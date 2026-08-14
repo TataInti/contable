@@ -1,0 +1,1681 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// Identidad y tenancy
+// ============================================================
+
+model User {
+  id                 String     @id @default(uuid(7))
+  emailNormalized    String     @unique
+  name               String
+  passwordHash       String
+  emailVerifiedAt    DateTime?
+  isPlatformAdmin    Boolean    @default(false)
+  status             UserStatus @default(ACTIVE)
+  mfaEnabled         Boolean    @default(false)
+  mfaSecretEncrypted String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  memberships            FirmMembership[]
+  sessions               DeviceSession[]
+  preparedEntries        JournalEntry[]          @relation("preparedBy")
+  reviewedEntries        JournalEntry[]          @relation("reviewedBy")
+  postedEntries          JournalEntry[]          @relation("postedBy")
+  vatPrepared            VatLiquidation[]        @relation("vatPreparedBy")
+  vatReviewed            VatLiquidation[]        @relation("vatReviewedBy")
+  closeAssigned          CloseWorkItem[]         @relation("closeAssignee")
+  closeCompleted         CloseWorkItem[]         @relation("closeCompletedBy")
+  requestMessages        RequestMessage[]
+  reportCreated          ReportRun[]             @relation("reportCreatedBy")
+  reportPublished        ReportRun[]             @relation("reportPublishedBy")
+  reportRevoked          ReportRun[]             @relation("reportRevokedBy")
+  pubPublished           ReportPublication[]     @relation("pubPublishedBy")
+  pubRevoked             ReportPublication[]     @relation("pubRevokedBy")
+  assistantConversations AssistantConversation[] @relation("assistantCreatedBy")
+  biDashboards           BiDashboard[]           @relation("biDashboardCreatedBy")
+  portalMemberships      PortalMembership[]
+  idempotencyRecords     IdempotencyRecord[]
+
+  @@map("users")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+model DeviceSession {
+  id                       String    @id @default(uuid(7))
+  userId                   String
+  refreshTokenHash         String    @unique
+  previousRefreshTokenHash String?   @unique
+  familyId                 String
+  rotationCounter          Int       @default(0)
+  userAgentHash            String?
+  ipPrefix                 String?
+  createdAt                DateTime  @default(now())
+  lastUsedAt               DateTime  @default(now())
+  expiresAt                DateTime
+  revokedAt                DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("device_sessions")
+}
+
+model Firm {
+  id          String     @id @default(uuid(7))
+  legalName   String
+  displayName String
+  taxId       String?
+  timezone    String     @default("America/Argentina/Buenos_Aires")
+  status      FirmStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  memberships       FirmMembership[]
+  clients           Client[]
+  portalMemberships PortalMembership[]
+  portalInvitations PortalInvitation[]
+
+  @@map("firms")
+}
+
+enum FirmStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+model FirmMembership {
+  id         String           @id @default(uuid(7))
+  firmId     String
+  userId     String
+  role       FirmRole
+  status     MembershipStatus @default(ACTIVE)
+  invitedBy  String?
+  acceptedAt DateTime?
+
+  firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([firmId, userId])
+  @@map("firm_memberships")
+}
+
+enum FirmRole {
+  OWNER
+  ADMIN
+  PREPARER
+  REVIEWER
+  AUDITOR_READONLY
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+model Client {
+  id        String       @id @default(uuid(7))
+  firmId    String
+  legalName String
+  tradeName String?
+  cuit      String
+  status    ClientStatus @default(ONBOARDING)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  firm                   Firm                    @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  fiscalYears            FiscalYear[]
+  accounts               Account[]
+  entries                JournalEntry[]
+  assignments            ClientAssignment[]
+  profile                ClientProfile?
+  counterparties         Counterparty[]
+  costCenters            CostCenter[]
+  onboarding             OnboardingChecklist?
+  documents              Document[]
+  uploadSessions         UploadSession[]
+  bankAccounts           BankAccount[]
+  exchangeRateSources    ExchangeRateSource[]
+  inflationIndexes       InflationIndex[]
+  exchangeDifferenceRuns ExchangeDifferenceRun[]
+  inflationRuns          InflationRun[]
+  vatRules               VatRule[]
+  vatLiquidations        VatLiquidation[]
+  obligations            Obligation[]
+  obligationInstances    ObligationInstance[]
+  obligationReminders    ObligationReminder[]
+  closeCycles            CloseCycle[]
+  documentRequests       DocumentRequest[]
+  requestThreads         RequestThread[]
+  reportTemplates        ReportTemplate[]
+  reportRuns             ReportRun[]
+  reportPublications     ReportPublication[]
+  assistantConversations AssistantConversation[]
+  biMetrics              BiMetric[]
+  biDimensions           BiDimension[]
+  biDashboards           BiDashboard[]
+  biWidgets              BiWidget[]
+  biSnapshots            BiSnapshot[]
+  featureFlags           FeatureFlag[]
+  portalMemberships      PortalMembership[]
+  portalInvitations      PortalInvitation[]
+  idempotencyRecords     IdempotencyRecord[]
+  outboxEvents           OutboxEvent[]
+
+  @@unique([firmId, cuit])
+  @@index([firmId])
+  @@map("clients")
+}
+
+model ClientAssignment {
+  id           String   @id @default(uuid(7))
+  firmId       String
+  userId       String
+  clientId     String
+  capabilities String[] @default([])
+  createdAt    DateTime @default(now())
+  assignedBy   String?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([firmId, userId, clientId])
+  @@index([firmId, clientId])
+  @@map("client_assignments")
+}
+
+enum ClientStatus {
+  ONBOARDING
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum PortalRole {
+  OWNER
+  COLLABORATOR
+  READONLY
+}
+
+model PortalMembership {
+  id         String           @id @default(uuid(7))
+  firmId     String
+  clientId   String
+  userId     String
+  role       PortalRole       @default(OWNER)
+  status     MembershipStatus @default(ACTIVE)
+  invitedBy  String?
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime         @default(now())
+
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([firmId, clientId, userId])
+  @@index([userId, status])
+  @@map("portal_memberships")
+}
+
+model PortalInvitation {
+  id              String     @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  emailNormalized String
+  role            PortalRole @default(OWNER)
+  tokenHash       String     @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  revokedAt       DateTime?
+  invitedByUserId String
+  createdAt       DateTime   @default(now())
+
+  firm   Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId, emailNormalized])
+  @@map("portal_invitations")
+}
+
+model IdempotencyRecord {
+  id          String    @id @default(uuid(7))
+  firmId      String
+  clientId    String
+  userId      String
+  scope       String
+  key         String
+  requestHash String
+  status      String    @default("PENDING")
+  response    Json?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([firmId, scope, key])
+  @@index([firmId, clientId, createdAt])
+  @@map("idempotency_records")
+}
+
+model OutboxEvent {
+  id          String    @id @default(uuid(7))
+  firmId      String
+  clientId    String
+  topic       String
+  eventType   String
+  aggregateId String
+  payload     Json
+  status      String    @default("PENDING")
+  attempts    Int       @default(0)
+  availableAt DateTime  @default(now())
+  lockedAt    DateTime?
+  publishedAt DateTime?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([firmId, clientId, createdAt])
+  @@map("outbox_events")
+}
+
+// ============================================================
+// Ledger
+// ============================================================
+
+model FiscalYear {
+  id        String           @id @default(uuid(7))
+  firmId    String
+  clientId  String
+  startDate DateTime
+  endDate   DateTime
+  label     String
+  status    FiscalYearStatus @default(OPEN)
+
+  client                 Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  periods                AccountingPeriod[]
+  entries                JournalEntry[]
+  exchangeDifferenceRuns ExchangeDifferenceRun[]
+  inflationRuns          InflationRun[]
+  closeCycles            CloseCycle[]
+
+  @@unique([clientId, startDate, endDate])
+  @@index([firmId, clientId])
+  @@map("fiscal_years")
+}
+
+enum FiscalYearStatus {
+  OPEN
+  CLOSING
+  CLOSED
+}
+
+model AccountingPeriod {
+  id           String                 @id @default(uuid(7))
+  firmId       String
+  clientId     String
+  fiscalYearId String
+  startDate    DateTime
+  endDate      DateTime
+  ordinal      Int
+  status       AccountingPeriodStatus @default(OPEN)
+
+  fiscalYear             FiscalYear              @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  entries                JournalEntry[]
+  exchangeDifferenceRuns ExchangeDifferenceRun[]
+  inflationRuns          InflationRun[]
+  vatLiquidations        VatLiquidation[]
+  closeCycles            CloseCycle[]
+  assistantConversations AssistantConversation[]
+
+  @@unique([clientId, startDate, endDate])
+  @@index([firmId, clientId])
+  @@map("accounting_periods")
+}
+
+enum AccountingPeriodStatus {
+  OPEN
+  SOFT_CLOSED
+  HARD_CLOSED
+}
+
+model Account {
+  id                     String        @id @default(uuid(7))
+  firmId                 String
+  clientId               String
+  chartVersionId         String?
+  code                   String
+  name                   String
+  type                   AccountType
+  normalBalance          NormalBalance
+  parentId               String?
+  level                  Int           @default(0)
+  path                   String
+  isPostable             Boolean       @default(true)
+  isActive               Boolean       @default(true)
+  currencyBehavior       String        @default("FUNCTIONAL_ONLY")
+  monetaryClassification String        @default("NOT_APPLICABLE")
+  vatRole                String        @default("NONE")
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  lines        JournalLine[]
+  chart        ChartTemplate? @relation(fields: [chartVersionId], references: [id])
+  bankAccounts BankAccount[]
+
+  @@unique([clientId, chartVersionId, code])
+  @@index([firmId, clientId])
+  @@map("accounts")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+  MEMO
+}
+
+enum NormalBalance {
+  DEBIT
+  CREDIT
+}
+
+model JournalEntry {
+  id                String                 @id @default(uuid(7))
+  firmId            String
+  clientId          String
+  fiscalYearId      String
+  periodId          String
+  sequenceNumber    Int?
+  entryDate         DateTime
+  description       String
+  reference         String?
+  sourceType        JournalEntrySourceType @default(MANUAL)
+  status            JournalEntryStatus     @default(DRAFT)
+  preparedByUserId  String
+  submittedAt       DateTime?
+  reviewedByUserId  String?
+  reviewedAt        DateTime?
+  postedByUserId    String?
+  postedAt          DateTime?
+  reversalOfId      String?
+  reversedByEntryId String?
+  rowVersion        Int                    @default(1)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  client                  Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fiscalYear              FiscalYear              @relation(fields: [fiscalYearId], references: [id])
+  period                  AccountingPeriod        @relation(fields: [periodId], references: [id])
+  preparedBy              User                    @relation("preparedBy", fields: [preparedByUserId], references: [id])
+  reviewedBy              User?                   @relation("reviewedBy", fields: [reviewedByUserId], references: [id])
+  postedBy                User?                   @relation("postedBy", fields: [postedByUserId], references: [id])
+  lines                   JournalLine[]
+  bankMatches             BankMatch[]
+  exchangeDifferenceDraft ExchangeDifferenceRun[]
+  inflationDraft          InflationRun[]
+
+  @@unique([clientId, fiscalYearId, sequenceNumber])
+  @@index([firmId, clientId, entryDate])
+  @@map("journal_entries")
+}
+
+enum JournalEntryStatus {
+  DRAFT
+  IN_REVIEW
+  REVIEWED
+  POSTED
+  REVERSED
+  REJECTED
+}
+
+enum JournalEntrySourceType {
+  MANUAL
+  DOCUMENT
+  BANK
+  OPENING
+  EXCHANGE
+  INFLATION
+  TAX
+  CLOSING
+  IMPORT
+}
+
+model JournalLine {
+  id               String   @id @default(uuid(7))
+  firmId           String
+  clientId         String
+  entryId          String
+  position         Int
+  accountId        String
+  description      String?
+  currencyCode     String   @default("ARS")
+  debitOriginal    Decimal  @db.Decimal(20, 4)
+  creditOriginal   Decimal  @db.Decimal(20, 4)
+  exchangeRate     Decimal? @db.Decimal(20, 8)
+  debitFunctional  Decimal  @db.Decimal(20, 4)
+  creditFunctional Decimal  @db.Decimal(20, 4)
+
+  entry   JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account Account      @relation(fields: [accountId], references: [id])
+
+  @@unique([entryId, position])
+  @@index([firmId, clientId, accountId])
+  @@map("journal_lines")
+}
+
+// ============================================================
+// Auditoría append-only
+// ============================================================
+
+model AuditEvent {
+  id             String   @id @default(uuid(7))
+  firmId         String?
+  clientId       String?
+  userId         String?
+  actorKind      String
+  action         String
+  entityType     String
+  entityId       String?
+  requestId      String?
+  idempotencyKey String?
+  before         Json?
+  after          Json?
+  createdAt      DateTime @default(now())
+
+  @@index([firmId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action])
+  @@map("audit_events")
+}
+
+// ============================================================
+// Fase 3 — Perfil contable/fiscal del cliente
+// ============================================================
+
+model ClientProfile {
+  id                 String    @id @default(uuid(7))
+  firmId             String
+  clientId           String    @unique
+  functionalCurrency String    @default("ARS")
+  accountingStandard String?
+  fiscalYearEndMonth Int       @default(12)
+  vatCondition       String?
+  iibbJurisdictions  String[]  @default([])
+  province           String?
+  activity           String?
+  legalForm          String?
+  serviceStartDate   DateTime?
+  updatedAt          DateTime  @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([firmId])
+  @@map("client_profiles")
+}
+
+// ============================================================
+// Fase 3 — Plan de cuentas
+// ============================================================
+
+model ChartTemplate {
+  id          String              @id @default(uuid(7))
+  firmId      String
+  name        String
+  description String?
+  version     Int                 @default(1)
+  status      ChartTemplateStatus @default(DRAFT)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  accounts Account[]
+
+  @@index([firmId])
+  @@map("chart_templates")
+}
+
+enum ChartTemplateStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+}
+
+// ============================================================
+// Fase 3 — Contrapartes y centros de costo
+// ============================================================
+
+model Counterparty {
+  id           String   @id @default(uuid(7))
+  firmId       String
+  clientId     String
+  cuit         String
+  legalName    String
+  tradeName    String?
+  taxCondition String?
+  address      String?
+  country      String   @default("AR")
+  aliases      String[] @default([])
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, cuit])
+  @@index([firmId, clientId])
+  @@map("counterparties")
+}
+
+model CostCenter {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String
+  code      String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, code])
+  @@index([firmId, clientId])
+  @@map("cost_centers")
+}
+
+// ============================================================
+// Fase 3 — Checklist de onboarding
+// ============================================================
+
+model OnboardingChecklist {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String   @unique
+  items     Json     @default("[]")
+  completed Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([firmId])
+  @@map("onboarding_checklists")
+}
+
+// ============================================================
+// Fase 4 — Documentos y procesamiento asíncrono
+// ============================================================
+
+model Document {
+  id                   String         @id @default(uuid(7))
+  firmId               String
+  clientId             String
+  category             String?
+  direction            String?
+  status               DocumentStatus @default(UPLOADED)
+  currentFileVersionId String?
+  currentExtractionId  String?
+  uploadedByUserId     String?
+  uploadOrigin         String         @default("FIRM")
+  requestId            String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  client         Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fileVersions   DocumentFileVersion[]
+  processingJobs DocumentProcessingJob[]
+  extractions    DocumentExtraction[]
+  requestItems   DocumentRequestItem[]
+
+  @@index([firmId, clientId, status])
+  @@index([firmId, clientId, createdAt])
+  @@map("documents")
+}
+
+enum DocumentStatus {
+  UPLOADED
+  VALIDATING
+  READY
+  EXTRACTED
+  EXTRACTION_FAILED
+  APPLIED
+  FAILED
+  CANCELED
+}
+
+model DocumentFileVersion {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  documentId      String
+  originalName    String
+  mimeType        String
+  extension       String
+  sizeBytes       Int
+  pages           Int?
+  sha256          String
+  bucket          String
+  objectKey       String
+  objectVersion   String?
+  antivirusStatus String   @default("PENDING")
+  isOriginal      Boolean  @default(true)
+  supersedesId    String?
+  createdAt       DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId])
+  @@index([sha256])
+  @@map("document_file_versions")
+}
+
+model DocumentProcessingJob {
+  id               String    @id @default(uuid(7))
+  firmId           String
+  clientId         String
+  documentId       String
+  fileVersionId    String
+  type             String    @default("VALIDATE")
+  status           JobStatus @default(QUEUED)
+  attempt          Int       @default(0)
+  maxAttempts      Int       @default(3)
+  stage            String?
+  progress         Int       @default(0)
+  deduplicationKey String?
+  traceId          String?
+  error            String?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([deduplicationKey])
+  @@index([firmId, clientId, status])
+  @@map("document_processing_jobs")
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  DEAD_LETTER
+  CANCELED
+}
+
+model UploadSession {
+  id           String              @id @default(uuid(7))
+  firmId       String
+  clientId     String
+  userId       String
+  status       UploadSessionStatus @default(PENDING)
+  expectedMime String?
+  maxSizeBytes Int
+  maxFiles     Int                 @default(1)
+  expiresAt    DateTime
+  completedAt  DateTime?
+  createdAt    DateTime            @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId])
+  @@map("upload_sessions")
+}
+
+enum UploadSessionStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+  CANCELED
+}
+
+// ============================================================
+// Fase 5 — Extracción y revisión
+// ============================================================
+
+model DocumentExtraction {
+  id               String           @id @default(uuid(7))
+  firmId           String
+  clientId         String
+  documentId       String
+  fileVersionId    String
+  schemaVersion    String
+  status           ExtractionStatus @default(GENERATED)
+  classification   String?
+  confidence       Float?
+  ocrEngine        String?
+  model            String?
+  provider         String?
+  promptVersion    String?
+  normalizedText   String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  document Document            @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  fields   ExtractedField[]
+  items    ExtractedLineItem[]
+
+  @@index([firmId, clientId, documentId])
+  @@map("document_extractions")
+}
+
+enum ExtractionStatus {
+  GENERATED
+  NEEDS_REVIEW
+  REVIEWED
+  SUPERSEDED
+  FAILED
+}
+
+model ExtractedField {
+  id              String  @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  extractionId    String
+  key             String
+  rawValue        String?
+  normalizedValue String?
+  confidence      Float
+  page            Int?
+  boundingBox     Json?
+  method          String
+  status          String  @default("ACCEPTED")
+  correction      String?
+  reason          String?
+
+  extraction DocumentExtraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId, extractionId])
+  @@map("extracted_fields")
+}
+
+model ExtractedLineItem {
+  id           String  @id @default(uuid(7))
+  firmId       String
+  clientId     String
+  extractionId String
+  description  String
+  quantity     String?
+  unitPrice    String?
+  netAmount    String?
+  vatRate      String?
+  vatAmount    String?
+  totalAmount  String?
+  confidence   Float
+  page         Int?
+  boundingBox  Json?
+  method       String
+  status       String  @default("ACCEPTED")
+
+  extraction DocumentExtraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId, extractionId])
+  @@map("extracted_line_items")
+}
+
+// ============================================================
+// Fase 7 — Bancos
+// ============================================================
+
+model BankAccount {
+  id            String   @id @default(uuid(7))
+  firmId        String
+  clientId      String
+  accountId     String
+  bankName      String
+  accountNumber String
+  cbu           String?
+  alias         String?
+  currencyCode  String   @default("ARS")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client          Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  account         Account              @relation(fields: [accountId], references: [id])
+  statements      BankStatement[]
+  movements       BankMovement[]
+  reconciliations BankReconciliation[]
+
+  @@unique([clientId, accountId])
+  @@index([firmId, clientId])
+  @@map("bank_accounts")
+}
+
+model BankStatement {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  clientId       String
+  bankAccountId  String
+  periodStart    DateTime
+  periodEnd      DateTime
+  openingBalance Decimal  @db.Decimal(20, 4)
+  closingBalance Decimal  @db.Decimal(20, 4)
+  currencyCode   String   @default("ARS")
+  sourceType     String   @default("CSV")
+  sourceFileId   String?
+  status         String   @default("IMPORTED")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  bankAccount BankAccount    @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  movements   BankMovement[]
+
+  @@index([firmId, clientId, bankAccountId])
+  @@map("bank_statements")
+}
+
+model BankMovement {
+  id            String   @id @default(uuid(7))
+  firmId        String
+  clientId      String
+  bankAccountId String
+  statementId   String?
+  externalId    String?
+  dedupeHash    String
+  valueDate     DateTime
+  description   String
+  amount        Decimal  @db.Decimal(20, 4)
+  currencyCode  String   @default("ARS")
+  reference     String?
+  status        String   @default("UNMATCHED")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  bankAccount BankAccount    @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  statement   BankStatement? @relation(fields: [statementId], references: [id])
+  matches     BankMatch[]
+
+  @@unique([bankAccountId, externalId])
+  @@index([firmId, clientId, bankAccountId])
+  @@index([dedupeHash])
+  @@map("bank_movements")
+}
+
+model BankMatch {
+  id              String    @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  bankAccountId   String
+  movementId      String
+  entryId         String?
+  appliedAmount   Decimal   @db.Decimal(20, 4)
+  status          String    @default("CANDIDATE")
+  confidence      Float?
+  matchedByUserId String?
+  matchedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  movement BankMovement  @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  entry    JournalEntry? @relation(fields: [entryId], references: [id])
+
+  @@index([firmId, clientId, movementId])
+  @@map("bank_matches")
+}
+
+model BankReconciliation {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  bankAccountId   String
+  periodStart     DateTime
+  periodEnd       DateTime
+  openingBalance  Decimal  @db.Decimal(20, 4)
+  closingBalance  Decimal  @db.Decimal(20, 4)
+  status          String   @default("IN_PROGRESS")
+  snapshot        Json?
+  reopenedFromId  String?
+  reason          String?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId, bankAccountId])
+  @@map("bank_reconciliations")
+}
+
+// ============================================================
+// Fase 7 — Moneda extranjera
+// ============================================================
+
+model ExchangeRateSource {
+  id            String   @id @default(uuid(7))
+  firmId        String
+  clientId      String
+  name          String
+  provider      String
+  baseCurrency  String   @default("ARS")
+  quoteCurrency String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client                 Client                  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  rates                  ExchangeRate[]
+  exchangeDifferenceRuns ExchangeDifferenceRun[]
+
+  @@index([firmId, clientId])
+  @@map("exchange_rate_sources")
+}
+
+model ExchangeRate {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String
+  sourceId  String
+  date      DateTime
+  rate      Decimal  @db.Decimal(20, 8)
+  createdAt DateTime @default(now())
+
+  source ExchangeRateSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, date])
+  @@index([firmId, clientId])
+  @@map("exchange_rates")
+}
+
+model ExchangeDifferenceRun {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  fiscalYearId    String
+  periodId        String
+  asOfDate        DateTime
+  rateSourceId    String
+  status          String   @default("DRAFT")
+  worksheet       Json?
+  draftEntryId    String?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client     Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fiscalYear FiscalYear         @relation(fields: [fiscalYearId], references: [id])
+  period     AccountingPeriod   @relation(fields: [periodId], references: [id])
+  rateSource ExchangeRateSource @relation(fields: [rateSourceId], references: [id])
+  draftEntry JournalEntry?      @relation(fields: [draftEntryId], references: [id])
+
+  @@index([firmId, clientId])
+  @@map("exchange_difference_runs")
+}
+
+// ============================================================
+// Fase 7 — Inflación
+// ============================================================
+
+model InflationIndex {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String
+  code      String
+  name      String
+  baseDate  DateTime
+  baseValue Decimal  @db.Decimal(20, 8)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client       Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  observations InflationObservation[]
+  runs         InflationRun[]
+
+  @@unique([clientId, code])
+  @@index([firmId, clientId])
+  @@map("inflation_indexes")
+}
+
+model InflationObservation {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String
+  indexId   String
+  date      DateTime
+  value     Decimal  @db.Decimal(20, 8)
+  source    String?
+  createdAt DateTime @default(now())
+
+  index InflationIndex @relation(fields: [indexId], references: [id], onDelete: Cascade)
+
+  @@unique([indexId, date])
+  @@index([firmId, clientId])
+  @@map("inflation_observations")
+}
+
+model InflationRun {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  fiscalYearId    String
+  periodId        String
+  asOfDate        DateTime
+  indexId         String
+  indexVersion    String
+  policyVersion   String
+  ledgerCutoff    DateTime
+  status          String   @default("DRAFT")
+  worksheet       Json?
+  draftEntryId    String?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client     Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fiscalYear FiscalYear       @relation(fields: [fiscalYearId], references: [id])
+  period     AccountingPeriod @relation(fields: [periodId], references: [id])
+  index      InflationIndex   @relation(fields: [indexId], references: [id])
+  draftEntry JournalEntry?    @relation(fields: [draftEntryId], references: [id])
+
+  @@index([firmId, clientId])
+  @@map("inflation_runs")
+}
+
+// ============================================================
+// Fase 8 — IVA
+// ============================================================
+
+model VatRule {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String
+  code      String
+  name      String
+  rate      Decimal  @db.Decimal(10, 4)
+  version   Int      @default(1)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client       Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  liquidations VatLiquidation[]
+
+  @@unique([clientId, code, version])
+  @@index([firmId, clientId])
+  @@map("vat_rules")
+}
+
+model VatLiquidation {
+  id               String    @id @default(uuid(7))
+  firmId           String
+  clientId         String
+  periodId         String
+  cutoff           DateTime
+  rulesVersion     Int
+  status           String    @default("CALCULATED")
+  totals           Json?
+  differences      Json?
+  preparedByUserId String
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  supersedesId     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  client     Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  period     AccountingPeriod @relation(fields: [periodId], references: [id])
+  rules      VatRule[]
+  preparedBy User             @relation("vatPreparedBy", fields: [preparedByUserId], references: [id])
+  reviewedBy User?            @relation("vatReviewedBy", fields: [reviewedByUserId], references: [id])
+
+  @@index([firmId, clientId, periodId])
+  @@map("vat_liquidations")
+}
+
+// ============================================================
+// Fase 8 — Obligaciones
+// ============================================================
+
+model Obligation {
+  id           String   @id @default(uuid(7))
+  firmId       String
+  clientId     String
+  code         String
+  name         String
+  jurisdiction String?
+  frequency    String   @default("MONTHLY")
+  dueDay       Int?
+  isActive     Boolean  @default(true)
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client    Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  instances ObligationInstance[]
+  reminders ObligationReminder[]
+
+  @@unique([clientId, code, version])
+  @@index([firmId, clientId])
+  @@map("obligations")
+}
+
+model ObligationInstance {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  clientId       String
+  obligationId   String
+  periodLabel    String
+  dueDate        DateTime
+  status         String   @default("PENDING")
+  materializedBy String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client     Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  obligation Obligation           @relation(fields: [obligationId], references: [id], onDelete: Cascade)
+  reminders  ObligationReminder[]
+  dispatches ReminderDispatch[]
+
+  @@unique([obligationId, periodLabel])
+  @@index([firmId, clientId, dueDate])
+  @@map("obligation_instances")
+}
+
+model ObligationReminder {
+  id           String   @id @default(uuid(7))
+  firmId       String
+  clientId     String
+  obligationId String
+  instanceId   String?
+  rule         String   @default("DUE_DATE")
+  offsetDays   Int      @default(0)
+  channel      String   @default("EMAIL")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client     Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  obligation Obligation          @relation(fields: [obligationId], references: [id], onDelete: Cascade)
+  instance   ObligationInstance? @relation(fields: [instanceId], references: [id])
+  dispatches ReminderDispatch[]
+
+  @@index([firmId, clientId])
+  @@map("obligation_reminders")
+}
+
+model ReminderDispatch {
+  id                String   @id @default(uuid(7))
+  firmId            String
+  clientId          String
+  reminderId        String
+  instanceId        String
+  scheduledFor      DateTime
+  status            String   @default("PENDING")
+  attempts          Int      @default(0)
+  providerMessageId String?
+  error             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  reminder ObligationReminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+  instance ObligationInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@unique([reminderId, instanceId])
+  @@index([firmId, clientId])
+  @@map("reminder_dispatches")
+}
+
+// ============================================================
+// Fase 8 — Cierres
+// ============================================================
+
+model CloseCycle {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  fiscalYearId    String
+  periodId        String
+  status          String   @default("IN_PROGRESS")
+  version         Int      @default(1)
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client     Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  fiscalYear FiscalYear       @relation(fields: [fiscalYearId], references: [id])
+  period     AccountingPeriod @relation(fields: [periodId], references: [id])
+  workItems  CloseWorkItem[]
+
+  @@index([firmId, clientId])
+  @@map("close_cycles")
+}
+
+model CloseWorkItem {
+  id                String    @id @default(uuid(7))
+  firmId            String
+  clientId          String
+  cycleId           String
+  code              String
+  title             String
+  status            String    @default("PENDING")
+  assigneeUserId    String?
+  completedByUserId String?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  cycle       CloseCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  assignee    User?      @relation("closeAssignee", fields: [assigneeUserId], references: [id])
+  completedBy User?      @relation("closeCompletedBy", fields: [completedByUserId], references: [id])
+
+  @@index([firmId, clientId, cycleId])
+  @@map("close_work_items")
+}
+
+// ============================================================
+// Fase 8 — Trabajo (pedidos documentales y threads)
+// ============================================================
+
+model DocumentRequest {
+  id              String    @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  title           String
+  description     String?
+  status          String    @default("OPEN")
+  dueDate         DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  client  Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  items   DocumentRequestItem[]
+  threads RequestThread[]
+
+  @@index([firmId, clientId])
+  @@map("document_requests")
+}
+
+model DocumentRequestItem {
+  id          String   @id @default(uuid(7))
+  firmId      String
+  clientId    String
+  requestId   String
+  description String
+  required    Boolean  @default(true)
+  status      String   @default("PENDING")
+  documentId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  request  DocumentRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  document Document?       @relation(fields: [documentId], references: [id])
+
+  @@index([firmId, clientId, requestId])
+  @@map("document_request_items")
+}
+
+model RequestThread {
+  id         String   @id @default(uuid(7))
+  firmId     String
+  clientId   String
+  requestId  String
+  visibility String   @default("INTERNAL")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  client   Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  request  DocumentRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  messages RequestMessage[]
+
+  @@index([firmId, clientId, requestId])
+  @@map("request_threads")
+}
+
+model RequestMessage {
+  id           String   @id @default(uuid(7))
+  firmId       String
+  clientId     String
+  threadId     String
+  authorUserId String
+  body         String
+  visibility   String   @default("INTERNAL")
+  createdAt    DateTime @default(now())
+
+  thread RequestThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author User          @relation(fields: [authorUserId], references: [id])
+
+  @@index([firmId, clientId, threadId])
+  @@map("request_messages")
+}
+
+// ============================================================
+// Fase 9 — Reportes, exports y publicación
+// ============================================================
+
+model ReportTemplate {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String?
+  code      String
+  name      String
+  kind      String   @default("BALANCE")
+  version   Int      @default(1)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client?              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  lines  ReportTemplateLine[]
+  runs   ReportRun[]
+
+  @@unique([firmId, clientId, code, version])
+  @@index([firmId, clientId])
+  @@map("report_templates")
+}
+
+model ReportTemplateLine {
+  id          String   @id @default(uuid(7))
+  firmId      String
+  clientId    String?
+  templateId  String
+  position    Int
+  code        String
+  label       String
+  formulaAst  Json?
+  formulaText String?
+  isTotal     Boolean  @default(false)
+  indent      Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  template ReportTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, position])
+  @@index([firmId, clientId])
+  @@map("report_template_lines")
+}
+
+model ReportRun {
+  id                String    @id @default(uuid(7))
+  firmId            String
+  clientId          String
+  templateId        String
+  templateVersion   Int
+  cutoff            DateTime
+  status            String    @default("DRAFT")
+  resultHash        String?
+  result            Json?
+  createdByUserId   String
+  publishedAt       DateTime?
+  publishedByUserId String?
+  supersedesId      String?
+  revokedAt         DateTime?
+  revokedByUserId   String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  client       Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  template     ReportTemplate      @relation(fields: [templateId], references: [id])
+  createdBy    User                @relation("reportCreatedBy", fields: [createdByUserId], references: [id])
+  publishedBy  User?               @relation("reportPublishedBy", fields: [publishedByUserId], references: [id])
+  revokedBy    User?               @relation("reportRevokedBy", fields: [revokedByUserId], references: [id])
+  publications ReportPublication[]
+
+  @@index([firmId, clientId, templateId])
+  @@map("report_runs")
+}
+
+model ReportPublication {
+  id                String    @id @default(uuid(7))
+  firmId            String
+  clientId          String
+  runId             String
+  status            String    @default("PUBLISHED")
+  publishedAt       DateTime  @default(now())
+  publishedByUserId String
+  revokedAt         DateTime?
+  revokedByUserId   String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  run         ReportRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  publishedBy User      @relation("pubPublishedBy", fields: [publishedByUserId], references: [id])
+  revokedBy   User?     @relation("pubRevokedBy", fields: [revokedByUserId], references: [id])
+
+  @@index([firmId, clientId])
+  @@map("report_publications")
+}
+
+// ============================================================
+// Fase 11 — Asistente contable
+// ============================================================
+
+model AssistantConversation {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  periodId        String?
+  title           String?
+  status          String   @default("ACTIVE")
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client    Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  period    AccountingPeriod? @relation(fields: [periodId], references: [id])
+  createdBy User              @relation("assistantCreatedBy", fields: [createdByUserId], references: [id])
+  turns     AssistantTurn[]
+
+  @@index([firmId, clientId])
+  @@map("assistant_conversations")
+}
+
+model AssistantTurn {
+  id               String   @id @default(uuid(7))
+  firmId           String
+  clientId         String
+  conversationId   String
+  role             String   @default("USER")
+  content          String
+  status           String   @default("COMPLETED")
+  abstained        Boolean  @default(false)
+  abstentionReason String?
+  model            String?
+  provider         String?
+  promptVersion    String?
+  createdAt        DateTime @default(now())
+
+  conversation AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  evidence     AssistantEvidence[]
+  feedback     AssistantFeedback?
+
+  @@index([firmId, clientId, conversationId])
+  @@map("assistant_turns")
+}
+
+model AssistantEvidence {
+  id         String   @id @default(uuid(7))
+  firmId     String
+  clientId   String
+  turnId     String
+  kind       String   @default("ACCOUNT")
+  sourceType String
+  sourceId   String
+  label      String?
+  value      String?
+  createdAt  DateTime @default(now())
+
+  turn AssistantTurn @relation(fields: [turnId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId, turnId])
+  @@map("assistant_evidence")
+}
+
+model AssistantFeedback {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  turnId          String   @unique
+  rating          Int?
+  comment         String?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+
+  turn AssistantTurn @relation(fields: [turnId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId])
+  @@map("assistant_feedback")
+}
+
+model AssistantUsage {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  clientId       String
+  conversationId String?
+  turnId         String?
+  model          String
+  provider       String
+  inputTokens    Int      @default(0)
+  outputTokens   Int      @default(0)
+  costUsd        Decimal  @default(0) @db.Decimal(20, 8)
+  createdAt      DateTime @default(now())
+
+  @@index([firmId, clientId])
+  @@map("assistant_usage")
+}
+
+// ============================================================
+// Fase 12 — Copiloto BI
+// ============================================================
+
+model BiMetric {
+  id         String   @id @default(uuid(7))
+  firmId     String
+  clientId   String
+  code       String
+  name       String
+  definition Json?
+  version    Int      @default(1)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  client  Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  widgets BiWidget[]
+
+  @@unique([clientId, code, version])
+  @@index([firmId, clientId])
+  @@map("bi_metrics")
+}
+
+model BiDimension {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String
+  code      String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, code])
+  @@index([firmId, clientId])
+  @@map("bi_dimensions")
+}
+
+model BiDashboard {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  name            String
+  layout          Json?
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client    Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdBy User         @relation("biDashboardCreatedBy", fields: [createdByUserId], references: [id])
+  widgets   BiWidget[]
+  snapshots BiSnapshot[]
+
+  @@index([firmId, clientId])
+  @@map("bi_dashboards")
+}
+
+model BiWidget {
+  id          String    @id @default(uuid(7))
+  firmId      String
+  clientId    String
+  dashboardId String
+  metricId    String
+  title       String
+  plan        Json?
+  cutoff      DateTime?
+  status      String    @default("DRAFT")
+  result      Json?
+  resultHash  String?
+  source      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  client    Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  dashboard BiDashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  metric    BiMetric    @relation(fields: [metricId], references: [id])
+
+  @@index([firmId, clientId, dashboardId])
+  @@map("bi_widgets")
+}
+
+model BiSnapshot {
+  id          String   @id @default(uuid(7))
+  firmId      String
+  clientId    String
+  dashboardId String
+  cutoff      DateTime
+  resultHash  String?
+  result      Json?
+  createdAt   DateTime @default(now())
+
+  client    Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  dashboard BiDashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId, dashboardId])
+  @@map("bi_snapshots")
+}
+
+// ============================================================
+// Fase 13 — Feature flags
+// ============================================================
+
+model FeatureFlag {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String?
+  code      String
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([firmId, clientId, code])
+  @@index([firmId, clientId])
+  @@map("feature_flags")
+}

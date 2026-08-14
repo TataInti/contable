@@ -1,0 +1,14 @@
+.demo {
+  max-width: 960px;
+}
+
+.demo__section {
+  margin-bottom: var(--ds-space-8);
+}
+
+.demo__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  align-items: flex-start;
+}

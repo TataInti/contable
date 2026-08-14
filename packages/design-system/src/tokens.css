@@ -1,0 +1,112 @@
+:root {
+  color-scheme: light;
+
+  /* Color — neutrales cálidos, superficies contenidas y contraste AA. */
+  --ds-color-background: #faf8f4;
+  --ds-color-surface: #fffdf8;
+  --ds-color-surface-muted: #f1eee6;
+  --ds-color-surface-hover: #f6f3ec;
+  --ds-color-surface-pressed: #ebe6dc;
+  --ds-color-text: #22211d;
+  --ds-color-text-muted: #625f57;
+  --ds-color-text-faint: #756f65;
+  --ds-color-text-disabled: #777268;
+  --ds-color-border: #d8d2c7;
+  --ds-color-border-subtle: #e7e2d9;
+  --ds-color-border-strong: #aaa398;
+  --ds-color-control-disabled: #ece8df;
+  --ds-color-focus: #256247;
+  --ds-color-focus-subtle: #c9dfd3;
+  --ds-color-primary: #256247;
+  --ds-color-primary-hover: #1f523c;
+  --ds-color-primary-active: #183f2f;
+  --ds-color-on-primary: #fffdf8;
+  --ds-color-danger: #a9362a;
+  --ds-color-danger-hover: #8e2c23;
+  --ds-color-danger-active: #72221c;
+  --ds-color-danger-subtle: #f4d8d3;
+  --ds-color-on-danger: #fffdf8;
+  --ds-color-warning: #8a570e;
+  --ds-color-warning-subtle: #f8ead3;
+  --ds-color-success: #256247;
+  --ds-color-info: #285d83;
+  --ds-color-info-subtle: #e3edf4;
+  --ds-color-selected: #e2eee7;
+  --ds-color-primary-soft: #e2eee7;
+  --ds-color-success-subtle: #e5efe9;
+  --ds-color-spinner-track: #89aa98;
+
+  /* Espaciado — escala de 4px */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 20px;
+  --ds-space-6: 24px;
+  --ds-space-7: 28px;
+  --ds-space-8: 32px;
+  --ds-space-10: 40px;
+  --ds-space-12: 48px;
+  --ds-space-16: 64px;
+
+  /* Tipografía — Source Sans 3 (UI) y Source Serif 4 (headings/reportes) */
+  --ds-font-sans: "Source Sans 3", system-ui, -apple-system, sans-serif;
+  --ds-font-serif: "Source Serif 4", Georgia, serif;
+  --ds-text-xs: 12px;
+  --ds-text-sm: 13px;
+  --ds-text-base: 14px;
+  --ds-text-lg: 16px;
+  --ds-text-xl: 20px;
+  --ds-text-2xl: 24px;
+  --ds-text-3xl: 32px;
+  --ds-leading-tight: 1.25;
+  --ds-leading-normal: 1.45;
+  --ds-leading-relaxed: 1.6;
+  --ds-font-weight-medium: 600;
+  --ds-font-weight-bold: 700;
+
+  /* Radios */
+  --ds-radius-sm: 3px;
+  --ds-radius-md: 5px;
+  --ds-radius-lg: 8px;
+
+  /* Controles y bordes */
+  --ds-border-width: 1px;
+  --ds-border-width-strong: 2px;
+  --ds-control-height-sm: 32px;
+  --ds-control-height-md: 40px;
+  --ds-touch-target: 44px;
+  --ds-focus-width: 2px;
+  --ds-focus-offset: 2px;
+
+  /* Elevación — borde por defecto; sombra sólo en popover/menú/flotante */
+  --ds-shadow-control: 0 1px 2px rgba(34, 33, 29, 0.07);
+  --ds-shadow-focus: 0 0 0 3px #c9dfd3;
+  --ds-shadow-focus-danger: 0 0 0 3px #f4d8d3;
+  --ds-shadow-popover: 0 4px 12px rgba(34, 33, 29, 0.12);
+  --ds-shadow-menu: 0 2px 8px rgba(34, 33, 29, 0.1);
+  --ds-shadow-float: 0 8px 24px rgba(34, 33, 29, 0.14);
+
+  /* Movimiento funcional */
+  --ds-duration-fast: 120ms;
+  --ds-duration-normal: 180ms;
+  --ds-duration-spinner: 700ms;
+  --ds-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Z-index nominal */
+  --ds-z-base: 0;
+  --ds-z-sticky: 100;
+  --ds-z-dropdown: 200;
+  --ds-z-modal: 300;
+  --ds-z-toast: 400;
+}
+
+/* Movimiento — sólo feedback; respetar la preferencia del sistema. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

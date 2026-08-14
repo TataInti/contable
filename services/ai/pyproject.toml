@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = ["."]
+
+[[tool.mypy.overrides]]
+module = ["pytesseract", "pyzbar.*"]
+ignore_missing_imports = true

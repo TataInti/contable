@@ -1,0 +1,338 @@
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { api, downloadFile, type Account, type ReportRun, type ReportTemplate } from "../lib/api";
+import { useClientContext } from "../context/ClientContext";
+import { Icon } from "../ui/Icon";
+import { StatusBadge } from "../ui/StatusBadge";
+import "./study.css";
+
+interface BiPlan {
+  version: number;
+  clientId: string;
+  fiscalPeriodId: string;
+  metric: string;
+  dimensions: string[];
+  filters: unknown[];
+  comparison: string;
+  limit: number;
+}
+
+interface BiExecution {
+  result: { metric: string; value: string; source: string; generatedAt: string };
+  resultHash: string;
+  metric: { id: string; name: string };
+}
+
+export function StudyReportes() {
+  const { firmId, clientId, periodId, capabilities } = useClientContext();
+  const queryClient = useQueryClient();
+  const [templateId, setTemplateId] = useState("");
+  const [cutoff, setCutoff] = useState(() => new Date().toISOString().slice(0, 10));
+  const [biQuestion, setBiQuestion] = useState("¿Cuál es el resultado neto del período?");
+  const [biResult, setBiResult] = useState<BiExecution | null>(null);
+  const [receipt, setReceipt] = useState<string | null>(null);
+
+  const base = firmId && clientId ? `/firms/${firmId}/clients/${clientId}` : null;
+  const templates = useQuery({
+    queryKey: ["report-templates", firmId, clientId],
+    queryFn: () => api.get<ReportTemplate[]>(`${base}/report-templates`),
+    enabled: Boolean(base),
+  });
+  const runs = useQuery({
+    queryKey: ["report-runs", firmId, clientId],
+    queryFn: () => api.get<ReportRun[]>(`${base}/report-runs`),
+    enabled: Boolean(base),
+  });
+  const accounts = useQuery({
+    queryKey: ["accounts", firmId, clientId],
+    queryFn: () => api.get<Account[]>(`${base}/accounts`),
+    enabled: Boolean(base && capabilities.has("report.configure")),
+  });
+
+  const selectedTemplateId = templateId || templates.data?.[0]?.id || "";
+  const runReport = useMutation({
+    mutationFn: () =>
+      api.post<ReportRun>(`${base}/report-runs`, { templateId: selectedTemplateId, cutoff }),
+    onSuccess: () => {
+      setReceipt("El reporte fue generado y quedó en borrador para revisión.");
+      void queryClient.invalidateQueries({ queryKey: ["report-runs", firmId, clientId] });
+    },
+  });
+  const publish = useMutation({
+    mutationFn: (runId: string) => api.post(`${base}/report-runs/${runId}/publish`),
+    onSuccess: () => {
+      setReceipt("Reporte publicado. El cliente ya puede ver esta versión en su portal.");
+      void queryClient.invalidateQueries({ queryKey: ["report-runs", firmId, clientId] });
+    },
+  });
+  const createBaseTemplate = useMutation({
+    mutationFn: () => {
+      const lines = (accounts.data ?? []).map((account, index) => ({
+        position: index + 1,
+        code: account.code,
+        label: account.name,
+        formulaAst: { op: "ACCOUNT", accountCode: account.code },
+        isTotal: false,
+        indent: 0,
+      }));
+      return api.post<ReportTemplate>(`${base}/report-templates`, {
+        code: `BALANCE_${Date.now()}`,
+        name: "Balance por cuentas",
+        kind: "BALANCE",
+        lines,
+      });
+    },
+    onSuccess: (created) => {
+      setTemplateId(created.id);
+      void queryClient.invalidateQueries({ queryKey: ["report-templates", firmId, clientId] });
+    },
+  });
+  const executeBi = useMutation({
+    mutationFn: async () => {
+      const plan = await api.post<BiPlan>(`${base}/bi/plan`, { periodId, query: biQuestion });
+      return api.post<BiExecution>(`${base}/bi/execute`, { plan });
+    },
+    onSuccess: setBiResult,
+  });
+
+  const rows = useMemo(() => runs.data ?? [], [runs.data]);
+  if (!firmId || !clientId) {
+    return (
+      <div className="study-page">
+        <EmptyState
+          title="Seleccioná un cliente"
+          description="Los reportes siempre se calculan dentro de un contexto explícito."
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="study-page">
+      <div className="study-page__header">
+        <div>
+          <p className="study-page__eyebrow">Información verificable</p>
+          <h1 className="study-page__title">Reportes y análisis</h1>
+          <p className="study-page__subtitle">
+            Generá estados desde el mayor canónico, revisalos y publicalos al portal.
+          </p>
+        </div>
+      </div>
+
+      {receipt ? (
+        <div className="action-receipt action-receipt--page" role="status">
+          <Icon name="check" size={19} />
+          <span>
+            <strong>Acción completada</strong>
+            <small>{receipt}</small>
+          </span>
+          <button type="button" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
+            <Icon name="close" size={15} />
+          </button>
+        </div>
+      ) : null}
+
+      <section className="study-panel" aria-labelledby="generate-report-title">
+        <div className="study-panel__heading">
+          <div>
+            <h2 id="generate-report-title">Nueva ejecución</h2>
+            <p>El corte limita los asientos incluidos y queda registrado en el resultado.</p>
+          </div>
+        </div>
+        {templates.isError ? (
+          <p className="form-error" role="alert">
+            No se pudieron cargar las plantillas.
+          </p>
+        ) : null}
+        {(templates.data?.length ?? 0) === 0 && !templates.isLoading ? (
+          <EmptyState
+            title="Todavía no hay plantillas"
+            description="Podés crear una base con todas las cuentas del cliente."
+            action={
+              capabilities.has("report.configure") && (accounts.data?.length ?? 0) > 0 ? (
+                <Button
+                  onClick={() => createBaseTemplate.mutate()}
+                  loading={createBaseTemplate.isPending}
+                >
+                  <Icon name="plus" size={17} /> Crear plantilla base
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div className="study-inline-form">
+            <label className="ds-field">
+              <span className="ds-field__label">Plantilla</span>
+              <select
+                className="ctxbar__input"
+                value={selectedTemplateId}
+                onChange={(event) => setTemplateId(event.target.value)}
+              >
+                {(templates.data ?? []).map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} · v{template.version}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Field
+              id="report-cutoff"
+              label="Fecha de corte"
+              type="date"
+              value={cutoff}
+              onChange={(event) => setCutoff(event.target.value)}
+            />
+            <Button
+              onClick={() => runReport.mutate()}
+              loading={runReport.isPending}
+              disabled={!selectedTemplateId || !capabilities.has("report.run")}
+            >
+              <Icon name="reports" size={17} /> Generar reporte
+            </Button>
+          </div>
+        )}
+        {runReport.isError ? (
+          <p className="form-error" role="alert">
+            {runReport.error.message}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="study-page__section" aria-labelledby="report-history-title">
+        <h2 className="study-page__section-title" id="report-history-title">
+          Historial
+        </h2>
+        {runs.isLoading ? (
+          <div className="query-state query-state--compact" role="status">
+            <span className="loading-copy">Cargando ejecuciones…</span>
+          </div>
+        ) : runs.isError ? (
+          <EmptyState
+            title="No se pudo cargar el historial"
+            action={
+              <Button variant="secondary" onClick={() => void runs.refetch()}>
+                Reintentar
+              </Button>
+            }
+          />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            title="Sin ejecuciones"
+            description="Generá el primer reporte para comenzar."
+          />
+        ) : (
+          <Table<ReportRun>
+            rows={rows}
+            rowKey={(run) => run.id}
+            columns={[
+              { key: "template", header: "Reporte", render: (run) => run.template.name },
+              {
+                key: "cutoff",
+                header: "Corte",
+                render: (run) =>
+                  new Date(run.cutoff).toLocaleDateString("es-AR", { timeZone: "UTC" }),
+              },
+              {
+                key: "status",
+                header: "Estado",
+                render: (run) => <StatusBadge status={run.status} />,
+              },
+              {
+                key: "actions",
+                header: "Acciones",
+                render: (run) => (
+                  <div className="table-actions">
+                    {(["pdf", "xlsx", "csv"] as const).map((format) => (
+                      <button
+                        className="text-action download-action"
+                        key={format}
+                        onClick={() =>
+                          void downloadFile(`${base}/report-runs/${run.id}/export?format=${format}`)
+                        }
+                      >
+                        <Icon name="download" size={14} /> {format.toUpperCase()}
+                      </button>
+                    ))}
+                    {run.status === "DRAFT" && capabilities.has("report.publish") ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={publish.isPending}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "¿Publicar esta versión en el portal del cliente? Verificá el corte y el contenido antes de continuar.",
+                            )
+                          )
+                            publish.mutate(run.id);
+                        }}
+                      >
+                        Publicar
+                      </Button>
+                    ) : null}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        )}
+      </section>
+
+      {capabilities.has("bi.use") ? (
+        <section className="study-panel" aria-labelledby="bi-title">
+          <div className="study-panel__heading">
+            <div>
+              <h2 id="bi-title">Copiloto BI</h2>
+              <p>
+                La pregunta se convierte en un plan validado; las cifras se calculan desde el
+                ledger, sin SQL libre.
+              </p>
+            </div>
+          </div>
+          <div className="study-page__form">
+            <label className="ds-field" htmlFor="bi-question">
+              <span className="ds-field__label">Pregunta</span>
+              <textarea
+                id="bi-question"
+                className="study-textarea"
+                rows={3}
+                value={biQuestion}
+                onChange={(event) => setBiQuestion(event.target.value)}
+              />
+            </label>
+            <Button
+              onClick={() => executeBi.mutate()}
+              loading={executeBi.isPending}
+              disabled={!periodId || !biQuestion.trim()}
+            >
+              <Icon name="spark" size={17} /> Analizar período
+            </Button>
+          </div>
+          {executeBi.isError ? (
+            <p className="form-error" role="alert">
+              {executeBi.error.message}
+            </p>
+          ) : null}
+          {biResult ? (
+            <div className="bi-result" aria-live="polite">
+              <span className="bi-result__verified">
+                <Icon name="shield" size={15} /> Resultado verificado
+              </span>
+              <span>{biResult.metric.name}</span>
+              <strong>
+                {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(
+                  Number(biResult.result.value),
+                )}
+              </strong>
+              <small>
+                Fuente canónica: {biResult.result.source} · evidencia{" "}
+                {biResult.resultHash.slice(0, 12)}
+              </small>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+    </div>
+  );
+}

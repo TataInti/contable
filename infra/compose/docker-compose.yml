@@ -1,0 +1,158 @@
+name: contable
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: contable
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-contable}
+      POSTGRES_DB: contable
+      RUNTIME_DB_PASSWORD: ${RUNTIME_DB_PASSWORD:-runtime_secret}
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:-worker_secret}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ../postgres/init-roles.sh:/docker-entrypoint-initdb.d/01-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contable"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: contable
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-contable-minio}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "${VALKEY_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  clamav:
+    # Imagen oficial multi-arquitectura (amd64, arm64 y ppc64le).
+    image: clamav/clamav-debian:stable
+    ports:
+      - "${CLAMAV_PORT_HOST:-3310}:3310"
+    volumes:
+      - clamdb:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://contable:${POSTGRES_PASSWORD:-contable}@postgres:5432/contable?schema=public
+    command: ["npx", "prisma", "migrate", "deploy", "--config", "apps/api/prisma.config.ts"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      RUNTIME_DATABASE_URL: postgresql://contable_runtime:${RUNTIME_DB_PASSWORD:-runtime_secret}@postgres:5432/contable?schema=public
+      REDIS_URL: redis://valkey:6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost}
+      MINIO_PUBLIC_PORT: ${WEB_PORT:-8080}
+      MINIO_PUBLIC_USE_SSL: ${MINIO_PUBLIC_USE_SSL:-false}
+      MINIO_ACCESS_KEY: contable
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-contable-minio}
+      AI_SERVICE_URL: http://ai:8000
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:-dev-ai-service-secret-change-me}
+      MFA_CHALLENGE_SECRET: ${MFA_CHALLENGE_SECRET:-dev-mfa-challenge-secret-change-me}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      ai:
+        condition: service_started
+    ports:
+      - "${API_PORT:-3000}:3000"
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      NODE_ENV: production
+      WORKER_DATABASE_URL: postgresql://contable_worker:${WORKER_DB_PASSWORD:-worker_secret}@postgres:5432/contable?schema=public
+      REDIS_URL: redis://valkey:6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: contable
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-contable-minio}
+      AI_SERVICE_URL: http://ai:8000
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:-dev-ai-service-secret-change-me}
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+      WORKER_QUEUES: documents,notifications
+      NOTIFICATION_WEBHOOK_URL: ${NOTIFICATION_WEBHOOK_URL:-}
+      NOTIFICATION_WEBHOOK_TOKEN: ${NOTIFICATION_WEBHOOK_TOKEN:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+
+  ai:
+    build:
+      context: ../..
+      dockerfile: services/ai/Dockerfile
+    environment:
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:-dev-ai-service-secret-change-me}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+    depends_on:
+      - valkey
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  miniodata:
+  clamdb:

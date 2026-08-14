@@ -1,0 +1,113 @@
+import type { FastifyInstance, FastifyReply } from "fastify";
+import { loginSchema, mfaVerifySchema } from "@contable/contracts";
+import { AuthService, AuthError } from "./auth-service.js";
+import { SessionRepository } from "./session-repository.js";
+import { randomBytes } from "node:crypto";
+
+const SECURE = process.env.NODE_ENV === "production";
+
+const setSessionCookies = (reply: FastifyReply, refreshToken: string) => {
+  const csrfToken = randomBytes(32).toString("base64url");
+  reply.setCookie("refresh_token", refreshToken, {
+    httpOnly: true,
+    secure: SECURE,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60,
+  });
+  reply.setCookie("csrf_token", csrfToken, {
+    httpOnly: false,
+    secure: SECURE,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60,
+  });
+};
+
+function hasValidCsrf(req: { cookies: Record<string, unknown>; headers: Record<string, unknown> }): boolean {
+  const cookie = req.cookies.csrf_token;
+  const header = req.headers["x-csrf-token"];
+  return typeof cookie === "string" && typeof header === "string" && cookie.length >= 32 && cookie === header;
+}
+
+export function authPlugin(app: FastifyInstance) {
+  const sessions = new SessionRepository();
+  const auth = new AuthService({ sessions });
+
+  app.post("/api/v1/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const body = loginSchema.parse(req.body);
+    try {
+      const result = await auth.login(body.email, body.password);
+      if (result.status === "MFA_REQUIRED") {
+        return reply.send({ data: { status: "MFA_REQUIRED", mfaSessionToken: result.mfaSessionToken } });
+      }
+      setSessionCookies(reply, result.refreshToken);
+      return reply.send({ data: { status: "OK" } });
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return reply.status(401).send({ error: { code: err.code, message: err.message } });
+      }
+      throw err;
+    }
+  });
+
+  app.post("/api/v1/auth/mfa/verify", { config: { rateLimit: { max: 8, timeWindow: "5 minutes" } } }, async (req, reply) => {
+    const body = mfaVerifySchema.parse(req.body);
+    try {
+      const session = await auth.verifyMfaAndCreateSession(body.mfaSessionToken, body.code);
+      setSessionCookies(reply, session.refreshToken);
+      return reply.send({ data: { status: "OK" } });
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return reply.status(401).send({ error: { code: err.code, message: err.message } });
+      }
+      throw err;
+    }
+  });
+
+  app.post("/api/v1/auth/refresh", async (req, reply) => {
+    const refreshToken = req.cookies.refresh_token as string | undefined;
+    if (!refreshToken) {
+      return reply.status(401).send({ error: { code: "SESSION_REVOKED", message: "Sin sesión" } });
+    }
+    if (!hasValidCsrf(req)) {
+      return reply.status(403).send({ error: { code: "CSRF_INVALID", message: "Token CSRF inválido" } });
+    }
+    try {
+      const rotated = await auth.rotateSession(refreshToken);
+      setSessionCookies(reply, rotated.refreshToken);
+      return reply.send({ data: { status: "OK" } });
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return reply.status(401).send({ error: { code: err.code, message: err.message } });
+      }
+      throw err;
+    }
+  });
+
+  app.post("/api/v1/auth/logout", async (req, reply) => {
+    const refreshToken = req.cookies.refresh_token as string | undefined;
+    if (refreshToken && !hasValidCsrf(req)) {
+      return reply.status(403).send({ error: { code: "CSRF_INVALID", message: "Token CSRF inválido" } });
+    }
+    if (refreshToken) {
+      // Revocación real de la sesión en DB
+      await sessions.revokeByToken(refreshToken).catch(() => {});
+    }
+    reply.setCookie("refresh_token", "", {
+      httpOnly: true,
+      secure: SECURE,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+    reply.setCookie("csrf_token", "", {
+      httpOnly: false,
+      secure: SECURE,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+    return reply.send({ data: { status: "OK" } });
+  });
+}

@@ -1,0 +1,43 @@
+{
+  "name": "@contable/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint",
+    "test": "NODE_ENV=test vitest run",
+    "dev": "tsx watch src/server.ts",
+    "seed:demo": "tsx src/seed-demo.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@contable/accounting-engine": "*",
+    "@contable/contracts": "*",
+    "@contable/permissions": "*",
+    "@contable/storage": "*",
+    "@fastify/cookie": "^11.0.0",
+    "@fastify/rate-limit": "^11.2.0",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "argon2": "^0.41.0",
+    "bullmq": "^5.34.0",
+    "cookie": "^1.0.0",
+    "dotenv": "^16.4.0",
+    "fastify": "^5.2.0",
+    "fflate": "^0.8.3",
+    "jose": "^5.9.0",
+    "otpauth": "^9.3.0",
+    "pdfkit": "^0.19.1",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/pdfkit": "^0.17.6",
+    "prisma": "^7.9.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.10"
+  }
+}

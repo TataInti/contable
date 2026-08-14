@@ -1,0 +1,102 @@
+.ds-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  font-family: var(--ds-font-sans);
+  min-inline-size: 0;
+}
+
+.ds-field__label {
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: var(--ds-leading-normal);
+  color: var(--ds-color-text);
+}
+
+.ds-field__input {
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: var(--ds-control-height-md);
+  padding-block: var(--ds-space-2);
+  padding-inline: var(--ds-space-3);
+  box-sizing: border-box;
+  font-size: var(--ds-text-base);
+  font-family: var(--ds-font-sans);
+  line-height: var(--ds-leading-normal);
+  color: var(--ds-color-text);
+  background-color: var(--ds-color-surface);
+  border: var(--ds-border-width) solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-shadow-control);
+  accent-color: var(--ds-color-primary);
+  transition:
+    border-color var(--ds-duration-fast) var(--ds-ease-out),
+    background-color var(--ds-duration-fast) var(--ds-ease-out),
+    box-shadow var(--ds-duration-fast) var(--ds-ease-out);
+}
+
+.ds-field__input::placeholder {
+  color: var(--ds-color-text-faint);
+  opacity: 1;
+}
+
+.ds-field__input:hover:not(:disabled):not(:read-only) {
+  border-color: var(--ds-color-text-muted);
+}
+
+.ds-field__input:focus-visible {
+  outline: none;
+  border-color: var(--ds-color-focus);
+  box-shadow: var(--ds-shadow-focus);
+}
+
+.ds-field__input--error {
+  border-color: var(--ds-color-danger);
+}
+
+.ds-field__input--error:focus-visible {
+  border-color: var(--ds-color-danger);
+  box-shadow: var(--ds-shadow-focus-danger);
+}
+
+.ds-field__input:disabled {
+  color: var(--ds-color-text-disabled);
+  background-color: var(--ds-color-control-disabled);
+  border-color: var(--ds-color-border);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.ds-field__input:read-only:not(:disabled) {
+  background-color: var(--ds-color-surface-muted);
+  box-shadow: none;
+  cursor: default;
+}
+
+.ds-field__hint {
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-normal);
+  color: var(--ds-color-text-muted);
+}
+
+.ds-field__error {
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: var(--ds-leading-normal);
+  color: var(--ds-color-danger);
+}
+
+@media (max-width: 48rem), (pointer: coarse) {
+  .ds-field__input {
+    min-block-size: var(--ds-touch-target);
+    font-size: var(--ds-text-lg);
+  }
+}
+
+@media (forced-colors: active) {
+  .ds-field__input:focus-visible {
+    outline: var(--ds-focus-width) solid Highlight;
+    outline-offset: var(--ds-focus-offset);
+  }
+}

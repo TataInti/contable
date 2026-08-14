@@ -1,0 +1,150 @@
+.ds-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-2);
+  min-inline-size: var(--ds-control-height-md);
+  min-block-size: var(--ds-control-height-md);
+  padding-block: 0;
+  padding-inline: var(--ds-space-4);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-base);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: var(--ds-leading-tight);
+  text-align: center;
+  white-space: nowrap;
+  user-select: none;
+  touch-action: manipulation;
+  border-radius: var(--ds-radius-md);
+  border: var(--ds-border-width) solid transparent;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background-color var(--ds-duration-fast) var(--ds-ease-out),
+    border-color var(--ds-duration-fast) var(--ds-ease-out),
+    color var(--ds-duration-fast) var(--ds-ease-out),
+    box-shadow var(--ds-duration-fast) var(--ds-ease-out);
+}
+
+.ds-button:focus-visible {
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.ds-button--sm {
+  min-inline-size: var(--ds-control-height-sm);
+  min-block-size: var(--ds-control-height-sm);
+  padding-inline: var(--ds-space-3);
+  font-size: var(--ds-text-sm);
+}
+
+.ds-button--primary {
+  background-color: var(--ds-color-primary);
+  color: var(--ds-color-on-primary);
+}
+
+.ds-button--primary:hover:not(:disabled) {
+  background-color: var(--ds-color-primary-hover);
+}
+
+.ds-button--primary:active:not(:disabled) {
+  background-color: var(--ds-color-primary-active);
+}
+
+.ds-button--secondary {
+  background-color: var(--ds-color-surface);
+  border-color: var(--ds-color-border-strong);
+  color: var(--ds-color-text);
+  box-shadow: var(--ds-shadow-control);
+}
+
+.ds-button--secondary:hover:not(:disabled) {
+  background-color: var(--ds-color-surface-hover);
+  border-color: var(--ds-color-text-muted);
+}
+
+.ds-button--secondary:active:not(:disabled) {
+  background-color: var(--ds-color-surface-pressed);
+}
+
+.ds-button--ghost {
+  background-color: transparent;
+  color: var(--ds-color-text);
+}
+
+.ds-button--ghost:hover:not(:disabled) {
+  background-color: var(--ds-color-surface-hover);
+}
+
+.ds-button--ghost:active:not(:disabled) {
+  background-color: var(--ds-color-surface-pressed);
+}
+
+.ds-button--danger {
+  background-color: var(--ds-color-danger);
+  color: var(--ds-color-on-danger);
+}
+
+.ds-button--danger:hover:not(:disabled) {
+  background-color: var(--ds-color-danger-hover);
+}
+
+.ds-button--danger:active:not(:disabled) {
+  background-color: var(--ds-color-danger-active);
+}
+
+.ds-button:disabled:not([data-loading]) {
+  color: var(--ds-color-text-disabled);
+  background-color: var(--ds-color-control-disabled);
+  border-color: var(--ds-color-border);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.ds-button--ghost:disabled:not([data-loading]) {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.ds-button[data-loading] {
+  cursor: wait;
+}
+
+.ds-button[data-loading] .ds-button__content {
+  opacity: 0;
+}
+
+.ds-button__spinner {
+  position: absolute;
+  inline-size: var(--ds-space-4);
+  block-size: var(--ds-space-4);
+  border: var(--ds-border-width-strong) solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: ds-spin var(--ds-duration-spinner) linear infinite;
+}
+
+@keyframes ds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (pointer: coarse) {
+  .ds-button,
+  .ds-button--sm {
+    min-inline-size: var(--ds-touch-target);
+    min-block-size: var(--ds-touch-target);
+  }
+}
+
+@media (forced-colors: active) {
+  .ds-button {
+    border-color: ButtonText;
+  }
+
+  .ds-button:focus-visible {
+    outline-color: Highlight;
+  }
+}
