@@ -364,8 +364,8 @@ export function StudyTrabajo() {
                     <div className="table-primary">
                       <strong>{row.title}</strong>
                       <small>
-                        {row.items.filter((item) => item.status !== "COMPLETED").length} ítems
-                        pendientes
+                        {row.items.filter((item) => item.status !== "ACCEPTED" && item.status !== "WAIVED").length}{" "}
+                        ítems pendientes
                       </small>
                     </div>
                   ),

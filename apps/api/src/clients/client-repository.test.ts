@@ -14,8 +14,6 @@ const OWNER_A = "11111111-1111-4111-8111-111111111111";
 const FIRM_ALFA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const FIRM_BETA = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
-const alive = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-
 const runtimeConnection =
   process.env.RUNTIME_DATABASE_URL ??
   "postgresql://contable_runtime:runtime_secret@localhost:5432/contable";
@@ -39,7 +37,7 @@ async function runAsRuntime<T>(
 // funciones equivalentes sobre el tx runtime.
 const repo = new ClientRepository();
 
-describe.skipIf(!alive)("clientes (integración DB)", () => {
+describe("clientes (integración DB)", () => {
   it("crea un cliente y su perfil", async () => {
     const created = await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
       // El repo usa prisma global; aquí validamos el flujo vía repo dentro del contexto runtime.

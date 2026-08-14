@@ -24,6 +24,7 @@ interface AvailablePeriod {
 interface AvailableClient {
   clientId: string;
   periods: AvailablePeriod[];
+  capabilities: string[];
 }
 
 interface AvailableFirm {
@@ -84,15 +85,22 @@ function groupPortalContexts(portalContexts: PortalContext[]): AvailableFirm[] {
   for (const context of portalContexts) {
     let firm = firms.get(context.firmId);
     if (!firm) {
-      firm = { firmId: context.firmId, clients: [], capabilities: [...PORTAL_CAPABILITIES] };
+      firm = { firmId: context.firmId, clients: [], capabilities: [] };
       firms.set(context.firmId, firm);
     }
+
+    // G0-05: READONLY no recibe upload ni mensajes (PLAN §4.2).
+    const clientCapabilities =
+      context.role === "READONLY"
+        ? ["client.read"]
+        : [...PORTAL_CAPABILITIES];
 
     const existingClient = firm.clients.find((client) => client.clientId === context.clientId);
     if (!existingClient) {
       firm.clients.push({
         clientId: context.clientId,
         periods: context.periods.map((period) => ({ periodId: period.periodId })),
+        capabilities: clientCapabilities,
       });
       continue;
     }
@@ -127,6 +135,7 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
             clients: firm.clients.map((client) => ({
               clientId: client.clientId,
               periods: client.periods.map((period) => ({ periodId: period.periodId })),
+              capabilities: firm.capabilities,
             })),
           })),
     [portal, portalContexts, me],
@@ -201,11 +210,11 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
     [availableFirms],
   );
 
-  const capabilities = useMemo(
-    () =>
-      new Set(availableFirms.find((item) => item.firmId === selection.firmId)?.capabilities ?? []),
-    [availableFirms, selection.firmId],
-  );
+  const capabilities = useMemo(() => {
+    const firm = availableFirms.find((item) => item.firmId === selection.firmId);
+    const client = firm?.clients.find((item) => item.clientId === selection.clientId);
+    return new Set(client?.capabilities ?? firm?.capabilities ?? []);
+  }, [availableFirms, selection.firmId, selection.clientId]);
 
   const value = useMemo<ClientContextValue>(
     () => ({

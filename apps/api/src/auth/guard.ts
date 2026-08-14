@@ -79,6 +79,7 @@ function requiredCapability(method: string, path: string): Capability | null {
     return "vat.calculate";
   }
   if (path.includes("/obligations")) return method === "GET" ? "client.read" : "obligation.manage";
+  if (path.includes("/obligation-instances")) return method === "GET" ? "client.read" : "obligation.manage";
   if (path.includes("/document-requests")) return method === "GET" ? "client.read" : "request.manage";
   if (path.includes("/threads")) return method === "GET" ? "client.read" : "message.shared";
   if (path.includes("/close-cycles")) return method === "GET" ? "client.read" : "period.soft_close";
@@ -173,7 +174,14 @@ export function authGuardPlugin(app: FastifyInstance) {
         if (!membership) throw httpError(404, "RESOURCE_NOT_FOUND", "Recurso no encontrado");
         req.firmId = membership.firmId;
         req.clientId = clientId;
-        req.capabilities = new Set<Capability>(["client.read", "document.upload", "message.shared"]);
+        // G0-05: distinguir Colaborador de Sólo lectura. READONLY no recibe
+        // capacidades de upload ni mensajes (PLAN §4.2).
+        const isReadOnly = membership.role === "READONLY";
+        req.capabilities = new Set<Capability>(
+          isReadOnly
+            ? ["client.read"]
+            : ["client.read", "document.upload", "message.shared"],
+        );
       }
       return;
     }

@@ -273,20 +273,22 @@ model IdempotencyRecord {
 }
 
 model OutboxEvent {
-  id          String    @id @default(uuid(7))
-  firmId      String
-  clientId    String
-  topic       String
-  eventType   String
-  aggregateId String
-  payload     Json
-  status      String    @default("PENDING")
-  attempts    Int       @default(0)
-  availableAt DateTime  @default(now())
-  lockedAt    DateTime?
-  publishedAt DateTime?
-  lastError   String?
-  createdAt   DateTime  @default(now())
+  id               String    @id @default(uuid(7))
+  firmId           String
+  clientId         String
+  topic            String
+  eventType        String
+  aggregateId      String
+  payload          Json
+  status           String    @default("PENDING")
+  attempts         Int       @default(0)
+  availableAt      DateTime  @default(now())
+  lockedAt         DateTime?
+  publishedAt      DateTime?
+  lastError        String?
+  deadLetterAt     DateTime?
+  deadLetterReason String?
+  createdAt        DateTime  @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
@@ -1248,7 +1250,7 @@ model CloseCycle {
   clientId        String
   fiscalYearId    String
   periodId        String
-  status          String   @default("IN_PROGRESS")
+  status          CloseCycleStatus @default(IN_PROGRESS)
   version         Int      @default(1)
   createdByUserId String
   createdAt       DateTime @default(now())
@@ -1270,7 +1272,7 @@ model CloseWorkItem {
   cycleId           String
   code              String
   title             String
-  status            String    @default("PENDING")
+  status            CloseWorkItemStatus @default(PENDING)
   assigneeUserId    String?
   completedByUserId String?
   completedAt       DateTime?
@@ -1295,7 +1297,7 @@ model DocumentRequest {
   clientId        String
   title           String
   description     String?
-  status          String    @default("OPEN")
+  status          DocumentRequestStatus @default(DRAFT)
   dueDate         DateTime?
   createdByUserId String
   createdAt       DateTime  @default(now())
@@ -1316,7 +1318,7 @@ model DocumentRequestItem {
   requestId   String
   description String
   required    Boolean  @default(true)
-  status      String   @default("PENDING")
+  status      DocumentRequestItemStatus @default(PENDING)
   documentId  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1326,6 +1328,38 @@ model DocumentRequestItem {
 
   @@index([firmId, clientId, requestId])
   @@map("document_request_items")
+}
+
+// Estados unificados de pedidos y cierres (G0-04).
+// Fuente: PLAN_DESARROLLO_CONTABLE.md §6.8.
+enum DocumentRequestStatus {
+  DRAFT
+  SENT
+  IN_PROGRESS
+  READY_FOR_REVIEW
+  COMPLETED
+  CANCELLED
+}
+
+enum DocumentRequestItemStatus {
+  PENDING
+  ATTACHED
+  ACCEPTED
+  REJECTED
+  WAIVED
+}
+
+enum CloseCycleStatus {
+  IN_PROGRESS
+  COMPLETED
+  FINALIZED
+  CANCELLED
+}
+
+enum CloseWorkItemStatus {
+  PENDING
+  DONE
+  SKIPPED
 }
 
 model RequestThread {

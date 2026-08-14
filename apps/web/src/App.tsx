@@ -24,15 +24,6 @@ const StudyBandeja = lazy(() =>
 const StudyTrabajo = lazy(() =>
   import("./study/StudyTrabajo").then((m) => ({ default: m.StudyTrabajo })),
 );
-const StudyContabilidad = lazy(() =>
-  import("./study/StudyContabilidad").then((m) => ({ default: m.StudyContabilidad })),
-);
-const StudyReportes = lazy(() =>
-  import("./study/StudyReportes").then((m) => ({ default: m.StudyReportes })),
-);
-const StudyAsistente = lazy(() =>
-  import("./study/StudyAsistente").then((m) => ({ default: m.StudyAsistente })),
-);
 const StudyAdministracion = lazy(() =>
   import("./study/StudyAdministracion").then((m) => ({ default: m.StudyAdministracion })),
 );
@@ -143,9 +134,6 @@ function AppRoutes() {
               <Route path="clientes" element={<StudyClientes />} />
               <Route path="bandeja" element={<StudyBandeja />} />
               <Route path="trabajo" element={<StudyTrabajo />} />
-              <Route path="contabilidad" element={<StudyContabilidad />} />
-              <Route path="reportes" element={<StudyReportes />} />
-              <Route path="asistente" element={<StudyAsistente />} />
               <Route path="administracion" element={<StudyAdministracion />} />
             </Route>
           </Route>

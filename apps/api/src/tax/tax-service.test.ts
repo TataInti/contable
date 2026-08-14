@@ -17,8 +17,6 @@ const PREPARER_A = "33333333-3333-4333-8333-333333333333";
 const FIRM_ALFA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT_ALFA = "11111111-2222-4333-8444-777777777777";
 
-const alive = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-
 const runtimeConnection =
   process.env.RUNTIME_DATABASE_URL ??
   "postgresql://contable_runtime:runtime_secret@localhost:5432/contable";
@@ -146,7 +144,7 @@ async function createPostedVatEntry(fx: { fy: { id: string }; period: { id: stri
   });
 }
 
-describe.skipIf(!alive)("IVA (integración DB)", () => {
+describe("IVA (integración DB)", () => {
   beforeEach(async () => {
     await prisma.$executeRawUnsafe(`DELETE FROM vat_liquidations WHERE "clientId" = '${CLIENT_ALFA}'`);
     await prisma.$executeRawUnsafe(`DELETE FROM vat_rules WHERE "clientId" = '${CLIENT_ALFA}'`);
@@ -251,7 +249,7 @@ describe.skipIf(!alive)("IVA (integración DB)", () => {
   });
 });
 
-describe.skipIf(!alive)("obligaciones (integración DB)", () => {
+describe("obligaciones (integración DB)", () => {
   beforeEach(async () => {
     await prisma.$executeRawUnsafe(`DELETE FROM reminder_dispatches WHERE "clientId" = '${CLIENT_ALFA}'`);
     await prisma.$executeRawUnsafe(`DELETE FROM obligation_reminders WHERE "clientId" = '${CLIENT_ALFA}'`);
@@ -339,7 +337,7 @@ describe.skipIf(!alive)("obligaciones (integración DB)", () => {
   });
 });
 
-describe.skipIf(!alive)("cierres (integración DB)", () => {
+describe("cierres (integración DB)", () => {
   beforeEach(async () => {
     await prisma.$executeRawUnsafe(`DELETE FROM close_work_items WHERE "clientId" = '${CLIENT_ALFA}'`);
     await prisma.$executeRawUnsafe(`DELETE FROM close_cycles WHERE "clientId" = '${CLIENT_ALFA}'`);
@@ -380,7 +378,7 @@ describe.skipIf(!alive)("cierres (integración DB)", () => {
   });
 });
 
-describe.skipIf(!alive)("trabajo (integración DB)", () => {
+describe("trabajo (integración DB)", () => {
   beforeEach(async () => {
     await prisma.$executeRawUnsafe(`DELETE FROM request_messages WHERE "clientId" = '${CLIENT_ALFA}'`);
     await prisma.$executeRawUnsafe(`DELETE FROM request_threads WHERE "clientId" = '${CLIENT_ALFA}'`);
@@ -397,7 +395,7 @@ describe.skipIf(!alive)("trabajo (integración DB)", () => {
         { description: "DDJJ", required: true },
       ],
     });
-    expect(request.status).toBe("OPEN");
+    expect(request.status).toBe("DRAFT");
 
     // Adjuntar un documento a un ítem (documento dummy)
     const doc = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
@@ -415,13 +413,13 @@ describe.skipIf(!alive)("trabajo (integración DB)", () => {
     const partial = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
       tx.documentRequest.findUnique({ where: { id: request.id } }),
     );
-    expect(partial?.status).toBe("OPEN");
+    expect(partial?.status).toBe("DRAFT");
 
     await work.attachDocument(ctxOwner, request.id, request.items[1]!.id, doc.id);
     const complete = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
       tx.documentRequest.findUnique({ where: { id: request.id } }),
     );
-    expect(complete?.status).toBe("COMPLETE");
+    expect(complete?.status).toBe("COMPLETED");
   });
 
   it("nota interna no cambia a compartida sin confirmación (W-004)", async () => {

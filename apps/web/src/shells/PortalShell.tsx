@@ -25,7 +25,7 @@ const NAV_ITEMS: {
 
 export function PortalShell() {
   const { me, portalContexts } = useSession();
-  const { firmId } = useClientContext();
+  const { firmId, capabilities } = useClientContext();
   const navigate = useNavigate();
   const location = useLocation();
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -36,6 +36,13 @@ export function PortalShell() {
     portalContexts.find((context) => context.firmId === firmId)?.firmName ??
     portalContexts[0]?.firmName ??
     "Tu estudio";
+
+  // G0-05: READONLY no ve Subir documentos ni Mensajes (PLAN §4.2).
+  const navItems = NAV_ITEMS.filter((item) => {
+    if (item.to === "/portal/upload") return capabilities.has("document.upload");
+    if (item.to === "/portal/mensajes") return capabilities.has("message.shared");
+    return true;
+  });
 
   useEffect(() => {
     setMenuOpen(false);
@@ -96,7 +103,7 @@ export function PortalShell() {
               </button>
             </div>
             <div className="portal__nav-links">
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}

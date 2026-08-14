@@ -28,14 +28,6 @@ const NAV_GROUPS: { label: string; items: NavigationItem[] }[] = [
     items: [
       { to: "/bandeja", label: "Bandeja documental", icon: "inbox" },
       { to: "/trabajo", label: "Trabajo", icon: "tasks" },
-      { to: "/contabilidad", label: "Contabilidad", icon: "briefcase" },
-    ],
-  },
-  {
-    label: "Análisis",
-    items: [
-      { to: "/reportes", label: "Reportes y BI", icon: "reports", capability: "report.run" },
-      { to: "/asistente", label: "Asistente", icon: "assistant", capability: "ai.use" },
     ],
   },
 ];

@@ -14,8 +14,6 @@ const OWNER_A = "11111111-1111-4111-8111-111111111111";
 const FIRM_ALFA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT_ALFA = "11111111-2222-4333-8444-000000000000";
 
-const alive = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-
 const runtimeConnection =
   process.env.RUNTIME_DATABASE_URL ??
   "postgresql://contable_runtime:runtime_secret@localhost:5432/contable";
@@ -135,7 +133,7 @@ async function createPostedEntry(fx: { fy: { id: string }; period: { id: string 
   });
 }
 
-describe.skipIf(!alive)("copiloto BI (integración DB)", () => {
+describe("copiloto BI (integración DB)", () => {
   beforeEach(async () => {
     await prisma.$executeRawUnsafe(`DELETE FROM bi_snapshots WHERE "clientId" = '${CLIENT_ALFA}'`);
     await prisma.$executeRawUnsafe(`DELETE FROM bi_widgets WHERE "clientId" = '${CLIENT_ALFA}'`);

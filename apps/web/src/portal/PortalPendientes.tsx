@@ -22,8 +22,9 @@ export function PortalPendientes() {
     enabled: Boolean(clientId),
   });
   const rows = query.data ?? [];
+  const isPendingItem = (status: string) => status !== "ACCEPTED" && status !== "WAIVED";
   const pendingItems = rows.reduce(
-    (total, request) => total + request.items.filter((item) => item.status !== "COMPLETED").length,
+    (total, request) => total + request.items.filter((item) => isPendingItem(item.status)).length,
     0,
   );
 
@@ -93,7 +94,7 @@ export function PortalPendientes() {
                 key: "items",
                 header: "Entrega",
                 render: (row) => {
-                  const pending = row.items.filter((item) => item.status !== "COMPLETED").length;
+                  const pending = row.items.filter((item) => isPendingItem(item.status)).length;
                   return (
                     <span>
                       {pending === 0

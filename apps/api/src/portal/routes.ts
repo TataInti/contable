@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
+import { assertCapability } from "../auth/guard.js";
 import { DocumentService } from "../documents/document-service.js";
 import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
 import { MAX_FILE_SIZE } from "../storage/file-validator.js";
@@ -240,6 +241,7 @@ export function portalRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/portal/clients/:clientId/document-upload-sessions", async (req, reply) => {
+    assertCapability(req, "document.upload");
     const ctx = tenantContextFromRequest(req);
     const body = z.object({ expectedMime: z.string().optional() }).strict().parse(req.body ?? {});
     const session = await documents.createUploadSession(
@@ -260,6 +262,7 @@ export function portalRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/portal/clients/:clientId/document-upload-sessions/:sessionId/complete", async (req, reply) => {
+    assertCapability(req, "document.upload");
     const ctx = tenantContextFromRequest(req);
     const { sessionId } = req.params as { sessionId: string };
     const body = completeUploadSchema.parse(req.body);
@@ -269,6 +272,7 @@ export function portalRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/portal/clients/:clientId/threads/:threadId/messages", async (req, reply) => {
+    assertCapability(req, "message.shared");
     const ctx = tenantContextFromRequest(req);
     const { threadId } = req.params as { threadId: string };
     const body = z.object({ body: z.string().trim().min(1).max(5000) }).strict().parse(req.body);

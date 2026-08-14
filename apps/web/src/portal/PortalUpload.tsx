@@ -16,13 +16,30 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
 
 export function PortalUpload() {
-  const { clientId } = useClientContext();
+  const { clientId, capabilities } = useClientContext();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+
+  // G0-05: READONLY no puede subir documentos (PLAN §4.2).
+  if (!capabilities.has("document.upload")) {
+    return (
+      <div className="portal-page">
+        <PortalPageHeader
+          eyebrow="Documentación"
+          title="Subir documentos"
+          description="Tu perfil es de sólo lectura y no puede cargar archivos."
+        />
+        <EmptyState
+          title="Sin permiso para subir"
+          description="Contactá a tu estudio si necesitás aportar documentación."
+        />
+      </div>
+    );
+  }
 
   const selectFile = (selected: File | null) => {
     if (selected && (!ALLOWED_TYPES.has(selected.type) || selected.size > MAX_FILE_SIZE)) {

@@ -15,6 +15,7 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   ACCEPTED: { label: "Aceptado", tone: "ok" },
   APPLIED: { label: "Aplicado", tone: "ok" },
   APPROVED: { label: "Aprobado", tone: "ok" },
+  ATTACHED: { label: "Adjuntado", tone: "ok" },
   CLEAN: { label: "Validado", tone: "ok" },
   COMPLETED: { label: "Completado", tone: "ok" },
   EXTRACTED: { label: "Extraído", tone: "ok" },
@@ -54,6 +55,7 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   REJECTED: { label: "Rechazado", tone: "danger" },
   REVOKED: { label: "Revocado", tone: "danger" },
   SUSPENDED: { label: "Suspendido", tone: "danger" },
+  WAIVED: { label: "Eximido", tone: "muted" },
 
   CALCULATED: { label: "Calculado", tone: "info" },
   GENERATED: { label: "Generado", tone: "info" },
@@ -61,6 +63,7 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   IN_REVIEW: { label: "En revisión", tone: "info" },
   OPEN: { label: "Abierto", tone: "info" },
   PROCESSING: { label: "Procesando", tone: "info" },
+  READY_FOR_REVIEW: { label: "Listo para revisar", tone: "info" },
   RUNNING: { label: "En proceso", tone: "info" },
   SENT: { label: "Enviado", tone: "info" },
   UPLOADED: { label: "Subido", tone: "info" },

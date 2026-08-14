@@ -69,17 +69,17 @@ export class WorkService {
 
       const updated = await tx.documentRequestItem.update({
         where: { id: itemId },
-        data: { status: "SUBMITTED", documentId },
+        data: { status: "ATTACHED", documentId },
       });
 
-      // Completitud derivada: si todos los ítems requeridos están SUBMITTED, el pedido está COMPLETE
+      // Completitud derivada: si todos los ítems requeridos están ATTACHED, el pedido está COMPLETED
       const items = await tx.documentRequestItem.findMany({ where: { requestId } });
       const required = items.filter((i) => i.required);
-      const allDone = required.every((i) => i.status === "SUBMITTED");
+      const allDone = required.every((i) => i.status === "ATTACHED");
       if (allDone) {
         await tx.documentRequest.update({
           where: { id: requestId },
-          data: { status: "COMPLETE" },
+          data: { status: "COMPLETED" },
         });
       }
 

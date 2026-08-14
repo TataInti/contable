@@ -1,10 +1,12 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { VatService, VatError } from "./vat-service.js";
 import { ObligationService, ObligationError } from "./obligation-service.js";
 import { CloseService, CloseError } from "./close-service.js";
 import { WorkService, WorkError } from "./work-service.js";
 import { tenantContextFromRequest } from "../auth/tenant.js";
 import { withTenantContext } from "../auth/tenant.js";
+import { FeatureFlagService } from "../flags/feature-flag-service.js";
+import { requireTaxEnabled, TaxLegacyDisabledError } from "./tax-flag-guard.js";
 import { z } from "zod";
 
 /**
@@ -17,9 +19,13 @@ export function taxRoutes(app: FastifyInstance) {
   const obligations = new ObligationService();
   const close = new CloseService();
   const work = new WorkService();
+  const flags = new FeatureFlagService();
   const tenantCtx = tenantContextFromRequest;
 
   const handleError = (reply: { status: (code: number) => { send: (body: object) => void } }, err: unknown) => {
+    if (err instanceof TaxLegacyDisabledError) {
+      return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } });
+    }
     if (err instanceof VatError || err instanceof ObligationError || err instanceof CloseError || err instanceof WorkError) {
       const status = err.code.includes("NOT_FOUND") ? 404 : 400;
       return reply.status(status).send({ error: { code: err.code, message: err.message } });
@@ -36,6 +42,11 @@ export function taxRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
   app.post("/api/v1/firms/:firmId/clients/:clientId/vat/liquidations", async (req, reply) => {
+    try {
+      await requireTaxEnabled(flags, tenantCtx(req));
+    } catch (err) {
+      return handleError(reply, err);
+    }
     const { clientId } = req.params as { clientId: string };
     const body = z.object({ periodId: z.string().uuid(), cutoff: z.string().datetime(), rulesVersion: z.number().int().positive() }).strict().parse(req.body);
     try {
@@ -47,6 +58,11 @@ export function taxRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/firms/:firmId/clients/:clientId/vat/liquidations/:liquidationId/finalize", async (req, reply) => {
+    try {
+      await requireTaxEnabled(flags, tenantCtx(req));
+    } catch (err) {
+      return handleError(reply, err);
+    }
     const { liquidationId } = req.params as { liquidationId: string };
     try {
       const liq = await vat.finalize(tenantCtx(req), liquidationId);
@@ -57,6 +73,11 @@ export function taxRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/firms/:firmId/clients/:clientId/vat/liquidations/:liquidationId/rectify", async (req, reply) => {
+    try {
+      await requireTaxEnabled(flags, tenantCtx(req));
+    } catch (err) {
+      return handleError(reply, err);
+    }
     const { liquidationId } = req.params as { liquidationId: string };
     try {
       const liq = await vat.rectify(tenantCtx(req), liquidationId);

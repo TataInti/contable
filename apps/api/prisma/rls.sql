@@ -34,6 +34,44 @@ AS $$
 $$;
 
 -- ------------------------------------------------------------
+-- 0b. Función helper de acceso a cliente (G0-09)
+-- ------------------------------------------------------------
+-- Determina si un usuario puede acceder a un cliente de la firma:
+--   - Si app.client_id está seteado, sólo permite ese cliente (aislamiento por contexto).
+--   - Si no, permite si el usuario es OWNER/ADMIN (firm-wide) o tiene asignación al cliente.
+CREATE OR REPLACE FUNCTION app_can_access_client(target_client_id text, target_firm_id text, target_user_id text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT
+    -- Contexto client_id explícito: sólo ese cliente
+    (current_setting('app.client_id', true) <> '' AND current_setting('app.client_id', true) = target_client_id)
+    OR
+    -- Sin contexto client_id: owner/admin o asignado
+    (
+      current_setting('app.client_id', true) = ''
+      AND (
+        EXISTS (
+          SELECT 1 FROM firm_memberships fm
+          WHERE fm."firmId" = target_firm_id
+            AND fm."userId" = target_user_id
+            AND fm."status" = 'ACTIVE'
+            AND fm.role IN ('OWNER', 'ADMIN')
+        )
+        OR EXISTS (
+          SELECT 1 FROM client_assignments ca
+          WHERE ca."firmId" = target_firm_id
+            AND ca."clientId" = target_client_id
+            AND ca."userId" = target_user_id
+        )
+      )
+    )
+$$;
+
+-- ------------------------------------------------------------
 -- 1. users
 -- ------------------------------------------------------------
 ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;
@@ -77,7 +115,7 @@ DROP POLICY IF EXISTS clients_firm_member ON "clients";
 CREATE POLICY clients_firm_member ON "clients"
   USING (
     "firmId" = current_setting('app.firm_id', true)
-    AND app_is_firm_member("firmId", current_setting('app.user_id', true))
+    AND app_can_access_client(id, "firmId", current_setting('app.user_id', true))
   );
 
 -- ------------------------------------------------------------

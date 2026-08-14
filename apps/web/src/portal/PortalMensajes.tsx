@@ -17,10 +17,27 @@ interface RequestWithThreads extends DocumentRequest {
 }
 
 export function PortalMensajes() {
-  const { clientId } = useClientContext();
+  const { clientId, capabilities } = useClientContext();
   const { me } = useSession();
   const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  // G0-05: READONLY no puede enviar mensajes (PLAN §4.2).
+  if (!capabilities.has("message.shared")) {
+    return (
+      <div className="portal-page">
+        <PortalPageHeader
+          eyebrow="Mensajes"
+          title="Mensajes"
+          description="Tu perfil es de sólo lectura y no puede enviar mensajes."
+        />
+        <EmptyState
+          title="Sin permiso para mensajear"
+          description="Contactá a tu estudio si necesitás comunicarte."
+        />
+      </div>
+    );
+  }
   const query = useQuery({
     queryKey: ["portal-messages", clientId],
     queryFn: () => api.get<RequestWithThreads[]>(`/portal/clients/${clientId}/document-requests`),

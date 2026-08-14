@@ -11,12 +11,10 @@ const OWNER_A = "11111111-1111-4111-8111-111111111111";
 const FIRM_ALFA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT_ALFA = "11111111-2222-4333-8444-111111111111";
 
-const alive = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-
 const flags = new FeatureFlagService();
 const ctx = { userId: OWNER_A, firmId: FIRM_ALFA, actorKind: "USER" as const };
 
-describe.skipIf(!alive)("feature flags (integración DB)", () => {
+describe("feature flags (integración DB)", () => {
   beforeEach(async () => {
     await prisma.$executeRawUnsafe(`DELETE FROM feature_flags WHERE "firmId" = '${FIRM_ALFA}'`);
   });

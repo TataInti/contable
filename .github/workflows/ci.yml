@@ -9,6 +9,51 @@ jobs:
   node:
     name: Node (lint, typecheck, test, build)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: contable
+          POSTGRES_PASSWORD: contable
+          POSTGRES_DB: contable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contable"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: contable
+          MINIO_ROOT_PASSWORD: contable-minio
+        command: server /data --console-address ":9001"
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://contable:contable@localhost:5432/contable
+      RUNTIME_DATABASE_URL: postgresql://contable_runtime:runtime_secret@localhost:5432/contable
+      SHADOW_DATABASE_URL: postgresql://contable:contable@localhost:5432/contable_shadow
+      REDIS_URL: redis://localhost:6379
+      MINIO_ENDPOINT: localhost
+      MINIO_PORT: "9000"
+      MINIO_SECRET_KEY: contable-minio
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
 
@@ -19,6 +64,24 @@ jobs:
 
       - name: Install
         run: npm ci
+
+      - name: Setup PostgreSQL roles and shadow DB
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE contable_runtime LOGIN PASSWORD 'runtime_secret' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+          CREATE ROLE contable_worker LOGIN PASSWORD 'worker_secret' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+          CREATE DATABASE contable_shadow;
+          GRANT CONNECT ON DATABASE contable TO contable_runtime, contable_worker;
+          GRANT USAGE ON SCHEMA public TO contable_runtime, contable_worker;
+          SQL
+
+      - name: Apply migrations
+        run: npm run migrate:deploy -w @contable/api
+
+      - name: Apply RLS and seed
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/api/prisma/rls.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/api/prisma/seed-fase2.sql
 
       - name: Lint
         run: npm run lint

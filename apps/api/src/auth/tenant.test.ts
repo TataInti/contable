@@ -17,8 +17,6 @@ const PREPARER_A = "33333333-3333-4333-8333-333333333333";
 const ASSIGNED_CLIENT = "11111111-2222-4333-8444-555555555555";
 const UNASSIGNED_CLIENT = "11111111-2222-4333-8444-666666666666";
 
-const alive = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-
 // Cliente con rol runtime (sin BYPASSRLS) para validar RLS real.
 const runtimeConnection =
   process.env.RUNTIME_DATABASE_URL ??
@@ -39,7 +37,7 @@ async function runAsRuntime<T>(
   });
 }
 
-describe.skipIf(!alive)("tenancy (integración DB, rol runtime)", () => {
+describe("tenancy (integración DB, rol runtime)", () => {
   it("sin contexto de firma no puede listar clientes", async () => {
     const clients = await runtimePrisma.$transaction(async (tx) =>
       tx.client.findMany({ where: { firmId: FIRM_ALFA } }),

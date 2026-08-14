@@ -25,13 +25,13 @@ async function main() {
     create: { emailNormalized: DEMO_EMAIL, name: "Demo Owner", passwordHash },
   });
 
-  // Firma demo
+  // Firma demo (marcada como DEMOSTRACIÓN — NO APTO PARA LIQUIDAR)
   const firm = await prisma.firm.upsert({
     where: { id: "dddddddd-dddd-4ddd-8ddd-ddddddddd001" },
     update: {},
     create: {
       id: "dddddddd-dddd-4ddd-8ddd-ddddddddd001",
-      legalName: "Estudio Demo S.A.",
+      legalName: "Estudio Demo S.A. — DEMOSTRACIÓN — NO APTO PARA LIQUIDAR",
       displayName: "Demo",
     },
   });
@@ -205,8 +205,9 @@ async function main() {
     });
   }
 
-  // Feature flags habilitados
-  const flags = ["DOCUMENTS", "LEDGER", "BANKING", "TAX", "REPORTING", "PORTAL", "ASSISTANT", "BI"];
+  // Feature flags habilitados (TAX queda APAGADO: el IVA legacy está deshabilitado
+  // por flag server-side, G0-01. La firma demo no puede liquidar.)
+  const flags = ["DOCUMENTS", "LEDGER", "BANKING", "REPORTING", "PORTAL", "ASSISTANT", "BI"];
   for (const code of flags) {
     const existing = await prisma.featureFlag.findFirst({
       where: { firmId: firm.id, clientId: null, code },

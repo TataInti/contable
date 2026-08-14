@@ -1,15 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import {
   ApiError,
   api,
   uploadToSignedUrl,
-  type Account,
   type Document,
   type DocumentExtraction,
-  type FiscalYear,
-  type JournalEntry,
 } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
@@ -55,13 +52,10 @@ function fileSize(size: number) {
 }
 
 export function StudyBandeja() {
-  const { firmId, clientId, periodId, capabilities } = useClientContext();
+  const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [corrections, setCorrections] = useState<Record<string, string>>({});
-  const [debitAccountId, setDebitAccountId] = useState("");
-  const [creditAccountId, setCreditAccountId] = useState("");
-  const [entryResult, setEntryResult] = useState<JournalEntry | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -91,16 +85,6 @@ export function StudyBandeja() {
     enabled: Boolean(base && selectedId && detail.data?.status === "EXTRACTED"),
     retry: false,
   });
-  const accounts = useQuery({
-    queryKey: ["accounts", firmId, clientId],
-    queryFn: () => api.get<Account[]>(`${base}/accounts`),
-    enabled: Boolean(base && selectedId),
-  });
-  const fiscalYears = useQuery({
-    queryKey: ["fiscal-years", firmId, clientId],
-    queryFn: () => api.get<FiscalYear[]>(`${base}/fiscal-years`),
-    enabled: Boolean(base && selectedId),
-  });
 
   useEffect(() => {
     if (extraction.data)
@@ -113,11 +97,6 @@ export function StudyBandeja() {
         ),
       );
   }, [extraction.data]);
-  useEffect(() => {
-    const list = accounts.data ?? [];
-    if (!debitAccountId && list[0]) setDebitAccountId(list[0].id);
-    if (!creditAccountId && list[1]) setCreditAccountId(list[1].id);
-  }, [accounts.data, debitAccountId, creditAccountId]);
 
   const chooseFile = (selected: File | null) => {
     const error = validateFile(selected);
@@ -175,57 +154,8 @@ export function StudyBandeja() {
         queryKey: ["extraction", firmId, clientId, selectedId],
       }),
   });
-  const createEntry = useMutation({
-    mutationFn: async () => {
-      const selectedPeriod = fiscalYears.data
-        ?.flatMap((year) => year.periods.map((period) => ({ ...period, fiscalYearId: year.id })))
-        .find((period) => period.id === periodId);
-      if (!selectedPeriod) throw new Error("Seleccioná un período abierto");
-      const totalField = extraction.data?.fields.find((field) => field.key === "totalAmount");
-      const amount = totalField ? corrections[totalField.id] : undefined;
-      if (!amount || Number(amount) <= 0)
-        throw new Error("La extracción no contiene un total válido");
-      const dateField = extraction.data?.fields.find((field) => field.key === "issueDate");
-      const entry = await api.post<JournalEntry>(`${base}/journal-entries`, {
-        fiscalYearId: selectedPeriod.fiscalYearId,
-        periodId: selectedPeriod.id,
-        entryDate:
-          (dateField && corrections[dateField.id]) || new Date().toISOString().slice(0, 10),
-        description: `Comprobante ${detail.data?.fileVersions?.[0]?.originalName ?? selectedId}`,
-        reference: selectedId ?? undefined,
-        sourceType: "DOCUMENT",
-        lines: [
-          {
-            accountId: debitAccountId,
-            currencyCode: "ARS",
-            debitOriginal: amount,
-            creditOriginal: "0",
-            debitFunctional: amount,
-            creditFunctional: "0",
-          },
-          {
-            accountId: creditAccountId,
-            currencyCode: "ARS",
-            debitOriginal: "0",
-            creditOriginal: amount,
-            debitFunctional: "0",
-            creditFunctional: amount,
-          },
-        ],
-      });
-      return api.post<JournalEntry>(`${base}/journal-entries/${entry.id}/submit`);
-    },
-    onSuccess: (entry) => {
-      setEntryResult(entry);
-      void queryClient.invalidateQueries({ queryKey: ["journal-entries", firmId, clientId] });
-    },
-  });
 
   const rows = documents.data ?? [];
-  const total = useMemo(
-    () => extraction.data?.fields.find((field) => field.key === "totalAmount"),
-    [extraction.data],
-  );
   return (
     <div className="study-page study-page--wide">
       <div className="study-page__header">
@@ -394,7 +324,6 @@ export function StudyBandeja() {
                         aria-current={selectedId === row.id ? "true" : undefined}
                         onClick={() => {
                           setSelectedId(row.id);
-                          setEntryResult(null);
                         }}
                       >
                         <span className="document-link__icon">
@@ -554,82 +483,18 @@ export function StudyBandeja() {
                         </span>
                       </div>
                     ) : null}
-                    {extraction.data.status === "REVIEWED" && capabilities.has("entry.create") ? (
-                      <section className="entry-proposal">
-                        <div className="entry-proposal__heading">
-                          <div>
-                            <p className="study-page__eyebrow">Siguiente paso</p>
-                            <h3>Propuesta de asiento</h3>
-                          </div>
-                          <strong>
-                            {total
-                              ? new Intl.NumberFormat("es-AR", {
-                                  style: "currency",
-                                  currency: "ARS",
-                                }).format(Number(corrections[total.id] ?? 0))
-                              : "Sin total"}
-                          </strong>
-                        </div>
-                        <div className="entry-proposal__accounts">
-                          <label className="ds-field">
-                            <span className="ds-field__label">Cuenta de débito</span>
-                            <select
-                              className="ctxbar__input"
-                              value={debitAccountId}
-                              onChange={(event) => setDebitAccountId(event.target.value)}
-                            >
-                              {accounts.data?.map((account) => (
-                                <option key={account.id} value={account.id}>
-                                  {account.code} · {account.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="ds-field">
-                            <span className="ds-field__label">Cuenta de crédito</span>
-                            <select
-                              className="ctxbar__input"
-                              value={creditAccountId}
-                              onChange={(event) => setCreditAccountId(event.target.value)}
-                            >
-                              {accounts.data?.map((account) => (
-                                <option key={account.id} value={account.id}>
-                                  {account.code} · {account.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        </div>
-                        {createEntry.isError ? (
-                          <p className="form-error" role="alert">
-                            {createEntry.error.message}
-                          </p>
-                        ) : null}
-                        {entryResult ? (
-                          <div className="action-receipt" role="status">
-                            <Icon name="check" size={18} />
-                            <span>
-                              <strong>Asiento enviado a revisión</strong>
-                              <small>
-                                La propuesta quedó separada de la aprobación documental.
-                              </small>
-                            </span>
-                          </div>
-                        ) : (
-                          <Button
-                            onClick={() => createEntry.mutate()}
-                            loading={createEntry.isPending}
-                            disabled={
-                              !periodId ||
-                              !debitAccountId ||
-                              !creditAccountId ||
-                              debitAccountId === creditAccountId
-                            }
-                          >
-                            Crear y enviar a revisión
-                          </Button>
-                        )}
-                      </section>
+                    {extraction.data.status === "REVIEWED" ? (
+                      <div className="action-receipt" role="status">
+                        <Icon name="file" size={18} />
+                        <span>
+                          <strong>Propuesta contable deshabilitada</strong>
+                          <small>
+                            La creación automática de asientos desde la bandeja se retiró (G0-02).
+                            La propuesta se prepara en el nuevo flujo fiscal con desglose por
+                            componente.
+                          </small>
+                        </span>
+                      </div>
                     ) : null}
                   </>
                 ) : (

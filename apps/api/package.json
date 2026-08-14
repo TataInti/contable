@@ -11,6 +11,7 @@
     "test": "NODE_ENV=test vitest run",
     "dev": "tsx watch src/server.ts",
     "seed:demo": "tsx src/seed-demo.ts",
+    "migrate:deploy": "prisma migrate deploy",
     "start": "node dist/server.js"
   },
   "dependencies": {

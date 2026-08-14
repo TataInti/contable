@@ -16,8 +16,6 @@ const PREPARER_A = "33333333-3333-4333-8333-333333333333";
 const FIRM_ALFA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT_ALFA = "11111111-2222-4333-8444-555555555555";
 
-const alive = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-
 const runtimeConnection =
   process.env.RUNTIME_DATABASE_URL ??
   "postgresql://contable_runtime:runtime_secret@localhost:5432/contable";
@@ -95,7 +93,7 @@ async function setupFixtures(year: number) {
   });
 }
 
-describe.skipIf(!alive)("núcleo contable (integración DB)", () => {
+describe("núcleo contable (integración DB)", () => {
   beforeEach(async () => {
     // Limpiar datos de prueba del cliente para idempotencia
     // (incluye tablas de Fase 7 que referencian el ledger)

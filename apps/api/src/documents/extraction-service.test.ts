@@ -13,8 +13,6 @@ const OWNER_A = "11111111-1111-4111-8111-111111111111";
 const FIRM_ALFA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT_ALFA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
-const alive = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-
 const runtimeConnection =
   process.env.RUNTIME_DATABASE_URL ??
   "postgresql://contable_runtime:runtime_secret@localhost:5432/contable";
@@ -36,7 +34,7 @@ async function runAsRuntime<T>(
 
 const service = new ExtractionService();
 
-describe.skipIf(!alive)("extracción (integración DB)", () => {
+describe("extracción (integración DB)", () => {
   it("crea una extracción con campos e ítems", async () => {
     const created = await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
       // Buscar un documento existente del seed para asociar la extracción

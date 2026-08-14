@@ -14,8 +14,6 @@ const OWNER_A = "11111111-1111-4111-8111-111111111111";
 const FIRM_ALFA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT_ALFA = "11111111-2222-4333-8444-999999999999";
 
-const alive = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-
 const runtimeConnection =
   process.env.RUNTIME_DATABASE_URL ??
   "postgresql://contable_runtime:runtime_secret@localhost:5432/contable";
@@ -64,7 +62,7 @@ async function setupFixtures() {
   });
 }
 
-describe.skipIf(!alive)("asistente (integración DB)", () => {
+describe("asistente (integración DB)", () => {
   beforeEach(async () => {
     await prisma.$executeRawUnsafe(`DELETE FROM assistant_usage WHERE "clientId" = '${CLIENT_ALFA}'`);
     await prisma.$executeRawUnsafe(`DELETE FROM assistant_feedback WHERE "clientId" = '${CLIENT_ALFA}'`);
