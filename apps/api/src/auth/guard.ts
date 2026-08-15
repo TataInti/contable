@@ -78,6 +78,24 @@ function requiredCapability(method: string, path: string): Capability | null {
     if (path.endsWith("/review")) return "vat.review";
     return "vat.calculate";
   }
+  // --- Fundación fiscal (Puerta 1) ---
+  if (path.includes("/tax-profile-versions")) {
+    if (path.endsWith("/activate")) return "tax.profile.write";
+    if (path.endsWith("/submit-review")) return "tax.profile.write";
+    return method === "GET" ? "tax.profile.read" : "tax.profile.write";
+  }
+  if (path.includes("/tax-registrations")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
+  if (path.includes("/tax-periods")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
+  if (path.includes("/tax-obligations")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
+  if (path.includes("/tax-rule-versions")) {
+    if (path.endsWith("/approve")) return "tax.rules.approve";
+    if (path.endsWith("/activate")) return "tax.rules.activate";
+    if (path.endsWith("/submit-review")) return "tax.rules.propose";
+    return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
+  }
+  if (path.includes("/tax-rule-packs")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
+  if (path.includes("/tax/credentials")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
+  if (path.includes("/tax/")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
   if (path.includes("/obligations")) return method === "GET" ? "client.read" : "obligation.manage";
   if (path.includes("/obligation-instances")) return method === "GET" ? "client.read" : "obligation.manage";
   if (path.includes("/document-requests")) return method === "GET" ? "client.read" : "request.manage";

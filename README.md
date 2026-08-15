@@ -15,6 +15,10 @@ packages/*     motor contable, permisos, contratos, storage y design system
 infra/*        PostgreSQL, Valkey, MinIO, ClamAV, Nginx y Compose
 ```
 
+> 📐 **[Diagrama de arquitectura vivo →](./docs/architecture-overview.md)**
+> Incluye vista de contenedores, mapa de transición de módulos legacy → fiscal, flujo de liquidación target y principios arquitectónicos.
+> Se actualiza con cada cambio arquitectónico significativo.
+
 ## Inicio local
 
 Requisitos: Node 22+, npm, Docker Compose y Python 3.12+.

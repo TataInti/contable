@@ -1,5 +1,7 @@
 export * from "./primitives.js";
 export * from "./domain-enums.js";
+export * from "./tax-enums.js";
+export * from "./tax.js";
 export * from "./journal.js";
 export * from "./documents.js";
 export * from "./domain.js";

@@ -27,6 +27,9 @@ const StudyTrabajo = lazy(() =>
 const StudyAdministracion = lazy(() =>
   import("./study/StudyAdministracion").then((m) => ({ default: m.StudyAdministracion })),
 );
+const StudyOnboardingFiscal = lazy(() =>
+  import("./study/StudyOnboardingFiscal").then((m) => ({ default: m.StudyOnboardingFiscal })),
+);
 const PortalDashboard = lazy(() =>
   import("./portal/PortalDashboard").then((m) => ({ default: m.PortalDashboard })),
 );
@@ -132,6 +135,7 @@ function AppRoutes() {
             <Route element={<StudyShell />}>
               <Route index element={<StudyDashboard />} />
               <Route path="clientes" element={<StudyClientes />} />
+              <Route path="clientes/:clientId/configuracion-fiscal" element={<StudyOnboardingFiscal />} />
               <Route path="bandeja" element={<StudyBandeja />} />
               <Route path="trabajo" element={<StudyTrabajo />} />
               <Route path="administracion" element={<StudyAdministracion />} />

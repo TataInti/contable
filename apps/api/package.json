@@ -19,6 +19,7 @@
     "@contable/contracts": "*",
     "@contable/permissions": "*",
     "@contable/storage": "*",
+    "@contable/tax-engine": "*",
     "@fastify/cookie": "^11.0.0",
     "@fastify/rate-limit": "^11.2.0",
     "@prisma/adapter-pg": "^7.9.1",

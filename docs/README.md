@@ -6,6 +6,7 @@
 
 | Documento | Contenido |
 |---|---|
+| [Arquitectura viva](./architecture-overview.md) | Diagrama Mermaid de contenedores, transición de módulos y flujo target |
 | [ADR](./adr/README.md) | Decisiones de arquitectura (7 ADRs aceptados) |
 | [Glosario](./glosario.md) | Terminología de dominio congelada |
 | [Invariantes](./invariantes.md) | Escenarios Given/When/Then como tests pendientes |

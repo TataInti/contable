@@ -28,6 +28,7 @@ const NAV_GROUPS: { label: string; items: NavigationItem[] }[] = [
     items: [
       { to: "/bandeja", label: "Bandeja documental", icon: "inbox" },
       { to: "/trabajo", label: "Trabajo", icon: "tasks" },
+      { to: "/clientes/:clientId/configuracion-fiscal", label: "Configuración fiscal", icon: "settings", capability: "tax.profile.read" },
     ],
   },
 ];

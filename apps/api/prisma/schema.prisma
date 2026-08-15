@@ -42,6 +42,9 @@ model User {
   biDashboards           BiDashboard[]           @relation("biDashboardCreatedBy")
   portalMemberships      PortalMembership[]
   idempotencyRecords     IdempotencyRecord[]
+  professionalCredentials ProfessionalCredential[]
+  ruleApprovals          RuleApproval[]
+  ruleVersionApprovals   TaxRuleVersion[]
 
   @@map("users")
 }
@@ -175,9 +178,15 @@ model Client {
   portalInvitations      PortalInvitation[]
   idempotencyRecords     IdempotencyRecord[]
   outboxEvents           OutboxEvent[]
+  taxpayerProfiles       TaxpayerProfileVersion[]
+  taxRegistrations       TaxRegistration[]
+  clientActivities       ClientActivity[]
+  taxPeriods             TaxPeriod[]
+  taxObligations         TaxObligation[]
 
   @@unique([firmId, cuit])
   @@index([firmId])
+  @@unique([firmId, id])
   @@map("clients")
 }
 
@@ -1712,4 +1721,502 @@ model FeatureFlag {
   @@unique([firmId, clientId, code])
   @@index([firmId, clientId])
   @@map("feature_flags")
+}
+
+// ============================================================
+// Puerta 1 — Fundación fiscal (G1-01 a G1-05)
+// Fuente: PLAN_DESARROLLO_CONTABLE.md §7.2, §7.3
+// ============================================================
+
+// --- Maestros: jurisdicción, autoridad, impuesto, régimen ---
+
+model Jurisdiction {
+  id        String   @id @default(uuid(7))
+  code      String
+  name      String
+  kind      JurisdictionKind
+  parentId  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent        Jurisdiction?       @relation("jurisdictionTree", fields: [parentId], references: [id])
+  children      Jurisdiction[]      @relation("jurisdictionTree")
+  authorities   TaxAuthority[]
+  regimes       TaxRegime[]
+  activities    EconomicActivity[]
+  dueDateRules  DueDateRule[]
+  holidays      Holiday[]
+  credentials   ProfessionalCredential[]
+
+  @@unique([code])
+  @@index([parentId])
+  @@map("jurisdictions")
+}
+
+enum JurisdictionKind {
+  NATIONAL
+  PROVINCIAL
+  MUNICIPAL
+}
+
+model TaxAuthority {
+  id             String   @id @default(uuid(7))
+  code           String
+  name           String
+  jurisdictionId String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  jurisdiction Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+  regimes      TaxRegime[]
+  sources      NormativeSource[]
+  credentials  ProfessionalCredential[]
+
+  @@unique([code])
+  @@index([jurisdictionId])
+  @@map("tax_authorities")
+}
+
+model TaxType {
+  id        String   @id @default(uuid(7))
+  code      String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  regimes TaxRegime[]
+  periods TaxPeriod[]
+
+  @@unique([code])
+  @@map("tax_types")
+}
+
+model TaxRegime {
+  id             String   @id @default(uuid(7))
+  code           String
+  name           String
+  taxTypeId      String
+  jurisdictionId String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  taxType        TaxType          @relation(fields: [taxTypeId], references: [id])
+  jurisdiction   Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
+  authority      TaxAuthority     @relation(fields: [authorityId], references: [id])
+  authorityId    String
+  registrations  TaxRegistration[]
+  obligations    TaxObligation[]
+  rulePacks      TaxRulePack[]
+
+  @@unique([code])
+  @@index([taxTypeId])
+  @@index([jurisdictionId])
+  @@map("tax_regimes")
+}
+
+// --- Perfil fiscal del contribuyente ---
+
+model TaxpayerProfileVersion {
+  id                 String                 @id @default(uuid(7))
+  firmId             String
+  clientId           String
+  version            Int                    @default(1)
+  legalName          String
+  cuit               String
+  personType         PersonType
+  nationalCondition  NationalTaxCondition
+  fiscalAddress      String?
+  fiscalYearEndMonth Int                    @default(12)
+  validFrom          DateTime
+  validTo            DateTime?
+  status             TaxpayerProfileStatus  @default(DRAFT)
+  source             String?
+  createdByUserId    String?
+  reviewedByUserId   String?
+  reviewedAt         DateTime?
+  activatedAt        DateTime?
+  supersedesId       String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  client         Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  registrations  TaxRegistration[]
+  activities     ClientActivity[]
+  obligations    TaxObligation[]
+
+  @@unique([clientId, version])
+  @@index([firmId, clientId, status])
+  @@map("taxpayer_profile_versions")
+}
+
+enum PersonType {
+  FISICA
+  JURIDICA
+}
+
+enum NationalTaxCondition {
+  RESPONSABLE_INSCRIPTO
+  MONOTRIBUTISTA
+  EXENTO
+  NO_RESPONSABLE
+}
+
+enum TaxpayerProfileStatus {
+  DRAFT
+  IN_REVIEW
+  ACTIVE
+  SUPERSEDED
+}
+
+model TaxRegistration {
+  id                    String             @id @default(uuid(7))
+  firmId                String
+  clientId              String
+  profileVersionId      String
+  regimeId              String
+  status                TaxRegistrationStatus @default(ACTIVE)
+  validFrom             DateTime
+  validTo               DateTime?
+  registrationNumber    String?
+  createdByUserId       String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  client    Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  profile   TaxpayerProfileVersion @relation(fields: [profileVersionId], references: [id])
+  regime    TaxRegime           @relation(fields: [regimeId], references: [id])
+
+  @@index([firmId, clientId, regimeId])
+  @@index([profileVersionId])
+  @@map("tax_registrations")
+}
+
+enum TaxRegistrationStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+model EconomicActivity {
+  id             String   @id @default(uuid(7))
+  code           String
+  name           String
+  jurisdictionId String
+  source         String?
+  validFrom      DateTime
+  validTo        DateTime?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  jurisdiction Jurisdiction    @relation(fields: [jurisdictionId], references: [id])
+  clientLinks  ClientActivity[]
+
+  @@unique([code, jurisdictionId])
+  @@index([jurisdictionId])
+  @@map("economic_activities")
+}
+
+model ClientActivity {
+  id                String   @id @default(uuid(7))
+  firmId            String
+  clientId          String
+  profileVersionId  String
+  activityId        String
+  isPrimary         Boolean  @default(false)
+  validFrom         DateTime
+  validTo           DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  client   Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  profile  TaxpayerProfileVersion @relation(fields: [profileVersionId], references: [id])
+  activity EconomicActivity   @relation(fields: [activityId], references: [id])
+
+  @@index([firmId, clientId, activityId])
+  @@index([profileVersionId])
+  @@map("client_activities")
+}
+
+model ProfessionalCredential {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  userId         String
+  jurisdictionId String
+  registrationNumber String
+  status         CredentialStatus @default(ACTIVE)
+  validFrom      DateTime
+  validTo        DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id])
+  jurisdiction Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+  authority    TaxAuthority @relation(fields: [authorityId], references: [id])
+  authorityId  String
+  approvals    RuleApproval[]
+
+  @@index([firmId, userId])
+  @@index([jurisdictionId])
+  @@map("professional_credentials")
+}
+
+enum CredentialStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+}
+
+// --- Períodos y obligaciones ---
+
+model TaxPeriod {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String
+  taxTypeId String
+  startDate DateTime
+  endDate   DateTime
+  label     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client      Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  taxType     TaxType         @relation(fields: [taxTypeId], references: [id])
+  obligations TaxObligation[]
+
+  @@unique([clientId, taxTypeId, startDate, endDate])
+  @@index([firmId, clientId, taxTypeId])
+  @@map("tax_periods")
+}
+
+model TaxObligation {
+  id                String   @id @default(uuid(7))
+  firmId            String
+  clientId          String
+  profileVersionId  String
+  regimeId          String
+  periodId          String
+  status            TaxObligationStatus @default(PENDING)
+  dueDate           DateTime?
+  materializedBy    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  client   Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  profile  TaxpayerProfileVersion @relation(fields: [profileVersionId], references: [id])
+  regime   TaxRegime           @relation(fields: [regimeId], references: [id])
+  period   TaxPeriod           @relation(fields: [periodId], references: [id])
+
+  @@unique([clientId, regimeId, periodId])
+  @@index([firmId, clientId, status])
+  @@index([periodId])
+  @@map("tax_obligations")
+}
+
+enum TaxObligationStatus {
+  PENDING
+  WAITING_INPUTS
+  READY_TO_CALCULATE
+  IN_REVIEW
+  READY_TO_FILE
+  FILED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  NOT_APPLICABLE
+}
+
+// --- Reglas fiscales ---
+
+model TaxRulePack {
+  id          String   @id @default(uuid(7))
+  code        String
+  name        String
+  regimeId    String
+  status      TaxRulePackStatus @default(DRAFT)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  regime   TaxRegime          @relation(fields: [regimeId], references: [id])
+  versions TaxRuleVersion[]
+
+  @@unique([code])
+  @@index([regimeId])
+  @@map("tax_rule_packs")
+}
+
+enum TaxRulePackStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  ACTIVE
+  RETIRED
+}
+
+model TaxRuleVersion {
+  id            String   @id @default(uuid(7))
+  packId        String
+  version       Int      @default(1)
+  status        TaxRulePackStatus @default(DRAFT)
+  validFrom     DateTime
+  validTo       DateTime?
+  rulesHash     String
+  engineVersion String
+  approvedByUserId String?
+  approvedAt    DateTime?
+  activatedAt   DateTime?
+  supersedesId  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  pack      TaxRulePack        @relation(fields: [packId], references: [id], onDelete: Cascade)
+  approvedBy User?             @relation(fields: [approvedByUserId], references: [id])
+  rateRules TaxRateRule[]
+  minimumRules TaxMinimumRule[]
+  bracketRules TaxBracketRule[]
+  dueDateRules DueDateRule[]
+  roundingRules RoundingRule[]
+  sources   NormativeSource[]
+  approvals RuleApproval[]
+
+  @@unique([packId, version])
+  @@index([packId, status])
+  @@map("tax_rule_versions")
+}
+
+model TaxRateRule {
+  id              String   @id @default(uuid(7))
+  ruleVersionId   String
+  concept         String
+  activityCode    String?
+  jurisdictionId  String?
+  rate            Decimal  @db.Decimal(10, 6)
+  minAmount       Decimal? @db.Decimal(20, 4)
+  validFrom       DateTime
+  validTo         DateTime?
+  createdAt       DateTime @default(now())
+
+  ruleVersion TaxRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Cascade)
+
+  @@index([ruleVersionId])
+  @@map("tax_rate_rules")
+}
+
+model TaxMinimumRule {
+  id            String   @id @default(uuid(7))
+  ruleVersionId String
+  concept       String
+  jurisdictionId String?
+  amount        Decimal  @db.Decimal(20, 4)
+  isConditional Boolean  @default(false)
+  validFrom     DateTime
+  validTo       DateTime?
+  createdAt     DateTime @default(now())
+
+  ruleVersion TaxRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Cascade)
+
+  @@index([ruleVersionId])
+  @@map("tax_minimum_rules")
+}
+
+model TaxBracketRule {
+  id            String   @id @default(uuid(7))
+  ruleVersionId String
+  concept       String
+  fromAmount    Decimal  @db.Decimal(20, 4)
+  toAmount      Decimal? @db.Decimal(20, 4)
+  rate          Decimal  @db.Decimal(10, 6)
+  fixedAmount   Decimal? @db.Decimal(20, 4)
+  validFrom     DateTime
+  validTo       DateTime?
+  createdAt     DateTime @default(now())
+
+  ruleVersion TaxRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Cascade)
+
+  @@index([ruleVersionId])
+  @@map("tax_bracket_rules")
+}
+
+model DueDateRule {
+  id            String   @id @default(uuid(7))
+  ruleVersionId String
+  jurisdictionId String
+  frequency     String   @default("MONTHLY")
+  dueDay        Int
+  cuitEnding    String?
+  validFrom     DateTime
+  validTo       DateTime?
+  createdAt     DateTime @default(now())
+
+  ruleVersion  TaxRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Cascade)
+  jurisdiction Jurisdiction   @relation(fields: [jurisdictionId], references: [id])
+
+  @@index([ruleVersionId])
+  @@map("due_date_rules")
+}
+
+model Holiday {
+  id             String   @id @default(uuid(7))
+  jurisdictionId String
+  date           DateTime
+  name           String?
+  createdAt      DateTime @default(now())
+
+  jurisdiction Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+
+  @@unique([jurisdictionId, date])
+  @@map("holidays")
+}
+
+model RoundingRule {
+  id            String   @id @default(uuid(7))
+  ruleVersionId String
+  concept       String
+  precision     Int      @default(2)
+  mode          String   @default("HALF_UP")
+  createdAt     DateTime @default(now())
+
+  ruleVersion TaxRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Cascade)
+
+  @@index([ruleVersionId])
+  @@map("rounding_rules")
+}
+
+model NormativeSource {
+  id            String   @id @default(uuid(7))
+  ruleVersionId String
+  authorityId   String
+  title         String
+  url           String?
+  reference     String?
+  fileChecksum  String?
+  consultedAt   DateTime
+  createdAt     DateTime @default(now())
+
+  ruleVersion TaxRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Cascade)
+  authority   TaxAuthority   @relation(fields: [authorityId], references: [id])
+
+  @@index([ruleVersionId])
+  @@map("normative_sources")
+}
+
+model RuleApproval {
+  id            String   @id @default(uuid(7))
+  ruleVersionId String
+  credentialId  String
+  approvedByUserId String
+  comment       String?
+  goldenResultsHash String?
+  approvedAt    DateTime @default(now())
+
+  ruleVersion TaxRuleVersion        @relation(fields: [ruleVersionId], references: [id], onDelete: Cascade)
+  credential  ProfessionalCredential @relation(fields: [credentialId], references: [id])
+  approvedBy  User                  @relation(fields: [approvedByUserId], references: [id])
+
+  @@index([ruleVersionId])
+  @@map("rule_approvals")
 }
