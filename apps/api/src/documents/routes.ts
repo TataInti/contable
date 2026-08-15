@@ -28,16 +28,23 @@ export function documentRoutes(app: FastifyInstance) {
   const service = new DocumentService(storage);
   const extractionService = new ExtractionService();
 
-  // Crear sesión de upload
+  // Crear sesión de upload (G2-07: el body valida requestItemId obligatorio)
   app.post("/api/v1/firms/:firmId/clients/:clientId/document-upload-sessions", async (req, reply) => {
     const { firmId, clientId } = req.params as { firmId: string; clientId: string };
     const body = createUploadSessionSchema.parse(req.body);
     const ctx = tenantContextFromRequest(req);
     const userId = ctx.userId;
 
+    // G2-07: valida que el ítem existe y pertenece al cliente antes de crear la sesión.
+    const item = await service.getRequestItem(ctx, body.requestItemId);
+    if (!item || item.clientId !== clientId) {
+      return reply.status(404).send({ error: { code: "REQUEST_ITEM_NOT_FOUND", message: "Ítem de pedido no encontrado" } });
+    }
+
     const session = await service.createUploadSession(firmId, clientId, userId, {
       ...(body.expectedMime !== undefined ? { expectedMime: body.expectedMime } : {}),
       ...(body.maxFiles !== undefined ? { maxFiles: body.maxFiles } : {}),
+      requestItemId: body.requestItemId,
     }, ctx);
 
     // Generar URL firmada de subida directa a cuarentena

@@ -90,18 +90,18 @@ async function setupMembership() {
 async function setupMasters() {
   return runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
     const nacion = await tx.jurisdiction.create({
-      data: { code: "AR", name: "Nación", kind: "NATIONAL" },
+      data: { code: "AR-F", name: "Nación", kind: "NATIONAL" },
     });
     const tucuman = await tx.jurisdiction.create({
-      data: { code: "AR-T", name: "Tucumán", kind: "PROVINCIAL", parentId: nacion.id },
+      data: { code: "AR-T-F", name: "Tucumán", kind: "PROVINCIAL", parentId: nacion.id },
     });
     const arca = await tx.taxAuthority.create({
-      data: { code: "ARCA", name: "ARCA", jurisdictionId: nacion.id },
+      data: { code: "ARCA-F", name: "ARCA", jurisdictionId: nacion.id },
     });
-    const iva = await tx.taxType.create({ data: { code: "IVA", name: "IVA" } });
+    const iva = await tx.taxType.create({ data: { code: "IVA-F", name: "IVA" } });
     const ri = await tx.taxRegime.create({
       data: {
-        code: "RI",
+        code: "RI-F",
         name: "Responsable Inscripto",
         taxTypeId: iva.id,
         jurisdictionId: nacion.id,
@@ -110,7 +110,7 @@ async function setupMasters() {
     });
     const actividad = await tx.economicActivity.create({
       data: {
-        code: "620100",
+        code: "620100-F",
         name: "Servicios de informática",
         jurisdictionId: nacion.id,
         source: "CLAE",
@@ -145,11 +145,11 @@ async function cleanupFiscal() {
     await tx.$executeRawUnsafe(`DELETE FROM taxpayer_profile_versions WHERE "clientId" = '${CLIENT_ALFA}'`);
     await tx.$executeRawUnsafe(`DELETE FROM professional_credentials`);
     await tx.$executeRawUnsafe(`DELETE FROM holidays`);
-    await tx.$executeRawUnsafe(`DELETE FROM economic_activities`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_regimes`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_types`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_authorities`);
-    await tx.$executeRawUnsafe(`DELETE FROM jurisdictions`);
+    await tx.$executeRawUnsafe(`DELETE FROM economic_activities WHERE code LIKE '%-F'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_regimes WHERE code LIKE '%-F'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_types WHERE code LIKE '%-F'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_authorities WHERE code LIKE '%-F'`);
+    await tx.$executeRawUnsafe(`DELETE FROM jurisdictions WHERE code LIKE '%-F'`);
   });
 }
 
@@ -160,20 +160,21 @@ describe("G1-02 maestros (integración DB)", () => {
   });
 
   it("crea y lista jurisdicciones con jerarquía", async () => {
-    const nacion = await masters.createJurisdiction(ctxOwner, { code: "AR", name: "Nación", kind: "NATIONAL" });
-    await masters.createJurisdiction(ctxOwner, { code: "AR-T", name: "Tucumán", kind: "PROVINCIAL", parentId: nacion.id });
+    const nacion = await masters.createJurisdiction(ctxOwner, { code: "AR-F", name: "Nación", kind: "NATIONAL" });
+    await masters.createJurisdiction(ctxOwner, { code: "AR-T-F", name: "Tucumán", kind: "PROVINCIAL", parentId: nacion.id });
 
     const list = await masters.listJurisdictions(ctxOwner);
-    expect(list.length).toBe(2);
-    const tucuman = list.find((j) => j.code === "AR-T");
+    const mine = list.filter((j) => j.code.endsWith("-F"));
+    expect(mine.length).toBe(2);
+    const tucuman = mine.find((j) => j.code === "AR-T-F");
     expect(tucuman?.parentId).toBe(nacion.id);
   });
 
   it("crea impuesto, régimen y actividad", async () => {
     const fx = await setupMasters();
-    expect(fx.ri.code).toBe("RI");
+    expect(fx.ri.code).toBe("RI-F");
     expect(fx.ri.taxTypeId).toBe(fx.iva.id);
-    expect(fx.actividad.code).toBe("620100");
+    expect(fx.actividad.code).toBe("620100-F");
   });
 
   it("los maestros son catálogos compartidos: un no-miembro no los ve (RLS runtime)", async () => {

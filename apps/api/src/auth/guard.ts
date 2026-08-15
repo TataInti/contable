@@ -95,6 +95,23 @@ function requiredCapability(method: string, path: string): Capability | null {
   }
   if (path.includes("/tax-rule-packs")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
   if (path.includes("/tax/credentials")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
+  // --- Ingestión y subledger fiscal (Puerta 2) ---
+  if (path.includes("/import-batches")) {
+    if (path.endsWith("/validate")) return "tax.vouchers.prepare";
+    if (path.endsWith("/commit")) return "tax.vouchers.prepare";
+    return method === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare";
+  }
+  if (path.includes("/vouchers")) {
+    if (path.endsWith("/review")) return "tax.vouchers.review";
+    return method === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare";
+  }
+  if (path.includes("/withholdings") || path.includes("/perceptions")) {
+    return method === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare";
+  }
+  if (path.includes("/management-expenses")) {
+    if (path.endsWith("/approve-treatment")) return "tax.management_expenses.approve_treatment";
+    return method === "GET" ? "tax.management_expenses.read" : "tax.management_expenses.write";
+  }
   if (path.includes("/tax/")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
   if (path.includes("/obligations")) return method === "GET" ? "client.read" : "obligation.manage";
   if (path.includes("/obligation-instances")) return method === "GET" ? "client.read" : "obligation.manage";

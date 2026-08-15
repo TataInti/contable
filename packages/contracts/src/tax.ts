@@ -400,25 +400,6 @@ export const taxSettlementSchema = z.object({
 });
 export type TaxSettlement = z.infer<typeof taxSettlementSchema>;
 
-// --- Gastos gerenciales (base para Puerta 5) ---
-
-export const managementExpenseSchema = z.object({
-  id: uuid,
-  firmId: uuid,
-  clientId: uuid,
-  description: z.string().min(1).max(300),
-  amount: money,
-  currency: z.string().default("ARS"),
-  incurredOn: isoDate,
-  paidOn: isoDate.nullable(),
-  taxTreatment: taxTreatment,
-  status: managementExpenseStatus,
-  hasFiscalSupport: z.boolean(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
-export type ManagementExpense = z.infer<typeof managementExpenseSchema>;
-
 // --- Cumplimiento (base para Puerta 3) ---
 
 export const taxFilingSchema = z.object({
@@ -468,6 +449,16 @@ export const importBatchSchema = z.object({
 });
 export type ImportBatch = z.infer<typeof importBatchSchema>;
 
+export const createImportBatchSchema = z.object({
+  origin: z.string().min(1).max(80),
+  taxTypeId: uuid,
+  periodId: uuid,
+  adapterVersion: z.string().min(1).max(80),
+  fileName: z.string().max(240).optional(),
+  fileHash: z.string().max(128).optional(),
+});
+export type CreateImportBatch = z.infer<typeof createImportBatchSchema>;
+
 export const importRowSchema = z.object({
   id: uuid,
   batchId: uuid,
@@ -514,3 +505,106 @@ export const fiscalComponentSchema = z.object({
   amount: money,
 });
 export type FiscalComponent = z.infer<typeof fiscalComponentSchema>;
+
+export const createVoucherComponentSchema = z.object({
+  concept: z.string().min(1).max(80),
+  base: money,
+  rate: decimalRate.optional(),
+  amount: money,
+});
+export type CreateVoucherComponent = z.infer<typeof createVoucherComponentSchema>;
+
+export const createFiscalVoucherSchema = z.object({
+  direction: fiscalVoucherDirection,
+  type: z.string().min(1).max(10),
+  letter: z.string().max(1).optional(),
+  pointOfSale: z.number().int().nonnegative(),
+  number: z.number().int().nonnegative(),
+  issuerCuit: cuit,
+  receiverCuit: cuit,
+  issuedOn: isoDate,
+  currency: z.string().length(3).optional(),
+  exchangeRate: decimalRate.optional(),
+  total: money,
+  documentId: uuid.optional(),
+  periodId: uuid.optional(),
+  components: z.array(createVoucherComponentSchema).min(1).max(50),
+});
+export type CreateFiscalVoucher = z.infer<typeof createFiscalVoucherSchema>;
+
+// --- Certificados de retención y percepción (G2-03) ---
+
+export const withholdingCertificateSchema = z.object({
+  id: uuid,
+  firmId: uuid,
+  clientId: uuid,
+  direction: z.string().max(20),
+  cuitAgent: cuit,
+  cuitResponsible: cuit,
+  concept: z.string().max(80),
+  base: money,
+  amount: money,
+  rate: decimalRate.nullable(),
+  issuedOn: isoDate,
+  certificateNumber: z.string().max(80).nullable(),
+  status: z.string().max(20),
+  createdAt: z.string().datetime(),
+});
+export type WithholdingCertificate = z.infer<typeof withholdingCertificateSchema>;
+
+export const perceptionCertificateSchema = z.object({
+  id: uuid,
+  firmId: uuid,
+  clientId: uuid,
+  direction: z.string().max(20),
+  cuitAgent: cuit,
+  cuitResponsible: cuit,
+  concept: z.string().max(80),
+  base: money,
+  amount: money,
+  rate: decimalRate.nullable(),
+  issuedOn: isoDate,
+  certificateNumber: z.string().max(80).nullable(),
+  status: z.string().max(20),
+  createdAt: z.string().datetime(),
+});
+export type PerceptionCertificate = z.infer<typeof perceptionCertificateSchema>;
+
+// --- Gastos gerenciales (G2-08) ---
+
+export const managementExpenseSchema = z.object({
+  id: uuid,
+  firmId: uuid,
+  clientId: uuid,
+  description: z.string().min(1).max(300),
+  amount: money,
+  currency: z.string().default("ARS"),
+  incurredOn: isoDate,
+  paidOn: isoDate.nullable(),
+  taxTreatment: taxTreatment,
+  status: managementExpenseStatus,
+  hasFiscalSupport: z.boolean(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type ManagementExpense = z.infer<typeof managementExpenseSchema>;
+
+export const createManagementExpenseSchema = z.object({
+  description: z.string().min(1).max(300),
+  amount: money,
+  currency: z.string().length(3).optional(),
+  incurredOn: isoDate,
+  paidOn: isoDate.optional(),
+  category: z.string().max(120).optional(),
+  hasFiscalSupport: z.boolean(),
+});
+export type CreateManagementExpense = z.infer<typeof createManagementExpenseSchema>;
+
+export const approveTreatmentSchema = z.object({
+  treatment: taxTreatment,
+  reason: z.string().min(10).max(1000),
+  ruleVersionId: uuid.optional(),
+  evidenceDocumentId: uuid.optional(),
+  reviewedByUserId: uuid,
+});
+export type ApproveTreatment = z.infer<typeof approveTreatmentSchema>;

@@ -97,11 +97,14 @@ export const createPeriodSchema = z
   .strict();
 export type CreatePeriod = z.infer<typeof createPeriodSchema>;
 
-/** Creación de sesión de upload de documento */
+/** Creación de sesión de upload de documento (G2-07: requestItemId obligatorio) */
 export const createUploadSessionSchema = z
   .object({
     expectedMime: z.string().optional(),
     maxFiles: z.number().int().positive().max(10).optional(),
+    // G2-07: el ítem de pedido al que responde el documento. Obligatorio para
+    // que cada archivo quede ligado al ítem correcto del pedido documental.
+    requestItemId: z.string().uuid(),
   })
   .strict();
 export type CreateUploadSession = z.infer<typeof createUploadSessionSchema>;

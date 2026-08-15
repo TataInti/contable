@@ -18,7 +18,7 @@ export class DocumentService {
   constructor(private storage: ObjectStorage) {}
 
   /** Crea una sesión de upload para un cliente autorizado. */
-  async createUploadSession(firmId: string, clientId: string, userId: string, opts: { expectedMime?: string; maxFiles?: number } = {}, ctx?: TenantContext) {
+  async createUploadSession(firmId: string, clientId: string, userId: string, opts: { expectedMime?: string; maxFiles?: number; requestItemId?: string } = {}, ctx?: TenantContext) {
     const data: Prisma.UploadSessionUncheckedCreateInput = {
       firmId,
       clientId,
@@ -29,6 +29,7 @@ export class DocumentService {
       expiresAt: new Date(Date.now() + UPLOAD_SESSION_TTL_MS),
     };
     if (opts.expectedMime !== undefined) data.expectedMime = opts.expectedMime;
+    if (opts.requestItemId !== undefined) data.requestItemId = opts.requestItemId;
 
     return ctx
       ? withTenantContext(ctx, (tx) => tx.uploadSession.create({ data }))
@@ -105,6 +106,28 @@ export class DocumentService {
         where: { id: sessionId },
         data: { status: "COMPLETED", completedAt: new Date() },
       });
+
+      // G2-07: si la sesión se creó para responder un ítem de pedido, ligar el
+      // documento al ítem y derivar la completitud del pedido.
+      if (session.requestItemId) {
+        const item = await tx.documentRequestItem.findFirst({
+          where: { id: session.requestItemId, firmId: session.firmId, clientId: session.clientId },
+        });
+        if (item) {
+          await tx.documentRequestItem.update({
+            where: { id: item.id },
+            data: { status: "ATTACHED", documentId: document.id },
+          });
+          const items = await tx.documentRequestItem.findMany({ where: { requestId: item.requestId } });
+          const required = items.filter((i) => i.required);
+          if (required.every((i) => i.status === "ATTACHED")) {
+            await tx.documentRequest.update({
+              where: { id: item.requestId },
+              data: { status: "COMPLETED" },
+            });
+          }
+        }
+      }
 
       const job = await tx.documentProcessingJob.create({
         data: {
@@ -186,6 +209,47 @@ export class DocumentService {
       orderBy: { createdAt: "desc" },
     });
     return ctx ? withTenantContext(ctx, query) : prisma.$transaction(query);
+  }
+
+  /** G2-07: obtiene un ítem de pedido documental (para ligar uploads). */
+  async getRequestItem(ctx: TenantContext, requestItemId: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.documentRequestItem.findFirst({
+        where: {
+          id: requestItemId,
+          firmId: ctx.firmId,
+          ...(ctx.clientId ? { clientId: ctx.clientId } : {}),
+        },
+      }),
+    );
+  }
+
+  /** G2-07: liga el documento al ítem del pedido y actualiza el estado del ítem. */
+  async attachToRequestItem(ctx: TenantContext, documentId: string, requestItemId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const item = await tx.documentRequestItem.findFirst({
+        where: {
+          id: requestItemId,
+          firmId: ctx.firmId,
+          ...(ctx.clientId ? { clientId: ctx.clientId } : {}),
+        },
+      });
+      if (!item) return null;
+      const updated = await tx.documentRequestItem.update({
+        where: { id: requestItemId },
+        data: { status: "ATTACHED", documentId },
+      });
+      // Completitud derivada (W-003): si todos los ítems requeridos están ATTACHED.
+      const items = await tx.documentRequestItem.findMany({ where: { requestId: item.requestId } });
+      const required = items.filter((i) => i.required);
+      if (required.every((i) => i.status === "ATTACHED")) {
+        await tx.documentRequest.update({
+          where: { id: item.requestId },
+          data: { status: "COMPLETED" },
+        });
+      }
+      return updated;
+    });
   }
 
   /** Obtiene un documento con sus versiones y jobs. */
