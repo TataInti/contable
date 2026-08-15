@@ -1,7 +1,10 @@
 import { Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { calculateVat, dec, VAT_ENGINE_VERSION } from "@contable/tax-engine";
 import type { TaxFact } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
+import { exportReport, type ExportReportResult } from "../reporting/report-export.js";
 
 /**
  * Servicio de liquidaciones fiscales (Puerta 3).
@@ -599,6 +602,85 @@ export class SettlementService {
     });
   }
 
+  /**
+   * G3-09: rectificativa con delta.
+   * Crea la nueva versión DRAFT y registra la diferencia por renglón contra
+   * la versión anterior (delta visible en la pantalla de liquidación).
+   */
+  async rectifyWithDelta(ctx: TenantContext, settlementId: string, reason: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const s = await this.getOwned(ctx, tx, settlementId);
+      if (s.status !== "FINALIZED") {
+        throw new SettlementError("INVALID_TRANSITION", "Solo una liquidación finalizada puede rectificarse");
+      }
+      if (!reason.trim()) {
+        throw new SettlementError("INVALID_TRANSITION", "La rectificación exige un motivo");
+      }
+      const versionCount = await tx.taxSettlement.count({
+        where: { clientId: s.clientId, regimeId: s.regimeId, periodId: s.periodId },
+      });
+      const next = await tx.taxSettlement.create({
+        data: {
+          firmId: s.firmId,
+          clientId: s.clientId,
+          taxTypeId: s.taxTypeId,
+          regimeId: s.regimeId,
+          jurisdictionId: s.jurisdictionId,
+          periodId: s.periodId,
+          cutoff: s.cutoff,
+          version: versionCount + 1,
+          engineVersion: s.engineVersion,
+          rulesHash: s.rulesHash,
+          inputHash: s.inputHash,
+          outputHash: s.outputHash,
+          status: "DRAFT",
+          totals: s.totals as unknown as Prisma.InputJsonValue,
+          preparedByUserId: ctx.userId,
+          supersedesId: s.id,
+        },
+      });
+
+      // Delta por renglón contra la versión anterior (G3-09).
+      const prevLines = await tx.taxSettlementLine.findMany({
+        where: { settlementId: s.id },
+        orderBy: { position: "asc" },
+      });
+      const prevByConcept = new Map(prevLines.map((l) => [l.concept, l.amount]));
+      const nextLines = await tx.taxSettlementLine.findMany({
+        where: { settlementId: next.id },
+        orderBy: { position: "asc" },
+      });
+      const deltas: Array<{ concept: string; previous: string; current: string; delta: string }> = [];
+      for (const line of nextLines) {
+        const prev = prevByConcept.get(line.concept) ?? new Prisma.Decimal(0);
+        const delta = line.amount.minus(prev);
+        if (!delta.isZero()) {
+          deltas.push({
+            concept: line.concept,
+            previous: prev.toString(),
+            current: line.amount.toString(),
+            delta: delta.toString(),
+          });
+        }
+      }
+      if (deltas.length > 0) {
+        await tx.taxDifference.create({
+          data: {
+            firmId: s.firmId,
+            clientId: s.clientId,
+            settlementId: next.id,
+            severity: "INFO",
+            status: "OPEN",
+            code: "RECTIFICATION_DELTA",
+            message: `Rectificación: ${deltas.length} renglón(es) con cambio`,
+            context: { deltas, reason } as Prisma.InputJsonValue,
+          },
+        });
+      }
+      return { settlement: next, deltas };
+    });
+  }
+
   // ------------------------------------------------------------------
   // G3-07/08: Presentación, pago, créditos
   // ------------------------------------------------------------------
@@ -806,6 +888,115 @@ export class SettlementService {
         include: { period: true, regime: true, lines: true },
         orderBy: { version: "desc" },
         take: 300,
+      }),
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // G3-06: Papel de trabajo y export (artifacts)
+  // ------------------------------------------------------------------
+
+  /**
+   * Genera el papel de trabajo de una liquidación FINALIZED y lo persiste
+   * como TaxExportArtifact (objeto inmutable en MinIO + checksum).
+   * El export se genera SIEMPRE desde el snapshot finalizado (V-003).
+   */
+  async generateArtifact(
+    ctx: TenantContext,
+    input: { settlementId: string; format: "csv" | "pdf" },
+  ) {
+    const storage = new ObjectStorage();
+    return withTenantContext(ctx, async (tx) => {
+      const s = await tx.taxSettlement.findUnique({
+        where: { id: input.settlementId },
+        include: {
+          period: true,
+          regime: { include: { taxType: true, jurisdiction: true } },
+          lines: { orderBy: { position: "asc" } },
+          inputs: true,
+          differences: true,
+        },
+      });
+      if (!s) throw new SettlementError("SETTLEMENT_NOT_FOUND", "Liquidación no encontrada");
+      if (s.status !== "FINALIZED") {
+        throw new SettlementError(
+          "SETTLEMENT_IMMUTABLE",
+          "El papel de trabajo sólo se genera desde una liquidación finalizada",
+        );
+      }
+
+      const totals = (s.totals ?? {}) as Record<string, string>;
+      const lines: ExportReportResult["lines"] = [
+        { code: "CLIENTE", label: "Cliente", value: s.clientId },
+        { code: "PERIODO", label: "Período", value: `${s.period.startDate.toISOString().slice(0, 10)} → ${s.period.endDate.toISOString().slice(0, 10)}` },
+        { code: "IMPUESTO", label: "Impuesto", value: s.regime.taxType.name },
+        { code: "REGIMEN", label: "Régimen", value: s.regime.name },
+        { code: "VERSION", label: "Versión", value: `v${s.version}` },
+        { code: "ENGINE", label: "Motor", value: s.engineVersion },
+        { code: "RULES_HASH", label: "Hash de reglas", value: s.rulesHash },
+        { code: "INPUT_HASH", label: "Hash de entradas", value: s.inputHash },
+        { code: "OUTPUT_HASH", label: "Hash de salida", value: s.outputHash },
+        { code: "CUTOFF", label: "Corte", value: s.cutoff.toISOString().slice(0, 10) },
+        { code: "PREPARADOR", label: "Preparador", value: s.preparedByUserId },
+        { code: "REVISOR", label: "Revisor", value: s.reviewedByUserId ?? "—" },
+        { code: "FINALIZADO", label: "Finalizado", value: s.finalizedAt?.toISOString() ?? "—" },
+        { code: "TOTAL", label: "Total a ingresar", value: totals["TOTAL_A_INGRESAR"] ?? totals["totalDue"] ?? "0", isTotal: true },
+      ];
+      for (const line of s.lines) {
+        lines.push({
+          code: line.concept,
+          label: line.concept,
+          value: line.amount.toString(),
+          indent: 1,
+        });
+      }
+      for (const diff of s.differences) {
+        lines.push({
+          code: diff.code,
+          label: `Diferencia ${diff.severity}: ${diff.message}`,
+          value: diff.status,
+          indent: 1,
+        });
+      }
+
+      const buffer = await exportReport(
+        {
+          templateCode: `LIQUIDACION_${s.regime.taxType.code}_${s.period.startDate.toISOString().slice(0, 7)}`,
+          templateVersion: s.version,
+          cutoff: s.cutoff.toISOString().slice(0, 10),
+          generatedAt: new Date().toISOString(),
+          lines,
+        },
+        input.format,
+      );
+
+      const checksum = createHash("sha256").update(buffer).digest("hex");
+      const objectKey = `settlements/${s.firmId}/${s.clientId}/${s.id}/v${s.version}.${input.format}`;
+      await storage.put(BUCKETS.exports, objectKey, buffer, buffer.length);
+
+      const artifact = await tx.taxExportArtifact.create({
+        data: {
+          firmId: s.firmId,
+          clientId: s.clientId,
+          settlementId: s.id,
+          kind: "PAPEL_DE_TRABAJO",
+          format: input.format,
+          objectKey,
+          checksum,
+          generatedByUserId: ctx.userId,
+        },
+      });
+      return { artifact, checksum, objectKey };
+    });
+  }
+
+  /** Lista artifacts de una liquidación. */
+  async listArtifacts(ctx: TenantContext, settlementId: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.taxExportArtifact.findMany({
+        where: { firmId: ctx.firmId, settlementId },
+        orderBy: { createdAt: "desc" },
+        take: 50,
       }),
     );
   }

@@ -18,6 +18,7 @@ const NAV_ITEMS: {
   { to: "/portal/pendientes", label: "Pendientes", shortLabel: "Pendientes", icon: "tasks" },
   { to: "/portal/upload", label: "Subir documentos", shortLabel: "Subir", icon: "upload" },
   { to: "/portal/impuestos", label: "Impuestos", shortLabel: "Impuestos", icon: "calendar" },
+  { to: "/portal/liquidaciones", label: "Liquidaciones", shortLabel: "Liquidaciones", icon: "reports" },
   { to: "/portal/reportes", label: "Estados y reportes", shortLabel: "Reportes", icon: "reports" },
   { to: "/portal/mensajes", label: "Mensajes", shortLabel: "Mensajes", icon: "message" },
   { to: "/portal/perfil", label: "Perfil", shortLabel: "Perfil", icon: "users" },

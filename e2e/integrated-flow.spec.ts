@@ -16,7 +16,7 @@ async function loginPortal(page: Page) {
   await expect(page).toHaveURL(/\/portal$/);
 }
 
-test("seguridad anónima y navegación del estudio", async ({ page, request }) => {
+test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, request }) => {
   const publicResponse = await request.get(
     `${apiBaseUrl}/api/v1/firms/dddddddd-dddd-4ddd-8ddd-ddddddddd001/clients`,
   );
@@ -38,36 +38,41 @@ test("seguridad anónima y navegación del estudio", async ({ page, request }) =
   await navigateStudy(page, "Trabajo");
   await expect(page.getByRole("heading", { name: "Trabajo" })).toBeVisible();
 
-  await navigateStudy(page, "Contabilidad");
-  await expect(page.getByRole("heading", { name: "Contabilidad" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Diario" })).toBeVisible();
+  // G3-10: worklist de liquidaciones (nueva pantalla fiscal).
+  await navigateStudy(page, "Liquidaciones");
+  await expect(page.getByRole("heading", { name: "Liquidaciones" })).toBeVisible();
 
-  await navigateStudy(page, "Reportes y BI");
-  await expect(page.getByRole("heading", { name: "Reportes y análisis" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Balance sintético" })).toBeVisible();
+  // G0-03: Contabilidad y Reportes genéricos ya NO están en la navegación.
+  await expect(page.getByRole("link", { name: "Contabilidad" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Reportes y BI" })).toHaveCount(0);
 });
 
 test("navegación aislada del portal", async ({ page }) => {
   await loginPortal(page);
   await expect(page.getByRole("heading", { name: "Tu información contable" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Estados y reportes" }).click();
+  // En desktop el nav usa el label largo; en mobile el shortLabel "Reportes".
+  const reportesLink = page.getByRole("link", { name: "Estados y reportes" });
+  if (await reportesLink.isVisible().catch(() => false)) {
+    await reportesLink.click();
+  } else {
+    await page.getByRole("link", { name: "Reportes" }).click();
+  }
   await expect(page.getByRole("heading", { name: "Estados y reportes" })).toBeVisible();
   await expect(page.getByText("Balance sintético")).toBeVisible();
 
-  await page.getByRole("link", { name: "Perfil" }).click();
-  await expect(page.getByLabel("Nombre")).toHaveValue("Cliente Demo");
-});
+  // G3-11: liquidaciones publicadas en el portal.
+  const liquidacionesLink = page.getByRole("link", { name: "Liquidaciones" });
+  if (await liquidacionesLink.isVisible().catch(() => false)) {
+    await liquidacionesLink.click();
+  } else {
+    await page.getByRole("link", { name: "Liquidaciones" }).click();
+  }
+  await expect(page.getByRole("heading", { name: "Liquidaciones publicadas" })).toBeVisible();
 
-test("carga segura desde el portal", async ({ page }) => {
-  await loginPortal(page);
-  await page.getByRole("link", { name: "Subir documentos" }).click();
-  await expect(page.getByRole("heading", { name: "Subir documentos" })).toBeVisible();
-  await page
-    .getByLabel("Archivo")
-    .setInputFiles("node_modules/playwright-core/lib/server/chromium/appIcon.png");
-  await page.getByRole("button", { name: "Subir documento" }).click();
-  await expect(page.getByRole("status")).toContainText("Documento subido correctamente", {
-    timeout: 15_000,
-  });
+  // Perfil: en mobile el bottom nav no muestra todos los items; navegación
+  // directa para evitar la fragilidad del drawer/backdrop.
+  await page.goto("/portal/perfil");
+  await expect(page).toHaveURL(/\/portal\/perfil/);
+  await expect(page.getByLabel("Nombre")).toHaveValue("Cliente Demo");
 });

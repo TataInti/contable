@@ -115,6 +115,7 @@ function requiredCapability(method: string, path: string): Capability | null {
   // --- Liquidaciones fiscales (Puerta 3) ---
   if (path.includes("/tax-settlements")) {
     if (path.endsWith("/calculate")) return "tax.settlements.calculate";
+    if (path.includes("/artifacts")) return "tax.settlements.export";
     if (path.endsWith("/submit-review")) return "tax.settlements.submit_review";
     if (path.endsWith("/request-changes") || path.endsWith("/review")) return "tax.settlements.review";
     if (path.endsWith("/finalize")) return "tax.settlements.finalize";

@@ -46,6 +46,10 @@ const PortalUpload = lazy(() =>
 const PortalObligaciones = lazy(() =>
   import("./portal/PortalObligaciones").then((m) => ({ default: m.PortalObligaciones })),
 );
+
+const PortalLiquidaciones = lazy(() =>
+  import("./portal/PortalLiquidaciones").then((m) => ({ default: m.PortalLiquidaciones })),
+);
 const PortalReportes = lazy(() =>
   import("./portal/PortalReportes").then((m) => ({ default: m.PortalReportes })),
 );
@@ -152,6 +156,7 @@ function AppRoutes() {
               <Route path="pendientes" element={<PortalPendientes />} />
               <Route path="upload" element={<PortalUpload />} />
               <Route path="impuestos" element={<PortalObligaciones />} />
+              <Route path="liquidaciones" element={<PortalLiquidaciones />} />
               <Route path="reportes" element={<PortalReportes />} />
               <Route path="mensajes" element={<PortalMensajes />} />
               <Route path="perfil" element={<PortalPerfil />} />

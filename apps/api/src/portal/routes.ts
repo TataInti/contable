@@ -215,6 +215,49 @@ export function portalRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
 
+  // G3-11: liquidaciones publicadas (sólo FINALIZED) para el portal.
+  app.get("/api/v1/portal/clients/:clientId/tax-settlements", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const data = await withTenantContext(ctx, (tx) => tx.taxSettlement.findMany({
+      where: { firmId: ctx.firmId, clientId: ctx.clientId!, status: "FINALIZED" },
+      include: {
+        period: true,
+        regime: { include: { taxType: true, jurisdiction: true } },
+        filings: { orderBy: { createdAt: "desc" }, take: 1 },
+        payments: { orderBy: { createdAt: "desc" }, take: 10 },
+      },
+      orderBy: { version: "desc" },
+      take: 100,
+    }));
+    return reply.send({ data });
+  });
+
+  // G3-11: descarga del papel de trabajo publicado (artifact).
+  app.get("/api/v1/portal/clients/:clientId/tax-settlements/:settlementId/artifacts/:artifactId/download", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { settlementId, artifactId } = req.params as { settlementId: string; artifactId: string };
+    const artifact = await withTenantContext(ctx, (tx) => tx.taxExportArtifact.findFirst({
+      where: {
+        id: artifactId,
+        firmId: ctx.firmId,
+        clientId: ctx.clientId!,
+        settlementId,
+        settlement: { status: "FINALIZED" },
+      },
+    }));
+    if (!artifact || !artifact.objectKey) {
+      return reply.status(404).send({ error: { code: "ARTIFACT_NOT_FOUND", message: "Papel de trabajo no encontrado" } });
+    }
+    const buffer = await storage.get(BUCKETS.exports, artifact.objectKey);
+    const contentType = artifact.format === "pdf" ? "application/pdf" : "text/csv; charset=utf-8";
+    const filename = `papel-de-trabajo-${settlementId.slice(0, 8)}.${artifact.format}`;
+    return reply
+      .header("Content-Type", contentType)
+      .header("Content-Disposition", `attachment; filename="${filename}"`)
+      .header("Cache-Control", "private, no-store")
+      .send(buffer);
+  });
+
   app.get("/api/v1/portal/clients/:clientId/report-publications/:publicationId/export", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { publicationId } = req.params as { publicationId: string };

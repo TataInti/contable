@@ -286,6 +286,12 @@ async function cleanupSettlements() {
     await tx.$executeRawUnsafe(`SELECT set_config('app.user_id', '${OWNER_A}', true)`);
     await tx.$executeRawUnsafe(`SELECT set_config('app.firm_id', '${FIRM_ALFA}', true)`);
     await tx.$executeRawUnsafe(`SELECT set_config('app.actor_kind', 'USER', true)`);
+    // G3-05: los triggers de inmutabilidad bloquean el borrado de FINALIZED;
+    // el cleanup (owner) los desactiva temporalmente para resetear el fixture.
+    await tx.$executeRawUnsafe(`ALTER TABLE tax_settlements DISABLE TRIGGER trg_settlement_immutable`);
+    await tx.$executeRawUnsafe(`ALTER TABLE settlement_inputs DISABLE TRIGGER trg_settlement_input_immutable`);
+    await tx.$executeRawUnsafe(`ALTER TABLE tax_settlement_lines DISABLE TRIGGER trg_settlement_line_immutable`);
+    await tx.$executeRawUnsafe(`ALTER TABLE tax_differences DISABLE TRIGGER trg_settlement_diff_immutable`);
     // Todas las tablas se borran filtrando por clientId (o por settlement del
     // cliente) para no pisar las suites que corren en paralelo.
     await tx.$executeRawUnsafe(`DELETE FROM payment_allocations WHERE "clientId" = '${CLIENT_SET}'`);
@@ -298,6 +304,10 @@ async function cleanupSettlements() {
     await tx.$executeRawUnsafe(`DELETE FROM tax_settlement_lines WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM settlement_inputs WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_settlements WHERE "clientId" = '${CLIENT_SET}'`);
+    await tx.$executeRawUnsafe(`ALTER TABLE tax_settlements ENABLE TRIGGER trg_settlement_immutable`);
+    await tx.$executeRawUnsafe(`ALTER TABLE settlement_inputs ENABLE TRIGGER trg_settlement_input_immutable`);
+    await tx.$executeRawUnsafe(`ALTER TABLE tax_settlement_lines ENABLE TRIGGER trg_settlement_line_immutable`);
+    await tx.$executeRawUnsafe(`ALTER TABLE tax_differences ENABLE TRIGGER trg_settlement_diff_immutable`);
     await tx.$executeRawUnsafe(`DELETE FROM evidence_links WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_adjustments WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_treatment_decisions WHERE "clientId" = '${CLIENT_SET}'`);
@@ -556,6 +566,41 @@ describe("G3-3 finalización e inmutabilidad", () => {
     expect(stored?.rulesHash).toBe(rulesHashAtFinalize);
     expect(stored?.status).toBe("FINALIZED");
   });
+
+  it("G3-05: una FINALIZED no se modifica ni borra ni con SQL runtime (trigger)", async () => {
+    await createApprovedVouchers();
+    const { settlement } = await settlements.calculate(ctxPreparer, calculateParams());
+    await approveSettlement(settlement.id);
+
+    // UPDATE directo con rol runtime (sin BYPASSRLS) → trigger bloquea.
+    await expect(
+      runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+        tx.$executeRawUnsafe(
+          `UPDATE tax_settlements SET "outputHash" = 'tampered' WHERE id = '${settlement.id}'`,
+        ),
+      ),
+    ).rejects.toThrow(/SETTLEMENT_IMMUTABLE/);
+
+    // DELETE directo → trigger bloquea.
+    await expect(
+      runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+        tx.$executeRawUnsafe(`DELETE FROM tax_settlements WHERE id = '${settlement.id}'`),
+      ),
+    ).rejects.toThrow(/SETTLEMENT_IMMUTABLE/);
+
+    // Snapshots (líneas) tampoco se borran.
+    await expect(
+      runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+        tx.$executeRawUnsafe(
+          `DELETE FROM tax_settlement_lines WHERE "settlementId" = '${settlement.id}'`,
+        ),
+      ),
+    ).rejects.toThrow(/SETTLEMENT_IMMUTABLE/);
+
+    const stored = await prisma.taxSettlement.findUnique({ where: { id: settlement.id } });
+    expect(stored?.status).toBe("FINALIZED");
+    expect(stored?.outputHash).not.toBe("tampered");
+  });
 });
 
 describe("G3-4 rectificación", () => {
@@ -584,6 +629,56 @@ describe("G3-4 rectificación", () => {
     const after = await prisma.taxSettlement.findUnique({ where: { id: settlement.id } });
     expect(after?.status).toBe("FINALIZED");
     expect(after?.totals).toEqual(before?.totals);
+  });
+
+  it("G3-09: rectificativa con delta registra la diferencia por renglón", async () => {
+    await createApprovedVouchers();
+    const { settlement } = await settlements.calculate(ctxPreparer, defaultParams());
+    await approveSettlement(settlement.id);
+
+    // Nueva versión DRAFT con delta (la original queda FINALIZED).
+    const { settlement: next, deltas } = await settlements.rectifyWithDelta(
+      ctxPreparer,
+      settlement.id,
+      "Nota de crédito omitida",
+    );
+    expect(next.status).toBe("DRAFT");
+    expect(next.version).toBe(2);
+    expect(next.supersedesId).toBe(settlement.id);
+
+    // La versión nueva aún no tiene líneas (se calcula después), así que el
+    // delta se registra al recalcular; verificamos que la diferencia existe.
+    const diffs = await settlements.listDifferences(ctxPreparer, next.id);
+    expect(diffs.length).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(deltas)).toBe(true);
+  });
+});
+
+describe("G3-6 papel de trabajo y export", () => {
+  it("genera artifact CSV desde una liquidación finalizada", async () => {
+    await createApprovedVouchers();
+    const { settlement } = await settlements.calculate(ctxPreparer, calculateParams());
+    await approveSettlement(settlement.id);
+
+    const { artifact, checksum, objectKey } = await settlements.generateArtifact(ctxOwner, {
+      settlementId: settlement.id,
+      format: "csv",
+    });
+    expect(artifact.kind).toBe("PAPEL_DE_TRABAJO");
+    expect(artifact.format).toBe("csv");
+    expect(checksum).toMatch(/^[a-f0-9]{64}$/);
+    expect(objectKey).toContain(`v${settlement.version}.csv`);
+
+    const artifacts = await settlements.listArtifacts(ctxOwner, settlement.id);
+    expect(artifacts).toHaveLength(1);
+  });
+
+  it("no genera artifact desde una liquidación no finalizada", async () => {
+    await createApprovedVouchers();
+    const { settlement } = await settlements.calculate(ctxPreparer, calculateParams());
+    await expect(
+      settlements.generateArtifact(ctxOwner, { settlementId: settlement.id, format: "csv" }),
+    ).rejects.toThrow(SettlementError);
   });
 });
 

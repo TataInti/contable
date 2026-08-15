@@ -134,6 +134,33 @@ export function settlementRoutes(app: FastifyInstance) {
   });
 
   // ------------------------------------------------------------------
+  // G3-06: Papel de trabajo y export
+  // ------------------------------------------------------------------
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/tax-settlements/:settlementId/artifacts", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { settlementId } = req.params as { settlementId: string };
+    const body = z.object({ format: z.enum(["csv", "pdf"]) }).strict().parse(req.body);
+    try {
+      const data = await service.generateArtifact(ctx, { settlementId, format: body.format });
+      return reply.status(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.get("/api/v1/firms/:firmId/clients/:clientId/tax-settlements/:settlementId/artifacts", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { settlementId } = req.params as { settlementId: string };
+    try {
+      const data = await service.listArtifacts(ctx, settlementId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // ------------------------------------------------------------------
   // G3-04: Workflow maker-checker
   // ------------------------------------------------------------------
 
@@ -193,6 +220,19 @@ export function settlementRoutes(app: FastifyInstance) {
     const body = z.object({ reason: z.string().trim().min(1).max(1000) }).strict().parse(req.body);
     try {
       const data = await service.rectify(ctx, settlementId, body.reason);
+      return reply.status(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // G3-09: rectificativa con delta por renglón.
+  app.post("/api/v1/firms/:firmId/clients/:clientId/tax-settlements/:settlementId/rectify-with-delta", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { settlementId } = req.params as { settlementId: string };
+    const body = z.object({ reason: z.string().trim().min(1).max(1000) }).strict().parse(req.body);
+    try {
+      const data = await service.rectifyWithDelta(ctx, settlementId, body.reason);
       return reply.status(201).send({ data });
     } catch (err) {
       return handleError(reply, err);
