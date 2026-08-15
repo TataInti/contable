@@ -123,7 +123,7 @@ export function calculateVat(input: VatInput): TaxEngineResult {
   subtotals["SALDO_LIBRE_ANTERIOR"] = fmtMoney(roundFor(freeAvailabilityPrevious, "SALDOS", rounding.SALDOS));
 
   // Débito − crédito − retenciones − percepciones
-  let net = debit.minus(credit).minus(withholding).minus(perception);
+  const net = debit.minus(credit).minus(withholding).minus(perception);
 
   const creditTotal = credit.plus(withholding).plus(perception);
   const technical = creditTotal.minus(debit);

@@ -170,7 +170,7 @@ export class ManagementExpenseService {
   }
 
   /** Rechaza el gasto (desde PENDING_REVIEW o DRAFT). */
-  async reject(ctx: TenantContext, expenseId: string, comment: string) {
+  async reject(ctx: TenantContext, expenseId: string, _comment: string) {
     return withTenantContext(ctx, async (tx) => {
       const expense = await tx.managementExpense.findFirst({
         where: { id: expenseId, firmId: ctx.firmId },

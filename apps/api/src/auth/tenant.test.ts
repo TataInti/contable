@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { prisma } from "../lib/prisma.js";
 
 /**
  * Tests de integración de tenancy (requieren PostgreSQL local con RLS aplicado

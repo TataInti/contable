@@ -1,0 +1,825 @@
+import { Prisma } from "@prisma/client";
+import { calculateVat, dec, VAT_ENGINE_VERSION } from "@contable/tax-engine";
+import type { TaxFact } from "@contable/tax-engine";
+import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+
+/**
+ * Servicio de liquidaciones fiscales (Puerta 3).
+ *
+ * Ciclo completo de una TaxSettlement sobre el motor determinista de
+ * packages/tax-engine, sin depender del mayor contable.
+ *
+ * Invariantes (PLAN §9, §6.3–6.6, docs/invariantes.md):
+ * - V-001: diferencias bloqueantes visibles y con resolución.
+ * - V-002: finalizar exige revisor distinto del preparador (maker-checker).
+ * - V-003: una liquidación FINALIZED es inmutable; corregirla crea una
+ *   versión nueva (rectificativa) que referencia la anterior.
+ * - V-004: misma entrada + misma regla + mismo motor → mismo hash.
+ * - V-005: un cambio de regla no altera liquidaciones finalizadas
+ *   (se conservan engineVersion y rulesHash).
+ *
+ * Reglas de negocio:
+ * - Se calcula sólo con hechos APPROVED dentro del período y del cutoff.
+ * - No se revisa con diferencias BLOCKING abiertas.
+ * - No se finaliza sin revisión completada ni por el propio preparador.
+ * - Retenciones, percepciones y saldo disponible provienen de los
+ *   subledger aprobados y del ledger de créditos.
+ */
+
+export type SettlementErrorCode =
+  | "SETTLEMENT_NOT_FOUND"
+  | "SETTLEMENT_IMMUTABLE"
+  | "INVALID_TRANSITION"
+  | "MAKER_CHECKER_VIOLATION"
+  | "NO_ACTIVE_RULES"
+  | "RULE_VERSION_NOT_FOUND"
+  | "PERIOD_NOT_FOUND"
+  | "OBLIGATION_NOT_FOUND"
+  | "BLOCKING_DIFFERENCES"
+  | "FINALIZE_REQUIRES_REVIEW"
+  | "CREDIT_NOT_FOUND"
+  | "CREDIT_INSUFFICIENT"
+  | "PAYMENT_NOT_FOUND"
+  | "PAYMENT_REVERSED";
+
+export class SettlementError extends Error {
+  readonly code: SettlementErrorCode;
+  constructor(code: SettlementErrorCode, message: string) {
+    super(message);
+    this.name = "SettlementError";
+    this.code = code;
+  }
+}
+
+type Tx = Prisma.TransactionClient;
+
+/** Hecho fiscal normalizado para el motor (base en ARS). */
+interface EngineFact {
+  id: string;
+  direction: "PURCHASE" | "SALE";
+  date: string;
+  concept: "VENTAS" | "COMPRAS" | "EXENTO" | "NO_GRAVADO";
+  base: Prisma.Decimal;
+}
+
+/** Entrada persistida en settlement_inputs (snapshot trazable, V-004). */
+interface SettlementInputRow {
+  kind: "VOUCHER_COMPONENT" | "ADJUSTMENT" | "WITHHOLDING" | "PERCEPTION" | "CREDIT";
+  sourceId: string;
+  sourceVersion?: number;
+  snapshot: Record<string, unknown>;
+}
+
+export class SettlementService {
+  // ------------------------------------------------------------------
+  // G3-03: Cobertura — entradas disponibles para el período
+  // ------------------------------------------------------------------
+
+  async coverage(
+    ctx: TenantContext,
+    input: { clientId: string; periodId: string; regimeId?: string },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const period = await tx.taxPeriod.findUnique({ where: { id: input.periodId } });
+      if (!period) throw new SettlementError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
+
+      const periodFilter = {
+        firmId: ctx.firmId,
+        clientId: input.clientId,
+        issuedOn: { gte: period.startDate, lte: period.endDate },
+      };
+      const [vouchersApproved, vouchersPending, withholdings, perceptions, adjustments, credits] =
+        await Promise.all([
+          tx.fiscalVoucher.count({ where: { ...periodFilter, status: "APPROVED" } }),
+          tx.fiscalVoucher.count({
+            where: { ...periodFilter, status: { in: ["DRAFT", "IN_REVIEW"] } },
+          }),
+          tx.withholdingCertificate.count({ where: { firmId: ctx.firmId, clientId: input.clientId } }),
+          tx.perceptionCertificate.count({ where: { firmId: ctx.firmId, clientId: input.clientId } }),
+          tx.taxAdjustment.count({ where: { firmId: ctx.firmId, clientId: input.clientId } }),
+          tx.taxCreditLedgerEntry.aggregate({
+            where: { firmId: ctx.firmId, clientId: input.clientId },
+            _sum: { balanceAfter: true },
+          }),
+        ]);
+
+      const missing: string[] = [];
+      if (vouchersPending > 0) missing.push(`${vouchersPending} comprobante(s) sin revisar`);
+      if (vouchersApproved === 0) missing.push("No hay comprobantes aprobados en el período");
+      const obligation = input.regimeId
+        ? await tx.taxObligation.findFirst({
+            where: {
+              firmId: ctx.firmId,
+              clientId: input.clientId,
+              regimeId: input.regimeId,
+              periodId: input.periodId,
+            },
+          })
+        : null;
+      if (obligation && obligation.status === "WAITING_INPUTS") {
+        missing.push("La obligación está esperando entradas");
+      }
+      const status = missing.length > 0 ? "WAITING_INPUTS" : "READY";
+
+      return {
+        vouchersApproved,
+        vouchersPending,
+        withholdings,
+        perceptions,
+        adjustments,
+        creditsAvailable: (credits._sum.balanceAfter ?? new Prisma.Decimal(0)).toString(),
+        ...(obligation ? { obligationId: obligation.id } : {}),
+        status: status as "READY" | "WAITING_INPUTS",
+        missing,
+      };
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // G3-03: Cálculo determinista (motor puro)
+  // ------------------------------------------------------------------
+
+  async calculate(
+    ctx: TenantContext,
+    input: {
+      clientId: string;
+      taxTypeId: string;
+      regimeId: string;
+      jurisdictionId: string;
+      periodId: string;
+      cutoff: string;
+    },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const period = await tx.taxPeriod.findUnique({ where: { id: input.periodId } });
+      if (!period) throw new SettlementError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
+
+      // --- Versión ACTIVE del rule pack del régimen (V-005: se congela) ---
+      const pack = await tx.taxRulePack.findFirst({ where: { regimeId: input.regimeId } });
+      if (!pack) throw new SettlementError("RULE_VERSION_NOT_FOUND", "No existe rule pack para el régimen");
+      const activeVersion = await tx.taxRuleVersion.findFirst({
+        where: { packId: pack.id, status: "ACTIVE" },
+        orderBy: { version: "desc" },
+      });
+      if (!activeVersion) {
+        throw new SettlementError("NO_ACTIVE_RULES", "No hay versión ACTIVE del rule pack; no se puede calcular");
+      }
+      const rateRules = await tx.taxRateRule.findMany({
+        where: { ruleVersionId: activeVersion.id },
+      });
+
+      // --- Hechos aprobados dentro del período y del cutoff ---
+      const cutoff = input.cutoff;
+      const vouchers = await tx.fiscalVoucher.findMany({
+        where: {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          status: "APPROVED",
+          issuedOn: { gte: period.startDate, lte: period.endDate },
+        },
+        include: { components: true },
+      });
+      const adjustments = await tx.taxAdjustment.findMany({
+        where: { firmId: ctx.firmId, clientId: input.clientId, reviewedAt: { not: null } },
+      });
+      const withholdings = await tx.withholdingCertificate.findMany({
+        where: { firmId: ctx.firmId, clientId: input.clientId },
+      });
+      const perceptions = await tx.perceptionCertificate.findMany({
+        where: { firmId: ctx.firmId, clientId: input.clientId },
+      });
+      const credits = await tx.taxCreditLedgerEntry.aggregate({
+        where: { firmId: ctx.firmId, clientId: input.clientId },
+        _sum: { balanceAfter: true },
+      });
+      const previousFree = credits._sum.balanceAfter ?? new Prisma.Decimal(0);
+
+      // --- Reglas del motor (tasas por concepto). La DB guarda la alícuota
+      //     en puntos porcentuales (p.ej. 21.0000); el motor espera decimal
+      //     (0.21). Se normaliza dividiendo por 100. ---
+      const rules = rateRules.map((r) => {
+        const percent = dec(r.rate.toString());
+        const rate = percent.greaterThan(1) ? percent.div(100) : percent;
+        return {
+          id: r.id,
+          concept: r.concept,
+          code: r.concept,
+          rate,
+          validFrom: r.validFrom.toISOString().slice(0, 10),
+        };
+      });
+
+      // --- Hechos e inputs ---
+      const facts: EngineFact[] = [];
+      const inputs: SettlementInputRow[] = [];
+
+      for (const v of vouchers) {
+        const concept = v.direction === "SALE" ? "VENTAS" : "COMPRAS";
+        for (const c of v.components) {
+          if (c.concept === "NETO" || c.concept === "EXENTO" || c.concept === "NO_GRAVADO") {
+            const factConcept =
+              c.concept === "NETO" ? concept : (c.concept as "EXENTO" | "NO_GRAVADO");
+            facts.push({
+              id: `${v.id}:${c.id}`,
+              direction: v.direction,
+              date: v.issuedOn.toISOString().slice(0, 10),
+              concept: factConcept,
+              base: c.base,
+            });
+            inputs.push({
+              kind: "VOUCHER_COMPONENT",
+              sourceId: `${v.id}:${c.id}`,
+              sourceVersion: v.version,
+              snapshot: {
+                voucherId: v.id,
+                type: v.type,
+                letter: v.letter,
+                pointOfSale: v.pointOfSale,
+                number: v.number,
+                issuedOn: v.issuedOn.toISOString().slice(0, 10),
+                component: c.concept,
+                base: c.base.toString(),
+              },
+            });
+          }
+        }
+      }
+      for (const a of adjustments) {
+        if (a.reviewedAt && a.amount.isPositive() && a.concept === "GASTO_GERENCIAL_COMPUTABLE") {
+          facts.push({
+            id: `adj:${a.id}`,
+            direction: "PURCHASE",
+            date: a.createdAt.toISOString().slice(0, 10),
+            concept: "COMPRAS",
+            base: a.amount,
+          });
+          inputs.push({
+            kind: "ADJUSTMENT",
+            sourceId: a.id,
+            snapshot: {
+              adjustmentId: a.id,
+              concept: a.concept,
+              amount: a.amount.toString(),
+              reason: a.reason,
+            },
+          });
+        }
+      }
+
+      const withholdingTotal = withholdings.reduce(
+        (acc, w) => acc.plus(w.amount),
+        new Prisma.Decimal(0),
+      );
+      const perceptionTotal = perceptions.reduce(
+        (acc, p) => acc.plus(p.amount),
+        new Prisma.Decimal(0),
+      );
+
+      // --- Motor IVA (determinista, V-004) ---
+      const result = calculateVat({
+        engineVersion: VAT_ENGINE_VERSION,
+        period: {
+          startDate: period.startDate.toISOString().slice(0, 10),
+          endDate: period.endDate.toISOString().slice(0, 10),
+          cutoff,
+        },
+        facts: facts as TaxFact[],
+        rules,
+        credits: {
+          withholding: withholdingTotal,
+          perception: perceptionTotal,
+          technicalPrevious: new Prisma.Decimal(0),
+          freeAvailabilityPrevious: previousFree,
+        },
+      });
+
+      const totals: Record<string, string> = { ...result.subtotals };
+      const lines = result.lines.map((l, i) => ({
+        position: i + 1,
+        concept: l.concept,
+        formula: l.formula,
+        inputs: l.inputs as Prisma.InputJsonValue,
+        amount: new Prisma.Decimal(l.result),
+      }));
+
+      const core = {
+        cutoff: new Date(`${cutoff}T00:00:00.000Z`),
+        engineVersion: result.engineVersion,
+        rulesHash: activeVersion.rulesHash,
+        inputHash: result.inputHash,
+        outputHash: result.outputHash,
+        totals: totals as unknown as Prisma.InputJsonValue,
+        status: "CALCULATED" as const,
+      };
+
+      // --- Persistencia: reutiliza la versión en curso o crea v1 ---
+      const existing = await tx.taxSettlement.findFirst({
+        where: {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          regimeId: input.regimeId,
+          periodId: input.periodId,
+          status: { in: ["DRAFT", "CALCULATED", "IN_REVIEW", "CHANGES_REQUESTED"] },
+        },
+      });
+
+      // V-003: si ya existe una finalizada (sin rectificativa en curso), el
+      // recálculo queda bloqueado y se exige rectificación explícita.
+      if (!existing) {
+        const finalized = await tx.taxSettlement.findFirst({
+          where: {
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            regimeId: input.regimeId,
+            periodId: input.periodId,
+            status: "FINALIZED",
+          },
+        });
+        if (finalized) {
+          throw new SettlementError(
+            "SETTLEMENT_IMMUTABLE",
+            "La liquidación ya está finalizada; use rectificación para una corrección",
+          );
+        }
+      }
+
+      const settlement = existing
+        ? await tx.taxSettlement.update({ where: { id: existing.id }, data: core })
+        : await tx.taxSettlement.create({
+            data: {
+              firmId: ctx.firmId,
+              clientId: input.clientId,
+              taxTypeId: input.taxTypeId,
+              regimeId: input.regimeId,
+              jurisdictionId: input.jurisdictionId,
+              periodId: input.periodId,
+              preparedByUserId: ctx.userId,
+              ...core,
+            },
+          });
+
+      // --- Snapshot de entradas + líneas (reemplazo atómico) ---
+      await tx.settlementInput.deleteMany({ where: { settlementId: settlement.id } });
+      await tx.taxSettlementLine.deleteMany({ where: { settlementId: settlement.id } });
+      await tx.taxSettlementLine.createMany({
+        data: lines.map((l) => ({
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          settlementId: settlement.id,
+          ...l,
+        })),
+      });
+      await tx.settlementInput.createMany({
+        data: inputs.map((i) => ({
+          settlementId: settlement.id,
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          kind: i.kind,
+          sourceId: i.sourceId,
+          ...(i.sourceVersion !== undefined ? { sourceVersion: i.sourceVersion } : {}),
+          snapshot: i.snapshot as Prisma.InputJsonValue,
+        })),
+      });
+
+      // --- Diferencias del motor (V-001) ---
+      await tx.taxDifference.deleteMany({ where: { settlementId: settlement.id, status: "OPEN" } });
+      for (const w of result.warnings) {
+        await tx.taxDifference.create({
+          data: {
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            settlementId: settlement.id,
+            severity: "INFO",
+            status: "OPEN",
+            code: "ENGINE_WARNING",
+            message: w,
+            context: { kind: "warning" } as Prisma.InputJsonValue,
+          },
+        });
+      }
+      for (const b of result.blocks) {
+        await tx.taxDifference.create({
+          data: {
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            settlementId: settlement.id,
+            severity: "BLOCKING",
+            status: "OPEN",
+            code: "ENGINE_BLOCK",
+            message: b,
+            context: { kind: "block" } as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      return {
+        settlement: await tx.taxSettlement.findUniqueOrThrow({ where: { id: settlement.id } }),
+        lines,
+        inputs,
+        result: {
+          engineVersion: result.engineVersion,
+          totalDue: result.totalDue,
+          credits: result.credits,
+          warnings: result.warnings,
+          blocks: result.blocks,
+          inputHash: result.inputHash,
+          outputHash: result.outputHash,
+        },
+      };
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // G3-04: Workflow maker-checker
+  // ------------------------------------------------------------------
+
+  /** CALCULATED → IN_REVIEW (sólo desde calculada y sin bloqueos). */
+  async submitReview(ctx: TenantContext, settlementId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const s = await this.getOwned(ctx, tx, settlementId);
+      if (s.status !== "CALCULATED") {
+        throw new SettlementError(
+          "INVALID_TRANSITION",
+          `Sólo una liquidación calculada puede enviarse a revisión (estado: ${s.status})`,
+        );
+      }
+      const blocking = await tx.taxDifference.count({
+        where: { settlementId, severity: "BLOCKING", status: "OPEN" },
+      });
+      if (blocking > 0) {
+        throw new SettlementError("BLOCKING_DIFFERENCES", `Hay ${blocking} diferencia(s) bloqueantes abiertas`);
+      }
+      return tx.taxSettlement.update({ where: { id: settlementId }, data: { status: "IN_REVIEW" } });
+    });
+  }
+
+  /** IN_REVIEW → CHANGES_REQUESTED (el revisor pide cambios). */
+  async requestChanges(ctx: TenantContext, settlementId: string, comment: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const s = await this.getOwned(ctx, tx, settlementId);
+      if (s.status !== "IN_REVIEW") {
+        throw new SettlementError(
+          "INVALID_TRANSITION",
+          `Solo una revisión en curso puede pedir cambios (estado: ${s.status})`,
+        );
+      }
+      if (s.preparedByUserId === ctx.userId) {
+        throw new SettlementError("MAKER_CHECKER_VIOLATION", "El preparador no puede revisar su propia liquidación");
+      }
+      await tx.taxDifference.create({
+        data: {
+          firmId: s.firmId,
+          clientId: s.clientId,
+          settlementId: s.id,
+          severity: "WARNING",
+          status: "OPEN",
+          code: "CHANGES_REQUESTED",
+          message: comment,
+        },
+      });
+      return tx.taxSettlement.update({
+        where: { id: settlementId },
+        data: { status: "CHANGES_REQUESTED", reviewedByUserId: ctx.userId, reviewedAt: new Date() },
+      });
+    });
+  }
+
+  /** IN_REVIEW → REVIEWED (aprobación del revisor; exige revisor distinto). */
+  async review(ctx: TenantContext, settlementId: string, comment?: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const s = await this.getOwned(ctx, tx, settlementId);
+      if (s.status !== "IN_REVIEW") {
+        throw new SettlementError(
+          "INVALID_TRANSITION",
+          `Solo IN_REVIEW puede aprobarse (estado: ${s.status})`,
+        );
+      }
+      if (s.preparedByUserId === ctx.userId) {
+        throw new SettlementError("MAKER_CHECKER_VIOLATION", "El preparador no puede revisar su propia liquidación");
+      }
+      const blocking = await tx.taxDifference.count({
+        where: { settlementId, severity: "BLOCKING", status: "OPEN" },
+      });
+      if (blocking > 0) {
+        throw new SettlementError("BLOCKING_DIFFERENCES", `Hay ${blocking} diferencia(s) bloqueante(s) abiertas`);
+      }
+      if (comment) {
+        await tx.taxDifference.create({
+          data: {
+            firmId: s.firmId,
+            clientId: s.clientId,
+            settlementId: s.id,
+            severity: "INFO",
+            status: "RESOLVED",
+            code: "REVIEW_COMMENT",
+            message: comment,
+            resolvedByUserId: ctx.userId,
+            resolvedAt: new Date(),
+          },
+        });
+      }
+      return tx.taxSettlement.update({
+        where: { id: settlementId },
+        data: { status: "REVIEWED", reviewedByUserId: ctx.userId, reviewedAt: new Date() },
+      });
+    });
+  }
+
+  /** REVIEWED → FINALIZED (V-002: revisor distinto; V-003: inmutable luego). */
+  async finalize(ctx: TenantContext, settlementId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const s = await this.getOwned(ctx, tx, settlementId);
+      if (s.status === "FINALIZED") throw new SettlementError("SETTLEMENT_IMMUTABLE", "La liquidación ya está finalizada");
+      if (s.status !== "REVIEWED") {
+        throw new SettlementError(
+          "FINALIZE_REQUIRES_REVIEW",
+          `No se puede finalizar desde ${s.status}; la revisión debe completarse antes`,
+        );
+      }
+      if (s.preparedByUserId === ctx.userId) {
+        throw new SettlementError("MAKER_CHECKER_VIOLATION", "El preparador no puede finalizar su propia liquidación");
+      }
+      const settledStatus = "FINALIZED";
+      const finalized = await tx.taxSettlement.update({
+        where: { id: settlementId },
+        data: { status: settledStatus, finalizedByUserId: ctx.userId, finalizedAt: new Date() },
+      });
+      // La obligación vinculada pasa a READY_TO_FILE (no presenta por sí sola).
+      await tx.taxObligation.updateMany({
+        where: {
+          firmId: s.firmId,
+          clientId: s.clientId,
+          regimeId: s.regimeId,
+          periodId: s.periodId,
+        },
+        data: { status: "READY_TO_FILE" },
+      });
+      return finalized;
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // G3-09: Rectificación (nueva versión desde FINALIZED)
+  // ------------------------------------------------------------------
+
+  async rectify(ctx: TenantContext, settlementId: string, reason: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const s = await this.getOwned(ctx, tx, settlementId);
+      if (s.status !== "FINALIZED") {
+        throw new SettlementError("INVALID_TRANSITION", "Solo una liquidación finalizada puede rectificarse");
+      }
+      if (!reason.trim()) {
+        throw new SettlementError("INVALID_TRANSITION", "La rectificación exige un motivo");
+      }
+      const versionCount = await tx.taxSettlement.count({
+        where: { clientId: s.clientId, regimeId: s.regimeId, periodId: s.periodId },
+      });
+      const next = await tx.taxSettlement.create({
+        data: {
+          firmId: s.firmId,
+          clientId: s.clientId,
+          taxTypeId: s.taxTypeId,
+          regimeId: s.regimeId,
+          jurisdictionId: s.jurisdictionId,
+          periodId: s.periodId,
+          cutoff: s.cutoff,
+          version: versionCount + 1,
+          engineVersion: s.engineVersion,
+          rulesHash: s.rulesHash,
+          inputHash: s.inputHash,
+          outputHash: s.outputHash,
+          status: "DRAFT",
+          totals: s.totals as unknown as Prisma.InputJsonValue,
+          preparedByUserId: ctx.userId,
+          supersedesId: s.id,
+        },
+      });
+      // La anterior permanece consultable e inmutable; el historial no se borra.
+      return next;
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // G3-07/08: Presentación, pago, créditos
+  // ------------------------------------------------------------------
+
+  async recordFiling(
+    ctx: TenantContext,
+    input: {
+      obligationId: string;
+      settlementId: string;
+      filedAt: string;
+      amountFiled: string;
+      externalId?: string;
+      evidenceDocumentId?: string;
+    },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const o = await tx.taxObligation.findFirst({ where: { id: input.obligationId, firmId: ctx.firmId } });
+      if (!o) throw new SettlementError("OBLIGATION_NOT_FOUND", "Obligación no encontrada");
+      const s = await tx.taxSettlement.findUnique({ where: { id: input.settlementId } });
+      if (!s) throw new SettlementError("SETTLEMENT_NOT_FOUND", "Liquidación no encontrada");
+      if (s.status !== "FINALIZED") {
+        throw new SettlementError("SETTLEMENT_IMMUTABLE", "La liquidación debe estar finalizada para presentarse");
+      }
+      const filing = await tx.taxFiling.create({
+        data: {
+          firmId: ctx.firmId,
+          clientId: o.clientId,
+          obligationId: o.id,
+          settlementId: s.id,
+          filedAt: new Date(input.filedAt),
+          amountFiled: new Prisma.Decimal(input.amountFiled),
+          ...(input.externalId ? { externalId: input.externalId } : {}),
+          ...(input.evidenceDocumentId ? { evidenceDocumentId: input.evidenceDocumentId } : {}),
+          createdByUserId: ctx.userId,
+          status: "FILED",
+        },
+      });
+      await tx.taxObligation.update({ where: { id: o.id }, data: { status: "FILED" } });
+      return filing;
+    });
+  }
+
+  async recordPayment(
+    ctx: TenantContext,
+    input: {
+      obligationId: string;
+      settlementId?: string;
+      paidAt: string;
+      amount: string;
+      method: string;
+      reference?: string;
+    },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const o = await tx.taxObligation.findFirst({ where: { id: input.obligationId, firmId: ctx.firmId } });
+      if (!o) throw new SettlementError("OBLIGATION_NOT_FOUND", "Obligación no encontrada");
+      const payment = await tx.taxPayment.create({
+        data: {
+          firmId: ctx.firmId,
+          clientId: o.clientId,
+          obligationId: o.id,
+          ...(input.settlementId ? { settlementId: input.settlementId } : {}),
+          paidAt: new Date(input.paidAt),
+          amount: new Prisma.Decimal(input.amount),
+          method: input.method,
+          ...(input.reference ? { reference: input.reference } : {}),
+          createdByUserId: ctx.userId,
+          status: "PAID",
+        },
+      });
+
+      // Estado de la obligación según lo exigido vs pagado.
+      const settlement = input.settlementId
+        ? await tx.taxSettlement.findUnique({ where: { id: input.settlementId } })
+        : null;
+      const totals = settlement?.totals as Record<string, string> | null | undefined;
+      const required = totals?.["TOTAL_A_INGRESAR"] ?? totals?.["totalDue"];
+      let paidStatus: "PARTIALLY_PAID" | "PAID" = "PARTIALLY_PAID";
+      if (required) {
+        const paid = await tx.taxPayment.aggregate({
+          where: { obligationId: o.id, status: "PAID" },
+          _sum: { amount: true },
+        });
+        const paidSum = paid._sum.amount ?? new Prisma.Decimal(0);
+        const owed = new Prisma.Decimal(required).minus(paidSum);
+        paidStatus = owed.isZero() || owed.isNegative() ? "PAID" : "PARTIALLY_PAID";
+      }
+      await tx.taxObligation.update({ where: { id: o.id }, data: { status: paidStatus } });
+      return payment;
+    });
+  }
+
+  async reversePayment(ctx: TenantContext, paymentId: string, reason: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const p = await tx.taxPayment.findFirst({ where: { id: paymentId, firmId: ctx.firmId } });
+      if (!p) throw new SettlementError("PAYMENT_NOT_FOUND", "Pago no encontrado");
+      if (p.status === "REVERSED") throw new SettlementError("PAYMENT_REVERSED", "El pago ya está revertido");
+      if (p.createdByUserId === ctx.userId) {
+        throw new SettlementError("MAKER_CHECKER_VIOLATION", "El creador del pago no puede revertirlo");
+      }
+      if (!reason.trim()) {
+        throw new SettlementError("INVALID_TRANSITION", "La reversión exige un motivo");
+      }
+      const reversed = await tx.taxPayment.update({
+        where: { id: paymentId },
+        data: { status: "REVERSED", reversedById: ctx.userId, reversedAt: new Date() },
+      });
+      const o = await tx.taxObligation.findUnique({ where: { id: reversed.obligationId } });
+      if (o) {
+        const paid = await tx.taxPayment.aggregate({
+          where: { obligationId: o.id, status: "PAID" },
+          _sum: { amount: true },
+        });
+        const paidSum = paid._sum.amount ?? new Prisma.Decimal(0);
+        await tx.taxObligation.update({
+          where: { id: o.id },
+          data: { status: paidSum.isZero() ? "READY_TO_FILE" : "PARTIALLY_PAID" },
+        });
+      }
+      return reversed;
+    });
+  }
+
+  async allocateCredit(
+    ctx: TenantContext,
+    input: { creditEntryId: string; settlementId: string; amount: string },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const credit = await tx.taxCreditLedgerEntry.findFirst({
+        where: { id: input.creditEntryId, firmId: ctx.firmId },
+      });
+      if (!credit) throw new SettlementError("CREDIT_NOT_FOUND", "Crédito no encontrado");
+      const amount = new Prisma.Decimal(input.amount);
+      if (credit.balanceAfter.lessThan(amount)) {
+        throw new SettlementError("CREDIT_INSUFFICIENT", "El crédito disponible es insuficiente");
+      }
+      const allocation = await tx.taxCreditAllocation.create({
+        data: {
+          firmId: ctx.firmId,
+          clientId: credit.clientId,
+          creditEntryId: credit.id,
+          settlementId: input.settlementId,
+          amount,
+        },
+      });
+      await tx.taxCreditLedgerEntry.update({
+        where: { id: credit.id },
+        data: { balanceAfter: credit.balanceAfter.minus(amount) },
+      });
+      return allocation;
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Consultas (G3-10)
+  // ------------------------------------------------------------------
+
+  /** Worklist de liquidaciones del cliente. */
+  async worklist(ctx: TenantContext, clientId?: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.taxSettlement.findMany({
+        where: {
+          firmId: ctx.firmId,
+          ...(clientId ? { clientId } : {}),
+        },
+        include: {
+          period: true,
+          regime: { include: { taxType: true, jurisdiction: true } },
+          lines: { take: 8, orderBy: { position: "asc" } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 300,
+      }),
+    );
+  }
+
+  async listDifferences(ctx: TenantContext, settlementId: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.taxDifference.findMany({
+        where: { firmId: ctx.firmId, settlementId },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      }),
+    );
+  }
+
+  async timeline(ctx: TenantContext, settlementId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const s = await tx.taxSettlement.findUnique({ where: { id: settlementId } });
+      if (!s) throw new SettlementError("SETTLEMENT_NOT_FOUND", "Liquidación no encontrada");
+      const [differences, filings, payments, allocations] = await Promise.all([
+        tx.taxDifference.findMany({ where: { settlementId }, orderBy: { createdAt: "asc" }, take: 200 }),
+        tx.taxFiling.findMany({ where: { settlementId }, orderBy: { createdAt: "asc" }, take: 200 }),
+        tx.taxPayment.findMany({ where: { settlementId }, orderBy: { createdAt: "asc" }, take: 200 }),
+        tx.taxCreditAllocation.findMany({ where: { settlementId }, orderBy: { createdAt: "asc" }, take: 200 }),
+      ]);
+      return { settlement: s, differences, filings, payments, allocations };
+    });
+  }
+
+  async list(ctx: TenantContext, clientId: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.taxSettlement.findMany({
+        where: { firmId: ctx.firmId, clientId },
+        include: { period: true, regime: true, lines: true },
+        orderBy: { version: "desc" },
+        take: 300,
+      }),
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // Helpers
+  // ------------------------------------------------------------------
+
+  private async getOwned(ctx: TenantContext, tx: Tx, id: string) {
+    const s = await tx.taxSettlement.findFirst({ where: { id, firmId: ctx.firmId } });
+    if (!s) throw new SettlementError("SETTLEMENT_NOT_FOUND", "Liquidación no encontrada");
+    return s;
+  }
+}
+
+/** Instancia única del servicio de liquidaciones. */
+export const settlementService = new SettlementService();

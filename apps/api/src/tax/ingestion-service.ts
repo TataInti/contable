@@ -467,7 +467,7 @@ export class IngestionService {
    * G2-09: revisión independiente de vouchers (maker-checker).
    * El revisor no puede ser el creador.
    */
-  async reviewVoucher(ctx: TenantContext, voucherId: string, approve: boolean, comment?: string) {
+  async reviewVoucher(ctx: TenantContext, voucherId: string, approve: boolean, _comment?: string) {
     return withTenantContext(ctx, async (tx) => {
       const voucher = await tx.fiscalVoucher.findFirst({
         where: { id: voucherId, firmId: ctx.firmId },

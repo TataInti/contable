@@ -125,19 +125,62 @@ async function setupMasters() {
 async function cleanupFiscal() {
   // Usa el cliente prisma (owner) con contexto RLS para eludir la restricción
   // append-only de rule_approvals y forzar limpieza.
+  // IMPORTANTE: borra SÓLO los packs propios (sufijo -F) para no romper las
+  // suites que corren en paralelo (ingestión -ING, settlements -SET).
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`SELECT set_config('app.user_id', '${OWNER_A}', true)`);
     await tx.$executeRawUnsafe(`SELECT set_config('app.firm_id', '${FIRM_ALFA}', true)`);
     await tx.$executeRawUnsafe(`SELECT set_config('app.actor_kind', 'USER', true)`);
+    // rule_approvals: se borran SIN filtro (sólo esta suite las crea; es
+    // append-only y no interfiere con ingestion/settlement).
     await tx.$executeRawUnsafe(`DELETE FROM rule_approvals`);
-    await tx.$executeRawUnsafe(`DELETE FROM normative_sources`);
-    await tx.$executeRawUnsafe(`DELETE FROM rounding_rules`);
-    await tx.$executeRawUnsafe(`DELETE FROM due_date_rules`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_bracket_rules`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_minimum_rules`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_rate_rules`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_rule_versions`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_rule_packs`);
+    await tx.$executeRawUnsafe(`
+      DELETE FROM normative_sources
+      WHERE "ruleVersionId" IN (
+        SELECT id FROM tax_rule_versions
+        WHERE "packId" IN (SELECT id FROM tax_rule_packs WHERE "regimeId" IN (SELECT id FROM tax_regimes WHERE code LIKE '%-F'))
+      )
+    `);
+    await tx.$executeRawUnsafe(`
+      DELETE FROM rounding_rules
+      WHERE "ruleVersionId" IN (
+        SELECT id FROM tax_rule_versions
+        WHERE "packId" IN (SELECT id FROM tax_rule_packs WHERE "regimeId" IN (SELECT id FROM tax_regimes WHERE code LIKE '%-F'))
+      )
+    `);
+    await tx.$executeRawUnsafe(`
+      DELETE FROM due_date_rules
+      WHERE "ruleVersionId" IN (
+        SELECT id FROM tax_rule_versions
+        WHERE "packId" IN (SELECT id FROM tax_rule_packs WHERE "regimeId" IN (SELECT id FROM tax_regimes WHERE code LIKE '%-F'))
+      )
+    `);
+    await tx.$executeRawUnsafe(`
+      DELETE FROM tax_bracket_rules
+      WHERE "ruleVersionId" IN (
+        SELECT id FROM tax_rule_versions
+        WHERE "packId" IN (SELECT id FROM tax_rule_packs WHERE "regimeId" IN (SELECT id FROM tax_regimes WHERE code LIKE '%-F'))
+      )
+    `);
+    await tx.$executeRawUnsafe(`
+      DELETE FROM tax_minimum_rules
+      WHERE "ruleVersionId" IN (
+        SELECT id FROM tax_rule_versions
+        WHERE "packId" IN (SELECT id FROM tax_rule_packs WHERE "regimeId" IN (SELECT id FROM tax_regimes WHERE code LIKE '%-F'))
+      )
+    `);
+    await tx.$executeRawUnsafe(`
+      DELETE FROM tax_rate_rules
+      WHERE "ruleVersionId" IN (
+        SELECT id FROM tax_rule_versions
+        WHERE "packId" IN (SELECT id FROM tax_rule_packs WHERE "regimeId" IN (SELECT id FROM tax_regimes WHERE code LIKE '%-F'))
+      )
+    `);
+    await tx.$executeRawUnsafe(`
+      DELETE FROM tax_rule_versions
+      WHERE "packId" IN (SELECT id FROM tax_rule_packs WHERE "regimeId" IN (SELECT id FROM tax_regimes WHERE code LIKE '%-F'))
+    `);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_rule_packs WHERE "regimeId" IN (SELECT id FROM tax_regimes WHERE code LIKE '%-F')`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_obligations WHERE "clientId" = '${CLIENT_ALFA}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_periods WHERE "clientId" = '${CLIENT_ALFA}'`);
     await tx.$executeRawUnsafe(`DELETE FROM client_activities WHERE "clientId" = '${CLIENT_ALFA}'`);
@@ -358,7 +401,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
   it("rule pack: DRAFT → IN_REVIEW → APPROVED → ACTIVE con matrícula", async () => {
     const fx = await setupMasters();
     const pack = await rules.createPack(ctxOwner, {
-      code: "AR_VAT_RI_V1",
+      code: "AR_VAT_RI_V1-F",
       name: "IVA Responsable Inscripto V1",
       regimeId: fx.ri.id,
     });
@@ -440,7 +483,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
   it("activar una versión retira la anterior", async () => {
     const fx = await setupMasters();
     const pack = await rules.createPack(ctxOwner, {
-      code: "AR_VAT_RI_V1",
+      code: "AR_VAT_RI_V1-F",
       name: "IVA RI V1",
       regimeId: fx.ri.id,
     });

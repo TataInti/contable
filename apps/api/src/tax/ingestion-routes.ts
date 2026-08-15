@@ -4,13 +4,6 @@ import { tenantContextFromRequest } from "../auth/tenant.js";
 import { IngestionService, ImportError } from "./ingestion-service.js";
 import { ManagementExpenseService, ExpenseError } from "./management-expense-service.js";
 
-/** Con `exactOptionalPropertyTypes`, los opcionales se pasan sólo si están definidos. */
-function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([, v]) => v !== undefined),
-  ) as Partial<T>;
-}
-
 /**
  * Rutas de ingestión y subledger fiscal (Puerta 2).
  * Base: /api/v1/firms/{firmId}/clients/{clientId}

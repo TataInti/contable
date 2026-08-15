@@ -93,7 +93,6 @@ export function calculateDueDate(
   }
 
   const endParts = period.endDate.split("-").map(Number) as [number, number, number];
-  const [, month] = endParts;
 
   // El vencimiento se calcula sobre el día hábil siguiente al día del
   // calendario indicado por dueDay.
@@ -122,7 +121,6 @@ export function periodsForRange(
   end: string,
 ): Array<{ startDate: string; endDate: string }> {
   const [sy, sm] = start.split("-").map(Number) as [number, number];
-  const [ey] = end.split("-").map(Number) as [number, number];
   const out: Array<{ startDate: string; endDate: string }> = [];
 
   if (frequency === "ONCE") {

@@ -2,11 +2,6 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
-import {
-  FiscalMasterService,
-  TaxpayerProfileService,
-  TaxPeriodService,
-} from "./fiscal-foundation-service.js";
 import { IngestionService, ImportError } from "./ingestion-service.js";
 import { ManagementExpenseService, ExpenseError } from "./management-expense-service.js";
 
@@ -50,9 +45,6 @@ async function runAsRuntime<T>(
   });
 }
 
-const masters = new FiscalMasterService();
-const profiles = new TaxpayerProfileService();
-const periods = new TaxPeriodService();
 const ingestion = new IngestionService();
 const expenses = new ManagementExpenseService();
 
@@ -193,6 +185,8 @@ async function cleanupIngestion() {
     await tx.$executeRawUnsafe(`SELECT set_config('app.user_id', '${OWNER_A}', true)`);
     await tx.$executeRawUnsafe(`SELECT set_config('app.firm_id', '${FIRM_ALFA}', true)`);
     await tx.$executeRawUnsafe(`SELECT set_config('app.actor_kind', 'USER', true)`);
+    // IMPORTANTE: se filtra por clientId para no borrar filas de las suites
+    // que corren en paralelo (fundación -F, settlements -SET).
     await tx.$executeRawUnsafe(`DELETE FROM payment_allocations`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_payments`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_filings`);
@@ -208,13 +202,13 @@ async function cleanupIngestion() {
     await tx.$executeRawUnsafe(`DELETE FROM tax_treatment_decisions`);
     await tx.$executeRawUnsafe(`DELETE FROM expense_evidence`);
     await tx.$executeRawUnsafe(`DELETE FROM management_expenses`);
-    await tx.$executeRawUnsafe(`DELETE FROM perception_certificates`);
-    await tx.$executeRawUnsafe(`DELETE FROM withholding_certificates`);
-    await tx.$executeRawUnsafe(`DELETE FROM fiscal_components`);
-    await tx.$executeRawUnsafe(`DELETE FROM fiscal_voucher_lines`);
-    await tx.$executeRawUnsafe(`DELETE FROM fiscal_vouchers`);
-    await tx.$executeRawUnsafe(`DELETE FROM import_rows`);
-    await tx.$executeRawUnsafe(`DELETE FROM import_batches`);
+    await tx.$executeRawUnsafe(`DELETE FROM perception_certificates WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM withholding_certificates WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM fiscal_components WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM fiscal_voucher_lines WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM fiscal_vouchers WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM import_rows WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM import_batches WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_obligations WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_periods WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM taxpayer_profile_versions WHERE "clientId" = '${CLIENT_ING}'`);

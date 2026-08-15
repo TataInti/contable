@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { VatService, VatError } from "./vat-service.js";
 import { ObligationService, ObligationError } from "./obligation-service.js";
 import { CloseService, CloseError } from "./close-service.js";

@@ -112,6 +112,21 @@ function requiredCapability(method: string, path: string): Capability | null {
     if (path.endsWith("/approve-treatment")) return "tax.management_expenses.approve_treatment";
     return method === "GET" ? "tax.management_expenses.read" : "tax.management_expenses.write";
   }
+  // --- Liquidaciones fiscales (Puerta 3) ---
+  if (path.includes("/tax-settlements")) {
+    if (path.endsWith("/calculate")) return "tax.settlements.calculate";
+    if (path.endsWith("/submit-review")) return "tax.settlements.submit_review";
+    if (path.endsWith("/request-changes") || path.endsWith("/review")) return "tax.settlements.review";
+    if (path.endsWith("/finalize")) return "tax.settlements.finalize";
+    if (path.endsWith("/rectify")) return "tax.settlements.rectify";
+    if (path.endsWith("/export")) return "tax.settlements.export";
+    return method === "GET" ? "tax.settlements.read" : "tax.settlements.calculate";
+  }
+  if (path.includes("/tax-credit-allocations")) return "tax.settlements.calculate";
+  if (path.includes("/tax-worklist")) return "tax.settlements.read";
+  if (path.includes("/tax-obligations/") && /\/filings$/.test(path)) return "tax.filings.record";
+  if (path.includes("/tax-obligations/") && /\/payments$/.test(path)) return "tax.payments.record";
+  if (path.includes("/tax-payments/") && path.endsWith("/reverse")) return "tax.payments.record";
   if (path.includes("/tax/")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
   if (path.includes("/obligations")) return method === "GET" ? "client.read" : "obligation.manage";
   if (path.includes("/obligation-instances")) return method === "GET" ? "client.read" : "obligation.manage";
