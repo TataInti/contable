@@ -87,6 +87,12 @@ function requiredCapability(method: string, path: string): Capability | null {
   if (path.includes("/tax-registrations")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
   if (path.includes("/tax-periods")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
   if (path.includes("/tax-obligations")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
+  // Catálogos de firma (maestros fiscales globales).
+  if (path.includes("/tax/jurisdictions")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
+  if (path.includes("/tax/types")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
+  if (path.includes("/tax/regimes")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
+  if (path.includes("/tax/activities")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
+  if (path.includes("/tax/holidays")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
   if (path.includes("/tax-rule-versions")) {
     if (path.endsWith("/approve")) return "tax.rules.approve";
     if (path.endsWith("/activate")) return "tax.rules.activate";
@@ -241,6 +247,26 @@ export function authGuardPlugin(app: FastifyInstance) {
     if (!scoped.firmId) {
       if (path === "/api/v1/firms" && req.method !== "GET" && !session.isPlatformAdmin) {
         throw httpError(403, "PLATFORM_ADMIN_REQUIRED", "Se requiere administración de plataforma");
+      }
+      // Catálogos de firma (maestros fiscales /tax/*): se resuelve la primera
+      // membresía activa del usuario para dar contexto de firma y capacidades.
+      if (path.startsWith("/api/v1/tax/")) {
+        const membership = await withTenantContext(
+          { userId: session.userId, firmId: "", actorKind: "USER" },
+          (tx) => tx.firmMembership.findFirst({
+            where: { userId: session.userId, status: "ACTIVE" },
+            orderBy: { acceptedAt: "asc" },
+          }),
+        );
+        if (!membership) throw httpError(404, "RESOURCE_NOT_FOUND", "Recurso no encontrado");
+        const role = membership.role as FirmRole;
+        req.firmId = membership.firmId;
+        req.firmRole = role;
+        req.capabilities = capabilitiesForRole(role);
+        const capability = requiredCapability(req.method, path);
+        if (capability && !req.capabilities.has(capability)) {
+          throw httpError(403, "CAPABILITY_REQUIRED", `Falta la capacidad ${capability}`);
+        }
       }
       return;
     }

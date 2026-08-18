@@ -104,6 +104,7 @@ async function setupMembership() {
 }
 
 let ivaId = "";
+let iibbId = "";
 let periodId = "";
 
 /** Crea maestros y un período fiscal para el cliente (idempotente en maestros). */
@@ -124,6 +125,11 @@ async function setupFiscalContext() {
       update: {},
       create: { code: "IVA-ING", name: "IVA Ing" },
     });
+    const iibb = await tx.taxType.upsert({
+      where: { code: "IIBB-ING" },
+      update: {},
+      create: { code: "IIBB-ING", name: "IIBB Ing" },
+    });
     const ri = await tx.taxRegime.upsert({
       where: { code: "RI-ING" },
       update: {},
@@ -136,6 +142,7 @@ async function setupFiscalContext() {
       },
     });
     ivaId = iva.id;
+    iibbId = iibb.id;
 
     const profile = await tx.taxpayerProfileVersion.create({
       data: {
@@ -191,19 +198,19 @@ async function cleanupIngestion() {
     await tx.$executeRawUnsafe(`ALTER TABLE tax_settlement_lines DISABLE TRIGGER trg_settlement_line_immutable`);
     await tx.$executeRawUnsafe(`ALTER TABLE tax_differences DISABLE TRIGGER trg_settlement_diff_immutable`);
     // IMPORTANTE: se filtra por clientId para no borrar filas de las suites
-    // que corren en paralelo (fundación -F, settlements -SET).
-    await tx.$executeRawUnsafe(`DELETE FROM payment_allocations`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_payments`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_filings`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_export_artifacts`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_allocations`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_ledger_entries`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_differences`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_settlement_lines`);
-    await tx.$executeRawUnsafe(`DELETE FROM settlement_inputs`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_settlements`);
-    await tx.$executeRawUnsafe(`DELETE FROM evidence_links`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_adjustments`);
+    // que corren en paralelo (fundación -F, settlements -SET, IIBB -IIBB).
+    await tx.$executeRawUnsafe(`DELETE FROM payment_allocations WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_payments WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_filings WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_export_artifacts WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_allocations WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_ledger_entries WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_differences WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_settlement_lines WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM settlement_inputs WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_settlements WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM evidence_links WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_adjustments WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_treatment_decisions`);
     await tx.$executeRawUnsafe(`DELETE FROM expense_evidence`);
     await tx.$executeRawUnsafe(`DELETE FROM management_expenses`);
@@ -450,5 +457,154 @@ describe("G2-08 gastos gerenciales", () => {
     });
     expect(ok.status).toBe("APPROVED");
     expect(ok.taxTreatment).toBe("MANAGEMENT_ONLY");
+  });
+});
+
+describe("G2-02 IIBB DGR Tucumán — adaptador de importación", () => {
+  it("valida un lote IIBB con filas por actividad", async () => {
+    const batch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "DGR_IIBB",
+      taxTypeId: iibbId,
+      periodId,
+      adapterVersion: "DGR_IIBB_V1",
+      fileHash: "sha256:iibb1",
+    });
+    const result = await ingestion.validateBatch(ctxOwner, batch.id, [
+      { activityCode: "501100", income: "100000.00", rate: "4" },
+      { activityCode: "502200", income: "50000.00", rate: "4.5" },
+      { activityCode: "", income: "1000" },
+    ]);
+    expect(result.totals.validRows).toBe(2);
+    expect(result.totals.errorRows).toBe(1);
+    expect(result.totals.net).toBe("150000.0000");
+  });
+
+  it("commit IIBB crea vouchers SALE con línea de actividad", async () => {
+    const batch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "DGR_IIBB",
+      taxTypeId: iibbId,
+      periodId,
+      adapterVersion: "DGR_IIBB_V1",
+      fileHash: "sha256:iibb2",
+    });
+    await ingestion.validateBatch(ctxOwner, batch.id, [
+      { activityCode: "501100", income: "100000.00", rate: "4" },
+      { activityCode: "502200", income: "50000.00", rate: "4.5" },
+    ]);
+    const committed = await ingestion.commitBatch(ctxOwner, batch.id, "20999999999");
+    expect(committed.committed).toBe(2);
+
+    const vouchers = await ingestion.listVouchers(ctxOwner, CLIENT_ING);
+    expect(vouchers).toHaveLength(2);
+    // Verificar que el primer voucher tiene línea de actividad.
+    const v1 = vouchers.find((v) => v.type === "IIBB_RESUMEN");
+    expect(v1).toBeDefined();
+    expect(v1?.direction).toBe("SALE");
+  });
+});
+
+describe("G4 TEM SMT — adaptador de importación", () => {
+  it("valida un lote TEM con filas por actividad", async () => {
+    const batch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "SMT_TEM",
+      taxTypeId: iibbId,
+      periodId,
+      adapterVersion: "SMT_TEM_V1",
+      fileHash: "sha256:tem1",
+    });
+    const result = await ingestion.validateBatch(ctxOwner, batch.id, [
+      { activityCode: "601100", income: "100000.00", rate: "2" },
+      { activityCode: "602200", income: "50000.00", rate: "3" },
+      { activityCode: "", income: "1000" },
+    ]);
+    expect(result.totals.validRows).toBe(2);
+    expect(result.totals.errorRows).toBe(1);
+    expect(result.totals.net).toBe("150000.0000");
+  });
+
+  it("commit TEM crea vouchers SALE con línea de actividad", async () => {
+    const batch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "SMT_TEM",
+      taxTypeId: iibbId,
+      periodId,
+      adapterVersion: "SMT_TEM_V1",
+      fileHash: "sha256:tem2",
+    });
+    await ingestion.validateBatch(ctxOwner, batch.id, [
+      { activityCode: "601100", income: "100000.00", rate: "2" },
+      { activityCode: "602200", income: "50000.00", rate: "3" },
+    ]);
+    const committed = await ingestion.commitBatch(ctxOwner, batch.id, "20999999999");
+    expect(committed.committed).toBe(2);
+
+    const vouchers = await ingestion.listVouchers(ctxOwner, CLIENT_ING);
+    const v1 = vouchers.find((v) => v.type === "TEM_RESUMEN");
+    expect(v1).toBeDefined();
+    expect(v1?.direction).toBe("SALE");
+  });
+});
+
+describe("G4 CM03 — adaptador de importación", () => {
+  it("valida un lote CM03 con ingresos y coeficientes", async () => {
+    const batch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "CM03",
+      taxTypeId: iibbId,
+      periodId,
+      adapterVersion: "CM03_V1",
+      fileHash: "sha256:cm1",
+    });
+    const result = await ingestion.validateBatch(ctxOwner, batch.id, [
+      { activityCode: "501100", income: "100000.00" },
+      { activityCode: "COEF_TUC", income: "0", coefficient: "0.6" },
+      { activityCode: "COEF_CBA", income: "0", coefficient: "0.4" },
+    ]);
+    expect(result.totals.validRows).toBe(3);
+    expect(result.totals.errorRows).toBe(0);
+    expect(result.totals.net).toBe("100000.0000");
+  });
+
+  it("rechaza un lote CM03 con coeficientes que no suman 1", async () => {
+    const batch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "CM03",
+      taxTypeId: iibbId,
+      periodId,
+      adapterVersion: "CM03_V1",
+      fileHash: "sha256:cm2",
+    });
+    const result = await ingestion.validateBatch(ctxOwner, batch.id, [
+      { activityCode: "501100", income: "100000.00" },
+      { activityCode: "COEF_TUC", income: "0", coefficient: "0.6" },
+      { activityCode: "COEF_CBA", income: "0", coefficient: "0.3" },
+    ]);
+    expect(result.totals.errorRows).toBe(1);
+  });
+
+  it("commit CM03 crea vouchers SALE solo para ingresos (no coeficientes)", async () => {
+    const batch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "CM03",
+      taxTypeId: iibbId,
+      periodId,
+      adapterVersion: "CM03_V1",
+      fileHash: "sha256:cm3",
+    });
+    await ingestion.validateBatch(ctxOwner, batch.id, [
+      { activityCode: "501100", income: "100000.00" },
+      { activityCode: "COEF_TUC", income: "0", coefficient: "0.6" },
+      { activityCode: "COEF_CBA", income: "0", coefficient: "0.4" },
+    ]);
+    const committed = await ingestion.commitBatch(ctxOwner, batch.id, "20999999999");
+    expect(committed.committed).toBe(3);
+
+    const vouchers = await ingestion.listVouchers(ctxOwner, CLIENT_ING);
+    const cmVouchers = vouchers.filter((v) => v.type === "CM03_RESUMEN");
+    expect(cmVouchers).toHaveLength(1);
+    expect(cmVouchers[0]?.direction).toBe("SALE");
   });
 });

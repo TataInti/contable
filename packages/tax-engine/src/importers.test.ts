@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeArcaVoucherBatch,
   normalizeArcaVoucherRow,
+  normalizeCm03Batch,
+  normalizeCm03Row,
+  normalizeIibbTucBatch,
+  normalizeIibbTucRow,
+  normalizeTemSmtBatch,
+  normalizeTemSmtRow,
   normalizeWithholdingBatch,
   normalizeWithholdingRow,
 } from "./importers.js";
@@ -205,5 +211,196 @@ describe("G2-03 adaptador ARCA retenciones/percepciones", () => {
     expect(batch.totals.withholding).toBe("2100.0000");
     expect(batch.totals.perception).toBe("1250.0000");
     expect(batch.totals.validRows).toBe(2);
+  });
+});
+
+describe("G2-02 adaptador DGR Tucumán IIBB local", () => {
+  it("normaliza una fila válida de actividad", () => {
+    const result = normalizeIibbTucRow({
+      activityCode: "501100",
+      description: "Venta de mercadería",
+      income: "100000.00",
+      rate: "4",
+      exemption: "0",
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.activityCode).toBe("501100");
+      expect(result.data.income).toBe("100000.0000");
+      expect(result.data.rate).toBe("4.000000");
+      expect(result.data.description).toBe("Venta de mercadería");
+    }
+  });
+
+  it("acepta alícuota y mínimo opcionales nulos", () => {
+    const result = normalizeIibbTucRow({
+      activityCode: "501100",
+      income: "50000.00",
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.rate).toBeNull();
+      expect(result.data.minimum).toBeNull();
+    }
+  });
+
+  it("rechaza código de actividad vacío", () => {
+    const result = normalizeIibbTucRow({
+      activityCode: "  ",
+      income: "1000",
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("ACTIVITY_CODE_INVALID");
+  });
+
+  it("rechaza ingreso negativo", () => {
+    const result = normalizeIibbTucRow({
+      activityCode: "501100",
+      income: "-100",
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("INCOME_INVALID");
+  });
+
+  it("un lote suma ingresos y cuenta errores", () => {
+    const batch = normalizeIibbTucBatch([
+      { activityCode: "501100", income: "100000.00", rate: "4" },
+      { activityCode: "502200", income: "50000.00", rate: "4.5" },
+      { activityCode: "", income: "1000" },
+    ]);
+    expect(batch.totals.net).toBe("150000.0000");
+    expect(batch.totals.validRows).toBe(2);
+    expect(batch.totals.errorRows).toBe(1);
+  });
+});
+
+describe("G4 adaptador SMT TEM San Miguel de Tucumán", () => {
+  it("normaliza una fila válida de actividad", () => {
+    const result = normalizeTemSmtRow({
+      activityCode: "601100",
+      description: "Comercio minorista",
+      income: "100000.00",
+      rate: "2",
+      exemption: "0",
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.activityCode).toBe("601100");
+      expect(result.data.income).toBe("100000.0000");
+      expect(result.data.rate).toBe("2.000000");
+      expect(result.data.description).toBe("Comercio minorista");
+    }
+  });
+
+  it("acepta alícuota y mínimo opcionales nulos", () => {
+    const result = normalizeTemSmtRow({
+      activityCode: "601100",
+      income: "50000.00",
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.rate).toBeNull();
+      expect(result.data.minimum).toBeNull();
+    }
+  });
+
+  it("rechaza código de actividad vacío", () => {
+    const result = normalizeTemSmtRow({
+      activityCode: "  ",
+      income: "1000",
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("ACTIVITY_CODE_INVALID");
+  });
+
+  it("rechaza ingreso negativo", () => {
+    const result = normalizeTemSmtRow({
+      activityCode: "601100",
+      income: "-100",
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("INCOME_INVALID");
+  });
+
+  it("un lote suma ingresos y cuenta errores", () => {
+    const batch = normalizeTemSmtBatch([
+      { activityCode: "601100", income: "100000.00", rate: "2" },
+      { activityCode: "602200", income: "50000.00", rate: "3" },
+      { activityCode: "", income: "1000" },
+    ]);
+    expect(batch.totals.net).toBe("150000.0000");
+    expect(batch.totals.validRows).toBe(2);
+    expect(batch.totals.errorRows).toBe(1);
+  });
+});
+
+describe("G4 adaptador CM03 artículo 2 (Convenio Multilateral)", () => {
+  it("normaliza una fila válida de ingreso por actividad", () => {
+    const result = normalizeCm03Row({
+      activityCode: "501100",
+      description: "Venta de mercadería",
+      income: "100000.00",
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.activityCode).toBe("501100");
+      expect(result.data.income).toBe("100000.0000");
+      expect(result.data.coefficient).toBeNull();
+    }
+  });
+
+  it("normaliza una fila de coeficiente por jurisdicción", () => {
+    const result = normalizeCm03Row({
+      activityCode: "COEF_TUC",
+      income: "0",
+      jurisdiction: "TUC",
+      coefficient: "0.6",
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.activityCode).toBe("COEF_TUC");
+      expect(result.data.coefficient).toBe("0.600000");
+      expect(result.data.jurisdiction).toBe("TUC");
+    }
+  });
+
+  it("rechaza coeficiente fuera de rango 0..1", () => {
+    const result = normalizeCm03Row({
+      activityCode: "COEF_TUC",
+      income: "0",
+      coefficient: "1.5",
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("COEFFICIENT_INVALID");
+  });
+
+  it("rechaza ingreso negativo", () => {
+    const result = normalizeCm03Row({
+      activityCode: "501100",
+      income: "-100",
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("INCOME_INVALID");
+  });
+
+  it("un lote con coeficientes que no suman 1 es inválido", () => {
+    const batch = normalizeCm03Batch([
+      { activityCode: "501100", income: "100000.00" },
+      { activityCode: "COEF_TUC", income: "0", coefficient: "0.6" },
+      { activityCode: "COEF_CBA", income: "0", coefficient: "0.3" },
+    ]);
+    expect(batch.totals.errorRows).toBe(1);
+    expect(batch.rows.some((r) => r.status === "ERROR")).toBe(true);
+  });
+
+  it("un lote con coeficientes que suman 1 es válido", () => {
+    const batch = normalizeCm03Batch([
+      { activityCode: "501100", income: "100000.00" },
+      { activityCode: "COEF_TUC", income: "0", coefficient: "0.6" },
+      { activityCode: "COEF_CBA", income: "0", coefficient: "0.4" },
+    ]);
+    expect(batch.totals.net).toBe("100000.0000");
+    expect(batch.totals.validRows).toBe(3);
+    expect(batch.totals.errorRows).toBe(0);
   });
 });

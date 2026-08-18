@@ -11,6 +11,8 @@ import { hashPassword } from "./auth/password.js";
 
 const DEMO_EMAIL = "demo@contable.local";
 const DEMO_PASSWORD = "demo1234";
+const REVIEWER_EMAIL = "revisor@contable.local";
+const REVIEWER_PASSWORD = "revisor1234";
 const PORTAL_EMAIL = "cliente@contable.local";
 const PORTAL_PASSWORD = "cliente1234";
 
@@ -49,6 +51,24 @@ async function main() {
     },
   });
 
+  // Usuario revisor (maker-checker: el owner no puede revisar su propio trabajo)
+  const reviewer = await prisma.user.upsert({
+    where: { emailNormalized: REVIEWER_EMAIL },
+    update: {},
+    create: { emailNormalized: REVIEWER_EMAIL, name: "Revisor Demo", passwordHash: await hashPassword(REVIEWER_PASSWORD) },
+  });
+  await prisma.firmMembership.upsert({
+    where: { firmId_userId: { firmId: firm.id, userId: reviewer.id } },
+    update: { status: "ACTIVE", role: "REVIEWER" },
+    create: {
+      firmId: firm.id,
+      userId: reviewer.id,
+      role: "REVIEWER",
+      status: "ACTIVE",
+      acceptedAt: new Date(),
+    },
+  });
+
   // Cliente demo
   const client = await prisma.client.upsert({
     where: { firmId_cuit: { firmId: firm.id, cuit: "20111111199" } },
@@ -59,6 +79,13 @@ async function main() {
       cuit: "20111111199",
       status: "ACTIVE",
     },
+  });
+
+  // Asignación del revisor al cliente (maker-checker en E2E).
+  await prisma.clientAssignment.upsert({
+    where: { firmId_userId_clientId: { firmId: firm.id, userId: reviewer.id, clientId: client.id } },
+    update: {},
+    create: { firmId: firm.id, userId: reviewer.id, clientId: client.id },
   });
 
   const portalUser = await prisma.user.upsert({

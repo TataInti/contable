@@ -1867,6 +1867,7 @@ model TaxpayerProfileVersion {
   nationalCondition  NationalTaxCondition
   fiscalAddress      String?
   fiscalYearEndMonth Int                    @default(12)
+  monotributoCategory String?
   validFrom          DateTime
   validTo            DateTime?
   status             TaxpayerProfileStatus  @default(DRAFT)
@@ -2139,7 +2140,7 @@ model TaxRateRule {
   concept         String
   activityCode    String?
   jurisdictionId  String?
-  rate            Decimal  @db.Decimal(10, 6)
+  rate            Decimal? @db.Decimal(10, 6)
   minAmount       Decimal? @db.Decimal(20, 4)
   validFrom       DateTime
   validTo         DateTime?

@@ -209,6 +209,109 @@ async function main() {
       });
     }
 
+    // G4: rule packs IIBB local, TEM, CM03 y Monotributo (aprobados y activos).
+    const iibbLocalRegime = await tx.taxRegime.findUnique({ where: { code: "IIBB_LOCAL_TUC" } });
+    const temRegime = await tx.taxRegime.findUnique({ where: { code: "TEM_SMT" } });
+    const cmRegime = await tx.taxRegime.findUnique({ where: { code: "CM_ART2" } });
+    const monoRegime = await tx.taxRegime.findUnique({ where: { code: "MONOTRIBUTO" } });
+
+    const iibbPack = await tx.taxRulePack.upsert({
+      where: { code: "AR_IIBB_TUC_LOCAL_V1" },
+      update: {},
+      create: { code: "AR_IIBB_TUC_LOCAL_V1", name: "IIBB Contribuyente Local Tucumán V1", regimeId: iibbLocalRegime!.id },
+    });
+    const temPack = await tx.taxRulePack.upsert({
+      where: { code: "AR_TEM_SMT_V1" },
+      update: {},
+      create: { code: "AR_TEM_SMT_V1", name: "TEM San Miguel de Tucumán V1", regimeId: temRegime!.id },
+    });
+    const cmPack = await tx.taxRulePack.upsert({
+      where: { code: "AR_IIBB_CM_ART2_V1" },
+      update: {},
+      create: { code: "AR_IIBB_CM_ART2_V1", name: "CM03 Artículo 2 V1", regimeId: cmRegime!.id },
+    });
+    const monoPack = await tx.taxRulePack.upsert({
+      where: { code: "AR_MONOTRIBUTO_V1" },
+      update: {},
+      create: { code: "AR_MONOTRIBUTO_V1", name: "Monotributo V1", regimeId: monoRegime!.id },
+    });
+
+    async function ensureActivePack(packId: string, engineVersion: string, rulesHash: string) {
+      const existing = await tx.taxRuleVersion.findFirst({
+        where: { packId, status: "ACTIVE" },
+      });
+      if (existing) return existing;
+      return tx.taxRuleVersion.create({
+        data: {
+          packId,
+          version: 1,
+          status: "ACTIVE",
+          validFrom: new Date("2026-01-01"),
+          engineVersion,
+          rulesHash,
+        },
+      });
+    }
+
+    // IIBB local: alícuota por actividad (nomenclador DGR Tucumán, muestra).
+    const iibbVersion = await ensureActivePack(iibbPack.id, "ar-iibb-tuc-local-v1.0.0", "sha256:ar-iibb-tuc-local-v1");
+    await tx.taxRateRule.createMany({
+      data: [
+        { ruleVersionId: iibbVersion.id, concept: "COMERCIO", rate: new Prisma.Decimal("4"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: iibbVersion.id, concept: "SERVICIOS", rate: new Prisma.Decimal("4.5"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: iibbVersion.id, concept: "DEFAULT", rate: new Prisma.Decimal("4"), validFrom: new Date("2026-01-01") },
+      ],
+      skipDuplicates: true,
+    });
+    await tx.taxMinimumRule.createMany({
+      data: [
+        { ruleVersionId: iibbVersion.id, concept: "MINIMO", amount: new Prisma.Decimal("5000"), validFrom: new Date("2026-01-01") },
+      ],
+      skipDuplicates: true,
+    });
+
+    // TEM SMT: alícuota por actividad (nomenclador municipal, muestra).
+    const temVersion = await ensureActivePack(temPack.id, "ar-tem-smt-v1.0.0", "sha256:ar-tem-smt-v1");
+    await tx.taxRateRule.createMany({
+      data: [
+        { ruleVersionId: temVersion.id, concept: "COMERCIO", rate: new Prisma.Decimal("2"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: temVersion.id, concept: "SERVICIOS", rate: new Prisma.Decimal("3"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: temVersion.id, concept: "DEFAULT", rate: new Prisma.Decimal("2"), validFrom: new Date("2026-01-01") },
+      ],
+      skipDuplicates: true,
+    });
+    await tx.taxMinimumRule.createMany({
+      data: [
+        { ruleVersionId: temVersion.id, concept: "MINIMO", amount: new Prisma.Decimal("3000"), validFrom: new Date("2026-01-01") },
+      ],
+      skipDuplicates: true,
+    });
+
+    // CM03 art.2: alícuota por jurisdicción + coeficientes (concept COEF_<jur>).
+    const cmVersion = await ensureActivePack(cmPack.id, "ar-iibb-cm-art2-v1.0.0", "sha256:ar-iibb-cm-art2-v1");
+    await tx.taxRateRule.createMany({
+      data: [
+        { ruleVersionId: cmVersion.id, concept: "TUC", rate: new Prisma.Decimal("4"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: cmVersion.id, concept: "CBA", rate: new Prisma.Decimal("3.5"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: cmVersion.id, concept: "COEF_TUC", rate: new Prisma.Decimal("0.6"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: cmVersion.id, concept: "COEF_CBA", rate: new Prisma.Decimal("0.4"), validFrom: new Date("2026-01-01") },
+      ],
+      skipDuplicates: true,
+    });
+
+    // Monotributo: cuota por categoría (concept CUOTA_<cat>). Las cuotas son
+    // importes (no tasas), por eso van en minAmount (Decimal(20,4)), no en rate
+    // (Decimal(10,6) que no admite > 9999).
+    const monoVersion = await ensureActivePack(monoPack.id, "ar-monotributo-v1.0.0", "sha256:ar-monotributo-v1");
+    await tx.taxRateRule.createMany({
+      data: [
+        { ruleVersionId: monoVersion.id, concept: "CUOTA_A", minAmount: new Prisma.Decimal("25000"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: monoVersion.id, concept: "CUOTA_B", minAmount: new Prisma.Decimal("30000"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: monoVersion.id, concept: "CUOTA_C", minAmount: new Prisma.Decimal("35000"), validFrom: new Date("2026-01-01") },
+      ],
+      skipDuplicates: true,
+    });
+
     console.log("Maestros fiscales listos.");
   });
 }

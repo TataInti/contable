@@ -380,3 +380,357 @@ export function normalizeWithholdingBatch(
     },
   };
 }
+
+// ============================================================
+// G2-02 — Adaptador DGR Tucumán IIBB (Ingresos Brutos local)
+//
+// Formato esperado (padrón/constancia de DGR Tucumán):
+//   activityCode | description | income | rate | minimum | exemption
+//
+// Cada fila representa ingresos gravados por actividad (nomenclador).
+// ============================================================
+
+export interface IibbTucRow {
+  activityCode: string;
+  description: string | null;
+  income: string;
+  rate: string | null;
+  minimum: string | null;
+  exemption: string;
+}
+
+export type IibbTucError =
+  | "ACTIVITY_CODE_INVALID"
+  | "INCOME_INVALID"
+  | "RATE_INVALID"
+  | "MINIMUM_INVALID";
+
+export interface IibbTucImportRow {
+  activityCode?: unknown;
+  description?: unknown;
+  income?: unknown;
+  rate?: unknown;
+  minimum?: unknown;
+  exemption?: unknown;
+}
+
+/**
+ * Normaliza una fila de ingresos brutos DGR Tucumán.
+ * Devuelve { status: 'VALID', data } o { status: 'ERROR', errors }.
+ */
+export function normalizeIibbTucRow(input: IibbTucImportRow): NormalizedRow<IibbTucRow> {
+  const errors: IibbTucError[] = [];
+
+  const activityCode = typeof input.activityCode === "string"
+    ? input.activityCode.trim().toUpperCase()
+    : "";
+  if (activityCode.length === 0) errors.push("ACTIVITY_CODE_INVALID");
+
+  const income = isDecimalString(input.income) ? new Decimal(input.income) : null;
+  if (!income || income.isNegative()) errors.push("INCOME_INVALID");
+
+  const rate = isDecimalString(input.rate) ? new Decimal(input.rate) : null;
+  if (input.rate !== undefined && input.rate !== null && !rate) errors.push("RATE_INVALID");
+
+  const minimum = isDecimalString(input.minimum) ? new Decimal(input.minimum) : null;
+  if (input.minimum !== undefined && input.minimum !== null && !minimum) errors.push("MINIMUM_INVALID");
+
+  const exemption = isDecimalString(input.exemption) ? new Decimal(input.exemption) : new Decimal(0);
+
+  const description = typeof input.description === "string" && input.description.trim().length > 0
+    ? input.description.trim()
+    : null;
+
+  if (errors.length > 0) return { status: "ERROR", errors };
+
+  return {
+    status: "VALID",
+    data: {
+      activityCode,
+      description,
+      income: (income as Decimal).toFixed(4),
+      rate: rate ? rate.toFixed(6) : null,
+      minimum: minimum ? minimum.toFixed(4) : null,
+      exemption: exemption.toFixed(4),
+    },
+  };
+}
+
+/**
+ * Procesa un lote de filas IIBB DGR Tucumán y devuelve normalizadas + totales.
+ */
+export function normalizeIibbTucBatch(
+  rows: readonly IibbTucImportRow[],
+): { rows: NormalizedRow<IibbTucRow>[]; totals: ImportTotals } {
+  let net = new Decimal(0);
+  let valid = 0;
+  let errors = 0;
+
+  const normalized = rows.map((row) => {
+    const result = normalizeIibbTucRow(row);
+    if (result.status === "VALID" && result.data) {
+      net = net.plus(result.data.income);
+      valid += 1;
+    } else {
+      errors += 1;
+    }
+    return result;
+  });
+
+  return {
+    rows: normalized,
+    totals: {
+      net: net.toFixed(4),
+      iva: "0",
+      validRows: valid,
+      errorRows: errors,
+    },
+  };
+}
+
+// ============================================================
+// G4 — Adaptador SMT TEM (Tasa de Actividades Económicas)
+//
+// Formato esperado (padrón/constancia de la Municipalidad de San Miguel de
+// Tucumán):
+//   activityCode | description | income | rate | minimum | exemption
+//
+// Cada fila representa ingresos gravados por actividad (nomenclador municipal).
+// Comparte el mismo esquema que el adaptador DGR IIBB, pero se distingue por
+// el prefijo de adapterVersion (SMT_TEM) para el dispatch en ingestión.
+// ============================================================
+
+export interface TemSmtRow {
+  activityCode: string;
+  description: string | null;
+  income: string;
+  rate: string | null;
+  minimum: string | null;
+  exemption: string;
+}
+
+export type TemSmtError =
+  | "ACTIVITY_CODE_INVALID"
+  | "INCOME_INVALID"
+  | "RATE_INVALID"
+  | "MINIMUM_INVALID";
+
+export interface TemSmtImportRow {
+  activityCode?: unknown;
+  description?: unknown;
+  income?: unknown;
+  rate?: unknown;
+  minimum?: unknown;
+  exemption?: unknown;
+}
+
+/**
+ * Normaliza una fila de TEM San Miguel de Tucumán.
+ * Devuelve { status: 'VALID', data } o { status: 'ERROR', errors }.
+ */
+export function normalizeTemSmtRow(input: TemSmtImportRow): NormalizedRow<TemSmtRow> {
+  const errors: TemSmtError[] = [];
+
+  const activityCode = typeof input.activityCode === "string"
+    ? input.activityCode.trim().toUpperCase()
+    : "";
+  if (activityCode.length === 0) errors.push("ACTIVITY_CODE_INVALID");
+
+  const income = isDecimalString(input.income) ? new Decimal(input.income) : null;
+  if (!income || income.isNegative()) errors.push("INCOME_INVALID");
+
+  const rate = isDecimalString(input.rate) ? new Decimal(input.rate) : null;
+  if (input.rate !== undefined && input.rate !== null && !rate) errors.push("RATE_INVALID");
+
+  const minimum = isDecimalString(input.minimum) ? new Decimal(input.minimum) : null;
+  if (input.minimum !== undefined && input.minimum !== null && !minimum) errors.push("MINIMUM_INVALID");
+
+  const exemption = isDecimalString(input.exemption) ? new Decimal(input.exemption) : new Decimal(0);
+
+  const description = typeof input.description === "string" && input.description.trim().length > 0
+    ? input.description.trim()
+    : null;
+
+  if (errors.length > 0) return { status: "ERROR", errors };
+
+  return {
+    status: "VALID",
+    data: {
+      activityCode,
+      description,
+      income: (income as Decimal).toFixed(4),
+      rate: rate ? rate.toFixed(6) : null,
+      minimum: minimum ? minimum.toFixed(4) : null,
+      exemption: exemption.toFixed(4),
+    },
+  };
+}
+
+/**
+ * Procesa un lote de filas TEM SMT y devuelve normalizadas + totales.
+ */
+export function normalizeTemSmtBatch(
+  rows: readonly TemSmtImportRow[],
+): { rows: NormalizedRow<TemSmtRow>[]; totals: ImportTotals } {
+  let net = new Decimal(0);
+  let valid = 0;
+  let errors = 0;
+
+  const normalized = rows.map((row) => {
+    const result = normalizeTemSmtRow(row);
+    if (result.status === "VALID" && result.data) {
+      net = net.plus(result.data.income);
+      valid += 1;
+    } else {
+      errors += 1;
+    }
+    return result;
+  });
+
+  return {
+    rows: normalized,
+    totals: {
+      net: net.toFixed(4),
+      iva: "0",
+      validRows: valid,
+      errorRows: errors,
+    },
+  };
+}
+
+// ============================================================
+// G4 — Adaptador CM03 artículo 2 (Convenio Multilateral)
+//
+// Formato esperado (declaración CM03 / SIFERE):
+//   activityCode | description | income | jurisdiction | coefficient
+//
+// Cada fila representa ingresos gravados por actividad (base país). Los
+// coeficientes por jurisdicción se declaran en filas con activityCode
+// "COEF_<jur>" y el valor en `coefficient` (0..1). El adaptador separa
+// ingresos de coeficientes y valida que la suma de coeficientes sea 1.
+// ============================================================
+
+export interface Cm03Row {
+  activityCode: string;
+  description: string | null;
+  income: string;
+  jurisdiction: string | null;
+  coefficient: string | null;
+}
+
+export type Cm03Error =
+  | "ACTIVITY_CODE_INVALID"
+  | "INCOME_INVALID"
+  | "COEFFICIENT_INVALID"
+  | "COEFFICIENT_SUM_INVALID";
+
+export interface Cm03ImportRow {
+  activityCode?: unknown;
+  description?: unknown;
+  income?: unknown;
+  jurisdiction?: unknown;
+  coefficient?: unknown;
+}
+
+/**
+ * Normaliza una fila de CM03 artículo 2.
+ * Devuelve { status: 'VALID', data } o { status: 'ERROR', errors }.
+ */
+export function normalizeCm03Row(input: Cm03ImportRow): NormalizedRow<Cm03Row> {
+  const errors: Cm03Error[] = [];
+
+  const activityCode = typeof input.activityCode === "string"
+    ? input.activityCode.trim().toUpperCase()
+    : "";
+  if (activityCode.length === 0) errors.push("ACTIVITY_CODE_INVALID");
+
+  const income = isDecimalString(input.income) ? new Decimal(input.income) : null;
+  if (!income || income.isNegative()) errors.push("INCOME_INVALID");
+
+  const coefficient = isDecimalString(input.coefficient) ? new Decimal(input.coefficient) : null;
+  if (input.coefficient !== undefined && input.coefficient !== null && !coefficient) {
+    errors.push("COEFFICIENT_INVALID");
+  }
+  if (coefficient && (coefficient.isNegative() || coefficient.greaterThan(1))) {
+    errors.push("COEFFICIENT_INVALID");
+  }
+
+  const jurisdiction =
+    typeof input.jurisdiction === "string" && input.jurisdiction.trim().length > 0
+      ? input.jurisdiction.trim().toUpperCase()
+      : null;
+
+  const description = typeof input.description === "string" && input.description.trim().length > 0
+    ? input.description.trim()
+    : null;
+
+  if (errors.length > 0) return { status: "ERROR", errors };
+
+  return {
+    status: "VALID",
+    data: {
+      activityCode,
+      description,
+      income: (income as Decimal).toFixed(4),
+      jurisdiction,
+      coefficient: coefficient ? coefficient.toFixed(6) : null,
+    },
+  };
+}
+
+/**
+ * Procesa un lote de filas CM03 y devuelve normalizadas + totales.
+ * Valida que la suma de coeficientes declarados sea 1.
+ */
+export function normalizeCm03Batch(
+  rows: readonly Cm03ImportRow[],
+): { rows: NormalizedRow<Cm03Row>[]; totals: ImportTotals } {
+  let net = new Decimal(0);
+  let valid = 0;
+  let errors = 0;
+  let coeffSum = new Decimal(0);
+  let hasCoeff = false;
+
+  const normalized = rows.map((row) => {
+    const result = normalizeCm03Row(row);
+    if (result.status === "VALID" && result.data) {
+      if (result.data.coefficient !== null) {
+        coeffSum = coeffSum.plus(result.data.coefficient);
+        hasCoeff = true;
+      } else {
+        net = net.plus(result.data.income);
+      }
+      valid += 1;
+    } else {
+      errors += 1;
+    }
+    return result;
+  });
+
+  // Si hay coeficientes declarados y no suman 1, el lote es inválido.
+  if (hasCoeff && !coeffSum.equals(1)) {
+    return {
+      rows: normalized.map((r) =>
+        r.status === "VALID" && r.data && r.data.coefficient !== null
+          ? { status: "ERROR" as const, errors: ["COEFFICIENT_SUM_INVALID"] }
+          : r,
+      ),
+      totals: {
+        net: net.toFixed(4),
+        iva: "0",
+        validRows: valid - 1,
+        errorRows: errors + 1,
+      },
+    };
+  }
+
+  return {
+    rows: normalized,
+    totals: {
+      net: net.toFixed(4),
+      iva: "0",
+      validRows: valid,
+      errorRows: errors,
+    },
+  };
+}

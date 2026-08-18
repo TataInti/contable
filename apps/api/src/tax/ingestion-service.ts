@@ -2,8 +2,14 @@ import { Prisma } from "@prisma/client";
 import { taxHash } from "@contable/tax-engine";
 import {
   normalizeArcaVoucherBatch,
+  normalizeCm03Batch,
+  normalizeIibbTucBatch,
+  normalizeTemSmtBatch,
   normalizeWithholdingBatch,
   type ArcaVoucherInput,
+  type Cm03ImportRow,
+  type IibbTucImportRow,
+  type TemSmtImportRow,
   type WithholdingInput,
 } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
@@ -111,7 +117,7 @@ export class IngestionService {
   async validateBatch(
     ctx: TenantContext,
     batchId: string,
-    rows: readonly (ArcaVoucherInput | WithholdingInput)[],
+    rows: readonly (ArcaVoucherInput | WithholdingInput | IibbTucImportRow | TemSmtImportRow | Cm03ImportRow)[],
   ) {
     return withTenantContext(ctx, async (tx) => {
       const batch = await tx.importBatch.findFirst({ where: { id: batchId, firmId: ctx.firmId } });
@@ -121,9 +127,18 @@ export class IngestionService {
       }
 
       const isWithholding = batch.adapterVersion.startsWith("ARCA_RET");
+      const isIibb = batch.adapterVersion.startsWith("DGR_IIBB");
+      const isTem = batch.adapterVersion.startsWith("SMT_TEM");
+      const isCm03 = batch.adapterVersion.startsWith("CM03");
       const normalizedRows = isWithholding
         ? normalizeWithholdingBatch(rows as WithholdingInput[])
-        : normalizeArcaVoucherBatch(rows as ArcaVoucherInput[]);
+        : isIibb
+          ? normalizeIibbTucBatch(rows as IibbTucImportRow[])
+          : isTem
+            ? normalizeTemSmtBatch(rows as TemSmtImportRow[])
+            : isCm03
+              ? normalizeCm03Batch(rows as Cm03ImportRow[])
+              : normalizeArcaVoucherBatch(rows as ArcaVoucherInput[]);
 
       await tx.importBatch.update({
         where: { id: batchId },
@@ -190,6 +205,9 @@ export class IngestionService {
       }
 
       const isWithholding = batch.adapterVersion.startsWith("ARCA_RET");
+      const isIibb = batch.adapterVersion.startsWith("DGR_IIBB");
+      const isTem = batch.adapterVersion.startsWith("SMT_TEM");
+      const isCm03 = batch.adapterVersion.startsWith("CM03");
       let committed = 0;
       let duplicates = 0;
       const errors: string[] = [];
@@ -207,6 +225,15 @@ export class IngestionService {
         try {
           if (isWithholding) {
             await this.commitWithholdingRow(tx, ctx, batch, row, clientCuit);
+            committed += 1;
+          } else if (isIibb) {
+            await this.commitIibbRow(tx, ctx, batch, row, clientCuit);
+            committed += 1;
+          } else if (isTem) {
+            await this.commitTemRow(tx, ctx, batch, row, clientCuit);
+            committed += 1;
+          } else if (isCm03) {
+            await this.commitCm03Row(tx, ctx, batch, row, clientCuit);
             committed += 1;
           } else {
             const created = await this.commitVoucherRow(tx, ctx, batch, row, clientCuit);
@@ -341,6 +368,278 @@ export class IngestionService {
       data: { status: "COMMITTED", voucherId: voucher.id },
     });
     return true;
+  }
+
+  /**
+   * G2-02 IIBB: convierte una fila DGR Tucumán en un voucher SALE con línea
+   * de actividad. La línea (activityCode + netAmount) es la fuente que el
+   * motor IIBB agrupa por actividad.
+   */
+  private async commitIibbRow(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    batch: { id: string; periodId: string },
+    row: { id: string; position: number; normalized: Prisma.JsonValue },
+    clientCuit: string,
+  ): Promise<void> {
+    const n = (row.normalized ?? {}) as Record<string, unknown>;
+    const activityCode = n["activityCode"] as string;
+    const income = n["income"] as string;
+    const description = (n["description"] as string | null) ?? activityCode;
+    const rate = n["rate"] as string | null;
+    const minimum = n["minimum"] as string | null;
+    const exemption = n["exemption"] as string;
+
+    // Fecha dentro del período (el resumen DGR es mensual; se usa el fin del
+    // período para que el voucher quede dentro del rango del cálculo).
+    const period = await tx.taxPeriod.findUnique({ where: { id: batch.periodId } });
+    const issuedOn = period?.endDate ?? new Date();
+
+    // Un voucher por actividad (resumen mensual de ingresos gravados).
+    const hash = taxHash({
+      firmId: ctx.firmId,
+      clientId: ctx.clientId,
+      origin: "DGR_IIBB",
+      activityCode,
+      income,
+    });
+
+    const voucher = await tx.fiscalVoucher.create({
+      data: {
+        firmId: ctx.firmId,
+        clientId: ctx.clientId!,
+        direction: "SALE",
+        type: "IIBB_RESUMEN",
+        letter: "R",
+        pointOfSale: 0,
+        number: row.position + 1,
+        issuerCuit: clientCuit,
+        receiverCuit: clientCuit,
+        issuedOn,
+        currency: "ARS",
+        total: new Prisma.Decimal(income),
+        status: "DRAFT",
+        version: 1,
+        hash,
+        createdByUserId: ctx.userId,
+        lines: {
+          create: [
+            {
+              firmId: ctx.firmId,
+              clientId: ctx.clientId!,
+              position: 1,
+              description,
+              activityCode,
+              netAmount: new Prisma.Decimal(income),
+            },
+          ],
+        },
+        components: {
+          create: [
+            {
+              firmId: ctx.firmId,
+              clientId: ctx.clientId!,
+              concept: "NETO",
+              base: new Prisma.Decimal(income),
+              amount: new Prisma.Decimal(income),
+            },
+            ...(Number(exemption) !== 0
+              ? [{
+                  firmId: ctx.firmId,
+                  clientId: ctx.clientId!,
+                  concept: "EXENTO",
+                  base: new Prisma.Decimal(exemption),
+                  amount: new Prisma.Decimal(exemption),
+                }]
+              : []),
+          ],
+        },
+      },
+    });
+
+    await tx.importRow.update({
+      where: { id: row.id },
+      data: { status: "COMMITTED", voucherId: voucher.id },
+    });
+
+    void rate;
+    void minimum;
+  }
+
+  /**
+   * G4 TEM: convierte una fila SMT en un voucher SALE con línea de actividad.
+   * Mismo patrón que commitIibbRow: el resumen municipal es mensual y se usa
+   * el fin del período como fecha para que el voucher quede dentro del rango.
+   */
+  private async commitTemRow(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    batch: { id: string; periodId: string },
+    row: { id: string; position: number; normalized: Prisma.JsonValue },
+    clientCuit: string,
+  ): Promise<void> {
+    const n = (row.normalized ?? {}) as Record<string, unknown>;
+    const activityCode = n["activityCode"] as string;
+    const income = n["income"] as string;
+    const description = (n["description"] as string | null) ?? activityCode;
+    const exemption = n["exemption"] as string;
+
+    const period = await tx.taxPeriod.findUnique({ where: { id: batch.periodId } });
+    const issuedOn = period?.endDate ?? new Date();
+
+    const hash = taxHash({
+      firmId: ctx.firmId,
+      clientId: ctx.clientId,
+      origin: "SMT_TEM",
+      activityCode,
+      income,
+    });
+
+    const voucher = await tx.fiscalVoucher.create({
+      data: {
+        firmId: ctx.firmId,
+        clientId: ctx.clientId!,
+        direction: "SALE",
+        type: "TEM_RESUMEN",
+        letter: "R",
+        pointOfSale: 0,
+        number: row.position + 1,
+        issuerCuit: clientCuit,
+        receiverCuit: clientCuit,
+        issuedOn,
+        currency: "ARS",
+        total: new Prisma.Decimal(income),
+        status: "DRAFT",
+        version: 1,
+        hash,
+        createdByUserId: ctx.userId,
+        lines: {
+          create: [
+            {
+              firmId: ctx.firmId,
+              clientId: ctx.clientId!,
+              position: 1,
+              description,
+              activityCode,
+              netAmount: new Prisma.Decimal(income),
+            },
+          ],
+        },
+        components: {
+          create: [
+            {
+              firmId: ctx.firmId,
+              clientId: ctx.clientId!,
+              concept: "NETO",
+              base: new Prisma.Decimal(income),
+              amount: new Prisma.Decimal(income),
+            },
+            ...(Number(exemption) !== 0
+              ? [{
+                  firmId: ctx.firmId,
+                  clientId: ctx.clientId!,
+                  concept: "EXENTO",
+                  base: new Prisma.Decimal(exemption),
+                  amount: new Prisma.Decimal(exemption),
+                }]
+              : []),
+          ],
+        },
+      },
+    });
+
+    await tx.importRow.update({
+      where: { id: row.id },
+      data: { status: "COMMITTED", voucherId: voucher.id },
+    });
+  }
+
+  /**
+   * G4 CM03: convierte una fila de ingreso en un voucher SALE con línea de
+   * actividad (base país). Las filas de coeficiente (activityCode COEF_<jur>)
+   * no generan voucher: los coeficientes viven en las reglas del rule pack.
+   */
+  private async commitCm03Row(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    batch: { id: string; periodId: string },
+    row: { id: string; position: number; normalized: Prisma.JsonValue },
+    clientCuit: string,
+  ): Promise<void> {
+    const n = (row.normalized ?? {}) as Record<string, unknown>;
+    const activityCode = n["activityCode"] as string;
+    const income = n["income"] as string;
+    const description = (n["description"] as string | null) ?? activityCode;
+    const coefficient = n["coefficient"] as string | null;
+
+    // Fila de coeficiente: no genera voucher (se marca COMMITTED sin voucher).
+    if (coefficient !== null) {
+      await tx.importRow.update({
+        where: { id: row.id },
+        data: { status: "COMMITTED" },
+      });
+      return;
+    }
+
+    const period = await tx.taxPeriod.findUnique({ where: { id: batch.periodId } });
+    const issuedOn = period?.endDate ?? new Date();
+
+    const hash = taxHash({
+      firmId: ctx.firmId,
+      clientId: ctx.clientId,
+      origin: "CM03",
+      activityCode,
+      income,
+    });
+
+    const voucher = await tx.fiscalVoucher.create({
+      data: {
+        firmId: ctx.firmId,
+        clientId: ctx.clientId!,
+        direction: "SALE",
+        type: "CM03_RESUMEN",
+        letter: "R",
+        pointOfSale: 0,
+        number: row.position + 1,
+        issuerCuit: clientCuit,
+        receiverCuit: clientCuit,
+        issuedOn,
+        currency: "ARS",
+        total: new Prisma.Decimal(income),
+        status: "DRAFT",
+        version: 1,
+        hash,
+        createdByUserId: ctx.userId,
+        lines: {
+          create: [
+            {
+              firmId: ctx.firmId,
+              clientId: ctx.clientId!,
+              position: 1,
+              description,
+              activityCode,
+              netAmount: new Prisma.Decimal(income),
+            },
+          ],
+        },
+        components: {
+          create: [
+            {
+              firmId: ctx.firmId,
+              clientId: ctx.clientId!,
+              concept: "NETO",
+              base: new Prisma.Decimal(income),
+              amount: new Prisma.Decimal(income),
+            },
+          ],
+        },
+      },
+    });
+
+    await tx.importRow.update({
+      where: { id: row.id },
+      data: { status: "COMMITTED", voucherId: voucher.id },
+    });
   }
 
   private async commitWithholdingRow(

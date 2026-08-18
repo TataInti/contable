@@ -1,7 +1,19 @@
 import { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
-import { calculateVat, dec, VAT_ENGINE_VERSION } from "@contable/tax-engine";
-import type { TaxFact } from "@contable/tax-engine";
+import {
+  calculateCm03,
+  calculateIIbbTuc,
+  calculateMonotributo,
+  calculateTemSmt,
+  calculateVat,
+  CM03_ENGINE_VERSION,
+  dec,
+  IIBB_TUC_ENGINE_VERSION,
+  MONOTRIBUTO_ENGINE_VERSION,
+  TEM_SMT_ENGINE_VERSION,
+  VAT_ENGINE_VERSION,
+} from "@contable/tax-engine";
+import type { TaxEngineResult, TaxFact } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
 import { exportReport, type ExportReportResult } from "../reporting/report-export.js";
@@ -180,7 +192,7 @@ export class SettlementService {
           status: "APPROVED",
           issuedOn: { gte: period.startDate, lte: period.endDate },
         },
-        include: { components: true },
+        include: { components: true, lines: true },
       });
       const adjustments = await tx.taxAdjustment.findMany({
         where: { firmId: ctx.firmId, clientId: input.clientId, reviewedAt: { not: null } },
@@ -199,15 +211,18 @@ export class SettlementService {
 
       // --- Reglas del motor (tasas por concepto). La DB guarda la alícuota
       //     en puntos porcentuales (p.ej. 21.0000); el motor espera decimal
-      //     (0.21). Se normaliza dividiendo por 100. ---
+      //     (0.21). Se normaliza dividiendo por 100. rate es opcional (las
+      //     cuotas de monotributo van en minAmount). ---
       const rules = rateRules.map((r) => {
-        const percent = dec(r.rate.toString());
-        const rate = percent.greaterThan(1) ? percent.div(100) : percent;
+        const rate = r.rate !== null ? dec(r.rate.toString()) : undefined;
+        const normalized = rate !== undefined && rate.greaterThan(1) ? rate.div(100) : rate;
+        const min = r.minAmount !== null ? dec(r.minAmount.toString()) : undefined;
         return {
           id: r.id,
           concept: r.concept,
           code: r.concept,
-          rate,
+          ...(normalized !== undefined ? { rate: normalized } : {}),
+          ...(min !== undefined ? { minimum: min } : {}),
           validFrom: r.validFrom.toISOString().slice(0, 10),
         };
       });
@@ -278,23 +293,179 @@ export class SettlementService {
         new Prisma.Decimal(0),
       );
 
-      // --- Motor IVA (determinista, V-004) ---
-      const result = calculateVat({
-        engineVersion: VAT_ENGINE_VERSION,
-        period: {
-          startDate: period.startDate.toISOString().slice(0, 10),
-          endDate: period.endDate.toISOString().slice(0, 10),
-          cutoff,
-        },
-        facts: facts as TaxFact[],
-        rules,
-        credits: {
-          withholding: withholdingTotal,
-          perception: perceptionTotal,
-          technicalPrevious: new Prisma.Decimal(0),
-          freeAvailabilityPrevious: previousFree,
-        },
+      // --- Dispatch por motor (determinista, V-004) ---
+      // El rule pack ACTIVE declara su engineVersion; cada régimen usa su
+      // motor puro. IVA usa hechos por concepto; IIBB usa ingresos por
+      // actividad (líneas del voucher) + créditos RPI.
+      const periodRange = {
+        startDate: period.startDate.toISOString().slice(0, 10),
+        endDate: period.endDate.toISOString().slice(0, 10),
+        cutoff,
+      };
+
+      // --- Ingresos por actividad (IIBB/TEM/CM) desde líneas de ventas ---
+      // El cutoff se aplica aquí (hechos con fecha > cutoff se excluyen).
+      const cutoffDate = `${cutoff}T23:59:59.999Z`;
+      const incomeByActivity: Record<string, string> = {};
+      for (const v of vouchers) {
+        if (v.direction !== "SALE") continue;
+        if (v.issuedOn.toISOString() > cutoffDate) continue;
+        for (const line of v.lines) {
+          const activity = line.activityCode ?? "DEFAULT";
+          const net = line.netAmount ?? new Prisma.Decimal(0);
+          incomeByActivity[activity] = dec(incomeByActivity[activity] ?? "0")
+            .plus(net)
+            .toString();
+          inputs.push({
+            kind: "VOUCHER_COMPONENT",
+            sourceId: `${v.id}:${line.id}`,
+            sourceVersion: v.version,
+            snapshot: {
+              voucherId: v.id,
+              type: v.type,
+              letter: v.letter,
+              pointOfSale: v.pointOfSale,
+              number: v.number,
+              issuedOn: v.issuedOn.toISOString().slice(0, 10),
+              activityCode: activity,
+              netAmount: net.toString(),
+            },
+          });
+        }
+      }
+
+      const minimumRules = await tx.taxMinimumRule.findMany({
+        where: { ruleVersionId: activeVersion.id },
       });
+      const minimum = minimumRules[0]?.amount
+        ? dec(minimumRules[0].amount.toString())
+        : undefined;
+
+      let result: TaxEngineResult;
+      switch (activeVersion.engineVersion) {
+        case IIBB_TUC_ENGINE_VERSION: {
+          // --- IIBB Tucumán local: ingresos por actividad + créditos RPI ---
+          result = calculateIIbbTuc({
+            engineVersion: IIBB_TUC_ENGINE_VERSION,
+            period: periodRange,
+            facts: facts as TaxFact[],
+            rules,
+            incomeByActivity,
+            ...(minimum !== undefined ? { minimum } : {}),
+            credits: {
+              withholding: withholdingTotal,
+              perception: perceptionTotal,
+              collected: new Prisma.Decimal(0),
+            },
+            balances: { previousCredit: previousFree.toString() },
+          });
+          break;
+        }
+        case TEM_SMT_ENGINE_VERSION: {
+          // --- TEM San Miguel de Tucumán ---
+          result = calculateTemSmt({
+            engineVersion: TEM_SMT_ENGINE_VERSION,
+            period: periodRange,
+            facts: facts as TaxFact[],
+            rules,
+            incomeByActivity,
+            ...(minimum !== undefined ? { minimum } : {}),
+            credits: {
+              withholding: withholdingTotal,
+              perception: perceptionTotal,
+            },
+            balances: { previousCredit: previousFree.toString() },
+          });
+          break;
+        }
+        case CM03_ENGINE_VERSION: {
+          // --- CM03 artículo 2: coeficientes por jurisdicción ---
+          // Los coeficientes se toman de las reglas (concept = jurisdicción,
+          // rate = coeficiente). Se validan en el motor (suma = 1).
+          const coefficients: Record<string, string> = {};
+          for (const r of rateRules) {
+            if (r.concept.startsWith("COEF_") && r.rate !== null) {
+              coefficients[r.concept.slice(5)] = r.rate.toString();
+            }
+          }
+          // Los certificados no tienen jurisdictionId; en CM03 los créditos se
+          // imputan a la jurisdicción principal (la primera con coeficiente).
+          const primaryJurisdiction = Object.keys(coefficients)[0];
+          const withholdingByJurisdiction: Record<string, Prisma.Decimal> = {};
+          const perceptionByJurisdiction: Record<string, Prisma.Decimal> = {};
+          const previousCreditByJurisdiction: Record<string, string> = {};
+          if (primaryJurisdiction) {
+            withholdingByJurisdiction[primaryJurisdiction] = withholdingTotal;
+            perceptionByJurisdiction[primaryJurisdiction] = perceptionTotal;
+            previousCreditByJurisdiction[primaryJurisdiction] = previousFree.toString();
+          }
+          result = calculateCm03({
+            engineVersion: CM03_ENGINE_VERSION,
+            period: periodRange,
+            facts: facts as TaxFact[],
+            rules,
+            incomeByActivity,
+            coefficients,
+            credits: {
+              withholdingByJurisdiction,
+              perceptionByJurisdiction,
+            },
+            cmBalances: { previousCreditByJurisdiction },
+          });
+          break;
+        }
+        case MONOTRIBUTO_ENGINE_VERSION: {
+          // --- Monotributo: cuota por categoría ---
+          const profile = await tx.taxpayerProfileVersion.findFirst({
+            where: { firmId: ctx.firmId, clientId: input.clientId, status: "ACTIVE" },
+            orderBy: { version: "desc" },
+          });
+          const category = profile?.monotributoCategory ?? "A";
+          const feeByCategory: Record<string, string> = {};
+          for (const r of rateRules) {
+            if (r.concept.startsWith("CUOTA_")) {
+              // La cuota es un importe; se guarda en minAmount (Decimal(20,4)).
+              feeByCategory[r.concept.slice(6)] = (r.minAmount ?? r.rate)?.toString() ?? "0";
+            }
+          }
+          // Pagos ya registrados del período (se deducen de la cuota).
+          const periodPayments = await tx.taxPayment.aggregate({
+            where: {
+              firmId: ctx.firmId,
+              clientId: input.clientId,
+              status: "PAID",
+              paidAt: { gte: period.startDate, lte: period.endDate },
+            },
+            _sum: { amount: true },
+          });
+          result = calculateMonotributo({
+            engineVersion: MONOTRIBUTO_ENGINE_VERSION,
+            period: periodRange,
+            facts: facts as TaxFact[],
+            rules,
+            category,
+            parameters: { monthlyFeeByCategory: feeByCategory },
+            payments: {
+              paid: periodPayments._sum.amount ?? new Prisma.Decimal(0),
+            },
+          });
+          break;
+        }
+        default:
+          // --- IVA responsable inscripto (default) ---
+          result = calculateVat({
+            engineVersion: VAT_ENGINE_VERSION,
+            period: periodRange,
+            facts: facts as TaxFact[],
+            rules,
+            credits: {
+              withholding: withholdingTotal,
+              perception: perceptionTotal,
+              technicalPrevious: new Prisma.Decimal(0),
+              freeAvailabilityPrevious: previousFree,
+            },
+          });
+      }
 
       const totals: Record<string, string> = { ...result.subtotals };
       const lines = result.lines.map((l, i) => ({
