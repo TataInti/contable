@@ -152,3 +152,24 @@ falla.
 1. Restaurar el backup más reciente verificado.
 2. Verificar integridad de objetos (checksum).
 3. Confirmar que las migraciones aplican desde base vacía.
+
+## RB-12 — Corrida histórica del piloto (G6-02)
+
+**Síntoma:** se necesita ejecutar (o revalidar) los períodos históricos de
+control para un cliente piloto.
+
+**Diagnóstico:**
+- El script `seed:corrida` materializa 3 períodos consecutivos (Oct–Dic 2025)
+  por cliente con perfil fiscal ACTIVE, aprobando hechos y finalizando cada
+  liquidación con maker-checker (V-002).
+- Genera `docs/piloto/g6-corrida-historica.md` con totales y hashes.
+
+**Acción:**
+1. `npx tsx apps/api/src/seed-corrida-piloto.ts` (o `npm run seed:corrida -w @contable/api`).
+2. Comparar cada total del reporte contra la liquidación manual de control
+   del contador (tres períodos por régimen deben coincidir o tener diferencia
+   explicada).
+3. La corrida es idempotente: re-ejecutar reutiliza las liquidaciones FINALIZED
+   (no duplica) y sólo completa los faltantes.
+4. Si una regla/dato cambió, corregir creando versión nueva y rectificar
+   (nunca editar APPROVED/ACTIVE ni FINALIZED).

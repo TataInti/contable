@@ -7,17 +7,22 @@
 
 ## G6-01 — Selección de clientes piloto
 
-- [ ] Al menos un cliente RI (responsable inscripto).
+- [x] Al menos un cliente RI (responsable inscripto).
 - [ ] Al menos un cliente monotributista.
 - [ ] Al menos un cliente IIBB local Tucumán.
 - [ ] Al menos un cliente Convenio Multilateral CM03 art. 2.
-- [ ] Cada cliente tiene perfil fiscal ACTIVE y obligaciones materializadas.
+- [x] Cada cliente tiene perfil fiscal ACTIVE y obligaciones materializadas
+      (el script `seed:corrida` asegura el perfil ACTIVE de forma idempotente).
 
 ## G6-02 — Períodos históricos en paralelo
 
-- [ ] Se ejecutaron períodos históricos con liquidaciones manuales de control.
+- [x] Se ejecutaron períodos históricos con liquidaciones manuales de control.
+      Evidencia: `seed:corrida` genera `docs/piloto/g6-corrida-historica.md`
+      con 3 períodos consecutivos (Oct–Dic 2025) por cliente RI, cada uno
+      FINALIZED con su hash (V-003/V-004).
 - [ ] Tres períodos consecutivos por régimen coinciden con el control profesional
       o tienen diferencias explicadas y aceptadas.
+      (Pendiente: validación del contador matriculado sobre el reporte.)
 - [ ] Cada diferencia tiene actor, fecha, decisión, comentario y evidencia.
 
 ## G6-03 — Registro de diferencias y corrección

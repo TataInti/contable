@@ -12,6 +12,7 @@
     "dev": "tsx watch src/server.ts",
     "seed:demo": "tsx src/seed-demo.ts",
     "seed:carga": "tsx src/seed-carga-piloto.ts",
+    "seed:corrida": "tsx src/seed-corrida-piloto.ts",
     "migrate:deploy": "prisma migrate deploy",
     "start": "node dist/server.js"
   },
