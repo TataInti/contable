@@ -2,6 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { tenantContextFromRequest } from "../auth/tenant.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
+import { FeatureFlagService } from "../flags/feature-flag-service.js";
+import { requireTaxRegimeEnabled, TaxRegimeDisabledError } from "./tax-regime-guard.js";
+import { prisma } from "../lib/prisma.js";
 
 /** Con `exactOptionalPropertyTypes`, los opcionales se pasan sólo si están definidos. */
 function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
@@ -24,6 +27,7 @@ function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
 
 export function settlementRoutes(app: FastifyInstance) {
   const service = new SettlementService();
+  const flags = new FeatureFlagService();
 
   const handleError = (
     reply: { status: (code: number) => { send: (body: object) => void } },
@@ -33,8 +37,18 @@ export function settlementRoutes(app: FastifyInstance) {
       const status = err.code.includes("NOT_FOUND") ? 404 : err.code.includes("BLOCKING") ? 422 : 409;
       return reply.status(status).send({ error: { code: err.code, message: err.message } });
     }
+    if (err instanceof TaxRegimeDisabledError) {
+      return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } });
+    }
     throw err;
   };
+
+  /** G6-10: resuelve el código de régimen y verifica su flag de activación. */
+  async function assertRegimeEnabled(ctx: ReturnType<typeof tenantContextFromRequest>, regimeId: string) {
+    const regime = await prisma.taxRegime.findUnique({ where: { id: regimeId } });
+    if (!regime) throw new SettlementError("RULE_VERSION_NOT_FOUND", "Régimen fiscal no encontrado");
+    await requireTaxRegimeEnabled(flags, ctx, regime.code);
+  }
 
   // ------------------------------------------------------------------
   // Listas y worklist
@@ -119,6 +133,8 @@ export function settlementRoutes(app: FastifyInstance) {
       .strict()
       .parse(req.body);
     try {
+      // G6-10: el cálculo de un régimen exige su flag de activación.
+      await assertRegimeEnabled(ctx, body.regimeId);
       const data = await service.calculate(ctx, {
         clientId: ctx.clientId!,
         taxTypeId: body.taxTypeId,

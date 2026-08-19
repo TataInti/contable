@@ -15,7 +15,15 @@ export interface ClientContextValue {
 
 const Context = createContext<ClientContextValue | null>(null);
 const STORAGE_KEY = "contable.context.v2";
-const PORTAL_CAPABILITIES = ["client.read", "document.upload", "message.shared"];
+// G5: capacidades dedicadas de portal (PLAN §4.2). READONLY sólo recibe
+// portal.results.read; el colaborador además sube documentos y responde pedidos.
+const PORTAL_CAPABILITIES = [
+  "client.read",
+  "portal.results.read",
+  "portal.documents.upload",
+  "portal.requests.respond",
+  "message.shared",
+];
 
 interface AvailablePeriod {
   periodId: string;
@@ -89,10 +97,10 @@ function groupPortalContexts(portalContexts: PortalContext[]): AvailableFirm[] {
       firms.set(context.firmId, firm);
     }
 
-    // G0-05: READONLY no recibe upload ni mensajes (PLAN §4.2).
+    // G0-05 + G5: READONLY no recibe upload ni mensajes (PLAN §4.2).
     const clientCapabilities =
       context.role === "READONLY"
-        ? ["client.read"]
+        ? ["client.read", "portal.results.read"]
         : [...PORTAL_CAPABILITIES];
 
     const existingClient = firm.clients.find((client) => client.clientId === context.clientId);

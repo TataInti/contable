@@ -34,6 +34,9 @@ const StudyOnboardingFiscal = lazy(() =>
 const StudyLiquidaciones = lazy(() =>
   import("./study/StudyLiquidaciones").then((m) => ({ default: m.StudyLiquidaciones })),
 );
+const StudyRentabilidad = lazy(() =>
+  import("./study/StudyRentabilidad").then((m) => ({ default: m.StudyRentabilidad })),
+);
 const PortalDashboard = lazy(() =>
   import("./portal/PortalDashboard").then((m) => ({ default: m.PortalDashboard })),
 );
@@ -49,6 +52,9 @@ const PortalObligaciones = lazy(() =>
 
 const PortalLiquidaciones = lazy(() =>
   import("./portal/PortalLiquidaciones").then((m) => ({ default: m.PortalLiquidaciones })),
+);
+const PortalRentabilidad = lazy(() =>
+  import("./portal/PortalRentabilidad").then((m) => ({ default: m.PortalRentabilidad })),
 );
 const PortalReportes = lazy(() =>
   import("./portal/PortalReportes").then((m) => ({ default: m.PortalReportes })),
@@ -145,6 +151,7 @@ function AppRoutes() {
               <Route path="clientes" element={<StudyClientes />} />
               <Route path="clientes/:clientId/configuracion-fiscal" element={<StudyOnboardingFiscal />} />
               <Route path="liquidaciones" element={<StudyLiquidaciones />} />
+              <Route path="clientes/:clientId/rentabilidad" element={<StudyRentabilidad />} />
               <Route path="bandeja" element={<StudyBandeja />} />
               <Route path="trabajo" element={<StudyTrabajo />} />
               <Route path="administracion" element={<StudyAdministracion />} />
@@ -157,6 +164,7 @@ function AppRoutes() {
               <Route path="upload" element={<PortalUpload />} />
               <Route path="impuestos" element={<PortalObligaciones />} />
               <Route path="liquidaciones" element={<PortalLiquidaciones />} />
+              <Route path="rentabilidad" element={<PortalRentabilidad />} />
               <Route path="reportes" element={<PortalReportes />} />
               <Route path="mensajes" element={<PortalMensajes />} />
               <Route path="perfil" element={<PortalPerfil />} />

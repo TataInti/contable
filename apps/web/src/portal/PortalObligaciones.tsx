@@ -16,6 +16,18 @@ interface Obligation {
   obligation: { name: string; jurisdiction?: string | null };
 }
 
+interface TimelineEntry {
+  obligation: {
+    id: string;
+    status: string;
+    dueDate: string;
+    period: { label: string | null; startDate: string; endDate: string } | null;
+  };
+  filings: { id: string; externalId: string | null; amount: string; filedAt: string }[];
+  payments: { id: string; amount: string; paidAt: string; status: string }[];
+  messages: { id: string; body: string; createdAt: string }[];
+}
+
 export function PortalObligaciones() {
   const { clientId } = useClientContext();
   const query = useQuery({
@@ -105,6 +117,11 @@ export function PortalObligaciones() {
                 header: "Estado",
                 render: (row) => <StatusBadge status={row.status} />,
               },
+              {
+                key: "timeline",
+                header: "Seguimiento",
+                render: (row) => <ObligationTimeline clientId={clientId} obligationId={row.id} />,
+              },
             ]}
           />
           <p className="portal-page__footnote">
@@ -116,5 +133,59 @@ export function PortalObligaciones() {
         </section>
       )}
     </div>
+  );
+}
+
+/** G5-08: timeline de comunicación por obligación (filings, pagos y mensajes SHARED). */
+function ObligationTimeline({ clientId, obligationId }: { clientId: string; obligationId: string }) {
+  const query = useQuery({
+    queryKey: ["portal-obligation-timeline", clientId, obligationId],
+    queryFn: () =>
+      api.get<TimelineEntry>(`/portal/clients/${clientId}/obligations/${obligationId}/timeline`),
+    enabled: Boolean(clientId && obligationId),
+  });
+
+  if (query.isLoading) return <span className="portal-timeline__loading">Cargando…</span>;
+  if (query.isError || !query.data) return <span className="portal-timeline__empty">Sin novedades</span>;
+
+  const { filings, payments, messages } = query.data;
+  const events: { date: string; label: string; detail?: string }[] = [
+    ...filings.map((f) => ({
+      date: f.filedAt,
+      label: "Presentación registrada",
+      detail: f.externalId ? `Acuse ${f.externalId}` : undefined,
+    })),
+    ...payments.map((p) => ({
+      date: p.paidAt,
+      label: p.status === "REVERSED" ? "Pago revertido" : "Pago registrado",
+      detail: p.amount,
+    })),
+    ...messages.map((m) => ({ date: m.createdAt, label: "Mensaje del estudio", detail: m.body })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+
+  if (events.length === 0) return <span className="portal-timeline__empty">Sin novedades</span>;
+
+  return (
+    <details className="portal-timeline">
+      <summary className="portal-timeline__summary">
+        {events.length} {events.length === 1 ? "novedad" : "novedades"}
+      </summary>
+      <ol className="portal-timeline__list">
+        {events.map((event, i) => (
+          <li key={i} className="portal-timeline__item">
+            <span className="portal-timeline__date">
+              {formatPortalDate(event.date, {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                timeZone: "UTC",
+              })}
+            </span>
+            <span className="portal-timeline__label">{event.label}</span>
+            {event.detail ? <span className="portal-timeline__detail">{event.detail}</span> : null}
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }

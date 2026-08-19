@@ -60,6 +60,7 @@ export type Capability =
   | "tax.management_expenses.write"
   | "tax.management_expenses.approve_treatment"
   | "profitability.read"
+  | "profitability.calculate"
   | "profitability.publish"
   | "portal.requests.respond"
   | "portal.documents.upload"

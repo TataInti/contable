@@ -42,6 +42,10 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   await navigateStudy(page, "Liquidaciones");
   await expect(page.getByRole("heading", { name: "Liquidaciones" })).toBeVisible();
 
+  // G5-06: la cartera por riesgo aparece en el dashboard con liquidaciones.
+  await navigateStudy(page, "Inicio");
+  await expect(page.getByRole("heading", { name: "Liquidaciones en curso" })).toBeVisible();
+
   // G0-03: Contabilidad y Reportes genéricos ya NO están en la navegación.
   await expect(page.getByRole("link", { name: "Contabilidad" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Reportes y BI" })).toHaveCount(0);

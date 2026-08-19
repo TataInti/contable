@@ -19,6 +19,7 @@ const NAV_ITEMS: {
   { to: "/portal/upload", label: "Subir documentos", shortLabel: "Subir", icon: "upload" },
   { to: "/portal/impuestos", label: "Impuestos", shortLabel: "Impuestos", icon: "calendar" },
   { to: "/portal/liquidaciones", label: "Liquidaciones", shortLabel: "Liquidaciones", icon: "reports" },
+  { to: "/portal/rentabilidad", label: "Rentabilidad", shortLabel: "Rentabilidad", icon: "trending" },
   { to: "/portal/reportes", label: "Estados y reportes", shortLabel: "Reportes", icon: "reports" },
   { to: "/portal/mensajes", label: "Mensajes", shortLabel: "Mensajes", icon: "message" },
   { to: "/portal/perfil", label: "Perfil", shortLabel: "Perfil", icon: "users" },
@@ -38,9 +39,9 @@ export function PortalShell() {
     portalContexts[0]?.firmName ??
     "Tu estudio";
 
-  // G0-05: READONLY no ve Subir documentos ni Mensajes (PLAN §4.2).
+  // G0-05 + G5: READONLY no ve Subir documentos ni Mensajes (PLAN §4.2).
   const navItems = NAV_ITEMS.filter((item) => {
-    if (item.to === "/portal/upload") return capabilities.has("document.upload");
+    if (item.to === "/portal/upload") return capabilities.has("portal.documents.upload");
     if (item.to === "/portal/mensajes") return capabilities.has("message.shared");
     return true;
   });

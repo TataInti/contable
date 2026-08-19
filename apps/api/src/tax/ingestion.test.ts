@@ -211,9 +211,9 @@ async function cleanupIngestion() {
     await tx.$executeRawUnsafe(`DELETE FROM tax_settlements WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM evidence_links WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_adjustments WHERE "clientId" = '${CLIENT_ING}'`);
-    await tx.$executeRawUnsafe(`DELETE FROM tax_treatment_decisions`);
-    await tx.$executeRawUnsafe(`DELETE FROM expense_evidence`);
-    await tx.$executeRawUnsafe(`DELETE FROM management_expenses`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_treatment_decisions WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM expense_evidence WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM management_expenses WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM perception_certificates WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM withholding_certificates WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_components WHERE "clientId" = '${CLIENT_ING}'`);

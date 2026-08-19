@@ -24,8 +24,8 @@ export function PortalUpload() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  // G0-05: READONLY no puede subir documentos (PLAN §4.2).
-  if (!capabilities.has("document.upload")) {
+  // G0-05 + G5: READONLY no puede subir documentos (PLAN §4.2).
+  if (!capabilities.has("portal.documents.upload")) {
     return (
       <div className="portal-page">
         <PortalPageHeader

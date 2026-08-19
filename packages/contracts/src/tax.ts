@@ -9,6 +9,8 @@ import {
   managementExpenseStatus,
   nationalTaxCondition,
   personType,
+  profitabilityBasis,
+  profitabilitySnapshotStatus,
   taxFilingStatus,
   taxObligationStatus,
   taxPaymentStatus,
@@ -608,3 +610,45 @@ export const approveTreatmentSchema = z.object({
   reviewedByUserId: uuid,
 });
 export type ApproveTreatment = z.infer<typeof approveTreatmentSchema>;
+
+// --- Rentabilidad gerencial (Puerta 5, PLAN §5.7, §7.7) ---
+
+export const profitabilitySnapshotSchema = z.object({
+  id: uuid,
+  firmId: uuid,
+  clientId: uuid,
+  periodId: uuid,
+  basis: profitabilityBasis,
+  version: z.number().int().positive(),
+  engineVersion: z.string().min(1).max(80),
+  cutoff: isoDate,
+  status: profitabilitySnapshotStatus,
+  totals: z.record(z.string(), money).nullable(),
+  lines: z.array(z.object({
+    concept: z.string(),
+    formula: z.string(),
+    inputs: z.record(z.string(), z.string()),
+    result: z.string(),
+  })).nullable(),
+  inputHash: z.string().min(1).max(128),
+  outputHash: z.string().min(1).max(128),
+  inputIds: z.array(z.string()).nullable(),
+  publishedById: uuid.nullable(),
+  publishedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type ProfitabilitySnapshot = z.infer<typeof profitabilitySnapshotSchema>;
+
+export const calculateProfitabilitySchema = z.object({
+  periodId: uuid,
+  basis: profitabilityBasis,
+  cutoff: isoDate,
+});
+export type CalculateProfitability = z.infer<typeof calculateProfitabilitySchema>;
+
+export const publishProfitabilitySchema = z.object({
+  periodId: uuid,
+  basis: profitabilityBasis,
+});
+export type PublishProfitability = z.infer<typeof publishProfitabilitySchema>;

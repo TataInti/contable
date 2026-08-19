@@ -258,6 +258,81 @@ export function portalRoutes(app: FastifyInstance) {
       .send(buffer);
   });
 
+  // G5-07: rentabilidad publicada (sólo snapshots PUBLISHED; el portal nunca
+  // ve borradores ni versiones SUPERSEDED).
+  app.get("/api/v1/portal/clients/:clientId/profitability", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const q = z.object({ periodId: z.string().uuid().optional() }).parse(req.query);
+    const data = await withTenantContext(ctx, (tx) => tx.profitabilitySnapshot.findMany({
+      where: {
+        firmId: ctx.firmId,
+        clientId: ctx.clientId!,
+        status: "PUBLISHED",
+        ...(q.periodId ? { periodId: q.periodId } : {}),
+      },
+      include: { period: { select: { label: true, startDate: true, endDate: true } } },
+      orderBy: [{ periodId: "desc" }, { basis: "asc" }, { version: "desc" }],
+      take: 100,
+    }));
+    return reply.send({ data });
+  });
+
+  // G5-10: recibo persistente de una publicación (snapshot PUBLISHED con
+  // hashes y fecha de publicación; el portal puede descargarlo/consultarlo).
+  app.get("/api/v1/portal/clients/:clientId/profitability/:snapshotId/receipt", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { snapshotId } = req.params as { snapshotId: string };
+    const snapshot = await withTenantContext(ctx, (tx) => tx.profitabilitySnapshot.findFirst({
+      where: { id: snapshotId, firmId: ctx.firmId, clientId: ctx.clientId!, status: "PUBLISHED" },
+      include: { period: { select: { label: true, startDate: true, endDate: true } } },
+    }));
+    if (!snapshot) {
+      return reply.status(404).send({ error: { code: "SNAPSHOT_NOT_FOUND", message: "Publicación no encontrada" } });
+    }
+    return reply.send({
+      data: {
+        id: snapshot.id,
+        basis: snapshot.basis,
+        version: snapshot.version,
+        status: snapshot.status,
+        publishedAt: snapshot.publishedAt,
+        outputHash: snapshot.outputHash,
+        inputHash: snapshot.inputHash,
+        period: snapshot.period,
+        totals: snapshot.totals,
+      },
+    });
+  });
+
+  // G5-08: timeline de comunicación por obligación (sólo mensajes SHARED).
+  app.get("/api/v1/portal/clients/:clientId/obligations/:obligationId/timeline", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { obligationId } = req.params as { obligationId: string };
+    const data = await withTenantContext(ctx, async (tx) => {
+      const obligation = await tx.taxObligation.findFirst({
+        where: { id: obligationId, firmId: ctx.firmId, clientId: ctx.clientId! },
+        include: { period: { select: { label: true, startDate: true, endDate: true } }, filings: { orderBy: { createdAt: "asc" } }, payments: { orderBy: { createdAt: "asc" } } },
+      });
+      if (!obligation) {
+        throw Object.assign(new Error("Obligación no encontrada"), { statusCode: 404, code: "OBLIGATION_NOT_FOUND" });
+      }
+      // Mensajes compartidos del thread vinculado al pedido/obligación.
+      const messages = await tx.requestMessage.findMany({
+        where: {
+          firmId: ctx.firmId,
+          clientId: ctx.clientId!,
+          visibility: "SHARED",
+          thread: { request: { clientId: ctx.clientId! } },
+        },
+        include: { thread: { select: { requestId: true } } },
+        orderBy: { createdAt: "asc" },
+        take: 200,
+      });
+      return { obligation, filings: obligation.filings, payments: obligation.payments, messages };
+    });
+    return reply.send({ data });
+  });
+
   app.get("/api/v1/portal/clients/:clientId/report-publications/:publicationId/export", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { publicationId } = req.params as { publicationId: string };
@@ -284,7 +359,7 @@ export function portalRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/portal/clients/:clientId/document-upload-sessions", async (req, reply) => {
-    assertCapability(req, "document.upload");
+    assertCapability(req, "portal.documents.upload");
     const ctx = tenantContextFromRequest(req);
     const body = z.object({ expectedMime: z.string().optional() }).strict().parse(req.body ?? {});
     const session = await documents.createUploadSession(
@@ -305,7 +380,7 @@ export function portalRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/portal/clients/:clientId/document-upload-sessions/:sessionId/complete", async (req, reply) => {
-    assertCapability(req, "document.upload");
+    assertCapability(req, "portal.documents.upload");
     const ctx = tenantContextFromRequest(req);
     const { sessionId } = req.params as { sessionId: string };
     const body = completeUploadSchema.parse(req.body);

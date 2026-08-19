@@ -29,6 +29,7 @@ const NAV_GROUPS: { label: string; items: NavigationItem[] }[] = [
       { to: "/bandeja", label: "Bandeja documental", icon: "inbox" },
       { to: "/trabajo", label: "Trabajo", icon: "tasks" },
       { to: "/liquidaciones", label: "Liquidaciones", icon: "reports", capability: "tax.settlements.read" },
+      { to: "/clientes/:clientId/rentabilidad", label: "Rentabilidad", icon: "trending", capability: "profitability.read" },
       { to: "/clientes/:clientId/configuracion-fiscal", label: "Configuración fiscal", icon: "settings", capability: "tax.profile.read" },
     ],
   },

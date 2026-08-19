@@ -108,6 +108,7 @@ const ROLE_CAPABILITIES: Record<FirmRole, ReadonlySet<Capability>> = {
     "tax.management_expenses.write",
     "tax.management_expenses.approve_treatment",
     "profitability.read",
+    "profitability.calculate",
     "profitability.publish",
   ]),
   PREPARER: new Set([
@@ -135,6 +136,7 @@ const ROLE_CAPABILITIES: Record<FirmRole, ReadonlySet<Capability>> = {
     "tax.management_expenses.read",
     "tax.management_expenses.write",
     "profitability.read",
+    "profitability.calculate",
   ]),
   REVIEWER: new Set([
     "client.read",
@@ -169,6 +171,7 @@ const ROLE_CAPABILITIES: Record<FirmRole, ReadonlySet<Capability>> = {
     "tax.management_expenses.read",
     "tax.management_expenses.approve_treatment",
     "profitability.read",
+    "profitability.calculate",
     "profitability.publish",
   ]),
   AUDITOR_READONLY: new Set([

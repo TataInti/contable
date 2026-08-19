@@ -488,6 +488,57 @@
   flex: 0 0 auto;
 }
 
+/* G5-08: timeline de comunicación por obligación */
+.portal-timeline__summary {
+  cursor: pointer;
+  color: var(--ds-color-primary, #2f6b4f);
+  font-weight: 600;
+  font-size: var(--ds-text-sm);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.portal-timeline__list {
+  list-style: none;
+  margin: var(--ds-space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 220px;
+}
+
+.portal-timeline__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--ds-space-2);
+  border-left: 2px solid var(--ds-color-border, #d8d2c4);
+  padding-left: var(--ds-space-3);
+}
+
+.portal-timeline__date {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-color-text-muted);
+}
+
+.portal-timeline__label {
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+}
+
+.portal-timeline__detail {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-color-text-muted);
+  white-space: normal;
+}
+
+.portal-timeline__loading,
+.portal-timeline__empty {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}
+
 .portal-report-name {
   display: flex;
   align-items: center;
@@ -1245,4 +1296,143 @@
     width: 100%;
     min-height: 44px;
   }
+}
+
+/* ============================================================
+   Puerta 5 — Rentabilidad publicada (portal)
+   ============================================================ */
+
+.portal-profitability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: var(--ds-space-5);
+  align-items: start;
+}
+
+.portal-profitability-card {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  padding: var(--ds-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+}
+
+.portal-profitability-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+}
+
+.portal-profitability-card__header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.portal-profitability-card__version {
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text-muted);
+  font-size: 0.85rem;
+}
+
+.portal-profitability-card__total {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+
+.portal-profitability-card__total small {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--ds-text-muted);
+}
+
+.portal-profitability-card__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin: 0;
+}
+
+.portal-profitability-card__rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-2) 0;
+  border-bottom: 1px solid var(--ds-border);
+  font-size: 0.9rem;
+}
+
+.portal-profitability-card__rows dt {
+  color: var(--ds-text-muted);
+}
+
+.portal-profitability-card__rows dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.portal-profitability-card__rows [data-total] {
+  border-bottom: none;
+  font-weight: 800;
+}
+
+.portal-profitability-card__detail {
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  padding: var(--ds-space-3);
+}
+
+.portal-profitability-card__detail summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.portal-profitability-card__detail ul {
+  list-style: none;
+  margin: var(--ds-space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+
+.portal-profitability-card__detail li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--ds-space-1) var(--ds-space-3);
+  font-size: 0.82rem;
+}
+
+.portal-profitability-card__detail li span {
+  grid-column: 1 / -1;
+  color: var(--ds-text-muted);
+}
+
+.portal-profitability-card__receipt {
+  border: 1px dashed var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  padding: var(--ds-space-3);
+  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+
+.portal-profitability-card__receipt p {
+  margin: 0;
+}
+
+.portal-profitability-card__receipt code {
+  font-size: 0.72rem;
+  color: var(--ds-text-muted);
+  word-break: break-all;
 }

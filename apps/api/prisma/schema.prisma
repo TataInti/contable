@@ -209,6 +209,7 @@ model Client {
   taxFilings             TaxFiling[]
   taxPayments            TaxPayment[]
   paymentAllocations     PaymentAllocation[]
+  profitabilitySnapshots ProfitabilitySnapshot[]
 
   @@unique([firmId, cuit])
   @@index([firmId])
@@ -2028,6 +2029,7 @@ model TaxPeriod {
   vouchers    FiscalVoucher[]
   adjustments TaxAdjustment[]
   settlements TaxSettlement[]
+  profitabilitySnapshots ProfitabilitySnapshot[]
 
   @@unique([clientId, taxTypeId, startDate, endDate])
   @@index([firmId, clientId, taxTypeId])
@@ -2909,4 +2911,48 @@ model PaymentAllocation {
 
   @@index([firmId, clientId, obligationId])
   @@map("payment_allocations")
+}
+
+// ============================================================
+// Puerta 5 — Rentabilidad gerencial (PLAN §5.7, §7.7)
+// ============================================================
+
+model ProfitabilitySnapshot {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  periodId        String
+  basis           ProfitabilityBasis @default(DEVENGADO)
+  version         Int      @default(1)
+  engineVersion   String
+  cutoff          DateTime
+  status          ProfitabilitySnapshotStatus @default(DRAFT)
+  totals          Json?
+  lines           Json?
+  inputHash       String
+  outputHash      String
+  inputIds        Json?
+  publishedById   String?
+  publishedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  period   TaxPeriod @relation(fields: [periodId], references: [id])
+
+  @@unique([clientId, periodId, basis, version])
+  @@index([firmId, clientId, status])
+  @@index([firmId, clientId, periodId])
+  @@map("profitability_snapshots")
+}
+
+enum ProfitabilityBasis {
+  DEVENGADO
+  CAJA
+}
+
+enum ProfitabilitySnapshotStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
 }

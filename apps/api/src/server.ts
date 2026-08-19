@@ -13,6 +13,7 @@ import { taxRoutes } from "./tax/routes.js";
 import { fiscalFoundationRoutes } from "./tax/fiscal-foundation-routes.js";
 import { ingestionRoutes } from "./tax/ingestion-routes.js";
 import { settlementRoutes } from "./tax/settlement-routes.js";
+import { profitabilityRoutes } from "./tax/profitability-routes.js";
 import { reportingRoutes } from "./reporting/routes.js";
 import { assistantRoutes } from "./assistant/routes.js";
 import { biRoutes } from "./bi/routes.js";
@@ -110,6 +111,7 @@ export async function buildServer(overrides?: Partial<HealthChecks>): Promise<Fa
   fiscalFoundationRoutes(app);
   ingestionRoutes(app);
   settlementRoutes(app);
+  profitabilityRoutes(app);
   reportingRoutes(app);
   assistantRoutes(app);
   biRoutes(app);

@@ -112,3 +112,6 @@ export type TaxPaymentStatus = z.infer<typeof taxPaymentStatus>;
 
 export const profitabilityBasis = z.enum(["DEVENGADO", "CAJA"]);
 export type ProfitabilityBasis = z.infer<typeof profitabilityBasis>;
+
+export const profitabilitySnapshotStatus = z.enum(["DRAFT", "PUBLISHED", "SUPERSEDED"]);
+export type ProfitabilitySnapshotStatus = z.infer<typeof profitabilitySnapshotStatus>;

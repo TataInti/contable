@@ -28,6 +28,7 @@ export const ICON_NAMES = [
   "download",
   "plus",
   "arrow-right",
+  "trending",
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];
@@ -169,6 +170,12 @@ const ICON_GLYPHS: Record<IconName, ReactNode> = {
   ),
   plus: <path d="M12 5v14M5 12h14" />,
   "arrow-right": <path d="M4 12h16M14 6l6 6-6 6" />,
+  trending: (
+    <>
+      <path d="m3 17 6-6 4 4 8-8" />
+      <path d="M15 7h6v6" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 20, strokeWidth = 1.8, className, title }: IconProps) {

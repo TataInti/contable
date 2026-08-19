@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
+import { StatusBadge } from "../ui/StatusBadge";
 import { Icon, type IconName } from "../ui/Icon";
 import "./study.css";
 
@@ -16,7 +17,43 @@ interface DashboardSummary {
   pendingObligations: number;
 }
 
+/** Worklist fiscal: liquidaciones con riesgo (G5-06). */
+interface WorklistItem {
+  id: string;
+  status: string;
+  clientId: string;
+  version: number;
+  cutoff: string;
+  period?: { startDate: string; endDate: string };
+  regime?: { code: string; name: string; taxType?: { code: string; name: string } };
+}
+
 const TODAY = new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "long" });
+
+/** Severidad de un estado para priorizar la mesa de trabajo. */
+function riskTone(status: string): "danger" | "warn" | "info" {
+  switch (status) {
+    case "CHANGES_REQUESTED":
+      return "danger";
+    case "IN_REVIEW":
+      return "warn";
+    case "DRAFT":
+    case "CALCULATED":
+      return "info";
+    default:
+      return "info";
+  }
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: "En preparación",
+  CALCULATED: "Calculada",
+  IN_REVIEW: "En revisión",
+  CHANGES_REQUESTED: "Requiere corrección",
+  REVIEWED: "Revisada",
+  FINALIZED: "Finalizada",
+  SUPERSEDED: "Rectificada",
+};
 
 export function StudyDashboard() {
   const { firmId } = useClientContext();
@@ -24,6 +61,12 @@ export function StudyDashboard() {
   const query = useQuery({
     queryKey: ["study-dashboard", firmId],
     queryFn: () => api.get<DashboardSummary>(`/firms/${firmId}/dashboard`),
+    enabled: Boolean(firmId),
+  });
+  // G5-06: la cartera por riesgo viene del worklist fiscal real.
+  const worklistQuery = useQuery({
+    queryKey: ["tax-worklist-dashboard", firmId],
+    queryFn: () => api.get<WorklistItem[]>("/portfolio/tax-worklist"),
     enabled: Boolean(firmId),
   });
   const firmName = me?.firms.find((firm) => firm.firmId === firmId)?.firmName;
@@ -37,6 +80,9 @@ export function StudyDashboard() {
       </div>
     );
   const data = query.data;
+  const worklist = worklistQuery.data ?? [];
+  const atRisk = worklist.filter((item) => item.status === "CHANGES_REQUESTED").length;
+  const inReview = worklist.filter((item) => item.status === "IN_REVIEW").length;
   const attentionTotal =
     (data?.processing ?? 0) + (data?.openRequests ?? 0) + (data?.pendingObligations ?? 0);
   const workItems: {
@@ -154,6 +200,55 @@ export function StudyDashboard() {
                 </Link>
               ))}
             </div>
+          </section>
+
+          {/* G5-06: cartera por riesgo — liquidaciones en curso de toda la firma. */}
+          <section className="dashboard-overview" aria-labelledby="risk-portfolio-title">
+            <div className="dashboard-overview__heading">
+              <div>
+                <p className="study-page__eyebrow">Cartera por riesgo</p>
+                <h2 id="risk-portfolio-title">Liquidaciones en curso</h2>
+                <p className="study-page__subtitle">
+                  {atRisk} con correcciones pendientes · {inReview} en revisión
+                </p>
+              </div>
+              <Link to="/liquidaciones">
+                Ver todas <Icon name="arrow-right" size={14} />
+              </Link>
+            </div>
+            {worklistQuery.isLoading ? (
+              <div className="study-state" role="status">
+                Cargando cartera…
+              </div>
+            ) : worklist.length === 0 ? (
+              <EmptyState
+                title="Sin liquidaciones en curso"
+                description="Cuando se calcule una liquidación, aparecerá acá priorizada por riesgo."
+              />
+            ) : (
+              <div className="risk-portfolio" role="list">
+                {worklist.slice(0, 8).map((item) => (
+                  <div
+                    className="risk-portfolio__row"
+                    role="listitem"
+                    key={item.id}
+                    data-tone={riskTone(item.status)}
+                  >
+                    <span className="risk-portfolio__signal" aria-hidden="true" />
+                    <div className="risk-portfolio__copy">
+                      <strong>
+                        {item.regime?.taxType?.name ?? item.regime?.name ?? "Impuesto"} · v
+                        {item.version}
+                      </strong>
+                      <small>
+                        {item.period?.startDate ?? item.cutoff} → {item.period?.endDate ?? ""}
+                      </small>
+                    </div>
+                    <StatusBadge status={STATUS_LABELS[item.status] ?? item.status} />
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="dashboard-overview" aria-labelledby="portfolio-overview-title">

@@ -22,7 +22,7 @@ export function PortalMensajes() {
   const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
-  // G0-05: READONLY no puede enviar mensajes (PLAN §4.2).
+  // G0-05 + G5: READONLY no puede enviar mensajes (PLAN §4.2).
   if (!capabilities.has("message.shared")) {
     return (
       <div className="portal-page">

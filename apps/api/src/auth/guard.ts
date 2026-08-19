@@ -55,7 +55,7 @@ function pathContext(path: string): { firmId?: string; clientId?: string } {
   };
 }
 
-function requiredCapability(method: string, path: string): Capability | null {
+export function requiredCapability(method: string, path: string): Capability | null {
   if (path.includes("/feature-flags")) return method === "GET" ? "firm.manage" : "firm.manage";
   if (/\/members(?:\/|$)|\/invitations(?:\/|$)|\/portal-memberships(?:\/|$)/.test(path)) return "firm.manage";
   if (path.includes("/assignments")) return "client.assign";
@@ -86,6 +86,11 @@ function requiredCapability(method: string, path: string): Capability | null {
   }
   if (path.includes("/tax-registrations")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
   if (path.includes("/tax-periods")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
+  // G5 fix: filings/payments de una obligación deben mapearse a sus capacidades
+  // específicas ANTES del catch-all de /tax-obligations (que devuelve
+  // tax.profile.write y rompía el registro de presentación/pago).
+  if (path.includes("/tax-obligations/") && /\/filings$/.test(path)) return "tax.filings.record";
+  if (path.includes("/tax-obligations/") && /\/payments$/.test(path)) return "tax.payments.record";
   if (path.includes("/tax-obligations")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
   // Catálogos de firma (maestros fiscales globales).
   if (path.includes("/tax/jurisdictions")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
@@ -125,12 +130,21 @@ function requiredCapability(method: string, path: string): Capability | null {
     if (path.endsWith("/submit-review")) return "tax.settlements.submit_review";
     if (path.endsWith("/request-changes") || path.endsWith("/review")) return "tax.settlements.review";
     if (path.endsWith("/finalize")) return "tax.settlements.finalize";
-    if (path.endsWith("/rectify")) return "tax.settlements.rectify";
+    // G4.4 fix: rectify-with-delta es una rectificativa; un PREPARER (que sólo
+    // tiene calculate) no debe poder iniciarla. Se mapea explícitamente ANTES
+    // del endsWith("/rectify") para que no caiga al default calculate.
+    if (path.endsWith("/rectify-with-delta") || path.endsWith("/rectify")) return "tax.settlements.rectify";
     if (path.endsWith("/export")) return "tax.settlements.export";
     return method === "GET" ? "tax.settlements.read" : "tax.settlements.calculate";
   }
   if (path.includes("/tax-credit-allocations")) return "tax.settlements.calculate";
   if (path.includes("/tax-worklist")) return "tax.settlements.read";
+  // --- Rentabilidad gerencial (Puerta 5) ---
+  if (path.includes("/profitability")) {
+    if (path.endsWith("/publish")) return "profitability.publish";
+    if (path.endsWith("/calculate")) return "profitability.calculate";
+    return method === "GET" ? "profitability.read" : "profitability.calculate";
+  }
   if (path.includes("/tax-obligations/") && /\/filings$/.test(path)) return "tax.filings.record";
   if (path.includes("/tax-obligations/") && /\/payments$/.test(path)) return "tax.payments.record";
   if (path.includes("/tax-payments/") && path.endsWith("/reverse")) return "tax.payments.record";
@@ -231,13 +245,14 @@ export function authGuardPlugin(app: FastifyInstance) {
         if (!membership) throw httpError(404, "RESOURCE_NOT_FOUND", "Recurso no encontrado");
         req.firmId = membership.firmId;
         req.clientId = clientId;
-        // G0-05: distinguir Colaborador de Sólo lectura. READONLY no recibe
-        // capacidades de upload ni mensajes (PLAN §4.2).
+        // G0-05 + G5: distinguir Colaborador de Sólo lectura. READONLY no recibe
+        // capacidades de upload ni mensajes (PLAN §4.2). Se usan las capacidades
+        // dedicadas de portal (portal.*) para que el guard distinga por semántica.
         const isReadOnly = membership.role === "READONLY";
         req.capabilities = new Set<Capability>(
           isReadOnly
-            ? ["client.read"]
-            : ["client.read", "document.upload", "message.shared"],
+            ? ["client.read", "portal.results.read"]
+            : ["client.read", "portal.results.read", "portal.documents.upload", "portal.requests.respond", "message.shared"],
         );
       }
       return;

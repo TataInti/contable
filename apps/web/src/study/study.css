@@ -1979,3 +1979,153 @@
     overflow: visible;
   }
 }
+
+/* ============================================================
+   Puerta 5 — Rentabilidad gerencial (estudio)
+   ============================================================ */
+
+.profitability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--ds-space-5);
+  align-items: start;
+}
+
+.profitability-view {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  padding: var(--ds-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+}
+
+.profitability-view__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  flex-wrap: wrap;
+}
+
+.profitability-view__title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.profitability-view__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  flex-wrap: wrap;
+}
+
+.profitability-view__version {
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text-muted);
+  font-size: 0.85rem;
+}
+
+.profitability-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--ds-space-2);
+  margin: 0;
+}
+
+.profitability-total {
+  background: var(--ds-surface-muted);
+  border-radius: var(--ds-radius-md);
+  padding: var(--ds-space-3);
+}
+
+.profitability-total dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ds-text-muted);
+}
+
+.profitability-total dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.profitability-total[data-key="RESULTADO_POST_IMPUESTOS"],
+.profitability-total[data-key="FLUJO_NETO"] {
+  background: var(--ds-accent-soft, #e8f2ee);
+}
+
+.profitability-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+
+.profitability-line {
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  padding: var(--ds-space-3);
+}
+
+.profitability-line__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  font-size: 0.9rem;
+}
+
+.profitability-line__formula {
+  margin: var(--ds-space-1) 0 0;
+  font-size: 0.8rem;
+  color: var(--ds-text-muted);
+}
+
+/* Cartera por riesgo (G5-06) */
+.risk-portfolio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+
+.risk-portfolio__row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  padding: var(--ds-space-3);
+}
+
+.risk-portfolio__signal {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ds-text-muted);
+  flex: none;
+}
+
+.risk-portfolio__row[data-tone="danger"] .risk-portfolio__signal {
+  background: #c0392b;
+}
+
+.risk-portfolio__row[data-tone="warn"] .risk-portfolio__signal {
+  background: #d68910;
+}
+
+.risk-portfolio__row[data-tone="info"] .risk-portfolio__signal {
+  background: #2e86c1;
+}
+
+.risk-portfolio__copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.risk-portfolio__copy small {
+  color: var(--ds-text-muted);
+}
