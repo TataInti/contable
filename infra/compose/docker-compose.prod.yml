@@ -1,0 +1,187 @@
+# ============================================================
+# Contable — Compose de PRODUCCIÓN (autoalojado)
+#
+# Diferencias clave con docker-compose.yml (desarrollo):
+#  - Sólo Nginx se expone al host (80/443). PostgreSQL, Valkey,
+#    MinIO, ClamAV, API, worker y FastAPI viven en la red Docker
+#    privada y NO publican puertos al host.
+#  - No hay secretos por defecto: TODAS las credenciales se leen
+#    de variables de entorno obligatorias. Si faltan, el servicio
+#    no arranca (validación estricta en la API/worker/IA).
+#  - Imágenes fijadas por digest (no `latest` ni `stable` flotantes).
+#  - Volúmenes explícitos para PostgreSQL, MinIO, certificados y logs.
+#  - restart: unless-stopped y healthchecks que bloquean dependientes.
+#
+# Uso: docker compose -f infra/compose/docker-compose.prod.yml up
+# Requiere definir en el entorno: POSTGRES_PASSWORD, RUNTIME_DB_PASSWORD,
+# WORKER_DB_PASSWORD, MINIO_SECRET_KEY, AI_SERVICE_SECRET,
+# MFA_CHALLENGE_SECRET, MFA_ENCRYPTION_KEY, DOMAIN (para TLS).
+# ============================================================
+
+name: contable-prod
+
+services:
+  postgres:
+    image: postgres:18@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    environment:
+      POSTGRES_USER: contable
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es obligatorio}
+      POSTGRES_DB: contable
+      RUNTIME_DB_PASSWORD: ${RUNTIME_DB_PASSWORD:?RUNTIME_DB_PASSWORD es obligatorio}
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:?WORKER_DB_PASSWORD es obligatorio}
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ../postgres/init-roles.sh:/docker-entrypoint-initdb.d/01-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contable"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: contable
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY es obligatorio}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  clamav:
+    image: clamav/clamav-debian@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    volumes:
+      - clamdb:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://contable:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es obligatorio}@postgres:5432/contable?schema=public
+    command: ["npx", "prisma", "migrate", "deploy", "--config", "apps/api/prisma.config.ts"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      RUNTIME_DATABASE_URL: postgresql://contable_runtime:${RUNTIME_DB_PASSWORD:?RUNTIME_DB_PASSWORD es obligatorio}@postgres:5432/contable?schema=public
+      REDIS_URL: redis://valkey:6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_PUBLIC_ENDPOINT: ${PUBLIC_HOSTNAME:?PUBLIC_HOSTNAME es obligatorio}
+      MINIO_PUBLIC_PORT: 443
+      MINIO_PUBLIC_USE_SSL: "true"
+      MINIO_ACCESS_KEY: contable
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY es obligatorio}
+      AI_SERVICE_URL: http://ai:8000
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:?AI_SERVICE_SECRET es obligatorio}
+      MFA_CHALLENGE_SECRET: ${MFA_CHALLENGE_SECRET:?MFA_CHALLENGE_SECRET es obligatorio}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:?MFA_ENCRYPTION_KEY es obligatorio}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      ai:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      NODE_ENV: production
+      WORKER_DATABASE_URL: postgresql://contable_worker:${WORKER_DB_PASSWORD:?WORKER_DB_PASSWORD es obligatorio}@postgres:5432/contable?schema=public
+      REDIS_URL: redis://valkey:6379
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: contable
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY es obligatorio}
+      AI_SERVICE_URL: http://ai:8000
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:?AI_SERVICE_SECRET es obligatorio}
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+      WORKER_QUEUES: documents,notifications
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ai:
+    build:
+      context: ../..
+      dockerfile: services/ai/Dockerfile
+    environment:
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:?AI_SERVICE_SECRET es obligatorio}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+    depends_on:
+      - valkey
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  nginx:
+    image: nginx@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    volumes:
+      - ../nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - certs:/etc/letsencrypt
+      - certs:/var/www/challenges
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api
+      - web
+      - minio
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:
+  clamdb:
+  certs:

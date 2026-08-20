@@ -64,9 +64,10 @@ export function StudyDashboard() {
     enabled: Boolean(firmId),
   });
   // G5-06: la cartera por riesgo viene del worklist fiscal real.
+  // F0.1: la ruta lleva la firma explícita (no contexto implícito).
   const worklistQuery = useQuery({
     queryKey: ["tax-worklist-dashboard", firmId],
-    queryFn: () => api.get<WorklistItem[]>("/portfolio/tax-worklist"),
+    queryFn: () => api.get<WorklistItem[]>(`/firms/${firmId}/portfolio/tax-worklist`),
     enabled: Boolean(firmId),
   });
   const firmName = me?.firms.find((firm) => firm.firmId === firmId)?.firmName;
@@ -220,6 +221,16 @@ export function StudyDashboard() {
               <div className="study-state" role="status">
                 Cargando cartera…
               </div>
+            ) : worklistQuery.isError ? (
+              <EmptyState
+                title="No se pudo cargar la cartera fiscal"
+                description="La consulta falló; no interpretamos esta situación como una cartera sin liquidaciones."
+                action={
+                  <button className="text-action" onClick={() => void worklistQuery.refetch()}>
+                    Reintentar
+                  </button>
+                }
+              />
             ) : worklist.length === 0 ? (
               <EmptyState
                 title="Sin liquidaciones en curso"

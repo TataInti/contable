@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { useNavigate } from "react-router-dom";
 import { api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
@@ -16,6 +17,7 @@ export function StudyClientes() {
   const { firmId, clientId, capabilities, setClientId } = useClientContext();
   const session = useSession();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({ legalName: "", tradeName: "", cuit: "" });
@@ -39,6 +41,7 @@ export function StudyClientes() {
       setClientId(client.id);
       setCreating(false);
       setForm({ legalName: "", tradeName: "", cuit: "" });
+      navigate("/configuracion-fiscal");
     },
   });
   const rows = useMemo(() => {
@@ -50,6 +53,11 @@ export function StudyClientes() {
         client.cuit.includes(needle.replace(/\D/g, "")),
     );
   }, [query.data, search]);
+
+  const openClientWorkspace = (id: string) => {
+    setClientId(id);
+    navigate("/trabajo");
+  };
 
   return (
     <div className="study-page">
@@ -194,7 +202,7 @@ export function StudyClientes() {
                   <button
                     className="client-link"
                     aria-current={clientId === row.id ? "true" : undefined}
-                    onClick={() => setClientId(row.id)}
+                    onClick={() => openClientWorkspace(row.id)}
                   >
                     <span className="client-link__avatar" aria-hidden="true">
                       {row.legalName.slice(0, 1).toLocaleUpperCase("es-AR")}
@@ -224,7 +232,7 @@ export function StudyClientes() {
                   <button
                     className="row-arrow"
                     aria-label={`Trabajar con ${row.legalName}`}
-                    onClick={() => setClientId(row.id)}
+                    onClick={() => openClientWorkspace(row.id)}
                   >
                     <Icon name="arrow-right" size={17} />
                   </button>

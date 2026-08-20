@@ -49,7 +49,10 @@ async function runAsRuntime<T>(
 }
 
 const ingestion = new IngestionService();
-const settlements = new SettlementService();
+// F0.3: se inyecta un storage stub para que el export no dependa de MinIO local.
+const settlements = new SettlementService({
+  put: async () => {},
+} as unknown as ConstructorParameters<typeof SettlementService>[0]);
 
 const ctxOwner = { userId: OWNER_A, firmId: FIRM_ALFA, actorKind: "USER" as const };
 const ctxReviewer = { userId: REVIEWER_A, firmId: FIRM_ALFA, actorKind: "USER" as const };

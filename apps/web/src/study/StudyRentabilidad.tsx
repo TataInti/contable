@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
+import { Icon } from "../ui/Icon";
 import "./study.css";
 
 /**
@@ -29,13 +31,6 @@ interface Snapshot {
   period?: { label: string | null; startDate: string; endDate: string } | null;
 }
 
-interface TaxPeriod {
-  id: string;
-  label: string | null;
-  startDate: string;
-  endDate: string;
-}
-
 interface Obligation {
   id: string;
   regimeId: string;
@@ -55,8 +50,9 @@ function basisLabel(basis: string): string {
 }
 
 export function StudyRentabilidad() {
-  const { firmId, clientId } = useClientContext();
+  const { firmId, clientId, periodId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
+  const [receipt, setReceipt] = useState<string | null>(null);
 
   const periodsQuery = useQuery({
     queryKey: ["tax-obligations", firmId, clientId],
@@ -65,23 +61,15 @@ export function StudyRentabilidad() {
     enabled: Boolean(firmId && clientId),
   });
 
-  const obligations = periodsQuery.data ?? [];
-  const periods: TaxPeriod[] = obligations
-    .map((o) => o.period)
-    .filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
-    .sort((a, b) => b.startDate.localeCompare(a.startDate));
-
-  const selected = periodsQuery.data
-    ? (periodsQuery.data as Obligation[]).find((o) => o.period.id === periods[0]?.id)
-    : null;
+  const selected = periodsQuery.data?.find((obligation) => obligation.period.id === periodId) ?? null;
 
   const listQuery = useQuery({
-    queryKey: ["profitability", firmId, clientId, selected?.period.id],
+    queryKey: ["profitability", firmId, clientId, periodId],
     queryFn: () =>
       api.get<Snapshot[]>(
-        `/firms/${firmId}/clients/${clientId}/profitability?periodId=${selected?.period.id}`,
+        `/firms/${firmId}/clients/${clientId}/profitability?periodId=${encodeURIComponent(periodId ?? "")}`,
       ),
-    enabled: Boolean(firmId && clientId && selected?.period.id),
+    enabled: Boolean(firmId && clientId && periodId),
   });
 
   const invalidate = () => {
@@ -95,7 +83,10 @@ export function StudyRentabilidad() {
         basis,
         cutoff: selected?.period.endDate,
       }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      setReceipt("La rentabilidad fue calculada para el período activo.");
+    },
   });
 
   const publishMutation = useMutation({
@@ -104,7 +95,10 @@ export function StudyRentabilidad() {
         periodId: selected?.period.id,
         basis,
       }),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      setReceipt("La versión fue publicada y ya está disponible en el portal del cliente.");
+    },
   });
 
   const snapshots = listQuery.data ?? [];
@@ -125,14 +119,16 @@ export function StudyRentabilidad() {
           {snapshot ? (
             <span className="profitability-view__version">v{snapshot.version}</span>
           ) : null}
-          <Button
-            size="sm"
-            disabled={!selected || calculateMutation.isPending}
-            onClick={() => calculateMutation.mutate({ basis })}
-          >
-            {snapshot && snapshot.status === "DRAFT" ? "Recalcular" : "Calcular"}
-          </Button>
-          {snapshot && snapshot.status === "DRAFT" ? (
+          {capabilities.has("profitability.calculate") ? (
+            <Button
+              size="sm"
+              disabled={!selected || calculateMutation.isPending}
+              onClick={() => calculateMutation.mutate({ basis })}
+            >
+              {snapshot && snapshot.status === "DRAFT" ? "Recalcular" : "Calcular"}
+            </Button>
+          ) : null}
+          {snapshot && snapshot.status === "DRAFT" && capabilities.has("profitability.publish") ? (
             <Button
               size="sm"
               variant="secondary"
@@ -201,29 +197,50 @@ export function StudyRentabilidad() {
         </p>
       </header>
 
+      {receipt ? (
+        <div className="action-receipt action-receipt--page" role="status">
+          <Icon name="check" size={19} />
+          <span>
+            <strong>Acción completada</strong>
+            <small>{receipt}</small>
+          </span>
+          <button type="button" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
+            <Icon name="close" size={15} />
+          </button>
+        </div>
+      ) : null}
+
       {!clientId ? (
         <EmptyState
           title="Elegí un cliente"
           description="La rentabilidad se calcula por cliente y período fiscal."
         />
-      ) : listQuery.isLoading ? (
+      ) : periodsQuery.isLoading || listQuery.isLoading ? (
         <div className="study-state" role="status">
           Cargando rentabilidad…
         </div>
-      ) : listQuery.isError ? (
+      ) : periodsQuery.isError || listQuery.isError ? (
         <div className="study-state" role="alert">
           No se pudo cargar la rentabilidad. Reintentá más tarde.
         </div>
-      ) : periods.length === 0 ? (
+      ) : !selected ? (
         <EmptyState
-          title="Sin períodos fiscales"
-          description="Creá el perfil fiscal y las obligaciones del cliente para calcular rentabilidad."
+          title="Sin obligación fiscal para el período activo"
+          description="Completá la configuración fiscal y materializá las obligaciones antes de calcular rentabilidad."
         />
       ) : (
-        <div className="profitability-grid">
-          {renderView(devengado, "DEVENGADO")}
-          {renderView(caja, "CAJA")}
-        </div>
+        <>
+          <div className="profitability-grid">
+            {renderView(devengado, "DEVENGADO")}
+            {renderView(caja, "CAJA")}
+          </div>
+          {calculateMutation.isError || publishMutation.isError ? (
+            <p className="form-error" role="alert">
+              {(calculateMutation.error ?? publishMutation.error)?.message ??
+                "No se pudo completar la acción. Reintentá en unos minutos."}
+            </p>
+          ) : null}
+        </>
       )}
     </section>
   );

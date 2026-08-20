@@ -8,6 +8,12 @@
   width: min(100%, 1360px);
 }
 
+.study-route-state {
+  display: grid;
+  min-height: min(58vh, 520px);
+  align-items: center;
+}
+
 .study-page__header {
   display: flex;
   align-items: flex-end;

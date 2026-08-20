@@ -46,7 +46,10 @@ async function runAsRuntime<T>(
 }
 
 const ingestion = new IngestionService();
-const settlements = new SettlementService();
+// F0.3: storage stub para que el artifact no dependa de MinIO local.
+const settlements = new SettlementService({
+  put: async () => {},
+} as unknown as ConstructorParameters<typeof SettlementService>[0]);
 const profitability = new ProfitabilityService();
 
 const ctxOwner = { userId: OWNER_PIL, firmId: FIRM_PILOTO, actorKind: "USER" as const };

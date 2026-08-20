@@ -10,6 +10,7 @@ interface MockSession {
   status: "loading" | "authenticated" | "unauthenticated";
   me: MeContext | null;
   portalContexts: PortalContext[];
+  error: null;
   refresh: () => Promise<void>;
 }
 
@@ -77,14 +78,14 @@ function currentContext(): ClientContextValue {
 }
 
 function authenticated(me: MeContext | null, portalContexts: PortalContext[] = []): MockSession {
-  return { status: "authenticated", me, portalContexts, refresh: vi.fn() };
+  return { status: "authenticated", me, portalContexts, error: null, refresh: vi.fn() };
 }
 
 describe("ClientContextProvider", () => {
   beforeEach(() => {
     localStorage.clear();
     latestContext = undefined;
-    sessionMock.current = { status: "loading", me: null, portalContexts: [], refresh: vi.fn() };
+    sessionMock.current = { status: "loading", me: null, portalContexts: [], error: null, refresh: vi.fn() };
   });
 
   afterEach(() => {
@@ -99,7 +100,7 @@ describe("ClientContextProvider", () => {
       userId: "user-a",
       firms: [firm("firm-a", [{ clientId: "client-a", periodIds: ["period-a"] }])],
     } satisfies MeContext;
-    sessionMock.current = { status: "loading", me, portalContexts: [], refresh: vi.fn() };
+    sessionMock.current = { status: "loading", me, portalContexts: [], error: null, refresh: vi.fn() };
     const setItem = vi.spyOn(Storage.prototype, "setItem");
     const view = render(<TestTree path="/" />);
 
@@ -171,7 +172,13 @@ describe("ClientContextProvider", () => {
         periodId: "period-b",
       });
       expect(currentContext().capabilities).toEqual(
-        new Set(["client.read", "document.upload", "message.shared"]),
+        new Set([
+          "client.read",
+          "portal.results.read",
+          "portal.documents.upload",
+          "portal.requests.respond",
+          "message.shared",
+        ]),
       );
     });
   });
@@ -265,5 +272,17 @@ describe("ClientContextProvider", () => {
 
     act(() => currentContext().setFirmId("missing-firm"));
     expect(currentContext()).toMatchObject({ firmId: null, clientId: null, periodId: null });
+  });
+
+  it("expone la pertenencia del cliente activo para validar enlaces heredados", async () => {
+    sessionMock.current = authenticated({
+      userId: "user-a",
+      firms: [firm("firm-a", [{ clientId: "client-a", periodIds: ["period-a"] }])],
+    });
+    render(<TestTree path="/" />);
+
+    await waitFor(() => expect(currentContext().isReady).toBe(true));
+    expect(currentContext().hasClientAccess("client-a")).toBe(true);
+    expect(currentContext().hasClientAccess("client-unknown")).toBe(false);
   });
 });

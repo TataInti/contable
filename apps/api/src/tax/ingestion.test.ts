@@ -271,8 +271,8 @@ describe("G2-01/02/10 lote de importación ARCA", () => {
       fileHash: "sha256:val1",
     });
     const result = await ingestion.validateBatch(ctxOwner, batch.id, [
-      { letter: "A", pointOfSale: "0001", numberFrom: "1", cuit: "20111111111", issuedOn: "2026-01-10", net: "100000.00", hasIva: true, iva21: "21000.00" },
-      { letter: "X", pointOfSale: "0001", numberFrom: "2", cuit: "bad", issuedOn: "2026-01-11", net: "1000", hasIva: true },
+      { direction: "SALE", letter: "A", pointOfSale: "0001", numberFrom: "1", cuit: "20111111111", issuedOn: "2026-01-10", net: "100000.00", hasIva: true, iva21: "21000.00" },
+      { direction: "SALE", letter: "X", pointOfSale: "0001", numberFrom: "2", cuit: "bad", issuedOn: "2026-01-11", net: "1000", hasIva: true },
     ]);
     expect(result.totals.validRows).toBe(1);
     expect(result.totals.errorRows).toBe(1);
@@ -293,7 +293,7 @@ describe("G2-01/02/10 lote de importación ARCA", () => {
       fileHash: "sha256:commit1",
     });
     await ingestion.validateBatch(ctxOwner, batch.id, [
-      { letter: "A", pointOfSale: "0001", numberFrom: "100", cuit: "20111111111", issuedOn: "2026-01-10", net: "100000.00", hasIva: true, iva21: "21000.00" },
+      { direction: "SALE", letter: "A", pointOfSale: "0001", numberFrom: "100", cuit: "20111111111", issuedOn: "2026-01-10", net: "100000.00", hasIva: true, iva21: "21000.00" },
     ]);
     const committed = await ingestion.commitBatch(ctxOwner, batch.id, "20999999999");
     expect(committed.committed).toBe(1);
@@ -335,7 +335,7 @@ describe("G2-01/02/10 lote de importación ARCA", () => {
       fileHash: "sha256:rec1",
     });
     await ingestion.validateBatch(ctxOwner, batch.id, [
-      { letter: "A", pointOfSale: "0001", numberFrom: "200", cuit: "20111111111", issuedOn: "2026-01-10", net: "100000.00", hasIva: true, iva21: "21000.00" },
+      { direction: "SALE", letter: "A", pointOfSale: "0001", numberFrom: "200", cuit: "20111111111", issuedOn: "2026-01-10", net: "100000.00", hasIva: true, iva21: "21000.00" },
     ]);
     await ingestion.commitBatch(ctxOwner, batch.id, "20999999999");
     const rec = await ingestion.reconcileBatch(ctxOwner, batch.id);

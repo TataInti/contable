@@ -7,15 +7,32 @@
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
-  constructor(code: string, message: string, status: number) {
+  readonly requestId: string | null;
+  readonly retryable: boolean;
+
+  constructor(code: string, message: string, status: number, requestId: string | null = null) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
+    this.requestId = requestId;
+    this.retryable = status === 0 || status === 408 || status === 429 || status >= 500;
   }
 }
 
 const BASE = "/api/v1";
+const REQUEST_TIMEOUT_MS = 20_000;
+
+function fallbackMessage(status: number): string {
+  if (status === 400) return "La solicitud contiene datos inválidos";
+  if (status === 401) return "Tu sesión venció. Volvé a iniciar sesión";
+  if (status === 403) return "No tenés permiso para realizar esta acción";
+  if (status === 404) return "No encontramos el recurso solicitado";
+  if (status === 409) return "La información cambió. Actualizá la pantalla e intentá nuevamente";
+  if (status === 429) return "Hay demasiadas solicitudes. Esperá un momento antes de reintentar";
+  if (status >= 500) return "El servidor no está disponible en este momento";
+  return "No se pudo completar la solicitud";
+}
 
 async function request<T>(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
   const headers: Record<string, string> = { ...extraHeaders };
@@ -29,24 +46,42 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
   }
 
   let res: Response;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
   try {
     res = await fetch(`${BASE}${path}`, {
       method,
       headers,
       credentials: "same-origin",
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
   } catch {
-    throw new ApiError("NETWORK_ERROR", "No se pudo conectar con el servidor", 0);
+    throw new ApiError(
+      timedOut ? "REQUEST_TIMEOUT" : "NETWORK_ERROR",
+      timedOut ? "La solicitud tardó demasiado. Reintentá en unos minutos" : "No se pudo conectar con el servidor",
+      0,
+    );
+  } finally {
+    clearTimeout(timeout);
   }
 
   const payload = (await res.json().catch(() => null)) as
-    | { data?: T; error?: { code?: string; message?: string } }
+    | { data?: T; error?: { code?: string; message?: string; requestId?: string } }
     | null;
 
   if (!res.ok) {
     const err = payload?.error;
-    throw new ApiError(err?.code ?? "HTTP_ERROR", err?.message ?? `Error ${res.status}`, res.status);
+    throw new ApiError(
+      err?.code ?? "HTTP_ERROR",
+      err?.message ?? fallbackMessage(res.status),
+      res.status,
+      err?.requestId ?? res.headers.get("x-request-id"),
+    );
   }
 
   return (payload?.data ?? payload) as T;
@@ -64,8 +99,15 @@ export const api = {
 export async function downloadFile(path: string): Promise<void> {
   const res = await fetch(`${BASE}${path}`, { credentials: "same-origin" });
   if (!res.ok) {
-    const payload = await res.json().catch(() => null) as { error?: { code?: string; message?: string } } | null;
-    throw new ApiError(payload?.error?.code ?? "DOWNLOAD_FAILED", payload?.error?.message ?? "No se pudo descargar el archivo", res.status);
+    const payload = await res.json().catch(() => null) as
+      | { error?: { code?: string; message?: string; requestId?: string } }
+      | null;
+    throw new ApiError(
+      payload?.error?.code ?? "DOWNLOAD_FAILED",
+      payload?.error?.message ?? fallbackMessage(res.status),
+      res.status,
+      payload?.error?.requestId ?? res.headers.get("x-request-id"),
+    );
   }
   const blob = await res.blob();
   const disposition = res.headers.get("content-disposition") ?? "";

@@ -56,15 +56,19 @@ export function settlementRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/firms/:firmId/clients/:clientId/tax-settlements", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
+    const query = z.object({ periodId: z.string().uuid().optional() }).parse(req.query);
     try {
-      const data = await service.list(ctx, ctx.clientId!);
+      const data = await service.list(ctx, ctx.clientId!, query.periodId);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
     }
   });
 
-  app.get("/api/v1/portfolio/tax-worklist", async (req, reply) => {
+  // F0.1: worklist fiscal con firma explícita en la ruta. El guard global ya
+  // valida membresía/rol/capability contra la firma de la ruta (no contexto
+  // implícito).
+  app.get("/api/v1/firms/:firmId/portfolio/tax-worklist", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     try {
       const data = await service.worklist(ctx);

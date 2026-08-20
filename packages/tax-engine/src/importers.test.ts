@@ -4,6 +4,8 @@ import {
   normalizeArcaVoucherRow,
   normalizeCm03Batch,
   normalizeCm03Row,
+  normalizeF931Batch,
+  normalizeF931Row,
   normalizeIibbTucBatch,
   normalizeIibbTucRow,
   normalizeTemSmtBatch,
@@ -20,6 +22,7 @@ import {
 describe("G2-02 adaptador ARCA compras/ventas", () => {
   it("normaliza una fila válida de venta", () => {
     const result = normalizeArcaVoucherRow({
+      direction: "SALE",
       letter: "A",
       pointOfSale: "0001",
       numberFrom: "00123",
@@ -35,6 +38,7 @@ describe("G2-02 adaptador ARCA compras/ventas", () => {
     });
     expect(result.status).toBe("VALID");
     if (result.status === "VALID") {
+      expect(result.data.direction).toBe("SALE");
       expect(result.data.letter).toBe("A");
       expect(result.data.net).toBe("100000.0000");
       expect(result.data.total).toBe("121000.0000");
@@ -45,6 +49,7 @@ describe("G2-02 adaptador ARCA compras/ventas", () => {
 
   it("deriva total = neto + IVA + exento + otros tributos", () => {
     const result = normalizeArcaVoucherRow({
+      direction: "PURCHASE",
       letter: "B",
       pointOfSale: "0002",
       numberFrom: "10",
@@ -65,6 +70,7 @@ describe("G2-02 adaptador ARCA compras/ventas", () => {
 
   it("rechaza fila con CUIT inválido y detalla el error", () => {
     const result = normalizeArcaVoucherRow({
+      direction: "SALE",
       letter: "A",
       pointOfSale: "0001",
       numberFrom: "1",
@@ -79,6 +85,7 @@ describe("G2-02 adaptador ARCA compras/ventas", () => {
 
   it("rechaza fila con IVA faltante cuando discrimina", () => {
     const result = normalizeArcaVoucherRow({
+      direction: "SALE",
       letter: "A",
       pointOfSale: "0001",
       numberFrom: "1",
@@ -94,6 +101,7 @@ describe("G2-02 adaptador ARCA compras/ventas", () => {
   it("un lote suma totales y cuenta errores por fila", () => {
     const batch = normalizeArcaVoucherBatch([
       {
+        direction: "SALE",
         letter: "A",
         pointOfSale: "0001",
         numberFrom: "1",
@@ -104,6 +112,7 @@ describe("G2-02 adaptador ARCA compras/ventas", () => {
         iva21: "21000.00",
       },
       {
+        direction: "PURCHASE",
         letter: "B",
         pointOfSale: "0002",
         numberFrom: "2",
@@ -113,7 +122,7 @@ describe("G2-02 adaptador ARCA compras/ventas", () => {
         hasIva: true,
         iva21: "10500.00",
       },
-      { letter: "X", pointOfSale: "0003", numberFrom: "3", cuit: "bad", issuedOn: "no-date", net: "1", hasIva: true },
+      { direction: "SALE", letter: "X", pointOfSale: "0003", numberFrom: "3", cuit: "bad", issuedOn: "no-date", net: "1", hasIva: true },
     ]);
     expect(batch.totals.net).toBe("150000.0000");
     expect(batch.totals.iva).toBe("31500.0000");
@@ -402,5 +411,73 @@ describe("G4 adaptador CM03 artículo 2 (Convenio Multilateral)", () => {
     expect(batch.totals.net).toBe("100000.0000");
     expect(batch.totals.validRows).toBe(3);
     expect(batch.totals.errorRows).toBe(0);
+  });
+});
+
+describe("F1.2 adaptador F.931 (remuneraciones Dto. 814)", () => {
+  it("normaliza una fila válida con detracción", () => {
+    const result = normalizeF931Row({
+      cuit: "20111111111",
+      remuneration: "100000.00",
+      deduction: "10000.00",
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.cuit).toBe("20111111111");
+      expect(result.data.remuneration).toBe("100000.0000");
+      expect(result.data.deduction).toBe("10000.0000");
+      expect(result.data.netRemuneration).toBe("90000.0000");
+    }
+  });
+
+  it("acepta detracción cero", () => {
+    const result = normalizeF931Row({
+      cuit: "20111111111",
+      remuneration: "50000.00",
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.deduction).toBe("0.0000");
+      expect(result.data.netRemuneration).toBe("50000.0000");
+    }
+  });
+
+  it("rechaza CUIT inválido", () => {
+    const result = normalizeF931Row({
+      cuit: "123",
+      remuneration: "1000",
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("CUIT_INVALID");
+  });
+
+  it("rechaza remuneración inválida", () => {
+    const result = normalizeF931Row({
+      cuit: "20111111111",
+      remuneration: "abc",
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("REMUNERATION_INVALID");
+  });
+
+  it("rechaza detracción mayor que la remuneración", () => {
+    const result = normalizeF931Row({
+      cuit: "20111111111",
+      remuneration: "1000",
+      deduction: "2000",
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("DEDUCTION_EXCEEDS");
+  });
+
+  it("un lote suma remuneración neta y cuenta errores", () => {
+    const batch = normalizeF931Batch([
+      { cuit: "20111111111", remuneration: "100000.00", deduction: "10000.00" },
+      { cuit: "20222222222", remuneration: "50000.00" },
+      { cuit: "bad", remuneration: "1000" },
+    ]);
+    expect(batch.totals.net).toBe("140000.0000");
+    expect(batch.totals.validRows).toBe(2);
+    expect(batch.totals.errorRows).toBe(1);
   });
 });

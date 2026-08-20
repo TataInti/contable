@@ -55,115 +55,169 @@ function pathContext(path: string): { firmId?: string; clientId?: string } {
   };
 }
 
+/**
+ * F0.8: política de autorización declarativa (deny-by-default).
+ *
+ * Cada regla declara un patrón de ruta (regex) y una función que resuelve la
+ * capability según el método HTTP. La evaluación recorre la tabla en orden:
+ * la primera regla que matchea gana. Si ninguna matchea, la ruta queda SIN
+ * política y el guard la deniega (403/404), nunca la autoriza por omisión.
+ *
+ * El guard y la prueba de cobertura consumen esta misma tabla: la prueba
+ * falla si una ruta Fastify de negocio no tiene política declarada.
+ */
+interface RoutePolicy {
+  /** Regex sobre el pathname (sin query). */
+  match: RegExp;
+  /** Resuelve la capability según el método y el path. Devuelve null para denegar. */
+  resolve: (method: string, path: string) => Capability | null;
+}
+
+const ROUTE_POLICY: readonly RoutePolicy[] = [
+  { match: /\/feature-flags/, resolve: () => "firm.manage" },
+  { match: /\/members(?:\/|$)|\/invitations(?:\/|$)|\/portal-memberships(?:\/|$)/, resolve: () => "firm.manage" },
+  { match: /\/assignments/, resolve: () => "client.assign" },
+  { match: /\/document-upload-sessions/, resolve: () => "document.upload" },
+  { match: /\/extractions\//, resolve: (m) => (m === "GET" ? "document.prepare" : "document.review") },
+  { match: /\/documents/, resolve: (m) => (m === "GET" ? "client.read" : "document.upload") },
+  {
+    match: /\/journal-entries/,
+    resolve: (m) => {
+      if (m === "GET") return "client.read";
+      return "entry.create";
+    },
+  },
+  { match: /\/journal-entries\/submit/, resolve: () => "entry.submit" },
+  { match: /\/journal-entries\/(review|reject)$/, resolve: () => "entry.review" },
+  { match: /\/journal-entries\/post$/, resolve: () => "entry.post" },
+  { match: /\/journal-entries\/reverse$/, resolve: () => "entry.reverse" },
+  { match: /\/ledger\//, resolve: () => "client.read" },
+  {
+    match: /\/bank-|\/bank\//,
+    resolve: (m, path) => (path.includes("reconcil") || path.includes("matches") ? "bank.reconcile" : "bank.import"),
+  },
+  {
+    match: /\/vat\//,
+    resolve: (m, path) => {
+      if (path.endsWith("/finalize")) return "vat.finalize";
+      if (path.endsWith("/review")) return "vat.review";
+      return "vat.calculate";
+    },
+  },
+  {
+    match: /\/tax-profile-versions/,
+    resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write"),
+  },
+  { match: /\/tax-registrations/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
+  { match: /\/tax-periods/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
+  // G5 fix: filings/payments de una obligación se mapean a sus capacidades
+  // específicas ANTES del catch-all de /tax-obligations.
+  { match: /\/tax-obligations\/.*\/filings$/, resolve: () => "tax.filings.record" },
+  { match: /\/tax-obligations\/.*\/payments$/, resolve: () => "tax.payments.record" },
+  { match: /\/tax-obligations/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
+  { match: /\/tax\/jurisdictions/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
+  { match: /\/tax\/types/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
+  { match: /\/tax\/regimes/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
+  { match: /\/tax\/activities/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
+  { match: /\/tax\/holidays/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
+  {
+    match: /\/tax-rule-versions/,
+    resolve: (m, path) => {
+      if (path.endsWith("/approve")) return "tax.rules.approve";
+      if (path.endsWith("/activate")) return "tax.rules.activate";
+      if (path.endsWith("/submit-review")) return "tax.rules.propose";
+      return m === "GET" ? "tax.rules.read" : "tax.rules.propose";
+    },
+  },
+  { match: /\/tax-rule-packs/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
+  { match: /\/tax\/credentials/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
+  {
+    match: /\/import-batches/,
+    resolve: (m, path) => {
+      if (path.endsWith("/validate") || path.endsWith("/commit")) return "tax.vouchers.prepare";
+      return m === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare";
+    },
+  },
+  {
+    match: /\/vouchers/,
+    resolve: (m, path) => {
+      if (path.endsWith("/review")) return "tax.vouchers.review";
+      return m === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare";
+    },
+  },
+  { match: /\/withholdings|\/perceptions/, resolve: (m) => (m === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare") },
+  {
+    match: /\/management-expenses/,
+    resolve: (m, path) => {
+      if (path.endsWith("/approve-treatment")) return "tax.management_expenses.approve_treatment";
+      return m === "GET" ? "tax.management_expenses.read" : "tax.management_expenses.write";
+    },
+  },
+  {
+    match: /\/monthly-tax-workpapers/,
+    resolve: (m, path) => {
+      if (path.endsWith("/calculate")) return "tax.settlements.calculate";
+      if (path.endsWith("/submit-review")) return "tax.settlements.submit_review";
+      if (path.endsWith("/review")) return "tax.settlements.review";
+      if (path.endsWith("/finalize")) return "tax.settlements.finalize";
+      if (path.endsWith("/rectify")) return "tax.settlements.rectify";
+      if (path.includes("/controls/") && path.endsWith("/resolve")) return "tax.settlements.review";
+      return m === "GET" ? "tax.settlements.read" : "tax.settlements.calculate";
+    },
+  },
+  {
+    match: /\/tax-settlements/,
+    resolve: (m, path) => {
+      if (path.endsWith("/calculate")) return "tax.settlements.calculate";
+      if (path.includes("/artifacts")) return "tax.settlements.export";
+      if (path.endsWith("/submit-review")) return "tax.settlements.submit_review";
+      if (path.endsWith("/request-changes") || path.endsWith("/review")) return "tax.settlements.review";
+      if (path.endsWith("/finalize")) return "tax.settlements.finalize";
+      // G4.4 fix: rectify-with-delta es una rectificativa; un PREPARER (que
+      // sólo tiene calculate) no debe poder iniciarla. Se declara ANTES del
+      // endsWith("/rectify") para que no caiga al default calculate.
+      if (path.endsWith("/rectify-with-delta") || path.endsWith("/rectify")) return "tax.settlements.rectify";
+      if (path.endsWith("/export")) return "tax.settlements.export";
+      return m === "GET" ? "tax.settlements.read" : "tax.settlements.calculate";
+    },
+  },
+  { match: /\/tax-credit-ledger/, resolve: () => "tax.settlements.read" },
+  { match: /\/tax-credit-allocations/, resolve: () => "tax.settlements.calculate" },
+  { match: /\/tax-worklist/, resolve: () => "tax.settlements.read" },
+  {
+    match: /\/profitability/,
+    resolve: (m, path) => {
+      if (path.endsWith("/publish")) return "profitability.publish";
+      if (path.endsWith("/calculate")) return "profitability.calculate";
+      return m === "GET" ? "profitability.read" : "profitability.calculate";
+    },
+  },
+  { match: /\/tax-obligations\/.*\/filings$/, resolve: () => "tax.filings.record" },
+  { match: /\/tax-obligations\/.*\/payments$/, resolve: () => "tax.payments.record" },
+  { match: /\/tax-payments\/.*\/reverse$/, resolve: () => "tax.payments.record" },
+  { match: /\/tax\//, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
+  { match: /\/obligations/, resolve: (m) => (m === "GET" ? "client.read" : "obligation.manage") },
+  { match: /\/obligation-instances/, resolve: (m) => (m === "GET" ? "client.read" : "obligation.manage") },
+  { match: /\/document-requests/, resolve: (m) => (m === "GET" ? "client.read" : "request.manage") },
+  { match: /\/threads/, resolve: (m) => (m === "GET" ? "client.read" : "message.shared") },
+  { match: /\/close-cycles/, resolve: (m) => (m === "GET" ? "client.read" : "period.soft_close") },
+  { match: /\/report-publications/, resolve: (m) => (m === "GET" ? "client.read" : "report.publish") },
+  { match: /\/report-runs/, resolve: (_m, path) => (path.endsWith("/publish") ? "report.publish" : "report.run") },
+  { match: /\/report-templates/, resolve: (m) => (m === "GET" ? "client.read" : "report.configure") },
+  { match: /\/reports\//, resolve: () => "report.run" },
+  { match: /\/assistant\//, resolve: () => "ai.use" },
+  { match: /\/bi\//, resolve: () => "bi.use" },
+  {
+    match: /\/clients\/[^/]+\/(accounts|counterparties|cost-centers|fiscal-years|profile)/,
+    resolve: (m) => (m === "GET" ? "client.read" : "client.manage"),
+  },
+  { match: /\/clients(?:\/[^/]+)?$/, resolve: (m) => (m === "GET" ? "client.read" : "client.manage") },
+];
+
 export function requiredCapability(method: string, path: string): Capability | null {
-  if (path.includes("/feature-flags")) return method === "GET" ? "firm.manage" : "firm.manage";
-  if (/\/members(?:\/|$)|\/invitations(?:\/|$)|\/portal-memberships(?:\/|$)/.test(path)) return "firm.manage";
-  if (path.includes("/assignments")) return "client.assign";
-  if (path.includes("/document-upload-sessions")) return "document.upload";
-  if (path.includes("/extractions/")) {
-    return method === "GET" ? "document.prepare" : "document.review";
+  for (const rule of ROUTE_POLICY) {
+    if (rule.match.test(path)) return rule.resolve(method, path);
   }
-  if (path.includes("/documents")) return method === "GET" ? "client.read" : "document.upload";
-  if (path.includes("/journal-entries")) {
-    if (path.endsWith("/submit")) return "entry.submit";
-    if (path.endsWith("/review") || path.endsWith("/reject")) return "entry.review";
-    if (path.endsWith("/post")) return "entry.post";
-    if (path.endsWith("/reverse")) return "entry.reverse";
-    return method === "GET" ? "client.read" : "entry.create";
-  }
-  if (path.includes("/ledger/")) return "client.read";
-  if (/\/bank-|\/bank\//.test(path)) return path.includes("reconcil") || path.includes("matches") ? "bank.reconcile" : "bank.import";
-  if (path.includes("/vat/")) {
-    if (path.endsWith("/finalize")) return "vat.finalize";
-    if (path.endsWith("/review")) return "vat.review";
-    return "vat.calculate";
-  }
-  // --- Fundación fiscal (Puerta 1) ---
-  if (path.includes("/tax-profile-versions")) {
-    if (path.endsWith("/activate")) return "tax.profile.write";
-    if (path.endsWith("/submit-review")) return "tax.profile.write";
-    return method === "GET" ? "tax.profile.read" : "tax.profile.write";
-  }
-  if (path.includes("/tax-registrations")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
-  if (path.includes("/tax-periods")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
-  // G5 fix: filings/payments de una obligación deben mapearse a sus capacidades
-  // específicas ANTES del catch-all de /tax-obligations (que devuelve
-  // tax.profile.write y rompía el registro de presentación/pago).
-  if (path.includes("/tax-obligations/") && /\/filings$/.test(path)) return "tax.filings.record";
-  if (path.includes("/tax-obligations/") && /\/payments$/.test(path)) return "tax.payments.record";
-  if (path.includes("/tax-obligations")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
-  // Catálogos de firma (maestros fiscales globales).
-  if (path.includes("/tax/jurisdictions")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
-  if (path.includes("/tax/types")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
-  if (path.includes("/tax/regimes")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
-  if (path.includes("/tax/activities")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
-  if (path.includes("/tax/holidays")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
-  if (path.includes("/tax-rule-versions")) {
-    if (path.endsWith("/approve")) return "tax.rules.approve";
-    if (path.endsWith("/activate")) return "tax.rules.activate";
-    if (path.endsWith("/submit-review")) return "tax.rules.propose";
-    return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
-  }
-  if (path.includes("/tax-rule-packs")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
-  if (path.includes("/tax/credentials")) return method === "GET" ? "tax.profile.read" : "tax.profile.write";
-  // --- Ingestión y subledger fiscal (Puerta 2) ---
-  if (path.includes("/import-batches")) {
-    if (path.endsWith("/validate")) return "tax.vouchers.prepare";
-    if (path.endsWith("/commit")) return "tax.vouchers.prepare";
-    return method === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare";
-  }
-  if (path.includes("/vouchers")) {
-    if (path.endsWith("/review")) return "tax.vouchers.review";
-    return method === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare";
-  }
-  if (path.includes("/withholdings") || path.includes("/perceptions")) {
-    return method === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare";
-  }
-  if (path.includes("/management-expenses")) {
-    if (path.endsWith("/approve-treatment")) return "tax.management_expenses.approve_treatment";
-    return method === "GET" ? "tax.management_expenses.read" : "tax.management_expenses.write";
-  }
-  // --- Liquidaciones fiscales (Puerta 3) ---
-  if (path.includes("/tax-settlements")) {
-    if (path.endsWith("/calculate")) return "tax.settlements.calculate";
-    if (path.includes("/artifacts")) return "tax.settlements.export";
-    if (path.endsWith("/submit-review")) return "tax.settlements.submit_review";
-    if (path.endsWith("/request-changes") || path.endsWith("/review")) return "tax.settlements.review";
-    if (path.endsWith("/finalize")) return "tax.settlements.finalize";
-    // G4.4 fix: rectify-with-delta es una rectificativa; un PREPARER (que sólo
-    // tiene calculate) no debe poder iniciarla. Se mapea explícitamente ANTES
-    // del endsWith("/rectify") para que no caiga al default calculate.
-    if (path.endsWith("/rectify-with-delta") || path.endsWith("/rectify")) return "tax.settlements.rectify";
-    if (path.endsWith("/export")) return "tax.settlements.export";
-    return method === "GET" ? "tax.settlements.read" : "tax.settlements.calculate";
-  }
-  if (path.includes("/tax-credit-allocations")) return "tax.settlements.calculate";
-  if (path.includes("/tax-worklist")) return "tax.settlements.read";
-  // --- Rentabilidad gerencial (Puerta 5) ---
-  if (path.includes("/profitability")) {
-    if (path.endsWith("/publish")) return "profitability.publish";
-    if (path.endsWith("/calculate")) return "profitability.calculate";
-    return method === "GET" ? "profitability.read" : "profitability.calculate";
-  }
-  if (path.includes("/tax-obligations/") && /\/filings$/.test(path)) return "tax.filings.record";
-  if (path.includes("/tax-obligations/") && /\/payments$/.test(path)) return "tax.payments.record";
-  if (path.includes("/tax-payments/") && path.endsWith("/reverse")) return "tax.payments.record";
-  if (path.includes("/tax/")) return method === "GET" ? "tax.rules.read" : "tax.rules.propose";
-  if (path.includes("/obligations")) return method === "GET" ? "client.read" : "obligation.manage";
-  if (path.includes("/obligation-instances")) return method === "GET" ? "client.read" : "obligation.manage";
-  if (path.includes("/document-requests")) return method === "GET" ? "client.read" : "request.manage";
-  if (path.includes("/threads")) return method === "GET" ? "client.read" : "message.shared";
-  if (path.includes("/close-cycles")) return method === "GET" ? "client.read" : "period.soft_close";
-  if (path.includes("/report-publications")) return method === "GET" ? "client.read" : "report.publish";
-  if (path.includes("/report-runs")) return path.endsWith("/publish") ? "report.publish" : "report.run";
-  if (path.includes("/report-templates")) return method === "GET" ? "client.read" : "report.configure";
-  if (path.includes("/reports/")) return "report.run";
-  if (path.includes("/assistant/")) return "ai.use";
-  if (path.includes("/bi/")) return "bi.use";
-  if (path.match(/\/clients\/[^/]+\/(accounts|counterparties|cost-centers|fiscal-years|profile)/)) {
-    return method === "GET" ? "client.read" : "client.manage";
-  }
-  if (/\/clients(?:\/[^/]+)?$/.test(path)) return method === "GET" ? "client.read" : "client.manage";
   return null;
 }
 

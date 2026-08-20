@@ -16,17 +16,17 @@ graph TB
     end
 
     subgraph Frontend["🖥️ Frontend — React 19 + Vite"]
-        WEB_STUDY["apps/web — Study Shell<br/>Rutas: estudio contable<br/>auth, clientes, bandeja, admin<br/><br/><i>⚠️ Módulos legacy ocultos:<br/>contabilidad, reportes,<br/>asistente, BI</i>"]
-        WEB_PORTAL["apps/web — Portal Cliente<br/>Rutas: /portal/*<br/>Dashboard, upload,<br/>obligaciones, reportes<br/><br/><i>🔧 En transición a<br/>vista fiscal + rentabilidad</i>"]
+        WEB_STUDY["apps/web — Study Shell<br/>Rutas: estudio contable<br/>dashboard, clientes, onboarding<br/>fiscal, liquidaciones, bandeja,<br/>trabajo, rentabilidad, admin<br/><br/><i>⚠️ Legacy oculto de la nav:<br/>contabilidad, reportes,<br/>asistente, BI (G0-03)</i>"]
+        WEB_PORTAL["apps/web — Portal Cliente<br/>Rutas: /portal/*<br/>Dashboard, pendientes, upload,<br/>impuestos, liquidaciones,<br/>rentabilidad, mensajes, perfil<br/><br/><i>✅ Vista fiscal + rentabilidad</i>"]
     end
 
     subgraph API["⚡ API Node — Autoridad de escritura"]
-        FASTIFY["apps/api — Fastify + Prisma<br/><br/>🔵 Auth / MFA / Sesiones<br/>🔵 Firmas y membresías<br/>🔵 Clientes (→ onboarding fiscal)<br/>🔵 Documentos pipeline<br/>🔵 Jobs / Outbox<br/>🔵 Portal endpoints<br/><br/>🟡 Contabilidad (mayor)<br/>🟡 Banking<br/>🟡 Reportes<br/>🟡 Asistente<br/>🟡 BI<br/><br/>🔴 IVA Legacy — DESHABILITADO<br/>&nbsp;&nbsp;&nbsp;&nbsp;(feature flag TAX=off)"]
-        TAX_SVC["🔴 apps/api/src/tax/<br/>VAT legacy service<br/><br/><i>A reemplazar por<br/>nuevo motor fiscal</i>"]
+        FASTIFY["apps/api — Fastify + Prisma<br/><br/>🔵 Auth / MFA / Sesiones<br/>🔵 Firmas y membresías<br/>🔵 Clientes (onboarding fiscal)<br/>🔵 Documentos pipeline<br/>🔵 Jobs / Outbox (lease/retry/DLQ)<br/>🔵 Portal endpoints<br/><br/>🟢 Fundación fiscal (maestros,<br/>&nbsp;&nbsp;&nbsp;&nbsp;perfil, reglas, calendario)<br/>🟢 Ingestión (batches, vouchers,<br/>&nbsp;&nbsp;&nbsp;&nbsp;ret/perc, gastos gerenciales)<br/>🟢 Liquidaciones (IVA/IIBB/TEM/<br/>&nbsp;&nbsp;&nbsp;&nbsp;CM03/MONO, maker-checker)<br/>🟢 Rentabilidad (devengado/caja)<br/><br/>🟡 Legacy (mayor, banking,<br/>&nbsp;&nbsp;&nbsp;&nbsp;reportes, asistente, BI)<br/><br/>🔴 IVA Legacy — DESHABILITADO<br/>&nbsp;&nbsp;&nbsp;&nbsp;(feature flag TAX=off)"]
+        TAX_SVC["🟢 apps/api/src/tax/<br/>Motor fiscal nuevo<br/>settlement + ingestion +<br/>profitability services"]
     end
 
     subgraph Workers["⚙️ Workers — BullMQ"]
-        WORKER["apps/worker<br/>documentos, exports,<br/>notificaciones, recurrencias<br/><br/><i>🔧 En revisión:<br/>entrega y recuperación</i>"]
+        WORKER["apps/worker<br/>documentos, notificaciones<br/><br/><i>🔧 Pendiente: handlers reales<br/>para exports, recurrencias,<br/>ai y maintenance</i>"]
     end
 
     subgraph AI["🧠 AI Service — FastAPI"]
@@ -35,6 +35,7 @@ graph TB
 
     subgraph Packages["📦 Packages compartidos"]
         ENG["accounting-engine<br/>Motor decimal puro<br/>partida doble, validación"]
+        TAXENG["tax-engine<br/>Motores deterministas<br/>IVA · IIBB · TEM · CM03 ·<br/>MONO · rentabilidad"]
         CONTRACTS["contracts<br/>Schemas Zod + tipos TS"]
         PERMS["permissions<br/>Matriz de permisos runtime"]
         STORAGE["storage<br/>Cliente MinIO wrapper"]
@@ -74,6 +75,7 @@ graph TB
 
     %% Packages
     FASTIFY --> ENG
+    FASTIFY --> TAXENG
     FASTIFY --> CONTRACTS
     FASTIFY --> PERMS
     FASTIFY --> STORAGE
@@ -89,9 +91,9 @@ graph TB
     classDef stable fill:#dfd,stroke:#090,stroke-width:2px
     classDef infra fill:#eef,stroke:#66c,stroke-width:1px,stroke-dasharray: 3
 
-    class TAX_SVC legacy
-    class WEB_PORTAL,WORKER,FASTAPI transition
-    class FASTIFY,WEB_STUDY,PG,VK,MO,NX stable
+    class TAX_SVC stable
+    class WORKER,FASTAPI transition
+    class FASTIFY,WEB_STUDY,WEB_PORTAL,PG,VK,MO,NX stable
 ```
 
 ---
@@ -100,53 +102,40 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph EstadoActual["📋 Estado actual"]
+    subgraph EstadoActual["📋 Estado actual (2026-08-19)"]
         AUTH[Auth / MFA / Sesiones]
         FIRM[Firmas + membresías]
-        CLI_OLD[Clientes ABM parcial]
-        DOCS[Documentos + OCR]
-        LEDGER[Contabilidad mayor]
-        BANK[Banking]
-        VAT_LEGACY[IVA Legacy<br/><b>DESHABILITADO</b>]
-        REPORTS[Reportes + BI]
-        ASSISTANT[Asistente IA]
-        PORTAL_OLD[Portal cliente]
-        WORKER_OLD[Worker docs/notif]
+        ONBOARD[Onboarding fiscal<br/><b>✅ completo</b>]
+        CALENDAR[Calendario de obligaciones<br/><b>✅ derivado de reglas</b>]
+        IMPO[Importación oficial +<br/>reconciliación<br/><b>✅ adaptadores ARCA/DGR/SMT/CM03</b>]
+        COMP[Comprobantes fiscales<br/><b>✅ FiscalVoucher + componentes</b>]
+        VAT_NEW[IVA liquidación<br/><b>✅ motor nuevo</b>]
+        IIBB[IIBB Tucumán + CM03<br/><b>✅ motores</b>]
+        TEM[TEM SMT<br/><b>✅ motor</b>]
+        MONO[Monotributo<br/><b>✅ seguimiento</b>]
+        MAKER[Flujo maker-checker<br/><b>✅ preparar → revisar →<br/>aprobar → finalizar</b>]
+        EXPORT[Exportación + acuse + pago<br/><b>✅ papel de trabajo</b>]
+        PROFIT[Rentabilidad gerencial<br/><b>✅ devengado + caja</b>]
+        PORTAL_NEW[Portal cliente fiscal<br/><b>✅ pedidos, publicaciones,<br/>rentabilidad</b>]
+        WORKER_NEW[Worker robusto<br/><b>✅ outbox + dead-letter</b>]
+        LEDGER[Contabilidad mayor<br/><i>🔒 oculto de la nav</i>]
+        BANK[Banking<br/><i>⏸️ pausado</i>]
+        REPORTS[Reportes + BI<br/><i>🔒 oculto de la nav</i>]
+        ASSISTANT[Asistente IA<br/><i>🔒 oculto de la nav</i>]
     end
 
-    subgraph EstadoDestino["🎯 Estado destino (fiscal vertical)"]
-        AUTH2[Auth / MFA / Sesiones<br/><i>✓ Conservar</i>]
-        FIRM2[Firmas + permisos<br/><i>✓ Conservar + endurecer</i>]
-        ONBOARD[Onboarding fiscal completo<br/><i>🆕 perfil fiscal, actividades,<br/>jurisdicciones, obligaciones</i>]
-        CALENDAR[Calendario de obligaciones<br/><i>🆕 derivado de reglas</i>]
-        IMPO[Importación oficial +<br/>reconciliación<br/><i>🆕 AFIP/ARCA, SIFEN</i>]
-        COMP[Comprobantes fiscales<br/><i>🆕 base, alícuota,<br/>componentes, ret/pers</i>]
-        VAT_NEW[IVA liquidación<br/><i>🆕 nuevo motor</i>]
-        IIBB[IIBB Tucumán + CM03<br/><i>🆕 nuevo</i>]
-        TEM[TEM SMT<br/><i>🆕 nuevo</i>]
-        MONO["Monotributo<br/>(seguimiento)<br/><i>🆕 nuevo</i>"]
-        MAKER[Flujo maker-checker<br/><i>🆕 preparar → revisar →<br/>aprobar → finalizar</i>]
-        EXPORT[Exportación + acuse + pago<br/><i>🆕 papel de trabajo</i>]
-        PROFIT[Rentabilidad gerencial<br/><i>🆕 devengado + caja</i>]
-        PORTAL_NEW[Portal cliente fiscal<br/><i>🔄 pedidos, publicaciones,<br/>rentabilidad</i>]
-        WORKER_NEW[Worker robusto<br/><i>🔄 outbox + dead-letter</i>]
+    subgraph Pendiente["🎯 Pendiente (plan-cierre-gaps.md)"]
+        ESTACION[Estación de trabajo<br/>liquidación 5 zonas]
+        PEDIDOS[Pedidos ligados a<br/>obligationId + portal por ítem]
+        DOCPREV[Estación documental<br/>con preview de evidencia]
+        ACUSE[Filing con acuse/evidencia]
+        LEDGER_CR[Libro de créditos<br/>GET /tax-credit-ledger]
+        CALC_EXCEL[Cálculos del Excel:<br/>Dto. 814 · mora · prorrata ·<br/>rubros · conciliación]
+        OBS[Observabilidad /metrics<br/>+ alertas]
+        CI[CI: ClamAV + E2E +<br/>scripts canónicos]
     end
 
-    %% Transiciones
-    AUTH --> AUTH2
-    FIRM --> FIRM2
-    CLI_OLD --> ONBOARD
-    DOCS --> IMPO
-    DOCS --> COMP
-    LEDGER -.->|"🔒 Oculto<br/>solo conciliación"| LEDGER_HIDDEN[("Mayor interno<br/>evidencia")]
-    BANK -.->|"⏸️ Pausado"| BANK_PAUSED[("Futuro")]
-    VAT_LEGACY --> VAT_NEW
-    REPORTS -.->|"🔒 Oculto"| REPORTS_HIDDEN[("Reemplazado por<br/>rentabilidad")]
-    ASSISTANT -.->|"🔒 Oculto"| ASST_HIDDEN[("Futuro")]
-    PORTAL_OLD --> PORTAL_NEW
-    WORKER_OLD --> WORKER_NEW
-
-    %% Nuevos flujos
+    %% Flujo fiscal ya operativo
     ONBOARD --> CALENDAR
     CALENDAR --> IMPO
     IMPO --> COMP
@@ -160,7 +149,19 @@ graph LR
     MAKER --> EXPORT
     EXPORT --> PROFIT
 
-    style VAT_LEGACY fill:#fdd,stroke:#c00
+    %% Legacy oculto
+    LEDGER -.->|"🔒 Oculto<br/>solo conciliación"| LEDGER_HIDDEN[("Mayor interno<br/>evidencia")]
+    BANK -.->|"⏸️ Pausado"| BANK_PAUSED[("Futuro")]
+    REPORTS -.->|"🔒 Oculto"| REPORTS_HIDDEN[("Reemplazado por<br/>rentabilidad")]
+    ASSISTANT -.->|"🔒 Oculto"| ASST_HIDDEN[("Futuro")]
+
+    style VAT_NEW fill:#dfd,stroke:#090
+    style IIBB fill:#dfd,stroke:#090
+    style TEM fill:#dfd,stroke:#090
+    style MONO fill:#dfd,stroke:#090
+    style MAKER fill:#dfd,stroke:#090
+    style EXPORT fill:#dfd,stroke:#090
+    style PROFIT fill:#dfd,stroke:#090
     style LEDGER_HIDDEN fill:#eee,stroke:#999,stroke-dasharray: 3
     style REPORTS_HIDDEN fill:#eee,stroke:#999,stroke-dasharray: 3
     style ASST_HIDDEN fill:#eee,stroke:#999,stroke-dasharray: 3

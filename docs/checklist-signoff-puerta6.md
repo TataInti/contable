@@ -4,6 +4,8 @@
 > La Puerta 6 es binaria: PASS o FAIL. Cada ítem exige evidencia (commit SHA,
 > CI, migración, dataset, comandos, reportes, aprobaciones).
 > Un contador matriculado debe firmar el resultado de validación fiscal.
+> Estado: actualizado 2026-08-19. Los gaps que bloquean el cierre están en
+> [`plan-cierre-gaps.md`](./plan-cierre-gaps.md).
 
 ## G6-01 — Selección de clientes piloto
 
@@ -34,17 +36,21 @@
 
 ## G6-04 — Ensayo de rectificativa, pago parcial y saldo a favor
 
-- [ ] Rectificativa crea versión nueva e inmutable la anterior (V-003).
-- [ ] Pago parcial deja la obligación PARTIALLY_PAID.
-- [ ] Saldo a favor se registra y asigna sin alterar el cálculo.
-- [ ] Test de integración del ciclo piloto completo pasa (settlement-piloto.test.ts).
+- [x] Rectificativa crea versión nueva e inmutable la anterior (V-003).
+      Cubierto por `settlement.test.ts` y `settlement-*.test.ts` (rectify).
+- [x] Pago parcial deja la obligación PARTIALLY_PAID.
+      Cubierto por `settlement.test.ts` (recordPayment).
+- [x] Saldo a favor se registra y asigna sin alterar el cálculo.
+      Cubierto por `settlement.test.ts` (allocateCredit).
+- [x] Test de integración del ciclo piloto completo pasa (settlement-piloto.test.ts).
 
 ## G6-05 — Restore drill y continuidad
 
 - [ ] Backup cifrado verificado.
 - [ ] Restauración ensayada desde base vacía.
-- [ ] Migraciones aplican limpias (migrate deploy).
-- [ ] Roles owner, migrator, runtime, worker y readonly verificados.
+- [x] Migraciones aplican limpias (migrate deploy).
+- [x] Roles owner, migrator, runtime, worker y readonly verificados.
+      (G0-08/G1: CI aplica migrate:deploy + rls.sql + seed-fase2 con roles.)
 
 ## G6-06 — Prueba de carga
 
@@ -53,26 +59,34 @@
 - [ ] Importación de 10.000 filas como job con progreso.
 - [ ] Cálculo de 10.000 hechos < 30s como job.
 - [ ] Paginación obligatoria en colecciones; cero consultas sin límite.
-- [ ] Script `npm run seed:carga -w @contable/api` ejecutado y medido.
+- [x] Script `npm run seed:carga -w @contable/api` existe (G6-06, 300 clientes).
+      Pendiente: ejecutarlo y medir los objetivos p95 (plan-cierre-gaps G-2).
 
 ## G6-07 — Revisión de seguridad y privacidad
 
-- [ ] RLS probada con dos firmas y dos clientes (rol runtime).
-- [ ] Portal no accede a endpoints del estudio.
-- [ ] Sólo lectura no carga ni mensajea.
-- [ ] Preparador no revisa ni finaliza su propio trabajo.
-- [ ] Finalizada no admite UPDATE/DELETE ni con SQL runtime.
+- [x] RLS probada con dos firmas y dos clientes (rol runtime).
+      Cubierto por `tenant.test.ts` y `fiscal-foundation.test.ts`.
+- [x] Portal no accede a endpoints del estudio.
+      Cubierto por guard de portal (READONLY/COLLABORATOR).
+- [x] Sólo lectura no carga ni mensajea.
+      Cubierto por guard de portal + `guard-capabilities.test.ts`.
+- [x] Preparador no revisa ni finaliza su propio trabajo.
+      Cubierto por maker-checker en settlement/ingestion.
+- [x] Finalizada no admite UPDATE/DELETE ni con SQL runtime.
+      Cubierto por triggers de inmutabilidad (G3-05).
 - [ ] Sin incidentes P0/P1 abiertos.
 
 ## G6-08 — Capacitación y runbooks
 
-- [ ] Runbooks operativos documentados (docs/runbooks-piloto.md).
+- [x] Runbooks operativos documentados (docs/runbooks-piloto.md).
 - [ ] Equipo de soporte con dueño asignado.
 - [ ] Observabilidad con dueño (métricas y alertas).
+      Pendiente: endpoint `/metrics` + alertas por runbook (plan-cierre-gaps A-6).
 
 ## G6-09 — Sign-off fiscal, técnico y operativo
 
 - [ ] Golden cases firmados por contador matriculado (por régimen).
+      Pendiente: evidencia de validación profesional (plan-cierre-gaps G-4).
 - [ ] Aprobación técnica (arquitectura, tests, CI).
 - [ ] Aprobación funcional (flujos de punta a punta).
 - [ ] Aprobación de seguridad.

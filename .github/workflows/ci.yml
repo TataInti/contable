@@ -45,6 +45,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      clamav:
+        image: clamav/clamav-debian:stable
+        ports:
+          - 3310:3310
+        options: >-
+          --health-cmd "clamdscan --ping 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://contable:contable@localhost:5432/contable
       RUNTIME_DATABASE_URL: postgresql://contable_runtime:runtime_secret@localhost:5432/contable
@@ -53,6 +62,8 @@ jobs:
       MINIO_ENDPOINT: localhost
       MINIO_PORT: "9000"
       MINIO_SECRET_KEY: contable-minio
+      CLAMAV_HOST: localhost
+      CLAMAV_PORT: "3310"
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
@@ -94,6 +105,14 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: E2E (Playwright)
+        run: npm run test:e2e
+        env:
+          E2E_WEB_URL: http://127.0.0.1:4173
+          AI_SERVICE_URL: http://localhost:8000
+          AI_SERVICE_SECRET: dev-secret
+          MFA_CHALLENGE_SECRET: e2e-mfa-challenge-secret-with-32-characters
 
   python:
     name: Python (lint, typecheck, test)

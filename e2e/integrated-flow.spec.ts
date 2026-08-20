@@ -38,17 +38,34 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   await navigateStudy(page, "Trabajo");
   await expect(page.getByRole("heading", { name: "Trabajo" })).toBeVisible();
 
+  await navigateStudy(page, "Configuración fiscal");
+  await expect(page.getByRole("heading", { name: "Onboarding fiscal del cliente" })).toBeVisible();
+
+  await navigateStudy(page, "Contabilidad");
+  await expect(page.getByRole("heading", { name: "Contabilidad" })).toBeVisible();
+
   // G3-10: worklist de liquidaciones (nueva pantalla fiscal).
   await navigateStudy(page, "Liquidaciones");
   await expect(page.getByRole("heading", { name: "Liquidaciones" })).toBeVisible();
+
+  await navigateStudy(page, "Expediente mensual");
+  await expect(page.getByRole("heading", { name: "Expediente mensual" })).toBeVisible();
+
+  await navigateStudy(page, "Rentabilidad");
+  await expect(page.getByRole("heading", { name: "Rentabilidad" })).toBeVisible();
+
+  await navigateStudy(page, "Reportes y análisis");
+  await expect(page.getByRole("heading", { name: "Reportes y análisis" })).toBeVisible();
+
+  await navigateStudy(page, "Asistente contable");
+  await expect(page.getByRole("heading", { name: "Asistente contable" })).toBeVisible();
 
   // G5-06: la cartera por riesgo aparece en el dashboard con liquidaciones.
   await navigateStudy(page, "Inicio");
   await expect(page.getByRole("heading", { name: "Liquidaciones en curso" })).toBeVisible();
 
-  // G0-03: Contabilidad y Reportes genéricos ya NO están en la navegación.
-  await expect(page.getByRole("link", { name: "Contabilidad" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Reportes y BI" })).toHaveCount(0);
+  await page.goto("/ruta-obsoleta");
+  await expect(page.getByRole("heading", { name: "Esta sección no existe" })).toBeVisible();
 });
 
 test("navegación aislada del portal", async ({ page }) => {

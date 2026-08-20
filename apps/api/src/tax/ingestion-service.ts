@@ -210,38 +210,39 @@ export class IngestionService {
       const isCm03 = batch.adapterVersion.startsWith("CM03");
       let committed = 0;
       let duplicates = 0;
-      const errors: string[] = [];
 
+      // F0.4: commit estrictamente atómico. Si una fila crítica falla al
+      // escribir o una regla de unicidad revela un conflicto no resuelto, la
+      // excepción propaga y la transacción hace rollback de TODAS las
+      // escrituras de negocio. El lote nunca queda COMMITTED parcialmente.
       for (const row of batch.rows) {
         if (row.status !== "VALID") {
-          errors.push(`Fila ${row.position + 1}: ${row.errors.join(", ")}`);
-          continue;
+          throw new ImportError(
+            "BATCH_HAS_ERRORS",
+            `El lote contiene la fila ${row.position + 1} inválida: ${row.errors.join(", ")}`,
+          );
         }
         if (row.voucherId) {
           committed += 1; // Ya comiteada en una ejecución anterior.
           continue;
         }
 
-        try {
-          if (isWithholding) {
-            await this.commitWithholdingRow(tx, ctx, batch, row, clientCuit);
-            committed += 1;
-          } else if (isIibb) {
-            await this.commitIibbRow(tx, ctx, batch, row, clientCuit);
-            committed += 1;
-          } else if (isTem) {
-            await this.commitTemRow(tx, ctx, batch, row, clientCuit);
-            committed += 1;
-          } else if (isCm03) {
-            await this.commitCm03Row(tx, ctx, batch, row, clientCuit);
-            committed += 1;
-          } else {
-            const created = await this.commitVoucherRow(tx, ctx, batch, row, clientCuit);
-            if (created) committed += 1;
-            else duplicates += 1;
-          }
-        } catch (err) {
-          errors.push(`Fila ${row.position + 1}: ${err instanceof Error ? err.message : "ERROR"}`);
+        if (isWithholding) {
+          await this.commitWithholdingRow(tx, ctx, batch, row, clientCuit);
+          committed += 1;
+        } else if (isIibb) {
+          await this.commitIibbRow(tx, ctx, batch, row, clientCuit);
+          committed += 1;
+        } else if (isTem) {
+          await this.commitTemRow(tx, ctx, batch, row, clientCuit);
+          committed += 1;
+        } else if (isCm03) {
+          await this.commitCm03Row(tx, ctx, batch, row, clientCuit);
+          committed += 1;
+        } else {
+          const created = await this.commitVoucherRow(tx, ctx, batch, row, clientCuit);
+          if (created) committed += 1;
+          else duplicates += 1;
         }
       }
 
@@ -250,19 +251,20 @@ export class IngestionService {
         data: { status: "COMMITTED" },
       });
 
-      return { batch, committed, duplicates, errors };
+      return { batch, committed, duplicates, errors: [] as string[] };
     });
   }
 
   private async commitVoucherRow(
     tx: Prisma.TransactionClient,
     ctx: TenantContext,
-    batch: { id: string; taxTypeId: string },
+    batch: { id: string },
     row: { id: string; position: number; normalized: Prisma.JsonValue },
     clientCuit: string,
   ): Promise<boolean> {
     const n = (row.normalized ?? {}) as Record<string, unknown>;
-    const direction = batch.taxTypeId ? "PURCHASE" : "SALE";
+    // F0.4: la dirección viene del adaptador tipado (nunca se infiere de taxTypeId).
+    const direction = n["direction"] === "SALE" ? "SALE" : "PURCHASE";
     const counterpartyCuit = n["counterpartyCuit"] as string;
     const letter = n["letter"] as string;
     const pointOfSale = n["pointOfSale"] as number;
@@ -299,10 +301,10 @@ export class IngestionService {
     const exchangeRate = n["exchangeRate"] as string | null;
     const currency = n["currency"] as string;
 
-    // Dirección según contraparte: venta → el cliente es emisor; compra → receptor.
-    const isSale = false; // placeholder: el adaptador no trae dirección; se fija por origen.
-    const issuerCuit = isSale ? clientCuit : counterpartyCuit;
-    const receiverCuit = isSale ? counterpartyCuit : clientCuit;
+    // F0.4: dirección según el adaptador. Venta → el cliente es emisor;
+    // compra → el cliente es receptor.
+    const issuerCuit = direction === "SALE" ? clientCuit : counterpartyCuit;
+    const receiverCuit = direction === "SALE" ? counterpartyCuit : clientCuit;
 
     const hashInput = {
       firmId: ctx.firmId,

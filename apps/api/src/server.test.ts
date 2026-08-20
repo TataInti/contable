@@ -56,7 +56,11 @@ describe("health endpoints", () => {
     const server = await startTestServer();
     const res = await server.inject({ method: "GET", url: "/api/v1/firms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/clients" });
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toEqual({ error: { code: "UNAUTHENTICATED", message: "Se requiere iniciar sesión" } });
+    const body = res.json();
+    expect(body.error.code).toBe("UNAUTHENTICATED");
+    expect(body.error.message).toBe("Se requiere iniciar sesión");
+    // F0.8: toda respuesta de error lleva requestId (trace) para correlación.
+    expect(typeof body.error.requestId).toBe("string");
   });
 
   it("una ruta desconocida devuelve 404 y no una página ajena", async () => {

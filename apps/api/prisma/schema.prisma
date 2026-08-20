@@ -49,6 +49,12 @@ model User {
   reviewedTaxSettlements TaxSettlement[]       @relation("settlementReviewedBy")
   finalizedTaxSettlements TaxSettlement[]      @relation("settlementFinalizedBy")
   treatmentDecisions     TaxTreatmentDecision[] @relation("treatmentDecidedBy")
+  notifications          UserNotification[]
+  workpapersPrepared     MonthlyTaxWorkpaper[] @relation("workpaperPreparedBy")
+  workpapersReviewed     MonthlyTaxWorkpaper[] @relation("workpaperReviewedBy")
+  workpapersFinalized    MonthlyTaxWorkpaper[] @relation("workpaperFinalizedBy")
+  creditLotsCreated      TaxCreditLot[]
+  creditMovementsCreated TaxCreditMovement[]
 
   @@map("users")
 }
@@ -57,6 +63,30 @@ enum UserStatus {
   ACTIVE
   SUSPENDED
   DISABLED
+}
+
+// --- F0.7: Notificaciones internas (sólo in-app, sin webhook) ---
+model UserNotification {
+  id               String   @id @default(uuid(7))
+  userId           String
+  firmId           String?
+  clientId         String?
+  type             String
+  severity         String   @default("INFO")
+  title            String
+  body             String?
+  resourceType     String?
+  resourceId       String?
+  deduplicationKey String?
+  readAt           DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deduplicationKey])
+  @@index([userId, createdAt])
+  @@map("user_notifications")
 }
 
 model DeviceSession {
@@ -210,6 +240,16 @@ model Client {
   taxPayments            TaxPayment[]
   paymentAllocations     PaymentAllocation[]
   profitabilitySnapshots ProfitabilitySnapshot[]
+  monthlyWorkpapers      MonthlyTaxWorkpaper[]
+  workpaperSettlements   WorkpaperSettlement[]
+  taxInputAllocations    TaxInputAllocation[]
+  taxControlFindings     TaxControlFinding[]
+  taxInterestSnapshots   TaxInterestSnapshot[]
+  f931Runs               F931Run[]
+  f931Lines              F931Line[]
+  supplierTaxProfiles    SupplierTaxProfile[]
+  taxCreditLots          TaxCreditLot[]
+  taxCreditMovements     TaxCreditMovement[]
 
   @@unique([firmId, cuit])
   @@index([firmId])
@@ -1825,6 +1865,7 @@ model TaxType {
   importBatches      ImportBatch[]
   settlements        TaxSettlement[]
   creditLedgerEntries TaxCreditLedgerEntry[]
+  importAdapters     ImportAdapter[]
 
   @@unique([code])
   @@map("tax_types")
@@ -2056,6 +2097,7 @@ model TaxObligation {
   filings  TaxFiling[]
   payments TaxPayment[]
   paymentAllocations PaymentAllocation[]
+  workpaperLinks WorkpaperSettlement[]
 
   @@unique([clientId, regimeId, periodId])
   @@index([firmId, clientId, status])
@@ -2315,6 +2357,27 @@ enum ImportBatchStatus {
   CANCELLED
 }
 
+// --- F1.2: Registro de adaptadores de importación (PLAN §5.6.2) ---
+
+model ImportAdapter {
+  id                 String   @id @default(uuid(7))
+  taxTypeId          String
+  originCode         String
+  direction          String
+  sourceSchemaVersion String
+  parserVersion      String
+  taxScope           String
+  fileFormat         String
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  taxType TaxType @relation(fields: [taxTypeId], references: [id])
+
+  @@unique([originCode, sourceSchemaVersion])
+  @@map("import_adapters")
+}
+
 model ImportRow {
   id          String        @id @default(uuid(7))
   firmId      String
@@ -2468,6 +2531,11 @@ model WithholdingCertificate {
   certificateNumber String?
   sourceDocumentId String?
   taxPeriodId   String?
+  // F1.4: alcance fiscal para atribución correcta de créditos.
+  taxTypeId     String?
+  regimeId      String?
+  jurisdictionId String?
+  creditKind    String    @default("WITHHOLDING")
   status        String    @default("DRAFT")
   createdByUserId String?
   reviewedByUserId String?
@@ -2497,6 +2565,11 @@ model PerceptionCertificate {
   certificateNumber String?
   sourceDocumentId String?
   taxPeriodId   String?
+  // F1.4: alcance fiscal para atribución correcta de créditos.
+  taxTypeId     String?
+  regimeId      String?
+  jurisdictionId String?
+  creditKind    String    @default("PERCEPTION")
   status        String    @default("DRAFT")
   createdByUserId String?
   reviewedByUserId String?
@@ -2696,6 +2769,7 @@ model TaxSettlement {
   filings      TaxFiling[]
   payments     TaxPayment[]
   creditAllocations TaxCreditAllocation[]
+  workpaperLinks WorkpaperSettlement[]
 
   @@unique([clientId, regimeId, periodId, version])
   @@index([firmId, clientId, status])
@@ -2955,4 +3029,261 @@ enum ProfitabilitySnapshotStatus {
   DRAFT
   PUBLISHED
   SUPERSEDED
+}
+
+// ============================================================
+// Fase 1 — Expediente mensual de liquidación (PLAN §5.6)
+// ============================================================
+
+enum MonthlyTaxWorkpaperStatus {
+  DRAFT
+  COLLECTING_INPUTS
+  READY_TO_CALCULATE
+  CALCULATING
+  CALCULATED
+  IN_REVIEW
+  CHANGES_REQUESTED
+  REVIEWED
+  FINALIZED
+  SUPERSEDED
+}
+
+model MonthlyTaxWorkpaper {
+  id            String                     @id @default(uuid(7))
+  firmId        String
+  clientId      String
+  periodStart   DateTime
+  periodEnd     DateTime
+  revision      Int                        @default(1)
+  status        MonthlyTaxWorkpaperStatus  @default(DRAFT)
+  cutoffAt      DateTime?
+  preparedByUserId String?
+  reviewedByUserId String?
+  finalizedByUserId String?
+  supersedesId  String?
+  inputHash     String?
+  outputHash    String?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  client     Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  preparedBy User?                 @relation("workpaperPreparedBy", fields: [preparedByUserId], references: [id])
+  reviewedBy User?                 @relation("workpaperReviewedBy", fields: [reviewedByUserId], references: [id])
+  finalizedBy User?                @relation("workpaperFinalizedBy", fields: [finalizedByUserId], references: [id])
+  supersedes MonthlyTaxWorkpaper?  @relation("workpaperSupersedes", fields: [supersedesId], references: [id])
+  supersededBy MonthlyTaxWorkpaper[] @relation("workpaperSupersedes")
+  settlements WorkpaperSettlement[]
+  controls    TaxControlFinding[]
+  interestSnapshots TaxInterestSnapshot[]
+
+  @@unique([clientId, periodStart, periodEnd, revision])
+  @@index([firmId, clientId, status])
+  @@map("monthly_tax_workpapers")
+}
+
+model WorkpaperSettlement {
+  id           String   @id @default(uuid(7))
+  firmId       String
+  clientId     String
+  workpaperId  String
+  settlementId String
+  obligationId String
+  role         String
+  required     Boolean  @default(true)
+  statusAtLink String   @default("LINKED")
+  createdAt    DateTime @default(now())
+
+  client     Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workpaper  MonthlyTaxWorkpaper @relation(fields: [workpaperId], references: [id], onDelete: Cascade)
+  settlement TaxSettlement      @relation(fields: [settlementId], references: [id])
+  obligation TaxObligation      @relation(fields: [obligationId], references: [id])
+
+  @@unique([workpaperId, obligationId])
+  @@index([firmId, clientId, workpaperId])
+  @@map("workpaper_settlements")
+}
+
+model TaxInputAllocation {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  clientId       String
+  sourceType     String
+  sourceId       String
+  taxTypeId      String
+  regimeId       String?
+  jurisdictionId String?
+  periodId       String?
+  amount         Decimal  @db.Decimal(20, 4)
+  status         String   @default("RESERVED")
+  snapshotHash   String?
+  createdAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceType, sourceId, taxTypeId, regimeId, jurisdictionId, periodId])
+  @@index([firmId, clientId, taxTypeId])
+  @@map("tax_input_allocations")
+}
+
+model TaxControlFinding {
+  id                String   @id @default(uuid(7))
+  firmId            String
+  clientId          String
+  workpaperId       String?
+  settlementId      String?
+  code              String
+  severity          TaxDifferenceSeverity @default(WARNING)
+  expected          Decimal? @db.Decimal(20, 4)
+  actual            Decimal? @db.Decimal(20, 4)
+  tolerance         Decimal? @db.Decimal(20, 4)
+  status            TaxDifferenceStatus @default(OPEN)
+  evidenceDocumentId String?
+  resolution        String?
+  resolvedByUserId  String?
+  reviewedByUserId  String?
+  sourceHash        String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workpaper MonthlyTaxWorkpaper? @relation(fields: [workpaperId], references: [id], onDelete: SetNull)
+
+  @@index([firmId, clientId, workpaperId])
+  @@map("tax_control_findings")
+}
+
+model TaxInterestSnapshot {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  clientId       String
+  workpaperId    String?
+  obligationId   String
+  settlementId   String?
+  baseAmount     Decimal  @db.Decimal(20, 4)
+  dueDate        DateTime
+  asOfDate       DateTime
+  daysLate       Int
+  monthlyRate    Decimal  @db.Decimal(10, 6)
+  ruleVersionId  String?
+  amount         Decimal  @db.Decimal(20, 4)
+  status         String   @default("CALCULATED")
+  inputHash      String
+  createdAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workpaper MonthlyTaxWorkpaper? @relation(fields: [workpaperId], references: [id], onDelete: SetNull)
+
+  @@index([firmId, clientId, obligationId])
+  @@map("tax_interest_snapshots")
+}
+
+model F931Run {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  clientId       String
+  periodId       String
+  importBatchId  String?
+  totalRemuneration Decimal @db.Decimal(20, 4)
+  deduction      Decimal  @db.Decimal(20, 4)
+  netRemuneration Decimal @db.Decimal(20, 4)
+  status         String   @default("DRAFT")
+  reviewedByUserId String?
+  reviewedAt     DateTime?
+  hash           String
+  createdAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  lines  F931Line[]
+
+  @@index([firmId, clientId, periodId])
+  @@map("f931_runs")
+}
+
+model F931Line {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  clientId       String
+  runId          String
+  cuit           String
+  remuneration   Decimal  @db.Decimal(20, 4)
+  deduction      Decimal  @db.Decimal(20, 4)
+  netRemuneration Decimal @db.Decimal(20, 4)
+  position       Int
+  createdAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  run    F931Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId, runId])
+  @@map("f931_lines")
+}
+
+model SupplierTaxProfile {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  clientId       String
+  cuitNormalized String
+  validFrom      DateTime
+  validTo        DateTime?
+  activityCode   String?
+  jurisdictionId String?
+  evidenceDocumentId String?
+  createdByUserId String?
+  reviewedByUserId String?
+  status         String   @default("DRAFT")
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, clientId, cuitNormalized])
+  @@map("supplier_tax_profiles")
+}
+
+// --- F1.1: libro de créditos inmutable (reemplaza balanceAfter mutable) ---
+
+model TaxCreditLot {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  clientId       String
+  taxTypeId      String
+  jurisdictionId String?
+  regimeId       String?
+  periodId       String?
+  kind           String
+  originalAmount Decimal  @db.Decimal(20, 4)
+  sourceSettlementId String?
+  sourcePaymentId String?
+  evidenceDocumentId String?
+  createdByUserId String
+  createdAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdBy User @relation(fields: [createdByUserId], references: [id])
+  movements TaxCreditMovement[]
+
+  @@index([firmId, clientId, taxTypeId])
+  @@map("tax_credit_lots")
+}
+
+model TaxCreditMovement {
+  id             String   @id @default(uuid(7))
+  firmId         String
+  clientId       String
+  lotId          String
+  kind           String
+  amount         Decimal  @db.Decimal(20, 4)
+  workpaperId    String?
+  settlementId   String?
+  reference      String?
+  createdByUserId String
+  createdAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  lot    TaxCreditLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  createdBy User @relation(fields: [createdByUserId], references: [id])
+
+  @@index([firmId, clientId, lotId])
+  @@map("tax_credit_movements")
 }

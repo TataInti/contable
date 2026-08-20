@@ -10,4 +10,9 @@ coverage/
 .DS_Store
 test-results/
 playwright-report/
-memory.md
+demo-liquidacion-manual.xlsx
+.venv/
+.github/
+dev.sh
+.gitignore
+docs/proceso-liquidacion-mensual.html

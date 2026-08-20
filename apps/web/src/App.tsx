@@ -10,33 +10,15 @@ import { LoginPage } from "./auth/LoginPage";
 import { AcceptPortalInvitation } from "./auth/AcceptPortalInvitation";
 import { logout } from "./lib/auth";
 import { Icon } from "./ui/Icon";
+import { STUDY_MODULES, type StudyModule } from "./study/moduleRegistry";
+import {
+  LegacyClientModuleRoute,
+  PortalNotFound,
+  StudyModuleGuard,
+  StudyNotFound,
+} from "./study/StudyRouteStates";
 import "./App.css";
 
-const StudyDashboard = lazy(() =>
-  import("./study/StudyDashboard").then((m) => ({ default: m.StudyDashboard })),
-);
-const StudyClientes = lazy(() =>
-  import("./study/StudyClientes").then((m) => ({ default: m.StudyClientes })),
-);
-const StudyBandeja = lazy(() =>
-  import("./study/StudyBandeja").then((m) => ({ default: m.StudyBandeja })),
-);
-const StudyTrabajo = lazy(() =>
-  import("./study/StudyTrabajo").then((m) => ({ default: m.StudyTrabajo })),
-);
-const StudyAdministracion = lazy(() =>
-  import("./study/StudyAdministracion").then((m) => ({ default: m.StudyAdministracion })),
-);
-const StudyOnboardingFiscal = lazy(() =>
-  import("./study/StudyOnboardingFiscal").then((m) => ({ default: m.StudyOnboardingFiscal })),
-);
-
-const StudyLiquidaciones = lazy(() =>
-  import("./study/StudyLiquidaciones").then((m) => ({ default: m.StudyLiquidaciones })),
-);
-const StudyRentabilidad = lazy(() =>
-  import("./study/StudyRentabilidad").then((m) => ({ default: m.StudyRentabilidad })),
-);
 const PortalDashboard = lazy(() =>
   import("./portal/PortalDashboard").then((m) => ({ default: m.PortalDashboard })),
 );
@@ -85,10 +67,33 @@ function LoadingScreen() {
   );
 }
 
+function SessionUnavailable() {
+  const session = useSession();
+  return (
+    <main className="no-workspace">
+      <div className="no-workspace__mark" aria-hidden="true">
+        <Icon name="alert" size={28} />
+      </div>
+      <p className="no-workspace__eyebrow">Conexión no disponible</p>
+      <h1>No pudimos validar tu sesión</h1>
+      <p>
+        {session.error?.message ??
+          "La conexión con el servidor no está disponible en este momento. Tu sesión no fue cerrada."}
+      </p>
+      <div className="no-workspace__actions">
+        <Button variant="secondary" onClick={() => void session.refresh().catch(() => undefined)}>
+          Reintentar
+        </Button>
+      </div>
+    </main>
+  );
+}
+
 function Protected({ portal = false }: { portal?: boolean }) {
   const session = useSession();
   const location = useLocation();
   if (session.status === "loading") return <LoadingScreen />;
+  if (session.status === "unavailable") return <SessionUnavailable />;
   if (session.status === "unauthenticated")
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   if (portal && session.portalContexts.length === 0) {
@@ -100,9 +105,19 @@ function Protected({ portal = false }: { portal?: boolean }) {
   return <Outlet />;
 }
 
+function StudyModuleRoute({ module }: { module: StudyModule }) {
+  const Component = module.component;
+  return (
+    <StudyModuleGuard module={module}>
+      <Component />
+    </StudyModuleGuard>
+  );
+}
+
 function NoWorkspace() {
   const session = useSession();
   if (session.status === "loading") return <LoadingScreen />;
+  if (session.status === "unavailable") return <SessionUnavailable />;
   if (session.status === "unauthenticated") return <Navigate to="/login" replace />;
   if ((session.me?.firms.length ?? 0) > 0) return <Navigate to="/" replace />;
   if (session.portalContexts.length > 0) return <Navigate to="/portal" replace />;
@@ -147,14 +162,26 @@ function AppRoutes() {
           <Route path="/sin-acceso" element={<NoWorkspace />} />
           <Route element={<Protected />}>
             <Route element={<StudyShell />}>
-              <Route index element={<StudyDashboard />} />
-              <Route path="clientes" element={<StudyClientes />} />
-              <Route path="clientes/:clientId/configuracion-fiscal" element={<StudyOnboardingFiscal />} />
-              <Route path="liquidaciones" element={<StudyLiquidaciones />} />
-              <Route path="clientes/:clientId/rentabilidad" element={<StudyRentabilidad />} />
-              <Route path="bandeja" element={<StudyBandeja />} />
-              <Route path="trabajo" element={<StudyTrabajo />} />
-              <Route path="administracion" element={<StudyAdministracion />} />
+              {STUDY_MODULES.map((module) =>
+                module.path === "/" ? (
+                  <Route key={module.id} index element={<StudyModuleRoute module={module} />} />
+                ) : (
+                  <Route
+                    key={module.id}
+                    path={module.path.slice(1)}
+                    element={<StudyModuleRoute module={module} />}
+                  />
+                ),
+              )}
+              <Route
+                path="clientes/:clientId/rentabilidad"
+                element={<LegacyClientModuleRoute to="/rentabilidad" />}
+              />
+              <Route
+                path="clientes/:clientId/configuracion-fiscal"
+                element={<LegacyClientModuleRoute to="/configuracion-fiscal" />}
+              />
+              <Route path="*" element={<StudyNotFound />} />
             </Route>
           </Route>
           <Route element={<Protected portal />}>
@@ -168,9 +195,12 @@ function AppRoutes() {
               <Route path="reportes" element={<PortalReportes />} />
               <Route path="mensajes" element={<PortalMensajes />} />
               <Route path="perfil" element={<PortalPerfil />} />
+              <Route path="*" element={<PortalNotFound />} />
             </Route>
           </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route element={<Protected />}>
+            <Route path="*" element={<StudyNotFound />} />
+          </Route>
         </Routes>
       </Suspense>
     </ClientContextProvider>

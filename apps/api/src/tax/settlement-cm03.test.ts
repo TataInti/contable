@@ -451,6 +451,33 @@ describe("Fase 4.3 — CM03 artículo 2: cálculo", () => {
     // TUC: 100000 × 0.6 = 60000 × 4% = 2400; CBA: 100000 × 0.4 = 40000 × 3.5% = 1400
     expect(totals["IMPUESTO_POR_JURISDICCION"]).toBe("3800.00");
   });
+
+  it("F1.4: atribuye créditos por jurisdicción declarada en el certificado", async () => {
+    await createApprovedVouchersWithLines();
+    // Retención declarada para CBA (no para TUC).
+    await prisma.withholdingCertificate.create({
+      data: {
+        firmId: FIRM_CM,
+        clientId: CLIENT_CM,
+        direction: "SUFFERED",
+        cuitAgent: "30111111111",
+        cuitResponsible: "20999999994",
+        concept: "RETENCION_IIBB",
+        base: new Prisma.Decimal("50000"),
+        amount: new Prisma.Decimal("2000"),
+        rate: new Prisma.Decimal("4"),
+        issuedOn: new Date("2026-01-20"),
+        status: "APPROVED",
+        jurisdictionId: "CBA",
+      },
+    });
+
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+    // La retención de CBA se deduce de CBA, no de TUC.
+    expect(totals["RETENCIONES"]).toBe("2000.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("3700.00"); // 5700 - 2000
+  });
 });
 
 describe("Fase 4.3 — CM03 artículo 2: workflow maker-checker", () => {

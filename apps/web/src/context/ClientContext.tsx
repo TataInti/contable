@@ -7,7 +7,9 @@ export interface ClientContextValue {
   firmId: string | null;
   clientId: string | null;
   periodId: string | null;
+  isReady: boolean;
   capabilities: ReadonlySet<string>;
+  hasClientAccess: (id: string) => boolean;
   setFirmId: (id: string | null) => void;
   setClientId: (id: string | null) => void;
   setPeriodId: (id: string | null) => void;
@@ -224,15 +226,27 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
     return new Set(client?.capabilities ?? firm?.capabilities ?? []);
   }, [availableFirms, selection.firmId, selection.clientId]);
 
+  const hasClientAccess = useCallback(
+    (candidateClientId: string) => {
+      const firm = availableFirms.find((item) => item.firmId === selection.firmId);
+      return firm?.clients.some((client) => client.clientId === candidateClientId) ?? false;
+    },
+    [availableFirms, selection.firmId],
+  );
+
+  const isReady = status === "authenticated" && hydratedStorageKey === storageKey;
+
   const value = useMemo<ClientContextValue>(
     () => ({
       ...selection,
+      isReady,
       capabilities,
+      hasClientAccess,
       setFirmId,
       setClientId,
       setPeriodId,
     }),
-    [selection, capabilities, setFirmId, setClientId, setPeriodId],
+    [selection, isReady, capabilities, hasClientAccess, setFirmId, setClientId, setPeriodId],
   );
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

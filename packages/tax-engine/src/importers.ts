@@ -65,6 +65,8 @@ function isCuit(value: unknown): value is string {
 // ============================================================
 
 export interface ArcaVoucherRow {
+  /** Dirección del comprobante: SALE (venta) o PURCHASE (compra). */
+  direction: "SALE" | "PURCHASE";
   /** Letra del comprobante: A, B, C, M, NC, ND. */
   letter: string;
   pointOfSale: number;
@@ -85,6 +87,7 @@ export interface ArcaVoucherRow {
 }
 
 export type ArcaVoucherError =
+  | "DIRECTION_INVALID"
   | "LETTER_INVALID"
   | "POS_INVALID"
   | "RANGE_INVALID"
@@ -97,6 +100,8 @@ export type ArcaVoucherError =
 const VALID_LETTERS = new Set(["A", "B", "C", "M", "NC", "ND"]);
 
 export interface ArcaVoucherInput {
+  /** Dirección del comprobante: SALE (venta) o PURCHASE (compra). */
+  direction?: unknown;
   /** Letra o tipo del comprobante. */
   letter?: unknown;
   /** Punto de venta. */
@@ -141,6 +146,12 @@ function normalizeLetter(value: unknown): { ok: true; letter: string } | { ok: f
  */
 export function normalizeArcaVoucherRow(input: ArcaVoucherInput): NormalizedRow<ArcaVoucherRow> {
   const errors: ArcaVoucherError[] = [];
+
+  // F0.4: la dirección es obligatoria y tipada. Nunca se infiere de taxTypeId.
+  const direction = typeof input.direction === "string" ? input.direction.toUpperCase() : "";
+  if (direction !== "SALE" && direction !== "PURCHASE") {
+    errors.push("DIRECTION_INVALID");
+  }
 
   const letter = normalizeLetter(input.letter);
   if (!letter.ok) errors.push(letter.error);
@@ -189,6 +200,7 @@ export function normalizeArcaVoucherRow(input: ArcaVoucherInput): NormalizedRow<
   return {
     status: "VALID",
     data: {
+      direction: direction as "SALE" | "PURCHASE",
       letter: (letter as { ok: true; letter: string }).letter,
       pointOfSale: pos,
       numberFrom,
@@ -728,6 +740,92 @@ export function normalizeCm03Batch(
     rows: normalized,
     totals: {
       net: net.toFixed(4),
+      iva: "0",
+      validRows: valid,
+      errorRows: errors,
+    },
+  };
+}
+
+// ============================================================
+// F1.2 — Adaptador F.931 (remuneraciones para Dto. 814)
+//
+// Formato esperado (columnas de F.931):
+//   cuit | remuneracion | detraccion
+// El importador calcula la remuneración neta (remuneración - detracción)
+// y valida que la detracción no supere la remuneración.
+// ============================================================
+
+export interface F931Row {
+  cuit: string;
+  remuneration: string;
+  deduction: string;
+  netRemuneration: string;
+}
+
+export type F931Error = "CUIT_INVALID" | "REMUNERATION_INVALID" | "DEDUCTION_INVALID" | "DEDUCTION_EXCEEDS";
+
+export interface F931Input {
+  cuit?: unknown;
+  remuneration?: unknown;
+  deduction?: unknown;
+}
+
+export function normalizeF931Row(input: F931Input): NormalizedRow<F931Row> {
+  const errors: F931Error[] = [];
+
+  if (!isCuit(input.cuit)) errors.push("CUIT_INVALID");
+
+  const remuneration = isDecimalString(input.remuneration) ? new Decimal(input.remuneration) : null;
+  if (!remuneration) errors.push("REMUNERATION_INVALID");
+
+  const deduction = isDecimalString(input.deduction) ? new Decimal(input.deduction) : new Decimal(0);
+  if (deduction.isNegative()) errors.push("DEDUCTION_INVALID");
+
+  if (remuneration && deduction.greaterThan(remuneration)) {
+    errors.push("DEDUCTION_EXCEEDS");
+  }
+
+  if (errors.length > 0) {
+    return { status: "ERROR", errors };
+  }
+
+  const net = (remuneration as Decimal).minus(deduction);
+  return {
+    status: "VALID",
+    data: {
+      cuit: input.cuit as string,
+      remuneration: (remuneration as Decimal).toFixed(4),
+      deduction: deduction.toFixed(4),
+      netRemuneration: net.toFixed(4),
+    },
+  };
+}
+
+export function normalizeF931Batch(
+  rows: readonly F931Input[],
+): { rows: NormalizedRow<F931Row>[]; totals: ImportTotals } {
+  let remuneration = new Decimal(0);
+  let deduction = new Decimal(0);
+  let valid = 0;
+  let errors = 0;
+
+  const normalized = rows.map((row) => {
+    const result = normalizeF931Row(row);
+    if (result.status === "VALID" && result.data) {
+      remuneration = remuneration.plus(result.data.remuneration);
+      deduction = deduction.plus(result.data.deduction);
+      valid += 1;
+    } else {
+      errors += 1;
+    }
+    return result;
+  });
+
+  return {
+    rows: normalized,
+    totals: {
+      net: remuneration.minus(deduction).toFixed(4),
       iva: "0",
       validRows: valid,
       errorRows: errors,

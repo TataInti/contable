@@ -86,6 +86,12 @@ interface SettlementInputRow {
 }
 
 export class SettlementService {
+  private readonly storage: ObjectStorage;
+
+  constructor(storage?: ObjectStorage) {
+    this.storage = storage ?? new ObjectStorage();
+  }
+
   // ------------------------------------------------------------------
   // G3-03: Cobertura — entradas disponibles para el período
   // ------------------------------------------------------------------
@@ -197,14 +203,30 @@ export class SettlementService {
       const adjustments = await tx.taxAdjustment.findMany({
         where: { firmId: ctx.firmId, clientId: input.clientId, reviewedAt: { not: null } },
       });
+      // F0.5: sólo certificados APROBADOS (revisados) entran al cálculo. Si un
+      // certificado declara período, debe coincidir con el del cálculo; un
+      // certificado sin período se conserva (atribución completa por régimen/
+      // jurisdicción es Fase 1 con TaxInputAllocation).
       const withholdings = await tx.withholdingCertificate.findMany({
-        where: { firmId: ctx.firmId, clientId: input.clientId },
+        where: {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          status: "APPROVED",
+          ...(period ? { OR: [{ taxPeriodId: null }, { taxPeriodId: input.periodId }] } : {}),
+        },
       });
       const perceptions = await tx.perceptionCertificate.findMany({
-        where: { firmId: ctx.firmId, clientId: input.clientId },
+        where: {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          status: "APPROVED",
+          ...(period ? { OR: [{ taxPeriodId: null }, { taxPeriodId: input.periodId }] } : {}),
+        },
       });
+      // F0.5: los créditos del libro se filtran por el impuesto del cálculo
+      // (nunca se descuenta un saldo de otro impuesto).
       const credits = await tx.taxCreditLedgerEntry.aggregate({
-        where: { firmId: ctx.firmId, clientId: input.clientId },
+        where: { firmId: ctx.firmId, clientId: input.clientId, taxTypeId: input.taxTypeId },
         _sum: { balanceAfter: true },
       });
       const previousFree = credits._sum.balanceAfter ?? new Prisma.Decimal(0);
@@ -388,16 +410,32 @@ export class SettlementService {
               coefficients[r.concept.slice(5)] = r.rate.toString();
             }
           }
-          // Los certificados no tienen jurisdictionId; en CM03 los créditos se
-          // imputan a la jurisdicción principal (la primera con coeficiente).
-          const primaryJurisdiction = Object.keys(coefficients)[0];
+          // F1.4: los créditos se atribuyen por jurisdicción cuando el
+          // certificado declara jurisdictionId. Sólo si ningún certificado
+          // declara jurisdicción se usa el fallback a la jurisdicción
+          // principal (datos legacy), nunca mezclando créditos entre
+          // jurisdicciones.
           const withholdingByJurisdiction: Record<string, Prisma.Decimal> = {};
           const perceptionByJurisdiction: Record<string, Prisma.Decimal> = {};
           const previousCreditByJurisdiction: Record<string, string> = {};
-          if (primaryJurisdiction) {
-            withholdingByJurisdiction[primaryJurisdiction] = withholdingTotal;
-            perceptionByJurisdiction[primaryJurisdiction] = perceptionTotal;
-            previousCreditByJurisdiction[primaryJurisdiction] = previousFree.toString();
+          const declaredWithholding = withholdings.filter((w) => w.jurisdictionId);
+          const declaredPerception = perceptions.filter((p) => p.jurisdictionId);
+          if (declaredWithholding.length > 0 || declaredPerception.length > 0) {
+            for (const w of declaredWithholding) {
+              const j = w.jurisdictionId!;
+              withholdingByJurisdiction[j] = (withholdingByJurisdiction[j] ?? new Prisma.Decimal(0)).plus(w.amount);
+            }
+            for (const p of declaredPerception) {
+              const j = p.jurisdictionId!;
+              perceptionByJurisdiction[j] = (perceptionByJurisdiction[j] ?? new Prisma.Decimal(0)).plus(p.amount);
+            }
+          } else {
+            const primaryJurisdiction = Object.keys(coefficients)[0];
+            if (primaryJurisdiction) {
+              withholdingByJurisdiction[primaryJurisdiction] = withholdingTotal;
+              perceptionByJurisdiction[primaryJurisdiction] = perceptionTotal;
+              previousCreditByJurisdiction[primaryJurisdiction] = previousFree.toString();
+            }
           }
           result = calculateCm03({
             engineVersion: CM03_ENGINE_VERSION,
@@ -1052,10 +1090,10 @@ export class SettlementService {
     });
   }
 
-  async list(ctx: TenantContext, clientId: string) {
+  async list(ctx: TenantContext, clientId: string, periodId?: string) {
     return withTenantContext(ctx, (tx) =>
       tx.taxSettlement.findMany({
-        where: { firmId: ctx.firmId, clientId },
+        where: { firmId: ctx.firmId, clientId, ...(periodId ? { periodId } : {}) },
         include: { period: true, regime: true, lines: true },
         orderBy: { version: "desc" },
         take: 300,
@@ -1076,7 +1114,7 @@ export class SettlementService {
     ctx: TenantContext,
     input: { settlementId: string; format: "csv" | "pdf" },
   ) {
-    const storage = new ObjectStorage();
+    const storage = this.storage;
     return withTenantContext(ctx, async (tx) => {
       const s = await tx.taxSettlement.findUnique({
         where: { id: input.settlementId },

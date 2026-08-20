@@ -7,6 +7,9 @@ describe("resolveCapabilities", () => {
     expect(ctx.firmWide).toBe(true);
     expect(ctx.assignedToClient).toBe(true);
     expect(hasCapability(ctx, "entry.post")).toBe(true);
+    expect(hasCapability(ctx, "profitability.calculate")).toBe(true);
+    expect(hasCapability(ctx, "ai.use")).toBe(true);
+    expect(hasCapability(ctx, "bi.use")).toBe(true);
   });
 
   it("admin tiene capacidades de admin", () => {
@@ -34,6 +37,7 @@ describe("resolveCapabilities", () => {
     expect(hasCapability(ctx, "entry.review")).toBe(true);
     expect(hasCapability(ctx, "entry.post")).toBe(true);
     expect(hasCapability(ctx, "entry.create")).toBe(false);
+    expect(hasCapability(ctx, "ai.use")).toBe(true);
   });
 
   it("auditor readonly no muta", () => {

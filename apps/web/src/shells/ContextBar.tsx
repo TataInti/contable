@@ -51,7 +51,11 @@ export function ContextBar() {
     : me?.firms.find((item) => item.firmId === firmId)?.role;
 
   return (
-    <div className={`ctxbar${portal ? " ctxbar--portal" : ""}`} aria-label="Contexto de trabajo">
+    <div
+      id="context-bar"
+      className={`ctxbar${portal ? " ctxbar--portal" : ""}`}
+      aria-label="Contexto de trabajo"
+    >
       <div className="ctxbar__intro">
         <span className="ctxbar__scope-icon" aria-hidden="true">
           <Icon name={portal ? "building" : "briefcase"} size={17} />

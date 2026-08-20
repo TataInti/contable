@@ -4,36 +4,9 @@ import { ContextBar } from "./ContextBar";
 import { logout } from "../lib/auth";
 import { useSession } from "../session/SessionContext";
 import { useClientContext } from "../context/ClientContext";
-import { Icon, type IconName } from "../ui/Icon";
+import { Icon } from "../ui/Icon";
+import { STUDY_NAVIGATION_GROUPS, modulesForNavigation } from "../study/moduleRegistry";
 import "./StudyShell.css";
-
-interface NavigationItem {
-  to: string;
-  label: string;
-  icon: IconName;
-  end?: boolean;
-  capability?: string;
-}
-
-const NAV_GROUPS: { label: string; items: NavigationItem[] }[] = [
-  {
-    label: "General",
-    items: [
-      { to: "/", label: "Inicio", icon: "home", end: true },
-      { to: "/clientes", label: "Clientes", icon: "users" },
-    ],
-  },
-  {
-    label: "Operación",
-    items: [
-      { to: "/bandeja", label: "Bandeja documental", icon: "inbox" },
-      { to: "/trabajo", label: "Trabajo", icon: "tasks" },
-      { to: "/liquidaciones", label: "Liquidaciones", icon: "reports", capability: "tax.settlements.read" },
-      { to: "/clientes/:clientId/rentabilidad", label: "Rentabilidad", icon: "trending", capability: "profitability.read" },
-      { to: "/clientes/:clientId/configuracion-fiscal", label: "Configuración fiscal", icon: "settings", capability: "tax.profile.read" },
-    ],
-  },
-];
 
 const ROLE_LABELS: Record<string, string> = {
   OWNER: "Titular",
@@ -65,6 +38,7 @@ export function StudyShell() {
   const { firmId, capabilities } = useClientContext();
   const [menuOpen, setMenuOpen] = useState(false);
   const firm = session.me?.firms.find((item) => item.firmId === firmId);
+  const navigationModules = modulesForNavigation(capabilities);
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
@@ -102,18 +76,19 @@ export function StudyShell() {
       <aside className="study__sidebar" id="study-navigation">
         <Brand />
         <nav className="study__nav" aria-label="Navegación del estudio">
-          {NAV_GROUPS.map((group) => {
-            const items = group.items.filter(
-              (item) => !item.capability || capabilities.has(item.capability),
-            );
+          {STUDY_NAVIGATION_GROUPS.map((group) => {
+            const items = navigationModules.filter((item) => item.navigationGroup === group);
             if (items.length === 0) return null;
             return (
-              <div className="study__nav-group" key={group.label}>
-                <p className="study__nav-label">{group.label}</p>
+              <div
+                className={`study__nav-group${group === "Configuración" ? " study__nav-group--admin" : ""}`}
+                key={group}
+              >
+                <p className="study__nav-label">{group}</p>
                 {items.map((item) => (
                   <NavLink
-                    key={item.to}
-                    to={item.to}
+                    key={item.id}
+                    to={item.path}
                     end={item.end}
                     className={({ isActive }) =>
                       `study__nav-link${isActive ? " study__nav-link--active" : ""}`
@@ -127,21 +102,6 @@ export function StudyShell() {
               </div>
             );
           })}
-          {capabilities.has("firm.manage") ? (
-            <div className="study__nav-group study__nav-group--admin">
-              <p className="study__nav-label">Configuración</p>
-              <NavLink
-                to="/administracion"
-                className={({ isActive }) =>
-                  `study__nav-link${isActive ? " study__nav-link--active" : ""}`
-                }
-              >
-                <Icon name="settings" size={18} />
-                <span>Administración</span>
-                <Icon name="chevron" size={14} className="study__nav-chevron" />
-              </NavLink>
-            </div>
-          ) : null}
         </nav>
 
         <div className="study__sidebar-footer">

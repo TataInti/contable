@@ -13,6 +13,7 @@ import { taxRoutes } from "./tax/routes.js";
 import { fiscalFoundationRoutes } from "./tax/fiscal-foundation-routes.js";
 import { ingestionRoutes } from "./tax/ingestion-routes.js";
 import { settlementRoutes } from "./tax/settlement-routes.js";
+import { workpaperRoutes } from "./tax/workpaper-routes.js";
 import { profitabilityRoutes } from "./tax/profitability-routes.js";
 import { reportingRoutes } from "./reporting/routes.js";
 import { assistantRoutes } from "./assistant/routes.js";
@@ -111,6 +112,7 @@ export async function buildServer(overrides?: Partial<HealthChecks>): Promise<Fa
   fiscalFoundationRoutes(app);
   ingestionRoutes(app);
   settlementRoutes(app);
+  workpaperRoutes(app);
   profitabilityRoutes(app);
   reportingRoutes(app);
   assistantRoutes(app);
@@ -134,10 +136,15 @@ export async function buildServer(overrides?: Partial<HealthChecks>): Promise<Fa
     reply.status(404).send({ error: { code: "NOT_FOUND", message: "Ruta no encontrada" } }),
   );
 
-  app.setErrorHandler((err, _req, reply) => {
+  app.setErrorHandler((err, req, reply) => {
     if (err instanceof ZodError) {
       return reply.status(400).send({
-        error: { code: "VALIDATION_ERROR", message: "La solicitud contiene datos inválidos", details: err.issues },
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "La solicitud contiene datos inválidos",
+          details: err.issues,
+          requestId: req.id,
+        },
       });
     }
     const typed = err as Error & { statusCode?: number; code?: string; dependencies?: unknown };
@@ -147,6 +154,7 @@ export async function buildServer(overrides?: Partial<HealthChecks>): Promise<Fa
       error: {
         code,
         message: status >= 500 && code === "INTERNAL_ERROR" ? "Ocurrió un error interno" : typed.message,
+        requestId: req.id,
         ...(typed.dependencies ? { dependencies: typed.dependencies } : {}),
       },
     });
