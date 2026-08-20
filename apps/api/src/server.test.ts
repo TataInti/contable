@@ -52,6 +52,18 @@ describe("health endpoints", () => {
     expect(res.json()).toEqual({ data: { message: "pong" } });
   });
 
+  it("GET /api/v1/system/ready expone readiness para el frontend", async () => {
+    const server = await startTestServer();
+    const res = await server.inject({ method: "GET", url: "/api/v1/system/ready" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      data: {
+        status: "ready",
+        dependencies: { postgres: true, valkey: true, minio: true, ai: true },
+      },
+    });
+  });
+
   it("rechaza rutas de negocio sin sesión", async () => {
     const server = await startTestServer();
     const res = await server.inject({ method: "GET", url: "/api/v1/firms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/clients" });

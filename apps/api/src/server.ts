@@ -34,6 +34,13 @@ export interface HealthChecks {
   ai: () => Promise<boolean>;
 }
 
+async function readinessSnapshot(checks: HealthChecks) {
+  const names = Object.keys(checks) as (keyof HealthChecks)[];
+  const values = await Promise.all(names.map(async (name) => [name, await checks[name]()] as const));
+  const dependencies = Object.fromEntries(values) as Record<keyof HealthChecks, boolean>;
+  return { ready: Object.values(dependencies).every(Boolean), dependencies };
+}
+
 async function pingValkey(): Promise<boolean> {
   const target = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
   return new Promise((resolve) => {
@@ -88,10 +95,7 @@ export async function buildServer(overrides?: Partial<HealthChecks>): Promise<Fa
 
   // Readiness: dependencias indispensables
   app.get("/health/ready", async () => {
-    const names = Object.keys(checks) as (keyof HealthChecks)[];
-    const values = await Promise.all(names.map(async (name) => [name, await checks[name]()] as const));
-    const dependencies = Object.fromEntries(values) as Record<keyof HealthChecks, boolean>;
-    const ready = Object.values(dependencies).every(Boolean);
+    const { ready, dependencies } = await readinessSnapshot(checks);
     return ready
       ? { status: "ready", dependencies }
       : Promise.reject(Object.assign(new Error("DEPENDENCY_UNAVAILABLE"), { statusCode: 503, dependencies }));
@@ -101,6 +105,19 @@ export async function buildServer(overrides?: Partial<HealthChecks>): Promise<Fa
   app.get("/health/startup", async () => ({ status: "started" }));
 
   app.get("/api/v1/ping", async () => ({ data: { message: "pong" } }));
+  app.get("/api/v1/system/ready", async (_req, reply) => {
+    const { ready, dependencies } = await readinessSnapshot(checks);
+    if (ready) {
+      return { data: { status: "ready", dependencies } };
+    }
+    return reply.status(503).send({
+      error: {
+        code: "DEPENDENCY_UNAVAILABLE",
+        message: "Hay dependencias obligatorias sin inicializar",
+        dependencies,
+      },
+    });
+  });
 
   authPlugin(app);
   authGuardPlugin(app);

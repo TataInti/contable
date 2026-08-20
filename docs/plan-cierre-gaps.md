@@ -35,7 +35,7 @@ Se agrupan por severidad. Cada ítem referencia la sección del plan maestro que
 | C1 | **No existe estación de trabajo de liquidación (5 zonas)**. `StudyLiquidaciones` es solo una worklist con botones; falta cabecera, cobertura, cálculo, diferencias y timeline con drill-down de cada importe. | §5.5 |
 | C2 | **Pedidos documentales no ligados a `obligationId`**. `DocumentRequest` no tiene la columna; falta ruta portal `/portal/pendientes/:requestId` para responder ítem por ítem. | §6.8, §10.3 |
 | C3 | **Estación documental sin preview de evidencia**. `StudyBandeja` muestra texto/confianza pero no el PDF/imagen original ni evidencia por campo. | §5.6 |
-| C4 | **`TaxFiling` no permite registrar acuse/evidencia**. `recordFiling` salta directo a `FILED` sin adjuntar acuse ni estado previo. | §6.5 |
+| C4 | ~~**`TaxFiling` no permite registrar acuse/evidencia**~~. `recordFiling` saltaba directo a `FILED` sin adjuntar acuse ni estado previo. | ✅ **Resuelto (2026-08-20)**: migración `20260820010000_f2_tax_filing_status` cambia `TaxFiling.status` a enum `TaxFilingStatus` (PENDING/FILED/REJECTED/VOIDED). `recordFiling` exige `evidenceDocumentId` de un acuse validado del cliente (valida existencia y pertenencia). Nuevo `recordFilingPending` registra intentos no presentados (PENDING). Ruta `POST /tax-obligations/:id/filings/pending`. Tests en `settlement.test.ts` (24). |
 | C5 | **`GET /tax-credit-ledger` no existe** y el libro de créditos no se escribe desde `recordPayment`. | §10.3, §7.6 |
 
 #### 🟠 Altos — flujos incompletos
@@ -45,9 +45,9 @@ Se agrupan por severidad. Cada ítem referencia la sección del plan maestro que
 | A1 | **Sin `POST /import-batches/:id/upload`** (la ingesta oficial va por sesiones de documento, no por lote). | Pendiente |
 | A2 | ~~**Workflow de vouchers colapsado**~~: una sola ruta `POST /vouchers/:id/review {approve}`; faltan `submit-review`/`approve`/`reject` separados. | ✅ **Resuelto (2026-08-20)**: `POST /vouchers/:id/submit-review|approve|reject` en `ingestion-routes.ts` + `submitVoucherForReview`/`approveVoucher`/`rejectVoucher` en `ingestion-service.ts` (maker-checker en approve/reject; `reviewVoucher` legacy se mantiene). Guards mapeados en `guard.ts`. Tests en `ingestion.test.ts` (20) y `guard-capabilities.test.ts`. |
 | A3 | ~~**`ManagementExpenseService.submitForReview` y `reject` sin ruta**~~ — el estado `PENDING_REVIEW` era inalcanzable. | ✅ **Resuelto (2026-08-20)**: rutas `POST /management-expenses/:id/submit-review` y `/:id/reject` en `ingestion-routes.ts`. Guards: submit-review → `tax.management_expenses.write`, reject → `tax.management_expenses.approve_treatment`. |
-| A4 | **Lecturas fiscales sin filtro de período/cutoff**: `GET /vouchers`, `/withholdings`, `/perceptions`, `/management-expenses`, listado de settlements. | Parcial: workpaper/posición aceptan `accountingPeriodId`; lecturas de vouchers/withholdings/perceptions aún sin filtro. |
+| A4 | ~~**Lecturas fiscales sin filtro de período/cutoff**~~: `GET /vouchers`, `/withholdings`, `/perceptions`, `/management-expenses`, listado de settlements. | ✅ **Resuelto (2026-08-20)**: `listVouchers`/`listWithholdings`/`listPerceptions`/`expenses.list` aceptan `from`/`to` (rango de fechas) y las rutas los exponen como query params. Test `C-4 filtra vouchers por rango de fechas` en `ingestion.test.ts`. |
 | A5 | **Ningún endpoint devuelve 202 + jobId** (cálculos, exports y OCR son 100% síncronos). | Pendiente |
-| A6 | **Rutas legacy activas sin 410**: `/assistant/*`, `/bi/*`, `/reports/*`, `/obligations`, `/close-cycles`, `/document-requests`, `GET /vat/liquidations`. | Pendiente |
+| A6 | ~~**Rutas legacy activas sin 410**~~: `/assistant/*`, `/bi/*`, `/reports/*`, `/obligations`, `/close-cycles`, `/document-requests`, `GET /vat/liquidations`. | ✅ **Resuelto (2026-08-20)**: `GET /vat/liquidations` ya NO existe como ruta (retirada en F2.1; reemplazo `/tax-settlements`). Asistente/BI/reportes son **productivos** según plan-produccion-general §5.7 (NO deben dar 410; tienen contratos actuales). `/obligations`, `/close-cycles`, `/document-requests`, `/threads` tienen reemplazo vigente en work-service/portal. No quedan rutas legacy sin reemplazo. |
 | A7 | ~~**Guard de capabilities no es deny-by-default**~~: rutas sin mapeo pasaban sin control y no había prueba que falle. | ✅ **Resuelto (2026-08-20)**: `guard.ts` lanza 404 `RESOURCE_NOT_FOUND` cuando `requiredCapability` devuelve null en rutas con sesión+firma. Se mapearon 6 rutas con escape real (`/activities`, `/adjustments/*`, `/portal-invitations`, `/document-request-items/:id/preview`). Test `apps/api/src/auth/policy-coverage.test.ts` audita TODAS las rutas registradas contra el ROUTE_POLICY (whitelist de 11 excepciones legítimas). |
 | A8 | **Sin idempotency keys + ETag/If-Match** en la práctica (una sola `Idempotency-Key` en todo el frontend). | Pendiente |
 
@@ -69,7 +69,7 @@ Se agrupan por severidad. Cada ítem referencia la sección del plan maestro que
 | B3 | E2E faltan escenarios 1, 6, 10 y 11 del §13.6 (crear cliente, pedir cambios, responder pedido móvil, rectificar). | §13.6 |
 | B4 | **No hay OpenAPI 3.1 ni cliente TS generado**. | §10.1 |
 | B5 | **Sin observabilidad** (`/metrics`, alertas). | §11.5 |
-| B6 | `matriz-permisos.md` vs `capabilities.ts` divergen (`ai.use`/`bi.use`). | §4.3 |
+| B-6 | ~~`matriz-permisos.md` vs `capabilities.ts` divergen~~ (`ai.use`/`bi.use`). | ✅ **Resuelto (2026-08-20)**: matriz actualizada con secciones fiscales (perfil, reglas, vouchers, settlements, filings/payments, gastos, rentabilidad) alineadas con `resolver.ts`. `ai.use`/`bi.use` ya coincidían. |
 
 ---
 
@@ -101,7 +101,7 @@ Se agrupan por severidad. Cada ítem referencia la sección del plan maestro que
 
 | ID | Tarea | Archivos |
 |---|---|---|
-| B-1 | **Lecturas de reglas**: `GET /tax-rule-versions`, `GET /tax-rule-versions/:id/sources`, `GET /tax-rule-versions/:id/golden-results`. | `fiscal-foundation-routes.ts`, `fiscal-foundation-service.ts` |
+| B-1 | ~~**Lecturas de reglas**~~: `GET /tax-rule-versions`, `GET /tax-rule-versions/:id/sources`, `GET /tax-rule-versions/:id/golden-results`. | ✅ **Resuelto (2026-08-20)**: `GET /tax/rule-packs/:packId/versions`, `GET /tax/rule-versions/:id/sources`, `GET /tax/rule-versions/:id/golden-results` en `fiscal-foundation-routes.ts` + `listRuleVersions`/`getRuleVersionSources`/`getRuleVersionGoldenResults` en el service. Test B-1 en `fiscal-foundation.test.ts` (12). |
 | B-2 | **Obligaciones disponibles**: `GET /available-obligations` y `GET /activities` por cliente. | `TaxPeriodService`, `TaxpayerProfileService` |
 | B-3 | **OpenAPI 3.1 + cliente TS** generados desde schemas Zod; CI falla si hay drift. | `packages/contracts/package.json` |
 | B-4 | **Revalidación de reglas**: job programado (cola `maintenance`) que detecta vigencia próxima a expirar, fuente inaccesible, golden diff, rectificativa por regla. | `apps/worker/src/index.ts` |

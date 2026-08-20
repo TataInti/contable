@@ -210,6 +210,20 @@ async function setupSettlementContext(fx: Awaited<ReturnType<typeof setupMasters
   });
 }
 
+/** Crea un documento de evidencia (acuse) para el cliente. */
+async function createEvidenceDocument(): Promise<string> {
+  const doc = await prisma.document.create({
+    data: {
+      firmId: FIRM_PILOTO,
+      clientId: CLIENT_PILOTO,
+      category: "ACUSE",
+      status: "READY",
+      uploadOrigin: "FIRM",
+    },
+  });
+  return doc.id;
+}
+
 async function createApprovedVouchers() {
   const v1 = await ingestion.createVoucher(ctxOwner, {
     clientId: CLIENT_PILOTO,
@@ -441,6 +455,7 @@ describe("G6-04 ciclo piloto completo (RI)", () => {
       filedAt: "2026-02-05",
       amountFiled: "33600.00",
       externalId: "PDC-PILOTO-1",
+      evidenceDocumentId: await createEvidenceDocument(),
     });
     expect(filing.status).toBe("FILED");
 

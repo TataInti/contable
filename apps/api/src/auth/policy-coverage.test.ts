@@ -31,6 +31,7 @@ describe("cobertura total del ROUTE_POLICY (deny-by-default)", () => {
       "GET /api/v1/me/contexts", // rutas de sesión (no matchean firmId)
       "GET /api/v1/me/invitations",
       "GET /api/v1/ping", // PUBLIC_PATHS
+      "GET /api/v1/system/ready", // PUBLIC_PATHS
       "POST /api/v1/auth/login", // PUBLIC_PATHS
       "POST /api/v1/auth/logout",
       "POST /api/v1/auth/mfa/verify",

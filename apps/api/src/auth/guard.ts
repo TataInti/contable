@@ -35,6 +35,7 @@ function httpError(statusCode: number, code: string, message: string): HttpError
 
 const PUBLIC_PATHS = new Set([
   "/api/v1/ping",
+  "/api/v1/system/ready",
   "/api/v1/auth/login",
   "/api/v1/auth/mfa/verify",
   "/api/v1/auth/refresh",

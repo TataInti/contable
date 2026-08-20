@@ -409,6 +409,40 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  // B-1: lecturas históricas de reglas (procedencia y validación).
+  app.get("/api/v1/tax/rule-packs/:packId/versions", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { packId } = req.params as { packId: string };
+    try {
+      const data = await rules.listRuleVersions(ctx, packId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.get("/api/v1/tax/rule-versions/:ruleVersionId/sources", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { ruleVersionId } = req.params as { ruleVersionId: string };
+    try {
+      const data = await rules.getRuleVersionSources(ctx, ruleVersionId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.get("/api/v1/tax/rule-versions/:ruleVersionId/golden-results", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { ruleVersionId } = req.params as { ruleVersionId: string };
+    try {
+      const data = await rules.getRuleVersionGoldenResults(ctx, ruleVersionId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.post("/api/v1/tax/rule-packs", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const body = z

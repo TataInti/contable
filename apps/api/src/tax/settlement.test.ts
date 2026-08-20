@@ -215,6 +215,20 @@ async function setupSettlementContext(fx: Awaited<ReturnType<typeof setupMasters
   });
 }
 
+/** Crea un documento de acuse (evidencia de presentación) para el cliente. */
+async function createEvidenceDocument(): Promise<string> {
+  const doc = await prisma.document.create({
+    data: {
+      firmId: FIRM_ALFA,
+      clientId: CLIENT_SET,
+      category: "ACUSE",
+      status: "READY",
+      uploadOrigin: "FIRM",
+    },
+  });
+  return doc.id;
+}
+
 /** Crea y aprueba vouchers: 2 ventas 100k + 1 compra 40k. */
 async function createApprovedVouchers() {
   const v1 = await ingestion.createVoucher(ctxOwner, {
@@ -696,10 +710,51 @@ describe("G3-5 presentación, pago y crédito", () => {
       filedAt: "2026-02-05",
       amountFiled: "33600.00",
       externalId: "PDC-124567",
+      evidenceDocumentId: await createEvidenceDocument(),
     });
     expect(filing.status).toBe("FILED");
     const ob = await prisma.taxObligation.findUnique({ where: { id: obligationId } });
     expect(ob?.status).toBe("FILED");
+  });
+
+  it("D-3 exige acuse (evidenceDocumentId) para presentar como FILED", async () => {
+    await createApprovedVouchers();
+    const { settlement } = await settlements.calculate(ctxPreparer, defaultParams());
+    await approveSettlement(settlement.id);
+
+    // Sin acuse → rechaza.
+    await expect(
+      settlements.recordFiling(ctxOwner, {
+        obligationId,
+        settlementId: settlement.id,
+        filedAt: "2026-02-05",
+        amountFiled: "33600.00",
+        evidenceDocumentId: "",
+      }),
+    ).rejects.toThrow(SettlementError);
+
+    // Con acuse de otro cliente → rechaza.
+    const otherDoc = await prisma.document.create({
+      data: { firmId: FIRM_ALFA, clientId: "11111111-2222-4333-8444-999999999999", category: "ACUSE", status: "READY" },
+    });
+    await expect(
+      settlements.recordFiling(ctxOwner, {
+        obligationId,
+        settlementId: settlement.id,
+        filedAt: "2026-02-05",
+        amountFiled: "33600.00",
+        evidenceDocumentId: otherDoc.id,
+      }),
+    ).rejects.toThrow(SettlementError);
+
+    // Intento sin presentar queda PENDING.
+    const pending = await settlements.recordFilingPending(ctxOwner, {
+      obligationId,
+      settlementId: settlement.id,
+      filedAt: "2026-02-05",
+      amountFiled: "33600.00",
+    });
+    expect(pending.status).toBe("PENDING");
   });
 
   it("registra pago total y marca la obligación PAID", async () => {

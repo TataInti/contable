@@ -9,6 +9,7 @@ import { PortalShell } from "./shells/PortalShell";
 import { LoginPage } from "./auth/LoginPage";
 import { AcceptPortalInvitation } from "./auth/AcceptPortalInvitation";
 import { logout } from "./lib/auth";
+import { EnvironmentStatusBanner } from "./environment/EnvironmentStatusBanner";
 import { Icon } from "./ui/Icon";
 import { STUDY_MODULES, type StudyModule } from "./study/moduleRegistry";
 import {
@@ -156,52 +157,55 @@ function AppRoutes() {
   return (
     <ClientContextProvider>
       <Suspense fallback={<LoadingScreen />}>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/aceptar-invitacion" element={<AcceptPortalInvitation />} />
-          <Route path="/sin-acceso" element={<NoWorkspace />} />
-          <Route element={<Protected />}>
-            <Route element={<StudyShell />}>
-              {STUDY_MODULES.map((module) =>
-                module.path === "/" ? (
-                  <Route key={module.id} index element={<StudyModuleRoute module={module} />} />
-                ) : (
-                  <Route
-                    key={module.id}
-                    path={module.path.slice(1)}
-                    element={<StudyModuleRoute module={module} />}
-                  />
-                ),
-              )}
-              <Route
-                path="clientes/:clientId/rentabilidad"
-                element={<LegacyClientModuleRoute to="/rentabilidad" />}
-              />
-              <Route
-                path="clientes/:clientId/configuracion-fiscal"
-                element={<LegacyClientModuleRoute to="/configuracion-fiscal" />}
-              />
+        <>
+          <EnvironmentStatusBanner />
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/aceptar-invitacion" element={<AcceptPortalInvitation />} />
+            <Route path="/sin-acceso" element={<NoWorkspace />} />
+            <Route element={<Protected />}>
+              <Route element={<StudyShell />}>
+                {STUDY_MODULES.map((module) =>
+                  module.path === "/" ? (
+                    <Route key={module.id} index element={<StudyModuleRoute module={module} />} />
+                  ) : (
+                    <Route
+                      key={module.id}
+                      path={module.path.slice(1)}
+                      element={<StudyModuleRoute module={module} />}
+                    />
+                  ),
+                )}
+                <Route
+                  path="clientes/:clientId/rentabilidad"
+                  element={<LegacyClientModuleRoute to="/rentabilidad" />}
+                />
+                <Route
+                  path="clientes/:clientId/configuracion-fiscal"
+                  element={<LegacyClientModuleRoute to="/configuracion-fiscal" />}
+                />
+                <Route path="*" element={<StudyNotFound />} />
+              </Route>
+            </Route>
+            <Route element={<Protected portal />}>
+              <Route path="portal" element={<PortalShell />}>
+                <Route index element={<PortalDashboard />} />
+                <Route path="pendientes" element={<PortalPendientes />} />
+                <Route path="upload" element={<PortalUpload />} />
+                <Route path="impuestos" element={<PortalObligaciones />} />
+                <Route path="liquidaciones" element={<PortalLiquidaciones />} />
+                <Route path="rentabilidad" element={<PortalRentabilidad />} />
+                <Route path="reportes" element={<PortalReportes />} />
+                <Route path="mensajes" element={<PortalMensajes />} />
+                <Route path="perfil" element={<PortalPerfil />} />
+                <Route path="*" element={<PortalNotFound />} />
+              </Route>
+            </Route>
+            <Route element={<Protected />}>
               <Route path="*" element={<StudyNotFound />} />
             </Route>
-          </Route>
-          <Route element={<Protected portal />}>
-            <Route path="portal" element={<PortalShell />}>
-              <Route index element={<PortalDashboard />} />
-              <Route path="pendientes" element={<PortalPendientes />} />
-              <Route path="upload" element={<PortalUpload />} />
-              <Route path="impuestos" element={<PortalObligaciones />} />
-              <Route path="liquidaciones" element={<PortalLiquidaciones />} />
-              <Route path="rentabilidad" element={<PortalRentabilidad />} />
-              <Route path="reportes" element={<PortalReportes />} />
-              <Route path="mensajes" element={<PortalMensajes />} />
-              <Route path="perfil" element={<PortalPerfil />} />
-              <Route path="*" element={<PortalNotFound />} />
-            </Route>
-          </Route>
-          <Route element={<Protected />}>
-            <Route path="*" element={<StudyNotFound />} />
-          </Route>
-        </Routes>
+          </Routes>
+        </>
       </Suspense>
     </ClientContextProvider>
   );

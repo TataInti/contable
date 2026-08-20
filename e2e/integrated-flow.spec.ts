@@ -8,6 +8,29 @@ async function navigateStudy(page: Page, label: string) {
   await page.getByRole("link", { name: label, exact: true }).click();
 }
 
+async function ensureStudyContext(page: Page) {
+  const clientSelect = page.locator("#context-bar select").nth(1);
+  const periodSelect = page.locator("#context-bar select").nth(2);
+
+  if ((await clientSelect.inputValue()) === "") {
+    const clientOptions = await clientSelect.locator("option").evaluateAll((options) =>
+      options
+        .map((option) => option.getAttribute("value") ?? "")
+        .filter((value) => value.length > 0),
+    );
+    if (clientOptions.length > 0) await clientSelect.selectOption(clientOptions[0]!);
+  }
+
+  if ((await periodSelect.inputValue()) === "") {
+    const periodOptions = await periodSelect.locator("option").evaluateAll((options) =>
+      options
+        .map((option) => option.getAttribute("value") ?? "")
+        .filter((value) => value.length > 0),
+    );
+    if (periodOptions.length > 0) await periodSelect.selectOption(periodOptions[0]!);
+  }
+}
+
 async function loginPortal(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Correo electrónico").fill("cliente@contable.local");
@@ -27,6 +50,7 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   await page.getByLabel("Contraseña").fill("demo1234");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByRole("heading", { name: "Resumen operativo" })).toBeVisible();
+  await ensureStudyContext(page);
 
   await navigateStudy(page, "Clientes");
   await expect(page.getByRole("heading", { name: "Clientes" })).toBeVisible();

@@ -208,6 +208,20 @@ async function setupSettlementContext(fx: Awaited<ReturnType<typeof setupMasters
   });
 }
 
+/** Crea un documento de evidencia (acuse) para el cliente. */
+async function createEvidenceDocument(): Promise<string> {
+  const doc = await prisma.document.create({
+    data: {
+      firmId: FIRM_TEM,
+      clientId: CLIENT_TEM,
+      category: "ACUSE",
+      status: "READY",
+      uploadOrigin: "FIRM",
+    },
+  });
+  return doc.id;
+}
+
 /** Crea vouchers SALE aprobados con líneas (activityCode + netAmount). */
 async function createApprovedVouchersWithLines() {
   const v1 = await ingestion.createVoucher(ctxOwner, {
@@ -548,6 +562,7 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: presentación y pago", () => 
       filedAt: "2026-02-05",
       amountFiled: "3500.00",
       externalId: "TEM-001",
+      evidenceDocumentId: await createEvidenceDocument(),
     });
     expect(filing.status).toBe("FILED");
 

@@ -53,6 +53,11 @@ type StoredContext = Partial<Record<keyof SelectedContext, string>>;
 
 const EMPTY_SELECTION: SelectedContext = { firmId: null, clientId: null, periodId: null };
 
+interface SelectionStrategy {
+  autoSelectClient: boolean;
+  autoSelectPeriod: boolean;
+}
+
 function readStoredContext(storageKey: string): StoredContext {
   try {
     const raw = localStorage.getItem(storageKey);
@@ -72,15 +77,22 @@ function readStoredContext(storageKey: string): StoredContext {
   }
 }
 
-function resolveSelection(availableFirms: AvailableFirm[], saved: StoredContext): SelectedContext {
+function resolveSelection(
+  availableFirms: AvailableFirm[],
+  saved: StoredContext,
+  strategy: SelectionStrategy,
+): SelectedContext {
   const firm =
     availableFirms.find((item) => item.firmId === saved.firmId) ??
     (availableFirms.length === 1 ? availableFirms[0] : undefined);
   if (!firm) return EMPTY_SELECTION;
 
-  const client = firm.clients.find((item) => item.clientId === saved.clientId) ?? firm.clients[0];
+  const client =
+    firm.clients.find((item) => item.clientId === saved.clientId) ??
+    (strategy.autoSelectClient ? firm.clients[0] : undefined);
   const period =
-    client?.periods.find((item) => item.periodId === saved.periodId) ?? client?.periods[0];
+    client?.periods.find((item) => item.periodId === saved.periodId) ??
+    (strategy.autoSelectPeriod ? client?.periods[0] : undefined);
 
   return {
     firmId: firm.firmId,
@@ -132,6 +144,13 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
   const location = useLocation();
   const portal = location.pathname.startsWith("/portal");
   const storageKey = `${STORAGE_KEY}.${portal ? "portal" : "study"}`;
+  const strategy = useMemo<SelectionStrategy>(
+    () => ({
+      autoSelectClient: portal,
+      autoSelectPeriod: portal,
+    }),
+    [portal],
+  );
   const [selection, setSelection] = useState<SelectedContext>(EMPTY_SELECTION);
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
 
@@ -159,9 +178,9 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
       return;
     }
 
-    setSelection(resolveSelection(availableFirms, readStoredContext(storageKey)));
+    setSelection(resolveSelection(availableFirms, readStoredContext(storageKey), strategy));
     setHydratedStorageKey(storageKey);
-  }, [availableFirms, status, storageKey]);
+  }, [availableFirms, status, storageKey, strategy]);
 
   useEffect(() => {
     if (status !== "authenticated" || hydratedStorageKey !== storageKey) return;
@@ -180,14 +199,16 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
         return;
       }
 
-      const client = firm.clients[0];
       setSelection({
         firmId: firm.firmId,
-        clientId: client?.clientId ?? null,
-        periodId: client?.periods[0]?.periodId ?? null,
+        clientId: strategy.autoSelectClient ? firm.clients[0]?.clientId ?? null : null,
+        periodId:
+          strategy.autoSelectClient && strategy.autoSelectPeriod
+            ? firm.clients[0]?.periods[0]?.periodId ?? null
+            : null,
       });
     },
-    [availableFirms],
+    [availableFirms, strategy.autoSelectClient, strategy.autoSelectPeriod],
   );
 
   const setClientId = useCallback(
@@ -195,14 +216,19 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
       setSelection((current) => {
         const firm = availableFirms.find((item) => item.firmId === current.firmId);
         const client = firm?.clients.find((item) => item.clientId === next);
+        const periodId = client?.periods.some((item) => item.periodId === current.periodId)
+          ? current.periodId
+          : strategy.autoSelectPeriod
+            ? client?.periods[0]?.periodId ?? null
+            : null;
         return {
           firmId: firm?.firmId ?? null,
           clientId: client?.clientId ?? null,
-          periodId: client?.periods[0]?.periodId ?? null,
+          periodId,
         };
       });
     },
-    [availableFirms],
+    [availableFirms, strategy.autoSelectPeriod],
   );
 
   const setPeriodId = useCallback(

@@ -9,14 +9,22 @@ export class ApiError extends Error {
   readonly status: number;
   readonly requestId: string | null;
   readonly retryable: boolean;
+  readonly details: Record<string, unknown> | null;
 
-  constructor(code: string, message: string, status: number, requestId: string | null = null) {
+  constructor(
+    code: string,
+    message: string,
+    status: number,
+    requestId: string | null = null,
+    details: Record<string, unknown> | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
     this.requestId = requestId;
     this.retryable = status === 0 || status === 408 || status === 429 || status >= 500;
+    this.details = details;
   }
 }
 
@@ -71,7 +79,10 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
   }
 
   const payload = (await res.json().catch(() => null)) as
-    | { data?: T; error?: { code?: string; message?: string; requestId?: string } }
+    | {
+        data?: T;
+        error?: { code?: string; message?: string; requestId?: string } & Record<string, unknown>;
+      }
     | null;
 
   if (!res.ok) {
@@ -81,6 +92,7 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
       err?.message ?? fallbackMessage(res.status),
       res.status,
       err?.requestId ?? res.headers.get("x-request-id"),
+      err ? { ...err } : null,
     );
   }
 
@@ -100,13 +112,14 @@ export async function downloadFile(path: string): Promise<void> {
   const res = await fetch(`${BASE}${path}`, { credentials: "same-origin" });
   if (!res.ok) {
     const payload = await res.json().catch(() => null) as
-      | { error?: { code?: string; message?: string; requestId?: string } }
+      | { error?: { code?: string; message?: string; requestId?: string } & Record<string, unknown> }
       | null;
     throw new ApiError(
       payload?.error?.code ?? "DOWNLOAD_FAILED",
       payload?.error?.message ?? fallbackMessage(res.status),
       res.status,
       payload?.error?.requestId ?? res.headers.get("x-request-id"),
+      payload?.error ? { ...payload.error } : null,
     );
   }
   const blob = await res.blob();

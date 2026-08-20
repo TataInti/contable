@@ -2936,7 +2936,7 @@ model TaxFiling {
   filedAt           DateTime
   externalId        String?
   amountFiled       Decimal  @db.Decimal(20, 4)
-  status            String   @default("FILED")
+  status            TaxFilingStatus @default(PENDING)
   evidenceDocumentId String?
   createdByUserId   String
   createdAt         DateTime @default(now())
@@ -2948,6 +2948,13 @@ model TaxFiling {
 
   @@index([firmId, clientId, obligationId])
   @@map("tax_filings")
+}
+
+enum TaxFilingStatus {
+  PENDING
+  FILED
+  REJECTED
+  VOIDED
 }
 
 model TaxPayment {

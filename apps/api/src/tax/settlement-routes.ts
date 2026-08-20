@@ -289,19 +289,46 @@ export function settlementRoutes(app: FastifyInstance) {
         filedAt: z.string().date(),
         amountFiled: z.string().regex(/^-?\d+(\.\d+)?$/),
         externalId: z.string().max(120).optional(),
-        evidenceDocumentId: z.string().uuid().optional(),
+        evidenceDocumentId: z.string().uuid(),
       })
       .strict()
       .parse(req.body);
     try {
-      const data = await service.recordFiling(ctx, pickDefined({
+      const data = await service.recordFiling(ctx, {
         obligationId,
         settlementId: body.settlementId,
         filedAt: body.filedAt,
         amountFiled: body.amountFiled,
-        externalId: body.externalId,
+        ...(body.externalId ? { externalId: body.externalId } : {}),
         evidenceDocumentId: body.evidenceDocumentId,
-      }) as { obligationId: string; settlementId: string; filedAt: string; amountFiled: string; externalId?: string; evidenceDocumentId?: string });
+      });
+      return reply.status(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // D-3: registrar un intento de presentación NO presentado (PENDING).
+  app.post("/api/v1/firms/:firmId/clients/:clientId/tax-obligations/:obligationId/filings/pending", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { obligationId } = req.params as { obligationId: string };
+    const body = z
+      .object({
+        settlementId: z.string().uuid(),
+        filedAt: z.string().date(),
+        amountFiled: z.string().regex(/^-?\d+(\.\d+)?$/),
+        externalId: z.string().max(120).optional(),
+      })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await service.recordFilingPending(ctx, {
+        obligationId,
+        settlementId: body.settlementId,
+        filedAt: body.filedAt,
+        amountFiled: body.amountFiled,
+        ...(body.externalId ? { externalId: body.externalId } : {}),
+      });
       return reply.status(201).send({ data });
     } catch (err) {
       return handleError(reply, err);

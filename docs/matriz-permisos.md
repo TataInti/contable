@@ -96,6 +96,65 @@
 | `ai.use` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `bi.use` | ✓ | ✓ | ✓ | ✓ | ✓ |
 
+### Perfil fiscal (Puerta 1)
+
+| Capacidad | OWNER | ADMIN | PREPARER | REVIEWER | AUDITOR_READONLY |
+|---|---|---|---|---|---|
+| `tax.profile.read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `tax.profile.write` | ✓ | ✓ | ✓ | | |
+
+### Reglas fiscales (Puerta 1)
+
+| Capacidad | OWNER | ADMIN | PREPARER | REVIEWER | AUDITOR_READONLY |
+|---|---|---|---|---|---|
+| `tax.rules.read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `tax.rules.propose` | ✓ | ✓ | | | |
+| `tax.rules.approve` | ✓ | ✓ | | | |
+| `tax.rules.activate` | ✓ | ✓ | | | |
+
+### Comprobantes e ingesta (Puerta 2)
+
+| Capacidad | OWNER | ADMIN | PREPARER | REVIEWER | AUDITOR_READONLY |
+|---|---|---|---|---|---|
+| `tax.vouchers.read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `tax.vouchers.prepare` | ✓ | ✓ | ✓ | | |
+| `tax.vouchers.review` | ✓ | ✓ | | ✓ | |
+
+### Liquidaciones (Puerta 3)
+
+| Capacidad | OWNER | ADMIN | PREPARER | REVIEWER | AUDITOR_READONLY |
+|---|---|---|---|---|---|
+| `tax.settlements.read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `tax.settlements.calculate` | ✓ | ✓ | ✓ | | |
+| `tax.settlements.submit_review` | ✓ | ✓ | ✓ | | |
+| `tax.settlements.review` | ✓ | ✓ | | ✓ | |
+| `tax.settlements.finalize` | ✓ | ✓ | | ✓ | |
+| `tax.settlements.rectify` | ✓ | ✓ | | ✓ | |
+| `tax.settlements.export` | ✓ | ✓ | ✓ | ✓ | |
+
+### Presentación y pagos (Puerta 3)
+
+| Capacidad | OWNER | ADMIN | PREPARER | REVIEWER | AUDITOR_READONLY |
+|---|---|---|---|---|---|
+| `tax.filings.record` | ✓ | ✓ | | ✓ | |
+| `tax.payments.record` | ✓ | ✓ | | ✓ | |
+
+### Gastos gerenciales (Puerta 2)
+
+| Capacidad | OWNER | ADMIN | PREPARER | REVIEWER | AUDITOR_READONLY |
+|---|---|---|---|---|---|
+| `tax.management_expenses.read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `tax.management_expenses.write` | ✓ | ✓ | ✓ | | |
+| `tax.management_expenses.approve_treatment` | ✓ | ✓ | | ✓ | |
+
+### Rentabilidad (Puerta 5)
+
+| Capacidad | OWNER | ADMIN | PREPARER | REVIEWER | AUDITOR_READONLY |
+|---|---|---|---|---|---|
+| `profitability.read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `profitability.calculate` | ✓ | ✓ | ✓ | ✓ | |
+| `profitability.publish` | ✓ | ✓ | | ✓ | |
+
 ## Reglas transversales
 
 1. **Maker-checker:** `preparedByUserId` y `reviewedByUserId` deben ser distintos. Owner/admin pueden actuar como preparador o revisor, pero no ambos en el mismo objeto.

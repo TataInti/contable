@@ -519,4 +519,39 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     const active = await prisma.taxRuleVersion.findUnique({ where: { id: v2.id } });
     expect(active?.status).toBe("ACTIVE");
   });
+
+  it("B-1 expone lecturas históricas: versiones, fuentes y golden results", async () => {
+    const fx = await setupMasters();
+    const pack = await rules.createPack(ctxOwner, {
+      code: "AR_VAT_RI_V1-F2",
+      name: "IVA RI B1",
+      regimeId: fx.ri.id,
+    });
+    const version = await rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineVersion: "1.0.0",
+      rulesHash: "h-b1",
+    });
+    await rules.addSource(ctxOwner, {
+      ruleVersionId: version.id,
+      authorityId: fx.arca.id,
+      title: "Ley de IVA (B-1)",
+      consultedAt: "2026-01-10",
+    });
+
+    // Fuentes de la versión.
+    const sources = await rules.getRuleVersionSources(ctxOwner, version.id);
+    expect(sources.length).toBeGreaterThanOrEqual(1);
+    expect(sources[0]?.title).toContain("Ley de IVA");
+
+    // Golden results vacíos antes de aprobar.
+    const approvals = await rules.getRuleVersionGoldenResults(ctxOwner, version.id);
+    expect(approvals).toHaveLength(0);
+
+    // Versiones del pack.
+    const list = await rules.listRuleVersions(ctxOwner, pack.id);
+    expect(list.length).toBeGreaterThanOrEqual(1);
+    expect(list[0]?.id).toBe(version.id);
+  });
 });

@@ -887,13 +887,27 @@ export class IngestionService {
   }
 
   /** Lista vouchers del cliente con sus componentes. */
-  async listVouchers(ctx: TenantContext, clientId: string, direction?: "PURCHASE" | "SALE") {
+  async listVouchers(
+    ctx: TenantContext,
+    clientId: string,
+    direction?: "PURCHASE" | "SALE",
+    from?: string,
+    to?: string,
+  ) {
     return withTenantContext(ctx, (tx) =>
       tx.fiscalVoucher.findMany({
         where: {
           firmId: ctx.firmId,
           clientId,
           ...(direction ? { direction } : {}),
+          ...(from || to
+            ? {
+                issuedOn: {
+                  ...(from ? { gte: new Date(from) } : {}),
+                  ...(to ? { lte: new Date(to) } : {}),
+                },
+              }
+            : {}),
         },
         include: { components: true, importRow: { select: { position: true, batchId: true } } },
         orderBy: { issuedOn: "desc" },
@@ -914,10 +928,21 @@ export class IngestionService {
   }
 
   /** Lista certificados de retención del cliente. */
-  async listWithholdings(ctx: TenantContext, clientId: string) {
+  async listWithholdings(ctx: TenantContext, clientId: string, from?: string, to?: string) {
     return withTenantContext(ctx, (tx) =>
       tx.withholdingCertificate.findMany({
-        where: { firmId: ctx.firmId, clientId },
+        where: {
+          firmId: ctx.firmId,
+          clientId,
+          ...(from || to
+            ? {
+                issuedOn: {
+                  ...(from ? { gte: new Date(from) } : {}),
+                  ...(to ? { lte: new Date(to) } : {}),
+                },
+              }
+            : {}),
+        },
         orderBy: { issuedOn: "desc" },
         take: 500,
       }),
@@ -925,10 +950,21 @@ export class IngestionService {
   }
 
   /** Lista certificados de percepción del cliente. */
-  async listPerceptions(ctx: TenantContext, clientId: string) {
+  async listPerceptions(ctx: TenantContext, clientId: string, from?: string, to?: string) {
     return withTenantContext(ctx, (tx) =>
       tx.perceptionCertificate.findMany({
-        where: { firmId: ctx.firmId, clientId },
+        where: {
+          firmId: ctx.firmId,
+          clientId,
+          ...(from || to
+            ? {
+                issuedOn: {
+                  ...(from ? { gte: new Date(from) } : {}),
+                  ...(to ? { lte: new Date(to) } : {}),
+                },
+              }
+            : {}),
+        },
         orderBy: { issuedOn: "desc" },
         take: 500,
       }),

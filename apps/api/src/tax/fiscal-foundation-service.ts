@@ -675,6 +675,41 @@ export class TaxRuleService {
     });
   }
 
+  /** Lista versiones de reglas de un pack (B-1: lectura histórica). */
+  async listRuleVersions(ctx: TenantContext, packId: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.taxRuleVersion.findMany({
+        where: { packId },
+        include: { rateRules: true, sources: true, approvals: { orderBy: { approvedAt: "desc" }, take: 1 } },
+        orderBy: { version: "desc" },
+        take: 100,
+      }),
+    );
+  }
+
+  /** Devuelve las fuentes normativas de una versión (B-1: procedencia de la regla). */
+  async getRuleVersionSources(ctx: TenantContext, ruleVersionId: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.normativeSource.findMany({
+        where: { ruleVersionId },
+        include: { authority: true },
+        orderBy: { consultedAt: "desc" },
+        take: 100,
+      }),
+    );
+  }
+
+  /** Devuelve las aprobaciones/golden results de una versión (B-1: evidencia de validación). */
+  async getRuleVersionGoldenResults(ctx: TenantContext, ruleVersionId: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.ruleApproval.findMany({
+        where: { ruleVersionId },
+        orderBy: { approvedAt: "desc" },
+        take: 100,
+      }),
+    );
+  }
+
   /** Agrega una regla de alícuota a una versión DRAFT. */
   async addRateRule(
     ctx: TenantContext,

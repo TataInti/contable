@@ -208,6 +208,20 @@ async function setupSettlementContext(fx: Awaited<ReturnType<typeof setupMasters
   });
 }
 
+/** Crea un documento de evidencia (acuse) para el cliente. */
+async function createEvidenceDocument(): Promise<string> {
+  const doc = await prisma.document.create({
+    data: {
+      firmId: FIRM_IIBB,
+      clientId: CLIENT_IIBB,
+      category: "ACUSE",
+      status: "READY",
+      uploadOrigin: "FIRM",
+    },
+  });
+  return doc.id;
+}
+
 /** Crea vouchers SALE aprobados con líneas (activityCode + netAmount). */
 async function createApprovedVouchersWithLines() {
   const v1 = await ingestion.createVoucher(ctxOwner, {
@@ -550,6 +564,7 @@ describe("Fase 4.1 — IIBB Tucumán local: presentación y pago", () => {
       filedAt: "2026-02-05",
       amountFiled: "6250.00",
       externalId: "IIBB-001",
+      evidenceDocumentId: await createEvidenceDocument(),
     });
     expect(filing.status).toBe("FILED");
 

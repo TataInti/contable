@@ -2,6 +2,50 @@
   height: 100%;
 }
 
+.app-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-3) clamp(16px, 3vw, 40px);
+  border-bottom: 1px solid color-mix(in srgb, var(--ds-color-warning) 24%, var(--ds-color-border));
+  background: var(--ds-color-warning-subtle);
+  color: var(--ds-color-warning);
+}
+
+.app-banner__copy {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+
+.app-banner__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: var(--ds-radius-md);
+  background: color-mix(in srgb, var(--ds-color-warning) 14%, var(--ds-color-surface));
+}
+
+.app-banner__copy > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.app-banner strong,
+.app-banner small {
+  display: block;
+}
+
+.app-banner small {
+  color: color-mix(in srgb, var(--ds-color-warning) 88%, var(--ds-color-text));
+  line-height: 1.45;
+}
+
 .app-loading {
   min-height: 100%;
   display: grid;
@@ -106,5 +150,16 @@
 @media (prefers-reduced-motion: reduce) {
   .app-loading__indicator::after {
     animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-banner {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .app-banner .ds-button {
+    width: 100%;
   }
 }

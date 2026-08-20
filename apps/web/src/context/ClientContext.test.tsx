@@ -206,7 +206,7 @@ describe("ClientContextProvider", () => {
     expect(currentContext().capabilities.size).toBe(0);
   });
 
-  it("usa una única firma disponible y aplica fallback de cliente y período", async () => {
+  it("usa una única firma disponible pero exige elegir cliente y período en estudio", async () => {
     localStorage.setItem(
       STUDY_STORAGE_KEY,
       JSON.stringify({
@@ -229,8 +229,8 @@ describe("ClientContextProvider", () => {
     await waitFor(() => {
       expect(currentContext()).toMatchObject({
         firmId: "firm-a",
-        clientId: "client-a",
-        periodId: "period-a",
+        clientId: null,
+        periodId: null,
       });
     });
   });

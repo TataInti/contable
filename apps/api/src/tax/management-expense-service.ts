@@ -186,10 +186,21 @@ export class ManagementExpenseService {
     });
   }
 
-  async list(ctx: TenantContext, clientId: string) {
+  async list(ctx: TenantContext, clientId: string, from?: string, to?: string) {
     return withTenantContext(ctx, (tx) =>
       tx.managementExpense.findMany({
-        where: { firmId: ctx.firmId, clientId },
+        where: {
+          firmId: ctx.firmId,
+          clientId,
+          ...(from || to
+            ? {
+                incurredOn: {
+                  ...(from ? { gte: new Date(from) } : {}),
+                  ...(to ? { lte: new Date(to) } : {}),
+                },
+              }
+            : {}),
+        },
         include: { decisions: true },
         orderBy: { incurredOn: "desc" },
         take: 500,

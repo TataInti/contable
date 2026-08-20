@@ -204,6 +204,20 @@ async function setupSettlementContext(fx: Awaited<ReturnType<typeof setupMasters
   });
 }
 
+/** Crea un documento de evidencia (acuse) para el cliente. */
+async function createEvidenceDocument(): Promise<string> {
+  const doc = await prisma.document.create({
+    data: {
+      firmId: FIRM_MONO,
+      clientId: CLIENT_MONO,
+      category: "ACUSE",
+      status: "READY",
+      uploadOrigin: "FIRM",
+    },
+  });
+  return doc.id;
+}
+
 function calculateParams() {
   return {
     clientId: CLIENT_MONO,
@@ -398,6 +412,7 @@ describe("Fase 4.4 — Monotributo: presentación y pago", () => {
       filedAt: "2026-02-05",
       amountFiled: "30000.00",
       externalId: "MONO-001",
+      evidenceDocumentId: await createEvidenceDocument(),
     });
     expect(filing.status).toBe("FILED");
 

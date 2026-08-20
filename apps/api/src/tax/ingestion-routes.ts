@@ -122,9 +122,15 @@ export function ingestionRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/firms/:firmId/clients/:clientId/vouchers", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const q = z.object({ direction: z.enum(["PURCHASE", "SALE"]).optional() }).parse(req.query);
+    const q = z
+      .object({
+        direction: z.enum(["PURCHASE", "SALE"]).optional(),
+        from: z.string().date().optional(),
+        to: z.string().date().optional(),
+      })
+      .parse(req.query);
     try {
-      const data = await ingestion.listVouchers(ctx, ctx.clientId!, q.direction);
+      const data = await ingestion.listVouchers(ctx, ctx.clientId!, q.direction, q.from, q.to);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -252,8 +258,11 @@ export function ingestionRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/firms/:firmId/clients/:clientId/withholdings", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
+    const q = z
+      .object({ from: z.string().date().optional(), to: z.string().date().optional() })
+      .parse(req.query);
     try {
-      const data = await ingestion.listWithholdings(ctx, ctx.clientId!);
+      const data = await ingestion.listWithholdings(ctx, ctx.clientId!, q.from, q.to);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -262,8 +271,11 @@ export function ingestionRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/firms/:firmId/clients/:clientId/perceptions", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
+    const q = z
+      .object({ from: z.string().date().optional(), to: z.string().date().optional() })
+      .parse(req.query);
     try {
-      const data = await ingestion.listPerceptions(ctx, ctx.clientId!);
+      const data = await ingestion.listPerceptions(ctx, ctx.clientId!, q.from, q.to);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -276,8 +288,11 @@ export function ingestionRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/firms/:firmId/clients/:clientId/management-expenses", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
+    const q = z
+      .object({ from: z.string().date().optional(), to: z.string().date().optional() })
+      .parse(req.query);
     try {
-      const data = await expenses.list(ctx, ctx.clientId!);
+      const data = await expenses.list(ctx, ctx.clientId!, q.from, q.to);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);

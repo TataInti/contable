@@ -24,13 +24,19 @@ describe("cliente API", () => {
 
   it("normaliza errores HTTP del backend", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: { code: "FORBIDDEN", message: "Sin permiso", requestId: "req-123" } }), {
+      new Response(JSON.stringify({ error: { code: "FORBIDDEN", message: "Sin permiso", requestId: "req-123", dependencies: { minio: false } } }), {
         status: 403,
         headers: { "Content-Type": "application/json" },
       }),
     );
     const error = await api.get("/private").catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ApiError);
-    expect(error).toMatchObject({ code: "FORBIDDEN", status: 403, requestId: "req-123", retryable: false });
+    expect(error).toMatchObject({
+      code: "FORBIDDEN",
+      status: 403,
+      requestId: "req-123",
+      retryable: false,
+      details: expect.objectContaining({ dependencies: { minio: false } }),
+    });
   });
 });

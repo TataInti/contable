@@ -669,4 +669,32 @@ describe("G4 CM03 — adaptador de importación", () => {
     expect(cmVouchers).toHaveLength(1);
     expect(cmVouchers[0]?.direction).toBe("SALE");
   });
+
+  it("C-4 filtra vouchers por rango de fechas (from/to)", async () => {
+    const batch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "ARCA",
+      taxTypeId: ivaId,
+      periodId,
+      adapterVersion: "ARCA_V1",
+      fileHash: "sha256:filter1",
+    });
+    await ingestion.validateBatch(ctxOwner, batch.id, [
+      { direction: "SALE", letter: "A", pointOfSale: "0001", numberFrom: "100", cuit: "20111111111", issuedOn: "2026-01-05", net: "1000.00", hasIva: true, iva21: "210.00" },
+      { direction: "SALE", letter: "A", pointOfSale: "0001", numberFrom: "101", cuit: "20111111111", issuedOn: "2026-02-10", net: "2000.00", hasIva: true, iva21: "420.00" },
+    ]);
+    await ingestion.commitBatch(ctxOwner, batch.id, "20999999999");
+
+    // Solo enero: el voucher 100 (enero) está, el 101 (febrero) no.
+    const jan = await ingestion.listVouchers(ctxOwner, CLIENT_ING, undefined, "2026-01-01", "2026-01-31");
+    const janNums = jan.filter((v) => v.type === "A").map((v) => v.number);
+    expect(janNums).toContain(100);
+    expect(janNums).not.toContain(101);
+
+    // Solo febrero: el voucher 101 (febrero) está, el 100 (enero) no.
+    const feb = await ingestion.listVouchers(ctxOwner, CLIENT_ING, undefined, "2026-02-01", "2026-02-28");
+    const febNums = feb.filter((v) => v.type === "A").map((v) => v.number);
+    expect(febNums).toContain(101);
+    expect(febNums).not.toContain(100);
+  });
 });

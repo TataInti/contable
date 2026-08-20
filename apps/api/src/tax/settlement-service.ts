@@ -55,7 +55,9 @@ export type SettlementErrorCode =
   | "CREDIT_NOT_FOUND"
   | "CREDIT_INSUFFICIENT"
   | "PAYMENT_NOT_FOUND"
-  | "PAYMENT_REVERSED";
+  | "PAYMENT_REVERSED"
+  | "FILING_REQUIRES_EVIDENCE"
+  | "EVIDENCE_NOT_FOUND";
 
 export class SettlementError extends Error {
   readonly code: SettlementErrorCode;
@@ -952,6 +954,11 @@ export class SettlementService {
   // G3-07/08: Presentación, pago, créditos
   // ------------------------------------------------------------------
 
+  /**
+   * Registra una presentación FILED. Exige un acuse validado (evidenceDocumentId)
+   * de un documento existente del cliente (D-3: la transición a FILED requiere
+   * evidencia). El intento sin acuse queda en PENDING vía recordFilingPending.
+   */
   async recordFiling(
     ctx: TenantContext,
     input: {
@@ -960,7 +967,7 @@ export class SettlementService {
       filedAt: string;
       amountFiled: string;
       externalId?: string;
-      evidenceDocumentId?: string;
+      evidenceDocumentId: string;
     },
   ) {
     return withTenantContext(ctx, async (tx) => {
@@ -971,6 +978,16 @@ export class SettlementService {
       if (s.status !== "FINALIZED") {
         throw new SettlementError("SETTLEMENT_IMMUTABLE", "La liquidación debe estar finalizada para presentarse");
       }
+      // D-3: la transición a FILED exige un acuse validado del cliente.
+      if (!input.evidenceDocumentId) {
+        throw new SettlementError("FILING_REQUIRES_EVIDENCE", "La presentación exige un acuse (evidenceDocumentId)");
+      }
+      const evidence = await tx.document.findFirst({
+        where: { id: input.evidenceDocumentId, firmId: ctx.firmId, clientId: o.clientId },
+      });
+      if (!evidence) {
+        throw new SettlementError("EVIDENCE_NOT_FOUND", "El acuse de presentación no existe para este cliente");
+      }
       const filing = await tx.taxFiling.create({
         data: {
           firmId: ctx.firmId,
@@ -980,13 +997,48 @@ export class SettlementService {
           filedAt: new Date(input.filedAt),
           amountFiled: new Prisma.Decimal(input.amountFiled),
           ...(input.externalId ? { externalId: input.externalId } : {}),
-          ...(input.evidenceDocumentId ? { evidenceDocumentId: input.evidenceDocumentId } : {}),
+          evidenceDocumentId: input.evidenceDocumentId,
           createdByUserId: ctx.userId,
           status: "FILED",
         },
       });
       await tx.taxObligation.update({ where: { id: o.id }, data: { status: "FILED" } });
       return filing;
+    });
+  }
+
+  /**
+   * Registra un intento de presentación NO presentado (PENDING), sin acuse.
+   * Permite dejar trazabilidad de un intento fallido sin marcar FILED.
+   */
+  async recordFilingPending(
+    ctx: TenantContext,
+    input: {
+      obligationId: string;
+      settlementId: string;
+      filedAt: string;
+      amountFiled: string;
+      externalId?: string;
+    },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const o = await tx.taxObligation.findFirst({ where: { id: input.obligationId, firmId: ctx.firmId } });
+      if (!o) throw new SettlementError("OBLIGATION_NOT_FOUND", "Obligación no encontrada");
+      const s = await tx.taxSettlement.findUnique({ where: { id: input.settlementId } });
+      if (!s) throw new SettlementError("SETTLEMENT_NOT_FOUND", "Liquidación no encontrada");
+      return tx.taxFiling.create({
+        data: {
+          firmId: ctx.firmId,
+          clientId: o.clientId,
+          obligationId: o.id,
+          settlementId: s.id,
+          filedAt: new Date(input.filedAt),
+          amountFiled: new Prisma.Decimal(input.amountFiled),
+          ...(input.externalId ? { externalId: input.externalId } : {}),
+          createdByUserId: ctx.userId,
+          status: "PENDING",
+        },
+      });
     });
   }
 
