@@ -18,3 +18,26 @@ venv/
 **/.mypy_cache/
 .ruff_cache/
 **/.ruff_cache/
+# F2.6: excluir archivos sensibles y de desarrollo
+.git/
+.gitignore
+.gitattributes
+.github/
+*.md
+docs/
+e2e/
+playwright-report/
+playwright.config.ts
+vitest.config.ts
+eslint.config.mjs
+tsconfig*.json
+!tsconfig.base.json
+*.tsbuildinfo
+dev.sh
+.vscode/
+.idea/
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
