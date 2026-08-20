@@ -768,6 +768,84 @@ export class IngestionService {
    * G2-09: revisión independiente de vouchers (maker-checker).
    * El revisor no puede ser el creador.
    */
+  /** Envía un voucher a revisión (DRAFT → IN_REVIEW). */
+  async submitVoucherForReview(ctx: TenantContext, voucherId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const voucher = await tx.fiscalVoucher.findFirst({
+        where: { id: voucherId, firmId: ctx.firmId },
+      });
+      if (!voucher) throw new ImportError("VOUCHER_NOT_FOUND", "Comprobante no encontrado");
+      if (voucher.status !== "DRAFT") {
+        throw new ImportError("VOUCHER_IMMUTABLE", `El comprobante está en estado ${voucher.status}`);
+      }
+      return tx.fiscalVoucher.update({
+        where: { id: voucherId },
+        data: { status: "IN_REVIEW" },
+      });
+    });
+  }
+
+  /** Aprueba un voucher (IN_REVIEW o DRAFT → APPROVED, maker-checker). */
+  async approveVoucher(ctx: TenantContext, voucherId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const voucher = await tx.fiscalVoucher.findFirst({
+        where: { id: voucherId, firmId: ctx.firmId },
+      });
+      if (!voucher) throw new ImportError("VOUCHER_NOT_FOUND", "Comprobante no encontrado");
+      if (voucher.status !== "IN_REVIEW" && voucher.status !== "DRAFT") {
+        throw new ImportError("VOUCHER_IMMUTABLE", `El comprobante está en estado ${voucher.status}`);
+      }
+      if (voucher.createdByUserId === ctx.userId) {
+        throw new ImportError(
+          "INVALID_TRANSITION",
+          "El preparador no puede revisar su propio comprobante (maker-checker)",
+        );
+      }
+      return tx.fiscalVoucher.update({
+        where: { id: voucherId },
+        data: {
+          status: "APPROVED",
+          reviewedByUserId: ctx.userId,
+          reviewedAt: new Date(),
+          approvedByUserId: ctx.userId,
+          approvedAt: new Date(),
+          version: { increment: 1 },
+        },
+      });
+    });
+  }
+
+  /** Rechaza un voucher (IN_REVIEW o DRAFT → REJECTED, maker-checker). */
+  async rejectVoucher(ctx: TenantContext, voucherId: string, _comment?: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const voucher = await tx.fiscalVoucher.findFirst({
+        where: { id: voucherId, firmId: ctx.firmId },
+      });
+      if (!voucher) throw new ImportError("VOUCHER_NOT_FOUND", "Comprobante no encontrado");
+      if (voucher.status !== "IN_REVIEW" && voucher.status !== "DRAFT") {
+        throw new ImportError("VOUCHER_IMMUTABLE", `El comprobante está en estado ${voucher.status}`);
+      }
+      if (voucher.createdByUserId === ctx.userId) {
+        throw new ImportError(
+          "INVALID_TRANSITION",
+          "El preparador no puede revisar su propio comprobante (maker-checker)",
+        );
+      }
+      return tx.fiscalVoucher.update({
+        where: { id: voucherId },
+        data: {
+          status: "REJECTED",
+          reviewedByUserId: ctx.userId,
+          reviewedAt: new Date(),
+        },
+      });
+    });
+  }
+
+  /**
+   * Revisa un voucher con decisión booleana (compatibilidad legacy).
+   * Para flujos productivos usar submitVoucherForReview/approveVoucher/rejectVoucher.
+   */
   async reviewVoucher(ctx: TenantContext, voucherId: string, approve: boolean, _comment?: string) {
     return withTenantContext(ctx, async (tx) => {
       const voucher = await tx.fiscalVoucher.findFirst({

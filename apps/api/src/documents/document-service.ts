@@ -68,6 +68,18 @@ export class DocumentService {
         throw new Error("UPLOAD_SESSION_INVALID");
       }
 
+      // Una sesión vinculada no puede sobrescribir una evidencia ya adjunta.
+      // La comprobación se repite al completar para cubrir carreras entre dos
+      // sesiones válidas abiertas sobre el mismo ítem.
+      const requestItem = session.requestItemId
+        ? await tx.documentRequestItem.findFirst({
+            where: { id: session.requestItemId, firmId: session.firmId, clientId: session.clientId },
+          })
+        : null;
+      if (session.requestItemId && (!requestItem || requestItem.status !== "PENDING")) {
+        throw new Error("REQUEST_ITEM_NOT_PENDING");
+      }
+
       // Crear documento
       const document = await tx.document.create({
         data: {
@@ -109,23 +121,18 @@ export class DocumentService {
 
       // G2-07: si la sesión se creó para responder un ítem de pedido, ligar el
       // documento al ítem y derivar la completitud del pedido.
-      if (session.requestItemId) {
-        const item = await tx.documentRequestItem.findFirst({
-          where: { id: session.requestItemId, firmId: session.firmId, clientId: session.clientId },
+      if (requestItem) {
+        await tx.documentRequestItem.update({
+          where: { id: requestItem.id },
+          data: { status: "ATTACHED", documentId: document.id },
         });
-        if (item) {
-          await tx.documentRequestItem.update({
-            where: { id: item.id },
-            data: { status: "ATTACHED", documentId: document.id },
+        const items = await tx.documentRequestItem.findMany({ where: { requestId: requestItem.requestId } });
+        const required = items.filter((i) => i.required);
+        if (required.every((i) => i.status === "ATTACHED")) {
+          await tx.documentRequest.update({
+            where: { id: requestItem.requestId },
+            data: { status: "COMPLETED" },
           });
-          const items = await tx.documentRequestItem.findMany({ where: { requestId: item.requestId } });
-          const required = items.filter((i) => i.required);
-          if (required.every((i) => i.status === "ATTACHED")) {
-            await tx.documentRequest.update({
-              where: { id: item.requestId },
-              data: { status: "COMPLETED" },
-            });
-          }
         }
       }
 

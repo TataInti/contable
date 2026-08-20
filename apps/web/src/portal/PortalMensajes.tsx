@@ -1,11 +1,17 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState } from "@contable/design-system";
+import { Link } from "react-router-dom";
 import { api, type DocumentRequest, type RequestMessage } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { Icon } from "../ui/Icon";
-import { formatPortalDate, PortalLoading, PortalPageHeader } from "./PortalUI";
+import {
+  formatPortalDate,
+  PortalLoading,
+  PortalPageHeader,
+  PortalRetryButton,
+} from "./PortalUI";
 import "./portal.css";
 
 interface Thread {
@@ -74,11 +80,17 @@ export function PortalMensajes() {
         <EmptyState
           title="No pudimos cargar los mensajes"
           description="Reintentá en unos minutos."
+          action={<PortalRetryButton onRetry={() => void query.refetch()} />}
         />
       ) : threads.length === 0 ? (
         <EmptyState
           title="Todavía no hay conversaciones"
-          description="Cuando tu estudio comparta un mensaje sobre un pedido, aparecerá acá."
+          description="Las conversaciones se abren desde un pedido de documentación. Revisá si necesitás responder alguno."
+          action={
+            <Link className="portal-text-link" to="/portal/pendientes">
+              Ver pedidos pendientes
+            </Link>
+          }
         />
       ) : (
         <div className="portal-threads">
@@ -166,9 +178,21 @@ export function PortalMensajes() {
                     </Button>
                   </div>
                   {failedThisThread ? (
-                    <p className="portal-inline-alert portal-inline-alert--error" role="alert">
-                      No pudimos enviar el mensaje. Reintentá.
-                    </p>
+                    <div className="portal-inline-alert portal-inline-alert--error" role="alert">
+                      <span>No pudimos enviar el mensaje. Revisá tu conexión e intentá nuevamente.</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const body = draft.trim();
+                          if (body) send.mutate({ threadId: thread.id, body });
+                        }}
+                        disabled={!draft.trim() || send.isPending}
+                      >
+                        Reintentar
+                      </Button>
+                    </div>
                   ) : null}
                 </form>
               </section>

@@ -163,6 +163,8 @@ export class AiClient {
     const nonce = randomUUID();
     const signature = this.sign("POST", path, timestamp, nonce, this.sha256Hex(body));
 
+    // Timeout: un fallo de IA no puede colgar el worker.
+    const timeout = AbortSignal.timeout(30_000);
     const res = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}${path}`, {
       method: "POST",
       headers: {
@@ -173,6 +175,7 @@ export class AiClient {
         "X-Service-Signature": signature,
       },
       body,
+      signal: timeout,
     });
 
     if (!res.ok) {

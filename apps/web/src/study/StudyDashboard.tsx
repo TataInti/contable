@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState } from "@contable/design-system";
-import { Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { Button, EmptyState } from "@contable/design-system";
+import { Link, useNavigate } from "react-router-dom";
+import { api, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -56,19 +57,24 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function StudyDashboard() {
-  const { firmId } = useClientContext();
+  const { firmId, clientId, periodId, capabilities, hasClientAccess, setClientId, setPeriodId } =
+    useClientContext();
   const { me } = useSession();
+  const navigate = useNavigate();
+  const canReadDashboard = capabilities.has("client.read");
+  const canReadTaxWorklist = capabilities.has("tax.settlements.read");
+  const [openingSettlementId, setOpeningSettlementId] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ["study-dashboard", firmId],
     queryFn: () => api.get<DashboardSummary>(`/firms/${firmId}/dashboard`),
-    enabled: Boolean(firmId),
+    enabled: Boolean(firmId && canReadDashboard),
   });
   // G5-06: la cartera por riesgo viene del worklist fiscal real.
   // F0.1: la ruta lleva la firma explícita (no contexto implícito).
   const worklistQuery = useQuery({
     queryKey: ["tax-worklist-dashboard", firmId],
     queryFn: () => api.get<WorklistItem[]>(`/firms/${firmId}/portfolio/tax-worklist`),
-    enabled: Boolean(firmId),
+    enabled: Boolean(firmId && canReadTaxWorklist),
   });
   const firmName = me?.firms.find((firm) => firm.firmId === firmId)?.firmName;
   if (!firmId)
@@ -120,6 +126,48 @@ export function StudyDashboard() {
     },
   ];
 
+  const openSettlement = async (item: WorklistItem) => {
+    if (!hasClientAccess(item.clientId)) return;
+    setOpeningSettlementId(item.id);
+    setClientId(item.clientId);
+    try {
+      if (item.period) {
+        const fiscalYears = await api.get<FiscalYear[]>(
+          `/firms/${firmId}/clients/${item.clientId}/fiscal-years`,
+        );
+        const taxPeriodStart = new Date(item.period.startDate).getTime();
+        const taxPeriodEnd = new Date(item.period.endDate).getTime();
+        const accountingPeriod = fiscalYears
+          .flatMap((year) => year.periods)
+          .find((period) => {
+            const start = new Date(period.startDate).getTime();
+            const end = new Date(period.endDate).getTime();
+            return start <= taxPeriodEnd && end >= taxPeriodStart;
+          });
+        if (accountingPeriod) setPeriodId(accountingPeriod.id);
+      }
+      navigate("/liquidaciones");
+    } catch {
+      // El cliente ya quedó seleccionado; si no podemos resolver el período equivalente,
+      // la bandeja fiscal sigue siendo el siguiente paso recuperable.
+      navigate("/liquidaciones");
+    } finally {
+      setOpeningSettlementId(null);
+    }
+  };
+
+  const openTaxWorkspace = () => {
+    if (!clientId) {
+      navigate("/clientes");
+      return;
+    }
+    if (!periodId) {
+      navigate("/configuracion-fiscal");
+      return;
+    }
+    navigate("/expediente-mensual");
+  };
+
   return (
     <div className="study-page study-dashboard">
       <div className="study-page__header study-page__header--dashboard">
@@ -131,12 +179,44 @@ export function StudyDashboard() {
             avanzar.
           </p>
         </div>
-        <Link className="page-primary-link" to="/bandeja">
-          <Icon name="inbox" size={17} /> Revisar bandeja <Icon name="arrow-right" size={15} />
-        </Link>
+        <div className="study-page__actions">
+          <Button
+            variant="ghost"
+            disabled={!canReadDashboard && !canReadTaxWorklist}
+            title={
+              !canReadDashboard && !canReadTaxWorklist
+                ? "Tu rol no tiene datos operativos para actualizar."
+                : undefined
+            }
+            onClick={() => {
+              if (canReadDashboard) void query.refetch();
+              if (canReadTaxWorklist) void worklistQuery.refetch();
+            }}
+          >
+            Actualizar
+          </Button>
+          {clientId ? (
+            <Link className="page-primary-link" to="/bandeja">
+              <Icon name="inbox" size={17} /> Revisar bandeja <Icon name="arrow-right" size={15} />
+            </Link>
+          ) : capabilities.has("client.manage") ? (
+            <Button onClick={() => navigate("/clientes")}>
+              <Icon name="users" size={17} /> Elegir cliente
+            </Button>
+          ) : (
+            <Button disabled title="Seleccioná un cliente para abrir la bandeja.">
+              <Icon name="inbox" size={17} /> Revisar bandeja
+            </Button>
+          )}
+        </div>
       </div>
 
-      {query.isLoading ? (
+      {!canReadDashboard ? (
+        <EmptyState
+          title="Resumen no disponible para tu rol"
+          description="Podés seguir trabajando en los módulos a los que tenés acceso desde la navegación lateral."
+        />
+      ) : query.isLoading ? (
         <div className="dashboard-loading" role="status" aria-live="polite">
           <span className="loading-copy">Organizando el resumen…</span>
           <span />
@@ -148,9 +228,9 @@ export function StudyDashboard() {
           title="No se pudo cargar el resumen"
           description="La información del estudio no está disponible en este momento."
           action={
-            <button className="text-action" onClick={() => void query.refetch()}>
+            <Button variant="secondary" onClick={() => void query.refetch()}>
               Volver a intentar
-            </button>
+            </Button>
           }
         />
       ) : (
@@ -184,7 +264,7 @@ export function StudyDashboard() {
               </div>
               {workItems.map((item) => (
                 <Link
-                  to={item.to}
+                  to={clientId ? item.to : "/clientes"}
                   className="dashboard-work-item"
                   key={item.label}
                   data-tone={item.tone}
@@ -213,11 +293,19 @@ export function StudyDashboard() {
                   {atRisk} con correcciones pendientes · {inReview} en revisión
                 </p>
               </div>
-              <Link to="/liquidaciones">
-                Ver todas <Icon name="arrow-right" size={14} />
-              </Link>
+              {clientId && canReadTaxWorklist ? (
+                <Link to="/liquidaciones">
+                  Ver todas <Icon name="arrow-right" size={14} />
+                </Link>
+              ) : null}
             </div>
-            {worklistQuery.isLoading ? (
+            {!canReadTaxWorklist ? (
+              <EmptyState
+                size="compact"
+                title="Cartera fiscal restringida"
+                description="Tu rol no permite consultar liquidaciones de la firma."
+              />
+            ) : worklistQuery.isLoading ? (
               <div className="study-state" role="status">
                 Cargando cartera…
               </div>
@@ -226,15 +314,30 @@ export function StudyDashboard() {
                 title="No se pudo cargar la cartera fiscal"
                 description="La consulta falló; no interpretamos esta situación como una cartera sin liquidaciones."
                 action={
-                  <button className="text-action" onClick={() => void worklistQuery.refetch()}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void worklistQuery.refetch()}
+                  >
                     Reintentar
-                  </button>
+                  </Button>
                 }
               />
             ) : worklist.length === 0 ? (
               <EmptyState
                 title="Sin liquidaciones en curso"
                 description="Cuando se calcule una liquidación, aparecerá acá priorizada por riesgo."
+                action={
+                  clientId && capabilities.has("tax.settlements.read") ? (
+                    <Button onClick={openTaxWorkspace}>
+                      {periodId ? "Abrir expediente mensual" : "Configurar período"}
+                    </Button>
+                  ) : capabilities.has("client.manage") ? (
+                    <Button variant="secondary" onClick={() => navigate("/clientes")}>
+                      Crear o elegir cliente
+                    </Button>
+                  ) : undefined
+                }
               />
             ) : (
               <div className="risk-portfolio" role="list">
@@ -256,6 +359,17 @@ export function StudyDashboard() {
                       </small>
                     </div>
                     <StatusBadge status={STATUS_LABELS[item.status] ?? item.status} />
+                    {hasClientAccess(item.clientId) ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={openingSettlementId === item.id}
+                        loadingLabel="Abriendo liquidación"
+                        onClick={() => void openSettlement(item)}
+                      >
+                        Abrir <Icon name="arrow-right" size={14} />
+                      </Button>
+                    ) : null}
                   </div>
                 ))}
               </div>

@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
-import { api, type DocumentRequest, type JournalEntry } from "../lib/api";
+import { useNavigate } from "react-router-dom";
+import { api, type DocumentRequest, type FiscalYear, type JournalEntry } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -15,6 +16,22 @@ interface CloseCycle {
   id: string;
   status: string;
   workItems: { id: string; title: string; status: string }[];
+}
+interface RequestThread {
+  id: string;
+  visibility: string;
+  messages: {
+    id: string;
+    authorUserId: string;
+    body: string;
+    visibility: string;
+    createdAt: string;
+  }[];
+}
+interface WorkDocumentRequest extends DocumentRequest {
+  description?: string | null;
+  dueDate?: string | null;
+  threads?: RequestThread[];
 }
 interface Obligation {
   id: string;
@@ -30,13 +47,29 @@ interface EvidencePreview {
 const DATE = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 
 export function StudyTrabajo() {
-  const { firmId, clientId, capabilities } = useClientContext();
+  const { firmId, clientId, periodId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [showRequest, setShowRequest] = useState(false);
+  const [showClose, setShowClose] = useState(false);
   const [receipt, setReceipt] = useState<string | null>(null);
-  const [request, setRequest] = useState({ title: "", item: "", dueDate: "" });
+  const [request, setRequest] = useState({ title: "", description: "", item: "", dueDate: "" });
+  const [closeItems, setCloseItems] = useState(
+    "Revisar documentación\nConciliar saldos\nValidar obligaciones\nPreparar cierre",
+  );
   const [preview, setPreview] = useState<EvidencePreview | null>(null);
+  const [activeConversation, setActiveConversation] = useState<{
+    requestId: string;
+    threadId: string;
+    title: string;
+  } | null>(null);
+  const [messageBody, setMessageBody] = useState("");
   const base = firmId && clientId ? `/firms/${firmId}/clients/${clientId}` : null;
+  const fiscalYears = useQuery({
+    queryKey: ["fiscal-years", firmId, clientId],
+    queryFn: () => api.get<FiscalYear[]>(`${base}/fiscal-years`),
+    enabled: Boolean(base),
+  });
   const [entries, requests, closes, obligations] = useQueries({
     queries: [
       {
@@ -46,7 +79,7 @@ export function StudyTrabajo() {
       },
       {
         queryKey: ["document-requests", firmId, clientId],
-        queryFn: () => api.get<DocumentRequest[]>(`${base}/document-requests`),
+        queryFn: () => api.get<WorkDocumentRequest[]>(`${base}/document-requests`),
         enabled: Boolean(base),
       },
       {
@@ -86,12 +119,13 @@ export function StudyTrabajo() {
     mutationFn: () =>
       api.post(`${base}/document-requests`, {
         title: request.title.trim(),
+        ...(request.description.trim() ? { description: request.description.trim() } : {}),
         dueDate: request.dueDate || undefined,
         items: [{ description: request.item.trim(), required: true }],
       }),
     onSuccess: () => {
       setShowRequest(false);
-      setRequest({ title: "", item: "", dueDate: "" });
+      setRequest({ title: "", description: "", item: "", dueDate: "" });
       setReceipt("Pedido creado. Quedó disponible para el seguimiento con el cliente.");
       void queryClient.invalidateQueries({ queryKey: ["document-requests", firmId, clientId] });
     },
@@ -100,6 +134,86 @@ export function StudyTrabajo() {
     mutationFn: (itemId: string) =>
       api.get<EvidencePreview>(`${base}/document-request-items/${itemId}/preview`),
     onSuccess: (data) => setPreview(data),
+  });
+  const activeFiscalYear = useMemo(
+    () => fiscalYears.data?.find((year) => year.periods.some((period) => period.id === periodId)),
+    [fiscalYears.data, periodId],
+  );
+  const createClose = useMutation({
+    mutationFn: () => {
+      if (!base || !periodId || !activeFiscalYear) {
+        throw new Error("Elegí un período contable abierto para iniciar el cierre.");
+      }
+      const items = closeItems
+        .split("\n")
+        .map((title) => title.trim())
+        .filter(Boolean)
+        .map((title, index) => ({
+          code: `CIERRE_${index + 1}_${
+            title
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/[^A-Za-z0-9]+/g, "_")
+              .replace(/^_|_$/g, "")
+              .slice(0, 45) || "TAREA"
+          }`,
+          title,
+        }));
+      if (items.length === 0) throw new Error("Ingresá al menos una tarea de cierre.");
+      return api.post(`${base}/close-cycles`, {
+        fiscalYearId: activeFiscalYear.id,
+        periodId,
+        items,
+      });
+    },
+    onSuccess: () => {
+      setShowClose(false);
+      setReceipt("Cierre iniciado. Las tareas quedan disponibles para control y finalización.");
+      void queryClient.invalidateQueries({ queryKey: ["close-cycles", firmId, clientId] });
+    },
+  });
+  const completeCloseItem = useMutation({
+    mutationFn: ({ cycleId, workItemId }: { cycleId: string; workItemId: string }) =>
+      api.post(`${base}/close-cycles/${cycleId}/work-items/${workItemId}/complete`),
+    onSuccess: () => {
+      setReceipt("Tarea de cierre completada.");
+      void queryClient.invalidateQueries({ queryKey: ["close-cycles", firmId, clientId] });
+    },
+  });
+  const finalizeClose = useMutation({
+    mutationFn: (cycleId: string) => api.post(`${base}/close-cycles/${cycleId}/finalize`),
+    onSuccess: () => {
+      setReceipt("Cierre finalizado. El ciclo quedó registrado para auditoría.");
+      void queryClient.invalidateQueries({ queryKey: ["close-cycles", firmId, clientId] });
+    },
+  });
+  const openConversation = useMutation({
+    mutationFn: async (row: WorkDocumentRequest) => {
+      const current = row.threads?.find((thread) => thread.visibility === "SHARED");
+      if (current) return { requestId: row.id, title: row.title, threadId: current.id };
+      const created = await api.post<RequestThread>(`${base}/document-requests/${row.id}/threads`, {
+        visibility: "SHARED",
+      });
+      return { requestId: row.id, title: row.title, threadId: created.id };
+    },
+    onSuccess: (conversation) => {
+      setActiveConversation(conversation);
+      void queryClient.invalidateQueries({ queryKey: ["document-requests", firmId, clientId] });
+    },
+  });
+  const sendMessage = useMutation({
+    mutationFn: () => {
+      if (!activeConversation || !messageBody.trim()) throw new Error("Escribí un mensaje.");
+      return api.post(`${base}/threads/${activeConversation.threadId}/messages`, {
+        body: messageBody.trim(),
+        visibility: "SHARED",
+      });
+    },
+    onSuccess: () => {
+      setMessageBody("");
+      setReceipt("Mensaje enviado al pedido documental.");
+      void queryClient.invalidateQueries({ queryKey: ["document-requests", firmId, clientId] });
+    },
   });
 
   if (!base)
@@ -119,7 +233,13 @@ export function StudyTrabajo() {
   const obligationRows = (obligations.data ?? []).flatMap((item) =>
     item.instances.map((instance) => ({ ...instance, name: item.name })),
   );
-  const openCloses = (closes.data ?? []).filter((item) => item.status !== "COMPLETED");
+  const openCloses = (closes.data ?? []).filter((item) => item.status !== "FINALIZED");
+  const conversationRequest = activeConversation
+    ? (requests.data ?? []).find((item) => item.id === activeConversation.requestId)
+    : undefined;
+  const conversationThread = conversationRequest?.threads?.find(
+    (thread) => thread.id === activeConversation?.threadId,
+  );
   const hasQueryError =
     entries.isError || requests.isError || closes.isError || obligations.isError;
 
@@ -133,15 +253,45 @@ export function StudyTrabajo() {
             Revisiones, pedidos, cierres y vencimientos que requieren una decisión.
           </p>
         </div>
-        {capabilities.has("request.manage") ? (
+        <div className="study-page__header-actions">
           <Button
-            onClick={() => setShowRequest((value) => !value)}
-            variant={showRequest ? "secondary" : "primary"}
+            variant="ghost"
+            onClick={() => {
+              void Promise.all([
+                entries.refetch(),
+                requests.refetch(),
+                closes.refetch(),
+                obligations.refetch(),
+              ]);
+            }}
           >
-            <Icon name={showRequest ? "close" : "plus"} size={17} />
-            {showRequest ? "Cancelar" : "Pedir documentación"}
+            Actualizar
           </Button>
-        ) : null}
+          {capabilities.has("period.soft_close") ? (
+            <Button
+              onClick={() => setShowClose((value) => !value)}
+              variant={showClose ? "secondary" : "ghost"}
+              disabled={!periodId || !activeFiscalYear}
+              title={
+                !activeFiscalYear
+                  ? "Seleccioná un período contable para abrir el cierre"
+                  : undefined
+              }
+            >
+              <Icon name={showClose ? "close" : "tasks"} size={17} />
+              {showClose ? "Cancelar cierre" : "Iniciar cierre"}
+            </Button>
+          ) : null}
+          {capabilities.has("request.manage") ? (
+            <Button
+              onClick={() => setShowRequest((value) => !value)}
+              variant={showRequest ? "secondary" : "primary"}
+            >
+              <Icon name={showRequest ? "close" : "plus"} size={17} />
+              {showRequest ? "Cancelar" : "Pedir documentación"}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="work-summary" aria-label="Resumen del trabajo">
@@ -236,6 +386,18 @@ export function StudyTrabajo() {
               maxLength={500}
               required
             />
+            <label className="ds-field" htmlFor="request-description">
+              <span className="ds-field__label">Instrucciones para el cliente</span>
+              <textarea
+                id="request-description"
+                className="study-textarea"
+                rows={2}
+                value={request.description}
+                onChange={(event) => setRequest({ ...request, description: event.target.value })}
+                maxLength={4000}
+                placeholder="Indicá el período, formato o detalle que necesitás."
+              />
+            </label>
             <Field
               id="request-due"
               label="Fecha límite"
@@ -261,6 +423,62 @@ export function StudyTrabajo() {
         </section>
       ) : null}
 
+      {showClose ? (
+        <section className="study-panel study-panel--form" aria-labelledby="new-close-title">
+          <div className="study-panel__heading">
+            <div>
+              <h2 id="new-close-title">Iniciar cierre del período</h2>
+              <p>
+                Definí las verificaciones del ciclo. Cada tarea se completa y queda auditada por
+                separado.
+              </p>
+            </div>
+          </div>
+          <form
+            className="study-page__form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              createClose.mutate();
+            }}
+          >
+            <label className="ds-field" htmlFor="close-items">
+              <span className="ds-field__label">Tareas de cierre</span>
+              <textarea
+                id="close-items"
+                className="study-textarea"
+                rows={5}
+                value={closeItems}
+                onChange={(event) => setCloseItems(event.target.value)}
+                placeholder="Una tarea por línea"
+                required
+              />
+              <small className="study-page__hint">
+                Se crearán {closeItems.split("\n").filter((item) => item.trim()).length} tareas.
+              </small>
+            </label>
+            {!activeFiscalYear ? (
+              <p className="form-error" role="alert">
+                Seleccioná un período contable abierto antes de iniciar el cierre.
+              </p>
+            ) : null}
+            {createClose.isError ? (
+              <p className="form-error" role="alert">
+                {createClose.error.message}
+              </p>
+            ) : null}
+            <div className="study-inline-form__actions">
+              <Button
+                type="submit"
+                loading={createClose.isPending}
+                disabled={!activeFiscalYear || !periodId}
+              >
+                Crear ciclo de cierre
+              </Button>
+            </div>
+          </form>
+        </section>
+      ) : null}
+
       {preview ? (
         <section className="study-panel study-panel--form" aria-labelledby="evidence-preview-title">
           <div className="study-panel__heading">
@@ -280,12 +498,87 @@ export function StudyTrabajo() {
                 className="evidence-preview__frame"
               />
             ) : (
-              <img src={preview.url} alt="Vista previa del documento" className="evidence-preview__image" />
+              <img
+                src={preview.url}
+                alt="Vista previa del documento"
+                className="evidence-preview__image"
+              />
             )}
-            <a className="evidence-preview__link" href={preview.url} target="_blank" rel="noreferrer">
+            <a
+              className="evidence-preview__link"
+              href={preview.url}
+              target="_blank"
+              rel="noreferrer"
+            >
               Abrir en pestaña nueva
             </a>
           </div>
+        </section>
+      ) : null}
+
+      {activeConversation ? (
+        <section
+          className="study-panel study-panel--form"
+          aria-labelledby="request-conversation-title"
+        >
+          <div className="study-panel__heading">
+            <div>
+              <h2 id="request-conversation-title">Conversación del pedido</h2>
+              <p>{activeConversation.title}</p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => setActiveConversation(null)}>
+              <Icon name="close" size={15} /> Cerrar
+            </Button>
+          </div>
+          {conversationThread?.messages.length ? (
+            <div className="request-message-list" aria-live="polite">
+              {conversationThread.messages.map((message) => (
+                <div key={message.id} className="request-message-list__item">
+                  <strong>{message.visibility === "SHARED" ? "Compartido" : "Interno"}</strong>
+                  <p>{message.body}</p>
+                  <small>{DATE.format(new Date(message.createdAt))}</small>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted-copy">
+              Todavía no hay mensajes. Dejá una instrucción o consulta para el cliente.
+            </p>
+          )}
+          {capabilities.has("message.shared") ? (
+            <form
+              className="study-page__form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                sendMessage.mutate();
+              }}
+            >
+              <label className="ds-field" htmlFor="request-message">
+                <span className="ds-field__label">Mensaje compartido</span>
+                <textarea
+                  id="request-message"
+                  className="study-textarea"
+                  rows={3}
+                  value={messageBody}
+                  onChange={(event) => setMessageBody(event.target.value)}
+                  maxLength={5000}
+                  placeholder="Escribí una instrucción clara para el cliente."
+                />
+              </label>
+              {sendMessage.isError ? (
+                <p className="form-error">{sendMessage.error.message}</p>
+              ) : null}
+              <div className="study-inline-form__actions">
+                <Button
+                  type="submit"
+                  loading={sendMessage.isPending}
+                  disabled={!messageBody.trim()}
+                >
+                  Enviar mensaje
+                </Button>
+              </div>
+            </form>
+          ) : null}
         </section>
       ) : null}
 
@@ -307,6 +600,13 @@ export function StudyTrabajo() {
             size="compact"
             title="No hay asientos pendientes"
             description="Las nuevas propuestas aparecerán acá cuando sean enviadas a revisión."
+            action={
+              capabilities.has("entry.create") ? (
+                <Button size="sm" variant="secondary" onClick={() => navigate("/contabilidad")}>
+                  Crear asiento
+                </Button>
+              ) : undefined
+            }
           />
         ) : (
           <Table
@@ -403,7 +703,11 @@ export function StudyTrabajo() {
                     <div className="table-primary">
                       <strong>{row.title}</strong>
                       <small>
-                        {row.items.filter((item) => item.status !== "ACCEPTED" && item.status !== "WAIVED").length}{" "}
+                        {
+                          row.items.filter(
+                            (item) => item.status !== "ACCEPTED" && item.status !== "WAIVED",
+                          ).length
+                        }{" "}
                         ítems pendientes
                       </small>
                     </div>
@@ -434,6 +738,24 @@ export function StudyTrabajo() {
                     );
                   },
                 },
+                {
+                  key: "conversation",
+                  header: "Conversación",
+                  align: "right",
+                  render: (row) =>
+                    capabilities.has("message.shared") ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        loading={openConversation.isPending}
+                        onClick={() => openConversation.mutate(row)}
+                      >
+                        <Icon name="message" size={15} /> Mensaje
+                      </Button>
+                    ) : (
+                      <span className="muted-copy">—</span>
+                    ),
+                },
               ]}
             />
           ) : (
@@ -441,6 +763,13 @@ export function StudyTrabajo() {
               size="compact"
               title="Sin pedidos abiertos"
               description="El cliente no tiene documentación pendiente."
+              action={
+                capabilities.has("request.manage") ? (
+                  <Button size="sm" variant="secondary" onClick={() => setShowRequest(true)}>
+                    Crear pedido
+                  </Button>
+                ) : undefined
+              }
             />
           )}
         </section>
@@ -470,7 +799,7 @@ export function StudyTrabajo() {
                   key: "progress",
                   header: "Avance",
                   render: (row) => {
-                    const done = row.workItems.filter((item) => item.status === "COMPLETED").length;
+                    const done = row.workItems.filter((item) => item.status === "DONE").length;
                     return (
                       <div className="progress-cell">
                         <progress
@@ -485,6 +814,49 @@ export function StudyTrabajo() {
                     );
                   },
                 },
+                {
+                  key: "actions",
+                  header: "Acciones",
+                  align: "right",
+                  render: (row) => {
+                    const next = row.workItems.find((item) => item.status !== "DONE");
+                    const ready = row.workItems.length > 0 && !next;
+                    if (!capabilities.has("period.soft_close"))
+                      return <span className="muted-copy">—</span>;
+                    return (
+                      <div className="table-actions">
+                        {next ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            loading={completeCloseItem.isPending}
+                            onClick={() =>
+                              completeCloseItem.mutate({ cycleId: row.id, workItemId: next.id })
+                            }
+                          >
+                            Completar: {next.title}
+                          </Button>
+                        ) : ready ? (
+                          <Button
+                            size="sm"
+                            loading={finalizeClose.isPending}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  "¿Finalizar este cierre? El ciclo quedará bloqueado para auditoría.",
+                                )
+                              ) {
+                                finalizeClose.mutate(row.id);
+                              }
+                            }}
+                          >
+                            Finalizar cierre
+                          </Button>
+                        ) : null}
+                      </div>
+                    );
+                  },
+                },
               ]}
             />
           ) : (
@@ -492,6 +864,13 @@ export function StudyTrabajo() {
               size="compact"
               title="Sin ciclos de cierre"
               description="Cuando se abra un cierre vas a ver su avance acá."
+              action={
+                capabilities.has("period.soft_close") && activeFiscalYear ? (
+                  <Button size="sm" variant="secondary" onClick={() => setShowClose(true)}>
+                    Iniciar cierre
+                  </Button>
+                ) : undefined
+              }
             />
           )}
         </section>
@@ -529,6 +908,17 @@ export function StudyTrabajo() {
             size="compact"
             title="Sin obligaciones materializadas"
             description="No hay vencimientos configurados para este contexto."
+            action={
+              capabilities.has("tax.profile.write") ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => navigate("/configuracion-fiscal")}
+                >
+                  Configurar obligaciones
+                </Button>
+              ) : undefined
+            }
           />
         )}
       </section>

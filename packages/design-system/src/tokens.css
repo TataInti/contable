@@ -36,6 +36,16 @@
   --ds-color-success-subtle: #e5efe9;
   --ds-color-spinner-track: #89aa98;
 
+  /* Alias de compatibilidad para módulos operativos: conservan una única
+     fuente de verdad de color y evitan estilos silenciosamente inválidos. */
+  --ds-surface: var(--ds-color-surface);
+  --ds-surface-muted: var(--ds-color-surface-muted);
+  --ds-border: var(--ds-color-border);
+  --ds-text: var(--ds-color-text);
+  --ds-text-muted: var(--ds-color-text-muted);
+  --ds-accent: var(--ds-color-primary);
+  --ds-accent-soft: var(--ds-color-primary-soft);
+
   /* Espaciado — escala de 4px */
   --ds-space-1: 4px;
   --ds-space-2: 8px;

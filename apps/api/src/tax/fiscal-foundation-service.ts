@@ -453,6 +453,18 @@ export class TaxPeriodService {
     });
   }
 
+  /** Lista los períodos fiscales disponibles para asociar saldos y obligaciones. */
+  async listPeriods(ctx: TenantContext, clientId: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.taxPeriod.findMany({
+        where: { firmId: ctx.firmId, clientId },
+        include: { taxType: true },
+        orderBy: [{ startDate: "desc" }, { taxType: { code: "asc" } }],
+        take: 500,
+      }),
+    );
+  }
+
   /** Materializa la obligación de un cliente para un régimen y período. */
   async materializeObligation(
     ctx: TenantContext,

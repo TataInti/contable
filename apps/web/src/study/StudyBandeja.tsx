@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { useNavigate } from "react-router-dom";
 import {
   ApiError,
   api,
   uploadToSignedUrl,
   type Document,
   type DocumentExtraction,
+  type DocumentRequest,
 } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
@@ -54,9 +56,11 @@ function fileSize(size: number) {
 export function StudyBandeja() {
   const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [corrections, setCorrections] = useState<Record<string, string>>({});
   const [showUpload, setShowUpload] = useState(false);
+  const [uploadRequestItemId, setUploadRequestItemId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadDone, setUploadDone] = useState(false);
@@ -72,6 +76,11 @@ export function StudyBandeja() {
       )
         ? 3_000
         : false,
+  });
+  const requests = useQuery({
+    queryKey: ["document-requests", firmId, clientId],
+    queryFn: () => api.get<DocumentRequest[]>(`${base}/document-requests`),
+    enabled: Boolean(base && showUpload),
   });
   const detail = useQuery({
     queryKey: ["document", firmId, clientId, selectedId],
@@ -108,8 +117,10 @@ export function StudyBandeja() {
   const upload = useMutation({
     mutationFn: async () => {
       if (!file || !base) throw new Error("Falta seleccionar un archivo");
+      if (!uploadRequestItemId) throw new Error("Elegí el pedido al que corresponde el archivo");
       const session = await api.post<UploadSession>(`${base}/document-upload-sessions`, {
         expectedMime: file.type || undefined,
+        requestItemId: uploadRequestItemId,
       });
       await uploadToSignedUrl(session.presignedUrl, file);
       const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
@@ -131,7 +142,10 @@ export function StudyBandeja() {
       setUploadDone(true);
       setFile(null);
       setSelectedId(document.documentId);
-      void queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
+        queryClient.invalidateQueries({ queryKey: ["document-requests", firmId, clientId] }),
+      ]);
     },
     onError: (error) =>
       setUploadError(error instanceof ApiError ? error.message : "No se pudo subir el documento."),
@@ -156,6 +170,11 @@ export function StudyBandeja() {
   });
 
   const rows = documents.data ?? [];
+  const pendingRequestItems = (requests.data ?? []).flatMap((request) =>
+    request.items
+      .filter((item) => item.status === "PENDING")
+      .map((item) => ({ ...item, requestTitle: request.title })),
+  );
   return (
     <div className="study-page study-page--wide">
       <div className="study-page__header">
@@ -167,18 +186,30 @@ export function StudyBandeja() {
             evidencia.
           </p>
         </div>
-        {base && capabilities.has("document.upload") ? (
+        <div className="study-page__header-actions">
           <Button
+            variant="ghost"
             onClick={() => {
-              setShowUpload((value) => !value);
-              setUploadDone(false);
+              void documents.refetch();
+              if (showUpload) void requests.refetch();
             }}
-            variant={showUpload ? "secondary" : "primary"}
           >
-            <Icon name={showUpload ? "close" : "upload"} size={17} />
-            {showUpload ? "Cerrar carga" : "Subir documento"}
+            Actualizar
           </Button>
-        ) : null}
+          {base && capabilities.has("document.upload") ? (
+            <Button
+              onClick={() => {
+                setShowUpload((value) => !value);
+                setUploadDone(false);
+                setUploadError(null);
+              }}
+              variant={showUpload ? "secondary" : "primary"}
+            >
+              <Icon name={showUpload ? "close" : "upload"} size={17} />
+              {showUpload ? "Cerrar carga" : "Subir documento"}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {showUpload && base ? (
@@ -194,77 +225,126 @@ export function StudyBandeja() {
               <Icon name="shield" size={15} /> Carga segura
             </span>
           </div>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              upload.mutate();
-            }}
-          >
-            <label
-              className={`upload-dropzone${dragging ? " upload-dropzone--dragging" : ""}`}
-              onDragOver={(event) => {
+          {requests.isLoading ? (
+            <div className="query-state query-state--compact" role="status">
+              <span className="loading-copy">Buscando pedidos abiertos…</span>
+            </div>
+          ) : requests.isError ? (
+            <EmptyState
+              size="compact"
+              title="No se pudieron cargar los pedidos"
+              description="Reintentá antes de asociar un documento a la evidencia solicitada."
+              action={
+                <Button size="sm" variant="secondary" onClick={() => void requests.refetch()}>
+                  Reintentar
+                </Button>
+              }
+            />
+          ) : pendingRequestItems.length === 0 ? (
+            <EmptyState
+              size="compact"
+              title="Primero creá un pedido documental"
+              description="Cada carga queda vinculada a un ítem solicitado para preservar la trazabilidad."
+              action={
+                capabilities.has("request.manage") ? (
+                  <Button size="sm" onClick={() => navigate("/trabajo")}>
+                    Ir a pedidos
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <form
+              onSubmit={(event) => {
                 event.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                setDragging(false);
-                chooseFile(event.dataTransfer.files[0] ?? null);
+                upload.mutate();
               }}
             >
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-                onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
-              />
-              <span className="upload-dropzone__icon">
-                <Icon name="upload" size={23} />
-              </span>
-              <span>
-                <strong>
-                  {file ? file.name : "Arrastrá un archivo o elegilo desde tu equipo"}
-                </strong>
-                <small>{file ? fileSize(file.size) : "PDF, JPG, PNG o WebP · máximo 25 MB"}</small>
-              </span>
-              <span className="upload-dropzone__action">Elegir archivo</span>
-            </label>
-            {uploadError ? (
-              <p className="form-error" role="alert">
-                {uploadError}
-              </p>
-            ) : null}
-            {uploadDone ? (
-              <div className="action-receipt" role="status">
-                <Icon name="check" size={18} />
-                <span>
-                  <strong>Documento recibido</strong>
-                  <small>Ya ingresó al circuito de validación y procesamiento.</small>
-                </span>
-              </div>
-            ) : null}
-            <div className="upload-panel__actions">
-              <Button
-                type="submit"
-                loading={upload.isPending}
-                loadingLabel="Subiendo documento"
-                disabled={!file}
-              >
-                Subir y procesar
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setShowUpload(false);
-                  setFile(null);
-                  setUploadError(null);
+              <label className="ds-field" htmlFor="upload-request-item">
+                <span className="ds-field__label">Corresponde a</span>
+                <select
+                  id="upload-request-item"
+                  className="ctxbar__input"
+                  value={uploadRequestItemId}
+                  onChange={(event) => setUploadRequestItemId(event.target.value)}
+                  required
+                >
+                  <option value="">Elegí el ítem solicitado</option>
+                  {pendingRequestItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.requestTitle} · {item.description}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label
+                className={`upload-dropzone${dragging ? " upload-dropzone--dragging" : ""}`}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDragging(false);
+                  chooseFile(event.dataTransfer.files[0] ?? null);
                 }}
               >
-                Cancelar
-              </Button>
-            </div>
-          </form>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                  onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+                />
+                <span className="upload-dropzone__icon">
+                  <Icon name="upload" size={23} />
+                </span>
+                <span>
+                  <strong>
+                    {file ? file.name : "Arrastrá un archivo o elegilo desde tu equipo"}
+                  </strong>
+                  <small>
+                    {file ? fileSize(file.size) : "PDF, JPG, PNG o WebP · máximo 25 MB"}
+                  </small>
+                </span>
+                <span className="upload-dropzone__action">Elegir archivo</span>
+              </label>
+              {uploadError ? (
+                <p className="form-error" role="alert">
+                  {uploadError}
+                </p>
+              ) : null}
+              {uploadDone ? (
+                <div className="action-receipt" role="status">
+                  <Icon name="check" size={18} />
+                  <span>
+                    <strong>Documento recibido</strong>
+                    <small>Ya ingresó al circuito de validación y procesamiento.</small>
+                  </span>
+                </div>
+              ) : null}
+              <div className="upload-panel__actions">
+                <Button
+                  type="submit"
+                  loading={upload.isPending}
+                  loadingLabel="Subiendo documento"
+                  disabled={!file || !uploadRequestItemId}
+                >
+                  Subir y procesar
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowUpload(false);
+                    setFile(null);
+                    setUploadError(null);
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          )}
         </section>
       ) : null}
 
@@ -354,6 +434,17 @@ export function StudyBandeja() {
               <EmptyState
                 title="Elegí un documento"
                 description="Vas a revisar sus datos y preparar el asiento en este panel."
+                action={
+                  rows.length > 0 ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setSelectedId(rows[0]!.id)}
+                    >
+                      Abrir el más reciente
+                    </Button>
+                  ) : undefined
+                }
               />
             ) : detail.isLoading ? (
               <div className="query-state">
@@ -487,13 +578,21 @@ export function StudyBandeja() {
                       <div className="action-receipt" role="status">
                         <Icon name="file" size={18} />
                         <span>
-                          <strong>Propuesta contable deshabilitada</strong>
+                          <strong>Datos listos para registrar</strong>
                           <small>
-                            La creación automática de asientos desde la bandeja se retiró (G0-02).
-                            La propuesta se prepara en el nuevo flujo fiscal con desglose por
-                            componente.
+                            La creación automática se retiró para conservar el control. Podés
+                            preparar un asiento manual con esta evidencia como respaldo.
                           </small>
                         </span>
+                        {capabilities.has("entry.create") ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => navigate("/contabilidad")}
+                          >
+                            Preparar asiento
+                          </Button>
+                        ) : null}
                       </div>
                     ) : null}
                   </>

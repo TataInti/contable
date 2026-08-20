@@ -137,7 +137,7 @@ describe("F2.3 revalidación de rule packs", () => {
 
   it("retira un pack ACTIVE sin versión vigente (fail-safe)", async () => {
     const pack = await createActivePack("RV_VENCIDO", true);
-    const results = await runAsRuntime(OWNER_RV, FIRM_RV, async (tx) => {
+    const results = await runAsRuntime(OWNER_RV, FIRM_RV, async () => {
       return validator.revalidateAll(ctxOwner);
     });
     const result = results.find((r) => r.packId === pack.id);

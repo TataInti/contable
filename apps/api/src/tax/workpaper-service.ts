@@ -47,8 +47,9 @@ export class WorkpaperError extends Error {
 
 export interface WorkpaperCreateInput {
   clientId: string;
-  periodStart: string;
-  periodEnd: string;
+  periodStart?: string;
+  periodEnd?: string;
+  accountingPeriodId?: string;
 }
 
 export class MonthlyWorkpaperService {
@@ -63,8 +64,21 @@ export class MonthlyWorkpaperService {
       });
       if (!client) throw new WorkpaperError("CLIENT_NOT_FOUND", "Cliente no encontrado");
 
-      const periodStart = new Date(input.periodStart);
-      const periodEnd = new Date(input.periodEnd);
+      const accountingPeriod = input.accountingPeriodId
+        ? await tx.accountingPeriod.findFirst({
+            where: { id: input.accountingPeriodId, firmId: ctx.firmId, clientId: input.clientId },
+            select: { startDate: true, endDate: true },
+          })
+        : null;
+      if (input.accountingPeriodId && !accountingPeriod) {
+        throw new WorkpaperError("PERIOD_NOT_FOUND", "Período contable no encontrado");
+      }
+      if ((!input.periodStart || !input.periodEnd) && !accountingPeriod) {
+        throw new WorkpaperError("PERIOD_NOT_FOUND", "Indicá un período para crear el expediente");
+      }
+
+      const periodStart = accountingPeriod?.startDate ?? new Date(input.periodStart!);
+      const periodEnd = accountingPeriod?.endDate ?? new Date(input.periodEnd!);
 
       // Idempotencia: mismo cliente + mes + revisión 1 ya existe.
       const existing = await tx.monthlyTaxWorkpaper.findFirst({
@@ -109,6 +123,31 @@ export class MonthlyWorkpaperService {
         take: 100,
       }),
     );
+  }
+
+  async listForAccountingPeriod(ctx: TenantContext, clientId: string, accountingPeriodId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const accountingPeriod = await tx.accountingPeriod.findFirst({
+        where: { id: accountingPeriodId, firmId: ctx.firmId, clientId },
+        select: { startDate: true, endDate: true },
+      });
+      if (!accountingPeriod) throw new WorkpaperError("PERIOD_NOT_FOUND", "Período contable no encontrado");
+
+      return tx.monthlyTaxWorkpaper.findMany({
+        where: {
+          firmId: ctx.firmId,
+          clientId,
+          periodStart: accountingPeriod.startDate,
+          periodEnd: accountingPeriod.endDate,
+        },
+        include: {
+          settlements: { include: { settlement: true } },
+          controls: true,
+        },
+        orderBy: { revision: "desc" },
+        take: 100,
+      });
+    });
   }
 
   async get(ctx: TenantContext, workpaperId: string) {
@@ -597,6 +636,29 @@ export class MonthlyWorkpaperService {
         };
       });
     });
+  }
+
+  /** Consolida la posición fiscal de todos los impuestos que coinciden con un período contable. */
+  async positionForAccountingPeriod(ctx: TenantContext, clientId: string, accountingPeriodId: string) {
+    const taxPeriods = await withTenantContext(ctx, async (tx) => {
+      const accountingPeriod = await tx.accountingPeriod.findFirst({
+        where: { id: accountingPeriodId, firmId: ctx.firmId, clientId },
+        select: { startDate: true, endDate: true },
+      });
+      if (!accountingPeriod) throw new WorkpaperError("PERIOD_NOT_FOUND", "Período contable no encontrado");
+      return tx.taxPeriod.findMany({
+        where: {
+          firmId: ctx.firmId,
+          clientId,
+          startDate: { lte: accountingPeriod.endDate },
+          endDate: { gte: accountingPeriod.startDate },
+        },
+        select: { id: true },
+      });
+    });
+
+    const positions = await Promise.all(taxPeriods.map((taxPeriod) => this.position(ctx, clientId, taxPeriod.id)));
+    return positions.flat();
   }
 }
 

@@ -225,6 +225,14 @@ export function portalRoutes(app: FastifyInstance) {
         regime: { include: { taxType: true, jurisdiction: true } },
         filings: { orderBy: { createdAt: "desc" }, take: 1 },
         payments: { orderBy: { createdAt: "desc" }, take: 10 },
+        // Sólo exponemos metadatos descargables: la clave del objeto y el
+        // checksum siguen del lado del servidor y la descarga reautoriza.
+        artifacts: {
+          where: { objectKey: { not: null } },
+          select: { id: true, kind: true, format: true, generatedAt: true },
+          orderBy: { generatedAt: "desc" },
+          take: 20,
+        },
       },
       orderBy: { version: "desc" },
       take: 100,
@@ -361,12 +369,33 @@ export function portalRoutes(app: FastifyInstance) {
   app.post("/api/v1/portal/clients/:clientId/document-upload-sessions", async (req, reply) => {
     assertCapability(req, "portal.documents.upload");
     const ctx = tenantContextFromRequest(req);
-    const body = z.object({ expectedMime: z.string().optional() }).strict().parse(req.body ?? {});
+    const body = z.object({
+      expectedMime: z.string().optional(),
+      // Un upload libre sigue siendo válido; cuando nace desde un pedido, se
+      // persiste el vínculo para completar el ítem automáticamente.
+      requestItemId: z.string().uuid().optional(),
+    }).strict().parse(req.body ?? {});
+    if (body.requestItemId) {
+      const item = await documents.getRequestItem(ctx, body.requestItemId);
+      if (!item) {
+        return reply.status(404).send({
+          error: { code: "REQUEST_ITEM_NOT_FOUND", message: "Ítem de pedido no encontrado" },
+        });
+      }
+      if (item.status !== "PENDING") {
+        return reply.status(409).send({
+          error: { code: "REQUEST_ITEM_NOT_PENDING", message: "Este ítem ya tiene una respuesta en curso" },
+        });
+      }
+    }
     const session = await documents.createUploadSession(
       ctx.firmId,
       ctx.clientId!,
       ctx.userId,
-      body.expectedMime ? { expectedMime: body.expectedMime } : {},
+      {
+        ...(body.expectedMime ? { expectedMime: body.expectedMime } : {}),
+        ...(body.requestItemId ? { requestItemId: body.requestItemId } : {}),
+      },
       ctx,
     );
     const objectKey = `${session.id}/${randomUUID()}.bin`;
@@ -384,9 +413,18 @@ export function portalRoutes(app: FastifyInstance) {
     const ctx = tenantContextFromRequest(req);
     const { sessionId } = req.params as { sessionId: string };
     const body = completeUploadSchema.parse(req.body);
-    const { document } = await documents.completeUpload(sessionId, { ...body, bucket: BUCKETS.quarantine }, ctx);
-    void outboxPublisher.dispatchPending().catch((error) => req.log.error({ error }, "No se pudo despachar el outbox"));
-    return reply.status(201).send({ data: { documentId: document.id, status: document.status } });
+    try {
+      const { document } = await documents.completeUpload(sessionId, { ...body, bucket: BUCKETS.quarantine }, ctx);
+      void outboxPublisher.dispatchPending().catch((error) => req.log.error({ error }, "No se pudo despachar el outbox"));
+      return reply.status(201).send({ data: { documentId: document.id, status: document.status } });
+    } catch (error) {
+      if (error instanceof Error && error.message === "REQUEST_ITEM_NOT_PENDING") {
+        return reply.status(409).send({
+          error: { code: "REQUEST_ITEM_NOT_PENDING", message: "El ítem ya fue respondido" },
+        });
+      }
+      throw error;
+    }
   });
 
   app.post("/api/v1/portal/clients/:clientId/threads/:threadId/messages", async (req, reply) => {

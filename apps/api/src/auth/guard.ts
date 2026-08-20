@@ -80,6 +80,10 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/document-upload-sessions/, resolve: () => "document.upload" },
   { match: /\/extractions\//, resolve: (m) => (m === "GET" ? "document.prepare" : "document.review") },
   { match: /\/documents/, resolve: (m) => (m === "GET" ? "client.read" : "document.upload") },
+  { match: /\/journal-entries\/[^/]+\/submit$/, resolve: () => "entry.submit" },
+  { match: /\/journal-entries\/[^/]+\/(review|reject)$/, resolve: () => "entry.review" },
+  { match: /\/journal-entries\/[^/]+\/post$/, resolve: () => "entry.post" },
+  { match: /\/journal-entries\/[^/]+\/reverse$/, resolve: () => "entry.reverse" },
   {
     match: /\/journal-entries/,
     resolve: (m) => {
@@ -87,10 +91,6 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
       return "entry.create";
     },
   },
-  { match: /\/journal-entries\/submit/, resolve: () => "entry.submit" },
-  { match: /\/journal-entries\/(review|reject)$/, resolve: () => "entry.review" },
-  { match: /\/journal-entries\/post$/, resolve: () => "entry.post" },
-  { match: /\/journal-entries\/reverse$/, resolve: () => "entry.reverse" },
   { match: /\/ledger\//, resolve: () => "client.read" },
   {
     match: /\/bank-|\/bank\//,
@@ -141,7 +141,10 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   {
     match: /\/vouchers/,
     resolve: (m, path) => {
-      if (path.endsWith("/review")) return "tax.vouchers.review";
+      if (path.endsWith("/review") || path.endsWith("/approve") || path.endsWith("/reject")) {
+        return "tax.vouchers.review";
+      }
+      if (path.endsWith("/submit-review")) return "tax.vouchers.prepare";
       return m === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare";
     },
   },
@@ -150,6 +153,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
     match: /\/management-expenses/,
     resolve: (m, path) => {
       if (path.endsWith("/approve-treatment")) return "tax.management_expenses.approve_treatment";
+      if (path.endsWith("/reject")) return "tax.management_expenses.approve_treatment";
+      if (path.endsWith("/submit-review")) return "tax.management_expenses.write";
       return m === "GET" ? "tax.management_expenses.read" : "tax.management_expenses.write";
     },
   },
@@ -197,6 +202,10 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/tax-obligations\/.*\/payments$/, resolve: () => "tax.payments.record" },
   { match: /\/tax-payments\/.*\/reverse$/, resolve: () => "tax.payments.record" },
   { match: /\/tax\//, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
+  { match: /\/activities/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
+  { match: /\/adjustments\/(exchange-difference|inflation)/, resolve: () => "bank.reconcile" },
+  { match: /\/portal-invitations/, resolve: (m) => (m === "GET" ? "client.read" : "client.manage") },
+  { match: /\/document-request-items\/[^/]+\/preview/, resolve: () => "client.read" },
   { match: /\/obligations/, resolve: (m) => (m === "GET" ? "client.read" : "obligation.manage") },
   { match: /\/obligation-instances/, resolve: (m) => (m === "GET" ? "client.read" : "obligation.manage") },
   { match: /\/document-requests/, resolve: (m) => (m === "GET" ? "client.read" : "request.manage") },
@@ -208,6 +217,9 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/reports\//, resolve: () => "report.run" },
   { match: /\/assistant\//, resolve: () => "ai.use" },
   { match: /\/bi\//, resolve: () => "bi.use" },
+  // El tablero del estudio sólo agrega datos de clientes ya accesibles para
+  // el miembro. No debe caer en el deny-by-default de las rutas de firma.
+  { match: /\/firms\/[^/]+\/dashboard$/, resolve: (m) => (m === "GET" ? "client.read" : null) },
   {
     match: /\/clients\/[^/]+\/(accounts|counterparties|cost-centers|fiscal-years|profile)/,
     resolve: (m) => (m === "GET" ? "client.read" : "client.manage"),
@@ -373,7 +385,12 @@ export function authGuardPlugin(app: FastifyInstance) {
     }
 
     const capability = requiredCapability(req.method, path);
-    if (capability && !capabilities.has(capability)) {
+    if (capability === null) {
+      // A-7: deny-by-default. Una ruta de negocio con sesión y firma que no
+      // declara capability es un escape de permisos → 404 indistinguible.
+      throw httpError(404, "RESOURCE_NOT_FOUND", "Recurso no encontrado");
+    }
+    if (!capabilities.has(capability)) {
       throw httpError(403, "CAPABILITY_REQUIRED", `Falta la capacidad ${capability}`);
     }
   });

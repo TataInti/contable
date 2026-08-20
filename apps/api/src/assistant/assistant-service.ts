@@ -65,12 +65,17 @@ export class AssistantService {
   /**
    * Envía un turno: persiste el mensaje del usuario, llama a FastAPI
    * (A-004: Node autoriza; FastAPI no decide permisos) y persiste la respuesta.
+   *
+   * La llamada remota se hace FUERA de la transacción de BD (P1: no retener una
+   * transacción durante una llamada remota) y con timeout (AbortSignal).
    */
   async sendTurn(
     ctx: TenantContext,
     input: { conversationId: string; query: string },
   ) {
-    return withTenantContext(ctx, async (tx) => {
+    // 1) Transacción corta: validar conversación, resolver herramientas y
+    //    persistir el turno del usuario. No debe convivir con I/O remota.
+    const { conversation, userTurn, toolResults } = await withTenantContext(ctx, async (tx) => {
       const conversation = await tx.assistantConversation.findFirst({
         where: { id: input.conversationId, firmId: ctx.firmId },
       });
@@ -92,11 +97,16 @@ export class AssistantService {
         },
       });
 
-      // Llamar a FastAPI (A-004: Node autoriza el contexto)
+      // Resolver herramientas dentro de la misma transacción de lectura.
       const toolResults = await this.resolveToolResults(tx, conversation, input.query);
-      const result = await this.callAssistant(ctx, conversation, input.query, toolResults);
+      return { conversation, userTurn, toolResults };
+    });
 
-      // Persistir turno del asistente
+    // 2) Llamada a FastAPI FUERA de transacción, con timeout.
+    const result = await this.callAssistant(ctx, conversation, input.query, toolResults);
+
+    // 3) Transacción corta: persistir el turno del asistente, evidencia y usage.
+    return withTenantContext(ctx, async (tx) => {
       const assistantTurn = await tx.assistantTurn.create({
         data: {
           firmId: ctx.firmId,
@@ -215,6 +225,8 @@ export class AssistantService {
     const message = `POST${path}${timestamp}${nonce}${bodyHash}`;
     const signature = createHmac("sha256", this.config.secret).update(message).digest("hex");
 
+    // Timeout: la llamada remota no puede mantener colgada una request HTTP.
+    const timeout = AbortSignal.timeout(15_000);
     const res = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}${path}`, {
       method: "POST",
       headers: {
@@ -225,6 +237,7 @@ export class AssistantService {
         "X-Service-Signature": signature,
       },
       body,
+      signal: timeout,
     });
 
     if (!res.ok) {

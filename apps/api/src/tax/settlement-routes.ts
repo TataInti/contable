@@ -59,6 +59,7 @@ export function settlementRoutes(app: FastifyInstance) {
     const query = z
       .object({
         periodId: z.string().uuid().optional(),
+        accountingPeriodId: z.string().uuid().optional(),
         cutoffFrom: z.string().date().optional(),
         cutoffTo: z.string().date().optional(),
         limit: z.coerce.number().int().min(1).max(200).optional(),
@@ -69,6 +70,7 @@ export function settlementRoutes(app: FastifyInstance) {
     try {
       const result = await service.list(ctx, ctx.clientId!, {
         ...(query.periodId ? { periodId: query.periodId } : {}),
+        ...(query.accountingPeriodId ? { accountingPeriodId: query.accountingPeriodId } : {}),
         ...(query.cutoffFrom ? { cutoffFrom: query.cutoffFrom } : {}),
         ...(query.cutoffTo ? { cutoffTo: query.cutoffTo } : {}),
         ...(query.limit !== undefined ? { limit: query.limit } : {}),

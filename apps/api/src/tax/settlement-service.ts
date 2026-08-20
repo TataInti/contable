@@ -1227,15 +1227,36 @@ export class SettlementService {
   async list(
     ctx: TenantContext,
     clientId: string,
-    filters: { periodId?: string; cutoffFrom?: string; cutoffTo?: string; limit?: number; offset?: number } = {},
+    filters: { periodId?: string; accountingPeriodId?: string; cutoffFrom?: string; cutoffTo?: string; limit?: number; offset?: number } = {},
   ) {
     const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
     const offset = Math.max(filters.offset ?? 0, 0);
     return withTenantContext(ctx, async (tx) => {
+      const accountingPeriod = filters.accountingPeriodId
+        ? await tx.accountingPeriod.findFirst({
+            where: { id: filters.accountingPeriodId, firmId: ctx.firmId, clientId },
+            select: { startDate: true, endDate: true },
+          })
+        : null;
+      if (filters.accountingPeriodId && !accountingPeriod) {
+        throw new SettlementError("PERIOD_NOT_FOUND", "Período contable no encontrado");
+      }
+      const taxPeriodIds = accountingPeriod
+        ? await tx.taxPeriod.findMany({
+            where: {
+              firmId: ctx.firmId,
+              clientId,
+              startDate: { lte: accountingPeriod.endDate },
+              endDate: { gte: accountingPeriod.startDate },
+            },
+            select: { id: true },
+          })
+        : [];
       const where: Prisma.TaxSettlementWhereInput = {
         firmId: ctx.firmId,
         clientId,
         ...(filters.periodId ? { periodId: filters.periodId } : {}),
+        ...(accountingPeriod ? { periodId: { in: taxPeriodIds.map((period) => period.id) } } : {}),
         ...(filters.cutoffFrom || filters.cutoffTo
           ? {
               cutoff: {
@@ -1248,7 +1269,7 @@ export class SettlementService {
       const [data, total] = await Promise.all([
         tx.taxSettlement.findMany({
           where,
-          include: { period: true, regime: true, lines: true },
+          include: { period: true, regime: { include: { taxType: true, jurisdiction: true } }, lines: true },
           orderBy: [{ period: { startDate: "desc" } }, { version: "desc" }],
           skip: offset,
           take: limit,

@@ -27,10 +27,12 @@ export function workpaperRoutes(app: FastifyInstance) {
   app.get("/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const q = z
-      .object({ from: z.string().optional(), to: z.string().optional() })
+      .object({ from: z.string().optional(), to: z.string().optional(), accountingPeriodId: z.string().uuid().optional() })
       .parse(req.query);
     try {
-      const data = await service.list(ctx, ctx.clientId!, q.from, q.to);
+      const data = q.accountingPeriodId
+        ? await service.listForAccountingPeriod(ctx, ctx.clientId!, q.accountingPeriodId)
+        : await service.list(ctx, ctx.clientId!, q.from, q.to);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -41,12 +43,21 @@ export function workpaperRoutes(app: FastifyInstance) {
     const ctx = tenantContextFromRequest(req);
     const body = z
       .object({
-        periodStart: z.string(),
-        periodEnd: z.string(),
+        periodStart: z.string().optional(),
+        periodEnd: z.string().optional(),
+        accountingPeriodId: z.string().uuid().optional(),
+      })
+      .refine((value) => Boolean(value.accountingPeriodId || (value.periodStart && value.periodEnd)), {
+        message: "Indicá un período contable o las fechas del expediente",
       })
       .parse(req.body);
     try {
-      const data = await service.create(ctx, { clientId: ctx.clientId!, ...body });
+      const data = await service.create(ctx, {
+        clientId: ctx.clientId!,
+        ...(body.periodStart ? { periodStart: body.periodStart } : {}),
+        ...(body.periodEnd ? { periodEnd: body.periodEnd } : {}),
+        ...(body.accountingPeriodId ? { accountingPeriodId: body.accountingPeriodId } : {}),
+      });
       return reply.status(201).send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -205,7 +216,17 @@ export function workpaperRoutes(app: FastifyInstance) {
       .strict()
       .parse(req.body);
     try {
-      const data = await service.createOpeningCredit(ctx, { clientId: ctx.clientId!, ...body });
+      const data = await service.createOpeningCredit(ctx, {
+        clientId: ctx.clientId!,
+        taxTypeId: body.taxTypeId,
+        ...(body.regimeId ? { regimeId: body.regimeId } : {}),
+        ...(body.jurisdictionId ? { jurisdictionId: body.jurisdictionId } : {}),
+        periodId: body.periodId,
+        kind: body.kind,
+        amount: body.amount,
+        evidenceDocumentId: body.evidenceDocumentId,
+        ...(body.reference ? { reference: body.reference } : {}),
+      });
       return reply.status(201).send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -214,9 +235,15 @@ export function workpaperRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/firms/:firmId/clients/:clientId/tax-position", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const query = z.object({ periodId: z.string().uuid() }).strict().parse(req.query);
+    const query = z
+      .object({ periodId: z.string().uuid().optional(), accountingPeriodId: z.string().uuid().optional() })
+      .strict()
+      .refine((value) => Boolean(value.periodId || value.accountingPeriodId), "Indicá un período fiscal o contable")
+      .parse(req.query);
     try {
-      const data = await service.position(ctx, ctx.clientId!, query.periodId);
+      const data = query.accountingPeriodId
+        ? await service.positionForAccountingPeriod(ctx, ctx.clientId!, query.accountingPeriodId)
+        : await service.position(ctx, ctx.clientId!, query.periodId!);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);

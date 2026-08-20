@@ -1,6 +1,4 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { Prisma, PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { WorkService, WorkError } from "./work-service.js";
 import { DocumentService } from "../documents/document-service.js";
@@ -21,25 +19,6 @@ import { ObjectStorage } from "../storage/object-storage.js";
 const OWNER_F2 = "cccccccc-cccc-4ccc-8ccc-cccccccccc01";
 const FIRM_F2 = "cccccccc-cccc-4ccc-8ccc-cccccccccc02";
 const CLIENT_F2 = "cccccccc-2222-4333-8444-cccccccccc03";
-
-const runtimeConnection =
-  process.env.RUNTIME_DATABASE_URL ??
-  "postgresql://contable_runtime:runtime_secret@localhost:5432/contable";
-const runtimeAdapter = new PrismaPg({ connectionString: runtimeConnection });
-const runtimePrisma = new PrismaClient({ adapter: runtimeAdapter });
-
-async function runAsRuntime<T>(
-  userId: string,
-  firmId: string,
-  fn: (tx: Prisma.TransactionClient) => Promise<T>,
-) {
-  return runtimePrisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`SELECT set_config('app.user_id', '${userId}', true)`);
-    await tx.$executeRawUnsafe(`SELECT set_config('app.firm_id', '${firmId}', true)`);
-    await tx.$executeRawUnsafe(`SELECT set_config('app.actor_kind', 'USER', true)`);
-    return fn(tx) as Promise<T>;
-  });
-}
 
 const work = new WorkService();
 const storage = new ObjectStorage();

@@ -1,16 +1,26 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState, Table } from "@contable/design-system";
+import { Button, EmptyState, Table } from "@contable/design-system";
+import { Link } from "react-router-dom";
 import { api, downloadFile, type ReportPublication } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
-import { formatPortalDate, PortalLoading, PortalPageHeader } from "./PortalUI";
+import {
+  formatPortalDate,
+  PortalLoading,
+  PortalPageHeader,
+  PortalRetryButton,
+} from "./PortalUI";
 import "./portal.css";
 
 export function PortalReportes() {
   const { clientId } = useClientContext();
   const [downloading, setDownloading] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [failedDownload, setFailedDownload] = useState<{
+    report: ReportPublication;
+    format: "pdf" | "xlsx" | "csv";
+  } | null>(null);
   const reports = useQuery({
     queryKey: ["portal-reports", clientId],
     queryFn: () => api.get<ReportPublication[]>(`/portal/clients/${clientId}/report-publications`),
@@ -22,12 +32,14 @@ export function PortalReportes() {
     const key = `${report.id}-${format}`;
     setDownloading(key);
     setDownloadError(null);
+    setFailedDownload(null);
     try {
       await downloadFile(
         `/portal/clients/${clientId}/report-publications/${report.id}/export?format=${format}`,
       );
     } catch {
       setDownloadError("No pudimos descargar el archivo. Reintentá en unos minutos.");
+      setFailedDownload({ report, format });
     } finally {
       setDownloading(null);
     }
@@ -39,6 +51,11 @@ export function PortalReportes() {
         eyebrow="Publicaciones"
         title="Estados y reportes"
         description="Descargá las versiones que tu estudio preparó y publicó para vos."
+        actions={
+          <Link className="portal-secondary-link" to="/portal/liquidaciones">
+            Ver liquidaciones
+          </Link>
+        }
       />
       <section className="portal-page__section" aria-label="Reportes publicados">
         {!clientId ? (
@@ -52,11 +69,17 @@ export function PortalReportes() {
           <EmptyState
             title="No pudimos cargar los reportes"
             description="Reintentá en unos minutos."
+            action={<PortalRetryButton onRetry={() => void reports.refetch()} />}
           />
         ) : publications.length === 0 ? (
           <EmptyState
             title="Todavía no hay reportes publicados"
             description="Cuando tu estudio publique una versión, aparecerá acá."
+            action={
+              <Link className="portal-text-link" to="/portal/liquidaciones">
+                Ver liquidaciones publicadas
+              </Link>
+            }
           />
         ) : (
           <>
@@ -71,9 +94,19 @@ export function PortalReportes() {
               </div>
             </div>
             {downloadError ? (
-              <p className="portal-inline-alert portal-inline-alert--error" role="alert">
-                {downloadError}
-              </p>
+              <div className="portal-inline-alert portal-inline-alert--error" role="alert">
+                <span>{downloadError}</span>
+                {failedDownload ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void downloadReport(failedDownload.report, failedDownload.format)}
+                  >
+                    Reintentar {failedDownload.format.toUpperCase()}
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
             <Table<ReportPublication>
               className="portal-data-table portal-data-table--reports"
@@ -141,6 +174,11 @@ export function PortalReportes() {
                     </div>
                   ),
                 },
+                {
+                  key: "preview",
+                  header: "Vista",
+                  render: (report) => <ReportPreview report={report} />,
+                },
               ]}
             />
             <p className="portal-page__footnote">
@@ -151,5 +189,24 @@ export function PortalReportes() {
         )}
       </section>
     </div>
+  );
+}
+
+function ReportPreview({ report }: { report: ReportPublication }) {
+  const lines = report.run?.result?.lines ?? [];
+  if (lines.length === 0) return <span>Sin vista previa</span>;
+
+  return (
+    <details>
+      <summary>Ver resumen</summary>
+      <ul>
+        {lines.slice(0, 6).map((line) => (
+          <li key={line.code}>
+            <strong>{line.label}</strong>: {line.value}
+          </li>
+        ))}
+        {lines.length > 6 ? <li>+ {lines.length - 6} líneas más en la descarga</li> : null}
+      </ul>
+    </details>
   );
 }

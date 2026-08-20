@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, EmptyState } from "@contable/design-system";
@@ -26,7 +26,12 @@ interface Snapshot {
   status: "DRAFT" | "PUBLISHED" | "SUPERSEDED";
   cutoff: string;
   totals: Record<string, string> | null;
-  lines: Array<{ concept: string; formula: string; inputs: Record<string, string>; result: string }> | null;
+  lines: Array<{
+    concept: string;
+    formula: string;
+    inputs: Record<string, string>;
+    result: string;
+  }> | null;
   outputHash: string;
   publishedAt: string | null;
   period?: { label: string | null; startDate: string; endDate: string } | null;
@@ -59,20 +64,27 @@ export function StudyRentabilidad() {
 
   const periodsQuery = useQuery({
     queryKey: ["tax-obligations", firmId, clientId],
-    queryFn: () =>
-      api.get<Obligation[]>(`/firms/${firmId}/clients/${clientId}/tax-obligations`),
+    queryFn: () => api.get<Obligation[]>(`/firms/${firmId}/clients/${clientId}/tax-obligations`),
     enabled: Boolean(firmId && clientId),
   });
 
   // F2.4: selector de período local que se refleja en la URL (?period=).
   // No asume periods[0]: usa el período de la URL, del contexto o el primero.
   const urlPeriod = searchParams.get("period");
-  const selected =
-    periodsQuery.data?.find((obligation) => obligation.period.id === (urlPeriod ?? periodId)) ??
-    periodsQuery.data?.find((obligation) => obligation.period.id === periodId) ??
-    periodsQuery.data?.[0] ??
+  const availablePeriods = useMemo(
+    () => [
+      ...new Map(
+        (periodsQuery.data ?? []).map((obligation) => [obligation.period.id, obligation.period]),
+      ).values(),
+    ],
+    [periodsQuery.data],
+  );
+  const selectedPeriod =
+    availablePeriods.find((period) => period.id === (urlPeriod ?? periodId)) ??
+    availablePeriods.find((period) => period.id === periodId) ??
+    availablePeriods[0] ??
     null;
-  const activePeriodId = selected?.period.id ?? periodId;
+  const activePeriodId = selectedPeriod?.id ?? periodId;
 
   const selectPeriod = (next: string) => {
     const params = new URLSearchParams(searchParams);
@@ -97,9 +109,9 @@ export function StudyRentabilidad() {
   const calculateMutation = useMutation({
     mutationFn: ({ basis }: { basis: "DEVENGADO" | "CAJA" }) =>
       api.post(`/firms/${firmId}/clients/${clientId}/profitability/calculate`, {
-        periodId: selected?.period.id,
+        periodId: selectedPeriod?.id,
         basis,
-        cutoff: selected?.period.endDate,
+        cutoff: selectedPeriod?.endDate,
       }),
     onSuccess: () => {
       invalidate();
@@ -110,7 +122,7 @@ export function StudyRentabilidad() {
   const publishMutation = useMutation({
     mutationFn: ({ basis }: { basis: "DEVENGADO" | "CAJA" }) =>
       api.post(`/firms/${firmId}/clients/${clientId}/profitability/publish`, {
-        periodId: selected?.period.id,
+        periodId: selectedPeriod?.id,
         basis,
       }),
     onSuccess: () => {
@@ -124,11 +136,17 @@ export function StudyRentabilidad() {
   const caja = snapshots.find((s) => s.basis === "CAJA");
 
   const renderView = (snapshot: Snapshot | undefined, basis: "DEVENGADO" | "CAJA") => (
-    <section className="profitability-view" aria-labelledby={`profitability-${basis.toLowerCase()}-title`}>
+    <section
+      className="profitability-view"
+      aria-labelledby={`profitability-${basis.toLowerCase()}-title`}
+    >
       <div className="profitability-view__header">
         <div>
           <p className="study-page__eyebrow">{basisLabel(basis)}</p>
-          <h3 id={`profitability-${basis.toLowerCase()}-title`} className="profitability-view__title">
+          <h3
+            id={`profitability-${basis.toLowerCase()}-title`}
+            className="profitability-view__title"
+          >
             {basis === "DEVENGADO" ? "Resultado gerencial" : "Flujo neto"}
           </h3>
         </div>
@@ -140,7 +158,7 @@ export function StudyRentabilidad() {
           {capabilities.has("profitability.calculate") ? (
             <Button
               size="sm"
-              disabled={!selected || calculateMutation.isPending}
+              disabled={!selectedPeriod || calculateMutation.isPending}
               onClick={() => calculateMutation.mutate({ basis })}
             >
               {snapshot && snapshot.status === "DRAFT" ? "Recalcular" : "Calcular"}
@@ -151,7 +169,15 @@ export function StudyRentabilidad() {
               size="sm"
               variant="secondary"
               disabled={publishMutation.isPending}
-              onClick={() => publishMutation.mutate({ basis })}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "¿Publicar esta versión? El cliente podrá consultar este resultado en el portal.",
+                  )
+                ) {
+                  publishMutation.mutate({ basis });
+                }
+              }}
             >
               Publicar
             </Button>
@@ -163,6 +189,18 @@ export function StudyRentabilidad() {
         <EmptyState
           title={basis === "DEVENGADO" ? "Devengado sin calcular" : "Caja sin calcular"}
           description="Calculá la vista para ver el resultado del período."
+          action={
+            capabilities.has("profitability.calculate") && selectedPeriod ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={calculateMutation.isPending}
+                onClick={() => calculateMutation.mutate({ basis })}
+              >
+                Calcular {basis === "DEVENGADO" ? "devengado" : "caja"}
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <>
@@ -178,7 +216,11 @@ export function StudyRentabilidad() {
           {snapshot.lines && snapshot.lines.length > 0 ? (
             <div className="profitability-lines" role="list">
               {snapshot.lines.map((line, index) => (
-                <div className="profitability-line" role="listitem" key={`${line.concept}-${index}`}>
+                <div
+                  className="profitability-line"
+                  role="listitem"
+                  key={`${line.concept}-${index}`}
+                >
                   <div className="profitability-line__head">
                     <strong>{line.concept}</strong>
                     <span>{formatMoney(line.result)}</span>
@@ -210,7 +252,7 @@ export function StudyRentabilidad() {
           </h1>
         </div>
         <div className="study-page__header-actions">
-          {periodsQuery.data && periodsQuery.data.length > 0 ? (
+          {availablePeriods.length > 0 ? (
             <label className="period-select">
               <span>Período</span>
               <select
@@ -218,17 +260,26 @@ export function StudyRentabilidad() {
                 onChange={(event) => selectPeriod(event.target.value)}
                 aria-label="Seleccionar período de rentabilidad"
               >
-                {periodsQuery.data.map((obligation) => (
-                  <option key={obligation.period.id} value={obligation.period.id}>
-                    {obligation.period.label ?? obligation.period.startDate.slice(0, 7)}
+                {availablePeriods.map((period) => (
+                  <option key={period.id} value={period.id}>
+                    {period.label ?? period.startDate.slice(0, 7)}
                   </option>
                 ))}
               </select>
             </label>
           ) : null}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void Promise.all([periodsQuery.refetch(), listQuery.refetch()]);
+            }}
+          >
+            Actualizar
+          </Button>
           <p className="study-page__hint">
-            Devengado y caja se calculan por separado; la gestión sin respaldo
-            fiscal nunca reduce impuestos por defecto.
+            Devengado y caja se calculan por separado; la gestión sin respaldo fiscal nunca reduce
+            impuestos por defecto.
           </p>
         </div>
       </header>
@@ -256,13 +307,31 @@ export function StudyRentabilidad() {
           Cargando rentabilidad…
         </div>
       ) : periodsQuery.isError || listQuery.isError ? (
-        <div className="study-state" role="alert">
-          No se pudo cargar la rentabilidad. Reintentá más tarde.
-        </div>
-      ) : !selected ? (
         <EmptyState
-          title="Sin obligación fiscal para el período activo"
+          title="No se pudo cargar la rentabilidad"
+          description="Reintentá en unos minutos."
+          action={
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void Promise.all([periodsQuery.refetch(), listQuery.refetch()]);
+              }}
+            >
+              Reintentar
+            </Button>
+          }
+        />
+      ) : !selectedPeriod ? (
+        <EmptyState
+          title="Sin período fiscal para calcular"
           description="Completá la configuración fiscal y materializá las obligaciones antes de calcular rentabilidad."
+          action={
+            capabilities.has("tax.profile.write") ? (
+              <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
+                Configurar período fiscal
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <>

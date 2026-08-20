@@ -29,6 +29,7 @@ interface RuleVersion {
   engineVersion: string;
   rulesHash: string;
   rateRules: RuleRow[];
+  dueDateRules: Array<{ id: string; frequency: string | null; dueDay: number; cuitEnding: string | null; validFrom: string; validTo: string | null }>;
   sources: Array<{ id: string; title: string; reference: string | null; consultedAt: string }>;
 }
 
@@ -41,8 +42,10 @@ interface RulePack {
 }
 
 interface RulePackDetail extends RulePack {
-  regime: RulePack["regime"] & { authority: { name: string } };
+  regime: RulePack["regime"] & { jurisdiction: { id: string; name: string }; authority: { id: string; name: string } };
 }
+
+interface RuleRegimeOption { id: string; code: string; name: string; taxType: { name: string }; jurisdiction: { name: string } }
 
 interface Credential {
   id: string;
@@ -64,6 +67,13 @@ export function StudyReglasFiscales() {
   const [credentialId, setCredentialId] = useState("");
   const [draftRows, setDraftRows] = useState<RuleRow[]>([]);
   const [receipt, setReceipt] = useState<string | null>(null);
+  const [showPackForm, setShowPackForm] = useState(false);
+  const [showSourceForm, setShowSourceForm] = useState(false);
+  const [showDueDateForm, setShowDueDateForm] = useState(false);
+  const [newPack, setNewPack] = useState({ code: "", name: "", regimeId: "" });
+  const [engineVersion, setEngineVersion] = useState("tax-engine-v1");
+  const [newSource, setNewSource] = useState({ title: "", reference: "", url: "", consultedAt: today });
+  const [newDueDate, setNewDueDate] = useState({ frequency: "MENSUAL", dueDay: "", cuitEnding: "", validFrom: today });
 
   const packsQuery = useQuery({
     queryKey: ["tax-rule-packs", firmId],
@@ -85,6 +95,11 @@ export function StudyReglasFiscales() {
     queryFn: () => api.get<Credential[]>("/tax/credentials"),
     enabled: capabilities.has("tax.rules.approve"),
   });
+  const regimesQuery = useQuery({
+    queryKey: ["tax-regimes"],
+    queryFn: () => api.get<RuleRegimeOption[]>("/tax/regimes"),
+    enabled: capabilities.has("tax.rules.propose"),
+  });
 
   const selectedVersion = useMemo(
     () => detailQuery.data?.versions.find((version) => version.status === "DRAFT") ?? detailQuery.data?.versions[0],
@@ -105,6 +120,23 @@ export function StudyReglasFiscales() {
     onSuccess: () => {
       invalidate();
       setReceipt("Se creó un borrador independiente a partir de la versión vigente.");
+    },
+  });
+  const createPackMutation = useMutation({
+    mutationFn: () => api.post<RulePack>("/tax/rule-packs", { code: newPack.code.trim(), name: newPack.name.trim(), regimeId: newPack.regimeId }),
+    onSuccess: (pack) => {
+      void queryClient.invalidateQueries({ queryKey: ["tax-rule-packs", firmId] });
+      setSelectedPackId(pack.id);
+      setNewPack({ code: "", name: "", regimeId: "" });
+      setShowPackForm(false);
+      setReceipt("El paquete quedó creado. Ahora podés iniciar su primera versión.");
+    },
+  });
+  const createVersionMutation = useMutation({
+    mutationFn: () => api.post(`/tax/rule-packs/${selectedPackId}/versions`, { validFrom, engineVersion, rulesHash: "PENDING_DRAFT" }),
+    onSuccess: () => {
+      invalidate();
+      setReceipt("La primera versión quedó abierta como borrador.");
     },
   });
   const saveMutation = useMutation({
@@ -146,13 +178,43 @@ export function StudyReglasFiscales() {
       setReceipt("La versión activa quedó disponible para próximos cálculos.");
     },
   });
+  const addSourceMutation = useMutation({
+    mutationFn: () => api.post(`/tax/rule-versions/${selectedVersion?.id}/sources`, {
+      authorityId: detailQuery.data?.regime.authority.id,
+      title: newSource.title.trim(),
+      ...(newSource.reference.trim() ? { reference: newSource.reference.trim() } : {}),
+      ...(newSource.url.trim() ? { url: newSource.url.trim() } : {}),
+      consultedAt: newSource.consultedAt,
+    }),
+    onSuccess: () => {
+      invalidate();
+      setNewSource({ title: "", reference: "", url: "", consultedAt: today });
+      setShowSourceForm(false);
+      setReceipt("La fuente normativa quedó asociada al borrador.");
+    },
+  });
+  const addDueDateMutation = useMutation({
+    mutationFn: () => api.post(`/tax/rule-versions/${selectedVersion?.id}/due-date-rules`, {
+      jurisdictionId: detailQuery.data?.regime.jurisdiction.id,
+      ...(newDueDate.frequency.trim() ? { frequency: newDueDate.frequency.trim() } : {}),
+      dueDay: Number(newDueDate.dueDay),
+      ...(newDueDate.cuitEnding.trim() ? { cuitEnding: newDueDate.cuitEnding.trim() } : {}),
+      validFrom: newDueDate.validFrom,
+    }),
+    onSuccess: () => {
+      invalidate();
+      setNewDueDate({ frequency: "MENSUAL", dueDay: "", cuitEnding: "", validFrom: today });
+      setShowDueDateForm(false);
+      setReceipt("El vencimiento quedó agregado al borrador.");
+    },
+  });
 
   if (!capabilities.has("tax.rules.read")) {
     return <EmptyState title="Acceso restringido" description="No tenés permiso para consultar reglas fiscales." />;
   }
 
   const editable = selectedVersion?.status === "DRAFT" && capabilities.has("tax.rules.propose");
-  const mutationError = cloneMutation.error ?? saveMutation.error ?? submitMutation.error ?? approveMutation.error ?? activateMutation.error;
+  const mutationError = cloneMutation.error ?? createPackMutation.error ?? createVersionMutation.error ?? saveMutation.error ?? submitMutation.error ?? approveMutation.error ?? activateMutation.error ?? addSourceMutation.error ?? addDueDateMutation.error;
 
   return (
     <section className="study-page study-page--wide" aria-labelledby="tax-rules-title">
@@ -162,7 +224,16 @@ export function StudyReglasFiscales() {
           <h1 id="tax-rules-title" className="study-page__title">Reglas fiscales</h1>
           <p className="study-page__subtitle">Alícuotas, mínimos y porcentajes normativos con vigencia y aprobación profesional.</p>
         </div>
+        {capabilities.has("tax.rules.propose") ? <Button onClick={() => setShowPackForm((visible) => !visible)}><Icon name="plus" size={16} /> Nuevo paquete</Button> : null}
       </header>
+
+      {showPackForm ? <form className="study-panel study-form fiscal-action-form" onSubmit={(event) => { event.preventDefault(); createPackMutation.mutate(); }}>
+        <div className="study-panel__heading"><div><h2>Nuevo paquete de reglas</h2><p>Iniciá la configuración para un régimen y luego abrí su primera versión.</p></div></div>
+        <Field label="Código" id="new-rule-pack-code" value={newPack.code} onChange={(event) => setNewPack({ ...newPack, code: event.target.value.toUpperCase() })} placeholder="IVA-RI-ARCA" required />
+        <Field label="Nombre" id="new-rule-pack-name" value={newPack.name} onChange={(event) => setNewPack({ ...newPack, name: event.target.value })} placeholder="IVA Responsable Inscripto" required />
+        <div className="ds-field"><label className="ds-field__label" htmlFor="new-rule-pack-regime">Régimen</label><select id="new-rule-pack-regime" className="ds-field__input" value={newPack.regimeId} onChange={(event) => setNewPack({ ...newPack, regimeId: event.target.value })} required><option value="">Seleccioná un régimen…</option>{regimesQuery.data?.map((regime) => <option key={regime.id} value={regime.id}>{regime.name} · {regime.taxType.name} · {regime.jurisdiction.name}</option>)}</select></div>
+        <div className="study-form__actions"><Button type="submit" loading={createPackMutation.isPending} disabled={!newPack.code.trim() || !newPack.name.trim() || !newPack.regimeId}>Crear paquete</Button><Button type="button" variant="ghost" onClick={() => setShowPackForm(false)}>Cancelar</Button></div>
+      </form> : null}
 
       {receipt ? (
         <div className="action-receipt action-receipt--page" role="status">
@@ -176,6 +247,7 @@ export function StudyReglasFiscales() {
         <aside className="fiscal-rules-index" aria-label="Rule packs disponibles">
           <p className="fiscal-rules-index__label">Regímenes</p>
           {packsQuery.isLoading ? <p className="muted-copy">Cargando reglas…</p> : null}
+          {!packsQuery.isLoading && (packsQuery.data?.length ?? 0) === 0 ? <p className="muted-copy">No hay paquetes configurados.</p> : null}
           {packsQuery.data?.map((pack) => {
             const active = pack.versions.find((version) => version.status === "ACTIVE");
             return (
@@ -196,6 +268,8 @@ export function StudyReglasFiscales() {
         <div className="fiscal-rules-detail">
           {detailQuery.isLoading ? <div className="query-state">Cargando detalle de reglas…</div> : null}
           {detailQuery.isError ? <EmptyState title="No se pudo cargar el paquete de reglas" /> : null}
+          {!selectedPackId && !packsQuery.isLoading ? <EmptyState title="Todavía no hay paquetes de reglas" description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas." action={capabilities.has("tax.rules.propose") ? <Button onClick={() => setShowPackForm(true)}>Crear paquete</Button> : undefined} /> : null}
+          {detailQuery.data && !selectedVersion ? <EmptyState title="Este paquete todavía no tiene versión" description="Creá un borrador inicial antes de ingresar porcentajes o vencimientos." action={capabilities.has("tax.rules.propose") ? <form className="fiscal-empty-action" onSubmit={(event) => { event.preventDefault(); createVersionMutation.mutate(); }}><Field label="Vigencia desde" id="first-rule-version-valid-from" type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} required /><Field label="Versión del motor" id="first-rule-version-engine" value={engineVersion} onChange={(event) => setEngineVersion(event.target.value)} required /><Button type="submit" loading={createVersionMutation.isPending}>Crear primera versión</Button></form> : undefined} /> : null}
           {detailQuery.data && selectedVersion ? (
             <>
               <section className="study-panel fiscal-rule-summary">
@@ -241,6 +315,55 @@ export function StudyReglasFiscales() {
                   ]}
                 />
                 {editable ? <div className="study-page__actions fiscal-rule-actions"><Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending} disabled={draftRows.some((row) => !row.concept.trim() || (!row.rate && !row.minAmount))}>Guardar borrador</Button><Button variant="secondary" onClick={() => submitMutation.mutate()} loading={submitMutation.isPending}>Enviar a revisión</Button></div> : null}
+              </section>
+
+              <section className="study-panel" aria-labelledby="rule-due-dates-title">
+                <div className="study-panel__heading">
+                  <div><h2 id="rule-due-dates-title">Vencimientos</h2><p>Reglas usadas para calcular fechas de presentación y pago.</p></div>
+                  {editable ? <Button size="sm" variant="secondary" onClick={() => setShowDueDateForm((visible) => !visible)}>{showDueDateForm ? "Cancelar" : "Agregar vencimiento"}</Button> : null}
+                </div>
+                {showDueDateForm && editable ? <form className="study-form study-form--compact fiscal-action-form" onSubmit={(event) => { event.preventDefault(); addDueDateMutation.mutate(); }}>
+                  <Field label="Frecuencia" id="rule-due-frequency" value={newDueDate.frequency} onChange={(event) => setNewDueDate({ ...newDueDate, frequency: event.target.value })} required />
+                  <Field label="Día del mes" id="rule-due-day" type="number" min="1" max="31" value={newDueDate.dueDay} onChange={(event) => setNewDueDate({ ...newDueDate, dueDay: event.target.value })} required />
+                  <Field label="Terminación de CUIT" id="rule-due-cuit-ending" value={newDueDate.cuitEnding} onChange={(event) => setNewDueDate({ ...newDueDate, cuitEnding: event.target.value })} placeholder="Opcional" />
+                  <Field label="Vigencia desde" id="rule-due-valid-from" type="date" value={newDueDate.validFrom} onChange={(event) => setNewDueDate({ ...newDueDate, validFrom: event.target.value })} required />
+                  <div className="study-form__actions"><Button type="submit" loading={addDueDateMutation.isPending} disabled={!newDueDate.dueDay || Number(newDueDate.dueDay) < 1 || Number(newDueDate.dueDay) > 31}>Guardar vencimiento</Button></div>
+                </form> : null}
+                <Table<RuleVersion["dueDateRules"][number]>
+                  rows={selectedVersion.dueDateRules}
+                  rowKey={(row) => row.id}
+                  empty="No hay vencimientos cargados para esta versión."
+                  columns={[
+                    { key: "frequency", header: "Frecuencia", render: (row) => row.frequency ?? "—" },
+                    { key: "dueDay", header: "Día", render: (row) => String(row.dueDay) },
+                    { key: "cuitEnding", header: "CUIT", render: (row) => row.cuitEnding ?? "Todas" },
+                    { key: "validFrom", header: "Vigencia", render: (row) => `${shortDate(row.validFrom)} — ${shortDate(row.validTo)}` },
+                  ]}
+                />
+              </section>
+
+              <section className="study-panel" aria-labelledby="rule-sources-title">
+                <div className="study-panel__heading">
+                  <div><h2 id="rule-sources-title">Fuentes normativas</h2><p>Resoluciones, padrones o normas que respaldan esta versión.</p></div>
+                  {editable ? <Button size="sm" variant="secondary" onClick={() => setShowSourceForm((visible) => !visible)}>{showSourceForm ? "Cancelar" : "Agregar fuente"}</Button> : null}
+                </div>
+                {showSourceForm && editable ? <form className="study-form fiscal-action-form" onSubmit={(event) => { event.preventDefault(); addSourceMutation.mutate(); }}>
+                  <Field label="Título" id="rule-source-title" value={newSource.title} onChange={(event) => setNewSource({ ...newSource, title: event.target.value })} required />
+                  <Field label="Referencia" id="rule-source-reference" value={newSource.reference} onChange={(event) => setNewSource({ ...newSource, reference: event.target.value })} placeholder="Opcional" />
+                  <Field label="URL" id="rule-source-url" type="url" value={newSource.url} onChange={(event) => setNewSource({ ...newSource, url: event.target.value })} placeholder="https://…" />
+                  <Field label="Consultada el" id="rule-source-consulted-at" type="date" value={newSource.consultedAt} onChange={(event) => setNewSource({ ...newSource, consultedAt: event.target.value })} required />
+                  <div className="study-form__actions"><Button type="submit" loading={addSourceMutation.isPending} disabled={!newSource.title.trim()}>Guardar fuente</Button></div>
+                </form> : null}
+                <Table<RuleVersion["sources"][number]>
+                  rows={selectedVersion.sources}
+                  rowKey={(row) => row.id}
+                  empty="No hay fuentes normativas asociadas a esta versión."
+                  columns={[
+                    { key: "title", header: "Fuente", render: (row) => row.title },
+                    { key: "reference", header: "Referencia", render: (row) => row.reference ?? "—" },
+                    { key: "consultedAt", header: "Consultada", render: (row) => shortDate(row.consultedAt) },
+                  ]}
+                />
               </section>
 
               <section className="study-panel fiscal-rule-approval">

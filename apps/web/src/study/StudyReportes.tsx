@@ -66,6 +66,20 @@ export function StudyReportes() {
       void queryClient.invalidateQueries({ queryKey: ["report-runs", firmId, clientId] });
     },
   });
+  const revoke = useMutation({
+    mutationFn: (publicationId: string) =>
+      api.post(`${base}/report-publications/${publicationId}/revoke`),
+    onSuccess: () => {
+      setReceipt("La publicación fue revocada. El reporte ya no está disponible en el portal.");
+      void queryClient.invalidateQueries({ queryKey: ["report-runs", firmId, clientId] });
+    },
+  });
+  const exportRun = useMutation({
+    mutationFn: ({ runId, format }: { runId: string; format: "pdf" | "xlsx" | "csv" }) =>
+      downloadFile(`${base}/report-runs/${runId}/export?format=${format}`),
+    onSuccess: (_data, variables) =>
+      setReceipt(`Se descargó el reporte en ${variables.format.toUpperCase()}.`),
+  });
   const createBaseTemplate = useMutation({
     mutationFn: () => {
       const lines = (accounts.data ?? []).map((account, index) => ({
@@ -85,6 +99,7 @@ export function StudyReportes() {
     },
     onSuccess: (created) => {
       setTemplateId(created.id);
+      setReceipt("Plantilla base creada con las cuentas disponibles del cliente.");
       void queryClient.invalidateQueries({ queryKey: ["report-templates", firmId, clientId] });
     },
   });
@@ -118,6 +133,31 @@ export function StudyReportes() {
             Generá estados desde el mayor canónico, revisalos y publicalos al portal.
           </p>
         </div>
+        <div className="study-page__header-actions">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              void Promise.all([templates.refetch(), runs.refetch()]);
+            }}
+          >
+            Actualizar
+          </Button>
+          {capabilities.has("report.configure") ? (
+            <Button
+              variant="secondary"
+              onClick={() => createBaseTemplate.mutate()}
+              loading={createBaseTemplate.isPending}
+              disabled={(accounts.data?.length ?? 0) === 0}
+              title={
+                (accounts.data?.length ?? 0) === 0
+                  ? "No hay cuentas disponibles para armar una plantilla"
+                  : undefined
+              }
+            >
+              <Icon name="plus" size={17} /> Nueva plantilla base
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {receipt ? (
@@ -141,9 +181,12 @@ export function StudyReportes() {
           </div>
         </div>
         {templates.isError ? (
-          <p className="form-error" role="alert">
-            No se pudieron cargar las plantillas.
-          </p>
+          <div className="query-warning" role="alert">
+            <span>No se pudieron cargar las plantillas.</span>
+            <Button size="sm" variant="ghost" onClick={() => void templates.refetch()}>
+              Reintentar
+            </Button>
+          </div>
         ) : null}
         {(templates.data?.length ?? 0) === 0 && !templates.isLoading ? (
           <EmptyState
@@ -247,9 +290,8 @@ export function StudyReportes() {
                       <button
                         className="text-action download-action"
                         key={format}
-                        onClick={() =>
-                          void downloadFile(`${base}/report-runs/${run.id}/export?format=${format}`)
-                        }
+                        disabled={exportRun.isPending}
+                        onClick={() => exportRun.mutate({ runId: run.id, format })}
                       >
                         <Icon name="download" size={14} /> {format.toUpperCase()}
                       </button>
@@ -271,6 +313,33 @@ export function StudyReportes() {
                         Publicar
                       </Button>
                     ) : null}
+                    {run.status === "PUBLISHED" && capabilities.has("report.publish") ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        loading={revoke.isPending}
+                        disabled={
+                          !run.publications.some(
+                            (publication) => publication.status === "PUBLISHED",
+                          )
+                        }
+                        onClick={() => {
+                          const publication = run.publications.find(
+                            (item) => item.status === "PUBLISHED",
+                          );
+                          if (
+                            publication &&
+                            window.confirm(
+                              "¿Revocar la publicación? El reporte dejará de estar visible para el cliente.",
+                            )
+                          ) {
+                            revoke.mutate(publication.id);
+                          }
+                        }}
+                      >
+                        Revocar
+                      </Button>
+                    ) : null}
                   </div>
                 ),
               },
@@ -278,6 +347,12 @@ export function StudyReportes() {
           />
         )}
       </section>
+
+      {exportRun.isError || revoke.isError ? (
+        <p className="form-error" role="alert">
+          {(exportRun.error ?? revoke.error)?.message ?? "No se pudo completar la acción."}
+        </p>
+      ) : null}
 
       {capabilities.has("bi.use") ? (
         <section className="study-panel" aria-labelledby="bi-title">

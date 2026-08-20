@@ -1,9 +1,18 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState, Table } from "@contable/design-system";
-import { api } from "../lib/api";
+import { Button, EmptyState, Table } from "@contable/design-system";
+import { Link } from "react-router-dom";
+import { api, downloadFile } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
+import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
-import { formatPortalDate, PortalLoading, PortalPageHeader } from "./PortalUI";
+import {
+  formatPortalDate,
+  formatPortalMoney,
+  PortalLoading,
+  PortalPageHeader,
+  PortalRetryButton,
+} from "./PortalUI";
 import "./portal.css";
 
 /**
@@ -23,28 +32,59 @@ interface PublishedSettlement {
   regime?: { code: string; name: string; taxType?: { code: string; name: string } };
   filings?: Array<{ filedAt: string; amountFiled: string; externalId: string | null }>;
   payments?: Array<{ paidAt: string; amount: string; method: string }>;
+  artifacts?: PublishedArtifact[];
 }
 
-function formatMoney(value: string | undefined | null): string {
-  const num = Number(value ?? 0);
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(num);
+interface PublishedArtifact {
+  id: string;
+  kind: string;
+  format: "pdf" | "csv";
+  generatedAt: string;
 }
 
 export function PortalLiquidaciones() {
-  const { clientId } = useClientContext();
+  const { clientId, capabilities } = useClientContext();
+  const [downloadingArtifact, setDownloadingArtifact] = useState<string | null>(null);
+  const [artifactError, setArtifactError] = useState<string | null>(null);
+  const [failedArtifact, setFailedArtifact] = useState<{
+    settlementId: string;
+    artifact: PublishedArtifact;
+  } | null>(null);
   const query = useQuery({
     queryKey: ["portal-tax-settlements", clientId],
     queryFn: () => api.get<PublishedSettlement[]>(`/portal/clients/${clientId}/tax-settlements`),
     enabled: Boolean(clientId),
   });
   const rows = query.data ?? [];
+  const downloadArtifact = async (settlementId: string, artifact: PublishedArtifact) => {
+    const key = `${settlementId}-${artifact.id}`;
+    setDownloadingArtifact(key);
+    setArtifactError(null);
+    setFailedArtifact(null);
+    try {
+      await downloadFile(
+        `/portal/clients/${clientId}/tax-settlements/${settlementId}/artifacts/${artifact.id}/download`,
+      );
+    } catch {
+      setArtifactError("No pudimos descargar el archivo. Reintentá en unos minutos.");
+      setFailedArtifact({ settlementId, artifact });
+    } finally {
+      setDownloadingArtifact(null);
+    }
+  };
 
   return (
     <div className="portal-page">
       <PortalPageHeader
         eyebrow="Impuestos"
         title="Liquidaciones publicadas"
-        description="Resultados finalizados que tu estudio compartió con vos."
+        description="Resultados finalizados que tu estudio compartió con vos, con su presentación y pago informados."
+        actions={
+          <Link className="portal-secondary-link" to="/portal/impuestos">
+            <Icon name="calendar" size={18} />
+            <span>Ver obligaciones</span>
+          </Link>
+        }
       />
 
       {!clientId ? (
@@ -58,22 +98,43 @@ export function PortalLiquidaciones() {
         <EmptyState
           title="No pudimos cargar las liquidaciones"
           description="Reintentá en unos minutos."
+          action={<PortalRetryButton onRetry={() => void query.refetch()} />}
         />
       ) : rows.length === 0 ? (
         <EmptyState
           title="Sin liquidaciones publicadas"
           description="Cuando tu estudio finalice una liquidación, aparecerá acá."
+          action={
+            <Link className="portal-text-link" to="/portal/impuestos">
+              Ver obligaciones informadas
+            </Link>
+          }
         />
       ) : (
         <section className="portal-page__section" aria-labelledby="settlements-title">
           <div className="portal-section-bar">
             <div>
               <h2 id="settlements-title">Resultados finalizados</h2>
-              <p>Podés descargar el papel de trabajo de cada período.</p>
+              <p>Consultá el detalle informado por período, los movimientos y los archivos publicados.</p>
             </div>
           </div>
+          {artifactError ? (
+            <div className="portal-inline-alert portal-inline-alert--error" role="alert">
+              <span>{artifactError}</span>
+              {failedArtifact ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void downloadArtifact(failedArtifact.settlementId, failedArtifact.artifact)}
+                >
+                  Reintentar descarga
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           <Table<PublishedSettlement>
-            className="portal-data-table"
+            className="portal-data-table portal-data-table--settlements"
             rows={rows}
             rowKey={(row) => row.id}
             columns={[
@@ -101,7 +162,8 @@ export function PortalLiquidaciones() {
                 key: "total",
                 header: "Total a ingresar",
                 align: "right",
-                render: (row) => formatMoney(row.totals?.["TOTAL_A_INGRESAR"] ?? row.totals?.["totalDue"]),
+                render: (row) =>
+                  formatPortalMoney(row.totals?.["TOTAL_A_INGRESAR"] ?? row.totals?.["totalDue"]),
               },
               {
                 key: "presentacion",
@@ -116,7 +178,70 @@ export function PortalLiquidaciones() {
                 header: "Pago",
                 render: (row) => {
                   const payment = row.payments?.[0];
-                  return payment ? formatMoney(payment.amount) : "—";
+                  return payment ? formatPortalMoney(payment.amount) : "—";
+                },
+              },
+              {
+                key: "detail",
+                header: "Detalle",
+                render: (row) => (
+                  <details>
+                    <summary>Ver movimientos</summary>
+                    <div>
+                      <p>
+                        <strong>Corte:</strong> {formatPortalDate(row.cutoff)}
+                      </p>
+                      <p>
+                        <strong>Presentación:</strong>{" "}
+                        {row.filings?.[0]
+                          ? `${formatPortalDate(row.filings[0].filedAt)}${row.filings[0].externalId ? ` · Acuse ${row.filings[0].externalId}` : ""}`
+                          : "Aún no informada"}
+                      </p>
+                      <p>
+                        <strong>Pagos:</strong>{" "}
+                        {row.payments && row.payments.length > 0
+                          ? row.payments
+                              .map((payment) => `${formatPortalMoney(payment.amount)} · ${formatPortalDate(payment.paidAt)}`)
+                              .join(" · ")
+                          : "Aún no informados"}
+                      </p>
+                      {capabilities.has("message.shared") ? (
+                        <Link className="portal-text-link" to="/portal/mensajes">
+                          Consultar al estudio
+                        </Link>
+                      ) : null}
+                    </div>
+                  </details>
+                ),
+              },
+              {
+                key: "artifacts",
+                header: "Archivos",
+                render: (row) => {
+                  const artifacts = row.artifacts ?? [];
+                  if (artifacts.length === 0) return <span>Sin archivos publicados</span>;
+                  return (
+                    <div>
+                      {artifacts.map((artifact) => {
+                        const key = `${row.id}-${artifact.id}`;
+                        return (
+                          <Button
+                            key={artifact.id}
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            loading={downloadingArtifact === key}
+                            disabled={downloadingArtifact !== null}
+                            onClick={() => void downloadArtifact(row.id, artifact)}
+                            aria-label={`Descargar ${artifact.format.toUpperCase()} de ${artifact.kind}`}
+                            title={`Generado ${formatPortalDate(artifact.generatedAt)}`}
+                          >
+                            {artifact.format.toUpperCase()}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  );
                 },
               },
             ]}

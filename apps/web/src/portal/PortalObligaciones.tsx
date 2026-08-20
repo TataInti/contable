@@ -1,11 +1,18 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState, Table } from "@contable/design-system";
+import { Button, EmptyState, Table } from "@contable/design-system";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
-import { formatPortalDate, PortalLoading, PortalPageHeader } from "./PortalUI";
+import {
+  formatPortalDate,
+  formatPortalMoney,
+  PortalLoading,
+  PortalPageHeader,
+  PortalRetryButton,
+} from "./PortalUI";
 import "./portal.css";
 
 interface Obligation {
@@ -29,7 +36,7 @@ interface TimelineEntry {
 }
 
 export function PortalObligaciones() {
-  const { clientId } = useClientContext();
+  const { clientId, capabilities } = useClientContext();
   const query = useQuery({
     queryKey: ["portal-obligations", clientId],
     queryFn: () => api.get<Obligation[]>(`/portal/clients/${clientId}/obligations`),
@@ -46,12 +53,12 @@ export function PortalObligaciones() {
         eyebrow="Calendario"
         title="Impuestos y obligaciones"
         description="Consultá las fechas y el estado que informó tu estudio."
-        actions={
+        actions={capabilities.has("message.shared") ? (
           <Link className="portal-secondary-link" to="/portal/mensajes">
             <Icon name="message" size={18} />
             <span>Hacer una consulta</span>
           </Link>
-        }
+        ) : undefined}
       />
 
       {!clientId ? (
@@ -65,11 +72,19 @@ export function PortalObligaciones() {
         <EmptyState
           title="No pudimos cargar los vencimientos"
           description="Reintentá en unos minutos."
+          action={<PortalRetryButton onRetry={() => void query.refetch()} />}
         />
       ) : rows.length === 0 ? (
         <EmptyState
           title="Sin vencimientos informados"
           description="Cuando tu estudio publique una obligación, aparecerá acá."
+          action={
+            capabilities.has("message.shared") ? (
+              <Link className="portal-text-link" to="/portal/mensajes">
+                Consultar al estudio
+              </Link>
+            ) : undefined
+          }
         />
       ) : (
         <section className="portal-page__section" aria-labelledby="obligations-title">
@@ -138,15 +153,33 @@ export function PortalObligaciones() {
 
 /** G5-08: timeline de comunicación por obligación (filings, pagos y mensajes SHARED). */
 function ObligationTimeline({ clientId, obligationId }: { clientId: string; obligationId: string }) {
+  const [open, setOpen] = useState(false);
   const query = useQuery({
     queryKey: ["portal-obligation-timeline", clientId, obligationId],
     queryFn: () =>
       api.get<TimelineEntry>(`/portal/clients/${clientId}/obligations/${obligationId}/timeline`),
-    enabled: Boolean(clientId && obligationId),
+    enabled: open && Boolean(clientId && obligationId),
   });
 
+  if (!open) {
+    return (
+      <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(true)}>
+        Ver seguimiento
+      </Button>
+    );
+  }
+
   if (query.isLoading) return <span className="portal-timeline__loading">Cargando…</span>;
-  if (query.isError || !query.data) return <span className="portal-timeline__empty">Sin novedades</span>;
+  if (query.isError || !query.data) {
+    return (
+      <span className="portal-timeline__empty">
+        Sin novedades. {" "}
+        <Button type="button" size="sm" variant="ghost" onClick={() => void query.refetch()}>
+          Reintentar
+        </Button>
+      </span>
+    );
+  }
 
   const { filings, payments, messages } = query.data;
   const events: { date: string; label: string; detail?: string }[] = [
@@ -158,7 +191,7 @@ function ObligationTimeline({ clientId, obligationId }: { clientId: string; obli
     ...payments.map((p) => ({
       date: p.paidAt,
       label: p.status === "REVERSED" ? "Pago revertido" : "Pago registrado",
-      detail: p.amount,
+      detail: formatPortalMoney(p.amount),
     })),
     ...messages.map((m) => ({ date: m.createdAt, label: "Mensaje del estudio", detail: m.body })),
   ].sort((a, b) => a.date.localeCompare(b.date));
@@ -166,7 +199,7 @@ function ObligationTimeline({ clientId, obligationId }: { clientId: string; obli
   if (events.length === 0) return <span className="portal-timeline__empty">Sin novedades</span>;
 
   return (
-    <details className="portal-timeline">
+    <details className="portal-timeline" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary className="portal-timeline__summary">
         {events.length} {events.length === 1 ? "novedad" : "novedades"}
       </summary>

@@ -4,7 +4,7 @@ import { Button, EmptyState, Field } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
-import { PortalLoading, PortalPageHeader } from "./PortalUI";
+import { PortalLoading, PortalPageHeader, PortalRetryButton } from "./PortalUI";
 import "./portal.css";
 
 interface Profile {
@@ -26,9 +26,14 @@ export function PortalPerfil() {
     if (profile.data) setName(profile.data.name);
   }, [profile.data]);
   const save = useMutation({
-    mutationFn: () => api.patch<Profile>(`/portal/clients/${clientId}/profile`, { name }),
-    onSuccess: (data) => queryClient.setQueryData(["portal-profile", clientId], data),
+    mutationFn: () => api.patch<Profile>(`/portal/clients/${clientId}/profile`, { name: name.trim() }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["portal-profile", clientId], data);
+      setName(data.name);
+    },
   });
+  const normalizedName = name.trim();
+  const isDirty = normalizedName !== (profile.data?.name ?? "");
   return (
     <div className="portal-page portal-page--profile">
       <PortalPageHeader
@@ -44,7 +49,11 @@ export function PortalPerfil() {
       ) : profile.isLoading ? (
         <PortalLoading label="Cargando tu perfil…" />
       ) : profile.isError ? (
-        <EmptyState title="No pudimos cargar tu perfil" description="Reintentá en unos minutos." />
+        <EmptyState
+          title="No pudimos cargar tu perfil"
+          description="Reintentá en unos minutos."
+          action={<PortalRetryButton onRetry={() => void profile.refetch()} />}
+        />
       ) : profile.data ? (
         <section className="portal-profile" aria-labelledby="profile-data-title">
           <div className="portal-profile__intro">
@@ -67,6 +76,7 @@ export function PortalPerfil() {
               id="profile-name"
               name="name"
               label="Nombre"
+              hint="Así te verá el estudio en los mensajes y entregas."
               autoComplete="name"
               value={name}
               onChange={(event) => {
@@ -99,10 +109,22 @@ export function PortalPerfil() {
               <Button
                 type="submit"
                 loading={save.isPending}
-                disabled={name.trim().length < 2 || name.trim() === profile.data.name}
+                disabled={normalizedName.length < 2 || !isDirty}
               >
                 Guardar cambios
               </Button>
+              {isDirty && !save.isPending ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    save.reset();
+                    setName(profile.data.name);
+                  }}
+                >
+                  Descartar
+                </Button>
+              ) : null}
             </div>
           </form>
         </section>

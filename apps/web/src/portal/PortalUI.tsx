@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Button } from "@contable/design-system";
 
 interface PortalPageHeaderProps {
   eyebrow?: string;
@@ -29,6 +30,25 @@ export function PortalLoading({ label }: { label: string }) {
   );
 }
 
+/**
+ * Acción consistente para los estados recuperables del portal.  Mantiene el
+ * siguiente paso junto al error sin convertir cada pantalla en un formulario
+ * distinto.
+ */
+export function PortalRetryButton({
+  onRetry,
+  label = "Reintentar",
+}: {
+  onRetry: () => void;
+  label?: string;
+}) {
+  return (
+    <Button type="button" variant="secondary" onClick={onRetry}>
+      {label}
+    </Button>
+  );
+}
+
 export function formatPortalDate(value: string, options?: Intl.DateTimeFormatOptions) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Fecha no disponible";
@@ -43,4 +63,13 @@ export function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024)
     return `${(bytes / 1024).toLocaleString("es-AR", { maximumFractionDigits: 1 })} KB`;
   return `${(bytes / (1024 * 1024)).toLocaleString("es-AR", { maximumFractionDigits: 1 })} MB`;
+}
+
+export function formatPortalMoney(value: string | number | null | undefined): string {
+  const amount = Number(value ?? 0);
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(amount) ? amount : 0);
 }

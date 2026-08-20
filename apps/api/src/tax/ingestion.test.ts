@@ -405,6 +405,68 @@ describe("G2-04/09 voucher manual y maker-checker", () => {
     expect(approved.status).toBe("APPROVED");
     expect(approved.reviewedByUserId).toBe(REVIEWER_A);
   });
+
+  it("C-2 transiciones separadas: submit-review → approve (maker-checker)", async () => {
+    const voucher = await ingestion.createVoucher(ctxPreparer, {
+      clientId: CLIENT_ING,
+      direction: "PURCHASE",
+      type: "A",
+      pointOfSale: 1,
+      number: 701,
+      issuerCuit: "20111111111",
+      receiverCuit: "20999999999",
+      issuedOn: "2026-01-19",
+      total: "1210.00",
+      components: [{ concept: "NETO", base: "1000.00", amount: "1000.00" }],
+    });
+
+    // Preparador lo envía a revisión.
+    const inReview = await ingestion.submitVoucherForReview(ctxPreparer, voucher.id);
+    expect(inReview.status).toBe("IN_REVIEW");
+
+    // Preparador no puede aprobar su propio trabajo.
+    await expect(ingestion.approveVoucher(ctxPreparer, voucher.id)).rejects.toThrow(ImportError);
+
+    // Revisor aprueba.
+    const approved = await ingestion.approveVoucher(ctxReviewer, voucher.id);
+    expect(approved.status).toBe("APPROVED");
+    expect(approved.approvedByUserId).toBe(REVIEWER_A);
+  });
+
+  it("C-2 transiciones separadas: submit-review → reject", async () => {
+    const voucher = await ingestion.createVoucher(ctxPreparer, {
+      clientId: CLIENT_ING,
+      direction: "SALE",
+      type: "A",
+      pointOfSale: 1,
+      number: 701,
+      issuerCuit: "20999999999",
+      receiverCuit: "20111111111",
+      issuedOn: "2026-01-20",
+      total: "1210.00",
+      components: [{ concept: "NETO", base: "1000.00", amount: "1000.00" }],
+    });
+
+    // Rechazo directo por revisor (desde DRAFT también es válido).
+    await expect(ingestion.rejectVoucher(ctxPreparer, voucher.id)).rejects.toThrow(ImportError);
+
+    const rejected = await ingestion.rejectVoucher(ctxReviewer, voucher.id);
+    expect(rejected.status).toBe("REJECTED");
+  });
+
+  it("C-3 gastos: submit-for-review → reject", async () => {
+    const expense = await expenses.create(ctxOwner, {
+      clientId: CLIENT_ING,
+      description: "Gasto sin respaldo para rechazar",
+      amount: "12000.00",
+      incurredOn: "2026-01-10",
+      hasFiscalSupport: false,
+    });
+    // Al crearse con hasFiscalSupport=false ya está PENDING_REVIEW; la transición
+    // submit-for-review desde DRAFT cubre el caso manual.
+    const rejected = await expenses.reject(ctxOwner, expense.id, "No corresponde");
+    expect(rejected.status).toBe("REJECTED");
+  });
 });
 
 describe("G2-08 gastos gerenciales", () => {

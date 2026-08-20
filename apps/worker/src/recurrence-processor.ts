@@ -1,4 +1,4 @@
-import { prisma, withWorkerTenant } from "./lib/prisma.js";
+import { withWorkerTenant } from "./lib/prisma.js";
 
 /**
  * F2.4: procesador de recurrencias (cola recurrences).

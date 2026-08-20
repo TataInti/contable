@@ -123,6 +123,8 @@ export class BiService {
     const message = `POST${path}${timestamp}${nonce}${bodyHash}`;
     const signature = createHmac("sha256", this.config.secret).update(message).digest("hex");
 
+    // Timeout: la llamada a IA no puede mantener una request HTTP colgada.
+    const timeout = AbortSignal.timeout(15_000);
     const res = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}${path}`, {
       method: "POST",
       headers: {
@@ -133,6 +135,7 @@ export class BiService {
         "X-Service-Signature": signature,
       },
       body,
+      signal: timeout,
     });
 
     if (!res.ok) {

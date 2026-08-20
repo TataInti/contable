@@ -326,6 +326,16 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   // G1-04: Períodos y obligaciones
   // ------------------------------------------------------------------
 
+  app.get("/api/v1/firms/:firmId/clients/:clientId/tax-periods", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const data = await periods.listPeriods(ctx, ctx.clientId!);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.post("/api/v1/firms/:firmId/clients/:clientId/tax-periods", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const body = z
@@ -494,7 +504,18 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       .strict()
       .parse(req.body);
     try {
-      const data = await rules.replaceRateRules(ctx, { ruleVersionId, rules: body.rules });
+      const data = await rules.replaceRateRules(ctx, {
+        ruleVersionId,
+        rules: body.rules.map((rule) => ({
+          concept: rule.concept,
+          ...(rule.rate ? { rate: rule.rate } : {}),
+          ...(rule.activityCode ? { activityCode: rule.activityCode } : {}),
+          ...(rule.jurisdictionId ? { jurisdictionId: rule.jurisdictionId } : {}),
+          ...(rule.minAmount ? { minAmount: rule.minAmount } : {}),
+          validFrom: rule.validFrom,
+          ...(rule.validTo ? { validTo: rule.validTo } : {}),
+        })),
+      });
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);

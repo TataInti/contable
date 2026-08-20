@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { useNavigate } from "react-router-dom";
 import { api, type FeatureFlag } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
@@ -31,9 +32,12 @@ interface CreatedInvitation {
 export function StudyAdministracion() {
   const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("OWNER");
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const flags = useQuery({
     queryKey: ["flags", firmId],
     queryFn: () => api.get<FeatureFlag[]>(`/firms/${firmId}/feature-flags`),
@@ -54,28 +58,64 @@ export function StudyAdministracion() {
   const updateFlag = useMutation({
     mutationFn: (flag: FeatureFlag) =>
       api.put(`/firms/${firmId}/feature-flags/${flag.code}`, { enabled: !flag.enabled }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["flags", firmId] }),
+    onSuccess: (_result, flag) => {
+      setActionError(null);
+      setNotice(`${flag.code} quedó ${flag.enabled ? "deshabilitado" : "habilitado"}.`);
+      void queryClient.invalidateQueries({ queryKey: ["flags", firmId] });
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo actualizar el módulo."),
   });
   const invite = useMutation({
     mutationFn: () =>
       api.post<CreatedInvitation>(`/firms/${firmId}/clients/${clientId}/portal-invitations`, {
-        email,
+        email: email.trim(),
         role,
       }),
     onSuccess: (created) => {
+      setActionError(null);
       setInvitationLink(
         `${window.location.origin}/aceptar-invitacion?token=${encodeURIComponent(created.invitationToken)}`,
       );
       setEmail("");
       void queryClient.invalidateQueries({ queryKey: ["portal-invitations", firmId, clientId] });
     },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo crear la invitación."),
   });
   const revokeMembership = useMutation({
     mutationFn: (id: string) =>
       api.post(`/firms/${firmId}/clients/${clientId}/portal-memberships/${id}/revoke`),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({ queryKey: ["portal-memberships", firmId, clientId] }),
+    onSuccess: () => {
+      setActionError(null);
+      setNotice("El acceso al portal fue revocado.");
+      void queryClient.invalidateQueries({ queryKey: ["portal-memberships", firmId, clientId] });
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo revocar el acceso."),
   });
+  const revokeInvitation = useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/firms/${firmId}/clients/${clientId}/portal-invitations/${id}/revoke`),
+    onSuccess: () => {
+      setActionError(null);
+      setNotice("La invitación quedó revocada.");
+      void queryClient.invalidateQueries({ queryKey: ["portal-invitations", firmId, clientId] });
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo revocar la invitación."),
+  });
+
+  const copyInvitationLink = async () => {
+    if (!invitationLink) return;
+    try {
+      await navigator.clipboard.writeText(invitationLink);
+      setActionError(null);
+      setNotice("El enlace de invitación se copió al portapapeles.");
+    } catch {
+      setActionError("No se pudo copiar el enlace. Seleccionalo y copialo manualmente.");
+    }
+  };
 
   if (!capabilities.has("firm.manage"))
     return (
@@ -97,6 +137,23 @@ export function StudyAdministracion() {
           </p>
         </div>
       </div>
+      {notice ? (
+        <div className="action-receipt action-receipt--page" role="status">
+          <Icon name="check" size={18} />
+          <span>
+            <strong>Acción completada</strong>
+            <small>{notice}</small>
+          </span>
+          <button type="button" aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
+            <Icon name="close" size={15} />
+          </button>
+        </div>
+      ) : null}
+      {actionError ? (
+        <p className="form-error" role="alert">
+          {actionError}
+        </p>
+      ) : null}
       <section className="study-panel">
         <div className="study-panel__heading">
           <div>
@@ -105,13 +162,22 @@ export function StudyAdministracion() {
           </div>
         </div>
         {!clientId ? (
-          <EmptyState title="Seleccioná un cliente" />
+          <EmptyState
+            title="Seleccioná un cliente"
+            description="El acceso al portal siempre se administra dentro de una empresa cliente."
+            action={
+              <Button variant="secondary" onClick={() => navigate("/clientes")}>
+                Ir a clientes
+              </Button>
+            }
+          />
         ) : (
           <>
             <form
               className="study-inline-form"
               onSubmit={(event) => {
                 event.preventDefault();
+                setActionError(null);
                 invite.mutate();
               }}
             >
@@ -135,107 +201,166 @@ export function StudyAdministracion() {
                   <option value="READONLY">Sólo lectura</option>
                 </select>
               </label>
-              <Button type="submit" loading={invite.isPending} disabled={!email}>
+              <Button type="submit" loading={invite.isPending} disabled={!email.trim()}>
                 <Icon name="plus" size={17} /> Invitar
               </Button>
             </form>
-            {invite.isError ? (
-              <p className="form-error" role="alert">
-                {invite.error.message}
-              </p>
-            ) : null}
             {invitationLink ? (
               <div className="invitation-link" role="status">
                 <p>Enlace generado. Copialo ahora; el token no se vuelve a mostrar.</p>
                 <input readOnly value={invitationLink} aria-label="Enlace de invitación" />
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => void navigator.clipboard.writeText(invitationLink)}
-                >
+                <Button size="sm" variant="secondary" onClick={() => void copyInvitationLink()}>
                   Copiar enlace
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setInvitationLink(null)}>
+                  Cerrar
                 </Button>
               </div>
             ) : null}
-            {(memberships.data?.length ?? 0) > 0 ? (
-              <Table<PortalMembership>
-                rows={memberships.data ?? []}
-                rowKey={(item) => item.id}
-                columns={[
-                  {
-                    key: "person",
-                    header: "Persona",
-                    render: (item) => (
-                      <>
-                        <strong>{item.user.name}</strong>
-                        <br />
-                        <small>{item.user.emailNormalized}</small>
-                      </>
-                    ),
-                  },
-                  { key: "role", header: "Rol", render: (item) => item.role },
-                  {
-                    key: "status",
-                    header: "Estado",
-                    render: (item) => (
-                      <StatusBadge status={item.revokedAt ? "REVOKED" : item.status} />
-                    ),
-                  },
-                  {
-                    key: "action",
-                    header: "Acción",
-                    render: (item) =>
-                      !item.revokedAt ? (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          loading={revokeMembership.isPending}
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `¿Revocar el acceso de ${item.user.name}? Perderá acceso al portal de inmediato.`,
-                              )
-                            )
-                              revokeMembership.mutate(item.id);
-                          }}
-                        >
-                          Revocar
-                        </Button>
-                      ) : null,
-                  },
-                ]}
-              />
-            ) : null}
-            {(invitations.data?.length ?? 0) > 0 ? (
-              <div className="administration-subsection">
-                <h3>Invitaciones recientes</h3>
-                <Table<PortalInvitation>
-                  rows={invitations.data ?? []}
-                  rowKey={(item) => item.id}
-                  columns={[
-                    { key: "email", header: "Email", render: (item) => item.emailNormalized },
-                    { key: "role", header: "Rol", render: (item) => item.role },
-                    {
-                      key: "status",
-                      header: "Estado",
-                      render: (item) => (
-                        <StatusBadge
-                          status={
-                            item.revokedAt
-                              ? "REVOKED"
-                              : item.acceptedAt
-                                ? "ACCEPTED"
-                                : new Date(item.expiresAt) < new Date()
-                                  ? "EXPIRED"
-                                  : "PENDING"
-                          }
-                        />
-                      ),
-                    },
-                  ]}
-                />
+            {memberships.isLoading || invitations.isLoading ? (
+              <div className="query-state query-state--compact" role="status">
+                <span className="loading-copy">Actualizando accesos del portal…</span>
               </div>
-            ) : null}
+            ) : memberships.isError || invitations.isError ? (
+              <EmptyState
+                size="compact"
+                title="No se pudieron cargar los accesos"
+                description="No asumimos que no haya accesos mientras la consulta está fallando."
+                action={
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      void memberships.refetch();
+                      void invitations.refetch();
+                    }}
+                  >
+                    Reintentar
+                  </Button>
+                }
+              />
+            ) : (
+              <>
+                {(memberships.data?.length ?? 0) > 0 ? (
+                  <Table<PortalMembership>
+                    rows={memberships.data ?? []}
+                    rowKey={(item) => item.id}
+                    columns={[
+                      {
+                        key: "person",
+                        header: "Persona",
+                        render: (item) => (
+                          <>
+                            <strong>{item.user.name}</strong>
+                            <br />
+                            <small>{item.user.emailNormalized}</small>
+                          </>
+                        ),
+                      },
+                      { key: "role", header: "Rol", render: (item) => item.role },
+                      {
+                        key: "status",
+                        header: "Estado",
+                        render: (item) => (
+                          <StatusBadge status={item.revokedAt ? "REVOKED" : item.status} />
+                        ),
+                      },
+                      {
+                        key: "action",
+                        header: "Acción",
+                        render: (item) =>
+                          !item.revokedAt ? (
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              loading={
+                                revokeMembership.isPending && revokeMembership.variables === item.id
+                              }
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `¿Revocar el acceso de ${item.user.name}? Perderá acceso al portal de inmediato.`,
+                                  )
+                                )
+                                  revokeMembership.mutate(item.id);
+                              }}
+                            >
+                              Revocar
+                            </Button>
+                          ) : null,
+                      },
+                    ]}
+                  />
+                ) : (
+                  <EmptyState
+                    size="compact"
+                    title="Todavía nadie tiene acceso"
+                    description="Usá el formulario anterior para habilitar el portal a una persona del cliente."
+                  />
+                )}
+                {(invitations.data?.length ?? 0) > 0 ? (
+                  <div className="administration-subsection">
+                    <h3>Invitaciones recientes</h3>
+                    <Table<PortalInvitation>
+                      rows={invitations.data ?? []}
+                      rowKey={(item) => item.id}
+                      columns={[
+                        { key: "email", header: "Email", render: (item) => item.emailNormalized },
+                        { key: "role", header: "Rol", render: (item) => item.role },
+                        {
+                          key: "status",
+                          header: "Estado",
+                          render: (item) => (
+                            <StatusBadge
+                              status={
+                                item.revokedAt
+                                  ? "REVOKED"
+                                  : item.acceptedAt
+                                    ? "ACCEPTED"
+                                    : new Date(item.expiresAt) < new Date()
+                                      ? "EXPIRED"
+                                      : "PENDING"
+                              }
+                            />
+                          ),
+                        },
+                        {
+                          key: "action",
+                          header: "Acción",
+                          render: (item) => {
+                            const pending =
+                              !item.revokedAt &&
+                              !item.acceptedAt &&
+                              new Date(item.expiresAt) >= new Date();
+                            return pending ? (
+                              <Button
+                                size="sm"
+                                variant="danger"
+                                loading={
+                                  revokeInvitation.isPending &&
+                                  revokeInvitation.variables === item.id
+                                }
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      `¿Revocar la invitación para ${item.emailNormalized}?`,
+                                    )
+                                  ) {
+                                    revokeInvitation.mutate(item.id);
+                                  }
+                                }}
+                              >
+                                Revocar
+                              </Button>
+                            ) : null;
+                          },
+                        },
+                      ]}
+                    />
+                  </div>
+                ) : null}
+              </>
+            )}
           </>
         )}
       </section>
@@ -246,7 +371,15 @@ export function StudyAdministracion() {
             <span className="loading-copy">Cargando módulos…</span>
           </div>
         ) : flags.isError ? (
-          <EmptyState title="No se pudo cargar la configuración" />
+          <EmptyState
+            title="No se pudo cargar la configuración"
+            description="Reintentá antes de cambiar módulos del estudio."
+            action={
+              <Button variant="secondary" onClick={() => void flags.refetch()}>
+                Reintentar
+              </Button>
+            }
+          />
         ) : (flags.data?.length ?? 0) === 0 ? (
           <EmptyState title="Sin módulos configurados" />
         ) : (
@@ -267,7 +400,7 @@ export function StudyAdministracion() {
                   <Button
                     size="sm"
                     variant={flag.enabled ? "danger" : "secondary"}
-                    loading={updateFlag.isPending}
+                    loading={updateFlag.isPending && updateFlag.variables?.id === flag.id}
                     onClick={() => {
                       if (
                         !flag.enabled ||

@@ -208,6 +208,44 @@ export function ingestionRoutes(app: FastifyInstance) {
     }
   });
 
+  // C-2: transiciones separadas para vouchers (submit-review / approve / reject)
+  app.post("/api/v1/firms/:firmId/clients/:clientId/vouchers/:voucherId/submit-review", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { voucherId } = req.params as { voucherId: string };
+    try {
+      const data = await ingestion.submitVoucherForReview(ctx, voucherId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/vouchers/:voucherId/approve", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { voucherId } = req.params as { voucherId: string };
+    try {
+      const data = await ingestion.approveVoucher(ctx, voucherId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/vouchers/:voucherId/reject", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { voucherId } = req.params as { voucherId: string };
+    const body = z
+      .object({ comment: z.string().max(500).optional() })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await ingestion.rejectVoucher(ctx, voucherId, body.comment);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   // ------------------------------------------------------------------
   // G2-03: Retenciones y percepciones
   // ------------------------------------------------------------------
@@ -299,6 +337,33 @@ export function ingestionRoutes(app: FastifyInstance) {
         ...(body.ruleVersionId ? { ruleVersionId: body.ruleVersionId } : {}),
         ...(body.evidenceDocumentId ? { evidenceDocumentId: body.evidenceDocumentId } : {}),
       });
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // C-3: transiciones separadas para gastos gerenciales (submit-review / reject)
+  app.post("/api/v1/firms/:firmId/clients/:clientId/management-expenses/:expenseId/submit-review", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { expenseId } = req.params as { expenseId: string };
+    try {
+      const data = await expenses.submitForReview(ctx, expenseId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/management-expenses/:expenseId/reject", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { expenseId } = req.params as { expenseId: string };
+    const body = z
+      .object({ comment: z.string().min(1).max(500) })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await expenses.reject(ctx, expenseId, body.comment);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);

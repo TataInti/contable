@@ -1,9 +1,18 @@
 import { useRef, useState } from "react";
-import { Button, EmptyState } from "@contable/design-system";
-import { api, ApiError, uploadToSignedUrl } from "../lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, EmptyState, Table } from "@contable/design-system";
+import { Link, useSearchParams } from "react-router-dom";
+import { api, ApiError, type Document, uploadToSignedUrl } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
-import { formatFileSize, PortalPageHeader } from "./PortalUI";
+import { StatusBadge } from "../ui/StatusBadge";
+import {
+  formatFileSize,
+  formatPortalDate,
+  PortalLoading,
+  PortalPageHeader,
+  PortalRetryButton,
+} from "./PortalUI";
 import "./portal.css";
 
 interface UploadSession {
@@ -17,12 +26,22 @@ const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "im
 
 export function PortalUpload() {
   const { clientId, capabilities } = useClientContext();
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const requestedBy = searchParams.get("pedido");
+  const requestedItem = searchParams.get("item");
+  const requestItemId = searchParams.get("itemId");
+  const documents = useQuery({
+    queryKey: ["portal-documents", clientId],
+    queryFn: () => api.get<Document[]>(`/portal/clients/${clientId}/documents`),
+    enabled: Boolean(clientId) && capabilities.has("portal.results.read"),
+  });
 
   // G0-05 + G5: READONLY no puede subir documentos (PLAN §4.2).
   if (!capabilities.has("portal.documents.upload")) {
@@ -73,7 +92,10 @@ export function PortalUpload() {
       // 1. Crear sesión de upload → URL firmada
       const session = await api.post<UploadSession>(
         `/portal/clients/${clientId}/document-upload-sessions`,
-        { expectedMime: file.type || undefined },
+        {
+          expectedMime: file.type || undefined,
+          ...(requestItemId ? { requestItemId } : {}),
+        },
       );
       // 2. Subir a la URL firmada (MinIO)
       await uploadToSignedUrl(session.presignedUrl, file);
@@ -93,7 +115,14 @@ export function PortalUpload() {
         `/portal/clients/${clientId}/document-upload-sessions/${session.sessionId}/complete`,
         body,
       );
-      setDone("Documento subido correctamente. Ya lo estamos validando.");
+      setDone(
+        requestItemId
+          ? "Documento subido y asociado al ítem solicitado. Ya lo estamos validando."
+          : "Documento subido correctamente. Ya lo estamos validando.",
+      );
+      void queryClient.invalidateQueries({ queryKey: ["portal-documents", clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["portal-summary", clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["portal-requests", clientId] });
       setFile(null);
       if (inputRef.current) inputRef.current.value = "";
     } catch (err) {
@@ -123,6 +152,18 @@ export function PortalUpload() {
       ) : (
         <div className="portal-upload-layout">
           <form className="portal-upload" onSubmit={onSubmit}>
+            {requestedBy || requestedItem ? (
+              <div className="portal-inline-alert" role="status">
+                <Icon name="tasks" size={17} />
+                <span>
+                  {requestedItem ? `Estás aportando: ${requestedItem}. ` : "Estás aportando documentación. "}
+                  {requestedBy ? `Pedido: ${requestedBy}. ` : ""}
+                  {requestItemId
+                    ? "Al finalizar, el archivo se asociará a este ítem y quedará disponible para tu estudio."
+                    : "Al finalizar, el archivo quedará disponible para tu estudio dentro de esta empresa."}
+                </span>
+              </div>
+            ) : null}
             <div
               className={`portal-dropzone${dragging ? " portal-dropzone--dragging" : ""}${file ? " portal-dropzone--selected" : ""}`}
               onDragEnter={(event) => {
@@ -193,9 +234,18 @@ export function PortalUpload() {
               </p>
             ) : null}
             {done ? (
-              <p className="portal-inline-alert portal-inline-alert--success" role="status">
-                <Icon name="check" size={17} /> {done}
-              </p>
+              <div className="portal-inline-alert portal-inline-alert--success" role="status">
+                <Icon name="check" size={17} />
+                <span>{done}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => inputRef.current?.click()}
+                >
+                  Cargar otro
+                </Button>
+              </div>
             ) : null}
 
             <div className="portal-page__actions portal-upload__actions">
@@ -230,9 +280,69 @@ export function PortalUpload() {
                 <span>3</span> Nosotros lo validamos
               </li>
             </ol>
+            {requestedBy ? (
+              <Link className="portal-text-link" to="/portal/pendientes">
+                Volver a los pedidos
+              </Link>
+            ) : null}
           </aside>
         </div>
       )}
+
+      {clientId && capabilities.has("portal.results.read") ? (
+        <section className="portal-page__section" aria-labelledby="recent-documents-title">
+          <div className="portal-section-bar">
+            <div>
+              <h2 id="recent-documents-title">Cargas recientes</h2>
+              <p>Seguimiento de los últimos archivos enviados a tu estudio.</p>
+            </div>
+          </div>
+          {documents.isLoading ? (
+            <PortalLoading label="Cargando tus documentos…" />
+          ) : documents.isError ? (
+            <EmptyState
+              size="compact"
+              title="No pudimos cargar tus documentos"
+              description="La carga sigue disponible aunque el historial no se muestre ahora."
+              action={<PortalRetryButton onRetry={() => void documents.refetch()} />}
+            />
+          ) : (documents.data ?? []).length === 0 ? (
+            <EmptyState
+              size="compact"
+              title="Todavía no cargaste documentos"
+              description="Elegí un archivo arriba para enviarlo al estudio."
+            />
+          ) : (
+            <Table<Document>
+              className="portal-data-table portal-data-table--documents"
+              rows={(documents.data ?? []).slice(0, 8)}
+              rowKey={(document) => document.id}
+              columns={[
+                {
+                  key: "file",
+                  header: "Archivo",
+                  render: (document) => (
+                    <div className="portal-table-primary">
+                      <strong>{document.fileVersions?.[0]?.originalName ?? "Documento sin nombre"}</strong>
+                      <span>{document.category ?? "Documentación recibida"}</span>
+                    </div>
+                  ),
+                },
+                {
+                  key: "date",
+                  header: "Enviado",
+                  render: (document) => formatPortalDate(document.createdAt),
+                },
+                {
+                  key: "status",
+                  header: "Estado",
+                  render: (document) => <StatusBadge status={document.status} />,
+                },
+              ]}
+            />
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }

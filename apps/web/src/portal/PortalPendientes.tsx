@@ -5,7 +5,12 @@ import { api, type DocumentRequest } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
-import { formatPortalDate, PortalLoading, PortalPageHeader } from "./PortalUI";
+import {
+  formatPortalDate,
+  PortalLoading,
+  PortalPageHeader,
+  PortalRetryButton,
+} from "./PortalUI";
 import "./portal.css";
 
 interface PortalDocumentRequest extends DocumentRequest {
@@ -14,7 +19,7 @@ interface PortalDocumentRequest extends DocumentRequest {
 }
 
 export function PortalPendientes() {
-  const { clientId } = useClientContext();
+  const { clientId, capabilities } = useClientContext();
   const query = useQuery({
     queryKey: ["portal-requests", clientId],
     queryFn: () =>
@@ -22,7 +27,7 @@ export function PortalPendientes() {
     enabled: Boolean(clientId),
   });
   const rows = query.data ?? [];
-  const isPendingItem = (status: string) => status !== "ACCEPTED" && status !== "WAIVED";
+  const isPendingItem = (status: string) => status === "PENDING";
   const pendingItems = rows.reduce(
     (total, request) => total + request.items.filter((item) => isPendingItem(item.status)).length,
     0,
@@ -34,12 +39,12 @@ export function PortalPendientes() {
         eyebrow="Documentación"
         title="Documentación pendiente"
         description="Revisá qué necesita tu estudio y seguí el estado de cada pedido."
-        actions={
+        actions={capabilities.has("portal.documents.upload") ? (
           <Link className="portal-button-link" to="/portal/upload">
             <Icon name="upload" size={18} />
             <span>Cargar un archivo</span>
           </Link>
-        }
+        ) : undefined}
       />
 
       {!clientId ? (
@@ -53,16 +58,17 @@ export function PortalPendientes() {
         <EmptyState
           title="No pudimos cargar los pedidos"
           description="Reintentá en unos minutos."
+          action={<PortalRetryButton onRetry={() => void query.refetch()} />}
         />
       ) : rows.length === 0 ? (
         <EmptyState
           title="Estás al día"
           description="No hay documentación pendiente para esta empresa."
-          action={
+          action={capabilities.has("portal.documents.upload") ? (
             <Link className="portal-text-link" to="/portal/upload">
               Cargar documentación nueva
             </Link>
-          }
+          ) : undefined}
         />
       ) : (
         <section className="portal-page__section" aria-labelledby="requests-title">
@@ -122,10 +128,71 @@ export function PortalPendientes() {
                 header: "Estado",
                 render: (row) => <StatusBadge status={row.status} />,
               },
+              {
+                key: "actions",
+                header: "Acciones",
+                render: (row) => (
+                  <RequestItems
+                    request={row}
+                    canUpload={capabilities.has("portal.documents.upload")}
+                  />
+                ),
+              },
             ]}
           />
         </section>
       )}
     </div>
+  );
+}
+
+function RequestItems({
+  request,
+  canUpload,
+}: {
+  request: PortalDocumentRequest;
+  canUpload: boolean;
+}) {
+  const pending = request.items.filter((item) => item.status === "PENDING");
+  const uploadFor = (item: DocumentRequest["items"][number]) =>
+    `/portal/upload?pedido=${encodeURIComponent(request.title)}&item=${encodeURIComponent(item.description)}&itemId=${encodeURIComponent(item.id)}`;
+
+  if (pending.length === 0) {
+    return (
+      <details>
+        <summary>Ver entrega</summary>
+        <ul>
+          {request.items.map((item) => (
+            <li key={item.id}>
+              {item.description} · <StatusBadge status={item.status} />
+            </li>
+          ))}
+        </ul>
+      </details>
+    );
+  }
+
+  return (
+    <details>
+      <summary>{pending.length === 1 ? "Resolver ítem" : `Resolver ${pending.length} ítems`}</summary>
+      <ul>
+        {request.items.map((item) => (
+          <li key={item.id}>
+            <div>
+              <strong>{item.description}</strong>
+              {item.required ? <span> · Requerido</span> : <span> · Opcional</span>}
+              <div>
+                <StatusBadge status={item.status} />
+              </div>
+            </div>
+            {item.status === "PENDING" && canUpload ? (
+              <Link className="portal-text-link" to={uploadFor(item)}>
+                Aportar archivo
+              </Link>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

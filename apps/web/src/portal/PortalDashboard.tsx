@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon, type IconName } from "../ui/Icon";
-import { PortalLoading, PortalPageHeader } from "./PortalUI";
+import { PortalLoading, PortalPageHeader, PortalRetryButton } from "./PortalUI";
 import "./portal.css";
 
 interface Summary {
@@ -14,18 +14,26 @@ interface Summary {
   documentsCount: number;
 }
 
-const QUICK_LINKS: { to: string; title: string; description: string; icon: IconName }[] = [
+const QUICK_LINKS: {
+  to: string;
+  title: string;
+  description: string;
+  icon: IconName;
+  capability?: string;
+}[] = [
   {
     to: "/portal/upload",
     title: "Cargar un archivo",
     description: "Facturas, recibos y otra documentación",
     icon: "upload",
+    capability: "portal.documents.upload",
   },
   {
     to: "/portal/mensajes",
     title: "Escribir al estudio",
     description: "Consultas asociadas a tus pedidos",
     icon: "message",
+    capability: "message.shared",
   },
   {
     to: "/portal/reportes",
@@ -36,7 +44,8 @@ const QUICK_LINKS: { to: string; title: string; description: string; icon: IconN
 ];
 
 export function PortalDashboard() {
-  const { clientId } = useClientContext();
+  const { clientId, capabilities } = useClientContext();
+  const canUpload = capabilities.has("portal.documents.upload");
   const summary = useQuery({
     queryKey: ["portal-summary", clientId],
     queryFn: () => api.get<Summary>(`/portal/clients/${clientId}/summary`),
@@ -61,6 +70,7 @@ export function PortalDashboard() {
         <EmptyState
           title="No pudimos cargar el resumen"
           description="Reintentá en unos minutos. Si el problema continúa, escribile a tu estudio."
+          action={<PortalRetryButton onRetry={() => void summary.refetch()} />}
         />
       ) : summary.data ? (
         <>
@@ -78,14 +88,26 @@ export function PortalDashboard() {
               <p>
                 {summary.data.pendingRequests > 0
                   ? "Revisá qué documentación pidió tu estudio y qué falta entregar."
-                  : "Podés cargar documentación nueva cuando la tengas disponible."}
+                  : canUpload
+                    ? "Podés cargar documentación nueva cuando la tengas disponible."
+                    : "Consultá los reportes y resultados que tu estudio publicó para vos."}
               </p>
               <Link
                 className="portal-action-link"
-                to={summary.data.pendingRequests > 0 ? "/portal/pendientes" : "/portal/upload"}
+                to={
+                  summary.data.pendingRequests > 0
+                    ? "/portal/pendientes"
+                    : canUpload
+                      ? "/portal/upload"
+                      : "/portal/reportes"
+                }
               >
                 <span>
-                  {summary.data.pendingRequests > 0 ? "Ver pedidos" : "Cargar un documento"}
+                  {summary.data.pendingRequests > 0
+                    ? "Ver pedidos"
+                    : canUpload
+                      ? "Cargar un documento"
+                      : "Ver reportes"}
                 </span>
                 <Icon name="arrow-right" size={18} />
               </Link>
@@ -110,6 +132,11 @@ export function PortalDashboard() {
                 <dt>Documentos cargados</dt>
                 <dd className="portal-summary__value">{summary.data.documentsCount}</dd>
                 <dd className="portal-summary__detail">Historial total</dd>
+                {canUpload ? (
+                  <dd className="portal-summary__detail">
+                    <Link to="/portal/upload">Ver cargas recientes</Link>
+                  </dd>
+                ) : null}
               </div>
             </dl>
           </section>
@@ -120,7 +147,7 @@ export function PortalDashboard() {
               <h2 id="quick-title">¿Qué necesitás hacer?</h2>
             </div>
             <div className="portal-dashboard__quick-links">
-              {QUICK_LINKS.map((item) => (
+              {QUICK_LINKS.filter((item) => !item.capability || capabilities.has(item.capability)).map((item) => (
                 <Link className="portal-quick-link" to={item.to} key={item.to}>
                   <Icon name={item.icon} size={21} />
                   <span>

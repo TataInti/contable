@@ -40,16 +40,16 @@ Se agrupan por severidad. Cada ítem referencia la sección del plan maestro que
 
 #### 🟠 Altos — flujos incompletos
 
-| # | Gap | Plan maestro |
+| # | Gap | Estado |
 |---|---|---|
-| A1 | **Sin `POST /import-batches/:id/upload`** (la ingesta oficial va por sesiones de documento, no por lote). | §6.2, §10.3 |
-| A2 | **Workflow de vouchers colapsado**: una sola ruta `POST /vouchers/:id/review {approve}`; faltan `submit-review`/`approve`/`reject` separados. | §10.3 |
-| A3 | **`ManagementExpenseService.submitForReview` y `reject` sin ruta** — el estado `PENDING_REVIEW` es inalcanzable. | §7.5 |
-| A4 | **Lecturas fiscales sin filtro de período/cutoff**: `GET /vouchers`, `/withholdings`, `/perceptions`, `/management-expenses`, listado de settlements. | §10.2 |
-| A5 | **Ningún endpoint devuelve 202 + jobId** (cálculos, exports y OCR son 100% síncronos). | §10.4 |
-| A6 | **Rutas legacy activas sin 410**: `/assistant/*`, `/bi/*`, `/reports/*`, `/obligations`, `/close-cycles`, `/document-requests`, `GET /vat/liquidations`. | §14.3 |
-| A7 | **Guard de capabilities no es deny-by-default**: rutas sin mapeo pasan sin control y no hay prueba que falle. | §4.3 |
-| A8 | **Sin idempotency keys + ETag/If-Match** en la práctica (una sola `Idempotency-Key` en todo el frontend). | §10.2 |
+| A1 | **Sin `POST /import-batches/:id/upload`** (la ingesta oficial va por sesiones de documento, no por lote). | Pendiente |
+| A2 | ~~**Workflow de vouchers colapsado**~~: una sola ruta `POST /vouchers/:id/review {approve}`; faltan `submit-review`/`approve`/`reject` separados. | ✅ **Resuelto (2026-08-20)**: `POST /vouchers/:id/submit-review|approve|reject` en `ingestion-routes.ts` + `submitVoucherForReview`/`approveVoucher`/`rejectVoucher` en `ingestion-service.ts` (maker-checker en approve/reject; `reviewVoucher` legacy se mantiene). Guards mapeados en `guard.ts`. Tests en `ingestion.test.ts` (20) y `guard-capabilities.test.ts`. |
+| A3 | ~~**`ManagementExpenseService.submitForReview` y `reject` sin ruta**~~ — el estado `PENDING_REVIEW` era inalcanzable. | ✅ **Resuelto (2026-08-20)**: rutas `POST /management-expenses/:id/submit-review` y `/:id/reject` en `ingestion-routes.ts`. Guards: submit-review → `tax.management_expenses.write`, reject → `tax.management_expenses.approve_treatment`. |
+| A4 | **Lecturas fiscales sin filtro de período/cutoff**: `GET /vouchers`, `/withholdings`, `/perceptions`, `/management-expenses`, listado de settlements. | Parcial: workpaper/posición aceptan `accountingPeriodId`; lecturas de vouchers/withholdings/perceptions aún sin filtro. |
+| A5 | **Ningún endpoint devuelve 202 + jobId** (cálculos, exports y OCR son 100% síncronos). | Pendiente |
+| A6 | **Rutas legacy activas sin 410**: `/assistant/*`, `/bi/*`, `/reports/*`, `/obligations`, `/close-cycles`, `/document-requests`, `GET /vat/liquidations`. | Pendiente |
+| A7 | ~~**Guard de capabilities no es deny-by-default**~~: rutas sin mapeo pasaban sin control y no había prueba que falle. | ✅ **Resuelto (2026-08-20)**: `guard.ts` lanza 404 `RESOURCE_NOT_FOUND` cuando `requiredCapability` devuelve null en rutas con sesión+firma. Se mapearon 6 rutas con escape real (`/activities`, `/adjustments/*`, `/portal-invitations`, `/document-request-items/:id/preview`). Test `apps/api/src/auth/policy-coverage.test.ts` audita TODAS las rutas registradas contra el ROUTE_POLICY (whitelist de 11 excepciones legítimas). |
+| A8 | **Sin idempotency keys + ETag/If-Match** en la práctica (una sola `Idempotency-Key` en todo el frontend). | Pendiente |
 
 #### 🟡 Medios — producto/UX
 

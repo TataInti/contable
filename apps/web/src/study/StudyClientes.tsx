@@ -13,6 +13,50 @@ function formatCuit(cuit: string) {
   return cuit.length === 11 ? `${cuit.slice(0, 2)}-${cuit.slice(2, 10)}-${cuit.slice(10)}` : cuit;
 }
 
+interface ClientProfile {
+  functionalCurrency: string;
+  accountingStandard: string | null;
+  fiscalYearEndMonth: number;
+  vatCondition: string | null;
+  iibbJurisdictions: string[];
+  province: string | null;
+  activity: string | null;
+  legalForm: string | null;
+  serviceStartDate: string | null;
+}
+
+interface ClientWithProfile extends Client {
+  tradeName?: string | null;
+  profile?: ClientProfile | null;
+}
+
+interface ClientProfileForm {
+  functionalCurrency: string;
+  accountingStandard: string;
+  fiscalYearEndMonth: string;
+  vatCondition: string;
+  iibbJurisdictions: string;
+  province: string;
+  activity: string;
+  legalForm: string;
+  serviceStartDate: string;
+}
+
+function profileFormFrom(client: ClientWithProfile): ClientProfileForm {
+  const profile = client.profile;
+  return {
+    functionalCurrency: profile?.functionalCurrency ?? "ARS",
+    accountingStandard: profile?.accountingStandard ?? "",
+    fiscalYearEndMonth: String(profile?.fiscalYearEndMonth ?? 12),
+    vatCondition: profile?.vatCondition ?? "",
+    iibbJurisdictions: profile?.iibbJurisdictions.join(", ") ?? "",
+    province: profile?.province ?? "",
+    activity: profile?.activity ?? "",
+    legalForm: profile?.legalForm ?? "",
+    serviceStartDate: profile?.serviceStartDate?.slice(0, 10) ?? "",
+  };
+}
+
 export function StudyClientes() {
   const { firmId, clientId, capabilities, setClientId } = useClientContext();
   const session = useSession();
@@ -20,10 +64,30 @@ export function StudyClientes() {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({ legalName: "", tradeName: "", cuit: "" });
+  const [form, setForm] = useState({
+    legalName: "",
+    tradeName: "",
+    cuit: "",
+    province: "",
+    activity: "",
+    legalForm: "",
+  });
+  const [editingClient, setEditingClient] = useState<ClientWithProfile | null>(null);
+  const [profileForm, setProfileForm] = useState<ClientProfileForm>(() => ({
+    functionalCurrency: "ARS",
+    accountingStandard: "",
+    fiscalYearEndMonth: "12",
+    vatCondition: "",
+    iibbJurisdictions: "",
+    province: "",
+    activity: "",
+    legalForm: "",
+    serviceStartDate: "",
+  }));
+  const [notice, setNotice] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ["clients", firmId],
-    queryFn: () => api.get<Client[]>(`/firms/${firmId}/clients`),
+    queryFn: () => api.get<ClientWithProfile[]>(`/firms/${firmId}/clients`),
     enabled: Boolean(firmId),
   });
   const create = useMutation({
@@ -32,6 +96,9 @@ export function StudyClientes() {
         legalName: form.legalName.trim(),
         cuit: form.cuit,
         ...(form.tradeName.trim() ? { tradeName: form.tradeName.trim() } : {}),
+        ...(form.province.trim() ? { province: form.province.trim() } : {}),
+        ...(form.activity.trim() ? { activity: form.activity.trim() } : {}),
+        ...(form.legalForm.trim() ? { legalForm: form.legalForm.trim() } : {}),
       }),
     onSuccess: async (client) => {
       await Promise.all([
@@ -40,8 +107,41 @@ export function StudyClientes() {
       ]);
       setClientId(client.id);
       setCreating(false);
-      setForm({ legalName: "", tradeName: "", cuit: "" });
+      setForm({
+        legalName: "",
+        tradeName: "",
+        cuit: "",
+        province: "",
+        activity: "",
+        legalForm: "",
+      });
       navigate("/configuracion-fiscal");
+    },
+  });
+  const updateProfile = useMutation({
+    mutationFn: () => {
+      if (!editingClient) throw new Error("Elegí un cliente para actualizar su ficha");
+      const jurisdictions = profileForm.iibbJurisdictions
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean);
+      return api.patch<ClientProfile>(`/firms/${firmId}/clients/${editingClient.id}/profile`, {
+        functionalCurrency: profileForm.functionalCurrency.trim().toUpperCase(),
+        fiscalYearEndMonth: Number(profileForm.fiscalYearEndMonth),
+        iibbJurisdictions: jurisdictions,
+        accountingStandard: profileForm.accountingStandard.trim(),
+        vatCondition: profileForm.vatCondition.trim(),
+        province: profileForm.province.trim(),
+        activity: profileForm.activity.trim(),
+        legalForm: profileForm.legalForm.trim(),
+        ...(profileForm.serviceStartDate ? { serviceStartDate: profileForm.serviceStartDate } : {}),
+      });
+    },
+    onSuccess: async () => {
+      const clientName = editingClient?.legalName ?? "El cliente";
+      await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
+      setEditingClient(null);
+      setNotice(`La ficha de ${clientName} quedó actualizada.`);
     },
   });
   const rows = useMemo(() => {
@@ -57,6 +157,13 @@ export function StudyClientes() {
   const openClientWorkspace = (id: string) => {
     setClientId(id);
     navigate("/trabajo");
+  };
+
+  const startProfileEdit = (client: ClientWithProfile) => {
+    setCreating(false);
+    setNotice(null);
+    setEditingClient(client);
+    setProfileForm(profileFormFrom(client));
   };
 
   return (
@@ -79,6 +186,19 @@ export function StudyClientes() {
           </Button>
         ) : null}
       </div>
+
+      {notice ? (
+        <div className="action-receipt action-receipt--page" role="status">
+          <Icon name="check" size={18} />
+          <span>
+            <strong>Actualización guardada</strong>
+            <small>{notice}</small>
+          </span>
+          <button type="button" aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
+            <Icon name="close" size={15} />
+          </button>
+        </div>
+      ) : null}
 
       {creating ? (
         <section className="study-panel study-panel--form" aria-labelledby="new-client-title">
@@ -122,6 +242,30 @@ export function StudyClientes() {
               hint="11 dígitos, sin guiones"
               required
             />
+            <Field
+              id="client-province"
+              label="Provincia"
+              value={form.province}
+              onChange={(event) => setForm({ ...form, province: event.target.value })}
+              maxLength={100}
+              placeholder="Opcional"
+            />
+            <Field
+              id="client-activity"
+              label="Actividad principal"
+              value={form.activity}
+              onChange={(event) => setForm({ ...form, activity: event.target.value })}
+              maxLength={200}
+              placeholder="Opcional"
+            />
+            <Field
+              id="client-legal-form"
+              label="Forma jurídica"
+              value={form.legalForm}
+              onChange={(event) => setForm({ ...form, legalForm: event.target.value })}
+              maxLength={100}
+              placeholder="Opcional"
+            />
             {create.isError ? (
               <p className="form-error study-inline-form__feedback" role="alert">
                 No se pudo crear el cliente. Revisá el CUIT y los permisos.
@@ -135,6 +279,152 @@ export function StudyClientes() {
                 disabled={form.legalName.trim().length < 2 || form.cuit.length !== 11}
               >
                 Crear cliente
+              </Button>
+            </div>
+          </form>
+        </section>
+      ) : null}
+
+      {editingClient ? (
+        <section className="study-panel study-panel--form" aria-labelledby="edit-client-title">
+          <div className="study-panel__heading">
+            <div>
+              <h2 id="edit-client-title">Ficha operativa · {editingClient.legalName}</h2>
+              <p>
+                Estos datos se usan como base contable y fiscal. Los regímenes y alícuotas se
+                administran en la configuración fiscal.
+              </p>
+            </div>
+            <Button type="button" variant="ghost" onClick={() => setEditingClient(null)}>
+              <Icon name="close" size={16} /> Cerrar
+            </Button>
+          </div>
+          <form
+            className="study-inline-form study-inline-form--client"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateProfile.mutate();
+            }}
+          >
+            <Field
+              id="client-profile-currency"
+              label="Moneda funcional"
+              value={profileForm.functionalCurrency}
+              onChange={(event) =>
+                setProfileForm({
+                  ...profileForm,
+                  functionalCurrency: event.target.value.slice(0, 3),
+                })
+              }
+              maxLength={3}
+              minLength={3}
+              pattern="[A-Za-z]{3}"
+              title="Ingresá el código ISO de tres letras, por ejemplo ARS"
+              required
+            />
+            <label className="ds-field">
+              <span className="ds-field__label">Cierre de ejercicio</span>
+              <select
+                className="ctxbar__input"
+                value={profileForm.fiscalYearEndMonth}
+                onChange={(event) =>
+                  setProfileForm({ ...profileForm, fiscalYearEndMonth: event.target.value })
+                }
+              >
+                {[
+                  "Enero",
+                  "Febrero",
+                  "Marzo",
+                  "Abril",
+                  "Mayo",
+                  "Junio",
+                  "Julio",
+                  "Agosto",
+                  "Septiembre",
+                  "Octubre",
+                  "Noviembre",
+                  "Diciembre",
+                ].map((month, index) => (
+                  <option key={month} value={index + 1}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Field
+              id="client-profile-vat"
+              label="Condición frente al IVA"
+              value={profileForm.vatCondition}
+              onChange={(event) =>
+                setProfileForm({ ...profileForm, vatCondition: event.target.value })
+              }
+              maxLength={100}
+              placeholder="Ej.: Responsable inscripto"
+            />
+            <Field
+              id="client-profile-province"
+              label="Provincia"
+              value={profileForm.province}
+              onChange={(event) => setProfileForm({ ...profileForm, province: event.target.value })}
+              maxLength={100}
+            />
+            <Field
+              id="client-profile-activity"
+              label="Actividad principal"
+              value={profileForm.activity}
+              onChange={(event) => setProfileForm({ ...profileForm, activity: event.target.value })}
+              maxLength={200}
+            />
+            <Field
+              id="client-profile-legal-form"
+              label="Forma jurídica"
+              value={profileForm.legalForm}
+              onChange={(event) =>
+                setProfileForm({ ...profileForm, legalForm: event.target.value })
+              }
+              maxLength={100}
+            />
+            <Field
+              id="client-profile-iibb"
+              label="Jurisdicciones IIBB"
+              value={profileForm.iibbJurisdictions}
+              onChange={(event) =>
+                setProfileForm({ ...profileForm, iibbJurisdictions: event.target.value })
+              }
+              hint="Separalas con coma"
+              maxLength={500}
+            />
+            <Field
+              id="client-profile-standard"
+              label="Norma contable"
+              value={profileForm.accountingStandard}
+              onChange={(event) =>
+                setProfileForm({ ...profileForm, accountingStandard: event.target.value })
+              }
+              maxLength={100}
+              placeholder="Opcional"
+            />
+            <Field
+              id="client-profile-service-start"
+              label="Inicio del servicio"
+              type="date"
+              value={profileForm.serviceStartDate}
+              onChange={(event) =>
+                setProfileForm({ ...profileForm, serviceStartDate: event.target.value })
+              }
+            />
+            {updateProfile.isError ? (
+              <p className="form-error study-inline-form__feedback" role="alert">
+                No se pudo guardar la ficha. Revisá los datos e intentá nuevamente.
+              </p>
+            ) : null}
+            <div className="study-inline-form__actions">
+              <Button
+                type="submit"
+                loading={updateProfile.isPending}
+                loadingLabel="Guardando ficha"
+              >
+                Guardar ficha
               </Button>
             </div>
           </form>
@@ -226,16 +516,23 @@ export function StudyClientes() {
               },
               {
                 key: "action",
-                header: "",
+                header: "Acciones",
                 align: "right",
                 render: (row) => (
-                  <button
-                    className="row-arrow"
-                    aria-label={`Trabajar con ${row.legalName}`}
-                    onClick={() => openClientWorkspace(row.id)}
-                  >
-                    <Icon name="arrow-right" size={17} />
-                  </button>
+                  <div className="table-actions">
+                    {capabilities.has("client.manage") ? (
+                      <Button size="sm" variant="ghost" onClick={() => startProfileEdit(row)}>
+                        Editar ficha
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => openClientWorkspace(row.id)}
+                    >
+                      Abrir <Icon name="arrow-right" size={15} />
+                    </Button>
+                  </div>
                 ),
               },
             ]}

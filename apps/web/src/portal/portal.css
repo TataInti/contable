@@ -133,7 +133,11 @@
 .portal-page__actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--ds-space-3);
+  margin-top: var(--ds-space-1);
+  padding-top: var(--ds-space-5);
+  border-top: 1px solid var(--ds-color-border-subtle);
 }
 
 .portal-loading {
@@ -455,6 +459,30 @@
   background-color: color-mix(in srgb, var(--ds-color-primary-soft) 52%, var(--ds-color-surface));
 }
 
+.portal-data-table details {
+  min-width: 0;
+}
+
+.portal-data-table details summary {
+  color: var(--ds-color-primary);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  cursor: pointer;
+}
+
+.portal-data-table details > div {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-3);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  line-height: 1.45;
+}
+
+.portal-data-table details p {
+  margin: 0;
+}
+
 .portal-table-primary {
   display: flex;
   flex-direction: column;
@@ -701,6 +729,7 @@
 .portal-reply > label {
   font-size: var(--ds-text-sm);
   font-weight: 650;
+  color: var(--ds-color-text-muted);
 }
 
 .portal-reply__input {
@@ -1198,6 +1227,9 @@
   .portal-data-table--requests td:nth-child(4)::before {
     content: "Estado";
   }
+  .portal-data-table--requests td:nth-child(5)::before {
+    content: "Acciones";
+  }
   .portal-data-table--obligations td:nth-child(1)::before {
     content: "Obligación";
   }
@@ -1221,6 +1253,45 @@
   }
   .portal-data-table--reports td:nth-child(4)::before {
     content: "Descargar";
+  }
+  .portal-data-table--reports td:nth-child(5)::before {
+    content: "Vista";
+  }
+  .portal-data-table--documents td:nth-child(1)::before {
+    content: "Archivo";
+  }
+  .portal-data-table--documents td:nth-child(2)::before {
+    content: "Enviado";
+  }
+  .portal-data-table--documents td:nth-child(3)::before {
+    content: "Estado";
+  }
+  .portal-data-table--settlements td:nth-child(1)::before {
+    content: "Período";
+  }
+  .portal-data-table--settlements td:nth-child(2)::before {
+    content: "Impuesto";
+  }
+  .portal-data-table--settlements td:nth-child(3)::before {
+    content: "Versión";
+  }
+  .portal-data-table--settlements td:nth-child(4)::before {
+    content: "Estado";
+  }
+  .portal-data-table--settlements td:nth-child(5)::before {
+    content: "Total";
+  }
+  .portal-data-table--settlements td:nth-child(6)::before {
+    content: "Presentación";
+  }
+  .portal-data-table--settlements td:nth-child(7)::before {
+    content: "Pago";
+  }
+  .portal-data-table--settlements td:nth-child(8)::before {
+    content: "Detalle";
+  }
+  .portal-data-table--settlements td:nth-child(9)::before {
+    content: "Archivos";
   }
 
   .portal-table-primary,

@@ -79,6 +79,9 @@ export function documentRoutes(app: FastifyInstance) {
       if (err instanceof Error && err.message === "UPLOAD_SESSION_INVALID") {
         return reply.status(400).send({ error: { code: "UPLOAD_SESSION_INVALID", message: "Sesión inválida o expirada" } });
       }
+      if (err instanceof Error && err.message === "REQUEST_ITEM_NOT_PENDING") {
+        return reply.status(409).send({ error: { code: "REQUEST_ITEM_NOT_PENDING", message: "El ítem ya fue respondido" } });
+      }
       throw err;
     }
   });

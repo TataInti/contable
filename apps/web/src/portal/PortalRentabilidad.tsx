@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState } from "@contable/design-system";
+import { Button, EmptyState } from "@contable/design-system";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
-import { PortalLoading, PortalPageHeader } from "./PortalUI";
+import { formatPortalMoney, PortalLoading, PortalPageHeader, PortalRetryButton } from "./PortalUI";
 import "./portal.css";
 
 /**
@@ -35,11 +37,6 @@ interface Receipt {
   period?: { label: string | null } | null;
 }
 
-function formatMoney(value: string | undefined | null): string {
-  const num = Number(value ?? 0);
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(num);
-}
-
 const SUBTOTAL_LABELS: Record<string, string> = {
   VENTAS: "Ventas netas del período",
   VENTAS_EXENTAS: "Ventas exentas / no gravadas (informativas)",
@@ -62,6 +59,7 @@ function basisLabel(basis: string): string {
 
 function SnapshotCard({ snapshot }: { snapshot: PublishedSnapshot }) {
   const { clientId } = useClientContext();
+  const [copied, setCopied] = useState(false);
   const receiptQuery = useQuery({
     queryKey: ["portal-profitability-receipt", clientId, snapshot.id],
     queryFn: () =>
@@ -84,7 +82,7 @@ function SnapshotCard({ snapshot }: { snapshot: PublishedSnapshot }) {
       </div>
 
       <p className="portal-profitability-card__total">
-        {formatMoney(totals[totalKey])}
+        {formatPortalMoney(totals[totalKey])}
         <small>
           {snapshot.basis === "CAJA"
             ? "luego de impuestos y del efecto de caja del IVA"
@@ -96,7 +94,7 @@ function SnapshotCard({ snapshot }: { snapshot: PublishedSnapshot }) {
         {(Object.entries(totals) as [string, string][]).map(([key, value]) => (
           <div key={key} data-total={key === totalKey || undefined}>
             <dt>{SUBTOTAL_LABELS[key] ?? key.replaceAll("_", " ").toLowerCase()}</dt>
-            <dd>{formatMoney(value)}</dd>
+            <dd>{formatPortalMoney(value)}</dd>
           </div>
         ))}
       </dl>
@@ -109,7 +107,7 @@ function SnapshotCard({ snapshot }: { snapshot: PublishedSnapshot }) {
               <li key={`${line.concept}-${index}`}>
                 <strong>{line.concept}</strong>
                 <span>{line.formula}</span>
-                <b>{formatMoney(line.result)}</b>
+                <b>{formatPortalMoney(line.result)}</b>
               </li>
             ))}
           </ul>
@@ -125,6 +123,19 @@ function SnapshotCard({ snapshot }: { snapshot: PublishedSnapshot }) {
               : ""}
           </p>
           <code>hash {receipt.outputHash.slice(0, 20)}…</code>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void navigator.clipboard
+                ?.writeText(receipt.outputHash)
+                .then(() => setCopied(true))
+                .catch(() => setCopied(false));
+            }}
+          >
+            {copied ? "Identificador copiado" : "Copiar identificador"}
+          </Button>
         </div>
       ) : null}
     </section>
@@ -132,10 +143,13 @@ function SnapshotCard({ snapshot }: { snapshot: PublishedSnapshot }) {
 }
 
 export function PortalRentabilidad() {
-  const { clientId } = useClientContext();
+  const { clientId, periodId } = useClientContext();
   const query = useQuery({
-    queryKey: ["portal-profitability", clientId],
-    queryFn: () => api.get<PublishedSnapshot[]>(`/portal/clients/${clientId}/profitability`),
+    queryKey: ["portal-profitability", clientId, periodId],
+    queryFn: () =>
+      api.get<PublishedSnapshot[]>(
+        `/portal/clients/${clientId}/profitability${periodId ? `?periodId=${encodeURIComponent(periodId)}` : ""}`,
+      ),
     enabled: Boolean(clientId),
   });
   const rows = query.data ?? [];
@@ -147,7 +161,12 @@ export function PortalRentabilidad() {
       <PortalPageHeader
         eyebrow="Gerencia"
         title="Rentabilidad"
-        description="Resultados publicados por tu estudio, separados por devengado y caja."
+        description="Resultados publicados para el período seleccionado, separados por devengado y caja."
+        actions={
+          <Link className="portal-secondary-link" to="/portal/reportes">
+            Ver estados y reportes
+          </Link>
+        }
       />
 
       {!clientId ? (
@@ -161,11 +180,17 @@ export function PortalRentabilidad() {
         <EmptyState
           title="No pudimos cargar la rentabilidad"
           description="Reintentá en unos minutos."
+          action={<PortalRetryButton onRetry={() => void query.refetch()} />}
         />
       ) : rows.length === 0 ? (
         <EmptyState
           title="Sin rentabilidad publicada"
-          description="Cuando tu estudio publique un período, aparecerá acá."
+          description="Cuando tu estudio publique el período seleccionado, aparecerá acá."
+          action={
+            <Link className="portal-text-link" to="/portal/reportes">
+              Ver estados y reportes disponibles
+            </Link>
+          }
         />
       ) : (
         <div className="portal-profitability-grid">

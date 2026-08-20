@@ -1,6 +1,7 @@
 import hashlib
 import json
 import time
+import uuid
 from typing import Self
 
 import pytest
@@ -47,7 +48,7 @@ def _setup_auth(monkeypatch: pytest.MonkeyPatch) -> None:
 def _headers(body: bytes, secret: str = "test-secret") -> dict[str, str]:
     path = "/internal/v1/extractions"
     ts = str(int(time.time()))
-    nonce = "nonce-1"
+    nonce = str(uuid.uuid4())
     sig = sign("POST", path, ts, nonce, sha256_hex(body), secret)
     return {
         "Content-Type": "application/json",
@@ -127,3 +128,58 @@ def test_extraction_rejects_unknown_fields() -> None:
     body = json.dumps(payload).encode()
     res = client.post("/internal/v1/extractions", content=body, headers=_headers(body))
     assert res.status_code == 422
+
+
+def test_hmac_replay_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Un request firmado reenviado con el mismo nonce debe rechazarse."""
+    # Mock de la descarga para que el primer envío consuma el nonce y llegue al
+    # procesamiento (sin esto falla antes con ConnectError).
+    fake_pdf = b"%PDF-1.4 fake pdf body"
+
+    class FakeResp:
+        content = fake_pdf
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class FakeClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        async def __aenter__(self) -> Self:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def get(self, url: str) -> FakeResp:
+            return FakeResp()
+
+    monkeypatch.setattr("app.main.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr(
+        "app.main.extract_from_pdf_bytes",
+        lambda _data, schema: __import__("app.extractor", fromlist=["extract_from_text"]).extract_from_text(
+            "CUIT 30712345675 Fecha 12/08/2026 Total: 121000.00", schema
+        ),
+    )
+
+    payload = {
+        **VALID_PAYLOAD,
+        "source": {
+            **VALID_PAYLOAD["source"],
+            "sizeBytes": len(fake_pdf),
+            "sha256": hashlib.sha256(fake_pdf).hexdigest(),
+        },
+    }
+    body = json.dumps(payload).encode()
+    headers = _headers(body)
+
+    # Primer envío: firma válida → el nonce queda consumido; la extracción
+    # devuelve 200 gracias al mock de descarga.
+    res = client.post("/internal/v1/extractions", content=body, headers=headers)
+    assert res.status_code == 200
+
+    # Reenviar el MISMO request (mismo nonce+timestamp) debe detectarse como replay.
+    res2 = client.post("/internal/v1/extractions", content=body, headers=headers)
+    assert res2.status_code == 401
+    assert res2.json()["detail"] == "Nonce reutilizado"
