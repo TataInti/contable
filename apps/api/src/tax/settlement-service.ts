@@ -1090,15 +1090,43 @@ export class SettlementService {
     });
   }
 
-  async list(ctx: TenantContext, clientId: string, periodId?: string) {
-    return withTenantContext(ctx, (tx) =>
-      tx.taxSettlement.findMany({
-        where: { firmId: ctx.firmId, clientId, ...(periodId ? { periodId } : {}) },
-        include: { period: true, regime: true, lines: true },
-        orderBy: { version: "desc" },
-        take: 300,
-      }),
-    );
+  /**
+   * F2.3: lista liquidaciones con filtros paginados de período y cutoff.
+   * Devuelve { data, meta } con cursor de paginación (offset/limit).
+   */
+  async list(
+    ctx: TenantContext,
+    clientId: string,
+    filters: { periodId?: string; cutoffFrom?: string; cutoffTo?: string; limit?: number; offset?: number } = {},
+  ) {
+    const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
+    const offset = Math.max(filters.offset ?? 0, 0);
+    return withTenantContext(ctx, async (tx) => {
+      const where: Prisma.TaxSettlementWhereInput = {
+        firmId: ctx.firmId,
+        clientId,
+        ...(filters.periodId ? { periodId: filters.periodId } : {}),
+        ...(filters.cutoffFrom || filters.cutoffTo
+          ? {
+              cutoff: {
+                ...(filters.cutoffFrom ? { gte: new Date(`${filters.cutoffFrom}T00:00:00.000Z`) } : {}),
+                ...(filters.cutoffTo ? { lte: new Date(`${filters.cutoffTo}T23:59:59.999Z`) } : {}),
+              },
+            }
+          : {}),
+      };
+      const [data, total] = await Promise.all([
+        tx.taxSettlement.findMany({
+          where,
+          include: { period: true, regime: true, lines: true },
+          orderBy: [{ period: { startDate: "desc" } }, { version: "desc" }],
+          skip: offset,
+          take: limit,
+        }),
+        tx.taxSettlement.count({ where }),
+      ]);
+      return { data, meta: { total, limit, offset } };
+    });
   }
 
   // ------------------------------------------------------------------

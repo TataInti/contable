@@ -20,6 +20,7 @@ import { assistantRoutes } from "./assistant/routes.js";
 import { biRoutes } from "./bi/routes.js";
 import { flagRoutes } from "./flags/routes.js";
 import { portalRoutes } from "./portal/routes.js";
+import { sseRoutes } from "./sse/routes.js";
 import { ObjectStorage } from "@contable/storage";
 import { prisma } from "./lib/prisma.js";
 import { ZodError } from "zod";
@@ -119,6 +120,7 @@ export async function buildServer(overrides?: Partial<HealthChecks>): Promise<Fa
   biRoutes(app);
   flagRoutes(app);
   portalRoutes(app);
+  sseRoutes(app);
 
   let outboxTimer: ReturnType<typeof setInterval> | undefined;
   if (process.env.NODE_ENV !== "test") {

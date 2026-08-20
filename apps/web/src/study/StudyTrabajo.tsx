@@ -21,6 +21,11 @@ interface Obligation {
   name: string;
   instances: { id: string; periodLabel: string; dueDate: string; status: string }[];
 }
+interface EvidencePreview {
+  url: string;
+  mimeType: string | null;
+  originalName: string | null;
+}
 
 const DATE = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 
@@ -30,6 +35,7 @@ export function StudyTrabajo() {
   const [showRequest, setShowRequest] = useState(false);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [request, setRequest] = useState({ title: "", item: "", dueDate: "" });
+  const [preview, setPreview] = useState<EvidencePreview | null>(null);
   const base = firmId && clientId ? `/firms/${firmId}/clients/${clientId}` : null;
   const [entries, requests, closes, obligations] = useQueries({
     queries: [
@@ -89,6 +95,11 @@ export function StudyTrabajo() {
       setReceipt("Pedido creado. Quedó disponible para el seguimiento con el cliente.");
       void queryClient.invalidateQueries({ queryKey: ["document-requests", firmId, clientId] });
     },
+  });
+  const previewEvidence = useMutation({
+    mutationFn: (itemId: string) =>
+      api.get<EvidencePreview>(`${base}/document-request-items/${itemId}/preview`),
+    onSuccess: (data) => setPreview(data),
   });
 
   if (!base)
@@ -250,6 +261,34 @@ export function StudyTrabajo() {
         </section>
       ) : null}
 
+      {preview ? (
+        <section className="study-panel study-panel--form" aria-labelledby="evidence-preview-title">
+          <div className="study-panel__heading">
+            <div>
+              <h2 id="evidence-preview-title">Evidencia</h2>
+              <p>{preview.originalName ?? "Documento adjunto"}</p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => setPreview(null)}>
+              <Icon name="close" size={15} /> Cerrar
+            </Button>
+          </div>
+          <div className="evidence-preview">
+            {preview.mimeType === "application/pdf" ? (
+              <iframe
+                src={preview.url}
+                title="Vista previa del documento"
+                className="evidence-preview__frame"
+              />
+            ) : (
+              <img src={preview.url} alt="Vista previa del documento" className="evidence-preview__image" />
+            )}
+            <a className="evidence-preview__link" href={preview.url} target="_blank" rel="noreferrer">
+              Abrir en pestaña nueva
+            </a>
+          </div>
+        </section>
+      ) : null}
+
       <section className="study-panel work-review" aria-labelledby="entries-review-title">
         <div className="study-panel__heading">
           <div>
@@ -374,6 +413,26 @@ export function StudyTrabajo() {
                   key: "status",
                   header: "Estado",
                   render: (row) => <StatusBadge status={row.status} />,
+                },
+                {
+                  key: "evidence",
+                  header: "Evidencia",
+                  align: "right",
+                  render: (row) => {
+                    const attached = row.items.find((item) => item.status === "ATTACHED");
+                    return attached ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={previewEvidence.isPending}
+                        onClick={() => previewEvidence.mutate(attached.id)}
+                      >
+                        <Icon name="file" size={15} /> Ver
+                      </Button>
+                    ) : (
+                      <span className="muted-copy">—</span>
+                    );
+                  },
                 },
               ]}
             />

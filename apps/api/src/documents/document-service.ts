@@ -260,6 +260,29 @@ export class DocumentService {
     });
     return ctx ? withTenantContext(ctx, query) : prisma.$transaction(query);
   }
+
+  /**
+   * F2.2: genera una URL firmada de preview para la evidencia de un ítem de
+   * pedido. Reautoriza el acceso al ítem (RLS) antes de firmar la URL, de modo
+   * que la evidencia no quede expuesta sin permiso.
+   */
+  async getEvidencePreviewUrl(ctx: TenantContext, requestItemId: string): Promise<{ url: string; mimeType: string | null; originalName: string | null } | null> {
+    return withTenantContext(ctx, async (tx) => {
+      const item = await tx.documentRequestItem.findFirst({
+        where: {
+          id: requestItemId,
+          firmId: ctx.firmId,
+          ...(ctx.clientId ? { clientId: ctx.clientId } : {}),
+        },
+        include: { document: { include: { fileVersions: { orderBy: { createdAt: "desc" }, take: 1 } } } },
+      });
+      if (!item?.document) return null;
+      const version = item.document.fileVersions[0];
+      if (!version) return null;
+      const url = await this.storage.getPresignedGetUrl(version.bucket as "originals", version.objectKey);
+      return { url, mimeType: version.mimeType, originalName: version.originalName };
+    });
+  }
 }
 
 function getExtension(name: string): string {

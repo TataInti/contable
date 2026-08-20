@@ -318,9 +318,9 @@
   }
 
   .portal__nav:not(.portal__nav--open) .portal__nav-link:nth-child(1),
+  .portal__nav:not(.portal__nav--open) .portal__nav-link:nth-child(2),
   .portal__nav:not(.portal__nav--open) .portal__nav-link:nth-child(3),
-  .portal__nav:not(.portal__nav--open) .portal__nav-link:nth-child(5),
-  .portal__nav:not(.portal__nav--open) .portal__nav-link:nth-child(7) {
+  .portal__nav:not(.portal__nav--open) .portal__nav-link:nth-child(4) {
     display: flex;
     min-height: 58px;
     padding: var(--ds-space-1);

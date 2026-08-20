@@ -100,6 +100,16 @@ export function documentRoutes(app: FastifyInstance) {
     return reply.send({ data: document });
   });
 
+  // F2.2: preview de evidencia de un ítem de pedido (URL firmada reautorizada).
+  app.get("/api/v1/firms/:firmId/clients/:clientId/document-request-items/:itemId/preview", async (req, reply) => {
+    const { itemId } = req.params as { itemId: string };
+    const preview = await service.getEvidencePreviewUrl(tenantContextFromRequest(req), itemId);
+    if (!preview) {
+      return reply.status(404).send({ error: { code: "EVIDENCE_NOT_FOUND", message: "Sin evidencia para este ítem" } });
+    }
+    return reply.send({ data: preview });
+  });
+
   // --- Fase 5: revisión de extracciones ---
 
   // Obtener la extracción más reciente de un documento

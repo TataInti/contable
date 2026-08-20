@@ -8,6 +8,7 @@ import {
   TaxRuleService,
   TaxCalendarService,
 } from "./fiscal-foundation-service.js";
+import { rulePackValidator } from "./rule-pack-validator.js";
 import { z } from "zod";
 
 /** Con `exactOptionalPropertyTypes`, los opcionales se pasan sólo si están definidos. */
@@ -503,6 +504,17 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     try {
       const data = await calendar.addHoliday(ctx, pickDefined(body) as { jurisdictionId: string; date: string; name?: string });
       return reply.code(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // F2.3: revalidación programada de rule packs (fail-safe: retira packs sin versión vigente).
+  app.post("/api/v1/firms/:firmId/tax/rule-packs/revalidate", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const results = await rulePackValidator.revalidateAll(ctx);
+      return reply.send({ data: results });
     } catch (err) {
       return handleError(reply, err);
     }

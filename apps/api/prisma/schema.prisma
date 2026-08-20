@@ -1381,14 +1381,18 @@ model DocumentRequest {
   status          DocumentRequestStatus @default(DRAFT)
   dueDate         DateTime?
   createdByUserId String
+  // F2.2: pedido documental vinculado a una obligación fiscal (opcional).
+  obligationId    String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  client  Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  items   DocumentRequestItem[]
-  threads RequestThread[]
+  client    Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  obligation TaxObligation?       @relation(fields: [obligationId], references: [id])
+  items     DocumentRequestItem[]
+  threads   RequestThread[]
 
   @@index([firmId, clientId])
+  @@index([obligationId])
   @@map("document_requests")
 }
 
@@ -2098,6 +2102,7 @@ model TaxObligation {
   payments TaxPayment[]
   paymentAllocations PaymentAllocation[]
   workpaperLinks WorkpaperSettlement[]
+  documentRequests DocumentRequest[]
 
   @@unique([clientId, regimeId, periodId])
   @@index([firmId, clientId, status])

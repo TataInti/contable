@@ -3,6 +3,9 @@ import { ObjectStorage } from "@contable/storage";
 import { DocumentProcessor } from "./document-processor.js";
 import { AiClient } from "./ai-client.js";
 import { processNotification } from "./notification-processor.js";
+import { processMaintenance } from "./maintenance-processor.js";
+import { processExport } from "./export-processor.js";
+import { processRecurrence } from "./recurrence-processor.js";
 
 /**
  * Handlers por cola. Cada job es idempotente por clave natural o deduplicationKey.
@@ -25,19 +28,19 @@ const handlers: Record<QueueName, (ctx: JobContext) => Promise<void>> = {
     await documentProcessor.process(ctx.data as Parameters<typeof documentProcessor.process>[0]);
   },
   exports: async (ctx) => {
-    throw new Error(`UNSUPPORTED_EXPORT_JOB:${ctx.name}`);
+    await processExport(ctx.name, ctx.data);
   },
   notifications: async (ctx) => {
     await processNotification(ctx.name, ctx.data);
   },
   recurrences: async (ctx) => {
-    throw new Error(`UNSUPPORTED_RECURRENCE_JOB:${ctx.name}`);
+    await processRecurrence(ctx.name, ctx.data);
   },
   ai: async (ctx) => {
     throw new Error(`UNSUPPORTED_AI_JOB:${ctx.name}`);
   },
   maintenance: async (ctx) => {
-    throw new Error(`UNSUPPORTED_MAINTENANCE_JOB:${ctx.name}`);
+    await processMaintenance(ctx.name, ctx.data);
   },
 };
 

@@ -14,6 +14,7 @@ export type WorkErrorCode =
   | "REQUEST_NOT_FOUND"
   | "ITEM_NOT_FOUND"
   | "THREAD_NOT_FOUND"
+  | "OBLIGATION_NOT_FOUND"
   | "VISIBILITY_CONFIRMATION_REQUIRED";
 
 export class WorkError extends Error {
@@ -26,12 +27,20 @@ export class WorkError extends Error {
 }
 
 export class WorkService {
-  /** Crea un pedido documental con ítems. */
+  /** Crea un pedido documental con ítems (F2.2: opcionalmente vinculado a una obligación). */
   async createRequest(
     ctx: TenantContext,
-    input: { clientId: string; title: string; description?: string; dueDate?: string; items: { description: string; required?: boolean }[] },
+    input: { clientId: string; title: string; description?: string; dueDate?: string; obligationId?: string; items: { description: string; required?: boolean }[] },
   ) {
     return withTenantContext(ctx, async (tx) => {
+      // F2.2: si se vincula una obligación, validar que pertenece al cliente.
+      if (input.obligationId !== undefined) {
+        const obligation = await tx.taxObligation.findFirst({
+          where: { id: input.obligationId, firmId: ctx.firmId, clientId: input.clientId },
+        });
+        if (!obligation) throw new WorkError("OBLIGATION_NOT_FOUND", "Obligación no encontrada");
+      }
+
       const data: Prisma.DocumentRequestUncheckedCreateInput = {
         firmId: ctx.firmId,
         clientId: input.clientId,
@@ -40,6 +49,7 @@ export class WorkService {
       };
       if (input.description !== undefined) data.description = input.description;
       if (input.dueDate !== undefined) data.dueDate = new Date(input.dueDate);
+      if (input.obligationId !== undefined) data.obligationId = input.obligationId;
 
       return tx.documentRequest.create({
         data: {

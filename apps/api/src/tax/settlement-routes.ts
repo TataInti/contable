@@ -56,10 +56,25 @@ export function settlementRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/firms/:firmId/clients/:clientId/tax-settlements", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const query = z.object({ periodId: z.string().uuid().optional() }).parse(req.query);
+    const query = z
+      .object({
+        periodId: z.string().uuid().optional(),
+        cutoffFrom: z.string().date().optional(),
+        cutoffTo: z.string().date().optional(),
+        limit: z.coerce.number().int().min(1).max(200).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+      })
+      .strict()
+      .parse(req.query);
     try {
-      const data = await service.list(ctx, ctx.clientId!, query.periodId);
-      return reply.send({ data });
+      const result = await service.list(ctx, ctx.clientId!, {
+        ...(query.periodId ? { periodId: query.periodId } : {}),
+        ...(query.cutoffFrom ? { cutoffFrom: query.cutoffFrom } : {}),
+        ...(query.cutoffTo ? { cutoffTo: query.cutoffTo } : {}),
+        ...(query.limit !== undefined ? { limit: query.limit } : {}),
+        ...(query.offset !== undefined ? { offset: query.offset } : {}),
+      });
+      return reply.send({ data: result.data, meta: result.meta });
     } catch (err) {
       return handleError(reply, err);
     }

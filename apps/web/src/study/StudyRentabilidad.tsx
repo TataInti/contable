@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, EmptyState } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -52,6 +53,8 @@ function basisLabel(basis: string): string {
 export function StudyRentabilidad() {
   const { firmId, clientId, periodId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [receipt, setReceipt] = useState<string | null>(null);
 
   const periodsQuery = useQuery({
@@ -61,15 +64,30 @@ export function StudyRentabilidad() {
     enabled: Boolean(firmId && clientId),
   });
 
-  const selected = periodsQuery.data?.find((obligation) => obligation.period.id === periodId) ?? null;
+  // F2.4: selector de período local que se refleja en la URL (?period=).
+  // No asume periods[0]: usa el período de la URL, del contexto o el primero.
+  const urlPeriod = searchParams.get("period");
+  const selected =
+    periodsQuery.data?.find((obligation) => obligation.period.id === (urlPeriod ?? periodId)) ??
+    periodsQuery.data?.find((obligation) => obligation.period.id === periodId) ??
+    periodsQuery.data?.[0] ??
+    null;
+  const activePeriodId = selected?.period.id ?? periodId;
+
+  const selectPeriod = (next: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (next) params.set("period", next);
+    else params.delete("period");
+    navigate(`?${params.toString()}`, { replace: true });
+  };
 
   const listQuery = useQuery({
-    queryKey: ["profitability", firmId, clientId, periodId],
+    queryKey: ["profitability", firmId, clientId, activePeriodId],
     queryFn: () =>
       api.get<Snapshot[]>(
-        `/firms/${firmId}/clients/${clientId}/profitability?periodId=${encodeURIComponent(periodId ?? "")}`,
+        `/firms/${firmId}/clients/${clientId}/profitability?periodId=${encodeURIComponent(activePeriodId ?? "")}`,
       ),
-    enabled: Boolean(firmId && clientId && periodId),
+    enabled: Boolean(firmId && clientId && activePeriodId),
   });
 
   const invalidate = () => {
@@ -191,10 +209,28 @@ export function StudyRentabilidad() {
             Rentabilidad
           </h1>
         </div>
-        <p className="study-page__hint">
-          Devengado y caja se calculan por separado; la gestión sin respaldo
-          fiscal nunca reduce impuestos por defecto.
-        </p>
+        <div className="study-page__header-actions">
+          {periodsQuery.data && periodsQuery.data.length > 0 ? (
+            <label className="period-select">
+              <span>Período</span>
+              <select
+                value={activePeriodId ?? ""}
+                onChange={(event) => selectPeriod(event.target.value)}
+                aria-label="Seleccionar período de rentabilidad"
+              >
+                {periodsQuery.data.map((obligation) => (
+                  <option key={obligation.period.id} value={obligation.period.id}>
+                    {obligation.period.label ?? obligation.period.startDate.slice(0, 7)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <p className="study-page__hint">
+            Devengado y caja se calculan por separado; la gestión sin respaldo
+            fiscal nunca reduce impuestos por defecto.
+          </p>
+        </div>
       </header>
 
       {receipt ? (
