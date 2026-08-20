@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { calculateDueDate } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
@@ -21,6 +22,7 @@ export type FiscalErrorCode =
   | "PROFILE_VERSION_CONFLICT"
   | "REGISTRATION_OVERLAP"
   | "REGISTRATION_NOT_FOUND"
+  | "ACTIVITY_LINK_NOT_FOUND"
   | "REGIME_NOT_FOUND"
   | "JURISDICTION_NOT_FOUND"
   | "ACTIVITY_NOT_FOUND"
@@ -143,6 +145,33 @@ export class TaxpayerProfileService {
         where: { firmId: ctx.firmId, ...(clientId ?? ctx.clientId ? { clientId: clientId ?? ctx.clientId! } : {}) },
         orderBy: { version: "desc" },
         take: 100,
+      }),
+    );
+  }
+
+  /** Inscripciones vigentes e históricas, con su alcance fiscal legible. */
+  async listRegistrations(ctx: TenantContext, clientId: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.taxRegistration.findMany({
+        where: { firmId: ctx.firmId, clientId },
+        include: {
+          regime: { include: { taxType: true, jurisdiction: true } },
+          profile: { select: { id: true, version: true, legalName: true } },
+        },
+        orderBy: [{ status: "asc" }, { validFrom: "desc" }],
+        take: 300,
+      }),
+    );
+  }
+
+  /** Actividades del contribuyente, no el maestro completo de actividades. */
+  async listClientActivities(ctx: TenantContext, clientId: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.clientActivity.findMany({
+        where: { firmId: ctx.firmId, clientId },
+        include: { activity: { include: { jurisdiction: true } }, profile: { select: { version: true } } },
+        orderBy: [{ isPrimary: "desc" }, { validFrom: "desc" }],
+        take: 300,
       }),
     );
   }
@@ -304,6 +333,29 @@ export class TaxpayerProfileService {
     });
   }
 
+  /** Una adhesión no se borra: se cierra su vigencia y permanece auditable. */
+  async cancelRegistration(
+    ctx: TenantContext,
+    input: { registrationId: string; validTo: string },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const registration = await tx.taxRegistration.findFirst({
+        where: { id: input.registrationId, firmId: ctx.firmId, clientId: ctx.clientId! },
+      });
+      if (!registration) {
+        throw new FiscalError("REGISTRATION_NOT_FOUND", "Inscripción fiscal no encontrada");
+      }
+      const validTo = new Date(input.validTo);
+      if (validTo < registration.validFrom) {
+        throw new FiscalError("INVALID_TRANSITION", "La baja no puede ser anterior al inicio de vigencia");
+      }
+      return tx.taxRegistration.update({
+        where: { id: registration.id },
+        data: { status: "CANCELLED", validTo },
+      });
+    });
+  }
+
   /** Vincula una actividad económica al cliente. */
   async addClientActivity(
     ctx: TenantContext,
@@ -321,6 +373,20 @@ export class TaxpayerProfileService {
         },
       }),
     );
+  }
+
+  async endClientActivity(ctx: TenantContext, input: { clientActivityId: string; validTo: string }) {
+    return withTenantContext(ctx, async (tx) => {
+      const link = await tx.clientActivity.findFirst({
+        where: { id: input.clientActivityId, firmId: ctx.firmId, clientId: ctx.clientId! },
+      });
+      if (!link) throw new FiscalError("ACTIVITY_LINK_NOT_FOUND", "Actividad del cliente no encontrada");
+      const validTo = new Date(input.validTo);
+      if (validTo < link.validFrom) {
+        throw new FiscalError("INVALID_TRANSITION", "La baja no puede ser anterior al inicio de vigencia");
+      }
+      return tx.clientActivity.update({ where: { id: link.id }, data: { validTo } });
+    });
   }
 
   /** Registra la matrícula profesional de un usuario. */
@@ -441,6 +507,30 @@ export class TaxRuleService {
     );
   }
 
+  /** Detalle completo para administrar una versión sin inferir valores desde la UI. */
+  async getPack(ctx: TenantContext, packId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const pack = await tx.taxRulePack.findUnique({
+        where: { id: packId },
+        include: {
+          regime: { include: { taxType: true, jurisdiction: true, authority: true } },
+          versions: {
+            orderBy: { version: "desc" },
+            include: {
+              rateRules: { orderBy: [{ concept: "asc" }, { activityCode: "asc" }] },
+              minimumRules: { orderBy: { concept: "asc" } },
+              dueDateRules: { orderBy: { dueDay: "asc" } },
+              roundingRules: { orderBy: { concept: "asc" } },
+              sources: { orderBy: { consultedAt: "desc" } },
+            },
+          },
+        },
+      });
+      if (!pack) throw new FiscalError("RULE_PACK_NOT_FOUND", "Rule pack no encontrado");
+      return pack;
+    });
+  }
+
   /** Crea un rule pack para un régimen. */
   async createPack(ctx: TenantContext, input: { code: string; name: string; regimeId: string }) {
     return withTenantContext(ctx, (tx) => tx.taxRulePack.create({ data: input }));
@@ -475,6 +565,104 @@ export class TaxRuleService {
     });
   }
 
+  /**
+   * Los cambios normativos siempre parten de una versión conocida. Copia la
+   * configuración operativa y deja un borrador aislado para revisión.
+   */
+  async cloneVersion(ctx: TenantContext, input: { packId: string; validFrom: string; validTo?: string }) {
+    return withTenantContext(ctx, async (tx) => {
+      const source = await tx.taxRuleVersion.findFirst({
+        where: { packId: input.packId },
+        orderBy: { version: "desc" },
+        include: { rateRules: true, minimumRules: true, dueDateRules: true, roundingRules: true, sources: true },
+      });
+      if (!source) throw new FiscalError("RULE_VERSION_NOT_FOUND", "El pack no tiene una versión para clonar");
+      const count = await tx.taxRuleVersion.count({ where: { packId: input.packId } });
+      const version = await tx.taxRuleVersion.create({
+        data: {
+          packId: input.packId,
+          version: count + 1,
+          status: "DRAFT",
+          validFrom: new Date(input.validFrom),
+          ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
+          engineVersion: source.engineVersion,
+          rulesHash: source.rulesHash,
+          supersedesId: source.id,
+        },
+      });
+      await Promise.all([
+        source.rateRules.length
+          ? tx.taxRateRule.createMany({
+              data: source.rateRules.map((rule) => ({
+                ruleVersionId: version.id,
+                concept: rule.concept,
+                ...(rule.activityCode ? { activityCode: rule.activityCode } : {}),
+                ...(rule.jurisdictionId ? { jurisdictionId: rule.jurisdictionId } : {}),
+                ...(rule.rate ? { rate: rule.rate } : {}),
+                ...(rule.minAmount ? { minAmount: rule.minAmount } : {}),
+                validFrom: new Date(input.validFrom),
+                ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
+              })),
+            })
+          : Promise.resolve({ count: 0 }),
+        source.minimumRules.length
+          ? tx.taxMinimumRule.createMany({
+              data: source.minimumRules.map((rule) => ({
+                ruleVersionId: version.id,
+                concept: rule.concept,
+                ...(rule.jurisdictionId ? { jurisdictionId: rule.jurisdictionId } : {}),
+                amount: rule.amount,
+                isConditional: rule.isConditional,
+                validFrom: new Date(input.validFrom),
+                ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
+              })),
+            })
+          : Promise.resolve({ count: 0 }),
+        source.dueDateRules.length
+          ? tx.dueDateRule.createMany({
+              data: source.dueDateRules.map((rule) => ({
+                ruleVersionId: version.id,
+                jurisdictionId: rule.jurisdictionId,
+                frequency: rule.frequency,
+                dueDay: rule.dueDay,
+                ...(rule.cuitEnding ? { cuitEnding: rule.cuitEnding } : {}),
+                validFrom: new Date(input.validFrom),
+                ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
+              })),
+            })
+          : Promise.resolve({ count: 0 }),
+        source.roundingRules.length
+          ? tx.roundingRule.createMany({
+              data: source.roundingRules.map((rule) => ({
+                ruleVersionId: version.id,
+                concept: rule.concept,
+                precision: rule.precision,
+                mode: rule.mode,
+              })),
+            })
+          : Promise.resolve({ count: 0 }),
+        source.sources.length
+          ? tx.normativeSource.createMany({
+              data: source.sources.map((sourceItem) => ({
+                ruleVersionId: version.id,
+                authorityId: sourceItem.authorityId,
+                title: sourceItem.title,
+                ...(sourceItem.url ? { url: sourceItem.url } : {}),
+                ...(sourceItem.reference ? { reference: sourceItem.reference } : {}),
+                ...(sourceItem.fileChecksum ? { fileChecksum: sourceItem.fileChecksum } : {}),
+                consultedAt: sourceItem.consultedAt,
+              })),
+            })
+          : Promise.resolve({ count: 0 }),
+      ]);
+      await this.refreshHash(tx, version.id);
+      return tx.taxRuleVersion.findUniqueOrThrow({
+        where: { id: version.id },
+        include: { rateRules: true, minimumRules: true, dueDateRules: true, sources: true },
+      });
+    });
+  }
+
   /** Agrega una regla de alícuota a una versión DRAFT. */
   async addRateRule(
     ctx: TenantContext,
@@ -491,7 +679,7 @@ export class TaxRuleService {
   ) {
     return withTenantContext(ctx, async (tx) => {
       await this.assertDraft(tx, input.ruleVersionId);
-      return tx.taxRateRule.create({
+      const rule = await tx.taxRateRule.create({
         data: {
           ruleVersionId: input.ruleVersionId,
           concept: input.concept,
@@ -502,6 +690,49 @@ export class TaxRuleService {
           validFrom: new Date(input.validFrom),
           ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
         },
+      });
+      await this.refreshHash(tx, input.ruleVersionId);
+      return rule;
+    });
+  }
+
+  /** Reemplazo atómico: evita que una tasa anterior quede oculta en un borrador. */
+  async replaceRateRules(
+    ctx: TenantContext,
+    input: {
+      ruleVersionId: string;
+      rules: Array<{
+        concept: string;
+        rate?: string;
+        activityCode?: string;
+        jurisdictionId?: string;
+        minAmount?: string;
+        validFrom: string;
+        validTo?: string;
+      }>;
+    },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      await this.assertDraft(tx, input.ruleVersionId);
+      await tx.taxRateRule.deleteMany({ where: { ruleVersionId: input.ruleVersionId } });
+      if (input.rules.length > 0) {
+        await tx.taxRateRule.createMany({
+          data: input.rules.map((rule) => ({
+            ruleVersionId: input.ruleVersionId,
+            concept: rule.concept,
+            ...(rule.rate ? { rate: new Prisma.Decimal(rule.rate) } : {}),
+            ...(rule.activityCode ? { activityCode: rule.activityCode } : {}),
+            ...(rule.jurisdictionId ? { jurisdictionId: rule.jurisdictionId } : {}),
+            ...(rule.minAmount ? { minAmount: new Prisma.Decimal(rule.minAmount) } : {}),
+            validFrom: new Date(rule.validFrom),
+            ...(rule.validTo ? { validTo: new Date(rule.validTo) } : {}),
+          })),
+        });
+      }
+      await this.refreshHash(tx, input.ruleVersionId);
+      return tx.taxRateRule.findMany({
+        where: { ruleVersionId: input.ruleVersionId },
+        orderBy: [{ concept: "asc" }, { activityCode: "asc" }],
       });
     });
   }
@@ -521,7 +752,7 @@ export class TaxRuleService {
   ) {
     return withTenantContext(ctx, async (tx) => {
       await this.assertDraft(tx, input.ruleVersionId);
-      return tx.dueDateRule.create({
+      const rule = await tx.dueDateRule.create({
         data: {
           ruleVersionId: input.ruleVersionId,
           jurisdictionId: input.jurisdictionId,
@@ -532,6 +763,8 @@ export class TaxRuleService {
           ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
         },
       });
+      await this.refreshHash(tx, input.ruleVersionId);
+      return rule;
     });
   }
 
@@ -632,6 +865,43 @@ export class TaxRuleService {
         where: { id: ruleVersionId },
         data: { status: "ACTIVE", activatedAt: new Date() },
       });
+    });
+  }
+
+  async listCredentials(ctx: TenantContext) {
+    return withTenantContext(ctx, (tx) =>
+      tx.professionalCredential.findMany({
+        where: { firmId: ctx.firmId, userId: ctx.userId, status: "ACTIVE" },
+        include: { jurisdiction: true, authority: true },
+        orderBy: { validFrom: "desc" },
+        take: 50,
+      }),
+    );
+  }
+
+  private async refreshHash(tx: Prisma.TransactionClient, ruleVersionId: string) {
+    const version = await tx.taxRuleVersion.findUnique({
+      where: { id: ruleVersionId },
+      include: { rateRules: true, minimumRules: true, dueDateRules: true, roundingRules: true },
+    });
+    if (!version) throw new FiscalError("RULE_VERSION_NOT_FOUND", "Versión de regla no encontrada");
+    const canonical = JSON.stringify({
+      rate: version.rateRules
+        .map((rule) => [rule.concept, rule.activityCode, rule.jurisdictionId, rule.rate?.toString(), rule.minAmount?.toString(), rule.validFrom.toISOString(), rule.validTo?.toISOString()])
+        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      minimum: version.minimumRules
+        .map((rule) => [rule.concept, rule.jurisdictionId, rule.amount.toString(), rule.isConditional, rule.validFrom.toISOString(), rule.validTo?.toISOString()])
+        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      due: version.dueDateRules
+        .map((rule) => [rule.jurisdictionId, rule.frequency, rule.dueDay, rule.cuitEnding, rule.validFrom.toISOString(), rule.validTo?.toISOString()])
+        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      rounding: version.roundingRules
+        .map((rule) => [rule.concept, rule.precision, rule.mode])
+        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+    });
+    return tx.taxRuleVersion.update({
+      where: { id: ruleVersionId },
+      data: { rulesHash: createHash("sha256").update(canonical).digest("hex") },
     });
   }
 

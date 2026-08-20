@@ -232,6 +232,31 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/api/v1/firms/:firmId/clients/:clientId/tax-registrations", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const data = await profiles.listRegistrations(ctx, ctx.clientId!);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post(
+    "/api/v1/firms/:firmId/clients/:clientId/tax-registrations/:registrationId/cancel",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { registrationId } = req.params as { registrationId: string };
+      const body = z.object({ validTo: z.string().date() }).strict().parse(req.body);
+      try {
+        const data = await profiles.cancelRegistration(ctx, { registrationId, validTo: body.validTo });
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
+
   app.post("/api/v1/firms/:firmId/clients/:clientId/activities", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const body = z
@@ -250,6 +275,31 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       return handleError(reply, err);
     }
   });
+
+  app.get("/api/v1/firms/:firmId/clients/:clientId/activities", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const data = await profiles.listClientActivities(ctx, ctx.clientId!);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post(
+    "/api/v1/firms/:firmId/clients/:clientId/activities/:clientActivityId/end",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { clientActivityId } = req.params as { clientActivityId: string };
+      const body = z.object({ validTo: z.string().date() }).strict().parse(req.body);
+      try {
+        const data = await profiles.endClientActivity(ctx, { clientActivityId, validTo: body.validTo });
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
 
   app.post("/api/v1/tax/credentials", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
@@ -338,6 +388,17 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/api/v1/tax/rule-packs/:packId", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { packId } = req.params as { packId: string };
+    try {
+      const data = await rules.getPack(ctx, packId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.post("/api/v1/tax/rule-packs", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const body = z
@@ -372,6 +433,18 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  app.post("/api/v1/tax/rule-packs/:packId/versions/clone", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { packId } = req.params as { packId: string };
+    const body = z.object({ validFrom: z.string().date(), validTo: z.string().date().optional() }).strict().parse(req.body);
+    try {
+      const data = await rules.cloneVersion(ctx, pickDefined({ packId, ...body }) as { packId: string; validFrom: string; validTo?: string });
+      return reply.code(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.post("/api/v1/tax/rule-versions/:ruleVersionId/rate-rules", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { ruleVersionId } = req.params as { ruleVersionId: string };
@@ -390,6 +463,39 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     try {
       const data = await rules.addRateRule(ctx, pickDefined({ ...body, ruleVersionId }) as { ruleVersionId: string; concept: string; rate: string; activityCode?: string; jurisdictionId?: string; minAmount?: string; validFrom: string; validTo?: string });
       return reply.code(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.put("/api/v1/tax/rule-versions/:ruleVersionId/rate-rules", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { ruleVersionId } = req.params as { ruleVersionId: string };
+    const rate = z.string().regex(/^\d+(\.\d+)?$/).optional();
+    const body = z
+      .object({
+        rules: z
+          .array(
+            z
+              .object({
+                concept: z.string().min(1).max(80),
+                rate,
+                activityCode: z.string().max(40).optional(),
+                jurisdictionId: z.string().uuid().optional(),
+                minAmount: z.string().regex(/^\d+(\.\d+)?$/).optional(),
+                validFrom: z.string().date(),
+                validTo: z.string().date().optional(),
+              })
+              .strict()
+              .refine((rule) => Boolean(rule.rate || rule.minAmount), "Cada regla debe tener una tasa o importe"),
+          )
+          .max(500),
+      })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await rules.replaceRateRules(ctx, { ruleVersionId, rules: body.rules });
+      return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
     }
@@ -474,6 +580,16 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     const { ruleVersionId } = req.params as { ruleVersionId: string };
     try {
       const data = await rules.activate(ctx, ruleVersionId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.get("/api/v1/tax/credentials", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const data = await rules.listCredentials(ctx);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);

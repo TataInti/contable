@@ -47,6 +47,23 @@ interface TaxObligation {
   dueDate: string | null;
 }
 
+interface TaxRegistration {
+  id: string;
+  status: string;
+  validFrom: string;
+  validTo: string | null;
+  registrationNumber: string | null;
+  regime: { id: string; code: string; name: string; taxType: { name: string }; jurisdiction: { name: string } };
+}
+
+interface ClientActivityLink {
+  id: string;
+  isPrimary: boolean;
+  validFrom: string;
+  validTo: string | null;
+  activity: { code: string; name: string; jurisdiction: { name: string } };
+}
+
 const CONDITION_LABELS: Record<string, string> = {
   RESPONSABLE_INSCRIPTO: "Responsable Inscripto",
   MONOTRIBUTISTA: "Monotributista",
@@ -95,6 +112,16 @@ export function StudyOnboardingFiscal() {
     queryKey: ["tax-obligations", firmId, clientId],
     queryFn: () =>
       api.get<TaxObligation[]>(`/firms/${firmId}/clients/${clientId}/tax-obligations`),
+    enabled: Boolean(firmId && clientId),
+  });
+  const registrationsQuery = useQuery({
+    queryKey: ["tax-registrations", firmId, clientId],
+    queryFn: () => api.get<TaxRegistration[]>(`/firms/${firmId}/clients/${clientId}/tax-registrations`),
+    enabled: Boolean(firmId && clientId),
+  });
+  const clientActivitiesQuery = useQuery({
+    queryKey: ["client-tax-activities", firmId, clientId],
+    queryFn: () => api.get<ClientActivityLink[]>(`/firms/${firmId}/clients/${clientId}/activities`),
     enabled: Boolean(firmId && clientId),
   });
 
@@ -148,6 +175,7 @@ export function StudyOnboardingFiscal() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["tax", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["tax-registrations", firmId, clientId] });
       setStep("actividades");
     },
   });
@@ -162,8 +190,24 @@ export function StudyOnboardingFiscal() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["tax", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["client-tax-activities", firmId, clientId] });
       setStep("periodos");
     },
+  });
+
+  const cancelRegistration = useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/firms/${firmId}/clients/${clientId}/tax-registrations/${id}/cancel`, {
+        validTo: new Date().toISOString().slice(0, 10),
+      }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["tax-registrations", firmId, clientId] }),
+  });
+  const endActivity = useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/firms/${firmId}/clients/${clientId}/activities/${id}/end`, {
+        validTo: new Date().toISOString().slice(0, 10),
+      }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["client-tax-activities", firmId, clientId] }),
   });
 
   const createPeriod = useMutation({
@@ -242,6 +286,43 @@ export function StudyOnboardingFiscal() {
           </div>
         </section>
       )}
+
+      <section className="study-panel fiscal-client-overview" aria-labelledby="fiscal-setup-title">
+        <div className="study-panel__heading">
+          <div>
+            <h2 id="fiscal-setup-title">Configuración vigente</h2>
+            <p>Las adhesiones y actividades aplicables quedan siempre visibles antes de abrir una liquidación.</p>
+          </div>
+        </div>
+        <div className="fiscal-client-overview__columns">
+          <div>
+            <div className="fiscal-client-overview__heading"><h3>Regímenes adheridos</h3><Button size="sm" variant="secondary" onClick={() => setStep("inscripcion")}>Agregar</Button></div>
+            {registrationsQuery.isLoading ? <p className="muted-copy">Cargando adhesiones…</p> : (registrationsQuery.data?.length ?? 0) === 0 ? <p className="muted-copy">Todavía no hay regímenes adheridos.</p> : <Table<TaxRegistration>
+              rows={registrationsQuery.data ?? []}
+              rowKey={(row) => row.id}
+              columns={[
+                { key: "regime", header: "Régimen", render: (row) => <><strong>{row.regime.name}</strong><br /><small>{row.regime.taxType.name} · {row.regime.jurisdiction.name}</small></> },
+                { key: "from", header: "Desde", render: (row) => row.validFrom.slice(0, 10) },
+                { key: "status", header: "Estado", render: (row) => <StatusBadge status={row.status} /> },
+                { key: "actions", header: "", render: (row) => row.status === "ACTIVE" ? <Button size="sm" variant="ghost" disabled={cancelRegistration.isPending} onClick={() => { if (window.confirm(`Dar de baja ${row.regime.name}?`)) cancelRegistration.mutate(row.id); }}>Dar de baja</Button> : null },
+              ]}
+            />}
+          </div>
+          <div>
+            <div className="fiscal-client-overview__heading"><h3>Actividades</h3><Button size="sm" variant="secondary" onClick={() => setStep("actividades")}>Agregar</Button></div>
+            {clientActivitiesQuery.isLoading ? <p className="muted-copy">Cargando actividades…</p> : (clientActivitiesQuery.data?.length ?? 0) === 0 ? <p className="muted-copy">Todavía no hay actividades vinculadas.</p> : <Table<ClientActivityLink>
+              rows={clientActivitiesQuery.data ?? []}
+              rowKey={(row) => row.id}
+              columns={[
+                { key: "activity", header: "Actividad", render: (row) => <><strong>{row.activity.code}</strong><br /><small>{row.activity.name}</small></> },
+                { key: "scope", header: "Jurisdicción", render: (row) => row.activity.jurisdiction.name },
+                { key: "status", header: "Estado", render: (row) => row.validTo ? "Finalizada" : row.isPrimary ? "Principal" : "Vigente" },
+                { key: "actions", header: "", render: (row) => !row.validTo ? <Button size="sm" variant="ghost" disabled={endActivity.isPending} onClick={() => { if (window.confirm(`Finalizar ${row.activity.name}?`)) endActivity.mutate(row.id); }}>Finalizar</Button> : null },
+              ]}
+            />}
+          </div>
+        </div>
+      </section>
 
       {step === "perfil" && (
         <section className="study-panel" aria-labelledby="perfil-title">

@@ -476,6 +476,128 @@ export class MonthlyWorkpaperService {
       });
     });
   }
+
+  /**
+   * Punto de entrada controlado para saldos previos a Contable. No se edita
+   * un lote: una corrección futura se registra como movimiento compensatorio.
+   */
+  async createOpeningCredit(
+    ctx: TenantContext,
+    input: {
+      clientId: string;
+      taxTypeId: string;
+      regimeId?: string;
+      jurisdictionId?: string;
+      periodId: string;
+      kind: "IVA_TECNICO" | "IVA_LIBRE" | "SALDO_A_FAVOR";
+      amount: string;
+      evidenceDocumentId: string;
+      reference?: string;
+    },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const [period, taxType, document] = await Promise.all([
+        tx.taxPeriod.findFirst({ where: { id: input.periodId, firmId: ctx.firmId, clientId: input.clientId } }),
+        tx.taxType.findUnique({ where: { id: input.taxTypeId } }),
+        tx.document.findFirst({ where: { id: input.evidenceDocumentId, firmId: ctx.firmId, clientId: input.clientId } }),
+      ]);
+      if (!period || !taxType) throw new WorkpaperError("PERIOD_NOT_FOUND", "El período o impuesto del saldo no existe");
+      if (!document) throw new WorkpaperError("SOURCE_NOT_REVIEWED", "Seleccioná un documento de respaldo del cliente");
+      if (new Prisma.Decimal(input.amount).lessThanOrEqualTo(0)) {
+        throw new WorkpaperError("INVALID_TRANSITION", "El saldo inicial debe ser mayor a cero");
+      }
+      if (input.kind.startsWith("IVA_") && taxType.code !== "IVA") {
+        throw new WorkpaperError("INVALID_TRANSITION", "Los saldos técnicos y libres sólo corresponden a IVA");
+      }
+      if (input.regimeId) {
+        const regime = await tx.taxRegime.findFirst({ where: { id: input.regimeId, taxTypeId: input.taxTypeId } });
+        if (!regime) throw new WorkpaperError("PERIOD_NOT_FOUND", "El régimen no corresponde al impuesto seleccionado");
+        if (input.jurisdictionId && regime.jurisdictionId !== input.jurisdictionId) {
+          throw new WorkpaperError("INVALID_TRANSITION", "La jurisdicción no coincide con el régimen seleccionado");
+        }
+      }
+      return tx.taxCreditLot.create({
+        data: {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          taxTypeId: input.taxTypeId,
+          ...(input.regimeId ? { regimeId: input.regimeId } : {}),
+          ...(input.jurisdictionId ? { jurisdictionId: input.jurisdictionId } : {}),
+          periodId: input.periodId,
+          kind: input.kind,
+          originalAmount: new Prisma.Decimal(input.amount),
+          evidenceDocumentId: input.evidenceDocumentId,
+          createdByUserId: ctx.userId,
+        },
+      });
+    });
+  }
+
+  /** Posición fiscal del período: devengado fiscal, pagos y saldo pendiente. */
+  async position(ctx: TenantContext, clientId: string, periodId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const obligations = await tx.taxObligation.findMany({
+        where: { firmId: ctx.firmId, clientId, periodId },
+        include: {
+          period: true,
+          regime: { include: { taxType: true, jurisdiction: true } },
+          payments: { where: { status: "PAID" } },
+        },
+        orderBy: { dueDate: "asc" },
+      });
+      const settlements = await tx.taxSettlement.findMany({
+        where: { firmId: ctx.firmId, clientId, periodId, status: { not: "SUPERSEDED" } },
+        orderBy: [{ version: "desc" }, { createdAt: "desc" }],
+      });
+      const interest = await tx.taxInterestSnapshot.findMany({
+        where: { firmId: ctx.firmId, clientId, obligationId: { in: obligations.map((item) => item.id) } },
+        orderBy: { createdAt: "desc" },
+      });
+      const lots = await tx.taxCreditLot.findMany({
+        where: { firmId: ctx.firmId, clientId },
+        include: { movements: true },
+      });
+
+      return obligations.map((obligation) => {
+        const settlement = settlements.find((item) => item.regimeId === obligation.regimeId);
+        const totals = (settlement?.totals ?? {}) as Record<string, string>;
+        const accrued = new Prisma.Decimal(totals["TOTAL_A_INGRESAR"] ?? totals["totalDue"] ?? "0");
+        const paid = obligation.payments.reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0));
+        const availableCredit = lots
+          .filter(
+            (lot) =>
+              lot.taxTypeId === obligation.regime.taxTypeId &&
+              (!lot.regimeId || lot.regimeId === obligation.regimeId) &&
+              (!lot.jurisdictionId || lot.jurisdictionId === obligation.regime.jurisdictionId),
+          )
+          .reduce(
+            (sum, lot) =>
+              sum.plus(
+                lot.originalAmount.minus(
+                  lot.movements.reduce((movementSum, movement) => movementSum.plus(movement.amount), new Prisma.Decimal(0)),
+                ),
+              ),
+            new Prisma.Decimal(0),
+          );
+        const latestInterest = interest.find((item) => item.obligationId === obligation.id);
+        const pending = Prisma.Decimal.max(accrued.minus(paid), new Prisma.Decimal(0));
+        return {
+          obligationId: obligation.id,
+          status: obligation.status,
+          dueDate: obligation.dueDate,
+          regime: obligation.regime,
+          settlement: settlement
+            ? { id: settlement.id, status: settlement.status, version: settlement.version, totals }
+            : null,
+          accrued: accrued.toFixed(4),
+          paid: paid.toFixed(4),
+          pending: pending.toFixed(4),
+          availableCredit: Prisma.Decimal.max(availableCredit, new Prisma.Decimal(0)).toFixed(4),
+          interest: latestInterest?.amount.toFixed(4) ?? "0.0000",
+        };
+      });
+    });
+  }
 }
 
 export const monthlyWorkpaperService = new MonthlyWorkpaperService();

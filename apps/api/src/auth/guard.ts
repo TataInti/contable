@@ -181,7 +181,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
       return m === "GET" ? "tax.settlements.read" : "tax.settlements.calculate";
     },
   },
-  { match: /\/tax-credit-ledger/, resolve: () => "tax.settlements.read" },
+  { match: /\/tax-credit-ledger/, resolve: (m) => (m === "GET" ? "tax.settlements.read" : "tax.settlements.calculate") },
+  { match: /\/tax-position/, resolve: () => "tax.settlements.read" },
   { match: /\/tax-credit-allocations/, resolve: () => "tax.settlements.calculate" },
   { match: /\/tax-worklist/, resolve: () => "tax.settlements.read" },
   {

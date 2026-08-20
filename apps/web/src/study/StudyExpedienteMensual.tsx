@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -38,6 +38,37 @@ interface Workpaper {
   }>;
 }
 
+interface CreditLot {
+  id: string;
+  taxTypeId: string;
+  jurisdictionId: string | null;
+  regimeId: string | null;
+  periodId: string | null;
+  kind: string;
+  originalAmount: string;
+  available: string;
+  evidenceDocumentId: string | null;
+  createdAt: string;
+  movements: Array<{ id: string; kind: string; amount: string; reference: string | null; createdAt: string }>;
+}
+
+interface TaxPosition {
+  obligationId: string;
+  status: string;
+  dueDate: string | null;
+  regime: { id: string; name: string; taxType: { id: string; name: string }; jurisdiction: { id: string; name: string } };
+  settlement: { id: string; status: string; version: number; totals: Record<string, string> } | null;
+  accrued: string;
+  paid: string;
+  pending: string;
+  availableCredit: string;
+  interest: string;
+}
+
+interface TaxType { id: string; code: string; name: string }
+interface TaxRegime { id: string; name: string; taxTypeId: string; jurisdictionId: string; jurisdiction: { name: string }; taxType: { name: string } }
+interface EvidenceDocument { id: string; category: string | null; createdAt: string; fileVersions?: Array<{ originalName: string }> }
+
 const STEPS = ["Saldos", "Fuentes", "Clasificación", "Cálculo", "Controles", "Cierre"] as const;
 
 function formatMoney(value: string | undefined | null): string {
@@ -49,6 +80,8 @@ export function StudyExpedienteMensual() {
   const { firmId, clientId, periodId } = useClientContext();
   const queryClient = useQueryClient();
   const [activeStep, setActiveStep] = useState(0);
+  const [showOpening, setShowOpening] = useState(false);
+  const [opening, setOpening] = useState({ taxTypeId: "", regimeId: "", jurisdictionId: "", kind: "SALDO_A_FAVOR", amount: "", evidenceDocumentId: "" });
 
   const listQuery = useQuery({
     queryKey: ["monthly-workpapers", firmId, clientId, periodId],
@@ -57,6 +90,38 @@ export function StudyExpedienteMensual() {
         `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers?from=${encodeURIComponent(periodId ?? "")}`,
       ),
     enabled: Boolean(firmId && clientId && periodId),
+  });
+
+  const activeWorkpaperId = listQuery.data?.[0]?.id;
+  const coverageQuery = useQuery({
+    queryKey: ["monthly-workpaper-coverage", firmId, clientId, activeWorkpaperId],
+    queryFn: () => api.get<{ components: Array<{ obligationId: string; regimeCode: string; taxTypeCode: string; required: boolean; linked: boolean; settlementStatus: string | null }>; sources: Array<{ code: string; required: boolean; present: boolean }> }>(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/coverage`),
+    enabled: Boolean(firmId && clientId && activeWorkpaperId),
+  });
+  const ledgerQuery = useQuery({
+    queryKey: ["tax-credit-ledger", firmId, clientId],
+    queryFn: () => api.get<CreditLot[]>(`/firms/${firmId}/clients/${clientId}/tax-credit-ledger`),
+    enabled: Boolean(firmId && clientId),
+  });
+  const positionQuery = useQuery({
+    queryKey: ["tax-position", firmId, clientId, periodId],
+    queryFn: () => api.get<TaxPosition[]>(`/firms/${firmId}/clients/${clientId}/tax-position?periodId=${encodeURIComponent(periodId ?? "")}`),
+    enabled: Boolean(firmId && clientId && periodId),
+  });
+  const taxTypesQuery = useQuery({
+    queryKey: ["tax-types"],
+    queryFn: () => api.get<TaxType[]>("/tax/types"),
+    enabled: Boolean(firmId),
+  });
+  const regimesQuery = useQuery({
+    queryKey: ["tax-regimes"],
+    queryFn: () => api.get<TaxRegime[]>("/tax/regimes"),
+    enabled: Boolean(firmId),
+  });
+  const documentsQuery = useQuery({
+    queryKey: ["documents", firmId, clientId],
+    queryFn: () => api.get<EvidenceDocument[]>(`/firms/${firmId}/clients/${clientId}/documents`),
+    enabled: Boolean(firmId && clientId),
   });
 
   const createMutation = useMutation({
@@ -101,6 +166,24 @@ export function StudyExpedienteMensual() {
       api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${id}/finalize`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+    },
+  });
+
+  const openingMutation = useMutation({
+    mutationFn: () => api.post(`/firms/${firmId}/clients/${clientId}/tax-credit-ledger/opening`, {
+      taxTypeId: opening.taxTypeId,
+      ...(opening.regimeId ? { regimeId: opening.regimeId } : {}),
+      ...(opening.jurisdictionId ? { jurisdictionId: opening.jurisdictionId } : {}),
+      periodId,
+      kind: opening.kind,
+      amount: opening.amount,
+      evidenceDocumentId: opening.evidenceDocumentId,
+    }),
+    onSuccess: () => {
+      setShowOpening(false);
+      setOpening({ taxTypeId: "", regimeId: "", jurisdictionId: "", kind: "SALDO_A_FAVOR", amount: "", evidenceDocumentId: "" });
+      void queryClient.invalidateQueries({ queryKey: ["tax-credit-ledger", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId, periodId] });
     },
   });
 

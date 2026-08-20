@@ -68,6 +68,20 @@ export class SettlementError extends Error {
 
 type Tx = Prisma.TransactionClient;
 
+function availableFromLots(
+  lots: Array<{ originalAmount: Prisma.Decimal; movements: Array<{ amount: Prisma.Decimal }> }>,
+) {
+  return lots.reduce(
+    (sum, lot) =>
+      sum.plus(
+        lot.originalAmount.minus(
+          lot.movements.reduce((movementSum, movement) => movementSum.plus(movement.amount), new Prisma.Decimal(0)),
+        ),
+      ),
+    new Prisma.Decimal(0),
+  );
+}
+
 /** Hecho fiscal normalizado para el motor (base en ARS). */
 interface EngineFact {
   id: string;
@@ -109,7 +123,7 @@ export class SettlementService {
         clientId: input.clientId,
         issuedOn: { gte: period.startDate, lte: period.endDate },
       };
-      const [vouchersApproved, vouchersPending, withholdings, perceptions, adjustments, credits] =
+      const [vouchersApproved, vouchersPending, withholdings, perceptions, adjustments, creditLots] =
         await Promise.all([
           tx.fiscalVoucher.count({ where: { ...periodFilter, status: "APPROVED" } }),
           tx.fiscalVoucher.count({
@@ -118,9 +132,9 @@ export class SettlementService {
           tx.withholdingCertificate.count({ where: { firmId: ctx.firmId, clientId: input.clientId } }),
           tx.perceptionCertificate.count({ where: { firmId: ctx.firmId, clientId: input.clientId } }),
           tx.taxAdjustment.count({ where: { firmId: ctx.firmId, clientId: input.clientId } }),
-          tx.taxCreditLedgerEntry.aggregate({
+          tx.taxCreditLot.findMany({
             where: { firmId: ctx.firmId, clientId: input.clientId },
-            _sum: { balanceAfter: true },
+            include: { movements: true },
           }),
         ]);
 
@@ -148,7 +162,7 @@ export class SettlementService {
         withholdings,
         perceptions,
         adjustments,
-        creditsAvailable: (credits._sum.balanceAfter ?? new Prisma.Decimal(0)).toString(),
+        creditsAvailable: availableFromLots(creditLots).toFixed(4),
         ...(obligation ? { obligationId: obligation.id } : {}),
         status: status as "READY" | "WAITING_INPUTS",
         missing,
@@ -223,13 +237,42 @@ export class SettlementService {
           ...(period ? { OR: [{ taxPeriodId: null }, { taxPeriodId: input.periodId }] } : {}),
         },
       });
-      // F0.5: los créditos del libro se filtran por el impuesto del cálculo
-      // (nunca se descuenta un saldo de otro impuesto).
-      const credits = await tx.taxCreditLedgerEntry.aggregate({
-        where: { firmId: ctx.firmId, clientId: input.clientId, taxTypeId: input.taxTypeId },
-        _sum: { balanceAfter: true },
+      // F1.7: los lotes inmutables son la fuente de verdad. Sólo durante la
+      // migración se admite un fallback legacy si todavía no se cargó ningún
+      // lote del alcance fiscal; así nunca se suman ambos libros.
+      const creditLots = await tx.taxCreditLot.findMany({
+        where: {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          taxTypeId: input.taxTypeId,
+          OR: [
+            { regimeId: input.regimeId, jurisdictionId: input.jurisdictionId },
+            { regimeId: input.regimeId, jurisdictionId: null },
+          ],
+        },
+        include: { movements: true },
       });
-      const previousFree = credits._sum.balanceAfter ?? new Prisma.Decimal(0);
+      const legacyCredits = creditLots.length === 0
+        ? await tx.taxCreditLedgerEntry.aggregate({
+            where: { firmId: ctx.firmId, clientId: input.clientId, taxTypeId: input.taxTypeId },
+            _sum: { balanceAfter: true },
+          })
+        : null;
+      const availableLots = creditLots
+        .map((lot) => ({ lot, available: lot.originalAmount.minus(lot.movements.reduce((sum, movement) => sum.plus(movement.amount), new Prisma.Decimal(0))) }))
+        .filter((entry) => entry.available.isPositive());
+      const technicalPrevious = availableLots
+        .filter((entry) => entry.lot.kind === "IVA_TECNICO")
+        .reduce((sum, entry) => sum.plus(entry.available), new Prisma.Decimal(0));
+      const freePrevious = availableLots
+        .filter((entry) => entry.lot.kind === "IVA_LIBRE")
+        .reduce((sum, entry) => sum.plus(entry.available), new Prisma.Decimal(0));
+      const genericPrevious = availableLots
+        .filter((entry) => entry.lot.kind === "SALDO_A_FAVOR")
+        .reduce((sum, entry) => sum.plus(entry.available), new Prisma.Decimal(0));
+      const previousFree = creditLots.length > 0
+        ? genericPrevious.plus(freePrevious)
+        : legacyCredits?._sum.balanceAfter ?? new Prisma.Decimal(0);
 
       // --- Reglas del motor (tasas por concepto). La DB guarda la alícuota
       //     en puntos porcentuales (p.ej. 21.0000); el motor espera decimal
@@ -252,6 +295,20 @@ export class SettlementService {
       // --- Hechos e inputs ---
       const facts: EngineFact[] = [];
       const inputs: SettlementInputRow[] = [];
+
+      for (const entry of availableLots) {
+        inputs.push({
+          kind: "CREDIT",
+          sourceId: entry.lot.id,
+          snapshot: {
+            kind: entry.lot.kind,
+            available: entry.available.toFixed(4),
+            regimeId: entry.lot.regimeId,
+            jurisdictionId: entry.lot.jurisdictionId,
+            periodId: entry.lot.periodId,
+          },
+        });
+      }
 
       for (const v of vouchers) {
         const concept = v.direction === "SALE" ? "VENTAS" : "COMPRAS";
@@ -499,7 +556,7 @@ export class SettlementService {
             credits: {
               withholding: withholdingTotal,
               perception: perceptionTotal,
-              technicalPrevious: new Prisma.Decimal(0),
+              technicalPrevious,
               freeAvailabilityPrevious: previousFree,
             },
           });
@@ -756,6 +813,7 @@ export class SettlementService {
         where: { id: settlementId },
         data: { status: settledStatus, finalizedByUserId: ctx.userId, finalizedAt: new Date() },
       });
+      await this.rollForwardClosingCredits(tx, finalized, ctx.userId);
       // La obligación vinculada pasa a READY_TO_FILE (no presenta por sí sola).
       await tx.taxObligation.updateMany({
         where: {
@@ -1041,6 +1099,78 @@ export class SettlementService {
       });
       return allocation;
     });
+  }
+
+  /**
+   * Al cerrar se consolida el disponible de la obligación en un lote nuevo
+   * con origen en la liquidación. Los lotes anteriores no se modifican: un
+   * movimiento firmado deja su disponible en cero y evita doble arrastre.
+   */
+  private async rollForwardClosingCredits(
+    tx: Tx,
+    settlement: { id: string; firmId: string; clientId: string; taxTypeId: string; regimeId: string; jurisdictionId: string; periodId: string; engineVersion: string; totals: Prisma.JsonValue | null },
+    userId: string,
+  ) {
+    const existingClosing = await tx.taxCreditLot.findFirst({ where: { sourceSettlementId: settlement.id } });
+    if (existingClosing) return;
+    const totals = (settlement.totals ?? {}) as Record<string, string>;
+    const lots = await tx.taxCreditLot.findMany({
+      where: {
+        firmId: settlement.firmId,
+        clientId: settlement.clientId,
+        taxTypeId: settlement.taxTypeId,
+        OR: [
+          { regimeId: settlement.regimeId, jurisdictionId: settlement.jurisdictionId },
+          { regimeId: settlement.regimeId, jurisdictionId: null },
+        ],
+      },
+      include: { movements: true },
+    });
+    const available = lots
+      .map((lot) => ({ lot, available: lot.originalAmount.minus(lot.movements.reduce((sum, movement) => sum.plus(movement.amount), new Prisma.Decimal(0))) }))
+      .filter((entry) => entry.available.isPositive());
+
+    const replaceKind = async (kind: string, closingAmount: string) => {
+      const scoped = available.filter((entry) => entry.lot.kind === kind || (kind === "IVA_LIBRE" && entry.lot.kind === "SALDO_A_FAVOR"));
+      if (scoped.length > 0) {
+        await tx.taxCreditMovement.createMany({
+          data: scoped.map((entry) => ({
+            firmId: settlement.firmId,
+            clientId: settlement.clientId,
+            lotId: entry.lot.id,
+            kind: "ROLLED_FORWARD",
+            amount: entry.available,
+            settlementId: settlement.id,
+            reference: `Cierre ${settlement.id}`,
+            createdByUserId: userId,
+          })),
+        });
+      }
+      const amount = new Prisma.Decimal(closingAmount || "0");
+      if (amount.isPositive()) {
+        await tx.taxCreditLot.create({
+          data: {
+            firmId: settlement.firmId,
+            clientId: settlement.clientId,
+            taxTypeId: settlement.taxTypeId,
+            regimeId: settlement.regimeId,
+            jurisdictionId: settlement.jurisdictionId,
+            periodId: settlement.periodId,
+            kind,
+            originalAmount: amount,
+            sourceSettlementId: settlement.id,
+            createdByUserId: userId,
+          },
+        });
+      }
+    };
+
+    if (settlement.engineVersion === VAT_ENGINE_VERSION) {
+      await replaceKind("IVA_TECNICO", totals["SALDO_TECNICO_AFTER"] ?? "0");
+      await replaceKind("IVA_LIBRE", totals["SALDO_LIBRE_AFTER"] ?? "0");
+      return;
+    }
+    await replaceKind("SALDO_A_FAVOR", totals["SALDO_A_FAVOR"] ?? "0");
   }
 
   // ------------------------------------------------------------------

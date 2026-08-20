@@ -204,6 +204,19 @@ export const STUDY_MODULES: readonly StudyModule[] = [
       import("./StudyAdministracion").then((module) => ({ default: module.StudyAdministracion })),
     ),
   },
+  {
+    id: "reglas-fiscales",
+    path: "/reglas-fiscales",
+    label: "Reglas fiscales",
+    icon: "settings",
+    navigationGroup: "Configuración",
+    requiredCapability: "tax.rules.read",
+    requirements: { firm: true },
+    status: "released",
+    component: lazy(() =>
+      import("./StudyReglasFiscales").then((module) => ({ default: module.StudyReglasFiscales })),
+    ),
+  },
 ] as const;
 
 export function modulesForNavigation(capabilities: ReadonlySet<string>): readonly StudyModule[] {

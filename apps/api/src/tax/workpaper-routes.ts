@@ -188,4 +188,38 @@ export function workpaperRoutes(app: FastifyInstance) {
       return handleError(reply, err);
     }
   });
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/tax-credit-ledger/opening", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const body = z
+      .object({
+        taxTypeId: z.string().uuid(),
+        regimeId: z.string().uuid().optional(),
+        jurisdictionId: z.string().uuid().optional(),
+        periodId: z.string().uuid(),
+        kind: z.enum(["IVA_TECNICO", "IVA_LIBRE", "SALDO_A_FAVOR"]),
+        amount: z.string().regex(/^\d+(\.\d+)?$/),
+        evidenceDocumentId: z.string().uuid(),
+        reference: z.string().max(240).optional(),
+      })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await service.createOpeningCredit(ctx, { clientId: ctx.clientId!, ...body });
+      return reply.status(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.get("/api/v1/firms/:firmId/clients/:clientId/tax-position", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const query = z.object({ periodId: z.string().uuid() }).strict().parse(req.query);
+    try {
+      const data = await service.position(ctx, ctx.clientId!, query.periodId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
 }
