@@ -28,6 +28,7 @@
 | [Runbooks del piloto](./runbooks-piloto.md) | Operación y recuperación del piloto (11 runbooks) |
 | [Checklist de sign-off Puerta 6](./checklist-signoff-puerta6.md) | Evidencia binaria PASS/FAIL de la Puerta 6 |
 | [Evidencia corrida histórica](./piloto/g6-corrida-historica.md) | 3 períodos históricos FINALIZED con hashes (G6-02) |
+| [Memoria técnica](./memoria-tecnica.md) | Diario de decisiones técnicas y patrones verificados (2026-08-20) |
 
 ## Estado del proyecto (2026-08-20)
 
