@@ -86,4 +86,4 @@ Copie `.env.example` y configure secretos reales antes de cualquier entorno no l
 
 ## Estado
 
-El vertical integrado disponible comprende login/MFA, contexto, clientes, carga documental, antivirus, extracción PDF/OCR/QR, revisión, propuesta/posting contable, balance, reportes PDF/XLSX/CSV, publicación y consulta desde portal. Los handlers no implementados permanecen fuera de `WORKER_QUEUES` y fallan explícitamente si se invocan; no hay jobs que simulen éxito.
+El vertical integrado disponible comprende login/MFA, contexto, clientes, carga documental, antivirus, extracción PDF/OCR/QR, revisión, onboarding fiscal, ingestión de comprobantes, liquidaciones fiscales (IVA/IIBB/TEM/CM03/Monotributo, maker-checker), expediente mensual, rentabilidad, publicaciones y consulta desde portal. La navegación del estudio se enfoca en el proceso de liquidación mensual: contabilidad de asientos y reportes/BI permanecen ocultos como legado técnico (no son rutas de producto). Los handlers no implementados permanecen fuera de `WORKER_QUEUES` y fallan explícitamente si se invocan; no hay jobs que simulen éxito.

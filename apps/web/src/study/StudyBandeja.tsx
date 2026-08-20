@@ -11,6 +11,7 @@ import {
   type DocumentRequest,
 } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
+import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
@@ -212,141 +213,140 @@ export function StudyBandeja() {
         </div>
       </div>
 
-      {showUpload && base ? (
-        <section className="study-panel upload-panel" aria-labelledby="study-upload-title">
-          <div className="study-panel__heading">
-            <div>
-              <h2 id="study-upload-title">Nuevo documento</h2>
-              <p>
-                El archivo pasa por validación, antivirus y extracción antes de estar disponible.
-              </p>
-            </div>
-            <span className="secure-note">
-              <Icon name="shield" size={15} /> Carga segura
-            </span>
+      <ActionDrawer
+        isOpen={showUpload && Boolean(base)}
+        onClose={() => {
+          setShowUpload(false);
+          setFile(null);
+          setUploadError(null);
+        }}
+        eyebrow="Bandeja"
+        title="Nuevo documento"
+        description="El archivo pasa por validación, antivirus y extracción antes de estar disponible."
+        size="wide"
+      >
+        <span className="secure-note upload-panel__secure-note">
+          <Icon name="shield" size={15} /> Carga segura
+        </span>
+        {requests.isLoading ? (
+          <div className="query-state query-state--compact" role="status">
+            <span className="loading-copy">Buscando pedidos abiertos…</span>
           </div>
-          {requests.isLoading ? (
-            <div className="query-state query-state--compact" role="status">
-              <span className="loading-copy">Buscando pedidos abiertos…</span>
-            </div>
-          ) : requests.isError ? (
-            <EmptyState
-              size="compact"
-              title="No se pudieron cargar los pedidos"
-              description="Reintentá antes de asociar un documento a la evidencia solicitada."
-              action={
-                <Button size="sm" variant="secondary" onClick={() => void requests.refetch()}>
-                  Reintentar
+        ) : requests.isError ? (
+          <EmptyState
+            size="compact"
+            title="No se pudieron cargar los pedidos"
+            description="Reintentá antes de asociar un documento a la evidencia solicitada."
+            action={
+              <Button size="sm" variant="secondary" onClick={() => void requests.refetch()}>
+                Reintentar
+              </Button>
+            }
+          />
+        ) : pendingRequestItems.length === 0 ? (
+          <EmptyState
+            size="compact"
+            title="Primero creá un pedido documental"
+            description="Cada carga queda vinculada a un ítem solicitado para preservar la trazabilidad."
+            action={
+              capabilities.has("request.manage") ? (
+                <Button size="sm" onClick={() => navigate("/trabajo")}>
+                  Ir a pedidos
                 </Button>
-              }
-            />
-          ) : pendingRequestItems.length === 0 ? (
-            <EmptyState
-              size="compact"
-              title="Primero creá un pedido documental"
-              description="Cada carga queda vinculada a un ítem solicitado para preservar la trazabilidad."
-              action={
-                capabilities.has("request.manage") ? (
-                  <Button size="sm" onClick={() => navigate("/trabajo")}>
-                    Ir a pedidos
-                  </Button>
-                ) : undefined
-              }
-            />
-          ) : (
-            <form
-              onSubmit={(event) => {
+              ) : undefined
+            }
+          />
+        ) : (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              upload.mutate();
+            }}
+          >
+            <label className="ds-field" htmlFor="upload-request-item">
+              <span className="ds-field__label">Corresponde a</span>
+              <select
+                id="upload-request-item"
+                className="ctxbar__input"
+                value={uploadRequestItemId}
+                onChange={(event) => setUploadRequestItemId(event.target.value)}
+                required
+              >
+                <option value="">Elegí el ítem solicitado</option>
+                {pendingRequestItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.requestTitle} · {item.description}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label
+              className={`upload-dropzone${dragging ? " upload-dropzone--dragging" : ""}`}
+              onDragOver={(event) => {
                 event.preventDefault();
-                upload.mutate();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragging(false);
+                chooseFile(event.dataTransfer.files[0] ?? null);
               }}
             >
-              <label className="ds-field" htmlFor="upload-request-item">
-                <span className="ds-field__label">Corresponde a</span>
-                <select
-                  id="upload-request-item"
-                  className="ctxbar__input"
-                  value={uploadRequestItemId}
-                  onChange={(event) => setUploadRequestItemId(event.target.value)}
-                  required
-                >
-                  <option value="">Elegí el ítem solicitado</option>
-                  {pendingRequestItems.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.requestTitle} · {item.description}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label
-                className={`upload-dropzone${dragging ? " upload-dropzone--dragging" : ""}`}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setDragging(false);
-                  chooseFile(event.dataTransfer.files[0] ?? null);
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+                onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+              />
+              <span className="upload-dropzone__icon">
+                <Icon name="upload" size={23} />
+              </span>
+              <span>
+                <strong>
+                  {file ? file.name : "Arrastrá un archivo o elegilo desde tu equipo"}
+                </strong>
+                <small>{file ? fileSize(file.size) : "PDF, JPG, PNG o WebP · máximo 25 MB"}</small>
+              </span>
+              <span className="upload-dropzone__action">Elegir archivo</span>
+            </label>
+            {uploadError ? (
+              <p className="form-error" role="alert">
+                {uploadError}
+              </p>
+            ) : null}
+            {uploadDone ? (
+              <div className="action-receipt" role="status">
+                <Icon name="check" size={18} />
+                <span>
+                  <strong>Documento recibido</strong>
+                  <small>Ya ingresó al circuito de validación y procesamiento.</small>
+                </span>
+              </div>
+            ) : null}
+            <div className="upload-panel__actions">
+              <Button
+                type="submit"
+                loading={upload.isPending}
+                loadingLabel="Subiendo documento"
+                disabled={!file || !uploadRequestItemId}
+              >
+                Subir y procesar
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowUpload(false);
+                  setFile(null);
+                  setUploadError(null);
                 }}
               >
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-                  onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
-                />
-                <span className="upload-dropzone__icon">
-                  <Icon name="upload" size={23} />
-                </span>
-                <span>
-                  <strong>
-                    {file ? file.name : "Arrastrá un archivo o elegilo desde tu equipo"}
-                  </strong>
-                  <small>
-                    {file ? fileSize(file.size) : "PDF, JPG, PNG o WebP · máximo 25 MB"}
-                  </small>
-                </span>
-                <span className="upload-dropzone__action">Elegir archivo</span>
-              </label>
-              {uploadError ? (
-                <p className="form-error" role="alert">
-                  {uploadError}
-                </p>
-              ) : null}
-              {uploadDone ? (
-                <div className="action-receipt" role="status">
-                  <Icon name="check" size={18} />
-                  <span>
-                    <strong>Documento recibido</strong>
-                    <small>Ya ingresó al circuito de validación y procesamiento.</small>
-                  </span>
-                </div>
-              ) : null}
-              <div className="upload-panel__actions">
-                <Button
-                  type="submit"
-                  loading={upload.isPending}
-                  loadingLabel="Subiendo documento"
-                  disabled={!file || !uploadRequestItemId}
-                >
-                  Subir y procesar
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setShowUpload(false);
-                    setFile(null);
-                    setUploadError(null);
-                  }}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          )}
-        </section>
-      ) : null}
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        )}
+      </ActionDrawer>
 
       {!base ? (
         <EmptyState
@@ -580,19 +580,10 @@ export function StudyBandeja() {
                         <span>
                           <strong>Datos listos para registrar</strong>
                           <small>
-                            La creación automática se retiró para conservar el control. Podés
-                            preparar un asiento manual con esta evidencia como respaldo.
+                            La creación automática se retiró para conservar el control. La
+                            evidencia queda disponible como respaldo del expediente.
                           </small>
                         </span>
-                        {capabilities.has("entry.create") ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => navigate("/contabilidad")}
-                          >
-                            Preparar asiento
-                          </Button>
-                        ) : null}
                       </div>
                     ) : null}
                   </>

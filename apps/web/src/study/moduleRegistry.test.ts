@@ -29,4 +29,14 @@ describe("registro de módulos del estudio", () => {
     const visible = modulesForNavigation(new Set()).map((module) => module.id);
     expect(visible).toEqual(["inicio"]);
   });
+
+  it("mantiene contabilidad y reportes fuera de la navegación aunque el rol tenga todas las capacidades", () => {
+    const capabilities = new Set(
+      STUDY_MODULES.flatMap((module) => (module.requiredCapability ? [module.requiredCapability] : [])),
+    );
+    const visible = modulesForNavigation(capabilities).map((module) => module.id);
+
+    expect(visible).not.toContain("contabilidad");
+    expect(visible).not.toContain("reportes");
+  });
 });

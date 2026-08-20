@@ -856,5 +856,5 @@ No se debe declarar la aplicación lista para producción general si alguno de e
 
 - Proceso operativo mensual y puntos de control: [`proceso-liquidacion-mensual.md`](./proceso-liquidacion-mensual.md)
 - Lógica y valores de referencia del workbook: [`especificacion-liquidacion-manual-excel.md`](./especificacion-liquidacion-manual-excel.md)
-- Gaps de cierre funcional incorporados y reconciliados: [`plan-cierre-gaps.md`](./plan-cierre-gaps.md)
+- Gaps de cierre funcional incorporados y reconciliados (2026-08-20): filtros período/cutoff, filing con acuse, lecturas de reglas, guard deny-by-default, matriz de permisos alineada.
 - Invariantes de dominio existentes: [`invariantes.md`](./invariantes.md)

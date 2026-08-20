@@ -102,7 +102,7 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph EstadoActual["📋 Estado actual (2026-08-19)"]
+    subgraph EstadoActual["📋 Estado actual (2026-08-20)"]
         AUTH[Auth / MFA / Sesiones]
         FIRM[Firmas + membresías]
         ONBOARD[Onboarding fiscal<br/><b>✅ completo</b>]
@@ -114,7 +114,7 @@ graph LR
         TEM[TEM SMT<br/><b>✅ motor</b>]
         MONO[Monotributo<br/><b>✅ seguimiento</b>]
         MAKER[Flujo maker-checker<br/><b>✅ preparar → revisar →<br/>aprobar → finalizar</b>]
-        EXPORT[Exportación + acuse + pago<br/><b>✅ papel de trabajo</b>]
+        EXPORT[Exportación + acuse + pago<br/><b>✅ papel de trabajo + acuse</b>]
         PROFIT[Rentabilidad gerencial<br/><b>✅ devengado + caja</b>]
         PORTAL_NEW[Portal cliente fiscal<br/><b>✅ pedidos, publicaciones,<br/>rentabilidad</b>]
         WORKER_NEW[Worker robusto<br/><b>✅ outbox + dead-letter</b>]
@@ -124,11 +124,10 @@ graph LR
         ASSISTANT[Asistente IA<br/><i>🔒 oculto de la nav</i>]
     end
 
-    subgraph Pendiente["🎯 Pendiente (plan-cierre-gaps.md)"]
+    subgraph Pendiente["🎯 Pendiente (2026-08-20)"]
         ESTACION[Estación de trabajo<br/>liquidación 5 zonas]
         PEDIDOS[Pedidos ligados a<br/>obligationId + portal por ítem]
         DOCPREV[Estación documental<br/>con preview de evidencia]
-        ACUSE[Filing con acuse/evidencia]
         LEDGER_CR[Libro de créditos<br/>GET /tax-credit-ledger]
         CALC_EXCEL[Cálculos del Excel:<br/>Dto. 814 · mora · prorrata ·<br/>rubros · conciliación]
         OBS[Observabilidad /metrics<br/>+ alertas]
@@ -211,7 +210,12 @@ flowchart TD
 | **RLS obligatorio** | Runtime nunca es owner de PostgreSQL. Políticas forzadas por estudio/cliente. |
 | **Outbox durable** | Intención en PostgreSQL; worker reclama con lease. Dead-letter tras 10 intentos. |
 | **Maker-checker** | Quien prepara no revisa ni finaliza. Historial inmutable. |
+| **Autoridad de escritura** | Solo Node/Fastify escribe. IA nunca crea asientos ni finaliza liquidaciones. |
+| **RLS obligatorio** | Runtime nunca es owner de PostgreSQL. Políticas forzadas por estudio/cliente. |
+| **Outbox durable** | Intención en PostgreSQL; worker reclama con lease. Dead-letter tras 10 intentos. |
+| **Maker-checker** | Quien prepara no revisa ni finaliza. Historial inmutable. |
 | **Feature flags** | Módulos incompletos ocultos por flag server-side. Sin pantallas decorativas. |
+| **Foco en el proceso** | La navegación del estudio expone sólo el flujo de liquidación fiscal mensual (captura → clasificación → cálculo → determinación de saldo → control → cierre). Los módulos de contabilidad de asientos y reportes/BI están ocultos de la navegación; su código se conserva como legado técnico (evidencia y conciliación interna), sin rutas de producto. |
 | **Sin credenciales fiscales** | No se almacenan claves ARCA/COMARB. El contador presenta manualmente. |
 
 ---

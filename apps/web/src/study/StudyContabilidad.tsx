@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import { api, type Account, type FiscalYear, type TrialBalance } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
+import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
@@ -312,123 +313,117 @@ export function StudyContabilidad() {
         </div>
       ) : null}
 
-      {showDraftForm ? (
-        <section className="study-panel study-panel--form" aria-labelledby="draft-entry-title">
-          <div className="study-panel__heading">
-            <div>
-              <h2 id="draft-entry-title">Nuevo asiento manual</h2>
-              <p>
-                El formulario genera dos líneas balanceadas. Podrás enviarlo a revisión antes de
-                contabilizar.
-              </p>
-            </div>
+      <ActionDrawer
+        isOpen={showDraftForm}
+        onClose={() => setShowDraftForm(false)}
+        eyebrow="Maker"
+        title="Nuevo asiento manual"
+        description="Genera dos líneas balanceadas. Podrás enviarlo a revisión antes de contabilizar."
+        size="wide"
+      >
+        <form
+          className="study-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createDraft.mutate();
+          }}
+        >
+          <Field
+            id="entry-date"
+            label="Fecha del asiento"
+            type="date"
+            value={draft.entryDate}
+            min={activePeriod?.startDate.slice(0, 10)}
+            max={activePeriod?.endDate.slice(0, 10)}
+            onChange={(event) => setDraft({ ...draft, entryDate: event.target.value })}
+            required
+          />
+          <Field
+            id="entry-description"
+            label="Descripción"
+            value={draft.description}
+            maxLength={500}
+            onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+            placeholder="Ej. Devengamiento de honorarios"
+            required
+          />
+          <Field
+            id="entry-reference"
+            label="Referencia"
+            value={draft.reference}
+            maxLength={200}
+            onChange={(event) => setDraft({ ...draft, reference: event.target.value })}
+            placeholder="Opcional"
+          />
+          <label className="ds-field" htmlFor="entry-debit-account">
+            <span className="ds-field__label">Cuenta deudora</span>
+            <select
+              id="entry-debit-account"
+              className="ctxbar__input"
+              value={draft.debitAccountId}
+              onChange={(event) => setDraft({ ...draft, debitAccountId: event.target.value })}
+              required
+            >
+              <option value="">Elegí una cuenta</option>
+              {postingAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.code} · {account.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="ds-field" htmlFor="entry-credit-account">
+            <span className="ds-field__label">Cuenta acreedora</span>
+            <select
+              id="entry-credit-account"
+              className="ctxbar__input"
+              value={draft.creditAccountId}
+              onChange={(event) => setDraft({ ...draft, creditAccountId: event.target.value })}
+              required
+            >
+              <option value="">Elegí una cuenta</option>
+              {postingAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.code} · {account.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Field
+            id="entry-amount"
+            label="Importe ARS"
+            type="number"
+            min="0.01"
+            step="0.01"
+            inputMode="decimal"
+            value={draft.amount}
+            onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
+            required
+          />
+          {createDraft.isError ? (
+            <p className="form-error study-form__actions" role="alert">
+              {createDraft.error.message}
+            </p>
+          ) : null}
+          <div className="study-form__actions">
+            <span className="study-page__hint">Debe y haber se generan por el mismo importe.</span>
+            <Button
+              type="submit"
+              loading={createDraft.isPending}
+              disabled={
+                !draft.entryDate ||
+                !draft.description.trim() ||
+                !draft.debitAccountId ||
+                !draft.creditAccountId ||
+                !draft.amount ||
+                !canCreateDraft
+              }
+            >
+              Guardar borrador
+            </Button>
           </div>
-          <form
-            className="study-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              createDraft.mutate();
-            }}
-          >
-            <Field
-              id="entry-date"
-              label="Fecha del asiento"
-              type="date"
-              value={draft.entryDate}
-              min={activePeriod?.startDate.slice(0, 10)}
-              max={activePeriod?.endDate.slice(0, 10)}
-              onChange={(event) => setDraft({ ...draft, entryDate: event.target.value })}
-              required
-            />
-            <Field
-              id="entry-description"
-              label="Descripción"
-              value={draft.description}
-              maxLength={500}
-              onChange={(event) => setDraft({ ...draft, description: event.target.value })}
-              placeholder="Ej. Devengamiento de honorarios"
-              required
-            />
-            <Field
-              id="entry-reference"
-              label="Referencia"
-              value={draft.reference}
-              maxLength={200}
-              onChange={(event) => setDraft({ ...draft, reference: event.target.value })}
-              placeholder="Opcional"
-            />
-            <label className="ds-field" htmlFor="entry-debit-account">
-              <span className="ds-field__label">Cuenta deudora</span>
-              <select
-                id="entry-debit-account"
-                className="ctxbar__input"
-                value={draft.debitAccountId}
-                onChange={(event) => setDraft({ ...draft, debitAccountId: event.target.value })}
-                required
-              >
-                <option value="">Elegí una cuenta</option>
-                {postingAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.code} · {account.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="ds-field" htmlFor="entry-credit-account">
-              <span className="ds-field__label">Cuenta acreedora</span>
-              <select
-                id="entry-credit-account"
-                className="ctxbar__input"
-                value={draft.creditAccountId}
-                onChange={(event) => setDraft({ ...draft, creditAccountId: event.target.value })}
-                required
-              >
-                <option value="">Elegí una cuenta</option>
-                {postingAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.code} · {account.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Field
-              id="entry-amount"
-              label="Importe ARS"
-              type="number"
-              min="0.01"
-              step="0.01"
-              inputMode="decimal"
-              value={draft.amount}
-              onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
-              required
-            />
-            {createDraft.isError ? (
-              <p className="form-error study-form__actions" role="alert">
-                {createDraft.error.message}
-              </p>
-            ) : null}
-            <div className="study-form__actions">
-              <span className="study-page__hint">
-                Debe y haber se generan por el mismo importe.
-              </span>
-              <Button
-                type="submit"
-                loading={createDraft.isPending}
-                disabled={
-                  !draft.entryDate ||
-                  !draft.description.trim() ||
-                  !draft.debitAccountId ||
-                  !draft.creditAccountId ||
-                  !draft.amount ||
-                  !canCreateDraft
-                }
-              >
-                Guardar borrador
-              </Button>
-            </div>
-          </form>
-        </section>
-      ) : null}
+        </form>
+      </ActionDrawer>
 
       <div className="ledger-tabs" role="tablist" aria-label="Vistas contables">
         {(

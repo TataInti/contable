@@ -1,0 +1,184 @@
+.action-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-z-modal);
+  display: flex;
+  justify-content: flex-end;
+  isolation: isolate;
+}
+
+.action-drawer__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--ds-color-text) 26%, transparent);
+  cursor: pointer;
+  animation: drawer-scrim-in 150ms ease-out both;
+}
+
+.action-drawer__panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(100vw, 560px);
+  height: 100%;
+  flex-direction: column;
+  border-left: 1px solid var(--ds-color-border-strong);
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--ds-color-primary) 7%, transparent),
+      transparent 28%
+    ),
+    var(--ds-color-surface);
+  box-shadow: -18px 0 44px color-mix(in srgb, var(--ds-color-text) 16%, transparent);
+  animation: drawer-panel-in 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  outline: none;
+}
+
+.action-drawer__panel--wide {
+  width: min(100vw, 680px);
+}
+
+.action-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-4);
+  padding: clamp(20px, 3vw, 30px);
+  border-bottom: 1px solid var(--ds-color-border);
+  background: color-mix(in srgb, var(--ds-color-background) 58%, var(--ds-color-surface));
+}
+
+.action-drawer__header h2,
+.action-drawer__header p {
+  margin: 0;
+}
+
+.action-drawer__header h2 {
+  max-width: 18ch;
+  font-size: clamp(23px, 3vw, 30px);
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+}
+
+.action-drawer__header p:not(.action-drawer__eyebrow) {
+  max-width: 54ch;
+  margin-top: var(--ds-space-2);
+  color: var(--ds-color-text-muted);
+  line-height: 1.45;
+}
+
+.action-drawer__eyebrow {
+  margin-bottom: var(--ds-space-2);
+  color: var(--ds-color-primary);
+  font-size: var(--ds-text-xs);
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.action-drawer__close {
+  flex: 0 0 auto;
+}
+
+.action-drawer__content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: clamp(20px, 3vw, 30px);
+}
+
+.action-drawer__content > :first-child {
+  margin-top: 0;
+}
+
+.action-drawer__content > :last-child {
+  margin-bottom: 0;
+}
+
+.action-drawer .study-inline-form,
+.action-drawer .study-inline-form--client,
+.action-drawer .study-inline-form--request {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.action-drawer .study-page__form,
+.action-drawer .study-form {
+  max-width: none;
+  width: 100%;
+}
+
+.action-drawer .study-form__actions,
+.action-drawer .study-inline-form__actions,
+.action-drawer .upload-panel__actions,
+.action-drawer .opening-credit-form__actions {
+  position: sticky;
+  bottom: calc(-1 * clamp(20px, 3vw, 30px));
+  margin-inline: calc(-1 * clamp(20px, 3vw, 30px));
+  padding: var(--ds-space-4) clamp(20px, 3vw, 30px);
+  border-top: 1px solid var(--ds-color-border);
+  background: color-mix(in srgb, var(--ds-color-surface) 94%, var(--ds-color-background));
+}
+
+.action-drawer .upload-panel__secure-note {
+  margin-bottom: var(--ds-space-4);
+}
+
+.action-drawer .opening-credit-form {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+@keyframes drawer-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-panel-in {
+  from {
+    opacity: 0.9;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .action-drawer__panel,
+  .action-drawer__panel--wide {
+    width: 100vw;
+  }
+
+  .action-drawer__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .action-drawer__close {
+    align-self: flex-start;
+  }
+
+  .action-drawer .study-inline-form,
+  .action-drawer .study-inline-form--client,
+  .action-drawer .study-inline-form--request,
+  .action-drawer .study-form,
+  .action-drawer .study-form--compact {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action-drawer__scrim,
+  .action-drawer__panel {
+    animation: none;
+  }
+}

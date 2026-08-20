@@ -4,8 +4,7 @@
 > La Puerta 6 es binaria: PASS o FAIL. Cada ítem exige evidencia (commit SHA,
 > CI, migración, dataset, comandos, reportes, aprobaciones).
 > Un contador matriculado debe firmar el resultado de validación fiscal.
-> Estado: actualizado 2026-08-19. Los gaps que bloquean el cierre están en
-> [`plan-cierre-gaps.md`](./plan-cierre-gaps.md).
+> Estado: actualizado 2026-08-20. Los gaps de producto sin validación contador se cerraron (commits `0d481f8`, `f9a5050`); los pendientes que bloquean el cierre requieren validación profesional (golden cases, cálculos del Excel).
 
 ## G6-01 — Selección de clientes piloto
 
@@ -60,7 +59,7 @@
 - [ ] Cálculo de 10.000 hechos < 30s como job.
 - [ ] Paginación obligatoria en colecciones; cero consultas sin límite.
 - [x] Script `npm run seed:carga -w @contable/api` existe (G6-06, 300 clientes).
-      Pendiente: ejecutarlo y medir los objetivos p95 (plan-cierre-gaps G-2).
+      Pendiente: ejecutarlo y medir los objetivos p95 (G-2).
 
 ## G6-07 — Revisión de seguridad y privacidad
 
@@ -81,12 +80,12 @@
 - [x] Runbooks operativos documentados (docs/runbooks-piloto.md).
 - [ ] Equipo de soporte con dueño asignado.
 - [ ] Observabilidad con dueño (métricas y alertas).
-      Pendiente: endpoint `/metrics` + alertas por runbook (plan-cierre-gaps A-6).
+      Pendiente: endpoint `/metrics` + alertas por runbook (A-6).
 
 ## G6-09 — Sign-off fiscal, técnico y operativo
 
 - [ ] Golden cases firmados por contador matriculado (por régimen).
-      Pendiente: evidencia de validación profesional (plan-cierre-gaps G-4).
+      Pendiente: evidencia de validación profesional (G-4).
 - [ ] Aprobación técnica (arquitectura, tests, CI).
 - [ ] Aprobación funcional (flujos de punta a punta).
 - [ ] Aprobación de seguridad.

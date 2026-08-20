@@ -20,3 +20,4 @@ Este directorio contiene las decisiones de arquitectura de **Contable**, la plat
 | [ADR-005](./0005-openrouter-zdr-allowlist.md) | OpenRouter con ZDR y allowlist | Aceptado |
 | [ADR-006](./0006-rls-obligatorio-runtime-non-owner.md) | RLS obligatorio y runtime non-owner | Aceptado |
 | [ADR-007](./0007-monolito-modular-node-workers.md) | Monolito modular Node más workers | Aceptado |
+| [ADR-008](./0008-navegacion-foco-liquidacion-fiscal.md) | Navegación enfocada en la liquidación fiscal mensual | Aceptado |

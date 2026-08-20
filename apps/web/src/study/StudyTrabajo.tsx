@@ -2,16 +2,13 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
-import { api, type DocumentRequest, type FiscalYear, type JournalEntry } from "../lib/api";
+import { api, type DocumentRequest, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
+import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
 
-interface Entry extends JournalEntry {
-  rowVersion: number;
-  preparedByUserId: string;
-}
 interface CloseCycle {
   id: string;
   status: string;
@@ -70,13 +67,8 @@ export function StudyTrabajo() {
     queryFn: () => api.get<FiscalYear[]>(`${base}/fiscal-years`),
     enabled: Boolean(base),
   });
-  const [entries, requests, closes, obligations] = useQueries({
+  const [requests, closes, obligations] = useQueries({
     queries: [
-      {
-        queryKey: ["journal-entries", firmId, clientId],
-        queryFn: () => api.get<Entry[]>(`${base}/journal-entries`),
-        enabled: Boolean(base),
-      },
       {
         queryKey: ["document-requests", firmId, clientId],
         queryFn: () => api.get<WorkDocumentRequest[]>(`${base}/document-requests`),
@@ -93,27 +85,6 @@ export function StudyTrabajo() {
         enabled: Boolean(base),
       },
     ],
-  });
-  const invalidateEntries = () =>
-    queryClient.invalidateQueries({ queryKey: ["journal-entries", firmId, clientId] });
-  const review = useMutation({
-    mutationFn: (entryId: string) => api.post(`${base}/journal-entries/${entryId}/review`),
-    onSuccess: async () => {
-      await invalidateEntries();
-      setReceipt("Asiento revisado. Ya puede ser contabilizado por una persona autorizada.");
-    },
-  });
-  const post = useMutation({
-    mutationFn: (entry: Entry) =>
-      api.postWithHeaders(
-        `${base}/journal-entries/${entry.id}/post`,
-        { expectedRowVersion: entry.rowVersion },
-        { "Idempotency-Key": crypto.randomUUID() },
-      ),
-    onSuccess: async () => {
-      await invalidateEntries();
-      setReceipt("Asiento contabilizado. El registro quedó inmutable y disponible en los libros.");
-    },
   });
   const createRequest = useMutation({
     mutationFn: () =>
@@ -226,9 +197,6 @@ export function StudyTrabajo() {
       </div>
     );
 
-  const pendingEntries = (entries.data ?? []).filter((entry) =>
-    ["IN_REVIEW", "REVIEWED"].includes(entry.status),
-  );
   const activeRequests = (requests.data ?? []).filter((item) => item.status !== "COMPLETED");
   const obligationRows = (obligations.data ?? []).flatMap((item) =>
     item.instances.map((instance) => ({ ...instance, name: item.name })),
@@ -241,7 +209,7 @@ export function StudyTrabajo() {
     (thread) => thread.id === activeConversation?.threadId,
   );
   const hasQueryError =
-    entries.isError || requests.isError || closes.isError || obligations.isError;
+    requests.isError || closes.isError || obligations.isError;
 
   return (
     <div className="study-page study-page--wide">
@@ -258,7 +226,6 @@ export function StudyTrabajo() {
             variant="ghost"
             onClick={() => {
               void Promise.all([
-                entries.refetch(),
                 requests.refetch(),
                 closes.refetch(),
                 obligations.refetch(),
@@ -269,7 +236,10 @@ export function StudyTrabajo() {
           </Button>
           {capabilities.has("period.soft_close") ? (
             <Button
-              onClick={() => setShowClose((value) => !value)}
+              onClick={() => {
+                setShowRequest(false);
+                setShowClose((value) => !value);
+              }}
               variant={showClose ? "secondary" : "ghost"}
               disabled={!periodId || !activeFiscalYear}
               title={
@@ -284,7 +254,10 @@ export function StudyTrabajo() {
           ) : null}
           {capabilities.has("request.manage") ? (
             <Button
-              onClick={() => setShowRequest((value) => !value)}
+              onClick={() => {
+                setShowClose(false);
+                setShowRequest((value) => !value);
+              }}
               variant={showRequest ? "secondary" : "primary"}
             >
               <Icon name={showRequest ? "close" : "plus"} size={17} />
@@ -295,15 +268,6 @@ export function StudyTrabajo() {
       </div>
 
       <div className="work-summary" aria-label="Resumen del trabajo">
-        <div>
-          <span className="work-summary__icon work-summary__icon--info">
-            <Icon name="shield" size={18} />
-          </span>
-          <span>
-            <strong>{pendingEntries.length}</strong>
-            <small>asientos por resolver</small>
-          </span>
-        </div>
         <div>
           <span className="work-summary__icon work-summary__icon--warn">
             <Icon name="message" size={18} />
@@ -355,141 +319,132 @@ export function StudyTrabajo() {
         </div>
       ) : null}
 
-      {showRequest ? (
-        <section className="study-panel study-panel--form" aria-labelledby="new-request-title">
-          <div className="study-panel__heading">
-            <div>
-              <h2 id="new-request-title">Nuevo pedido</h2>
-              <p>Describí exactamente qué necesitás y, si corresponde, cuándo.</p>
-            </div>
-          </div>
-          <form
-            className="study-inline-form study-inline-form--request"
-            onSubmit={(event) => {
-              event.preventDefault();
-              createRequest.mutate();
-            }}
-          >
-            <Field
-              id="request-title"
-              label="Asunto"
-              value={request.title}
-              onChange={(event) => setRequest({ ...request, title: event.target.value })}
-              maxLength={200}
-              required
+      <ActionDrawer
+        isOpen={showRequest}
+        onClose={() => setShowRequest(false)}
+        eyebrow="Cliente"
+        title="Nuevo pedido"
+        description="Describí exactamente qué necesitás y, si corresponde, cuándo debe entregarse."
+      >
+        <form
+          className="study-inline-form study-inline-form--request"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createRequest.mutate();
+          }}
+        >
+          <Field
+            id="request-title"
+            label="Asunto"
+            value={request.title}
+            onChange={(event) => setRequest({ ...request, title: event.target.value })}
+            maxLength={200}
+            required
+          />
+          <Field
+            id="request-item"
+            label="Documento solicitado"
+            value={request.item}
+            onChange={(event) => setRequest({ ...request, item: event.target.value })}
+            maxLength={500}
+            required
+          />
+          <label className="ds-field" htmlFor="request-description">
+            <span className="ds-field__label">Instrucciones para el cliente</span>
+            <textarea
+              id="request-description"
+              className="study-textarea"
+              rows={2}
+              value={request.description}
+              onChange={(event) => setRequest({ ...request, description: event.target.value })}
+              maxLength={4000}
+              placeholder="Indicá el período, formato o detalle que necesitás."
             />
-            <Field
-              id="request-item"
-              label="Documento solicitado"
-              value={request.item}
-              onChange={(event) => setRequest({ ...request, item: event.target.value })}
-              maxLength={500}
-              required
-            />
-            <label className="ds-field" htmlFor="request-description">
-              <span className="ds-field__label">Instrucciones para el cliente</span>
-              <textarea
-                id="request-description"
-                className="study-textarea"
-                rows={2}
-                value={request.description}
-                onChange={(event) => setRequest({ ...request, description: event.target.value })}
-                maxLength={4000}
-                placeholder="Indicá el período, formato o detalle que necesitás."
-              />
-            </label>
-            <Field
-              id="request-due"
-              label="Fecha límite"
-              type="date"
-              value={request.dueDate}
-              onChange={(event) => setRequest({ ...request, dueDate: event.target.value })}
-            />
-            {createRequest.isError ? (
-              <p className="form-error study-inline-form__feedback" role="alert">
-                No se pudo crear el pedido. Revisá los datos e intentá nuevamente.
-              </p>
-            ) : null}
-            <div className="study-inline-form__actions">
-              <Button
-                type="submit"
-                loading={createRequest.isPending}
-                disabled={!request.title.trim() || !request.item.trim()}
-              >
-                Crear pedido
-              </Button>
-            </div>
-          </form>
-        </section>
-      ) : null}
-
-      {showClose ? (
-        <section className="study-panel study-panel--form" aria-labelledby="new-close-title">
-          <div className="study-panel__heading">
-            <div>
-              <h2 id="new-close-title">Iniciar cierre del período</h2>
-              <p>
-                Definí las verificaciones del ciclo. Cada tarea se completa y queda auditada por
-                separado.
-              </p>
-            </div>
-          </div>
-          <form
-            className="study-page__form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              createClose.mutate();
-            }}
-          >
-            <label className="ds-field" htmlFor="close-items">
-              <span className="ds-field__label">Tareas de cierre</span>
-              <textarea
-                id="close-items"
-                className="study-textarea"
-                rows={5}
-                value={closeItems}
-                onChange={(event) => setCloseItems(event.target.value)}
-                placeholder="Una tarea por línea"
-                required
-              />
-              <small className="study-page__hint">
-                Se crearán {closeItems.split("\n").filter((item) => item.trim()).length} tareas.
-              </small>
-            </label>
-            {!activeFiscalYear ? (
-              <p className="form-error" role="alert">
-                Seleccioná un período contable abierto antes de iniciar el cierre.
-              </p>
-            ) : null}
-            {createClose.isError ? (
-              <p className="form-error" role="alert">
-                {createClose.error.message}
-              </p>
-            ) : null}
-            <div className="study-inline-form__actions">
-              <Button
-                type="submit"
-                loading={createClose.isPending}
-                disabled={!activeFiscalYear || !periodId}
-              >
-                Crear ciclo de cierre
-              </Button>
-            </div>
-          </form>
-        </section>
-      ) : null}
-
-      {preview ? (
-        <section className="study-panel study-panel--form" aria-labelledby="evidence-preview-title">
-          <div className="study-panel__heading">
-            <div>
-              <h2 id="evidence-preview-title">Evidencia</h2>
-              <p>{preview.originalName ?? "Documento adjunto"}</p>
-            </div>
-            <Button size="sm" variant="secondary" onClick={() => setPreview(null)}>
-              <Icon name="close" size={15} /> Cerrar
+          </label>
+          <Field
+            id="request-due"
+            label="Fecha límite"
+            type="date"
+            value={request.dueDate}
+            onChange={(event) => setRequest({ ...request, dueDate: event.target.value })}
+          />
+          {createRequest.isError ? (
+            <p className="form-error study-inline-form__feedback" role="alert">
+              No se pudo crear el pedido. Revisá los datos e intentá nuevamente.
+            </p>
+          ) : null}
+          <div className="study-inline-form__actions">
+            <Button
+              type="submit"
+              loading={createRequest.isPending}
+              disabled={!request.title.trim() || !request.item.trim()}
+            >
+              Crear pedido
             </Button>
           </div>
+        </form>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={showClose}
+        onClose={() => setShowClose(false)}
+        eyebrow="Control"
+        title="Iniciar cierre del período"
+        description="Definí las verificaciones del ciclo. Cada tarea se completa y queda auditada por separado."
+      >
+        <form
+          className="study-page__form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createClose.mutate();
+          }}
+        >
+          <label className="ds-field" htmlFor="close-items">
+            <span className="ds-field__label">Tareas de cierre</span>
+            <textarea
+              id="close-items"
+              className="study-textarea"
+              rows={5}
+              value={closeItems}
+              onChange={(event) => setCloseItems(event.target.value)}
+              placeholder="Una tarea por línea"
+              required
+            />
+            <small className="study-page__hint">
+              Se crearán {closeItems.split("\n").filter((item) => item.trim()).length} tareas.
+            </small>
+          </label>
+          {!activeFiscalYear ? (
+            <p className="form-error" role="alert">
+              Seleccioná un período contable abierto antes de iniciar el cierre.
+            </p>
+          ) : null}
+          {createClose.isError ? (
+            <p className="form-error" role="alert">
+              {createClose.error.message}
+            </p>
+          ) : null}
+          <div className="study-inline-form__actions">
+            <Button
+              type="submit"
+              loading={createClose.isPending}
+              disabled={!activeFiscalYear || !periodId}
+            >
+              Crear ciclo de cierre
+            </Button>
+          </div>
+        </form>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={Boolean(preview)}
+        onClose={() => setPreview(null)}
+        eyebrow="Evidencia"
+        title="Documento adjunto"
+        description={preview?.originalName ?? "Vista previa de la evidencia asociada al pedido."}
+        size="wide"
+      >
+        {preview ? (
           <div className="evidence-preview">
             {preview.mimeType === "application/pdf" ? (
               <iframe
@@ -513,170 +468,70 @@ export function StudyTrabajo() {
               Abrir en pestaña nueva
             </a>
           </div>
-        </section>
-      ) : null}
-
-      {activeConversation ? (
-        <section
-          className="study-panel study-panel--form"
-          aria-labelledby="request-conversation-title"
-        >
-          <div className="study-panel__heading">
-            <div>
-              <h2 id="request-conversation-title">Conversación del pedido</h2>
-              <p>{activeConversation.title}</p>
-            </div>
-            <Button size="sm" variant="secondary" onClick={() => setActiveConversation(null)}>
-              <Icon name="close" size={15} /> Cerrar
-            </Button>
-          </div>
-          {conversationThread?.messages.length ? (
-            <div className="request-message-list" aria-live="polite">
-              {conversationThread.messages.map((message) => (
-                <div key={message.id} className="request-message-list__item">
-                  <strong>{message.visibility === "SHARED" ? "Compartido" : "Interno"}</strong>
-                  <p>{message.body}</p>
-                  <small>{DATE.format(new Date(message.createdAt))}</small>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="muted-copy">
-              Todavía no hay mensajes. Dejá una instrucción o consulta para el cliente.
-            </p>
-          )}
-          {capabilities.has("message.shared") ? (
-            <form
-              className="study-page__form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                sendMessage.mutate();
-              }}
-            >
-              <label className="ds-field" htmlFor="request-message">
-                <span className="ds-field__label">Mensaje compartido</span>
-                <textarea
-                  id="request-message"
-                  className="study-textarea"
-                  rows={3}
-                  value={messageBody}
-                  onChange={(event) => setMessageBody(event.target.value)}
-                  maxLength={5000}
-                  placeholder="Escribí una instrucción clara para el cliente."
-                />
-              </label>
-              {sendMessage.isError ? (
-                <p className="form-error">{sendMessage.error.message}</p>
-              ) : null}
-              <div className="study-inline-form__actions">
-                <Button
-                  type="submit"
-                  loading={sendMessage.isPending}
-                  disabled={!messageBody.trim()}
-                >
-                  Enviar mensaje
-                </Button>
-              </div>
-            </form>
-          ) : null}
-        </section>
-      ) : null}
-
-      <section className="study-panel work-review" aria-labelledby="entries-review-title">
-        <div className="study-panel__heading">
-          <div>
-            <p className="study-page__eyebrow">Maker–checker</p>
-            <h2 id="entries-review-title">Asientos por revisar</h2>
-            <p>Aprobar y contabilizar son pasos separados para conservar el control.</p>
-          </div>
-          <span className="section-count">{pendingEntries.length}</span>
-        </div>
-        {entries.isLoading ? (
-          <div className="query-state query-state--compact">
-            <span className="loading-copy">Cargando asientos…</span>
-          </div>
-        ) : pendingEntries.length === 0 ? (
-          <EmptyState
-            size="compact"
-            title="No hay asientos pendientes"
-            description="Las nuevas propuestas aparecerán acá cuando sean enviadas a revisión."
-            action={
-              capabilities.has("entry.create") ? (
-                <Button size="sm" variant="secondary" onClick={() => navigate("/contabilidad")}>
-                  Crear asiento
-                </Button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <Table
-            rows={pendingEntries}
-            rowKey={(entry) => entry.id}
-            columns={[
-              {
-                key: "date",
-                header: "Fecha",
-                render: (entry) => DATE.format(new Date(entry.entryDate)),
-              },
-              {
-                key: "description",
-                header: "Descripción",
-                render: (entry) => (
-                  <div className="table-primary">
-                    <strong>{entry.description}</strong>
-                    <small>
-                      {entry.sequenceNumber ? `Asiento #${entry.sequenceNumber}` : "Sin numerar"}
-                    </small>
-                  </div>
-                ),
-              },
-              {
-                key: "status",
-                header: "Estado",
-                render: (entry) => <StatusBadge status={entry.status} />,
-              },
-              {
-                key: "action",
-                header: "Próximo paso",
-                align: "right",
-                render: (entry) =>
-                  entry.status === "IN_REVIEW" && capabilities.has("entry.review") ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      loading={review.isPending}
-                      onClick={() => review.mutate(entry.id)}
-                    >
-                      Aprobar revisión
-                    </Button>
-                  ) : entry.status === "REVIEWED" && capabilities.has("entry.post") ? (
-                    <Button
-                      size="sm"
-                      loading={post.isPending}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "¿Contabilizar este asiento? Después no podrá editarse; cualquier corrección requerirá una reversión.",
-                          )
-                        )
-                          post.mutate(entry);
-                      }}
-                    >
-                      Contabilizar
-                    </Button>
-                  ) : (
-                    <span className="muted-copy">Sin acciones</span>
-                  ),
-              },
-            ]}
-          />
-        )}
-        {review.isError || post.isError ? (
-          <p className="form-error" role="alert">
-            No se pudo completar la acción. Verificá maker-checker, período y versión.
-          </p>
         ) : null}
-      </section>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={Boolean(activeConversation)}
+        onClose={() => setActiveConversation(null)}
+        eyebrow="Pedido documental"
+        title="Conversación"
+        description={activeConversation?.title}
+      >
+        {activeConversation ? (
+          <>
+            {conversationThread?.messages.length ? (
+              <div className="request-message-list" aria-live="polite">
+                {conversationThread.messages.map((message) => (
+                  <div key={message.id} className="request-message-list__item">
+                    <strong>{message.visibility === "SHARED" ? "Compartido" : "Interno"}</strong>
+                    <p>{message.body}</p>
+                    <small>{DATE.format(new Date(message.createdAt))}</small>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted-copy">
+                Todavía no hay mensajes. Dejá una instrucción o consulta para el cliente.
+              </p>
+            )}
+            {capabilities.has("message.shared") ? (
+              <form
+                className="study-page__form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  sendMessage.mutate();
+                }}
+              >
+                <label className="ds-field" htmlFor="request-message">
+                  <span className="ds-field__label">Mensaje compartido</span>
+                  <textarea
+                    id="request-message"
+                    className="study-textarea"
+                    rows={3}
+                    value={messageBody}
+                    onChange={(event) => setMessageBody(event.target.value)}
+                    maxLength={5000}
+                    placeholder="Escribí una instrucción clara para el cliente."
+                  />
+                </label>
+                {sendMessage.isError ? (
+                  <p className="form-error">{sendMessage.error.message}</p>
+                ) : null}
+                <div className="study-inline-form__actions">
+                  <Button
+                    type="submit"
+                    loading={sendMessage.isPending}
+                    disabled={!messageBody.trim()}
+                  >
+                    Enviar mensaje
+                  </Button>
+                </div>
+              </form>
+            ) : null}
+          </>
+        ) : null}
+      </ActionDrawer>
 
       <div className="study-columns work-columns">
         <section className="study-panel">

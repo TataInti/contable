@@ -65,8 +65,11 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   await navigateStudy(page, "Configuración fiscal");
   await expect(page.getByRole("heading", { name: "Onboarding fiscal del cliente" })).toBeVisible();
 
-  await navigateStudy(page, "Contabilidad");
-  await expect(page.getByRole("heading", { name: "Contabilidad" })).toBeVisible();
+  // La contabilidad de asientos quedó fuera de la navegación: la app se enfoca
+  // en el flujo de liquidación fiscal mensual.
+  await expect(
+    page.getByRole("link", { name: "Contabilidad", exact: true }),
+  ).toHaveCount(0);
 
   // G3-10: worklist de liquidaciones (nueva pantalla fiscal).
   await navigateStudy(page, "Liquidaciones");
@@ -78,8 +81,10 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   await navigateStudy(page, "Rentabilidad");
   await expect(page.getByRole("heading", { name: "Rentabilidad" })).toBeVisible();
 
-  await navigateStudy(page, "Reportes y análisis");
-  await expect(page.getByRole("heading", { name: "Reportes y análisis" })).toBeVisible();
+  // Reportes y análisis (BI) tampoco forma parte de la navegación del estudio.
+  await expect(
+    page.getByRole("link", { name: "Reportes y análisis", exact: true }),
+  ).toHaveCount(0);
 
   await navigateStudy(page, "Asistente contable");
   await expect(page.getByRole("heading", { name: "Asistente contable" })).toBeVisible();

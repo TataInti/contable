@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
+import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
@@ -178,7 +179,10 @@ export function StudyClientes() {
         </div>
         {capabilities.has("client.manage") ? (
           <Button
-            onClick={() => setCreating((value) => !value)}
+            onClick={() => {
+              setEditingClient(null);
+              setCreating((value) => !value);
+            }}
             variant={creating ? "secondary" : "primary"}
           >
             <Icon name={creating ? "close" : "plus"} size={17} />
@@ -200,105 +204,98 @@ export function StudyClientes() {
         </div>
       ) : null}
 
-      {creating ? (
-        <section className="study-panel study-panel--form" aria-labelledby="new-client-title">
-          <div className="study-panel__heading">
-            <div>
-              <h2 id="new-client-title">Alta de cliente</h2>
-              <p>Completá los datos fiscales básicos. Podrás configurar el resto después.</p>
-            </div>
-          </div>
-          <form
-            className="study-inline-form study-inline-form--client"
-            onSubmit={(event) => {
-              event.preventDefault();
-              create.mutate();
-            }}
-          >
-            <Field
-              id="client-legal-name"
-              label="Razón social"
-              value={form.legalName}
-              onChange={(event) => setForm({ ...form, legalName: event.target.value })}
-              maxLength={200}
-              required
-            />
-            <Field
-              id="client-trade-name"
-              label="Nombre comercial"
-              value={form.tradeName}
-              onChange={(event) => setForm({ ...form, tradeName: event.target.value })}
-              maxLength={100}
-            />
-            <Field
-              id="client-cuit"
-              label="CUIT"
-              value={form.cuit}
-              onChange={(event) =>
-                setForm({ ...form, cuit: event.target.value.replace(/\D/g, "").slice(0, 11) })
-              }
-              inputMode="numeric"
-              pattern="[0-9]{11}"
-              hint="11 dígitos, sin guiones"
-              required
-            />
-            <Field
-              id="client-province"
-              label="Provincia"
-              value={form.province}
-              onChange={(event) => setForm({ ...form, province: event.target.value })}
-              maxLength={100}
-              placeholder="Opcional"
-            />
-            <Field
-              id="client-activity"
-              label="Actividad principal"
-              value={form.activity}
-              onChange={(event) => setForm({ ...form, activity: event.target.value })}
-              maxLength={200}
-              placeholder="Opcional"
-            />
-            <Field
-              id="client-legal-form"
-              label="Forma jurídica"
-              value={form.legalForm}
-              onChange={(event) => setForm({ ...form, legalForm: event.target.value })}
-              maxLength={100}
-              placeholder="Opcional"
-            />
-            {create.isError ? (
-              <p className="form-error study-inline-form__feedback" role="alert">
-                No se pudo crear el cliente. Revisá el CUIT y los permisos.
-              </p>
-            ) : null}
-            <div className="study-inline-form__actions">
-              <Button
-                type="submit"
-                loading={create.isPending}
-                loadingLabel="Creando cliente"
-                disabled={form.legalName.trim().length < 2 || form.cuit.length !== 11}
-              >
-                Crear cliente
-              </Button>
-            </div>
-          </form>
-        </section>
-      ) : null}
-
-      {editingClient ? (
-        <section className="study-panel study-panel--form" aria-labelledby="edit-client-title">
-          <div className="study-panel__heading">
-            <div>
-              <h2 id="edit-client-title">Ficha operativa · {editingClient.legalName}</h2>
-              <p>
-                Estos datos se usan como base contable y fiscal. Los regímenes y alícuotas se
-                administran en la configuración fiscal.
-              </p>
-            </div>
-            <Button type="button" variant="ghost" onClick={() => setEditingClient(null)}>
-              <Icon name="close" size={16} /> Cerrar
+      <ActionDrawer
+        isOpen={creating}
+        onClose={() => setCreating(false)}
+        eyebrow="Cartera"
+        title="Alta de cliente"
+        description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
+      >
+        <form
+          className="study-inline-form study-inline-form--client"
+          onSubmit={(event) => {
+            event.preventDefault();
+            create.mutate();
+          }}
+        >
+          <Field
+            id="client-legal-name"
+            label="Razón social"
+            value={form.legalName}
+            onChange={(event) => setForm({ ...form, legalName: event.target.value })}
+            maxLength={200}
+            required
+          />
+          <Field
+            id="client-trade-name"
+            label="Nombre comercial"
+            value={form.tradeName}
+            onChange={(event) => setForm({ ...form, tradeName: event.target.value })}
+            maxLength={100}
+          />
+          <Field
+            id="client-cuit"
+            label="CUIT"
+            value={form.cuit}
+            onChange={(event) =>
+              setForm({ ...form, cuit: event.target.value.replace(/\D/g, "").slice(0, 11) })
+            }
+            inputMode="numeric"
+            pattern="[0-9]{11}"
+            hint="11 dígitos, sin guiones"
+            required
+          />
+          <Field
+            id="client-province"
+            label="Provincia"
+            value={form.province}
+            onChange={(event) => setForm({ ...form, province: event.target.value })}
+            maxLength={100}
+            placeholder="Opcional"
+          />
+          <Field
+            id="client-activity"
+            label="Actividad principal"
+            value={form.activity}
+            onChange={(event) => setForm({ ...form, activity: event.target.value })}
+            maxLength={200}
+            placeholder="Opcional"
+          />
+          <Field
+            id="client-legal-form"
+            label="Forma jurídica"
+            value={form.legalForm}
+            onChange={(event) => setForm({ ...form, legalForm: event.target.value })}
+            maxLength={100}
+            placeholder="Opcional"
+          />
+          {create.isError ? (
+            <p className="form-error study-inline-form__feedback" role="alert">
+              No se pudo crear el cliente. Revisá el CUIT y los permisos.
+            </p>
+          ) : null}
+          <div className="study-inline-form__actions">
+            <Button
+              type="submit"
+              loading={create.isPending}
+              loadingLabel="Creando cliente"
+              disabled={form.legalName.trim().length < 2 || form.cuit.length !== 11}
+            >
+              Crear cliente
             </Button>
           </div>
+        </form>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={Boolean(editingClient)}
+        onClose={() => setEditingClient(null)}
+        eyebrow="Ficha operativa"
+        title={editingClient ? editingClient.legalName : "Cliente"}
+        description="Estos datos se usan como base contable y fiscal. Los regímenes y alícuotas se administran en configuración fiscal."
+        size="wide"
+      >
+        {editingClient ? (
           <form
             className="study-inline-form study-inline-form--client"
             onSubmit={(event) => {
@@ -428,8 +425,8 @@ export function StudyClientes() {
               </Button>
             </div>
           </form>
-        </section>
-      ) : null}
+        ) : null}
+      </ActionDrawer>
 
       <section className="study-page__section" aria-labelledby="client-list-title">
         <div className="collection-toolbar">
@@ -476,7 +473,14 @@ export function StudyClientes() {
             }
             action={
               !search && capabilities.has("client.manage") ? (
-                <Button onClick={() => setCreating(true)}>Crear cliente</Button>
+                <Button
+                  onClick={() => {
+                    setEditingClient(null);
+                    setCreating(true);
+                  }}
+                >
+                  Crear cliente
+                </Button>
               ) : undefined
             }
           />

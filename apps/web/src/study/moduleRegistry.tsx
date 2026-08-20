@@ -119,7 +119,7 @@ export const STUDY_MODULES: readonly StudyModule[] = [
     navigationGroup: "Ejecución",
     requiredCapability: "client.read",
     requirements: { firm: true, client: true, period: true },
-    status: "released",
+    status: "not_released",
     component: lazy(() =>
       import("./StudyContabilidad").then((module) => ({ default: module.StudyContabilidad })),
     ),
@@ -173,7 +173,7 @@ export const STUDY_MODULES: readonly StudyModule[] = [
     navigationGroup: "Análisis",
     requiredCapability: "report.run",
     requirements: { firm: true, client: true, period: true },
-    status: "released",
+    status: "not_released",
     component: lazy(() =>
       import("./StudyReportes").then((module) => ({ default: module.StudyReportes })),
     ),

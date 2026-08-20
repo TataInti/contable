@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
+import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
 import "./study.css";
@@ -15,10 +16,29 @@ interface TaxSettlement {
   cutoff: string;
   totals: Record<string, string> | null;
   period: { id: string; label: string | null; startDate: string; endDate: string };
-  regime: { code: string; name: string; taxType: { code: string; name: string }; jurisdiction: { name: string } };
+  regime: {
+    code: string;
+    name: string;
+    taxType: { code: string; name: string };
+    jurisdiction: { name: string };
+  };
 }
-interface TaxPeriod { id: string; taxTypeId: string; startDate: string; endDate: string; label: string | null; taxType: { name: string } }
-interface TaxRegime { id: string; name: string; taxTypeId: string; jurisdictionId: string; taxType: { name: string }; jurisdiction: { name: string } }
+interface TaxPeriod {
+  id: string;
+  taxTypeId: string;
+  startDate: string;
+  endDate: string;
+  label: string | null;
+  taxType: { name: string };
+}
+interface TaxRegime {
+  id: string;
+  name: string;
+  taxTypeId: string;
+  jurisdictionId: string;
+  taxType: { name: string };
+  jurisdiction: { name: string };
+}
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -42,7 +62,10 @@ export function StudyLiquidaciones() {
 
   const listQuery = useQuery({
     queryKey: ["tax-settlements", firmId, clientId, periodId],
-    queryFn: () => api.get<TaxSettlement[]>(`/firms/${firmId}/clients/${clientId}/tax-settlements?accountingPeriodId=${encodeURIComponent(periodId ?? "")}`),
+    queryFn: () =>
+      api.get<TaxSettlement[]>(
+        `/firms/${firmId}/clients/${clientId}/tax-settlements?accountingPeriodId=${encodeURIComponent(periodId ?? "")}`,
+      ),
     enabled: Boolean(firmId && clientId && periodId),
   });
   const taxPeriodsQuery = useQuery({
@@ -70,13 +93,14 @@ export function StudyLiquidaciones() {
   };
 
   const calculateMutation = useMutation({
-    mutationFn: () => api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/calculate`, {
-      taxTypeId: selectedTaxPeriod?.taxTypeId,
-      regimeId: calculation.regimeId,
-      jurisdictionId: selectedRegime?.jurisdictionId,
-      periodId: calculation.periodId,
-      cutoff: calculation.cutoff,
-    }),
+    mutationFn: () =>
+      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/calculate`, {
+        taxTypeId: selectedTaxPeriod?.taxTypeId,
+        regimeId: calculation.regimeId,
+        jurisdictionId: selectedRegime?.jurisdictionId,
+        periodId: calculation.periodId,
+        cutoff: calculation.cutoff,
+      }),
     onSuccess: () => {
       invalidate();
       setShowCalculator(false);
@@ -85,65 +109,311 @@ export function StudyLiquidaciones() {
     },
   });
   const submitMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/submit-review`),
-    onSuccess: () => { invalidate(); setReceipt("La liquidación fue enviada a revisión."); },
+    mutationFn: (id: string) =>
+      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/submit-review`),
+    onSuccess: () => {
+      invalidate();
+      setReceipt("La liquidación fue enviada a revisión.");
+    },
   });
   const reviewMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/review`),
-    onSuccess: () => { invalidate(); setReceipt("La liquidación quedó revisada."); },
+    mutationFn: (id: string) =>
+      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/review`),
+    onSuccess: () => {
+      invalidate();
+      setReceipt("La liquidación quedó revisada.");
+    },
   });
   const finalizeMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/finalize`),
-    onSuccess: () => { invalidate(); setReceipt("La liquidación fue finalizada y quedó inmutable."); },
+    mutationFn: (id: string) =>
+      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/finalize`),
+    onSuccess: () => {
+      invalidate();
+      setReceipt("La liquidación fue finalizada y quedó inmutable.");
+    },
   });
   const rectifyMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/rectify`, { reason: "Rectificación iniciada desde la cartera" }),
-    onSuccess: () => { invalidate(); setReceipt("Se inició una rectificación de la liquidación."); },
+    mutationFn: (id: string) =>
+      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/rectify`, {
+        reason: "Rectificación iniciada desde la cartera",
+      }),
+    onSuccess: () => {
+      invalidate();
+      setReceipt("Se inició una rectificación de la liquidación.");
+    },
   });
   const artifactMutation = useMutation({
-    mutationFn: ({ id, format }: { id: string; format: "csv" | "pdf" }) => api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/artifacts`, { format }),
-    onSuccess: (_, variables) => setReceipt(`Se generó el papel de trabajo en ${variables.format.toUpperCase()}.`),
+    mutationFn: ({ id, format }: { id: string; format: "csv" | "pdf" }) =>
+      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/artifacts`, { format }),
+    onSuccess: (_, variables) =>
+      setReceipt(`Se generó el papel de trabajo en ${variables.format.toUpperCase()}.`),
   });
 
   if (!firmId || !clientId || !periodId) {
-    return <EmptyState title="Elegí un cliente y período" description="La cartera fiscal necesita un cliente y un período contable activos." />;
+    return (
+      <EmptyState
+        title="Elegí un cliente y período"
+        description="La cartera fiscal necesita un cliente y un período contable activos."
+      />
+    );
   }
 
   const data = listQuery.data ?? [];
-  const mutationError = calculateMutation.error ?? submitMutation.error ?? reviewMutation.error ?? finalizeMutation.error ?? rectifyMutation.error ?? artifactMutation.error;
+  const mutationError =
+    calculateMutation.error ??
+    submitMutation.error ??
+    reviewMutation.error ??
+    finalizeMutation.error ??
+    rectifyMutation.error ??
+    artifactMutation.error;
 
   return (
     <section className="study-page" aria-labelledby="liquidaciones-title">
       <header className="study-page__header">
-        <div><p className="study-page__eyebrow">Impuestos</p><h1 id="liquidaciones-title" className="study-page__title">Liquidaciones</h1></div>
-        <span className="study-page__actions">{canCalculate ? <Button onClick={() => setShowCalculator((visible) => !visible)}><Icon name="plus" size={16} /> Calcular liquidación</Button> : null}<Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>Ver expediente</Button></span>
+        <div>
+          <p className="study-page__eyebrow">Impuestos</p>
+          <h1 id="liquidaciones-title" className="study-page__title">
+            Liquidaciones
+          </h1>
+        </div>
+        <span className="study-page__actions">
+          {canCalculate ? (
+            <Button
+              onClick={() => setShowCalculator((visible) => !visible)}
+              variant={showCalculator ? "secondary" : "primary"}
+            >
+              <Icon name={showCalculator ? "close" : "plus"} size={16} />{" "}
+              {showCalculator ? "Cerrar cálculo" : "Calcular liquidación"}
+            </Button>
+          ) : null}
+          <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>
+            Ver expediente
+          </Button>
+        </span>
       </header>
-      <p className="study-page__hint">Cada liquidación conserva su versión, las reglas aplicadas y la evidencia del corte de cálculo.</p>
+      <p className="study-page__hint">
+        Cada liquidación conserva su versión, las reglas aplicadas y la evidencia del corte de
+        cálculo.
+      </p>
 
-      {showCalculator ? <form className="study-panel study-form study-form--compact fiscal-action-form" onSubmit={(event) => { event.preventDefault(); calculateMutation.mutate(); }}>
-        <div className="study-panel__heading"><div><h2>Calcular una liquidación</h2><p>Elegí el período fiscal y el régimen. El cálculo sólo toma documentación aprobada hasta la fecha de corte.</p></div></div>
-        <div className="ds-field"><label className="ds-field__label" htmlFor="settlement-tax-period">Período fiscal</label><select id="settlement-tax-period" className="ds-field__input" value={calculation.periodId} onChange={(event) => setCalculation({ ...calculation, periodId: event.target.value, regimeId: "" })} required><option value="">Seleccioná un período…</option>{taxPeriodsQuery.data?.map((period) => <option key={period.id} value={period.id}>{period.taxType.name} · {taxPeriodLabel(period)}</option>)}</select></div>
-        <div className="ds-field"><label className="ds-field__label" htmlFor="settlement-regime">Régimen</label><select id="settlement-regime" className="ds-field__input" value={calculation.regimeId} onChange={(event) => setCalculation({ ...calculation, regimeId: event.target.value })} required disabled={!calculation.periodId}><option value="">Seleccioná un régimen…</option>{availableRegimes.map((regime) => <option key={regime.id} value={regime.id}>{regime.name} · {regime.jurisdiction.name}</option>)}</select></div>
-        <Field label="Fecha de corte" id="settlement-cutoff" type="date" value={calculation.cutoff} onChange={(event) => setCalculation({ ...calculation, cutoff: event.target.value })} required />
-        <div className="study-form__actions"><Button type="submit" loading={calculateMutation.isPending} disabled={!selectedTaxPeriod || !selectedRegime || !calculation.cutoff}>Calcular</Button><Button type="button" variant="ghost" onClick={() => setShowCalculator(false)}>Cancelar</Button></div>
-      </form> : null}
+      <ActionDrawer
+        isOpen={showCalculator}
+        onClose={() => setShowCalculator(false)}
+        eyebrow="Impuestos"
+        title="Calcular liquidación"
+        description="Elegí el período fiscal y el régimen. El cálculo sólo toma documentación aprobada hasta la fecha de corte."
+      >
+        <form
+          className="study-form study-form--compact fiscal-action-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            calculateMutation.mutate();
+          }}
+        >
+          <div className="ds-field">
+            <label className="ds-field__label" htmlFor="settlement-tax-period">
+              Período fiscal
+            </label>
+            <select
+              id="settlement-tax-period"
+              className="ds-field__input"
+              value={calculation.periodId}
+              onChange={(event) =>
+                setCalculation({ ...calculation, periodId: event.target.value, regimeId: "" })
+              }
+              required
+            >
+              <option value="">Seleccioná un período…</option>
+              {taxPeriodsQuery.data?.map((period) => (
+                <option key={period.id} value={period.id}>
+                  {period.taxType.name} · {taxPeriodLabel(period)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="ds-field">
+            <label className="ds-field__label" htmlFor="settlement-regime">
+              Régimen
+            </label>
+            <select
+              id="settlement-regime"
+              className="ds-field__input"
+              value={calculation.regimeId}
+              onChange={(event) => setCalculation({ ...calculation, regimeId: event.target.value })}
+              required
+              disabled={!calculation.periodId}
+            >
+              <option value="">Seleccioná un régimen…</option>
+              {availableRegimes.map((regime) => (
+                <option key={regime.id} value={regime.id}>
+                  {regime.name} · {regime.jurisdiction.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Field
+            label="Fecha de corte"
+            id="settlement-cutoff"
+            type="date"
+            value={calculation.cutoff}
+            onChange={(event) => setCalculation({ ...calculation, cutoff: event.target.value })}
+            required
+          />
+          <div className="study-form__actions">
+            <Button
+              type="submit"
+              loading={calculateMutation.isPending}
+              disabled={!selectedTaxPeriod || !selectedRegime || !calculation.cutoff}
+            >
+              Calcular
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setShowCalculator(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      </ActionDrawer>
 
-      {receipt ? <div className="action-receipt action-receipt--page" role="status"><Icon name="check" size={19} /><span><strong>Acción completada</strong><small>{receipt}</small></span><button type="button" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}><Icon name="close" size={15} /></button></div> : null}
+      {receipt ? (
+        <div className="action-receipt action-receipt--page" role="status">
+          <Icon name="check" size={19} />
+          <span>
+            <strong>Acción completada</strong>
+            <small>{receipt}</small>
+          </span>
+          <button type="button" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
+            <Icon name="close" size={15} />
+          </button>
+        </div>
+      ) : null}
 
-      {listQuery.isLoading ? <div className="study-state" role="status">Cargando liquidaciones…</div> : listQuery.isError ? <EmptyState title="No se pudieron cargar las liquidaciones" description="Reintentá en unos minutos. No interpretamos esta falla como una cartera vacía." action={<Button variant="secondary" onClick={() => void listQuery.refetch()}>Reintentar</Button>} /> : data.length === 0 ? <EmptyState title="Todavía no hay liquidaciones" description="Iniciá el cálculo para un régimen configurado o prepará la evidencia desde el expediente mensual." action={canCalculate ? <Button onClick={() => setShowCalculator(true)}>Calcular liquidación</Button> : <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>Abrir expediente</Button>} /> : <Table<TaxSettlement>
-        columns={[
-          { key: "period", header: "Período", render: (row) => row.period.label ?? row.period.startDate.slice(0, 10) },
-          { key: "tax", header: "Impuesto", render: (row) => <><strong>{row.regime.taxType.name}</strong><br /><small>{row.regime.name} · {row.regime.jurisdiction.name}</small></> },
-          { key: "version", header: "Versión", render: (row) => `v${row.version}` },
-          { key: "status", header: "Estado", render: (row) => <StatusBadge status={row.status} /> },
-          { key: "total", header: "Total", align: "right", render: (row) => formatMoney(row.totals?.["TOTAL_A_INGRESAR"] ?? row.totals?.totalDue) },
-          { key: "actions", header: "Acciones", render: (row) => <span className="study-table__actions"><Button size="sm" variant="ghost" onClick={() => navigate("/expediente-mensual")}>Expediente</Button>{row.status === "CALCULATED" && capabilities.has("tax.settlements.submit_review") ? <Button size="sm" onClick={() => submitMutation.mutate(row.id)}>Enviar a revisión</Button> : null}{row.status === "IN_REVIEW" && capabilities.has("tax.settlements.review") ? <Button size="sm" onClick={() => reviewMutation.mutate(row.id)}>Revisar</Button> : null}{row.status === "REVIEWED" && capabilities.has("tax.settlements.finalize") ? <Button size="sm" onClick={() => finalizeMutation.mutate(row.id)}>Finalizar</Button> : null}{row.status === "FINALIZED" && capabilities.has("tax.settlements.rectify") ? <Button size="sm" variant="secondary" onClick={() => rectifyMutation.mutate(row.id)}>Rectificar</Button> : null}{row.status === "FINALIZED" && capabilities.has("tax.settlements.export") ? <><Button size="sm" variant="ghost" onClick={() => artifactMutation.mutate({ id: row.id, format: "pdf" })}>PDF</Button><Button size="sm" variant="ghost" onClick={() => artifactMutation.mutate({ id: row.id, format: "csv" })}>CSV</Button></> : null}</span> },
-        ]}
-        rows={data}
-        rowKey={(row) => row.id}
-        empty="Sin liquidaciones."
-      />}
-      {mutationError ? <p className="form-error" role="alert">{mutationError.message}</p> : null}
+      {listQuery.isLoading ? (
+        <div className="study-state" role="status">
+          Cargando liquidaciones…
+        </div>
+      ) : listQuery.isError ? (
+        <EmptyState
+          title="No se pudieron cargar las liquidaciones"
+          description="Reintentá en unos minutos. No interpretamos esta falla como una cartera vacía."
+          action={
+            <Button variant="secondary" onClick={() => void listQuery.refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      ) : data.length === 0 ? (
+        <EmptyState
+          title="Todavía no hay liquidaciones"
+          description="Iniciá el cálculo para un régimen configurado o prepará la evidencia desde el expediente mensual."
+          action={
+            canCalculate ? (
+              <Button onClick={() => setShowCalculator(true)}>Calcular liquidación</Button>
+            ) : (
+              <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>
+                Abrir expediente
+              </Button>
+            )
+          }
+        />
+      ) : (
+        <Table<TaxSettlement>
+          columns={[
+            {
+              key: "period",
+              header: "Período",
+              render: (row) => row.period.label ?? row.period.startDate.slice(0, 10),
+            },
+            {
+              key: "tax",
+              header: "Impuesto",
+              render: (row) => (
+                <>
+                  <strong>{row.regime.taxType.name}</strong>
+                  <br />
+                  <small>
+                    {row.regime.name} · {row.regime.jurisdiction.name}
+                  </small>
+                </>
+              ),
+            },
+            { key: "version", header: "Versión", render: (row) => `v${row.version}` },
+            {
+              key: "status",
+              header: "Estado",
+              render: (row) => <StatusBadge status={row.status} />,
+            },
+            {
+              key: "total",
+              header: "Total",
+              align: "right",
+              render: (row) =>
+                formatMoney(row.totals?.["TOTAL_A_INGRESAR"] ?? row.totals?.totalDue),
+            },
+            {
+              key: "actions",
+              header: "Acciones",
+              render: (row) => (
+                <span className="study-table__actions">
+                  <Button size="sm" variant="ghost" onClick={() => navigate("/expediente-mensual")}>
+                    Expediente
+                  </Button>
+                  {row.status === "CALCULATED" &&
+                  capabilities.has("tax.settlements.submit_review") ? (
+                    <Button size="sm" onClick={() => submitMutation.mutate(row.id)}>
+                      Enviar a revisión
+                    </Button>
+                  ) : null}
+                  {row.status === "IN_REVIEW" && capabilities.has("tax.settlements.review") ? (
+                    <Button size="sm" onClick={() => reviewMutation.mutate(row.id)}>
+                      Revisar
+                    </Button>
+                  ) : null}
+                  {row.status === "REVIEWED" && capabilities.has("tax.settlements.finalize") ? (
+                    <Button size="sm" onClick={() => finalizeMutation.mutate(row.id)}>
+                      Finalizar
+                    </Button>
+                  ) : null}
+                  {row.status === "FINALIZED" && capabilities.has("tax.settlements.rectify") ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => rectifyMutation.mutate(row.id)}
+                    >
+                      Rectificar
+                    </Button>
+                  ) : null}
+                  {row.status === "FINALIZED" && capabilities.has("tax.settlements.export") ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => artifactMutation.mutate({ id: row.id, format: "pdf" })}
+                      >
+                        PDF
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => artifactMutation.mutate({ id: row.id, format: "csv" })}
+                      >
+                        CSV
+                      </Button>
+                    </>
+                  ) : null}
+                </span>
+              ),
+            },
+          ]}
+          rows={data}
+          rowKey={(row) => row.id}
+          empty="Sin liquidaciones."
+        />
+      )}
+      {mutationError ? (
+        <p className="form-error" role="alert">
+          {mutationError.message}
+        </p>
+      ) : null}
     </section>
   );
 }
