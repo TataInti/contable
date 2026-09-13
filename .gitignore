@@ -67,3 +67,6 @@ backups/
 
 # Acceso ssh
 ssh.md
+
+# Carpertas de configuración de herramientas de desarrollo
+desarrollo_ideas/
