@@ -54,6 +54,7 @@ let regimeId = "";
 let jurisdictionId = "";
 let periodId = "";
 let obligationId = "";
+let ruleVersionId = "";
 
 async function setupMembership() {
   for (const [userId, email, name] of [
@@ -102,6 +103,16 @@ async function setupMasters() {
       update: {},
       create: { code: "AR-CM", name: "Nación CM", kind: "NATIONAL" },
     });
+    await tx.jurisdiction.upsert({
+      where: { code: "TUC" },
+      update: {},
+      create: { code: "TUC", name: "Tucumán CM", kind: "PROVINCIAL" },
+    });
+    await tx.jurisdiction.upsert({
+      where: { code: "CBA" },
+      update: {},
+      create: { code: "CBA", name: "Córdoba CM", kind: "PROVINCIAL" },
+    });
     const arca = await tx.taxAuthority.upsert({
       where: { code: "ARCA-CM" },
       update: {},
@@ -138,7 +149,7 @@ async function setupActiveRules(fx: Awaited<ReturnType<typeof setupMasters>>) {
         version: 1,
         status: "ACTIVE",
         validFrom: new Date("2026-01-01"),
-        engineVersion: "ar-iibb-cm-art2-v1.0.0",
+        engineVersion: "ar-iibb-cm-art2-v1.1.0",
         rulesHash: "sha256:cm03-test",
       },
     });
@@ -307,6 +318,8 @@ async function cleanupCM() {
     await tx.$executeRawUnsafe(`DELETE FROM tax_export_artifacts WHERE "clientId" = '${CLIENT_CM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_credit_allocations WHERE "clientId" = '${CLIENT_CM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_credit_ledger_entries WHERE "clientId" = '${CLIENT_CM}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_movements WHERE "clientId" = '${CLIENT_CM}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_lots WHERE "clientId" = '${CLIENT_CM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_differences WHERE "clientId" = '${CLIENT_CM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_settlement_lines WHERE "clientId" = '${CLIENT_CM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM settlement_inputs WHERE "clientId" = '${CLIENT_CM}'`);
@@ -347,13 +360,14 @@ beforeEach(async () => {
   await setupMembership();
   await cleanupCM();
   const fx = await setupMasters();
-  await setupActiveRules(fx);
+  const rules = await setupActiveRules(fx);
   const { period, obligation } = await setupSettlementContext(fx);
   jurisdictionId = fx.nacion.id;
   taxTypeId = fx.iibb.id;
   regimeId = fx.regime.id;
   periodId = period.id;
   obligationId = obligation.id;
+  ruleVersionId = rules.version.id;
 });
 
 describe("Fase 4.3 — CM03 artículo 2: cálculo", () => {
@@ -362,7 +376,7 @@ describe("Fase 4.3 — CM03 artículo 2: cálculo", () => {
     const result = await settlements.calculate(ctxOwner, calculateParams());
     const s = result.settlement;
     expect(s.status).toBe("CALCULATED");
-    expect(s.engineVersion).toBe("ar-iibb-cm-art2-v1.0.0");
+    expect(s.engineVersion).toBe("ar-iibb-cm-art2-v1.1.0");
     const totals = s.totals as Record<string, string>;
     expect(totals["BASE_PAIS"]).toBe("150000.00");
     // TUC: 150000 × 0.6 = 90000 × 4% = 3600; CBA: 150000 × 0.4 = 60000 × 3.5% = 2100
@@ -370,10 +384,33 @@ describe("Fase 4.3 — CM03 artículo 2: cálculo", () => {
     expect(totals["TOTAL_A_INGRESAR"]).toBe("5700.00");
   });
 
+  it("prioriza los coeficientes CM03 congelados por el expediente", async () => {
+    const { v1, v2 } = await createApprovedVouchersWithLines();
+    const result = await settlements.calculate(ctxOwner, {
+      ...calculateParams(),
+      sourceScope: {
+        voucherIds: [v1.id, v2.id],
+        withholdingIds: [],
+        perceptionIds: [],
+        f931RunIds: [],
+        classifications: [],
+        cm03Coefficients: [
+          { sourceId: "coef-tuc", jurisdiction: "TUC", coefficient: "0.2" },
+          { sourceId: "coef-cba", jurisdiction: "CBA", coefficient: "0.8" },
+        ],
+      },
+    });
+    const totals = result.settlement.totals as Record<string, string>;
+    // TUC: 30k × 4% = 1200; CBA: 120k × 3,5% = 4200.
+    expect(totals["IMPUESTO_POR_JURISDICCION"]).toBe("5400.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("5400.00");
+    expect(result.inputs.filter((item) => item.kind === "CM03_COEFFICIENT")).toHaveLength(2);
+  });
+
   it("bloquea si los coeficientes no suman 1", async () => {
     // Reescribir coeficientes para que sumen 0.9 (inválido).
     await prisma.taxRateRule.updateMany({
-      where: { concept: "COEF_CBA" },
+      where: { ruleVersionId, concept: "COEF_CBA" },
       data: { rate: new Prisma.Decimal("0.3") },
     });
     await createApprovedVouchersWithLines();
@@ -440,9 +477,11 @@ describe("Fase 4.3 — CM03 artículo 2: cálculo", () => {
     const result = await settlements.calculate(ctxOwner, calculateParams());
     const totals = result.settlement.totals as Record<string, string>;
     expect(totals["SALDO_ANTERIOR"]).toBe("6000.00");
-    // 5700 - 6000 = -300 → saldo a favor
-    expect(totals["TOTAL_A_INGRESAR"]).toBe("0.00");
-    expect(totals["SALDO_A_FAVOR"]).toBe("300.00");
+    // El fallback legacy se asigna a TUC (mayor coeficiente): queda saldo TUC
+    // por 2400, mientras CBA conserva su deuda independiente de 2100.
+    expect(totals["SALDO_ANTERIOR_TUC"]).toBe("6000.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("2100.00");
+    expect(totals["SALDO_A_FAVOR"]).toBe("2400.00");
   });
 
   it("V-004: reejecutar produce mismo hash", async () => {
@@ -495,6 +534,66 @@ describe("Fase 4.3 — CM03 artículo 2: cálculo", () => {
 });
 
 describe("Fase 4.3 — CM03 artículo 2: workflow maker-checker", () => {
+  it("arrastra y consume el saldo de cada jurisdicción sin compensación cruzada", async () => {
+    await createApprovedVouchersWithLines();
+    const jurisdictions = await prisma.jurisdiction.findMany({
+      where: { code: { in: ["TUC", "CBA"] } },
+    });
+    const jurisdictionByCode = new Map(jurisdictions.map((item) => [item.code, item.id]));
+    const tucId = jurisdictionByCode.get("TUC");
+    const cbaId = jurisdictionByCode.get("CBA");
+    expect(tucId).toBeTruthy();
+    expect(cbaId).toBeTruthy();
+
+    const openingLot = await prisma.taxCreditLot.create({
+      data: {
+        firmId: FIRM_CM,
+        clientId: CLIENT_CM,
+        taxTypeId,
+        regimeId,
+        jurisdictionId: tucId!,
+        periodId,
+        kind: "SALDO_A_FAVOR",
+        originalAmount: new Prisma.Decimal("6000"),
+        reference: "Saldo inicial TUC",
+        // B1 (§3.1): el fixture simula un saldo ya verificado por un revisor.
+        verificationStatus: "VERIFIED",
+        verifiedByUserId: REVIEWER_CM,
+        verifiedAt: new Date(),
+        createdByUserId: OWNER_CM,
+      },
+    });
+
+    const { settlement } = await settlements.calculate(ctxPreparer, calculateParams());
+    const totals = settlement.totals as Record<string, string>;
+    expect(totals["SALDO_ANTERIOR_TUC"]).toBe("6000.00");
+    expect(totals["TOTAL_A_INGRESAR_TUC"]).toBe("0.00");
+    expect(totals["SALDO_A_FAVOR_TUC"]).toBe("2400.00");
+    expect(totals["TOTAL_A_INGRESAR_CBA"]).toBe("2100.00");
+
+    await settlements.submitReview(ctxPreparer, settlement.id);
+    await settlements.review(ctxReviewer, settlement.id);
+    await settlements.finalize(ctxReviewer, settlement.id);
+
+    const closingLots = await prisma.taxCreditLot.findMany({
+      where: { sourceSettlementId: settlement.id, kind: "SALDO_A_FAVOR" },
+    });
+    expect(closingLots).toHaveLength(2);
+    expect(
+      Object.fromEntries(
+        closingLots.map((lot) => [
+          lot.jurisdictionId === tucId ? "TUC" : lot.jurisdictionId === cbaId ? "CBA" : "UNKNOWN",
+          lot.originalAmount.toFixed(2),
+        ]),
+      ),
+    ).toEqual({ CBA: "0.00", TUC: "2400.00" });
+
+    const consumedOpening = await prisma.taxCreditMovement.findFirst({
+      where: { lotId: openingLot.id, settlementId: settlement.id, kind: "ROLLED_FORWARD" },
+    });
+    expect(consumedOpening?.amount.toFixed(2)).toBe("6000.00");
+  });
+
   it("submit → review → finalize con revisor distinto", async () => {
     await createApprovedVouchersWithLines();
     const { settlement } = await settlements.calculate(ctxPreparer, calculateParams());

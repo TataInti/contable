@@ -12,6 +12,7 @@ import {
   PortalPageHeader,
   PortalRetryButton,
 } from "./PortalUI";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./portal.css";
 
 interface Thread {
@@ -60,6 +61,9 @@ export function PortalMensajes() {
   const threads = (query.data ?? []).flatMap((request) =>
     request.threads.map((thread) => ({ ...thread, requestTitle: request.title })),
   );
+  const latestMessage = threads
+    .flatMap((thread) => thread.messages.map((message) => ({ ...message, requestTitle: thread.requestTitle })))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
   return (
     <div className="portal-page portal-page--messages">
@@ -93,7 +97,30 @@ export function PortalMensajes() {
           }
         />
       ) : (
-        <div className="portal-threads">
+        <>
+          <SectionIndex items={[{ id: "messages-next-step-title", label: "Resumen" }, { id: "portal-conversations", label: "Conversaciones", meta: String(threads.length) }]} />
+          <section className="portal-guidance" aria-labelledby="messages-next-step-title">
+            <div className="portal-guidance__context">
+              <span className="portal-guidance__icon" aria-hidden="true">
+                <Icon name="message" size={19} />
+              </span>
+              <div>
+                <p className="portal-guidance__eyebrow">Última novedad</p>
+                <p>
+                  {latestMessage
+                    ? `${latestMessage.requestTitle} · ${formatPortalDate(latestMessage.createdAt, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`
+                    : "Hay conversaciones abiertas, todavía sin mensajes."}
+                </p>
+              </div>
+            </div>
+            <div className="portal-guidance__next">
+              <div>
+                <p className="portal-guidance__eyebrow">Próximo paso</p>
+                <h2 id="messages-next-step-title">Respondé sólo si tu estudio necesita una precisión</h2>
+              </div>
+            </div>
+          </section>
+          <div className="portal-threads" id="portal-conversations">
           {threads.map((thread) => {
             const draft = drafts[thread.id] ?? "";
             const sendingThisThread = send.isPending && send.variables?.threadId === thread.id;
@@ -198,7 +225,8 @@ export function PortalMensajes() {
               </section>
             );
           })}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

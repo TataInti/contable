@@ -397,6 +397,9 @@ describe("trabajo (integración DB)", () => {
     });
     expect(request.status).toBe("DRAFT");
 
+    // B3 (§5.1): enviar antes de adjuntar (DRAFT no admite adjuntos).
+    await work.sendRequest(ctxOwner, request.id);
+
     // Adjuntar un documento a un ítem (documento dummy)
     const doc = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
       tx.document.create({
@@ -409,17 +412,17 @@ describe("trabajo (integración DB)", () => {
     );
     await work.attachDocument(ctxOwner, request.id, request.items[0]!.id, doc.id);
 
-    // Aún no completo (falta el segundo ítem)
+    // Aún no listo para revisión (falta el segundo ítem)
     const partial = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
       tx.documentRequest.findUnique({ where: { id: request.id } }),
     );
-    expect(partial?.status).toBe("DRAFT");
+    expect(partial?.status).toBe("IN_PROGRESS");
 
     await work.attachDocument(ctxOwner, request.id, request.items[1]!.id, doc.id);
     const complete = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
       tx.documentRequest.findUnique({ where: { id: request.id } }),
     );
-    expect(complete?.status).toBe("COMPLETED");
+    expect(complete?.status).toBe("READY_FOR_REVIEW");
   });
 
   it("nota interna no cambia a compartida sin confirmación (W-004)", async () => {

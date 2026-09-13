@@ -6,6 +6,7 @@ import { api, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { StatusBadge } from "../ui/StatusBadge";
+import { SectionIndex } from "../ui/SectionIndex";
 import { Icon, type IconName } from "../ui/Icon";
 import "./study.css";
 
@@ -210,6 +211,14 @@ export function StudyDashboard() {
           )}
         </div>
       </div>
+
+      <SectionIndex
+        items={[
+          { id: "dashboard-focus-title", label: "Mesa de trabajo", meta: String(attentionTotal) },
+          { id: "risk-portfolio-title", label: "Liquidaciones en curso", meta: String(worklist.length) },
+          { id: "portfolio-overview-title", label: "Panorama general" },
+        ]}
+      />
 
       {!canReadDashboard ? (
         <EmptyState

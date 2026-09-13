@@ -27,7 +27,8 @@ import {
  * - Regímenes especiales quedan bloqueados (NO SOPORTADO).
  */
 
-export const CM03_ENGINE_VERSION = "ar-iibb-cm-art2-v1.0.0";
+export const CM03_LEGACY_ENGINE_VERSION = "ar-iibb-cm-art2-v1.0.0";
+export const CM03_ENGINE_VERSION = "ar-iibb-cm-art2-v1.1.0";
 
 export interface Cm03Input extends TaxEngineInput {
   /** Base país por actividad (código → neto gravado). */
@@ -49,6 +50,11 @@ export interface Cm03Input extends TaxEngineInput {
 }
 
 export function calculateCm03(input: Cm03Input): TaxEngineResult {
+  const engineVersion =
+    input.engineVersion === CM03_LEGACY_ENGINE_VERSION
+      ? CM03_LEGACY_ENGINE_VERSION
+      : CM03_ENGINE_VERSION;
+  const strict = engineVersion === CM03_ENGINE_VERSION;
   const rounding = input.rounding ?? {};
   const rules = new Map(input.rules.map((r) => [r.concept, r]));
   const lines: TaxEngineResult["lines"] = [];
@@ -66,7 +72,9 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
   }
 
   // --- Coeficientes: validar suma = 1 ---
-  const coeffEntries = Object.entries(input.coefficients);
+  const coeffEntries = Object.entries(input.coefficients).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
   if (coeffEntries.length === 0) {
     blocks.push("No se declararon coeficientes por jurisdicción");
   }
@@ -91,7 +99,9 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
     const rule = rules.get(jurisdiction);
     const rate = rule?.rate !== undefined ? rule.rate : rules.get("DEFAULT")?.rate;
     if (rate === undefined) {
-      warnings.push(`Jurisdicción ${jurisdiction} sin alícuota configurada; se omitió`);
+      const message = `Jurisdicción ${jurisdiction} sin alícuota configurada; se omitió`;
+      if (strict) blocks.push(message);
+      else warnings.push(message);
       continue;
     }
     const tax = applyRate(base, rate);
@@ -117,6 +127,9 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
   let totalWithholding = dec(0);
   let totalPerception = dec(0);
   let totalPrevious = dec(0);
+  let netDue = dec(0);
+  let remainingCredit = dec(0);
+  const remainingByJurisdiction: Record<string, DecimalValue> = {};
   for (const line of jurisdictionLines) {
     const w = withholdingByJurisdiction[line.jurisdiction] ?? dec(0);
     const p = perceptionByJurisdiction[line.jurisdiction] ?? dec(0);
@@ -125,19 +138,29 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
     totalWithholding = totalWithholding.plus(w);
     totalPerception = totalPerception.plus(p);
     totalPrevious = totalPrevious.plus(prev);
+    subtotals[`SALDO_ANTERIOR_${line.jurisdiction}`] = fmtMoney(
+      roundFor(prev, "saldos", rounding.saldos),
+    );
+    const jurisdictionNet = line.tax.minus(w).minus(p).minus(prev);
+    const jurisdictionDue = jurisdictionNet.isPositive() ? jurisdictionNet : dec(0);
+    const jurisdictionCredit = jurisdictionNet.isNegative() ? jurisdictionNet.abs() : dec(0);
+    netDue = netDue.plus(jurisdictionDue);
+    remainingCredit = remainingCredit.plus(jurisdictionCredit);
+    remainingByJurisdiction[line.jurisdiction] = jurisdictionCredit;
+    subtotals[`TOTAL_A_INGRESAR_${line.jurisdiction}`] = fmtMoney(
+      roundFor(jurisdictionDue, "total", rounding.total),
+    );
+    subtotals[`SALDO_A_FAVOR_${line.jurisdiction}`] = fmtMoney(
+      roundFor(jurisdictionCredit, "saldos", rounding.saldos),
+    );
   }
   subtotals["RETENCIONES"] = fmtMoney(roundFor(totalWithholding, "retenciones", rounding.retenciones));
   subtotals["PERCEPCIONES"] = fmtMoney(roundFor(totalPerception, "percepciones", rounding.percepciones));
   subtotals["SALDO_ANTERIOR"] = fmtMoney(roundFor(totalPrevious, "saldos", rounding.saldos));
 
   // --- Determinación ---
-  const deductions = totalWithholding.plus(totalPerception).plus(totalPrevious);
-  let netDue = totalByRate.minus(deductions);
-  let remainingCredit = dec(0);
-  if (netDue.isNegative()) {
-    remainingCredit = netDue.abs();
-    netDue = dec(0);
-  }
+  // Cada jurisdicción se determina de forma independiente. Un crédito en una
+  // provincia nunca compensa deuda de otra dentro del motor CM03.
   subtotals["TOTAL_A_INGRESAR"] = fmtMoney(roundFor(netDue, "total", rounding.total));
   subtotals["SALDO_A_FAVOR"] = fmtMoney(roundFor(remainingCredit, "saldos", rounding.saldos));
 
@@ -148,6 +171,17 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
       formula: `base(${fmtMoney(line.base)}) × alícuota ${line.rate} = ${fmtMoney(line.tax)}`,
       inputs: { jurisdiction: line.jurisdiction, base: fmtMoney(line.base), rate: line.rate.toString(), tax: fmtMoney(line.tax) },
       result: fmtMoney(line.tax),
+    });
+    lines.push({
+      concept: `RESULTADO_JURISDICCION_${line.jurisdiction}`,
+      formula: "impuesto − retenciones − percepciones − saldo anterior",
+      inputs: {
+        jurisdiction: line.jurisdiction,
+        withholding: fmtMoney(withholdingByJurisdiction[line.jurisdiction] ?? dec(0)),
+        perception: fmtMoney(perceptionByJurisdiction[line.jurisdiction] ?? dec(0)),
+        previousCredit: fmtMoney(dec(previousCreditByJurisdiction[line.jurisdiction] ?? "0")),
+      },
+      result: subtotals[`TOTAL_A_INGRESAR_${line.jurisdiction}`]!,
     });
   }
   for (const [concept, value] of [
@@ -164,7 +198,7 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
 
   // --- Hashes (V-004 / determinismo) ---
   const inputHash = taxHash({
-    engineVersion: CM03_ENGINE_VERSION,
+    engineVersion,
     period: input.period,
     incomeByActivity: input.incomeByActivity,
     coefficients: input.coefficients,
@@ -177,17 +211,33 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
     lines: lines.map((l) => ({ concept: l.concept, result: l.result })),
     subtotals,
     totalDue: fmtMoney(roundFor(netDue, "total", rounding.total)),
-    credits: { remaining: fmtMoney(remainingCredit) },
+    credits: {
+      remaining: fmtMoney(remainingCredit),
+      ...Object.fromEntries(
+        Object.entries(remainingByJurisdiction).map(([jurisdiction, amount]) => [
+          jurisdiction,
+          fmtMoney(amount),
+        ]),
+      ),
+    },
     warnings,
     blocks,
   });
 
   return {
-    engineVersion: CM03_ENGINE_VERSION,
+    engineVersion,
     lines,
     subtotals,
     totalDue: fmtMoney(roundFor(netDue, "total", rounding.total)),
-    credits: { remaining: fmtMoney(remainingCredit) },
+    credits: {
+      remaining: fmtMoney(remainingCredit),
+      ...Object.fromEntries(
+        Object.entries(remainingByJurisdiction).map(([jurisdiction, amount]) => [
+          jurisdiction,
+          fmtMoney(amount),
+        ]),
+      ),
+    },
     warnings,
     blocks,
     inputHash,

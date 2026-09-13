@@ -11,11 +11,14 @@
  *     totales por período para comparación manual del contador (G6-02).
  *
  * Uso:
- *   npx tsx src/seed-corrida-piloto.ts [--periodos 3]
+ *   npx tsx src/seed-corrida-piloto.ts --dry-run
+ *   npx tsx src/seed-corrida-piloto.ts --client-id <id> --periodos 1 --confirm-write
  *
  * Esto NO crea clientes nuevos: usa los clientes de la firma piloto
  * (seed-demo/seed-fase2) con perfil fiscal ACTIVE. Es idempotente (una
  * liquidación FINALIZED no se recalcula; filas ya comiteadas no se duplican).
+ * La escritura exige `--confirm-write` para evitar crear liquidaciones
+ * históricas por accidente. `--dry-run` nunca modifica la base.
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "./lib/prisma.js";
@@ -26,16 +29,61 @@ import { SettlementService } from "./tax/settlement-service.js";
 const FIRM_ID = "dddddddd-dddd-4ddd-8ddd-ddddddddd001"; // firma demo del seed
 const OWNER_ID = "11111111-1111-4111-8111-111111111111"; // owner demo del seed
 
-// Períodos históricos recientes (cerrados, para no pisar el corriente).
+// Períodos históricos recientes (cerrados, para no pisar el corriente) y
+// cubiertos por las versiones normativas del seed fiscal (vigentes desde 2026).
 const PERIODOS_HISTORICOS = [
-  { start: "2025-10-01", end: "2025-10-31", label: "Octubre 2025", cutoff: "2025-10-31" },
-  { start: "2025-11-01", end: "2025-11-30", label: "Noviembre 2025", cutoff: "2025-11-30" },
-  { start: "2025-12-01", end: "2025-12-31", label: "Diciembre 2025", cutoff: "2025-12-31" },
+  { start: "2026-01-01", end: "2026-01-31", label: "Enero 2026", cutoff: "2026-01-31" },
+  { start: "2026-02-01", end: "2026-02-28", label: "Febrero 2026", cutoff: "2026-02-28" },
+  { start: "2026-03-01", end: "2026-03-31", label: "Marzo 2026", cutoff: "2026-03-31" },
 ];
 
 // Offset por mes para que los puntos de venta/números no colisionen entre
 // períodos del mismo cliente (dedupe por período + número).
-const MES_OFFSET: Record<string, number> = { "10": 0, "11": 100, "12": 200 };
+const MES_OFFSET: Record<string, number> = { "01": 0, "02": 100, "03": 200 };
+
+interface CorridaOptions {
+  periodos: number;
+  clientId?: string;
+  reportPath?: string;
+  dryRun: boolean;
+  confirmWrite: boolean;
+}
+
+function parseOptions(argv: string[]): CorridaOptions {
+  const valueAfter = (flag: string): string | undefined => {
+    const index = argv.indexOf(flag);
+    const value = index >= 0 ? argv[index + 1] : undefined;
+    return value && !value.startsWith("--") ? value : undefined;
+  };
+
+  const periodosRaw = valueAfter("--periodos");
+  if (argv.includes("--periodos") && !periodosRaw) {
+    throw new Error("--periodos requiere un valor");
+  }
+  const periodos = periodosRaw === undefined ? PERIODOS_HISTORICOS.length : Number(periodosRaw);
+  if (!Number.isInteger(periodos) || periodos < 1 || periodos > PERIODOS_HISTORICOS.length) {
+    throw new Error(`--periodos debe ser un entero entre 1 y ${PERIODOS_HISTORICOS.length}`);
+  }
+
+  const clientId = valueAfter("--client-id");
+  if (argv.includes("--client-id") && !clientId) {
+    throw new Error("--client-id requiere un valor");
+  }
+
+  const reportPath = valueAfter("--report-path");
+  if (argv.includes("--report-path") && !reportPath) {
+    throw new Error("--report-path requiere un valor");
+  }
+
+  const options: CorridaOptions = {
+    periodos,
+    dryRun: argv.includes("--dry-run"),
+    confirmWrite: argv.includes("--confirm-write"),
+  };
+  if (clientId) options.clientId = clientId;
+  if (reportPath) options.reportPath = reportPath;
+  return options;
+}
 
 function fmt(amount: Prisma.Decimal | string | undefined | null): string {
   if (amount === undefined || amount === null) return "—";
@@ -44,8 +92,17 @@ function fmt(amount: Prisma.Decimal | string | undefined | null): string {
 }
 
 async function main() {
+  const options = parseOptions(process.argv.slice(2));
+  if (!options.dryRun && !options.confirmWrite) {
+    throw new Error(
+      "La corrida histórica escribe liquidaciones persistentes. " +
+        "Usá --dry-run para inspeccionar o --confirm-write para autorizar la escritura.",
+    );
+  }
+
   const ingestion = new IngestionService();
   const settlements = new SettlementService();
+  const periodos = PERIODOS_HISTORICOS.slice(0, options.periodos);
 
   const ctx = { userId: OWNER_ID, firmId: FIRM_ID, actorKind: "USER" as const };
   const iva = await prisma.taxType.findUnique({ where: { code: "IVA" } });
@@ -55,11 +112,59 @@ async function main() {
     throw new Error("Faltan maestros fiscales. Corré primero: npx tsx src/seed-maestros-fiscales.ts");
   }
 
+  const pack = await prisma.taxRulePack.findFirst({ where: { regimeId: ri.id } });
+  if (!pack) {
+    throw new Error("Falta el rule pack de IVA/RI. Corré primero: npx tsx src/seed-maestros-fiscales.ts");
+  }
+  const cobertura = await Promise.all(
+    periodos.map(async (periodo) => {
+      const version = await prisma.taxRuleVersion.findFirst({
+        where: {
+          packId: pack.id,
+          status: { in: ["ACTIVE", "RETIRED"] },
+          validFrom: { lte: new Date(periodo.start) },
+          OR: [{ validTo: null }, { validTo: { gte: new Date(periodo.end) } }],
+        },
+        orderBy: [{ validFrom: "desc" }, { version: "desc" }],
+        select: { version: true, validFrom: true, validTo: true },
+      });
+      return { periodo, version };
+    }),
+  );
+  const faltantes = cobertura.filter(({ version }) => !version);
+  if (faltantes.length > 0 && !options.dryRun) {
+    throw new Error(
+      `No hay versiones normativas de IVA/RI para: ${faltantes.map(({ periodo }) => periodo.label).join(", ")}. ` +
+        "Activá una versión histórica aprobada antes de escribir.",
+    );
+  }
+
   // Clientes de la firma piloto; se asegura un perfil fiscal ACTIVE para
   // cada uno (idempotente: si ya existe ACTIVE, se reutiliza).
-  const clientes = await prisma.client.findMany({ where: { firmId: FIRM_ID } });
+  const clientes = await prisma.client.findMany({
+    where: { firmId: FIRM_ID, ...(options.clientId ? { id: options.clientId } : {}) },
+    orderBy: { legalName: "asc" },
+  });
   if (clientes.length === 0) {
-    throw new Error(`No hay clientes en la firma piloto ${FIRM_ID}. Corré seed-demo primero.`);
+    throw new Error(
+      options.clientId
+        ? `No existe el cliente ${options.clientId} en la firma piloto ${FIRM_ID}.`
+        : `No hay clientes en la firma piloto ${FIRM_ID}. Corré seed-demo primero.`,
+    );
+  }
+
+  if (options.dryRun) {
+    console.log("Corrida histórica en modo dry-run: no se modificarán datos.");
+    console.log(`Firma: ${FIRM_ID}`);
+    console.log(`Clientes: ${clientes.length}`);
+    console.log(`Períodos: ${periodos.map((periodo) => periodo.label).join(", ")}`);
+    for (const { periodo, version } of cobertura) {
+      console.log(`  - ${periodo.label}: ${version ? `regla v${version.version}` : "SIN COBERTURA NORMATIVA"}`);
+    }
+    for (const cliente of clientes) {
+      console.log(`  - ${cliente.id} | ${cliente.legalName} | ${cliente.cuit}`);
+    }
+    return;
   }
 
   for (const cliente of clientes) {
@@ -136,7 +241,7 @@ async function main() {
       continue;
     }
 
-    for (const per of PERIODOS_HISTORICOS) {
+    for (const per of periodos) {
       // Período (idempotente).
       const period = await prisma.taxPeriod.upsert({
         where: { id: `his-${cliente.id}-${per.start.slice(0, 7)}` },
@@ -296,7 +401,7 @@ async function main() {
 
 ## Resumen
 - Clientes: ${clientes.length}
-- Períodos por cliente: ${PERIODOS_HISTORICOS.length}
+- Períodos por cliente: ${periodos.length}
 - Liquidaciones finalizadas nuevas: ${finalizadas}
 
 | Cliente | Período | Total a ingresar | InputHash | OutputHash |
@@ -313,10 +418,10 @@ ${report.map((r) => `| ${r.cliente} | ${r.periodo} | ${r.total} | ${r.inputHash}
   for (let i = 0; i < 6 && !fs.existsSync(path.join(root, "PLAN_DESARROLLO_CONTABLE.md")); i++) {
     root = path.dirname(root);
   }
-  const docsDir = path.join(root, "docs/piloto");
-  fs.mkdirSync(docsDir, { recursive: true });
-  fs.writeFileSync(path.join(docsDir, "g6-corrida-historica.md"), out, "utf8");
-  console.log(`\nReporte: ${path.join(docsDir, "g6-corrida-historica.md")} (${clientes.length} clientes, ${finalizadas} finalizadas nuevas)`);
+  const reportPath = options.reportPath ?? path.join(root, "docs/piloto/g6-corrida-historica.md");
+  fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+  fs.writeFileSync(reportPath, out, "utf8");
+  console.log(`\nReporte: ${reportPath} (${clientes.length} clientes, ${finalizadas} finalizadas nuevas)`);
 }
 
 main().catch((err) => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -87,6 +87,8 @@ export function StudyReglasFiscales() {
   const [showPackForm, setShowPackForm] = useState(false);
   const [showSourceForm, setShowSourceForm] = useState(false);
   const [showDueDateForm, setShowDueDateForm] = useState(false);
+  const [showInitialVersionForm, setShowInitialVersionForm] = useState(false);
+  const [showCloneForm, setShowCloneForm] = useState(false);
   const [newPack, setNewPack] = useState({ code: "", name: "", regimeId: "" });
   const [engineVersion, setEngineVersion] = useState("tax-engine-v1");
   const [newSource, setNewSource] = useState({
@@ -148,6 +150,7 @@ export function StudyReglasFiscales() {
     mutationFn: () => api.post(`/tax/rule-packs/${selectedPackId}/versions/clone`, { validFrom }),
     onSuccess: () => {
       invalidate();
+      setShowCloneForm(false);
       setReceipt("Se creó un borrador independiente a partir de la versión vigente.");
     },
   });
@@ -175,6 +178,7 @@ export function StudyReglasFiscales() {
       }),
     onSuccess: () => {
       invalidate();
+      setShowInitialVersionForm(false);
       setReceipt("La primera versión quedó abierta como borrador.");
     },
   });
@@ -271,6 +275,33 @@ export function StudyReglasFiscales() {
     activateMutation.error ??
     addSourceMutation.error ??
     addDueDateMutation.error;
+  const canPropose = capabilities.has("tax.rules.propose");
+  const rulesNextAction = (() => {
+    if (!selectedPackId) {
+      return canPropose
+        ? { label: "Crear paquete", description: "Definí el régimen sobre el que vas a configurar reglas.", onClick: () => setShowPackForm(true) }
+        : null;
+    }
+    if (detailQuery.data && !selectedVersion) {
+      return canPropose
+        ? { label: "Crear primera versión", description: "Abrí un borrador para cargar alícuotas, vencimientos y fuentes.", onClick: () => setShowInitialVersionForm(true) }
+        : null;
+    }
+    if (!selectedVersion) return null;
+    if (selectedVersion.status === "DRAFT" && canPropose) {
+      return { label: "Editar borrador", description: "Revisá las reglas y guardá los cambios antes de enviarlo a revisión.", onClick: () => document.getElementById("rule-rates-title")?.scrollIntoView({ behavior: "smooth", block: "start" }) };
+    }
+    if (selectedVersion.status === "IN_REVIEW" && capabilities.has("tax.rules.approve")) {
+      return { label: "Revisar y aprobar", description: "Seleccioná la matrícula profesional para aprobar esta versión.", onClick: () => document.getElementById("rule-approval")?.scrollIntoView({ behavior: "smooth", block: "start" }) };
+    }
+    if (selectedVersion.status === "APPROVED" && capabilities.has("tax.rules.activate")) {
+      return { label: "Activar versión", description: "La versión aprobada quedará disponible para los próximos cálculos.", onClick: () => activateMutation.mutate() };
+    }
+    if (selectedVersion.status !== "DRAFT" && canPropose) {
+      return { label: "Crear borrador", description: "Partí de esta versión para preparar una nueva vigencia sin alterar la actual.", onClick: () => setShowCloneForm(true) };
+    }
+    return null;
+  })();
 
   return (
     <section className="study-page study-page--wide" aria-labelledby="tax-rules-title">
@@ -284,7 +315,7 @@ export function StudyReglasFiscales() {
             Alícuotas, mínimos y porcentajes normativos con vigencia y aprobación profesional.
           </p>
         </div>
-        {capabilities.has("tax.rules.propose") ? (
+        {canPropose ? (
           <Button onClick={() => setShowPackForm((visible) => !visible)}>
             <Icon name={showPackForm ? "close" : "plus"} size={16} />{" "}
             {showPackForm ? "Cerrar alta" : "Nuevo paquete"}
@@ -476,6 +507,79 @@ export function StudyReglasFiscales() {
         </form>
       </ActionDrawer>
 
+      <ActionDrawer
+        isOpen={showInitialVersionForm && Boolean(detailQuery.data) && !selectedVersion}
+        onClose={() => setShowInitialVersionForm(false)}
+        eyebrow="Reglas fiscales"
+        title="Crear primera versión"
+        description="Abrí un borrador para cargar alícuotas, vencimientos y las fuentes que respaldan el cálculo."
+      >
+        <form
+          className="study-form study-form--compact fiscal-action-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createVersionMutation.mutate();
+          }}
+        >
+          <Field
+            label="Vigencia desde"
+            id="first-rule-version-valid-from"
+            type="date"
+            value={validFrom}
+            onChange={(event) => setValidFrom(event.target.value)}
+            required
+          />
+          <Field
+            label="Versión del motor"
+            id="first-rule-version-engine"
+            value={engineVersion}
+            onChange={(event) => setEngineVersion(event.target.value)}
+            required
+          />
+          <div className="study-form__actions">
+            <Button type="submit" loading={createVersionMutation.isPending}>
+              Crear primera versión
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setShowInitialVersionForm(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={showCloneForm && Boolean(selectedVersion) && selectedVersion?.status !== "DRAFT"}
+        onClose={() => setShowCloneForm(false)}
+        eyebrow="Reglas fiscales"
+        title="Crear borrador"
+        description="Partí de la versión vigente para preparar cambios sin modificar el cálculo actualmente activo."
+      >
+        <form
+          className="study-form study-form--compact fiscal-action-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            cloneMutation.mutate();
+          }}
+        >
+          <Field
+            label="Nueva vigencia desde"
+            id="rule-valid-from"
+            type="date"
+            value={validFrom}
+            onChange={(event) => setValidFrom(event.target.value)}
+            required
+          />
+          <div className="study-form__actions">
+            <Button type="submit" loading={cloneMutation.isPending}>
+              <Icon name="plus" size={16} /> Crear borrador
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setShowCloneForm(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      </ActionDrawer>
+
       {receipt ? (
         <div className="action-receipt action-receipt--page" role="status">
           <Icon name="check" size={19} />
@@ -490,8 +594,12 @@ export function StudyReglasFiscales() {
       ) : null}
 
       <div className="fiscal-rules-layout">
-        <aside className="fiscal-rules-index" aria-label="Rule packs disponibles">
-          <p className="fiscal-rules-index__label">Regímenes</p>
+        <aside className="fiscal-rules-index" aria-label="Paquetes de reglas disponibles">
+          <div className="fiscal-rules-index__heading">
+            <p className="fiscal-rules-index__label">Paquetes fiscales</p>
+            {canPropose ? <Button size="sm" variant="ghost" onClick={() => setShowPackForm(true)}><Icon name="plus" size={15} /> Nuevo</Button> : null}
+          </div>
+          <small className="fiscal-rules-index__count">{packsQuery.data?.length ?? 0} configurados</small>
           {packsQuery.isLoading ? <p className="muted-copy">Cargando reglas…</p> : null}
           {!packsQuery.isLoading && (packsQuery.data?.length ?? 0) === 0 ? (
             <p className="muted-copy">No hay paquetes configurados.</p>
@@ -515,7 +623,7 @@ export function StudyReglasFiscales() {
           })}
         </aside>
 
-        <div className="fiscal-rules-detail">
+          <div className="fiscal-rules-detail">
           {detailQuery.isLoading ? (
             <div className="query-state">Cargando detalle de reglas…</div>
           ) : null}
@@ -526,55 +634,29 @@ export function StudyReglasFiscales() {
             <EmptyState
               title="Todavía no hay paquetes de reglas"
               description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
-              action={
-                capabilities.has("tax.rules.propose") ? (
-                  <Button onClick={() => setShowPackForm(true)}>Crear paquete</Button>
-                ) : undefined
-              }
             />
           ) : null}
+          {rulesNextAction ? <section className="fiscal-rules-next-step" aria-labelledby="rules-next-step-title">
+            <div>
+              <p className="study-page__eyebrow">Flujo guiado</p>
+              <h2 id="rules-next-step-title">Próximo paso</h2>
+              <p>{rulesNextAction.description}</p>
+            </div>
+            <Button onClick={rulesNextAction.onClick}>{rulesNextAction.label}</Button>
+          </section> : null}
           {detailQuery.data && !selectedVersion ? (
             <EmptyState
               title="Este paquete todavía no tiene versión"
               description="Creá un borrador inicial antes de ingresar porcentajes o vencimientos."
-              action={
-                capabilities.has("tax.rules.propose") ? (
-                  <form
-                    className="fiscal-empty-action"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      createVersionMutation.mutate();
-                    }}
-                  >
-                    <Field
-                      label="Vigencia desde"
-                      id="first-rule-version-valid-from"
-                      type="date"
-                      value={validFrom}
-                      onChange={(event) => setValidFrom(event.target.value)}
-                      required
-                    />
-                    <Field
-                      label="Versión del motor"
-                      id="first-rule-version-engine"
-                      value={engineVersion}
-                      onChange={(event) => setEngineVersion(event.target.value)}
-                      required
-                    />
-                    <Button type="submit" loading={createVersionMutation.isPending}>
-                      Crear primera versión
-                    </Button>
-                  </form>
-                ) : undefined
-              }
             />
           ) : null}
           {detailQuery.data && selectedVersion ? (
             <>
-              <section className="study-panel fiscal-rule-summary">
+              <section className="study-panel fiscal-rule-summary fiscal-rule-context">
                 <div className="study-panel__heading">
                   <div>
-                    <p className="study-page__eyebrow">
+                    <p className="study-page__eyebrow">Paquete seleccionado</p>
+                    <p className="fiscal-rule-context__regime">
                       {detailQuery.data.regime.taxType.name} ·{" "}
                       {detailQuery.data.regime.jurisdiction.name}
                     </p>
@@ -586,6 +668,9 @@ export function StudyReglasFiscales() {
                   <StatusBadge status={selectedVersion.status} />
                 </div>
                 <div className="fiscal-rule-summary__meta">
+                  <span>
+                    Régimen <strong>{detailQuery.data.regime.name}</strong>
+                  </span>
                   <span>
                     Versión <strong>v{selectedVersion.version}</strong>
                   </span>
@@ -600,25 +685,9 @@ export function StudyReglasFiscales() {
                   </span>
                 </div>
                 {selectedVersion.status !== "DRAFT" && capabilities.has("tax.rules.propose") ? (
-                  <form
-                    className="fiscal-rule-summary__clone"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      cloneMutation.mutate();
-                    }}
-                  >
-                    <Field
-                      label="Nueva vigencia desde"
-                      id="rule-valid-from"
-                      type="date"
-                      value={validFrom}
-                      onChange={(event) => setValidFrom(event.target.value)}
-                      required
-                    />
-                    <Button type="submit" variant="secondary" loading={cloneMutation.isPending}>
-                      <Icon name="plus" size={16} /> Crear borrador
-                    </Button>
-                  </form>
+                  <Button variant="secondary" onClick={() => setShowCloneForm(true)}>
+                    <Icon name="plus" size={16} /> Crear borrador
+                  </Button>
                 ) : null}
               </section>
 
@@ -711,17 +780,15 @@ export function StudyReglasFiscales() {
                       align: "right",
                       render: (row) =>
                         editable ? (
-                          <input
+                          <MoneyField
                             className="fiscal-rule-input fiscal-rule-input--number"
                             aria-label={`Alícuota ${row.id}`}
-                            inputMode="decimal"
                             value={row.rate ?? ""}
-                            placeholder="—"
-                            onChange={(event) =>
+                            onChange={(value) =>
                               setDraftRows((rows) =>
                                 rows.map((item) =>
                                   item.id === row.id
-                                    ? { ...item, rate: event.target.value || null }
+                                    ? { ...item, rate: value || null }
                                     : item,
                                 ),
                               )
@@ -739,17 +806,15 @@ export function StudyReglasFiscales() {
                       align: "right",
                       render: (row) =>
                         editable ? (
-                          <input
+                          <MoneyField
                             className="fiscal-rule-input fiscal-rule-input--number"
                             aria-label={`Mínimo ${row.id}`}
-                            inputMode="decimal"
                             value={row.minAmount ?? ""}
-                            placeholder="—"
-                            onChange={(event) =>
+                            onChange={(value) =>
                               setDraftRows((rows) =>
                                 rows.map((item) =>
                                   item.id === row.id
-                                    ? { ...item, minAmount: event.target.value || null }
+                                    ? { ...item, minAmount: value || null }
                                     : item,
                                 ),
                               )
@@ -876,7 +941,7 @@ export function StudyReglasFiscales() {
                 />
               </section>
 
-              <section className="study-panel fiscal-rule-approval">
+              <section id="rule-approval" className="study-panel fiscal-rule-approval">
                 <div>
                   <h2>Control profesional</h2>
                   <p>

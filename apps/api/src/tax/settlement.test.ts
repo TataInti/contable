@@ -163,6 +163,36 @@ async function setupActiveRules(fx: Awaited<ReturnType<typeof setupMasters>>) {
   });
 }
 
+async function activateDetailedVatRules() {
+  return runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+    const pack = await tx.taxRulePack.findUniqueOrThrow({ where: { code: "VAT_SET_V1" } });
+    const active = await tx.taxRuleVersion.findFirstOrThrow({
+      where: { packId: pack.id, status: "ACTIVE" },
+    });
+    await tx.taxRuleVersion.update({ where: { id: active.id }, data: { status: "RETIRED" } });
+    const version = await tx.taxRuleVersion.create({
+      data: {
+        packId: pack.id,
+        version: 2,
+        status: "ACTIVE",
+        validFrom: new Date("2026-01-01"),
+        engineVersion: "ar-vat-ri-v2.1.0",
+        rulesHash: "sha256:setrules-v2.1",
+        supersedesId: active.id,
+      },
+    });
+    await tx.taxRateRule.createMany({
+      data: [
+        { ruleVersionId: version.id, concept: "IVA_21", rate: new Prisma.Decimal("21"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: version.id, concept: "IVA_105", rate: new Prisma.Decimal("10.5"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: version.id, concept: "IVA_27", rate: new Prisma.Decimal("27"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: version.id, concept: "DTO_814", rate: new Prisma.Decimal("6.5"), validFrom: new Date("2026-01-01") },
+      ],
+    });
+    return version;
+  });
+}
+
 /** Perfil + inscripción + período + obligación. */
 async function setupSettlementContext(fx: Awaited<ReturnType<typeof setupMasters>>) {
   return runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
@@ -314,13 +344,17 @@ async function cleanupSettlements() {
     await tx.$executeRawUnsafe(`DELETE FROM payment_allocations WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_payments WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_filings WHERE "clientId" = '${CLIENT_SET}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_interest_snapshots WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_export_artifacts WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_credit_allocations WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_credit_ledger_entries WHERE "clientId" = '${CLIENT_SET}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_movements WHERE "clientId" = '${CLIENT_SET}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_lots WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_differences WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_settlement_lines WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM settlement_inputs WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_settlements WHERE "clientId" = '${CLIENT_SET}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM monthly_tax_workpapers WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`ALTER TABLE tax_settlements ENABLE TRIGGER trg_settlement_immutable`);
     await tx.$executeRawUnsafe(`ALTER TABLE settlement_inputs ENABLE TRIGGER trg_settlement_input_immutable`);
     await tx.$executeRawUnsafe(`ALTER TABLE tax_settlement_lines ENABLE TRIGGER trg_settlement_line_immutable`);
@@ -332,6 +366,8 @@ async function cleanupSettlements() {
     await tx.$executeRawUnsafe(`DELETE FROM management_expenses WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM perception_certificates WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM withholding_certificates WHERE "clientId" = '${CLIENT_SET}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM f931_lines WHERE "clientId" = '${CLIENT_SET}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM f931_runs WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_components WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_voucher_lines WHERE "clientId" = '${CLIENT_SET}'`);
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_vouchers WHERE "clientId" = '${CLIENT_SET}'`);
@@ -439,6 +475,397 @@ describe("G3-1 cobertura y cálculo determinista", () => {
     expect(concepts).toContain("COMPRAS");
   });
 
+  it("calcula IVA v2 por alícuota y toma Dto. 814 sólo del F.931 revisado", async () => {
+    await activateDetailedVatRules();
+    const { v1, v2, v3 } = await createApprovedVouchers();
+    const f931 = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.f931Run.create({
+        data: {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_SET,
+          periodId,
+          totalRemuneration: new Prisma.Decimal("60000"),
+          deduction: new Prisma.Decimal("10000"),
+          netRemuneration: new Prisma.Decimal("50000"),
+          status: "REVIEWED",
+          reviewedByUserId: REVIEWER_A,
+          reviewedAt: new Date("2026-01-31"),
+          hash: "sha256:f931-set-v2",
+        },
+      }),
+    );
+    const classifications = [v1, v2, v3].map((voucher) => ({
+      voucherId: voucher.id,
+      documentKind: "INVOICE",
+      activityCode: voucher.direction === "SALE" ? "VENTA_GENERAL" : "COMPRAS",
+      categoryCode: voucher.direction === "PURCHASE" ? "SUPER" : null,
+      rateBuckets: [{
+        rate: "21",
+        base: voucher.direction === "SALE" ? "100000.0000" : "40000.0000",
+        amount: voucher.direction === "SALE" ? "21000.0000" : "8400.0000",
+      }],
+      snapshotHash: `sha256:classification-${voucher.id}`,
+    }));
+
+    const result = await settlements.calculate(ctxOwner, {
+      ...calculateParams(),
+      sourceScope: {
+        voucherIds: [v1.id, v2.id, v3.id],
+        withholdingIds: [],
+        perceptionIds: [],
+        f931RunIds: [f931.id],
+        classifications,
+      },
+    });
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(result.settlement.engineVersion).toBe("ar-vat-ri-v2.1.0");
+    expect(totals).toMatchObject({
+      DEBITO_FISCAL: "42000.00",
+      CREDITO_FISCAL: "8400.00",
+      CREDITO_DTO_814: "3250.00",
+      SALDO_TECNICO_A_INGRESAR: "30350.00",
+      TOTAL_A_INGRESAR: "30350.00",
+    });
+    expect(result.lines.some((line) => line.concept === "DEBITO_IVA_21")).toBe(true);
+    expect(result.lines.some((line) => line.concept === "CREDITO_DTO_814")).toBe(true);
+    expect(result.inputs.some((input) => input.kind === "F931" && input.sourceId === f931.id)).toBe(true);
+    expect(result.result.blocks).toHaveLength(0);
+  });
+
+  it("arrastra IVA v2 sin duplicar saldos al rectificar y usar el mes siguiente", async () => {
+    await activateDetailedVatRules();
+    const { v3: januaryPurchase } = await createApprovedVouchers();
+    const januaryScope = {
+      voucherIds: [januaryPurchase.id],
+      withholdingIds: [],
+      perceptionIds: [],
+      f931RunIds: [],
+      classifications: [
+        {
+          voucherId: januaryPurchase.id,
+          documentKind: "INVOICE",
+          activityCode: "COMPRAS",
+          categoryCode: "SUPER",
+          rateBuckets: [{ rate: "21", base: "40000.0000", amount: "8400.0000" }],
+          snapshotHash: "sha256:january-purchase",
+        },
+      ],
+    };
+    const original = await settlements.calculate(ctxPreparer, {
+      ...calculateParams(),
+      sourceScope: januaryScope,
+    });
+    await settlements.submitReview(ctxPreparer, original.settlement.id);
+    await settlements.review(ctxReviewer, original.settlement.id);
+    await settlements.finalize(ctxOwner, original.settlement.id);
+
+    let lots = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.taxCreditLot.findMany({
+        where: { clientId: CLIENT_SET, sourceSettlementId: original.settlement.id },
+        include: { movements: true },
+      }),
+    );
+    expect(lots).toHaveLength(2);
+    expect(lots.find((lot) => lot.kind === "IVA_TECNICO")?.originalAmount.toFixed(4)).toBe(
+      "8400.0000",
+    );
+    expect(lots.find((lot) => lot.kind === "IVA_LIBRE")?.originalAmount.toFixed(4)).toBe(
+      "0.0000",
+    );
+
+    const rectification = await settlements.rectify(
+      ctxPreparer,
+      original.settlement.id,
+      "Corrección del libro IVA",
+    );
+    const recalculated = await settlements.calculate(ctxPreparer, {
+      ...calculateParams(),
+      sourceScope: januaryScope,
+    });
+    expect(recalculated.settlement.id).toBe(rectification.id);
+    expect((recalculated.settlement.totals as Record<string, string>)["SALDO_TECNICO_AFTER"]).toBe(
+      "8400.00",
+    );
+    expect(
+      recalculated.inputs.some(
+        (item) =>
+          item.kind === "CREDIT" &&
+          (item.snapshot as Record<string, unknown>)["kind"] ===
+            "RECTIFICATION_OPENING_SNAPSHOT",
+      ),
+    ).toBe(true);
+    await settlements.submitReview(ctxPreparer, recalculated.settlement.id);
+    await settlements.review(ctxReviewer, recalculated.settlement.id);
+    await settlements.finalize(ctxOwner, recalculated.settlement.id);
+
+    lots = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.taxCreditLot.findMany({
+        where: { clientId: CLIENT_SET, kind: "IVA_TECNICO" },
+        include: { movements: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    );
+    expect(lots).toHaveLength(2);
+    expect(
+      lots
+        .map((lot) =>
+          lot.originalAmount.minus(
+            lot.movements.reduce((sum, movement) => sum.plus(movement.amount), new Prisma.Decimal(0)),
+          ),
+        )
+        .reduce((sum, amount) => sum.plus(amount), new Prisma.Decimal(0))
+        .toFixed(4),
+    ).toBe("8400.0000");
+
+    const februaryPeriod = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.taxPeriod.create({
+        data: {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_SET,
+          taxTypeId,
+          startDate: new Date("2026-02-01"),
+          endDate: new Date("2026-02-28"),
+          label: "Febrero 2026",
+        },
+      }),
+    );
+    const februarySale = await ingestion.createVoucher(ctxPreparer, {
+      clientId: CLIENT_SET,
+      direction: "SALE",
+      type: "A",
+      letter: "A",
+      pointOfSale: 1,
+      number: 200,
+      issuerCuit: "20999999997",
+      receiverCuit: "20111111111",
+      issuedOn: "2026-02-10",
+      total: "121000.00",
+      components: [
+        { concept: "NETO", base: "100000.00", amount: "100000.00" },
+        { concept: "IVA_21", base: "100000.00", rate: "0.21", amount: "21000.00" },
+      ],
+    });
+    await ingestion.reviewVoucher(ctxReviewer, februarySale.id, true);
+    const februaryScope = {
+      voucherIds: [februarySale.id],
+      withholdingIds: [],
+      perceptionIds: [],
+      f931RunIds: [],
+      classifications: [
+        {
+          voucherId: februarySale.id,
+          documentKind: "INVOICE",
+          activityCode: "VENTA_GENERAL",
+          categoryCode: null,
+          rateBuckets: [{ rate: "21", base: "100000.0000", amount: "21000.0000" }],
+          snapshotHash: "sha256:february-sale",
+        },
+      ],
+    };
+    const february = await settlements.calculate(ctxPreparer, {
+      clientId: CLIENT_SET,
+      taxTypeId,
+      regimeId,
+      jurisdictionId,
+      periodId: februaryPeriod.id,
+      cutoff: "2026-02-28",
+      sourceScope: februaryScope,
+    });
+    expect((february.settlement.totals as Record<string, string>)).toMatchObject({
+      SALDO_TECNICO_ANTERIOR: "8400.00",
+      TOTAL_A_INGRESAR: "12600.00",
+    });
+    await settlements.submitReview(ctxPreparer, february.settlement.id);
+    await settlements.review(ctxReviewer, february.settlement.id);
+    await settlements.finalize(ctxOwner, february.settlement.id);
+
+    const historical = await settlements.rectify(
+      ctxPreparer,
+      recalculated.settlement.id,
+      "Nueva corrección histórica",
+    );
+    const historicalCalculated = await settlements.calculate(ctxPreparer, {
+      ...calculateParams(),
+      sourceScope: januaryScope,
+    });
+    expect(historicalCalculated.settlement.id).toBe(historical.id);
+    await settlements.submitReview(ctxPreparer, historical.id);
+    await settlements.review(ctxReviewer, historical.id);
+    await expect(settlements.finalize(ctxOwner, historical.id)).rejects.toMatchObject({
+      code: "INVALID_TRANSITION",
+    });
+
+    const downstreamRectification = await settlements.rectify(
+      ctxPreparer,
+      february.settlement.id,
+      "Propagar la rectificación de enero",
+    );
+    await settlements.finalize(ctxOwner, historical.id);
+    const downstreamCalculated = await settlements.calculate(ctxPreparer, {
+      clientId: CLIENT_SET,
+      taxTypeId,
+      regimeId,
+      jurisdictionId,
+      periodId: februaryPeriod.id,
+      cutoff: "2026-02-28",
+      sourceScope: februaryScope,
+    });
+    expect(downstreamCalculated.settlement.id).toBe(downstreamRectification.id);
+    expect(
+      downstreamCalculated.inputs.some(
+        (item) => item.kind === "CREDIT" && item.sourceId === historical.id,
+      ),
+    ).toBe(true);
+    await settlements.submitReview(ctxPreparer, downstreamCalculated.settlement.id);
+    await settlements.review(ctxReviewer, downstreamCalculated.settlement.id);
+    await settlements.finalize(ctxOwner, downstreamCalculated.settlement.id);
+  });
+
+  it("el alcance del expediente aplica la nota de crédito con signo negativo", async () => {
+    const { v1, v2, v3 } = await createApprovedVouchers();
+    const result = await settlements.calculate(ctxOwner, {
+      ...calculateParams(),
+      sourceScope: {
+        voucherIds: [v1.id, v2.id, v3.id],
+        withholdingIds: [],
+        perceptionIds: [],
+        f931RunIds: [],
+        classifications: [
+          {
+            voucherId: v1.id,
+            documentKind: "INVOICE",
+            activityCode: "VENTA_GENERAL",
+            categoryCode: null,
+            snapshotHash: "sha256:classification-v1",
+          },
+          {
+            voucherId: v2.id,
+            documentKind: "CREDIT_NOTE",
+            activityCode: "VENTA_GENERAL",
+            categoryCode: null,
+            snapshotHash: "sha256:classification-v2",
+          },
+          {
+            voucherId: v3.id,
+            documentKind: "INVOICE",
+            activityCode: "COMPRAS",
+            categoryCode: "SUPER",
+            snapshotHash: "sha256:classification-v3",
+          },
+        ],
+      },
+    });
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["DEBITO_FISCAL"]).toBe("0.00");
+    expect(totals["CREDITO_FISCAL"]).toBe("8400.00");
+    expect(
+      result.inputs.some(
+        (input) =>
+          input.sourceId.startsWith(`${v2.id}:`) &&
+          (input.snapshot as Record<string, unknown>)["sign"] === -1,
+      ),
+    ).toBe(true);
+  });
+
+  it("consume retenciones y percepciones sólo desde imputaciones del expediente", async () => {
+    const { v1, v2, v3 } = await createApprovedVouchers();
+    const workpaper = await prisma.monthlyTaxWorkpaper.create({
+      data: {
+        firmId: FIRM_ALFA,
+        clientId: CLIENT_SET,
+        periodStart: new Date("2026-01-01"),
+        periodEnd: new Date("2026-01-31"),
+        status: "READY_TO_CALCULATE",
+        preparedByUserId: OWNER_A,
+      },
+    });
+    const withholding = await prisma.withholdingCertificate.create({
+      data: {
+        firmId: FIRM_ALFA,
+        clientId: CLIENT_SET,
+        cuitAgent: "30555555550",
+        cuitResponsible: "20999999997",
+        concept: "IVA",
+        base: new Prisma.Decimal("100000"),
+        amount: new Prisma.Decimal("2000"),
+        issuedOn: new Date("2026-01-20"),
+        status: "APPROVED",
+      },
+    });
+    const perceptionCreditNote = await prisma.perceptionCertificate.create({
+      data: {
+        firmId: FIRM_ALFA,
+        clientId: CLIENT_SET,
+        cuitAgent: "30666666660",
+        cuitResponsible: "20999999997",
+        concept: "IVA",
+        base: new Prisma.Decimal("20000"),
+        amount: new Prisma.Decimal("-500"),
+        creditKind: "PERCEPTION_CREDIT_NOTE",
+        issuedOn: new Date("2026-01-22"),
+        status: "APPROVED",
+      },
+    });
+    await prisma.taxInputAllocation.createMany({
+      data: [
+        {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_SET,
+          workpaperId: workpaper.id,
+          obligationId,
+          sourceCode: "SICORE_IVA",
+          sourceType: "WITHHOLDING",
+          sourceId: withholding.id,
+          taxTypeId,
+          regimeId,
+          jurisdictionId,
+          periodId,
+          amount: new Prisma.Decimal("2000"),
+          status: "ALLOCATED",
+          snapshotHash: "sha256:allocation-withholding",
+        },
+        {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_SET,
+          workpaperId: workpaper.id,
+          obligationId,
+          sourceCode: "SICORE_IVA",
+          sourceType: "PERCEPTION",
+          sourceId: perceptionCreditNote.id,
+          taxTypeId,
+          regimeId,
+          jurisdictionId,
+          periodId,
+          amount: new Prisma.Decimal("-500"),
+          status: "ALLOCATED",
+          snapshotHash: "sha256:allocation-perception",
+        },
+      ],
+    });
+
+    const result = await settlements.calculate(ctxOwner, {
+      ...calculateParams(),
+      sourceScope: {
+        workpaperId: workpaper.id,
+        obligationId,
+        voucherIds: [v1.id, v2.id, v3.id],
+        withholdingIds: [withholding.id],
+        perceptionIds: [perceptionCreditNote.id],
+        f931RunIds: [],
+        classifications: [],
+      },
+    });
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["RETENCIONES_SUFRIDAS"]).toBe("2000.00");
+    expect(totals["PERCEPCIONES_SUFRIDAS"]).toBe("-500.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("32100.00");
+    expect(
+      result.inputs.filter(
+        (input) => input.kind === "WITHHOLDING" || input.kind === "PERCEPTION",
+      ),
+    ).toHaveLength(2);
+  });
+
   it("V-004: reejecutar con mismo cutoff produce el mismo hash", async () => {
     await createApprovedVouchers();
     const a = await settlements.calculate(ctxOwner, calculateParams());
@@ -461,13 +888,14 @@ describe("G3-1 cobertura y cálculo determinista", () => {
     expect(totals["DEBITO_FISCAL"]).toBe("21000.00");
   });
 
-  it("no calcula sin versión ACTIVE de reglas", async () => {
-    // En este beforeEach hay regla activa; la retiramos para probar el bloqueo.
+  it("no calcula sin una versión activada vigente para el período", async () => {
+    // RETIRED sigue siendo válida históricamente; para probar la ausencia de
+    // reglas activadas se deja la única versión como borrador.
     await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(`SELECT set_config('app.user_id', '${OWNER_A}', true)`);
       await tx.$executeRawUnsafe(`SELECT set_config('app.firm_id', '${FIRM_ALFA}', true)`);
       await tx.$executeRawUnsafe(`SELECT set_config('app.actor_kind', 'USER', true)`);
-      await tx.$executeRawUnsafe(`UPDATE tax_rule_versions SET status = 'RETIRED' WHERE "packId" IN (SELECT id FROM tax_rule_packs WHERE code = 'VAT_SET_V1')`);
+      await tx.$executeRawUnsafe(`UPDATE tax_rule_versions SET status = 'DRAFT' WHERE "packId" IN (SELECT id FROM tax_rule_packs WHERE code = 'VAT_SET_V1')`);
     });
     await expect(settlements.calculate(ctxOwner, calculateParams())).rejects.toThrow(
       SettlementError,
@@ -785,6 +1213,65 @@ describe("G3-5 presentación, pago y crédito", () => {
     });
     const ob = await prisma.taxObligation.findUnique({ where: { id: obligationId } });
     expect(ob?.status).toBe("PARTIALLY_PAID");
+  });
+
+  it("separa capital e interés en un pago vencido", async () => {
+    await createApprovedVouchers();
+    const { settlement } = await settlements.calculate(ctxPreparer, defaultParams());
+    await approveSettlement(settlement.id);
+    const dueDate = new Date("2026-02-20T00:00:00.000Z");
+    const paidAt = new Date("2026-03-22T00:00:00.000Z");
+    await prisma.taxObligation.update({
+      where: { id: obligationId },
+      data: { dueDate },
+    });
+    await prisma.taxInterestSnapshot.create({
+      data: {
+        firmId: FIRM_ALFA,
+        clientId: CLIENT_SET,
+        obligationId,
+        settlementId: settlement.id,
+        baseAmount: new Prisma.Decimal("33600"),
+        dueDate,
+        asOfDate: paidAt,
+        daysLate: 30,
+        monthlyRate: new Prisma.Decimal("0.06"),
+        ruleVersionId: settlement.ruleVersionId,
+        amount: new Prisma.Decimal("2016"),
+        inputHash: "late-payment-split",
+      },
+    });
+
+    const payment = await settlements.recordPayment(ctxOwner, {
+      obligationId,
+      settlementId: settlement.id,
+      paidAt: "2026-03-22",
+      amount: "35616.00",
+      method: "TRANSFERENCIA",
+    });
+    expect(payment.principalAmount.toString()).toBe("33600");
+    expect(payment.interestAmount.toString()).toBe("2016");
+    const obligation = await prisma.taxObligation.findUnique({ where: { id: obligationId } });
+    expect(obligation?.status).toBe("PAID");
+  });
+
+  it("exige una foto de mora para pagar después del vencimiento", async () => {
+    await createApprovedVouchers();
+    const { settlement } = await settlements.calculate(ctxPreparer, defaultParams());
+    await approveSettlement(settlement.id);
+    await prisma.taxObligation.update({
+      where: { id: obligationId },
+      data: { dueDate: new Date("2026-02-20T00:00:00.000Z") },
+    });
+    await expect(
+      settlements.recordPayment(ctxOwner, {
+        obligationId,
+        settlementId: settlement.id,
+        paidAt: "2026-03-22",
+        amount: "33600.00",
+        method: "TRANSFERENCIA",
+      }),
+    ).rejects.toMatchObject({ code: "INTEREST_SNAPSHOT_REQUIRED" });
   });
 
   it("reversión de pago exige revisor distinto y vuelve la obligación a READY_TO_FILE", async () => {

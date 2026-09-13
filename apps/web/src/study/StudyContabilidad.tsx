@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
 import { api, type Account, type FiscalYear, type TrialBalance } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
+import { SectionIndex } from "../ui/SectionIndex";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
 
@@ -300,6 +301,13 @@ export function StudyContabilidad() {
         </div>
       </div>
 
+      <SectionIndex
+        items={[
+          { id: "accounting-views-title", label: "Libros y balances" },
+          { id: "drafts-title", label: "Asientos en preparación", meta: `${selectedDrafts.length}` },
+        ]}
+      />
+
       {receipt ? (
         <div className="action-receipt action-receipt--page" role="status">
           <Icon name="check" size={19} />
@@ -389,15 +397,11 @@ export function StudyContabilidad() {
               ))}
             </select>
           </label>
-          <Field
+          <MoneyField
             id="entry-amount"
             label="Importe ARS"
-            type="number"
-            min="0.01"
-            step="0.01"
-            inputMode="decimal"
             value={draft.amount}
-            onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
+            onChange={(value) => setDraft({ ...draft, amount: value })}
             required
           />
           {createDraft.isError ? (
@@ -446,7 +450,7 @@ export function StudyContabilidad() {
         ))}
       </div>
 
-      <div className="ledger-toolbar">
+      <div className="ledger-toolbar" id="accounting-views-title">
         <div className="ledger-toolbar__copy">
           <span className="ledger-toolbar__icon">
             <Icon name={view === "journal" ? "file" : "chart"} size={18} />

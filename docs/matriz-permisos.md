@@ -20,7 +20,10 @@
 | Capacidad | OWNER | ADMIN | PREPARER | REVIEWER | AUDITOR_READONLY |
 |---|---|---|---|---|---|
 | `firm.manage` | ✓ | ✓ | | | |
+| `firm.users.manage` | ✓ | ✓ | | | |
 | `firm.audit.read` | ✓ | ✓ | | | ✓ |
+
+`platform.modules.manage` no pertenece a ningún rol de firma: sólo la recibe una sesión de administración general (`User.isPlatformAdmin`).
 
 ### Clientes
 

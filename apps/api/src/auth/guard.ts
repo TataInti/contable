@@ -4,6 +4,7 @@ import { capabilitiesForRole } from "@contable/permissions";
 import { prisma } from "../lib/prisma.js";
 import { sha256 } from "./sessions.js";
 import { withTenantContext } from "./tenant.js";
+import { portalCapabilities, type PortalRole } from "./portal-capabilities.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -140,6 +141,18 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
     },
   },
   {
+    match: /\/sifere\/analyze/,
+    resolve: () => "tax.vouchers.prepare",
+  },
+  {
+    match: /\/sifere\/import/,
+    resolve: () => "tax.vouchers.prepare",
+  },
+  {
+    match: /\/sifere\/template/,
+    resolve: () => "tax.vouchers.read",
+  },
+  {
     match: /\/vouchers/,
     resolve: (m, path) => {
       if (path.endsWith("/review") || path.endsWith("/approve") || path.endsWith("/reject")) {
@@ -160,10 +173,24 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
     },
   },
   {
+    // C (§7.1): ingresos gerenciales. Ciclo propio de revisión: aprobar es
+    // revisión (PREPARER no puede), crear/editar es write, leer es read.
+    match: /\/management-incomes/,
+    resolve: (m, path) => {
+      if (path.endsWith("/approve")) return "tax.management_expenses.approve_treatment";
+      if (path.endsWith("/reject")) return "tax.management_expenses.approve_treatment";
+      if (path.endsWith("/submit-review")) return "tax.management_expenses.write";
+      return m === "GET" ? "tax.management_expenses.read" : "tax.management_expenses.write";
+    },
+  },
+  {
     match: /\/monthly-tax-workpapers/,
     resolve: (m, path) => {
       if (path.endsWith("/calculate")) return "tax.settlements.calculate";
       if (path.endsWith("/submit-review")) return "tax.settlements.submit_review";
+      if (path.includes("/sources/") && path.endsWith("/review")) return "tax.vouchers.review";
+      if (path.includes("/classifications/") && m !== "GET") return "tax.vouchers.prepare";
+      if (path.includes("/allocations/") && m !== "GET") return "tax.vouchers.prepare";
       if (path.endsWith("/review")) return "tax.settlements.review";
       if (path.endsWith("/finalize")) return "tax.settlements.finalize";
       if (path.endsWith("/rectify")) return "tax.settlements.rectify";
@@ -187,6 +214,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
       return m === "GET" ? "tax.settlements.read" : "tax.settlements.calculate";
     },
   },
+  { match: /\/tax-credit-ledger\/[^/]+\/verify$/, resolve: () => "tax.settlements.review" },
+  { match: /\/tax-credit-ledger\/[^/]+\/(movements|corrections)$/, resolve: () => "tax.settlements.calculate" },
   { match: /\/tax-credit-ledger/, resolve: (m) => (m === "GET" ? "tax.settlements.read" : "tax.settlements.calculate") },
   { match: /\/tax-position/, resolve: () => "tax.settlements.read" },
   { match: /\/tax-credit-allocations/, resolve: () => "tax.settlements.calculate" },
@@ -222,7 +251,7 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   // el miembro. No debe caer en el deny-by-default de las rutas de firma.
   { match: /\/firms\/[^/]+\/dashboard$/, resolve: (m) => (m === "GET" ? "client.read" : null) },
   {
-    match: /\/clients\/[^/]+\/(accounts|counterparties|cost-centers|fiscal-years|profile)/,
+    match: /\/clients\/[^/]+\/(accounts|counterparties|cost-centers|fiscal-years|profile|summary)/,
     resolve: (m) => (m === "GET" ? "client.read" : "client.manage"),
   },
   { match: /\/clients(?:\/[^/]+)?$/, resolve: (m) => (m === "GET" ? "client.read" : "client.manage") },
@@ -316,12 +345,7 @@ export function authGuardPlugin(app: FastifyInstance) {
         // G0-05 + G5: distinguir Colaborador de Sólo lectura. READONLY no recibe
         // capacidades de upload ni mensajes (PLAN §4.2). Se usan las capacidades
         // dedicadas de portal (portal.*) para que el guard distinga por semántica.
-        const isReadOnly = membership.role === "READONLY";
-        req.capabilities = new Set<Capability>(
-          isReadOnly
-            ? ["client.read", "portal.results.read"]
-            : ["client.read", "portal.results.read", "portal.documents.upload", "portal.requests.respond", "message.shared"],
-        );
+        req.capabilities = portalCapabilities(membership.role as PortalRole);
       }
       return;
     }

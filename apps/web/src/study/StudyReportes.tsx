@@ -5,6 +5,8 @@ import { api, downloadFile, type Account, type ReportRun, type ReportTemplate } 
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
+import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./study.css";
 
 interface BiPlan {
@@ -112,6 +114,7 @@ export function StudyReportes() {
   });
 
   const rows = useMemo(() => runs.data ?? [], [runs.data]);
+  const confirm = useConfirmAction();
   if (!firmId || !clientId) {
     return (
       <div className="study-page">
@@ -159,6 +162,14 @@ export function StudyReportes() {
           ) : null}
         </div>
       </div>
+
+      <SectionIndex
+        items={[
+          { id: "generate-report-title", label: "Nueva ejecución" },
+          { id: "report-history-title", label: "Historial", meta: String(rows.length) },
+          ...(capabilities.has("bi.use") ? [{ id: "bi-title", label: "Análisis BI" }] : []),
+        ]}
+      />
 
       {receipt ? (
         <div className="action-receipt action-receipt--page" role="status">
@@ -301,14 +312,15 @@ export function StudyReportes() {
                         size="sm"
                         variant="secondary"
                         loading={publish.isPending}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "¿Publicar esta versión en el portal del cliente? Verificá el corte y el contenido antes de continuar.",
-                            )
-                          )
-                            publish.mutate(run.id);
-                        }}
+                        onClick={() =>
+                          confirm.ask({
+                            title: "¿Publicar esta versión en el portal del cliente?",
+                            description:
+                              "Verificá el corte y el contenido antes de continuar. El cliente verá este reporte publicado.",
+                            confirmLabel: "Publicar",
+                            onConfirm: () => publish.mutate(run.id),
+                          })
+                        }
                       >
                         Publicar
                       </Button>
@@ -327,14 +339,15 @@ export function StudyReportes() {
                           const publication = run.publications.find(
                             (item) => item.status === "PUBLISHED",
                           );
-                          if (
-                            publication &&
-                            window.confirm(
-                              "¿Revocar la publicación? El reporte dejará de estar visible para el cliente.",
-                            )
-                          ) {
-                            revoke.mutate(publication.id);
-                          }
+                          if (!publication) return;
+                          confirm.ask({
+                            title: "¿Revocar la publicación?",
+                            description:
+                              "El reporte dejará de estar visible para el cliente en el portal.",
+                            confirmLabel: "Revocar publicación",
+                            tone: "danger",
+                            onConfirm: () => revoke.mutate(publication.id),
+                          });
                         }}
                       >
                         Revocar
@@ -408,6 +421,7 @@ export function StudyReportes() {
           ) : null}
         </section>
       ) : null}
+      <ConfirmDialog confirm={confirm} />
     </div>
   );
 }

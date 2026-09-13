@@ -12,6 +12,8 @@ export interface DueDateRuleInput {
   frequency: "MONTHLY" | "QUARTERLY" | "ANNUAL" | "ONCE";
   /** Día del vencimiento (1-31). */
   dueDay: number;
+  /** Meses posteriores al cierre del período. Mensuales: normalmente 1. */
+  monthOffset?: number;
   /** Terminación de CUIT (p.ej. "5") si aplica calendario por terminación. */
   cuitEnding?: string;
   validFrom: string;
@@ -93,12 +95,17 @@ export function calculateDueDate(
   }
 
   const endParts = period.endDate.split("-").map(Number) as [number, number, number];
+  const monthOffset = rule.monthOffset ?? 1;
+  if (!Number.isInteger(monthOffset) || monthOffset < 0) {
+    throw new Error("El desplazamiento mensual de la regla de vencimiento debe ser un entero no negativo");
+  }
+  const dueMonth = new Date(Date.UTC(endParts[0], endParts[1] - 1 + monthOffset, 1));
 
   // El vencimiento se calcula sobre el día hábil siguiente al día del
   // calendario indicado por dueDay.
   const raw = rawDueDate(rule, {
-    periodYear: endParts[0],
-    periodMonth: endParts[1],
+    periodYear: dueMonth.getUTCFullYear(),
+    periodMonth: dueMonth.getUTCMonth() + 1,
   });
 
   const jurisdictionHolidays = holidays

@@ -273,6 +273,8 @@ export interface WithholdingRow {
   kind: "RETENCION" | "PERCEPCION";
   issuedOn: string;
   certificateNumber: string | null;
+  documentKind: "INVOICE" | "CREDIT_NOTE";
+  jurisdiction: string | null;
 }
 
 export type WithholdingError =
@@ -296,6 +298,10 @@ export interface WithholdingInput {
   issuedOn?: unknown;
   fechaEmision?: unknown;
   certificateNumber?: unknown;
+  documentKind?: unknown;
+  documentType?: unknown;
+  descripcionComprobante?: unknown;
+  jurisdiction?: unknown;
 }
 
 /**
@@ -318,7 +324,6 @@ export function normalizeWithholdingRow(input: WithholdingInput): NormalizedRow<
 
   const amount = isDecimalString(input.amount) ? new Decimal(input.amount) : null;
   if (!amount) errors.push("AMOUNT_INVALID");
-  else if (amount.isNegative()) errors.push("AMOUNT_INVALID");
 
   const rate = isDecimalString(input.rate) ? new Decimal(input.rate) : null;
 
@@ -342,6 +347,24 @@ export function normalizeWithholdingRow(input: WithholdingInput): NormalizedRow<
       ? input.certificateNumber.trim()
       : null;
 
+  const documentRaw =
+    typeof input.documentKind === "string"
+      ? input.documentKind
+      : typeof input.documentType === "string"
+        ? input.documentType
+        : typeof input.descripcionComprobante === "string"
+          ? input.descripcionComprobante
+          : "";
+  const normalizedDocument = documentRaw.trim().toUpperCase().replaceAll("_", " ");
+  const documentKind =
+    amount?.isNegative() || normalizedDocument === "NC" || normalizedDocument.includes("NOTA DE CREDITO")
+      ? "CREDIT_NOTE"
+      : "INVOICE";
+  const jurisdiction =
+    typeof input.jurisdiction === "string" && input.jurisdiction.trim().length > 0
+      ? input.jurisdiction.trim().toUpperCase()
+      : null;
+
   if (errors.length > 0) return { status: "ERROR", errors };
 
   return {
@@ -351,11 +374,16 @@ export function normalizeWithholdingRow(input: WithholdingInput): NormalizedRow<
       cuitAgente: input.cuitAgente as string,
       concept: concept as string,
       base: (base as Decimal).toFixed(4),
-      amount: (amount as Decimal).toFixed(4),
+      amount: (documentKind === "CREDIT_NOTE"
+        ? (amount as Decimal).abs().negated()
+        : (amount as Decimal).abs()
+      ).toFixed(4),
       rate: rate ? rate.toFixed(6) : null,
       kind: kind as "RETENCION" | "PERCEPCION",
       issuedOn: issuedOn as string,
       certificateNumber,
+      documentKind,
+      jurisdiction,
     },
   };
 }
@@ -634,6 +662,7 @@ export type Cm03Error =
   | "ACTIVITY_CODE_INVALID"
   | "INCOME_INVALID"
   | "COEFFICIENT_INVALID"
+  | "COEFFICIENT_DUPLICATE"
   | "COEFFICIENT_SUM_INVALID";
 
 export interface Cm03ImportRow {
@@ -702,6 +731,7 @@ export function normalizeCm03Batch(
   let errors = 0;
   let coeffSum = new Decimal(0);
   let hasCoeff = false;
+  const coefficientOccurrences = new Map<string, number>();
 
   const normalized = rows.map((row) => {
     const result = normalizeCm03Row(row);
@@ -709,6 +739,10 @@ export function normalizeCm03Batch(
       if (result.data.coefficient !== null) {
         coeffSum = coeffSum.plus(result.data.coefficient);
         hasCoeff = true;
+        coefficientOccurrences.set(
+          result.data.activityCode,
+          (coefficientOccurrences.get(result.data.activityCode) ?? 0) + 1,
+        );
       } else {
         net = net.plus(result.data.income);
       }
@@ -719,19 +753,32 @@ export function normalizeCm03Batch(
     return result;
   });
 
-  // Si hay coeficientes declarados y no suman 1, el lote es inválido.
-  if (hasCoeff && !coeffSum.equals(1)) {
+  const duplicateCoefficients = new Set(
+    [...coefficientOccurrences.entries()]
+      .filter(([, count]) => count > 1)
+      .map(([activityCode]) => activityCode),
+  );
+  const invalidSum = hasCoeff && !coeffSum.equals(1);
+  if (invalidSum || duplicateCoefficients.size > 0) {
+    let invalidCoefficientRows = 0;
+    const invalidRows = normalized.map((row) => {
+      if (row.status !== "VALID" || !row.data || row.data.coefficient === null) return row;
+      const rowErrors: Cm03Error[] = [];
+      if (invalidSum) rowErrors.push("COEFFICIENT_SUM_INVALID");
+      if (duplicateCoefficients.has(row.data.activityCode)) {
+        rowErrors.push("COEFFICIENT_DUPLICATE");
+      }
+      if (rowErrors.length === 0) return row;
+      invalidCoefficientRows += 1;
+      return { status: "ERROR" as const, errors: rowErrors };
+    });
     return {
-      rows: normalized.map((r) =>
-        r.status === "VALID" && r.data && r.data.coefficient !== null
-          ? { status: "ERROR" as const, errors: ["COEFFICIENT_SUM_INVALID"] }
-          : r,
-      ),
+      rows: invalidRows,
       totals: {
         net: net.toFixed(4),
         iva: "0",
-        validRows: valid - 1,
-        errorRows: errors + 1,
+        validRows: valid - invalidCoefficientRows,
+        errorRows: errors + invalidCoefficientRows,
       },
     };
   }

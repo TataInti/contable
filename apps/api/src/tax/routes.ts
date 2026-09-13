@@ -154,6 +154,54 @@ export function taxRoutes(app: FastifyInstance) {
     }
   });
 
+  // §5.1: transiciones del workflow documental.
+  app.post("/api/v1/firms/:firmId/clients/:clientId/document-requests/:requestId/send", async (req, reply) => {
+    const { requestId } = req.params as { requestId: string };
+    try {
+      const request = await work.sendRequest(tenantCtx(req), requestId);
+      return reply.send({ data: request });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+  app.post("/api/v1/firms/:firmId/clients/:clientId/document-requests/:requestId/items/:itemId/accept", async (req, reply) => {
+    const { requestId, itemId } = req.params as { requestId: string; itemId: string };
+    try {
+      const item = await work.acceptItem(tenantCtx(req), requestId, itemId);
+      return reply.send({ data: item });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+  app.post("/api/v1/firms/:firmId/clients/:clientId/document-requests/:requestId/items/:itemId/reject", async (req, reply) => {
+    const { requestId, itemId } = req.params as { requestId: string; itemId: string };
+    const body = z.object({ reason: z.string().trim().min(1).max(1000) }).strict().parse(req.body);
+    try {
+      const item = await work.rejectItem(tenantCtx(req), requestId, itemId, body.reason);
+      return reply.send({ data: item });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+  app.post("/api/v1/firms/:firmId/clients/:clientId/document-requests/:requestId/items/:itemId/waive", async (req, reply) => {
+    const { requestId, itemId } = req.params as { requestId: string; itemId: string };
+    try {
+      const item = await work.waiveItem(tenantCtx(req), requestId, itemId);
+      return reply.send({ data: item });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+  app.post("/api/v1/firms/:firmId/clients/:clientId/document-requests/:requestId/cancel", async (req, reply) => {
+    const { requestId } = req.params as { requestId: string };
+    try {
+      const request = await work.cancelRequest(tenantCtx(req), requestId);
+      return reply.send({ data: request });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.post("/api/v1/firms/:firmId/clients/:clientId/document-requests/:requestId/threads", async (req, reply) => {
     const { requestId } = req.params as { requestId: string };
     const body = z.object({ visibility: z.enum(["INTERNAL", "SHARED"]).optional() }).strict().parse(req.body ?? {});

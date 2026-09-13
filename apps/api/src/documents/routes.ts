@@ -103,6 +103,18 @@ export function documentRoutes(app: FastifyInstance) {
     return reply.send({ data: document });
   });
 
+  // Preview/descarga de un documento subido (URL firmada reautorizada por RLS).
+  // Sólo se firma la versión ya validada (antivirus CLEAN, bucket originals);
+  // mientras el archivo está en cuarentena devuelve 409.
+  app.get("/api/v1/firms/:firmId/clients/:clientId/documents/:documentId/preview", async (req, reply) => {
+    const { documentId } = req.params as { documentId: string };
+    const preview = await service.getPreviewUrl(tenantContextFromRequest(req), documentId);
+    if (!preview) {
+      return reply.status(404).send({ error: { code: "DOCUMENT_NOT_FOUND", message: "Documento no encontrado" } });
+    }
+    return reply.send({ data: preview });
+  });
+
   // F2.2: preview de evidencia de un ítem de pedido (URL firmada reautorizada).
   app.get("/api/v1/firms/:firmId/clients/:clientId/document-request-items/:itemId/preview", async (req, reply) => {
     const { itemId } = req.params as { itemId: string };

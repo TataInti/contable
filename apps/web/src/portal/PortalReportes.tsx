@@ -11,6 +11,7 @@ import {
   PortalPageHeader,
   PortalRetryButton,
 } from "./PortalUI";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./portal.css";
 
 export function PortalReportes() {
@@ -27,6 +28,7 @@ export function PortalReportes() {
     enabled: Boolean(clientId),
   });
   const publications = reports.data ?? [];
+  const latestPublication = [...publications].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0];
 
   const downloadReport = async (report: ReportPublication, format: "pdf" | "xlsx" | "csv") => {
     const key = `${report.id}-${format}`;
@@ -83,6 +85,44 @@ export function PortalReportes() {
           />
         ) : (
           <>
+            <SectionIndex
+              items={[
+                { id: "portal-reports-status-title", label: "Resumen" },
+                { id: "reports-title", label: "Documentos", meta: String(publications.length) },
+              ]}
+            />
+            <section className="portal-guidance" aria-labelledby="reports-next-step-title">
+              <div className="portal-guidance__context">
+                <span className="portal-guidance__icon" aria-hidden="true">
+                  <Icon name="reports" size={19} />
+                </span>
+                <div>
+                  <p className="portal-guidance__eyebrow" id="portal-reports-status-title">Último reporte publicado</p>
+                  <p>
+                    {latestPublication
+                      ? `${latestPublication.run?.template?.name ?? latestPublication.run?.result?.templateCode ?? "Estado contable"} · ${formatPortalDate(latestPublication.publishedAt)}`
+                      : "Las versiones publicadas por tu estudio están listas para descargar."}
+                  </p>
+                </div>
+              </div>
+              <div className="portal-guidance__next">
+                <div>
+                  <p className="portal-guidance__eyebrow">Próximo paso</p>
+                  <h2 id="reports-next-step-title">Descargá la última versión disponible</h2>
+                </div>
+                {latestPublication ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    loading={downloading === `${latestPublication.id}-pdf`}
+                    disabled={downloading !== null}
+                    onClick={() => void downloadReport(latestPublication, "pdf")}
+                  >
+                    Descargar PDF
+                  </Button>
+                ) : null}
+              </div>
+            </section>
             <div className="portal-section-bar">
               <div>
                 <h2 id="reports-title">Documentos disponibles</h2>

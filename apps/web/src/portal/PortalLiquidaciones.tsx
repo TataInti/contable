@@ -13,6 +13,7 @@ import {
   PortalPageHeader,
   PortalRetryButton,
 } from "./PortalUI";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./portal.css";
 
 /**
@@ -29,7 +30,9 @@ interface PublishedSettlement {
   cutoff: string;
   totals: Record<string, string> | null;
   period?: { label: string | null; startDate: string; endDate: string };
-  regime?: { code: string; name: string; taxType?: { code: string; name: string } };
+  taxType?: { code: string; name: string };
+  jurisdiction?: { code: string; name: string };
+  regime?: { code: string; name: string };
   filings?: Array<{ filedAt: string; amountFiled: string; externalId: string | null }>;
   payments?: Array<{ paidAt: string; amount: string; method: string }>;
   artifacts?: PublishedArtifact[];
@@ -56,6 +59,8 @@ export function PortalLiquidaciones() {
     enabled: Boolean(clientId),
   });
   const rows = query.data ?? [];
+  const latestSettlement = [...rows].sort((a, b) => b.cutoff.localeCompare(a.cutoff))[0];
+  const latestArtifact = latestSettlement?.artifacts?.[0];
   const downloadArtifact = async (settlementId: string, artifact: PublishedArtifact) => {
     const key = `${settlementId}-${artifact.id}`;
     setDownloadingArtifact(key);
@@ -111,7 +116,48 @@ export function PortalLiquidaciones() {
           }
         />
       ) : (
-        <section className="portal-page__section" aria-labelledby="settlements-title">
+        <>
+          <SectionIndex
+            items={[
+              { id: "published-settlements-status-title", label: "Resumen" },
+              { id: "settlements-title", label: "Resultados", meta: String(rows.length) },
+            ]}
+          />
+          <section className="portal-guidance" aria-labelledby="settlements-next-step-title">
+            <div className="portal-guidance__context">
+              <span className="portal-guidance__icon" aria-hidden="true">
+                <Icon name="file" size={19} />
+              </span>
+              <div>
+                <p className="portal-guidance__eyebrow" id="published-settlements-status-title">Última liquidación publicada</p>
+                <p>
+                  {latestSettlement
+                    ? `${latestSettlement.taxType?.name ?? latestSettlement.regime?.name ?? latestSettlement.regime?.code ?? "Impuesto"} · ${latestSettlement.period?.label ?? formatPortalDate(latestSettlement.cutoff)} · v${latestSettlement.version}`
+                    : "Consultá los resultados publicados por tu estudio."}
+                </p>
+              </div>
+            </div>
+            <div className="portal-guidance__next">
+              <div>
+                <p className="portal-guidance__eyebrow">Próximo paso</p>
+                <h2 id="settlements-next-step-title">
+                  {latestArtifact ? "Descargá el archivo de la última liquidación" : "Revisá el detalle de la liquidación publicada"}
+                </h2>
+              </div>
+              {latestSettlement && latestArtifact ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={downloadingArtifact === `${latestSettlement.id}-${latestArtifact.id}`}
+                  disabled={downloadingArtifact !== null}
+                  onClick={() => void downloadArtifact(latestSettlement.id, latestArtifact)}
+                >
+                  Descargar {latestArtifact.format.toUpperCase()}
+                </Button>
+              ) : null}
+            </div>
+          </section>
+          <section className="portal-page__section" aria-labelledby="settlements-title">
           <div className="portal-section-bar">
             <div>
               <h2 id="settlements-title">Resultados finalizados</h2>
@@ -146,7 +192,7 @@ export function PortalLiquidaciones() {
               {
                 key: "impuesto",
                 header: "Impuesto",
-                render: (row) => row.regime?.taxType?.name ?? row.regime?.code ?? "—",
+                render: (row) => row.taxType?.name ?? row.regime?.name ?? row.regime?.code ?? "—",
               },
               {
                 key: "version",
@@ -247,7 +293,8 @@ export function PortalLiquidaciones() {
             ]}
             empty="Sin liquidaciones publicadas."
           />
-        </section>
+          </section>
+        </>
       )}
     </div>
   );

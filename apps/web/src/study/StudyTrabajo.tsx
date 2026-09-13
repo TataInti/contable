@@ -7,6 +7,8 @@ import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
+import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./study.css";
 
 interface CloseCycle {
@@ -32,8 +34,14 @@ interface WorkDocumentRequest extends DocumentRequest {
 }
 interface Obligation {
   id: string;
-  name: string;
-  instances: { id: string; periodLabel: string; dueDate: string; status: string }[];
+  status: string;
+  dueDate: string | null;
+  regime: {
+    name: string;
+    taxType: { name: string };
+    jurisdiction: { name: string };
+  };
+  period: { id: string; label: string | null; startDate: string; endDate: string };
 }
 interface EvidencePreview {
   url: string;
@@ -48,6 +56,7 @@ export function StudyTrabajo() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showRequest, setShowRequest] = useState(false);
+  const confirm = useConfirmAction();
   const [showClose, setShowClose] = useState(false);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [request, setRequest] = useState({ title: "", description: "", item: "", dueDate: "" });
@@ -60,6 +69,8 @@ export function StudyTrabajo() {
     threadId: string;
     title: string;
   } | null>(null);
+  const [activeReviewRequestId, setActiveReviewRequestId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const base = firmId && clientId ? `/firms/${firmId}/clients/${clientId}` : null;
   const fiscalYears = useQuery({
@@ -81,7 +92,7 @@ export function StudyTrabajo() {
       },
       {
         queryKey: ["obligations", firmId, clientId],
-        queryFn: () => api.get<Obligation[]>(`${base}/obligations`),
+        queryFn: () => api.get<Obligation[]>(`${base}/tax-obligations`),
         enabled: Boolean(base),
       },
     ],
@@ -106,10 +117,46 @@ export function StudyTrabajo() {
       api.get<EvidencePreview>(`${base}/document-request-items/${itemId}/preview`),
     onSuccess: (data) => setPreview(data),
   });
+  const refreshRequests = () => {
+    void queryClient.invalidateQueries({ queryKey: ["document-requests", firmId, clientId] });
+  };
+  const sendRequest = useMutation({
+    mutationFn: (requestId: string) => api.post(`${base}/document-requests/${requestId}/send`),
+    onSuccess: () => {
+      setReceipt("Pedido enviado al portal del cliente.");
+      refreshRequests();
+    },
+  });
+  const acceptItem = useMutation({
+    mutationFn: ({ requestId, itemId }: { requestId: string; itemId: string }) =>
+      api.post(`${base}/document-requests/${requestId}/items/${itemId}/accept`),
+    onSuccess: () => {
+      setReceipt("Ítem aceptado. El estado del pedido se recalculó.");
+      refreshRequests();
+    },
+  });
+  const waiveItem = useMutation({
+    mutationFn: ({ requestId, itemId }: { requestId: string; itemId: string }) =>
+      api.post(`${base}/document-requests/${requestId}/items/${itemId}/waive`),
+    onSuccess: () => {
+      setReceipt("Ítem eximido. El estado del pedido se recalculó.");
+      refreshRequests();
+    },
+  });
+  const rejectItem = useMutation({
+    mutationFn: ({ requestId, itemId, reason }: { requestId: string; itemId: string; reason: string }) =>
+      api.post(`${base}/document-requests/${requestId}/items/${itemId}/reject`, { reason }),
+    onSuccess: () => {
+      setRejectReason("");
+      setReceipt("Ítem rechazado y devuelto al cliente con el motivo indicado.");
+      refreshRequests();
+    },
+  });
   const activeFiscalYear = useMemo(
     () => fiscalYears.data?.find((year) => year.periods.some((period) => period.id === periodId)),
     [fiscalYears.data, periodId],
   );
+  const selectedAccountingPeriod = activeFiscalYear?.periods.find((period) => period.id === periodId);
   const createClose = useMutation({
     mutationFn: () => {
       if (!base || !periodId || !activeFiscalYear) {
@@ -198,9 +245,23 @@ export function StudyTrabajo() {
     );
 
   const activeRequests = (requests.data ?? []).filter((item) => item.status !== "COMPLETED");
-  const obligationRows = (obligations.data ?? []).flatMap((item) =>
-    item.instances.map((instance) => ({ ...instance, name: item.name })),
-  );
+  const obligationRows = (obligations.data ?? [])
+    .filter((item) => {
+      if (!selectedAccountingPeriod) return true;
+      return (
+        item.period.startDate.slice(0, 10) === selectedAccountingPeriod.startDate.slice(0, 10) &&
+        item.period.endDate.slice(0, 10) === selectedAccountingPeriod.endDate.slice(0, 10)
+      );
+    })
+    .map((item) => ({
+    id: item.id,
+    name: `${item.regime.taxType.name} · ${item.regime.jurisdiction.name}`,
+    periodLabel:
+      item.period.label ??
+      `${DATE.format(new Date(item.period.startDate))} → ${DATE.format(new Date(item.period.endDate))}`,
+    dueDate: item.dueDate ?? item.period.endDate,
+    status: item.status,
+    }));
   const openCloses = (closes.data ?? []).filter((item) => item.status !== "FINALIZED");
   const conversationRequest = activeConversation
     ? (requests.data ?? []).find((item) => item.id === activeConversation.requestId)
@@ -208,6 +269,9 @@ export function StudyTrabajo() {
   const conversationThread = conversationRequest?.threads?.find(
     (thread) => thread.id === activeConversation?.threadId,
   );
+  const reviewRequest = activeReviewRequestId
+    ? (requests.data ?? []).find((item) => item.id === activeReviewRequestId)
+    : undefined;
   const hasQueryError =
     requests.isError || closes.isError || obligations.isError;
 
@@ -266,6 +330,17 @@ export function StudyTrabajo() {
           ) : null}
         </div>
       </div>
+
+      <SectionIndex
+        items={[
+          { id: "work-requests-section", label: "Pedidos", meta: String(activeRequests.length) },
+          { id: "work-closes-section", label: "Cierres", meta: String(openCloses.length) },
+          { id: "work-obligations-section", label: "Obligaciones", meta: String(obligationRows.length) },
+        ]}
+      />
+
+      <section className="guided-context" aria-labelledby="work-context-title"><div className="guided-context__heading"><div><p className="study-page__eyebrow">Coordinación operativa</p><h2 id="work-context-title">Trabajo del período</h2><p>Pedidos, vencimientos y cierres se gestionan dentro del cliente y período seleccionados.</p></div><StatusBadge status={openCloses.length ? "IN_PROGRESS" : "ACTIVE"} /></div><dl className="guided-context__facts"><div><dt>Pedidos abiertos</dt><dd>{activeRequests.length}</dd></div><div><dt>Cierres en curso</dt><dd>{openCloses.length}</dd></div><div><dt>Obligaciones</dt><dd>{obligationRows.length}</dd></div></dl></section>
+      <section className="guided-next-step" aria-labelledby="work-next-step-title"><div><p className="study-page__eyebrow">Flujo guiado</p><h2 id="work-next-step-title">Próximo paso</h2><p>{activeRequests.length ? "Revisá los pedidos abiertos y pedí la evidencia que todavía falta." : openCloses.length ? "Continuá el cierre que está en curso para este período." : "Iniciá un pedido documental para reunir la evidencia del período."}</p></div>{activeRequests.length && capabilities.has("request.manage") ? <Button onClick={() => setShowRequest(true)}>Verificar pedidos</Button> : !openCloses.length && capabilities.has("request.manage") ? <Button onClick={() => setShowRequest(true)}>Pedir documentación</Button> : capabilities.has("period.soft_close") ? <Button onClick={() => setShowClose(true)} disabled={!periodId || !activeFiscalYear}>Iniciar cierre</Button> : null}</section>
 
       <div className="work-summary" aria-label="Resumen del trabajo">
         <div>
@@ -437,6 +512,95 @@ export function StudyTrabajo() {
       </ActionDrawer>
 
       <ActionDrawer
+        isOpen={Boolean(reviewRequest)}
+        onClose={() => {
+          setActiveReviewRequestId(null);
+          setRejectReason("");
+        }}
+        eyebrow="Pedido documental"
+        title="Revisión de ítems"
+        description={reviewRequest?.title}
+      >
+        {reviewRequest ? (
+          <div className="study-page__form">
+            <p className="study-page__hint">
+              Estado del pedido: <strong>{reviewRequest.status}</strong>. La completitud se deriva
+              de los ítems aceptados o eximidos.
+            </p>
+            <div className="request-review-list">
+              {reviewRequest.items.map((item) => {
+                const canResolve = item.status === "ATTACHED";
+                return (
+                  <div key={item.id} className="request-review-list__item">
+                    <div>
+                      <strong>{item.description}</strong>
+                      <small>
+                        {item.required ? "Requerido" : "Opcional"} · {item.status}
+                      </small>
+                    </div>
+                    {canResolve && capabilities.has("request.manage") ? (
+                      <div className="table-actions">
+                        <Button
+                          size="sm"
+                          loading={acceptItem.isPending}
+                          onClick={() => acceptItem.mutate({ requestId: reviewRequest.id, itemId: item.id })}
+                        >
+                          Aceptar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          loading={waiveItem.isPending}
+                          onClick={() => waiveItem.mutate({ requestId: reviewRequest.id, itemId: item.id })}
+                        >
+                          Eximir
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          loading={rejectItem.isPending}
+                          disabled={!rejectReason.trim()}
+                          onClick={() =>
+                            rejectItem.mutate({
+                              requestId: reviewRequest.id,
+                              itemId: item.id,
+                              reason: rejectReason.trim(),
+                            })
+                          }
+                        >
+                          Rechazar
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            {reviewRequest.items.some((item) => item.status === "ATTACHED") &&
+            capabilities.has("request.manage") ? (
+              <>
+                <label className="ds-field" htmlFor="request-reject-reason">
+                  <span className="ds-field__label">Motivo de rechazo</span>
+                  <textarea
+                    id="request-reject-reason"
+                    className="study-textarea"
+                    rows={2}
+                    value={rejectReason}
+                    onChange={(event) => setRejectReason(event.target.value)}
+                    placeholder="Indicá qué debe corregir el cliente."
+                  />
+                </label>
+                <p className="study-page__hint">
+                  Para rechazar un ítem, elegí el motivo y usá la acción correspondiente en la
+                  fila.
+                </p>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </ActionDrawer>
+
+      <ActionDrawer
         isOpen={Boolean(preview)}
         onClose={() => setPreview(null)}
         eyebrow="Evidencia"
@@ -534,7 +698,7 @@ export function StudyTrabajo() {
       </ActionDrawer>
 
       <div className="study-columns work-columns">
-        <section className="study-panel">
+        <section className="study-panel" id="work-requests-section">
           <div className="study-panel__heading">
             <div>
               <p className="study-page__eyebrow">Cliente</p>
@@ -611,6 +775,33 @@ export function StudyTrabajo() {
                       <span className="muted-copy">—</span>
                     ),
                 },
+                {
+                  key: "actions",
+                  header: "Acciones",
+                  align: "right",
+                  render: (row) => (
+                    <div className="table-actions">
+                      {row.status === "DRAFT" && capabilities.has("request.manage") ? (
+                        <Button
+                          size="sm"
+                          loading={sendRequest.isPending}
+                          onClick={() => sendRequest.mutate(row.id)}
+                        >
+                          Enviar pedido
+                        </Button>
+                      ) : null}
+                      {capabilities.has("request.manage") ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setActiveReviewRequestId(row.id)}
+                        >
+                          Revisar
+                        </Button>
+                      ) : null}
+                    </div>
+                  ),
+                },
               ]}
             />
           ) : (
@@ -628,7 +819,7 @@ export function StudyTrabajo() {
             />
           )}
         </section>
-        <section className="study-panel">
+        <section className="study-panel" id="work-closes-section">
           <div className="study-panel__heading">
             <div>
               <p className="study-page__eyebrow">Control</p>
@@ -695,15 +886,15 @@ export function StudyTrabajo() {
                           <Button
                             size="sm"
                             loading={finalizeClose.isPending}
-                            onClick={() => {
-                              if (
-                                window.confirm(
-                                  "¿Finalizar este cierre? El ciclo quedará bloqueado para auditoría.",
-                                )
-                              ) {
-                                finalizeClose.mutate(row.id);
-                              }
-                            }}
+                            onClick={() =>
+                              confirm.ask({
+                                title: "¿Finalizar este cierre?",
+                                description:
+                                  "El ciclo quedará bloqueado para auditoría y no podrá volver a un estado anterior.",
+                                confirmLabel: "Finalizar cierre",
+                                onConfirm: () => finalizeClose.mutate(row.id),
+                              })
+                            }
                           >
                             Finalizar cierre
                           </Button>
@@ -731,7 +922,7 @@ export function StudyTrabajo() {
         </section>
       </div>
 
-      <section className="study-page__section">
+      <section className="study-page__section" id="work-obligations-section">
         <div className="section-heading">
           <div>
             <p className="study-page__eyebrow">Agenda fiscal</p>
@@ -777,6 +968,7 @@ export function StudyTrabajo() {
           />
         )}
       </section>
+      <ConfirmDialog confirm={confirm} />
     </div>
   );
 }

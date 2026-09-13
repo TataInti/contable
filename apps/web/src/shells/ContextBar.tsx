@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
-import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./ContextBar.css";
 
@@ -21,6 +20,10 @@ export function ContextBar() {
   const { firmId, clientId, periodId, setFirmId, setClientId, setPeriodId } = useClientContext();
   const { me, portalContexts } = useSession();
   const portal = useLocation().pathname.startsWith("/portal");
+  // El selector de estudio pertenece únicamente a la administración general.
+  // Dentro del estudio y en el portal se trabaja sobre el único estudio
+  // disponible para esa sesión; el multi-tenant queda fuera de esa vista.
+  const showFirmSelector = me?.isPlatformAdmin === true;
   const firms = useMemo(
     () =>
       portal
@@ -46,6 +49,7 @@ export function ContextBar() {
     : (me?.firms.find((item) => item.firmId === firmId)?.clients ?? []);
   const periods = clients.find((item) => item.clientId === clientId)?.periods ?? [];
   const selectedPeriod = periods.find((period) => period.periodId === periodId);
+  const selectedFirmName = firms.find((firm) => firm.firmId === firmId)?.firmName;
   const role = portal
     ? portalContexts.find((item) => item.firmId === firmId && item.clientId === clientId)?.role
     : me?.firms.find((item) => item.firmId === firmId)?.role;
@@ -57,9 +61,6 @@ export function ContextBar() {
       aria-label="Contexto de trabajo"
     >
       <div className="ctxbar__intro">
-        <span className="ctxbar__scope-icon" aria-hidden="true">
-          <Icon name={portal ? "building" : "briefcase"} size={17} />
-        </span>
         <span>
           <strong>{portal ? "Empresa activa" : "Contexto de trabajo"}</strong>
           <small>{ROLE_LABELS[role ?? ""] ?? role ?? "Seleccioná el alcance"}</small>
@@ -67,32 +68,34 @@ export function ContextBar() {
       </div>
 
       <div className="ctxbar__selectors">
-        <label className="ctxbar__item">
-          <span className="ctxbar__label">Estudio</span>
-          <span className="ctxbar__select-wrap">
-            <Icon name="building" size={15} />
-            <select
-              className="ctxbar__input"
-              value={firmId ?? ""}
-              onChange={(event) => setFirmId(event.target.value || null)}
-            >
-              {!firmId ? <option value="">Elegí un estudio</option> : null}
-              {firms.length === 0 ? <option value="">Sin estudios disponibles</option> : null}
-              {firms.map((firm) => (
-                <option key={firm.firmId} value={firm.firmId}>
-                  {firm.firmName}
-                </option>
-              ))}
-            </select>
-          </span>
-        </label>
-        <span className="ctxbar__separator" aria-hidden="true">
-          <Icon name="chevron" size={13} />
-        </span>
+        {showFirmSelector ? (
+          <label className="ctxbar__item">
+            <span className="ctxbar__label">Estudio</span>
+            <span className="ctxbar__select-wrap">
+              <select
+                className="ctxbar__input"
+                value={firmId ?? ""}
+                onChange={(event) => setFirmId(event.target.value || null)}
+              >
+                {!firmId ? <option value="">Elegí un estudio</option> : null}
+                {firms.length === 0 ? <option value="">Sin estudios disponibles</option> : null}
+                {firms.map((firm) => (
+                  <option key={firm.firmId} value={firm.firmId}>
+                    {firm.firmName}
+                  </option>
+                ))}
+              </select>
+            </span>
+          </label>
+        ) : (
+          <div className="ctxbar__item">
+            <span className="ctxbar__label">Estudio</span>
+            <span className="ctxbar__static-value">{selectedFirmName ?? "Estudio contable"}</span>
+          </div>
+        )}
         <label className="ctxbar__item">
           <span className="ctxbar__label">Cliente</span>
           <span className="ctxbar__select-wrap">
-            <Icon name="users" size={15} />
             <select
               className="ctxbar__input"
               value={clientId ?? ""}
@@ -113,13 +116,9 @@ export function ContextBar() {
             </select>
           </span>
         </label>
-        <span className="ctxbar__separator" aria-hidden="true">
-          <Icon name="chevron" size={13} />
-        </span>
         <label className="ctxbar__item ctxbar__item--period">
           <span className="ctxbar__label">Período</span>
           <span className="ctxbar__select-wrap">
-            <Icon name="calendar" size={15} />
             <select
               className="ctxbar__input ctxbar__input--period"
               value={periodId ?? ""}

@@ -88,6 +88,7 @@
 }
 
 select.ds-field__input {
+  block-size: var(--ds-control-height-md);
   padding-inline-end: var(--ds-space-7);
   cursor: pointer;
 }
@@ -115,6 +116,27 @@ input.ds-field__input[type="number"] {
   font-weight: var(--ds-font-weight-medium);
   line-height: var(--ds-leading-normal);
   color: var(--ds-color-danger);
+}
+
+.ds-field__control {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.ds-field__control .ds-field__input {
+  flex: 1;
+}
+
+.ds-field__prefix {
+  flex: none;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-base);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: var(--ds-leading-normal);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 @media (max-width: 48rem), (pointer: coarse) {

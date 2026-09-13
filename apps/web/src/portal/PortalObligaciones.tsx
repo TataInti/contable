@@ -13,6 +13,7 @@ import {
   PortalPageHeader,
   PortalRetryButton,
 } from "./PortalUI";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./portal.css";
 
 interface Obligation {
@@ -46,6 +47,9 @@ export function PortalObligaciones() {
   const actionable = rows.filter(
     (row) => !["PAID", "FILED", "NOT_APPLICABLE"].includes(row.status),
   ).length;
+  const nextObligation = rows
+    .filter((row) => !["PAID", "FILED", "NOT_APPLICABLE"].includes(row.status))
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
 
   return (
     <div className="portal-page">
@@ -87,7 +91,42 @@ export function PortalObligaciones() {
           }
         />
       ) : (
-        <section className="portal-page__section" aria-labelledby="obligations-title">
+        <>
+          <SectionIndex
+            items={[
+              { id: "obligations-status-title", label: "Resumen", meta: `${actionable} requieren seguimiento` },
+              { id: "obligations-title", label: "Calendario", meta: String(rows.length) },
+            ]}
+          />
+          <section className="portal-guidance" aria-labelledby="obligations-next-step-title">
+            <div className="portal-guidance__context">
+              <span className="portal-guidance__icon" aria-hidden="true">
+                <Icon name="calendar" size={19} />
+              </span>
+              <div>
+                <p className="portal-guidance__eyebrow" id="obligations-status-title">Calendario informado</p>
+                <p>
+                  {nextObligation
+                    ? `Próximo vencimiento: ${nextObligation.obligation.name} · ${formatPortalDate(nextObligation.dueDate, { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}.`
+                    : "No hay obligaciones que requieran seguimiento en este momento."}
+                </p>
+              </div>
+            </div>
+            <div className="portal-guidance__next">
+              <div>
+                <p className="portal-guidance__eyebrow">Próximo paso</p>
+                <h2 id="obligations-next-step-title">
+                  {nextObligation ? "Revisá su seguimiento antes del vencimiento" : "Consultá el detalle de tus obligaciones"}
+                </h2>
+              </div>
+              {nextObligation && capabilities.has("message.shared") ? (
+                <Link className="portal-secondary-link" to="/portal/mensajes">
+                  Hacer una consulta
+                </Link>
+              ) : null}
+            </div>
+          </section>
+          <section className="portal-page__section" aria-labelledby="obligations-title">
           <div className="portal-section-bar">
             <div>
               <h2 id="obligations-title">Calendario informado</h2>
@@ -145,7 +184,8 @@ export function PortalObligaciones() {
               La información publicada es orientativa. Ante una duda, confirmala con tu estudio.
             </span>
           </p>
-        </section>
+          </section>
+        </>
       )}
     </div>
   );

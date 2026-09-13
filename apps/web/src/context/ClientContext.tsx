@@ -249,8 +249,10 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
   const capabilities = useMemo(() => {
     const firm = availableFirms.find((item) => item.firmId === selection.firmId);
     const client = firm?.clients.find((item) => item.clientId === selection.clientId);
-    return new Set(client?.capabilities ?? firm?.capabilities ?? []);
-  }, [availableFirms, selection.firmId, selection.clientId]);
+    const resolved = new Set(client?.capabilities ?? firm?.capabilities ?? []);
+    if (me?.isPlatformAdmin) resolved.add("platform.modules.manage");
+    return resolved;
+  }, [availableFirms, me?.isPlatformAdmin, selection.firmId, selection.clientId]);
 
   const hasClientAccess = useCallback(
     (candidateClientId: string) => {

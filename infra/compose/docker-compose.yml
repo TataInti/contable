@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_USER: contable
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-contable}
-      POSTGRES_DB: contable
+      POSTGRES_DB: ${POSTGRES_DB:-contable_demo}
       RUNTIME_DB_PASSWORD: ${RUNTIME_DB_PASSWORD:-runtime_secret}
       WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:-worker_secret}
     ports:
@@ -65,8 +65,8 @@ services:
       context: ../..
       dockerfile: apps/api/Dockerfile
     environment:
-      DATABASE_URL: postgresql://contable:${POSTGRES_PASSWORD:-contable}@postgres:5432/contable?schema=public
-    command: ["npx", "prisma", "migrate", "deploy", "--config", "apps/api/prisma.config.ts"]
+      DATABASE_URL: postgresql://contable:${POSTGRES_PASSWORD:-contable}@postgres:5432/${POSTGRES_DB:-contable_demo}?schema=public
+    command: ["node", "node_modules/prisma/build/index.js", "migrate", "deploy", "--config", "apps/api/prisma.config.ts"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,7 +78,7 @@ services:
     environment:
       PORT: 3000
       NODE_ENV: production
-      RUNTIME_DATABASE_URL: postgresql://contable_runtime:${RUNTIME_DB_PASSWORD:-runtime_secret}@postgres:5432/contable?schema=public
+      RUNTIME_DATABASE_URL: postgresql://contable_runtime:${RUNTIME_DB_PASSWORD:-runtime_secret}@postgres:5432/${POSTGRES_DB:-contable_demo}?schema=public
       REDIS_URL: redis://valkey:6379
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
@@ -109,7 +109,7 @@ services:
       dockerfile: apps/worker/Dockerfile
     environment:
       NODE_ENV: production
-      WORKER_DATABASE_URL: postgresql://contable_worker:${WORKER_DB_PASSWORD:-worker_secret}@postgres:5432/contable?schema=public
+      WORKER_DATABASE_URL: postgresql://contable_worker:${WORKER_DB_PASSWORD:-worker_secret}@postgres:5432/${POSTGRES_DB:-contable_demo}?schema=public
       REDIS_URL: redis://valkey:6379
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000

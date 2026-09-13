@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Decimal } from "decimal.js";
-import { calculateTemSmt, TEM_SMT_ENGINE_VERSION } from "./tem.js";
+import {
+  calculateTemSmt,
+  TEM_SMT_ENGINE_VERSION,
+  TEM_SMT_LEGACY_ENGINE_VERSION,
+} from "./tem.js";
 
 const period = {
   startDate: "2026-01-01",
@@ -78,7 +82,7 @@ describe("TEM San Miguel de Tucumán (AR_TEM_SMT_V1)", () => {
     expect(result.subtotals["SALDO_A_FAVOR"]).toBe("500.00");
   });
 
-  it("actividad sin alícuota se omite con advertencia", () => {
+  it("actividad sin alícuota bloquea el motor vigente", () => {
     const result = calculateTemSmt({
       engineVersion: TEM_SMT_ENGINE_VERSION,
       period,
@@ -86,9 +90,52 @@ describe("TEM San Miguel de Tucumán (AR_TEM_SMT_V1)", () => {
       rules: rules([{ concept: "COMERCIO", rate: "0.02" }]),
       incomeByActivity: { COMERCIO: "100000", OTRA: "50000" },
     });
-    expect(result.warnings.some((w) => w.includes("OTRA"))).toBe(true);
+    expect(result.blocks.some((block) => block.includes("OTRA"))).toBe(true);
     expect(result.subtotals["BASE_TOTAL"]).toBe("150000.00");
     expect(result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("2000.00");
+  });
+
+  it("mantiene compatibilidad explícita con el motor legacy v1.0", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_LEGACY_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules([{ concept: "COMERCIO", rate: "0.02" }]),
+      incomeByActivity: { OTRA: "50000" },
+    });
+    expect(result.engineVersion).toBe(TEM_SMT_LEGACY_ENGINE_VERSION);
+    expect(result.warnings.some((warning) => warning.includes("OTRA"))).toBe(true);
+    expect(result.blocks).toHaveLength(0);
+  });
+
+  it("aplica mínimos por actividad", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules([
+        { concept: "TRANSPORTE", rate: "0.0125", minimum: "700" },
+        { concept: "CANA", rate: "0.0125", minimum: "900" },
+      ]),
+      incomeByActivity: { TRANSPORTE: "10000", CANA: "10000" },
+    });
+    expect(result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("250.00");
+    expect(result.subtotals["IMPUESTO_DETERMINADO"]).toBe("1600.00");
+  });
+
+  it("bloquea diferencias entre la fuente SMT y la regla versionada", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules([{ concept: "TRANSPORTE", rate: "0.0125" }]),
+      incomeByActivity: { TRANSPORTE: "100000" },
+      minimum: new Decimal("61446"),
+      declaredParameters: [
+        { sourceId: "fila-1", activity: "TRANSPORTE", rate: "1.50", minimum: "60000" },
+      ],
+    });
+    expect(result.blocks).toHaveLength(2);
   });
 
   it("sin ingresos emite advertencia y total 0", () => {

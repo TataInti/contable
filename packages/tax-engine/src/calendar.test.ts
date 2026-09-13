@@ -3,20 +3,20 @@ import { calculateDueDate, nextBusinessDay, periodsForRange } from "./calendar.j
 
 describe("calendario fiscal (G1-10)", () => {
   it("vencimiento en día hábil se mantiene", () => {
-    // Lunes 20 de enero de 2026
+    // Viernes 20 de febrero de 2026 (período enero + 1 mes)
     const result = calculateDueDate(
       { id: "r1", frequency: "MONTHLY", dueDay: 20, validFrom: "2026-01-01" },
       { startDate: "2026-01-01", endDate: "2026-01-31" },
       [],
     );
-    expect(result.dueDate).toBe("2026-01-20");
+    expect(result.dueDate).toBe("2026-02-20");
     expect(result.adjusted).toBe(false);
   });
 
   it("fin de semana se corre al lunes", () => {
-    // 2026-01-18 cae domingo → lunes 19
+    // 2026-01-18 cae domingo → lunes 19 (regla con offset 0)
     const result = calculateDueDate(
-      { id: "r1", frequency: "MONTHLY", dueDay: 18, validFrom: "2026-01-01" },
+      { id: "r1", frequency: "MONTHLY", dueDay: 18, monthOffset: 0, validFrom: "2026-01-01" },
       { startDate: "2026-01-01", endDate: "2026-01-31" },
       [],
     );
@@ -26,11 +26,20 @@ describe("calendario fiscal (G1-10)", () => {
 
   it("feriado corre al día hábil siguiente", () => {
     const result = calculateDueDate(
-      { id: "r1", frequency: "MONTHLY", dueDay: 20, validFrom: "2026-01-01" },
+      { id: "r1", frequency: "MONTHLY", dueDay: 20, monthOffset: 0, validFrom: "2026-01-01" },
       { startDate: "2026-01-01", endDate: "2026-01-31" },
       [{ jurisdictionId: "AR", date: "2026-01-20" }],
     );
     expect(result.dueDate).toBe("2026-01-21");
+  });
+
+  it("desplaza el vencimiento al año siguiente", () => {
+    const result = calculateDueDate(
+      { id: "r1", frequency: "MONTHLY", dueDay: 15, monthOffset: 1, validFrom: "2026-01-01" },
+      { startDate: "2026-12-01", endDate: "2026-12-31" },
+      [],
+    );
+    expect(result.dueDate).toBe("2027-01-15");
   });
 
   it("terminación de CUIT filtra reglas", () => {

@@ -30,8 +30,6 @@ playwright-report/
 playwright.config.ts
 vitest.config.ts
 eslint.config.mjs
-tsconfig*.json
-!tsconfig.base.json
 *.tsbuildinfo
 dev.sh
 .vscode/

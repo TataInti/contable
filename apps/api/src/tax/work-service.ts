@@ -15,7 +15,9 @@ export type WorkErrorCode =
   | "ITEM_NOT_FOUND"
   | "THREAD_NOT_FOUND"
   | "OBLIGATION_NOT_FOUND"
-  | "VISIBILITY_CONFIRMATION_REQUIRED";
+  | "VISIBILITY_CONFIRMATION_REQUIRED"
+  | "INVALID_TRANSITION"
+  | "ITEM_NOT_REQUIRED";
 
 export class WorkError extends Error {
   readonly code: WorkErrorCode;
@@ -72,6 +74,17 @@ export class WorkService {
   /** Adjunta un documento a un ítem (W-003: completitud derivada). */
   async attachDocument(ctx: TenantContext, requestId: string, itemId: string, documentId: string) {
     return withTenantContext(ctx, async (tx) => {
+      const request = await tx.documentRequest.findFirst({
+        where: { id: requestId, firmId: ctx.firmId },
+      });
+      if (!request) throw new WorkError("REQUEST_NOT_FOUND", "Pedido no encontrado");
+      // §5.1: no se puede adjuntar a un pedido DRAFT, COMPLETED o CANCELLED.
+      if (!["SENT", "IN_PROGRESS", "READY_FOR_REVIEW"].includes(request.status)) {
+        throw new WorkError(
+          "INVALID_TRANSITION",
+          `No se puede adjuntar a un pedido ${request.status}`,
+        );
+      }
       const item = await tx.documentRequestItem.findFirst({
         where: { id: itemId, requestId, firmId: ctx.firmId },
       });
@@ -82,18 +95,143 @@ export class WorkService {
         data: { status: "ATTACHED", documentId },
       });
 
-      // Completitud derivada: si todos los ítems requeridos están ATTACHED, el pedido está COMPLETED
+      // §5.1: adjuntar el primer requerido mueve el pedido a IN_PROGRESS;
+      // adjuntar todos los requeridos lo lleva a READY_FOR_REVIEW (no
+      // COMPLETED: la revisión es una acción explícita del estudio).
       const items = await tx.documentRequestItem.findMany({ where: { requestId } });
       const required = items.filter((i) => i.required);
-      const allDone = required.every((i) => i.status === "ATTACHED");
-      if (allDone) {
+      const attachedRequired = required.filter((i) =>
+        ["ATTACHED", "ACCEPTED", "WAIVED"].includes(i.status),
+      );
+      let nextStatus = request.status;
+      if (required.length > 0 && attachedRequired.length === required.length) {
+        nextStatus = "READY_FOR_REVIEW";
+      } else if (attachedRequired.length > 0) {
+        nextStatus = "IN_PROGRESS";
+      }
+      if (nextStatus !== request.status) {
         await tx.documentRequest.update({
           where: { id: requestId },
-          data: { status: "COMPLETED" },
+          data: { status: nextStatus },
         });
       }
-
       return updated;
+    });
+  }
+
+  /** §5.1: envía el pedido (DRAFT → SENT). */
+  async sendRequest(ctx: TenantContext, requestId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const request = await tx.documentRequest.findFirst({
+        where: { id: requestId, firmId: ctx.firmId },
+      });
+      if (!request) throw new WorkError("REQUEST_NOT_FOUND", "Pedido no encontrado");
+      if (request.status !== "DRAFT") {
+        throw new WorkError(
+          "INVALID_TRANSITION",
+          `Sólo un pedido DRAFT puede enviarse (estado actual: ${request.status})`,
+        );
+      }
+      return tx.documentRequest.update({
+        where: { id: requestId },
+        data: { status: "SENT" },
+        include: { items: true },
+      });
+    });
+  }
+
+  /** §5.1: acepta un ítem (READY_FOR_REVIEW → COMPLETED si todos resueltos). */
+  async acceptItem(ctx: TenantContext, requestId: string, itemId: string) {
+    return this.resolveItem(ctx, requestId, itemId, "ACCEPTED");
+  }
+
+  /** §5.1: rechaza un ítem conservando evidencia previa y motivo. */
+  async rejectItem(ctx: TenantContext, requestId: string, itemId: string, reason: string) {
+    return this.resolveItem(ctx, requestId, itemId, "REJECTED", reason);
+  }
+
+  /** §5.1: exime un ítem (no bloquea la completitud). */
+  async waiveItem(ctx: TenantContext, requestId: string, itemId: string) {
+    return this.resolveItem(ctx, requestId, itemId, "WAIVED");
+  }
+
+  private async resolveItem(
+    ctx: TenantContext,
+    requestId: string,
+    itemId: string,
+    target: "ACCEPTED" | "REJECTED" | "WAIVED",
+    reason?: string,
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const request = await tx.documentRequest.findFirst({
+        where: { id: requestId, firmId: ctx.firmId },
+      });
+      if (!request) throw new WorkError("REQUEST_NOT_FOUND", "Pedido no encontrado");
+      // §5.1: aceptar/rechazar/eximir exige pedido READY_FOR_REVIEW o
+      // IN_PROGRESS (aceptar ítems uno a uno mientras el pedido está en
+      // revisión parcial no debe bloquearse).
+      if (!["READY_FOR_REVIEW", "IN_PROGRESS"].includes(request.status)) {
+        throw new WorkError(
+          "INVALID_TRANSITION",
+          `Sólo un pedido en revisión permite resolver ítems (estado actual: ${request.status})`,
+        );
+      }
+      const item = await tx.documentRequestItem.findFirst({
+        where: { id: itemId, requestId, firmId: ctx.firmId },
+      });
+      if (!item) throw new WorkError("ITEM_NOT_FOUND", "Ítem no encontrado");
+      if (target === "ACCEPTED" && !item.required) {
+        throw new WorkError("ITEM_NOT_REQUIRED", "Un ítem opcional no se acepta");
+      }
+
+      const updated = await tx.documentRequestItem.update({
+        where: { id: itemId },
+        data: {
+          status: target,
+          // §5.1: un ítem rechazado conserva la evidencia previa (documentId
+          // no se toca) y registra el motivo en la descripción del ítem.
+          ...(target === "REJECTED" && reason
+            ? { description: `${item.description} — RECHAZADO: ${reason}` }
+            : {}),
+        },
+      });
+
+      // §5.1: rechazar un ítem devuelve el pedido a IN_PROGRESS; aceptar o
+      // eximir todos los requeridos lo completa.
+      const items = await tx.documentRequestItem.findMany({ where: { requestId } });
+      const required = items.filter((i) => i.required);
+      const resolved = required.filter((i) => ["ACCEPTED", "WAIVED"].includes(i.status));
+      const nextStatus: "COMPLETED" | "IN_PROGRESS" =
+        required.length > 0 && resolved.length === required.length
+          ? "COMPLETED"
+          : "IN_PROGRESS";
+      if (nextStatus !== (request.status as string)) {
+        await tx.documentRequest.update({
+          where: { id: requestId },
+          data: { status: nextStatus },
+        });
+      }
+      return updated;
+    });
+  }
+
+  /** §5.1: cancela un pedido abierto (no COMPLETED). */
+  async cancelRequest(ctx: TenantContext, requestId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const request = await tx.documentRequest.findFirst({
+        where: { id: requestId, firmId: ctx.firmId },
+      });
+      if (!request) throw new WorkError("REQUEST_NOT_FOUND", "Pedido no encontrado");
+      if (request.status === "COMPLETED" || request.status === "CANCELLED") {
+        throw new WorkError(
+          "INVALID_TRANSITION",
+          `Un pedido ${request.status} no puede cancelarse`,
+        );
+      }
+      return tx.documentRequest.update({
+        where: { id: requestId },
+        data: { status: "CANCELLED" },
+      });
     });
   }
 

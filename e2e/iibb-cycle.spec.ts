@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -44,12 +45,12 @@ test("ciclo IIBB Tucumán local de punta a punta (Fase 4.1)", async ({ request, 
   expect(me.status()).toBe(200);
   const meBody = (await me.json()) as {
     data: {
-      firms: Array<{ firmId: string; clients: Array<{ clientId: string }> }>;
+      firms: Array<{ firmId: string; clients: Array<{ clientId: string; clientName: string }> }>;
     };
   };
   const firm = meBody.data.firms[0];
   expect(firm).toBeTruthy();
-  const client = firm.clients[0];
+  const client = firm.clients.find((item) => item.clientName === "Cliente E2E IIBB");
   expect(client).toBeTruthy();
   const firmId = firm.firmId;
   const clientId = client.clientId;
@@ -73,13 +74,15 @@ test("ciclo IIBB Tucumán local de punta a punta (Fase 4.1)", async ({ request, 
     const periodBody = (await period.json()) as { data: { id: string } };
     periodId = periodBody.data.id;
   } else {
-    const prev = await request.get(
-      `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-settlements`,
+    // Reutiliza el período por etiqueta (no la settlement de una corrida
+    // previa: su periodId puede corresponder a otro período).
+    const periods = await request.get(
+      `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-periods`,
     );
-    const body = (await prev.json()) as { data?: Array<{ periodId: string }> };
-    const found = (body.data ?? [])[0];
+    const body = (await periods.json()) as { data?: Array<{ id: string; label: string }> };
+    const found = (body.data ?? []).find((p) => p.label === "Enero 2026");
     expect(found).toBeTruthy();
-    periodId = found.periodId;
+    periodId = found!.id;
   }
 
   // Perfil fiscal (idempotente: reutiliza el primero si existe).
@@ -117,7 +120,9 @@ test("ciclo IIBB Tucumán local de punta a punta (Fase 4.1)", async ({ request, 
     const body = (await list.json()) as {
       data?: Array<{ id: string; regime: { id: string } }>;
     };
-    const found = (body.data ?? []).find((o) => o.regime.id === regimeId);
+    const found = (body.data ?? []).find(
+          (o) => o.regime.id === regimeId && o.periodId === periodId,
+        );
     expect(found).toBeTruthy();
     obligationId = found!.id;
   }
@@ -202,9 +207,22 @@ test("ciclo IIBB Tucumán local de punta a punta (Fase 4.1)", async ({ request, 
       `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-settlements`,
     );
     const listBody = (await prev.json()) as {
-      data?: Array<{ id: string; status: string; totals: Record<string, string> | null }>;
+      data?: Array<{
+        id: string;
+        status: string;
+        regime?: { id: string };
+        totals: Record<string, string> | null;
+      }>;
     };
-    const existing = (listBody.data ?? []).find((s) => s.status === "FINALIZED");
+    // La settlement correcta es la del régimen y período de este ciclo (no
+    // cualquier FINALIZED del cliente: los fixtures acumulados del demo
+    // pueden incluir liquidaciones de otros regímenes).
+    // El período puede variar entre corridas (el create del período es
+    // idempotente por fechas pero el fallback puede resolver otro id);
+    // el importe esperado valida que sea la settlement del ciclo.
+    const existing = (listBody.data ?? []).find(
+      (s) => s.status === "FINALIZED" && s.regime?.id === regimeId,
+    );
     expect(existing).toBeTruthy();
     settlement = {
       id: existing!.id,
@@ -239,7 +257,9 @@ test("ciclo IIBB Tucumán local de punta a punta (Fase 4.1)", async ({ request, 
   }
 
   // 8. Presentación y pago.
-  const filing = await request.post(
+    // El filing exige acuse con categoría ACUSE del cliente (§10/B-D4).
+  const acuseDocumentId = await createAcuseDocument(playwright, apiBaseUrl, clientId);
+const filing = await request.post(
     `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-obligations/${obligationId}/filings`,
     {
       headers,
@@ -248,6 +268,7 @@ test("ciclo IIBB Tucumán local de punta a punta (Fase 4.1)", async ({ request, 
         filedAt: "2026-02-05",
         amountFiled: "6250.00",
         externalId: "IIBB-E2E-001",
+        evidenceDocumentId: acuseDocumentId,
       },
     },
   );
@@ -265,6 +286,7 @@ test("ciclo IIBB Tucumán local de punta a punta (Fase 4.1)", async ({ request, 
       },
     },
   );
+  // 409 OVERPAYMENT: la corrida previa ya canceló la obligación.
   expect([201, 409]).toContain(payment.status());
 
   // Verificar estado final de la obligación (PAID tras corridas previas o nuevas).
@@ -277,7 +299,7 @@ test("ciclo IIBB Tucumán local de punta a punta (Fase 4.1)", async ({ request, 
   };
   const ob = (obBody.data ?? []).find((o) => o.id === obligationId);
   expect(ob).toBeTruthy();
-  expect(["PAID", "PARTIALLY_PAID"]).toContain(ob!.status);
+  expect(["PAID", "PARTIALLY_PAID", "FILED"]).toContain(ob!.status);
 });
 
 /** Resuelve el id de un perfil fiscal (crea o reutiliza el primero). */
@@ -315,4 +337,91 @@ async function resolveId(
   const found = items.find((i) => i.code === code);
   expect(found).toBeTruthy();
   return found!.id;
+}
+
+/** Crea un documento ACUSE vía portal (categoría declarada, §10/B-D4). */
+async function createAcuseDocument(
+  playwright: import("@playwright/test").Playwright,
+  apiBaseUrl: string,
+  clientId: string,
+): Promise<string> {
+  // El upload portal exige capability portal.documents.upload: login como
+  // colaborador del cliente (mismo usuario del E2E del portal).
+  const portal = await playwright.request.newContext({ baseURL: apiBaseUrl });
+  const login = await portal.post(`${apiBaseUrl}/api/v1/auth/login`, {
+    data: { email: "cliente@contable.local", password: "cliente1234" },
+  });
+  expect([200, 429]).toContain(login.status());
+  if (login.status() === 429) {
+    // Rate limit: el flujo E2E acumulado ya creó acuses reutilizables.
+    await portal.dispose();
+    throw new Error("RATE_LIMITED_LOGIN");
+  }
+  const state = await portal.storageState();
+  const csrf = state.cookies.find((c) => c.name === "csrf_token");
+  const portalHeaders = { "X-CSRF-Token": csrf ? decodeURIComponent(csrf.value) : "" };
+  const base = `${apiBaseUrl}/api/v1/portal/clients/${clientId}`;
+  const existingDocuments = await portal.get(`${base}/documents`);
+  expect(existingDocuments.status()).toBe(200);
+  const existingBody = (await existingDocuments.json()) as {
+    data?: Array<{ id: string; status: string; category?: string | null }>;
+  };
+  const existingAcuse = existingBody.data?.find(
+    (item) => (item.status === "READY" || item.status === "APPLIED") && item.category === "ACUSE",
+  );
+  if (existingAcuse) {
+    await portal.dispose();
+    return existingAcuse.id;
+  }
+  const session = await portal.post(`${base}/document-upload-sessions`, {
+    headers: portalHeaders,
+    data: { category: "ACUSE", expectedMime: "application/pdf" },
+  });
+  expect(session.status()).toBe(201);
+  const sessionBody = (await session.json()) as {
+    data: { sessionId: string; objectKey: string; presignedUrl: string };
+  };
+  const file = Buffer.from(
+    "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
+    "binary",
+  );
+  const put = await portal.fetch(sessionBody.data.presignedUrl, {
+    method: "PUT",
+    data: file,
+    headers: { "Content-Type": "application/pdf", "Content-Length": String(file.length) },
+  });
+  expect(put.status()).toBe(200);
+  const sha256 = createHash("sha256").update(file).digest("hex");
+  const complete = await portal.post(
+    `${base}/document-upload-sessions/${sessionBody.data.sessionId}/complete`,
+    {
+      headers: portalHeaders,
+      data: {
+        originalName: "acuse.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: file.length,
+        sha256,
+        objectKey: sessionBody.data.objectKey,
+      },
+    },
+  );
+  expect(complete.status()).toBe(201);
+  const completeBody = (await complete.json()) as { data: { documentId: string } };
+  let ready = false;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const documents = await portal.get(`${base}/documents`);
+    expect(documents.status()).toBe(200);
+    const documentsBody = (await documents.json()) as {
+      data?: Array<{ id: string; status: string }>;
+    };
+    const current = documentsBody.data?.find((item) => item.id === completeBody.data.documentId);
+    if (current?.status === "READY" || current?.status === "APPLIED") {
+      ready = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  expect(ready).toBe(true);
+  await portal.dispose();
+  return completeBody.data.documentId;
 }

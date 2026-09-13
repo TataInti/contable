@@ -54,7 +54,11 @@ model User {
   workpapersReviewed     MonthlyTaxWorkpaper[] @relation("workpaperReviewedBy")
   workpapersFinalized    MonthlyTaxWorkpaper[] @relation("workpaperFinalizedBy")
   creditLotsCreated      TaxCreditLot[]
+  creditLotsVerified     TaxCreditLot[]        @relation("creditLotVerifiedBy")
   creditMovementsCreated TaxCreditMovement[]
+  creditLotHistoryCreated TaxCreditLotHistory[]
+  incomesCreated         ManagementIncome[]    @relation("incomeCreatedBy")
+  incomesReviewed        ManagementIncome[]    @relation("incomeReviewedBy")
 
   @@map("users")
 }
@@ -227,6 +231,7 @@ model Client {
   taxAdjustments         TaxAdjustment[]
   evidenceLinks          EvidenceLink[]
   managementExpenses     ManagementExpense[]
+  managementIncomes      ManagementIncome[]
   expenseEvidence        ExpenseEvidence[]
   taxTreatmentDecisions  TaxTreatmentDecision[]
   taxSettlements         TaxSettlement[]
@@ -242,6 +247,8 @@ model Client {
   profitabilitySnapshots ProfitabilitySnapshot[]
   monthlyWorkpapers      MonthlyTaxWorkpaper[]
   workpaperSettlements   WorkpaperSettlement[]
+  workpaperImportBatches WorkpaperImportBatch[]
+  workpaperVoucherClassifications WorkpaperVoucherClassification[]
   taxInputAllocations    TaxInputAllocation[]
   taxControlFindings     TaxControlFinding[]
   taxInterestSnapshots   TaxInterestSnapshot[]
@@ -815,6 +822,7 @@ model UploadSession {
   maxSizeBytes Int
   maxFiles     Int                 @default(1)
   requestItemId String?
+  category     String?
   expiresAt    DateTime
   completedAt  DateTime?
   createdAt    DateTime            @default(now())
@@ -2102,6 +2110,7 @@ model TaxObligation {
   payments TaxPayment[]
   paymentAllocations PaymentAllocation[]
   workpaperLinks WorkpaperSettlement[]
+  inputAllocations TaxInputAllocation[]
   documentRequests DocumentRequest[]
 
   @@unique([clientId, regimeId, periodId])
@@ -2177,6 +2186,7 @@ model TaxRuleVersion {
   approvals RuleApproval[]
   treatmentDecisions TaxTreatmentDecision[]
   adjustments TaxAdjustment[]
+  settlements TaxSettlement[]
 
   @@unique([packId, version])
   @@index([packId, status])
@@ -2242,6 +2252,7 @@ model DueDateRule {
   jurisdictionId String
   frequency     String   @default("MONTHLY")
   dueDay        Int
+  monthOffset   Int      @default(1)
   cuitEnding    String?
   validFrom     DateTime
   validTo       DateTime?
@@ -2346,6 +2357,7 @@ model ImportBatch {
   taxType TaxType       @relation(fields: [taxTypeId], references: [id])
   period  TaxPeriod     @relation(fields: [periodId], references: [id])
   rows    ImportRow[]
+  workpapers WorkpaperImportBatch[]
 
   @@unique([firmId, clientId, origin, taxTypeId, periodId, fileHash])
   @@index([firmId, clientId, periodId])
@@ -2394,6 +2406,8 @@ model ImportRow {
   status      ImportRowStatus @default(PENDING)
   errors      String[]      @default([])
   voucherId   String?       @unique
+  sourceType  String?
+  sourceId    String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -2404,6 +2418,7 @@ model ImportRow {
 
   @@unique([batchId, position])
   @@index([firmId, clientId, batchId])
+  @@index([sourceType, sourceId])
   @@map("import_rows")
 }
 
@@ -2459,6 +2474,7 @@ model FiscalVoucher {
   importRow    ImportRow?
   evidence     EvidenceLink[]
   adjustments  TaxAdjustment[]
+  workpaperClassifications WorkpaperVoucherClassification[]
 
   @@index([firmId, clientId, issuedOn])
   @@index([firmId, clientId, direction, type, pointOfSale, number])
@@ -2618,6 +2634,35 @@ model ManagementExpense {
   @@map("management_expenses")
 }
 
+// C (plan piloto fiscal §7.1): ingresos gerenciales. Separados del dominio
+// fiscal: nunca crean comprobante, componente ni ajuste fiscal. Ciclo igual
+// que gastos: DRAFT → PENDING_REVIEW → APPROVED | REJECTED.
+model ManagementIncome {
+  id                String   @id @default(uuid(7))
+  firmId            String
+  clientId          String
+  description       String
+  amount            Decimal  @db.Decimal(20, 4)
+  currency          String   @default("ARS")
+  accruedOn         DateTime
+  collectedOn       DateTime?
+  category          String?
+  status            ManagementExpenseStatus @default(DRAFT)
+  evidenceDocumentId String?
+  createdByUserId   String
+  reviewedByUserId  String?
+  reviewedAt        DateTime?
+  rejectionComment  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  client    Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("incomeCreatedBy", fields: [createdByUserId], references: [id])
+  reviewedBy User? @relation("incomeReviewedBy", fields: [reviewedByUserId], references: [id])
+
+  @@index([firmId, clientId, accruedOn])
+  @@map("management_incomes")
+}
 enum TaxTreatment {
   MANAGEMENT_ONLY
   FISCAL_COMPUTABLE
@@ -2740,6 +2785,7 @@ model TaxSettlement {
   regimeId         String
   jurisdictionId   String
   periodId         String
+  ruleVersionId    String?
   cutoff           DateTime
   version          Int                @default(1)
   engineVersion    String
@@ -2762,6 +2808,7 @@ model TaxSettlement {
   regime       TaxRegime          @relation(fields: [regimeId], references: [id])
   jurisdiction Jurisdiction       @relation(fields: [jurisdictionId], references: [id])
   period       TaxPeriod          @relation(fields: [periodId], references: [id])
+  ruleVersion  TaxRuleVersion?    @relation(fields: [ruleVersionId], references: [id])
   preparedBy   User               @relation("settlementPreparedBy", fields: [preparedByUserId], references: [id])
   reviewedBy   User?              @relation("settlementReviewedBy", fields: [reviewedByUserId], references: [id])
   finalizedBy  User?              @relation("settlementFinalizedBy", fields: [finalizedByUserId], references: [id])
@@ -2779,6 +2826,7 @@ model TaxSettlement {
   @@unique([clientId, regimeId, periodId, version])
   @@index([firmId, clientId, status])
   @@index([firmId, clientId, periodId])
+  @@index([ruleVersionId])
   @@map("tax_settlements")
 }
 
@@ -2965,11 +3013,14 @@ model TaxPayment {
   settlementId      String?
   paidAt            DateTime
   amount            Decimal  @db.Decimal(20, 4)
+  principalAmount   Decimal  @default(0) @db.Decimal(20, 4)
+  interestAmount    Decimal  @default(0) @db.Decimal(20, 4)
   method            String
   status            String   @default("PAID")
   reference         String?
   reversedById      String?
   reversedAt        DateTime?
+  reversalReason    String?
   createdByUserId   String
   createdAt         DateTime @default(now())
 
@@ -2979,6 +3030,7 @@ model TaxPayment {
   allocations PaymentAllocation[]
 
   @@index([firmId, clientId, obligationId])
+  @@unique([obligationId, reference])
   @@map("tax_payments")
 }
 
@@ -3085,6 +3137,9 @@ model MonthlyTaxWorkpaper {
   supersedes MonthlyTaxWorkpaper?  @relation("workpaperSupersedes", fields: [supersedesId], references: [id])
   supersededBy MonthlyTaxWorkpaper[] @relation("workpaperSupersedes")
   settlements WorkpaperSettlement[]
+  sources     WorkpaperImportBatch[]
+  classifications WorkpaperVoucherClassification[]
+  inputAllocations TaxInputAllocation[]
   controls    TaxControlFinding[]
   interestSnapshots TaxInterestSnapshot[]
 
@@ -3098,7 +3153,7 @@ model WorkpaperSettlement {
   firmId       String
   clientId     String
   workpaperId  String
-  settlementId String
+  settlementId String?
   obligationId String
   role         String
   required     Boolean  @default(true)
@@ -3107,7 +3162,7 @@ model WorkpaperSettlement {
 
   client     Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
   workpaper  MonthlyTaxWorkpaper @relation(fields: [workpaperId], references: [id], onDelete: Cascade)
-  settlement TaxSettlement      @relation(fields: [settlementId], references: [id])
+  settlement TaxSettlement?     @relation(fields: [settlementId], references: [id])
   obligation TaxObligation      @relation(fields: [obligationId], references: [id])
 
   @@unique([workpaperId, obligationId])
@@ -3115,10 +3170,68 @@ model WorkpaperSettlement {
   @@map("workpaper_settlements")
 }
 
+model WorkpaperImportBatch {
+  id               String   @id @default(uuid(7))
+  firmId           String
+  clientId         String
+  workpaperId      String
+  importBatchId    String
+  sourceCode       String
+  status           String   @default("PENDING_REVIEW")
+  snapshotHash     String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  client      Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workpaper   MonthlyTaxWorkpaper @relation(fields: [workpaperId], references: [id], onDelete: Cascade)
+  importBatch ImportBatch         @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+
+  @@unique([workpaperId, importBatchId])
+  @@index([firmId, clientId, workpaperId, sourceCode])
+  @@map("workpaper_import_batches")
+}
+
+model WorkpaperVoucherClassification {
+  id                 String   @id @default(uuid(7))
+  firmId             String
+  clientId           String
+  workpaperId        String
+  voucherId          String
+  supplierProfileId  String?
+  direction          FiscalVoucherDirection
+  counterpartyCuit   String
+  documentKind       String
+  categoryCode       String?
+  activityCode       String?
+  rateBuckets        Json
+  status             String   @default("PENDING")
+  origin             String?
+  snapshotHash       String?
+  classifiedByUserId String?
+  classifiedAt       DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  client          Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workpaper       MonthlyTaxWorkpaper @relation(fields: [workpaperId], references: [id], onDelete: Cascade)
+  voucher         FiscalVoucher       @relation(fields: [voucherId], references: [id])
+  supplierProfile SupplierTaxProfile? @relation(fields: [supplierProfileId], references: [id], onDelete: SetNull)
+
+  @@unique([workpaperId, voucherId])
+  @@index([firmId, clientId, workpaperId, status])
+  @@index([firmId, clientId, counterpartyCuit])
+  @@map("workpaper_voucher_classifications")
+}
+
 model TaxInputAllocation {
   id             String   @id @default(uuid(7))
   firmId         String
   clientId       String
+  workpaperId    String?
+  obligationId   String?
+  sourceCode     String?
   sourceType     String
   sourceId       String
   taxTypeId      String
@@ -3128,12 +3241,18 @@ model TaxInputAllocation {
   amount         Decimal  @db.Decimal(20, 4)
   status         String   @default("RESERVED")
   snapshotHash   String?
+  allocatedByUserId String?
+  allocatedAt    DateTime?
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client     Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  workpaper  MonthlyTaxWorkpaper? @relation(fields: [workpaperId], references: [id], onDelete: Cascade)
+  obligation TaxObligation?      @relation(fields: [obligationId], references: [id], onDelete: Cascade)
 
-  @@unique([sourceType, sourceId, taxTypeId, regimeId, jurisdictionId, periodId])
+  @@unique([workpaperId, sourceType, sourceId, obligationId])
   @@index([firmId, clientId, taxTypeId])
+  @@index([firmId, clientId, workpaperId, obligationId, status])
   @@map("tax_input_allocations")
 }
 
@@ -3161,6 +3280,7 @@ model TaxControlFinding {
   workpaper MonthlyTaxWorkpaper? @relation(fields: [workpaperId], references: [id], onDelete: SetNull)
 
   @@index([firmId, clientId, workpaperId])
+  @@unique([workpaperId, code, sourceHash])
   @@map("tax_control_findings")
 }
 
@@ -3186,6 +3306,7 @@ model TaxInterestSnapshot {
   workpaper MonthlyTaxWorkpaper? @relation(fields: [workpaperId], references: [id], onDelete: SetNull)
 
   @@index([firmId, clientId, obligationId])
+  @@unique([obligationId, inputHash])
   @@map("tax_interest_snapshots")
 }
 
@@ -3194,7 +3315,7 @@ model F931Run {
   firmId         String
   clientId       String
   periodId       String
-  importBatchId  String?
+  importBatchId  String?  @unique
   totalRemuneration Decimal @db.Decimal(20, 4)
   deduction      Decimal  @db.Decimal(20, 4)
   netRemuneration Decimal @db.Decimal(20, 4)
@@ -3238,6 +3359,7 @@ model SupplierTaxProfile {
   validFrom      DateTime
   validTo        DateTime?
   activityCode   String?
+  categoryCode   String?
   jurisdictionId String?
   evidenceDocumentId String?
   createdByUserId String?
@@ -3247,13 +3369,23 @@ model SupplierTaxProfile {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client          Client                           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  classifications WorkpaperVoucherClassification[]
 
   @@index([firmId, clientId, cuitNormalized])
+  @@unique([clientId, cuitNormalized, version])
   @@map("supplier_tax_profiles")
 }
 
 // --- F1.1: libro de créditos inmutable (reemplaza balanceAfter mutable) ---
+
+// B1 (plan piloto §3.1): estado de verificación de saldos. Un saldo sólo
+// reduce un impuesto cuando está VERIFIED; los existentes migran pendientes.
+enum TaxCreditLotStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  SUPERSEDED
+}
 
 model TaxCreditLot {
   id             String   @id @default(uuid(7))
@@ -3268,15 +3400,38 @@ model TaxCreditLot {
   sourceSettlementId String?
   sourcePaymentId String?
   evidenceDocumentId String?
+  reference      String?
+  verificationStatus TaxCreditLotStatus @default(PENDING_VERIFICATION)
+  verifiedByUserId String?
+  verifiedAt     DateTime?
   createdByUserId String
   createdAt      DateTime @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   createdBy User @relation(fields: [createdByUserId], references: [id])
+  verifiedBy User? @relation("creditLotVerifiedBy", fields: [verifiedByUserId], references: [id])
   movements TaxCreditMovement[]
+  history TaxCreditLotHistory[]
 
   @@index([firmId, clientId, taxTypeId])
+  @@unique([sourceSettlementId, kind, jurisdictionId])
   @@map("tax_credit_lots")
+}
+
+model TaxCreditLotHistory {
+  id             String   @id @default(uuid(7))
+  lotId          String
+  firmId         String
+  clientId       String
+  createdByUserId String
+  createdAt      DateTime @default(now())
+  changes        Json
+
+  lot      TaxCreditLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  createdBy User         @relation(fields: [createdByUserId], references: [id])
+
+  @@index([firmId, clientId, lotId])
+  @@map("tax_credit_lot_history")
 }
 
 model TaxCreditMovement {

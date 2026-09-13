@@ -24,6 +24,10 @@ SELECT format(
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'contable_worker')
 \gexec
 
-GRANT CONNECT ON DATABASE contable TO contable_runtime, contable_worker;
+SELECT format(
+  'GRANT CONNECT ON DATABASE %I TO contable_runtime, contable_worker',
+  current_database()
+)
+\gexec
 GRANT USAGE ON SCHEMA public TO contable_runtime, contable_worker;
 SQL

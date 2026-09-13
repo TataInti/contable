@@ -55,4 +55,60 @@ describe("resolveCapabilities", () => {
     expect(caps.has("entry.post")).toBe(false);
     expect(caps).not.toContain("entry.post");
   });
+
+  // ================================================================
+  // B (plan piloto §6): matriz de permisos para saldos y libro de
+  // créditos. Verificar es revisión (REVIEWER+); aplicar/corregir es
+  // cálculo (PREPARER+); leer es sólo lectura.
+  // ================================================================
+
+  it("§6: verificar saldo exige tax.settlements.review (PREPARER no puede)", () => {
+    const preparer = capabilitiesForRole("PREPARER");
+    const reviewer = capabilitiesForRole("REVIEWER");
+    const auditor = capabilitiesForRole("AUDITOR_READONLY");
+    expect(preparer.has("tax.settlements.review")).toBe(false);
+    expect(reviewer.has("tax.settlements.review")).toBe(true);
+    expect(auditor.has("tax.settlements.review")).toBe(false);
+  });
+
+  it("§6: aplicar/corregir saldo exige calculate (PREPARER sí, AUDITOR no)", () => {
+    const preparer = capabilitiesForRole("PREPARER");
+    const reviewer = capabilitiesForRole("REVIEWER");
+    const auditor = capabilitiesForRole("AUDITOR_READONLY");
+    expect(preparer.has("tax.settlements.calculate")).toBe(true);
+    expect(reviewer.has("tax.settlements.calculate")).toBe(false);
+    expect(auditor.has("tax.settlements.calculate")).toBe(false);
+  });
+
+  it("§6: leer libro de créditos exige tax.settlements.read (todos los internos)", () => {
+    const owner = capabilitiesForRole("OWNER");
+    const preparer = capabilitiesForRole("PREPARER");
+    const reviewer = capabilitiesForRole("REVIEWER");
+    const auditor = capabilitiesForRole("AUDITOR_READONLY");
+    for (const caps of [owner, preparer, reviewer, auditor]) {
+      expect(caps.has("tax.settlements.read")).toBe(true);
+    }
+  });
+
+  it("§6: el aislamiento del portal no depende de capacidades internas", () => {
+    // El guard de portal (guard.ts) NO usa resolveCapabilities: asigna un set
+    // dedicado (portal.*) según el rol de portal. Un usuario interno que
+    // además es miembro de portal conserva sus capacidades internas en rutas
+    // de estudio, pero las rutas /portal/* sólo otorgan portal.*. Este test
+    // fija que el resolver no filtre por isPortalMember (el scope portal es
+    // responsabilidad del guard), evitando dobles fuentes de verdad.
+    const internalAndPortal = resolveCapabilities({
+      role: "REVIEWER",
+      isAssignedToClient: true,
+      isPortalMember: true,
+    });
+    expect(hasCapability(internalAndPortal, "tax.settlements.review")).toBe(true);
+    const portalOnly = resolveCapabilities({
+      role: "REVIEWER",
+      isAssignedToClient: false,
+      isPortalMember: true,
+    });
+    // Sin asignación al cliente no hay acceso a datos del cliente.
+    expect(hasCapability(portalOnly, "tax.settlements.review")).toBe(false);
+  });
 });

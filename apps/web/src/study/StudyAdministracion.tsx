@@ -2,10 +2,13 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
-import { api, type FeatureFlag } from "../lib/api";
+import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
+import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
+import { ActionDrawer } from "../ui/ActionDrawer";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./study.css";
 
 interface PortalInvitation {
@@ -29,19 +32,75 @@ interface CreatedInvitation {
   expiresAt: string;
 }
 
+interface InternalMember {
+  id: string;
+  userId: string;
+  role: string;
+  status: string;
+  acceptedAt: string | null;
+  user?: { name: string; emailNormalized: string; status: string } | null;
+}
+
+const INTERNAL_ROLE_LABELS: Record<string, string> = {
+  OWNER: "Titular",
+  ADMIN: "Administrador",
+  PREPARER: "Preparador",
+  REVIEWER: "Revisor",
+  AUDITOR_READONLY: "Auditor · sólo lectura",
+};
+
+const INTERNAL_MODULES_BY_ROLE: Record<string, string[]> = {
+  OWNER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Expediente mensual", "Rentabilidad"],
+  ADMIN: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Expediente mensual", "Rentabilidad"],
+  PREPARER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Expediente mensual", "Rentabilidad"],
+  REVIEWER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Expediente mensual", "Rentabilidad"],
+  AUDITOR_READONLY: ["Clientes", "Configuración fiscal", "Liquidaciones", "Rentabilidad"],
+};
+
+const INTERNAL_ROLE_OPTIONS = Object.entries(INTERNAL_ROLE_LABELS);
+
 export function StudyAdministracion() {
   const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [internalEmail, setInternalEmail] = useState("");
+  const [internalRole, setInternalRole] = useState("PREPARER");
+  const [showInternalInviteForm, setShowInternalInviteForm] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("OWNER");
+  const [showInviteForm, setShowInviteForm] = useState(false);
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const flags = useQuery({
-    queryKey: ["flags", firmId],
-    queryFn: () => api.get<FeatureFlag[]>(`/firms/${firmId}/feature-flags`),
-    enabled: Boolean(firmId && capabilities.has("firm.manage")),
+  const confirm = useConfirmAction();
+  const internalMembers = useQuery({
+    queryKey: ["internal-members", firmId],
+    queryFn: () => api.get<InternalMember[]>(`/firms/${firmId}/members`),
+    enabled: Boolean(firmId && capabilities.has("firm.users.manage")),
+  });
+  const inviteInternal = useMutation({
+    mutationFn: () =>
+      api.post(`/firms/${firmId}/invitations`, { email: internalEmail.trim(), role: internalRole }),
+    onSuccess: () => {
+      setActionError(null);
+      setNotice("La invitación al estudio quedó registrada.");
+      setInternalEmail("");
+      setShowInternalInviteForm(false);
+      void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo invitar al usuario interno."),
+  });
+  const updateInternalRole = useMutation({
+    mutationFn: ({ userId, role: nextRole }: { userId: string; role: string }) =>
+      api.patch(`/firms/${firmId}/members/${userId}`, { role: nextRole }),
+    onSuccess: () => {
+      setActionError(null);
+      setNotice("El rol del usuario interno fue actualizado.");
+      void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo actualizar el rol."),
   });
   const invitations = useQuery({
     queryKey: ["portal-invitations", firmId, clientId],
@@ -55,17 +114,6 @@ export function StudyAdministracion() {
       api.get<PortalMembership[]>(`/firms/${firmId}/clients/${clientId}/portal-memberships`),
     enabled: Boolean(firmId && clientId && capabilities.has("firm.manage")),
   });
-  const updateFlag = useMutation({
-    mutationFn: (flag: FeatureFlag) =>
-      api.put(`/firms/${firmId}/feature-flags/${flag.code}`, { enabled: !flag.enabled }),
-    onSuccess: (_result, flag) => {
-      setActionError(null);
-      setNotice(`${flag.code} quedó ${flag.enabled ? "deshabilitado" : "habilitado"}.`);
-      void queryClient.invalidateQueries({ queryKey: ["flags", firmId] });
-    },
-    onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo actualizar el módulo."),
-  });
   const invite = useMutation({
     mutationFn: () =>
       api.post<CreatedInvitation>(`/firms/${firmId}/clients/${clientId}/portal-invitations`, {
@@ -78,6 +126,7 @@ export function StudyAdministracion() {
         `${window.location.origin}/aceptar-invitacion?token=${encodeURIComponent(created.invitationToken)}`,
       );
       setEmail("");
+      setShowInviteForm(false);
       void queryClient.invalidateQueries({ queryKey: ["portal-invitations", firmId, clientId] });
     },
     onError: (error) =>
@@ -117,12 +166,29 @@ export function StudyAdministracion() {
     }
   };
 
-  if (!capabilities.has("firm.manage"))
+  const activePortalMembershipCount = memberships.data?.filter((item) => !item.revokedAt).length;
+  const pendingInvitationCount = invitations.data?.filter(
+    (item) =>
+      !item.revokedAt &&
+      !item.acceptedAt &&
+      new Date(item.expiresAt) >= new Date(),
+  ).length;
+  const activeInternalMemberCount = internalMembers.data?.filter((item) => item.status === "ACTIVE").length;
+  const openInternalInviteForm = () => {
+    setActionError(null);
+    setShowInternalInviteForm(true);
+  };
+  const openInviteForm = () => {
+    setActionError(null);
+    setShowInviteForm(true);
+  };
+
+  if (!capabilities.has("firm.users.manage"))
     return (
       <div className="study-page">
         <EmptyState
           title="Acceso restringido"
-          description="Sólo owners y administradores pueden cambiar la configuración del estudio."
+          description="Sólo titulares y administradores pueden gestionar usuarios internos del estudio."
         />
       </div>
     );
@@ -131,12 +197,19 @@ export function StudyAdministracion() {
       <div className="study-page__header">
         <div>
           <p className="study-page__eyebrow">Configuración del estudio</p>
-          <h1 className="study-page__title">Administración</h1>
+          <h1 className="study-page__title">Usuarios y accesos</h1>
           <p className="study-page__subtitle">
-            Gestioná accesos al portal y módulos habilitados para el contexto actual.
+            Gestioná las personas del estudio. El rol define qué módulos internos puede usar cada usuario.
           </p>
         </div>
       </div>
+      <SectionIndex
+        items={[
+          { id: "admin-context-title", label: "Resumen" },
+          { id: "internal-users-title", label: "Usuarios internos" },
+          { id: "portal-access-title", label: "Accesos del portal" },
+        ]}
+      />
       {notice ? (
         <div className="action-receipt action-receipt--page" role="status">
           <Icon name="check" size={18} />
@@ -154,12 +227,138 @@ export function StudyAdministracion() {
           {actionError}
         </p>
       ) : null}
-      <section className="study-panel">
+      <section className="study-panel administration-context" aria-labelledby="admin-context-title">
+        <div className="administration-context__heading">
+          <div>
+            <p className="study-page__eyebrow">Contexto operativo</p>
+            <h2 id="admin-context-title">Resumen de accesos</h2>
+            <p>Los módulos habilitados para el estudio se definen en administración general; acá se asignan por rol.</p>
+          </div>
+          <StatusBadge status={clientId ? "ACTIVE" : "PENDING"} />
+        </div>
+        <dl className="administration-context__facts">
+          <div><dt>Cliente</dt><dd>{clientId ? "Seleccionado" : "Sin seleccionar"}</dd></div>
+          <div><dt>Usuarios internos</dt><dd>{activeInternalMemberCount ?? "—"}</dd></div>
+          <div><dt>Accesos del portal</dt><dd>{activePortalMembershipCount ?? "—"}</dd></div>
+          <div><dt>Invitaciones pendientes</dt><dd>{pendingInvitationCount ?? "—"}</dd></div>
+        </dl>
+      </section>
+
+      <section className="administration-next-step" aria-labelledby="admin-next-step-title">
+        <div>
+          <p className="study-page__eyebrow">Flujo guiado</p>
+          <h2 id="admin-next-step-title">Próximo paso</h2>
+          <p>{activeInternalMemberCount ? "Podés invitar otra persona al estudio o ajustar el rol de un usuario interno." : "Todavía no hay usuarios internos activos en este estudio."}</p>
+        </div>
+        <Button onClick={openInternalInviteForm}>
+          <Icon name="plus" size={17} /> Invitar al estudio
+        </Button>
+      </section>
+
+      <section className="study-panel administration-operational-section" aria-labelledby="internal-users-title">
         <div className="study-panel__heading">
           <div>
-            <h2>Acceso del cliente</h2>
+            <h2 id="internal-users-title">Usuarios internos</h2>
+            <p>El rol es la fuente de verdad del acceso a módulos internos. No se asignan permisos sueltos por persona.</p>
+          </div>
+          <Button size="sm" onClick={openInternalInviteForm}>
+            <Icon name="plus" size={17} /> Invitar usuario
+          </Button>
+        </div>
+        <ActionDrawer
+          isOpen={showInternalInviteForm}
+          onClose={() => setShowInternalInviteForm(false)}
+          eyebrow="Acceso interno"
+          title="Invitar al estudio"
+          description="La persona debe tener una cuenta activa. Su rol definirá los módulos internos disponibles."
+        >
+          <form
+            className="study-form study-form--compact"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setActionError(null);
+              inviteInternal.mutate();
+            }}
+          >
+            <Field
+              id="internal-invite-email"
+              label="Email"
+              type="email"
+              value={internalEmail}
+              onChange={(event) => setInternalEmail(event.target.value)}
+              required
+            />
+            <label className="ds-field">
+              <span className="ds-field__label">Rol interno</span>
+              <select className="ds-field__input" value={internalRole} onChange={(event) => setInternalRole(event.target.value)}>
+                {INTERNAL_ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            {inviteInternal.isError && actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
+            <div className="study-form__actions">
+              <Button type="submit" loading={inviteInternal.isPending} disabled={!internalEmail.trim()}>
+                <Icon name="plus" size={17} /> Enviar invitación
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setShowInternalInviteForm(false)}>Cancelar</Button>
+            </div>
+          </form>
+        </ActionDrawer>
+        {internalMembers.isLoading ? (
+          <div className="query-state" role="status"><span className="loading-copy">Cargando usuarios internos…</span></div>
+        ) : internalMembers.isError ? (
+          <EmptyState
+            title="No se pudieron cargar los usuarios"
+            description="No asumimos que no haya usuarios mientras la consulta está fallando."
+            action={<Button size="sm" variant="secondary" onClick={() => void internalMembers.refetch()}>Reintentar</Button>}
+          />
+        ) : (internalMembers.data?.length ?? 0) === 0 ? (
+          <EmptyState title="Todavía no hay usuarios internos" description="Invitá a la primera persona del estudio para asignarle un rol." />
+        ) : (
+          <Table<InternalMember>
+            rows={internalMembers.data ?? []}
+            rowKey={(item) => item.id}
+            columns={[
+              {
+                key: "person",
+                header: "Persona",
+                render: (item) => <><strong>{item.user?.name ?? "Usuario eliminado"}</strong><br /><small>{item.user?.emailNormalized ?? "—"}</small></>,
+              },
+              {
+                key: "role",
+                header: "Rol y acceso",
+                render: (item) => (
+                  <div className="internal-access-cell">
+                    <label className="sr-only" htmlFor={`internal-role-${item.userId}`}>Rol de {item.user?.name ?? "usuario eliminado"}</label>
+                    <select
+                      id={`internal-role-${item.userId}`}
+                      className="ds-field__input"
+                      value={item.role}
+                      disabled={updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId}
+                      onChange={(event) => updateInternalRole.mutate({ userId: item.userId, role: event.target.value })}
+                    >
+                      {INTERNAL_ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                    <small>{(INTERNAL_MODULES_BY_ROLE[item.role] ?? []).join(" · ") || "Sin módulos internos"}</small>
+                  </div>
+                ),
+              },
+              { key: "status", header: "Estado", render: (item) => <StatusBadge status={item.status} /> },
+            ]}
+          />
+        )}
+      </section>
+
+      <section className="study-panel administration-operational-section" aria-labelledby="portal-access-title">
+        <div className="study-panel__heading">
+          <div>
+            <h2 id="portal-access-title">Accesos del portal</h2>
             <p>La invitación vence a los siete días y sólo puede usarse con el correo indicado.</p>
           </div>
+          {clientId ? (
+            <Button size="sm" onClick={openInviteForm}>
+              <Icon name="plus" size={17} /> Invitar al portal
+            </Button>
+          ) : null}
         </div>
         {!clientId ? (
           <EmptyState
@@ -173,38 +372,52 @@ export function StudyAdministracion() {
           />
         ) : (
           <>
-            <form
-              className="study-inline-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setActionError(null);
-                invite.mutate();
-              }}
+            <ActionDrawer
+              isOpen={showInviteForm}
+              onClose={() => setShowInviteForm(false)}
+              eyebrow="Acceso del cliente"
+              title="Invitar al portal"
+              description="La invitación vence a los siete días y sólo puede usarse con el correo indicado."
             >
-              <Field
-                id="portal-invite-email"
-                label="Email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-              <label className="ds-field">
-                <span className="ds-field__label">Rol</span>
-                <select
-                  className="ctxbar__input"
-                  value={role}
-                  onChange={(event) => setRole(event.target.value)}
-                >
-                  <option value="OWNER">Titular</option>
-                  <option value="COLLABORATOR">Colaborador</option>
-                  <option value="READONLY">Sólo lectura</option>
-                </select>
-              </label>
-              <Button type="submit" loading={invite.isPending} disabled={!email.trim()}>
-                <Icon name="plus" size={17} /> Invitar
-              </Button>
-            </form>
+              <form
+                className="study-form study-form--compact"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  setActionError(null);
+                  invite.mutate();
+                }}
+              >
+                <Field
+                  id="portal-invite-email"
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                />
+                <label className="ds-field">
+                  <span className="ds-field__label">Rol</span>
+                  <select
+                    className="ds-field__input"
+                    value={role}
+                    onChange={(event) => setRole(event.target.value)}
+                  >
+                    <option value="OWNER">Titular</option>
+                    <option value="COLLABORATOR">Colaborador</option>
+                    <option value="READONLY">Sólo lectura</option>
+                  </select>
+                </label>
+                {invite.isError && actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
+                <div className="study-form__actions">
+                  <Button type="submit" loading={invite.isPending} disabled={!email.trim()}>
+                    <Icon name="plus" size={17} /> Enviar invitación
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setShowInviteForm(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </form>
+            </ActionDrawer>
             {invitationLink ? (
               <div className="invitation-link" role="status">
                 <p>Enlace generado. Copialo ahora; el token no se vuelve a mostrar.</p>
@@ -251,9 +464,9 @@ export function StudyAdministracion() {
                         header: "Persona",
                         render: (item) => (
                           <>
-                            <strong>{item.user.name}</strong>
+                            <strong>{item.user?.name ?? "Usuario eliminado"}</strong>
                             <br />
-                            <small>{item.user.emailNormalized}</small>
+                            <small>{item.user?.emailNormalized ?? "—"}</small>
                           </>
                         ),
                       },
@@ -276,14 +489,16 @@ export function StudyAdministracion() {
                               loading={
                                 revokeMembership.isPending && revokeMembership.variables === item.id
                               }
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    `¿Revocar el acceso de ${item.user.name}? Perderá acceso al portal de inmediato.`,
-                                  )
-                                )
-                                  revokeMembership.mutate(item.id);
-                              }}
+                              onClick={() =>
+                                confirm.ask({
+                                  title: `¿Revocar el acceso de ${item.user?.name ?? "este usuario"}?`,
+                                  description:
+                                    "Perderá acceso al portal de inmediato. La acción queda registrada en la auditoría.",
+                                  confirmLabel: "Revocar acceso",
+                                  tone: "danger",
+                                  onConfirm: () => revokeMembership.mutate(item.id),
+                                })
+                              }
                             >
                               Revocar
                             </Button>
@@ -340,15 +555,16 @@ export function StudyAdministracion() {
                                   revokeInvitation.isPending &&
                                   revokeInvitation.variables === item.id
                                 }
-                                onClick={() => {
-                                  if (
-                                    window.confirm(
-                                      `¿Revocar la invitación para ${item.emailNormalized}?`,
-                                    )
-                                  ) {
-                                    revokeInvitation.mutate(item.id);
-                                  }
-                                }}
+                                onClick={() =>
+                                  confirm.ask({
+                                    title: `¿Revocar la invitación para ${item.emailNormalized}?`,
+                                    description:
+                                      "El enlace dejará de funcionar y la persona no podrá aceptar la invitación.",
+                                    confirmLabel: "Revocar invitación",
+                                    tone: "danger",
+                                    onConfirm: () => revokeInvitation.mutate(item.id),
+                                  })
+                                }
                               >
                                 Revocar
                               </Button>
@@ -364,61 +580,7 @@ export function StudyAdministracion() {
           </>
         )}
       </section>
-      <section className="study-page__section">
-        <h2 className="study-page__section-title">Módulos</h2>
-        {flags.isLoading ? (
-          <div className="query-state">
-            <span className="loading-copy">Cargando módulos…</span>
-          </div>
-        ) : flags.isError ? (
-          <EmptyState
-            title="No se pudo cargar la configuración"
-            description="Reintentá antes de cambiar módulos del estudio."
-            action={
-              <Button variant="secondary" onClick={() => void flags.refetch()}>
-                Reintentar
-              </Button>
-            }
-          />
-        ) : (flags.data?.length ?? 0) === 0 ? (
-          <EmptyState title="Sin módulos configurados" />
-        ) : (
-          <Table<FeatureFlag>
-            rows={flags.data ?? []}
-            rowKey={(flag) => flag.id}
-            columns={[
-              { key: "code", header: "Módulo", render: (flag) => flag.code },
-              {
-                key: "enabled",
-                header: "Estado",
-                render: (flag) => <StatusBadge status={flag.enabled ? "ACTIVE" : "DISABLED"} />,
-              },
-              {
-                key: "action",
-                header: "Acción",
-                render: (flag) => (
-                  <Button
-                    size="sm"
-                    variant={flag.enabled ? "danger" : "secondary"}
-                    loading={updateFlag.isPending && updateFlag.variables?.id === flag.id}
-                    onClick={() => {
-                      if (
-                        !flag.enabled ||
-                        window.confirm(
-                          `¿Deshabilitar ${flag.code}? La función dejará de estar disponible para este estudio.`,
-                        )
-                      )
-                        updateFlag.mutate(flag);
-                    }}
-                  >
-                    {flag.enabled ? "Deshabilitar" : "Habilitar"}
-                  </Button>
-                ),
-              },
-            ]}
-          />
-        )}
-      </section>
+      <ConfirmDialog confirm={confirm} />
     </div>
   );
 }

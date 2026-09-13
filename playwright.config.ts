@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const externalStack = process.env.E2E_EXTERNAL === "1";
+const e2eDatabaseUrl = process.env.E2E_DATABASE_URL ?? "postgresql://contable_runtime:runtime_secret@localhost:5432/contable";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -22,11 +23,14 @@ export default defineConfig({
       env: {
         ...process.env,
         NODE_ENV: "development",
-        RUNTIME_DATABASE_URL: "postgresql://contable_runtime:runtime_secret@localhost:5432/contable",
+        DATABASE_URL: e2eDatabaseUrl,
+        RUNTIME_DATABASE_URL: process.env.E2E_RUNTIME_DATABASE_URL ?? e2eDatabaseUrl,
         REDIS_URL: "redis://localhost:6379",
         AI_SERVICE_URL: "http://localhost:8000",
         AI_SERVICE_SECRET: "dev-secret",
         MFA_CHALLENGE_SECRET: "e2e-mfa-challenge-secret-with-32-characters",
+        // La suite E2E hace ~16 logins por corrida desde la misma IP.
+        LOGIN_RATE_LIMIT_MAX: "100",
       },
     },
     {

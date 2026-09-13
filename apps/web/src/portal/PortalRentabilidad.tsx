@@ -4,7 +4,9 @@ import { Button, EmptyState } from "@contable/design-system";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
-import { formatPortalMoney, PortalLoading, PortalPageHeader, PortalRetryButton } from "./PortalUI";
+import { Icon } from "../ui/Icon";
+import { formatPortalDate, formatPortalMoney, PortalLoading, PortalPageHeader, PortalRetryButton } from "./PortalUI";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./portal.css";
 
 /**
@@ -155,6 +157,9 @@ export function PortalRentabilidad() {
   const rows = query.data ?? [];
   const devengado = rows.find((s) => s.basis === "DEVENGADO");
   const caja = rows.find((s) => s.basis === "CAJA");
+  const latestPublication = [...rows].sort((a, b) =>
+    (b.publishedAt ?? b.cutoff).localeCompare(a.publishedAt ?? a.cutoff),
+  )[0];
 
   return (
     <div className="portal-page">
@@ -193,10 +198,43 @@ export function PortalRentabilidad() {
           }
         />
       ) : (
-        <div className="portal-profitability-grid">
-          {devengado ? <SnapshotCard snapshot={devengado} /> : null}
-          {caja ? <SnapshotCard snapshot={caja} /> : null}
-        </div>
+        <>
+          <SectionIndex
+            items={[
+              { id: "portal-profitability-status-title", label: "Resumen" },
+              ...(devengado ? [{ id: "portal-profitability-devengado", label: "Devengado", meta: `v${devengado.version}` }] : []),
+              ...(caja ? [{ id: "portal-profitability-caja", label: "Caja", meta: `v${caja.version}` }] : []),
+            ]}
+          />
+          <section className="portal-guidance" aria-labelledby="profitability-next-step-title">
+            <div className="portal-guidance__context">
+              <span className="portal-guidance__icon" aria-hidden="true">
+                <Icon name="trending" size={19} />
+              </span>
+              <div>
+                <p className="portal-guidance__eyebrow" id="portal-profitability-status-title">Última publicación</p>
+                <p>
+                  {latestPublication
+                    ? `${basisLabel(latestPublication.basis)} · v${latestPublication.version} · ${formatPortalDate(latestPublication.publishedAt ?? latestPublication.cutoff)}`
+                    : "Resultados disponibles para el período seleccionado."}
+                </p>
+              </div>
+            </div>
+            <div className="portal-guidance__next">
+              <div>
+                <p className="portal-guidance__eyebrow">Próximo paso</p>
+                <h2 id="profitability-next-step-title">Compará el resultado devengado con el flujo de caja</h2>
+              </div>
+              <Link className="portal-secondary-link" to="/portal/reportes">
+                Ver reportes
+              </Link>
+            </div>
+          </section>
+          <div className="portal-profitability-grid">
+            {devengado ? <div id="portal-profitability-devengado"><SnapshotCard snapshot={devengado} /></div> : null}
+            {caja ? <div id="portal-profitability-caja"><SnapshotCard snapshot={caja} /></div> : null}
+          </div>
+        </>
       )}
     </div>
   );

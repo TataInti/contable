@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon, type IconName } from "../ui/Icon";
 import { PortalLoading, PortalPageHeader, PortalRetryButton } from "./PortalUI";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./portal.css";
 
 interface Summary {
@@ -74,13 +75,20 @@ export function PortalDashboard() {
         />
       ) : summary.data ? (
         <>
-          <section className="portal-dashboard__overview" aria-labelledby="next-step-title">
+          <SectionIndex
+            items={[
+              { id: "portal-next-step-title", label: "Para resolver" },
+              { id: "portal-activity-summary", label: "Resumen" },
+              { id: "portal-quick-title", label: "Accesos rápidos" },
+            ]}
+          />
+          <section className="portal-dashboard__overview" aria-labelledby="portal-next-step-title">
             <div className="portal-dashboard__focus">
               <span className="portal-dashboard__focus-icon" aria-hidden="true">
                 <Icon name={summary.data.pendingRequests > 0 ? "tasks" : "check"} size={24} />
               </span>
               <p className="portal-dashboard__kicker">Para resolver</p>
-              <h2 id="next-step-title">
+              <h2 id="portal-next-step-title">
                 {summary.data.pendingRequests > 0
                   ? `${summary.data.pendingRequests} ${summary.data.pendingRequests === 1 ? "pedido necesita" : "pedidos necesitan"} tu atención`
                   : "No tenés pedidos pendientes"}
@@ -113,7 +121,7 @@ export function PortalDashboard() {
               </Link>
             </div>
 
-            <dl className="portal-summary" aria-label="Resumen de actividad">
+            <dl className="portal-summary" id="portal-activity-summary" aria-label="Resumen de actividad">
               <div className="portal-summary__item">
                 <dt>Vencimientos informados</dt>
                 <dd className="portal-summary__value">{summary.data.upcomingObligations}</dd>
@@ -141,10 +149,10 @@ export function PortalDashboard() {
             </dl>
           </section>
 
-          <section className="portal-dashboard__quick" aria-labelledby="quick-title">
+          <section className="portal-dashboard__quick" aria-labelledby="portal-quick-title">
             <div className="portal-section-heading">
               <p className="portal-page__eyebrow">Accesos rápidos</p>
-              <h2 id="quick-title">¿Qué necesitás hacer?</h2>
+              <h2 id="portal-quick-title">¿Qué necesitás hacer?</h2>
             </div>
             <div className="portal-dashboard__quick-links">
               {QUICK_LINKS.filter((item) => !item.capability || capabilities.has(item.capability)).map((item) => (

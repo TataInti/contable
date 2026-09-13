@@ -64,6 +64,7 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   OPEN: { label: "Abierto", tone: "info" },
   PROCESSING: { label: "Procesando", tone: "info" },
   READY_FOR_REVIEW: { label: "Listo para revisar", tone: "info" },
+  READY_TO_FILE: { label: "Lista para presentar", tone: "info" },
   RUNNING: { label: "En proceso", tone: "info" },
   SENT: { label: "Enviado", tone: "info" },
   UPLOADED: { label: "Subido", tone: "info" },

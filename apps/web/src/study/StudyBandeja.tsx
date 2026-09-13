@@ -12,8 +12,9 @@ import {
 } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
-import { Icon } from "../ui/Icon";
+import { SectionIndex } from "../ui/SectionIndex";
 import { StatusBadge } from "../ui/StatusBadge";
+import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import "./study.css";
 
 interface UploadSession {
@@ -25,6 +26,11 @@ interface UploadComplete {
   documentId: string;
   status: string;
 }
+
+type DocumentQueueFilter = "ALL" | "PROCESSING" | "NEEDS_REVIEW" | "REVIEWED" | "ERROR";
+
+const PROCESSING_DOCUMENT_STATUSES = new Set(["UPLOADED", "VALIDATING", "PROCESSING", "IN_PROGRESS", "RUNNING"]);
+const ERROR_DOCUMENT_STATUSES = new Set(["EXTRACTION_FAILED", "INFECTED", "FAILED"]);
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
@@ -54,11 +60,38 @@ function fileSize(size: number) {
     : `${Math.ceil(size / 1024)} KB`;
 }
 
+function documentFileName(document: Document) {
+  return document.fileVersions?.[0]?.originalName ?? document.id.slice(0, 8);
+}
+
+function documentTypeLabel(document: Document) {
+  const mimeType = document.fileVersions?.[0]?.mimeType ?? "";
+  if (mimeType.includes("pdf")) return "PDF";
+  if (mimeType.includes("webp")) return "WEBP";
+  return "IMAGEN";
+}
+
+function normalizeDocumentSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es-AR");
+}
+
+function belongsToDocumentQueue(document: Document, filter: DocumentQueueFilter) {
+  if (filter === "ALL") return true;
+  if (filter === "PROCESSING") return PROCESSING_DOCUMENT_STATUSES.has(document.status);
+  if (filter === "NEEDS_REVIEW") return document.status === "EXTRACTED";
+  if (filter === "REVIEWED") return document.status === "REVIEWED";
+  return ERROR_DOCUMENT_STATUSES.has(document.status);
+}
+
 export function StudyBandeja() {
   const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const confirm = useConfirmAction();
   const [corrections, setCorrections] = useState<Record<string, string>>({});
   const [showUpload, setShowUpload] = useState(false);
   const [uploadRequestItemId, setUploadRequestItemId] = useState("");
@@ -66,6 +99,8 @@ export function StudyBandeja() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadDone, setUploadDone] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [documentSearch, setDocumentSearch] = useState("");
+  const [documentFilter, setDocumentFilter] = useState<DocumentQueueFilter>("ALL");
   const base = firmId && clientId ? `/firms/${firmId}/clients/${clientId}` : null;
   const documents = useQuery({
     queryKey: ["documents", firmId, clientId],
@@ -169,15 +204,61 @@ export function StudyBandeja() {
         queryKey: ["extraction", firmId, clientId, selectedId],
       }),
   });
+  // G2-07.5: ver/descargar el archivo subido. La URL firmada se pide al servidor
+  // en el momento (reautoriza por RLS) y sólo se expone una vez validada.
+  const openFile = useMutation({
+    mutationFn: async (documentId: string) => {
+      const preview = await api.get<{ url: string }>(
+        `${base}/documents/${documentId}/preview`,
+      );
+      window.open(preview.url, "_blank", "noopener,noreferrer");
+    },
+  });
+  const fileReady =
+    Boolean(detail.data) &&
+    (detail.data?.fileVersions?.[0]?.bucket === "originals" ||
+      detail.data?.status === "EXTRACTED" ||
+      detail.data?.fileVersions?.[0]?.antivirusStatus === "CLEAN");
 
   const rows = documents.data ?? [];
+  const normalizedDocumentSearch = normalizeDocumentSearch(documentSearch.trim());
+  const visibleRows = rows.filter((document) => {
+    if (!belongsToDocumentQueue(document, documentFilter)) return false;
+    if (!normalizedDocumentSearch) return true;
+    return normalizeDocumentSearch(
+      `${documentFileName(document)} ${document.status} ${document.category ?? ""} ${document.direction ?? ""} ${document.createdAt}`,
+    ).includes(normalizedDocumentSearch);
+  });
+  const documentQueue = [
+    { id: "ALL" as const, label: "Todos", count: rows.length },
+    {
+      id: "NEEDS_REVIEW" as const,
+      label: "Para revisar",
+      count: rows.filter((document) => belongsToDocumentQueue(document, "NEEDS_REVIEW")).length,
+    },
+    {
+      id: "PROCESSING" as const,
+      label: "Procesando",
+      count: rows.filter((document) => belongsToDocumentQueue(document, "PROCESSING")).length,
+    },
+    {
+      id: "REVIEWED" as const,
+      label: "Revisados",
+      count: rows.filter((document) => belongsToDocumentQueue(document, "REVIEWED")).length,
+    },
+    {
+      id: "ERROR" as const,
+      label: "Con error",
+      count: rows.filter((document) => belongsToDocumentQueue(document, "ERROR")).length,
+    },
+  ];
   const pendingRequestItems = (requests.data ?? []).flatMap((request) =>
     request.items
       .filter((item) => item.status === "PENDING")
       .map((item) => ({ ...item, requestTitle: request.title })),
   );
   return (
-    <div className="study-page study-page--wide">
+    <div className="study-page study-page--wide document-inbox">
       <div className="study-page__header">
         <div>
           <p className="study-page__eyebrow">Ingreso y evidencia</p>
@@ -193,10 +274,10 @@ export function StudyBandeja() {
             onClick={() => {
               void documents.refetch();
               if (showUpload) void requests.refetch();
-            }}
-          >
-            Actualizar
-          </Button>
+              }}
+            >
+              Actualizar
+            </Button>
           {base && capabilities.has("document.upload") ? (
             <Button
               onClick={() => {
@@ -206,12 +287,66 @@ export function StudyBandeja() {
               }}
               variant={showUpload ? "secondary" : "primary"}
             >
-              <Icon name={showUpload ? "close" : "upload"} size={17} />
               {showUpload ? "Cerrar carga" : "Subir documento"}
             </Button>
           ) : null}
         </div>
       </div>
+
+      <SectionIndex
+        items={[
+          { id: "inbox-context-title", label: "Contexto", meta: `${rows.length} documentos` },
+          { id: "inbox-next-step-title", label: "Siguiente paso" },
+          ...(base ? [{ id: "document-explorer-title", label: "Explorador" }] : []),
+        ]}
+      />
+
+      <section className="document-inbox__context" aria-labelledby="inbox-context-title">
+        <div className="document-inbox__context-heading">
+          <div>
+            <p className="study-page__eyebrow">Evidencia del cliente</p>
+            <h2 id="inbox-context-title">Documentos y pedidos</h2>
+            <p>La bandeja conserva el vínculo entre cada archivo y el pedido que lo originó.</p>
+          </div>
+          <StatusBadge status={base ? "ACTIVE" : "PENDING"} />
+        </div>
+        <dl className="document-inbox__context-facts">
+          <div>
+            <dt>Documentos</dt>
+            <dd>{rows.length}</dd>
+          </div>
+          <div>
+            <dt>Ítems pendientes</dt>
+            <dd>{pendingRequestItems.length}</dd>
+          </div>
+          <div>
+            <dt>Cliente</dt>
+            <dd>{base ? "Seleccionado" : "Sin seleccionar"}</dd>
+          </div>
+          <div>
+            <dt>Orden</dt>
+            <dd>Más recientes primero</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="document-inbox__next-step" aria-labelledby="inbox-next-step-title">
+        <div>
+          <p className="study-page__eyebrow">Siguiente paso</p>
+          <h2 id="inbox-next-step-title">
+            {!base
+              ? "Seleccioná un cliente para revisar su evidencia."
+              : pendingRequestItems.length
+                ? "Hay pedidos documentales pendientes."
+                : "No hay pedidos documentales pendientes."}
+          </h2>
+        </div>
+        {base && pendingRequestItems.length && capabilities.has("document.upload") ? (
+          <Button onClick={() => setShowUpload(true)}>Subir documento</Button>
+        ) : base && capabilities.has("request.manage") ? (
+          <Button onClick={() => navigate("/trabajo")}>Crear pedido</Button>
+        ) : null}
+      </section>
 
       <ActionDrawer
         isOpen={showUpload && Boolean(base)}
@@ -225,9 +360,7 @@ export function StudyBandeja() {
         description="El archivo pasa por validación, antivirus y extracción antes de estar disponible."
         size="wide"
       >
-        <span className="secure-note upload-panel__secure-note">
-          <Icon name="shield" size={15} /> Carga segura
-        </span>
+        <p className="secure-note upload-panel__secure-note">Carga segura</p>
         {requests.isLoading ? (
           <div className="query-state query-state--compact" role="status">
             <span className="loading-copy">Buscando pedidos abiertos…</span>
@@ -298,9 +431,6 @@ export function StudyBandeja() {
                 accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                 onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
               />
-              <span className="upload-dropzone__icon">
-                <Icon name="upload" size={23} />
-              </span>
               <span>
                 <strong>
                   {file ? file.name : "Arrastrá un archivo o elegilo desde tu equipo"}
@@ -316,7 +446,6 @@ export function StudyBandeja() {
             ) : null}
             {uploadDone ? (
               <div className="action-receipt" role="status">
-                <Icon name="check" size={18} />
                 <span>
                   <strong>Documento recibido</strong>
                   <small>Ya ingresó al circuito de validación y procesamiento.</small>
@@ -354,14 +483,62 @@ export function StudyBandeja() {
           description="La bandeja y cada documento pertenecen a un contexto de cliente específico."
         />
       ) : (
-        <div className="review-workspace">
+        <>
+          <section className="document-inbox__explorer" aria-labelledby="document-explorer-title">
+            <div className="document-inbox__explorer-heading">
+              <div>
+                <p className="study-page__eyebrow">Explorar bandeja</p>
+                <h2 id="document-explorer-title">Encontrá un documento</h2>
+                <p>Filtrá por nombre o estado antes de abrir un comprobante.</p>
+              </div>
+              <div className="document-inbox__filters">
+                <label>
+                  <span>Buscar</span>
+                  <input
+                    type="search"
+                    value={documentSearch}
+                    onChange={(event) => setDocumentSearch(event.target.value)}
+                    placeholder="Nombre, categoría o estado…"
+                  />
+                </label>
+                <label>
+                  <span>Estado</span>
+                  <select
+                    value={documentFilter}
+                    onChange={(event) => setDocumentFilter(event.target.value as DocumentQueueFilter)}
+                  >
+                    {documentQueue.map((queue) => (
+                      <option key={queue.id} value={queue.id}>
+                        {queue.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+            <nav className="document-inbox__queue-index" aria-label="Vistas de la bandeja">
+              {documentQueue.map((queue) => (
+                <button
+                  key={queue.id}
+                  type="button"
+                  aria-current={documentFilter === queue.id ? "page" : undefined}
+                  onClick={() => setDocumentFilter(queue.id)}
+                >
+                  <span>{queue.label}</span>
+                  <small>{queue.count}</small>
+                </button>
+              ))}
+            </nav>
+          </section>
+
+          <div className="review-workspace">
           <section className="review-list" aria-label="Documentos">
             <div className="review-list__heading">
               <div>
                 <h2>Documentos</h2>
-                <span>{documents.isLoading ? "…" : rows.length}</span>
+                <span>{documents.isLoading ? "…" : visibleRows.length}</span>
               </div>
-              <small>Más recientes primero</small>
+              <small>{visibleRows.length === rows.length ? "Más recientes primero" : `de ${rows.length}`}</small>
             </div>
             {documents.isLoading ? (
               <div className="query-state query-state--compact" role="status">
@@ -392,27 +569,31 @@ export function StudyBandeja() {
               />
             ) : (
               <Table
-                rows={rows}
+                rows={visibleRows}
                 rowKey={(row) => row.id}
+                empty={
+                  <EmptyState
+                    size="compact"
+                    title="No hay documentos en esta vista"
+                    description="Probá con otro estado o ajustá la búsqueda."
+                  />
+                }
                 columns={[
                   {
                     key: "document",
                     header: "Documento",
                     render: (row) => (
                       <button
+                        type="button"
                         className="document-link"
                         aria-current={selectedId === row.id ? "true" : undefined}
                         onClick={() => {
                           setSelectedId(row.id);
                         }}
                       >
-                        <span className="document-link__icon">
-                          <Icon name="file" size={17} />
-                        </span>
+                        <span className="document-link__type">{documentTypeLabel(row)}</span>
                         <span>
-                          <strong>
-                            {row.fileVersions?.[0]?.originalName ?? row.id.slice(0, 8)}
-                          </strong>
+                          <strong>{documentFileName(row)}</strong>
                           <small>
                             {new Intl.DateTimeFormat("es-AR").format(new Date(row.createdAt))}
                           </small>
@@ -427,8 +608,8 @@ export function StudyBandeja() {
                   },
                 ]}
               />
-            )}
-          </section>
+              )}
+            </section>
           <aside className="review-detail" aria-live="polite">
             {!selectedId ? (
               <EmptyState
@@ -462,9 +643,6 @@ export function StudyBandeja() {
             ) : (
               <>
                 <div className="review-detail__heading">
-                  <span className="review-detail__file-icon">
-                    <Icon name="file" size={21} />
-                  </span>
                   <div>
                     <h2>{detail.data?.fileVersions?.[0]?.originalName ?? "Documento"}</h2>
                     <p>
@@ -476,13 +654,24 @@ export function StudyBandeja() {
                         : "recientemente"}
                     </p>
                   </div>
-                  <StatusBadge status={detail.data?.status} />
+                  <div className="review-detail__actions">
+                    {fileReady ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={openFile.isPending}
+                        disabled={openFile.isPending}
+                        title="Ver o descargar el archivo"
+                        onClick={() => openFile.mutate(detail.data!.id)}
+                      >
+                        Ver archivo
+                      </Button>
+                    ) : null}
+                    <StatusBadge status={detail.data?.status} />
+                  </div>
                 </div>
                 {detail.data?.status !== "EXTRACTED" ? (
                   <div className="processing-state">
-                    <span className="processing-state__icon">
-                      <Icon name="spark" size={21} />
-                    </span>
                     <div>
                       <h3>Procesando comprobante</h3>
                       <p>
@@ -544,19 +733,17 @@ export function StudyBandeja() {
                     {capabilities.has("document.review") &&
                     extraction.data.status !== "REVIEWED" ? (
                       <div className="review-actions">
-                        <p>
-                          <Icon name="shield" size={16} /> Confirmá que los datos coinciden con la
-                          evidencia antes de aprobar.
-                        </p>
+                        <p>Confirmá que los datos coinciden con la evidencia antes de aprobar.</p>
                         <Button
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                "¿Confirmás que revisaste los datos contra el comprobante?",
-                              )
-                            )
-                              approve.mutate();
-                          }}
+                          onClick={() =>
+                            confirm.ask({
+                              title: "¿Aprobar la extracción?",
+                              description:
+                                "Confirmá que revisaste los datos contra el comprobante. La aprobación queda registrada en la auditoría.",
+                              confirmLabel: "Aprobar extracción",
+                              onConfirm: () => approve.mutate(),
+                            })
+                          }
                           loading={approve.isPending}
                         >
                           Aprobar extracción
@@ -565,7 +752,6 @@ export function StudyBandeja() {
                     ) : null}
                     {extraction.data.status === "REVIEWED" ? (
                       <div className="action-receipt">
-                        <Icon name="check" size={18} />
                         <span>
                           <strong>Extracción revisada</strong>
                           <small>
@@ -576,7 +762,6 @@ export function StudyBandeja() {
                     ) : null}
                     {extraction.data.status === "REVIEWED" ? (
                       <div className="action-receipt" role="status">
-                        <Icon name="file" size={18} />
                         <span>
                           <strong>Datos listos para registrar</strong>
                           <small>
@@ -593,8 +778,10 @@ export function StudyBandeja() {
               </>
             )}
           </aside>
-        </div>
+          </div>
+        </>
       )}
+      <ConfirmDialog confirm={confirm} />
     </div>
   );
 }

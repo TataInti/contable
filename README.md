@@ -15,7 +15,7 @@ packages/*     motor contable, permisos, contratos, storage y design system
 infra/*        PostgreSQL, Valkey, MinIO, ClamAV, Nginx y Compose
 ```
 
-> 📐 **[Diagrama de arquitectura vivo →](./docs/architecture-overview.md)**
+> 📐 **[Diagrama de arquitectura vivo →](./docs/dev/architecture-overview.md)**
 > Incluye vista de contenedores, mapa de transición de módulos legacy → fiscal, flujo de liquidación target y principios arquitectónicos.
 > Se actualiza con cada cambio arquitectónico significativo.
 
@@ -37,10 +37,19 @@ Compose usa un migrador con rol owner y ejecuta API/worker con roles separados q
 Con infraestructura levantada:
 
 ```bash
-DATABASE_URL=postgresql://contable:contable@localhost:5432/contable npm run seed:demo -w @contable/api
+DATABASE_URL=postgresql://contable:contable@localhost:5432/contable_demo npm run seed:demo -w @contable/api
+DATABASE_URL=postgresql://contable:contable@localhost:5432/contable_demo npm run seed:maestros-fiscales -w @contable/api
 ```
 
 Credenciales: `demo@contable.local` / `demo1234`. El seed es sólo para desarrollo y no se ejecuta automáticamente.
+
+Para habilitar el fixture completo del piloto fiscal, después de `seed:demo` y `seed:maestros-fiscales` ejecutá:
+
+```bash
+DATABASE_URL=postgresql://contable:contable@localhost:5432/contable_demo npm run seed:piloto -w @contable/api
+```
+
+Ese seed activa los flags fiscales del piloto y crea usuarios de portal `COLLABORATOR` y `READONLY` para las pruebas de roles.
 
 ## Desarrollo sin contenedores
 

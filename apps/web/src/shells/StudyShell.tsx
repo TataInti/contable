@@ -1,11 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ContextBar } from "./ContextBar";
 import { logout } from "../lib/auth";
 import { useSession } from "../session/SessionContext";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
-import { STUDY_NAVIGATION_GROUPS, modulesForNavigation } from "../study/moduleRegistry";
+import { GuidedTour } from "../ui/GuidedTour";
+import {
+  STUDY_NAVIGATION_GROUPS,
+  modulesForNavigation,
+  type StudyNavigationGroup,
+} from "../study/moduleRegistry";
 import "./StudyShell.css";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -15,6 +20,14 @@ const ROLE_LABELS: Record<string, string> = {
   PREPARER: "Preparador",
   REVIEWER: "Revisor",
   AUDITOR: "Auditor",
+};
+
+const NAV_TOUR_IDS: Record<StudyNavigationGroup, string> = {
+  General: "nav-general",
+  Preparación: "nav-preparacion",
+  Ejecución: "nav-ejecucion",
+  Análisis: "nav-analisis",
+  Configuración: "nav-configuracion",
 };
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -41,6 +54,12 @@ export function StudyShell() {
   const navigationModules = modulesForNavigation(capabilities);
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
+
+  const openNavigationForTour = useCallback(() => {
+    if (window.matchMedia?.("(max-width: 1024px)").matches) {
+      setMenuOpen(true);
+    }
+  }, []);
 
   const signOut = () => void logout().finally(() => navigate("/login", { replace: true }));
 
@@ -83,6 +102,7 @@ export function StudyShell() {
               <div
                 className={`study__nav-group${group === "Configuración" ? " study__nav-group--admin" : ""}`}
                 key={group}
+                data-tour={NAV_TOUR_IDS[group]}
               >
                 <p className="study__nav-label">{group}</p>
                 {items.map((item) => (
@@ -105,8 +125,22 @@ export function StudyShell() {
         </nav>
 
         <div className="study__sidebar-footer">
+          <GuidedTour onNavigationRequired={openNavigationForTour}>
+            {({ startTour }) => (
+              <button type="button" className="study__tour-trigger" onClick={startTour}>
+                <span className="study__tour-trigger-mark" aria-hidden="true">
+                  ?
+                </span>
+                <span>
+                  <strong>Recorrer el estudio</strong>
+                  <small>Volver a ver el tour</small>
+                </span>
+                <Icon name="arrow-right" size={15} />
+              </button>
+            )}
+          </GuidedTour>
           {session.portalContexts.length > 0 ? (
-            <NavLink to="/portal" className="study__portal-link">
+            <NavLink to="/portal" className="study__portal-link" data-tour="portal-link">
               <span className="study__portal-icon">
                 <Icon name="portal" size={17} />
               </span>

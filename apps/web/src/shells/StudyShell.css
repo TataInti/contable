@@ -156,6 +156,68 @@
   border-top: 1px solid var(--ds-color-border);
 }
 
+.study__tour-trigger {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: var(--ds-space-3);
+  width: 100%;
+  margin-bottom: var(--ds-space-2);
+  padding: var(--ds-space-3);
+  border: 1px solid color-mix(in srgb, var(--ds-color-primary) 26%, var(--ds-color-border));
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease-out,
+    background-color 150ms ease-out,
+    transform 150ms ease-out;
+}
+
+.study__tour-trigger:hover {
+  border-color: var(--ds-color-primary);
+  background: color-mix(in srgb, var(--ds-color-primary-soft) 72%, var(--ds-color-surface));
+  transform: translateY(-1px);
+}
+
+.study__tour-trigger-mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid color-mix(in srgb, var(--ds-color-primary) 35%, transparent);
+  border-radius: 50%;
+  color: var(--ds-color-primary);
+  font-family: var(--ds-font-serif);
+  font-size: var(--ds-text-lg);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.study__tour-trigger > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+}
+
+.study__tour-trigger strong,
+.study__tour-trigger small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.study__tour-trigger strong {
+  font-size: var(--ds-text-sm);
+  line-height: 1.3;
+}
+
+.study__tour-trigger small {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
 .study__portal-link {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) 16px;
@@ -369,6 +431,29 @@
   .study__content {
     overflow: visible;
   }
+}
+
+/* Navegación textual: al no usar glifos, el texto ocupa todo el renglón. */
+.study__nav-link {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.study__nav-chevron,
+.study__portal-icon {
+  display: none;
+}
+
+.study__portal-link {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.study__account {
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+}
+
+.study__logout {
+  width: auto;
+  padding-inline: var(--ds-space-2);
 }
 
 @media (max-width: 640px) {

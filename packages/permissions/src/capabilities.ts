@@ -7,6 +7,8 @@ export type FirmRole =
 
 export type Capability =
   | "firm.manage"
+  | "firm.users.manage"
+  | "platform.modules.manage"
   | "firm.audit.read"
   | "client.read"
   | "client.manage"

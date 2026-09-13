@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
-import { api } from "../lib/api";
+import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
+import { api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -29,7 +29,7 @@ interface Workpaper {
   settlements: Array<{
     role: string;
     required: boolean;
-    settlement: { id: string; status: string; totals: Record<string, string> | null };
+    settlement: { id: string; status: string; totals: Record<string, string> | null } | null;
   }>;
   controls: Array<{
     id: string;
@@ -37,6 +37,11 @@ interface Workpaper {
     severity: string;
     status: string;
     message?: string;
+    expected: string | null;
+    actual: string | null;
+    tolerance: string | null;
+    evidenceDocumentId: string | null;
+    resolution: string | null;
   }>;
 }
 
@@ -50,7 +55,15 @@ interface CreditLot {
   originalAmount: string;
   available: string;
   evidenceDocumentId: string | null;
+  reference: string | null;
+  createdBy: { id: string; name: string } | null;
   createdAt: string;
+  history: Array<{
+    id: string;
+    createdAt: string;
+    changes: Record<string, { from: string | null; to: string | null }>;
+    createdBy: { id: string; name: string } | null;
+  }>;
   movements: Array<{
     id: string;
     kind: string;
@@ -81,6 +94,7 @@ interface TaxPosition {
   pending: string;
   availableCredit: string;
   interest: string;
+  totalPayable: string;
 }
 
 interface TaxType {
@@ -107,10 +121,218 @@ interface FiscalTaxPeriod {
 interface EvidenceDocument {
   id: string;
   category: string | null;
+  status: string;
   createdAt: string;
   fileVersions?: Array<{ originalName: string }>;
 }
+
+interface SifereRate {
+  rate: "10.5" | "21" | "27";
+  label: string;
+  net: string;
+  tax: string;
+  count: number;
+}
+
+interface SifereTax {
+  code: string;
+  label: string;
+  amount: string;
+}
+
+interface SifereAnalysis {
+  direction: "SALE" | "PURCHASE";
+  sheetName: string;
+  totals: {
+    importeTotal: string;
+    netoGravado: string;
+    iva: string;
+    noGravado: string;
+    exento: string;
+  };
+  rates: SifereRate[];
+  taxes: SifereTax[];
+  detailRows: number;
+  validRows: number;
+  errorRows: number;
+  rows: Array<{
+    index: number;
+    name: string | null;
+    rubro: string | null;
+    errors: string[];
+  }>;
+}
+interface WorkpaperSourceBatch {
+  id: string;
+  importBatchId: string;
+  fileName: string | null;
+  batchStatus: string;
+  reviewStatus: string;
+  totalRows: number;
+  validRows: number;
+  errorRows: number;
+  snapshotHash: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
+interface WorkpaperSource {
+  code: string;
+  label: string;
+  required: boolean;
+  present: boolean;
+  count: number;
+  taxTypeId: string | null;
+  periodId: string | null;
+  origin: string;
+  adapterVersion: string;
+  expectedColumns: string[];
+  batches: WorkpaperSourceBatch[];
+}
+interface WorkpaperClassification {
+  id: string;
+  voucherId: string;
+  direction: "PURCHASE" | "SALE";
+  counterpartyCuit: string;
+  documentKind: "INVOICE" | "CREDIT_NOTE" | "DEBIT_NOTE";
+  categoryCode: "SUPER" | "TRANSPORTE" | null;
+  activityCode: string | null;
+  rateBuckets: Array<{ rate: string; base: string; amount: string }>;
+  status: "PENDING" | "CLASSIFIED";
+  origin: string | null;
+  voucher: {
+    type: string;
+    letter: string | null;
+    pointOfSale: number;
+    number: number;
+    issuedOn: string;
+    total: string;
+  };
+}
+interface ClassificationCoverage {
+  total: number;
+  classified: number;
+  pending: number;
+  ready: boolean;
+  items: WorkpaperClassification[];
+}
+interface WorkpaperAllocation {
+  id: string;
+  sourceCode: string | null;
+  sourceType: "WITHHOLDING" | "PERCEPTION";
+  amount: string;
+  status: "ALLOCATED";
+  allocatedJurisdiction: { id: string; code: string; name: string } | null;
+  certificate: {
+    cuitAgent: string;
+    certificateNumber: string | null;
+    creditKind: string;
+    issuedOn: string;
+    sourceAmount: string;
+  } | null;
+  obligation: {
+    regime: {
+      name: string;
+      taxType: { name: string };
+      jurisdiction: { name: string };
+    };
+    period: { label: string | null; startDate: string; endDate: string };
+  } | null;
+}
+interface AllocationCoverage {
+  total: number;
+  allocated: number;
+  pending: number;
+  ready: boolean;
+  items: WorkpaperAllocation[];
+}
+interface TaxJurisdiction {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+}
+interface WorkpaperCalculationComponent {
+  role: string;
+  required: boolean;
+  obligationId: string;
+  obligation: {
+    regimeCode: string;
+    regimeName: string;
+    taxTypeCode: string;
+    taxTypeName: string;
+    jurisdictionName: string;
+  };
+  settlement: {
+    id: string;
+    status: string;
+    engineVersion: string;
+    ruleVersionId: string | null;
+    rulesHash: string;
+    totals: Record<string, string> | null;
+    lines: Array<{
+      id: string;
+      position: number;
+      concept: string;
+      formula: string | null;
+      inputs: Record<string, unknown> | null;
+      amount: string;
+    }>;
+    differences: Array<{
+      id: string;
+      severity: "INFO" | "WARNING" | "BLOCKING";
+      status: "OPEN" | "RESOLVED" | "WAIVED";
+      code: string;
+      message: string;
+    }>;
+    f931Inputs: Array<{
+      id: string;
+      sourceId: string;
+      snapshot: Record<string, unknown>;
+    }>;
+  } | null;
+}
 type PositionAction = { kind: "PAYMENT" | "FILING"; position: TaxPosition } | null;
+
+const CALCULATION_LABELS: Record<string, string> = {
+  BASE_PAIS: "Base país",
+  BASE_TOTAL: "Base imponible",
+  IMPUESTO_POR_JURISDICCION: "Impuesto determinado",
+  IMPUESTO_POR_ACTIVIDAD: "Impuesto por actividad",
+  IMPUESTO_DETERMINADO: "Impuesto determinado",
+  MINIMO_APLICADO: "Mínimo aplicado",
+  DEBITO_FISCAL: "Débito fiscal",
+  CREDITO_FISCAL: "Crédito fiscal",
+  CREDITO_DTO_814: "Crédito Dto. 814",
+  RETENCIONES_SUFRIDAS: "Retenciones",
+  PERCEPCIONES_SUFRIDAS: "Percepciones",
+  SALDO_TECNICO_ANTERIOR: "Saldo técnico anterior",
+  SALDO_LIBRE_ANTERIOR: "Saldo libre anterior",
+  SALDO_TECNICO_A_INGRESAR: "Saldo técnico determinado",
+  CREDITOS_SEGUNDO_PARRAFO: "Créditos 2.º párrafo",
+  RETENCIONES: "Retenciones",
+  PERCEPCIONES: "Percepciones",
+  RECAUDACIONES: "Recaudaciones bancarias",
+  OTROS_CREDITOS: "Otros créditos",
+  SALDO_ANTERIOR: "Saldo a favor anterior",
+  TOTAL_A_INGRESAR: "Total a ingresar",
+  SALDO_A_FAVOR: "Saldo a favor",
+  SALDO_TECNICO_AFTER: "Saldo técnico a favor",
+  SALDO_LIBRE_AFTER: "Saldo libre a favor",
+};
+
+function calculationLabel(concept: string): string | null {
+  if (CALCULATION_LABELS[concept]) return CALCULATION_LABELS[concept];
+  for (const [prefix, label] of [
+    ["SALDO_ANTERIOR_", "Saldo anterior"],
+    ["TOTAL_A_INGRESAR_", "A ingresar"],
+    ["SALDO_A_FAVOR_", "Saldo a favor"],
+  ] as const) {
+    if (concept.startsWith(prefix)) {
+      return `${label} · ${concept.slice(prefix.length).replaceAll("_", " ")}`;
+    }
+  }
+  return null;
+}
 
 const WORKPAPER_STEPS = [
   {
@@ -139,9 +361,160 @@ const WORKPAPER_STEPS = [
   },
 ] as const;
 
+const CONTROL_LABELS: Record<string, string> = {
+  BOOK_RATE_RECONCILIATION: "Diferencias de libro por alícuota",
+  PORTAL_IVA_RECONCILIATION: "Conciliación con Portal IVA",
+  BANK_CREDIT_RECONCILIATION: "Acreditaciones bancarias vs. facturación",
+  CASH_ALLOCATION_RECONCILIATION: "Caja e imputaciones del período",
+};
+
 function formatMoney(value: string | undefined | null): string {
   const num = Number(value ?? 0);
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(num);
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return "Sin vencimiento";
+  return new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" }).format(new Date(value));
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone: "UTC",
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function SifereAnalysisPanel({ analysis }: { analysis: SifereAnalysis }) {
+  return (
+    <div className="sifere-analysis">
+      <div className="sifere-analysis__totals">
+        <span>
+          <strong>{formatMoney(analysis.totals.importeTotal)}</strong>
+          <small>Importe total</small>
+        </span>
+        <span>
+          <strong>{formatMoney(analysis.totals.netoGravado)}</strong>
+          <small>Neto gravado</small>
+        </span>
+        <span>
+          <strong>{formatMoney(analysis.totals.iva)}</strong>
+          <small>IVA</small>
+        </span>
+      </div>
+      {analysis.rates.length > 0 ? (
+        <table className="sifere-analysis__table">
+          <thead>
+            <tr>
+              <th>Alícuota</th>
+              <th className="num">Base</th>
+              <th className="num">IVA</th>
+              <th className="num">Comp.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {analysis.rates.map((rate) => (
+              <tr key={rate.rate}>
+                <td>{rate.label}</td>
+                <td className="num">{formatMoney(rate.net)}</td>
+                <td className="num">{formatMoney(rate.tax)}</td>
+                <td className="num">{rate.count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      {analysis.taxes.length > 0 ? (
+        <div className="sifere-analysis__taxes">
+          <small>Tributos asociados</small>
+          {analysis.taxes.map((tax) => (
+            <span key={tax.code}>
+              {tax.label} · <strong>{formatMoney(tax.amount)}</strong>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <small className="muted-copy">
+        {analysis.detailRows} comprobantes · {analysis.validRows} válidos
+        {analysis.errorRows > 0 ? ` · ${analysis.errorRows} con observaciones` : ""}
+      </small>
+    </div>
+  );
+}
+
+function parseDelimitedRow(line: string, delimiter: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index]!;
+    if (character === '"') {
+      if (quoted && line[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === delimiter && !quoted) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function parseSourceFile(fileName: string, content: string): Record<string, unknown>[] {
+  if (fileName.toLowerCase().endsWith(".json")) {
+    const parsed = JSON.parse(content) as unknown;
+    if (!Array.isArray(parsed) || parsed.some((row) => !row || typeof row !== "object")) {
+      throw new Error("El JSON debe contener un arreglo de filas");
+    }
+    return parsed as Record<string, unknown>[];
+  }
+
+  const lines = content
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0);
+  if (lines.length < 2) throw new Error("El archivo debe contener encabezado y al menos una fila");
+  const delimiter = [";", "\t", ","].sort(
+    (left, right) => lines[0]!.split(right).length - lines[0]!.split(left).length,
+  )[0]!;
+  const headers = parseDelimitedRow(lines[0]!, delimiter);
+  if (new Set(headers).size !== headers.length || headers.some((header) => !header)) {
+    throw new Error("El encabezado contiene columnas vacías o duplicadas");
+  }
+  return lines.slice(1).map((line) => {
+    const values = parseDelimitedRow(line, delimiter);
+    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
+  });
+}
+
+async function hashSourceFile(content: string): Promise<string> {
+  const bytes = new TextEncoder().encode(content);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk));
+  }
+  return btoa(binary);
+}
+
+async function fileToHash(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function StudyExpedienteMensual() {
@@ -159,7 +532,14 @@ export function StudyExpedienteMensual() {
     amount: "",
     evidenceDocumentId: "",
   });
+  const [editingLot, setEditingLot] = useState<CreditLot | null>(null);
+  const [editForm, setEditForm] = useState({
+    reference: "",
+    evidenceDocumentId: "",
+    originalAmount: "",
+  });
   const [controlResolutions, setControlResolutions] = useState<Record<string, string>>({});
+  const [controlEvidence, setControlEvidence] = useState<Record<string, string>>({});
   const [positionAction, setPositionAction] = useState<PositionAction>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
@@ -173,6 +553,22 @@ export function StudyExpedienteMensual() {
     externalId: "",
     evidenceDocumentId: "",
   });
+  const [sourceCode, setSourceCode] = useState("");
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [classificationDrafts, setClassificationDrafts] = useState<
+    Record<string, { categoryCode: string; activityCode: string }>
+  >({});
+  const [allocationDrafts, setAllocationDrafts] = useState<Record<string, string>>({});
+  const [showSifereModal, setShowSifereModal] = useState(false);
+  const [sifereFiles, setSifereFiles] = useState<{
+    sales: File | null;
+    purchases: File | null;
+  }>({ sales: null, purchases: null });
+  const [sifereAnalysis, setSifereAnalysis] = useState<{
+    sales: SifereAnalysis | null;
+    purchases: SifereAnalysis | null;
+  }>({ sales: null, purchases: null });
+  const [sifereReceipt, setSifereReceipt] = useState<string | null>(null);
 
   const listQuery = useQuery({
     queryKey: ["monthly-workpapers", firmId, clientId, periodId],
@@ -196,11 +592,45 @@ export function StudyExpedienteMensual() {
           linked: boolean;
           settlementStatus: string | null;
         }>;
-        sources: Array<{ code: string; required: boolean; present: boolean }>;
+        sources: WorkpaperSource[];
       }>(
         `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/coverage`,
       ),
     enabled: Boolean(firmId && clientId && activeWorkpaperId),
+  });
+  const clientQuery = useQuery({
+    queryKey: ["client", firmId, clientId],
+    queryFn: () => api.get<Client>(`/firms/${firmId}/clients/${clientId}`),
+    enabled: Boolean(firmId && clientId),
+  });
+  const classificationQuery = useQuery({
+    queryKey: ["monthly-workpaper-classifications", firmId, clientId, activeWorkpaperId],
+    queryFn: () =>
+      api.get<ClassificationCoverage>(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/classifications`,
+      ),
+    enabled: Boolean(firmId && clientId && activeWorkpaperId),
+  });
+  const allocationQuery = useQuery({
+    queryKey: ["monthly-workpaper-allocations", firmId, clientId, activeWorkpaperId],
+    queryFn: () =>
+      api.get<AllocationCoverage>(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/allocations`,
+      ),
+    enabled: Boolean(firmId && clientId && activeWorkpaperId),
+  });
+  const calculationQuery = useQuery({
+    queryKey: ["monthly-workpaper-calculation", firmId, clientId, activeWorkpaperId],
+    queryFn: () =>
+      api.get<WorkpaperCalculationComponent[]>(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/calculation`,
+      ),
+    enabled: Boolean(firmId && clientId && activeWorkpaperId),
+  });
+  const jurisdictionsQuery = useQuery({
+    queryKey: ["tax-jurisdictions"],
+    queryFn: () => api.get<TaxJurisdiction[]>("/tax/jurisdictions"),
+    enabled: Boolean(firmId),
   });
   const ledgerQuery = useQuery({
     queryKey: ["tax-credit-ledger", firmId, clientId],
@@ -246,10 +676,209 @@ export function StudyExpedienteMensual() {
     },
   });
 
+  const analyzeSifereMutation = useMutation({
+    mutationFn: async ({ direction, file }: { direction: "SALE" | "PURCHASE"; file: File }) => {
+      const base64 = await fileToBase64(file);
+      return api.post<SifereAnalysis>(
+        `/firms/${firmId}/clients/${clientId}/sifere/analyze`,
+        { direction, base64 },
+      );
+    },
+    onSuccess: (data, variables) => {
+      setSifereAnalysis((current) => ({
+        ...current,
+        [variables.direction === "SALE" ? "sales" : "purchases"]: data,
+      }));
+    },
+  });
+
+  const importSifereMutation = useMutation({
+    mutationFn: async ({ direction, file }: { direction: "SALE" | "PURCHASE"; file: File }) => {
+      const source = coverageQuery.data?.sources.find((item) =>
+        direction === "SALE" ? item.code === "ARCA_IVA_SALES" : item.code === "ARCA_IVA_PURCHASES",
+      );
+      if (!source?.taxTypeId || !source?.periodId || !clientQuery.data) {
+        throw new Error("La fuente no tiene una obligación fiscal materializada");
+      }
+      const base64 = await fileToBase64(file);
+      const fileHash = await fileToHash(file);
+      return api.post<{
+        analysis: SifereAnalysis;
+        batch: { id: string; status: string; committed: number; duplicates: number };
+      }>(
+        `/firms/${firmId}/clients/${clientId}/sifere/import`,
+        {
+          direction,
+          base64,
+          fileName: file.name,
+          fileHash,
+          taxTypeId: source.taxTypeId,
+          periodId: source.periodId,
+          clientCuit: clientQuery.data.cuit,
+          ...(activeWorkpaperId ? { workpaperId: activeWorkpaperId } : {}),
+        },
+      );
+    },
+    onSuccess: (data) => {
+      setShowSifereModal(false);
+      setSifereFiles({ sales: null, purchases: null });
+      setSifereAnalysis({ sales: null, purchases: null });
+      setSifereReceipt(
+        `Se importaron ${data.batch.committed} comprobante(s) de ${data.analysis.direction === "SALE" ? "ventas" : "compras"} (${data.analysis.sheetName}). Quedaron asociados al cliente y al período activo.`,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-coverage", firmId, clientId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+    },
+  });
+
   const calculateMutation = useMutation({
     mutationFn: (id: string) =>
       api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${id}/calculate`),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-coverage", firmId, clientId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["tax-settlements", firmId, clientId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-calculation", firmId, clientId],
+      });
+    },
+  });
+
+  const sourceUploadMutation = useMutation({
+    mutationFn: async () => {
+      const source = coverageQuery.data?.sources.find((item) => item.code === sourceCode);
+      if (!source || !sourceFile || !activeWorkpaperId || !clientQuery.data) {
+        throw new Error("Seleccioná una fuente y un archivo antes de importar");
+      }
+      if (!source.taxTypeId || !source.periodId) {
+        throw new Error("La fuente no tiene una obligación fiscal materializada");
+      }
+
+      const content = await sourceFile.text();
+      const rows = parseSourceFile(sourceFile.name, content);
+      if (rows.length > 20_000) throw new Error("El lote supera el máximo de 20.000 filas");
+      const fileHash = await hashSourceFile(content);
+      const batch = await api.post<{
+        id: string;
+        status: string;
+        errorRows: number;
+      }>(`/firms/${firmId}/clients/${clientId}/import-batches`, {
+        origin: source.origin,
+        taxTypeId: source.taxTypeId,
+        periodId: source.periodId,
+        adapterVersion: source.adapterVersion,
+        fileName: sourceFile.name,
+        fileHash,
+        workpaperId: activeWorkpaperId,
+        sourceCode: source.code,
+      });
+
+      let status = batch.status;
+      let errorRows = batch.errorRows;
+      if (status === "UPLOADED") {
+        const validation = await api.post<{ totals: { errorRows: number } }>(
+          `/firms/${firmId}/clients/${clientId}/import-batches/${batch.id}/validate`,
+          { rows },
+        );
+        status = "VALIDATED";
+        errorRows = validation.totals.errorRows;
+      }
+      if (errorRows > 0) {
+        throw new Error(
+          `El lote quedó validado con ${errorRows} fila(s) observadas. Corregí el archivo antes de reimportar.`,
+        );
+      }
+      if (status === "VALIDATED") {
+        await api.post(`/firms/${firmId}/clients/${clientId}/import-batches/${batch.id}/commit`, {
+          clientCuit: clientQuery.data.cuit,
+        });
+      }
+    },
+    onSuccess: () => {
+      setSourceFile(null);
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-coverage", firmId, clientId],
+      });
+    },
+  });
+
+  const reviewSourceMutation = useMutation({
+    mutationFn: (sourceLinkId: string) =>
+      api.post(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/sources/${sourceLinkId}/review`,
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-coverage", firmId, clientId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-classifications", firmId, clientId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-allocations", firmId, clientId],
+      });
+    },
+  });
+
+  const classifyVoucherMutation = useMutation({
+    mutationFn: (classification: WorkpaperClassification) => {
+      const draft = classificationDrafts[classification.id] ?? {
+        categoryCode: classification.categoryCode ?? "",
+        activityCode: classification.activityCode ?? "",
+      };
+      if (classification.direction === "PURCHASE" && !draft.categoryCode) {
+        throw new Error("Seleccioná el rubro de la compra");
+      }
+      if (classification.direction === "SALE" && !draft.activityCode.trim()) {
+        throw new Error("Indicá la actividad fiscal de la venta");
+      }
+      return api.patch(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/classifications/${classification.id}`,
+        {
+          ...(classification.direction === "PURCHASE"
+            ? {
+                categoryCode: draft.categoryCode,
+                ...(draft.activityCode.trim() ? { activityCode: draft.activityCode.trim() } : {}),
+                saveSupplierProfile: true,
+              }
+            : { activityCode: draft.activityCode.trim() }),
+        },
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-classifications", firmId, clientId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-coverage", firmId, clientId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+    },
+  });
+
+  const reallocateInputMutation = useMutation({
+    mutationFn: (allocation: WorkpaperAllocation) => {
+      const jurisdiction =
+        allocationDrafts[allocation.id] ?? allocation.allocatedJurisdiction?.code ?? "";
+      if (!jurisdiction) throw new Error("Seleccioná una jurisdicción para la imputación");
+      return api.patch(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/allocations/${allocation.id}`,
+        { jurisdiction },
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-allocations", firmId, clientId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-coverage", firmId, clientId],
+      });
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
     },
   });
@@ -291,23 +920,51 @@ export function StudyExpedienteMensual() {
       workpaperId,
       findingId,
       status,
+      evidenceDocumentId,
     }: {
       workpaperId: string;
       findingId: string;
       status: "RESOLVED" | "WAIVED";
+      evidenceDocumentId?: string;
     }) =>
       api.post(
         `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${workpaperId}/controls/${findingId}/resolve`,
         {
           resolution: controlResolutions[findingId]?.trim(),
           status,
+          ...(evidenceDocumentId ? { evidenceDocumentId } : {}),
         },
       ),
     onSuccess: (_, variables) => {
       setControlResolutions((values) => ({ ...values, [variables.findingId]: "" }));
+      setControlEvidence((values) => ({ ...values, [variables.findingId]: "" }));
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
       void queryClient.invalidateQueries({
         queryKey: ["monthly-workpaper-coverage", firmId, clientId],
+      });
+    },
+  });
+  const calculateInterestMutation = useMutation({
+    mutationFn: ({
+      workpaperId,
+      obligationId,
+    }: {
+      workpaperId: string;
+      obligationId: string;
+    }) =>
+      api.post(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${workpaperId}/interest-snapshots`,
+        {
+          obligationId,
+          asOfDate: new Date().toISOString().slice(0, 10),
+        },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["tax-position", firmId, clientId, periodId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpapers", firmId, clientId],
       });
     },
   });
@@ -375,7 +1032,7 @@ export function StudyExpedienteMensual() {
         periodId: opening.taxPeriodId,
         kind: opening.kind,
         amount: opening.amount,
-        evidenceDocumentId: opening.evidenceDocumentId,
+        ...(opening.evidenceDocumentId ? { evidenceDocumentId: opening.evidenceDocumentId } : {}),
       }),
     onSuccess: () => {
       setShowOpening(false);
@@ -392,6 +1049,28 @@ export function StudyExpedienteMensual() {
       void queryClient.invalidateQueries({
         queryKey: ["tax-position", firmId, clientId, periodId],
       });
+    },
+  });
+
+  const editLotMutation = useMutation({
+    mutationFn: () => {
+      if (!editingLot) throw new Error("No hay registro seleccionado");
+      const payload: Record<string, unknown> = {
+        reference: editForm.reference || null,
+        evidenceDocumentId: editForm.evidenceDocumentId || null,
+      };
+      if (editForm.originalAmount) {
+        payload.originalAmount = editForm.originalAmount;
+      }
+      return api.patch(
+        `/firms/${firmId}/clients/${clientId}/tax-credit-ledger/${editingLot.id}`,
+        payload,
+      );
+    },
+    onSuccess: () => {
+      setEditingLot(null);
+      setEditForm({ reference: "", evidenceDocumentId: "", originalAmount: "" });
+      void queryClient.invalidateQueries({ queryKey: ["tax-credit-ledger", firmId, clientId] });
     },
   });
 
@@ -425,6 +1104,18 @@ export function StudyExpedienteMensual() {
 
   return (
     <div className="study-page">
+      {sifereReceipt ? (
+        <div className="action-receipt action-receipt--page" role="status">
+          <span>{sifereReceipt}</span>
+          <button
+            type="button"
+            aria-label="Descartar aviso"
+            onClick={() => setSifereReceipt(null)}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
       <header className="study-page__header">
         <div>
           <h1>Expediente mensual</h1>
@@ -432,22 +1123,114 @@ export function StudyExpedienteMensual() {
             Coordina IVA, IIBB y TEM del período con evidencia trazable.
           </p>
         </div>
-        <Button
-          variant="primary"
-          disabled={createMutation.isPending || !capabilities.has("tax.settlements.calculate")}
-          onClick={() => void createMutation.mutate()}
-        >
-          <Icon name="plus" size={16} />
-          Nuevo expediente
-        </Button>
+        <span className="study-page__actions">
+          <Button
+            variant="secondary"
+            disabled={!capabilities.has("tax.vouchers.prepare")}
+            onClick={() => setShowSifereModal(true)}
+          >
+            <Icon name="upload" size={16} />
+            Subir Excel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={createMutation.isPending || !capabilities.has("tax.settlements.calculate")}
+            onClick={() => void createMutation.mutate()}
+          >
+            <Icon name="plus" size={16} />
+            Nuevo expediente
+          </Button>
+        </span>
       </header>
+
+      <section className="guided-context" aria-labelledby="workpaper-context-title"><div className="guided-context__heading"><div><p className="study-page__eyebrow">Período en trabajo</p><h2 id="workpaper-context-title">Expediente y evidencia</h2><p>El expediente reúne fuentes, controles y posiciones fiscales antes del cierre mensual.</p></div><StatusBadge status={workpapers.length ? "IN_PROGRESS" : "PENDING"} /></div><dl className="guided-context__facts"><div><dt>Expedientes</dt><dd>{workpapers.length}</dd></div><div><dt>Etapa actual</dt><dd>{activeStepMeta.title}</dd></div><div><dt>Componentes</dt><dd>{coverageQuery.data?.components.length ?? "—"}</dd></div></dl></section>
+      <section className="guided-next-step" aria-labelledby="workpaper-next-step-title"><div><p className="study-page__eyebrow">Flujo guiado</p><h2 id="workpaper-next-step-title">Próximo paso</h2><p>{workpapers.length ? `${activeStepMeta.description} Avanzá cuando la evidencia de esta etapa esté completa.` : "Creá el expediente del período para ordenar la evidencia y los controles fiscales."}</p></div>{workpapers.length ? <Button variant="secondary" onClick={goToNextStep} disabled={!nextStep}>Continuar a {nextStep?.title ?? "cierre"}</Button> : <Button onClick={() => void createMutation.mutate()} disabled={createMutation.isPending || !capabilities.has("tax.settlements.calculate")}>Nuevo expediente</Button>}</section>
+
+      <ActionDrawer
+        isOpen={showSifereModal}
+        onClose={() => setShowSifereModal(false)}
+        eyebrow="Análisis previo"
+        title="Subir libros IVA (Excel)"
+        description="Subí por separado el libro de compras y el de ventas. El análisis de alícuotas y tributos no depende de que esté completo: lo podés correr con lo que ya tengas."
+        size="wide"
+      >
+        <div className="sifere-upload">
+          {(["SALE", "PURCHASE"] as const).map((direction) => {
+            const file = direction === "SALE" ? sifereFiles.sales : sifereFiles.purchases;
+            const analysis = direction === "SALE" ? sifereAnalysis.sales : sifereAnalysis.purchases;
+            const isAnalyzing = analyzeSifereMutation.isPending && analyzeSifereMutation.variables?.direction === direction;
+            const isImporting = importSifereMutation.isPending && importSifereMutation.variables?.direction === direction;
+            return (
+              <section className="sifere-upload__side" key={direction}>
+                <h3>{direction === "SALE" ? "Ventas" : "Compras"}</h3>
+                <div className="sifere-upload__actions">
+                  <a
+                    className="ds-button ds-button--sm ds-button--ghost"
+                    href={`/api/v1/firms/${firmId}/clients/${clientId}/sifere/template?direction=${direction}`}
+                    download
+                  >
+                    Modelo .xlsx
+                  </a>
+                  <label className="sifere-upload__file">
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      onChange={(event) => {
+                        const selected = event.target.files?.[0] ?? null;
+                        setSifereFiles((current) => ({
+                          ...current,
+                          [direction === "SALE" ? "sales" : "purchases"]: selected,
+                        }));
+                        setSifereAnalysis((current) => ({
+                          ...current,
+                          [direction === "SALE" ? "sales" : "purchases"]: null,
+                        }));
+                      }}
+                    />
+                    <span>{file ? file.name : "Elegí el .xlsx del libro"}</span>
+                  </label>
+                </div>
+                <div className="sifere-upload__actions">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={!file || isAnalyzing}
+                    loading={isAnalyzing}
+                    onClick={() => {
+                      if (file) {
+                        analyzeSifereMutation.mutate({ direction, file });
+                      }
+                    }}
+                  >
+                    Analizar alícuotas
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={!file || !analysis || isImporting || !activeWorkpaperId}
+                    loading={isImporting}
+                    onClick={() => {
+                      if (file) {
+                        importSifereMutation.mutate({ direction, file });
+                      }
+                    }}
+                  >
+                    Importar
+                  </Button>
+                </div>
+                {analysis ? <SifereAnalysisPanel analysis={analysis} /> : null}
+              </section>
+            );
+          })}
+        </div>
+      </ActionDrawer>
 
       <ActionDrawer
         isOpen={showOpening}
         onClose={() => setShowOpening(false)}
         eyebrow="Saldos"
         title="Cargar saldo inicial"
-        description="Registrá un saldo a favor o arrastre con su respaldo documental."
+        description="Registrá un saldo a favor o arrastre. Podés adjuntar un respaldo documental o cargarlo manualmente; en ambos casos queda registrado el usuario que lo hizo."
         size="wide"
       >
         <form
@@ -557,12 +1340,11 @@ export function StudyExpedienteMensual() {
               ) : null}
             </select>
           </div>
-          <Field
+          <MoneyField
             label="Importe"
             id="opening-amount"
-            inputMode="decimal"
             value={opening.amount}
-            onChange={(event) => setOpening((value) => ({ ...value, amount: event.target.value }))}
+            onChange={(value) => setOpening((state) => ({ ...state, amount: value }))}
             required
           />
           <div className="ds-field">
@@ -576,9 +1358,8 @@ export function StudyExpedienteMensual() {
               onChange={(event) =>
                 setOpening((value) => ({ ...value, evidenceDocumentId: event.target.value }))
               }
-              required
             >
-              <option value="">Seleccioná evidencia…</option>
+              <option value="">Sin documento (carga manual)</option>
               {documentsQuery.data?.map((document) => (
                 <option key={document.id} value={document.id}>
                   {document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento"}
@@ -590,12 +1371,7 @@ export function StudyExpedienteMensual() {
             <Button
               type="submit"
               loading={openingMutation.isPending}
-              disabled={
-                !opening.taxTypeId ||
-                !opening.taxPeriodId ||
-                !opening.amount ||
-                !opening.evidenceDocumentId
-              }
+              disabled={!opening.taxTypeId || !opening.taxPeriodId || !opening.amount}
             >
               Registrar saldo
             </Button>
@@ -604,6 +1380,86 @@ export function StudyExpedienteMensual() {
             </Button>
           </div>
         </form>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={editingLot !== null}
+        onClose={() => setEditingLot(null)}
+        eyebrow="Saldos"
+        title="Editar saldo"
+        description="Actualizá el monto, la referencia o el documento de respaldo del saldo. Cada cambio queda registrado en el log con usuario y fecha."
+        size="wide"
+      >
+        {editingLot ? (
+          <form
+            className="opening-credit-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              editLotMutation.mutate();
+            }}
+          >
+            <div className="ds-field">
+              <label className="ds-field__label">Saldo</label>
+              <p className="muted-copy">
+                <strong>{editingLot.kind.replaceAll("_", " ")}</strong> ·{" "}
+                {formatMoney(editingLot.originalAmount)}
+              </p>
+            </div>
+            <Field
+              label="Monto original"
+              id="edit-lot-amount"
+              type="number"
+              step="0.01"
+              value={editForm.originalAmount}
+              onChange={(event) =>
+                setEditForm((form) => ({ ...form, originalAmount: event.target.value }))
+              }
+              placeholder="0,00"
+            />
+            <Field
+              label="Referencia"
+              id="edit-lot-reference"
+              value={editForm.reference}
+              onChange={(event) =>
+                setEditForm((form) => ({ ...form, reference: event.target.value }))
+              }
+              placeholder="Opcional"
+            />
+            <div className="ds-field">
+              <label className="ds-field__label" htmlFor="edit-lot-evidence">
+                Documento de respaldo
+              </label>
+              <select
+                id="edit-lot-evidence"
+                className="ds-field__input"
+                value={editForm.evidenceDocumentId}
+                onChange={(event) =>
+                  setEditForm((form) => ({ ...form, evidenceDocumentId: event.target.value }))
+                }
+              >
+                <option value="">Sin documento (carga manual)</option>
+                {documentsQuery.data?.map((document) => (
+                  <option key={document.id} value={document.id}>
+                    {document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {editLotMutation.isError ? (
+              <p className="form-error" role="alert">
+                {editLotMutation.error.message}
+              </p>
+            ) : null}
+            <div className="opening-credit-form__actions">
+              <Button type="submit" loading={editLotMutation.isPending}>
+                Guardar cambios
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setEditingLot(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        ) : null}
       </ActionDrawer>
 
       <ActionDrawer
@@ -625,12 +1481,11 @@ export function StudyExpedienteMensual() {
               recordPaymentMutation.mutate();
             }}
           >
-            <Field
+            <MoneyField
               label="Importe"
               id="tax-payment-amount"
-              inputMode="decimal"
               value={paymentForm.amount}
-              onChange={(event) => setPaymentForm({ ...paymentForm, amount: event.target.value })}
+              onChange={(value) => setPaymentForm({ ...paymentForm, amount: value })}
               required
             />
             <Field
@@ -702,14 +1557,11 @@ export function StudyExpedienteMensual() {
               recordFilingMutation.mutate();
             }}
           >
-            <Field
+            <MoneyField
               label="Importe presentado"
               id="tax-filing-amount"
-              inputMode="decimal"
               value={filingForm.amountFiled}
-              onChange={(event) =>
-                setFilingForm({ ...filingForm, amountFiled: event.target.value })
-              }
+              onChange={(value) => setFilingForm({ ...filingForm, amountFiled: value })}
               required
             />
             <Field
@@ -789,6 +1641,12 @@ export function StudyExpedienteMensual() {
             const blocking = wp.controls.filter(
               (c) => c.severity === "BLOCKING" && c.status === "OPEN",
             );
+            const canEditSources = [
+              "DRAFT",
+              "COLLECTING_INPUTS",
+              "READY_TO_CALCULATE",
+              "CHANGES_REQUESTED",
+            ].includes(wp.status);
             return (
               <article className="workpaper-card" key={wp.id}>
                 <div className="workpaper-card__header">
@@ -925,10 +1783,90 @@ export function StudyExpedienteMensual() {
                               render: (lot) => <strong>{formatMoney(lot.available)}</strong>,
                             },
                             {
+                              key: "movements",
+                              header: "Movimientos",
+                              render: (lot) =>
+                                lot.movements.length === 0 ? (
+                                  "Sin aplicaciones"
+                                ) : (
+                                  <details className="workpaper-credit-movements">
+                                    <summary>{lot.movements.length} movimiento(s)</summary>
+                                    <ul>
+                                      {lot.movements.map((movement) => (
+                                        <li key={movement.id}>
+                                          <span>{movement.kind.replaceAll("_", " ")}</span>
+                                          <strong>{formatMoney(movement.amount)}</strong>
+                                          {movement.reference ? <small>{movement.reference}</small> : null}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </details>
+                                ),
+                            },
+                            {
                               key: "evidence",
                               header: "Respaldo",
                               render: (lot) =>
-                                lot.evidenceDocumentId ? "Documentado" : "Cierre de liquidación",
+                                lot.reference ??
+                                (lot.evidenceDocumentId
+                                  ? "Documentado"
+                                  : lot.createdBy
+                                    ? `Carga manual · ${lot.createdBy.name}`
+                                    : "Cierre de liquidación"),
+                            },
+                            {
+                              key: "log",
+                              header: "Log",
+                              render: (lot) =>
+                                !lot.history || lot.history.length === 0 ? (
+                                  <span className="muted-copy">Sin cambios</span>
+                                ) : (
+                                  <details className="workpaper-credit-log">
+                                    <summary>{lot.history.length} cambio(s)</summary>
+                                    <ul>
+                                      {lot.history.map((entry) => (
+                                        <li key={entry.id}>
+                                          <span>
+                                            {entry.createdBy?.name ?? "Usuario"} ·{" "}
+                                            {formatDateTime(entry.createdAt)}
+                                          </span>
+                                          <ul className="workpaper-credit-log__changes">
+                                            {Object.entries(entry.changes ?? {}).map(
+                                              ([field, diff]) => (
+                                                <li key={field}>
+                                                  <strong>{field}</strong>:{" "}
+                                                  {diff?.from ?? "—"} → {diff?.to ?? "—"}
+                                                </li>
+                                              ),
+                                            )}
+                                          </ul>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </details>
+                                ),
+                            },
+                            {
+                              key: "actions",
+                              header: "",
+                              align: "right",
+                              render: (lot) =>
+                                capabilities.has("tax.settlements.calculate") ? (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingLot(lot);
+                                      setEditForm({
+                                        reference: lot.reference ?? "",
+                                        evidenceDocumentId: lot.evidenceDocumentId ?? "",
+                                        originalAmount: lot.originalAmount ?? "",
+                                      });
+                                    }}
+                                  >
+                                    Editar
+                                  </Button>
+                                ) : null,
                             },
                           ]}
                         />
@@ -964,16 +1902,121 @@ export function StudyExpedienteMensual() {
                         <p className="muted-copy">Verificando cobertura…</p>
                       ) : (
                         <>
+                          {canEditSources &&
+                          capabilities.has("tax.vouchers.prepare") &&
+                          (coverageQuery.data?.sources.length ?? 0) > 0 ? (
+                            <div className="workpaper-source-import">
+                              <label>
+                                <span>Fuente</span>
+                                <select
+                                  value={sourceCode}
+                                  onChange={(event) => {
+                                    setSourceCode(event.target.value);
+                                    setSourceFile(null);
+                                  }}
+                                >
+                                  <option value="">Seleccionar…</option>
+                                  {(coverageQuery.data?.sources ?? []).map((source) => (
+                                    <option key={source.code} value={source.code}>
+                                      {source.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label>
+                                <span>Archivo CSV, TXT o JSON</span>
+                                <input
+                                  type="file"
+                                  accept=".csv,.txt,.json,text/csv,text/plain,application/json"
+                                  onChange={(event) =>
+                                    setSourceFile(event.target.files?.[0] ?? null)
+                                  }
+                                />
+                              </label>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={
+                                  !sourceCode || !sourceFile || sourceUploadMutation.isPending
+                                }
+                                onClick={() => sourceUploadMutation.mutate()}
+                              >
+                                {sourceUploadMutation.isPending ? "Procesando…" : "Importar lote"}
+                              </Button>
+                              {sourceCode ? (
+                                <small>
+                                  Columnas esperadas: {coverageQuery.data?.sources
+                                    .find((source) => source.code === sourceCode)
+                                    ?.expectedColumns.join(", ")}
+                                </small>
+                              ) : null}
+                            </div>
+                          ) : null}
                           <Table
                             rows={coverageQuery.data?.sources ?? []}
                             rowKey={(source) => source.code}
                             empty="No hay fuentes definidas para el expediente."
                             columns={[
-                              { key: "source", header: "Fuente", render: (source) => source.code },
+                              {
+                                key: "source",
+                                header: "Fuente",
+                                render: (source) => (
+                                  <>
+                                    <strong>{source.label}</strong>
+                                    <br />
+                                    <small>{source.code}</small>
+                                  </>
+                                ),
+                              },
+                              {
+                                key: "records",
+                                header: "Registros",
+                                align: "right",
+                                render: (source) => source.count,
+                              },
                               {
                                 key: "required",
                                 header: "Tipo",
                                 render: (source) => (source.required ? "Obligatoria" : "Opcional"),
+                              },
+                              {
+                                key: "batches",
+                                header: "Lotes",
+                                render: (source) =>
+                                  source.batches.length === 0 ? (
+                                    "Sin lotes"
+                                  ) : (
+                                    <div className="workpaper-source-batches">
+                                      {source.batches.map((batch) => (
+                                        <div key={batch.id}>
+                                          <span>
+                                            {batch.fileName ?? "Lote sin nombre"} · {batch.validRows}/
+                                            {batch.totalRows} filas
+                                          </span>
+                                          <StatusBadge
+                                            status={
+                                              batch.reviewStatus === "REVIEWED"
+                                                ? "READY"
+                                                : batch.batchStatus
+                                            }
+                                          />
+                                          {batch.batchStatus === "COMMITTED" &&
+                                          batch.reviewStatus !== "REVIEWED" &&
+                                          canEditSources &&
+                                          capabilities.has("tax.vouchers.review") ? (
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              disabled={reviewSourceMutation.isPending}
+                                              onClick={() => reviewSourceMutation.mutate(batch.id)}
+                                            >
+                                              Revisar
+                                            </Button>
+                                          ) : null}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ),
                               },
                               {
                                 key: "state",
@@ -1037,9 +2080,9 @@ export function StudyExpedienteMensual() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => void coverageQuery.refetch()}
+                            onClick={() => void classificationQuery.refetch()}
                           >
-                            Actualizar controles
+                            Actualizar clasificación
                           </Button>
                           <Button
                             size="sm"
@@ -1050,11 +2093,293 @@ export function StudyExpedienteMensual() {
                           </Button>
                         </span>
                       </div>
-                      <p className="workpaper-stage__note">
-                        La clasificación de comprobantes se controla contra las actividades y
-                        regímenes vigentes del cliente; los controles abiertos aparecerán antes del
-                        cierre.
-                      </p>
+                      {classificationQuery.isLoading ? (
+                        <p className="muted-copy">Clasificando comprobantes respaldados…</p>
+                      ) : (
+                        <>
+                          <div className="workpaper-classification-summary">
+                            <span>
+                              <strong>{classificationQuery.data?.classified ?? 0}</strong>
+                              <small>Clasificados</small>
+                            </span>
+                            <span>
+                              <strong>{classificationQuery.data?.pending ?? 0}</strong>
+                              <small>Pendientes</small>
+                            </span>
+                            <span>
+                              <StatusBadge
+                                status={classificationQuery.data?.ready ? "READY" : "WAITING_INPUTS"}
+                              />
+                              <small>Gate de cálculo</small>
+                            </span>
+                          </div>
+                          <Table<WorkpaperClassification>
+                            rows={classificationQuery.data?.items ?? []}
+                            rowKey={(classification) => classification.id}
+                            empty="No hay comprobantes de fuentes revisadas para clasificar."
+                            columns={[
+                              {
+                                key: "voucher",
+                                header: "Comprobante",
+                                render: (classification) => (
+                                  <>
+                                    <strong>
+                                      {classification.voucher.letter ?? classification.voucher.type} · {String(
+                                        classification.voucher.pointOfSale,
+                                      ).padStart(4, "0")}-{String(
+                                        classification.voucher.number,
+                                      ).padStart(8, "0")}
+                                    </strong>
+                                    <br />
+                                    <small>
+                                      {classification.direction === "PURCHASE" ? "Compra" : "Venta"} · {classification.counterpartyCuit}
+                                    </small>
+                                  </>
+                                ),
+                              },
+                              {
+                                key: "treatment",
+                                header: "Tratamiento",
+                                render: (classification) => (
+                                  <>
+                                    {classification.documentKind === "CREDIT_NOTE"
+                                      ? "Nota de crédito (resta)"
+                                      : classification.documentKind === "DEBIT_NOTE"
+                                        ? "Nota de débito"
+                                        : "Factura"}
+                                    <br />
+                                    <small>
+                                      {classification.rateBuckets.length > 0
+                                        ? classification.rateBuckets
+                                            .map((bucket) => `${bucket.rate}%: ${formatMoney(bucket.amount)}`)
+                                            .join(" · ")
+                                        : "Sin componentes por alícuota"}
+                                    </small>
+                                  </>
+                                ),
+                              },
+                              {
+                                key: "classification",
+                                header: "Rubro / actividad",
+                                render: (classification) => {
+                                  const draft = classificationDrafts[classification.id] ?? {
+                                    categoryCode: classification.categoryCode ?? "",
+                                    activityCode: classification.activityCode ?? "",
+                                  };
+                                  return !canEditSources ||
+                                    !capabilities.has("tax.vouchers.prepare") ? (
+                                    <>
+                                      <strong>
+                                        {classification.categoryCode ?? classification.activityCode}
+                                      </strong>
+                                      {classification.categoryCode && classification.activityCode ? (
+                                        <small> · {classification.activityCode}</small>
+                                      ) : null}
+                                      <br />
+                                      <small>{classification.origin ?? "Clasificación guardada"}</small>
+                                    </>
+                                  ) : (
+                                    <div className="workpaper-classification-fields">
+                                      {classification.direction === "PURCHASE" ? (
+                                        <select
+                                          aria-label="Rubro del proveedor"
+                                          value={draft.categoryCode}
+                                          onChange={(event) =>
+                                            setClassificationDrafts((current) => ({
+                                              ...current,
+                                              [classification.id]: {
+                                                ...draft,
+                                                categoryCode: event.target.value,
+                                              },
+                                            }))
+                                          }
+                                        >
+                                          <option value="">Rubro…</option>
+                                          <option value="SUPER">SUPER · Minimercados</option>
+                                          <option value="TRANSPORTE">TRANSPORTE</option>
+                                        </select>
+                                      ) : null}
+                                      <input
+                                        aria-label="Código de actividad"
+                                        placeholder={
+                                          classification.direction === "SALE"
+                                            ? "Actividad obligatoria"
+                                            : "Actividad (opcional)"
+                                        }
+                                        value={draft.activityCode}
+                                        onChange={(event) =>
+                                          setClassificationDrafts((current) => ({
+                                            ...current,
+                                            [classification.id]: {
+                                              ...draft,
+                                              activityCode: event.target.value,
+                                            },
+                                          }))
+                                        }
+                                      />
+                                    </div>
+                                  );
+                                },
+                              },
+                              {
+                                key: "state",
+                                header: "Estado",
+                                render: (classification) =>
+                                  classification.status === "CLASSIFIED" ? (
+                                    canEditSources && capabilities.has("tax.vouchers.prepare") ? (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={classifyVoucherMutation.isPending}
+                                        onClick={() => classifyVoucherMutation.mutate(classification)}
+                                      >
+                                        Actualizar
+                                      </Button>
+                                    ) : (
+                                      <StatusBadge status="READY" />
+                                    )
+                                  ) : canEditSources && capabilities.has("tax.vouchers.prepare") ? (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      disabled={classifyVoucherMutation.isPending}
+                                      onClick={() => classifyVoucherMutation.mutate(classification)}
+                                    >
+                                      Guardar
+                                    </Button>
+                                  ) : (
+                                    <StatusBadge status="WAITING_INPUTS" />
+                                  ),
+                              },
+                            ]}
+                          />
+                          <p className="workpaper-stage__note">
+                            El cálculo queda bloqueado mientras exista una compra sin rubro o una
+                            venta sin actividad. El rubro manual se guarda en el maestro del
+                            proveedor para los próximos períodos.
+                          </p>
+                          <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
+                            <div>
+                              <strong>Imputación de retenciones y percepciones</strong>
+                              <small>
+                                Cada certificado queda asignado a una obligación, jurisdicción y
+                                período concretos antes de entrar al motor.
+                              </small>
+                            </div>
+                            <span className="workpaper-stage__actions">
+                              <StatusBadge
+                                status={allocationQuery.data?.ready ? "READY" : "WAITING_INPUTS"}
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void allocationQuery.refetch()}
+                              >
+                                Actualizar imputaciones
+                              </Button>
+                            </span>
+                          </div>
+                          {allocationQuery.isLoading ? (
+                            <p className="muted-copy">Imputando certificados revisados…</p>
+                          ) : (
+                            <Table<WorkpaperAllocation>
+                              rows={allocationQuery.data?.items ?? []}
+                              rowKey={(allocation) => allocation.id}
+                              empty="No hay retenciones o percepciones revisadas para imputar."
+                              columns={[
+                                {
+                                  key: "certificate",
+                                  header: "Certificado",
+                                  render: (allocation) => (
+                                    <>
+                                      <strong>
+                                        {allocation.sourceType === "WITHHOLDING"
+                                          ? "Retención"
+                                          : "Percepción"}
+                                      </strong>
+                                      <br />
+                                      <small>
+                                        {allocation.certificate?.certificateNumber ?? "Sin número"} · {allocation.certificate?.cuitAgent ?? "Sin agente"}
+                                      </small>
+                                    </>
+                                  ),
+                                },
+                                {
+                                  key: "obligation",
+                                  header: "Obligación",
+                                  render: (allocation) => (
+                                    <>
+                                      <strong>
+                                        {allocation.obligation?.regime.taxType.name ?? "Impuesto"}
+                                      </strong>
+                                      <br />
+                                      <small>{allocation.obligation?.regime.name}</small>
+                                    </>
+                                  ),
+                                },
+                                {
+                                  key: "jurisdiction",
+                                  header: "Jurisdicción imputada",
+                                  render: (allocation) =>
+                                    canEditSources && capabilities.has("tax.vouchers.prepare") ? (
+                                      <select
+                                        className="workpaper-allocation-select"
+                                        aria-label="Jurisdicción de la imputación"
+                                        value={
+                                          allocationDrafts[allocation.id] ??
+                                          allocation.allocatedJurisdiction?.code ??
+                                          ""
+                                        }
+                                        onChange={(event) =>
+                                          setAllocationDrafts((current) => ({
+                                            ...current,
+                                            [allocation.id]: event.target.value,
+                                          }))
+                                        }
+                                      >
+                                        <option value="">Jurisdicción…</option>
+                                        {(jurisdictionsQuery.data ?? [])
+                                          .filter((jurisdiction) => jurisdiction.isActive)
+                                          .map((jurisdiction) => (
+                                            <option key={jurisdiction.id} value={jurisdiction.code}>
+                                              {jurisdiction.code} · {jurisdiction.name}
+                                            </option>
+                                          ))}
+                                      </select>
+                                    ) : (
+                                      allocation.allocatedJurisdiction?.name ?? "Sin jurisdicción"
+                                    ),
+                                },
+                                {
+                                  key: "amount",
+                                  header: "Importe",
+                                  align: "right",
+                                  render: (allocation) => (
+                                    <strong>{formatMoney(allocation.amount)}</strong>
+                                  ),
+                                },
+                                {
+                                  key: "state",
+                                  header: "Estado",
+                                  render: (allocation) =>
+                                    canEditSources && capabilities.has("tax.vouchers.prepare") ? (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={reallocateInputMutation.isPending}
+                                        onClick={() => reallocateInputMutation.mutate(allocation)}
+                                      >
+                                        Reimputar
+                                      </Button>
+                                    ) : (
+                                      <StatusBadge status="READY" />
+                                    ),
+                                },
+                              ]}
+                            />
+                          )}
+                        </>
+                      )}
                     </div>
                   ) : safeActiveStep === 3 ? (
                     <div className="workpaper-stage">
@@ -1073,6 +2398,125 @@ export function StudyExpedienteMensual() {
                         >
                           Actualizar posición
                         </Button>
+                      </div>
+                      <div className="workpaper-calculation-breakdown">
+                        <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
+                          <div>
+                            <strong>Determinación y trazabilidad del cálculo</strong>
+                            <small>
+                              Totales, fórmulas, alícuotas y versión de reglas congeladas por
+                              obligación.
+                            </small>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void calculationQuery.refetch()}
+                          >
+                            Actualizar cálculo
+                          </Button>
+                        </div>
+                        {calculationQuery.isLoading ? (
+                          <p className="muted-copy">Cargando determinación…</p>
+                        ) : (
+                          (calculationQuery.data ?? []).map((component) => (
+                            <article className="workpaper-calculation" key={component.obligationId}>
+                              <div className="workpaper-calculation__header">
+                                <span>
+                                  <strong>
+                                    {component.obligation.taxTypeName} · {component.obligation.regimeName}
+                                  </strong>
+                                  <small>{component.obligation.jurisdictionName}</small>
+                                </span>
+                                {component.settlement ? (
+                                  <span>
+                                    <StatusBadge status={component.settlement.status} />
+                                    <small>{component.settlement.engineVersion}</small>
+                                    <small title={component.settlement.rulesHash}>
+                                      Regla {component.settlement.ruleVersionId?.slice(0, 8) ?? "histórica"}
+                                    </small>
+                                  </span>
+                                ) : (
+                                  <StatusBadge status="PENDING" />
+                                )}
+                              </div>
+                              {component.settlement ? (
+                                <>
+                                  <dl className="workpaper-calculation__totals">
+                                    {Object.entries(component.settlement.totals ?? {})
+                                      .filter(([concept]) => calculationLabel(concept) !== null)
+                                      .map(([concept, amount]) => (
+                                        <div
+                                          className={
+                                            concept === "TOTAL_A_INGRESAR" ? "is-total" : ""
+                                          }
+                                          key={concept}
+                                        >
+                                          <dt>{calculationLabel(concept)}</dt>
+                                          <dd>{formatMoney(amount)}</dd>
+                                        </div>
+                                      ))}
+                                  </dl>
+                                  {component.settlement.f931Inputs.length > 0 ? (
+                                    <p className="workpaper-calculation__source-note">
+                                      F.931 revisado · remuneración neta {formatMoney(
+                                        String(
+                                          component.settlement.f931Inputs[0]?.snapshot[
+                                            "netRemuneration"
+                                          ] ?? 0,
+                                        ),
+                                      )}
+                                    </p>
+                                  ) : null}
+                                  <details className="workpaper-calculation__trace">
+                                    <summary>
+                                      Ver {component.settlement.lines.length} línea(s) de cálculo
+                                    </summary>
+                                    <Table<(typeof component.settlement.lines)[number]>
+                                      rows={component.settlement.lines}
+                                      rowKey={(line) => line.id}
+                                      empty="La liquidación no generó líneas."
+                                      columns={[
+                                        {
+                                          key: "concept",
+                                          header: "Concepto",
+                                          render: (line) => line.concept.replaceAll("_", " "),
+                                        },
+                                        {
+                                          key: "formula",
+                                          header: "Fórmula / fuente",
+                                          render: (line) => line.formula ?? "—",
+                                        },
+                                        {
+                                          key: "amount",
+                                          header: "Importe",
+                                          align: "right",
+                                          render: (line) => <strong>{formatMoney(line.amount)}</strong>,
+                                        },
+                                      ]}
+                                    />
+                                  </details>
+                                  {component.settlement.differences.length > 0 ? (
+                                    <div className="workpaper-calculation__differences">
+                                      {component.settlement.differences.map((difference) => (
+                                        <p key={difference.id}>
+                                          <StatusBadge status={difference.severity} />
+                                          <span>
+                                            <strong>{difference.code}</strong> · {difference.message}
+                                          </span>
+                                        </p>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <p className="muted-copy">
+                                  El detalle se genera cuando el expediente se calcula.
+                                </p>
+                              )}
+                            </article>
+                          ))
+                        )}
                       </div>
                       {positionQuery.isLoading ? (
                         <p className="muted-copy">Calculando posición…</p>
@@ -1095,6 +2539,11 @@ export function StudyExpedienteMensual() {
                                     </small>
                                   </>
                                 ),
+                              },
+                              {
+                                key: "dueDate",
+                                header: "Vencimiento",
+                                render: (position) => formatDate(position.dueDate),
                               },
                               {
                                 key: "accrued",
@@ -1120,6 +2569,14 @@ export function StudyExpedienteMensual() {
                                 align: "right",
                                 render: (position) => (
                                   <strong>{formatMoney(position.pending)}</strong>
+                                ),
+                              },
+                              {
+                                key: "totalPayable",
+                                header: "Total a pagar",
+                                align: "right",
+                                render: (position) => (
+                                  <strong>{formatMoney(position.totalPayable)}</strong>
                                 ),
                               },
                               {
@@ -1157,6 +2614,25 @@ export function StudyExpedienteMensual() {
                                       </Button>
                                     ) : null}
                                     {Number(position.pending) > 0 &&
+                                    position.dueDate &&
+                                    new Date(position.dueDate) < new Date() &&
+                                    position.settlement?.status === "FINALIZED" &&
+                                    capabilities.has("tax.payments.record") ? (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        loading={calculateInterestMutation.isPending}
+                                        onClick={() =>
+                                          calculateInterestMutation.mutate({
+                                            workpaperId: wp.id,
+                                            obligationId: position.obligationId,
+                                          })
+                                        }
+                                      >
+                                        Calcular mora
+                                      </Button>
+                                    ) : null}
+                                    {Number(position.totalPayable) > 0 &&
                                     capabilities.has("tax.payments.record") ? (
                                       <Button
                                         size="sm"
@@ -1164,7 +2640,7 @@ export function StudyExpedienteMensual() {
                                         onClick={() => {
                                           setPositionAction({ kind: "PAYMENT", position });
                                           setPaymentForm({
-                                            amount: position.pending,
+                                            amount: position.totalPayable,
                                             paidAt: new Date().toISOString().slice(0, 10),
                                             method: "TRANSFERENCIA",
                                             reference: "",
@@ -1190,8 +2666,20 @@ export function StudyExpedienteMensual() {
                         wp.controls.map((control) => (
                           <div className="workpaper-control" key={control.id}>
                             <span>
-                              <strong>{control.code}</strong>
+                              <strong>{CONTROL_LABELS[control.code] ?? control.code}</strong>
                               {control.message ? <small>{control.message}</small> : null}
+                              {control.expected !== null ? (
+                                <small>
+                                  Esperado: {formatMoney(control.expected)}
+                                  {control.actual !== null
+                                    ? ` · Actual: ${formatMoney(control.actual)}`
+                                    : " · Pendiente de respaldo"}
+                                  {control.tolerance !== null
+                                    ? ` · Tolerancia: ${formatMoney(control.tolerance)}`
+                                    : ""}
+                                </small>
+                              ) : null}
+                              {control.resolution ? <small>{control.resolution}</small> : null}
                             </span>
                             <StatusBadge status={control.status} />
                             <span>{control.severity}</span>
@@ -1209,15 +2697,47 @@ export function StudyExpedienteMensual() {
                                     }))
                                   }
                                 />
+                                {control.severity === "BLOCKING" ? (
+                                  <select
+                                    aria-label={`Evidencia ${control.code}`}
+                                    value={controlEvidence[control.id] ?? ""}
+                                    onChange={(event) =>
+                                      setControlEvidence((values) => ({
+                                        ...values,
+                                        [control.id]: event.target.value,
+                                      }))
+                                    }
+                                  >
+                                    <option value="">Seleccionar evidencia…</option>
+                                    {documentsQuery.data
+                                      ?.filter((document) =>
+                                        ["READY", "APPLIED"].includes(document.status),
+                                      )
+                                      .map((document) => (
+                                        <option key={document.id} value={document.id}>
+                                          {document.fileVersions?.[0]?.originalName ??
+                                            document.category ??
+                                            "Documento"}
+                                        </option>
+                                      ))}
+                                  </select>
+                                ) : null}
                                 <Button
                                   size="sm"
-                                  disabled={!controlResolutions[control.id]?.trim()}
+                                  disabled={
+                                    !controlResolutions[control.id]?.trim() ||
+                                    (control.severity === "BLOCKING" &&
+                                      !controlEvidence[control.id])
+                                  }
                                   loading={resolveControlMutation.isPending}
                                   onClick={() =>
                                     resolveControlMutation.mutate({
                                       workpaperId: wp.id,
                                       findingId: control.id,
                                       status: "RESOLVED",
+                                      ...(controlEvidence[control.id]
+                                        ? { evidenceDocumentId: controlEvidence[control.id] }
+                                        : {}),
                                     })
                                   }
                                 >
@@ -1301,12 +2821,18 @@ export function StudyExpedienteMensual() {
                 </div>
 
                 <div className="workpaper-card__actions">
-                  {wp.status === "DRAFT" || wp.status === "COLLECTING_INPUTS" ? (
+                  {["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE"].includes(wp.status) ? (
                     <Button
                       variant="primary"
                       disabled={
                         calculateMutation.isPending ||
+                        wp.status !== "READY_TO_CALCULATE" ||
                         !capabilities.has("tax.settlements.calculate")
+                      }
+                      title={
+                        wp.status === "READY_TO_CALCULATE"
+                          ? "Calcular el expediente"
+                          : "Completá y revisá las fuentes y clasificaciones obligatorias"
                       }
                       onClick={() => void calculateMutation.mutate(wp.id)}
                     >
@@ -1394,7 +2920,12 @@ export function StudyExpedienteMensual() {
       resolveControlMutation.isError ||
       rectifyMutation.isError ||
       recordPaymentMutation.isError ||
-      recordFilingMutation.isError ? (
+      calculateInterestMutation.isError ||
+      recordFilingMutation.isError ||
+      sourceUploadMutation.isError ||
+      reviewSourceMutation.isError ||
+      classifyVoucherMutation.isError ||
+      reallocateInputMutation.isError ? (
         <p className="form-error" role="alert">
           {
             (
@@ -1407,7 +2938,12 @@ export function StudyExpedienteMensual() {
               resolveControlMutation.error ??
               rectifyMutation.error ??
               recordPaymentMutation.error ??
-              recordFilingMutation.error
+              calculateInterestMutation.error ??
+              recordFilingMutation.error ??
+              sourceUploadMutation.error ??
+              reviewSourceMutation.error ??
+              classifyVoucherMutation.error ??
+              reallocateInputMutation.error
             )?.message
           }
         </p>

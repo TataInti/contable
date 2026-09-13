@@ -3,16 +3,21 @@ import { taxHash } from "@contable/tax-engine";
 import {
   normalizeArcaVoucherBatch,
   normalizeCm03Batch,
+  normalizeF931Batch,
   normalizeIibbTucBatch,
   normalizeTemSmtBatch,
   normalizeWithholdingBatch,
+  parseSifereWorkbook,
   type ArcaVoucherInput,
   type Cm03ImportRow,
+  type F931Input,
   type IibbTucImportRow,
   type TemSmtImportRow,
   type WithholdingInput,
+  type SifereDirection,
 } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import { getWorkpaperSourcePolicy } from "./workpaper-source-policy.js";
 
 /**
  * Servicio de ingestión fiscal (Puerta 2).
@@ -42,6 +47,8 @@ export type ImportErrorCode =
   | "VOUCHER_IMMUTABLE"
   | "DUPLICATE_VOUCHER"
   | "NO_ROWS"
+  | "WORKPAPER_NOT_FOUND"
+  | "SOURCE_POLICY_INVALID"
   | "INVALID_TRANSITION";
 
 export class ImportError extends Error {
@@ -51,6 +58,66 @@ export class ImportError extends Error {
     this.name = "ImportError";
     this.code = code;
   }
+}
+
+type NormalizedImportRow = {
+  status: "VALID" | "ERROR";
+  data?: Record<string, unknown>;
+  errors?: string[];
+};
+
+function enforceBatchPeriod(
+  rows: readonly NormalizedImportRow[],
+  period: { startDate: Date; endDate: Date },
+) {
+  return rows.map((row) => {
+    if (row.status !== "VALID" || !row.data || typeof row.data["issuedOn"] !== "string") {
+      return row;
+    }
+    const issuedOn = new Date(`${row.data["issuedOn"]}T00:00:00.000Z`);
+    if (issuedOn < period.startDate || issuedOn > period.endDate) {
+      return { status: "ERROR" as const, errors: ["PERIOD_MISMATCH"] };
+    }
+    return row;
+  });
+}
+
+function summarizeNormalizedRows(rows: readonly NormalizedImportRow[]) {
+  let net = new Prisma.Decimal(0);
+  let iva = new Prisma.Decimal(0);
+  let withholding = new Prisma.Decimal(0);
+  let perception = new Prisma.Decimal(0);
+  let validRows = 0;
+  let errorRows = 0;
+
+  for (const row of rows) {
+    if (row.status !== "VALID" || !row.data) {
+      errorRows += 1;
+      continue;
+    }
+    validRows += 1;
+    const data = row.data;
+    const netValue = data["net"] ?? data["income"] ?? data["netRemuneration"];
+    if (typeof netValue === "string") net = net.plus(netValue);
+    for (const key of ["iva21", "iva105", "iva27"]) {
+      if (typeof data[key] === "string") iva = iva.plus(data[key] as string);
+    }
+    if (typeof data["amount"] === "string" && data["kind"] === "RETENCION") {
+      withholding = withholding.plus(data["amount"] as string);
+    }
+    if (typeof data["amount"] === "string" && data["kind"] === "PERCEPCION") {
+      perception = perception.plus(data["amount"] as string);
+    }
+  }
+
+  return {
+    net: net.toFixed(4),
+    iva: iva.toFixed(4),
+    withholding: withholding.toFixed(4),
+    perception: perception.toFixed(4),
+    validRows,
+    errorRows,
+  };
 }
 
 export class IngestionService {
@@ -68,12 +135,80 @@ export class IngestionService {
       adapterVersion: string;
       fileName?: string;
       fileHash?: string;
+      workpaperId?: string;
+      sourceCode?: string;
     },
   ) {
     return withTenantContext(ctx, async (tx) => {
+      if (Boolean(input.workpaperId) !== Boolean(input.sourceCode)) {
+        throw new ImportError(
+          "SOURCE_POLICY_INVALID",
+          "El expediente y el código de fuente deben informarse juntos",
+        );
+      }
+
+      const period = await tx.taxPeriod.findFirst({
+        where: { id: input.periodId, firmId: ctx.firmId, clientId: input.clientId },
+      });
+      if (!period) throw new ImportError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
+      const taxType = await tx.taxType.findUnique({ where: { id: input.taxTypeId } });
+      if (!taxType) throw new ImportError("TAX_TYPE_NOT_FOUND", "Impuesto no encontrado");
+
+      if (input.workpaperId && input.sourceCode) {
+        const policy = getWorkpaperSourcePolicy(input.sourceCode);
+        if (
+          !policy ||
+          policy.taxTypeCode !== taxType.code ||
+          policy.origin !== input.origin ||
+          policy.adapterVersion !== input.adapterVersion
+        ) {
+          throw new ImportError(
+            "SOURCE_POLICY_INVALID",
+            "La fuente, el impuesto y el adaptador no corresponden entre sí",
+          );
+        }
+        const workpaper = await tx.monthlyTaxWorkpaper.findFirst({
+          where: {
+            id: input.workpaperId,
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            status: {
+              in: ["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE", "CHANGES_REQUESTED"],
+            },
+            periodStart: { lte: period.startDate },
+            periodEnd: { gte: period.endDate },
+          },
+        });
+        if (!workpaper) {
+          throw new ImportError(
+            "WORKPAPER_NOT_FOUND",
+            "El expediente no admite nuevas fuentes en su estado actual o no contiene el período del lote",
+          );
+        }
+        const obligation = await tx.taxObligation.findFirst({
+          where: {
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            periodId: input.periodId,
+            status: { not: "NOT_APPLICABLE" },
+            regime: {
+              taxTypeId: input.taxTypeId,
+              ...(policy.regimeCode ? { code: policy.regimeCode } : {}),
+            },
+          },
+        });
+        if (!obligation) {
+          throw new ImportError(
+            "SOURCE_POLICY_INVALID",
+            "El expediente no espera esa fuente para sus obligaciones activas",
+          );
+        }
+      }
+
       // Idempotencia: mismo lote (mismo origen/impuesto/período/hash) ya existe.
+      let existing = null;
       if (input.fileHash) {
-        const existing = await tx.importBatch.findUnique({
+        existing = await tx.importBatch.findUnique({
           where: {
             firmId_clientId_origin_taxTypeId_periodId_fileHash: {
               firmId: ctx.firmId,
@@ -85,28 +220,59 @@ export class IngestionService {
             },
           },
         });
-        if (existing) return existing;
       }
 
-      const period = await tx.taxPeriod.findUnique({ where: { id: input.periodId } });
-      if (!period) throw new ImportError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
-      const taxType = await tx.taxType.findUnique({ where: { id: input.taxTypeId } });
-      if (!taxType) throw new ImportError("TAX_TYPE_NOT_FOUND", "Impuesto no encontrado");
+      const batch =
+        existing ??
+        (await tx.importBatch.create({
+          data: {
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            origin: input.origin,
+            taxTypeId: input.taxTypeId,
+            periodId: input.periodId,
+            adapterVersion: input.adapterVersion,
+            status: "UPLOADED",
+            ...(input.fileName ? { fileName: input.fileName } : {}),
+            ...(input.fileHash ? { fileHash: input.fileHash } : {}),
+            createdByUserId: ctx.userId,
+          },
+        }));
 
-      return tx.importBatch.create({
-        data: {
-          firmId: ctx.firmId,
-          clientId: input.clientId,
-          origin: input.origin,
-          taxTypeId: input.taxTypeId,
-          periodId: input.periodId,
-          adapterVersion: input.adapterVersion,
-          status: "UPLOADED",
-          ...(input.fileName ? { fileName: input.fileName } : {}),
-          ...(input.fileHash ? { fileHash: input.fileHash } : {}),
-          createdByUserId: ctx.userId,
-        },
-      });
+      if (input.workpaperId && input.sourceCode) {
+        const existingLink = await tx.workpaperImportBatch.findUnique({
+          where: {
+            workpaperId_importBatchId: {
+              workpaperId: input.workpaperId,
+              importBatchId: batch.id,
+            },
+          },
+        });
+        if (existingLink && existingLink.sourceCode !== input.sourceCode) {
+          throw new ImportError(
+            "SOURCE_POLICY_INVALID",
+            "El mismo lote no puede representar dos fuentes distintas del expediente",
+          );
+        }
+        await tx.workpaperImportBatch.upsert({
+          where: {
+            workpaperId_importBatchId: {
+              workpaperId: input.workpaperId,
+              importBatchId: batch.id,
+            },
+          },
+          create: {
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            workpaperId: input.workpaperId,
+            importBatchId: batch.id,
+            sourceCode: input.sourceCode,
+          },
+          update: {},
+        });
+      }
+
+      return batch;
     });
   }
 
@@ -117,10 +283,20 @@ export class IngestionService {
   async validateBatch(
     ctx: TenantContext,
     batchId: string,
-    rows: readonly (ArcaVoucherInput | WithholdingInput | IibbTucImportRow | TemSmtImportRow | Cm03ImportRow)[],
+    rows: readonly (
+      | ArcaVoucherInput
+      | WithholdingInput
+      | IibbTucImportRow
+      | TemSmtImportRow
+      | Cm03ImportRow
+      | F931Input
+    )[],
   ) {
     return withTenantContext(ctx, async (tx) => {
-      const batch = await tx.importBatch.findFirst({ where: { id: batchId, firmId: ctx.firmId } });
+      const batch = await tx.importBatch.findFirst({
+        where: { id: batchId, firmId: ctx.firmId },
+        include: { period: true },
+      });
       if (!batch) throw new ImportError("BATCH_NOT_FOUND", "Lote no encontrado");
       if (batch.status !== "UPLOADED") {
         throw new ImportError("INVALID_TRANSITION", `No se puede validar un lote en estado ${batch.status}`);
@@ -130,6 +306,7 @@ export class IngestionService {
       const isIibb = batch.adapterVersion.startsWith("DGR_IIBB");
       const isTem = batch.adapterVersion.startsWith("SMT_TEM");
       const isCm03 = batch.adapterVersion.startsWith("CM03");
+      const isF931 = batch.adapterVersion.startsWith("F931");
       const normalizedRows = isWithholding
         ? normalizeWithholdingBatch(rows as WithholdingInput[])
         : isIibb
@@ -138,22 +315,33 @@ export class IngestionService {
             ? normalizeTemSmtBatch(rows as TemSmtImportRow[])
             : isCm03
               ? normalizeCm03Batch(rows as Cm03ImportRow[])
-              : normalizeArcaVoucherBatch(rows as ArcaVoucherInput[]);
+              : isF931
+                ? normalizeF931Batch(rows as F931Input[])
+                : normalizeArcaVoucherBatch(rows as ArcaVoucherInput[]);
+
+      const checkedRows = enforceBatchPeriod(
+        normalizedRows.rows as unknown as NormalizedImportRow[],
+        batch.period,
+      );
+      const hasPeriodMismatch = checkedRows.some((row) => row.errors?.includes("PERIOD_MISMATCH"));
+      const totals = hasPeriodMismatch
+        ? summarizeNormalizedRows(checkedRows)
+        : normalizedRows.totals;
 
       await tx.importBatch.update({
         where: { id: batchId },
         data: {
           status: "VALIDATED",
           totalRows: rows.length,
-          validRows: normalizedRows.totals.validRows,
-          errorRows: normalizedRows.totals.errorRows,
-          totals: normalizedRows.totals as unknown as Prisma.InputJsonValue,
+          validRows: totals.validRows,
+          errorRows: totals.errorRows,
+          totals: totals as unknown as Prisma.InputJsonValue,
         },
       });
 
       // Guarda cada fila normalizada (con su estado y errores).
-      for (let i = 0; i < normalizedRows.rows.length; i += 1) {
-        const row = normalizedRows.rows[i]!;
+      for (let i = 0; i < checkedRows.length; i += 1) {
+        const row = checkedRows[i]!;
         const raw = (rows[i] ?? {}) as Record<string, unknown>;
         await tx.importRow.create({
           data: {
@@ -173,8 +361,8 @@ export class IngestionService {
 
       return {
         batchId,
-        totals: normalizedRows.totals,
-        rows: normalizedRows.rows.length,
+        totals,
+        rows: checkedRows.length,
       };
     });
   }
@@ -208,14 +396,20 @@ export class IngestionService {
       const isIibb = batch.adapterVersion.startsWith("DGR_IIBB");
       const isTem = batch.adapterVersion.startsWith("SMT_TEM");
       const isCm03 = batch.adapterVersion.startsWith("CM03");
+      const isF931 = batch.adapterVersion.startsWith("F931");
       let committed = 0;
       let duplicates = 0;
+
+      if (isF931) {
+        committed = await this.commitF931Rows(tx, ctx, batch);
+      }
 
       // F0.4: commit estrictamente atómico. Si una fila crítica falla al
       // escribir o una regla de unicidad revela un conflicto no resuelto, la
       // excepción propaga y la transacción hace rollback de TODAS las
       // escrituras de negocio. El lote nunca queda COMMITTED parcialmente.
       for (const row of batch.rows) {
+        if (isF931) break;
         if (row.status !== "VALID") {
           throw new ImportError(
             "BATCH_HAS_ERRORS",
@@ -255,6 +449,85 @@ export class IngestionService {
     });
   }
 
+  /**
+   * Persistencia de un libro IVA digital (.xlsx) en un solo paso: parsea,
+   * crea el lote, valida y comitea. Devuelve el análisis del parser + el
+   * resultado del commit. Idempotente por fileHash del archivo original.
+   */
+  async importSifereWorkbook(
+    ctx: TenantContext,
+    input: {
+      clientId: string;
+      clientCuit: string;
+      direction: SifereDirection;
+      raw: Uint8Array;
+      fileName: string;
+      fileHash: string;
+      taxTypeId: string;
+      periodId: string;
+      workpaperId?: string;
+    },
+  ) {
+    const parsed = parseSifereWorkbook(input.raw, input.direction);
+    const rows = parsed.rows
+      .filter((row) => row.errors.length === 0)
+      .map((row) => row.input as ArcaVoucherInput);
+
+    const sourceCode =
+      input.direction === "SALE" ? "ARCA_IVA_SALES" : "ARCA_IVA_PURCHASES";
+    const policy = getWorkpaperSourcePolicy(sourceCode)!;
+
+    const batch = await this.createBatch(ctx, {
+      clientId: input.clientId,
+      origin: policy.origin,
+      taxTypeId: input.taxTypeId,
+      periodId: input.periodId,
+      adapterVersion: policy.adapterVersion,
+      fileName: input.fileName,
+      fileHash: input.fileHash,
+      ...(input.workpaperId ? { workpaperId: input.workpaperId } : {}),
+      sourceCode,
+    });
+
+    const validated = await this.validateBatch(ctx, batch.id, rows);
+    const committed = await this.commitBatch(ctx, batch.id, input.clientCuit);
+
+    // Persiste el análisis derivado (alícuotas, tributos, hoja) en el lote.
+    // El lote ya asocia firmId/clientId/createdByUserId/createdAt.
+    const analysis = {
+      direction: parsed.direction,
+      sheetName: parsed.sheetName,
+      totals: parsed.totals,
+      rates: parsed.rates,
+      taxes: parsed.taxes,
+      detailRows: parsed.detailRows,
+      validRows: parsed.validRows,
+      errorRows: parsed.errorRows,
+    };
+    await withTenantContext(ctx, async (tx) => {
+      await tx.importBatch.update({
+        where: { id: batch.id },
+        data: {
+          totals: {
+            ...(validated.totals as unknown as Record<string, unknown>),
+            analysis: analysis as unknown as Prisma.InputJsonValue,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
+    });
+
+    return {
+      analysis,
+      batch: {
+        id: batch.id,
+        status: committed.batch.status,
+        committed: committed.committed,
+        duplicates: committed.duplicates,
+      },
+      validation: validated.totals,
+    };
+  }
+
   private async commitVoucherRow(
     tx: Prisma.TransactionClient,
     ctx: TenantContext,
@@ -286,7 +559,11 @@ export class IngestionService {
     if (existing) {
       await tx.importRow.update({
         where: { id: row.id },
-        data: { status: "DUPLICATE" },
+        data: {
+          status: "DUPLICATE",
+          sourceType: "FISCAL_VOUCHER",
+          sourceId: existing.id,
+        },
       });
       return false;
     }
@@ -346,13 +623,13 @@ export class IngestionService {
               ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "NETO", base: new Prisma.Decimal(net), amount: new Prisma.Decimal(net) }]
               : []),
             ...(Number(iva21) !== 0
-              ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "IVA_21", base: new Prisma.Decimal(net), rate: new Prisma.Decimal("0.21"), amount: new Prisma.Decimal(iva21) }]
+              ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "IVA_21", base: new Prisma.Decimal(iva21).div("0.21"), rate: new Prisma.Decimal("0.21"), amount: new Prisma.Decimal(iva21) }]
               : []),
             ...(Number(iva105) !== 0
-              ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "IVA_105", base: new Prisma.Decimal(net), rate: new Prisma.Decimal("0.105"), amount: new Prisma.Decimal(iva105) }]
+              ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "IVA_105", base: new Prisma.Decimal(iva105).div("0.105"), rate: new Prisma.Decimal("0.105"), amount: new Prisma.Decimal(iva105) }]
               : []),
             ...(Number(iva27) !== 0
-              ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "IVA_27", base: new Prisma.Decimal(net), rate: new Prisma.Decimal("0.27"), amount: new Prisma.Decimal(iva27) }]
+              ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "IVA_27", base: new Prisma.Decimal(iva27).div("0.27"), rate: new Prisma.Decimal("0.27"), amount: new Prisma.Decimal(iva27) }]
               : []),
             ...(Number(exempt) !== 0
               ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "EXENTO", base: new Prisma.Decimal(exempt), amount: new Prisma.Decimal(exempt) }]
@@ -367,7 +644,12 @@ export class IngestionService {
 
     await tx.importRow.update({
       where: { id: row.id },
-      data: { status: "COMMITTED", voucherId: voucher.id },
+      data: {
+        status: "COMMITTED",
+        voucherId: voucher.id,
+        sourceType: "FISCAL_VOUCHER",
+        sourceId: voucher.id,
+      },
     });
     return true;
   }
@@ -404,6 +686,9 @@ export class IngestionService {
       origin: "DGR_IIBB",
       activityCode,
       income,
+      rate,
+      minimum,
+      exemption,
     });
 
     const voucher = await tx.fiscalVoucher.create({
@@ -419,7 +704,7 @@ export class IngestionService {
         receiverCuit: clientCuit,
         issuedOn,
         currency: "ARS",
-        total: new Prisma.Decimal(income),
+        total: new Prisma.Decimal(income).plus(exemption),
         status: "DRAFT",
         version: 1,
         hash,
@@ -461,11 +746,13 @@ export class IngestionService {
 
     await tx.importRow.update({
       where: { id: row.id },
-      data: { status: "COMMITTED", voucherId: voucher.id },
+      data: {
+        status: "COMMITTED",
+        voucherId: voucher.id,
+        sourceType: "FISCAL_VOUCHER",
+        sourceId: voucher.id,
+      },
     });
-
-    void rate;
-    void minimum;
   }
 
   /**
@@ -484,6 +771,8 @@ export class IngestionService {
     const activityCode = n["activityCode"] as string;
     const income = n["income"] as string;
     const description = (n["description"] as string | null) ?? activityCode;
+    const rate = n["rate"] as string | null;
+    const minimum = n["minimum"] as string | null;
     const exemption = n["exemption"] as string;
 
     const period = await tx.taxPeriod.findUnique({ where: { id: batch.periodId } });
@@ -495,6 +784,9 @@ export class IngestionService {
       origin: "SMT_TEM",
       activityCode,
       income,
+      rate,
+      minimum,
+      exemption,
     });
 
     const voucher = await tx.fiscalVoucher.create({
@@ -510,7 +802,7 @@ export class IngestionService {
         receiverCuit: clientCuit,
         issuedOn,
         currency: "ARS",
-        total: new Prisma.Decimal(income),
+        total: new Prisma.Decimal(income).plus(exemption),
         status: "DRAFT",
         version: 1,
         hash,
@@ -552,7 +844,12 @@ export class IngestionService {
 
     await tx.importRow.update({
       where: { id: row.id },
-      data: { status: "COMMITTED", voucherId: voucher.id },
+      data: {
+        status: "COMMITTED",
+        voucherId: voucher.id,
+        sourceType: "FISCAL_VOUCHER",
+        sourceId: voucher.id,
+      },
     });
   }
 
@@ -578,7 +875,7 @@ export class IngestionService {
     if (coefficient !== null) {
       await tx.importRow.update({
         where: { id: row.id },
-        data: { status: "COMMITTED" },
+        data: { status: "COMMITTED", sourceType: "CM03_COEFFICIENT", sourceId: row.id },
       });
       return;
     }
@@ -640,14 +937,19 @@ export class IngestionService {
 
     await tx.importRow.update({
       where: { id: row.id },
-      data: { status: "COMMITTED", voucherId: voucher.id },
+      data: {
+        status: "COMMITTED",
+        voucherId: voucher.id,
+        sourceType: "FISCAL_VOUCHER",
+        sourceId: voucher.id,
+      },
     });
   }
 
   private async commitWithholdingRow(
     tx: Prisma.TransactionClient,
     ctx: TenantContext,
-    _batch: { id: string },
+    batch: { id: string; periodId: string },
     row: { id: string; position: number; normalized: Prisma.JsonValue },
     _clientCuit: string,
   ): Promise<void> {
@@ -661,6 +963,7 @@ export class IngestionService {
     const rate = n["rate"] as string | null;
     const issuedOn = n["issuedOn"] as string;
     const certificateNumber = n["certificateNumber"] as string | null;
+    const documentKind = n["documentKind"] as "INVOICE" | "CREDIT_NOTE";
 
     const data = {
       firmId: ctx.firmId,
@@ -674,20 +977,117 @@ export class IngestionService {
       ...(rate ? { rate: new Prisma.Decimal(rate) } : {}),
       issuedOn: new Date(issuedOn),
       ...(certificateNumber ? { certificateNumber } : {}),
+      taxPeriodId: batch.periodId,
       status: "DRAFT",
       createdByUserId: ctx.userId,
     };
 
-    if (kind === "RETENCION") {
-      await tx.withholdingCertificate.create({ data });
-    } else {
-      await tx.perceptionCertificate.create({ data });
-    }
+    const source =
+      kind === "RETENCION"
+        ? await tx.withholdingCertificate.create({
+            data: {
+              ...data,
+              creditKind: documentKind === "CREDIT_NOTE" ? "WITHHOLDING_CREDIT_NOTE" : "WITHHOLDING",
+            },
+          })
+        : await tx.perceptionCertificate.create({
+            data: {
+              ...data,
+              creditKind: documentKind === "CREDIT_NOTE" ? "PERCEPTION_CREDIT_NOTE" : "PERCEPTION",
+            },
+          });
 
     await tx.importRow.update({
       where: { id: row.id },
-      data: { status: "COMMITTED" },
+      data: {
+        status: "COMMITTED",
+        sourceType: kind === "RETENCION" ? "WITHHOLDING" : "PERCEPTION",
+        sourceId: source.id,
+      },
     });
+  }
+
+  private async commitF931Rows(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    batch: {
+      id: string;
+      periodId: string;
+      rows: Array<{
+        id: string;
+        position: number;
+        status: string;
+        normalized: Prisma.JsonValue;
+      }>;
+    },
+  ) {
+    const existing = await tx.f931Run.findUnique({ where: { importBatchId: batch.id } });
+    if (existing) return batch.rows.length;
+
+    const rows = batch.rows.map((row) => {
+      const normalized = (row.normalized ?? {}) as Record<string, unknown>;
+      return {
+        id: row.id,
+        position: row.position,
+        cuit: normalized["cuit"] as string,
+        remuneration: new Prisma.Decimal(normalized["remuneration"] as string),
+        deduction: new Prisma.Decimal(normalized["deduction"] as string),
+        netRemuneration: new Prisma.Decimal(normalized["netRemuneration"] as string),
+      };
+    });
+    const totalRemuneration = rows.reduce(
+      (sum, row) => sum.plus(row.remuneration),
+      new Prisma.Decimal(0),
+    );
+    const deduction = rows.reduce(
+      (sum, row) => sum.plus(row.deduction),
+      new Prisma.Decimal(0),
+    );
+    const netRemuneration = rows.reduce(
+      (sum, row) => sum.plus(row.netRemuneration),
+      new Prisma.Decimal(0),
+    );
+    const hash = taxHash({
+      batchId: batch.id,
+      periodId: batch.periodId,
+      rows: rows.map((row) => ({
+        position: row.position,
+        cuit: row.cuit,
+        remuneration: row.remuneration.toFixed(4),
+        deduction: row.deduction.toFixed(4),
+        netRemuneration: row.netRemuneration.toFixed(4),
+      })),
+    });
+
+    const run = await tx.f931Run.create({
+      data: {
+        firmId: ctx.firmId,
+        clientId: ctx.clientId!,
+        periodId: batch.periodId,
+        importBatchId: batch.id,
+        totalRemuneration,
+        deduction,
+        netRemuneration,
+        hash,
+        lines: {
+          create: rows.map((row) => ({
+            firmId: ctx.firmId,
+            clientId: ctx.clientId!,
+            cuit: row.cuit,
+            remuneration: row.remuneration,
+            deduction: row.deduction,
+            netRemuneration: row.netRemuneration,
+            position: row.position,
+          })),
+        },
+      },
+    });
+
+    await tx.importRow.updateMany({
+      where: { batchId: batch.id },
+      data: { status: "COMMITTED", sourceType: "F931_RUN", sourceId: run.id },
+    });
+    return rows.length;
   }
 
   /**

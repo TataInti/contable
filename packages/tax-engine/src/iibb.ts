@@ -27,7 +27,17 @@ import {
  * - Saldo a favor anterior se aplica al final.
  */
 
-export const IIBB_TUC_ENGINE_VERSION = "ar-iibb-tuc-local-v1.0.0";
+export const IIBB_TUC_LEGACY_ENGINE_VERSION = "ar-iibb-tuc-local-v1.0.0";
+export const IIBB_TUC_ENGINE_VERSION = "ar-iibb-tuc-local-v1.1.0";
+
+export interface LocalTaxDeclaredParameter {
+  sourceId: string;
+  activity: string;
+  /** Alícuota informada por la fuente, expresada en puntos porcentuales. */
+  rate?: string;
+  /** Mínimo informado por la fuente para controlar contra el rule pack. */
+  minimum?: string;
+}
 
 export interface IibbTucInput extends TaxEngineInput {
   /** Ingresos por actividad (código del nomenclador → neto gravado). */
@@ -45,12 +55,21 @@ export interface IibbTucInput extends TaxEngineInput {
     perception: DecimalValue;
     /** Recaudaciones bancarias / tarjetas (RBC). */
     collected: DecimalValue;
+    /** Otros créditos revisados del período. */
+    other?: DecimalValue;
   };
   /** Mínimo global del período si corresponde (rule). */
   minimum?: DecimalValue;
+  /** Parámetros declarados por los archivos oficiales, usados como control. */
+  declaredParameters?: readonly LocalTaxDeclaredParameter[];
 }
 
 export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
+  const engineVersion =
+    input.engineVersion === IIBB_TUC_LEGACY_ENGINE_VERSION
+      ? IIBB_TUC_LEGACY_ENGINE_VERSION
+      : IIBB_TUC_ENGINE_VERSION;
+  const strict = engineVersion === IIBB_TUC_ENGINE_VERSION;
   const rounding = input.rounding ?? {};
   const rules = new Map(input.rules.map((r) => [r.concept, r]));
   const lines: TaxEngineResult["lines"] = [];
@@ -62,19 +81,42 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
   }
 
   // --- Base por actividad: ingreso × tasa ---
-  const activityLines: Array<{ activity: string; base: DecimalValue; rate: DecimalValue; tax: DecimalValue }> = [];
+  const activityLines: Array<{
+    activity: string;
+    base: DecimalValue;
+    rate: DecimalValue;
+    tax: DecimalValue;
+    determinedTax: DecimalValue;
+    minimum?: DecimalValue;
+  }> = [];
   let totalBase = dec(0);
-  for (const [activity, incomeStr] of Object.entries(input.incomeByActivity)) {
+  const activityEntries = Object.entries(input.incomeByActivity);
+  if (strict) activityEntries.sort(([left], [right]) => left.localeCompare(right));
+  for (const [activity, incomeStr] of activityEntries) {
     const income = dec(incomeStr);
     totalBase = totalBase.plus(income);
     const rule = rules.get(activity);
     const rate = rule?.rate !== undefined ? rule.rate : rules.get("DEFAULT")?.rate;
     if (rate === undefined) {
-      warnings.push(`Actividad ${activity} sin alícuota configurada; se omitió`);
+      const message = `Actividad ${activity} sin alícuota configurada; se omitió`;
+      if (strict) blocks.push(message);
+      else warnings.push(message);
       continue;
     }
     const tax = applyRate(income, rate);
-    activityLines.push({ activity, base: income, rate, tax });
+    const activityMinimum = strict ? rule?.minimum : undefined;
+    const determinedTax =
+      activityMinimum !== undefined && income.isPositive() && tax.lessThan(activityMinimum)
+        ? activityMinimum
+        : tax;
+    activityLines.push({
+      activity,
+      base: income,
+      rate,
+      tax,
+      determinedTax,
+      ...(activityMinimum !== undefined ? { minimum: activityMinimum } : {}),
+    });
   }
   if (activityLines.length === 0) {
     warnings.push("No se declararon ingresos gravados por actividad");
@@ -82,41 +124,89 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
 
   // --- Renglón total por alícuota ---
   let totalByRate = dec(0);
+  let totalAfterActivityMinimums = dec(0);
   for (const line of activityLines) {
     totalByRate = totalByRate.plus(line.tax);
+    totalAfterActivityMinimums = totalAfterActivityMinimums.plus(line.determinedTax);
   }
   totalByRate = roundFor(totalByRate, "TOTAL", rounding.TOTAL);
+  totalAfterActivityMinimums = roundFor(
+    totalAfterActivityMinimums,
+    "TOTAL",
+    rounding.TOTAL,
+  );
 
   // --- Mínimo ---
   const minimum = input.minimum !== undefined ? input.minimum : rules.get("MINIMO")?.minimum;
   let amountDue: DecimalValue;
   let appliedMinimum = false;
-  if (minimum !== undefined && totalByRate.lessThan(minimum)) {
+  const amountBeforeGlobalMinimum = strict ? totalAfterActivityMinimums : totalByRate;
+  if (minimum !== undefined && amountBeforeGlobalMinimum.lessThan(minimum)) {
     amountDue = minimum;
     appliedMinimum = true;
   } else {
-    amountDue = totalByRate;
+    amountDue = amountBeforeGlobalMinimum;
+  }
+
+  if (strict) {
+    const mismatches = new Set<string>();
+    for (const declared of [...(input.declaredParameters ?? [])].sort((left, right) =>
+      `${left.activity}:${left.sourceId}`.localeCompare(`${right.activity}:${right.sourceId}`),
+    )) {
+      const rule = rules.get(declared.activity) ?? rules.get("DEFAULT");
+      if (declared.rate !== undefined) {
+        const sourceRate = dec(declared.rate).div(100);
+        if (rule?.rate === undefined || !sourceRate.equals(rule.rate)) {
+          mismatches.add(
+            `La alícuota declarada para ${declared.activity} (${declared.rate}%) no coincide con la regla versionada`,
+          );
+        }
+      }
+      if (declared.minimum !== undefined) {
+        const configuredMinimum = rule?.minimum ?? minimum;
+        if (
+          configuredMinimum === undefined ||
+          !dec(declared.minimum).equals(configuredMinimum)
+        ) {
+          mismatches.add(
+            `El mínimo declarado para ${declared.activity} (${fmtMoney(dec(declared.minimum))}) no coincide con la regla versionada`,
+          );
+        }
+      }
+    }
+    blocks.push(...mismatches);
   }
 
   // --- Créditos (RPI) ---
   const withholding = input.credits?.withholding ?? dec(0);
   const perception = input.credits?.perception ?? dec(0);
   const collected = input.credits?.collected ?? dec(0);
+  const other = strict ? input.credits?.other ?? dec(0) : dec(0);
   const previousCredit = input.balances?.previousCredit ? dec(input.balances.previousCredit) : dec(0);
 
   const subtotals: Record<string, string> = {};
   subtotals["BASE_TOTAL"] = fmtMoney(roundFor(totalBase, "base", rounding.base));
   subtotals["IMPUESTO_POR_ACTIVIDAD"] = fmtMoney(roundFor(totalByRate, "total", rounding.total));
+  if (strict) {
+    subtotals["IMPUESTO_DETERMINADO"] = fmtMoney(
+      roundFor(amountDue, "total", rounding.total),
+    );
+  }
   if (appliedMinimum) {
     subtotals["MINIMO_APLICADO"] = fmtMoney(roundFor(minimum!, "total", rounding.total));
   }
   subtotals["RETENCIONES"] = fmtMoney(roundFor(withholding, "retenciones", rounding.retenciones));
   subtotals["PERCEPCIONES"] = fmtMoney(roundFor(perception, "percepciones", rounding.percepciones));
   subtotals["RECAUDACIONES"] = fmtMoney(roundFor(collected, "recaudaciones", rounding.recaudaciones));
+  if (strict) {
+    subtotals["OTROS_CREDITOS"] = fmtMoney(
+      roundFor(other, "otros_creditos", rounding.otros_creditos),
+    );
+  }
   subtotals["SALDO_ANTERIOR"] = fmtMoney(roundFor(previousCredit, "saldos", rounding.saldos));
 
   // --- Determinación ---
-  const deductions = withholding.plus(perception).plus(collected).plus(previousCredit);
+  const deductions = withholding.plus(perception).plus(collected).plus(other).plus(previousCredit);
   let netDue = amountDue.minus(deductions);
   let remainingCredit = dec(0);
   if (netDue.isNegative()) {
@@ -128,11 +218,20 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
 
   // --- Renglones de traza ---
   for (const line of activityLines) {
+    const activityMinimumApplied = line.determinedTax.greaterThan(line.tax);
     lines.push({
       concept: `ACTIVIDAD_${line.activity}`,
-      formula: `ingresos(${fmtMoney(line.base)}) × alícuota ${line.rate} = ${fmtMoney(line.tax)}`,
-      inputs: { activity: line.activity, base: fmtMoney(line.base), rate: line.rate.toString(), tax: fmtMoney(line.tax) },
-      result: fmtMoney(line.tax),
+      formula: activityMinimumApplied
+        ? `max(ingresos(${fmtMoney(line.base)}) × alícuota ${line.rate}, mínimo ${fmtMoney(line.minimum!)})`
+        : `ingresos(${fmtMoney(line.base)}) × alícuota ${line.rate} = ${fmtMoney(line.tax)}`,
+      inputs: {
+        activity: line.activity,
+        base: fmtMoney(line.base),
+        rate: line.rate.toString(),
+        tax: fmtMoney(line.tax),
+        ...(line.minimum !== undefined ? { minimum: fmtMoney(line.minimum) } : {}),
+      },
+      result: fmtMoney(line.determinedTax),
     });
   }
   if (appliedMinimum) {
@@ -147,6 +246,7 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
     ["RETENCION", withholding],
     ["PERCEPCION", perception],
     ["RECAUDACION", collected],
+    ...(strict ? ([ ["OTRO_CREDITO", other] ] as const) : []),
   ] as const) {
     lines.push({
       concept,
@@ -158,7 +258,7 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
 
   // --- Hashes (V-004 / determinismo) ---
   const inputHash = taxHash({
-    engineVersion: IIBB_TUC_ENGINE_VERSION,
+    engineVersion,
     period: input.period,
     incomeByActivity: input.incomeByActivity,
     rules: input.rules.map((r) => ({ concept: r.concept, rate: r.rate?.toString(), validFrom: r.validFrom })),
@@ -167,10 +267,12 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
           withholding: input.credits.withholding.toString(),
           perception: input.credits.perception.toString(),
           collected: input.credits.collected.toString(),
+          other: strict ? input.credits.other?.toString() ?? "0" : null,
         }
       : null,
     balances: input.balances ?? null,
     minimum: input.minimum?.toString() ?? null,
+    declaredParameters: strict ? input.declaredParameters ?? [] : null,
   });
   const outputHash = taxHash({
     inputHash,
@@ -183,7 +285,7 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
   });
 
   return {
-    engineVersion: IIBB_TUC_ENGINE_VERSION,
+    engineVersion,
     lines,
     subtotals,
     totalDue: fmtMoney(roundFor(netDue, "total", rounding.total)),

@@ -4,6 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { IngestionService, ImportError } from "./ingestion-service.js";
 import { ManagementExpenseService, ExpenseError } from "./management-expense-service.js";
+import { MonthlyWorkpaperService } from "./workpaper-service.js";
 
 /**
  * Tests de integración de la ingestión fiscal (Puerta 2).
@@ -47,6 +48,7 @@ async function runAsRuntime<T>(
 
 const ingestion = new IngestionService();
 const expenses = new ManagementExpenseService();
+const workpapers = new MonthlyWorkpaperService();
 
 const ctxOwner = { userId: OWNER_A, firmId: FIRM_ALFA, clientId: CLIENT_ING, actorKind: "USER" as const };
 const ctxReviewer = { userId: REVIEWER_A, firmId: FIRM_ALFA, clientId: CLIENT_ING, actorKind: "USER" as const };
@@ -208,6 +210,8 @@ async function cleanupIngestion() {
     await tx.$executeRawUnsafe(`DELETE FROM tax_differences WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_settlement_lines WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM settlement_inputs WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM monthly_tax_workpapers WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM supplier_tax_profiles WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_settlements WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM evidence_links WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_adjustments WHERE "clientId" = '${CLIENT_ING}'`);
@@ -216,6 +220,8 @@ async function cleanupIngestion() {
     await tx.$executeRawUnsafe(`DELETE FROM management_expenses WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM perception_certificates WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM withholding_certificates WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM f931_lines WHERE "clientId" = '${CLIENT_ING}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM f931_runs WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_components WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_voucher_lines WHERE "clientId" = '${CLIENT_ING}'`);
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_vouchers WHERE "clientId" = '${CLIENT_ING}'`);
@@ -281,6 +287,33 @@ describe("G2-01/02/10 lote de importación ARCA", () => {
     expect(rows).toHaveLength(2);
     const errorRow = rows.find((r) => r.status === "ERROR");
     expect(errorRow?.errors.join(",")).toContain("CUIT_INVALID");
+  });
+
+  it("observa filas cuya fecha no pertenece al período declarado", async () => {
+    const batch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "ARCA",
+      taxTypeId: ivaId,
+      periodId,
+      adapterVersion: "ARCA_LIBRO_IVA_V1",
+      fileHash: "sha256:period-mismatch",
+    });
+    const result = await ingestion.validateBatch(ctxOwner, batch.id, [
+      {
+        direction: "SALE",
+        letter: "A",
+        pointOfSale: "0001",
+        numberFrom: "3",
+        cuit: "20111111111",
+        issuedOn: "2026-02-01",
+        net: "1000",
+        hasIva: true,
+        iva21: "210",
+      },
+    ]);
+    expect(result.totals).toMatchObject({ validRows: 0, errorRows: 1, net: "0.0000" });
+    const rows = await ingestion.listBatchRows(ctxOwner, batch.id);
+    expect(rows[0]?.errors).toContain("PERIOD_MISMATCH");
   });
 
   it("commit convierte filas válidas en vouchers y es idempotente", async () => {
@@ -361,6 +394,488 @@ describe("G2-03 retenciones y percepciones", () => {
     ]);
     const committed = await ingestion.commitBatch(ctxOwner, batch.id, "20999999999");
     expect(committed.committed).toBe(2);
+  });
+});
+
+describe("F1.2 F.931", () => {
+  it("normaliza y confirma remuneraciones en un subledger trazable", async () => {
+    const batch = await ingestion.createBatch(ctxPreparer, {
+      clientId: CLIENT_ING,
+      origin: "F931",
+      taxTypeId: ivaId,
+      periodId,
+      adapterVersion: "F931_V1",
+      fileHash: "sha256:f931-1",
+    });
+    const validation = await ingestion.validateBatch(ctxPreparer, batch.id, [
+      { cuit: "20111111111", remuneration: "100000", deduction: "10000" },
+      { cuit: "20222222222", remuneration: "80000", deduction: "5000" },
+    ]);
+    expect(validation.totals.errorRows).toBe(0);
+
+    const committed = await ingestion.commitBatch(ctxPreparer, batch.id, "20999999998");
+    expect(committed.committed).toBe(2);
+
+    const run = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.f931Run.findUnique({ where: { importBatchId: batch.id }, include: { lines: true } }),
+    );
+    expect(run?.totalRemuneration.toString()).toBe("180000");
+    expect(run?.deduction.toString()).toBe("15000");
+    expect(run?.netRemuneration.toString()).toBe("165000");
+    expect(run?.lines).toHaveLength(2);
+  });
+});
+
+describe("F1.2 evidencia del expediente mensual", () => {
+  it("vincula, revisa y usa el lote para la cobertura obligatoria", async () => {
+    const exact = await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      const baseRegime = await tx.taxRegime.findUnique({
+        where: { code: "RI-ING" },
+      });
+      if (!baseRegime) throw new Error("Falta el régimen base del fixture");
+      const taxType = await tx.taxType.upsert({
+        where: { code: "IVA" },
+        update: {},
+        create: { code: "IVA", name: "IVA" },
+      });
+      const regime = await tx.taxRegime.upsert({
+        where: { code: "RI" },
+        update: {},
+        create: {
+          code: "RI",
+          name: "Responsable Inscripto",
+          taxTypeId: taxType.id,
+          jurisdictionId: baseRegime.jurisdictionId,
+          authorityId: baseRegime.authorityId,
+        },
+      });
+      const profile = await tx.taxpayerProfileVersion.findFirstOrThrow({
+        where: { clientId: CLIENT_ING, status: "ACTIVE" },
+      });
+      const period = await tx.taxPeriod.create({
+        data: {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_ING,
+          taxTypeId: taxType.id,
+          startDate: new Date("2026-01-01"),
+          endDate: new Date("2026-01-31"),
+          label: "Enero 2026 IVA",
+        },
+      });
+      await tx.taxObligation.create({
+        data: {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_ING,
+          profileVersionId: profile.id,
+          regimeId: regime.id,
+          periodId: period.id,
+          status: "WAITING_INPUTS",
+        },
+      });
+      return { taxTypeId: taxType.id, periodId: period.id };
+    });
+
+    const workpaper = await workpapers.create(ctxPreparer, {
+      clientId: CLIENT_ING,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+    });
+    const batch = await ingestion.createBatch(ctxPreparer, {
+      clientId: CLIENT_ING,
+      origin: "ARCA",
+      taxTypeId: exact.taxTypeId,
+      periodId: exact.periodId,
+      adapterVersion: "ARCA_LIBRO_IVA_V1",
+      fileHash: "sha256:wp-sales-1",
+      workpaperId: workpaper.id,
+      sourceCode: "ARCA_IVA_SALES",
+    });
+    await ingestion.validateBatch(ctxPreparer, batch.id, [
+      {
+        direction: "SALE",
+        letter: "A",
+        pointOfSale: "0001",
+        numberFrom: "700",
+        cuit: "20111111111",
+        issuedOn: "2026-01-10",
+        net: "100000",
+        hasIva: true,
+        iva21: "21000",
+      },
+    ]);
+    await ingestion.commitBatch(ctxPreparer, batch.id, "20999999998");
+
+    const before = await workpapers.coverage(ctxPreparer, workpaper.id);
+    const salesBefore = before.sources.find((source) => source.code === "ARCA_IVA_SALES");
+    expect(salesBefore?.present).toBe(false);
+    const sourceLinkId = salesBefore?.batches[0]?.id;
+    expect(sourceLinkId).toBeTruthy();
+    await expect(
+      workpapers.reviewSource(ctxPreparer, workpaper.id, sourceLinkId!),
+    ).rejects.toMatchObject({ code: "MAKER_CHECKER_VIOLATION" });
+
+    await workpapers.reviewSource(ctxReviewer, workpaper.id, sourceLinkId!);
+    const after = await workpapers.coverage(ctxReviewer, workpaper.id);
+    expect(after.sources.find((source) => source.code === "ARCA_IVA_SALES")?.present).toBe(true);
+    expect(after.sources.find((source) => source.code === "ARCA_IVA_PURCHASES")?.present).toBe(false);
+
+    const row = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.importRow.findFirstOrThrow({ where: { batchId: batch.id } }),
+    );
+    const voucher = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.fiscalVoucher.findUniqueOrThrow({ where: { id: row.voucherId! } }),
+    );
+    expect(voucher.status).toBe("APPROVED");
+    await expect(workpapers.calculate(ctxPreparer, workpaper.id)).rejects.toMatchObject({
+      code: "SOURCE_NOT_REVIEWED",
+    });
+
+    const purchasesBatch = await ingestion.createBatch(ctxPreparer, {
+      clientId: CLIENT_ING,
+      origin: "ARCA",
+      taxTypeId: exact.taxTypeId,
+      periodId: exact.periodId,
+      adapterVersion: "ARCA_LIBRO_IVA_V1",
+      fileHash: "sha256:wp-purchases-1",
+      workpaperId: workpaper.id,
+      sourceCode: "ARCA_IVA_PURCHASES",
+    });
+    await ingestion.validateBatch(ctxPreparer, purchasesBatch.id, [
+      {
+        direction: "PURCHASE",
+        letter: "A",
+        pointOfSale: "0001",
+        numberFrom: "701",
+        cuit: "20333333333",
+        issuedOn: "2026-01-12",
+        net: "50000",
+        hasIva: true,
+        iva21: "10500",
+      },
+      {
+        direction: "PURCHASE",
+        letter: "NC",
+        pointOfSale: "0001",
+        numberFrom: "702",
+        cuit: "20333333333",
+        issuedOn: "2026-01-18",
+        net: "5000",
+        hasIva: true,
+        iva21: "1050",
+      },
+    ]);
+    await ingestion.commitBatch(ctxPreparer, purchasesBatch.id, "20999999998");
+    const withPurchases = await workpapers.coverage(ctxReviewer, workpaper.id);
+    const purchasesLink = withPurchases.sources.find(
+      (source) => source.code === "ARCA_IVA_PURCHASES",
+    )?.batches[0]?.id;
+    await workpapers.reviewSource(ctxReviewer, workpaper.id, purchasesLink!);
+
+    const classifications = await workpapers.listClassifications(ctxPreparer, workpaper.id);
+    expect(classifications.pending).toBe(3);
+    await expect(workpapers.calculate(ctxPreparer, workpaper.id)).rejects.toMatchObject({
+      code: "CLASSIFICATION_INCOMPLETE",
+    });
+
+    const sale = classifications.items.find((item) => item.direction === "SALE");
+    const purchase = classifications.items.find((item) => item.direction === "PURCHASE");
+    expect(sale).toBeTruthy();
+    expect(purchase).toBeTruthy();
+    expect(
+      classifications.items.some(
+        (item) => item.direction === "PURCHASE" && item.documentKind === "CREDIT_NOTE",
+      ),
+    ).toBe(true);
+    await workpapers.classifyVoucher(ctxPreparer, workpaper.id, sale!.id, {
+      activityCode: "TRANSPORTE_AUTOMOTOR",
+    });
+    const classified = await workpapers.classifyVoucher(
+      ctxPreparer,
+      workpaper.id,
+      purchase!.id,
+      { categoryCode: "SUPER", activityCode: "MINIMERCADOS" },
+    );
+    expect(classified.ready).toBe(true);
+    expect(classified.pending).toBe(0);
+
+    const profile = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.supplierTaxProfile.findFirstOrThrow({
+        where: { clientId: CLIENT_ING, cuitNormalized: "20333333333", status: "ACTIVE" },
+      }),
+    );
+    expect(profile.categoryCode).toBe("SUPER");
+
+    const ready = await workpapers.get(ctxReviewer, workpaper.id);
+    expect(ready?.status).toBe("READY_TO_CALCULATE");
+
+    const creditsBatch = await ingestion.createBatch(ctxPreparer, {
+      clientId: CLIENT_ING,
+      origin: "ARCA_RET",
+      taxTypeId: exact.taxTypeId,
+      periodId: exact.periodId,
+      adapterVersion: "ARCA_RET_V1",
+      fileHash: "sha256:wp-sicore-1",
+      workpaperId: workpaper.id,
+      sourceCode: "SICORE_IVA",
+    });
+    await ingestion.validateBatch(ctxPreparer, creditsBatch.id, [
+      {
+        kind: "RETENCION",
+        cuitResponsable: "20999999998",
+        cuitAgente: "30555555550",
+        concept: "IVA",
+        base: "100000",
+        amount: "2100",
+        issuedOn: "2026-01-20",
+        certificateNumber: "RET-001",
+      },
+      {
+        kind: "PERCEPCION",
+        cuitResponsable: "20999999998",
+        cuitAgente: "30666666660",
+        concept: "IVA",
+        base: "20000",
+        amount: "500",
+        documentKind: "NOTA DE CREDITO",
+        issuedOn: "2026-01-22",
+        certificateNumber: "PER-NC-001",
+      },
+    ]);
+    await ingestion.commitBatch(ctxPreparer, creditsBatch.id, "20999999998");
+    const creditCoverage = await workpapers.coverage(ctxReviewer, workpaper.id);
+    const creditsLink = creditCoverage.sources.find(
+      (source) => source.code === "SICORE_IVA",
+    )?.batches[0]?.id;
+    await workpapers.reviewSource(ctxReviewer, workpaper.id, creditsLink!);
+
+    const allocations = await workpapers.listAllocations(ctxPreparer, workpaper.id);
+    expect(allocations.ready).toBe(true);
+    expect(allocations.allocated).toBe(2);
+    expect(allocations.items.map((item) => item.amount.toFixed(4)).sort()).toEqual([
+      "-500.0000",
+      "2100.0000",
+    ]);
+    expect(allocations.items.every((item) => item.obligationId)).toBe(true);
+    expect(allocations.items.every((item) => item.jurisdictionId)).toBe(true);
+
+    const payrollBatch = await ingestion.createBatch(ctxPreparer, {
+      clientId: CLIENT_ING,
+      origin: "F931",
+      taxTypeId: exact.taxTypeId,
+      periodId: exact.periodId,
+      adapterVersion: "F931_V1",
+      fileHash: "sha256:wp-f931-1",
+      workpaperId: workpaper.id,
+      sourceCode: "F931",
+    });
+    await ingestion.validateBatch(ctxPreparer, payrollBatch.id, [
+      { cuit: "20111111111", remuneration: "60000", deduction: "10000" },
+    ]);
+    await ingestion.commitBatch(ctxPreparer, payrollBatch.id, "20999999998");
+    const payrollLink = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.workpaperImportBatch.findUniqueOrThrow({
+        where: {
+          workpaperId_importBatchId: {
+            workpaperId: workpaper.id,
+            importBatchId: payrollBatch.id,
+          },
+        },
+      }),
+    );
+    await workpapers.reviewSource(ctxReviewer, workpaper.id, payrollLink.id);
+    const payroll = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.f931Run.findUniqueOrThrow({ where: { importBatchId: payrollBatch.id } }),
+    );
+    expect(payroll).toMatchObject({ status: "REVIEWED", reviewedByUserId: REVIEWER_A });
+    expect(payroll.netRemuneration.toFixed(4)).toBe("50000.0000");
+  });
+
+  it("exige jurisdicción en CM y conserva una reimputación manual", async () => {
+    const exact = await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      const baseRegime = await tx.taxRegime.findUnique({ where: { code: "RI-ING" } });
+      if (!baseRegime) throw new Error("Falta el régimen base del fixture");
+      const taxType = await tx.taxType.upsert({
+        where: { code: "IIBB" },
+        update: {},
+        create: { code: "IIBB", name: "Ingresos Brutos" },
+      });
+      const regime = await tx.taxRegime.upsert({
+        where: { code: "CM_ART2" },
+        update: {},
+        create: {
+          code: "CM_ART2",
+          name: "Convenio Multilateral artículo 2",
+          taxTypeId: taxType.id,
+          jurisdictionId: baseRegime.jurisdictionId,
+          authorityId: baseRegime.authorityId,
+        },
+      });
+      const regimeTaxType = await tx.taxType.findUniqueOrThrow({
+        where: { id: regime.taxTypeId },
+      });
+      if (regimeTaxType.code !== "IIBB") {
+        throw new Error("CM_ART2 debe pertenecer al impuesto IIBB");
+      }
+      await Promise.all([
+        tx.jurisdiction.upsert({
+          where: { code: "TUC" },
+          update: {},
+          create: { code: "TUC", name: "Tucumán", kind: "PROVINCIAL" },
+        }),
+        tx.jurisdiction.upsert({
+          where: { code: "CBA" },
+          update: {},
+          create: { code: "CBA", name: "Córdoba", kind: "PROVINCIAL" },
+        }),
+      ]);
+      const profile = await tx.taxpayerProfileVersion.findFirstOrThrow({
+        where: { clientId: CLIENT_ING, status: "ACTIVE" },
+      });
+      const period = await tx.taxPeriod.create({
+        data: {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_ING,
+          taxTypeId: regime.taxTypeId,
+          startDate: new Date("2026-02-01"),
+          endDate: new Date("2026-02-28"),
+          label: "Febrero 2026 CM",
+        },
+      });
+      await tx.taxObligation.create({
+        data: {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_ING,
+          profileVersionId: profile.id,
+          regimeId: regime.id,
+          periodId: period.id,
+          status: "WAITING_INPUTS",
+        },
+      });
+      return { taxTypeId: regime.taxTypeId, periodId: period.id };
+    });
+
+    const workpaper = await workpapers.create(ctxPreparer, {
+      clientId: CLIENT_ING,
+      periodStart: "2026-02-01",
+      periodEnd: "2026-02-28",
+    });
+    const cmBatch = await ingestion.createBatch(ctxPreparer, {
+      clientId: CLIENT_ING,
+      origin: "CM03",
+      taxTypeId: exact.taxTypeId,
+      periodId: exact.periodId,
+      adapterVersion: "CM03_V1",
+      fileHash: "sha256:wp-cm03-1",
+      workpaperId: workpaper.id,
+      sourceCode: "SIFERE_CM03",
+    });
+    await ingestion.validateBatch(ctxPreparer, cmBatch.id, [
+      { activityCode: "501100", income: "100000" },
+      { activityCode: "COEF_TUC", income: "0", coefficient: "0.6" },
+      { activityCode: "COEF_CBA", income: "0", coefficient: "0.4" },
+    ]);
+    await ingestion.commitBatch(ctxPreparer, cmBatch.id, "20999999998");
+    const cmLink = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.workpaperImportBatch.findUniqueOrThrow({
+        where: {
+          workpaperId_importBatchId: {
+            workpaperId: workpaper.id,
+            importBatchId: cmBatch.id,
+          },
+        },
+      }),
+    );
+    await workpapers.reviewSource(ctxReviewer, workpaper.id, cmLink.id);
+
+    const invalidBatch = await ingestion.createBatch(ctxPreparer, {
+      clientId: CLIENT_ING,
+      origin: "SIFERE_RPI",
+      taxTypeId: exact.taxTypeId,
+      periodId: exact.periodId,
+      adapterVersion: "ARCA_RET_V1",
+      fileHash: "sha256:wp-cm-rpi-invalid",
+      workpaperId: workpaper.id,
+      sourceCode: "SIFERE_RPI_CM",
+    });
+    await ingestion.validateBatch(ctxPreparer, invalidBatch.id, [
+      {
+        kind: "RETENCION",
+        cuitResponsable: "20999999998",
+        cuitAgente: "30555555550",
+        concept: "IIBB",
+        base: "100000",
+        amount: "2500",
+        issuedOn: "2026-02-18",
+        certificateNumber: "CM-SIN-JUR",
+      },
+    ]);
+    await ingestion.commitBatch(ctxPreparer, invalidBatch.id, "20999999998");
+    const invalidLink = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.workpaperImportBatch.findUniqueOrThrow({
+        where: {
+          workpaperId_importBatchId: {
+            workpaperId: workpaper.id,
+            importBatchId: invalidBatch.id,
+          },
+        },
+      }),
+    );
+    await expect(
+      workpapers.reviewSource(ctxReviewer, workpaper.id, invalidLink.id),
+    ).rejects.toMatchObject({ code: "ALLOCATION_SCOPE_INVALID" });
+
+    const validBatch = await ingestion.createBatch(ctxPreparer, {
+      clientId: CLIENT_ING,
+      origin: "SIFERE_RPI",
+      taxTypeId: exact.taxTypeId,
+      periodId: exact.periodId,
+      adapterVersion: "ARCA_RET_V1",
+      fileHash: "sha256:wp-cm-rpi-valid",
+      workpaperId: workpaper.id,
+      sourceCode: "SIFERE_RPI_CM",
+    });
+    await ingestion.validateBatch(ctxPreparer, validBatch.id, [
+      {
+        kind: "PERCEPCION",
+        cuitResponsable: "20999999998",
+        cuitAgente: "30666666660",
+        concept: "IIBB",
+        base: "80000",
+        amount: "1600",
+        issuedOn: "2026-02-20",
+        certificateNumber: "CM-TUC-001",
+        jurisdiction: "TUC",
+      },
+    ]);
+    await ingestion.commitBatch(ctxPreparer, validBatch.id, "20999999998");
+    const validLink = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.workpaperImportBatch.findUniqueOrThrow({
+        where: {
+          workpaperId_importBatchId: {
+            workpaperId: workpaper.id,
+            importBatchId: validBatch.id,
+          },
+        },
+      }),
+    );
+    await workpapers.reviewSource(ctxReviewer, workpaper.id, validLink.id);
+
+    const before = await workpapers.listAllocations(ctxPreparer, workpaper.id);
+    expect(before).toMatchObject({ total: 1, allocated: 1, pending: 0, ready: true });
+    expect(before.items[0]?.allocatedJurisdiction?.code).toBe("TUC");
+
+    const reallocated = await workpapers.reallocateInput(
+      ctxPreparer,
+      workpaper.id,
+      before.items[0]!.id,
+      { jurisdiction: "CBA" },
+    );
+    expect(reallocated.items).toHaveLength(1);
+    expect(reallocated.items[0]?.allocatedJurisdiction?.code).toBe("CBA");
+
+    const persisted = await workpapers.listAllocations(ctxReviewer, workpaper.id);
+    expect(persisted.items).toHaveLength(1);
+    expect(persisted.items[0]?.allocatedJurisdiction?.code).toBe("CBA");
   });
 });
 
@@ -644,7 +1159,7 @@ describe("G4 CM03 — adaptador de importación", () => {
       { activityCode: "COEF_TUC", income: "0", coefficient: "0.6" },
       { activityCode: "COEF_CBA", income: "0", coefficient: "0.3" },
     ]);
-    expect(result.totals.errorRows).toBe(1);
+    expect(result.totals.errorRows).toBe(2);
   });
 
   it("commit CM03 crea vouchers SALE solo para ingresos (no coeficientes)", async () => {
@@ -681,9 +1196,33 @@ describe("G4 CM03 — adaptador de importación", () => {
     });
     await ingestion.validateBatch(ctxOwner, batch.id, [
       { direction: "SALE", letter: "A", pointOfSale: "0001", numberFrom: "100", cuit: "20111111111", issuedOn: "2026-01-05", net: "1000.00", hasIva: true, iva21: "210.00" },
-      { direction: "SALE", letter: "A", pointOfSale: "0001", numberFrom: "101", cuit: "20111111111", issuedOn: "2026-02-10", net: "2000.00", hasIva: true, iva21: "420.00" },
     ]);
     await ingestion.commitBatch(ctxOwner, batch.id, "20999999999");
+
+    const februaryPeriod = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.taxPeriod.create({
+        data: {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_ING,
+          taxTypeId: ivaId,
+          startDate: new Date("2026-02-01"),
+          endDate: new Date("2026-02-28"),
+          label: "Febrero 2026",
+        },
+      }),
+    );
+    const februaryBatch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "ARCA",
+      taxTypeId: ivaId,
+      periodId: februaryPeriod.id,
+      adapterVersion: "ARCA_V1",
+      fileHash: "sha256:filter2",
+    });
+    await ingestion.validateBatch(ctxOwner, februaryBatch.id, [
+      { direction: "SALE", letter: "A", pointOfSale: "0001", numberFrom: "101", cuit: "20111111111", issuedOn: "2026-02-10", net: "2000.00", hasIva: true, iva21: "420.00" },
+    ]);
+    await ingestion.commitBatch(ctxOwner, februaryBatch.id, "20999999999");
 
     // Solo enero: el voucher 100 (enero) está, el 101 (febrero) no.
     const jan = await ingestion.listVouchers(ctxOwner, CLIENT_ING, undefined, "2026-01-01", "2026-01-31");

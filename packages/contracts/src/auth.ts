@@ -40,6 +40,7 @@ export type Refresh = z.infer<typeof refreshSchema>;
 /** Contextos del usuario: estudios, roles y clientes asignados */
 export const meContextsSchema = z.object({
   userId: uuid,
+  isPlatformAdmin: z.boolean().default(false),
   firms: z.array(
     z.object({
       firmId: uuid,

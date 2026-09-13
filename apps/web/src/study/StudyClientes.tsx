@@ -7,6 +7,7 @@ import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
+import { SectionIndex } from "../ui/SectionIndex";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
 
@@ -160,6 +161,11 @@ export function StudyClientes() {
     navigate("/trabajo");
   };
 
+  const openClientSummary = (id: string) => {
+    setClientId(id);
+    navigate("/resumen-cliente");
+  };
+
   const startProfileEdit = (client: ClientWithProfile) => {
     setCreating(false);
     setNotice(null);
@@ -191,6 +197,14 @@ export function StudyClientes() {
         ) : null}
       </div>
 
+      <SectionIndex
+        items={[
+          { id: "clients-context-title", label: "Contexto" },
+          { id: "clients-next-step-title", label: "Siguiente paso" },
+          { id: "client-list-title", label: "Cartera", meta: `${rows.length} clientes` },
+        ]}
+      />
+
       {notice ? (
         <div className="action-receipt action-receipt--page" role="status">
           <Icon name="check" size={18} />
@@ -203,6 +217,12 @@ export function StudyClientes() {
           </button>
         </div>
       ) : null}
+
+      <section className="guided-context" aria-labelledby="clients-context-title">
+        <div className="guided-context__heading"><div><p className="study-page__eyebrow">Cartera operativa</p><h2 id="clients-context-title">Contexto de clientes</h2><p>Elegí una empresa para continuar con su trabajo, documentos y configuración fiscal.</p></div><StatusBadge status={clientId ? "ACTIVE" : "PENDING"} /></div>
+        <dl className="guided-context__facts"><div><dt>Clientes</dt><dd>{query.data?.length ?? "—"}</dd></div><div><dt>Contexto actual</dt><dd>{clientId ? "Seleccionado" : "Sin seleccionar"}</dd></div><div><dt>Resultados</dt><dd>{rows.length}</dd></div></dl>
+      </section>
+      <section className="guided-next-step" aria-labelledby="clients-next-step-title"><div><p className="study-page__eyebrow">Flujo guiado</p><h2 id="clients-next-step-title">Próximo paso</h2><p>{clientId ? "Abrí el espacio de trabajo del cliente seleccionado o completá su configuración fiscal." : "Incorporá una empresa o elegí una de la cartera para comenzar a trabajar."}</p></div>{clientId ? <Button onClick={() => navigate("/trabajo")}>Abrir trabajo</Button> : capabilities.has("client.manage") ? <Button onClick={() => setCreating(true)}>Crear cliente</Button> : null}</section>
 
       <ActionDrawer
         isOpen={creating}
@@ -529,6 +549,9 @@ export function StudyClientes() {
                         Editar ficha
                       </Button>
                     ) : null}
+                    <Button size="sm" variant="ghost" onClick={() => openClientSummary(row.id)}>
+                      Resumen
+                    </Button>
                     <Button
                       size="sm"
                       variant="secondary"

@@ -86,12 +86,20 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
     page.getByRole("link", { name: "Reportes y análisis", exact: true }),
   ).toHaveCount(0);
 
-  await navigateStudy(page, "Asistente contable");
-  await expect(page.getByRole("heading", { name: "Asistente contable" })).toBeVisible();
+  // El asistente contable queda oculto hasta que el piloto lo habilite (§8).
+  await expect(
+    page.getByRole("link", { name: "Asistente contable", exact: true }),
+  ).toHaveCount(0);
 
   // G5-06: la cartera por riesgo aparece en el dashboard con liquidaciones.
   await navigateStudy(page, "Inicio");
   await expect(page.getByRole("heading", { name: "Liquidaciones en curso" })).toBeVisible();
+
+  // URL directa al asistente: muestra estado no disponible, no la pantalla.
+  await page.goto("/asistente");
+  await expect(
+    page.getByRole("heading", { name: "Esta sección todavía no está disponible" }),
+  ).toBeVisible();
 
   await page.goto("/ruta-obsoleta");
   await expect(page.getByRole("heading", { name: "Esta sección no existe" })).toBeVisible();
@@ -112,11 +120,12 @@ test("navegación aislada del portal", async ({ page }) => {
   await expect(page.getByText("Balance sintético")).toBeVisible();
 
   // G3-11: liquidaciones publicadas en el portal.
-  const liquidacionesLink = page.getByRole("link", { name: "Liquidaciones" });
+  // Exact para no chocar con el quick-link "Ver liquidaciones" del dashboard.
+  const liquidacionesLink = page.getByRole("link", { name: "Liquidaciones", exact: true });
   if (await liquidacionesLink.isVisible().catch(() => false)) {
     await liquidacionesLink.click();
   } else {
-    await page.getByRole("link", { name: "Liquidaciones" }).click();
+    await page.goto("/portal/liquidaciones");
   }
   await expect(page.getByRole("heading", { name: "Liquidaciones publicadas" })).toBeVisible();
 

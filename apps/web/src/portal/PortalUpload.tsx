@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Table } from "@contable/design-system";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError, type Document, uploadToSignedUrl } from "../lib/api";
@@ -13,6 +13,7 @@ import {
   PortalPageHeader,
   PortalRetryButton,
 } from "./PortalUI";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./portal.css";
 
 interface UploadSession {
@@ -21,8 +22,20 @@ interface UploadSession {
   objectKey: string;
 }
 
+interface FilePreview {
+  url: string;
+  mimeType: string | null;
+  originalName: string | null;
+}
+
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
+
+function canPreview(document: Document): boolean {
+  // La URL firmada sólo se expone tras la validación (fuera de cuarentena).
+  const version = document.fileVersions?.[0];
+  return Boolean(version && version.antivirusStatus === "CLEAN");
+}
 
 export function PortalUpload() {
   const { clientId, capabilities } = useClientContext();
@@ -34,6 +47,7 @@ export function PortalUpload() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [category, setCategory] = useState<"OTRO" | "ACUSE">("OTRO");
   const requestedBy = searchParams.get("pedido");
   const requestedItem = searchParams.get("item");
   const requestItemId = searchParams.get("itemId");
@@ -41,6 +55,16 @@ export function PortalUpload() {
     queryKey: ["portal-documents", clientId],
     queryFn: () => api.get<Document[]>(`/portal/clients/${clientId}/documents`),
     enabled: Boolean(clientId) && capabilities.has("portal.results.read"),
+  });
+  // G2-07.5: preview/descarga de un documento propio. Se pide la URL firmada
+  // al servidor al momento de abrir (reautoriza por RLS) y no se expone la
+  // clave del objeto en el cliente.
+  const preview = useMutation({
+    mutationFn: (documentId: string) =>
+      api.get<FilePreview>(`/portal/clients/${clientId}/documents/${documentId}/preview`),
+    onSuccess: (data) => {
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    },
   });
 
   // G0-05 + G5: READONLY no puede subir documentos (PLAN §4.2).
@@ -95,6 +119,7 @@ export function PortalUpload() {
         {
           expectedMime: file.type || undefined,
           ...(requestItemId ? { requestItemId } : {}),
+          ...(category !== "OTRO" ? { category } : {}),
         },
       );
       // 2. Subir a la URL firmada (MinIO)
@@ -124,6 +149,7 @@ export function PortalUpload() {
       void queryClient.invalidateQueries({ queryKey: ["portal-summary", clientId] });
       void queryClient.invalidateQueries({ queryKey: ["portal-requests", clientId] });
       setFile(null);
+      setCategory("OTRO");
       if (inputRef.current) inputRef.current.value = "";
     } catch (err) {
       setError(
@@ -150,7 +176,41 @@ export function PortalUpload() {
           description="Elegí una empresa en la barra superior antes de cargar documentación."
         />
       ) : (
-        <div className="portal-upload-layout">
+        <>
+          <SectionIndex
+            items={[
+              { id: "upload-next-step-title", label: "Nueva carga" },
+              { id: "upload-help-title", label: "Cómo funciona" },
+              ...(capabilities.has("portal.results.read")
+                ? [{ id: "recent-documents-title", label: "Cargas recientes" }]
+                : []),
+            ]}
+          />
+          <section className="portal-guidance portal-guidance--upload" aria-labelledby="upload-next-step-title">
+            <div className="portal-guidance__context">
+              <span className="portal-guidance__icon" aria-hidden="true">
+                <Icon name="upload" size={19} />
+              </span>
+              <div>
+                <p className="portal-guidance__eyebrow">Destino de la carga</p>
+                <p>
+                  {requestedItem
+                    ? `Este archivo se asociará a “${requestedItem}”.`
+                    : "El archivo quedará disponible para tu estudio dentro de esta empresa."}
+                </p>
+              </div>
+            </div>
+            <div className="portal-guidance__next">
+              <div>
+                <p className="portal-guidance__eyebrow">Próximo paso</p>
+                <h2 id="upload-next-step-title">Elegí el archivo que querés enviar</h2>
+              </div>
+              <Button type="button" variant="secondary" onClick={() => inputRef.current?.click()}>
+                Elegir archivo
+              </Button>
+            </div>
+          </section>
+          <div className="portal-upload-layout">
           <form className="portal-upload" onSubmit={onSubmit}>
             {requestedBy || requestedItem ? (
               <div className="portal-inline-alert" role="status">
@@ -206,6 +266,19 @@ export function PortalUpload() {
                 <span className="portal-dropzone__hint">PDF, JPG, PNG o WebP · Hasta 25 MB</span>
               </label>
             </div>
+
+            <label className="portal-upload__category">
+              <span>Tipo de documento</span>
+              <select
+                className="portal-upload__category-select"
+                value={category}
+                onChange={(event) => setCategory(event.target.value as "OTRO" | "ACUSE")}
+                disabled={uploading}
+              >
+                <option value="OTRO">Documentación general</option>
+                <option value="ACUSE">Acuse de presentación</option>
+              </select>
+            </label>
 
             {file ? (
               <div className="portal-upload__file" aria-live="polite">
@@ -286,7 +359,8 @@ export function PortalUpload() {
               </Link>
             ) : null}
           </aside>
-        </div>
+          </div>
+        </>
       )}
 
       {clientId && capabilities.has("portal.results.read") ? (
@@ -313,7 +387,16 @@ export function PortalUpload() {
               description="Elegí un archivo arriba para enviarlo al estudio."
             />
           ) : (
-            <Table<Document>
+            <>
+              {documents.data?.[0] ? (
+                <div className="portal-last-published">
+                  <Icon name="file" size={17} />
+                  <span>
+                    <strong>Última carga:</strong> {documents.data[0].fileVersions?.[0]?.originalName ?? "Documento sin nombre"} · {formatPortalDate(documents.data[0].createdAt)}
+                  </span>
+                </div>
+              ) : null}
+              <Table<Document>
               className="portal-data-table portal-data-table--documents"
               rows={(documents.data ?? []).slice(0, 8)}
               rowKey={(document) => document.id}
@@ -338,8 +421,31 @@ export function PortalUpload() {
                   header: "Estado",
                   render: (document) => <StatusBadge status={document.status} />,
                 },
+                {
+                  key: "actions",
+                  header: "",
+                  align: "right",
+                  render: (document) =>
+                    canPreview(document) ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        loading={preview.isPending}
+                        disabled={preview.isPending}
+                        title="Ver o descargar el archivo enviado"
+                        onClick={() => preview.mutate(document.id)}
+                      >
+                        <Icon name="download" size={15} /> Ver
+                      </Button>
+                    ) : (
+                      <span className="portal-text-muted" title="Se habilita cuando el documento esté validado">
+                        En validación
+                      </span>
+                    ),
+                },
               ]}
-            />
+              />
+            </>
           )}
         </section>
       ) : null}

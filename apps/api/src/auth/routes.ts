@@ -34,7 +34,11 @@ export function authPlugin(app: FastifyInstance) {
   const sessions = new SessionRepository();
   const auth = new AuthService({ sessions });
 
-  app.post("/api/v1/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
+  // El límite de login es configurable: la suite E2E hace ~16 logins por
+  // corrida desde la misma IP y el límite fijo de 10/min la hace fallar de
+  // forma intermitente. En producción se mantiene el default estricto.
+  const loginRateLimitMax = Number(process.env.LOGIN_RATE_LIMIT_MAX ?? 10);
+  app.post("/api/v1/auth/login", { config: { rateLimit: { max: loginRateLimitMax, timeWindow: "1 minute" } } }, async (req, reply) => {
     const body = loginSchema.parse(req.body);
     try {
       const result = await auth.login(body.email, body.password);

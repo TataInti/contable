@@ -187,6 +187,7 @@ export class TaxpayerProfileService {
       nationalCondition: "RESPONSABLE_INSCRIPTO" | "MONOTRIBUTISTA" | "EXENTO" | "NO_RESPONSABLE";
       fiscalAddress?: string;
       fiscalYearEndMonth?: number;
+      monotributoCategory?: string;
       validFrom: string;
       source?: string;
     },
@@ -209,6 +210,7 @@ export class TaxpayerProfileService {
           nationalCondition: input.nationalCondition,
           ...(input.fiscalAddress ? { fiscalAddress: input.fiscalAddress } : {}),
           ...(input.fiscalYearEndMonth !== undefined ? { fiscalYearEndMonth: input.fiscalYearEndMonth } : {}),
+          ...(input.monotributoCategory ? { monotributoCategory: input.monotributoCategory } : {}),
           validFrom: new Date(input.validFrom),
           status: "DRAFT",
           ...(input.source ? { source: input.source } : {}),
@@ -637,6 +639,7 @@ export class TaxRuleService {
                 jurisdictionId: rule.jurisdictionId,
                 frequency: rule.frequency,
                 dueDay: rule.dueDay,
+                monthOffset: rule.monthOffset,
                 ...(rule.cuitEnding ? { cuitEnding: rule.cuitEnding } : {}),
                 validFrom: new Date(input.validFrom),
                 ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
@@ -792,6 +795,7 @@ export class TaxRuleService {
       jurisdictionId: string;
       frequency?: string;
       dueDay: number;
+      monthOffset?: number;
       cuitEnding?: string;
       validFrom: string;
       validTo?: string;
@@ -805,6 +809,7 @@ export class TaxRuleService {
           jurisdictionId: input.jurisdictionId,
           frequency: input.frequency ?? "MONTHLY",
           dueDay: input.dueDay,
+          monthOffset: input.monthOffset ?? 1,
           ...(input.cuitEnding ? { cuitEnding: input.cuitEnding } : {}),
           validFrom: new Date(input.validFrom),
           ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
@@ -940,7 +945,7 @@ export class TaxRuleService {
         .map((rule) => [rule.concept, rule.jurisdictionId, rule.amount.toString(), rule.isConditional, rule.validFrom.toISOString(), rule.validTo?.toISOString()])
         .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
       due: version.dueDateRules
-        .map((rule) => [rule.jurisdictionId, rule.frequency, rule.dueDay, rule.cuitEnding, rule.validFrom.toISOString(), rule.validTo?.toISOString()])
+        .map((rule) => [rule.jurisdictionId, rule.frequency, rule.dueDay, rule.monthOffset, rule.cuitEnding, rule.validFrom.toISOString(), rule.validTo?.toISOString()])
         .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
       rounding: version.roundingRules
         .map((rule) => [rule.concept, rule.precision, rule.mode])
@@ -985,18 +990,34 @@ export class TaxCalendarService {
       });
       if (!pack) throw new FiscalError("RULE_PACK_NOT_FOUND", "No existe rule pack para el régimen");
       const activeVersion = await tx.taxRuleVersion.findFirst({
-        where: { packId: pack.id, status: "ACTIVE" },
+        where: {
+          packId: pack.id,
+          status: { in: ["ACTIVE", "RETIRED"] },
+          validFrom: { lte: period.startDate },
+          OR: [{ validTo: null }, { validTo: { gte: period.endDate } }],
+        },
+        orderBy: [{ version: "desc" }, { validFrom: "desc" }],
       });
       if (!activeVersion) {
         throw new FiscalError(
           "RULE_VERSION_NOT_FOUND",
-          "No hay versión ACTIVE del rule pack; la obligación no puede materializar vencimiento",
+          "No hay una versión normativa vigente para todo el período; la obligación no puede materializar vencimiento",
         );
       }
 
-      const dueRule = await tx.dueDateRule.findFirst({
-        where: { ruleVersionId: activeVersion.id },
+      const client = await tx.client.findUnique({ where: { id: input.clientId } });
+      const cuitEnding = client?.cuit.slice(-1);
+      const dueRules = await tx.dueDateRule.findMany({
+        where: {
+          ruleVersionId: activeVersion.id,
+          validFrom: { lte: period.startDate },
+          OR: [{ validTo: null }, { validTo: { gte: period.endDate } }],
+        },
+        orderBy: [{ dueDay: "asc" }, { id: "asc" }],
       });
+      const dueRule =
+        dueRules.find((rule) => Boolean(rule.cuitEnding) && rule.cuitEnding === cuitEnding) ??
+        dueRules.find((rule) => !rule.cuitEnding);
       if (!dueRule) {
         // Sin regla de vencimiento: obligación sin fecha (PENDING).
         return tx.taxObligation.create({
@@ -1011,7 +1032,6 @@ export class TaxCalendarService {
         });
       }
 
-      const client = await tx.client.findUnique({ where: { id: input.clientId } });
       const holidays = await tx.holiday.findMany({
         where: { jurisdictionId: dueRule.jurisdictionId, date: { gte: period.startDate } },
       });
@@ -1021,15 +1041,19 @@ export class TaxCalendarService {
           id: dueRule.id,
           frequency: (dueRule.frequency ?? "MONTHLY") as "MONTHLY" | "QUARTERLY" | "ANNUAL" | "ONCE",
           dueDay: dueRule.dueDay,
+          monthOffset: dueRule.monthOffset,
           ...(dueRule.cuitEnding ? { cuitEnding: dueRule.cuitEnding } : {}),
           validFrom: activeVersion.validFrom.toISOString().slice(0, 10),
+          ...(activeVersion.validTo
+            ? { validTo: activeVersion.validTo.toISOString().slice(0, 10) }
+            : {}),
         },
         {
           startDate: period.startDate.toISOString().slice(0, 10),
           endDate: period.endDate.toISOString().slice(0, 10),
         },
         holidays.map((h) => ({ jurisdictionId: h.jurisdictionId, date: h.date.toISOString().slice(0, 10) })),
-        client?.cuit.slice(-1) ?? undefined,
+        cuitEnding,
       );
 
       return tx.taxObligation.create({

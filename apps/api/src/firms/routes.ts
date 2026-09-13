@@ -11,6 +11,7 @@ import { AuthError } from "../auth/auth-service.js";
 import { prisma } from "../lib/prisma.js";
 import { capabilitiesForRole, type FirmRole } from "@contable/permissions";
 import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
+import { z } from "zod";
 
 /**
  * Rutas de firmas, miembros, invitaciones y asignaciones.
@@ -78,7 +79,11 @@ export function firmRoutes(app: FastifyInstance) {
         })),
       });
     }
-    const result = meContextsSchema.parse({ userId, firms: firmsData });
+    const result = meContextsSchema.parse({
+      userId,
+      isPlatformAdmin: req.isPlatformAdmin === true,
+      firms: firmsData,
+    });
     return reply.send({ data: result });
   });
 
@@ -113,6 +118,58 @@ export function firmRoutes(app: FastifyInstance) {
       if (err instanceof AuthError) throw err;
       return reply.status(409).send({ error: { code: "MEMBER_EXISTS", message: "Ya es miembro" } });
     }
+  });
+
+  // Lista de usuarios internos del estudio. La capacidad requerida se resuelve
+  // en el guard: sólo OWNER/ADMIN pueden ver y editar esta colección.
+  app.get("/api/v1/firms/:firmId/members", async (req, reply) => {
+    const { firmId } = req.params as { firmId: string };
+    const members = await withTenantContext(tenantContextFromRequest(req), (tx) =>
+      tx.firmMembership.findMany({
+        where: { firmId },
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+          status: true,
+          acceptedAt: true,
+          user: { select: { name: true, emailNormalized: true, status: true } },
+        },
+        orderBy: [{ status: "asc" }, { role: "asc" }, { acceptedAt: "asc" }],
+      }),
+    );
+    return reply.send({ data: members });
+  });
+
+  // El rol es la fuente de verdad del acceso a módulos internos.
+  app.patch("/api/v1/firms/:firmId/members/:userId", async (req, reply) => {
+    const { firmId, userId } = req.params as { firmId: string; userId: string };
+    const body = z
+      .object({ role: z.enum(["OWNER", "ADMIN", "PREPARER", "REVIEWER", "AUDITOR_READONLY"]) })
+      .strict()
+      .parse(req.body);
+    const member = await withTenantContext(tenantContextFromRequest(req), async (tx) => {
+      const existing = await tx.firmMembership.findUnique({
+        where: { firmId_userId: { firmId, userId } },
+      });
+      if (!existing) return null;
+      return tx.firmMembership.update({
+        where: { id: existing.id },
+        data: { role: body.role },
+        select: {
+          id: true,
+          userId: true,
+          role: true,
+          status: true,
+          acceptedAt: true,
+          user: { select: { name: true, emailNormalized: true, status: true } },
+        },
+      });
+    });
+    if (!member) {
+      return reply.status(404).send({ error: { code: "MEMBER_NOT_FOUND", message: "Usuario interno no encontrado" } });
+    }
+    return reply.send({ data: member });
   });
 
   // Asignar cliente a usuario

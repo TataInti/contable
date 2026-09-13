@@ -6,15 +6,15 @@
 -- Usuarios
 INSERT INTO users (id, "emailNormalized", name, "passwordHash", status, "updatedAt")
 SELECT '11111111-1111-4111-8111-111111111111', 'owner.a@example.com', 'Owner A', 'hash', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM users WHERE "emailNormalized" = 'owner.a@example.com');
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = '11111111-1111-4111-8111-111111111111' OR "emailNormalized" = 'owner.a@example.com');
 
 INSERT INTO users (id, "emailNormalized", name, "passwordHash", status, "updatedAt")
 SELECT '22222222-2222-4222-8222-222222222222', 'owner.b@example.com', 'Owner B', 'hash', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM users WHERE "emailNormalized" = 'owner.b@example.com');
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = '22222222-2222-4222-8222-222222222222' OR "emailNormalized" = 'owner.b@example.com');
 
 INSERT INTO users (id, "emailNormalized", name, "passwordHash", status, "updatedAt")
 SELECT '33333333-3333-4333-8333-333333333333', 'preparer.a@example.com', 'Preparer A', 'hash', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM users WHERE "emailNormalized" = 'preparer.a@example.com');
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = '33333333-3333-4333-8333-333333333333' OR "emailNormalized" = 'preparer.a@example.com');
 
 -- Firmas
 INSERT INTO firms (id, "legalName", "displayName", status, "updatedAt")
@@ -41,35 +41,35 @@ WHERE NOT EXISTS (SELECT 1 FROM firm_memberships WHERE "firmId" = 'aaaaaaaa-aaaa
 -- Clientes
 INSERT INTO clients (id, "firmId", "legalName", cuit, status, "updatedAt")
 SELECT '11111111-2222-4333-8444-555555555555', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Cliente Alfa Uno', '20111111111', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE "firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111111');
+WHERE NOT EXISTS (SELECT 1 FROM clients WHERE id = '11111111-2222-4333-8444-555555555555' OR ("firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111111'));
 
 INSERT INTO clients (id, "firmId", "legalName", cuit, status, "updatedAt")
 SELECT '11111111-2222-4333-8444-666666666666', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Cliente Alfa Dos', '20111111112', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE "firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111112');
+WHERE NOT EXISTS (SELECT 1 FROM clients WHERE id = '11111111-2222-4333-8444-666666666666' OR ("firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111112'));
 
 INSERT INTO clients (id, "firmId", "legalName", cuit, status, "updatedAt")
 SELECT '11111111-2222-4333-8444-777777777777', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Cliente Alfa Tres', '20111111113', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE "firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111113');
+WHERE NOT EXISTS (SELECT 1 FROM clients WHERE id = '11111111-2222-4333-8444-777777777777' OR ("firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111113'));
 
 INSERT INTO clients (id, "firmId", "legalName", cuit, status, "updatedAt")
 SELECT '11111111-2222-4333-8444-888888888888', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Cliente Alfa Cuatro', '20111111114', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE "firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111114');
+WHERE NOT EXISTS (SELECT 1 FROM clients WHERE id = '11111111-2222-4333-8444-888888888888' OR ("firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111114'));
 
 INSERT INTO clients (id, "firmId", "legalName", cuit, status, "updatedAt")
 SELECT '11111111-2222-4333-8444-999999999999', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Cliente Alfa Cinco', '20111111115', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE "firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111115');
+WHERE NOT EXISTS (SELECT 1 FROM clients WHERE id = '11111111-2222-4333-8444-999999999999' OR ("firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111115'));
 
 INSERT INTO clients (id, "firmId", "legalName", cuit, status, "updatedAt")
 SELECT '11111111-2222-4333-8444-000000000000', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Cliente Alfa Seis', '20111111116', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE "firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111116');
+WHERE NOT EXISTS (SELECT 1 FROM clients WHERE id = '11111111-2222-4333-8444-000000000000' OR ("firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111116'));
 
 INSERT INTO clients (id, "firmId", "legalName", cuit, status, "updatedAt")
 SELECT '11111111-2222-4333-8444-111111111111', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Cliente Alfa Siete', '20111111117', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE "firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111117');
+WHERE NOT EXISTS (SELECT 1 FROM clients WHERE id = '11111111-2222-4333-8444-111111111111' OR ("firmId" = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND cuit = '20111111117'));
 
 INSERT INTO clients (id, "firmId", "legalName", cuit, status, "updatedAt")
 SELECT '22222222-3333-4444-8555-777777777777', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Cliente Beta Uno', '20222222222', 'ACTIVE', now()
-WHERE NOT EXISTS (SELECT 1 FROM clients WHERE "firmId" = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' AND cuit = '20222222222');
+WHERE NOT EXISTS (SELECT 1 FROM clients WHERE id = '22222222-3333-4444-8555-777777777777' OR ("firmId" = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' AND cuit = '20222222222'));
 
 -- Asignación: Preparer A al cliente Alfa Uno
 INSERT INTO client_assignments (id, "firmId", "userId", "clientId")

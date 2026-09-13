@@ -35,10 +35,10 @@ export class OutboxPublisher {
           removeOnComplete: { age: 86_400, count: 1_000 },
           removeOnFail: false,
         });
-        await prisma.$queryRaw`SELECT app_complete_outbox(${event.id})`;
+        await prisma.$executeRaw`SELECT app_complete_outbox(${event.id})`;
         published++;
       } catch (error) {
-        await prisma.$queryRaw`SELECT app_fail_outbox(${event.id}, ${error instanceof Error ? error.message : "UNKNOWN"})`;
+        await prisma.$executeRaw`SELECT app_fail_outbox(${event.id}, ${error instanceof Error ? error.message : "UNKNOWN"})`;
       }
     }
     return published;

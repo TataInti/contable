@@ -318,6 +318,7 @@ export const dueDateRuleSchema = z.object({
   jurisdictionId: uuid,
   frequency: z.string().default("MONTHLY"),
   dueDay: z.number().int().min(1).max(31),
+  monthOffset: z.number().int().min(0).max(24).default(1),
   cuitEnding: z.string().max(4).nullable(),
   validFrom: isoDate,
   validTo: isoDate.nullable(),
@@ -328,6 +329,7 @@ export const createDueDateRuleSchema = z.object({
   jurisdictionId: uuid,
   frequency: z.string().max(40).optional(),
   dueDay: z.number().int().min(1).max(31),
+  monthOffset: z.number().int().min(0).max(24).optional(),
   cuitEnding: z.string().max(4).optional(),
   validFrom: isoDate,
   validTo: isoDate.optional(),
@@ -387,6 +389,7 @@ export const taxSettlementSchema = z.object({
   cutoff: isoDate,
   version: z.number().int().positive(),
   engineVersion: z.string(),
+  ruleVersionId: uuid.nullable(),
   rulesHash: z.string(),
   inputHash: z.string(),
   outputHash: z.string(),
@@ -458,6 +461,10 @@ export const createImportBatchSchema = z.object({
   adapterVersion: z.string().min(1).max(80),
   fileName: z.string().max(240).optional(),
   fileHash: z.string().max(128).optional(),
+  workpaperId: uuid.optional(),
+  sourceCode: z.string().min(1).max(80).optional(),
+}).refine((value) => Boolean(value.workpaperId) === Boolean(value.sourceCode), {
+  message: "El expediente y el código de fuente deben informarse juntos",
 });
 export type CreateImportBatch = z.infer<typeof createImportBatchSchema>;
 
@@ -471,6 +478,121 @@ export const importRowSchema = z.object({
   createdAt: z.string().datetime(),
 });
 export type ImportRow = z.infer<typeof importRowSchema>;
+
+// --- Clasificación dentro del expediente mensual (Fase 2) ---
+
+export const workpaperRateBucketSchema = z.object({
+  rate: z.enum(["21", "10.5", "27", "EXENTO", "NO_GRAVADO"]),
+  base: money,
+  amount: money,
+});
+
+export const workpaperVoucherClassificationSchema = z.object({
+  id: uuid,
+  workpaperId: uuid,
+  voucherId: uuid,
+  supplierProfileId: uuid.nullable(),
+  direction: fiscalVoucherDirection,
+  counterpartyCuit: cuit,
+  documentKind: z.enum(["INVOICE", "CREDIT_NOTE", "DEBIT_NOTE"]),
+  categoryCode: z.enum(["SUPER", "TRANSPORTE"]).nullable(),
+  activityCode: z.string().max(40).nullable(),
+  rateBuckets: z.array(workpaperRateBucketSchema),
+  status: z.enum(["PENDING", "CLASSIFIED"]),
+  origin: z.enum(["SUPPLIER_PROFILE", "VOUCHER_LINE", "SINGLE_CLIENT_ACTIVITY", "MANUAL"]).nullable(),
+  snapshotHash: z.string().max(128).nullable(),
+  classifiedByUserId: uuid.nullable(),
+  classifiedAt: z.string().datetime().nullable(),
+});
+export type WorkpaperVoucherClassification = z.infer<
+  typeof workpaperVoucherClassificationSchema
+>;
+
+export const classifyWorkpaperVoucherSchema = z
+  .object({
+    categoryCode: z.enum(["SUPER", "TRANSPORTE"]).optional(),
+    activityCode: z.string().trim().min(1).max(40).optional(),
+    saveSupplierProfile: z.boolean().optional(),
+  })
+  .strict();
+export type ClassifyWorkpaperVoucher = z.infer<typeof classifyWorkpaperVoucherSchema>;
+
+export const workpaperTaxInputAllocationSchema = z.object({
+  id: uuid,
+  workpaperId: uuid,
+  obligationId: uuid,
+  sourceCode: z.string().max(80),
+  sourceType: z.enum(["WITHHOLDING", "PERCEPTION"]),
+  sourceId: uuid,
+  taxTypeId: uuid,
+  regimeId: uuid,
+  jurisdictionId: uuid,
+  periodId: uuid,
+  amount: money,
+  status: z.literal("ALLOCATED"),
+  snapshotHash: z.string().max(128),
+  allocatedByUserId: uuid.nullable(),
+  allocatedAt: z.string().datetime(),
+});
+export type WorkpaperTaxInputAllocation = z.infer<
+  typeof workpaperTaxInputAllocationSchema
+>;
+
+export const workpaperCalculationLineSchema = z.object({
+  id: uuid,
+  position: z.number().int().positive(),
+  concept: z.string().min(1).max(160),
+  formula: z.string().nullable(),
+  inputs: z.record(z.string(), z.unknown()).nullable(),
+  amount: money,
+});
+export type WorkpaperCalculationLine = z.infer<typeof workpaperCalculationLineSchema>;
+
+export const workpaperCalculationComponentSchema = z.object({
+  role: z.string().min(1).max(120),
+  required: z.boolean(),
+  obligationId: uuid,
+  obligation: z.object({
+    regimeCode: z.string(),
+    regimeName: z.string(),
+    taxTypeCode: z.string(),
+    taxTypeName: z.string(),
+    jurisdictionName: z.string(),
+  }),
+  settlement: z
+    .object({
+      id: uuid,
+      status: taxSettlementStatus,
+      engineVersion: z.string(),
+      ruleVersionId: uuid.nullable(),
+      rulesHash: z.string(),
+      totals: z.record(z.string(), money).nullable(),
+      lines: z.array(workpaperCalculationLineSchema),
+      differences: z.array(
+        z.object({
+          id: uuid,
+          severity: z.enum(["INFO", "WARNING", "BLOCKING"]),
+          status: z.enum(["OPEN", "RESOLVED", "WAIVED"]),
+          code: z.string(),
+          message: z.string(),
+        }),
+      ),
+      f931Inputs: z.array(
+        z.object({ id: uuid, sourceId: z.string(), snapshot: z.record(z.string(), z.unknown()) }),
+      ),
+    })
+    .nullable(),
+});
+export type WorkpaperCalculationComponent = z.infer<
+  typeof workpaperCalculationComponentSchema
+>;
+
+export const reallocateWorkpaperTaxInputSchema = z
+  .object({ jurisdiction: z.string().trim().min(1).max(40) })
+  .strict();
+export type ReallocateWorkpaperTaxInput = z.infer<
+  typeof reallocateWorkpaperTaxInputSchema
+>;
 
 // --- Vouchers fiscales (base para Puerta 2) ---
 

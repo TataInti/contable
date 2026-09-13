@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { calculateIIbbTuc, IIBB_TUC_ENGINE_VERSION } from "./iibb.js";
+import {
+  calculateIIbbTuc,
+  IIBB_TUC_ENGINE_VERSION,
+  IIBB_TUC_LEGACY_ENGINE_VERSION,
+} from "./iibb.js";
 import { dec } from "./core.js";
 
 /**
@@ -68,6 +72,23 @@ describe("motor IIBB Tucumán (golden)", () => {
     expect(result.totalDue).toBe("27000.00"); // 35000 − 5000 − 2000 − 1000
   });
 
+  it("aplica otros créditos revisados del período", () => {
+    const result = calculateIIbbTuc({
+      engineVersion: IIBB_TUC_ENGINE_VERSION,
+      period: PERIOD,
+      incomeByActivity: { "620100": "1000000.00" },
+      rules: RULES,
+      credits: {
+        withholding: dec(0),
+        perception: dec(0),
+        collected: dec(0),
+        other: dec("2500"),
+      },
+    });
+    expect(result.subtotals["OTROS_CREDITOS"]).toBe("2500.00");
+    expect(result.totalDue).toBe("32500.00");
+  });
+
   it("saldo a favor anterior se aplica", () => {
     const result = calculateIIbbTuc({
       engineVersion: IIBB_TUC_ENGINE_VERSION,
@@ -91,15 +112,66 @@ describe("motor IIBB Tucumán (golden)", () => {
     expect(result.credits.remaining).toBe("5000.00");
   });
 
-  it("actividad sin alícuota se omite con advertencia", () => {
+  it("actividad sin alícuota bloquea el motor vigente", () => {
     const result = calculateIIbbTuc({
       engineVersion: IIBB_TUC_ENGINE_VERSION,
       period: PERIOD,
       incomeByActivity: { "999999": "1000000.00" },
       rules: [{ id: "r1", code: "620100", concept: "620100", rate: dec("0.035"), validFrom: "2026-01-01" }],
     });
-    expect(result.warnings.some((w) => w.includes("sin alícuota"))).toBe(true);
+    expect(result.blocks.some((block) => block.includes("sin alícuota"))).toBe(true);
     expect(result.totalDue).toBe("0.00");
+  });
+
+  it("mantiene la advertencia no bloqueante para liquidaciones legacy v1.0", () => {
+    const result = calculateIIbbTuc({
+      engineVersion: IIBB_TUC_LEGACY_ENGINE_VERSION,
+      period: PERIOD,
+      incomeByActivity: { "999999": "1000" },
+      rules: RULES.filter((rule) => rule.concept !== "DEFAULT"),
+    });
+    expect(result.engineVersion).toBe(IIBB_TUC_LEGACY_ENGINE_VERSION);
+    expect(result.warnings.some((warning) => warning.includes("sin alícuota"))).toBe(true);
+    expect(result.blocks).toHaveLength(0);
+  });
+
+  it("aplica un mínimo por actividad antes del mínimo global", () => {
+    const result = calculateIIbbTuc({
+      engineVersion: IIBB_TUC_ENGINE_VERSION,
+      period: PERIOD,
+      incomeByActivity: { COMERCIO: "10000", SERVICIOS: "10000" },
+      rules: [
+        { id: "com", code: "COMERCIO", concept: "COMERCIO", rate: dec("0.01"), minimum: dec("500"), validFrom: "2026-01-01" },
+        { id: "ser", code: "SERVICIOS", concept: "SERVICIOS", rate: dec("0.02"), minimum: dec("700"), validFrom: "2026-01-01" },
+      ],
+    });
+    expect(result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("300.00");
+    expect(result.subtotals["IMPUESTO_DETERMINADO"]).toBe("1200.00");
+    expect(result.totalDue).toBe("1200.00");
+  });
+
+  it("bloquea si la alícuota declarada no coincide con la regla congelada", () => {
+    const result = calculateIIbbTuc({
+      engineVersion: IIBB_TUC_ENGINE_VERSION,
+      period: PERIOD,
+      incomeByActivity: { "620100": "100000" },
+      rules: RULES,
+      declaredParameters: [
+        { sourceId: "fila-1", activity: "620100", rate: "4.000000" },
+      ],
+    });
+    expect(result.blocks.some((block) => block.includes("no coincide"))).toBe(true);
+  });
+
+  it("ordena actividades para que el hash no dependa del orden de inserción", () => {
+    const base = {
+      engineVersion: IIBB_TUC_ENGINE_VERSION,
+      period: PERIOD,
+      rules: RULES,
+    };
+    const a = calculateIIbbTuc({ ...base, incomeByActivity: { "620100": "10", OTRA: "20" } });
+    const b = calculateIIbbTuc({ ...base, incomeByActivity: { OTRA: "20", "620100": "10" } });
+    expect(a.outputHash).toBe(b.outputHash);
   });
 
   it("sin ingresos: total 0 y sin bloqueos", () => {

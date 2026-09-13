@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { PortalLoading, PortalPageHeader, PortalRetryButton } from "./PortalUI";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./portal.css";
 
 interface Profile {
@@ -55,6 +56,8 @@ export function PortalPerfil() {
           action={<PortalRetryButton onRetry={() => void profile.refetch()} />}
         />
       ) : profile.data ? (
+        <>
+        <SectionIndex items={[{ id: "profile-data-title", label: "Datos personales" }]} />
         <section className="portal-profile" aria-labelledby="profile-data-title">
           <div className="portal-profile__intro">
             <span className="portal-profile__avatar" aria-hidden="true">
@@ -128,6 +131,7 @@ export function PortalPerfil() {
             </div>
           </form>
         </section>
+        </>
       ) : null}
     </div>
   );

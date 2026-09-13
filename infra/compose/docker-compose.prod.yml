@@ -209,10 +209,13 @@ services:
       - /var/cache/nginx
       - /var/run
       - /tmp
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN es obligatorio}
     volumes:
-      - ../nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      # La imagen oficial procesa los archivos *.template con envsubst al iniciar.
+      - ../nginx/nginx.prod.conf:/etc/nginx/templates/default.conf.template:ro
       - certs:/etc/letsencrypt
-      - certs:/var/www/challenges
+      - acme-challenges:/var/www/challenges
     ports:
       - "80:80"
       - "443:443"
@@ -227,3 +230,4 @@ volumes:
   miniodata:
   clamdb:
   certs:
+  acme-challenges:

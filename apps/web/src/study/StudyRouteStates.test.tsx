@@ -35,6 +35,23 @@ describe("estados de rutas del estudio", () => {
 
   it("muestra acceso restringido sin ocultar una URL directa", () => {
     contextMock.current = context();
+    const module = moduleById("rentabilidad");
+    if (!module) throw new Error("Módulo rentabilidad no encontrado");
+
+    render(
+      <MemoryRouter>
+        <StudyModuleGuard module={module}>
+          <p>Contenido de rentabilidad</p>
+        </StudyModuleGuard>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("No tenés acceso a esta sección")).toBeTruthy();
+    expect(screen.queryByText("Contenido de rentabilidad")).toBeNull();
+  });
+
+  it("muestra estado no disponible para el asistente hasta que el piloto lo habilite", () => {
+    contextMock.current = context({ capabilities: new Set(["ai.use"]) });
     const module = moduleById("asistente");
     if (!module) throw new Error("Módulo asistente no encontrado");
 
@@ -46,7 +63,7 @@ describe("estados de rutas del estudio", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("No tenés acceso a esta sección")).toBeTruthy();
+    expect(screen.getByText("Esta sección todavía no está disponible")).toBeTruthy();
     expect(screen.queryByText("Contenido del asistente")).toBeNull();
   });
 

@@ -11,9 +11,11 @@
     "test": "NODE_ENV=test vitest run",
     "dev": "tsx watch src/server.ts",
     "seed:demo": "tsx src/seed-demo.ts",
+    "seed:maestros-fiscales": "tsx src/seed-maestros-fiscales.ts",
+    "seed:piloto": "tsx src/seed-piloto.ts",
     "seed:carga": "tsx src/seed-carga-piloto.ts",
     "seed:corrida": "tsx src/seed-corrida-piloto.ts",
-    "migrate:deploy": "prisma migrate deploy",
+    "migrate:deploy": "prisma migrate deploy --config prisma.config.ts",
     "start": "node dist/server.js"
   },
   "dependencies": {

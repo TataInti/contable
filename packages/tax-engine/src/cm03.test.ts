@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { Decimal } from "decimal.js";
-import { calculateCm03, CM03_ENGINE_VERSION } from "./cm03.js";
+import {
+  calculateCm03,
+  CM03_ENGINE_VERSION,
+  CM03_LEGACY_ENGINE_VERSION,
+} from "./cm03.js";
 
 const period = {
   startDate: "2026-01-01",
@@ -98,7 +102,26 @@ describe("CM03 artículo 2 (AR_IIBB_CM_ART2_V1)", () => {
     expect(result.subtotals["SALDO_A_FAVOR"]).toBe("10000.00"); // 40000 - 50000
   });
 
-  it("jurisdicción sin alícuota se omite con advertencia", () => {
+  it("no compensa un saldo a favor de una jurisdicción contra deuda de otra", () => {
+    const result = calculateCm03({
+      engineVersion: CM03_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules([
+        { concept: "TUC", rate: "0.04" },
+        { concept: "CBA", rate: "0.035" },
+      ]),
+      incomeByActivity: { COMERCIO: "1000000" },
+      coefficients: { TUC: "0.6", CBA: "0.4" },
+      cmBalances: { previousCreditByJurisdiction: { TUC: "30000" } },
+    });
+    expect(result.subtotals["SALDO_A_FAVOR_TUC"]).toBe("6000.00");
+    expect(result.subtotals["TOTAL_A_INGRESAR_CBA"]).toBe("14000.00");
+    expect(result.subtotals["TOTAL_A_INGRESAR"]).toBe("14000.00");
+    expect(result.subtotals["SALDO_A_FAVOR"]).toBe("6000.00");
+  });
+
+  it("jurisdicción sin alícuota bloquea el motor vigente", () => {
     const result = calculateCm03({
       engineVersion: CM03_ENGINE_VERSION,
       period,
@@ -107,8 +130,21 @@ describe("CM03 artículo 2 (AR_IIBB_CM_ART2_V1)", () => {
       incomeByActivity: { COMERCIO: "1000000" },
       coefficients: { TUC: "0.6", CBA: "0.4" },
     });
-    expect(result.warnings.some((w) => w.includes("CBA"))).toBe(true);
+    expect(result.blocks.some((block) => block.includes("CBA"))).toBe(true);
     expect(result.subtotals["IMPUESTO_POR_JURISDICCION"]).toBe("24000.00");
+  });
+
+  it("conserva la advertencia para el motor legacy v1.0", () => {
+    const result = calculateCm03({
+      engineVersion: CM03_LEGACY_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules([{ concept: "TUC", rate: "0.04" }]),
+      incomeByActivity: { COMERCIO: "1000000" },
+      coefficients: { TUC: "0.6", CBA: "0.4" },
+    });
+    expect(result.engineVersion).toBe(CM03_LEGACY_ENGINE_VERSION);
+    expect(result.warnings.some((warning) => warning.includes("CBA"))).toBe(true);
   });
 
   it("V-004: mismo input produce mismo hash", () => {

@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { parseSifereWorkbook, buildSifereTemplate, SifereParseError } from "@contable/tax-engine";
 import { tenantContextFromRequest } from "../auth/tenant.js";
 import { IngestionService, ImportError } from "./ingestion-service.js";
 import { ManagementExpenseService, ExpenseError } from "./management-expense-service.js";
+import { ManagementIncomeService, ManagementIncomeError } from "./management-income-service.js";
 
 /**
  * Rutas de ingestión y subledger fiscal (Puerta 2).
@@ -19,12 +21,13 @@ import { ManagementExpenseService, ExpenseError } from "./management-expense-ser
 export function ingestionRoutes(app: FastifyInstance) {
   const ingestion = new IngestionService();
   const expenses = new ManagementExpenseService();
+  const incomes = new ManagementIncomeService();
 
   const handleError = (
     reply: { status: (code: number) => { send: (body: object) => void } },
     err: unknown,
   ) => {
-    if (err instanceof ImportError || err instanceof ExpenseError) {
+    if (err instanceof ImportError || err instanceof ExpenseError || err instanceof ManagementIncomeError) {
       const status = err.code.includes("NOT_FOUND") ? 404 : 409;
       return reply.status(status).send({ error: { code: err.code, message: err.message } });
     }
@@ -45,8 +48,13 @@ export function ingestionRoutes(app: FastifyInstance) {
         adapterVersion: z.string().min(1).max(80),
         fileName: z.string().max(240).optional(),
         fileHash: z.string().max(128).optional(),
+        workpaperId: z.string().uuid().optional(),
+        sourceCode: z.string().min(1).max(80).optional(),
       })
       .strict()
+      .refine((value) => Boolean(value.workpaperId) === Boolean(value.sourceCode), {
+        message: "El expediente y el código de fuente deben informarse juntos",
+      })
       .parse(req.body);
     try {
       const data = await ingestion.createBatch(ctx, {
@@ -57,6 +65,8 @@ export function ingestionRoutes(app: FastifyInstance) {
         adapterVersion: body.adapterVersion,
         ...(body.fileName ? { fileName: body.fileName } : {}),
         ...(body.fileHash ? { fileHash: body.fileHash } : {}),
+        ...(body.workpaperId ? { workpaperId: body.workpaperId } : {}),
+        ...(body.sourceCode ? { sourceCode: body.sourceCode } : {}),
       });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -114,6 +124,117 @@ export function ingestionRoutes(app: FastifyInstance) {
     } catch (err) {
       return handleError(reply, err);
     }
+  });
+
+  // ------------------------------------------------------------------
+  // Análisis de libros IVA digital (.xlsx) — sin persistir
+  // ------------------------------------------------------------------
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/sifere/analyze", async (req, reply) => {
+    const body = z
+      .object({
+        direction: z.enum(["SALE", "PURCHASE"]),
+        base64: z.string().min(1),
+      })
+      .strict()
+      .parse(req.body);
+    let raw: Uint8Array;
+    try {
+      const buffer = Buffer.from(body.base64, "base64");
+      raw = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    } catch {
+      return reply.status(400).send({
+        error: { code: "INVALID_BASE64", message: "El archivo no está codificado en base64" },
+      });
+    }
+    try {
+      const data = parseSifereWorkbook(raw, body.direction);
+      // Las filas se exponen sin su payload completo para no duplicar los
+      // comprobantes en el cliente: el análisis devuelve resumen y la lista de
+      // entradas normalizadas listas para importar.
+      return reply.send({
+        data: {
+          direction: data.direction,
+          sheetName: data.sheetName,
+          headers: data.headers,
+          totals: data.totals,
+          rates: data.rates,
+          taxes: data.taxes,
+          detailRows: data.detailRows,
+          validRows: data.validRows,
+          errorRows: data.errorRows,
+          rows: data.rows.map((row) => ({
+            index: row.index,
+            name: row.name,
+            rubro: row.rubro,
+            input: row.input,
+            errors: row.errors,
+          })),
+        },
+      });
+    } catch (err) {
+      if (err instanceof SifereParseError) {
+        return reply.status(422).send({ error: { code: err.code, message: err.message } });
+      }
+      throw err;
+    }
+  });
+
+  // Persistencia en un paso: parsea el .xlsx, crea el lote, valida y comitea.
+  app.post("/api/v1/firms/:firmId/clients/:clientId/sifere/import", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const body = z
+      .object({
+        direction: z.enum(["SALE", "PURCHASE"]),
+        base64: z.string().min(1),
+        fileName: z.string().max(240),
+        fileHash: z.string().max(128),
+        taxTypeId: z.string().uuid(),
+        periodId: z.string().uuid(),
+        clientCuit: z.string().regex(/^\d{11}$/),
+        workpaperId: z.string().uuid().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    let raw: Uint8Array;
+    try {
+      const buffer = Buffer.from(body.base64, "base64");
+      raw = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    } catch {
+      return reply.status(400).send({
+        error: { code: "INVALID_BASE64", message: "El archivo no está codificado en base64" },
+      });
+    }
+    try {
+      const data = await ingestion.importSifereWorkbook(ctx, {
+        clientId: ctx.clientId!,
+        clientCuit: body.clientCuit,
+        direction: body.direction,
+        raw,
+        fileName: body.fileName,
+        fileHash: body.fileHash,
+        taxTypeId: body.taxTypeId,
+        periodId: body.periodId,
+        ...(body.workpaperId ? { workpaperId: body.workpaperId } : {}),
+      });
+      return reply.code(201).send({ data });
+    } catch (err) {
+      if (err instanceof SifereParseError) {
+        return reply.status(422).send({ error: { code: err.code, message: err.message } });
+      }
+      return handleError(reply, err);
+    }
+  });
+
+  // Plantilla modelo (.xlsx) para ordenar los libros antes de importar.
+  app.get("/api/v1/firms/:firmId/clients/:clientId/sifere/template", async (req, reply) => {
+    const q = z.object({ direction: z.enum(["SALE", "PURCHASE"]) }).parse(req.query);
+    const bytes = buildSifereTemplate(q.direction);
+    const name = q.direction === "SALE" ? "modelo-ventas.xlsx" : "modelo-compras.xlsx";
+    return reply
+      .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+      .header("Content-Disposition", `attachment; filename="${name}"`)
+      .send(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
   });
 
   // ------------------------------------------------------------------
@@ -379,6 +500,126 @@ export function ingestionRoutes(app: FastifyInstance) {
       .parse(req.body);
     try {
       const data = await expenses.reject(ctx, expenseId, body.comment);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // ------------------------------------------------------------------
+  // C (§7.1): Ingresos gerenciales — nunca crean comprobante fiscal.
+  // ------------------------------------------------------------------
+
+  app.get("/api/v1/firms/:firmId/clients/:clientId/management-incomes", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const q = z
+      .object({
+        from: z.string().date().optional(),
+        to: z.string().date().optional(),
+        status: z.string().optional(),
+      })
+      .parse(req.query);
+    try {
+      const data = await incomes.list(ctx, ctx.clientId!, {
+        ...(q.from ? { from: q.from } : {}),
+        ...(q.to ? { to: q.to } : {}),
+        ...(q.status ? { status: q.status } : {}),
+      });
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/management-incomes", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const body = z
+      .object({
+        description: z.string().min(1).max(300),
+        amount: z.string().regex(/^\d+(\.\d+)?$/),
+        currency: z.string().length(3).optional(),
+        accruedOn: z.string().date(),
+        collectedOn: z.string().date().optional(),
+        category: z.string().max(120).optional(),
+        evidenceDocumentId: z.string().uuid().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await incomes.create(ctx, {
+        clientId: ctx.clientId!,
+        description: body.description,
+        amount: body.amount,
+        accruedOn: body.accruedOn,
+        ...(body.currency ? { currency: body.currency } : {}),
+        ...(body.collectedOn ? { collectedOn: body.collectedOn } : {}),
+        ...(body.category ? { category: body.category } : {}),
+        ...(body.evidenceDocumentId ? { evidenceDocumentId: body.evidenceDocumentId } : {}),
+      });
+      return reply.code(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.patch("/api/v1/firms/:firmId/clients/:clientId/management-incomes/:incomeId", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { incomeId } = req.params as { incomeId: string };
+    const body = z
+      .object({
+        description: z.string().min(1).max(300).optional(),
+        amount: z.string().regex(/^\d+(\.\d+)?$/).optional(),
+        accruedOn: z.string().date().optional(),
+        collectedOn: z.string().date().nullable().optional(),
+        category: z.string().max(120).nullable().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await incomes.update(ctx, incomeId, {
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.amount !== undefined ? { amount: body.amount } : {}),
+        ...(body.accruedOn !== undefined ? { accruedOn: body.accruedOn } : {}),
+        ...(body.collectedOn !== undefined ? { collectedOn: body.collectedOn } : {}),
+        ...(body.category !== undefined ? { category: body.category } : {}),
+      });
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/management-incomes/:incomeId/submit-review", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { incomeId } = req.params as { incomeId: string };
+    try {
+      const data = await incomes.submitForReview(ctx, incomeId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/management-incomes/:incomeId/approve", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { incomeId } = req.params as { incomeId: string };
+    try {
+      const data = await incomes.approve(ctx, incomeId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/management-incomes/:incomeId/reject", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { incomeId } = req.params as { incomeId: string };
+    const body = z
+      .object({ comment: z.string().min(1).max(1000) })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await incomes.reject(ctx, incomeId, body.comment);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);

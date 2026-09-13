@@ -56,6 +56,10 @@ interface ProfitabilityFacts {
   sales: Prisma.Decimal;
   fiscalExpenses: Prisma.Decimal;
   managementExpenses: Prisma.Decimal;
+  /** Ingresos gerenciales APPROVED devengados en el período (§7.2). */
+  managementIncomeAccrued: Prisma.Decimal;
+  /** Ingresos gerenciales APPROVED cobrados en el período (CAJA, §7.2). */
+  managementIncomeCollected: Prisma.Decimal;
   /** Deuda devengada del período (DEVENGADO). */
   accruedTaxPayments: Prisma.Decimal;
   /** Pagos efectivos del período (CAJA). */
@@ -143,6 +147,36 @@ export class ProfitabilityService {
       inputIds.push(`exp:${e.id}`);
     }
 
+    // --- C (§7.2): ingresos gerenciales aprobados ---
+    // Sólo APPROVED participa. DEVENGADO: fecha devengada en período.
+    // CAJA: fecha de cobro en período. Nunca tocan el dominio fiscal.
+    const incomes = await tx.managementIncome.findMany({
+      where: {
+        firmId: ctx.firmId,
+        clientId,
+        status: "APPROVED",
+      },
+    });
+    let managementIncomeAccrued = new Prisma.Decimal(0);
+    let managementIncomeCollected = new Prisma.Decimal(0);
+    for (const income of incomes) {
+      if (
+        income.accruedOn >= period.startDate &&
+        income.accruedOn <= period.endDate &&
+        income.accruedOn.toISOString() <= cutoffDate
+      ) {
+        managementIncomeAccrued = managementIncomeAccrued.plus(income.amount);
+        inputIds.push(`income:${income.id}`);
+      }
+      if (
+        income.collectedOn &&
+        income.collectedOn >= period.startDate &&
+        income.collectedOn <= period.endDate
+      ) {
+        managementIncomeCollected = managementIncomeCollected.plus(income.amount);
+      }
+    }
+
     // --- Impuestos del período: liquidaciones FINALIZED del cliente ---
     // En devengado son costo del período; en caja son pagos impositivos.
     // El IVA trasladado NO es gasto económico: se informa como posición.
@@ -208,6 +242,8 @@ export class ProfitabilityService {
       sales,
       fiscalExpenses,
       managementExpenses,
+      managementIncomeAccrued,
+      managementIncomeCollected,
       accruedTaxPayments,
       paidTaxPayments,
       vatCashEffect,
@@ -226,6 +262,13 @@ export class ProfitabilityService {
       if (!period) throw new ProfitabilityError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
 
       const facts = await this.gatherFacts(ctx, tx, params);
+      // §7.2: los ingresos gerenciales aumentan el resultado gerencial;
+      // en devengado cuentan por fecha devengada, en caja por fecha de
+      // cobro. Se suman a las ventas (columna gerencial) sin tocar el
+      // dominio fiscal.
+      const sales = params.basis === "CAJA"
+        ? facts.sales.plus(facts.managementIncomeCollected)
+        : facts.sales.plus(facts.managementIncomeAccrued);
       const result = calculateProfitability({
         engineVersion: "ar-profitability-v1.0.0",
         basis: params.basis,
@@ -234,7 +277,7 @@ export class ProfitabilityService {
           endDate: period.endDate.toISOString().slice(0, 10),
           cutoff: params.cutoff,
         },
-        sales: facts.sales.toString(),
+        sales: sales.toString(),
         fiscalExpenses: facts.fiscalExpenses.toString(),
         managementExpenses: facts.managementExpenses.toString(),
         // DEVENGADO usa la deuda del período; CAJA usa los pagos efectivos.

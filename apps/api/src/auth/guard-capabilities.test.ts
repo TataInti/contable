@@ -13,6 +13,10 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(requiredCapability("POST", "/api/v1/firms/f/dashboard")).toBeNull();
   });
 
+  it("GET resumen del cliente exige client.read", () => {
+    expect(requiredCapability("GET", "/api/v1/firms/f/clients/c/summary")).toBe("client.read");
+  });
+
   it("deny-by-default: ruta de negocio sin mapeo devuelve null", () => {
     expect(
       requiredCapability("POST", "/api/v1/firms/f/clients/c/ruta-inexistente"),
@@ -158,5 +162,46 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(
       requiredCapability("POST", "/api/v1/firms/f/clients/c/management-expenses/e/reject"),
     ).toBe("tax.management_expenses.approve_treatment");
+  });
+
+  // ================================================================
+  // B1/B2 (plan piloto §3.1/§3.2): rutas del libro de créditos.
+  // ================================================================
+
+  it("verificación de saldo exige tax.settlements.review (no calculate)", () => {
+    expect(
+      requiredCapability("POST", "/api/v1/firms/f/clients/c/tax-credit-ledger/l/verify"),
+    ).toBe("tax.settlements.review");
+  });
+
+  it("movements/corrections del libro exigen tax.settlements.calculate", () => {
+    expect(
+      requiredCapability("POST", "/api/v1/firms/f/clients/c/tax-credit-ledger/l/movements"),
+    ).toBe("tax.settlements.calculate");
+    expect(
+      requiredCapability("POST", "/api/v1/firms/f/clients/c/tax-credit-ledger/l/corrections"),
+    ).toBe("tax.settlements.calculate");
+  });
+
+  it("GET ledger exige read; POST opening exige calculate", () => {
+    expect(
+      requiredCapability("GET", "/api/v1/firms/f/clients/c/tax-credit-ledger"),
+    ).toBe("tax.settlements.read");
+    expect(
+      requiredCapability("POST", "/api/v1/firms/f/clients/c/tax-credit-ledger/opening"),
+    ).toBe("tax.settlements.calculate");
+  });
+
+  // ================================================================
+  // B3 (plan piloto §5.1): transiciones del pedido documental.
+  // ================================================================
+
+  it("transiciones del pedido documental exigen request.manage", () => {
+    const base = "/api/v1/firms/f/clients/c/document-requests/r";
+    expect(requiredCapability("POST", `${base}/send`)).toBe("request.manage");
+    expect(requiredCapability("POST", `${base}/cancel`)).toBe("request.manage");
+    expect(requiredCapability("POST", `${base}/items/i/accept`)).toBe("request.manage");
+    expect(requiredCapability("POST", `${base}/items/i/reject`)).toBe("request.manage");
+    expect(requiredCapability("POST", `${base}/items/i/waive`)).toBe("request.manage");
   });
 });

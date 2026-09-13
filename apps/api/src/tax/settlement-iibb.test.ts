@@ -53,6 +53,7 @@ let regimeId = "";
 let jurisdictionId = "";
 let periodId = "";
 let obligationId = "";
+let ruleVersionId = "";
 
 async function setupMembership() {
   for (const [userId, email, name] of [
@@ -137,7 +138,7 @@ async function setupActiveRules(fx: Awaited<ReturnType<typeof setupMasters>>) {
         version: 1,
         status: "ACTIVE",
         validFrom: new Date("2026-01-01"),
-        engineVersion: "ar-iibb-tuc-local-v1.0.0",
+        engineVersion: "ar-iibb-tuc-local-v1.1.0",
         rulesHash: "sha256:iibb-test",
       },
     });
@@ -311,6 +312,8 @@ async function cleanupIIBB() {
     await tx.$executeRawUnsafe(`DELETE FROM tax_export_artifacts WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_credit_allocations WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_credit_ledger_entries WHERE "clientId" = '${CLIENT_IIBB}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_movements WHERE "clientId" = '${CLIENT_IIBB}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_lots WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_differences WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_settlement_lines WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM settlement_inputs WHERE "clientId" = '${CLIENT_IIBB}'`);
@@ -319,6 +322,9 @@ async function cleanupIIBB() {
     await tx.$executeRawUnsafe(`ALTER TABLE settlement_inputs ENABLE TRIGGER trg_settlement_input_immutable`);
     await tx.$executeRawUnsafe(`ALTER TABLE tax_settlement_lines ENABLE TRIGGER trg_settlement_line_immutable`);
     await tx.$executeRawUnsafe(`ALTER TABLE tax_differences ENABLE TRIGGER trg_settlement_diff_immutable`);
+    await tx.$executeRawUnsafe(`DELETE FROM import_rows WHERE "clientId" = '${CLIENT_IIBB}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM import_batches WHERE "clientId" = '${CLIENT_IIBB}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_adjustments WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_voucher_lines WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_components WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_vouchers WHERE "clientId" = '${CLIENT_IIBB}'`);
@@ -358,13 +364,14 @@ beforeEach(async () => {
   await setupMembership();
   await cleanupIIBB();
   const fx = await setupMasters();
-  await setupActiveRules(fx);
+  const rules = await setupActiveRules(fx);
   const { period, obligation } = await setupSettlementContext(fx);
   jurisdictionId = fx.tucuman.id;
   taxTypeId = fx.iibb.id;
   regimeId = fx.regime.id;
   periodId = period.id;
   obligationId = obligation.id;
+  ruleVersionId = rules.version.id;
 });
 
 describe("Fase 4.1 — IIBB Tucumán local: cálculo", () => {
@@ -373,7 +380,8 @@ describe("Fase 4.1 — IIBB Tucumán local: cálculo", () => {
     const result = await settlements.calculate(ctxOwner, calculateParams());
     const s = result.settlement;
     expect(s.status).toBe("CALCULATED");
-    expect(s.engineVersion).toBe("ar-iibb-tuc-local-v1.0.0");
+    expect(s.engineVersion).toBe("ar-iibb-tuc-local-v1.1.0");
+    expect(s.ruleVersionId).toBeTruthy();
     const totals = s.totals as Record<string, string>;
     expect(totals["BASE_TOTAL"]).toBe("150000.00");
     // COMERCIO: 100000 × 4% = 4000; SERVICIOS: 50000 × 4.5% = 2250
@@ -480,6 +488,199 @@ describe("Fase 4.1 — IIBB Tucumán local: cálculo", () => {
     // 6250 - 7000 = -750 → saldo a favor
     expect(totals["TOTAL_A_INGRESAR"]).toBe("0.00");
     expect(totals["SALDO_A_FAVOR"]).toBe("750.00");
+  });
+
+  it("normaliza alícuotas sub-1% como puntos porcentuales", async () => {
+    await createApprovedVouchersWithLines();
+    await prisma.taxMinimumRule.deleteMany({ where: { ruleVersionId } });
+    await prisma.taxRateRule.updateMany({
+      where: { ruleVersionId, concept: "COMERCIO" },
+      data: { rate: new Prisma.Decimal("0.75") },
+    });
+    await prisma.taxRateRule.updateMany({
+      where: { ruleVersionId, concept: "SERVICIOS" },
+      data: { rate: new Prisma.Decimal("1") },
+    });
+
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+    // 100000 × 0,75% + 50000 × 1%.
+    expect(totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("1250.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("1250.00");
+  });
+
+  it("aplica el mínimo configurado por actividad", async () => {
+    await createApprovedVouchersWithLines();
+    await prisma.taxMinimumRule.deleteMany({ where: { ruleVersionId } });
+    await prisma.taxRateRule.updateMany({
+      where: { ruleVersionId, concept: "COMERCIO" },
+      data: { minAmount: new Prisma.Decimal("7000") },
+    });
+
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("6250.00");
+    expect(totals["IMPUESTO_DETERMINADO"]).toBe("9250.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("9250.00");
+  });
+
+  it("separa SIRCREB/recaudaciones bancarias de las retenciones comunes", async () => {
+    await createApprovedVouchersWithLines();
+    await prisma.withholdingCertificate.createMany({
+      data: [
+        {
+          firmId: FIRM_IIBB,
+          clientId: CLIENT_IIBB,
+          cuitAgent: "30111111111",
+          cuitResponsible: "20999999996",
+          concept: "RETENCION_IIBB",
+          base: new Prisma.Decimal("10000"),
+          amount: new Prisma.Decimal("500"),
+          issuedOn: new Date("2026-01-20"),
+          status: "APPROVED",
+        },
+        {
+          firmId: FIRM_IIBB,
+          clientId: CLIENT_IIBB,
+          cuitAgent: "30222222222",
+          cuitResponsible: "20999999996",
+          concept: "SIRCREB",
+          creditKind: "BANK_COLLECTION",
+          base: new Prisma.Decimal("20000"),
+          amount: new Prisma.Decimal("1000"),
+          issuedOn: new Date("2026-01-21"),
+          status: "APPROVED",
+        },
+      ],
+    });
+
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["RETENCIONES"]).toBe("500.00");
+    expect(totals["RECAUDACIONES"]).toBe("1000.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("4750.00");
+  });
+
+  it("aplica otros créditos sólo cuando pertenecen al período", async () => {
+    await createApprovedVouchersWithLines();
+    const futurePeriod = await prisma.taxPeriod.create({
+      data: {
+        firmId: FIRM_IIBB,
+        clientId: CLIENT_IIBB,
+        taxTypeId,
+        startDate: new Date("2026-02-01"),
+        endDate: new Date("2026-02-28"),
+        label: "Febrero 2026",
+      },
+    });
+    await prisma.taxAdjustment.createMany({
+      data: [
+        {
+          firmId: FIRM_IIBB,
+          clientId: CLIENT_IIBB,
+          periodId,
+          concept: "IIBB_OTRO_CREDITO",
+          amount: new Prisma.Decimal("300"),
+          reason: "Crédito fiscal revisado de enero",
+          createdByUserId: OWNER_IIBB,
+          reviewedByUserId: REVIEWER_IIBB,
+          reviewedAt: new Date("2026-01-31"),
+        },
+        {
+          firmId: FIRM_IIBB,
+          clientId: CLIENT_IIBB,
+          periodId: futurePeriod.id,
+          concept: "IIBB_OTRO_CREDITO",
+          amount: new Prisma.Decimal("1000"),
+          reason: "Crédito fiscal de febrero",
+          createdByUserId: OWNER_IIBB,
+          reviewedByUserId: REVIEWER_IIBB,
+          reviewedAt: new Date("2026-02-28"),
+        },
+      ],
+    });
+
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["OTROS_CREDITOS"]).toBe("300.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("5950.00");
+    expect(result.inputs.filter((item) => item.kind === "ADJUSTMENT")).toHaveLength(1);
+  });
+
+  it("bloquea una alícuota declarada por DGR que difiere del rule pack", async () => {
+    const { v1 } = await createApprovedVouchersWithLines();
+    const batch = await prisma.importBatch.create({
+      data: {
+        firmId: FIRM_IIBB,
+        clientId: CLIENT_IIBB,
+        origin: "DGR_IIBB",
+        taxTypeId,
+        periodId,
+        adapterVersion: "DGR_IIBB_V1",
+        fileHash: "declared-rate-mismatch",
+        status: "COMMITTED",
+      },
+    });
+    await prisma.importRow.create({
+      data: {
+        firmId: FIRM_IIBB,
+        clientId: CLIENT_IIBB,
+        batchId: batch.id,
+        position: 0,
+        raw: {},
+        normalized: {
+          activityCode: "COMERCIO",
+          income: "100000.0000",
+          rate: "5.000000",
+          minimum: null,
+          exemption: "0.0000",
+        },
+        status: "COMMITTED",
+        voucherId: v1.id,
+        sourceType: "FISCAL_VOUCHER",
+        sourceId: v1.id,
+      },
+    });
+
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    expect(result.result.blocks.some((block) => block.includes("no coincide"))).toBe(true);
+    const differences = await settlements.listDifferences(ctxOwner, result.settlement.id);
+    expect(differences.some((difference) => difference.severity === "BLOCKING")).toBe(true);
+  });
+
+  it("usa la versión retirada que cubre el período en vez de una activa futura", async () => {
+    await createApprovedVouchersWithLines();
+    const pack = await prisma.taxRulePack.findFirstOrThrow({
+      where: { code: "IIBB_TUC_TEST_V1" },
+    });
+    await prisma.taxRuleVersion.updateMany({
+      where: { packId: pack.id, status: "ACTIVE" },
+      data: { status: "RETIRED" },
+    });
+    const future = await prisma.taxRuleVersion.create({
+      data: {
+        packId: pack.id,
+        version: 2,
+        status: "ACTIVE",
+        validFrom: new Date("2026-07-01"),
+        engineVersion: "ar-iibb-tuc-local-v1.1.0",
+        rulesHash: "sha256:iibb-future",
+      },
+    });
+    await prisma.taxRateRule.create({
+      data: {
+        ruleVersionId: future.id,
+        concept: "DEFAULT",
+        rate: new Prisma.Decimal("9"),
+        validFrom: new Date("2026-07-01"),
+      },
+    });
+
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    expect(result.settlement.rulesHash).toBe("sha256:iibb-test");
+    expect((result.settlement.totals as Record<string, string>)["TOTAL_A_INGRESAR"]).toBe(
+      "6250.00",
+    );
   });
 
   it("V-004: reejecutar produce mismo hash", async () => {

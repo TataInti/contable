@@ -8,8 +8,8 @@ import * as contracts from "@contable/contracts";
  * schemas derivados de los contratos Zod. La CI verifica que este documento
  * no tenga drift contra las rutas Fastify registradas (ver openapi-drift.test.ts).
  *
- * No pretende cubrir todas las rutas del sistema: documenta las rutas fiscales
- * críticas (las que tienen contratos Zod) y sirve de base para ampliar.
+ * Documenta la superficie fiscal y de portal que forma parte del piloto. Las
+ * rutas legacy fuera de ese recorrido quedan fuera deliberadamente.
  */
 
 export interface OpenApiSpec {
@@ -86,16 +86,175 @@ export function fiscalPaths(): OpenApiPath[] {
       capability: "tax.settlements.read",
     },
     {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/tax-credit-ledger/opening",
+      summary: "Registra un saldo inicial (nace PENDING_VERIFICATION)",
+      capability: "tax.settlements.calculate",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/tax-credit-ledger/{lotId}/verify",
+      summary: "Verifica un saldo anterior (maker-checker + evidencia)",
+      capability: "tax.settlements.review",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/tax-credit-ledger/{lotId}/movements",
+      summary: "Registra uso/compensación como movimiento inmutable",
+      capability: "tax.settlements.calculate",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/tax-credit-ledger/{lotId}/corrections",
+      summary: "Corrección de monto vía movimiento compensatorio",
+      capability: "tax.settlements.calculate",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/document-requests/{requestId}/send",
+      summary: "Envía un pedido documental (DRAFT → SENT)",
+      capability: "request.manage",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/document-requests/{requestId}/cancel",
+      summary: "Cancela un pedido documental abierto",
+      capability: "request.manage",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/document-requests/{requestId}/items/{itemId}/accept",
+      summary: "Acepta un ítem del pedido",
+      capability: "request.manage",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/document-requests/{requestId}/items/{itemId}/reject",
+      summary: "Rechaza un ítem conservando evidencia y motivo",
+      capability: "request.manage",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/document-requests/{requestId}/items/{itemId}/waive",
+      summary: "Exime un ítem del pedido",
+      capability: "request.manage",
+    },
+    {
+      method: "get",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/management-incomes",
+      summary: "Lista ingresos gerenciales (§7.1)",
+      capability: "tax.management_expenses.read",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/management-incomes",
+      summary: "Alta de ingreso gerencial en DRAFT",
+      capability: "tax.management_expenses.write",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/management-incomes/{incomeId}/approve",
+      summary: "Aprueba un ingreso gerencial (maker-checker)",
+      capability: "tax.management_expenses.approve_treatment",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/management-incomes/{incomeId}/submit-review",
+      summary: "Envía un ingreso gerencial a revisión",
+      capability: "tax.management_expenses.write",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/management-incomes/{incomeId}/reject",
+      summary: "Rechaza un ingreso gerencial con comentario obligatorio",
+      capability: "tax.management_expenses.approve_treatment",
+    },
+    {
       method: "get",
       path: "/api/v1/firms/{firmId}/clients/{clientId}/profitability",
       summary: "Snapshots de rentabilidad",
       capability: "profitability.read",
     },
     {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/profitability/calculate",
+      summary: "Calcula un snapshot de rentabilidad",
+      capability: "profitability.calculate",
+      idempotent: true,
+      versioned: true,
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/profitability/publish",
+      summary: "Publica un snapshot de rentabilidad",
+      capability: "profitability.publish",
+      versioned: true,
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/monthly-tax-workpapers",
+      summary: "Crea o recupera un expediente mensual",
+      capability: "tax.settlements.calculate",
+      idempotent: true,
+      versioned: true,
+    },
+    {
       method: "get",
       path: "/api/v1/firms/{firmId}/clients/{clientId}/monthly-tax-workpapers",
       summary: "Expedientes mensuales de liquidación",
       capability: "tax.settlements.read",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/monthly-tax-workpapers/{workpaperId}/calculate",
+      summary: "Calcula el expediente mensual",
+      capability: "tax.settlements.calculate",
+      idempotent: true,
+      versioned: true,
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/monthly-tax-workpapers/{workpaperId}/submit-review",
+      summary: "Envía el expediente mensual a revisión",
+      capability: "tax.settlements.submit_review",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/monthly-tax-workpapers/{workpaperId}/review",
+      summary: "Revisa el expediente mensual",
+      capability: "tax.settlements.review",
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/monthly-tax-workpapers/{workpaperId}/finalize",
+      summary: "Finaliza el expediente mensual",
+      capability: "tax.settlements.finalize",
+      versioned: true,
+    },
+    {
+      method: "post",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/monthly-tax-workpapers/{workpaperId}/rectify",
+      summary: "Crea una rectificativa del expediente mensual",
+      capability: "tax.settlements.rectify",
+      versioned: true,
+    },
+    {
+      method: "get",
+      path: "/api/v1/portal/clients/{clientId}/tax-settlements",
+      summary: "Lista liquidaciones fiscales finalizadas del portal",
+      capability: "portal.results.read",
+    },
+    {
+      method: "get",
+      path: "/api/v1/portal/clients/{clientId}/profitability",
+      summary: "Lista snapshots de rentabilidad publicados",
+      capability: "portal.results.read",
+    },
+    {
+      method: "get",
+      path: "/api/v1/portal/clients/{clientId}/profitability/{snapshotId}/receipt",
+      summary: "Consulta el recibo de una publicación",
+      capability: "portal.results.read",
     },
   ];
 }

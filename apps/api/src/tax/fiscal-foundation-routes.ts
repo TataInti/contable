@@ -177,13 +177,14 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         nationalCondition: z.enum(["RESPONSABLE_INSCRIPTO", "MONOTRIBUTISTA", "EXENTO", "NO_RESPONSABLE"]),
         fiscalAddress: z.string().max(300).optional(),
         fiscalYearEndMonth: z.number().int().min(1).max(12).optional(),
+        monotributoCategory: z.enum(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]).optional(),
         validFrom: z.string().date(),
         source: z.string().max(200).optional(),
       })
       .strict()
       .parse(req.body);
     try {
-      const data = await profiles.createProfile(ctx, pickDefined({ ...body, clientId: ctx.clientId! }) as { clientId: string; legalName: string; cuit: string; personType: "FISICA" | "JURIDICA"; nationalCondition: "RESPONSABLE_INSCRIPTO" | "MONOTRIBUTISTA" | "EXENTO" | "NO_RESPONSABLE"; fiscalAddress?: string; fiscalYearEndMonth?: number; validFrom: string; source?: string });
+      const data = await profiles.createProfile(ctx, pickDefined({ ...body, clientId: ctx.clientId! }) as { clientId: string; legalName: string; cuit: string; personType: "FISICA" | "JURIDICA"; nationalCondition: "RESPONSABLE_INSCRIPTO" | "MONOTRIBUTISTA" | "EXENTO" | "NO_RESPONSABLE"; fiscalAddress?: string; fiscalYearEndMonth?: number; monotributoCategory?: string; validFrom: string; source?: string });
       return reply.code(201).send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -564,6 +565,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         jurisdictionId: z.string().uuid(),
         frequency: z.string().max(40).optional(),
         dueDay: z.number().int().min(1).max(31),
+        monthOffset: z.number().int().min(0).max(24).optional(),
         cuitEnding: z.string().max(4).optional(),
         validFrom: z.string().date(),
         validTo: z.string().date().optional(),
@@ -571,7 +573,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       .strict()
       .parse(req.body);
     try {
-      const data = await rules.addDueDateRule(ctx, pickDefined({ ...body, ruleVersionId }) as { ruleVersionId: string; jurisdictionId: string; frequency?: string; dueDay: number; cuitEnding?: string; validFrom: string; validTo?: string });
+      const data = await rules.addDueDateRule(ctx, pickDefined({ ...body, ruleVersionId }) as { ruleVersionId: string; jurisdictionId: string; frequency?: string; dueDay: number; monthOffset?: number; cuitEnding?: string; validFrom: string; validTo?: string });
       return reply.code(201).send({ data });
     } catch (err) {
       return handleError(reply, err);

@@ -18,7 +18,7 @@ export class DocumentService {
   constructor(private storage: ObjectStorage) {}
 
   /** Crea una sesión de upload para un cliente autorizado. */
-  async createUploadSession(firmId: string, clientId: string, userId: string, opts: { expectedMime?: string; maxFiles?: number; requestItemId?: string } = {}, ctx?: TenantContext) {
+  async createUploadSession(firmId: string, clientId: string, userId: string, opts: { expectedMime?: string; maxFiles?: number; requestItemId?: string; category?: string } = {}, ctx?: TenantContext) {
     const data: Prisma.UploadSessionUncheckedCreateInput = {
       firmId,
       clientId,
@@ -30,6 +30,7 @@ export class DocumentService {
     };
     if (opts.expectedMime !== undefined) data.expectedMime = opts.expectedMime;
     if (opts.requestItemId !== undefined) data.requestItemId = opts.requestItemId;
+    if (opts.category !== undefined) data.category = opts.category;
 
     return ctx
       ? withTenantContext(ctx, (tx) => tx.uploadSession.create({ data }))
@@ -88,6 +89,8 @@ export class DocumentService {
           uploadedByUserId: session.userId,
           uploadOrigin: "FIRM",
           status: "UPLOADED",
+          // Categoría declarada por el cliente en la sesión (§10: acuses).
+          ...(session.category ? { category: session.category } : {}),
         },
       });
 
@@ -119,8 +122,11 @@ export class DocumentService {
         data: { status: "COMPLETED", completedAt: new Date() },
       });
 
-      // G2-07: si la sesión se creó para responder un ítem de pedido, ligar el
-      // documento al ítem y derivar la completitud del pedido.
+      // G2-07 + B3 (§5.1): si la sesión se creó para responder un ítem de
+      // pedido, ligar el documento al ítem y derivar el estado del pedido con
+      // la MISMA máquina de estados que WorkService.attachDocument: primer
+      // requerido → IN_PROGRESS; todos los requeridos → READY_FOR_REVIEW
+      // (nunca COMPLETED automático: la revisión es acción del estudio).
       if (requestItem) {
         await tx.documentRequestItem.update({
           where: { id: requestItem.id },
@@ -128,11 +134,25 @@ export class DocumentService {
         });
         const items = await tx.documentRequestItem.findMany({ where: { requestId: requestItem.requestId } });
         const required = items.filter((i) => i.required);
-        if (required.every((i) => i.status === "ATTACHED")) {
-          await tx.documentRequest.update({
-            where: { id: requestItem.requestId },
-            data: { status: "COMPLETED" },
-          });
+        const attachedRequired = required.filter((i) =>
+          ["ATTACHED", "ACCEPTED", "WAIVED"].includes(i.status),
+        );
+        const request = await tx.documentRequest.findFirst({
+          where: { id: requestItem.requestId },
+        });
+        if (request && ["SENT", "IN_PROGRESS", "READY_FOR_REVIEW"].includes(request.status)) {
+          let nextStatus = request.status;
+          if (required.length > 0 && attachedRequired.length === required.length) {
+            nextStatus = "READY_FOR_REVIEW";
+          } else if (attachedRequired.length > 0) {
+            nextStatus = "IN_PROGRESS";
+          }
+          if (nextStatus !== request.status) {
+            await tx.documentRequest.update({
+              where: { id: requestItem.requestId },
+              data: { status: nextStatus },
+            });
+          }
         }
       }
 
@@ -147,21 +167,21 @@ export class DocumentService {
           deduplicationKey: `validate:${fileVersion.id}`,
         },
       });
-      await tx.outboxEvent.create({
-        data: {
+      // G0-06: el runtime no tiene INSERT directo en outbox_events; la
+      // creación pasa por la función SECURITY DEFINER app_create_outbox.
+      await tx.$executeRaw`SELECT app_create_outbox(
+        ${session.firmId}::text,
+        ${session.clientId}::text,
+        'documents'::text,
+        'document.validate'::text,
+        ${job.id}::text,
+        ${JSON.stringify({
+          documentId: document.id,
+          fileVersionId: fileVersion.id,
           firmId: session.firmId,
           clientId: session.clientId,
-          topic: "documents",
-          eventType: "document.validate",
-          aggregateId: job.id,
-          payload: {
-            documentId: document.id,
-            fileVersionId: fileVersion.id,
-            firmId: session.firmId,
-            clientId: session.clientId,
-          },
-        },
-      });
+        })}::jsonb
+      )`;
       const auditAfter = { status: "UPLOADED", sha256: validation.sha256, size: validation.size };
       if (ctx?.actorKind === "PORTAL") {
         // Portal may append audit events but must not SELECT them. A raw INSERT
@@ -208,10 +228,18 @@ export class DocumentService {
     });
   }
 
-  /** Lista documentos de un cliente. */
+  /** Lista documentos de un cliente (para el portal: oculta cuarentena/malware). */
   async listDocuments(firmId: string, clientId: string, ctx?: TenantContext) {
     const query = (tx: Prisma.TransactionClient) => tx.document.findMany({
-      where: { firmId, clientId },
+      where: {
+        firmId,
+        clientId,
+        // §5.2: un documento en cuarentena o rechazado no aparece como
+        // evidencia disponible en el portal.
+        ...(ctx?.actorKind === "PORTAL"
+          ? { fileVersions: { some: { bucket: "originals", antivirusStatus: "CLEAN" } } }
+          : {}),
+      },
       include: { fileVersions: { orderBy: { createdAt: "desc" }, take: 1 } },
       orderBy: { createdAt: "desc" },
     });
@@ -266,6 +294,38 @@ export class DocumentService {
       include: { fileVersions: true, processingJobs: true },
     });
     return ctx ? withTenantContext(ctx, query) : prisma.$transaction(query);
+  }
+
+  /**
+   * Genera una URL firmada de preview/descarga para un documento subido.
+   *
+   * Reautoriza el acceso por RLS (el documento pertenece al cliente en
+   * contexto), toma la última versión de archivo y sólo firma una URL si la
+   * versión ya superó la validación (antivirus CLEAN) y fue promovida al
+   * bucket de originales; mientras el archivo está en cuarentena no se expone.
+   */
+  async getPreviewUrl(
+    ctx: TenantContext,
+    documentId: string,
+  ): Promise<{ url: string; mimeType: string | null; originalName: string | null } | null> {
+    return withTenantContext(ctx, async (tx) => {
+      const document = await tx.document.findFirst({
+        where: {
+          id: documentId,
+          firmId: ctx.firmId,
+          ...(ctx.clientId ? { clientId: ctx.clientId } : {}),
+        },
+        include: {
+          fileVersions: { orderBy: { createdAt: "desc" }, take: 1 },
+        },
+      });
+      const version = document?.fileVersions[0];
+      if (!document || !version) return null;
+      // No exponer archivos en cuarentena ni versiones sin validar.
+      if (version.bucket !== "originals" || version.antivirusStatus !== "CLEAN") return null;
+      const url = await this.storage.getPresignedGetUrl(version.bucket as "originals", version.objectKey);
+      return { url, mimeType: version.mimeType, originalName: version.originalName };
+    });
   }
 
   /**

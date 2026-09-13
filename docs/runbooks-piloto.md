@@ -4,6 +4,26 @@
 > Cada runbook describe síntoma, diagnóstico y acción. Los runbooks son
 > propiedad del equipo de soporte y se actualizan con cada incidente.
 
+## RB-00 — Entornos E2E cruzados
+
+**Síntoma:** un documento queda en `UPLOADED` o `QUEUED`, aparece
+`FILE_VERSION_NOT_FOUND` en el worker o una corrida E2E consume datos de otra
+base.
+
+**Causa habitual:** varias bases comparten Valkey y API/worker usan el mismo
+namespace BullMQ.
+
+**Acción:**
+1. Asignar un `QUEUE_PREFIX` único por entorno y usar exactamente el mismo
+   valor en API y worker (por ejemplo `contable-e2e-20260908`).
+2. Confirmar que hay un solo worker documental consumiendo ese prefijo y que
+   `WORKER_DATABASE_URL` apunta a la misma base que `E2E_DATABASE_URL`.
+3. Ejecutar E2E sobre una base aislada recién migrada y sembrada; no reutilizar
+   una base con períodos o documentos de una corrida anterior.
+
+Sin `QUEUE_PREFIX` explícito se conserva `bull`, el namespace histórico de
+BullMQ, para no romper despliegues existentes.
+
 ## RB-01 — Importación rechazada
 
 **Síntoma:** un lote de importación queda con filas en estado ERROR o el commit
@@ -159,17 +179,22 @@ falla.
 control para un cliente piloto.
 
 **Diagnóstico:**
-- El script `seed:corrida` materializa 3 períodos consecutivos (Oct–Dic 2025)
+- El script `seed:corrida` materializa 3 períodos consecutivos (Ene–Mar 2026),
+  cubiertos por las versiones normativas activas del seed fiscal,
   por cliente con perfil fiscal ACTIVE, aprobando hechos y finalizando cada
   liquidación con maker-checker (V-002).
 - Genera `docs/piloto/g6-corrida-historica.md` con totales y hashes.
 
 **Acción:**
-1. `npx tsx apps/api/src/seed-corrida-piloto.ts` (o `npm run seed:corrida -w @contable/api`).
-2. Comparar cada total del reporte contra la liquidación manual de control
+1. Inspeccionar primero el alcance sin escribir datos:
+   `npm run seed:corrida -w @contable/api -- --dry-run --periodos 1`.
+2. Ejecutar la corrida sólo con autorización explícita y, si corresponde,
+   limitarla a un cliente:
+   `npm run seed:corrida -w @contable/api -- --client-id <id> --periodos 1 --confirm-write`.
+3. Comparar cada total del reporte contra la liquidación manual de control
    del contador (tres períodos por régimen deben coincidir o tener diferencia
    explicada).
-3. La corrida es idempotente: re-ejecutar reutiliza las liquidaciones FINALIZED
+4. La corrida es idempotente: re-ejecutar reutiliza las liquidaciones FINALIZED
    (no duplica) y sólo completa los faltantes.
-4. Si una regla/dato cambió, corregir creando versión nueva y rectificar
+5. Si una regla/dato cambió, corregir creando versión nueva y rectificar
    (nunca editar APPROVED/ACTIVE ni FINALIZED).

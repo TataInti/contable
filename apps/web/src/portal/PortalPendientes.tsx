@@ -11,6 +11,7 @@ import {
   PortalPageHeader,
   PortalRetryButton,
 } from "./PortalUI";
+import { SectionIndex } from "../ui/SectionIndex";
 import "./portal.css";
 
 interface PortalDocumentRequest extends DocumentRequest {
@@ -32,6 +33,14 @@ export function PortalPendientes() {
     (total, request) => total + request.items.filter((item) => isPendingItem(item.status)).length,
     0,
   );
+  const firstPendingRequest = rows.find((request) =>
+    request.items.some((item) => isPendingItem(item.status)),
+  );
+  const firstPendingItem = firstPendingRequest?.items.find((item) => isPendingItem(item.status));
+  const nextUploadUrl =
+    firstPendingRequest && firstPendingItem
+      ? `/portal/upload?pedido=${encodeURIComponent(firstPendingRequest.title)}&item=${encodeURIComponent(firstPendingItem.description)}&itemId=${encodeURIComponent(firstPendingItem.id)}`
+      : "/portal/upload";
 
   return (
     <div className="portal-page">
@@ -71,7 +80,40 @@ export function PortalPendientes() {
           ) : undefined}
         />
       ) : (
-        <section className="portal-page__section" aria-labelledby="requests-title">
+        <>
+          <SectionIndex
+            items={[
+              { id: "pending-status-title", label: "Resumen", meta: `${pendingItems} pendientes` },
+              { id: "requests-title", label: "Pedidos", meta: String(rows.length) },
+            ]}
+          />
+          <section className="portal-guidance" aria-labelledby="pending-next-step-title">
+            <div className="portal-guidance__context">
+              <span className="portal-guidance__icon" aria-hidden="true">
+                <Icon name="tasks" size={19} />
+              </span>
+              <div>
+                <p className="portal-guidance__eyebrow" id="pending-status-title">Estado de la documentación</p>
+                <p>
+                  Tu estudio tiene {rows.length} {rows.length === 1 ? "pedido abierto" : "pedidos abiertos"} y faltan {pendingItems} {pendingItems === 1 ? "archivo" : "archivos"} por entregar.
+                </p>
+              </div>
+            </div>
+            <div className="portal-guidance__next">
+              <div>
+                <p className="portal-guidance__eyebrow">Próximo paso</p>
+                <h2 id="pending-next-step-title">
+                  {pendingItems > 0 ? "Aportá el primer archivo pendiente" : "Revisá las entregas completadas"}
+                </h2>
+              </div>
+              {pendingItems > 0 && capabilities.has("portal.documents.upload") ? (
+                <Link className="portal-action-link" to={nextUploadUrl}>
+                  Aportar archivo <Icon name="arrow-right" size={17} />
+                </Link>
+              ) : null}
+            </div>
+          </section>
+          <section className="portal-page__section" aria-labelledby="requests-title">
           <div className="portal-section-bar">
             <div>
               <h2 id="requests-title">Pedidos del estudio</h2>
@@ -140,7 +182,8 @@ export function PortalPendientes() {
               },
             ]}
           />
-        </section>
+          </section>
+        </>
       )}
     </div>
   );

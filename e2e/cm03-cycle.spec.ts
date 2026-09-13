@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -42,12 +43,12 @@ test("ciclo CM03 artículo 2 de punta a punta (Fase 4.3)", async ({ request, pla
   expect(me.status()).toBe(200);
   const meBody = (await me.json()) as {
     data: {
-      firms: Array<{ firmId: string; clients: Array<{ clientId: string }> }>;
+      firms: Array<{ firmId: string; clients: Array<{ clientId: string; clientName: string }> }>;
     };
   };
   const firm = meBody.data.firms[0];
   expect(firm).toBeTruthy();
-  const client = firm.clients[0];
+  const client = firm.clients.find((item) => item.clientName === "Cliente E2E CM03");
   expect(client).toBeTruthy();
   const firmId = firm.firmId;
   const clientId = client.clientId;
@@ -231,6 +232,7 @@ test("ciclo CM03 artículo 2 de punta a punta (Fase 4.3)", async ({ request, pla
   }
 
   // 8. Presentación y pago.
+  const acuseDocumentId = await createAcuseDocument(playwright, apiBaseUrl, clientId);
   const filing = await request.post(
     `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-obligations/${obligationId}/filings`,
     {
@@ -240,6 +242,7 @@ test("ciclo CM03 artículo 2 de punta a punta (Fase 4.3)", async ({ request, pla
         filedAt: "2026-02-05",
         amountFiled: "5700.00",
         externalId: "CM03-E2E-001",
+        evidenceDocumentId: acuseDocumentId,
       },
     },
   );
@@ -307,4 +310,74 @@ async function resolveId(
   const found = items.find((i) => i.code === code);
   expect(found).toBeTruthy();
   return found!.id;
+}
+
+async function createAcuseDocument(
+  playwright: import("@playwright/test").Playwright,
+  apiBaseUrl: string,
+  clientId: string,
+): Promise<string> {
+  const portal = await playwright.request.newContext({ baseURL: apiBaseUrl });
+  const login = await portal.post(`${apiBaseUrl}/api/v1/auth/login`, {
+    data: { email: "cliente@contable.local", password: "cliente1234" },
+  });
+  expect(login.status()).toBe(200);
+  const state = await portal.storageState();
+  const csrf = state.cookies.find((cookie) => cookie.name === "csrf_token");
+  const headers = { "X-CSRF-Token": csrf ? decodeURIComponent(csrf.value) : "" };
+  const base = `${apiBaseUrl}/api/v1/portal/clients/${clientId}`;
+  const existingDocuments = await portal.get(`${base}/documents`);
+  expect(existingDocuments.status()).toBe(200);
+  const existingBody = (await existingDocuments.json()) as {
+    data?: Array<{ id: string; status: string; category?: string | null }>;
+  };
+  const existingAcuse = existingBody.data?.find(
+    (item) => (item.status === "READY" || item.status === "APPLIED") && item.category === "ACUSE",
+  );
+  if (existingAcuse) {
+    await portal.dispose();
+    return existingAcuse.id;
+  }
+  const session = await portal.post(`${base}/document-upload-sessions`, {
+    headers,
+    data: { category: "ACUSE", expectedMime: "application/pdf" },
+  });
+  expect(session.status()).toBe(201);
+  const body = (await session.json()) as { data: { sessionId: string; objectKey: string; presignedUrl: string } };
+  const file = Buffer.from("%PDF-1.4\n%%EOF\n", "binary");
+  const put = await portal.fetch(body.data.presignedUrl, {
+    method: "PUT",
+    data: file,
+    headers: { "Content-Type": "application/pdf", "Content-Length": String(file.length) },
+  });
+  expect(put.status()).toBe(200);
+  const complete = await portal.post(`${base}/document-upload-sessions/${body.data.sessionId}/complete`, {
+    headers,
+    data: {
+      originalName: "acuse-cm03.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: file.length,
+      sha256: createHash("sha256").update(file).digest("hex"),
+      objectKey: body.data.objectKey,
+    },
+  });
+  expect(complete.status()).toBe(201);
+  const result = (await complete.json()) as { data: { documentId: string } };
+  let ready = false;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const documents = await portal.get(`${base}/documents`);
+    expect(documents.status()).toBe(200);
+    const documentsBody = (await documents.json()) as {
+      data?: Array<{ id: string; status: string }>;
+    };
+    const current = documentsBody.data?.find((item) => item.id === result.data.documentId);
+    if (current?.status === "READY" || current?.status === "APPLIED") {
+      ready = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  expect(ready).toBe(true);
+  await portal.dispose();
+  return result.data.documentId;
 }

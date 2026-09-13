@@ -5,8 +5,9 @@ import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
-import { StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
+import { SectionIndex } from "../ui/SectionIndex";
+import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
 
 interface TaxSettlement {
@@ -196,6 +197,17 @@ export function StudyLiquidaciones() {
         cálculo.
       </p>
 
+      <SectionIndex
+        items={[
+          { id: "settlements-context-title", label: "Estado del período" },
+          { id: "settlements-next-step-title", label: "Siguiente paso" },
+          { id: "settlements-list-title", label: "Liquidaciones", meta: `${data.length}` },
+        ]}
+      />
+
+      <section className="guided-context" aria-labelledby="settlements-context-title"><div className="guided-context__heading"><div><p className="study-page__eyebrow">Cartera fiscal</p><h2 id="settlements-context-title">Estado del período</h2><p>Calculá sólo sobre obligaciones configuradas y evidencia aprobada hasta la fecha de corte.</p></div><StatusBadge status={data.length ? "ACTIVE" : "PENDING"} /></div><dl className="guided-context__facts"><div><dt>Liquidaciones</dt><dd>{data.length}</dd></div><div><dt>Períodos fiscales</dt><dd>{taxPeriodsQuery.data?.length ?? "—"}</dd></div><div><dt>Regímenes disponibles</dt><dd>{availableRegimes.length}</dd></div></dl></section>
+      <section className="guided-next-step" aria-labelledby="settlements-next-step-title"><div><p className="study-page__eyebrow">Flujo guiado</p><h2 id="settlements-next-step-title">Próximo paso</h2><p>{data.length ? "Revisá la cartera y avanzá la liquidación que requiere la próxima decisión." : canCalculate ? "Calculá una liquidación para un régimen y período fiscal configurados." : "Prepará la evidencia y el expediente antes de iniciar el cálculo."}</p></div>{canCalculate ? <Button onClick={() => setShowCalculator(true)}>Calcular liquidación</Button> : <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>Abrir expediente</Button>}</section>
+
       <ActionDrawer
         isOpen={showCalculator}
         onClose={() => setShowCalculator(false)}
@@ -287,6 +299,15 @@ export function StudyLiquidaciones() {
         </div>
       ) : null}
 
+      <section className="study-page__section" aria-labelledby="settlements-list-title">
+      <div className="study-panel__heading">
+        <div>
+          <p className="study-page__eyebrow">Seguimiento</p>
+          <h2 id="settlements-list-title">Liquidaciones registradas</h2>
+          <p>Consultá versiones, estados y acciones disponibles para cada liquidación.</p>
+        </div>
+        <span className="section-count">{data.length}</span>
+      </div>
       {listQuery.isLoading ? (
         <div className="study-state" role="status">
           Cargando liquidaciones…
@@ -409,6 +430,7 @@ export function StudyLiquidaciones() {
           empty="Sin liquidaciones."
         />
       )}
+      </section>
       {mutationError ? (
         <p className="form-error" role="alert">
           {mutationError.message}

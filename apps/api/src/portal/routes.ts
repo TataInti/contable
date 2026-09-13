@@ -92,14 +92,16 @@ export function portalRoutes(app: FastifyInstance) {
         expiresAt,
         invitedByUserId: ctx.userId,
       } });
-      await tx.outboxEvent.create({ data: {
-        firmId: ctx.firmId,
-        clientId: ctx.clientId!,
-        topic: "notifications",
-        eventType: "PORTAL_INVITATION_CREATED",
-        aggregateId: created.id,
-        payload: { invitationId: created.id, email: body.email, token, expiresAt: expiresAt.toISOString() },
-      } });
+      // G0-06: creación de eventos vía SECURITY DEFINER (el runtime no
+      // tiene INSERT directo en outbox_events).
+      await tx.$executeRaw`SELECT app_create_outbox(
+        ${ctx.firmId}::text,
+        ${ctx.clientId!}::text,
+        'notifications'::text,
+        'PORTAL_INVITATION_CREATED'::text,
+        ${created.id}::text,
+        ${JSON.stringify({ invitationId: created.id, email: body.email, token, expiresAt: expiresAt.toISOString() })}::jsonb
+      )`;
       await tx.auditEvent.create({ data: {
         firmId: ctx.firmId, clientId: ctx.clientId!, userId: ctx.userId, actorKind: "USER",
         action: "portal.invitation.created", entityType: "PortalInvitation", entityId: created.id,
@@ -177,7 +179,8 @@ export function portalRoutes(app: FastifyInstance) {
     const ctx = tenantContextFromRequest(req);
     const data = await withTenantContext(ctx, async (tx) => {
       const [pendingRequests, upcomingObligations, publications, documentsCount] = await Promise.all([
-        tx.documentRequest.count({ where: { firmId: ctx.firmId, clientId: ctx.clientId!, status: { not: "COMPLETED" } } }),
+        // §5.2: el resumen tampoco cuenta DRAFT/CANCELLED como pendientes.
+        tx.documentRequest.count({ where: { firmId: ctx.firmId, clientId: ctx.clientId!, status: { notIn: ["COMPLETED", "DRAFT", "CANCELLED"] } } }),
         tx.obligationInstance.count({ where: { firmId: ctx.firmId, clientId: ctx.clientId!, status: { notIn: ["PAID", "FILED"] } } }),
         tx.reportPublication.count({ where: { firmId: ctx.firmId, clientId: ctx.clientId!, status: "PUBLISHED" } }),
         tx.document.count({ where: { firmId: ctx.firmId, clientId: ctx.clientId! } }),
@@ -199,7 +202,8 @@ export function portalRoutes(app: FastifyInstance) {
   app.get("/api/v1/portal/clients/:clientId/document-requests", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const data = await withTenantContext(ctx, (tx) => tx.documentRequest.findMany({
-      where: { firmId: ctx.firmId, clientId: ctx.clientId! },
+      // §5.2: el portal excluye pedidos DRAFT y CANCELLED.
+      where: { firmId: ctx.firmId, clientId: ctx.clientId!, status: { notIn: ["DRAFT", "CANCELLED"] } },
       include: { items: true, threads: { include: { messages: { where: { visibility: "SHARED" }, orderBy: { createdAt: "asc" } } } } },
       orderBy: { createdAt: "desc" }, take: 200,
     }));
@@ -207,6 +211,7 @@ export function portalRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/v1/portal/clients/:clientId/report-publications", async (req, reply) => {
+    assertCapability(req, "portal.results.read");
     const ctx = tenantContextFromRequest(req);
     const data = await withTenantContext(ctx, (tx) => tx.reportPublication.findMany({
       where: { firmId: ctx.firmId, clientId: ctx.clientId!, status: "PUBLISHED" },
@@ -217,6 +222,7 @@ export function portalRoutes(app: FastifyInstance) {
 
   // G3-11: liquidaciones publicadas (sólo FINALIZED) para el portal.
   app.get("/api/v1/portal/clients/:clientId/tax-settlements", async (req, reply) => {
+    assertCapability(req, "portal.results.read");
     const ctx = tenantContextFromRequest(req);
     const data = await withTenantContext(ctx, (tx) => tx.taxSettlement.findMany({
       where: { firmId: ctx.firmId, clientId: ctx.clientId!, status: "FINALIZED" },
@@ -242,6 +248,7 @@ export function portalRoutes(app: FastifyInstance) {
 
   // G3-11: descarga del papel de trabajo publicado (artifact).
   app.get("/api/v1/portal/clients/:clientId/tax-settlements/:settlementId/artifacts/:artifactId/download", async (req, reply) => {
+    assertCapability(req, "portal.results.read");
     const ctx = tenantContextFromRequest(req);
     const { settlementId, artifactId } = req.params as { settlementId: string; artifactId: string };
     const artifact = await withTenantContext(ctx, (tx) => tx.taxExportArtifact.findFirst({
@@ -269,6 +276,7 @@ export function portalRoutes(app: FastifyInstance) {
   // G5-07: rentabilidad publicada (sólo snapshots PUBLISHED; el portal nunca
   // ve borradores ni versiones SUPERSEDED).
   app.get("/api/v1/portal/clients/:clientId/profitability", async (req, reply) => {
+    assertCapability(req, "portal.results.read");
     const ctx = tenantContextFromRequest(req);
     const q = z.object({ periodId: z.string().uuid().optional() }).parse(req.query);
     const data = await withTenantContext(ctx, (tx) => tx.profitabilitySnapshot.findMany({
@@ -288,6 +296,7 @@ export function portalRoutes(app: FastifyInstance) {
   // G5-10: recibo persistente de una publicación (snapshot PUBLISHED con
   // hashes y fecha de publicación; el portal puede descargarlo/consultarlo).
   app.get("/api/v1/portal/clients/:clientId/profitability/:snapshotId/receipt", async (req, reply) => {
+    assertCapability(req, "portal.results.read");
     const ctx = tenantContextFromRequest(req);
     const { snapshotId } = req.params as { snapshotId: string };
     const snapshot = await withTenantContext(ctx, (tx) => tx.profitabilitySnapshot.findFirst({
@@ -314,6 +323,7 @@ export function portalRoutes(app: FastifyInstance) {
 
   // G5-08: timeline de comunicación por obligación (sólo mensajes SHARED).
   app.get("/api/v1/portal/clients/:clientId/obligations/:obligationId/timeline", async (req, reply) => {
+    assertCapability(req, "portal.results.read");
     const ctx = tenantContextFromRequest(req);
     const { obligationId } = req.params as { obligationId: string };
     const data = await withTenantContext(ctx, async (tx) => {
@@ -342,6 +352,7 @@ export function portalRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/v1/portal/clients/:clientId/report-publications/:publicationId/export", async (req, reply) => {
+    assertCapability(req, "portal.results.read");
     const ctx = tenantContextFromRequest(req);
     const { publicationId } = req.params as { publicationId: string };
     const { format } = z.object({ format: z.enum(["csv", "xlsx", "pdf"]).default("pdf") }).parse(req.query);
@@ -366,6 +377,20 @@ export function portalRoutes(app: FastifyInstance) {
     return reply.send({ data: await documents.listDocuments(ctx.firmId, ctx.clientId!, ctx) });
   });
 
+  // G2-07.5: preview/descarga de un documento que el cliente subió. Reautoriza
+  // por RLS y sólo firma versiones ya validadas (fuera de cuarentena). READONLY
+  // también puede ver sus propias cargas (portal.results.read).
+  app.get("/api/v1/portal/clients/:clientId/documents/:documentId/preview", async (req, reply) => {
+    assertCapability(req, "portal.results.read");
+    const ctx = tenantContextFromRequest(req);
+    const { documentId } = req.params as { documentId: string };
+    const preview = await documents.getPreviewUrl(ctx, documentId);
+    if (!preview) {
+      return reply.status(404).send({ error: { code: "DOCUMENT_NOT_FOUND", message: "Documento no encontrado" } });
+    }
+    return reply.send({ data: preview });
+  });
+
   app.post("/api/v1/portal/clients/:clientId/document-upload-sessions", async (req, reply) => {
     assertCapability(req, "portal.documents.upload");
     const ctx = tenantContextFromRequest(req);
@@ -374,6 +399,10 @@ export function portalRoutes(app: FastifyInstance) {
       // Un upload libre sigue siendo válido; cuando nace desde un pedido, se
       // persiste el vínculo para completar el ítem automáticamente.
       requestItemId: z.string().uuid().optional(),
+      // §10: el cliente puede declarar la categoría del documento (p.ej. el
+      // acuse de una presentación fiscal). Allowlist para evitar categorías
+      // reservadas del estudio.
+      category: z.enum(["ACUSE", "OTRO"]).optional(),
     }).strict().parse(req.body ?? {});
     if (body.requestItemId) {
       const item = await documents.getRequestItem(ctx, body.requestItemId);
@@ -395,6 +424,7 @@ export function portalRoutes(app: FastifyInstance) {
       {
         ...(body.expectedMime ? { expectedMime: body.expectedMime } : {}),
         ...(body.requestItemId ? { requestItemId: body.requestItemId } : {}),
+        ...(body.category ? { category: body.category } : {}),
       },
       ctx,
     );

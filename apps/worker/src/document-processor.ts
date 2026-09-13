@@ -29,6 +29,7 @@ export class DocumentProcessor {
     const fileVersion = await withWorkerTenant(payload.firmId, payload.clientId, (tx) =>
       tx.documentFileVersion.findFirst({
         where: { id: payload.fileVersionId, firmId: payload.firmId, clientId: payload.clientId },
+        include: { document: { select: { category: true } } },
       }),
     );
     if (!fileVersion) throw new Error("FILE_VERSION_NOT_FOUND");
@@ -102,6 +103,20 @@ export class DocumentProcessor {
         await tx.documentProcessingJob.updateMany({
           where: { fileVersionId: payload.fileVersionId, type: "VALIDATE" },
           data: { status: "SUCCEEDED", stage: "DUPLICATE", progress: 100, finishedAt: new Date() },
+        });
+      });
+      return;
+    }
+
+    // Los acuses son evidencia de una presentación, no comprobantes a
+    // extraer. Después de antivirus, hash y promoción ya cumplen el contrato
+    // de evidencia READY y no deben depender del servicio IA/OCR.
+    if (fileVersion.document.category === "ACUSE") {
+      await withWorkerTenant(payload.firmId, payload.clientId, async (tx) => {
+        await tx.document.update({ where: { id: payload.documentId }, data: { status: "READY" } });
+        await tx.documentProcessingJob.updateMany({
+          where: { fileVersionId: payload.fileVersionId, type: "VALIDATE" },
+          data: { status: "SUCCEEDED", stage: "VALIDATED_NO_EXTRACTION", progress: 100, finishedAt: new Date() },
         });
       });
       return;

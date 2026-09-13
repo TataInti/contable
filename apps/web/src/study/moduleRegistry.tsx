@@ -71,6 +71,19 @@ export const STUDY_MODULES: readonly StudyModule[] = [
     ),
   },
   {
+    id: "resumen-cliente",
+    path: "/resumen-cliente",
+    label: "Resumen del cliente",
+    icon: "briefcase",
+    navigationGroup: "General",
+    requiredCapability: "client.read",
+    requirements: { firm: true, client: true },
+    status: "released",
+    component: lazy(() =>
+      import("./StudyResumenCliente").then((module) => ({ default: module.StudyResumenCliente })),
+    ),
+  },
+  {
     id: "bandeja",
     path: "/bandeja",
     label: "Bandeja documental",
@@ -186,22 +199,37 @@ export const STUDY_MODULES: readonly StudyModule[] = [
     navigationGroup: "Análisis",
     requiredCapability: "ai.use",
     requirements: { firm: true, client: true, period: true },
-    status: "released",
+    status: "not_released",
     component: lazy(() =>
       import("./StudyAsistente").then((module) => ({ default: module.StudyAsistente })),
     ),
   },
   {
-    id: "administracion",
+    id: "usuarios",
     path: "/administracion",
-    label: "Administración",
-    icon: "settings",
+    label: "Usuarios y accesos",
+    icon: "users",
     navigationGroup: "Configuración",
-    requiredCapability: "firm.manage",
+    requiredCapability: "firm.users.manage",
     requirements: { firm: true },
     status: "released",
     component: lazy(() =>
       import("./StudyAdministracion").then((module) => ({ default: module.StudyAdministracion })),
+    ),
+  },
+  {
+    id: "administracion-plataforma",
+    path: "/administracion-plataforma",
+    label: "Módulos de estudios",
+    icon: "settings",
+    navigationGroup: "Configuración",
+    requiredCapability: "platform.modules.manage",
+    requirements: { firm: true },
+    status: "released",
+    component: lazy(() =>
+      import("./StudyAdministracionPlataforma").then((module) => ({
+        default: module.StudyAdministracionPlataforma,
+      })),
     ),
   },
   {

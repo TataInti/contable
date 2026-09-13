@@ -12,8 +12,9 @@ describe("queues", () => {
   });
 
   it("createQueue requiere url de redis", () => {
-    const q = createQueue("documents", { redisUrl: "redis://localhost:6379", concurrency: 1 });
+    const q = createQueue("documents", { redisUrl: "redis://localhost:6379", concurrency: 1, prefix: "test" });
     expect(q.name).toBe("documents");
+    expect(q.opts.prefix).toBe("test");
     void q.close();
   });
 });

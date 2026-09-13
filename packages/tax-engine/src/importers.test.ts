@@ -168,7 +168,7 @@ describe("G2-03 adaptador ARCA retenciones/percepciones", () => {
     }
   });
 
-  it("rechaza importe negativo o nulo", () => {
+  it("normaliza un importe negativo como nota de crédito", () => {
     const result = normalizeWithholdingRow({
       cuitResponsable: "20111111111",
       cuitAgente: "30555555550",
@@ -178,8 +178,11 @@ describe("G2-03 adaptador ARCA retenciones/percepciones", () => {
       tipo: "RETENCION",
       issuedOn: "2026-01-20",
     });
-    expect(result.status).toBe("ERROR");
-    expect(result.errors).toContain("AMOUNT_INVALID");
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.amount).toBe("-50.0000");
+      expect(result.data.documentKind).toBe("CREDIT_NOTE");
+    }
   });
 
   it("rechaza tipo desconocido", () => {
@@ -398,8 +401,23 @@ describe("G4 adaptador CM03 artículo 2 (Convenio Multilateral)", () => {
       { activityCode: "COEF_TUC", income: "0", coefficient: "0.6" },
       { activityCode: "COEF_CBA", income: "0", coefficient: "0.3" },
     ]);
-    expect(batch.totals.errorRows).toBe(1);
+    expect(batch.totals.errorRows).toBe(2);
     expect(batch.rows.some((r) => r.status === "ERROR")).toBe(true);
+  });
+
+  it("rechaza coeficientes duplicados para una jurisdicción", () => {
+    const batch = normalizeCm03Batch([
+      { activityCode: "501100", income: "100000.00" },
+      { activityCode: "COEF_TUC", income: "0", coefficient: "0.3" },
+      { activityCode: "COEF_TUC", income: "0", coefficient: "0.3" },
+      { activityCode: "COEF_CBA", income: "0", coefficient: "0.4" },
+    ]);
+    expect(batch.rows.filter((row) => row.status === "ERROR")).toHaveLength(2);
+    expect(
+      batch.rows.some(
+        (row) => row.status === "ERROR" && row.errors.includes("COEFFICIENT_DUPLICATE"),
+      ),
+    ).toBe(true);
   });
 
   it("un lote con coeficientes que suman 1 es válido", () => {

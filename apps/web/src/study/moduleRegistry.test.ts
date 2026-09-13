@@ -30,6 +30,15 @@ describe("registro de módulos del estudio", () => {
     expect(visible).toEqual(["inicio"]);
   });
 
+  it("separa el acceso del estudio del administrador general", () => {
+    const studyAdmin = modulesForNavigation(new Set(["firm.users.manage"])).map((module) => module.id);
+    const platformAdmin = modulesForNavigation(new Set(["platform.modules.manage"])).map((module) => module.id);
+    expect(studyAdmin).toContain("usuarios");
+    expect(studyAdmin).not.toContain("administracion-plataforma");
+    expect(platformAdmin).toContain("administracion-plataforma");
+    expect(platformAdmin).not.toContain("usuarios");
+  });
+
   it("mantiene contabilidad y reportes fuera de la navegación aunque el rol tenga todas las capacidades", () => {
     const capabilities = new Set(
       STUDY_MODULES.flatMap((module) => (module.requiredCapability ? [module.requiredCapability] : [])),

@@ -53,6 +53,7 @@ let regimeId = "";
 let jurisdictionId = "";
 let periodId = "";
 let obligationId = "";
+let ruleVersionId = "";
 
 async function setupMembership() {
   for (const [userId, email, name] of [
@@ -137,7 +138,7 @@ async function setupActiveRules(fx: Awaited<ReturnType<typeof setupMasters>>) {
         version: 1,
         status: "ACTIVE",
         validFrom: new Date("2026-01-01"),
-        engineVersion: "ar-tem-smt-v1.0.0",
+        engineVersion: "ar-tem-smt-v1.1.0",
         rulesHash: "sha256:tem-test",
       },
     });
@@ -310,6 +311,8 @@ async function cleanupTEM() {
     await tx.$executeRawUnsafe(`DELETE FROM tax_export_artifacts WHERE "clientId" = '${CLIENT_TEM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_credit_allocations WHERE "clientId" = '${CLIENT_TEM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_credit_ledger_entries WHERE "clientId" = '${CLIENT_TEM}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_movements WHERE "clientId" = '${CLIENT_TEM}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_credit_lots WHERE "clientId" = '${CLIENT_TEM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_differences WHERE "clientId" = '${CLIENT_TEM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_settlement_lines WHERE "clientId" = '${CLIENT_TEM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM settlement_inputs WHERE "clientId" = '${CLIENT_TEM}'`);
@@ -357,13 +360,14 @@ beforeEach(async () => {
   await setupMembership();
   await cleanupTEM();
   const fx = await setupMasters();
-  await setupActiveRules(fx);
+  const rules = await setupActiveRules(fx);
   const { period, obligation } = await setupSettlementContext(fx);
   jurisdictionId = fx.smt.id;
   taxTypeId = fx.tem.id;
   regimeId = fx.regime.id;
   periodId = period.id;
   obligationId = obligation.id;
+  ruleVersionId = rules.version.id;
 });
 
 describe("Fase 4.2 — TEM San Miguel de Tucumán: cálculo", () => {
@@ -372,7 +376,8 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: cálculo", () => {
     const result = await settlements.calculate(ctxOwner, calculateParams());
     const s = result.settlement;
     expect(s.status).toBe("CALCULATED");
-    expect(s.engineVersion).toBe("ar-tem-smt-v1.0.0");
+    expect(s.engineVersion).toBe("ar-tem-smt-v1.1.0");
+    expect(s.ruleVersionId).toBeTruthy();
     const totals = s.totals as Record<string, string>;
     expect(totals["BASE_TOTAL"]).toBe("150000.00");
     // COMERCIO: 100000 × 2% = 2000; SERVICIOS: 50000 × 3% = 1500
@@ -414,6 +419,24 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: cálculo", () => {
     const totals = result.settlement.totals as Record<string, string>;
     expect(totals["MINIMO_APLICADO"]).toBe("3000.00");
     expect(totals["TOTAL_A_INGRESAR"]).toBe("3000.00");
+  });
+
+  it("mapea el caso real documentado: 1,25% y mínimo mensual 61.446", async () => {
+    await createApprovedVouchersWithLines();
+    await prisma.taxRateRule.updateMany({
+      where: { ruleVersionId, concept: { in: ["COMERCIO", "SERVICIOS"] } },
+      data: { rate: new Prisma.Decimal("1.25") },
+    });
+    await prisma.taxMinimumRule.updateMany({
+      where: { ruleVersionId, concept: "MINIMO" },
+      data: { amount: new Prisma.Decimal("61446") },
+    });
+
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("1875.00");
+    expect(totals["MINIMO_APLICADO"]).toBe("61446.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("61446.00");
   });
 
   it("deduce retenciones y percepciones (créditos)", async () => {

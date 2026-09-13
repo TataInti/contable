@@ -5,6 +5,8 @@ import { Button, EmptyState } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
+import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
+import { SectionIndex } from "../ui/SectionIndex";
 import { Icon } from "../ui/Icon";
 import "./study.css";
 
@@ -61,6 +63,7 @@ export function StudyRentabilidad() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [receipt, setReceipt] = useState<string | null>(null);
+  const confirm = useConfirmAction();
 
   const periodsQuery = useQuery({
     queryKey: ["tax-obligations", firmId, clientId],
@@ -111,7 +114,9 @@ export function StudyRentabilidad() {
       api.post(`/firms/${firmId}/clients/${clientId}/profitability/calculate`, {
         periodId: selectedPeriod?.id,
         basis,
-        cutoff: selectedPeriod?.endDate,
+        // Prisma serializa Date como ISO completo; el contrato de cálculo
+        // recibe una fecha civil YYYY-MM-DD.
+        cutoff: selectedPeriod?.endDate?.slice(0, 10),
       }),
     onSuccess: () => {
       invalidate();
@@ -169,15 +174,15 @@ export function StudyRentabilidad() {
               size="sm"
               variant="secondary"
               disabled={publishMutation.isPending}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "¿Publicar esta versión? El cliente podrá consultar este resultado en el portal.",
-                  )
-                ) {
-                  publishMutation.mutate({ basis });
-                }
-              }}
+              onClick={() =>
+                confirm.ask({
+                  title: "¿Publicar esta versión?",
+                  description:
+                    "El cliente podrá consultar este resultado en el portal del cliente.",
+                  confirmLabel: "Publicar",
+                  onConfirm: () => publishMutation.mutate({ basis }),
+                })
+              }
             >
               Publicar
             </Button>
@@ -284,6 +289,15 @@ export function StudyRentabilidad() {
         </div>
       </header>
 
+      <section className="guided-context" aria-labelledby="profitability-context-title"><div className="guided-context__heading"><div><p className="study-page__eyebrow">Resultado del período</p><h2 id="profitability-context-title">Contexto de rentabilidad</h2><p>Devengado y caja se calculan y publican como versiones independientes para el cliente.</p></div><StatusBadge status={selectedPeriod ? "ACTIVE" : "PENDING"} /></div><dl className="guided-context__facts"><div><dt>Cliente</dt><dd>{clientId ? "Seleccionado" : "Sin seleccionar"}</dd></div><div><dt>Período</dt><dd>{selectedPeriod ? selectedPeriod.label ?? selectedPeriod.startDate.slice(0, 7) : "Pendiente"}</dd></div><div><dt>Devengado</dt><dd>{devengado ? `v${devengado.version}` : "Sin calcular"}</dd></div><div><dt>Caja</dt><dd>{caja ? `v${caja.version}` : "Sin calcular"}</dd></div></dl></section>
+      <section className="guided-next-step" aria-labelledby="profitability-next-step-title"><div><p className="study-page__eyebrow">Flujo guiado</p><h2 id="profitability-next-step-title">Próximo paso</h2><p>{!clientId ? "Seleccioná un cliente para consultar su resultado." : !selectedPeriod ? "Configurá un período fiscal con obligaciones materializadas." : !devengado ? "Calculá primero la rentabilidad devengada del período activo." : !caja ? "Calculá la vista de caja para completar el análisis." : devengado.status === "DRAFT" && capabilities.has("profitability.publish") ? "Publicá la versión devengada cuando esté lista para el cliente." : "Revisá las dos vistas y sus versiones publicadas."}</p></div>{!clientId ? null : !selectedPeriod ? <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>Configurar período</Button> : !devengado && capabilities.has("profitability.calculate") ? <Button onClick={() => calculateMutation.mutate({ basis: "DEVENGADO" })}>Calcular devengado</Button> : !caja && capabilities.has("profitability.calculate") ? <Button onClick={() => calculateMutation.mutate({ basis: "CAJA" })}>Calcular caja</Button> : devengado?.status === "DRAFT" && capabilities.has("profitability.publish") ? <Button onClick={() => confirm.ask({ title: "¿Publicar esta versión?", description: "El cliente podrá consultar este resultado en el portal del cliente.", confirmLabel: "Publicar", onConfirm: () => publishMutation.mutate({ basis: "DEVENGADO" }) })}>Publicar devengado</Button> : null}</section>
+      <SectionIndex
+        items={[
+          { id: "profitability-devengado-title", label: "Devengado", meta: devengado ? `v${devengado.version}` : "Pendiente" },
+          { id: "profitability-caja-title", label: "Caja", meta: caja ? `v${caja.version}` : "Pendiente" },
+        ]}
+      />
+
       {receipt ? (
         <div className="action-receipt action-receipt--page" role="status">
           <Icon name="check" size={19} />
@@ -347,6 +361,7 @@ export function StudyRentabilidad() {
           ) : null}
         </>
       )}
+      <ConfirmDialog confirm={confirm} />
     </section>
   );
 }

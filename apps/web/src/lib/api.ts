@@ -149,6 +149,7 @@ export async function uploadToSignedUrl(url: string, file: File): Promise<void> 
 /** Tipos comunes */
 export interface MeContext {
   userId: string;
+  isPlatformAdmin?: boolean;
   firms: {
     firmId: string;
     firmName: string;
@@ -174,13 +175,125 @@ export interface Client {
   status: string;
 }
 
+export interface ClientSummary {
+  client: Client & {
+    tradeName: string | null;
+    createdAt: string;
+    updatedAt: string;
+    profile: {
+      functionalCurrency: string;
+      accountingStandard: string | null;
+      fiscalYearEndMonth: number;
+      vatCondition: string | null;
+      iibbJurisdictions: string[];
+      province: string | null;
+      activity: string | null;
+      legalForm: string | null;
+      serviceStartDate: string | null;
+      updatedAt: string;
+    } | null;
+    onboarding: { completed: boolean; updatedAt: string } | null;
+  };
+  accounting: {
+    fiscalYears: Array<{
+      id: string;
+      label: string;
+      startDate: string;
+      endDate: string;
+      status: string;
+      periods: Array<{
+        id: string;
+        startDate: string;
+        endDate: string;
+        ordinal: number;
+        status: string;
+      }>;
+    }>;
+  };
+  fiscal: {
+    profiles: Array<{
+      id: string;
+      version: number;
+      legalName: string;
+      cuit: string;
+      personType: string;
+      nationalCondition: string;
+      fiscalAddress: string | null;
+      fiscalYearEndMonth: number;
+      monotributoCategory: string | null;
+      validFrom: string;
+      validTo: string | null;
+      status: string;
+      source: string | null;
+      createdAt: string;
+    }>;
+    registrations: Array<{
+      id: string;
+      status: string;
+      validFrom: string;
+      validTo: string | null;
+      registrationNumber: string | null;
+      profile: { id: string; version: number };
+      regime: {
+        id: string;
+        code: string;
+        name: string;
+        taxType: { id: string; code: string; name: string };
+        jurisdiction: { id: string; code: string; name: string };
+      };
+    }>;
+    activities: Array<{
+      id: string;
+      isPrimary: boolean;
+      validFrom: string;
+      validTo: string | null;
+      profile: { version: number };
+      activity: {
+        id: string;
+        code: string;
+        name: string;
+        jurisdiction: { code: string; name: string };
+      };
+    }>;
+    periods: Array<{
+      id: string;
+      startDate: string;
+      endDate: string;
+      label: string | null;
+      taxType: { id: string; code: string; name: string };
+    }>;
+    obligations: Array<{
+      id: string;
+      status: string;
+      dueDate: string | null;
+      profile: { version: number };
+      regime: {
+        id: string;
+        code: string;
+        name: string;
+        taxType: { id: string; code: string; name: string };
+        jurisdiction: { id: string; code: string; name: string };
+      };
+      period: { id: string; label: string | null; startDate: string; endDate: string };
+    }>;
+  };
+  counts: { accounts: number; counterparties: number; costCenters: number };
+}
+
 export interface Document {
   id: string;
   category?: string | null;
   direction?: string | null;
   status: string;
   createdAt: string;
-  fileVersions?: { id: string; originalName: string; mimeType: string; sizeBytes: number; antivirusStatus: string }[];
+  fileVersions?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    bucket?: string | null;
+    antivirusStatus: string;
+  }[];
   processingJobs?: { id: string; status: string; stage?: string | null; progress: number; error?: string | null }[];
 }
 

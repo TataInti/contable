@@ -3,12 +3,16 @@ import { Queue, Worker } from "bullmq";
 export interface QueueConfig {
   redisUrl: string;
   concurrency: number;
+  prefix: string;
 }
 
 export function loadQueueConfig(): QueueConfig {
   return {
     redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
     concurrency: parseInt(process.env.WORKER_CONCURRENCY ?? "4", 10),
+    // Mantener el prefijo BullMQ histórico salvo que el entorno necesite
+    // aislar varias bases que comparten el mismo Redis (por ejemplo E2E).
+    prefix: process.env.QUEUE_PREFIX ?? "bull",
   };
 }
 
@@ -25,7 +29,7 @@ export const QUEUE_NAMES = [
 export type QueueName = (typeof QUEUE_NAMES)[number];
 
 export function createQueue(name: QueueName, config: QueueConfig): Queue {
-  return new Queue(name, { connection: { url: config.redisUrl } });
+  return new Queue(name, { connection: { url: config.redisUrl }, prefix: config.prefix });
 }
 
 export function createWorker(
@@ -40,6 +44,7 @@ export function createWorker(
     },
     {
       connection: { url: config.redisUrl },
+      prefix: config.prefix,
       concurrency: config.concurrency,
     },
   );

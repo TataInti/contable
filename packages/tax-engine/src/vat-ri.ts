@@ -14,7 +14,7 @@ import { applyRate, dec, fmtMoney, roundFor, taxHash, type RoundingConfig, type 
  * renglones estables, subtotales, total, créditos, advertencias y bloqueos.
  */
 
-export const VAT_RI_ENGINE_VERSION = "ar-vat-ri-v2.0.0";
+export const VAT_RI_ENGINE_VERSION = "ar-vat-ri-v2.1.0";
 
 export type VatRiRate = "21" | "10.5" | "27" | "EXENTO" | "NO_GRAVADO";
 
@@ -26,6 +26,8 @@ export interface VatRiComponent {
   rate: VatRiRate;
   /** Base imponible (neto). */
   net: Decimal;
+  /** IVA informado por la fuente. El motor lo suma y controla contra base × tasa. */
+  tax: Decimal;
   /** Nota de crédito: resta del débito/crédito de su alícuota. */
   isCreditNote: boolean;
   /** Código de actividad (desglose informativo). */
@@ -35,12 +37,18 @@ export interface VatRiComponent {
 export interface VatRiInput {
   period: { startDate: string; endDate: string; cutoff: string };
   components: VatRiComponent[];
+  /** Comprobantes gravados cuyo snapshot no identifica una alícuota. */
+  missingRateVoucherIds?: string[];
+  /** Diferencias entre neto gravado del libro y bases distribuidas por alícuota. */
+  bookDifferences?: Array<{ voucherId: string; difference: Decimal }>;
   /** Reglas: tasa por alícuota (concept = "IVA_21", "IVA_105", "IVA_27"). */
   rules: Array<{ concept: string; rate?: Decimal; validFrom?: string; validTo?: string }>;
   /** Crédito Dto. 814 desde F.931 (remuneración neta × tasa). */
   decree814?: {
     netRemuneration: Decimal;
-    rate: Decimal;
+    rate?: Decimal;
+    /** F.931 es una declaración mensual completa: debe existir una sola corrida revisada. */
+    runCount?: number;
   };
   credits?: {
     withholding: Decimal;
@@ -65,6 +73,16 @@ export function calculateVatRi(input: VatRiInput): TaxEngineResult {
   if (!input.period.cutoff) {
     blocks.push("Se requiere un cutoff explícito para calcular IVA");
   }
+  for (const voucherId of input.missingRateVoucherIds ?? []) {
+    blocks.push(`El comprobante ${voucherId} tiene neto gravado sin alícuota IVA`);
+  }
+  for (const difference of input.bookDifferences ?? []) {
+    if (difference.difference.abs().greaterThan("0.02")) {
+      blocks.push(
+        `El comprobante ${difference.voucherId} difiere ${fmtMoney(difference.difference.abs())} entre neto gravado y bases por alícuota`,
+      );
+    }
+  }
 
   const inPeriod = input.components.filter((c) => {
     if (c.date < input.period.startDate || c.date > input.period.endDate) return false;
@@ -77,83 +95,141 @@ export function calculateVatRi(input: VatRiInput): TaxEngineResult {
   }
 
   // --- Débito/crédito por alícuota (neto de NC) ---
-  const rates: VatRiRate[] = ["21", "10.5", "27"];
+  const rates: Array<Exclude<VatRiRate, "EXENTO" | "NO_GRAVADO">> = ["21", "10.5", "27"];
   const rateRules = new Map(input.rules.map((r) => [r.concept, r]));
-  const rateByRate: Record<string, Decimal> = {
-    "21": rateRules.get("IVA_21")?.rate ?? dec("0.21"),
-    "10.5": rateRules.get("IVA_105")?.rate ?? dec("0.105"),
-    "27": rateRules.get("IVA_27")?.rate ?? dec("0.27"),
+  const ruleConceptByRate: Record<Exclude<VatRiRate, "EXENTO" | "NO_GRAVADO">, string> = {
+    "21": "IVA_21",
+    "10.5": "IVA_105",
+    "27": "IVA_27",
   };
-  const debitByRate = new Map<VatRiRate, Decimal>();
-  const creditByRate = new Map<VatRiRate, Decimal>();
-  let creditNoteRestitution = dec(0); // NC de compras que restituyen crédito
+  type RateTotal = { base: Decimal; tax: Decimal };
+  const debitByRate = new Map<VatRiRate, RateTotal>();
+  const creditByRate = new Map<VatRiRate, RateTotal>();
+  const activityTax = new Map<string, Decimal>();
+  const missingRules = new Set<string>();
   let exemptPurchases = dec(0);
   let nonTaxablePurchases = dec(0);
 
   for (const c of inPeriod) {
     if (c.rate === "EXENTO" || c.rate === "NO_GRAVADO") {
       if (c.direction === "PURCHASE") {
-        if (c.rate === "EXENTO") exemptPurchases = exemptPurchases.plus(c.net);
-        else nonTaxablePurchases = nonTaxablePurchases.plus(c.net);
+        const signedNet = c.net.abs().times(c.isCreditNote ? -1 : 1);
+        if (c.rate === "EXENTO") exemptPurchases = exemptPurchases.plus(signedNet);
+        else nonTaxablePurchases = nonTaxablePurchases.plus(signedNet);
       }
       continue;
     }
-    const sign = c.isCreditNote ? -1 : 1;
-    const tax = applyRate(c.net, rateByRate[c.rate] ?? dec("0.21")).times(sign);
-    if (c.direction === "SALE") {
-      debitByRate.set(c.rate, (debitByRate.get(c.rate) ?? dec(0)).plus(tax));
-    } else {
-      creditByRate.set(c.rate, (creditByRate.get(c.rate) ?? dec(0)).plus(tax));
-      if (c.isCreditNote) creditNoteRestitution = creditNoteRestitution.plus(c.net);
+    const ruleConcept = ruleConceptByRate[c.rate];
+    const rule = rateRules.get(ruleConcept);
+    if (!rule?.rate) {
+      if (!missingRules.has(ruleConcept)) {
+        blocks.push(`Falta la regla activa ${ruleConcept} para calcular IVA`);
+        missingRules.add(ruleConcept);
+      }
+      continue;
     }
+    const sourceBase = c.net.abs();
+    const sourceTax = c.tax.abs();
+    const expectedTax = applyRate(sourceBase, rule.rate);
+    const difference = sourceTax.minus(expectedTax).abs();
+    if (difference.greaterThan("0.02")) {
+      blocks.push(
+        `El componente ${c.id} difiere ${fmtMoney(difference)} entre IVA fuente y base × tasa`,
+      );
+    }
+    const sign = c.isCreditNote ? -1 : 1;
+    const signedBase = sourceBase.times(sign);
+    const signedTax = sourceTax.times(sign);
+    const target = c.direction === "SALE" ? debitByRate : creditByRate;
+    const current = target.get(c.rate) ?? { base: dec(0), tax: dec(0) };
+    target.set(c.rate, {
+      base: current.base.plus(signedBase),
+      tax: current.tax.plus(signedTax),
+    });
+    const activityKey = `${c.direction}:${c.rate}:${c.activityCode ?? "SIN_ACTIVIDAD"}`;
+    activityTax.set(activityKey, (activityTax.get(activityKey) ?? dec(0)).plus(signedTax));
   }
 
   // --- Renglones por alícuota ---
   for (const rate of rates) {
-    const debit = debitByRate.get(rate) ?? dec(0);
-    const credit = creditByRate.get(rate) ?? dec(0);
-    if (debit.isZero() && credit.isZero()) continue;
-    const rule = rateRules.get(`IVA_${rate.replace(".", "")}`);
-    const formula = rule?.rate
-      ? `base(${fmtMoney(debit)}) × tasa(${rule.rate})`
-      : `base(${fmtMoney(debit)}) (sin tasa)`;
-    lines.push({
-      concept: `DEBITO_IVA_${rate.replace(".", "")}`,
-      formula,
-      inputs: { base: fmtMoney(debit), rate: rule?.rate?.toString() ?? "—" },
-      result: fmtMoney(debit),
-    });
-    if (!credit.isZero()) {
+    const debit = debitByRate.get(rate);
+    const credit = creditByRate.get(rate);
+    if (!debit && !credit) continue;
+    const rule = rateRules.get(ruleConceptByRate[rate]);
+    if (debit && (!debit.base.isZero() || !debit.tax.isZero())) {
       lines.push({
-        concept: `CREDITO_IVA_${rate.replace(".", "")}`,
-        formula: `base(${fmtMoney(credit)})`,
-        inputs: { base: fmtMoney(credit) },
-        result: fmtMoney(credit),
+        concept: `DEBITO_IVA_${rate.replace(".", "")}`,
+        formula: "Σ IVA informado en ventas, neto de notas de crédito",
+        inputs: { base: fmtMoney(debit.base), rate: rule?.rate?.toString() ?? "—" },
+        result: fmtMoney(debit.tax),
       });
     }
+    if (credit && (!credit.base.isZero() || !credit.tax.isZero())) {
+      lines.push({
+        concept: `CREDITO_IVA_${rate.replace(".", "")}`,
+        formula: "Σ IVA informado en compras, neto de notas de crédito",
+        inputs: { base: fmtMoney(credit.base), rate: rule?.rate?.toString() ?? "—" },
+        result: fmtMoney(credit.tax),
+      });
+    }
+  }
+  for (const [key, amount] of [...activityTax.entries()].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    const [direction, rate, activity] = key.split(":");
+    lines.push({
+      concept: `DESGLOSE_${direction === "SALE" ? "DEBITO" : "CREDITO"}_${rate!.replace(".", "")}_${activity}`,
+      formula: "Desglose informativo por actividad y alícuota",
+      inputs: { activity: activity!, rate: rate! },
+      result: fmtMoney(amount),
+    });
+  }
+  if (!exemptPurchases.isZero()) {
+    lines.push({
+      concept: "COMPRAS_EXENTAS",
+      formula: "Σ compras exentas netas de notas de crédito",
+      inputs: { base: fmtMoney(exemptPurchases) },
+      result: fmtMoney(exemptPurchases),
+    });
+  }
+  if (!nonTaxablePurchases.isZero()) {
+    lines.push({
+      concept: "COMPRAS_NO_GRAVADAS",
+      formula: "Σ compras no gravadas netas de notas de crédito",
+      inputs: { base: fmtMoney(nonTaxablePurchases) },
+      result: fmtMoney(nonTaxablePurchases),
+    });
   }
 
   // --- Totales de débito y crédito ---
   let debitTotal = dec(0);
   let creditTotal = dec(0);
   for (const rate of rates) {
-    debitTotal = debitTotal.plus(debitByRate.get(rate) ?? dec(0));
-    creditTotal = creditTotal.plus(creditByRate.get(rate) ?? dec(0));
+    debitTotal = debitTotal.plus(debitByRate.get(rate)?.tax ?? dec(0));
+    creditTotal = creditTotal.plus(creditByRate.get(rate)?.tax ?? dec(0));
   }
 
   // --- Crédito Dto. 814 ---
   let decree814Credit = dec(0);
   if (input.decree814) {
-    decree814Credit = applyRate(input.decree814.netRemuneration, input.decree814.rate);
-    lines.push({
-      concept: "CREDITO_DTO_814",
-      formula: `remuneración neta(${fmtMoney(input.decree814.netRemuneration)}) × tasa(${input.decree814.rate})`,
-      inputs: {
-        base: fmtMoney(input.decree814.netRemuneration),
-        rate: input.decree814.rate.toString(),
-      },
-      result: fmtMoney(decree814Credit),
-    });
+    if ((input.decree814.runCount ?? 1) !== 1) {
+      blocks.push("Dto. 814 requiere una única corrida F.931 revisada para el período");
+    } else if (!input.decree814.rate) {
+      blocks.push("Falta la regla activa DTO_814 para calcular el crédito por contribuciones");
+    } else if (input.decree814.rate.isNegative() || input.decree814.rate.greaterThan(1)) {
+      blocks.push("La tasa DTO_814 debe expresarse como decimal entre 0 y 1");
+    } else {
+      decree814Credit = applyRate(input.decree814.netRemuneration, input.decree814.rate);
+      lines.push({
+        concept: "CREDITO_DTO_814",
+        formula: `remuneración neta(${fmtMoney(input.decree814.netRemuneration)}) × tasa(${input.decree814.rate})`,
+        inputs: {
+          base: fmtMoney(input.decree814.netRemuneration),
+          rate: input.decree814.rate.toString(),
+        },
+        result: fmtMoney(decree814Credit),
+      });
+    }
   }
 
   // --- Créditos totales ---
@@ -165,47 +241,42 @@ export function calculateVatRi(input: VatRiInput): TaxEngineResult {
   const technicalPrevious = credits?.technicalPrevious ?? dec(0);
   const freeAvailabilityPrevious = credits?.freeAvailabilityPrevious ?? dec(0);
 
-  const totalCredit = creditTotal.plus(decree814Credit).plus(withholding).plus(perception).plus(restitution).plus(compensation);
-
   // --- Determinación de resultado (orden de negocio documentado) ---
-  // 1) Saldo técnico = crédito total − débito total.
-  // 2) Si hay excedente de crédito, se aplica saldo técnico anterior (primer
-  //    párrafo) y luego saldo libre anterior (segundo párrafo).
-  // 3) Si hay débito neto, se aplica saldo libre anterior.
-  const technical = totalCredit.minus(debitTotal);
-  let totalDue: Decimal;
-  let technicalAfter: Decimal;
-  let freeAfter: Decimal;
-
-  if (technical.isZero() || technical.isPositive()) {
-    // Crédito a favor: aplicar saldo técnico anterior y libre anterior.
-    const excess = technical;
-    const technicalConsumption = Decimal.min(excess, technicalPrevious);
-    let remaining = excess.minus(technicalConsumption);
-    const freeConsumption = Decimal.min(remaining, freeAvailabilityPrevious);
-    remaining = remaining.minus(freeConsumption);
-    totalDue = dec(0);
-    technicalAfter = technicalPrevious.minus(technicalConsumption).plus(remaining);
-    freeAfter = freeAvailabilityPrevious.minus(freeConsumption);
-  } else {
-    // Débito neto: aplicar saldo libre anterior (segundo párrafo).
-    const netDebit = technical.abs();
-    const freeConsumption = Decimal.min(netDebit, freeAvailabilityPrevious);
-    totalDue = netDebit.minus(freeConsumption);
-    technicalAfter = technicalPrevious;
-    freeAfter = freeAvailabilityPrevious.minus(freeConsumption);
-  }
+  // Primer párrafo: débito − crédito fiscal − Dto. 814 − saldo técnico previo.
+  // Segundo párrafo: saldo libre previo + ret/per + compensaciones − restituciones.
+  // Nunca se mezclan ambos saldos: si el primer párrafo queda a favor se
+  // arrastra como técnico, mientras los créditos de segundo párrafo conservan
+  // su disponibilidad independiente.
+  const technicalNet = debitTotal
+    .minus(creditTotal)
+    .minus(decree814Credit)
+    .minus(technicalPrevious);
+  const technicalDue = Decimal.max(technicalNet, dec(0));
+  const technicalAfter = Decimal.max(technicalNet.negated(), dec(0));
+  const secondParagraphAvailable = freeAvailabilityPrevious
+    .plus(withholding)
+    .plus(perception)
+    .plus(compensation)
+    .minus(restitution);
+  const totalDue = Decimal.max(technicalDue.minus(secondParagraphAvailable), dec(0));
+  const freeAfter = Decimal.max(secondParagraphAvailable.minus(technicalDue), dec(0));
 
   const subtotals: Record<string, string> = {
     DEBITO_FISCAL: fmtMoney(roundFor(debitTotal, "VENTAS", rounding.VENTAS)),
     CREDITO_FISCAL: fmtMoney(roundFor(creditTotal, "COMPRAS", rounding.COMPRAS)),
     CREDITO_DTO_814: fmtMoney(roundFor(decree814Credit, "COMPRAS", rounding.COMPRAS)),
+    COMPRAS_EXENTAS: fmtMoney(roundFor(exemptPurchases, "COMPRAS", rounding.COMPRAS)),
+    COMPRAS_NO_GRAVADAS: fmtMoney(roundFor(nonTaxablePurchases, "COMPRAS", rounding.COMPRAS)),
     RETENCIONES_SUFRIDAS: fmtMoney(roundFor(withholding, "RETENCIONES", rounding.RETENCIONES)),
     PERCEPCIONES_SUFRIDAS: fmtMoney(roundFor(perception, "PERCEPCIONES", rounding.PERCEPCIONES)),
     RESTITUCIONES: fmtMoney(roundFor(restitution, "RESTITUCIONES", rounding.RESTITUCIONES)),
     COMPENSACIONES: fmtMoney(roundFor(compensation, "COMPENSACIONES", rounding.COMPENSACIONES)),
     SALDO_TECNICO_ANTERIOR: fmtMoney(roundFor(technicalPrevious, "SALDOS", rounding.SALDOS)),
     SALDO_LIBRE_ANTERIOR: fmtMoney(roundFor(freeAvailabilityPrevious, "SALDOS", rounding.SALDOS)),
+    SALDO_TECNICO_A_INGRESAR: fmtMoney(roundFor(technicalDue, "SALDOS", rounding.SALDOS)),
+    CREDITOS_SEGUNDO_PARRAFO: fmtMoney(
+      roundFor(secondParagraphAvailable, "SALDOS", rounding.SALDOS),
+    ),
     TOTAL_A_INGRESAR: fmtMoney(roundFor(totalDue, "TOTAL", rounding.TOTAL)),
     SALDO_TECNICO_AFTER: fmtMoney(roundFor(technicalAfter, "SALDOS", rounding.SALDOS)),
     SALDO_LIBRE_AFTER: fmtMoney(roundFor(freeAfter, "SALDOS", rounding.SALDOS)),
@@ -220,12 +291,21 @@ export function calculateVatRi(input: VatRiInput): TaxEngineResult {
       date: c.date,
       rate: c.rate,
       net: c.net.toString(),
+      tax: c.tax.toString(),
       isCreditNote: c.isCreditNote,
       activityCode: c.activityCode ?? null,
     })),
+    missingRateVoucherIds: [...(input.missingRateVoucherIds ?? [])].sort(),
+    bookDifferences: (input.bookDifferences ?? [])
+      .map((item) => ({ voucherId: item.voucherId, difference: item.difference.toString() }))
+      .sort((left, right) => left.voucherId.localeCompare(right.voucherId)),
     rules: input.rules.map((r) => ({ concept: r.concept, rate: r.rate?.toString() ?? null })),
     decree814: input.decree814
-      ? { netRemuneration: input.decree814.netRemuneration.toString(), rate: input.decree814.rate.toString() }
+      ? {
+          netRemuneration: input.decree814.netRemuneration.toString(),
+          rate: input.decree814.rate?.toString() ?? null,
+          runCount: input.decree814.runCount ?? 1,
+        }
       : null,
     credits: input.credits
       ? {
