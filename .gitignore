@@ -64,3 +64,6 @@ backups/
 # Copias y documentos generados sólo para desarrollo local
 /demo-liquidacion-manual.xlsx
 /docs/proceso-liquidacion-mensual.html
+
+# Acceso ssh
+ssh.md
