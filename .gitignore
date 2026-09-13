@@ -1,18 +1,66 @@
-node_modules/
-dist/
-build/
-coverage/
-*.log
+# Dependencias instaladas localmente
+**/node_modules/
+**/.venv/
+**/venv/
+
+# Variables de entorno, credenciales y certificados privados
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.crt
+secrets/
+**/secrets/
+credentials/
+**/credentials/
+
+# Builds y artefactos compilados
+**/dist/
+**/build/
+**/coverage/
 *.tsbuildinfo
-.env
-.env.*
-!.env.example
-.DS_Store
+
+# Resultados de tests y caches de herramientas
 test-results/
 playwright-report/
-demo-liquidacion-manual.xlsx
-.venv/
-.github/
-dev.sh
-.gitignore
-docs/proceso-liquidacion-mensual.html
+blob-report/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/__pycache__/
+*.py[cod]
+*.coverage
+htmlcov/
+**/.vite/
+**/.turbo/
+.eslintcache
+
+# Logs y archivos temporales
+*.log
+*.tmp
+*.temp
+*.bak
+*.old
+*.swp
+*.swo
+
+# Sistema operativo y editores
+.DS_Store
+._*
+.idea/
+.vscode/
+
+# Datos locales, dumps y backups
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.sql.gz
+backups/
+**/backups/
+
+# Copias y documentos generados sólo para desarrollo local
+/demo-liquidacion-manual.xlsx
+/docs/proceso-liquidacion-mensual.html
