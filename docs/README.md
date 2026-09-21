@@ -8,6 +8,7 @@
 
 | Documento | Contenido |
 |---|---|
+| [Manuales de usuario](./manuales/README.md) | Procedimientos internos del estudio (el portal del cliente va aparte) |
 | [Arquitectura viva](./dev/architecture-overview.md) | Diagrama Mermaid de contenedores, transición de módulos y flujo target |
 | [ADR](./adr/README.md) | Decisiones de arquitectura (8 ADRs aceptados) |
 | [Glosario](./dev/glosario.md) | Terminología de dominio congelada |
