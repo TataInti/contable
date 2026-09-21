@@ -2,27 +2,28 @@
 # Contable — Compose de PRODUCCIÓN (autoalojado)
 #
 # Diferencias clave con docker-compose.yml (desarrollo):
-#  - Sólo Nginx se expone al host (80/443). PostgreSQL, Valkey,
-#    MinIO, ClamAV, API, worker y FastAPI viven en la red Docker
-#    privada y NO publican puertos al host.
+#  - El Nginx del host es la entrada pública (80/443). Docker sólo
+#    publica el frontend en 127.0.0.1:18080; PostgreSQL, Valkey,
+#    MinIO, ClamAV, API, worker y FastAPI quedan en la red privada.
 #  - No hay secretos por defecto: TODAS las credenciales se leen
 #    de variables de entorno obligatorias. Si faltan, el servicio
 #    no arranca (validación estricta en la API/worker/IA).
 #  - Imágenes fijadas por digest (no `latest` ni `stable` flotantes).
-#  - Volúmenes explícitos para PostgreSQL, MinIO, certificados y logs.
+#  - Volúmenes explícitos para PostgreSQL, MinIO y la base de firmas de ClamAV.
 #  - restart: unless-stopped y healthchecks que bloquean dependientes.
 #
 # Uso: docker compose -f infra/compose/docker-compose.prod.yml up
 # Requiere definir en el entorno: POSTGRES_PASSWORD, RUNTIME_DB_PASSWORD,
 # WORKER_DB_PASSWORD, MINIO_SECRET_KEY, AI_SERVICE_SECRET,
-# MFA_CHALLENGE_SECRET, MFA_ENCRYPTION_KEY, DOMAIN (para TLS).
+# MFA_CHALLENGE_SECRET, MFA_ENCRYPTION_KEY y PUBLIC_HOSTNAME.
+# TLS y certificados se configuran en el Nginx del host.
 # ============================================================
 
 name: contable-prod
 
 services:
   postgres:
-    image: postgres:18@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: postgres:18@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
     # F2.6: hardening — sin privilegios nuevos, capacidades mínimas, root fs readonly.
     security_opt:
       - no-new-privileges:true
@@ -54,7 +55,7 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: contable
@@ -69,7 +70,7 @@ services:
     restart: unless-stopped
 
   valkey:
-    image: valkey/valkey:8-alpine@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: valkey/valkey:8-alpine@sha256:d2e18f3410b6f616de1417f570fa55261af2898b9c5b2cfb6781ce2373ea43d1
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
@@ -78,7 +79,7 @@ services:
     restart: unless-stopped
 
   clamav:
-    image: clamav/clamav-debian@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: clamav/clamav-debian@sha256:4c975c439fcb7ab9cbdd72162c2802f5efcb4a11dcf5b0b37da1d746474ef20e
     volumes:
       - clamdb:/var/lib/clamav
     healthcheck:
@@ -115,6 +116,7 @@ services:
     environment:
       PORT: 3000
       NODE_ENV: production
+      DATABASE_URL: postgresql://contable_runtime:${RUNTIME_DB_PASSWORD:?RUNTIME_DB_PASSWORD es obligatorio}@postgres:5432/contable?schema=public
       RUNTIME_DATABASE_URL: postgresql://contable_runtime:${RUNTIME_DB_PASSWORD:?RUNTIME_DB_PASSWORD es obligatorio}@postgres:5432/contable?schema=public
       REDIS_URL: redis://valkey:6379
       MINIO_ENDPOINT: minio
@@ -193,41 +195,11 @@ services:
       dockerfile: apps/web/Dockerfile
     depends_on:
       - api
-    restart: unless-stopped
-
-  nginx:
-    image: nginx@sha256:0000000000000000000000000000000000000000000000000000000000000000
-    # F2.6: hardening.
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-    read_only: true
-    tmpfs:
-      - /var/cache/nginx
-      - /var/run
-      - /tmp
-    environment:
-      DOMAIN: ${DOMAIN:?DOMAIN es obligatorio}
-    volumes:
-      # La imagen oficial procesa los archivos *.template con envsubst al iniciar.
-      - ../nginx/nginx.prod.conf:/etc/nginx/templates/default.conf.template:ro
-      - certs:/etc/letsencrypt
-      - acme-challenges:/var/www/challenges
     ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      - api
-      - web
-      - minio
+      - "127.0.0.1:18080:8080"
     restart: unless-stopped
 
 volumes:
   pgdata:
   miniodata:
   clamdb:
-  certs:
-  acme-challenges:

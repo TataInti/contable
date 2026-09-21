@@ -15,6 +15,7 @@ model User {
   emailNormalized    String     @unique
   name               String
   passwordHash       String
+  mustChangePassword Boolean    @default(false)
   emailVerifiedAt    DateTime?
   isPlatformAdmin    Boolean    @default(false)
   status             UserStatus @default(ACTIVE)

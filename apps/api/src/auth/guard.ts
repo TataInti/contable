@@ -15,6 +15,7 @@ declare module "fastify" {
     capabilities?: ReadonlySet<Capability>;
     isPortalRequest?: boolean;
     isPlatformAdmin?: boolean;
+    mustChangePassword?: boolean;
   }
 }
 
@@ -42,6 +43,12 @@ const PUBLIC_PATHS = new Set([
   "/api/v1/auth/refresh",
   "/api/v1/auth/logout",
   "/api/v1/portal/invitations/accept",
+]);
+
+const PASSWORD_CHANGE_PATHS = new Set([
+  "/api/v1/auth/password/change",
+  "/api/v1/me/contexts",
+  "/api/v1/portal/contexts",
 ]);
 
 function pathname(url: string): string {
@@ -77,7 +84,8 @@ interface RoutePolicy {
 
 const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/feature-flags/, resolve: () => "firm.manage" },
-  { match: /\/members(?:\/|$)|\/invitations(?:\/|$)|\/portal-memberships(?:\/|$)/, resolve: () => "firm.manage" },
+  { match: /\/members(?:\/|$)|\/users(?:\/|$)/, resolve: () => "firm.users.manage" },
+  { match: /\/invitations(?:\/|$)|\/portal-memberships(?:\/|$)/, resolve: () => "firm.manage" },
   { match: /\/assignments/, resolve: () => "client.assign" },
   { match: /\/document-upload-sessions/, resolve: () => "document.upload" },
   { match: /\/extractions\//, resolve: (m) => (m === "GET" ? "document.prepare" : "document.review") },
@@ -315,6 +323,7 @@ export function authGuardPlugin(app: FastifyInstance) {
   app.decorateRequest("capabilities", undefined);
   app.decorateRequest("isPortalRequest", false);
   app.decorateRequest("isPlatformAdmin", false);
+  app.decorateRequest("mustChangePassword", false);
 
   app.addHook("onRequest", async (req) => {
     const path = pathname(req.url ?? "");
@@ -329,6 +338,16 @@ export function authGuardPlugin(app: FastifyInstance) {
     req.isPlatformAdmin = session.isPlatformAdmin;
     req.capabilities = new Set<Capability>();
     assertCsrf(req);
+
+    const account = await withTenantContext(
+      { userId: session.userId, firmId: "", actorKind: "USER" },
+      (tx) => tx.user.findUnique({ where: { id: session.userId }, select: { mustChangePassword: true } }),
+    );
+    req.mustChangePassword = account?.mustChangePassword === true;
+    if (req.mustChangePassword && !PASSWORD_CHANGE_PATHS.has(path)) {
+      throw httpError(403, "PASSWORD_CHANGE_REQUIRED", "Primero cambiá tu contraseña temporal");
+    }
+    if (path === "/api/v1/auth/password/change") return;
 
     if (path.startsWith("/api/v1/portal/")) {
       req.isPortalRequest = true;

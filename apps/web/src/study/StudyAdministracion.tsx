@@ -40,6 +40,13 @@ interface InternalMember {
   acceptedAt: string | null;
   user?: { name: string; emailNormalized: string; status: string } | null;
 }
+interface CreatedInternalUser {
+  userId: string;
+  email: string;
+  name: string;
+  role: string;
+  temporaryPassword: string;
+}
 
 const INTERNAL_ROLE_LABELS: Record<string, string> = {
   OWNER: "Titular",
@@ -64,8 +71,10 @@ export function StudyAdministracion() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [internalEmail, setInternalEmail] = useState("");
+  const [internalName, setInternalName] = useState("");
   const [internalRole, setInternalRole] = useState("PREPARER");
   const [showInternalInviteForm, setShowInternalInviteForm] = useState(false);
+  const [createdInternalUser, setCreatedInternalUser] = useState<CreatedInternalUser | null>(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("OWNER");
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -80,16 +89,19 @@ export function StudyAdministracion() {
   });
   const inviteInternal = useMutation({
     mutationFn: () =>
-      api.post(`/firms/${firmId}/invitations`, { email: internalEmail.trim(), role: internalRole }),
-    onSuccess: () => {
+      api.post<CreatedInternalUser>(`/firms/${firmId}/users`, {
+        email: internalEmail.trim(), name: internalName.trim(), role: internalRole,
+      }),
+    onSuccess: (created) => {
       setActionError(null);
-      setNotice("La invitación al estudio quedó registrada.");
+      setNotice("El usuario fue creado. Entregale la contraseña temporal por un canal seguro.");
+      setCreatedInternalUser(created);
       setInternalEmail("");
-      setShowInternalInviteForm(false);
+      setInternalName("");
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo invitar al usuario interno."),
+      setActionError(error instanceof Error ? error.message : "No se pudo crear el usuario interno."),
   });
   const updateInternalRole = useMutation({
     mutationFn: ({ userId, role: nextRole }: { userId: string; role: string }) =>
@@ -176,6 +188,7 @@ export function StudyAdministracion() {
   const activeInternalMemberCount = internalMembers.data?.filter((item) => item.status === "ACTIVE").length;
   const openInternalInviteForm = () => {
     setActionError(null);
+    setCreatedInternalUser(null);
     setShowInternalInviteForm(true);
   };
   const openInviteForm = () => {
@@ -248,10 +261,10 @@ export function StudyAdministracion() {
         <div>
           <p className="study-page__eyebrow">Flujo guiado</p>
           <h2 id="admin-next-step-title">Próximo paso</h2>
-          <p>{activeInternalMemberCount ? "Podés invitar otra persona al estudio o ajustar el rol de un usuario interno." : "Todavía no hay usuarios internos activos en este estudio."}</p>
+          <p>{activeInternalMemberCount ? "Podés crear otra cuenta o ajustar el rol de un usuario interno." : "Todavía no hay usuarios internos activos en este estudio."}</p>
         </div>
         <Button onClick={openInternalInviteForm}>
-          <Icon name="plus" size={17} /> Invitar al estudio
+          <Icon name="plus" size={17} /> Crear usuario
         </Button>
       </section>
 
@@ -262,16 +275,24 @@ export function StudyAdministracion() {
             <p>El rol es la fuente de verdad del acceso a módulos internos. No se asignan permisos sueltos por persona.</p>
           </div>
           <Button size="sm" onClick={openInternalInviteForm}>
-            <Icon name="plus" size={17} /> Invitar usuario
+            <Icon name="plus" size={17} /> Crear usuario
           </Button>
         </div>
         <ActionDrawer
           isOpen={showInternalInviteForm}
-          onClose={() => setShowInternalInviteForm(false)}
+          onClose={() => { setShowInternalInviteForm(false); setCreatedInternalUser(null); }}
           eyebrow="Acceso interno"
-          title="Invitar al estudio"
-          description="La persona debe tener una cuenta activa. Su rol definirá los módulos internos disponibles."
+          title="Crear usuario del estudio"
+          description="Se generará una contraseña temporal que deberás entregar una sola vez. El usuario tendrá que cambiarla al ingresar."
         >
+          {createdInternalUser ? (
+            <div className="study-form study-form--compact" role="status">
+              <p>Cuenta creada para <strong>{createdInternalUser.email}</strong>.</p>
+              <Field id="internal-temporary-password" label="Contraseña temporal" type="text" readOnly value={createdInternalUser.temporaryPassword} />
+              <Button type="button" variant="secondary" onClick={() => void navigator.clipboard.writeText(createdInternalUser.temporaryPassword)}>Copiar contraseña</Button>
+              <Button type="button" onClick={() => { setCreatedInternalUser(null); setShowInternalInviteForm(false); }}>Terminar</Button>
+            </div>
+          ) : (
           <form
             className="study-form study-form--compact"
             onSubmit={(event) => {
@@ -280,6 +301,13 @@ export function StudyAdministracion() {
               inviteInternal.mutate();
             }}
           >
+            <Field
+              id="internal-invite-name"
+              label="Nombre"
+              value={internalName}
+              onChange={(event) => setInternalName(event.target.value)}
+              required
+            />
             <Field
               id="internal-invite-email"
               label="Email"
@@ -296,12 +324,13 @@ export function StudyAdministracion() {
             </label>
             {inviteInternal.isError && actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
             <div className="study-form__actions">
-              <Button type="submit" loading={inviteInternal.isPending} disabled={!internalEmail.trim()}>
-                <Icon name="plus" size={17} /> Enviar invitación
+              <Button type="submit" loading={inviteInternal.isPending} disabled={!internalEmail.trim() || !internalName.trim()}>
+                <Icon name="plus" size={17} /> Crear usuario
               </Button>
               <Button type="button" variant="ghost" onClick={() => setShowInternalInviteForm(false)}>Cancelar</Button>
             </div>
           </form>
+          )}
         </ActionDrawer>
         {internalMembers.isLoading ? (
           <div className="query-state" role="status"><span className="loading-copy">Cargando usuarios internos…</span></div>
@@ -312,7 +341,7 @@ export function StudyAdministracion() {
             action={<Button size="sm" variant="secondary" onClick={() => void internalMembers.refetch()}>Reintentar</Button>}
           />
         ) : (internalMembers.data?.length ?? 0) === 0 ? (
-          <EmptyState title="Todavía no hay usuarios internos" description="Invitá a la primera persona del estudio para asignarle un rol." />
+          <EmptyState title="Todavía no hay usuarios internos" description="Creá la primera cuenta del estudio para asignarle un rol." />
         ) : (
           <Table<InternalMember>
             rows={internalMembers.data ?? []}

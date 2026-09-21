@@ -204,6 +204,14 @@ textarea {
   animation: app-spin 700ms linear infinite;
 }
 
+.async-state--loading {
+  min-block-size: 180px;
+}
+
+.async-state--error {
+  min-block-size: 220px;
+}
+
 @keyframes app-spin {
   to {
     transform: rotate(360deg);

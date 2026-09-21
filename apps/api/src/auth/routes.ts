@@ -3,6 +3,15 @@ import { loginSchema, mfaVerifySchema } from "@contable/contracts";
 import { AuthService, AuthError } from "./auth-service.js";
 import { SessionRepository } from "./session-repository.js";
 import { randomBytes } from "node:crypto";
+import { z } from "zod";
+import { prisma } from "../lib/prisma.js";
+import { withTenantContext } from "./tenant.js";
+import { hashPassword, verifyPassword } from "./password.js";
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(8).max(200),
+  newPassword: z.string().min(12).max(200),
+}).strict();
 
 const SECURE = process.env.NODE_ENV === "production";
 
@@ -33,6 +42,28 @@ function hasValidCsrf(req: { cookies: Record<string, unknown>; headers: Record<s
 export function authPlugin(app: FastifyInstance) {
   const sessions = new SessionRepository();
   const auth = new AuthService({ sessions });
+
+  app.post("/api/v1/auth/password/change", { config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } }, async (req, reply) => {
+    const userId = req.userId;
+    if (!userId) return reply.status(401).send({ error: { code: "UNAUTHENTICATED", message: "Sin sesión" } });
+    const body = changePasswordSchema.parse(req.body);
+    const account = await withTenantContext(
+      { userId, firmId: "", actorKind: "USER" },
+      (tx) => tx.user.findUnique({ where: { id: userId }, select: { passwordHash: true } }),
+    );
+    if (!account || !(await verifyPassword(body.currentPassword, account.passwordHash))) {
+      return reply.status(400).send({ error: { code: "INVALID_CREDENTIALS", message: "La contraseña actual es incorrecta" } });
+    }
+    if (await verifyPassword(body.newPassword, account.passwordHash)) {
+      return reply.status(400).send({ error: { code: "PASSWORD_REUSED", message: "Elegí una contraseña distinta" } });
+    }
+    const passwordHash = await hashPassword(body.newPassword);
+    await withTenantContext(
+      { userId, firmId: "", actorKind: "USER" },
+      (tx) => tx.user.update({ where: { id: userId }, data: { passwordHash, mustChangePassword: false } }),
+    );
+    return reply.send({ data: { status: "OK" } });
+  });
 
   // El límite de login es configurable: la suite E2E hace ~16 logins por
   // corrida desde la misma IP y el límite fijo de 10/min la hace fallar de

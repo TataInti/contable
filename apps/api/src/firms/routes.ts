@@ -12,6 +12,14 @@ import { prisma } from "../lib/prisma.js";
 import { capabilitiesForRole, type FirmRole } from "@contable/permissions";
 import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
 import { z } from "zod";
+import { randomBytes } from "node:crypto";
+import { hashPassword } from "../auth/password.js";
+
+const createInternalUserSchema = z.object({
+  email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
+  name: z.string().trim().min(2).max(120),
+  role: z.enum(["OWNER", "ADMIN", "PREPARER", "REVIEWER", "AUDITOR_READONLY"]),
+}).strict();
 
 /**
  * Rutas de firmas, miembros, invitaciones y asignaciones.
@@ -82,6 +90,7 @@ export function firmRoutes(app: FastifyInstance) {
     const result = meContextsSchema.parse({
       userId,
       isPlatformAdmin: req.isPlatformAdmin === true,
+      mustChangePassword: req.mustChangePassword === true,
       firms: firmsData,
     });
     return reply.send({ data: result });
@@ -141,6 +150,31 @@ export function firmRoutes(app: FastifyInstance) {
     return reply.send({ data: members });
   });
 
+  app.post("/api/v1/firms/:firmId/users", async (req, reply) => {
+    const { firmId } = req.params as { firmId: string };
+    const body = createInternalUserSchema.parse(req.body);
+    const temporaryPassword = randomBytes(24).toString("base64url");
+    const passwordHash = await hashPassword(temporaryPassword);
+    try {
+      const rows = await prisma.$queryRaw<{ userId: string }[]>`
+        SELECT * FROM app_create_internal_user(
+          ${req.userId!}, ${firmId}, ${body.email}, ${body.name},
+          ${passwordHash}, ${body.role}::"FirmRole"
+        )
+      `;
+      if (!rows[0]) return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
+      return reply.status(201).send({ data: {
+        userId: rows[0].userId, email: body.email, name: body.name,
+        role: body.role, temporaryPassword,
+      } });
+    } catch (error) {
+      if (String(error).includes("USER_EXISTS") || String(error).includes("23505")) {
+        return reply.status(409).send({ error: { code: "USER_EXISTS", message: "Ya existe una cuenta con ese email" } });
+      }
+      throw error;
+    }
+  });
+
   // El rol es la fuente de verdad del acceso a módulos internos.
   app.patch("/api/v1/firms/:firmId/members/:userId", async (req, reply) => {
     const { firmId, userId } = req.params as { firmId: string; userId: string };
@@ -149,10 +183,19 @@ export function firmRoutes(app: FastifyInstance) {
       .strict()
       .parse(req.body);
     const member = await withTenantContext(tenantContextFromRequest(req), async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${firmId}))::text`;
       const existing = await tx.firmMembership.findUnique({
         where: { firmId_userId: { firmId, userId } },
       });
       if (!existing) return null;
+      if (["OWNER", "ADMIN"].includes(existing.role) && !["OWNER", "ADMIN"].includes(body.role)) {
+        const admins = await tx.firmMembership.count({
+          where: { firmId, status: "ACTIVE", role: { in: ["OWNER", "ADMIN"] } },
+        });
+        if (admins <= 1) throw Object.assign(new Error("El estudio debe conservar un administrador"), {
+          statusCode: 409, code: "LAST_ADMIN_REQUIRED",
+        });
+      }
       return tx.firmMembership.update({
         where: { id: existing.id },
         data: { role: body.role },

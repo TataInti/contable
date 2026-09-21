@@ -11,6 +11,7 @@
     "test": "NODE_ENV=test vitest run",
     "dev": "tsx watch src/server.ts",
     "seed:demo": "tsx src/seed-demo.ts",
+    "bootstrap:admin": "node dist/bootstrap-admin.js",
     "seed:maestros-fiscales": "tsx src/seed-maestros-fiscales.ts",
     "seed:piloto": "tsx src/seed-piloto.ts",
     "seed:carga": "tsx src/seed-carga-piloto.ts",

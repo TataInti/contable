@@ -7,6 +7,7 @@ import { SessionProvider, useSession } from "./session/SessionContext";
 import { StudyShell } from "./shells/StudyShell";
 import { PortalShell } from "./shells/PortalShell";
 import { LoginPage } from "./auth/LoginPage";
+import { ChangePasswordPage } from "./auth/ChangePasswordPage";
 import { AcceptPortalInvitation } from "./auth/AcceptPortalInvitation";
 import { logout } from "./lib/auth";
 import { EnvironmentStatusBanner } from "./environment/EnvironmentStatusBanner";
@@ -103,6 +104,7 @@ function Protected({ portal = false }: { portal?: boolean }) {
     const safeFrom = from.startsWith("/") && !from.startsWith("//") ? from : "/";
     return <Navigate to="/login" replace state={{ from: safeFrom }} />;
   }
+  if (session.me?.mustChangePassword) return <Navigate to="/cambiar-contrasena" replace />;
   if (portal && session.portalContexts.length === 0) {
     return <Navigate to={(session.me?.firms.length ?? 0) > 0 ? "/" : "/sin-acceso"} replace />;
   }
@@ -126,6 +128,7 @@ function NoWorkspace() {
   if (session.status === "loading") return <LoadingScreen />;
   if (session.status === "unavailable") return <SessionUnavailable />;
   if (session.status === "unauthenticated") return <Navigate to="/login" replace />;
+  if (session.me?.mustChangePassword) return <Navigate to="/cambiar-contrasena" replace />;
   if ((session.me?.firms.length ?? 0) > 0) return <Navigate to="/" replace />;
   if (session.portalContexts.length > 0) return <Navigate to="/portal" replace />;
 
@@ -167,6 +170,7 @@ function AppRoutes() {
           <EnvironmentStatusBanner />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/cambiar-contrasena" element={<ChangePasswordPage />} />
             <Route path="/aceptar-invitacion" element={<AcceptPortalInvitation />} />
             <Route path="/sin-acceso" element={<NoWorkspace />} />
             <Route element={<Protected />}>

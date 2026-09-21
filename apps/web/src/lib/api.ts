@@ -150,6 +150,7 @@ export async function uploadToSignedUrl(url: string, file: File): Promise<void> 
 export interface MeContext {
   userId: string;
   isPlatformAdmin?: boolean;
+  mustChangePassword?: boolean;
   firms: {
     firmId: string;
     firmName: string;

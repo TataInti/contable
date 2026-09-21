@@ -2083,6 +2083,16 @@
     grid-template-columns: 1fr;
   }
 
+  .study-page__header--dashboard .study-page__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .study-page__header--dashboard .study-page__actions > .ds-button,
+  .study-page__header--dashboard .study-page__actions > .page-primary-link {
+    flex: 0 1 auto;
+  }
+
   .dashboard-focus__lead {
     min-height: 230px;
   }
@@ -2123,6 +2133,17 @@
   }
 
   .page-primary-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .study-page__header--dashboard .study-page__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .study-page__header--dashboard .study-page__actions > .ds-button,
+  .study-page__header--dashboard .study-page__actions > .page-primary-link {
     width: 100%;
     justify-content: center;
   }

@@ -4,7 +4,8 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon, type IconName } from "../ui/Icon";
-import { PortalLoading, PortalPageHeader, PortalRetryButton } from "./PortalUI";
+import { PortalPageHeader } from "./PortalUI";
+import { AsyncState } from "../ui/AsyncState";
 import { SectionIndex } from "../ui/SectionIndex";
 import "./portal.css";
 
@@ -65,13 +66,14 @@ export function PortalDashboard() {
           title="Sin empresa asignada"
           description="Pedile a tu estudio que habilite el acceso a una empresa."
         />
-      ) : summary.isLoading ? (
-        <PortalLoading label="Cargando tu resumen…" />
-      ) : summary.isError ? (
-        <EmptyState
-          title="No pudimos cargar el resumen"
-          description="Reintentá en unos minutos. Si el problema continúa, escribile a tu estudio."
-          action={<PortalRetryButton onRetry={() => void summary.refetch()} />}
+      ) : summary.isLoading || summary.isError ? (
+        <AsyncState
+          loading={summary.isLoading}
+          error={summary.isError}
+          loadingLabel="Cargando tu resumen…"
+          errorTitle="No pudimos cargar el resumen"
+          errorDescription="Reintentá en unos minutos. Si el problema continúa, escribile a tu estudio."
+          onRetry={() => void summary.refetch()}
         />
       ) : summary.data ? (
         <>

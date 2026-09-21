@@ -8,6 +8,7 @@ import { useSession } from "../session/SessionContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import { SectionIndex } from "../ui/SectionIndex";
 import { Icon, type IconName } from "../ui/Icon";
+import { AsyncState } from "../ui/AsyncState";
 import "./study.css";
 
 interface DashboardSummary {
@@ -225,22 +226,14 @@ export function StudyDashboard() {
           title="Resumen no disponible para tu rol"
           description="Podés seguir trabajando en los módulos a los que tenés acceso desde la navegación lateral."
         />
-      ) : query.isLoading ? (
-        <div className="dashboard-loading" role="status" aria-live="polite">
-          <span className="loading-copy">Organizando el resumen…</span>
-          <span />
-          <span />
-          <span />
-        </div>
-      ) : query.isError ? (
-        <EmptyState
-          title="No se pudo cargar el resumen"
-          description="La información del estudio no está disponible en este momento."
-          action={
-            <Button variant="secondary" onClick={() => void query.refetch()}>
-              Volver a intentar
-            </Button>
-          }
+      ) : query.isLoading || query.isError ? (
+        <AsyncState
+          loading={query.isLoading}
+          error={query.isError}
+          loadingLabel="Organizando el resumen…"
+          errorTitle="No se pudo cargar el resumen"
+          errorDescription="La información del estudio no está disponible en este momento."
+          onRetry={() => void query.refetch()}
         />
       ) : (
         <>

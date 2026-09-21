@@ -41,6 +41,7 @@ export type Refresh = z.infer<typeof refreshSchema>;
 export const meContextsSchema = z.object({
   userId: uuid,
   isPlatformAdmin: z.boolean().default(false),
+  mustChangePassword: z.boolean().default(false),
   firms: z.array(
     z.object({
       firmId: uuid,
