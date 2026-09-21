@@ -1,0 +1,97 @@
+.help-page .help-section {
+  scroll-margin-top: 20px;
+}
+
+.help-page .help-section > p,
+.help-page .help-section > ol,
+.help-page .help-section > ul {
+  max-width: 72ch;
+}
+
+.help-page .help-section > ol,
+.help-page .help-section > ul {
+  margin: 0 0 var(--ds-space-5);
+  padding-left: 1.2em;
+  line-height: 1.5;
+}
+
+.help-page .help-section li + li {
+  margin-top: 0.35em;
+}
+
+.help-page .help-note {
+  max-width: 72ch;
+  margin: 0 0 var(--ds-space-5);
+  padding: var(--ds-space-4) var(--ds-space-5);
+  border-left: 3px solid var(--ds-color-primary);
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-text);
+}
+
+.help-page .help-note p {
+  margin: 0;
+}
+
+.help-table-wrap {
+  overflow-x: auto;
+  margin: 0 0 var(--ds-space-6);
+}
+
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ds-text-sm);
+}
+
+.help-table th,
+.help-table td {
+  padding: 0.65em 0.75em;
+  border-bottom: 1px solid var(--ds-color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.help-table th {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.help-table td strong {
+  font-weight: 650;
+}
+
+.help-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  max-width: 80ch;
+  margin: 0 0 var(--ds-space-5);
+  padding: 0;
+  list-style: none;
+}
+
+.help-flow li {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: 0.45em 0.7em;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+}
+
+.help-flow li::after {
+  content: "→";
+  color: var(--ds-color-text-muted);
+  font-weight: 500;
+}
+
+.help-flow li:last-child::after {
+  content: none;
+}

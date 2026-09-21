@@ -48,6 +48,9 @@ const PortalMensajes = lazy(() =>
 const PortalPerfil = lazy(() =>
   import("./portal/PortalPerfil").then((m) => ({ default: m.PortalPerfil })),
 );
+const StudyAyuda = lazy(() =>
+  import("./study/StudyAyuda").then((m) => ({ default: m.StudyAyuda })),
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -95,8 +98,11 @@ function Protected({ portal = false }: { portal?: boolean }) {
   const location = useLocation();
   if (session.status === "loading") return <LoadingScreen />;
   if (session.status === "unavailable") return <SessionUnavailable />;
-  if (session.status === "unauthenticated")
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (session.status === "unauthenticated") {
+    const from = `${location.pathname}${location.search}${location.hash}`;
+    const safeFrom = from.startsWith("/") && !from.startsWith("//") ? from : "/";
+    return <Navigate to="/login" replace state={{ from: safeFrom }} />;
+  }
   if (portal && session.portalContexts.length === 0) {
     return <Navigate to={(session.me?.firms.length ?? 0) > 0 ? "/" : "/sin-acceso"} replace />;
   }
@@ -165,6 +171,7 @@ function AppRoutes() {
             <Route path="/sin-acceso" element={<NoWorkspace />} />
             <Route element={<Protected />}>
               <Route element={<StudyShell />}>
+                <Route path="ayuda" element={<StudyAyuda />} />
                 {STUDY_MODULES.map((module) =>
                   module.path === "/" ? (
                     <Route key={module.id} index element={<StudyModuleRoute module={module} />} />

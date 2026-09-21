@@ -169,6 +169,8 @@
   background: var(--ds-color-primary-soft);
   color: var(--ds-color-text);
   text-align: left;
+  text-decoration: none;
+  box-sizing: border-box;
   cursor: pointer;
   transition:
     border-color 150ms ease-out,
@@ -180,6 +182,7 @@
   border-color: var(--ds-color-primary);
   background: color-mix(in srgb, var(--ds-color-primary-soft) 72%, var(--ds-color-surface));
   transform: translateY(-1px);
+  text-decoration: none;
 }
 
 .study__tour-trigger-mark {

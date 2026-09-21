@@ -11,6 +11,7 @@ import {
   modulesForNavigation,
   type StudyNavigationGroup,
 } from "../study/moduleRegistry";
+import { helpHrefForPath } from "../study/helpAnchors";
 import "./StudyShell.css";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -125,6 +126,22 @@ export function StudyShell() {
         </nav>
 
         <div className="study__sidebar-footer">
+          <a
+            className="study__tour-trigger"
+            href={helpHrefForPath(location.pathname)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Ayuda paso a paso, se abre en una pestaña nueva"
+          >
+            <span className="study__tour-trigger-mark" aria-hidden="true">
+              <Icon name="file" size={16} />
+            </span>
+            <span>
+              <strong>Ayuda paso a paso</strong>
+              <small>Manual del estudio</small>
+            </span>
+            <Icon name="arrow-right" size={15} />
+          </a>
           <GuidedTour onNavigationRequired={openNavigationForTour}>
             {({ startTour }) => (
               <button type="button" className="study__tour-trigger" onClick={startTour}>
