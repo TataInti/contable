@@ -10,8 +10,8 @@ async function navigateStudy(page: Page, label: string) {
 
 async function ensureStudyContext(page: Page) {
   const contextBar = page.locator("#context-bar");
-  const clientSelect = contextBar.getByLabel("Cliente");
-  const periodSelect = contextBar.getByLabel("Período");
+  const clientSelect = contextBar.getByRole("combobox", { name: /^Cliente/ });
+  const periodSelect = contextBar.getByRole("combobox", { name: /^Período/ });
 
   if ((await clientSelect.inputValue()) === "") {
     const clientOptions = await clientSelect.locator("option").evaluateAll((options) =>
@@ -128,7 +128,7 @@ test("navegación aislada del portal", async ({ page }) => {
   } else {
     await page.goto("/portal/liquidaciones");
   }
-  await expect(page.getByRole("heading", { name: "Liquidaciones publicadas" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Liquidaciones publicadas", exact: true })).toBeVisible();
 
   // Perfil: en mobile el bottom nav no muestra todos los items; navegación
   // directa para evitar la fragilidad del drawer/backdrop.
