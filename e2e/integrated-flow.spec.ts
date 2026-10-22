@@ -50,21 +50,21 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   await page.getByLabel("Correo electrónico").fill("demo@contable.local");
   await page.getByLabel("Contraseña").fill("demo1234");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByRole("heading", { name: "Resumen operativo" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Resumen operativo", exact: true })).toBeVisible();
   await ensureStudyContext(page);
 
   await navigateStudy(page, "Clientes");
-  await expect(page.getByRole("heading", { name: "Clientes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Clientes", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Alimentos del Sur S\.A\./ })).toBeVisible();
 
   await navigateStudy(page, "Bandeja documental");
-  await expect(page.getByRole("heading", { name: "Bandeja documental" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bandeja documental", exact: true })).toBeVisible();
 
   await navigateStudy(page, "Trabajo");
-  await expect(page.getByRole("heading", { name: "Trabajo" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Trabajo", exact: true })).toBeVisible();
 
   await navigateStudy(page, "Configuración fiscal");
-  await expect(page.getByRole("heading", { name: "Onboarding fiscal del cliente" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Onboarding fiscal del cliente", exact: true })).toBeVisible();
 
   // La contabilidad de asientos quedó fuera de la navegación: la app se enfoca
   // en el flujo de liquidación fiscal mensual.
@@ -74,13 +74,13 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
 
   // G3-10: worklist de liquidaciones (nueva pantalla fiscal).
   await navigateStudy(page, "Liquidaciones");
-  await expect(page.getByRole("heading", { name: "Liquidaciones" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Liquidaciones", exact: true })).toBeVisible();
 
   await navigateStudy(page, "Expediente mensual");
-  await expect(page.getByRole("heading", { name: "Expediente mensual" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Expediente mensual", exact: true })).toBeVisible();
 
   await navigateStudy(page, "Rentabilidad");
-  await expect(page.getByRole("heading", { name: "Rentabilidad" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Rentabilidad", exact: true })).toBeVisible();
 
   // Reportes y análisis (BI) tampoco forma parte de la navegación del estudio.
   await expect(
@@ -94,21 +94,21 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
 
   // G5-06: la cartera por riesgo aparece en el dashboard con liquidaciones.
   await navigateStudy(page, "Inicio");
-  await expect(page.getByRole("heading", { name: "Liquidaciones en curso" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Liquidaciones en curso", exact: true })).toBeVisible();
 
   // URL directa al asistente: muestra estado no disponible, no la pantalla.
   await page.goto("/asistente");
   await expect(
-    page.getByRole("heading", { name: "Esta sección todavía no está disponible" }),
+    page.getByRole("heading", { name: "Esta sección todavía no está disponible", exact: true }),
   ).toBeVisible();
 
   await page.goto("/ruta-obsoleta");
-  await expect(page.getByRole("heading", { name: "Esta sección no existe" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Esta sección no existe", exact: true })).toBeVisible();
 });
 
 test("navegación aislada del portal", async ({ page }) => {
   await loginPortal(page);
-  await expect(page.getByRole("heading", { name: "Tu información contable" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tu información contable", exact: true })).toBeVisible();
 
   // En desktop el nav usa el label largo; en mobile el shortLabel "Reportes".
   const reportesLink = page.getByRole("link", { name: "Estados y reportes" });
@@ -117,7 +117,7 @@ test("navegación aislada del portal", async ({ page }) => {
   } else {
     await page.getByRole("link", { name: "Reportes" }).click();
   }
-  await expect(page.getByRole("heading", { name: "Estados y reportes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Estados y reportes", exact: true })).toBeVisible();
   await expect(page.getByText("Balance sintético", { exact: true })).toBeVisible();
 
   // G3-11: liquidaciones publicadas en el portal.
