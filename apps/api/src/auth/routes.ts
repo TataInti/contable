@@ -4,7 +4,6 @@ import { AuthService, AuthError } from "./auth-service.js";
 import { SessionRepository } from "./session-repository.js";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { prisma } from "../lib/prisma.js";
 import { withTenantContext } from "./tenant.js";
 import { hashPassword, verifyPassword } from "./password.js";
 
