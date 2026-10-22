@@ -122,6 +122,23 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Start and wait for document worker
+        run: |
+          worker_log="$RUNNER_TEMP/contable-worker.log"
+          nohup npm run start -w @contable/worker > "$worker_log" 2>&1 < /dev/null &
+          worker_pid=$!
+          echo "$worker_pid" > "$RUNNER_TEMP/contable-worker.pid"
+          if ! node e2e/wait-for-document-worker.mjs; then
+            cat "$worker_log"
+            kill "$worker_pid" 2>/dev/null || true
+            exit 1
+          fi
+          if ! kill -0 "$worker_pid" 2>/dev/null; then
+            cat "$worker_log"
+            echo "Document worker exited after readiness check"
+            exit 1
+          fi
+
       - name: E2E (Playwright)
         run: npm run test:e2e
         env:

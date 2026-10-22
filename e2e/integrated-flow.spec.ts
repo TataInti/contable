@@ -9,8 +9,9 @@ async function navigateStudy(page: Page, label: string) {
 }
 
 async function ensureStudyContext(page: Page) {
-  const clientSelect = page.locator("#context-bar select").nth(1);
-  const periodSelect = page.locator("#context-bar select").nth(2);
+  const contextBar = page.locator("#context-bar");
+  const clientSelect = contextBar.getByLabel("Cliente");
+  const periodSelect = contextBar.getByLabel("Período");
 
   if ((await clientSelect.inputValue()) === "") {
     const clientOptions = await clientSelect.locator("option").evaluateAll((options) =>
@@ -117,7 +118,7 @@ test("navegación aislada del portal", async ({ page }) => {
     await page.getByRole("link", { name: "Reportes" }).click();
   }
   await expect(page.getByRole("heading", { name: "Estados y reportes" })).toBeVisible();
-  await expect(page.getByText("Balance sintético")).toBeVisible();
+  await expect(page.getByText("Balance sintético", { exact: true })).toBeVisible();
 
   // G3-11: liquidaciones publicadas en el portal.
   // Exact para no chocar con el quick-link "Ver liquidaciones" del dashboard.
