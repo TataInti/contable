@@ -1,5 +1,5 @@
 # F2.6: multi-stage, non-root, sin secretos en capas.
-FROM node:22-alpine AS build
+FROM node:22.23.4-alpine AS build
 WORKDIR /app
 COPY . .
 RUN npm ci --include=dev
@@ -7,7 +7,7 @@ RUN DATABASE_URL=postgresql://build:build@localhost:5432/build node node_modules
     && npm run build -w @contable/contracts -w @contable/accounting-engine -w @contable/permissions -w @contable/storage -w @contable/tax-engine \
     && npm run build -w @contable/api
 
-FROM node:22-alpine
+FROM node:22.23.4-alpine
 RUN addgroup -S contable && adduser -S contable -G contable
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules

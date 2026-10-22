@@ -33,7 +33,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       minio:
-        image: minio/minio:latest
+        # minio/minio was removed from Docker Hub (404); use the public, pinned Silo release.
+        image: docker.io/pgsty/silo:RELEASE.2026-10-18T00-00-00Z
         env:
           MINIO_ROOT_USER: contable
           MINIO_ROOT_PASSWORD: contable-minio
@@ -76,6 +77,12 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Generate Prisma client
+        run: npm exec --workspace @contable/api -- prisma generate --config prisma.config.ts
+
+      - name: Build internal packages
+        run: npm run build -w @contable/contracts -w @contable/accounting-engine -w @contable/permissions -w @contable/storage -w @contable/tax-engine
+
       - name: Setup PostgreSQL roles and shadow DB
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
@@ -94,6 +101,12 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/api/prisma/rls.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/api/prisma/seed-fase2.sql
 
+      - name: Seed E2E fixtures
+        run: |
+          npm run seed:demo -w @contable/api
+          npm run seed:maestros-fiscales -w @contable/api
+          npm run seed:piloto -w @contable/api
+
       - name: Lint
         run: npm run lint
 
@@ -105,6 +118,26 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start and wait for document worker
+        run: |
+          worker_log="$RUNNER_TEMP/contable-worker.log"
+          nohup npm run start -w @contable/worker > "$worker_log" 2>&1 < /dev/null &
+          worker_pid=$!
+          echo "$worker_pid" > "$RUNNER_TEMP/contable-worker.pid"
+          if ! node e2e/wait-for-document-worker.mjs; then
+            cat "$worker_log"
+            kill "$worker_pid" 2>/dev/null || true
+            exit 1
+          fi
+          if ! kill -0 "$worker_pid" 2>/dev/null; then
+            cat "$worker_log"
+            echo "Document worker exited after readiness check"
+            exit 1
+          fi
 
       - name: E2E (Playwright)
         run: npm run test:e2e
