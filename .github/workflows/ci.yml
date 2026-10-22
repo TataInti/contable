@@ -101,6 +101,12 @@ jobs:
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/api/prisma/rls.sql
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f apps/api/prisma/seed-fase2.sql
 
+      - name: Seed E2E fixtures
+        run: |
+          npm run seed:demo -w @contable/api
+          npm run seed:maestros-fiscales -w @contable/api
+          npm run seed:piloto -w @contable/api
+
       - name: Lint
         run: npm run lint
 
@@ -112,6 +118,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
 
       - name: E2E (Playwright)
         run: npm run test:e2e
