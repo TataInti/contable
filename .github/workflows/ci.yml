@@ -77,6 +77,12 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Generate Prisma client
+        run: npm exec --workspace @contable/api -- prisma generate --config prisma.config.ts
+
+      - name: Build internal packages
+        run: npm run build -w @contable/contracts -w @contable/accounting-engine -w @contable/permissions -w @contable/storage -w @contable/tax-engine
+
       - name: Setup PostgreSQL roles and shadow DB
         run: |
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
