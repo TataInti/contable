@@ -131,6 +131,7 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/tax-obligations/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
   { match: /\/tax\/jurisdictions/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
   { match: /\/tax\/types/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
+  { match: /\/tax\/authorities/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
   { match: /\/tax\/regimes/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
   { match: /\/tax\/activities/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
   { match: /\/tax\/holidays/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },

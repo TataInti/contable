@@ -245,6 +245,21 @@ export const STUDY_MODULES: readonly StudyModule[] = [
       import("./StudyReglasFiscales").then((module) => ({ default: module.StudyReglasFiscales })),
     ),
   },
+  {
+    id: "catalogos-fiscales",
+    path: "/catalogos-fiscales",
+    label: "Catálogos fiscales",
+    icon: "settings",
+    navigationGroup: "Configuración",
+    requiredCapability: "tax.rules.read",
+    requirements: { firm: true },
+    status: "released",
+    component: lazy(() =>
+      import("./StudyCatalogosFiscales").then((module) => ({
+        default: module.StudyCatalogosFiscales,
+      })),
+    ),
+  },
 ] as const;
 
 export function modulesForNavigation(capabilities: ReadonlySet<string>): readonly StudyModule[] {

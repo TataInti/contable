@@ -342,6 +342,86 @@ describe("G1-04 períodos y obligaciones (integración DB)", () => {
     await cleanupFiscal();
   });
 
+  it("crea autoridad, régimen y obligación sintéticos sin reglas ni alícuotas", async () => {
+    const jurisdiction = await masters.createJurisdiction(ctxOwner, {
+      code: "AR-E2E-SYN-F",
+      name: "Jurisdicción sintética E2E — sin validez fiscal",
+      kind: "NATIONAL",
+    });
+    const authority = await masters.createTaxAuthority(ctxOwner, {
+      code: "E2E-SYN-AUTH-F",
+      name: "Autoridad sintética E2E — sin validez fiscal",
+      jurisdictionId: jurisdiction.id,
+    });
+    const taxType = await masters.createTaxType(ctxOwner, {
+      code: "E2E-SYN-TAX-F",
+      name: "Impuesto sintético E2E — sin validez fiscal",
+    });
+    const regime = await masters.createRegime(ctxOwner, {
+      code: "E2E-SYN-REGIME-F",
+      name: "Régimen sintético E2E — sin reglas ni alícuotas",
+      taxTypeId: taxType.id,
+      jurisdictionId: jurisdiction.id,
+      authorityId: authority.id,
+    });
+    const profile = await profiles.createProfile(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      legalName: "Cliente Alfa SA",
+      cuit: "20111111111",
+      personType: "JURIDICA",
+      nationalCondition: "RESPONSABLE_INSCRIPTO",
+      validFrom: "2026-01-01",
+    });
+    await profiles.submitReview(ctxOwner, profile.id);
+    const activeProfile = await profiles.activate(ctxOwner, profile.id);
+    const period = await periods.createPeriod(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      taxTypeId: taxType.id,
+      startDate: "2026-11-01",
+      endDate: "2026-11-30",
+      label: "PRUEBA E2E — noviembre sintético",
+    });
+    await profiles.addRegistration(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      profileVersionId: activeProfile.id,
+      regimeId: regime.id,
+      validFrom: "2026-11-01",
+    });
+    const obligation = await periods.materializeObligation(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      profileVersionId: activeProfile.id,
+      regimeId: regime.id,
+      periodId: period.id,
+    });
+
+    expect(await masters.listTaxAuthorities(ctxOwner, jurisdiction.id)).toMatchObject([
+      { id: authority.id, code: "E2E-SYN-AUTH-F", jurisdictionId: jurisdiction.id },
+    ]);
+    expect(await masters.listRegimes(ctxOwner)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: regime.id,
+          authorityId: authority.id,
+          taxTypeId: taxType.id,
+          jurisdictionId: jurisdiction.id,
+        }),
+      ]),
+    );
+    expect(obligation).toMatchObject({
+      clientId: CLIENT_ALFA,
+      profileVersionId: activeProfile.id,
+      regimeId: regime.id,
+      periodId: period.id,
+      status: "PENDING",
+      dueDate: null,
+    });
+
+    const rulePackCount = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.taxRulePack.count({ where: { regimeId: regime.id } }),
+    );
+    expect(rulePackCount).toBe(0);
+  });
+
   it("crea período y materializa obligación sin duplicar", async () => {
     const fx = await setupMasters();
     const profile = await profiles.createProfile(ctxOwner, {

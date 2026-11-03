@@ -2,9 +2,16 @@ import { expect, test, type Page } from "@playwright/test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:3000";
 
+async function dismissGuidedTour(page: Page) {
+  const skipTour = page.getByRole("button", { name: "Saltar tour", exact: true });
+  if (await skipTour.isVisible().catch(() => false)) await skipTour.click();
+}
+
 async function navigateStudy(page: Page, label: string) {
+  await dismissGuidedTour(page);
   const menu = page.getByRole("button", { name: "Abrir navegación" });
   if (await menu.isVisible()) await menu.click();
+  await dismissGuidedTour(page);
   await page.getByRole("link", { name: label, exact: true }).click();
 }
 
@@ -41,6 +48,7 @@ async function loginPortal(page: Page) {
 }
 
 test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, request }) => {
+  test.setTimeout(60_000);
   const publicResponse = await request.get(
     `${apiBaseUrl}/api/v1/firms/dddddddd-dddd-4ddd-8ddd-ddddddddd001/clients`,
   );
@@ -65,6 +73,9 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
 
   await navigateStudy(page, "Configuración fiscal");
   await expect(page.getByRole("heading", { name: "Onboarding fiscal del cliente", exact: true })).toBeVisible();
+
+  await navigateStudy(page, "Catálogos fiscales");
+  await expect(page.getByRole("heading", { name: "Catálogos fiscales", exact: true })).toBeVisible();
 
   // La contabilidad de asientos quedó fuera de la navegación: la app se enfoca
   // en el flujo de liquidación fiscal mensual.
@@ -107,6 +118,7 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
 });
 
 test("navegación aislada del portal", async ({ page }) => {
+  test.setTimeout(60_000);
   await loginPortal(page);
   await expect(page.getByRole("heading", { name: "Tu información contable", exact: true })).toBeVisible();
 

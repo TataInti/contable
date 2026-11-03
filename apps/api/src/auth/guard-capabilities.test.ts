@@ -43,6 +43,14 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(capabilitiesForRole("AUDITOR_READONLY").has("tax.profile.write")).toBe(false);
   });
 
+  it("catálogos fiscales: lectura y alta requieren capacidades distintas", () => {
+    const authoritiesPath = "/api/v1/tax/authorities";
+    expect(requiredCapability("GET", authoritiesPath)).toBe("tax.rules.read");
+    expect(requiredCapability("POST", authoritiesPath)).toBe("tax.rules.propose");
+    expect(capabilitiesForRole("OWNER").has("tax.rules.propose")).toBe(true);
+    expect(capabilitiesForRole("AUDITOR_READONLY").has("tax.rules.propose")).toBe(false);
+  });
+
   it("portal-invitations exige client.read (GET) / client.manage (POST)", () => {
     expect(
       requiredCapability("GET", "/api/v1/firms/f/clients/c/portal-invitations"),
