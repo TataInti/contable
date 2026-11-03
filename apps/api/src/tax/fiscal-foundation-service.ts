@@ -21,6 +21,9 @@ export type FiscalErrorCode =
   | "PROFILE_ALREADY_ACTIVE"
   | "PROFILE_VERSION_CONFLICT"
   | "TAX_TYPE_NOT_FOUND"
+  | "AUTHORITY_NOT_FOUND"
+  | "AUTHORITY_JURISDICTION_MISMATCH"
+  | "CATALOG_CODE_CONFLICT"
   | "REGISTRATION_OVERLAP"
   | "REGISTRATION_NOT_FOUND"
   | "ACTIVITY_LINK_NOT_FOUND"
@@ -47,6 +50,15 @@ export class FiscalError extends Error {
     this.name = "FiscalError";
     this.code = code;
   }
+}
+
+function isUniqueConstraintError(err: unknown): boolean {
+  return Boolean(
+    err &&
+      typeof err === "object" &&
+      "code" in err &&
+      (err as { code?: unknown }).code === "P2002",
+  );
 }
 
 export type TaxpayerProfileChanges = {
@@ -105,6 +117,40 @@ export class FiscalMasterService {
     return withTenantContext(ctx, (tx) => tx.taxType.create({ data: input }));
   }
 
+  async listTaxAuthorities(ctx: TenantContext, jurisdictionId?: string) {
+    return withTenantContext(ctx, (tx) =>
+      tx.taxAuthority.findMany({
+        where: jurisdictionId ? { jurisdictionId } : {},
+        include: { jurisdiction: true },
+        orderBy: { code: "asc" },
+        take: 500,
+      }),
+    );
+  }
+
+  async createTaxAuthority(
+    ctx: TenantContext,
+    input: { code: string; name: string; jurisdictionId: string },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const jurisdiction = await tx.jurisdiction.findUnique({
+        where: { id: input.jurisdictionId },
+      });
+      if (!jurisdiction) {
+        throw new FiscalError("JURISDICTION_NOT_FOUND", "Jurisdicción no encontrada");
+      }
+      return tx.taxAuthority.create({ data: input });
+    }).catch((err: unknown) => {
+      if (isUniqueConstraintError(err)) {
+        throw new FiscalError(
+          "CATALOG_CODE_CONFLICT",
+          "Ya existe un registro con ese código en el catálogo fiscal",
+        );
+      }
+      throw err;
+    });
+  }
+
   async listRegimes(ctx: TenantContext) {
     return withTenantContext(ctx, (tx) =>
       tx.taxRegime.findMany({
@@ -122,7 +168,33 @@ export class FiscalMasterService {
     return withTenantContext(ctx, async (tx) => {
       const taxType = await tx.taxType.findUnique({ where: { id: input.taxTypeId } });
       if (!taxType) throw new FiscalError("TAX_TYPE_NOT_FOUND", "Impuesto no encontrado");
+      const jurisdiction = await tx.jurisdiction.findUnique({
+        where: { id: input.jurisdictionId },
+      });
+      if (!jurisdiction) {
+        throw new FiscalError("JURISDICTION_NOT_FOUND", "Jurisdicción no encontrada");
+      }
+      const authority = await tx.taxAuthority.findUnique({
+        where: { id: input.authorityId },
+      });
+      if (!authority) {
+        throw new FiscalError("AUTHORITY_NOT_FOUND", "Autoridad fiscal no encontrada");
+      }
+      if (authority.jurisdictionId !== input.jurisdictionId) {
+        throw new FiscalError(
+          "AUTHORITY_JURISDICTION_MISMATCH",
+          "La autoridad fiscal debe corresponder a la jurisdicción del régimen",
+        );
+      }
       return tx.taxRegime.create({ data: input });
+    }).catch((err: unknown) => {
+      if (isUniqueConstraintError(err)) {
+        throw new FiscalError(
+          "CATALOG_CODE_CONFLICT",
+          "Ya existe un registro con ese código en el catálogo fiscal",
+        );
+      }
+      throw err;
     });
   }
 

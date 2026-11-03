@@ -155,17 +155,21 @@ export function StudyOnboardingFiscal() {
     enabled: Boolean(firmId && clientId),
   });
 
-  const activeProfile = useMemo(
-    () => profileQuery.data?.find((profile) => profile.status === "ACTIVE") ?? profileQuery.data?.find((profile) => profile.status === "DRAFT") ?? profileQuery.data?.[0],
+  const latestProfile = useMemo(
+    () =>
+      (profileQuery.data ?? []).reduce<TaxpayerProfileVersion | undefined>(
+        (latest, profile) => (!latest || profile.version > latest.version ? profile : latest),
+        undefined,
+      ),
     [profileQuery.data],
   );
-  const effectiveProfileId = profileId ?? activeProfile?.id;
+  const effectiveProfileId = profileId ?? latestProfile?.id;
   const selectedPeriod = periodsQuery.data?.find((period) => period.id === obligationForm.periodId);
   const eligibleRegistrations = (registrationsQuery.data ?? []).filter(
     (registration) => registration.status === "ACTIVE" && (!selectedPeriod || registration.regime.taxType.id === selectedPeriod.taxTypeId),
   );
   const stepCompletion: Record<FiscalStep, boolean> = {
-    perfil: Boolean(activeProfile),
+    perfil: Boolean(latestProfile),
     inscripcion: (registrationsQuery.data?.length ?? 0) > 0,
     actividades: (clientActivitiesQuery.data?.length ?? 0) > 0,
     periodos: (periodsQuery.data?.length ?? 0) > 0,
@@ -288,23 +292,23 @@ export function StudyOnboardingFiscal() {
               <div>
                 <p className="study-page__eyebrow">Identidad fiscal</p>
                 <h2 id="contributor-title">Datos del contribuyente</h2>
-                <p>Identidad, condición frente al impuesto y estado de la versión vigente.</p>
+                <p>Identidad, condición frente al impuesto y estado de la última versión.</p>
               </div>
-              {activeProfile ? <StatusBadge status={activeProfile.status} /> : null}
+              {latestProfile ? <StatusBadge status={latestProfile.status} /> : null}
             </div>
-            {activeProfile ? (
+            {latestProfile ? (
               <>
                 <dl className="fiscal-contributor__facts">
-                  <div><dt>Razón social</dt><dd>{activeProfile.legalName}</dd></div>
-                  <div><dt>CUIT</dt><dd>{activeProfile.cuit}</dd></div>
-                  <div><dt>Tipo</dt><dd>{activeProfile.personType === "JURIDICA" ? "Persona jurídica" : "Persona física"}</dd></div>
-                  <div><dt>Condición</dt><dd>{CONDITION_LABELS[activeProfile.nationalCondition]}</dd></div>
-                  <div><dt>Versión</dt><dd>v{activeProfile.version}</dd></div>
+                  <div><dt>Razón social</dt><dd>{latestProfile.legalName}</dd></div>
+                  <div><dt>CUIT</dt><dd>{latestProfile.cuit}</dd></div>
+                  <div><dt>Tipo</dt><dd>{latestProfile.personType === "JURIDICA" ? "Persona jurídica" : "Persona física"}</dd></div>
+                  <div><dt>Condición</dt><dd>{CONDITION_LABELS[latestProfile.nationalCondition]}</dd></div>
+                  <div><dt>Versión</dt><dd>v{latestProfile.version}</dd></div>
                 </dl>
                 {canWrite || (profileQuery.data?.length ?? 0) > 1 ? <div className="study-panel__actions fiscal-contributor__actions">
-                  {canWrite && activeProfile.status === "DRAFT" ? <Button variant="secondary" onClick={() => submitReview.mutate()} loading={submitReview.isPending}>Enviar a revisión</Button> : null}
-                  {canWrite && activeProfile.status === "IN_REVIEW" ? <Button onClick={() => activate.mutate()} loading={activate.isPending}>Activar perfil</Button> : null}
-                  {canWrite ? <Button variant="secondary" onClick={() => { setProfileId(null); setForm({ legalName: activeProfile.legalName, cuit: activeProfile.cuit, personType: activeProfile.personType, nationalCondition: activeProfile.nationalCondition, validFrom: today }); openStepForm("perfil"); }}>Crear nueva versión</Button> : null}
+                  {canWrite && latestProfile.status === "DRAFT" ? <Button variant="secondary" onClick={() => submitReview.mutate()} loading={submitReview.isPending}>Enviar a revisión</Button> : null}
+                  {canWrite && latestProfile.status === "IN_REVIEW" ? <Button onClick={() => activate.mutate()} loading={activate.isPending}>Activar perfil</Button> : null}
+                  {canWrite && latestProfile.status === "ACTIVE" ? <Button variant="secondary" onClick={() => { setProfileId(null); setForm({ legalName: latestProfile.legalName, cuit: latestProfile.cuit, personType: latestProfile.personType, nationalCondition: latestProfile.nationalCondition, validFrom: today }); openStepForm("perfil"); }}>Crear nueva versión</Button> : null}
                   {(profileQuery.data?.length ?? 0) > 1 ? <Button type="button" variant="ghost" onClick={() => setShowProfileHistory((visible) => !visible)} aria-expanded={showProfileHistory}>{showProfileHistory ? "Ocultar historial" : "Ver historial"}</Button> : null}
                 </div> : null}
                 {showProfileHistory ? <ul className="fiscal-contributor__history" aria-label="Historial de versiones fiscales">
@@ -366,7 +370,7 @@ export function StudyOnboardingFiscal() {
         isOpen={openFormStep === "perfil"}
         onClose={() => setOpenFormStep(null)}
         eyebrow="Onboarding fiscal"
-        title={activeProfile ? "Crear nueva versión del perfil" : "Crear perfil fiscal"}
+        title={latestProfile ? "Crear nueva versión del perfil" : "Crear perfil fiscal"}
         description="Completá la identidad y condición fiscal del contribuyente."
         size="wide"
       >

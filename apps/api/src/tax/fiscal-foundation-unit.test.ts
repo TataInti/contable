@@ -39,6 +39,8 @@ type TestContext = {
 const mockState = vi.hoisted(() => ({
   profiles: [] as StoredProfile[],
   taxTypes: [] as Array<{ id: string }>,
+  jurisdictions: [] as Array<{ id: string }>,
+  taxAuthorities: [] as Array<{ id: string; jurisdictionId: string }>,
   taxRegimes: [] as Array<Record<string, unknown>>,
   lockQueues: new Map<string, Promise<void>>(),
   context: {
@@ -168,6 +170,14 @@ function makeTransaction(ctx: TestContext) {
       findUnique: async ({ where }: { where: { id: string } }) =>
         mockState.taxTypes.find((item) => item.id === where.id) ?? null,
     },
+    jurisdiction: {
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        mockState.jurisdictions.find((item) => item.id === where.id) ?? null,
+    },
+    taxAuthority: {
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        mockState.taxAuthorities.find((item) => item.id === where.id) ?? null,
+    },
     taxRegime: {
       findUnique: async () => {
         mockState.regimeFindUniqueCalls += 1;
@@ -216,6 +226,8 @@ const masters = new FiscalMasterService();
 beforeEach(() => {
   mockState.profiles.length = 0;
   mockState.taxTypes.length = 0;
+  mockState.jurisdictions.length = 0;
+  mockState.taxAuthorities.length = 0;
   mockState.taxRegimes.length = 0;
   mockState.lockQueues.clear();
   mockState.idCounter = 0;
@@ -332,6 +344,8 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
 
   it("valida taxTypeId contra impuestos al crear un régimen", async () => {
     mockState.taxTypes.push({ id: TAX_TYPE_ID });
+    mockState.jurisdictions.push({ id: JURISDICTION_ID });
+    mockState.taxAuthorities.push({ id: AUTHORITY_ID, jurisdictionId: JURISDICTION_ID });
     const regime = await masters.createRegime(ctxOwner, {
       code: "RI-UNIT",
       name: "Responsable Inscripto",
@@ -355,6 +369,8 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
 
   it("sanitiza errores Prisma de las rutas fiscales", async () => {
     mockState.taxTypes.push({ id: TAX_TYPE_ID });
+    mockState.jurisdictions.push({ id: JURISDICTION_ID });
+    mockState.taxAuthorities.push({ id: AUTHORITY_ID, jurisdictionId: JURISDICTION_ID });
     mockState.regimeCreateError = Object.assign(
       new Error("P2002 private_table contable_runtime secret detail"),
       { code: "P2002" },
@@ -374,9 +390,12 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
           authorityId: AUTHORITY_ID,
         },
       });
-      expect(response.statusCode).toBe(500);
+      expect(response.statusCode).toBe(409);
       expect(response.json()).toEqual({
-        error: { code: "INTERNAL_ERROR", message: "Ocurrió un error interno" },
+        error: {
+          code: "CATALOG_CODE_CONFLICT",
+          message: "Ya existe un registro con ese código en el catálogo fiscal",
+        },
       });
       expect(response.body).not.toContain("P2002");
       expect(response.body).not.toContain("private_table");

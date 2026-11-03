@@ -1,0 +1,146 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ClientContextValue } from "../context/ClientContext";
+import { api } from "../lib/api";
+import { StudyOnboardingFiscal } from "./StudyOnboardingFiscal";
+
+const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
+
+vi.mock("../context/ClientContext", () => ({
+  useClientContext: () => contextMock.current,
+}));
+
+vi.mock("../lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/api")>();
+  return {
+    ...actual,
+    api: {
+      get: vi.fn(),
+      post: vi.fn(),
+      patch: vi.fn(),
+      put: vi.fn(),
+      del: vi.fn(),
+      postWithHeaders: vi.fn(),
+    } as unknown as typeof actual.api,
+  };
+});
+
+interface ProfileFixture {
+  id: string;
+  version: number;
+  legalName: string;
+  cuit: string;
+  personType: "FISICA" | "JURIDICA";
+  nationalCondition: "RESPONSABLE_INSCRIPTO";
+  status: "DRAFT" | "IN_REVIEW" | "ACTIVE" | "SUPERSEDED";
+}
+
+const profiles: ProfileFixture[] = [];
+
+function renderOnboarding() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <StudyOnboardingFiscal />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+function context(): ClientContextValue {
+  return {
+    firmId: "firm-a",
+    clientId: "client-synthetic",
+    periodId: null,
+    isReady: true,
+    capabilities: new Set(["tax.profile.read", "tax.profile.write"]),
+    hasClientAccess: (id) => id === "client-synthetic",
+    setFirmId: vi.fn(),
+    setClientId: vi.fn(),
+    setPeriodId: vi.fn(),
+  };
+}
+
+function mockApi() {
+  vi.mocked(api.get).mockImplementation(((path: string) => {
+    if (path.includes("tax-profile-versions")) return Promise.resolve([...profiles]);
+    return Promise.resolve([]);
+  }) as never);
+  vi.mocked(api.post).mockImplementation(((path: string) => {
+    if (path.endsWith("/submit-review")) {
+      const successor = profiles.find((profile) => profile.id === "profile-v2");
+      if (successor) successor.status = "IN_REVIEW";
+      return Promise.resolve(successor);
+    }
+    if (path.endsWith("/activate")) {
+      const predecessor = profiles.find((profile) => profile.id === "profile-v1");
+      const successor = profiles.find((profile) => profile.id === "profile-v2");
+      if (predecessor) predecessor.status = "SUPERSEDED";
+      if (successor) successor.status = "ACTIVE";
+      return Promise.resolve(successor);
+    }
+    return Promise.resolve({});
+  }) as never);
+}
+
+describe("StudyOnboardingFiscal — acciones de la versión sucesora", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = context();
+    profiles.splice(
+      0,
+      profiles.length,
+      {
+        id: "profile-v1",
+        version: 1,
+        legalName: "Cliente sintético SA",
+        cuit: "20111111111",
+        personType: "JURIDICA",
+        nationalCondition: "RESPONSABLE_INSCRIPTO",
+        status: "ACTIVE",
+      },
+      {
+        id: "profile-v2",
+        version: 2,
+        legalName: "Cliente sintético actualizado SA",
+        cuit: "20111111111",
+        personType: "JURIDICA",
+        nationalCondition: "RESPONSABLE_INSCRIPTO",
+        status: "DRAFT",
+      },
+    );
+    mockApi();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("revisa y activa la última DRAFT mientras la versión anterior sigue activa", async () => {
+    renderOnboarding();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Enviar a revisión" }));
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith(
+        "/firms/firm-a/clients/client-synthetic/tax-profile-versions/profile-v2/submit-review",
+      );
+    });
+    expect(profiles.find((profile) => profile.id === "profile-v1")?.status).toBe("ACTIVE");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Activar perfil" }));
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith(
+        "/firms/firm-a/clients/client-synthetic/tax-profile-versions/profile-v2/activate",
+      );
+    });
+    expect(profiles.find((profile) => profile.id === "profile-v2")?.status).toBe("ACTIVE");
+    expect(profiles.find((profile) => profile.id === "profile-v1")?.status).toBe("SUPERSEDED");
+  });
+});

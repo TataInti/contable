@@ -100,6 +100,39 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/api/v1/tax/authorities", async (req, reply) => {
+    const query = z.object({ jurisdictionId: z.string().uuid().optional() }).parse(req.query);
+    try {
+      const data = await masters.listTaxAuthorities(
+        tenantContextFromRequest(req),
+        query.jurisdictionId,
+      );
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post("/api/v1/tax/authorities", async (req, reply) => {
+    const body = z
+      .object({
+        code: z.string().trim().min(1).max(40),
+        name: z.string().trim().min(1).max(160),
+        jurisdictionId: z.string().uuid(),
+      })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await masters.createTaxAuthority(
+        tenantContextFromRequest(req),
+        body,
+      );
+      return reply.status(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.get("/api/v1/tax/regimes", async (req, reply) => {
     try {
       const data = await masters.listRegimes(tenantContextFromRequest(req));
