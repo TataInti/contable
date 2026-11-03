@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { capabilitiesForRole } from "@contable/permissions";
 import { requiredCapability } from "./guard.js";
 
 /**
@@ -33,6 +34,13 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(
       requiredCapability("POST", "/api/v1/firms/f/clients/c/activities"),
     ).toBe("tax.profile.write");
+  });
+
+  it("crear una sucesora del perfil requiere permiso de escritura fiscal", () => {
+    const successorPath = "/api/v1/firms/f/clients/c/tax-profile-versions/p/versions";
+    expect(requiredCapability("POST", successorPath)).toBe("tax.profile.write");
+    expect(capabilitiesForRole("PREPARER").has("tax.profile.write")).toBe(true);
+    expect(capabilitiesForRole("AUDITOR_READONLY").has("tax.profile.write")).toBe(false);
   });
 
   it("portal-invitations exige client.read (GET) / client.manage (POST)", () => {
