@@ -303,15 +303,17 @@ export class TaxpayerProfileService {
 
   /** Envía a revisión. */
   async submitReview(ctx: TenantContext, profileVersionId: string) {
-    const clientId = ctx.clientId;
-    if (!clientId) throw new FiscalError("PROFILE_NOT_FOUND", "Perfil fiscal no encontrado");
     return withTenantContext(ctx, async (tx) => {
       const profile = await tx.taxpayerProfileVersion.findFirst({
-        where: { id: profileVersionId, firmId: ctx.firmId, clientId },
+        where: {
+          id: profileVersionId,
+          firmId: ctx.firmId,
+          ...(ctx.clientId ? { clientId: ctx.clientId } : {}),
+        },
       });
       if (!profile) throw new FiscalError("PROFILE_NOT_FOUND", "Perfil fiscal no encontrado");
       const latest = await tx.taxpayerProfileVersion.findFirst({
-        where: { firmId: ctx.firmId, clientId },
+        where: { firmId: ctx.firmId, clientId: profile.clientId },
         orderBy: { version: "desc" },
       });
       if (profile.status !== "DRAFT" || latest?.id !== profile.id) {
@@ -326,13 +328,17 @@ export class TaxpayerProfileService {
 
   /** Activa la última versión revisada y mantiene la anterior hasta el commit. */
   async activate(ctx: TenantContext, profileVersionId: string) {
-    const clientId = ctx.clientId;
-    if (!clientId) throw new FiscalError("PROFILE_NOT_FOUND", "Perfil fiscal no encontrado");
     return withTenantContext(ctx, async (tx) => {
+      const profileWhere = {
+        id: profileVersionId,
+        firmId: ctx.firmId,
+        ...(ctx.clientId ? { clientId: ctx.clientId } : {}),
+      };
+      const candidate = await tx.taxpayerProfileVersion.findFirst({ where: profileWhere });
+      if (!candidate) throw new FiscalError("PROFILE_NOT_FOUND", "Perfil fiscal no encontrado");
+      const clientId = ctx.clientId ?? candidate.clientId;
       await lockProfileVersionSequence(tx, clientId);
-      const profile = await tx.taxpayerProfileVersion.findFirst({
-        where: { id: profileVersionId, firmId: ctx.firmId, clientId },
-      });
+      const profile = await tx.taxpayerProfileVersion.findFirst({ where: profileWhere });
       if (!profile) throw new FiscalError("PROFILE_NOT_FOUND", "Perfil fiscal no encontrado");
       const latest = await tx.taxpayerProfileVersion.findFirst({
         where: { firmId: ctx.firmId, clientId },
