@@ -4,6 +4,7 @@ import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import {
   BACKED_CURRENCIES,
+  matchAccountingStandards,
   matchIibbJurisdictions,
   type CatalogJurisdiction,
 } from "@contable/contracts";
@@ -30,6 +31,13 @@ interface ClientProfile {
   activity: string | null;
   legalForm: string | null;
   serviceStartDate: string | null;
+}
+
+/** Entrada del catálogo de normas contables definido por el estudio. */
+interface AccountingStandardCatalogEntry {
+  id: string;
+  name: string;
+  isActive: boolean;
 }
 
 interface ClientWithProfile extends Client {
@@ -103,6 +111,15 @@ export function StudyClientes() {
     queryFn: () => api.get<CatalogJurisdiction[]>("/tax/jurisdictions"),
     enabled: Boolean(firmId),
   });
+  // Catálogo de normas contables definido por el estudio en Administración.
+  // Se piden activas e inactivas: los valores guardados inactivos se
+  // conservan como opción (desactivar una norma no invalida fichas).
+  const accountingStandardsCatalog = useQuery({
+    queryKey: ["accounting-standards", firmId],
+    queryFn: () =>
+      api.get<AccountingStandardCatalogEntry[]>(`/firms/${firmId}/accounting-standards`),
+    enabled: Boolean(firmId),
+  });
   // Catálogo y matching derivados: mientras el usuario no toca los checkboxes,
   // la selección viene de lo guardado + catálogo (preserva datos existentes).
   const catalogData = jurisdictionCatalog.data;
@@ -127,6 +144,25 @@ export function StudyClientes() {
   const currencyNotBacked = !(BACKED_CURRENCIES as readonly string[]).includes(
     profileForm.functionalCurrency,
   );
+  // Norma contable: selección contra el catálogo del estudio (sin texto libre).
+  // El valor guardado siempre está en el selector: si quedó desactivado se
+  // muestra marcado como tal; si no existe en el catálogo se muestra como
+  // "fuera de catálogo" y el guardado queda bloqueado hasta reelegir — nunca
+  // se elimina en silencio.
+  const standardCatalog = accountingStandardsCatalog.data ?? [];
+  const selectedStandard = profileForm.accountingStandard.trim();
+  const selectedStandardMatch = useMemo(
+    () => matchAccountingStandards(standardCatalog, selectedStandard ? [selectedStandard] : []),
+    [standardCatalog, selectedStandard],
+  );
+  const standardValue = selectedStandardMatch.canonical[0] ?? selectedStandard;
+  const selectedStandardEntry = standardCatalog.find((entry) => entry.name === standardValue);
+  const standardCatalogUnavailable = accountingStandardsCatalog.isError;
+  const standardUnknown =
+    !accountingStandardsCatalog.isLoading &&
+    !standardCatalogUnavailable &&
+    selectedStandard !== "" &&
+    !selectedStandardEntry;
   const create = useMutation({
     mutationFn: () =>
       api.post<Client>(`/firms/${firmId}/clients`, {
@@ -164,7 +200,9 @@ export function StudyClientes() {
         // Solo códigos canónicos del catálogo fiscal; los valores guardados
         // fuera de catálogo no se envían (se avisan antes de guardar).
         iibbJurisdictions: selectedJurisdictions,
-        accountingStandard: profileForm.accountingStandard.trim(),
+        // Selector alimentado por el catálogo del estudio: se envía el nombre
+        // canónico del catálogo, nunca texto libre.
+        accountingStandard: standardValue,
         vatCondition: profileForm.vatCondition.trim(),
         province: profileForm.province.trim(),
         activity: profileForm.activity.trim(),
@@ -478,16 +516,47 @@ export function StudyClientes() {
                 </p>
               ) : null}
             </fieldset>
-            <Field
-              id="client-profile-standard"
-              label="Norma contable"
-              value={profileForm.accountingStandard}
-              onChange={(event) =>
-                setProfileForm({ ...profileForm, accountingStandard: event.target.value })
-              }
-              maxLength={100}
-              placeholder="Opcional"
-            />
+            <label className="ds-field">
+              <span className="ds-field__label">Norma contable</span>
+              <select
+                id="client-profile-standard"
+                className="ctxbar__input"
+                value={standardValue}
+                onChange={(event) =>
+                  setProfileForm({ ...profileForm, accountingStandard: event.target.value })
+                }
+              >
+                <option value="">Sin definir</option>
+                {standardCatalogUnavailable ? (
+                  <option value="" disabled>
+                    No se pudo cargar el catálogo de normas
+                  </option>
+                ) : null}
+                {standardCatalog
+                  .filter((entry) => entry.isActive)
+                  .map((entry) => (
+                    <option key={entry.id} value={entry.name}>
+                      {entry.name}
+                    </option>
+                  ))}
+                {standardCatalog
+                  .filter((entry) => !entry.isActive && entry.name === standardValue)
+                  .map((entry) => (
+                    <option key={entry.id} value={entry.name}>
+                      {entry.name} — desactivada en el catálogo
+                    </option>
+                  ))}
+                {standardUnknown ? (
+                  <option value={standardValue}>{standardValue} — fuera de catálogo</option>
+                ) : null}
+              </select>
+              {standardUnknown ? (
+                <small className="form-error">
+                  La norma contable guardada no está en el catálogo del estudio. Definila en
+                  Administración o elegí una del catálogo para guardar la ficha.
+                </small>
+              ) : null}
+            </label>
             <Field
               id="client-profile-service-start"
               label="Inicio del servicio"
@@ -509,7 +578,7 @@ export function StudyClientes() {
                 type="submit"
                 loading={updateProfile.isPending}
                 loadingLabel="Guardando ficha"
-                disabled={currencyNotBacked}
+                disabled={currencyNotBacked || standardUnknown}
               >
                 Guardar ficha
               </Button>

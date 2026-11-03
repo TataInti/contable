@@ -47,6 +47,11 @@ const catalogFixture = [
   { id: "j2", code: "TUC", name: "Tucumán — Convenio Multilateral", kind: "PROVINCIAL", isActive: true },
 ];
 
+const standardsFixture = [
+  { id: "n1", name: "RTIC", isActive: true },
+  { id: "n2", name: "VENCER", isActive: false },
+];
+
 function clientFixture(profile: Record<string, unknown>) {
   return {
     id: "client-a",
@@ -57,9 +62,10 @@ function clientFixture(profile: Record<string, unknown>) {
   };
 }
 
-function mockApi(profile: Record<string, unknown>) {
+function mockApi(profile: Record<string, unknown>, standards = standardsFixture) {
   vi.mocked(api.get).mockImplementation(((path: string) => {
     if (path === "/tax/jurisdictions") return Promise.resolve(catalogFixture);
+    if (path.includes("/accounting-standards")) return Promise.resolve(standards);
     if (path.includes("/clients")) return Promise.resolve([clientFixture(profile)]);
     return Promise.resolve(null);
   }) as never);
@@ -199,5 +205,119 @@ describe("StudyClientes — ficha con catálogos", () => {
       name: /TUC — Tucumán — Convenio Multilateral/,
     }) as HTMLInputElement;
     expect(tuc.checked).toBe(true);
+  });
+});
+
+describe("StudyClientes — norma contable del catálogo del estudio", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = {
+      firmId: "firm-a",
+      clientId: "client-a",
+      periodId: "period-a",
+      isReady: true,
+      capabilities: new Set(["client.read", "client.manage"]),
+      hasClientAccess: (id) => id === "client-a",
+      setFirmId: vi.fn(),
+      setClientId: vi.fn(),
+      setPeriodId: vi.fn(),
+    };
+    sessionMock.current = {
+      status: "authenticated",
+      me: null,
+      portalContexts: [],
+      error: null,
+      refresh: async () => {},
+    };
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("reemplaza el texto libre por un selector alimentado por el catálogo", async () => {
+    mockApi({
+      functionalCurrency: "ARS",
+      accountingStandard: null,
+      fiscalYearEndMonth: 12,
+      vatCondition: null,
+      iibbJurisdictions: [],
+      province: null,
+      activity: null,
+      legalForm: null,
+      serviceStartDate: null,
+    });
+    renderClientes();
+    await openFirstProfileDrawer();
+
+    const select = (await screen.findByLabelText("Norma contable", {
+      selector: "select",
+      exact: false,
+    })) as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Norma contable" })).toBeNull();
+    // Sólo las normas activas del estudio aparecen como opciones normales;
+    // la desactivada no se ofrece, pero tampoco desaparece si estaba guardada.
+    expect(screen.getByRole("option", { name: "RTIC" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Sin definir" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "VENCER" })).toBeNull();
+  });
+
+  it("conserva la norma guardada desactivada y permite guardarla sin pérdida", async () => {
+    mockApi({
+      functionalCurrency: "ARS",
+      accountingStandard: "VENCER",
+      fiscalYearEndMonth: 12,
+      vatCondition: null,
+      iibbJurisdictions: [],
+      province: null,
+      activity: null,
+      legalForm: null,
+      serviceStartDate: null,
+    });
+    renderClientes();
+    await openFirstProfileDrawer();
+
+    const select = (await screen.findByLabelText("Norma contable", {
+      selector: "select",
+      exact: false,
+    })) as HTMLSelectElement;
+    expect(select.value).toBe("VENCER");
+    expect(screen.getByRole("option", { name: "VENCER — desactivada en el catálogo" })).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Guardar ficha" }) as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(screen.getByText("Guardar ficha"));
+    await waitFor(() => expect(vi.mocked(api.patch)).toHaveBeenCalled());
+    expect(vi.mocked(api.patch)).toHaveBeenCalledWith(
+      "/firms/firm-a/clients/client-a/profile",
+      expect.objectContaining({ accountingStandard: "VENCER" }),
+    );
+  });
+
+  it("muestra el valor legacy fuera de catálogo y bloquea el guardado hasta reelegir", async () => {
+    mockApi({
+      functionalCurrency: "ARS",
+      accountingStandard: "Texto legacy sin catálogo",
+      fiscalYearEndMonth: 12,
+      vatCondition: null,
+      iibbJurisdictions: [],
+      province: null,
+      activity: null,
+      legalForm: null,
+      serviceStartDate: null,
+    });
+    renderClientes();
+    await openFirstProfileDrawer();
+
+    const select = (await screen.findByLabelText("Norma contable", {
+      selector: "select",
+      exact: false,
+    })) as HTMLSelectElement;
+    expect(select.value).toBe("Texto legacy sin catálogo");
+    expect(screen.getByRole("option", { name: /Texto legacy sin catálogo — fuera de catálogo/ })).toBeTruthy();
+    expect(screen.getByText(/no está en el catálogo del estudio/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Guardar ficha" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(vi.mocked(api.patch)).not.toHaveBeenCalled();
   });
 });

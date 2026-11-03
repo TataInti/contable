@@ -5,6 +5,7 @@ import { loadConfig } from "./config.js";
 import { authPlugin } from "./auth/routes.js";
 import { authGuardPlugin } from "./auth/guard.js";
 import { firmRoutes } from "./firms/routes.js";
+import { accountingStandardRoutes } from "./firms/accounting-standards-routes.js";
 import { clientRoutes } from "./clients/routes.js";
 import { documentRoutes } from "./documents/routes.js";
 import { journalRoutes } from "./journal/routes.js";
@@ -122,6 +123,7 @@ export async function buildServer(overrides?: Partial<HealthChecks>): Promise<Fa
   authPlugin(app);
   authGuardPlugin(app);
   firmRoutes(app);
+  accountingStandardRoutes(app);
   clientRoutes(app);
   documentRoutes(app);
   journalRoutes(app);

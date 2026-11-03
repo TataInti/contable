@@ -6,6 +6,7 @@ import {
   createCounterpartySchema,
   createCostCenterSchema,
   createFiscalYearSchema,
+  matchAccountingStandards,
   matchIibbJurisdictions,
 } from "@contable/contracts";
 import { ClientRepository } from "./client-repository.js";
@@ -241,6 +242,39 @@ export function clientRoutes(app: FastifyInstance) {
       }
       clean.iibbJurisdictions = canonical;
     }
+    // Norma contable: validación contra el catálogo definido por el estudio
+    // (tabla accounting_standards). Valores sin match → 422 con detalle; los
+    // matcheados se canonicalizan al nombre del catálogo. Se validan también
+    // las normas desactivadas: desactivar no invalida a los clientes que ya
+    // las tienen asignadas. Los datos legacy se conservan en lectura; el
+    // rechazo ocurre sólo al guardar y no modifica el perfil.
+    if (typeof clean.accountingStandard === "string" && clean.accountingStandard.trim() !== "") {
+      const catalog = await withTenantContext(tenantContextFromRequest(req), (tx) =>
+        tx.accountingStandard.findMany({
+          where: { firmId },
+          select: { name: true, isActive: true },
+        }),
+      );
+      const { canonical, unknown } = matchAccountingStandards(catalog, [
+        clean.accountingStandard as string,
+      ]);
+      if (unknown.length > 0) {
+        return reply.status(422).send({
+          error: {
+            code: "ACCOUNTING_STANDARD_UNKNOWN",
+            message: `Norma contable fuera del catálogo del estudio: ${unknown.join(", ")}. Definila en Administración o elegí una del catálogo.`,
+            details: {
+              unknown,
+              available: catalog.map((entry) => entry.name),
+            },
+            requestId: req.id,
+          },
+        });
+      }
+      clean.accountingStandard = canonical[0];
+    }
+    // Cadena vacía = limpiar la norma explícitamente (null, no "").
+    if (clean.accountingStandard === "") clean.accountingStandard = null;
     const profile = await repo.updateProfile(firmId, clientId, clean as never, tenantContextFromRequest(req));
     return reply.send({ data: profile });
   });

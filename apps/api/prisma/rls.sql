@@ -262,6 +262,19 @@ CREATE POLICY onboarding_checklists_firm_scope ON "onboarding_checklists"
   );
 
 -- ------------------------------------------------------------
+-- 9b. Catálogo de normas contables por estudio (ficha de cliente).
+-- ------------------------------------------------------------
+ALTER TABLE "accounting_standards" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "accounting_standards" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS accounting_standards_firm_scope ON "accounting_standards";
+CREATE POLICY accounting_standards_firm_scope ON "accounting_standards"
+  USING (
+    "firmId" = current_setting('app.firm_id', true)
+    AND app_is_firm_member("firmId", current_setting('app.user_id', true))
+  );
+
+-- ------------------------------------------------------------
 -- 10. Fase 4 — documents, document_file_versions, document_processing_jobs, upload_sessions
 -- ------------------------------------------------------------
 ALTER TABLE "documents" ENABLE ROW LEVEL SECURITY;
