@@ -2,7 +2,12 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
-import { api, type Client } from "../lib/api";
+import {
+  BACKED_CURRENCIES,
+  matchIibbJurisdictions,
+  type CatalogJurisdiction,
+} from "@contable/contracts";
+import { ApiError, api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -37,7 +42,8 @@ interface ClientProfileForm {
   accountingStandard: string;
   fiscalYearEndMonth: string;
   vatCondition: string;
-  iibbJurisdictions: string;
+  /** Códigos canónicos seleccionados del catálogo. null = derivar de lo guardado + catálogo. */
+  iibbJurisdictions: string[] | null;
   province: string;
   activity: string;
   legalForm: string;
@@ -51,7 +57,7 @@ function profileFormFrom(client: ClientWithProfile): ClientProfileForm {
     accountingStandard: profile?.accountingStandard ?? "",
     fiscalYearEndMonth: String(profile?.fiscalYearEndMonth ?? 12),
     vatCondition: profile?.vatCondition ?? "",
-    iibbJurisdictions: profile?.iibbJurisdictions.join(", ") ?? "",
+    iibbJurisdictions: null,
     province: profile?.province ?? "",
     activity: profile?.activity ?? "",
     legalForm: profile?.legalForm ?? "",
@@ -80,7 +86,7 @@ export function StudyClientes() {
     accountingStandard: "",
     fiscalYearEndMonth: "12",
     vatCondition: "",
-    iibbJurisdictions: "",
+    iibbJurisdictions: null,
     province: "",
     activity: "",
     legalForm: "",
@@ -92,6 +98,35 @@ export function StudyClientes() {
     queryFn: () => api.get<ClientWithProfile[]>(`/firms/${firmId}/clients`),
     enabled: Boolean(firmId),
   });
+  const jurisdictionCatalog = useQuery({
+    queryKey: ["jurisdiction-catalog", firmId],
+    queryFn: () => api.get<CatalogJurisdiction[]>("/tax/jurisdictions"),
+    enabled: Boolean(firmId),
+  });
+  // Catálogo y matching derivados: mientras el usuario no toca los checkboxes,
+  // la selección viene de lo guardado + catálogo (preserva datos existentes).
+  const catalogData = jurisdictionCatalog.data;
+  const jurisdictionMatch = useMemo(
+    () =>
+      matchIibbJurisdictions(
+        catalogData ?? [],
+        editingClient?.profile?.iibbJurisdictions ?? [],
+      ),
+    [catalogData, editingClient],
+  );
+  const selectedJurisdictions = profileForm.iibbJurisdictions ?? jurisdictionMatch.canonical;
+  const outOfCatalogJurisdictions = jurisdictionMatch.unknown;
+  const toggleJurisdiction = (code: string, checked: boolean) => {
+    setProfileForm({
+      ...profileForm,
+      iibbJurisdictions: checked
+        ? [...new Set([...selectedJurisdictions, code])]
+        : selectedJurisdictions.filter((value) => value !== code),
+    });
+  };
+  const currencyNotBacked = !(BACKED_CURRENCIES as readonly string[]).includes(
+    profileForm.functionalCurrency,
+  );
   const create = useMutation({
     mutationFn: () =>
       api.post<Client>(`/firms/${firmId}/clients`, {
@@ -123,14 +158,12 @@ export function StudyClientes() {
   const updateProfile = useMutation({
     mutationFn: () => {
       if (!editingClient) throw new Error("Elegí un cliente para actualizar su ficha");
-      const jurisdictions = profileForm.iibbJurisdictions
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
       return api.patch<ClientProfile>(`/firms/${firmId}/clients/${editingClient.id}/profile`, {
         functionalCurrency: profileForm.functionalCurrency.trim().toUpperCase(),
         fiscalYearEndMonth: Number(profileForm.fiscalYearEndMonth),
-        iibbJurisdictions: jurisdictions,
+        // Solo códigos canónicos del catálogo fiscal; los valores guardados
+        // fuera de catálogo no se envían (se avisan antes de guardar).
+        iibbJurisdictions: selectedJurisdictions,
         accountingStandard: profileForm.accountingStandard.trim(),
         vatCondition: profileForm.vatCondition.trim(),
         province: profileForm.province.trim(),
@@ -323,22 +356,35 @@ export function StudyClientes() {
               updateProfile.mutate();
             }}
           >
-            <Field
-              id="client-profile-currency"
-              label="Moneda funcional"
-              value={profileForm.functionalCurrency}
-              onChange={(event) =>
-                setProfileForm({
-                  ...profileForm,
-                  functionalCurrency: event.target.value.slice(0, 3),
-                })
-              }
-              maxLength={3}
-              minLength={3}
-              pattern="[A-Za-z]{3}"
-              title="Ingresá el código ISO de tres letras, por ejemplo ARS"
-              required
-            />
+            <label className="ds-field">
+              <span className="ds-field__label">Moneda funcional</span>
+              <select
+                id="client-profile-currency"
+                className="ctxbar__input"
+                value={profileForm.functionalCurrency}
+                onChange={(event) =>
+                  setProfileForm({ ...profileForm, functionalCurrency: event.target.value })
+                }
+                required
+              >
+                {BACKED_CURRENCIES.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+                {currencyNotBacked ? (
+                  <option value={profileForm.functionalCurrency}>
+                    {profileForm.functionalCurrency} — fuera de catálogo
+                  </option>
+                ) : null}
+              </select>
+              {currencyNotBacked ? (
+                <small className="form-error">
+                  La moneda guardada no está respaldada por el sistema. Elegí{" "}
+                  {BACKED_CURRENCIES.join(" o ")} para guardar la ficha.
+                </small>
+              ) : null}
+            </label>
             <label className="ds-field">
               <span className="ds-field__label">Cierre de ejercicio</span>
               <select
@@ -401,16 +447,37 @@ export function StudyClientes() {
               }
               maxLength={100}
             />
-            <Field
-              id="client-profile-iibb"
-              label="Jurisdicciones IIBB"
-              value={profileForm.iibbJurisdictions}
-              onChange={(event) =>
-                setProfileForm({ ...profileForm, iibbJurisdictions: event.target.value })
-              }
-              hint="Separalas con coma"
-              maxLength={500}
-            />
+            <fieldset className="ds-field" id="client-profile-iibb">
+              <legend className="ds-field__label">Jurisdicciones IIBB</legend>
+              {jurisdictionCatalog.isLoading ? (
+                <p>Cargando catálogo de jurisdicciones…</p>
+              ) : jurisdictionCatalog.isError ? (
+                <p className="form-error">
+                  No se pudo cargar el catálogo de jurisdicciones. Reintentá.
+                </p>
+              ) : (
+                <div className="study-check-list">
+                  {catalogData?.map((entry) => (
+                    <label key={entry.code} className="study-check-option">
+                      <input
+                        type="checkbox"
+                        checked={selectedJurisdictions.includes(entry.code)}
+                        onChange={(event) => toggleJurisdiction(entry.code, event.target.checked)}
+                      />
+                      <span>
+                        {entry.code} — {entry.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {outOfCatalogJurisdictions.length > 0 ? (
+                <p className="study-legacy-note">
+                  Estas jurisdicciones guardadas no están en el catálogo fiscal y se quitarán al
+                  guardar: <strong>{outOfCatalogJurisdictions.join(", ")}</strong>
+                </p>
+              ) : null}
+            </fieldset>
             <Field
               id="client-profile-standard"
               label="Norma contable"
@@ -432,7 +499,9 @@ export function StudyClientes() {
             />
             {updateProfile.isError ? (
               <p className="form-error study-inline-form__feedback" role="alert">
-                No se pudo guardar la ficha. Revisá los datos e intentá nuevamente.
+                {updateProfile.error instanceof ApiError
+                  ? updateProfile.error.message
+                  : "No se pudo guardar la ficha. Revisá los datos e intentá nuevamente."}
               </p>
             ) : null}
             <div className="study-inline-form__actions">
@@ -440,6 +509,7 @@ export function StudyClientes() {
                 type="submit"
                 loading={updateProfile.isPending}
                 loadingLabel="Guardando ficha"
+                disabled={currencyNotBacked}
               >
                 Guardar ficha
               </Button>

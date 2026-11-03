@@ -6,9 +6,11 @@ import {
   createCounterpartySchema,
   createCostCenterSchema,
   createFiscalYearSchema,
+  matchIibbJurisdictions,
 } from "@contable/contracts";
 import { ClientRepository } from "./client-repository.js";
 import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
+import { FiscalMasterService } from "../tax/fiscal-foundation-service.js";
 
 /**
  * Rutas de clientes y maestros (Fase 3).
@@ -17,6 +19,7 @@ import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
 
 export function clientRoutes(app: FastifyInstance) {
   const repo = new ClientRepository();
+  const masters = new FiscalMasterService();
 
   // Crear cliente
   app.post("/api/v1/firms/:firmId/clients", async (req, reply) => {
@@ -216,6 +219,27 @@ export function clientRoutes(app: FastifyInstance) {
     const clean: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(body)) {
       if (v !== undefined) clean[k] = v;
+    }
+    // Jurisdicciones IIBB: validación contra el catálogo fiscal existente.
+    // Valores sin match → 422 con detalle; no se inventan códigos ni se
+    // borra información guardada (el rechazo no modifica el perfil).
+    if (Array.isArray(clean.iibbJurisdictions) && (clean.iibbJurisdictions as string[]).length > 0) {
+      const catalog = await masters.listJurisdictions(tenantContextFromRequest(req));
+      const { canonical, unknown } = matchIibbJurisdictions(catalog, clean.iibbJurisdictions as string[]);
+      if (unknown.length > 0) {
+        return reply.status(422).send({
+          error: {
+            code: "IIBB_JURISDICTION_UNKNOWN",
+            message: `Jurisdicciones IIBB fuera del catálogo fiscal: ${unknown.join(", ")}. Seleccioná jurisdicciones del catálogo.`,
+            details: {
+              unknown,
+              available: catalog.map((entry) => entry.code),
+            },
+            requestId: req.id,
+          },
+        });
+      }
+      clean.iibbJurisdictions = canonical;
     }
     const profile = await repo.updateProfile(firmId, clientId, clean as never, tenantContextFromRequest(req));
     return reply.send({ data: profile });

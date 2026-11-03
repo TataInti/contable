@@ -1,4 +1,5 @@
 export * from "./primitives.js";
+export * from "./catalogs.js";
 export * from "./domain-enums.js";
 export * from "./tax-enums.js";
 export * from "./tax.js";
@@ -7,3 +8,4 @@ export * from "./documents.js";
 export * from "./domain.js";
 export * from "./auth.js";
 export * from "./clients.js";
+export * from "./jurisdictions.js";

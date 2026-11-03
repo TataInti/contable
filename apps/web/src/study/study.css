@@ -5592,3 +5592,23 @@
     gap: var(--ds-space-1);
   }
 }
+
+/* Ficha de cliente: jurisdicciones IIBB del catálogo fiscal */
+.study-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1, 0.25rem);
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.study-check-option {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2, 0.5rem);
+}
+
+.study-legacy-note {
+  color: var(--ds-color-warning, #8a5a00);
+  font-size: 0.85rem;
+}
