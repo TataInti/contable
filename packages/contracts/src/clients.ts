@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { cuit, isoDate, uuid } from "./primitives.js";
+import { functionalCurrency } from "./catalogs.js";
 
 /** Creación de cliente */
 export const createClientSchema = z
@@ -21,7 +22,9 @@ export type UpdateClient = z.infer<typeof updateClientSchema>;
 /** Perfil contable/fiscal del cliente */
 export const clientProfileSchema = z
   .object({
-    functionalCurrency: z.string().length(3).default("ARS"),
+    // Moneda funcional: limitada al catálogo respaldado (contracts/catalogs.ts).
+    // No se asume que 3 letras = ISO 4217; valores fuera del catálogo se rechazan.
+    functionalCurrency: functionalCurrency.default("ARS"),
     accountingStandard: z.string().max(100).optional(),
     fiscalYearEndMonth: z.number().int().min(1).max(12).default(12),
     vatCondition: z.string().max(100).optional(),

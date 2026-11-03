@@ -48,6 +48,12 @@ interface CreatedInternalUser {
   temporaryPassword: string;
 }
 
+interface AccountingStandardRow {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 const INTERNAL_ROLE_LABELS: Record<string, string> = {
   OWNER: "Titular",
   ADMIN: "Administrador",
@@ -167,6 +173,78 @@ export function StudyAdministracion() {
       setActionError(error instanceof Error ? error.message : "No se pudo revocar la invitación."),
   });
 
+  // Catálogo de normas contables del estudio: parámetro estandarizado que se
+  // define acá, en Administración. La ficha de cliente selecciona de este
+  // catálogo (sin texto libre). No hay valores precargados: arranca vacío.
+  const [showStandardForm, setShowStandardForm] = useState(false);
+  const [standardEditing, setStandardEditing] = useState<AccountingStandardRow | null>(null);
+  const [standardName, setStandardName] = useState("");
+  const accountingStandards = useQuery({
+    queryKey: ["accounting-standards", firmId],
+    queryFn: () => api.get<AccountingStandardRow[]>(`/firms/${firmId}/accounting-standards`),
+    enabled: Boolean(firmId && capabilities.has("firm.manage")),
+  });
+  const invalidateStandards = () =>
+    void queryClient.invalidateQueries({ queryKey: ["accounting-standards", firmId] });
+  const createStandard = useMutation({
+    mutationFn: () =>
+      api.post<AccountingStandardRow>(`/firms/${firmId}/accounting-standards`, {
+        name: standardName.trim(),
+      }),
+    onSuccess: (created) => {
+      setActionError(null);
+      setNotice(`La norma contable "${created.name}" quedó activa en el catálogo.`);
+      setStandardName("");
+      setShowStandardForm(false);
+      invalidateStandards();
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo crear la norma contable."),
+  });
+  const updateStandard = useMutation({
+    mutationFn: ({ id, name, isActive }: { id: string; name?: string; isActive?: boolean }) =>
+      api.patch<AccountingStandardRow>(`/firms/${firmId}/accounting-standards/${id}`, {
+        ...(name !== undefined ? { name } : {}),
+        ...(isActive !== undefined ? { isActive } : {}),
+      }),
+    onSuccess: (updated) => {
+      setActionError(null);
+      setNotice(`La norma contable "${updated.name}" quedó actualizada.`);
+      setStandardEditing(null);
+      setStandardName("");
+      setShowStandardForm(false);
+      invalidateStandards();
+    },
+    onError: (error) =>
+      setActionError(
+        error instanceof Error ? error.message : "No se pudo actualizar la norma contable.",
+      ),
+  });
+  const openStandardForm = () => {
+    setActionError(null);
+    setStandardEditing(null);
+    setStandardName("");
+    setShowStandardForm(true);
+  };
+  const openStandardEdit = (row: AccountingStandardRow) => {
+    setActionError(null);
+    setStandardEditing(row);
+    setStandardName(row.name);
+    setShowStandardForm(true);
+  };
+  const toggleStandard = (row: AccountingStandardRow) =>
+    confirm.ask({
+      title: row.isActive
+        ? `¿Desactivar la norma contable "${row.name}"?`
+        : `¿Reactivar la norma contable "${row.name}"?`,
+      description: row.isActive
+        ? "Deja de ofrecerse en la ficha de clientes. Los clientes que ya la tienen asignada conservan su valor."
+        : "Vuelve a aparecer como opción en la ficha de clientes.",
+      confirmLabel: row.isActive ? "Desactivar" : "Reactivar",
+      tone: row.isActive ? "danger" : "default",
+      onConfirm: () => updateStandard.mutate({ id: row.id, isActive: !row.isActive }),
+    });
+
   const copyInvitationLink = async () => {
     if (!invitationLink) return;
     try {
@@ -221,6 +299,7 @@ export function StudyAdministracion() {
           { id: "admin-context-title", label: "Resumen" },
           { id: "internal-users-title", label: "Usuarios internos" },
           { id: "portal-access-title", label: "Accesos del portal" },
+          { id: "accounting-standards-title", label: "Normas contables" },
         ]}
       />
       {notice ? (
@@ -607,6 +686,104 @@ export function StudyAdministracion() {
               </>
             )}
           </>
+        )}
+      </section>
+
+      <section className="study-panel administration-operational-section" aria-labelledby="accounting-standards-title">
+        <div className="study-panel__heading">
+          <div>
+            <h2 id="accounting-standards-title">Normas contables</h2>
+            <p>
+              Catálogo propio del estudio. La ficha de cada cliente selecciona de acá, sin texto
+              libre. Desactivar una norma no altera a los clientes que ya la tienen asignada.
+            </p>
+          </div>
+          <Button size="sm" onClick={openStandardForm}>
+            <Icon name="plus" size={17} /> Nueva norma
+          </Button>
+        </div>
+        <ActionDrawer
+          isOpen={showStandardForm}
+          onClose={() => { setShowStandardForm(false); setStandardEditing(null); setStandardName(""); }}
+          eyebrow="Parámetro del estudio"
+          title={standardEditing ? "Editar norma contable" : "Nueva norma contable"}
+          description="El nombre es el valor que se muestra y se guarda en la ficha de clientes. No se precargan normas: el estudio define las suyas."
+        >
+          <form
+            className="study-form study-form--compact"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setActionError(null);
+              if (standardEditing) updateStandard.mutate({ id: standardEditing.id, name: standardName.trim() });
+              else createStandard.mutate();
+            }}
+          >
+            <Field
+              id="accounting-standard-name"
+              label="Nombre de la norma"
+              value={standardName}
+              onChange={(event) => setStandardName(event.target.value)}
+              maxLength={100}
+              required
+            />
+            {createStandard.isError || updateStandard.isError ? (
+              actionError ? <p className="form-error" role="alert">{actionError}</p> : null
+            ) : null}
+            <div className="study-form__actions">
+              <Button type="submit" loading={createStandard.isPending || updateStandard.isPending} disabled={!standardName.trim()}>
+                {standardEditing ? "Guardar cambios" : "Crear norma"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => { setShowStandardForm(false); setStandardEditing(null); setStandardName(""); }}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </ActionDrawer>
+        {accountingStandards.isLoading ? (
+          <div className="query-state" role="status"><span className="loading-copy">Cargando normas contables…</span></div>
+        ) : accountingStandards.isError ? (
+          <EmptyState
+            title="No se pudieron cargar las normas contables"
+            description="No asumimos que no haya normas mientras la consulta está fallando."
+            action={<Button size="sm" variant="secondary" onClick={() => void accountingStandards.refetch()}>Reintentar</Button>}
+          />
+        ) : (accountingStandards.data?.length ?? 0) === 0 ? (
+          <EmptyState
+            title="Todavía no hay normas contables"
+            description="Creá las normas que usa el estudio para poder seleccionarlas en la ficha de clientes."
+          />
+        ) : (
+          <Table<AccountingStandardRow>
+            rows={accountingStandards.data ?? []}
+            rowKey={(item) => item.id}
+            columns={[
+              { key: "name", header: "Norma", render: (item) => item.name },
+              {
+                key: "status",
+                header: "Estado",
+                render: (item) => <StatusBadge status={item.isActive ? "ACTIVE" : "INACTIVE"} />,
+              },
+              {
+                key: "action",
+                header: "Acción",
+                render: (item) => (
+                  <div className="study-form__actions">
+                    <Button size="sm" variant="secondary" onClick={() => openStandardEdit(item)}>
+                      Editar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={item.isActive ? "ghost" : "secondary"}
+                      loading={updateStandard.isPending && updateStandard.variables?.id === item.id}
+                      onClick={() => toggleStandard(item)}
+                    >
+                      {item.isActive ? "Desactivar" : "Reactivar"}
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+          />
         )}
       </section>
       <ConfirmDialog confirm={confirm} />

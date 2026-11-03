@@ -110,6 +110,9 @@ erDiagram
     USERS ||--o{ PORTAL_MEMBERSHIPS : "portal_memberships.userId"
     CLIENTS ||--o{ PORTAL_MEMBERSHIPS : "portal_memberships.clientId"
 
+    %% Catálogo de normas contables por estudio
+    FIRMS ||--o{ ACCOUNTING_STANDARDS : "accounting_standards.firmId"
+
     %% Sin FKs (tablas planas por diseño)
     AUDIT_EVENTS
 ```
@@ -118,6 +121,7 @@ Notas:
 - `client_profiles` es **1 a 1** con `clients` (`||--o|`).
 - `audit_events` no tiene foreign keys (tabla de auditoría deliberadamente plana).
 - `outbox_events` se accede vía funciones `SECURITY DEFINER` (`app_claim_outbox`, etc.), no por SQL directo.
+- `accounting_standards` es el catálogo de normas contables **por estudio**: se administra desde Administración y la ficha del cliente selecciona de él (sin texto libre). No tiene valores precargados; `client_profiles.accountingStandard` conserva datos legacy en lectura y sólo se valida contra el catálogo al guardar.
 
 ---
 
@@ -508,6 +512,7 @@ Generadas desde `information_schema` (se omitió `_prisma_migrations`, que no ti
 | `client_activities` | `profileVersionId` | `taxpayer_profile_versions` | `id` |
 | `client_assignments` | `clientId` | `clients` | `id` |
 | `client_profiles` | `clientId` | `clients` | `id` |
+| `accounting_standards` | `firmId` | `firms` | `id` |
 | `clients` | `firmId` | `firms` | `id` |
 | `close_cycles` | `clientId` | `clients` | `id` |
 | `close_cycles` | `fiscalYearId` | `fiscal_years` | `id` |

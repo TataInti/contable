@@ -6,9 +6,12 @@ import {
   createCounterpartySchema,
   createCostCenterSchema,
   createFiscalYearSchema,
+  matchAccountingStandards,
+  matchIibbJurisdictions,
 } from "@contable/contracts";
 import { ClientRepository } from "./client-repository.js";
 import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
+import { FiscalMasterService } from "../tax/fiscal-foundation-service.js";
 
 /**
  * Rutas de clientes y maestros (Fase 3).
@@ -17,6 +20,7 @@ import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
 
 export function clientRoutes(app: FastifyInstance) {
   const repo = new ClientRepository();
+  const masters = new FiscalMasterService();
 
   // Crear cliente
   app.post("/api/v1/firms/:firmId/clients", async (req, reply) => {
@@ -217,6 +221,60 @@ export function clientRoutes(app: FastifyInstance) {
     for (const [k, v] of Object.entries(body)) {
       if (v !== undefined) clean[k] = v;
     }
+    // Jurisdicciones IIBB: validación contra el catálogo fiscal existente.
+    // Valores sin match → 422 con detalle; no se inventan códigos ni se
+    // borra información guardada (el rechazo no modifica el perfil).
+    if (Array.isArray(clean.iibbJurisdictions) && (clean.iibbJurisdictions as string[]).length > 0) {
+      const catalog = await masters.listJurisdictions(tenantContextFromRequest(req));
+      const { canonical, unknown } = matchIibbJurisdictions(catalog, clean.iibbJurisdictions as string[]);
+      if (unknown.length > 0) {
+        return reply.status(422).send({
+          error: {
+            code: "IIBB_JURISDICTION_UNKNOWN",
+            message: `Jurisdicciones IIBB fuera del catálogo fiscal: ${unknown.join(", ")}. Seleccioná jurisdicciones del catálogo.`,
+            details: {
+              unknown,
+              available: catalog.map((entry) => entry.code),
+            },
+            requestId: req.id,
+          },
+        });
+      }
+      clean.iibbJurisdictions = canonical;
+    }
+    // Norma contable: validación contra el catálogo definido por el estudio
+    // (tabla accounting_standards). Valores sin match → 422 con detalle; los
+    // matcheados se canonicalizan al nombre del catálogo. Se validan también
+    // las normas desactivadas: desactivar no invalida a los clientes que ya
+    // las tienen asignadas. Los datos legacy se conservan en lectura; el
+    // rechazo ocurre sólo al guardar y no modifica el perfil.
+    if (typeof clean.accountingStandard === "string" && clean.accountingStandard.trim() !== "") {
+      const catalog = await withTenantContext(tenantContextFromRequest(req), (tx) =>
+        tx.accountingStandard.findMany({
+          where: { firmId },
+          select: { name: true, isActive: true },
+        }),
+      );
+      const { canonical, unknown } = matchAccountingStandards(catalog, [
+        clean.accountingStandard as string,
+      ]);
+      if (unknown.length > 0) {
+        return reply.status(422).send({
+          error: {
+            code: "ACCOUNTING_STANDARD_UNKNOWN",
+            message: `Norma contable fuera del catálogo del estudio: ${unknown.join(", ")}. Definila en Administración o elegí una del catálogo.`,
+            details: {
+              unknown,
+              available: catalog.map((entry) => entry.name),
+            },
+            requestId: req.id,
+          },
+        });
+      }
+      clean.accountingStandard = canonical[0];
+    }
+    // Cadena vacía = limpiar la norma explícitamente (null, no "").
+    if (clean.accountingStandard === "") clean.accountingStandard = null;
     const profile = await repo.updateProfile(firmId, clientId, clean as never, tenantContextFromRequest(req));
     return reply.send({ data: profile });
   });

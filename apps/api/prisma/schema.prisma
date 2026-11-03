@@ -129,6 +129,7 @@ model Firm {
   clients           Client[]
   portalMemberships PortalMembership[]
   portalInvitations PortalInvitation[]
+  accountingStandards AccountingStandard[]
 
   @@map("firms")
 }
@@ -617,6 +618,27 @@ model ClientProfile {
 
   @@index([firmId])
   @@map("client_profiles")
+}
+
+// ============================================================
+// Catálogo de normas contables por estudio (decisión de producto).
+// Cada estudio lo define desde Administración; la ficha del cliente
+// selecciona de este catálogo (sin texto libre). Sin valores precargados:
+// arranca vacío. Los valores guardados fuera del catálogo se conservan en
+// lectura; sólo se rechazan (422) cuando el estudio guarda la ficha.
+// ============================================================
+model AccountingStandard {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+
+  @@unique([firmId, name])
+  @@map("accounting_standards")
 }
 
 // ============================================================
