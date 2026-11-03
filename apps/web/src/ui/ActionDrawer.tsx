@@ -13,6 +13,7 @@ interface ActionDrawerProps {
   description?: string;
   eyebrow?: string;
   children: ReactNode;
+  footer?: ReactNode;
   closeLabel?: string;
   size?: "default" | "wide";
 }
@@ -24,6 +25,7 @@ export function ActionDrawer({
   description,
   eyebrow = "Acción",
   children,
+  footer,
   closeLabel = "Cerrar panel",
   size = "default",
 }: ActionDrawerProps) {
@@ -123,6 +125,7 @@ export function ActionDrawer({
           </Button>
         </header>
         <div className="action-drawer__content">{children}</div>
+        {footer ? <footer className="action-drawer__footer">{footer}</footer> : null}
       </aside>
     </div>
   );

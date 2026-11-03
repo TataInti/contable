@@ -264,7 +264,7 @@ describe("G1-03 perfil fiscal (integración DB)", () => {
     expect(active.activatedAt).not.toBeNull();
   });
 
-  it("no permite dos perfiles activos", async () => {
+  it("crea una sucesora sin reemplazar el perfil activo antes de su activación", async () => {
     const p1 = await profiles.createProfile(ctxOwner, {
       clientId: CLIENT_ALFA,
       legalName: "Cliente Alfa SA",
@@ -276,16 +276,23 @@ describe("G1-03 perfil fiscal (integración DB)", () => {
     await profiles.submitReview(ctxOwner, p1.id);
     await profiles.activate(ctxOwner, p1.id);
 
-    await expect(
-      profiles.createProfile(ctxOwner, {
-        clientId: CLIENT_ALFA,
-        legalName: "Cliente Alfa SA",
-        cuit: "20111111111",
-        personType: "JURIDICA",
-        nationalCondition: "RESPONSABLE_INSCRIPTO",
-        validFrom: "2026-02-01",
-      }),
-    ).rejects.toThrow(FiscalError);
+    const p2 = await profiles.createProfile(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      legalName: "Cliente Alfa actualizado SA",
+      cuit: "20111111111",
+      personType: "JURIDICA",
+      nationalCondition: "RESPONSABLE_INSCRIPTO",
+      validFrom: "2026-02-01",
+    });
+    expect(p2).toMatchObject({ version: 2, status: "DRAFT", supersedesId: p1.id });
+    expect((await prisma.taxpayerProfileVersion.findUnique({ where: { id: p1.id } }))?.status).toBe("ACTIVE");
+
+    await profiles.submitReview(ctxOwner, p2.id);
+    expect((await prisma.taxpayerProfileVersion.findUnique({ where: { id: p1.id } }))?.status).toBe("ACTIVE");
+    await profiles.activate(ctxOwner, p2.id);
+
+    expect((await prisma.taxpayerProfileVersion.findUnique({ where: { id: p1.id } }))?.status).toBe("SUPERSEDED");
+    expect((await prisma.taxpayerProfileVersion.findUnique({ where: { id: p2.id } }))?.status).toBe("ACTIVE");
   });
 
   it("registra inscripción sin solapar vigencias", async () => {

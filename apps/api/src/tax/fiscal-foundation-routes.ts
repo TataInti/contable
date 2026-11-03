@@ -7,6 +7,7 @@ import {
   TaxPeriodService,
   TaxRuleService,
   TaxCalendarService,
+  type TaxpayerProfileChanges,
 } from "./fiscal-foundation-service.js";
 import { rulePackValidator } from "./rule-pack-validator.js";
 import { z } from "zod";
@@ -43,7 +44,10 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       const status = err.code.includes("NOT_FOUND") ? 404 : 409;
       return reply.status(status).send({ error: { code: err.code, message: err.message } });
     }
-    throw err;
+    app.log.error({ err }, "Error interno de la fundación fiscal");
+    return reply.status(500).send({
+      error: { code: "INTERNAL_ERROR", message: "Ocurrió un error interno" },
+    });
   };
 
   // ------------------------------------------------------------------
@@ -190,6 +194,42 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       return handleError(reply, err);
     }
   });
+
+  const profileChangesSchema = z
+    .object({
+      legalName: z.string().min(1).max(200).optional(),
+      cuit: z.string().regex(/^\d{11}$/).optional(),
+      personType: z.enum(["FISICA", "JURIDICA"]).optional(),
+      nationalCondition: z.enum(["RESPONSABLE_INSCRIPTO", "MONOTRIBUTISTA", "EXENTO", "NO_RESPONSABLE"]).optional(),
+      fiscalAddress: z.string().max(300).nullable().optional(),
+      fiscalYearEndMonth: z.number().int().min(1).max(12).optional(),
+      monotributoCategory: z.enum(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]).nullable().optional(),
+      validFrom: z.string().date().optional(),
+    })
+    .strict()
+    .refine((changes) => Object.values(changes).some((value) => value !== undefined), "Indicá al menos un cambio");
+
+  app.post(
+    "/api/v1/firms/:firmId/clients/:clientId/tax-profile-versions/:profileVersionId/versions",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { profileVersionId } = req.params as { profileVersionId: string };
+      const body = z
+        .object({ reason: z.string().trim().min(1).max(200), changes: profileChangesSchema })
+        .strict()
+        .parse(req.body);
+      try {
+        const data = await profiles.newVersion(ctx, {
+          profileVersionId,
+          reason: body.reason,
+          changes: pickDefined(body.changes) as TaxpayerProfileChanges,
+        });
+        return reply.code(201).send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
 
   app.post("/api/v1/firms/:firmId/clients/:clientId/tax-profile-versions/:profileVersionId/submit-review", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);

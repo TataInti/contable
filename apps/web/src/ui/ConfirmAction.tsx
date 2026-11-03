@@ -86,14 +86,20 @@ export function ConfirmAction({
         aria-describedby={description ? "confirm-action-description" : undefined}
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id="confirm-action-title" className="confirm-action__title">{title}</h2>
-        {description ? <p id="confirm-action-description" className="confirm-action__description">{description}</p> : null}
-        <div className="confirm-action__actions">
+        <header className="confirm-action__header">
+          <h2 id="confirm-action-title" className="confirm-action__title">{title}</h2>
+        </header>
+        {description ? (
+          <div className="confirm-action__content">
+            <p id="confirm-action-description" className="confirm-action__description">{description}</p>
+          </div>
+        ) : null}
+        <footer className="confirm-action__actions">
           <Button variant="ghost" onClick={onCancel}>{cancelLabel}</Button>
           <Button variant={tone === "danger" ? "danger" : "primary"} onClick={onConfirm}>
             {confirmLabel}
           </Button>
-        </div>
+        </footer>
       </div>
     </div>
   );

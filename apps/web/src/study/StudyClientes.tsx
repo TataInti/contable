@@ -301,8 +301,20 @@ export function StudyClientes() {
         eyebrow="Cartera"
         title="Alta de cliente"
         description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
+        footer={
+          <Button
+            type="submit"
+            form="client-create-form"
+            loading={create.isPending}
+            loadingLabel="Creando cliente"
+            disabled={form.legalName.trim().length < 2 || form.cuit.length !== 11}
+          >
+            Crear cliente
+          </Button>
+        }
       >
         <form
+          id="client-create-form"
           className="study-inline-form study-inline-form--client"
           onSubmit={(event) => {
             event.preventDefault();
@@ -365,16 +377,6 @@ export function StudyClientes() {
               No se pudo crear el cliente. Revisá el CUIT y los permisos.
             </p>
           ) : null}
-          <div className="study-inline-form__actions">
-            <Button
-              type="submit"
-              loading={create.isPending}
-              loadingLabel="Creando cliente"
-              disabled={form.legalName.trim().length < 2 || form.cuit.length !== 11}
-            >
-              Crear cliente
-            </Button>
-          </div>
         </form>
       </ActionDrawer>
 
@@ -385,9 +387,23 @@ export function StudyClientes() {
         title={editingClient ? editingClient.legalName : "Cliente"}
         description="Estos datos se usan como base contable y fiscal. Los regímenes y alícuotas se administran en configuración fiscal."
         size="wide"
+        footer={
+          editingClient ? (
+            <Button
+              type="submit"
+              form="client-profile-form"
+              loading={updateProfile.isPending}
+              loadingLabel="Guardando ficha"
+              disabled={currencyNotBacked || standardUnknown}
+            >
+              Guardar ficha
+            </Button>
+          ) : null
+        }
       >
         {editingClient ? (
           <form
+            id="client-profile-form"
             className="study-inline-form study-inline-form--client"
             onSubmit={(event) => {
               event.preventDefault();
@@ -573,16 +589,6 @@ export function StudyClientes() {
                   : "No se pudo guardar la ficha. Revisá los datos e intentá nuevamente."}
               </p>
             ) : null}
-            <div className="study-inline-form__actions">
-              <Button
-                type="submit"
-                loading={updateProfile.isPending}
-                loadingLabel="Guardando ficha"
-                disabled={currencyNotBacked || standardUnknown}
-              >
-                Guardar ficha
-              </Button>
-            </div>
           </form>
         ) : null}
       </ActionDrawer>

@@ -20,6 +20,7 @@ export type FiscalErrorCode =
   | "PROFILE_NOT_FOUND"
   | "PROFILE_ALREADY_ACTIVE"
   | "PROFILE_VERSION_CONFLICT"
+  | "TAX_TYPE_NOT_FOUND"
   | "REGISTRATION_OVERLAP"
   | "REGISTRATION_NOT_FOUND"
   | "ACTIVITY_LINK_NOT_FOUND"
@@ -47,6 +48,26 @@ export class FiscalError extends Error {
     this.code = code;
   }
 }
+
+export type TaxpayerProfileChanges = {
+  legalName?: string;
+  cuit?: string;
+  personType?: "FISICA" | "JURIDICA";
+  nationalCondition?: "RESPONSABLE_INSCRIPTO" | "MONOTRIBUTISTA" | "EXENTO" | "NO_RESPONSABLE";
+  fiscalAddress?: string | null;
+  fiscalYearEndMonth?: number;
+  monotributoCategory?: string | null;
+  validFrom?: string;
+};
+
+/** Serializa la asignación de versión por cliente dentro de la transacción. */
+async function lockProfileVersionSequence(tx: Prisma.TransactionClient, clientId: string) {
+  // La clave coincide con la unicidad de taxpayer_profile_versions(clientId, version).
+  await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtext(${clientId}), 0)) AS profile_lock`;
+}
+
+const PROFILE_VERSION_CONFLICT_MESSAGE =
+  "Ya existe una versión fiscal en curso o el perfil no es la versión vigente";
 
 // ---------------------------------------------------------------------------
 // G1-02: Maestros (jurisdicción, autoridad, impuesto, régimen)
@@ -98,9 +119,9 @@ export class FiscalMasterService {
     ctx: TenantContext,
     input: { code: string; name: string; taxTypeId: string; jurisdictionId: string; authorityId: string },
   ) {
-    return withTenantContext(ctx, (tx) => {
-      const regime = tx.taxRegime.findUnique({ where: { id: input.taxTypeId } });
-      if (!regime) throw new FiscalError("REGIME_NOT_FOUND", "Régimen no encontrado");
+    return withTenantContext(ctx, async (tx) => {
+      const taxType = await tx.taxType.findUnique({ where: { id: input.taxTypeId } });
+      if (!taxType) throw new FiscalError("TAX_TYPE_NOT_FOUND", "Impuesto no encontrado");
       return tx.taxRegime.create({ data: input });
     });
   }
@@ -176,7 +197,7 @@ export class TaxpayerProfileService {
     );
   }
 
-  /** Crea la primera versión de un perfil fiscal. */
+  /** Crea el primer perfil o una sucesora DRAFT del perfil activo. */
   async createProfile(
     ctx: TenantContext,
     input: {
@@ -193,64 +214,84 @@ export class TaxpayerProfileService {
     },
   ) {
     return withTenantContext(ctx, async (tx) => {
-      const existing = await tx.taxpayerProfileVersion.findFirst({
-        where: { firmId: ctx.firmId, clientId: input.clientId, status: "ACTIVE" },
+      await lockProfileVersionSequence(tx, input.clientId);
+      const current = await tx.taxpayerProfileVersion.findFirst({
+        where: { firmId: ctx.firmId, clientId: input.clientId },
+        orderBy: { version: "desc" },
       });
-      if (existing) {
-        throw new FiscalError("PROFILE_ALREADY_ACTIVE", "El cliente ya tiene un perfil fiscal activo");
+      if (current && current.status !== "ACTIVE") {
+        throw new FiscalError("PROFILE_VERSION_CONFLICT", PROFILE_VERSION_CONFLICT_MESSAGE);
       }
       return tx.taxpayerProfileVersion.create({
         data: {
           firmId: ctx.firmId,
           clientId: input.clientId,
-          version: 1,
+          version: current ? current.version + 1 : 1,
           legalName: input.legalName,
           cuit: input.cuit,
           personType: input.personType,
           nationalCondition: input.nationalCondition,
-          ...(input.fiscalAddress ? { fiscalAddress: input.fiscalAddress } : {}),
-          ...(input.fiscalYearEndMonth !== undefined ? { fiscalYearEndMonth: input.fiscalYearEndMonth } : {}),
-          ...(input.monotributoCategory ? { monotributoCategory: input.monotributoCategory } : {}),
+          ...(input.fiscalAddress !== undefined
+            ? { fiscalAddress: input.fiscalAddress }
+            : current?.fiscalAddress !== null && current?.fiscalAddress !== undefined
+              ? { fiscalAddress: current.fiscalAddress }
+              : {}),
+          ...(input.fiscalYearEndMonth !== undefined
+            ? { fiscalYearEndMonth: input.fiscalYearEndMonth }
+            : current
+              ? { fiscalYearEndMonth: current.fiscalYearEndMonth }
+              : {}),
+          ...(input.monotributoCategory !== undefined
+            ? { monotributoCategory: input.monotributoCategory }
+            : current?.monotributoCategory !== null && current?.monotributoCategory !== undefined
+              ? { monotributoCategory: current.monotributoCategory }
+              : {}),
           validFrom: new Date(input.validFrom),
           status: "DRAFT",
           ...(input.source ? { source: input.source } : {}),
           createdByUserId: ctx.userId,
+          ...(current ? { supersedesId: current.id } : {}),
         },
       });
     });
   }
 
-  /** Crea una nueva versión a partir de una existente (corrección). */
+  /** Crea una nueva versión DRAFT a partir del perfil activo. */
   async newVersion(
     ctx: TenantContext,
-    input: { profileVersionId: string; reason: string; changes: Prisma.TaxpayerProfileVersionUncheckedUpdateInput },
+    input: { profileVersionId: string; reason: string; changes: TaxpayerProfileChanges },
   ) {
+    const clientId = ctx.clientId;
+    if (!clientId) throw new FiscalError("PROFILE_NOT_FOUND", "Perfil fiscal no encontrado");
     return withTenantContext(ctx, async (tx) => {
-      const current = await tx.taxpayerProfileVersion.findUnique({
-        where: { id: input.profileVersionId },
+      await lockProfileVersionSequence(tx, clientId);
+      const current = await tx.taxpayerProfileVersion.findFirst({
+        where: { id: input.profileVersionId, firmId: ctx.firmId, clientId },
       });
       if (!current) throw new FiscalError("PROFILE_NOT_FOUND", "Perfil fiscal no encontrado");
-      if (current.status === "ACTIVE") {
-        throw new FiscalError("PROFILE_ALREADY_ACTIVE", "Un perfil activo no se edita; cree una versión nueva");
+      const latest = await tx.taxpayerProfileVersion.findFirst({
+        where: { firmId: ctx.firmId, clientId },
+        orderBy: { version: "desc" },
+      });
+      if (current.status !== "ACTIVE" || latest?.id !== current.id) {
+        throw new FiscalError("PROFILE_VERSION_CONFLICT", PROFILE_VERSION_CONFLICT_MESSAGE);
       }
-      const nextVersion = current.version + 1;
       const data: Prisma.TaxpayerProfileVersionUncheckedCreateInput = {
         firmId: current.firmId,
         clientId: current.clientId,
-        version: nextVersion,
-        legalName: (input.changes.legalName as string) ?? current.legalName,
-        cuit: (input.changes.cuit as string) ?? current.cuit,
-        personType:
-          (input.changes.personType as "FISICA" | "JURIDICA") ?? current.personType,
-        nationalCondition:
-          (input.changes.nationalCondition as
-            | "RESPONSABLE_INSCRIPTO"
-            | "MONOTRIBUTISTA"
-            | "EXENTO"
-            | "NO_RESPONSABLE") ?? current.nationalCondition,
-        fiscalAddress: (input.changes.fiscalAddress as string) ?? current.fiscalAddress,
-        fiscalYearEndMonth: (input.changes.fiscalYearEndMonth as number) ?? current.fiscalYearEndMonth,
-        validFrom: (input.changes.validFrom as Date) ?? current.validFrom,
+        version: current.version + 1,
+        legalName: input.changes.legalName ?? current.legalName,
+        cuit: input.changes.cuit ?? current.cuit,
+        personType: input.changes.personType ?? current.personType,
+        nationalCondition: input.changes.nationalCondition ?? current.nationalCondition,
+        fiscalAddress:
+          input.changes.fiscalAddress !== undefined ? input.changes.fiscalAddress : current.fiscalAddress,
+        fiscalYearEndMonth: input.changes.fiscalYearEndMonth ?? current.fiscalYearEndMonth,
+        monotributoCategory:
+          input.changes.monotributoCategory !== undefined
+            ? input.changes.monotributoCategory
+            : current.monotributoCategory,
+        validFrom: input.changes.validFrom ? new Date(input.changes.validFrom) : current.validFrom,
         status: "DRAFT",
         source: input.reason,
         createdByUserId: ctx.userId,
@@ -263,10 +304,20 @@ export class TaxpayerProfileService {
   /** Envía a revisión. */
   async submitReview(ctx: TenantContext, profileVersionId: string) {
     return withTenantContext(ctx, async (tx) => {
-      const profile = await tx.taxpayerProfileVersion.findUnique({ where: { id: profileVersionId } });
+      const profile = await tx.taxpayerProfileVersion.findFirst({
+        where: {
+          id: profileVersionId,
+          firmId: ctx.firmId,
+          ...(ctx.clientId ? { clientId: ctx.clientId } : {}),
+        },
+      });
       if (!profile) throw new FiscalError("PROFILE_NOT_FOUND", "Perfil fiscal no encontrado");
-      if (profile.status !== "DRAFT") {
-        throw new FiscalError("INVALID_TRANSITION", `No se puede enviar a revisión desde ${profile.status}`);
+      const latest = await tx.taxpayerProfileVersion.findFirst({
+        where: { firmId: ctx.firmId, clientId: profile.clientId },
+        orderBy: { version: "desc" },
+      });
+      if (profile.status !== "DRAFT" || latest?.id !== profile.id) {
+        throw new FiscalError("INVALID_TRANSITION", "Sólo la última versión DRAFT puede enviarse a revisión");
       }
       return tx.taxpayerProfileVersion.update({
         where: { id: profileVersionId },
@@ -275,15 +326,29 @@ export class TaxpayerProfileService {
     });
   }
 
-  /** Activa la versión (requiere revisión previa). */
+  /** Activa la última versión revisada y mantiene la anterior hasta el commit. */
   async activate(ctx: TenantContext, profileVersionId: string) {
     return withTenantContext(ctx, async (tx) => {
-      const profile = await tx.taxpayerProfileVersion.findUnique({ where: { id: profileVersionId } });
+      const profileWhere = {
+        id: profileVersionId,
+        firmId: ctx.firmId,
+        ...(ctx.clientId ? { clientId: ctx.clientId } : {}),
+      };
+      const candidate = await tx.taxpayerProfileVersion.findFirst({ where: profileWhere });
+      if (!candidate) throw new FiscalError("PROFILE_NOT_FOUND", "Perfil fiscal no encontrado");
+      const clientId = ctx.clientId ?? candidate.clientId;
+      await lockProfileVersionSequence(tx, clientId);
+      const profile = await tx.taxpayerProfileVersion.findFirst({ where: profileWhere });
       if (!profile) throw new FiscalError("PROFILE_NOT_FOUND", "Perfil fiscal no encontrado");
-      if (profile.status !== "IN_REVIEW") {
-        throw new FiscalError("INVALID_TRANSITION", `Sólo un perfil IN_REVIEW puede activarse (estado: ${profile.status})`);
+      const latest = await tx.taxpayerProfileVersion.findFirst({
+        where: { firmId: ctx.firmId, clientId },
+        orderBy: { version: "desc" },
+      });
+      if (profile.status !== "IN_REVIEW" || latest?.id !== profile.id) {
+        throw new FiscalError("INVALID_TRANSITION", "Sólo la última versión IN_REVIEW puede activarse");
       }
-      // Supersede cualquier versión activa previa.
+      // Ambas transiciones quedan en la misma transacción: el perfil vigente
+      // permanece ACTIVE hasta que la nueva versión se activa correctamente.
       await tx.taxpayerProfileVersion.updateMany({
         where: { firmId: profile.firmId, clientId: profile.clientId, status: "ACTIVE" },
         data: { status: "SUPERSEDED" },

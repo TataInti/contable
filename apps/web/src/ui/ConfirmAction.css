@@ -4,24 +4,48 @@
   z-index: var(--ds-z-modal, 300);
   display: grid;
   place-items: center;
-  padding: var(--ds-space-6);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: max(12px, env(safe-area-inset-top, 0px))
+    max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px))
+    max(12px, env(safe-area-inset-left, 0px));
   background: color-mix(in srgb, rgb(34, 33, 29) 42%, transparent);
 }
 
 .confirm-action__dialog {
+  display: flex;
   width: min(100%, 420px);
-  padding: var(--ds-space-6);
+  max-height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--ds-color-border);
   border-radius: var(--ds-radius-lg);
   background: var(--ds-color-surface);
   box-shadow: var(--ds-shadow-float);
 }
 
+.confirm-action__header {
+  flex: 0 0 auto;
+  padding: var(--ds-space-6);
+  border-bottom: 1px solid var(--ds-color-border);
+}
+
 .confirm-action__title {
-  margin: 0 0 var(--ds-space-2);
+  margin: 0;
   font-family: var(--ds-font-serif);
   font-size: var(--ds-text-xl);
   line-height: 1.25;
+}
+
+.confirm-action__content {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--ds-space-6);
+  scrollbar-gutter: stable;
 }
 
 .confirm-action__description {
@@ -32,7 +56,23 @@
 
 .confirm-action__actions {
   display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--ds-space-2);
-  margin-top: var(--ds-space-5);
+  padding: var(--ds-space-6);
+  border-top: 1px solid var(--ds-color-border);
+  background: color-mix(in srgb, var(--ds-color-surface) 94%, var(--ds-color-background));
+}
+
+@media (max-width: 420px) {
+  .confirm-action__header,
+  .confirm-action__content,
+  .confirm-action__actions {
+    padding: var(--ds-space-4);
+  }
+
+  .confirm-action__actions > .ds-button {
+    flex: 1 1 auto;
+  }
 }
