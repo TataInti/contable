@@ -63,7 +63,7 @@ export type TaxpayerProfileChanges = {
 /** Serializa la asignación de versión por cliente dentro de la transacción. */
 async function lockProfileVersionSequence(tx: Prisma.TransactionClient, clientId: string) {
   // La clave coincide con la unicidad de taxpayer_profile_versions(clientId, version).
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${clientId}), 0)`;
+  await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtext(${clientId}), 0)) AS profile_lock`;
 }
 
 const PROFILE_VERSION_CONFLICT_MESSAGE =
