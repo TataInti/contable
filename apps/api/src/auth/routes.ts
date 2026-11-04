@@ -2,13 +2,23 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { loginSchema, mfaVerifySchema } from "@contable/contracts";
 import { AuthService, AuthError } from "./auth-service.js";
 import { SessionRepository } from "./session-repository.js";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { z } from "zod";
 import { withTenantContext } from "./tenant.js";
+import { prisma } from "../lib/prisma.js";
 import { hashPassword, verifyPassword } from "./password.js";
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(8).max(200),
+  newPassword: z.string().min(12).max(200),
+}).strict();
+
+// Canje de un enlace de recuperación de acceso emitido por un administrador
+// al miembro interno. La contraseña nueva la define el propio usuario: el
+// gestor nunca la ve. El token viaja en claro por HTTPS y en la base sólo
+// existe su hash SHA-256 (patrón portal_invitations).
+const accessRecoveryRedeemSchema = z.object({
+  token: z.string().min(32).max(300),
   newPassword: z.string().min(12).max(200),
 }).strict();
 
@@ -80,6 +90,37 @@ export function authPlugin(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof AuthError) {
         return reply.status(401).send({ error: { code: err.code, message: err.message } });
+      }
+      throw err;
+    }
+  });
+
+  // Canje del enlace de recuperación: ruta pública (la credencial es el
+  // token), rate-limit estricto. La validación de un solo uso, caducidad,
+  // revocación y usuario activo es atómica en SQL
+  // (app_redeem_member_access_recovery); el fallo es genérico RECOVERY_INVALID
+  // para no dar un oráculo de estados. Nunca se loguea el token ni la
+  // contraseña.
+  app.post("/api/v1/auth/access-recovery/redeem", { config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } }, async (req, reply) => {
+    const body = accessRecoveryRedeemSchema.parse(req.body);
+    const tokenHash = createHash("sha256").update(body.token).digest("hex");
+    const passwordHash = await hashPassword(body.newPassword);
+    try {
+      const rows = await prisma.$queryRaw<{ userId: string; status: string }[]>`
+        SELECT * FROM app_redeem_member_access_recovery(${tokenHash}, ${passwordHash})
+      `;
+      if (!rows[0]) {
+        return reply.status(400).send({
+          error: { code: "RECOVERY_INVALID", message: "El enlace de recuperación es inválido, expiró o ya fue usado" },
+        });
+      }
+      return reply.send({ data: { status: "OK" } });
+    } catch (err) {
+      // Fallo genérico e indistinguible: no se revela cuál fue la causa.
+      if (String(err).includes("RECOVERY_INVALID")) {
+        return reply.status(400).send({
+          error: { code: "RECOVERY_INVALID", message: "El enlace de recuperación es inválido, expiró o ya fue usado" },
+        });
       }
       throw err;
     }

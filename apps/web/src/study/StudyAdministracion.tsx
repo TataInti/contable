@@ -7,6 +7,7 @@ import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
+import { memberActionCopy, memberRecoveryCopy, memberRowActions, roleChangeCopy } from "./member-row-actions.js";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { SectionIndex } from "../ui/SectionIndex";
 import "./study.css";
@@ -48,6 +49,15 @@ interface CreatedInternalUser {
   temporaryPassword: string;
 }
 
+// Recuperación de acceso: el enlace se muestra UNA sola vez; en la base sólo
+// vive el hash del token. El gestor nunca ve ni define la contraseña.
+interface CreatedAccessRecovery {
+  recoveryId: string;
+  expiresAt: string;
+  sessionsRevoked: number;
+  recoveryToken: string;
+}
+
 interface AccountingStandardRow {
   id: string;
   name: string;
@@ -85,6 +95,8 @@ export function StudyAdministracion() {
   const [role, setRole] = useState("OWNER");
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
+  const [recoveryLink, setRecoveryLink] = useState<string | null>(null);
+  const [recoverySummary, setRecoverySummary] = useState<{ memberName: string; expiresAt: string; sessionsRevoked: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const confirm = useConfirmAction();
@@ -119,6 +131,56 @@ export function StudyAdministracion() {
     },
     onError: (error) =>
       setActionError(error instanceof Error ? error.message : "No se pudo actualizar el rol."),
+  });
+  // Ciclo de vida (baja reversible): suspender cierra las sesiones activas del
+  // usuario en el servidor y preserva datos/historial; reactivar exige una
+  // acción explícita del admin. La validación de último OWNER/ADMIN la hace
+  // el backend (app_suspend_internal_member / app_reactivate_internal_member).
+  const suspendInternalMember = useMutation({
+    mutationFn: ({ userId, reason }: { userId: string; reason?: string }) =>
+      api.post(`/firms/${firmId}/members/${userId}/suspend`, reason ? { reason } : {}),
+    onSuccess: () => {
+      setActionError(null);
+      setNotice("El usuario quedó suspendido: pierde el acceso de inmediato y sus sesiones activas se cerraron. Sus datos e historial se conservan.");
+      void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo suspender al usuario."),
+  });
+  const reactivateInternalMember = useMutation({
+    mutationFn: ({ userId, reason }: { userId: string; reason?: string }) =>
+      api.post(`/firms/${firmId}/members/${userId}/reactivate`, reason ? { reason } : {}),
+    onSuccess: () => {
+      setActionError(null);
+      setNotice("El usuario fue reactivado con su mismo rol. Tendrá que iniciar sesión nuevamente.");
+      void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo reactivar al usuario."),
+  });
+  // Renovación de claves: el admin genera un enlace de un solo uso para que el
+  // miembro defina una contraseña nueva. El backend cierra sus sesiones
+  // activas al emitir, valida OWNER-protegido y audita; el enlace se muestra
+  // una sola vez acá y no se vuelve a obtener.
+  const createAccessRecovery = useMutation({
+    mutationFn: ({ userId }: { userId: string }) =>
+      api.post<CreatedAccessRecovery>(`/firms/${firmId}/members/${userId}/access-recovery`, {}),
+    onSuccess: (created, { userId }) => {
+      setActionError(null);
+      const memberName =
+        internalMembers.data?.find((item) => item.userId === userId)?.user?.name ?? "el usuario";
+      setRecoverySummary({
+        memberName,
+        expiresAt: new Date(created.expiresAt).toLocaleString("es-AR"),
+        sessionsRevoked: created.sessionsRevoked,
+      });
+      setRecoveryLink(
+        `${window.location.origin}/recuperar-acceso#token=${encodeURIComponent(created.recoveryToken)}`,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo generar el enlace de recuperación."),
   });
   const invitations = useQuery({
     queryKey: ["portal-invitations", firmId, clientId],
@@ -254,6 +316,22 @@ export function StudyAdministracion() {
     } catch {
       setActionError("No se pudo copiar el enlace. Seleccionalo y copialo manualmente.");
     }
+  };
+
+  const copyRecoveryLink = async () => {
+    if (!recoveryLink) return;
+    try {
+      await navigator.clipboard.writeText(recoveryLink);
+      setActionError(null);
+      setNotice("El enlace de recuperación se copió al portapapeles.");
+    } catch {
+      setActionError("No se pudo copiar el enlace. Seleccionalo y copialo manualmente.");
+    }
+  };
+
+  const closeRecoveryReceipt = () => {
+    setRecoveryLink(null);
+    setRecoverySummary(null);
   };
 
   const activePortalMembershipCount = memberships.data?.filter((item) => !item.revokedAt).length;
@@ -442,7 +520,18 @@ export function StudyAdministracion() {
                       className="ds-field__input"
                       value={item.role}
                       disabled={updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId}
-                      onChange={(event) => updateInternalRole.mutate({ userId: item.userId, role: event.target.value })}
+                      onChange={(event) => {
+                        const nextRole = event.target.value;
+                        if (nextRole === item.role) return;
+                        const copy = roleChangeCopy(item.user?.name ?? "este usuario", item.role, nextRole);
+                        confirm.ask({
+                          title: copy.title,
+                          description: copy.description,
+                          confirmLabel: "Cambiar rol",
+                          tone: item.role === "OWNER" ? "danger" : "default",
+                          onConfirm: () => updateInternalRole.mutate({ userId: item.userId, role: nextRole }),
+                        });
+                      }}
                     >
                       {INTERNAL_ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
@@ -450,10 +539,110 @@ export function StudyAdministracion() {
                   </div>
                 ),
               },
-              { key: "status", header: "Estado", render: (item) => <StatusBadge status={item.status} /> },
+              { key: "status", header: "Estado", render: (item) => <StatusBadge status={item.user?.status ?? item.status} /> },
+              {
+                key: "actions",
+                header: "Acciones",
+                render: (item) => {
+                  const actions = memberRowActions({
+                    role: item.role,
+                    membershipStatus: item.status,
+                    userStatus: item.user?.status,
+                  });
+                  const memberName = item.user?.name ?? "este usuario";
+                  const anyPending =
+                    suspendInternalMember.isPending ||
+                    reactivateInternalMember.isPending ||
+                    createAccessRecovery.isPending;
+                  return (
+                    <div className="internal-access-cell">
+                      {actions.includes("suspend") ? (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          loading={suspendInternalMember.isPending && suspendInternalMember.variables?.userId === item.userId}
+                          disabled={anyPending}
+                          onClick={() => {
+                            const copy = memberActionCopy("suspend", memberName);
+                            confirm.ask({
+                              title: copy.title,
+                              description: copy.description,
+                              confirmLabel: copy.confirmLabel,
+                              tone: "danger",
+                              onConfirm: () => suspendInternalMember.mutate({ userId: item.userId }),
+                            });
+                          }}
+                        >
+                          Suspender
+                        </Button>
+                      ) : null}
+                      {actions.includes("recover-access") ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          loading={createAccessRecovery.isPending && createAccessRecovery.variables?.userId === item.userId}
+                          disabled={anyPending}
+                          onClick={() => {
+                            const copy = memberRecoveryCopy(memberName);
+                            confirm.ask({
+                              title: copy.title,
+                              description: copy.description,
+                              confirmLabel: copy.confirmLabel,
+                              tone: copy.tone,
+                              onConfirm: () => createAccessRecovery.mutate({ userId: item.userId }),
+                            });
+                          }}
+                        >
+                          Recuperar acceso
+                        </Button>
+                      ) : null}
+                      {actions.includes("reactivate") ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          loading={reactivateInternalMember.isPending && reactivateInternalMember.variables?.userId === item.userId}
+                          disabled={anyPending}
+                          onClick={() => {
+                            const copy = memberActionCopy("reactivate", memberName);
+                            confirm.ask({
+                              title: copy.title,
+                              description: copy.description,
+                              confirmLabel: copy.confirmLabel,
+                              tone: "default",
+                              onConfirm: () => reactivateInternalMember.mutate({ userId: item.userId }),
+                            });
+                          }}
+                        >
+                          Reactivar
+                        </Button>
+                      ) : null}
+                      {actions.length === 0 ? <small>—</small> : null}
+                    </div>
+                  );
+                },
+              },
             ]}
           />
         )}
+        {recoveryLink ? (
+          <div className="invitation-link" role="status">
+            <p>
+              Enlace de recuperación para <strong>{recoverySummary?.memberName}</strong>. Copialo
+              ahora: se muestra una sola vez y vence el {recoverySummary?.expiresAt}.
+              {recoverySummary && recoverySummary.sessionsRevoked > 0
+                ? ` Se cerraron ${recoverySummary.sessionsRevoked} sesión(es) activa(s) del usuario.`
+                : " El usuario no tenía sesiones activas abiertas."}{" "}
+              Vos no ves ni definís la contraseña: la define el usuario con este enlace.
+            </p>
+            <input readOnly value={recoveryLink} aria-label="Enlace de recuperación de acceso" />
+            <Button size="sm" variant="secondary" onClick={() => void copyRecoveryLink()}>
+              Copiar enlace
+            </Button>
+            <Button size="sm" variant="ghost" onClick={closeRecoveryReceipt}>
+              Cerrar
+            </Button>
+          </div>
+        ) : null}
       </section>
 
       <section className="study-panel administration-operational-section" aria-labelledby="portal-access-title">

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   createFirmSchema,
   createMemberSchema,
@@ -11,14 +11,31 @@ import { AuthError } from "../auth/auth-service.js";
 import { prisma } from "../lib/prisma.js";
 import { capabilitiesForRole, type FirmRole } from "@contable/permissions";
 import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
+import {
+  AUDITED_REJECTIONS,
+  lifecycleHttpError,
+  type LifecycleErrorCode,
+} from "./member-lifecycle.js";
 import { z } from "zod";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { hashPassword } from "../auth/password.js";
 
 const createInternalUserSchema = z.object({
   email: z.string().trim().email().max(254).transform((value) => value.toLowerCase()),
   name: z.string().trim().min(2).max(120),
   role: z.enum(["OWNER", "ADMIN", "PREPARER", "REVIEWER", "AUDITOR_READONLY"]),
+}).strict();
+
+const internalRoleSchema = z.enum(["OWNER", "ADMIN", "PREPARER", "REVIEWER", "AUDITOR_READONLY"]);
+
+// Motivo opcional del ciclo de vida (viaja al evento de auditoría; se trunca a 500 en SQL).
+const memberLifecycleReasonSchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+}).strict();
+
+// Recuperación de acceso: vigencia del enlace, en minutos (5 min .. 24 h).
+const accessRecoveryRequestSchema = z.object({
+  ttlMinutes: z.number().int().min(5).max(1440).optional(),
 }).strict();
 
 /**
@@ -28,6 +45,53 @@ const createInternalUserSchema = z.object({
 
 export function firmRoutes(app: FastifyInstance) {
   const firms = new FirmRepository();
+
+  /** Audita un intento rechazado de administración de miembros (actor/acción). */
+  const auditMemberRejection = async (
+    req: FastifyRequest,
+    firmId: string,
+    targetUserId: string,
+    code: LifecycleErrorCode,
+  ): Promise<void> => {
+    const action = AUDITED_REJECTIONS[code];
+    if (!action) return;
+    await withTenantContext(tenantContextFromRequest(req), (tx) =>
+      tx.auditEvent.create({
+        data: {
+          firmId,
+          userId: req.userId!,
+          actorKind: "USER",
+          action,
+          entityType: "FirmMembership",
+          entityId: targetUserId,
+          after: { rejection: code },
+        },
+      }),
+    );
+  };
+
+  /**
+   * Mapea un error SQL del ciclo de vida a la respuesta HTTP correspondiente.
+   * Audita los intentos rechazados sensibles (OWNER protegido, último
+   * administrador, objetivo propio). Devuelve true cuando quedó manejado.
+   */
+  const handleLifecycleError = async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+    firmId: string,
+    targetUserId: string,
+    error: unknown,
+  ): Promise<boolean> => {
+    const mapped = lifecycleHttpError(String(error));
+    if (!mapped) return false;
+    if (AUDITED_REJECTIONS[mapped.code]) {
+      await auditMemberRejection(req, firmId, targetUserId, mapped.code);
+    }
+    await reply.status(mapped.statusCode).send({
+      error: { code: mapped.code, message: mapped.message },
+    });
+    return true;
+  };
 
   app.get("/api/v1/firms/:firmId/dashboard", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
@@ -163,8 +227,23 @@ export function firmRoutes(app: FastifyInstance) {
         )
       `;
       if (!rows[0]) return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
+      const created = rows[0];
+      // Alta interna auditada: actor, acción y rol asignado (sin datos sensibles).
+      await withTenantContext(tenantContextFromRequest(req), (tx) =>
+        tx.auditEvent.create({
+          data: {
+            firmId,
+            userId: req.userId!,
+            actorKind: "USER",
+            action: "internal_user.created",
+            entityType: "User",
+            entityId: created.userId,
+            after: { role: body.role },
+          },
+        }),
+      );
       return reply.status(201).send({ data: {
-        userId: rows[0].userId, email: body.email, name: body.name,
+        userId: created.userId, email: body.email, name: body.name,
         role: body.role, temporaryPassword,
       } });
     } catch (error) {
@@ -175,45 +254,155 @@ export function firmRoutes(app: FastifyInstance) {
     }
   });
 
-  // El rol es la fuente de verdad del acceso a módulos internos.
+  // El rol es la fuente de verdad del acceso a módulos internos. La operación
+  // vive en SQL (app_change_internal_member_role): guard de último administrador
+  // bajo advisory lock, OWNER protegido (un ADMIN no modifica a un OWNER),
+  // revocación de sesiones al degradar y auditoría actor/acción.
   app.patch("/api/v1/firms/:firmId/members/:userId", async (req, reply) => {
     const { firmId, userId } = req.params as { firmId: string; userId: string };
-    const body = z
-      .object({ role: z.enum(["OWNER", "ADMIN", "PREPARER", "REVIEWER", "AUDITOR_READONLY"]) })
-      .strict()
-      .parse(req.body);
-    const member = await withTenantContext(tenantContextFromRequest(req), async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${firmId}))::text`;
-      const existing = await tx.firmMembership.findUnique({
-        where: { firmId_userId: { firmId, userId } },
-      });
-      if (!existing) return null;
-      if (["OWNER", "ADMIN"].includes(existing.role) && !["OWNER", "ADMIN"].includes(body.role)) {
-        const admins = await tx.firmMembership.count({
-          where: { firmId, status: "ACTIVE", role: { in: ["OWNER", "ADMIN"] } },
-        });
-        if (admins <= 1) throw Object.assign(new Error("El estudio debe conservar un administrador"), {
-          statusCode: 409, code: "LAST_ADMIN_REQUIRED",
-        });
+    const body = z.object({ role: internalRoleSchema }).strict().parse(req.body);
+    try {
+      const rows = await prisma.$queryRaw<{ userId: string; membershipId: string; role: string; outcome: string }[]>`
+        SELECT "userId", "membershipId", role, outcome
+        FROM app_change_internal_member_role(
+          ${req.userId!}, ${firmId}, ${userId}, ${body.role}::"FirmRole"
+        )`;
+      if (!rows[0]) {
+        return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
       }
-      return tx.firmMembership.update({
-        where: { id: existing.id },
-        data: { role: body.role },
-        select: {
-          id: true,
-          userId: true,
-          role: true,
-          status: true,
-          acceptedAt: true,
-          user: { select: { name: true, emailNormalized: true, status: true } },
-        },
-      });
-    });
-    if (!member) {
-      return reply.status(404).send({ error: { code: "MEMBER_NOT_FOUND", message: "Usuario interno no encontrado" } });
+      const member = await withTenantContext(tenantContextFromRequest(req), (tx) =>
+        tx.firmMembership.findUnique({
+          where: { firmId_userId: { firmId, userId } },
+          select: {
+            id: true,
+            userId: true,
+            role: true,
+            status: true,
+            acceptedAt: true,
+            user: { select: { name: true, emailNormalized: true, status: true } },
+          },
+        }),
+      );
+      if (!member) {
+        return reply.status(404).send({ error: { code: "MEMBER_NOT_FOUND", message: "Usuario interno no encontrado" } });
+      }
+      return reply.send({ data: member });
+    } catch (error) {
+      if (await handleLifecycleError(req, reply, firmId, userId, error)) return reply;
+      throw error;
     }
-    return reply.send({ data: member });
   });
+
+  // Baja reversible (suspensión) de un miembro interno. Las invariantes de
+  // autorización, guard de último administrador, revocación de sesiones y
+  // auditoría viven en SQL (app_suspend_internal_member). Sin hard-delete:
+  // el estado es la baja y el historial se conserva.
+  app.post("/api/v1/firms/:firmId/members/:userId/suspend", async (req, reply) => {
+    const { firmId, userId } = req.params as { firmId: string; userId: string };
+    const body = memberLifecycleReasonSchema.parse(req.body ?? {});
+    try {
+      const rows = await prisma.$queryRaw<{ userId: string; membershipId: string; status: string }[]>`
+        SELECT "userId", "membershipId", status
+        FROM app_suspend_internal_member(${req.userId!}, ${firmId}, ${userId}, ${body.reason ?? null})`;
+      if (!rows[0]) {
+        return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
+      }
+      return reply.send({ data: rows[0] });
+    } catch (error) {
+      if (await handleLifecycleError(req, reply, firmId, userId, error)) return reply;
+      throw error;
+    }
+  });
+
+  // Reactivación explícita de un miembro suspendido. El admin debe pedirla:
+  // no hay re-creación de sesiones, el usuario reingresa con login nuevo.
+  app.post("/api/v1/firms/:firmId/members/:userId/reactivate", async (req, reply) => {
+    const { firmId, userId } = req.params as { firmId: string; userId: string };
+    const body = memberLifecycleReasonSchema.parse(req.body ?? {});
+    try {
+      const rows = await prisma.$queryRaw<{ userId: string; membershipId: string; status: string }[]>`
+        SELECT "userId", "membershipId", status
+        FROM app_reactivate_internal_member(${req.userId!}, ${firmId}, ${userId}, ${body.reason ?? null})`;
+      if (!rows[0]) {
+        return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
+      }
+      return reply.send({ data: rows[0] });
+    } catch (error) {
+      if (await handleLifecycleError(req, reply, firmId, userId, error)) return reply;
+      throw error;
+    }
+  });
+
+  // Renovación de claves: recuperación segura de acceso para un miembro
+  // interno, iniciada por el admin. La autorización, OWNER-protegido, la
+  // invalidación de tokens pendientes previos, la revocación de sesiones y la
+  // auditoría viven en SQL (app_create_member_access_recovery). El token se
+  // genera acá, se devuelve UNA sola vez en la respuesta y se persiste sólo
+  // su hash SHA-256. Nunca se loguea: el gestor no ve ni define la contraseña;
+  // el propio usuario la define con el enlace.
+  app.post(
+    "/api/v1/firms/:firmId/members/:userId/access-recovery",
+    { config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } },
+    async (req, reply) => {
+      const { firmId, userId } = req.params as { firmId: string; userId: string };
+      const body = accessRecoveryRequestSchema.parse(req.body ?? {});
+      const recoveryToken = randomBytes(32).toString("base64url");
+      const tokenHashValue = createHash("sha256").update(recoveryToken).digest("hex");
+      try {
+        const rows = await prisma.$queryRaw<
+          { recoveryId: string; expiresAt: Date; sessionsRevoked: number }[]
+        >`
+          SELECT "recoveryId", "expiresAt", "sessionsRevoked"
+          FROM app_create_member_access_recovery(
+            ${req.userId!}, ${firmId}, ${userId}, ${tokenHashValue}, ${body.ttlMinutes ?? 30}
+          )`;
+        if (!rows[0]) {
+          return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
+        }
+        const created = rows[0];
+        return reply.status(201).send({
+          data: {
+            recoveryId: created.recoveryId,
+            expiresAt: created.expiresAt,
+            sessionsRevoked: created.sessionsRevoked,
+            // Token en claro: única aparición, sólo en esta respuesta.
+            recoveryToken,
+          },
+        });
+      } catch (error) {
+        if (await handleLifecycleError(req, reply, firmId, userId, error)) return reply;
+        throw error;
+      }
+    },
+  );
+
+  // Revocación explícita de un enlace pendiente (por ejemplo, si se generó por
+  // error). La verificación de actor y estado pendiente vive en SQL
+  // (app_revoke_member_access_recovery) con auditoría.
+  app.post(
+    "/api/v1/firms/:firmId/members/:userId/access-recovery/:recoveryId/revoke",
+    { config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } },
+    async (req, reply) => {
+      const { firmId, userId, recoveryId } = req.params as {
+        firmId: string; userId: string; recoveryId: string;
+      };
+      const body = memberLifecycleReasonSchema.parse(req.body ?? {});
+      try {
+        const rows = await prisma.$queryRaw<{ recoveryId: string; outcome: string }[]>`
+          SELECT "recoveryId", outcome
+          FROM app_revoke_member_access_recovery(
+            ${req.userId!}, ${firmId}, ${recoveryId}, ${body.reason ?? null}
+          )`;
+        if (!rows[0]) {
+          return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
+        }
+        return reply.send({ data: rows[0] });
+      } catch (error) {
+        if (await handleLifecycleError(req, reply, firmId, userId, error)) return reply;
+        throw error;
+      }
+    },
+  );
 
   // Asignar cliente a usuario
   app.post("/api/v1/firms/:firmId/clients/:clientId/assignments", async (req, reply) => {

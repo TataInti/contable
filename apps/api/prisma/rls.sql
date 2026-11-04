@@ -23,7 +23,7 @@ RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM firm_memberships fm
@@ -44,7 +44,7 @@ RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
   SELECT
     -- Contexto client_id explícito: sólo ese cliente
@@ -72,14 +72,60 @@ AS $$
 $$;
 
 -- ------------------------------------------------------------
+-- 0c. Identidades de miembros internos: sólo OWNER/ADMIN activos
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION app_can_manage_firm_users(
+  target_firm_id text,
+  target_actor_id text
+) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.firm_memberships fm
+    JOIN public.users actor ON actor.id = fm."userId"
+    WHERE fm."firmId" = target_firm_id
+      AND fm."userId" = target_actor_id
+      AND fm.status = 'ACTIVE'
+      AND fm.role IN ('OWNER', 'ADMIN')
+      AND actor.status = 'ACTIVE'
+  )
+$$;
+REVOKE ALL ON FUNCTION app_can_manage_firm_users(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app_can_manage_firm_users(text, text) TO contable_runtime, contable_worker;
+ALTER FUNCTION app_is_visible_portal_user(text, text, text)
+  SET search_path = pg_catalog, public, pg_temp;
+
+-- ------------------------------------------------------------
 -- 1. users
 -- ------------------------------------------------------------
 ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "users" FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS users_self ON "users";
-CREATE POLICY users_self ON "users"
-  USING (id = current_setting('app.user_id', true))
+CREATE POLICY users_self ON "users" FOR ALL
+  USING (
+    id = current_setting('app.user_id', true)
+    OR app_is_visible_portal_user(
+      id,
+      current_setting('app.firm_id', true),
+      current_setting('app.user_id', true)
+    )
+    OR (
+      NULLIF(current_setting('app.firm_id', true), '') IS NOT NULL
+      AND app_can_manage_firm_users(
+        current_setting('app.firm_id', true),
+        current_setting('app.user_id', true)
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM public.firm_memberships internal_member
+        WHERE internal_member."firmId" = current_setting('app.firm_id', true)
+          AND internal_member."userId" = users.id
+          AND internal_member.status IN ('ACTIVE', 'INVITED', 'SUSPENDED')
+      )
+    )
+  )
   WITH CHECK (id = current_setting('app.user_id', true));
 
 -- ------------------------------------------------------------

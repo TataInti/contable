@@ -9,6 +9,7 @@ import { PortalShell } from "./shells/PortalShell";
 import { LoginPage } from "./auth/LoginPage";
 import { ChangePasswordPage } from "./auth/ChangePasswordPage";
 import { AcceptPortalInvitation } from "./auth/AcceptPortalInvitation";
+import { RecoverAccessPage } from "./auth/RecoverAccessPage";
 import { logout } from "./lib/auth";
 import { EnvironmentStatusBanner } from "./environment/EnvironmentStatusBanner";
 import { Icon } from "./ui/Icon";
@@ -172,6 +173,7 @@ function AppRoutes() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/cambiar-contrasena" element={<ChangePasswordPage />} />
             <Route path="/aceptar-invitacion" element={<AcceptPortalInvitation />} />
+            <Route path="/recuperar-acceso" element={<RecoverAccessPage />} />
             <Route path="/sin-acceso" element={<NoWorkspace />} />
             <Route element={<Protected />}>
               <Route element={<StudyShell />}>

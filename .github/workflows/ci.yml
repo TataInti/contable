@@ -58,6 +58,11 @@ jobs:
     env:
       DATABASE_URL: postgresql://contable:contable@localhost:5432/contable
       RUNTIME_DATABASE_URL: postgresql://contable_runtime:runtime_secret@localhost:5432/contable
+      # Base desechable para las pruebas de integración de recuperación de
+      # acceso (member-access-recovery.integration.test.ts): apunta a la misma
+      # DB efímera de CI. Sin la variable, la suite se omite (nunca corre
+      # contra una base que no sea desechable).
+      RECOVERY_IT_DATABASE_URL: postgresql://contable:contable@localhost:5432/contable
       SHADOW_DATABASE_URL: postgresql://contable:contable@localhost:5432/contable_shadow
       REDIS_URL: redis://localhost:6379
       MINIO_ENDPOINT: localhost
