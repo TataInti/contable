@@ -170,6 +170,38 @@ describe("auditoría: eventos de actor/acción en el ciclo de vida", () => {
   });
 });
 
+describe("bugfix de ambigüedad PL/pgSQL en el ciclo de vida F2", () => {
+  // Verificado empíricamente: con RETURNS TABLE("userId", ...) el UPDATE sin
+  // calificar fallaba con `column reference "userId" is ambiguous`. La
+  // suspensión fallaba siempre y el cambio de rol fallaba justo en la rama
+  // que revoca sesiones.
+  const bugfixSql = readFileSync(
+    join(thisDir, "../../prisma/migrations/20261106000000_fix_lifecycle_plpgsql_ambiguity/migration.sql"),
+    "utf8",
+  );
+
+  it("los UPDATE de suspensión/reactivación/degradación califican las columnas", () => {
+    for (const fn of [
+      "app_suspend_internal_member",
+      "app_reactivate_internal_member",
+      "app_change_internal_member_role",
+    ]) {
+      const start = bugfixSql.indexOf(`CREATE OR REPLACE FUNCTION ${fn}(`);
+      expect(start, fn).toBeGreaterThan(-1);
+      const body = bugfixSql.slice(start, bugfixSql.indexOf("CREATE OR REPLACE FUNCTION", start + 10));
+      for (const update of body.match(/UPDATE (users|firm_memberships|device_sessions)[\s\S]*?;/g) ?? []) {
+        expect(update, `${fn}: ${update.slice(0, 80)}`).toMatch(
+          /WHERE (users|firm_memberships|device_sessions)\./,
+        );
+      }
+    }
+  });
+
+  it("la revocación de sesiones sigue presente en suspensión y degradación", () => {
+    expect(bugfixSql.match(/UPDATE device_sessions SET "revokedAt" = now\(\)/g)?.length).toBe(2);
+  });
+});
+
 describe("OWNER protegido en SQL", () => {
   it("nadie suspende a un OWNER; un ADMIN no lo modifica ni lo reactiva", () => {
     const suspendBody = migrationSql.slice(
