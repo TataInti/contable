@@ -18,13 +18,18 @@ export interface MemberLifecycleState {
   userStatus?: string | null;
 }
 
-export type MemberRowAction = "suspend" | "reactivate";
+export type MemberRowAction = "suspend" | "reactivate" | "recover-access";
 
 export function memberRowActions(member: MemberLifecycleState): MemberRowAction[] {
   if (!member.userStatus) return [];
   const effectiveStatus = member.userStatus || member.membershipStatus;
   if (effectiveStatus === "SUSPENDED") return ["reactivate"];
-  if (member.membershipStatus === "ACTIVE" && member.role !== "OWNER") return ["suspend"];
+  if (member.membershipStatus === "ACTIVE") {
+    // Recuperar acceso aplica a cualquier miembro activo (también al titular:
+    // si lo pierde, sólo otro titular puede emitirle el enlace; el backend lo
+    // verifica). Suspender sigue reservado a no-OWNER.
+    return member.role !== "OWNER" ? ["suspend", "recover-access"] : ["recover-access"];
+  }
   return [];
 }
 
@@ -71,5 +76,16 @@ export function roleChangeCopy(memberName: string, currentRole: string, nextRole
       ? "Baja de privilegios de administración: cierra sus sesiones activas y deja de gestionar usuarios. El cambio se rechaza si es el último titular o administrador activo."
       : "El rol define qué módulos internos puede usar. El cambio queda registrado en la auditoría.",
     confirmLabel: "Cambiar rol",
+  };
+}
+
+/** Texto de confirmación para generar el enlace de recuperación de acceso. */
+export function memberRecoveryCopy(memberName: string): MemberActionCopy {
+  return {
+    title: `¿Generar enlace de recuperación para ${memberName}?`,
+    description:
+      "Se cierran todas sus sesiones activas y se genera un enlace de un solo uso, válido 30 minutos, para que defina una contraseña nueva. Vos no ves ni definís esa contraseña: entregale el enlace por un canal seguro.",
+    confirmLabel: "Generar enlace",
+    tone: "default",
   };
 }

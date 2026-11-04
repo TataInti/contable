@@ -17,7 +17,7 @@ import {
   type LifecycleErrorCode,
 } from "./member-lifecycle.js";
 import { z } from "zod";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { hashPassword } from "../auth/password.js";
 
 const createInternalUserSchema = z.object({
@@ -31,6 +31,11 @@ const internalRoleSchema = z.enum(["OWNER", "ADMIN", "PREPARER", "REVIEWER", "AU
 // Motivo opcional del ciclo de vida (viaja al evento de auditoría; se trunca a 500 en SQL).
 const memberLifecycleReasonSchema = z.object({
   reason: z.string().trim().max(500).optional(),
+}).strict();
+
+// Recuperación de acceso: vigencia del enlace, en minutos (5 min .. 24 h).
+const accessRecoveryRequestSchema = z.object({
+  ttlMinutes: z.number().int().min(5).max(1440).optional(),
 }).strict();
 
 /**
@@ -327,6 +332,77 @@ export function firmRoutes(app: FastifyInstance) {
       throw error;
     }
   });
+
+  // Renovación de claves: recuperación segura de acceso para un miembro
+  // interno, iniciada por el admin. La autorización, OWNER-protegido, la
+  // invalidación de tokens pendientes previos, la revocación de sesiones y la
+  // auditoría viven en SQL (app_create_member_access_recovery). El token se
+  // genera acá, se devuelve UNA sola vez en la respuesta y se persiste sólo
+  // su hash SHA-256. Nunca se loguea: el gestor no ve ni define la contraseña;
+  // el propio usuario la define con el enlace.
+  app.post(
+    "/api/v1/firms/:firmId/members/:userId/access-recovery",
+    { config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } },
+    async (req, reply) => {
+      const { firmId, userId } = req.params as { firmId: string; userId: string };
+      const body = accessRecoveryRequestSchema.parse(req.body ?? {});
+      const recoveryToken = randomBytes(32).toString("base64url");
+      const tokenHashValue = createHash("sha256").update(recoveryToken).digest("hex");
+      try {
+        const rows = await prisma.$queryRaw<
+          { recoveryId: string; expiresAt: Date; sessionsRevoked: number }[]
+        >`
+          SELECT "recoveryId", "expiresAt", "sessionsRevoked"
+          FROM app_create_member_access_recovery(
+            ${req.userId!}, ${firmId}, ${userId}, ${tokenHashValue}, ${body.ttlMinutes ?? 30}
+          )`;
+        if (!rows[0]) {
+          return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
+        }
+        const created = rows[0];
+        return reply.status(201).send({
+          data: {
+            recoveryId: created.recoveryId,
+            expiresAt: created.expiresAt,
+            sessionsRevoked: created.sessionsRevoked,
+            // Token en claro: única aparición, sólo en esta respuesta.
+            recoveryToken,
+          },
+        });
+      } catch (error) {
+        if (await handleLifecycleError(req, reply, firmId, userId, error)) return reply;
+        throw error;
+      }
+    },
+  );
+
+  // Revocación explícita de un enlace pendiente (por ejemplo, si se generó por
+  // error). La verificación de actor y estado pendiente vive en SQL
+  // (app_revoke_member_access_recovery) con auditoría.
+  app.post(
+    "/api/v1/firms/:firmId/members/:userId/access-recovery/:recoveryId/revoke",
+    { config: { rateLimit: { max: 5, timeWindow: "10 minutes" } } },
+    async (req, reply) => {
+      const { firmId, userId, recoveryId } = req.params as {
+        firmId: string; userId: string; recoveryId: string;
+      };
+      const body = memberLifecycleReasonSchema.parse(req.body ?? {});
+      try {
+        const rows = await prisma.$queryRaw<{ recoveryId: string; outcome: string }[]>`
+          SELECT "recoveryId", outcome
+          FROM app_revoke_member_access_recovery(
+            ${req.userId!}, ${firmId}, ${recoveryId}, ${body.reason ?? null}
+          )`;
+        if (!rows[0]) {
+          return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
+        }
+        return reply.send({ data: rows[0] });
+      } catch (error) {
+        if (await handleLifecycleError(req, reply, firmId, userId, error)) return reply;
+        throw error;
+      }
+    },
+  );
 
   // Asignar cliente a usuario
   app.post("/api/v1/firms/:firmId/clients/:clientId/assignments", async (req, reply) => {

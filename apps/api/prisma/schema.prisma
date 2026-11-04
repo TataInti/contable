@@ -25,6 +25,7 @@ model User {
   updatedAt          DateTime   @updatedAt
 
   memberships            FirmMembership[]
+  accessRecoveries       MemberAccessRecovery[]
   sessions               DeviceSession[]
   preparedEntries        JournalEntry[]          @relation("preparedBy")
   reviewedEntries        JournalEntry[]          @relation("reviewedBy")
@@ -126,6 +127,7 @@ model Firm {
   updatedAt   DateTime   @updatedAt
 
   memberships       FirmMembership[]
+  accessRecoveries  MemberAccessRecovery[]
   clients           Client[]
   portalMemberships PortalMembership[]
   portalInvitations PortalInvitation[]
@@ -168,6 +170,29 @@ enum MembershipStatus {
   INVITED
   ACTIVE
   SUSPENDED
+}
+
+/// Recuperación de acceso para miembros internos, iniciada por un administrador
+/// (token de un solo uso con caducidad; en la base sólo el hash SHA-256, el
+/// token en claro nunca se persiste). El runtime no accede a la tabla: todo
+/// pasa por las funciones SECURITY DEFINER app_*_member_access_recovery.
+model MemberAccessRecovery {
+  id                String    @id @default(uuid(7))
+  firmId            String
+  userId            String
+  requestedByUserId String
+  tokenHash         String    @unique
+  expiresAt         DateTime
+  usedAt            DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+
+  firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([firmId])
+  @@index([userId])
+  @@map("member_access_recoveries")
 }
 
 model Client {

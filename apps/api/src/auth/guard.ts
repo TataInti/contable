@@ -42,6 +42,7 @@ const PUBLIC_PATHS = new Set([
   "/api/v1/auth/mfa/verify",
   "/api/v1/auth/refresh",
   "/api/v1/auth/logout",
+  "/api/v1/auth/access-recovery/redeem",
   "/api/v1/portal/invitations/accept",
 ]);
 

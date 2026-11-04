@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { memberActionCopy, memberRowActions, roleChangeCopy } from "./member-row-actions.js";
+import { memberActionCopy, memberRecoveryCopy, memberRowActions, roleChangeCopy } from "./member-row-actions.js";
 
 /**
  * Tests focalizados de UI para el ciclo de vida de usuarios internos
@@ -8,17 +8,25 @@ import { memberActionCopy, memberRowActions, roleChangeCopy } from "./member-row
  */
 
 describe("memberRowActions", () => {
-  it("no ofrece acciones para el OWNER (protegido)", () => {
-    expect(memberRowActions({ role: "OWNER", membershipStatus: "ACTIVE", userStatus: "ACTIVE" })).toEqual([]);
+  it("para el OWNER (protegido) sólo ofrece recuperar acceso, nunca suspender", () => {
+    expect(memberRowActions({ role: "OWNER", membershipStatus: "ACTIVE", userStatus: "ACTIVE" })).toEqual([
+      "recover-access",
+    ]);
   });
 
-  it("ofrece suspensión para un ADMIN activo (baja reversible)", () => {
-    expect(memberRowActions({ role: "ADMIN", membershipStatus: "ACTIVE", userStatus: "ACTIVE" })).toEqual(["suspend"]);
+  it("ofrece suspensión y recuperación para un ADMIN activo (baja reversible)", () => {
+    expect(memberRowActions({ role: "ADMIN", membershipStatus: "ACTIVE", userStatus: "ACTIVE" })).toEqual([
+      "suspend",
+      "recover-access",
+    ]);
   });
 
-  it("ofrece suspensión para roles operativos activos", () => {
+  it("ofrece suspensión y recuperación para roles operativos activos", () => {
     for (const role of ["PREPARER", "REVIEWER", "AUDITOR_READONLY"]) {
-      expect(memberRowActions({ role, membershipStatus: "ACTIVE", userStatus: "ACTIVE" })).toEqual(["suspend"]);
+      expect(memberRowActions({ role, membershipStatus: "ACTIVE", userStatus: "ACTIVE" })).toEqual([
+        "suspend",
+        "recover-access",
+      ]);
     }
   });
 
@@ -61,6 +69,27 @@ describe("memberActionCopy", () => {
     expect(copy.tone).toBe("default");
     expect(copy.description).toMatch(/iniciar sesión nuevamente/);
     expect(copy.confirmLabel).toBe("Reactivar");
+  });
+});
+
+describe("memberRecoveryCopy", () => {
+  it("avisa el cierre de sesiones y que el enlace es de un solo uso con caducidad", () => {
+    const copy = memberRecoveryCopy("Ana Gómez");
+    expect(copy.title).toContain("Ana Gómez");
+    expect(copy.description).toMatch(/sesiones activas/);
+    expect(copy.description).toMatch(/un solo uso/);
+    expect(copy.description).toMatch(/30 minutos/);
+    expect(copy.confirmLabel).toBe("Generar enlace");
+  });
+
+  it("deja claro que el gestor no ve ni define la contraseña", () => {
+    const copy = memberRecoveryCopy("Ana Gómez");
+    expect(copy.description).toMatch(/no ves ni definís esa contraseña/);
+  });
+
+  it("no expone ningún dato sensible en el texto", () => {
+    const copy = memberRecoveryCopy("Ana Gómez");
+    expect(copy.description).not.toMatch(/token|contraseña temporal|hash/i);
   });
 });
 

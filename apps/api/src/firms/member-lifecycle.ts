@@ -17,7 +17,12 @@ export type LifecycleErrorCode =
   | "OWNER_PROTECTED"
   | "MEMBER_NOT_SUSPENDIBLE"
   | "MEMBER_NOT_SUSPENDED"
-  | "LAST_ADMIN_REQUIRED";
+  | "LAST_ADMIN_REQUIRED"
+  | "RECOVERY_TTL_INVALID"
+  | "RECOVERY_TARGET_NOT_ACTIVE"
+  | "RECOVERY_NOT_FOUND"
+  | "RECOVERY_NOT_ACTIVE"
+  | "RECOVERY_INVALID";
 
 export interface LifecycleHttpError {
   statusCode: number;
@@ -56,6 +61,29 @@ const LIFECYCLE_ERROR_MAP: Record<LifecycleErrorCode, { statusCode: number; mess
   LAST_ADMIN_REQUIRED: {
     statusCode: 409,
     message: "El estudio debe conservar un titular o administrador activo",
+  },
+  // Recuperación de acceso (renovación de claves iniciada por el admin).
+  RECOVERY_TTL_INVALID: {
+    statusCode: 400,
+    message: "La vigencia del enlace de recuperación debe estar entre 5 minutos y 24 horas",
+  },
+  RECOVERY_TARGET_NOT_ACTIVE: {
+    statusCode: 409,
+    message: "El usuario no está activo: reactivá su cuenta antes de generar un enlace de recuperación",
+  },
+  RECOVERY_NOT_FOUND: {
+    statusCode: 404,
+    message: "Enlace de recuperación no encontrado",
+  },
+  RECOVERY_NOT_ACTIVE: {
+    statusCode: 409,
+    message: "El enlace de recuperación ya no está pendiente",
+  },
+  // Genérico a propósito (canje): sin oráculo entre inexistente/usado/expirado/
+  // revocado/usuario no activo.
+  RECOVERY_INVALID: {
+    statusCode: 400,
+    message: "El enlace de recuperación es inválido, expiró o ya fue usado",
   },
 };
 

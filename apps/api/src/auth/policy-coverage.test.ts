@@ -35,6 +35,7 @@ describe("cobertura total del ROUTE_POLICY (deny-by-default)", () => {
       "POST /api/v1/auth/login", // PUBLIC_PATHS
       "POST /api/v1/auth/logout",
       "POST /api/v1/auth/mfa/verify",
+      "POST /api/v1/auth/access-recovery/redeem", // PUBLIC_PATHS: la credencial es el token
       "POST /api/v1/auth/refresh",
       "POST /api/v1/auth/password/change", // sesión autenticada, permitida durante cambio obligatorio
       "POST /api/v1/firms", // PLATFORM_ADMIN handling antes del policy check
