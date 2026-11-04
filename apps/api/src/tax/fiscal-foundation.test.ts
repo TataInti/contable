@@ -485,6 +485,67 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     await cleanupFiscal();
   });
 
+  it("el rol runtime puede reemplazar una regla de alícuota en un borrador", async () => {
+    const fx = await setupMasters();
+    const pack = await rules.createPack(ctxOwner, {
+      code: "AR_RATE_RULE_REPLACE-F",
+      name: "Prueba de reemplazo de alícuotas",
+      regimeId: fx.ri.id,
+    });
+    const version = await rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineVersion: "tax-engine-v1",
+      rulesHash: "pending",
+    });
+    await rules.addRateRule(ctxOwner, {
+      ruleVersionId: version.id,
+      concept: "SINTETICO",
+      activityCode: "General",
+      rate: "21",
+      minAmount: "0",
+      validFrom: "2026-01-01",
+    });
+
+    // El cliente de fixtures usa la conexión propietaria; replicamos los pasos
+    // de reemplazo bajo el rol runtime de producción para verificar permisos.
+    const runtimeRules = await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      await tx.taxRateRule.deleteMany({ where: { ruleVersionId: version.id } });
+      await tx.taxRateRule.createMany({
+        data: [{
+          ruleVersionId: version.id,
+          concept: "SINTETICO",
+          activityCode: "General",
+          rate: new Prisma.Decimal("7.25"),
+          minAmount: new Prisma.Decimal("0"),
+          validFrom: new Date("2026-01-01"),
+        }],
+      });
+      return tx.taxRateRule.findMany({ where: { ruleVersionId: version.id } });
+    });
+    expect(runtimeRules).toHaveLength(1);
+    expect(runtimeRules[0]?.rate?.toString()).toBe("7.25");
+    expect(runtimeRules[0]?.minAmount?.toString()).toBe("0");
+
+    const replacement = await rules.replaceRateRules(ctxOwner, {
+      ruleVersionId: version.id,
+      rules: [{
+        concept: "SINTETICO",
+        activityCode: "General",
+        rate: "3.17",
+        minAmount: "0",
+        validFrom: "2026-01-01",
+      }],
+    });
+    expect(replacement).toHaveLength(1);
+    expect(replacement[0]?.rate?.toString()).toBe("3.17");
+
+    await expect(rules.replaceRateRules(ctxOwner, {
+      ruleVersionId: version.id,
+      rules: [],
+    })).resolves.toEqual([]);
+  });
+
   it("rule pack: DRAFT → IN_REVIEW → APPROVED → ACTIVE con matrícula", async () => {
     const fx = await setupMasters();
     const pack = await rules.createPack(ctxOwner, {
