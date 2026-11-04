@@ -7,6 +7,7 @@ import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
+import { memberActionCopy, memberRowActions, roleChangeCopy } from "./member-row-actions.js";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { SectionIndex } from "../ui/SectionIndex";
 import "./study.css";
@@ -119,6 +120,32 @@ export function StudyAdministracion() {
     },
     onError: (error) =>
       setActionError(error instanceof Error ? error.message : "No se pudo actualizar el rol."),
+  });
+  // Ciclo de vida (baja reversible): suspender cierra las sesiones activas del
+  // usuario en el servidor y preserva datos/historial; reactivar exige una
+  // acción explícita del admin. La validación de último OWNER/ADMIN la hace
+  // el backend (app_suspend_internal_member / app_reactivate_internal_member).
+  const suspendInternalMember = useMutation({
+    mutationFn: ({ userId, reason }: { userId: string; reason?: string }) =>
+      api.post(`/firms/${firmId}/members/${userId}/suspend`, reason ? { reason } : {}),
+    onSuccess: () => {
+      setActionError(null);
+      setNotice("El usuario quedó suspendido: pierde el acceso de inmediato y sus sesiones activas se cerraron. Sus datos e historial se conservan.");
+      void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo suspender al usuario."),
+  });
+  const reactivateInternalMember = useMutation({
+    mutationFn: ({ userId, reason }: { userId: string; reason?: string }) =>
+      api.post(`/firms/${firmId}/members/${userId}/reactivate`, reason ? { reason } : {}),
+    onSuccess: () => {
+      setActionError(null);
+      setNotice("El usuario fue reactivado con su mismo rol. Tendrá que iniciar sesión nuevamente.");
+      void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
+    },
+    onError: (error) =>
+      setActionError(error instanceof Error ? error.message : "No se pudo reactivar al usuario."),
   });
   const invitations = useQuery({
     queryKey: ["portal-invitations", firmId, clientId],
@@ -442,7 +469,18 @@ export function StudyAdministracion() {
                       className="ds-field__input"
                       value={item.role}
                       disabled={updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId}
-                      onChange={(event) => updateInternalRole.mutate({ userId: item.userId, role: event.target.value })}
+                      onChange={(event) => {
+                        const nextRole = event.target.value;
+                        if (nextRole === item.role) return;
+                        const copy = roleChangeCopy(item.user?.name ?? "este usuario", item.role, nextRole);
+                        confirm.ask({
+                          title: copy.title,
+                          description: copy.description,
+                          confirmLabel: "Cambiar rol",
+                          tone: item.role === "OWNER" ? "danger" : "default",
+                          onConfirm: () => updateInternalRole.mutate({ userId: item.userId, role: nextRole }),
+                        });
+                      }}
                     >
                       {INTERNAL_ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
@@ -450,7 +488,66 @@ export function StudyAdministracion() {
                   </div>
                 ),
               },
-              { key: "status", header: "Estado", render: (item) => <StatusBadge status={item.status} /> },
+              { key: "status", header: "Estado", render: (item) => <StatusBadge status={item.user?.status ?? item.status} /> },
+              {
+                key: "actions",
+                header: "Acciones",
+                render: (item) => {
+                  const actions = memberRowActions({
+                    role: item.role,
+                    membershipStatus: item.status,
+                    userStatus: item.user?.status,
+                  });
+                  const memberName = item.user?.name ?? "este usuario";
+                  const anyPending =
+                    suspendInternalMember.isPending || reactivateInternalMember.isPending;
+                  return (
+                    <div className="internal-access-cell">
+                      {actions.includes("suspend") ? (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          loading={suspendInternalMember.isPending && suspendInternalMember.variables?.userId === item.userId}
+                          disabled={anyPending}
+                          onClick={() => {
+                            const copy = memberActionCopy("suspend", memberName);
+                            confirm.ask({
+                              title: copy.title,
+                              description: copy.description,
+                              confirmLabel: copy.confirmLabel,
+                              tone: "danger",
+                              onConfirm: () => suspendInternalMember.mutate({ userId: item.userId }),
+                            });
+                          }}
+                        >
+                          Suspender
+                        </Button>
+                      ) : null}
+                      {actions.includes("reactivate") ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          loading={reactivateInternalMember.isPending && reactivateInternalMember.variables?.userId === item.userId}
+                          disabled={anyPending}
+                          onClick={() => {
+                            const copy = memberActionCopy("reactivate", memberName);
+                            confirm.ask({
+                              title: copy.title,
+                              description: copy.description,
+                              confirmLabel: copy.confirmLabel,
+                              tone: "default",
+                              onConfirm: () => reactivateInternalMember.mutate({ userId: item.userId }),
+                            });
+                          }}
+                        >
+                          Reactivar
+                        </Button>
+                      ) : null}
+                      {actions.length === 0 ? <small>—</small> : null}
+                    </div>
+                  );
+                },
+              },
             ]}
           />
         )}
