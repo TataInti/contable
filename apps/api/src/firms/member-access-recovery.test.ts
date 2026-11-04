@@ -29,6 +29,8 @@ const recoverySql = readFileSync(
 const firmsRoutes = readFileSync(join(thisDir, "routes.ts"), "utf8");
 const authRoutes = readFileSync(join(thisDir, "../auth/routes.ts"), "utf8");
 const guardSource = readFileSync(join(thisDir, "../auth/guard.ts"), "utf8");
+const adminUi = readFileSync(join(thisDir, "../../../web/src/study/StudyAdministracion.tsx"), "utf8");
+const recoverUi = readFileSync(join(thisDir, "../../../web/src/auth/RecoverAccessPage.tsx"), "utf8");
 
 const createBody = recoverySql.slice(
   recoverySql.indexOf("app_create_member_access_recovery("),
@@ -157,8 +159,20 @@ describe("secretos: hash del token, sin secretos en logs ni auditoría", () => {
   });
 
   it("el token se genera con 32 bytes aleatorios y se persiste hasheado", () => {
-    expect(firmsRoutes).toMatch(/randomBytes\(32\)\.toString\("base64url"\)/);
-    expect(firmsRoutes).toMatch(/createHash\("sha256"\)\.update\(recoveryToken\)\.digest\("hex"\)/);
+    expect(firmsRoutes).toContain('randomBytes(32).toString("base64url")');
+    expect(firmsRoutes).toContain('createHash("sha256").update(recoveryToken).digest("hex")');
+  });
+
+  it("el token de recuperación viaja sólo en el fragmento de URL, no en el query HTTP", () => {
+    expect(adminUi).toContain("/recuperar-acceso#token=");
+    expect(adminUi).not.toContain("/recuperar-acceso?token=");
+    expect(recoverUi).toContain("new URLSearchParams(location.hash.slice(1))");
+    expect(recoverUi).not.toContain("useSearchParams");
+  });
+
+  it("las funciones restringen search_path y fijan pg_temp al final", () => {
+    expect(recoverySql).toContain("SET search_path = pg_catalog, public, pg_temp");
+    expect(recoverySql).not.toContain("SET search_path = public");
   });
 });
 

@@ -27,6 +27,8 @@ const OWNER_ID = randomUUID();
 const ADMIN_ID = randomUUID();
 const MEMBER_ID = randomUUID();
 const FIRM_ID = randomUUID();
+const OTHER_MEMBER_ID = randomUUID();
+const OTHER_FIRM_ID = randomUUID();
 const RUN = randomBytes(4).toString("hex");
 
 const adminAdapter = new PrismaPg({ connectionString: connectionString || "postgresql://invalid" });
@@ -36,6 +38,19 @@ const adminPrisma = new PrismaClient({ adapter: adminAdapter });
 async function asRuntime<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return adminPrisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`SET LOCAL ROLE contable_runtime`);
+    return fn(tx);
+  });
+}
+
+/** Executes a read with the authenticated user and firm RLS context set. */
+async function asRuntimeInFirm<T>(
+  userId: string,
+  firmId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return adminPrisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SET LOCAL ROLE contable_runtime`);
+    await tx.$queryRaw`SELECT set_config('app.user_id', ${userId}, true), set_config('app.firm_id', ${firmId}, true)`;
     return fn(tx);
   });
 }
@@ -78,6 +93,35 @@ describe.skipIf(!connectionString)("recuperación de acceso (integración, base 
     await insertMember(OWNER_ID, `owner-${RUN}@example.com`, "OWNER", "ACTIVE");
     await insertMember(ADMIN_ID, `admin-${RUN}@example.com`, "ADMIN", "ACTIVE");
     await insertMember(MEMBER_ID, `member-${RUN}@example.com`, "PREPARER", "ACTIVE");
+    await adminPrisma.$executeRaw`
+      INSERT INTO firms (id, "legalName", "displayName", status, "updatedAt")
+      VALUES (${OTHER_FIRM_ID}, ${`Otro estudio ${RUN}`}, ${`Otro ${RUN}`}, 'ACTIVE', now())`;
+    await adminPrisma.$executeRaw`
+      INSERT INTO users (id, "emailNormalized", name, "passwordHash", status, "updatedAt")
+      VALUES (${OTHER_MEMBER_ID}, ${`other-${RUN}@example.com`}, 'Miembro de otro estudio', 'hash-viejo', 'ACTIVE', now())`;
+    await adminPrisma.$executeRaw`
+      INSERT INTO firm_memberships (id, "firmId", "userId", role, status, "acceptedAt")
+      VALUES (${randomUUID()}, ${OTHER_FIRM_ID}, ${OTHER_MEMBER_ID}, 'PREPARER', 'ACTIVE', now())`;
+  });
+
+  it("RLS: un OWNER ve identidades del mismo estudio y queda aislado de otra firma", async () => {
+    const rlsFlags = await adminPrisma.$queryRaw<{ enabled: boolean; forced: boolean }[]>`
+      SELECT relrowsecurity AS enabled, relforcerowsecurity AS forced
+      FROM pg_class WHERE oid = 'public.users'::regclass`;
+    expect(rlsFlags[0]).toEqual({ enabled: true, forced: true });
+
+    const sameFirmUsers = await asRuntimeInFirm(OWNER_ID, FIRM_ID, (tx) =>
+      tx.$queryRaw<{ id: string }[]>`SELECT id FROM users WHERE id = ${MEMBER_ID}`,
+    );
+    const otherFirmUsers = await asRuntimeInFirm(OWNER_ID, FIRM_ID, (tx) =>
+      tx.$queryRaw<{ id: string }[]>`SELECT id FROM users WHERE id = ${OTHER_MEMBER_ID}`,
+    );
+    const memberVisibleOwners = await asRuntimeInFirm(MEMBER_ID, FIRM_ID, (tx) =>
+      tx.$queryRaw<{ id: string }[]>`SELECT id FROM users WHERE id = ${OWNER_ID}`,
+    );
+    expect(sameFirmUsers.map((user) => user.id)).toContain(MEMBER_ID);
+    expect(otherFirmUsers).toHaveLength(0);
+    expect(memberVisibleOwners).toHaveLength(0);
   });
 
   it("uso: el admin emite, se revocan las sesiones y el miembro canjea su nueva contraseña", async () => {
@@ -154,6 +198,25 @@ describe.skipIf(!connectionString)("recuperación de acceso (integración, base 
     await expect(asRuntime(async (tx) => tx.$queryRaw`
       SELECT * FROM app_create_member_access_recovery(${OWNER_ID}, ${FIRM_ID}, ${MEMBER_ID}, ${token}, 3)`))
       .rejects.toThrow(/RECOVERY_TTL_INVALID/);
+  });
+
+  it("OWNER-protegido: un ADMIN no degrada un OWNER ni asigna OWNER", async () => {
+    await expect(asRuntime(async (tx) => tx.$queryRaw`
+      SELECT * FROM app_change_internal_member_role(
+        ${ADMIN_ID}, ${FIRM_ID}, ${OWNER_ID}, ${"ADMIN"}::"FirmRole", ${"test"}
+      )`)).rejects.toThrow(/OWNER_PROTECTED/);
+
+    await expect(asRuntime(async (tx) => tx.$queryRaw`
+      SELECT * FROM app_change_internal_member_role(
+        ${ADMIN_ID}, ${FIRM_ID}, ${MEMBER_ID}, ${"OWNER"}::"FirmRole", ${"test"}
+      )`)).rejects.toThrow(/OWNER_PROTECTED/);
+
+    const roles = await adminPrisma.$queryRaw<{ userId: string; role: string }[]>`
+      SELECT "userId", role FROM firm_memberships
+      WHERE "firmId" = ${FIRM_ID} AND "userId" IN (${OWNER_ID}, ${MEMBER_ID})
+      ORDER BY "userId"`;
+    expect(roles.find((row) => row.userId === OWNER_ID)?.role).toBe("OWNER");
+    expect(roles.find((row) => row.userId === MEMBER_ID)?.role).toBe("PREPARER");
   });
 
   it("objetivo suspendido: la emisión se rechaza; el canje de un token viejo también falla", async () => {

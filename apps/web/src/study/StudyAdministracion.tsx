@@ -175,7 +175,7 @@ export function StudyAdministracion() {
         sessionsRevoked: created.sessionsRevoked,
       });
       setRecoveryLink(
-        `${window.location.origin}/recuperar-acceso?token=${encodeURIComponent(created.recoveryToken)}`,
+        `${window.location.origin}/recuperar-acceso#token=${encodeURIComponent(created.recoveryToken)}`,
       );
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },

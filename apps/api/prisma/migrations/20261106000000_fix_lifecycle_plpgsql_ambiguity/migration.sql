@@ -27,7 +27,7 @@ CREATE OR REPLACE FUNCTION app_suspend_internal_member(
   target_user_id text,
   target_reason text DEFAULT NULL
 ) RETURNS TABLE("userId" text, "membershipId" text, status text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   target_role "FirmRole";
   membership_id text;
@@ -79,7 +79,7 @@ CREATE OR REPLACE FUNCTION app_reactivate_internal_member(
   target_user_id text,
   target_reason text DEFAULT NULL
 ) RETURNS TABLE("userId" text, "membershipId" text, status text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   target_role "FirmRole";
   membership_id text;
@@ -126,7 +126,7 @@ CREATE OR REPLACE FUNCTION app_change_internal_member_role(
   target_new_role "FirmRole",
   target_reason text DEFAULT NULL
 ) RETURNS TABLE("userId" text, "membershipId" text, role text, outcome text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   target_role "FirmRole";
   membership_id text;
@@ -141,6 +141,12 @@ BEGIN
     AND fm.status IN ('ACTIVE', 'SUSPENDED');
   IF membership_id IS NULL THEN
     RAISE EXCEPTION 'MEMBER_NOT_FOUND';
+  END IF;
+
+  -- Sólo un OWNER puede modificar a un OWNER o asignar el rol OWNER.
+  IF (target_role = 'OWNER' OR target_new_role = 'OWNER')
+    AND app_actor_is_admin_only(target_actor_id, target_firm_id) THEN
+    RAISE EXCEPTION 'OWNER_PROTECTED';
   END IF;
 
   IF target_role = target_new_role THEN

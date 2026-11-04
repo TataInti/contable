@@ -29,7 +29,7 @@ CREATE OR REPLACE FUNCTION app_active_admin_count(
   target_firm_id text,
   excluded_user_id text DEFAULT NULL
 ) RETURNS integer
-LANGUAGE sql STABLE SET search_path = public AS $$
+LANGUAGE sql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
   SELECT count(*)::integer
   FROM firm_memberships fm
   JOIN users u ON u.id = fm."userId"
@@ -52,7 +52,7 @@ CREATE OR REPLACE FUNCTION app_assert_member_target(
   target_firm_id text,
   target_user_id text
 ) RETURNS "FirmRole"
-LANGUAGE plpgsql STABLE SET search_path = public AS $$
+LANGUAGE plpgsql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   actor_role "FirmRole";
   target_role "FirmRole";
@@ -87,7 +87,7 @@ CREATE OR REPLACE FUNCTION app_actor_is_admin_only(
   target_actor_id text,
   target_firm_id text
 ) RETURNS boolean
-LANGUAGE sql STABLE SET search_path = public AS $$
+LANGUAGE sql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
   SELECT NOT EXISTS (
     SELECT 1 FROM firm_memberships fm
     WHERE fm."firmId" = target_firm_id AND fm."userId" = target_actor_id
@@ -108,7 +108,7 @@ CREATE OR REPLACE FUNCTION app_record_member_lifecycle_audit(
   target_before jsonb,
   target_after jsonb
 ) RETURNS void
-LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
   INSERT INTO audit_events
     (id, "firmId", "userId", "actorKind", action, "entityType", "entityId", before, after)
   VALUES
@@ -129,7 +129,7 @@ CREATE OR REPLACE FUNCTION app_suspend_internal_member(
   target_user_id text,
   target_reason text DEFAULT NULL
 ) RETURNS TABLE("userId" text, "membershipId" text, status text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   target_role "FirmRole";
   membership_id text;
@@ -186,7 +186,7 @@ CREATE OR REPLACE FUNCTION app_reactivate_internal_member(
   target_user_id text,
   target_reason text DEFAULT NULL
 ) RETURNS TABLE("userId" text, "membershipId" text, status text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   target_role "FirmRole";
   membership_id text;
@@ -238,7 +238,7 @@ CREATE OR REPLACE FUNCTION app_change_internal_member_role(
   target_new_role "FirmRole",
   target_reason text DEFAULT NULL
 ) RETURNS TABLE("userId" text, "membershipId" text, role text, outcome text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   target_role "FirmRole";
   membership_id text;
@@ -253,6 +253,12 @@ BEGIN
     AND fm.status IN ('ACTIVE', 'SUSPENDED');
   IF membership_id IS NULL THEN
     RAISE EXCEPTION 'MEMBER_NOT_FOUND';
+  END IF;
+
+  -- Sólo un OWNER puede modificar a un OWNER o asignar el rol OWNER.
+  IF (target_role = 'OWNER' OR target_new_role = 'OWNER')
+    AND app_actor_is_admin_only(target_actor_id, target_firm_id) THEN
+    RAISE EXCEPTION 'OWNER_PROTECTED';
   END IF;
 
   IF target_role = target_new_role THEN

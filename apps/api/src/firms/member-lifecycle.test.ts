@@ -198,7 +198,23 @@ describe("bugfix de ambigüedad PL/pgSQL en el ciclo de vida F2", () => {
   });
 
   it("la revocación de sesiones sigue presente en suspensión y degradación", () => {
-    expect(bugfixSql.match(/UPDATE device_sessions SET "revokedAt" = now\(\)/g)?.length).toBe(2);
+    expect(bugfixSql.split('UPDATE device_sessions SET "revokedAt" = now()').length - 1).toBe(2);
+  });
+
+  it("the replacement function retains the OWNER privilege boundary", () => {
+    const start = bugfixSql.indexOf("CREATE OR REPLACE FUNCTION app_change_internal_member_role(");
+    expect(start).toBeGreaterThan(-1);
+    const body = bugfixSql.slice(start);
+    expect(body).toMatch(/target_role = 'OWNER' OR target_new_role = 'OWNER'/);
+    expect(body).toContain("app_actor_is_admin_only(target_actor_id, target_firm_id)");
+    expect(body).toContain("RAISE EXCEPTION 'OWNER_PROTECTED'");
+  });
+
+  it("the security-definer search path fixes pg_temp after trusted schemas", () => {
+    for (const sql of [migrationSql, bugfixSql]) {
+      expect(sql).toContain("SET search_path = pg_catalog, public, pg_temp");
+      expect(sql).not.toContain("SET search_path = public");
+    }
   });
 });
 
@@ -218,6 +234,8 @@ describe("OWNER protegido en SQL", () => {
       migrationSql.indexOf("app_change_internal_member_role"),
       migrationSql.indexOf("REVOKE ALL ON FUNCTION app_change_internal_member_role"),
     );
-    expect(changeBody).toMatch(/target_role IN \('OWNER', 'ADMIN'\)/);
+    expect(changeBody).toMatch(/target_role = 'OWNER' OR target_new_role = 'OWNER'/);
+    expect(changeBody).toContain("app_actor_is_admin_only(target_actor_id, target_firm_id)");
+    expect(changeBody).toContain("RAISE EXCEPTION 'OWNER_PROTECTED'");
   });
 });

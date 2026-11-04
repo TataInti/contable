@@ -74,7 +74,7 @@ CREATE OR REPLACE FUNCTION app_create_member_access_recovery(
   target_token_hash text,
   target_ttl_minutes int DEFAULT 30
 ) RETURNS TABLE("recoveryId" text, "expiresAt" timestamptz, "sessionsRevoked" int)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   target_role "FirmRole";
   membership_id text;
@@ -148,7 +148,7 @@ CREATE OR REPLACE FUNCTION app_revoke_member_access_recovery(
   target_recovery_id text,
   target_reason text DEFAULT NULL
 ) RETURNS TABLE("recoveryId" text, outcome text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   pending_id text;
 BEGIN
@@ -200,7 +200,7 @@ CREATE OR REPLACE FUNCTION app_redeem_member_access_recovery(
   target_token_hash text,
   target_password_hash text
 ) RETURNS TABLE("userId" text, status text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   claimed record;
   user_status text;

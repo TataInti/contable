@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Field } from "@contable/design-system";
 import { api, ApiError } from "../lib/api";
 import { Icon } from "../ui/Icon";
@@ -12,9 +12,10 @@ import "./login.css";
  * contraseña; el token es de un solo uso y tiene caducidad corta (backend).
  */
 export function RecoverAccessPage() {
-  const [params] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
-  const token = params.get("token") ?? "";
+  // El fragmento no viaja en HTTP ni aparece en el access log del servidor.
+  const token = new URLSearchParams(location.hash.slice(1)).get("token") ?? "";
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
