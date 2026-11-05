@@ -1,0 +1,1066 @@
+/* Vistas administrativas densas: tabla + detalle lateral. Sólo usa tokens del design system. */
+
+.dense-page {
+  --dense-row-h: 32px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Escritorio: la página ocupa el alto disponible y la tabla scrollea por dentro. */
+@media (min-width: 1025px) {
+  .study__content:has(> .dense-page) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 16px 24px 0;
+  }
+
+  .study__content > .dense-page {
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+/* ───────── Encabezado ───────── */
+.dense-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ds-space-2) var(--ds-space-5);
+  margin-bottom: var(--ds-space-3);
+}
+
+.dense-head__title .study-page__eyebrow {
+  margin: 0 0 2px;
+}
+
+.dense-head__title h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.dense-head__desc {
+  flex: 1 1 320px;
+  max-width: 680px;
+  margin: 0 0 3px;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  line-height: 1.4;
+}
+
+.dense-head__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin-left: auto;
+}
+
+/* ───────── Franja de métricas ───────── */
+.dense-stats {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  overflow: hidden;
+}
+
+.dense-stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 0;
+  border-right: 1px solid var(--ds-color-border-subtle);
+  background: none;
+  color: inherit;
+  text-align: left;
+  white-space: nowrap;
+}
+
+button.dense-stat {
+  cursor: pointer;
+}
+
+button.dense-stat:hover {
+  background: var(--ds-color-surface-hover);
+}
+
+.dense-stat--active {
+  box-shadow: inset 0 -2px 0 var(--ds-color-primary);
+}
+
+.dense-stat__label {
+  color: var(--ds-color-text-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dense-stat__value {
+  font-size: var(--ds-text-xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dense-stat__detail {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.dense-stat--warn .dense-stat__value {
+  color: var(--ds-color-warning);
+}
+
+/* ───────── Pestañas ───────── */
+.dense-tabs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  margin-top: var(--ds-space-3);
+  border-bottom: 1px solid var(--ds-color-border);
+  overflow-x: auto;
+}
+
+.dense-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  background: none;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-base);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dense-tab:hover {
+  color: var(--ds-color-text);
+}
+
+.dense-tab[aria-selected="true"] {
+  color: var(--ds-color-primary);
+}
+
+.dense-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  bottom: -1px;
+  left: 8px;
+  height: 2px;
+  background: var(--ds-color-primary);
+}
+
+.dense-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  justify-content: center;
+}
+
+.dense-tab[aria-selected="true"] .dense-count {
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-primary);
+}
+
+.dense-tab .dense-count--warn {
+  background: var(--ds-color-warning-subtle);
+  color: var(--ds-color-warning);
+}
+
+/* ───────── Barra de herramientas ───────── */
+.dense-toolbar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: 10px 0;
+}
+
+.dense-toolbar__spacer {
+  flex: 1;
+}
+
+.dense-toolbar__count {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.dense-toolbar__hint {
+  color: var(--ds-color-text-faint);
+  font-size: var(--ds-text-xs);
+}
+
+.dense-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dense-search > svg {
+  position: absolute;
+  left: 9px;
+  color: var(--ds-color-text-faint);
+  pointer-events: none;
+}
+
+.dense-search kbd,
+.dense-shortcuts kbd {
+  padding: 0 5px;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
+  font: 600 11px/16px var(--ds-font-sans);
+}
+
+.dense-search kbd {
+  position: absolute;
+  right: 7px;
+  pointer-events: none;
+}
+
+.dense-input,
+.dense-select {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-sm);
+}
+
+.dense-search .dense-input {
+  width: 260px;
+  padding-right: 30px;
+}
+
+.dense-input::placeholder {
+  color: var(--ds-color-text-faint);
+}
+
+.dense-select {
+  max-width: 200px;
+  padding-right: 6px;
+  cursor: pointer;
+}
+
+.dense-select--inline {
+  width: 100%;
+  max-width: 190px;
+  height: 26px;
+  padding: 0 4px;
+  font-size: 12.5px;
+}
+
+.dense-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dense-toggle[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--ds-color-warning) 40%, var(--ds-color-border));
+  background: var(--ds-color-warning-subtle);
+  color: var(--ds-color-warning);
+}
+
+.dense-seg {
+  display: inline-flex;
+  border: 1px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  overflow: hidden;
+}
+
+.dense-seg button {
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-right: 1px solid var(--ds-color-border-subtle);
+  background: none;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dense-seg button:last-child {
+  border-right: 0;
+}
+
+.dense-seg button[aria-pressed="true"] {
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-primary);
+}
+
+/* ───────── Alertas ───────── */
+.dense-alert {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--ds-space-3);
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--ds-color-warning) 28%, var(--ds-color-border));
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-warning-subtle);
+  color: var(--ds-color-warning);
+  font-size: var(--ds-text-sm);
+}
+
+.dense-alert svg {
+  flex: none;
+}
+
+.dense-alert--ok {
+  border-color: color-mix(in srgb, var(--ds-color-success) 25%, var(--ds-color-border));
+  background: var(--ds-color-success-subtle);
+  color: var(--ds-color-success);
+}
+
+.dense-alert__action {
+  margin-left: auto;
+}
+
+.dense-chip {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--ds-color-border-subtle);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 17px;
+}
+
+/* ───────── Espacio de trabajo ───────── */
+.dense-work {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ds-space-4);
+  min-height: 0;
+  padding-bottom: var(--ds-space-4);
+}
+
+.dense-work--inspector {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.dense-work__main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.dense-table-card {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  box-shadow: var(--ds-shadow-control);
+  overflow: hidden;
+}
+
+.dense-table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: var(--ds-color-border-strong) var(--ds-color-surface-muted);
+}
+
+.dense-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.dense-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 30px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--ds-color-border-strong);
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dense-sort {
+  display: inline-flex;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dense-sort:hover {
+  color: var(--ds-color-text);
+}
+
+.dense-table tbody td {
+  height: var(--dense-row-h);
+  max-width: 320px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.dense-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.dense-cell--right {
+  text-align: right !important;
+}
+
+.dense-row--selectable {
+  cursor: pointer;
+  transition: background-color var(--ds-duration-fast) var(--ds-ease-out);
+}
+
+.dense-row--selectable:hover {
+  background: var(--ds-color-surface-hover);
+}
+
+.dense-row--selectable:focus-visible {
+  outline-offset: -2px;
+}
+
+.dense-row--selected,
+.dense-row--selected:hover {
+  background: var(--ds-color-selected);
+  box-shadow: inset 3px 0 0 var(--ds-color-primary);
+}
+
+.dense-row--muted td {
+  color: var(--ds-color-text-faint);
+}
+
+.dense-code {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.dense-cell-inline {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+}
+
+.dense-work--inspector .dense-table tbody td {
+  max-width: 160px;
+  padding-inline: 10px;
+}
+
+.dense-work--inspector .dense-table thead th {
+  padding-inline: 10px;
+}
+
+.dense-work--inspector .dense-chip--hide-narrow {
+  display: none;
+}
+
+.dense-table-foot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-4);
+  min-height: 30px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--ds-color-border);
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.dense-table-foot__spacer {
+  flex: 1;
+}
+
+.dense-table-foot__hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dense-shortcuts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.dense-empty {
+  display: grid;
+  place-items: center;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-10, 40px) var(--ds-space-5);
+  color: var(--ds-color-text-muted);
+  text-align: center;
+}
+
+/* Badges compactos (reutiliza status-badge) */
+.dense-table .status-badge {
+  min-height: 20px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+
+.dense-coherence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+}
+
+.dense-coherence--ok {
+  color: var(--ds-color-success);
+}
+
+.dense-coherence--bad {
+  color: var(--ds-color-warning);
+}
+
+/* ───────── Detalle lateral ───────── */
+.dense-inspector {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  overflow: hidden;
+}
+
+.dense-inspector__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+}
+
+.dense-inspector__head > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.dense-inspector__head .study-page__eyebrow {
+  margin: 0 0 2px;
+}
+
+.dense-inspector__head h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.dense-inspector__sub {
+  margin: 2px 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.dense-inspector__body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 14px 8px;
+  overflow: auto;
+}
+
+.dense-inspector__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  padding: 10px 14px;
+  border-top: 1px solid var(--ds-color-border-subtle);
+  background: var(--ds-color-surface-muted);
+}
+
+.dense-inspector__foot .dense-push {
+  margin-left: auto;
+}
+
+.dense-text-button {
+  flex: none;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  background: transparent;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dense-text-button:hover {
+  background: var(--ds-color-surface-pressed);
+  color: var(--ds-color-text);
+}
+
+.dense-section {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+}
+
+.dense-section:last-child {
+  border-bottom: 0;
+}
+
+.dense-section h3 {
+  margin: 0 0 6px;
+  color: var(--ds-color-text-faint);
+  font-family: var(--ds-font-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.dense-section p {
+  margin: 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  line-height: 1.45;
+}
+
+.dense-facts {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+}
+
+.dense-facts > div {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+}
+
+.dense-facts dt,
+.dense-facts dd {
+  margin: 0;
+  padding: 3px 0;
+}
+
+.dense-facts dt {
+  color: var(--ds-color-text-muted);
+}
+
+.dense-facts dd {
+  overflow-wrap: anywhere;
+}
+
+.dense-linked {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--ds-text-sm);
+}
+
+.dense-linked li {
+  display: grid;
+  grid-template-columns: minmax(0, 150px) minmax(0, 1fr);
+  gap: var(--ds-space-2);
+}
+
+.dense-linked li span:last-child {
+  overflow: hidden;
+  color: var(--ds-color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dense-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 12.5px;
+}
+
+.dense-chain > span:not(.dense-chain__arrow) {
+  padding: 2px 8px;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-color-surface-muted);
+}
+
+.dense-chain__arrow {
+  color: var(--ds-color-text-faint);
+}
+
+.dense-chain small {
+  display: block;
+  color: var(--ds-color-text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.dense-chain .dense-chain__bad {
+  border-color: var(--ds-color-warning);
+  background: var(--ds-color-warning-subtle);
+}
+
+.dense-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--ds-color-border-subtle);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.dense-note svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.dense-note--ok {
+  border-color: color-mix(in srgb, var(--ds-color-success) 22%, transparent);
+  background: var(--ds-color-success-subtle);
+  color: var(--ds-color-success);
+}
+
+.dense-note--warn {
+  border-color: color-mix(in srgb, var(--ds-color-warning) 28%, transparent);
+  background: var(--ds-color-warning-subtle);
+  color: var(--ds-color-warning);
+}
+
+/* ───────── Formularios en ActionDrawer ───────── */
+.study-form.dense-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.study-form.dense-form > .dense-form__full,
+.study-form.dense-form > .form-error,
+.study-form.dense-form > .form-submit-hint,
+.study-form.dense-form > .study-form__actions,
+.study-form.dense-form > .dense-note,
+.study-form.dense-form > p {
+  grid-column: 1 / -1;
+}
+
+.study-form.dense-form > .dense-note {
+  margin-top: 0;
+}
+
+/* ───────── Responsive ───────── */
+@media (max-width: 1100px) {
+  .dense-work--inspector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dense-work--inspector .dense-inspector {
+    min-height: 320px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .dense-table-scroll {
+    max-height: 70vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .dense-search,
+  .dense-search .dense-input {
+    width: 100%;
+  }
+
+  .study-form.dense-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ───────── Usuarios y accesos ───────── */
+.dense-person {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 9px;
+}
+
+.dense-person strong {
+  flex: none;
+}
+
+.dense-person__email {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-color-text-muted);
+  text-overflow: ellipsis;
+}
+
+.dense-avatar {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.dense-avatar--lg {
+  width: 34px;
+  height: 34px;
+  font-size: var(--ds-text-sm);
+}
+
+.dense-fp {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dense-fp__bars {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.dense-fp__bars i {
+  width: 7px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--ds-color-border-subtle);
+}
+
+.dense-fp__bars i.is-on {
+  background: var(--ds-color-primary);
+  opacity: 0.85;
+}
+
+.dense-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dense-row-actions .ds-button,
+.dense-inspector__foot .ds-button {
+  white-space: nowrap;
+}
+
+.ds-button.dense-action--danger {
+  color: var(--ds-color-danger);
+}
+
+.ds-button--ghost.dense-action--danger:hover:not(:disabled) {
+  background: var(--ds-color-danger-subtle);
+}
+
+.dense-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.dense-matrix th,
+.dense-matrix td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+  text-align: center;
+}
+
+.dense-matrix thead th {
+  border-bottom-color: var(--ds-color-border);
+  color: var(--ds-color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dense-matrix th:first-child,
+.dense-matrix tbody th {
+  text-align: left;
+  font-weight: 400;
+}
+
+.dense-matrix td {
+  color: var(--ds-color-primary);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.dense-matrix .dense-matrix__no {
+  color: var(--ds-color-border-strong);
+  font-weight: 400;
+}
+
+.dense-matrix .is-hi {
+  background: var(--ds-color-selected);
+}
+
+/* Selector de rol del alta: cada opción muestra su huella de módulos. */
+.dense-roles {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dense-roles legend {
+  margin-bottom: 4px;
+  padding: 0;
+}
+
+.dense-role {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  font-size: var(--ds-text-sm);
+  cursor: pointer;
+}
+
+.dense-role:hover {
+  background: var(--ds-color-surface-hover);
+}
+
+.dense-role--on {
+  border-color: var(--ds-color-primary);
+  background: var(--ds-color-primary-soft);
+}
+
+.dense-role input {
+  margin: 0;
+  accent-color: var(--ds-color-primary);
+}
+
+.dense-role small {
+  color: var(--ds-color-text-muted);
+}
+
+.dense-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ds-space-3);
+}
+
+.dense-stack > .study-form__actions {
+  display: flex;
+  gap: var(--ds-space-2);
+}
+
+.dense-drawer-body {
+  padding-top: var(--ds-space-4);
+}
+
+.dense-textarea {
+  min-height: 120px;
+  padding: 8px 10px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.dense-batch-preview {
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  overflow: auto;
+}
+
+.dense-batch-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.dense-batch-preview th {
+  padding: 5px 10px;
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.dense-batch-preview td {
+  padding: 5px 10px;
+  border-top: 1px solid var(--ds-color-border-subtle);
+}
+
+.dense-batch-preview tr.is-bad td {
+  background: var(--ds-color-warning-subtle);
+  color: var(--ds-color-warning);
+}

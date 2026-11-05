@@ -1,11 +1,32 @@
-import { useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { Button, EmptyState, Field } from "@contable/design-system";
 import { ACTIVITY_CODE_PATTERN, normalizeActivityCode } from "@contable/contracts";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
+import {
+  DenseAlert,
+  DenseHeader,
+  DensePage,
+  DenseSearch,
+  DensitySwitch,
+  DenseTable,
+  DenseTabs,
+  DenseToolbar,
+  DenseWorkspace,
+  Inspector,
+  InspectorFacts,
+  InspectorSection,
+  ShortcutHint,
+  StatStrip,
+  normalizeSearch,
+  useDenseShortcuts,
+  useDensity,
+  type DenseColumn,
+} from "../ui/Dense";
+import { Icon } from "../ui/Icon";
 import "./study.css";
 
 interface JurisdictionOption {
@@ -96,10 +117,29 @@ function shortDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString("es-AR") : "—";
 }
 
+type CatalogTab = "authorities" | "regimes" | "activities";
+
 function ActivityStateBadge({ isActive }: { isActive: boolean }) {
   return (
     <span className={`study-badge ${isActive ? "study-badge--ok" : "study-badge--muted"}`}>
       {isActive ? "Activa" : "Desactivada"}
+    </span>
+  );
+}
+
+function ActiveBadge({ active }: { active: boolean }) {
+  return (
+    <span className={`status-badge status-badge--${active ? "ok" : "muted"}`}>
+      {active ? "Activo" : "Inactivo"}
+    </span>
+  );
+}
+
+function OriginBadge({ origin }: { origin?: "REFERENCE" | "UI" }) {
+  if (!origin) return <span className="muted-copy">—</span>;
+  return (
+    <span className={`status-badge status-badge--${origin === "UI" ? "info" : "muted"}`}>
+      {origin === "UI" ? "Del estudio" : "Referencia"}
     </span>
   );
 }
@@ -129,7 +169,21 @@ export function StudyCatalogosFiscales() {
   const [activityDrawer, setActivityDrawer] = useState<"create" | "edit" | "deactivate" | null>(null);
   const [editingActivity, setEditingActivity] = useState<CatalogActivityRow | null>(null);
   const [activityForm, setActivityForm] = useState<ActivityForm>(emptyActivityForm);
-  const [activitySearch, setActivitySearch] = useState("");
+  const [tab, setTab] = useState<CatalogTab>("authorities");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [jurisdictionFilter, setJurisdictionFilter] = useState("");
+  const [originFilter, setOriginFilter] = useState<"" | "REFERENCE" | "UI">("");
+  const [stateFilter, setStateFilter] = useState<"" | "active" | "inactive">("");
+  const [alertsOnly, setAlertsOnly] = useState(false);
+  const [density, setDensity] = useDensity();
+  const searchRef = useRef<HTMLInputElement>(null);
+  const createRef = useRef<() => void>(() => undefined);
+  useDenseShortcuts({
+    searchRef,
+    onNew: () => createRef.current(),
+    onEscape: () => setSelectedId(null),
+  });
   const [receipt, setReceipt] = useState<string | null>(null);
   const [deletingTarget, setDeletingTarget] = useState<{ path: string } | null>(null);
   const [authorityForm, setAuthorityForm] = useState<AuthorityForm>({
@@ -288,35 +342,720 @@ export function StudyCatalogosFiscales() {
     const jurisdiction = jurisdictionsQuery.data?.find((item) => item.id === jurisdictionId);
     return jurisdiction ? `${jurisdiction.name} (${jurisdiction.code})` : "—";
   };
-  const searchTerm = activitySearch.trim().toLowerCase();
-  const visibleActivities = (activitiesQuery.data ?? []).filter(
-    (row) =>
-      !searchTerm ||
-      row.code.toLowerCase().includes(searchTerm) ||
-      row.name.toLowerCase().includes(searchTerm),
-  );
   const activityCodeValid = ACTIVITY_CODE_PATTERN.test(normalizeActivityCode(activityForm.code));
   const activityValidityValid =
     !activityForm.validTo || activityForm.validFrom <= activityForm.validTo;
 
-  return (
-    <div className="study-page">
-      <header className="study-page__header">
-        <div>
-          <p className="study-page__eyebrow">Administración fiscal</p>
-          <h1 className="study-page__title">Catálogos fiscales</h1>
-          <p className="study-page__subtitle">
-            Administrá organismos recaudadores, regímenes y actividades económicas para vincularlos a
-            la configuración fiscal de cada cliente.
-          </p>
-        </div>
-      </header>
+  const authorities = authoritiesQuery.data ?? [];
+  const regimes = regimesQuery.data ?? [];
+  const activities = activitiesQuery.data ?? [];
+  // El régimen puede venir con el organismo "plano": se completa con la lista de organismos.
+  const authorityOf = (row: TaxRegimeRow) =>
+    authorities.find((item) => item.id === row.authority.id) ?? row.authority;
+  const authorityJurisdictionName = (row: TaxRegimeRow) =>
+    authorityOf(row).jurisdiction?.name ??
+    jurisdictionsQuery.data?.find((item) => item.id === authorityOf(row).jurisdictionId)?.name ??
+    "otra jurisdicción";
+  const regimeMismatch = (row: TaxRegimeRow) => {
+    const authorityJurisdictionId = authorityOf(row).jurisdictionId;
+    return Boolean(authorityJurisdictionId) && authorityJurisdictionId !== row.jurisdiction.id;
+  };
+  const mismatchedRegimes = regimes.filter(regimeMismatch);
+  const regimesByAuthority = (authorityId: string) =>
+    regimes.filter((row) => row.authority.id === authorityId);
+  const originKnown = [...authorities, ...regimes, ...activities].some((row) => row.origin);
+  const studioRecords = [...authorities, ...regimes, ...activities].filter(
+    (row) => row.origin === "UI",
+  ).length;
+  const totalRecords = authorities.length + regimes.length + activities.length;
 
-      <p className="study-panel">
-        Las jurisdicciones, organismos recaudadores, impuestos y actividades económicas integran los
-        catálogos del estudio. Usá códigos y nombres verificados; los datos de prueba deben
-        identificarse claramente como sintéticos.
-      </p>
+  const searchQuery = normalizeSearch(search);
+  const textMatch = (...parts: Array<string | null | undefined>) =>
+    !searchQuery || normalizeSearch(parts.filter(Boolean).join(" ")).includes(searchQuery);
+  const commonMatch = (
+    row: { isActive: boolean; origin?: "REFERENCE" | "UI" },
+    jurisdictionId: string,
+  ) =>
+    (!jurisdictionFilter || jurisdictionId === jurisdictionFilter) &&
+    (!originFilter || row.origin === originFilter) &&
+    (!stateFilter || (stateFilter === "active") === row.isActive);
+
+  const visibleAuthorities = authorities.filter(
+    (row) =>
+      commonMatch(row, row.jurisdictionId) &&
+      textMatch(row.code, row.name, row.jurisdiction.name, row.jurisdiction.code),
+  );
+  const visibleRegimes = regimes.filter(
+    (row) =>
+      commonMatch(row, row.jurisdiction.id) &&
+      (!alertsOnly || regimeMismatch(row)) &&
+      textMatch(
+        row.code,
+        row.name,
+        row.taxType.name,
+        row.taxType.code,
+        row.jurisdiction.name,
+        row.authority.code,
+        row.authority.name,
+      ),
+  );
+  const visibleActivities = activities.filter(
+    (row) =>
+      commonMatch(row, row.jurisdictionId) &&
+      textMatch(row.code, row.name, row.source, jurisdictionName(row.jurisdictionId)),
+  );
+
+  const selectedAuthority = authorities.find((row) => row.id === selectedId) ?? null;
+  const selectedRegime = regimes.find((row) => row.id === selectedId) ?? null;
+  const selectedActivity = activities.find((row) => row.id === selectedId) ?? null;
+  const inspectorOpen =
+    (tab === "authorities" && Boolean(selectedAuthority)) ||
+    (tab === "regimes" && Boolean(selectedRegime)) ||
+    (tab === "activities" && Boolean(selectedActivity));
+
+  const switchTab = (next: CatalogTab) => {
+    setTab(next);
+    setSelectedId(null);
+    setAlertsOnly(false);
+  };
+  const showMismatches = () => {
+    setTab("regimes");
+    setSelectedId(null);
+    setAlertsOnly((current) => !current);
+  };
+
+  const openActivityEdit = (row: CatalogActivityRow) => {
+    setEditingActivity(row);
+    setActivityForm({
+      code: row.code,
+      name: row.name,
+      jurisdictionId: row.jurisdictionId,
+      source: row.source ?? "",
+      validFrom: row.validFrom.slice(0, 10),
+      validTo: row.validTo?.slice(0, 10) ?? "",
+    });
+    setActivityDrawer("edit");
+  };
+
+  const jurisdictionsReady = (jurisdictionsQuery.data?.length ?? 0) > 0;
+  const canCreateRegime =
+    jurisdictionsReady &&
+    (taxTypesQuery.data?.length ?? 0) > 0 &&
+    (authoritiesQuery.data?.length ?? 0) > 0;
+  const createLabel = {
+    authorities: "Nuevo organismo",
+    regimes: "Nuevo régimen",
+    activities: "Nueva actividad",
+  }[tab];
+  const createDisabled =
+    tab === "regimes" ? !canCreateRegime : tab === "activities" ? !jurisdictionsReady : false;
+  const openCreate = () => {
+    if (!canPropose || createDisabled) return;
+    if (tab === "authorities") setDrawer("authority");
+    else if (tab === "regimes") setDrawer("regime");
+    else {
+      setEditingActivity(null);
+      setActivityForm(emptyActivityForm);
+      setActivityDrawer("create");
+    }
+  };
+  createRef.current = openCreate;
+
+  const count = (value: number, loading: boolean) => (loading ? "—" : value);
+  const tabHints: Record<CatalogTab, string> = {
+    authorities:
+      "Quién recauda cada impuesto según la jurisdicción: ARCA en Nación, la DGR provincial o la dirección municipal de rentas.",
+    regimes: "Cada régimen requiere impuesto, jurisdicción y organismo recaudador compatibles.",
+    activities:
+      "El código es clave histórica: las actividades con dependencias se desactivan en lugar de eliminarse.",
+  };
+  const visibleCount =
+    tab === "authorities"
+      ? visibleAuthorities.length
+      : tab === "regimes"
+        ? visibleRegimes.length
+        : visibleActivities.length;
+  const totalCount =
+    tab === "authorities" ? authorities.length : tab === "regimes" ? regimes.length : activities.length;
+
+  const tableFooter = (
+    <>
+      <span>
+        {visibleCount} de {totalCount}
+      </span>
+      <span className="dense-table-foot__hint">{tabHints[tab]}</span>
+      <span className="dense-table-foot__spacer" />
+      <ShortcutHint
+        items={[
+          ["↑↓", "navegar"],
+          ["/", "buscar"],
+          ...(canPropose ? ([["N", "nuevo"]] as Array<[string, string]>) : []),
+          ["Esc", "cerrar"],
+        ]}
+      />
+    </>
+  );
+
+  const loadingFor = (loading: boolean, label: string) =>
+    loading ? (
+      <div className="dense-table-card">
+        <p className="muted-copy dense-empty">{label}</p>
+      </div>
+    ) : null;
+
+  const deleteButton = (path: string, push = false) => (
+    <Button
+      size="sm"
+      variant="danger"
+      className={push ? "dense-push" : undefined}
+      onClick={() => setDeletingTarget({ path: `/firms/${firmId}${path}` })}
+    >
+      Eliminar
+    </Button>
+  );
+
+  let inspector: ReactNode = null;
+  if (tab === "authorities" && selectedAuthority) {
+    const linked = regimesByAuthority(selectedAuthority.id);
+    inspector = (
+      <Inspector
+        label="Detalle del organismo"
+        eyebrow="Organismo"
+        title={selectedAuthority.code}
+        subtitle={selectedAuthority.name}
+        onClose={() => setSelectedId(null)}
+        footer={
+          canDelete && isOwnedUiRecord(selectedAuthority, firmId)
+            ? deleteButton(`/tax/authorities/${selectedAuthority.id}`)
+            : undefined
+        }
+      >
+        <InspectorSection title="Ficha">
+          <InspectorFacts
+            items={[
+              [
+                "Jurisdicción",
+                <>
+                  {selectedAuthority.jurisdiction.name}{" "}
+                  <span className="dense-chip">{selectedAuthority.jurisdiction.code}</span>
+                </>,
+              ],
+              ["Origen", selectedAuthority.origin ? <OriginBadge key="origin" origin={selectedAuthority.origin} /> : null],
+              ["Estado", <ActiveBadge key="state" active={selectedAuthority.isActive} />],
+            ]}
+          />
+        </InspectorSection>
+        <InspectorSection title={`Regímenes vinculados · ${linked.length}`}>
+          {linked.length > 0 ? (
+            <ul className="dense-linked">
+              {linked.map((row) => (
+                <li key={row.id}>
+                  <strong>{row.code}</strong>
+                  <span title={row.name}>{row.name}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Ningún régimen usa este organismo.</p>
+          )}
+        </InspectorSection>
+      </Inspector>
+    );
+  } else if (tab === "regimes" && selectedRegime) {
+    const mismatch = regimeMismatch(selectedRegime);
+    inspector = (
+      <Inspector
+        label="Detalle del régimen"
+        eyebrow="Régimen"
+        title={selectedRegime.code}
+        subtitle={selectedRegime.name}
+        onClose={() => setSelectedId(null)}
+        footer={
+          canDelete && isOwnedUiRecord(selectedRegime, firmId)
+            ? deleteButton(`/tax/regimes/${selectedRegime.id}`)
+            : undefined
+        }
+      >
+        <InspectorSection title="Cadena de vinculación">
+          <div className="dense-chain">
+            <span>
+              <small>Impuesto</small>
+              {selectedRegime.taxType.name}
+            </span>
+            <span className="dense-chain__arrow" aria-hidden="true">
+              →
+            </span>
+            <span>
+              <small>Jurisdicción</small>
+              {selectedRegime.jurisdiction.name}
+            </span>
+            <span className="dense-chain__arrow" aria-hidden="true">
+              →
+            </span>
+            <span className={mismatch ? "dense-chain__bad" : undefined}>
+              <small>Organismo</small>
+              {selectedRegime.authority.code}
+            </span>
+          </div>
+          <div className={`dense-note ${mismatch ? "dense-note--warn" : "dense-note--ok"}`}>
+            <Icon name={mismatch ? "alert" : "check"} size={14} />
+            <span>
+              {mismatch
+                ? `${selectedRegime.authority.code} recauda en ${authorityJurisdictionName(selectedRegime)}; el régimen es de ${selectedRegime.jurisdiction.name}. Revisá el organismo.`
+                : "El organismo corresponde a la jurisdicción del régimen."}
+            </span>
+          </div>
+        </InspectorSection>
+        <InspectorSection title="Ficha">
+          <InspectorFacts
+            items={[
+              [
+                "Impuesto",
+                <>
+                  {selectedRegime.taxType.name}{" "}
+                  <span className="dense-chip">{selectedRegime.taxType.code}</span>
+                </>,
+              ],
+              ["Organismo", selectedRegime.authority.name],
+              ["Origen", selectedRegime.origin ? <OriginBadge key="origin" origin={selectedRegime.origin} /> : null],
+              ["Estado", <ActiveBadge key="state" active={selectedRegime.isActive} />],
+            ]}
+          />
+        </InspectorSection>
+      </Inspector>
+    );
+  } else if (tab === "activities" && selectedActivity) {
+    const ownedUi = canDelete && isOwnedUiRecord(selectedActivity, firmId);
+    inspector = (
+      <Inspector
+        label="Detalle de la actividad"
+        eyebrow="Actividad económica"
+        title={selectedActivity.code}
+        subtitle={selectedActivity.name}
+        onClose={() => setSelectedId(null)}
+        footer={
+          canPropose || ownedUi ? (
+            <>
+              {canPropose ? (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => openActivityEdit(selectedActivity)}>
+                    Editar
+                  </Button>
+                  {selectedActivity.isActive ? (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => {
+                        setEditingActivity(selectedActivity);
+                        setActivityDrawer("deactivate");
+                      }}
+                    >
+                      Desactivar
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => toggleActivity.mutate(selectedActivity)}
+                      loading={
+                        toggleActivity.isPending && toggleActivity.variables?.id === selectedActivity.id
+                      }
+                    >
+                      Reactivar
+                    </Button>
+                  )}
+                </>
+              ) : null}
+              {ownedUi ? deleteButton(`/tax/activities/${selectedActivity.id}`, true) : null}
+            </>
+          ) : undefined
+        }
+      >
+        <InspectorSection title="Ficha">
+          <InspectorFacts
+            items={[
+              ["Jurisdicción", jurisdictionName(selectedActivity.jurisdictionId)],
+              ["Fuente", selectedActivity.source ?? "—"],
+              [
+                "Vigencia",
+                `${shortDate(selectedActivity.validFrom)} → ${shortDate(selectedActivity.validTo)}`,
+              ],
+              ["Origen", selectedActivity.origin ? <OriginBadge key="origin" origin={selectedActivity.origin} /> : null],
+              ["Estado", <ActivityStateBadge key="state" isActive={selectedActivity.isActive} />],
+              ...(selectedActivity.activeClientLinks !== undefined
+                ? ([["Clientes", `${selectedActivity.activeClientLinks} vínculo(s) vigente(s)`]] as Array<
+                    [string, ReactNode]
+                  >)
+                : []),
+            ]}
+          />
+        </InspectorSection>
+        <InspectorSection title="Historial">
+          <p>
+            El código se conserva como clave histórica. Si tiene dependencias, la actividad se
+            desactiva en lugar de eliminarse.
+          </p>
+        </InspectorSection>
+      </Inspector>
+    );
+  }
+
+  const authorityColumns: DenseColumn<TaxAuthorityRow>[] = [
+    {
+      key: "code",
+      header: "Código",
+      sortValue: (row) => row.code,
+      render: (row) => <span className="dense-code">{row.code}</span>,
+    },
+    {
+      key: "name",
+      header: "Organismo",
+      sortValue: (row) => row.name,
+      render: (row) => <span title={row.name}>{row.name}</span>,
+    },
+    {
+      key: "jurisdiction",
+      header: "Jurisdicción",
+      sortValue: (row) => row.jurisdiction.name,
+      render: (row) => (
+        <span className="dense-cell-inline">
+          {row.jurisdiction.name}
+          <span className="dense-chip dense-chip--hide-narrow">{row.jurisdiction.code}</span>
+        </span>
+      ),
+    },
+    {
+      key: "regimes",
+      header: "Regímenes",
+      align: "right",
+      sortValue: (row) => regimesByAuthority(row.id).length,
+      render: (row) => regimesByAuthority(row.id).length || "—",
+    },
+    {
+      key: "origin",
+      header: "Origen",
+      secondary: true,
+      sortValue: (row) => row.origin ?? "",
+      render: (row) => <OriginBadge origin={row.origin} />,
+    },
+    {
+      key: "state",
+      header: "Estado",
+      secondary: true,
+      sortValue: (row) => row.isActive,
+      render: (row) => <ActiveBadge active={row.isActive} />,
+    },
+  ];
+
+  const regimeColumns: DenseColumn<TaxRegimeRow>[] = [
+    {
+      key: "code",
+      header: "Código",
+      sortValue: (row) => row.code,
+      render: (row) => <span className="dense-code">{row.code}</span>,
+    },
+    {
+      key: "name",
+      header: "Régimen",
+      sortValue: (row) => row.name,
+      render: (row) => <span title={row.name}>{row.name}</span>,
+    },
+    {
+      key: "taxType",
+      header: "Impuesto",
+      secondary: true,
+      sortValue: (row) => row.taxType.name,
+      render: (row) => (
+        <span className="dense-cell-inline" title={`${row.taxType.name} (${row.taxType.code})`}>
+          {row.taxType.name}
+          <span className="dense-chip">{row.taxType.code}</span>
+        </span>
+      ),
+    },
+    {
+      key: "jurisdiction",
+      header: "Jurisdicción",
+      sortValue: (row) => row.jurisdiction.name,
+      render: (row) => (
+        <span className="dense-cell-inline">
+          {row.jurisdiction.name}
+          <span className="dense-chip dense-chip--hide-narrow">{row.jurisdiction.code}</span>
+        </span>
+      ),
+    },
+    {
+      key: "authority",
+      header: "Organismo",
+      sortValue: (row) => row.authority.code,
+      render: (row) => (
+        <span className="dense-chip" title={row.authority.name}>
+          {row.authority.code}
+        </span>
+      ),
+    },
+    {
+      key: "coherence",
+      header: "Coherencia",
+      sortValue: (row) => (regimeMismatch(row) ? 0 : 1),
+      render: (row) =>
+        regimeMismatch(row) ? (
+          <span
+            className="dense-coherence dense-coherence--bad"
+            title={`${row.authority.code} recauda en ${authorityJurisdictionName(row)}, no en ${row.jurisdiction.name}`}
+          >
+            <Icon name="alert" size={14} />
+            Revisar
+          </span>
+        ) : (
+          <span className="dense-coherence dense-coherence--ok">
+            <Icon name="check" size={14} />
+            OK
+          </span>
+        ),
+    },
+    {
+      key: "origin",
+      header: "Origen",
+      secondary: true,
+      sortValue: (row) => row.origin ?? "",
+      render: (row) => <OriginBadge origin={row.origin} />,
+    },
+    {
+      key: "state",
+      header: "Estado",
+      secondary: true,
+      sortValue: (row) => row.isActive,
+      render: (row) => <ActiveBadge active={row.isActive} />,
+    },
+  ];
+
+  const activityColumns: DenseColumn<CatalogActivityRow>[] = [
+    {
+      key: "code",
+      header: "Código",
+      sortValue: (row) => row.code,
+      render: (row) => (
+        <span className="dense-code" title={row.code}>
+          {row.code}
+        </span>
+      ),
+    },
+    {
+      key: "name",
+      header: "Actividad",
+      sortValue: (row) => row.name,
+      render: (row) => <span title={row.name}>{row.name}</span>,
+    },
+    {
+      key: "jurisdiction",
+      header: "Jurisdicción",
+      sortValue: (row) => jurisdictionName(row.jurisdictionId),
+      render: (row) => (
+        <span title={jurisdictionName(row.jurisdictionId)}>{jurisdictionName(row.jurisdictionId)}</span>
+      ),
+    },
+    {
+      key: "source",
+      header: "Fuente",
+      sortValue: (row) => row.source ?? "",
+      render: (row) => <span title={row.source ?? undefined}>{row.source ?? "—"}</span>,
+    },
+    {
+      key: "validity",
+      header: "Vigencia",
+      sortValue: (row) => row.validFrom,
+      render: (row) => `${shortDate(row.validFrom)} — ${shortDate(row.validTo)}`,
+    },
+    {
+      key: "origin",
+      header: "Origen",
+      secondary: true,
+      sortValue: (row) => row.origin ?? "",
+      render: (row) => <OriginBadge origin={row.origin} />,
+    },
+    {
+      key: "state",
+      header: "Estado",
+      secondary: true,
+      sortValue: (row) => row.isActive,
+      render: (row) => <ActivityStateBadge isActive={row.isActive} />,
+    },
+  ];
+
+  const select = (key: string | null) => setSelectedId(key);
+
+  let tableBody: ReactNode;
+  if (tab === "authorities") {
+    tableBody =
+      loadingFor(authoritiesQuery.isLoading, "Cargando organismos recaudadores…") ??
+      (authoritiesQuery.isError ? null : (
+        <DenseTable<TaxAuthorityRow>
+          label="Organismos recaudadores"
+          columns={authorityColumns.filter((column) => originKnown || column.key !== "origin")}
+          rows={visibleAuthorities}
+          rowKey={(row) => row.id}
+          selectedKey={selectedId}
+          onSelect={select}
+          inspectorOpen={inspectorOpen}
+          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
+          footer={tableFooter}
+          empty={
+            <EmptyState
+              size="compact"
+              title={
+                authorities.length === 0
+                  ? "Todavía no hay organismos recaudadores"
+                  : "Ningún organismo coincide con los filtros"
+              }
+              description={
+                authorities.length === 0
+                  ? "Creá un organismo asociado a una jurisdicción para poder registrar regímenes."
+                  : "Probá con otro código o nombre, o quitá filtros."
+              }
+            />
+          }
+        />
+      ));
+  } else if (tab === "regimes") {
+    tableBody =
+      loadingFor(regimesQuery.isLoading, "Cargando regímenes…") ??
+      (regimesQuery.isError ? null : (
+        <DenseTable<TaxRegimeRow>
+          label="Regímenes"
+          columns={regimeColumns.filter((column) => originKnown || column.key !== "origin")}
+          rows={visibleRegimes}
+          rowKey={(row) => row.id}
+          selectedKey={selectedId}
+          onSelect={select}
+          inspectorOpen={inspectorOpen}
+          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
+          footer={tableFooter}
+          empty={
+            <EmptyState
+              size="compact"
+              title={
+                regimes.length === 0
+                  ? "Todavía no hay regímenes fiscales"
+                  : "Ningún régimen coincide con los filtros"
+              }
+              description={
+                regimes.length === 0
+                  ? "Definí un régimen con un organismo recaudador y jurisdicción verificados."
+                  : "Probá con otro código o nombre, o quitá filtros."
+              }
+            />
+          }
+        />
+      ));
+  } else {
+    tableBody =
+      loadingFor(activitiesQuery.isLoading, "Cargando actividades económicas…") ??
+      (activitiesQuery.isError ? null : (
+        <DenseTable<CatalogActivityRow>
+          label="Actividades económicas"
+          columns={activityColumns.filter((column) => originKnown || column.key !== "origin")}
+          rows={visibleActivities}
+          rowKey={(row) => row.id}
+          selectedKey={selectedId}
+          onSelect={select}
+          inspectorOpen={inspectorOpen}
+          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
+          footer={tableFooter}
+          empty={
+            <EmptyState
+              size="compact"
+              title={
+                searchQuery
+                  ? "Ninguna actividad coincide con la búsqueda"
+                  : "Todavía no hay actividades económicas"
+              }
+              description={
+                searchQuery
+                  ? "Probá con otro código o nombre."
+                  : "Creá una actividad para poder vincularla a clientes y reglas fiscales."
+              }
+            />
+          }
+        />
+      ));
+  }
+
+  return (
+    <DensePage density={density}>
+      <DenseHeader
+        eyebrow="Administración fiscal"
+        title="Catálogos fiscales"
+        description="Organismos recaudadores, regímenes y actividades que se vinculan a la configuración fiscal de cada cliente. Usá códigos verificados e identificá los datos de prueba como sintéticos."
+        actions={
+          canPropose ? (
+            <Button size="sm" onClick={openCreate} disabled={createDisabled}>
+              {createLabel}
+            </Button>
+          ) : null
+        }
+      />
+
+      <StatStrip
+        label="Resumen de catálogos"
+        items={[
+          {
+            key: "authorities",
+            label: "Organismos",
+            value: count(authorities.length, authoritiesQuery.isLoading),
+            active: tab === "authorities",
+            onSelect: () => switchTab("authorities"),
+          },
+          {
+            key: "regimes",
+            label: "Regímenes",
+            value: count(regimes.length, regimesQuery.isLoading),
+            active: tab === "regimes",
+            onSelect: () => switchTab("regimes"),
+          },
+          {
+            key: "activities",
+            label: "Actividades",
+            value: count(activities.length, activitiesQuery.isLoading),
+            active: tab === "activities",
+            onSelect: () => switchTab("activities"),
+          },
+          ...(originKnown
+            ? [
+                {
+                  key: "studio",
+                  label: "Creados por el estudio",
+                  value: studioRecords,
+                  detail: `de ${totalRecords}`,
+                },
+              ]
+            : []),
+          {
+            key: "mismatch",
+            label: "Alertas de coherencia",
+            value: mismatchedRegimes.length,
+            detail: mismatchedRegimes.length > 0 ? "ver regímenes" : "sin alertas",
+            tone: mismatchedRegimes.length > 0 ? "warn" : undefined,
+            onSelect: mismatchedRegimes.length > 0 ? showMismatches : undefined,
+          },
+        ]}
+      />
+
+      <DenseTabs<CatalogTab>
+        label="Catálogos fiscales"
+        idPrefix="catalog-tab"
+        active={tab}
+        onChange={switchTab}
+        tabs={[
+          { id: "authorities", label: "Organismos recaudadores", count: authorities.length },
+          {
+            id: "regimes",
+            label: "Regímenes",
+            count: regimes.length,
+            warnCount: mismatchedRegimes.length,
+          },
+          { id: "activities", label: "Actividades económicas", count: activities.length },
+        ]}
+      />
 
       {failedQueries.map(({ label, query }) => (
         <div className="form-error" role="alert" key={label}>
@@ -327,273 +1066,87 @@ export function StudyCatalogosFiscales() {
         </div>
       ))}
 
-      <section className="study-panel" aria-labelledby="tax-authorities-title">
-        <div className="study-panel__heading">
-          <div>
-            <h2 id="tax-authorities-title">Organismos recaudadores</h2>
-            <p>
-              El organismo que recauda cada impuesto según la jurisdicción: ARCA en Nación (ex AFIP), la
-              Dirección General de Rentas provincial (ej. DGR Tucumán) o la dirección municipal de rentas
-              (ej. SMT San Miguel de Tucumán).
-            </p>
-          </div>
-          {canPropose ? (
-            <Button size="sm" onClick={() => setDrawer("authority")}>
-              Nuevo organismo
-            </Button>
-          ) : null}
-        </div>
-        {authoritiesQuery.isLoading ? (
-          <p className="muted-copy">Cargando organismos recaudadores…</p>
-        ) : authoritiesQuery.isError ? null : (authoritiesQuery.data?.length ?? 0) === 0 ? (
-          <EmptyState
-            size="compact"
-            title="Todavía no hay organismos recaudadores"
-            description="Creá un organismo asociado a una jurisdicción para poder registrar regímenes."
-          />
-        ) : (
-          <Table<TaxAuthorityRow>
-            rows={authoritiesQuery.data ?? []}
-            rowKey={(row) => row.id}
-            columns={[
-              { key: "code", header: "Código", render: (row) => row.code },
-              { key: "name", header: "Organismo", render: (row) => row.name },
-              {
-                key: "jurisdiction",
-                header: "Jurisdicción",
-                render: (row) => `${row.jurisdiction.name} (${row.jurisdiction.code})`,
-              },
-              {
-                key: "actions",
-                header: "",
-                render: (row) => canDelete && isOwnedUiRecord(row, firmId) ? (
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => setDeletingTarget({ path: `/firms/${firmId}/tax/authorities/${row.id}` })}
-                  >
-                    Eliminar
-                  </Button>
-                ) : null,
-              },
-            ]}
-          />
-        )}
-      </section>
+      <DenseToolbar>
+        <DenseSearch
+          inputRef={searchRef}
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar código o nombre…"
+        />
+        <select
+          className="dense-select"
+          aria-label="Filtrar por jurisdicción"
+          value={jurisdictionFilter}
+          onChange={(event) => setJurisdictionFilter(event.target.value)}
+        >
+          <option value="">Jurisdicción: todas</option>
+          {jurisdictionsQuery.data?.map((jurisdiction) => (
+            <option key={jurisdiction.id} value={jurisdiction.id}>
+              {jurisdiction.name} ({jurisdiction.code})
+            </option>
+          ))}
+        </select>
+        {originKnown ? (
+          <select
+            className="dense-select"
+            aria-label="Filtrar por origen"
+            value={originFilter}
+            onChange={(event) => setOriginFilter(event.target.value as "" | "REFERENCE" | "UI")}
+          >
+            <option value="">Origen: todos</option>
+            <option value="REFERENCE">Referencia</option>
+            <option value="UI">Del estudio</option>
+          </select>
+        ) : null}
+        <select
+          className="dense-select"
+          aria-label="Filtrar por estado"
+          value={stateFilter}
+          onChange={(event) => setStateFilter(event.target.value as "" | "active" | "inactive")}
+        >
+          <option value="">Estado: todos</option>
+          <option value="active">Activos</option>
+          <option value="inactive">Inactivos</option>
+        </select>
+        {tab === "regimes" ? (
+          <button
+            type="button"
+            className="dense-toggle"
+            aria-pressed={alertsOnly}
+            onClick={() => setAlertsOnly((current) => !current)}
+          >
+            <Icon name="alert" size={14} />
+            Sólo con alertas
+          </button>
+        ) : null}
+        <span className="dense-toolbar__spacer" />
+        <DensitySwitch value={density} onChange={setDensity} />
+      </DenseToolbar>
 
-      <section className="study-panel" aria-labelledby="tax-regimes-title">
-        <div className="study-panel__heading">
-          <div>
-            <h2 id="tax-regimes-title">Regímenes</h2>
-            <p>Cada régimen requiere impuesto, jurisdicción y organismo recaudador compatibles.</p>
-          </div>
-          {canPropose ? (
-            <Button
-              size="sm"
-              onClick={() => setDrawer("regime")}
-              disabled={
-                (jurisdictionsQuery.data?.length ?? 0) === 0 ||
-                (taxTypesQuery.data?.length ?? 0) === 0 ||
-                (authoritiesQuery.data?.length ?? 0) === 0
-              }
-            >
-              Nuevo régimen
+      {tab === "regimes" && mismatchedRegimes.length > 0 ? (
+        <DenseAlert
+          action={
+            <Button size="sm" variant="secondary" onClick={() => setAlertsOnly((current) => !current)}>
+              {alertsOnly ? "Quitar filtro" : "Filtrar"}
             </Button>
-          ) : null}
-        </div>
-        {regimesQuery.isLoading ? (
-          <p className="muted-copy">Cargando regímenes…</p>
-        ) : regimesQuery.isError ? null : (regimesQuery.data?.length ?? 0) === 0 ? (
-          <EmptyState
-            size="compact"
-            title="Todavía no hay regímenes fiscales"
-            description="Definí un régimen con un organismo recaudador y jurisdicción verificados."
-          />
-        ) : (
-          <Table<TaxRegimeRow>
-            rows={regimesQuery.data ?? []}
-            rowKey={(row) => row.id}
-            columns={[
-              { key: "code", header: "Código", render: (row) => row.code },
-              { key: "name", header: "Régimen", render: (row) => row.name },
-              { key: "taxType", header: "Impuesto", render: (row) => `${row.taxType.name} (${row.taxType.code})` },
-              { key: "jurisdiction", header: "Jurisdicción", render: (row) => row.jurisdiction.name },
-              { key: "authority", header: "Organismo", render: (row) => row.authority.name },
-              {
-                key: "actions",
-                header: "",
-                render: (row) => canDelete && isOwnedUiRecord(row, firmId) ? (
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => setDeletingTarget({ path: `/firms/${firmId}/tax/regimes/${row.id}` })}
-                  >
-                    Eliminar
-                  </Button>
-                ) : null,
-              },
-            ]}
-          />
-        )}
-      </section>
+          }
+        >
+          <strong>
+            {mismatchedRegimes.length}{" "}
+            {mismatchedRegimes.length === 1 ? "régimen tiene" : "regímenes tienen"} un organismo que no
+            corresponde a su jurisdicción:
+          </strong>{" "}
+          {mismatchedRegimes.map((row) => (
+            <span className="dense-chip" key={row.id}>
+              {row.code}
+            </span>
+          ))}
+        </DenseAlert>
+      ) : null}
 
-      <section className="study-panel" aria-labelledby="tax-activities-title">
-        <div className="study-panel__heading">
-          <div>
-            <h2 id="tax-activities-title">Actividades económicas</h2>
-            <p>
-              Catálogo de actividades por jurisdicción con fuente y vigencia. El código se conserva
-              como clave histórica. El Titular puede eliminar las actividades creadas desde UI cuando
-              el preview confirma que no tienen dependencias; las demás se desactivan para preservar
-              el historial.
-            </p>
-          </div>
-          {canPropose ? (
-            <Button
-              size="sm"
-              onClick={() => {
-                setEditingActivity(null);
-                setActivityForm(emptyActivityForm);
-                setActivityDrawer("create");
-              }}
-              disabled={(jurisdictionsQuery.data?.length ?? 0) === 0}
-            >
-              Nueva actividad
-            </Button>
-          ) : null}
-        </div>
-        <div className="ds-field fiscal-activity-search">
-          <label className="ds-field__label" htmlFor="activity-search">Buscar</label>
-          <input
-            id="activity-search"
-            className="ds-field__input"
-            type="search"
-            value={activitySearch}
-            onChange={(event) => setActivitySearch(event.target.value)}
-            placeholder="Buscar por código o nombre…"
-          />
-        </div>
-        {activitiesQuery.isLoading ? (
-          <p className="muted-copy">Cargando actividades económicas…</p>
-        ) : activitiesQuery.isError ? null : visibleActivities.length === 0 ? (
-          <EmptyState
-            size="compact"
-            title={
-              searchTerm
-                ? "Ninguna actividad coincide con la búsqueda"
-                : "Todavía no hay actividades económicas"
-            }
-            description={
-              searchTerm
-                ? "Probá con otro código o nombre."
-                : "Creá una actividad para poder vincularla a clientes y reglas fiscales."
-            }
-          />
-        ) : (
-          <Table<CatalogActivityRow>
-            rows={visibleActivities}
-            rowKey={(row) => row.id}
-            columns={[
-              {
-                key: "code",
-                header: "Código",
-                render: (row) => <span title={row.code}>{row.code}</span>,
-              },
-              {
-                key: "name",
-                header: "Actividad",
-                render: (row) => <span title={row.name}>{row.name}</span>,
-              },
-              {
-                key: "jurisdiction",
-                header: "Jurisdicción",
-                render: (row) => (
-                  <span title={jurisdictionName(row.jurisdictionId)}>
-                    {jurisdictionName(row.jurisdictionId)}
-                  </span>
-                ),
-              },
-              {
-                key: "source",
-                header: "Fuente",
-                render: (row) => (
-                  <span title={row.source ?? undefined}>{row.source ?? "—"}</span>
-                ),
-              },
-              {
-                key: "validity",
-                header: "Vigencia",
-                render: (row) => `${shortDate(row.validFrom)} — ${shortDate(row.validTo)}`,
-              },
-              {
-                key: "state",
-                header: "Estado",
-                render: (row) => <ActivityStateBadge isActive={row.isActive} />,
-              },
-              {
-                key: "actions",
-                header: "",
-                render: (row) => canPropose || (canDelete && isOwnedUiRecord(row, firmId)) ? (
-                  <div className="fiscal-activity-actions">
-                    {canPropose ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingActivity(row);
-                            setActivityForm({
-                              code: row.code,
-                              name: row.name,
-                              jurisdictionId: row.jurisdictionId,
-                              source: row.source ?? "",
-                              validFrom: row.validFrom.slice(0, 10),
-                              validTo: row.validTo?.slice(0, 10) ?? "",
-                            });
-                            setActivityDrawer("edit");
-                          }}
-                        >
-                          Editar
-                        </Button>
-                        {row.isActive ? (
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => {
-                              setEditingActivity(row);
-                              setActivityDrawer("deactivate");
-                            }}
-                          >
-                            Desactivar
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => toggleActivity.mutate(row)}
-                            loading={toggleActivity.isPending && toggleActivity.variables?.id === row.id}
-                          >
-                            Reactivar
-                          </Button>
-                        )}
-                      </>
-                    ) : null}
-                    {canDelete && isOwnedUiRecord(row, firmId) ? (
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => setDeletingTarget({ path: `/firms/${firmId}/tax/activities/${row.id}` })}
-                      >
-                        Eliminar
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null,
-              },
-            ]}
-          />
-        )}
-      </section>
+      <DenseWorkspace panelId="catalog-tab-panel" inspector={inspector}>
+        {tableBody}
+      </DenseWorkspace>
 
       <ActionDrawer
         isOpen={drawer === "authority"}
@@ -603,7 +1156,7 @@ export function StudyCatalogosFiscales() {
         description="La jurisdicción define el alcance en el que puede asignarse este organismo: ARCA recauda en Nación, las DGR en cada provincia y las direcciones de rentas en cada municipio."
       >
         <form
-          className="study-form study-form--compact"
+          className="study-form study-form--compact dense-form"
           onSubmit={(event) => {
             event.preventDefault();
             createAuthority.mutate();
@@ -625,7 +1178,7 @@ export function StudyCatalogosFiscales() {
             maxLength={160}
             required
           />
-          <div className="ds-field">
+          <div className="ds-field dense-form__full">
             <label className="ds-field__label" htmlFor="authority-jurisdiction">Jurisdicción</label>
             <select
               id="authority-jurisdiction"
@@ -666,7 +1219,7 @@ export function StudyCatalogosFiscales() {
         description="El organismo recaudador seleccionado debe corresponder a la jurisdicción del régimen."
       >
         <form
-          className="study-form study-form--compact"
+          className="study-form study-form--compact dense-form"
           onSubmit={(event) => {
             event.preventDefault();
             createRegime.mutate();
@@ -722,7 +1275,7 @@ export function StudyCatalogosFiscales() {
               ))}
             </select>
           </div>
-          <div className="ds-field">
+          <div className="ds-field dense-form__full">
             <label className="ds-field__label" htmlFor="regime-authority">Organismo recaudador</label>
             <select
               id="regime-authority"
@@ -743,6 +1296,16 @@ export function StudyCatalogosFiscales() {
               <p className="muted-copy">Creá primero un organismo para esta jurisdicción.</p>
             ) : null}
           </div>
+          {regimeForm.authorityId && regimeForm.jurisdictionId ? (
+            <div className="dense-note dense-note--ok" role="status">
+              <Icon name="check" size={14} />
+              <span>
+                Coherente:{" "}
+                {matchingAuthorities.find((item) => item.id === regimeForm.authorityId)?.code ?? "el organismo"}{" "}
+                recauda en {jurisdictionName(regimeForm.jurisdictionId)}.
+              </span>
+            </div>
+          ) : null}
           <MutationError error={createRegime.error} />
           <div className="study-form__actions">
             <Button
@@ -785,7 +1348,7 @@ export function StudyCatalogosFiscales() {
         description="El código se guarda en mayúsculas y es la clave con la que las reglas fiscales y los vínculos de clientes resuelven el historial: después de crearla no se edita."
       >
         <form
-          className="study-form study-form--compact"
+          className="study-form study-form--compact dense-form"
           onSubmit={(event) => {
             event.preventDefault();
             createActivity.mutate();
@@ -815,7 +1378,7 @@ export function StudyCatalogosFiscales() {
             maxLength={200}
             required
           />
-          <div className="ds-field">
+          <div className="ds-field dense-form__full">
             <label className="ds-field__label" htmlFor="activity-jurisdiction">Jurisdicción</label>
             <select
               id="activity-jurisdiction"
@@ -834,14 +1397,16 @@ export function StudyCatalogosFiscales() {
               ))}
             </select>
           </div>
-          <Field
-            id="activity-source"
-            label="Fuente"
-            value={activityForm.source}
-            onChange={(event) => setActivityForm({ ...activityForm, source: event.target.value })}
-            placeholder="Opcional: norma, padrón o resolución (ej. CM03, Arba)"
-            maxLength={200}
-          />
+          <div className="dense-form__full">
+            <Field
+              id="activity-source"
+              label="Fuente"
+              value={activityForm.source}
+              onChange={(event) => setActivityForm({ ...activityForm, source: event.target.value })}
+              placeholder="Opcional: norma, padrón o resolución (ej. CM03, Arba)"
+              maxLength={200}
+            />
+          </div>
           <Field
             id="activity-valid-from"
             label="Vigencia desde"
@@ -906,7 +1471,7 @@ export function StudyCatalogosFiscales() {
       >
         {editingActivity ? (
           <form
-            className="study-form study-form--compact"
+            className="study-form study-form--compact dense-form"
             onSubmit={(event) => {
               event.preventDefault();
               updateActivity.mutate();
@@ -928,22 +1493,26 @@ export function StudyCatalogosFiscales() {
                 readOnly
               />
             </div>
-            <Field
-              id="activity-edit-name"
-              label="Nombre"
-              value={activityForm.name}
-              onChange={(event) => setActivityForm({ ...activityForm, name: event.target.value })}
-              maxLength={200}
-              required
-            />
-            <Field
-              id="activity-edit-source"
-              label="Fuente"
-              value={activityForm.source}
-              onChange={(event) => setActivityForm({ ...activityForm, source: event.target.value })}
-              placeholder="Opcional: dejala vacía para quitar la fuente"
-              maxLength={200}
-            />
+            <div className="dense-form__full">
+              <Field
+                id="activity-edit-name"
+                label="Nombre"
+                value={activityForm.name}
+                onChange={(event) => setActivityForm({ ...activityForm, name: event.target.value })}
+                maxLength={200}
+                required
+              />
+            </div>
+            <div className="dense-form__full">
+              <Field
+                id="activity-edit-source"
+                label="Fuente"
+                value={activityForm.source}
+                onChange={(event) => setActivityForm({ ...activityForm, source: event.target.value })}
+                placeholder="Opcional: dejala vacía para quitar la fuente"
+                maxLength={200}
+              />
+            </div>
             <Field
               id="activity-edit-valid-from"
               label="Vigencia desde"
@@ -1040,6 +1609,6 @@ export function StudyCatalogosFiscales() {
           }}
         />
       ) : null}
-    </div>
+    </DensePage>
   );
 }

@@ -186,6 +186,9 @@ describe("StudyCatalogosFiscales", () => {
     vi.restoreAllMocks();
   });
 
+  const openTab = async (name: RegExp) =>
+    fireEvent.click(await screen.findByRole("tab", { name }));
+
   it("crea autoridad y régimen enlazados a la misma jurisdicción", async () => {
     renderCatalogs();
 
@@ -202,12 +205,15 @@ describe("StudyCatalogosFiscales", () => {
     }));
     await screen.findByText("Autoridad sintética E2E");
 
+    await openTab(/^Regímenes/);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo régimen" }));
     fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "E2E_SYN_REGIME" } });
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Régimen sintético E2E" } });
     fireEvent.change(screen.getByLabelText("Impuesto"), { target: { value: taxType.id } });
     fireEvent.change(screen.getByLabelText("Jurisdicción"), { target: { value: jurisdiction.id } });
     fireEvent.change(screen.getByLabelText("Organismo recaudador"), { target: { value: "authority-e2e" } });
+    // La coherencia organismo ↔ jurisdicción se confirma en vivo, antes de enviar.
+    expect(await screen.findByText(/Coherente:/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Crear régimen" }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/tax/regimes", {
@@ -224,12 +230,127 @@ describe("StudyCatalogosFiscales", () => {
     renderCatalogs();
 
     expect(await screen.findByRole("heading", { name: "Catálogos fiscales" })).toBeTruthy();
-    expect(await screen.findByRole("heading", { name: "Organismos recaudadores" })).toBeTruthy();
-    expect(screen.getByText(/ARCA en Nación \(ex AFIP\)/)).toBeTruthy();
-    expect(screen.queryByText(/compartidos entre estudios/)).toBeNull();
+    expect(await screen.findByRole("tab", { name: /Organismos recaudadores/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Regímenes/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Actividades económicas/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Nuevo organismo" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Nuevo régimen" })).toBeNull();
     expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("muestra los conteos por catálogo en la franja de métricas y en las pestañas", async () => {
+    authorities.push({
+      id: "authority-a",
+      code: "SYN-A",
+      name: "Organismo A",
+      jurisdictionId: jurisdiction.id,
+      isActive: true,
+      origin: "UI",
+      createdByFirmId: "firm-a",
+      jurisdiction,
+    });
+    renderCatalogs();
+
+    const tab = await screen.findByRole("tab", { name: /Organismos recaudadores/ });
+    await waitFor(() => expect(tab.textContent).toContain("1"));
+    const strip = screen.getByRole("group", { name: "Resumen de catálogos" });
+    expect(within(strip).getByText("Creados por el estudio")).toBeTruthy();
+    expect(within(strip).getByText("Alertas de coherencia")).toBeTruthy();
+  });
+
+  it("filtra por búsqueda y abre el detalle del organismo con sus regímenes vinculados", async () => {
+    authorities.push(
+      {
+        id: "authority-a",
+        code: "SYN-A",
+        name: "Organismo alfa",
+        jurisdictionId: jurisdiction.id,
+        isActive: true,
+        jurisdiction,
+      },
+      {
+        id: "authority-b",
+        code: "SYN-B",
+        name: "Organismo beta",
+        jurisdictionId: jurisdiction.id,
+        isActive: true,
+        jurisdiction,
+      },
+    );
+    regimes.push({
+      id: "regime-a",
+      code: "SYN-REG-A",
+      name: "Régimen alfa",
+      isActive: true,
+      authority: authorities[0],
+      jurisdiction,
+      taxType,
+    });
+    renderCatalogs();
+
+    expect(await screen.findByText("Organismo beta")).toBeTruthy();
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "alfa" } });
+    expect(screen.queryByText("Organismo beta")).toBeNull();
+
+    fireEvent.click(screen.getByText("Organismo alfa"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle del organismo" });
+    expect(within(detail).getByText("Regímenes vinculados · 1")).toBeTruthy();
+    expect(within(detail).getByText("SYN-REG-A")).toBeTruthy();
+  });
+
+  it("señala el régimen cuyo organismo recauda en otra jurisdicción y permite filtrarlo", async () => {
+    const other = { ...jurisdiction, id: "jurisdiction-other", code: "AR-OTRA", name: "Otra jurisdicción" };
+    authorities.push(
+      {
+        id: "authority-other",
+        code: "SYN-OTRA",
+        name: "Organismo de otra jurisdicción",
+        jurisdictionId: other.id,
+        isActive: true,
+        jurisdiction: other,
+      },
+      {
+        id: "authority-same",
+        code: "SYN-MISMA",
+        name: "Organismo de la misma jurisdicción",
+        jurisdictionId: jurisdiction.id,
+        isActive: true,
+        jurisdiction,
+      },
+    );
+    regimes.push(
+      {
+        id: "regime-bad",
+        code: "SYN-REG-BAD",
+        name: "Régimen incoherente",
+        isActive: true,
+        authority: authorities[0],
+        jurisdiction,
+        taxType,
+      },
+      {
+        id: "regime-ok",
+        code: "SYN-REG-OK",
+        name: "Régimen coherente",
+        isActive: true,
+        authority: authorities[1],
+        jurisdiction,
+        taxType,
+      },
+    );
+    renderCatalogs();
+
+    await openTab(/^Regímenes/);
+    expect(await screen.findByText(/1 régimen tiene un organismo que no corresponde/)).toBeTruthy();
+    expect(screen.getAllByText("Revisar")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Sólo con alertas/ }));
+    await waitFor(() => expect(screen.queryByText("Régimen coherente")).toBeNull());
+    expect(screen.getByText("Régimen incoherente")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Régimen incoherente"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle del régimen" });
+    expect(within(detail).getByText(/recauda en Otra jurisdicción/)).toBeTruthy();
   });
 
   it("jerarquiza Desactivar como destructiva y expone el valor completo en tooltip", async () => {
@@ -244,22 +365,25 @@ describe("StudyCatalogosFiscales", () => {
       isActive: true,
     });
     renderCatalogs();
+    await openTab(/^Actividades económicas/);
+
+    // El código completo queda accesible (tooltip) aunque la celda se trunque.
+    const code = await screen.findByText("E2E_SYN_ACTIVIDAD_LA_RGA_20261105");
+    expect(code.getAttribute("title")).toBe("E2E_SYN_ACTIVIDAD_LA_RGA_20261105");
+    const name = screen.getByText("Comercio mayorista sintético con nombre extenso");
+    expect(name.getAttribute("title")).toBe("Comercio mayorista sintético con nombre extenso");
 
     // La baja lógica se ve como acción destructiva, no como una acción más.
+    fireEvent.click(code);
     const deactivate = (await screen.findByRole("button", {
       name: "Desactivar",
     })) as HTMLButtonElement;
     expect(deactivate.className).toContain("ds-button--danger");
-
-    // El código completo queda accesible (tooltip) aunque la celda se trunque.
-    const code = screen.getByText("E2E_SYN_ACTIVIDAD_LA_RGA_20261105");
-    expect(code.getAttribute("title")).toBe("E2E_SYN_ACTIVIDAD_LA_RGA_20261105");
-    const name = screen.getByText("Comercio mayorista sintético con nombre extenso");
-    expect(name.getAttribute("title")).toBe("Comercio mayorista sintético con nombre extenso");
   });
 
   it("consulta el catálogo con includeInactive y crea una actividad con código normalizado", async () => {
     renderCatalogs();
+    await openTab(/^Actividades económicas/);
 
     // El alta se habilita recién cuando las jurisdicciones están cargadas.
     const newActivityButton = await screen.findByRole("button", { name: "Nueva actividad" });
@@ -310,7 +434,9 @@ describe("StudyCatalogosFiscales", () => {
       isActive: true,
     });
     renderCatalogs();
+    await openTab(/^Actividades económicas/);
 
+    fireEvent.click(await screen.findByText("Comercio mayorista"));
     fireEvent.click(await screen.findByRole("button", { name: "Editar" }));
     expect(screen.getAllByText("CM03-02").length).toBeGreaterThanOrEqual(1);
     expect((screen.getByLabelText("Jurisdicción (no editable)") as HTMLInputElement).value).toBe(
@@ -349,7 +475,9 @@ describe("StudyCatalogosFiscales", () => {
       activeClientLinks: 1,
     });
     renderCatalogs();
+    await openTab(/^Actividades económicas/);
 
+    fireEvent.click(await screen.findByText("Comercio mayorista"));
     fireEvent.click(await screen.findByRole("button", { name: "Desactivar" }));
     const drawer = document.querySelector(".action-drawer") as HTMLElement;
     fireEvent.click(within(drawer).getByRole("button", { name: "Desactivar" }));
@@ -379,9 +507,12 @@ describe("StudyCatalogosFiscales", () => {
     });
     contextMock.current = context(false);
     renderCatalogs();
+    await openTab(/^Actividades económicas/);
 
     expect(await screen.findByText("Servicios profesionales")).toBeTruthy();
     expect(screen.getByText("Desactivada")).toBeTruthy();
+    fireEvent.click(screen.getByText("Servicios profesionales"));
+    await screen.findByRole("complementary", { name: "Detalle de la actividad" });
     expect(screen.queryByRole("button", { name: "Nueva actividad" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Editar" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reactivar" })).toBeNull();
@@ -439,12 +570,23 @@ describe("StudyCatalogosFiscales", () => {
     contextMock.current = ownerContext;
     renderCatalogs();
 
-    expect(await screen.findAllByText("Organismo propio sintético")).toHaveLength(2);
-    expect(await screen.findByText("Régimen propio sintético")).toBeTruthy();
-    expect(await screen.findByText("Actividad propia sintética")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Eliminar" })).toHaveLength(3);
-    const referenceRow = screen.getByText("Organismo de referencia sintético").closest("tr");
-    expect(referenceRow).toBeTruthy();
-    expect(within(referenceRow as HTMLElement).queryByRole("button", { name: "Eliminar" })).toBeNull();
+    // Organismos: sólo el creado desde la UI por este estudio ofrece Eliminar.
+    fireEvent.click(await screen.findByText("Organismo propio sintético"));
+    let detail = await screen.findByRole("complementary", { name: "Detalle del organismo" });
+    expect(within(detail).getAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
+    fireEvent.click(screen.getByText("Organismo de referencia sintético"));
+    detail = await screen.findByRole("complementary", { name: "Detalle del organismo" });
+    expect(within(detail).getByText("SYN-REFERENCE-AUTH")).toBeTruthy();
+    expect(within(detail).queryByRole("button", { name: "Eliminar" })).toBeNull();
+
+    await openTab(/^Regímenes/);
+    fireEvent.click(await screen.findByText("Régimen propio sintético"));
+    detail = await screen.findByRole("complementary", { name: "Detalle del régimen" });
+    expect(within(detail).getAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
+
+    await openTab(/^Actividades económicas/);
+    fireEvent.click(await screen.findByText("Actividad propia sintética"));
+    detail = await screen.findByRole("complementary", { name: "Detalle de la actividad" });
+    expect(within(detail).getAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
   });
 });
