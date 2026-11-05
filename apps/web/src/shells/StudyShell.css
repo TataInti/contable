@@ -349,6 +349,45 @@
   scroll-behavior: smooth;
 }
 
+/* Escritorio: la sección Configuración queda fija sobre el pie de Ayuda para
+   que nunca quede oculta por el alto del nav o del pie; en móvil se mantiene
+   dentro del scroll (ver .study__nav-group--in-scroll). */
+.study__nav-admin {
+  display: none;
+}
+
+@media (min-width: 1025px) {
+  .study__nav-group--in-scroll {
+    display: none;
+  }
+
+  .study__nav-admin {
+    display: block;
+    flex: 0 0 auto;
+    padding: var(--ds-space-3);
+    border-top: 1px solid var(--ds-color-border);
+    background: color-mix(in srgb, var(--ds-color-surface-muted) 45%, var(--ds-color-surface));
+  }
+
+  .study__nav {
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+  }
+
+  .study__sidebar-footer {
+    padding: var(--ds-space-2);
+  }
+
+  .study__sidebar-footer .study__tour-trigger {
+    padding: var(--ds-space-2);
+    margin-bottom: var(--ds-space-1);
+  }
+
+  .study__sidebar-footer .study__portal-link {
+    margin-bottom: var(--ds-space-2);
+  }
+}
+
 @media (max-width: 1024px) {
   .study {
     height: auto;

@@ -41,7 +41,9 @@
   padding-inline: var(--ds-space-3);
   border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle);
   vertical-align: middle;
-  overflow-wrap: anywhere;
+  /* Quiebre sólo entre palabras; tokens largos (códigos) se cortan únicamente
+     si no entran solos. Evita badges y textos partidos a mitad de palabra. */
+  overflow-wrap: break-word;
 }
 
 .ds-table tbody tr:last-child td {

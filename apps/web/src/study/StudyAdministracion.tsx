@@ -431,9 +431,6 @@ export function StudyAdministracion() {
             <h2 id="internal-users-title">Usuarios internos</h2>
             <p>El rol es la fuente de verdad del acceso a módulos internos. No se asignan permisos sueltos por persona.</p>
           </div>
-          <Button size="sm" onClick={openInternalInviteForm}>
-            <Icon name="plus" size={17} /> Crear usuario
-          </Button>
         </div>
         <ActionDrawer
           isOpen={showInternalInviteForm}
@@ -480,6 +477,11 @@ export function StudyAdministracion() {
               </select>
             </label>
             {inviteInternal.isError && actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
+            {!internalEmail.trim() || !internalName.trim() ? (
+              <p className="form-submit-hint" role="note">
+                Ingresá nombre y email para poder crear el usuario.
+              </p>
+            ) : null}
             <div className="study-form__actions">
               <Button type="submit" loading={inviteInternal.isPending} disabled={!internalEmail.trim() || !internalName.trim()}>
                 <Icon name="plus" size={17} /> Crear usuario

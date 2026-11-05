@@ -246,6 +246,15 @@
   border-top: 1px solid var(--ds-color-border-subtle);
 }
 
+/* Explica por qué el submit está deshabilitado: un botón inerte sin motivo
+   confunde; el texto aparece junto a la acción mientras no se pueda enviar. */
+.form-submit-hint {
+  margin: var(--ds-space-2) 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.45;
+}
+
 .study-page__actions,
 .table-actions {
   display: flex;
@@ -2034,6 +2043,8 @@
   border-radius: 999px;
   font-size: var(--ds-text-xs);
   font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .study-badge--ok {
@@ -2906,6 +2917,14 @@
 
 .fiscal-rule-input--concept {
   min-width: 10rem;
+}
+
+/* En escritorio el campo de concepto recibe espacio real para escribir:
+   la tabla es ancha y el input no debe quedar apretado entre columnas. */
+@media (min-width: 1025px) {
+  .fiscal-rule-input--concept {
+    min-width: 18rem;
+  }
 }
 
 .fiscal-rule-input--number {

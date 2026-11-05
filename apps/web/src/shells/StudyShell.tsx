@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ContextBar } from "./ContextBar";
 import { logout } from "../lib/auth";
@@ -9,6 +9,7 @@ import { GuidedTour } from "../ui/GuidedTour";
 import {
   STUDY_NAVIGATION_GROUPS,
   modulesForNavigation,
+  type StudyModule,
   type StudyNavigationGroup,
 } from "../study/moduleRegistry";
 import { helpHrefForPath } from "../study/helpAnchors";
@@ -45,6 +46,23 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
+function StudyNavLink({ item }: { item: StudyModule }) {
+  return (
+    <NavLink
+      key={item.id}
+      to={item.path}
+      end={item.end}
+      className={({ isActive }) =>
+        `study__nav-link${isActive ? " study__nav-link--active" : ""}`
+      }
+    >
+      <Icon name={item.icon} size={18} />
+      <span>{item.label}</span>
+      <Icon name="chevron" size={14} className="study__nav-chevron" />
+    </NavLink>
+  );
+}
+
 export function StudyShell() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,8 +71,19 @@ export function StudyShell() {
   const [menuOpen, setMenuOpen] = useState(false);
   const firm = session.me?.firms.find((item) => item.firmId === firmId);
   const navigationModules = modulesForNavigation(capabilities);
+  const navRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
+
+  // En escritorio el menú puede superar la altura del viewport: al navegar,
+  // el ítem activo (p.ej. la sección Configuración) queda a la vista sin que
+  // el pie de Ayuda lo tape. En móvil no aplica (el menú se abre cerrado).
+  useEffect(() => {
+    const activeLink = navRef.current?.querySelector<HTMLAnchorElement>(
+      ".study__nav-link--active",
+    );
+    activeLink?.scrollIntoView?.({ block: "nearest" });
+  }, [location.pathname]);
 
   const openNavigationForTour = useCallback(() => {
     if (window.matchMedia?.("(max-width: 1024px)").matches) {
@@ -95,35 +124,43 @@ export function StudyShell() {
 
       <aside className="study__sidebar" id="study-navigation">
         <Brand />
-        <nav className="study__nav" aria-label="Navegación del estudio">
+        <nav className="study__nav" aria-label="Navegación del estudio" ref={navRef}>
           {STUDY_NAVIGATION_GROUPS.map((group) => {
             const items = navigationModules.filter((item) => item.navigationGroup === group);
             if (items.length === 0) return null;
+            const admin = group === "Configuración";
             return (
               <div
-                className={`study__nav-group${group === "Configuración" ? " study__nav-group--admin" : ""}`}
+                className={[
+                  "study__nav-group",
+                  admin ? "study__nav-group--admin" : "",
+                  admin ? "study__nav-group--in-scroll" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 key={group}
                 data-tour={NAV_TOUR_IDS[group]}
               >
                 <p className="study__nav-label">{group}</p>
                 {items.map((item) => (
-                  <NavLink
-                    key={item.id}
-                    to={item.path}
-                    end={item.end}
-                    className={({ isActive }) =>
-                      `study__nav-link${isActive ? " study__nav-link--active" : ""}`
-                    }
-                  >
-                    <Icon name={item.icon} size={18} />
-                    <span>{item.label}</span>
-                    <Icon name="chevron" size={14} className="study__nav-chevron" />
-                  </NavLink>
+                  <StudyNavLink item={item} key={item.id} />
                 ))}
               </div>
             );
           })}
         </nav>
+
+        {/* En escritorio la sección Configuración queda fija sobre el pie de
+            Ayuda, siempre visible; en móvil se sigue mostrando dentro del
+            scroll del menú (misma navegación que antes). */}
+        <div className="study__nav-admin" aria-label="Configuración del estudio">
+          <p className="study__nav-label">Configuración</p>
+          {navigationModules
+            .filter((item) => item.navigationGroup === "Configuración")
+            .map((item) => (
+              <StudyNavLink item={item} key={item.id} />
+            ))}
+        </div>
 
         <div className="study__sidebar-footer">
           <a

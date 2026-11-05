@@ -131,6 +131,15 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/tax-obligations\/.*\/filings$/, resolve: () => "tax.filings.record" },
   { match: /\/tax-obligations\/.*\/payments$/, resolve: () => "tax.payments.record" },
   { match: /\/tax-obligations/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
+  // Borrado definitivo de catálogos y reglas fiscales: sólo Titular (OWNER).
+  // Las rutas de preview y DELETE se declaran antes de los mapeos generales
+  // para que no caigan en tax.rules.propose / tax.profile.write.
+  { match: /\/tax\/(authorities|regimes|activities)\/[^/]+\/deletion-preview$/, resolve: () => "data.delete" },
+  { match: /\/tax\/(authorities|regimes|activities)\/[^/]+$/, resolve: (m) => (m === "DELETE" ? "data.delete" : (m === "GET" ? "tax.rules.read" : "tax.rules.propose")) },
+  { match: /\/tax\/rule-packs\/[^/]+\/deletion-preview$/, resolve: () => "data.delete" },
+  { match: /\/tax\/rule-packs\/[^/]+$/, resolve: (m) => (m === "DELETE" ? "data.delete" : (m === "GET" ? "tax.rules.read" : "tax.rules.propose")) },
+  { match: /\/tax\/rule-versions\/[^/]+\/deletion-preview$/, resolve: () => "data.delete" },
+  { match: /\/tax\/rule-versions\/[^/]+$/, resolve: (m) => (m === "DELETE" ? "data.delete" : (m === "GET" ? "tax.rules.read" : "tax.rules.propose")) },
   { match: /\/tax\/jurisdictions/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
   { match: /\/tax\/types/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
   { match: /\/tax\/authorities/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
@@ -269,6 +278,9 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
     match: /\/clients\/[^/]+\/(accounts|counterparties|cost-centers|fiscal-years|profile|summary)/,
     resolve: (m) => (m === "GET" ? "client.read" : "client.manage"),
   },
+  // Borrado definitivo de un cliente y su preview: capacidad exclusiva OWNER.
+  { match: /\/clients\/[^/]+\/deletion-preview$/, resolve: () => "data.delete" },
+  { match: /\/clients\/[^/]+$/, resolve: (m) => (m === "DELETE" ? "data.delete" : (m === "GET" ? "client.read" : "client.manage")) },
   { match: /\/clients(?:\/[^/]+)?$/, resolve: (m) => (m === "GET" ? "client.read" : "client.manage") },
 ];
 

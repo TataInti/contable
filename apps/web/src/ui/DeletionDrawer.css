@@ -1,0 +1,51 @@
+.deletion-preview {
+  display: grid;
+  gap: 1rem;
+}
+
+.deletion-preview__summary,
+.deletion-preview__blockers {
+  border: 1px solid currentColor;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.deletion-preview__summary h3,
+.deletion-preview__blockers h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.deletion-preview__summary p,
+.deletion-preview__blockers p {
+  margin: 0.25rem 0;
+}
+
+.deletion-preview__list,
+.deletion-preview__notes {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.deletion-preview__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.deletion-preview__confirmation {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.deletion-preview__confirmation input {
+  width: 100%;
+}
+
+.deletion-preview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}

@@ -35,6 +35,7 @@ export function tenantContextFromRequest(req: FastifyRequest): TenantContext {
 export async function withTenantContext<T>(
   ctx: TenantContext,
   fn: (tx: Tx) => Promise<T>,
+  options?: { maxWait?: number; timeout?: number },
 ): Promise<T> {
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
@@ -42,7 +43,7 @@ export async function withTenantContext<T>(
     await tx.$queryRaw`SELECT set_config('app.client_id', ${ctx.clientId ?? ""}, true)`;
     await tx.$queryRaw`SELECT set_config('app.actor_kind', ${ctx.actorKind}, true)`;
     return fn(tx);
-  });
+  }, options);
 }
 
 /**

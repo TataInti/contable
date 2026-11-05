@@ -226,4 +226,24 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(requiredCapability("POST", `${base}/items/i/reject`)).toBe("request.manage");
     expect(requiredCapability("POST", `${base}/items/i/waive`)).toBe("request.manage");
   });
+
+  it("reserva previews y borrados definitivos de clientes y catálogos al OWNER", () => {
+    const paths = [
+      "/api/v1/firms/f/clients/c",
+      "/api/v1/firms/f/tax/authorities/a",
+      "/api/v1/firms/f/tax/regimes/r",
+      "/api/v1/firms/f/tax/activities/a",
+      "/api/v1/firms/f/tax/rule-packs/p",
+      "/api/v1/firms/f/tax/rule-versions/v",
+    ];
+    for (const path of paths) {
+      expect(requiredCapability("GET", `${path}/deletion-preview`)).toBe("data.delete");
+      expect(requiredCapability("DELETE", path)).toBe("data.delete");
+    }
+
+    expect(capabilitiesForRole("OWNER").has("data.delete")).toBe(true);
+    for (const role of ["ADMIN", "PREPARER", "REVIEWER", "AUDITOR_READONLY"] as const) {
+      expect(capabilitiesForRole(role).has("data.delete")).toBe(false);
+    }
+  });
 });

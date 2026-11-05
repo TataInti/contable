@@ -40,6 +40,8 @@ const authorities: Array<{
   name: string;
   jurisdictionId: string;
   isActive: boolean;
+  origin?: "REFERENCE" | "UI";
+  createdByFirmId?: string | null;
   jurisdiction: typeof jurisdiction;
 }> = [];
 const regimes: Array<Record<string, unknown>> = [];
@@ -52,6 +54,8 @@ const activities: Array<{
   validFrom: string;
   validTo: string | null;
   isActive: boolean;
+  origin?: "REFERENCE" | "UI";
+  createdByFirmId?: string | null;
   activeClientLinks?: number;
 }> = [];
 
@@ -228,6 +232,32 @@ describe("StudyCatalogosFiscales", () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
+  it("jerarquiza Desactivar como destructiva y expone el valor completo en tooltip", async () => {
+    activities.push({
+      id: "activity-a",
+      code: "E2E_SYN_ACTIVIDAD_LA_RGA_20261105",
+      name: "Comercio mayorista sintético con nombre extenso",
+      jurisdictionId: jurisdiction.id,
+      source: "CM03",
+      validFrom: "2026-01-01",
+      validTo: null,
+      isActive: true,
+    });
+    renderCatalogs();
+
+    // La baja lógica se ve como acción destructiva, no como una acción más.
+    const deactivate = (await screen.findByRole("button", {
+      name: "Desactivar",
+    })) as HTMLButtonElement;
+    expect(deactivate.className).toContain("ds-button--danger");
+
+    // El código completo queda accesible (tooltip) aunque la celda se trunque.
+    const code = screen.getByText("E2E_SYN_ACTIVIDAD_LA_RGA_20261105");
+    expect(code.getAttribute("title")).toBe("E2E_SYN_ACTIVIDAD_LA_RGA_20261105");
+    const name = screen.getByText("Comercio mayorista sintético con nombre extenso");
+    expect(name.getAttribute("title")).toBe("Comercio mayorista sintético con nombre extenso");
+  });
+
   it("consulta el catálogo con includeInactive y crea una actividad con código normalizado", async () => {
     renderCatalogs();
 
@@ -303,7 +333,7 @@ describe("StudyCatalogosFiscales", () => {
         validTo: "2027-06-30",
       }),
     );
-    expect(await screen.findByText(/El código se conserva/)).toBeTruthy();
+    expect(await screen.findByText(/Los datos de la actividad quedaron actualizados/)).toBeTruthy();
   });
 
   it("desactiva una actividad avisando los vínculos vigentes y la reactiva", async () => {
@@ -356,5 +386,65 @@ describe("StudyCatalogosFiscales", () => {
     expect(screen.queryByRole("button", { name: "Editar" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reactivar" })).toBeNull();
     expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("ofrece eliminación sólo al Titular y sólo para catálogos UI de su estudio", async () => {
+    authorities.push(
+      {
+        id: "authority-owned",
+        code: "SYN-OWNED-AUTH",
+        name: "Organismo propio sintético",
+        jurisdictionId: jurisdiction.id,
+        isActive: true,
+        origin: "UI",
+        createdByFirmId: "firm-a",
+        jurisdiction,
+      },
+      {
+        id: "authority-reference",
+        code: "SYN-REFERENCE-AUTH",
+        name: "Organismo de referencia sintético",
+        jurisdictionId: jurisdiction.id,
+        isActive: true,
+        origin: "REFERENCE",
+        createdByFirmId: null,
+        jurisdiction,
+      },
+    );
+    regimes.push({
+      id: "regime-owned",
+      code: "SYN-OWNED-REGIME",
+      name: "Régimen propio sintético",
+      isActive: true,
+      origin: "UI",
+      createdByFirmId: "firm-a",
+      authority: authorities[0],
+      jurisdiction,
+      taxType,
+    });
+    activities.push({
+      id: "activity-owned",
+      code: "SYN-OWNED-ACT",
+      name: "Actividad propia sintética",
+      jurisdictionId: jurisdiction.id,
+      source: null,
+      validFrom: "2026-01-01",
+      validTo: null,
+      isActive: true,
+      origin: "UI",
+      createdByFirmId: "firm-a",
+    });
+    const ownerContext = context();
+    ownerContext.capabilities = new Set([...ownerContext.capabilities, "data.delete"]);
+    contextMock.current = ownerContext;
+    renderCatalogs();
+
+    expect(await screen.findAllByText("Organismo propio sintético")).toHaveLength(2);
+    expect(await screen.findByText("Régimen propio sintético")).toBeTruthy();
+    expect(await screen.findByText("Actividad propia sintética")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Eliminar" })).toHaveLength(3);
+    const referenceRow = screen.getByText("Organismo de referencia sintético").closest("tr");
+    expect(referenceRow).toBeTruthy();
+    expect(within(referenceRow as HTMLElement).queryByRole("button", { name: "Eliminar" })).toBeNull();
   });
 });

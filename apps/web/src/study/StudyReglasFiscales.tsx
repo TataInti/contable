@@ -9,6 +9,7 @@ import {
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
+import { DeletionDrawer } from "../ui/DeletionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
 import "./study.css";
@@ -30,6 +31,8 @@ interface RuleVersion {
   id: string;
   version: number;
   status: RuleStatus;
+  origin?: "REFERENCE" | "UI";
+  createdByFirmId?: string | null;
   validFrom: string;
   validTo: string | null;
   engineVersion: string;
@@ -50,6 +53,9 @@ interface RulePack {
   id: string;
   code: string;
   name: string;
+  status: RuleStatus;
+  origin?: "REFERENCE" | "UI";
+  createdByFirmId?: string | null;
   regime: {
     name: string;
     code: string;
@@ -90,6 +96,10 @@ export function StudyReglasFiscales() {
   const { firmId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [deletingTarget, setDeletingTarget] = useState<{
+    path: string;
+    kind: "pack" | "version";
+  } | null>(null);
   const [validFrom, setValidFrom] = useState(today);
   const [credentialId, setCredentialId] = useState("");
   const [draftRows, setDraftRows] = useState<RuleRow[]>([]);
@@ -176,6 +186,28 @@ export function StudyReglasFiscales() {
   useEffect(() => {
     setEngineVersion(compatibleEngineOptions[0]?.engineVersion ?? "");
   }, [compatibleEngineOptions, selectedPackId]);
+
+  // Versión activa del paquete: se muestra junto al borrador para que quede
+  // claro qué versión se está editando y cuál sigue aplicando a los cálculos.
+  const activeVersion = useMemo(
+    () => detailQuery.data?.versions.find((version) => version.status === "ACTIVE"),
+    [detailQuery.data],
+  );
+  const canDeletePack = Boolean(
+    firmId &&
+    capabilities.has("data.delete") &&
+    detailQuery.data?.origin === "UI" &&
+    detailQuery.data.createdByFirmId === firmId &&
+    detailQuery.data.status === "DRAFT" &&
+    detailQuery.data.versions.every((version) => version.status === "DRAFT"),
+  );
+  const canDeleteVersion = Boolean(
+    firmId &&
+    capabilities.has("data.delete") &&
+    selectedVersion?.origin === "UI" &&
+    selectedVersion.createdByFirmId === firmId &&
+    selectedVersion.status === "DRAFT",
+  );
 
   useEffect(() => {
     setDraftRows(selectedVersion?.status === "DRAFT" ? selectedVersion.rateRules : []);
@@ -349,7 +381,7 @@ export function StudyReglasFiscales() {
     }
     if (!selectedVersion) return null;
     if (selectedVersion.status === "DRAFT" && canPropose) {
-      return { label: "Editar borrador", description: "Revisá las reglas y guardá los cambios antes de enviarlo a revisión.", onClick: () => document.getElementById("rule-rates-title")?.scrollIntoView({ behavior: "smooth", block: "start" }) };
+      return { label: `Editar borrador v${selectedVersion.version}`, description: "Revisá las reglas y guardá los cambios antes de enviarlo a revisión.", onClick: () => document.getElementById("rule-rates-title")?.scrollIntoView({ behavior: "smooth", block: "start" }) };
     }
     if (selectedVersion.status === "IN_REVIEW" && capabilities.has("tax.rules.approve")) {
       return { label: "Revisar y aprobar", description: "Seleccioná la matrícula profesional para aprobar esta versión.", onClick: () => document.getElementById("rule-approval")?.scrollIntoView({ behavior: "smooth", block: "start" }) };
@@ -451,6 +483,11 @@ export function StudyReglasFiscales() {
               Cancelar
             </Button>
           </div>
+          {!newPack.code.trim() || !newPack.name.trim() || !newPack.regimeId ? (
+            <p className="form-submit-hint" role="note">
+              Completá código, nombre y régimen para poder crear el paquete.
+            </p>
+          ) : null}
         </form>
       </ActionDrawer>
 
@@ -688,7 +725,6 @@ export function StudyReglasFiscales() {
         <aside className="fiscal-rules-index" aria-label="Paquetes de reglas disponibles">
           <div className="fiscal-rules-index__heading">
             <p className="fiscal-rules-index__label">Paquetes fiscales</p>
-            {canPropose ? <Button size="sm" variant="ghost" onClick={() => setShowPackForm(true)}><Icon name="plus" size={15} /> Nuevo</Button> : null}
           </div>
           <small className="fiscal-rules-index__count">{packsQuery.data?.length ?? 0} configurados</small>
           {packsQuery.isLoading ? <p className="muted-copy">Cargando reglas…</p> : null}
@@ -697,6 +733,7 @@ export function StudyReglasFiscales() {
           ) : null}
           {packsQuery.data?.map((pack) => {
             const active = pack.versions.find((version) => version.status === "ACTIVE");
+            const draft = pack.versions.find((version) => version.status === "DRAFT");
             return (
               <button
                 key={pack.id}
@@ -708,7 +745,15 @@ export function StudyReglasFiscales() {
                 <span>
                   {pack.regime.taxType.name} · {pack.regime.jurisdiction.name}
                 </span>
-                <small>{active ? `Vigente v${active.version}` : "Sin versión activa"}</small>
+                <small>
+                  {active && draft
+                    ? `Borrador v${draft.version} · Vigente v${active.version}`
+                    : active
+                      ? `Vigente v${active.version}`
+                      : draft
+                        ? `Borrador v${draft.version}`
+                        : "Sin versión activa"}
+                </small>
               </button>
             );
           })}
@@ -735,6 +780,28 @@ export function StudyReglasFiscales() {
             </div>
             <Button onClick={rulesNextAction.onClick}>{rulesNextAction.label}</Button>
           </section> : null}
+          {detailQuery.data && canDeletePack ? (
+            <section className="study-panel fiscal-rule-delete" aria-label="Administración del paquete">
+              <div>
+                <h2>Paquete creado desde UI</h2>
+                <p>Revisá sus dependencias antes de confirmar la eliminación definitiva.</p>
+              </div>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => {
+                  if (firmId && selectedPackId) {
+                    setDeletingTarget({
+                      path: `/firms/${firmId}/tax/rule-packs/${selectedPackId}`,
+                      kind: "pack",
+                    });
+                  }
+                }}
+              >
+                Eliminar paquete
+              </Button>
+            </section>
+          ) : null}
           {detailQuery.data && !selectedVersion ? (
             <EmptyState
               title="Este paquete todavía no tiene versión"
@@ -756,15 +823,39 @@ export function StudyReglasFiscales() {
                       {detailQuery.data.code} · Organismo recaudador {detailQuery.data.regime.authority.name}
                     </p>
                   </div>
-                  <StatusBadge status={selectedVersion.status} />
+                  <div className="table-actions">
+                    <StatusBadge status={selectedVersion.status} />
+                    {canDeleteVersion ? (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => {
+                          if (firmId) {
+                            setDeletingTarget({
+                              path: `/firms/${firmId}/tax/rule-versions/${selectedVersion.id}`,
+                              kind: "version",
+                            });
+                          }
+                        }}
+                      >
+                        Eliminar borrador v{selectedVersion.version}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="fiscal-rule-summary__meta">
                   <span>
                     Régimen <strong>{detailQuery.data.regime.name}</strong>
                   </span>
                   <span>
-                    Versión <strong>v{selectedVersion.version}</strong>
+                    {selectedVersion.status === "DRAFT" ? "Editando borrador" : "Versión"}{" "}
+                    <strong>v{selectedVersion.version}</strong>
                   </span>
+                  {selectedVersion.status === "DRAFT" && activeVersion ? (
+                    <span>
+                      Versión activa <strong>v{activeVersion.version}</strong>
+                    </span>
+                  ) : null}
                   <span>
                     Vigencia{" "}
                     <strong>
@@ -1001,6 +1092,12 @@ export function StudyReglasFiscales() {
                     </Button>
                   </div>
                 ) : null}
+                {editable && draftRows.some((row) => !row.concept.trim() || (!row.rate && !row.minAmount)) ? (
+                  <p className="form-submit-hint" role="note">
+                    Completá el concepto y la alícuota o el mínimo de cada fila para poder guardar
+                    el borrador.
+                  </p>
+                ) : null}
               </section>
 
               <section className="study-panel" aria-labelledby="rule-due-dates-title">
@@ -1112,6 +1209,11 @@ export function StudyReglasFiscales() {
                       >
                         Aprobar
                       </Button>
+                      {!credentialId ? (
+                        <p className="form-submit-hint" role="note">
+                          Seleccioná la matrícula profesional para habilitar la aprobación.
+                        </p>
+                      ) : null}
                     </>
                   ) : null}
                   {selectedVersion.status === "APPROVED" &&
@@ -1143,6 +1245,26 @@ export function StudyReglasFiscales() {
         <p className="form-error" role="alert">
           {mutationError.message}
         </p>
+      ) : null}
+      {deletingTarget ? (
+        <DeletionDrawer
+          isOpen
+          path={deletingTarget.path}
+          onClose={() => setDeletingTarget(null)}
+          onDeleted={async () => {
+            const kind = deletingTarget.kind;
+            if (kind === "pack") setSelectedPackId(null);
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["tax-rule-packs", firmId] }),
+              queryClient.invalidateQueries({ queryKey: ["tax-rule-pack", selectedPackId] }),
+            ]);
+            setReceipt(
+              kind === "pack"
+                ? "El paquete y su parametría quedaron eliminados y auditados."
+                : "La versión borrador y su parametría quedaron eliminadas y auditadas.",
+            );
+          }}
+        />
       ) : null}
     </section>
   );
