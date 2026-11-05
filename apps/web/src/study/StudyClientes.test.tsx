@@ -69,6 +69,18 @@ function clientFixture(profile: Record<string, unknown>) {
 
 function mockApi(profile: Record<string, unknown>, standards = standardsFixture) {
   vi.mocked(api.get).mockImplementation(((path: string) => {
+    if (path.endsWith("/deletion-preview")) {
+      return Promise.resolve({
+        entity: { id: "client-a", kind: "CLIENT", label: "Alfa Uno S.A." },
+        confirmation: { expected: "Alfa Uno S.A.", label: "Escribí la razón social exacta para confirmar" },
+        totals: { rows: 2 },
+        groups: [{ key: "fiscal", label: "Datos fiscales", count: 2 }],
+        items: [{ key: "documents", label: "Documentos", count: 2 }],
+        blockers: [],
+        canDelete: true,
+        notes: ["La auditoría se conserva."],
+      });
+    }
     if (path === "/tax/jurisdictions") return Promise.resolve(catalogFixture);
     if (path.includes("/client-profile-catalogs/activities")) return Promise.resolve(activitiesFixture);
     if (path.includes("/accounting-standards")) return Promise.resolve(standards);
@@ -120,6 +132,42 @@ describe("StudyClientes — ficha con catálogos", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("oculta el borrado definitivo a los roles distintos del Titular", async () => {
+    mockApi({});
+    renderClientes();
+
+    expect(await screen.findByText("Alfa Uno S.A.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Eliminar" })).toBeNull();
+    expect(api.del).not.toHaveBeenCalled();
+  });
+
+  it("permite al Titular confirmar la eliminación del cliente con su razón social", async () => {
+    const setClientId = vi.fn();
+    contextMock.current = {
+      ...contextMock.current,
+      capabilities: new Set(["client.read", "client.manage", "data.delete"]),
+      setClientId,
+    };
+    mockApi({});
+    vi.mocked(api.del).mockResolvedValue({});
+    renderClientes();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Eliminar" }));
+    const input = await screen.findByRole("textbox", {
+      name: "Escribí la razón social exacta para confirmar",
+    });
+    fireEvent.change(input, { target: { value: "Alfa Uno S.A." } });
+    fireEvent.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
+
+    await waitFor(() =>
+      expect(api.del).toHaveBeenCalledWith("/firms/firm-a/clients/client-a", {
+        confirmation: "Alfa Uno S.A.",
+      }),
+    );
+    expect(setClientId).toHaveBeenCalledWith(null);
+    expect(await screen.findByText("El cliente y sus registros dependientes se eliminaron.")).toBeTruthy();
   });
 
   it("preselecciona jurisdicciones del catálogo, canonicaliza lo guardado y envía códigos", async () => {

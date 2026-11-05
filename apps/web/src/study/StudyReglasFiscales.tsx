@@ -5,6 +5,7 @@ import { normalizeActivityCode, type CatalogEconomicActivity } from "@contable/c
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
+import { DeletionDrawer } from "../ui/DeletionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
 import "./study.css";
@@ -26,6 +27,8 @@ interface RuleVersion {
   id: string;
   version: number;
   status: RuleStatus;
+  origin?: "REFERENCE" | "UI";
+  createdByFirmId?: string | null;
   validFrom: string;
   validTo: string | null;
   engineVersion: string;
@@ -46,6 +49,9 @@ interface RulePack {
   id: string;
   code: string;
   name: string;
+  status: RuleStatus;
+  origin?: "REFERENCE" | "UI";
+  createdByFirmId?: string | null;
   regime: { name: string; code: string; taxType: { name: string }; jurisdiction: { name: string } };
   versions: RuleVersion[];
 }
@@ -81,6 +87,10 @@ export function StudyReglasFiscales() {
   const { firmId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [deletingTarget, setDeletingTarget] = useState<{
+    path: string;
+    kind: "pack" | "version";
+  } | null>(null);
   const [validFrom, setValidFrom] = useState(today);
   const [credentialId, setCredentialId] = useState("");
   const [draftRows, setDraftRows] = useState<RuleRow[]>([]);
@@ -154,6 +164,21 @@ export function StudyReglasFiscales() {
   const activeVersion = useMemo(
     () => detailQuery.data?.versions.find((version) => version.status === "ACTIVE"),
     [detailQuery.data],
+  );
+  const canDeletePack = Boolean(
+    firmId &&
+    capabilities.has("data.delete") &&
+    detailQuery.data?.origin === "UI" &&
+    detailQuery.data.createdByFirmId === firmId &&
+    detailQuery.data.status === "DRAFT" &&
+    detailQuery.data.versions.every((version) => version.status === "DRAFT"),
+  );
+  const canDeleteVersion = Boolean(
+    firmId &&
+    capabilities.has("data.delete") &&
+    selectedVersion?.origin === "UI" &&
+    selectedVersion.createdByFirmId === firmId &&
+    selectedVersion.status === "DRAFT",
   );
 
   useEffect(() => {
@@ -706,6 +731,28 @@ export function StudyReglasFiscales() {
             </div>
             <Button onClick={rulesNextAction.onClick}>{rulesNextAction.label}</Button>
           </section> : null}
+          {detailQuery.data && canDeletePack ? (
+            <section className="study-panel fiscal-rule-delete" aria-label="Administración del paquete">
+              <div>
+                <h2>Paquete creado desde UI</h2>
+                <p>Revisá sus dependencias antes de confirmar la eliminación definitiva.</p>
+              </div>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => {
+                  if (firmId && selectedPackId) {
+                    setDeletingTarget({
+                      path: `/firms/${firmId}/tax/rule-packs/${selectedPackId}`,
+                      kind: "pack",
+                    });
+                  }
+                }}
+              >
+                Eliminar paquete
+              </Button>
+            </section>
+          ) : null}
           {detailQuery.data && !selectedVersion ? (
             <EmptyState
               title="Este paquete todavía no tiene versión"
@@ -727,7 +774,25 @@ export function StudyReglasFiscales() {
                       {detailQuery.data.code} · Organismo recaudador {detailQuery.data.regime.authority.name}
                     </p>
                   </div>
-                  <StatusBadge status={selectedVersion.status} />
+                  <div className="table-actions">
+                    <StatusBadge status={selectedVersion.status} />
+                    {canDeleteVersion ? (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => {
+                          if (firmId) {
+                            setDeletingTarget({
+                              path: `/firms/${firmId}/tax/rule-versions/${selectedVersion.id}`,
+                              kind: "version",
+                            });
+                          }
+                        }}
+                      >
+                        Eliminar borrador v{selectedVersion.version}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="fiscal-rule-summary__meta">
                   <span>
@@ -1131,6 +1196,26 @@ export function StudyReglasFiscales() {
         <p className="form-error" role="alert">
           {mutationError.message}
         </p>
+      ) : null}
+      {deletingTarget ? (
+        <DeletionDrawer
+          isOpen
+          path={deletingTarget.path}
+          onClose={() => setDeletingTarget(null)}
+          onDeleted={async () => {
+            const kind = deletingTarget.kind;
+            if (kind === "pack") setSelectedPackId(null);
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["tax-rule-packs", firmId] }),
+              queryClient.invalidateQueries({ queryKey: ["tax-rule-pack", selectedPackId] }),
+            ]);
+            setReceipt(
+              kind === "pack"
+                ? "El paquete y su parametría quedaron eliminados y auditados."
+                : "La versión borrador y su parametría quedaron eliminadas y auditadas.",
+            );
+          }}
+        />
       ) : null}
     </section>
   );

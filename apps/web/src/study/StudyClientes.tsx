@@ -18,6 +18,7 @@ import { ApiError, api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
+import { DeletionDrawer, type DeletionResult } from "../ui/DeletionDrawer";
 import { Icon } from "../ui/Icon";
 import { SectionIndex } from "../ui/SectionIndex";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -96,6 +97,7 @@ export function StudyClientes() {
     legalForm: "",
   });
   const [editingClient, setEditingClient] = useState<ClientWithProfile | null>(null);
+  const [deletingClient, setDeletingClient] = useState<ClientWithProfile | null>(null);
   const [profileForm, setProfileForm] = useState<ClientProfileForm>(() => ({
     functionalCurrency: "ARS",
     accountingStandard: "",
@@ -748,6 +750,26 @@ export function StudyClientes() {
         ) : null}
       </ActionDrawer>
 
+      {deletingClient && firmId ? (
+        <DeletionDrawer
+          isOpen
+          path={`/firms/${firmId}/clients/${deletingClient.id}`}
+          onClose={() => setDeletingClient(null)}
+          onDeleted={async (result: DeletionResult) => {
+            if (clientId === deletingClient.id) setClientId(null);
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["clients", firmId] }),
+              session.refresh(),
+            ]);
+            setNotice(
+              result.storage?.failed
+                ? `El cliente se eliminó; ${result.storage.failed} archivo(s) requieren limpieza posterior.`
+                : "El cliente y sus registros dependientes se eliminaron.",
+            );
+          }}
+        />
+      ) : null}
+
       <section className="study-page__section" aria-labelledby="client-list-title">
         <div className="collection-toolbar">
           <div>
@@ -847,6 +869,15 @@ export function StudyClientes() {
                     {capabilities.has("client.manage") ? (
                       <Button size="sm" variant="ghost" onClick={() => startProfileEdit(row)}>
                         Editar ficha
+                      </Button>
+                    ) : null}
+                    {capabilities.has("data.delete") ? (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => setDeletingClient(row)}
+                      >
+                        Eliminar
                       </Button>
                     ) : null}
                     <Button size="sm" variant="ghost" onClick={() => openClientSummary(row.id)}>
