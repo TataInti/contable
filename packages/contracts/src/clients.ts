@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { cuit, isoDate, uuid } from "./primitives.js";
 import { functionalCurrency } from "./catalogs.js";
+import { nationalTaxCondition } from "./tax-enums.js";
+import { ARGENTINA_PROVINCES, CLIENT_LEGAL_FORMS } from "./client-profile-catalogs.js";
 
 /** Creación de cliente */
 export const createClientSchema = z
@@ -8,9 +10,10 @@ export const createClientSchema = z
     legalName: z.string().min(1).max(200),
     tradeName: z.string().max(100).optional(),
     cuit: cuit,
-    province: z.string().max(100).optional(),
-    activity: z.string().max(200).optional(),
-    legalForm: z.string().max(100).optional(),
+    vatCondition: nationalTaxCondition.optional(),
+    province: z.enum(ARGENTINA_PROVINCES).optional(),
+    activity: z.string().max(300).optional(),
+    legalForm: z.enum(CLIENT_LEGAL_FORMS).optional(),
   })
   .strict();
 export type CreateClient = z.infer<typeof createClientSchema>;
@@ -27,15 +30,27 @@ export const clientProfileSchema = z
     functionalCurrency: functionalCurrency.default("ARS"),
     accountingStandard: z.string().max(100).optional(),
     fiscalYearEndMonth: z.number().int().min(1).max(12).default(12),
-    vatCondition: z.string().max(100).optional(),
+    vatCondition: nationalTaxCondition.optional(),
     iibbJurisdictions: z.array(z.string()).default([]),
-    province: z.string().max(100).optional(),
-    activity: z.string().max(200).optional(),
-    legalForm: z.string().max(100).optional(),
+    province: z.enum(ARGENTINA_PROVINCES).optional(),
+    activity: z.string().max(300).optional(),
+    legalForm: z.enum(CLIENT_LEGAL_FORMS).optional(),
     serviceStartDate: isoDate.optional(),
   })
   .strict();
 export type ClientProfile = z.infer<typeof clientProfileSchema>;
+
+/**
+ * Forma de entrada del PATCH: deja pasar cadenas históricas para que la ruta
+ * pueda compararlas con el valor almacenado y conservarlas sin habilitar texto
+ * libre nuevo. La validación final se aplica en clients/routes.ts.
+ */
+export const clientProfilePatchInputSchema = clientProfileSchema.partial().extend({
+  vatCondition: z.string().max(100).optional(),
+  province: z.string().max(100).optional(),
+  legalForm: z.string().max(100).optional(),
+});
+export type ClientProfilePatchInput = z.infer<typeof clientProfilePatchInputSchema>;
 
 /** Creación de cuenta */
 export const createAccountSchema = z

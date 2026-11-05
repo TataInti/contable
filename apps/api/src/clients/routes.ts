@@ -1,13 +1,18 @@
 import type { FastifyInstance } from "fastify";
 import {
   createClientSchema,
-  clientProfileSchema,
+  clientProfilePatchInputSchema,
   createAccountSchema,
   createCounterpartySchema,
   createCostCenterSchema,
   createFiscalYearSchema,
   matchAccountingStandards,
   matchIibbJurisdictions,
+  ARGENTINA_PROVINCES,
+  CLIENT_LEGAL_FORMS,
+  CLIENT_VAT_CONDITIONS,
+  clientEconomicActivityValue,
+  unknownClientProfileCategoryValues,
 } from "@contable/contracts";
 import { ClientRepository } from "./client-repository.js";
 import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
@@ -26,8 +31,47 @@ export function clientRoutes(app: FastifyInstance) {
   app.post("/api/v1/firms/:firmId/clients", async (req, reply) => {
     const { firmId } = req.params as { firmId: string };
     const body = createClientSchema.parse(req.body);
-    const client = await repo.create(firmId, body, tenantContextFromRequest(req));
+    const ctx = tenantContextFromRequest(req);
+    const activities = body.activity ? await masters.listActivities(ctx) : [];
+    const unknown = unknownClientProfileCategoryValues(
+      {
+        ...(body.vatCondition !== undefined ? { vatCondition: body.vatCondition } : {}),
+        ...(body.province !== undefined ? { province: body.province } : {}),
+        ...(body.activity !== undefined ? { activity: body.activity } : {}),
+        ...(body.legalForm !== undefined ? { legalForm: body.legalForm } : {}),
+      },
+      activities,
+    );
+    if (Object.keys(unknown).length > 0) {
+      return reply.status(422).send({
+        error: {
+          code: "CLIENT_PROFILE_CATEGORY_UNKNOWN",
+          message: "La actividad principal debe pertenecer al catálogo fiscal del estudio.",
+          details: {
+            unknown,
+            available: {
+              vatCondition: [...CLIENT_VAT_CONDITIONS],
+              province: [...ARGENTINA_PROVINCES],
+              activity: activities
+                .filter((activity) => activity.isActive !== false)
+                .map(clientEconomicActivityValue),
+              legalForm: [...CLIENT_LEGAL_FORMS],
+            },
+          },
+          requestId: req.id,
+        },
+      });
+    }
+    const client = await repo.create(firmId, body, ctx);
     return reply.status(201).send({ data: client });
+  });
+
+  // Catálogo de actividad principal para la ficha. Reutiliza EconomicActivity
+  // (el mismo maestro que usa el onboarding fiscal) con permiso de lectura de
+  // clientes, sin abrir permisos de administración de reglas fiscales.
+  app.get("/api/v1/firms/:firmId/client-profile-catalogs/activities", async (req, reply) => {
+    const data = await masters.listActivities(tenantContextFromRequest(req));
+    return reply.send({ data });
   });
 
   // Listar clientes
@@ -216,10 +260,67 @@ export function clientRoutes(app: FastifyInstance) {
   // Actualizar perfil contable/fiscal
   app.patch("/api/v1/firms/:firmId/clients/:clientId/profile", async (req, reply) => {
     const { firmId, clientId } = req.params as { firmId: string; clientId: string };
-    const body = clientProfileSchema.partial().parse(req.body);
+    const body = clientProfilePatchInputSchema.parse(req.body);
     const clean: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(body)) {
       if (v !== undefined) clean[k] = v;
+    }
+    const categoryValues = {
+      ...(body.vatCondition !== undefined ? { vatCondition: body.vatCondition } : {}),
+      ...(body.province !== undefined ? { province: body.province } : {}),
+      ...(body.activity !== undefined ? { activity: body.activity } : {}),
+      ...(body.legalForm !== undefined ? { legalForm: body.legalForm } : {}),
+    };
+    const hasCategoryValues = Object.values(categoryValues).some((value) => value !== undefined);
+    if (hasCategoryValues) {
+      const ctx = tenantContextFromRequest(req);
+      const existing = await withTenantContext(ctx, (tx) =>
+        tx.clientProfile.findFirst({
+          where: { firmId, clientId },
+          select: {
+            vatCondition: true,
+            province: true,
+            activity: true,
+            legalForm: true,
+          },
+        }),
+      );
+      const activities = await masters.listActivities(ctx);
+      const unknown = unknownClientProfileCategoryValues(
+        categoryValues,
+        activities,
+        {
+          ...(existing?.vatCondition != null ? { vatCondition: existing.vatCondition } : {}),
+          ...(existing?.province != null ? { province: existing.province } : {}),
+          ...(existing?.activity != null ? { activity: existing.activity } : {}),
+          ...(existing?.legalForm != null ? { legalForm: existing.legalForm } : {}),
+        },
+      );
+      if (Object.keys(unknown).length > 0) {
+        return reply.status(422).send({
+          error: {
+            code: "CLIENT_PROFILE_CATEGORY_UNKNOWN",
+            message: "Elegí una opción del catálogo. Los valores históricos se conservan mientras no se modifiquen.",
+            details: {
+              unknown,
+              available: {
+                vatCondition: [...CLIENT_VAT_CONDITIONS],
+                province: [...ARGENTINA_PROVINCES],
+                activity: activities
+                  .filter((activity) => activity.isActive !== false)
+                  .map(clientEconomicActivityValue),
+                legalForm: [...CLIENT_LEGAL_FORMS],
+              },
+            },
+            requestId: req.id,
+          },
+        });
+      }
+      // Una opción vacía limpia el campo explícitamente; los valores históricos
+      // no matcheados se mantienen sin cambios si el usuario no los reemplaza.
+      for (const field of ["vatCondition", "province", "activity", "legalForm"] as const) {
+        if (clean[field] === "") clean[field] = null;
+      }
     }
     // Jurisdicciones IIBB: validación contra el catálogo fiscal existente.
     // Valores sin match → 422 con detalle; no se inventan códigos ni se

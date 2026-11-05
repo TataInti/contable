@@ -47,6 +47,11 @@ const catalogFixture = [
   { id: "j2", code: "TUC", name: "Tucumán — Convenio Multilateral", kind: "PROVINCIAL", isActive: true },
 ];
 
+const activitiesFixture = [
+  { id: "a1", code: "COMERCIO", name: "Comercio", isActive: true },
+  { id: "a2", code: "SERVICIOS", name: "Servicios", isActive: true },
+];
+
 const standardsFixture = [
   { id: "n1", name: "RTIC", isActive: true },
   { id: "n2", name: "VENCER", isActive: false },
@@ -65,6 +70,7 @@ function clientFixture(profile: Record<string, unknown>) {
 function mockApi(profile: Record<string, unknown>, standards = standardsFixture) {
   vi.mocked(api.get).mockImplementation(((path: string) => {
     if (path === "/tax/jurisdictions") return Promise.resolve(catalogFixture);
+    if (path.includes("/client-profile-catalogs/activities")) return Promise.resolve(activitiesFixture);
     if (path.includes("/accounting-standards")) return Promise.resolve(standards);
     if (path.includes("/clients")) return Promise.resolve([clientFixture(profile)]);
     return Promise.resolve(null);
@@ -319,5 +325,123 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     expect(screen.getByText(/no está en el catálogo del estudio/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Guardar ficha" }) as HTMLButtonElement).disabled).toBe(true);
     expect(vi.mocked(api.patch)).not.toHaveBeenCalled();
+  });
+
+  it("usa los cuatro campos categóricos como selectores en la ficha operativa", async () => {
+    mockApi({
+      functionalCurrency: "ARS",
+      accountingStandard: null,
+      fiscalYearEndMonth: 12,
+      vatCondition: null,
+      iibbJurisdictions: [],
+      province: null,
+      activity: null,
+      legalForm: null,
+      serviceStartDate: null,
+    });
+    renderClientes();
+    await openFirstProfileDrawer();
+
+    const vat = await screen.findByLabelText("Condición frente al IVA", { selector: "select" });
+    const province = screen.getByLabelText("Provincia", { selector: "select" });
+    const activity = screen.getByLabelText("Actividad principal", { selector: "select" });
+    const legalForm = screen.getByLabelText("Forma jurídica", { selector: "select" });
+    fireEvent.change(vat, { target: { value: "RESPONSABLE_INSCRIPTO" } });
+    fireEvent.change(province, { target: { value: "Tucumán" } });
+    fireEvent.change(activity, { target: { value: "COMERCIO — Comercio" } });
+    fireEvent.change(legalForm, { target: { value: "Sociedad anónima (SA)" } });
+    fireEvent.click(screen.getByText("Guardar ficha"));
+
+    await waitFor(() => expect(vi.mocked(api.patch)).toHaveBeenCalled());
+    expect(vi.mocked(api.patch)).toHaveBeenCalledWith(
+      "/firms/firm-a/clients/client-a/profile",
+      expect.objectContaining({
+        vatCondition: "RESPONSABLE_INSCRIPTO",
+        province: "Tucumán",
+        activity: "COMERCIO — Comercio",
+        legalForm: "Sociedad anónima (SA)",
+      }),
+    );
+    expect(screen.queryByRole("textbox", { name: "Actividad principal" })).toBeNull();
+  });
+
+  it("mantiene visibles y envía sin cambios los cuatro valores históricos", async () => {
+    mockApi({
+      functionalCurrency: "ARS",
+      accountingStandard: null,
+      fiscalYearEndMonth: 12,
+      vatCondition: "Responsable inscripto",
+      iibbJurisdictions: [],
+      province: "Provincia de Tucumán",
+      activity: "Servicios",
+      legalForm: "SRL",
+      serviceStartDate: null,
+    });
+    renderClientes();
+    await openFirstProfileDrawer();
+
+    expect(screen.getByRole("option", { name: /Responsable inscripto — valor histórico/ })).toBeTruthy();
+    expect(screen.getByRole("option", { name: /Provincia de Tucumán — valor histórico/ })).toBeTruthy();
+    expect(screen.getByRole("option", { name: /Servicios — valor histórico/ })).toBeTruthy();
+    expect(screen.getByRole("option", { name: /SRL — valor histórico/ })).toBeTruthy();
+    fireEvent.click(screen.getByText("Guardar ficha"));
+
+    await waitFor(() => expect(vi.mocked(api.patch)).toHaveBeenCalled());
+    expect(vi.mocked(api.patch)).toHaveBeenCalledWith(
+      "/firms/firm-a/clients/client-a/profile",
+      expect.objectContaining({
+        vatCondition: "Responsable inscripto",
+        province: "Provincia de Tucumán",
+        activity: "Servicios",
+        legalForm: "SRL",
+      }),
+    );
+  });
+
+  it("presenta los cuatro campos categóricos como dropdowns también durante el alta", async () => {
+    mockApi({
+      functionalCurrency: "ARS",
+      accountingStandard: null,
+      fiscalYearEndMonth: 12,
+      vatCondition: null,
+      iibbJurisdictions: [],
+      province: null,
+      activity: null,
+      legalForm: null,
+      serviceStartDate: null,
+    });
+    vi.mocked(api.post).mockImplementation((async () => ({ id: "client-new" })) as never);
+    renderClientes();
+    fireEvent.click(screen.getByRole("button", { name: "Nuevo cliente" }));
+
+    fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Alta libre S.A." } });
+    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20111111112" } });
+    fireEvent.change(screen.getByLabelText("Condición frente al IVA", { selector: "select" }), {
+      target: { value: "RESPONSABLE_INSCRIPTO" },
+    });
+    fireEvent.change(screen.getByLabelText("Provincia", { selector: "select" }), {
+      target: { value: "Tucumán" },
+    });
+    await screen.findByRole("option", { name: "COMERCIO — Comercio" });
+    fireEvent.change(screen.getByLabelText(/Actividad principal/, { selector: "select" }), {
+      target: { value: "COMERCIO — Comercio" },
+    });
+    fireEvent.change(screen.getByLabelText("Forma jurídica", { selector: "select" }), {
+      target: { value: "Sociedad anónima (SA)" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
+
+    await waitFor(() => expect(vi.mocked(api.post)).toHaveBeenCalled());
+    expect(vi.mocked(api.post)).toHaveBeenCalledWith(
+      "/firms/firm-a/clients",
+      expect.objectContaining({
+        legalName: "Alta libre S.A.",
+        cuit: "20111111112",
+        vatCondition: "RESPONSABLE_INSCRIPTO",
+        province: "Tucumán",
+        activity: "COMERCIO — Comercio",
+        legalForm: "Sociedad anónima (SA)",
+      }),
+    );
   });
 });

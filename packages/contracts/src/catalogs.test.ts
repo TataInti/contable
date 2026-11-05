@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BACKED_CURRENCIES,
   clientProfileSchema,
+  clientProfilePatchInputSchema,
   functionalCurrency,
   matchIibbJurisdictions,
   type CatalogJurisdiction,
@@ -39,13 +40,30 @@ describe("catálogo de monedas funcionales (auditoría de catálogos)", () => {
   });
 
   it("en PATCH parcial no inyecta el default si el campo no viene", () => {
-    const parsed = clientProfileSchema.partial().parse({ vatCondition: "Responsable inscripto" });
+    const parsed = clientProfileSchema.partial().parse({ vatCondition: "RESPONSABLE_INSCRIPTO" });
     expect(parsed.functionalCurrency).toBeUndefined();
-    expect(parsed.vatCondition).toBe("Responsable inscripto");
+    expect(parsed.vatCondition).toBe("RESPONSABLE_INSCRIPTO");
+  });
+
+  it("separa la validación enum de alta del input PATCH que conserva legacy", () => {
+    expect(
+      clientProfileSchema.partial().safeParse({ vatCondition: "Responsable inscripto" }).success,
+    ).toBe(false);
+    expect(
+      clientProfileSchema.partial().safeParse({ province: "Provincia inventada" }).success,
+    ).toBe(false);
+    expect(clientProfileSchema.partial().safeParse({ legalForm: "Forma inventada" }).success).toBe(
+      false,
+    );
+    expect(
+      clientProfilePatchInputSchema.parse({ vatCondition: "Responsable inscripto" }).vatCondition,
+    ).toBe("Responsable inscripto");
   });
 
   it("el schema del perfil rechaza una moneda fuera del catálogo", () => {
-    expect(clientProfileSchema.partial().safeParse({ functionalCurrency: "EUR" }).success).toBe(false);
+    expect(clientProfileSchema.partial().safeParse({ functionalCurrency: "EUR" }).success).toBe(
+      false,
+    );
   });
 });
 

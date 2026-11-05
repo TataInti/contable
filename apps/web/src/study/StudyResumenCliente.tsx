@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, EmptyState, Table } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
+import { CLIENT_VAT_CONDITION_LABELS } from "@contable/contracts";
 import { api, type ClientSummary } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -65,6 +66,11 @@ function formatRange(startDate: string, endDate: string) {
 
 function displayValue(value: string | null | undefined) {
   return value?.trim() || "Sin configurar";
+}
+
+function displayVatCondition(value: string | null | undefined) {
+  if (!value) return "Sin configurar";
+  return (CLIENT_VAT_CONDITION_LABELS as Record<string, string>)[value] ?? value;
 }
 
 function SummaryFact({ label, value, detail }: { label: string; value: string; detail?: string }) {
@@ -698,7 +704,7 @@ export function StudyResumenCliente() {
                 <dl className="client-summary__facts">
                   <SummaryFact label="Moneda funcional" value={profile.functionalCurrency} />
                   <SummaryFact label="Cierre de ejercicio" value={MONTH_LABELS[profile.fiscalYearEndMonth - 1] ?? "Sin configurar"} />
-                  <SummaryFact label="Condición IVA" value={displayValue(profile.vatCondition)} />
+                  <SummaryFact label="Condición IVA" value={displayVatCondition(profile.vatCondition)} />
                   <SummaryFact label="Forma jurídica" value={displayValue(profile.legalForm)} />
                   <SummaryFact label="Provincia" value={displayValue(profile.province)} />
                   <SummaryFact label="Actividad principal" value={displayValue(profile.activity)} />

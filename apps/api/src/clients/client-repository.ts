@@ -32,6 +32,7 @@ export class ClientRepository {
         functionalCurrency: "ARS",
         fiscalYearEndMonth: 12,
       };
+      if (input.vatCondition !== undefined) profileData.vatCondition = input.vatCondition;
       if (input.province !== undefined) profileData.province = input.province;
       if (input.activity !== undefined) profileData.activity = input.activity;
       if (input.legalForm !== undefined) profileData.legalForm = input.legalForm;

@@ -3,10 +3,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import {
+  ARGENTINA_PROVINCES,
   BACKED_CURRENCIES,
+  CLIENT_LEGAL_FORMS,
+  CLIENT_VAT_CONDITION_LABELS,
+  CLIENT_VAT_CONDITIONS,
+  clientEconomicActivityValue,
   matchAccountingStandards,
   matchIibbJurisdictions,
   type CatalogJurisdiction,
+  type ClientEconomicActivityOption,
 } from "@contable/contracts";
 import { ApiError, api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -84,6 +90,7 @@ export function StudyClientes() {
     legalName: "",
     tradeName: "",
     cuit: "",
+    vatCondition: "",
     province: "",
     activity: "",
     legalForm: "",
@@ -111,6 +118,14 @@ export function StudyClientes() {
     queryFn: () => api.get<CatalogJurisdiction[]>("/tax/jurisdictions"),
     enabled: Boolean(firmId),
   });
+  const clientActivityCatalog = useQuery({
+    queryKey: ["client-profile-activity-catalog", firmId],
+    queryFn: () =>
+      api.get<ClientEconomicActivityOption[]>(
+        `/firms/${firmId}/client-profile-catalogs/activities`,
+      ),
+    enabled: Boolean(firmId),
+  });
   // Catálogo de normas contables definido por el estudio en Administración.
   // Se piden activas e inactivas: los valores guardados inactivos se
   // conservan como opción (desactivar una norma no invalida fichas).
@@ -123,6 +138,10 @@ export function StudyClientes() {
   // Catálogo y matching derivados: mientras el usuario no toca los checkboxes,
   // la selección viene de lo guardado + catálogo (preserva datos existentes).
   const catalogData = jurisdictionCatalog.data;
+  const activityEntries = clientActivityCatalog.data ?? [];
+  const activeActivityEntries = activityEntries.filter((entry) => entry.isActive !== false);
+  const allActivityValues = new Set(activityEntries.map(clientEconomicActivityValue));
+  const activeActivityValues = new Set(activeActivityEntries.map(clientEconomicActivityValue));
   const jurisdictionMatch = useMemo(
     () =>
       matchIibbJurisdictions(
@@ -163,15 +182,30 @@ export function StudyClientes() {
     !standardCatalogUnavailable &&
     selectedStandard !== "" &&
     !selectedStandardEntry;
+  const vatConditionIsLegacy =
+    profileForm.vatCondition !== "" &&
+    !(CLIENT_VAT_CONDITIONS as readonly string[]).includes(profileForm.vatCondition);
+  const provinceIsLegacy =
+    profileForm.province !== "" &&
+    !(ARGENTINA_PROVINCES as readonly string[]).includes(profileForm.province);
+  const legalFormIsLegacy =
+    profileForm.legalForm !== "" &&
+    !(CLIENT_LEGAL_FORMS as readonly string[]).includes(profileForm.legalForm);
+  const activityIsLegacy = profileForm.activity !== "" && !allActivityValues.has(profileForm.activity);
+  const activityIsInactive =
+    profileForm.activity !== "" &&
+    allActivityValues.has(profileForm.activity) &&
+    !activeActivityValues.has(profileForm.activity);
   const create = useMutation({
     mutationFn: () =>
       api.post<Client>(`/firms/${firmId}/clients`, {
         legalName: form.legalName.trim(),
         cuit: form.cuit,
         ...(form.tradeName.trim() ? { tradeName: form.tradeName.trim() } : {}),
-        ...(form.province.trim() ? { province: form.province.trim() } : {}),
-        ...(form.activity.trim() ? { activity: form.activity.trim() } : {}),
-        ...(form.legalForm.trim() ? { legalForm: form.legalForm.trim() } : {}),
+        ...(form.vatCondition ? { vatCondition: form.vatCondition } : {}),
+        ...(form.province ? { province: form.province } : {}),
+        ...(form.activity ? { activity: form.activity } : {}),
+        ...(form.legalForm ? { legalForm: form.legalForm } : {}),
       }),
     onSuccess: async (client) => {
       await Promise.all([
@@ -184,6 +218,7 @@ export function StudyClientes() {
         legalName: "",
         tradeName: "",
         cuit: "",
+        vatCondition: "",
         province: "",
         activity: "",
         legalForm: "",
@@ -203,10 +238,10 @@ export function StudyClientes() {
         // Selector alimentado por el catálogo del estudio: se envía el nombre
         // canónico del catálogo, nunca texto libre.
         accountingStandard: standardValue,
-        vatCondition: profileForm.vatCondition.trim(),
-        province: profileForm.province.trim(),
-        activity: profileForm.activity.trim(),
-        legalForm: profileForm.legalForm.trim(),
+        vatCondition: profileForm.vatCondition,
+        province: profileForm.province,
+        activity: profileForm.activity,
+        legalForm: profileForm.legalForm,
         ...(profileForm.serviceStartDate ? { serviceStartDate: profileForm.serviceStartDate } : {}),
       });
     },
@@ -348,33 +383,74 @@ export function StudyClientes() {
             hint="11 dígitos, sin guiones"
             required
           />
-          <Field
-            id="client-province"
-            label="Provincia"
-            value={form.province}
-            onChange={(event) => setForm({ ...form, province: event.target.value })}
-            maxLength={100}
-            placeholder="Opcional"
-          />
-          <Field
-            id="client-activity"
-            label="Actividad principal"
-            value={form.activity}
-            onChange={(event) => setForm({ ...form, activity: event.target.value })}
-            maxLength={200}
-            placeholder="Opcional"
-          />
-          <Field
-            id="client-legal-form"
-            label="Forma jurídica"
-            value={form.legalForm}
-            onChange={(event) => setForm({ ...form, legalForm: event.target.value })}
-            maxLength={100}
-            placeholder="Opcional"
-          />
+          <label className="ds-field">
+            <span className="ds-field__label">Condición frente al IVA</span>
+            <select
+              id="client-vat-condition"
+              className="ctxbar__input"
+              value={form.vatCondition}
+              onChange={(event) => setForm({ ...form, vatCondition: event.target.value })}
+            >
+              <option value="">Sin especificar</option>
+              {CLIENT_VAT_CONDITIONS.map((condition) => (
+                <option key={condition} value={condition}>
+                  {CLIENT_VAT_CONDITION_LABELS[condition]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="ds-field">
+            <span className="ds-field__label">Provincia</span>
+            <select
+              id="client-province"
+              className="ctxbar__input"
+              value={form.province}
+              onChange={(event) => setForm({ ...form, province: event.target.value })}
+            >
+              <option value="">Sin especificar</option>
+              {ARGENTINA_PROVINCES.map((province) => (
+                <option key={province} value={province}>{province}</option>
+              ))}
+            </select>
+          </label>
+          <label className="ds-field">
+            <span className="ds-field__label">Actividad principal</span>
+            <select
+              id="client-activity"
+              className="ctxbar__input"
+              value={form.activity}
+              onChange={(event) => setForm({ ...form, activity: event.target.value })}
+            >
+              <option value="">Sin especificar</option>
+              {activeActivityEntries.map((activity) => {
+                const value = clientEconomicActivityValue(activity);
+                return <option key={`${activity.code}:${activity.name}`} value={value}>{value}</option>;
+              })}
+            </select>
+            {clientActivityCatalog.isLoading ? <small>Cargando catálogo de actividades…</small> : null}
+            {clientActivityCatalog.isError ? (
+              <small className="form-error">No se pudo cargar el catálogo de actividades. Reintentá.</small>
+            ) : null}
+          </label>
+          <label className="ds-field">
+            <span className="ds-field__label">Forma jurídica</span>
+            <select
+              id="client-legal-form"
+              className="ctxbar__input"
+              value={form.legalForm}
+              onChange={(event) => setForm({ ...form, legalForm: event.target.value })}
+            >
+              <option value="">Sin especificar</option>
+              {CLIENT_LEGAL_FORMS.map((legalForm) => (
+                <option key={legalForm} value={legalForm}>{legalForm}</option>
+              ))}
+            </select>
+          </label>
           {create.isError ? (
             <p className="form-error study-inline-form__feedback" role="alert">
-              No se pudo crear el cliente. Revisá el CUIT y los permisos.
+              {create.error instanceof ApiError
+                ? create.error.message
+                : "No se pudo crear el cliente. Revisá los datos y los permisos."}
             </p>
           ) : null}
         </form>
@@ -468,39 +544,118 @@ export function StudyClientes() {
                 ))}
               </select>
             </label>
-            <Field
-              id="client-profile-vat"
-              label="Condición frente al IVA"
-              value={profileForm.vatCondition}
-              onChange={(event) =>
-                setProfileForm({ ...profileForm, vatCondition: event.target.value })
-              }
-              maxLength={100}
-              placeholder="Ej.: Responsable inscripto"
-            />
-            <Field
-              id="client-profile-province"
-              label="Provincia"
-              value={profileForm.province}
-              onChange={(event) => setProfileForm({ ...profileForm, province: event.target.value })}
-              maxLength={100}
-            />
-            <Field
-              id="client-profile-activity"
-              label="Actividad principal"
-              value={profileForm.activity}
-              onChange={(event) => setProfileForm({ ...profileForm, activity: event.target.value })}
-              maxLength={200}
-            />
-            <Field
-              id="client-profile-legal-form"
-              label="Forma jurídica"
-              value={profileForm.legalForm}
-              onChange={(event) =>
-                setProfileForm({ ...profileForm, legalForm: event.target.value })
-              }
-              maxLength={100}
-            />
+            <label className="ds-field">
+              <span className="ds-field__label">Condición frente al IVA</span>
+              <select
+                id="client-profile-vat"
+                className="ctxbar__input"
+                value={profileForm.vatCondition}
+                onChange={(event) =>
+                  setProfileForm({ ...profileForm, vatCondition: event.target.value })
+                }
+              >
+                <option value="">Sin especificar</option>
+                {CLIENT_VAT_CONDITIONS.map((condition) => (
+                  <option key={condition} value={condition}>
+                    {CLIENT_VAT_CONDITION_LABELS[condition]}
+                  </option>
+                ))}
+                {vatConditionIsLegacy ? (
+                  <option value={profileForm.vatCondition}>
+                    {profileForm.vatCondition} — valor histórico (conservado)
+                  </option>
+                ) : null}
+              </select>
+              {vatConditionIsLegacy ? (
+                <small className="study-legacy-note">
+                  El valor histórico sigue visible y se conserva si no lo reemplazás.
+                </small>
+              ) : null}
+            </label>
+            <label className="ds-field">
+              <span className="ds-field__label">Provincia</span>
+              <select
+                id="client-profile-province"
+                className="ctxbar__input"
+                value={profileForm.province}
+                onChange={(event) => setProfileForm({ ...profileForm, province: event.target.value })}
+              >
+                <option value="">Sin especificar</option>
+                {ARGENTINA_PROVINCES.map((province) => (
+                  <option key={province} value={province}>{province}</option>
+                ))}
+                {provinceIsLegacy ? (
+                  <option value={profileForm.province}>
+                    {profileForm.province} — valor histórico (conservado)
+                  </option>
+                ) : null}
+              </select>
+              {provinceIsLegacy ? (
+                <small className="study-legacy-note">
+                  El valor histórico sigue visible y se conserva si no lo reemplazás.
+                </small>
+              ) : null}
+            </label>
+            <label className="ds-field">
+              <span className="ds-field__label">Actividad principal</span>
+              <select
+                id="client-profile-activity"
+                className="ctxbar__input"
+                value={profileForm.activity}
+                onChange={(event) => setProfileForm({ ...profileForm, activity: event.target.value })}
+              >
+                <option value="">Sin especificar</option>
+                {activeActivityEntries.map((activity) => {
+                  const value = clientEconomicActivityValue(activity);
+                  return <option key={`${activity.code}:${activity.name}`} value={value}>{value}</option>;
+                })}
+                {activityIsInactive ? (
+                  <option value={profileForm.activity}>
+                    {profileForm.activity} — desactivada en el catálogo (conservada)
+                  </option>
+                ) : null}
+                {activityIsLegacy ? (
+                  <option value={profileForm.activity}>
+                    {profileForm.activity} — valor histórico (conservado)
+                  </option>
+                ) : null}
+              </select>
+              {clientActivityCatalog.isLoading ? <small>Cargando catálogo de actividades…</small> : null}
+              {clientActivityCatalog.isError ? (
+                <small className="form-error">No se pudo cargar el catálogo de actividades. Reintentá.</small>
+              ) : null}
+              {activityIsLegacy || activityIsInactive ? (
+                <small className="study-legacy-note">
+                  El valor guardado sigue visible y se conserva si no lo reemplazás.
+                </small>
+              ) : null}
+            </label>
+            <label className="ds-field">
+              <span className="ds-field__label">Forma jurídica</span>
+              <select
+                id="client-profile-legal-form"
+                className="ctxbar__input"
+                value={profileForm.legalForm}
+                onChange={(event) =>
+                  setProfileForm({ ...profileForm, legalForm: event.target.value })
+                }
+              >
+                <option value="">Sin especificar</option>
+                {CLIENT_LEGAL_FORMS.map((legalForm) => (
+                  <option key={legalForm} value={legalForm}>{legalForm}</option>
+                ))}
+                {legalFormIsLegacy ? (
+                  <option value={profileForm.legalForm}>
+                    {profileForm.legalForm} — valor histórico (conservado)
+                  </option>
+                ) : null}
+              </select>
+              {legalFormIsLegacy ? (
+                <small className="study-legacy-note">
+                  El valor histórico sigue visible y se conserva si no lo reemplazás.
+                </small>
+              ) : null}
+            </label>
             <fieldset className="ds-field" id="client-profile-iibb">
               <legend className="ds-field__label">Jurisdicciones IIBB</legend>
               {jurisdictionCatalog.isLoading ? (

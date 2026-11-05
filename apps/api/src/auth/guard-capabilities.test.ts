@@ -18,6 +18,12 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(requiredCapability("GET", "/api/v1/firms/f/clients/c/summary")).toBe("client.read");
   });
 
+  it("el catálogo de actividad de la ficha se lee con client.read", () => {
+    const path = "/api/v1/firms/f/client-profile-catalogs/activities";
+    expect(requiredCapability("GET", path)).toBe("client.read");
+    expect(requiredCapability("POST", path)).toBeNull();
+  });
+
   it("deny-by-default: ruta de negocio sin mapeo devuelve null", () => {
     expect(
       requiredCapability("POST", "/api/v1/firms/f/clients/c/ruta-inexistente"),

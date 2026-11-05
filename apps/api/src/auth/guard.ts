@@ -85,6 +85,7 @@ interface RoutePolicy {
 
 const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/feature-flags/, resolve: () => "firm.manage" },
+  { match: /\/client-profile-catalogs\/activities$/, resolve: (m) => (m === "GET" ? "client.read" : null) },
   // Catálogo de normas contables del estudio: lectura con la ficha de cliente
   // (cualquier rol que lee clientes necesita el selector), administración
   // (alta/edición/activación) reservada a firm.manage como los demás parámetros.
