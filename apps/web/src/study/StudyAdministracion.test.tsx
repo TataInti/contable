@@ -130,4 +130,18 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     });
     expect(vi.mocked(api.post)).not.toHaveBeenCalled();
   });
+
+  it("expone un único CTA de creación de usuario y explica el submit deshabilitado", async () => {
+    renderAdministracion();
+
+    // Un solo CTA "Crear usuario": el guiado; el panel ya no duplica la acción.
+    expect(await screen.findAllByRole("button", { name: /Crear usuario/ })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /Crear usuario/ }));
+
+    expect(await screen.findByText(/Ingresá nombre y email/)).toBeTruthy();
+    // El submit del drawer queda deshabilitado hasta completar nombre y email.
+    const submits = screen.getAllByRole("button", { name: "Crear usuario" });
+    const drawerSubmit = submits.find((button) => (button as HTMLButtonElement).disabled);
+    expect(drawerSubmit).toBeTruthy();
+  });
 });
