@@ -323,6 +323,12 @@ export function StudyReglasFiscales() {
         ) : null}
       </header>
 
+      <p className="fiscal-rules-sequence" role="note">
+        <strong>Secuencia de cambios:</strong> borrador → revisión → aprobación con matrícula
+        profesional → activa. Las versiones aprobadas y activas quedan inmutables; todo cambio
+        posterior se prepara en una nueva versión a partir de la vigente.
+      </p>
+
       <ActionDrawer
         isOpen={showPackForm}
         onClose={() => setShowPackForm(false)}
@@ -662,7 +668,7 @@ export function StudyReglasFiscales() {
                     </p>
                     <h2>{detailQuery.data.name}</h2>
                     <p>
-                      {detailQuery.data.code} · Autoridad {detailQuery.data.regime.authority.name}
+                      {detailQuery.data.code} · Organismo recaudador {detailQuery.data.regime.authority.name}
                     </p>
                   </div>
                   <StatusBadge status={selectedVersion.status} />
@@ -684,11 +690,6 @@ export function StudyReglasFiscales() {
                     Motor <strong>{selectedVersion.engineVersion}</strong>
                   </span>
                 </div>
-                {selectedVersion.status !== "DRAFT" && capabilities.has("tax.rules.propose") ? (
-                  <Button variant="secondary" onClick={() => setShowCloneForm(true)}>
-                    <Icon name="plus" size={16} /> Crear borrador
-                  </Button>
-                ) : null}
               </section>
 
               <section className="study-panel" aria-labelledby="rule-rates-title">
