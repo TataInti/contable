@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
+import { normalizeActivityCode, type CatalogEconomicActivity } from "@contable/contracts";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -89,6 +90,9 @@ export function StudyReglasFiscales() {
   const [showDueDateForm, setShowDueDateForm] = useState(false);
   const [showInitialVersionForm, setShowInitialVersionForm] = useState(false);
   const [showCloneForm, setShowCloneForm] = useState(false);
+  // Errores 409 del servidor por código de actividad (ACTIVITY_CODE_*): se
+  // marcan las filas del borrador cuyo código coincide con el del mensaje.
+  const [rowActivityErrors, setRowActivityErrors] = useState<Record<string, string>>({});
   const [newPack, setNewPack] = useState({ code: "", name: "", regimeId: "" });
   const [engineVersion, setEngineVersion] = useState("tax-engine-v1");
   const [newSource, setNewSource] = useState({
@@ -128,6 +132,14 @@ export function StudyReglasFiscales() {
     queryKey: ["tax-regimes"],
     queryFn: () => api.get<RuleRegimeOption[]>("/tax/regimes"),
     enabled: capabilities.has("tax.rules.propose"),
+  });
+  // Catálogo de actividades (sólo activas): alimenta el selector de cada regla.
+  // Los borradores clonados pueden conservar códigos hoy desactivados; el
+  // selector los mantiene como opción histórica para no romper el borrador.
+  const activitiesQuery = useQuery({
+    queryKey: ["tax-activities", firmId],
+    queryFn: () => api.get<CatalogEconomicActivity[]>("/tax/activities"),
+    enabled: Boolean(firmId && capabilities.has("tax.rules.read")),
   });
 
   const selectedVersion = useMemo(
@@ -197,7 +209,27 @@ export function StudyReglasFiscales() {
       }),
     onSuccess: () => {
       invalidate();
+      setRowActivityErrors({});
       setReceipt("Las reglas del borrador quedaron guardadas.");
+    },
+    onError: (error) => {
+      // Los 409 de validación del catálogo (ACTIVITY_CODE_UNKNOWN/INVALID/
+      // INACTIVE/JURISDICTION_MISMATCH) citan el código entre comillas:
+      // marcamos cada fila del borrador cuyo código coincida.
+      const message = error instanceof Error ? error.message : String(error);
+      const quotedCodes = message.match(/"([A-Z0-9][A-Z0-9._/-]{0,39})"/g) ?? [];
+      if (quotedCodes.length === 0) return;
+      const codes = quotedCodes.map((quoted) => quoted.slice(1, -1));
+      const marked = new Map<string, string>();
+      for (const row of draftRows) {
+        const code = normalizeActivityCode(row.activityCode ?? "");
+        if (code !== "" && codes.includes(code)) {
+          marked.set(row.id, message);
+        }
+      }
+      if (marked.size > 0) {
+        setRowActivityErrors((previous) => ({ ...previous, ...Object.fromEntries(marked) }));
+      }
     },
   });
   const submitMutation = useMutation({
@@ -702,6 +734,8 @@ export function StudyReglasFiscales() {
                     <h2 id="rule-rates-title">Alícuotas y porcentajes</h2>
                     <p>
                       Los valores se expresan en porcentaje; los importes mínimos se guardan en ARS.
+                      La actividad se elige del catálogo del estudio (código · nombre);{" "}
+                      <strong>General</strong> aplica la regla a todas las actividades.
                     </p>
                   </div>
                   {editable ? (
@@ -758,26 +792,77 @@ export function StudyReglasFiscales() {
                     {
                       key: "activity",
                       header: "Actividad",
-                      render: (row) =>
-                        editable ? (
-                          <input
-                            className="fiscal-rule-input"
-                            aria-label={`Actividad ${row.id}`}
-                            value={row.activityCode ?? ""}
-                            placeholder="General"
-                            onChange={(event) =>
-                              setDraftRows((rows) =>
-                                rows.map((item) =>
-                                  item.id === row.id
-                                    ? { ...item, activityCode: event.target.value || null }
-                                    : item,
-                                ),
-                              )
-                            }
-                          />
-                        ) : (
-                          (row.activityCode ?? "General")
-                        ),
+                      render: (row) => {
+                        if (!editable) {
+                          return row.activityCode ?? "General";
+                        }
+                        // El selector ofrece las actividades activas del
+                        // catálogo. Cuando el pack declara jurisdicción, filtra
+                        // por ella (el servidor exige publicación para la
+                        // jurisdicción de la regla). Un código histórico que ya
+                        // no figure (desactivado o de otra jurisdicción) se
+                        // conserva como opción para que el borrador clonado
+                        // pueda guardarse sin perder el vínculo.
+                        const packJurisdictionId = detailQuery.data?.regime.jurisdiction.id;
+                        const options = (activitiesQuery.data ?? []).filter(
+                          (activity) =>
+                            !packJurisdictionId ||
+                            activity.jurisdictionId === packJurisdictionId,
+                        );
+                        const currentCode = normalizeActivityCode(row.activityCode ?? "");
+                        const isLegacyCode =
+                          currentCode !== "" &&
+                          !options.some((activity) => activity.code === currentCode);
+                        const rowError = rowActivityErrors[row.id];
+                        return (
+                          <div>
+                            <select
+                              className="fiscal-rule-input fiscal-rule-input--select"
+                              aria-label={`Actividad ${row.id}`}
+                              value={row.activityCode ?? ""}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setDraftRows((rows) =>
+                                  rows.map((item) =>
+                                    item.id === row.id
+                                      ? {
+                                          ...item,
+                                          activityCode: value
+                                            ? normalizeActivityCode(value)
+                                            : null,
+                                        }
+                                      : item,
+                                  ),
+                                );
+                                setRowActivityErrors((previous) => {
+                                  if (!(row.id in previous)) return previous;
+                                  const next = { ...previous };
+                                  delete next[row.id];
+                                  return next;
+                                });
+                              }}
+                            >
+                              <option value="">General</option>
+                              {options.map((activity) => (
+                                <option key={activity.id} value={activity.code}>
+                                  {activity.code} · {activity.name}
+                                </option>
+                              ))}
+                              {isLegacyCode ? (
+                                <option value={row.activityCode ?? ""}>
+                                  {row.activityCode} — código histórico (desactivado o fuera de la
+                                  jurisdicción del paquete)
+                                </option>
+                              ) : null}
+                            </select>
+                            {rowError ? (
+                              <p className="fiscal-rule-row-error" role="alert">
+                                {rowError}
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      },
                     },
                     {
                       key: "rate",
