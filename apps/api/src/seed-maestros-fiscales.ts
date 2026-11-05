@@ -120,7 +120,7 @@ async function main() {
       update: {},
       create: { code: "TEM", name: "Tasa de Actividades Económicas (TEM)" },
     });
-    await tx.taxType.upsert({
+    const monotributo = await tx.taxType.upsert({
       where: { code: "MONOTRIBUTO" },
       update: {},
       create: { code: "MONOTRIBUTO", name: "Monotributo" },
@@ -140,11 +140,11 @@ async function main() {
     });
     await tx.taxRegime.upsert({
       where: { code: "MONOTRIBUTO" },
-      update: {},
+      update: { taxTypeId: monotributo.id },
       create: {
         code: "MONOTRIBUTO",
         name: "Monotributo",
-        taxTypeId: iibb.id,
+        taxTypeId: monotributo.id,
         jurisdictionId: ar.id,
         authorityId: arca.id,
       },

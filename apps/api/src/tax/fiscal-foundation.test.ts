@@ -98,7 +98,11 @@ async function setupMasters() {
     const arca = await tx.taxAuthority.create({
       data: { code: "ARCA-F", name: "ARCA", jurisdictionId: nacion.id },
     });
-    const iva = await tx.taxType.create({ data: { code: "IVA-F", name: "IVA" } });
+    const iva = await tx.taxType.upsert({
+      where: { code: "IVA" },
+      update: {},
+      create: { code: "IVA", name: "IVA" },
+    });
     const ri = await tx.taxRegime.create({
       data: {
         code: "RI-F",
@@ -495,7 +499,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     const version = await rules.createVersion(ctxOwner, {
       packId: pack.id,
       validFrom: "2026-01-01",
-      engineVersion: "tax-engine-v1",
+      engineVersion: "ar-vat-ri-v1.0.0",
       rulesHash: "pending",
     });
     await rules.addRateRule(ctxOwner, {
@@ -556,7 +560,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     const version = await rules.createVersion(ctxOwner, {
       packId: pack.id,
       validFrom: "2026-01-01",
-      engineVersion: "1.0.0",
+      engineVersion: "ar-vat-ri-v1.0.0",
       rulesHash: "abc123",
     });
     expect(version.status).toBe("DRAFT");
@@ -638,7 +642,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     const v1 = await rules.createVersion(ctxOwner, {
       packId: pack.id,
       validFrom: "2026-01-01",
-      engineVersion: "1.0.0",
+      engineVersion: "ar-vat-ri-v1.0.0",
       rulesHash: "h1",
     });
     const cred = await profiles.addCredential(ctxOwner, {
@@ -655,7 +659,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     const v2 = await rules.createVersion(ctxOwner, {
       packId: pack.id,
       validFrom: "2026-07-01",
-      engineVersion: "1.0.0",
+      engineVersion: "ar-vat-ri-v1.0.0",
       rulesHash: "h2",
     });
     await rules.submitReview(ctxOwner, v2.id);
@@ -678,7 +682,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     const version = await rules.createVersion(ctxOwner, {
       packId: pack.id,
       validFrom: "2026-01-01",
-      engineVersion: "1.0.0",
+      engineVersion: "ar-vat-ri-v1.0.0",
       rulesHash: "h-b1",
     });
     await rules.addSource(ctxOwner, {

@@ -118,9 +118,9 @@ async function setupMasters() {
       create: { code: "ARCA-SET", name: "ARCA Sett", jurisdictionId: nacion.id },
     });
     const iva = await tx.taxType.upsert({
-      where: { code: "IVA-SET" },
+      where: { code: "IVA" },
       update: {},
-      create: { code: "IVA-SET", name: "IVA Sett" },
+      create: { code: "IVA", name: "IVA" },
     });
     const ri = await tx.taxRegime.upsert({
       where: { code: "RI-SET" },
@@ -438,6 +438,36 @@ beforeEach(async () => {
 });
 
 describe("G3-1 cobertura y cálculo determinista", () => {
+  it("rechaza motor desconocido en despacho y no deriva a IVA legacy", async () => {
+    await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      const pack = await tx.taxRulePack.findUniqueOrThrow({ where: { code: "VAT_SET_V1" } });
+      await tx.taxRuleVersion.updateMany({
+        where: { packId: pack.id },
+        data: { engineVersion: "tax-engine-v1" },
+      });
+    });
+
+    await expect(settlements.calculate(ctxOwner, calculateParams())).rejects.toMatchObject({
+      code: "UNSUPPORTED_ENGINE_VERSION",
+      message: expect.stringContaining("tax-engine-v1"),
+    });
+  });
+
+  it("rechaza un motor implementado de otra familia sin ejecutarlo", async () => {
+    await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      const pack = await tx.taxRulePack.findUniqueOrThrow({ where: { code: "VAT_SET_V1" } });
+      await tx.taxRuleVersion.updateMany({
+        where: { packId: pack.id },
+        data: { engineVersion: "ar-iibb-cm-art2-v1.1.0" },
+      });
+    });
+
+    await expect(settlements.calculate(ctxOwner, calculateParams())).rejects.toMatchObject({
+      code: "UNSUPPORTED_ENGINE_VERSION",
+      message: expect.stringContaining("ar-iibb-cm-art2-v1.1.0"),
+    });
+  });
+
   it("coverage reporta entradas y estado", async () => {
     const covBefore = await settlements.coverage(ctxOwner, {
       clientId: CLIENT_SET,

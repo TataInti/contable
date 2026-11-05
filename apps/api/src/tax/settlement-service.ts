@@ -18,6 +18,7 @@ import {
   VAT_ENGINE_VERSION,
   VAT_RI_ENGINE_VERSION,
 } from "@contable/tax-engine";
+import { taxEngineVersionCompatibilityError } from "@contable/contracts";
 import type {
   LocalTaxDeclaredParameter,
   TaxEngineResult,
@@ -60,6 +61,7 @@ export type SettlementErrorCode =
   | "MAKER_CHECKER_VIOLATION"
   | "NO_ACTIVE_RULES"
   | "RULE_VERSION_NOT_FOUND"
+  | "UNSUPPORTED_ENGINE_VERSION"
   | "PERIOD_NOT_FOUND"
   | "OBLIGATION_NOT_FOUND"
   | "BLOCKING_DIFFERENCES"
@@ -268,7 +270,18 @@ export class SettlementService {
       if (!period) throw new SettlementError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
 
       // --- Versión ACTIVE del rule pack del régimen (V-005: se congela) ---
-      const pack = await tx.taxRulePack.findFirst({ where: { regimeId: input.regimeId } });
+      const pack = await tx.taxRulePack.findFirst({
+        where: { regimeId: input.regimeId },
+        include: {
+          regime: {
+            select: {
+              code: true,
+              taxType: { select: { code: true } },
+              jurisdiction: { select: { code: true } },
+            },
+          },
+        },
+      });
       if (!pack) throw new SettlementError("RULE_VERSION_NOT_FOUND", "No existe rule pack para el régimen");
       const activeVersion = await tx.taxRuleVersion.findFirst({
         where: {
@@ -287,6 +300,17 @@ export class SettlementService {
           "NO_ACTIVE_RULES",
           "No hay una versión normativa activada que cubra íntegramente el período",
         );
+      }
+      const unsupportedEngine = taxEngineVersionCompatibilityError(
+        {
+          regimeCode: pack.regime.code,
+          taxTypeCode: pack.regime.taxType.code,
+          jurisdictionCode: pack.regime.jurisdiction.code,
+        },
+        activeVersion.engineVersion,
+      );
+      if (unsupportedEngine) {
+        throw new SettlementError("UNSUPPORTED_ENGINE_VERSION", unsupportedEngine);
       }
       const isCmEngine =
         activeVersion.engineVersion === CM03_ENGINE_VERSION ||
@@ -1249,8 +1273,8 @@ export class SettlementService {
           });
           break;
         }
-        default:
-          // --- IVA responsable inscripto (default) ---
+        case VAT_ENGINE_VERSION: {
+          // --- IVA responsable inscripto legacy explícito ---
           result = calculateVat({
             engineVersion: VAT_ENGINE_VERSION,
             period: periodRange,
@@ -1263,6 +1287,13 @@ export class SettlementService {
               freeAvailabilityPrevious: previousFree,
             },
           });
+          break;
+        }
+        default:
+          throw new SettlementError(
+            "UNSUPPORTED_ENGINE_VERSION",
+            `No hay despacho implementado para el motor fiscal "${activeVersion.engineVersion}"; no se aplicó un motor alternativo.`,
+          );
       }
 
       const totals: Record<string, string> = { ...result.subtotals };

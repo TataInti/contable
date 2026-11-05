@@ -98,9 +98,9 @@ async function setupMembership() {
 async function setupMasters() {
   return runAsRuntime(OWNER_TEM, FIRM_TEM, async (tx) => {
     const smt = await tx.jurisdiction.upsert({
-      where: { code: "AR-SMT-TEM" },
+      where: { code: "AR-SMT" },
       update: {},
-      create: { code: "AR-SMT-TEM", name: "San Miguel de Tucumán TEM", kind: "MUNICIPAL" },
+      create: { code: "AR-SMT", name: "San Miguel de Tucumán TEM", kind: "MUNICIPAL" },
     });
     const smtAuth = await tx.taxAuthority.upsert({
       where: { code: "SMT-TEM" },
@@ -108,9 +108,9 @@ async function setupMasters() {
       create: { code: "SMT-TEM", name: "SMT TEM", jurisdictionId: smt.id },
     });
     const tem = await tx.taxType.upsert({
-      where: { code: "TEM-TEM" },
+      where: { code: "TEM" },
       update: {},
-      create: { code: "TEM-TEM", name: "TEM Test" },
+      create: { code: "TEM", name: "TEM Test" },
     });
     const regime = await tx.taxRegime.upsert({
       where: { code: "TEM_SMT-TEM" },

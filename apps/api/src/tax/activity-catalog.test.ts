@@ -79,7 +79,12 @@ function seedActivity(overrides: Record<string, unknown> = {}) {
 }
 
 function seedRuleVersion(status: string) {
-  const row = { id: nextUuid(), packId: nextUuid(), status };
+  const row = {
+    id: nextUuid(),
+    packId: nextUuid(),
+    status,
+    engineVersion: "ar-iibb-tuc-local-v1.1.0",
+  };
   mockState.ruleVersions.push(row);
   return row;
 }
@@ -145,6 +150,13 @@ function makeTransaction() {
         if (!row) return null;
         return {
           ...row,
+          pack: {
+            regime: {
+              code: "IIBB_LOCAL",
+              taxType: { code: "IIBB" },
+              jurisdiction: { code: "AR-T" },
+            },
+          },
           rateRules: mockState.rateRules.filter((rule) => rule.ruleVersionId === row.id),
           minimumRules: [],
           dueDateRules: [],

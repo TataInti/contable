@@ -107,9 +107,9 @@ async function setupMasters() {
       create: { code: "ARCA-MONO", name: "ARCA Mono", jurisdictionId: nacion.id },
     });
     const mono = await tx.taxType.upsert({
-      where: { code: "MONO-MONO" },
+      where: { code: "MONOTRIBUTO" },
       update: {},
-      create: { code: "MONO-MONO", name: "Monotributo Test" },
+      create: { code: "MONOTRIBUTO", name: "Monotributo Test" },
     });
     const regime = await tx.taxRegime.upsert({
       where: { code: "MONOTRIBUTO-MONO" },

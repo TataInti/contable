@@ -62,7 +62,7 @@ function makeDetail(activityCode: string | null) {
       id: "regime-1",
       code: "RI",
       name: "Responsable Inscripto",
-      taxType: { name: "IVA" },
+      taxType: { name: "IVA", code: "IVA" },
       jurisdiction: { id: "jur-ar", name: "Nación", code: "AR" },
       authority: { id: "auth-1", name: "ARCA" },
     },
@@ -108,7 +108,7 @@ function packList(detail: ReturnType<typeof makeDetail>) {
       regime: {
         name: detail.regime.name,
         code: detail.regime.code,
-        taxType: { name: "IVA" },
+        taxType: { name: "IVA", code: "IVA" },
         jurisdiction: { name: detail.regime.jurisdiction.name },
       },
       versions: detail.versions,
@@ -160,6 +160,47 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("ofrece motores compatibles del régimen y envía la selección elegida", async () => {
+    const detail = { ...makeDetail(null), versions: [] };
+    mockApi(detail);
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
+    const select = (await screen.findByLabelText("Motor compatible con el régimen")) as HTMLSelectElement;
+    expect(select.value).toBe("ar-vat-ri-v2.1.0");
+    expect(within(select).getByRole("option", { name: /ar-vat-ri-v1.0.0/ })).toBeTruthy();
+    expect(within(select).queryByRole("option", { name: "tax-engine-v1" })).toBeNull();
+
+    fireEvent.change(select, { target: { value: "ar-vat-ri-v1.0.0" } });
+    const form = select.closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.click(within(form!).getByRole("button", { name: "Crear primera versión" }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/tax/rule-packs/pack-1/versions", {
+        validFrom: expect.any(String),
+        engineVersion: "ar-vat-ri-v1.0.0",
+        rulesHash: "PENDING_DRAFT",
+      }),
+    );
+  });
+
+  it("resuelve el motor por impuesto aunque el código de régimen sea propio del estudio", async () => {
+    const base = makeDetail(null);
+    const detail = {
+      ...base,
+      versions: [],
+      regime: { ...base.regime, code: "RI_ESTUDIO_2026" },
+    };
+    mockApi(detail);
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
+    const select = (await screen.findByLabelText("Motor compatible con el régimen")) as HTMLSelectElement;
+    expect(select.value).toBe("ar-vat-ri-v2.1.0");
+    expect(within(select).getByRole("option", { name: /ar-vat-ri-v1.0.0/ })).toBeTruthy();
   });
 
   it("ofrece las actividades activas del catálogo y guarda el código elegido", async () => {

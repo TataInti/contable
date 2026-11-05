@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
-import { normalizeActivityCode, type CatalogEconomicActivity } from "@contable/contracts";
+import {
+  compatibleTaxEnginesForRegime,
+  normalizeActivityCode,
+  type CatalogEconomicActivity,
+} from "@contable/contracts";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -52,13 +56,18 @@ interface RulePack {
   status: RuleStatus;
   origin?: "REFERENCE" | "UI";
   createdByFirmId?: string | null;
-  regime: { name: string; code: string; taxType: { name: string }; jurisdiction: { name: string } };
+  regime: {
+    name: string;
+    code: string;
+    taxType: { name: string; code: string };
+    jurisdiction: { name: string; code?: string };
+  };
   versions: RuleVersion[];
 }
 
 interface RulePackDetail extends RulePack {
   regime: RulePack["regime"] & {
-    jurisdiction: { id: string; name: string };
+    jurisdiction: { id: string; name: string; code: string };
     authority: { id: string; name: string };
   };
 }
@@ -104,7 +113,7 @@ export function StudyReglasFiscales() {
   // marcan las filas del borrador cuyo código coincide con el del mensaje.
   const [rowActivityErrors, setRowActivityErrors] = useState<Record<string, string>>({});
   const [newPack, setNewPack] = useState({ code: "", name: "", regimeId: "" });
-  const [engineVersion, setEngineVersion] = useState("tax-engine-v1");
+  const [engineVersion, setEngineVersion] = useState("");
   const [newSource, setNewSource] = useState({
     title: "",
     reference: "",
@@ -158,6 +167,25 @@ export function StudyReglasFiscales() {
       detailQuery.data?.versions[0],
     [detailQuery.data],
   );
+  const compatibleEngineOptions = useMemo(
+    () =>
+      detailQuery.data?.regime.taxType.code
+        ? compatibleTaxEnginesForRegime({
+            regimeCode: detailQuery.data.regime.code,
+            taxTypeCode: detailQuery.data.regime.taxType.code,
+            jurisdictionCode: detailQuery.data.regime.jurisdiction.code,
+          })
+        : [],
+    [
+      detailQuery.data?.regime.code,
+      detailQuery.data?.regime.taxType.code,
+      detailQuery.data?.regime.jurisdiction.code,
+    ],
+  );
+
+  useEffect(() => {
+    setEngineVersion(compatibleEngineOptions[0]?.engineVersion ?? "");
+  }, [compatibleEngineOptions, selectedPackId]);
 
   // Versión activa del paquete: se muestra junto al borrador para que quede
   // claro qué versión se está editando y cuál sigue aplicando a los cálculos.
@@ -604,15 +632,36 @@ export function StudyReglasFiscales() {
             onChange={(event) => setValidFrom(event.target.value)}
             required
           />
-          <Field
-            label="Versión del motor"
-            id="first-rule-version-engine"
-            value={engineVersion}
-            onChange={(event) => setEngineVersion(event.target.value)}
-            required
-          />
+          <div className="ds-field">
+            <label className="ds-field__label" htmlFor="first-rule-version-engine">
+              Motor compatible con el régimen
+            </label>
+            <select
+              id="first-rule-version-engine"
+              className="ds-field__input"
+              value={engineVersion}
+              onChange={(event) => setEngineVersion(event.target.value)}
+              required
+            >
+              <option value="">Seleccioná un motor compatible…</option>
+              {compatibleEngineOptions.map((option) => (
+                <option key={option.engineVersion} value={option.engineVersion}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {compatibleEngineOptions.length === 0 ? (
+              <p className="form-error" role="alert">
+                No hay motores implementados para este régimen. La versión no se puede crear.
+              </p>
+            ) : null}
+          </div>
           <div className="study-form__actions">
-            <Button type="submit" loading={createVersionMutation.isPending}>
+            <Button
+              type="submit"
+              loading={createVersionMutation.isPending}
+              disabled={!compatibleEngineOptions.some((option) => option.engineVersion === engineVersion)}
+            >
               Crear primera versión
             </Button>
             <Button type="button" variant="ghost" onClick={() => setShowInitialVersionForm(false)}>

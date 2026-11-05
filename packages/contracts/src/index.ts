@@ -3,6 +3,7 @@ export * from "./catalogs.js";
 export * from "./client-profile-catalogs.js";
 export * from "./domain-enums.js";
 export * from "./tax-enums.js";
+export * from "./tax-engine-compatibility.js";
 export * from "./tax.js";
 export * from "./journal.js";
 export * from "./documents.js";

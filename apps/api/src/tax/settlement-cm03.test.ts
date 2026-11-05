@@ -99,9 +99,9 @@ async function setupMembership() {
 async function setupMasters() {
   return runAsRuntime(OWNER_CM, FIRM_CM, async (tx) => {
     const nacion = await tx.jurisdiction.upsert({
-      where: { code: "AR-CM" },
+      where: { code: "AR" },
       update: {},
-      create: { code: "AR-CM", name: "Nación CM", kind: "NATIONAL" },
+      create: { code: "AR", name: "Nación CM", kind: "NATIONAL" },
     });
     await tx.jurisdiction.upsert({
       where: { code: "TUC" },
@@ -119,9 +119,9 @@ async function setupMasters() {
       create: { code: "ARCA-CM", name: "ARCA CM", jurisdictionId: nacion.id },
     });
     const iibb = await tx.taxType.upsert({
-      where: { code: "IIBB-CM" },
+      where: { code: "IIBB" },
       update: {},
-      create: { code: "IIBB-CM", name: "IIBB CM" },
+      create: { code: "IIBB", name: "IIBB CM" },
     });
     const regime = await tx.taxRegime.upsert({
       where: { code: "CM_ART2-CM" },
