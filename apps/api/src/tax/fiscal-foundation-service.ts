@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { calculateDueDate } from "@contable/tax-engine";
+import { ACTIVITY_CODE_PATTERN, normalizeActivityCode } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 
 /**
@@ -41,6 +42,14 @@ export type FiscalErrorCode =
   | "CREDENTIAL_NOT_FOUND"
   | "CREDENTIAL_INACTIVE"
   | "APPROVER_MISMATCH"
+  | "ACTIVITY_INACTIVE"
+  | "ACTIVITY_STATE_UNCHANGED"
+  | "ACTIVITY_VALIDITY_INVALID"
+  | "ACTIVITY_FIELD_IMMUTABLE"
+  | "ACTIVITY_CODE_INVALID"
+  | "ACTIVITY_CODE_UNKNOWN"
+  | "ACTIVITY_CODE_INACTIVE"
+  | "ACTIVITY_CODE_JURISDICTION_MISMATCH"
   | "INVALID_TRANSITION";
 
 export class FiscalError extends Error {
@@ -198,10 +207,20 @@ export class FiscalMasterService {
     });
   }
 
-  async listActivities(ctx: TenantContext, jurisdictionId?: string) {
+  /**
+   * Catálogo de actividades económicas. Por defecto lista sólo las activas:
+   * los selectores (ficha, configuración fiscal) no deben ofrecer actividades
+   * desactivadas. La administración del catálogo pasa `includeInactive=true`
+   * para poder editar o reactivar. El resto de los valores históricos no se
+   * pierde: desactivar nunca borra la fila.
+   */
+  async listActivities(ctx: TenantContext, jurisdictionId?: string, includeInactive = false) {
     return withTenantContext(ctx, (tx) =>
       tx.economicActivity.findMany({
-        where: jurisdictionId ? { jurisdictionId } : {},
+        where: {
+          ...(jurisdictionId ? { jurisdictionId } : {}),
+          ...(includeInactive ? {} : { isActive: true }),
+        },
         orderBy: { code: "asc" },
         take: 1000,
       }),
@@ -210,20 +229,218 @@ export class FiscalMasterService {
 
   async createActivity(
     ctx: TenantContext,
-    input: { code: string; name: string; jurisdictionId: string; source?: string; validFrom: string },
+    input: {
+      code: string;
+      name: string;
+      jurisdictionId: string;
+      source?: string;
+      validFrom: string;
+      validTo?: string;
+    },
   ) {
-    return withTenantContext(ctx, (tx) =>
-      tx.economicActivity.create({
+    return withTenantContext(ctx, async (tx) => {
+      const jurisdiction = await tx.jurisdiction.findUnique({ where: { id: input.jurisdictionId } });
+      if (!jurisdiction) {
+        throw new FiscalError("JURISDICTION_NOT_FOUND", "Jurisdicción no encontrada");
+      }
+      const code = normalizeActivityCode(input.code);
+      if (!ACTIVITY_CODE_PATTERN.test(code)) {
+        throw new FiscalError("ACTIVITY_CODE_INVALID", `El código "${code}" no cumple el formato del catálogo`);
+      }
+      const validFrom = new Date(input.validFrom);
+      const validTo = input.validTo ? new Date(input.validTo) : null;
+      assertActivityValidity(validFrom, validTo);
+      const created = await tx.economicActivity.create({
         data: {
-          code: input.code,
-          name: input.name,
+          code,
+          name: input.name.trim(),
           jurisdictionId: input.jurisdictionId,
-          ...(input.source ? { source: input.source } : {}),
-          validFrom: new Date(input.validFrom),
+          ...(input.source ? { source: input.source.trim() } : {}),
+          validFrom,
+          ...(validTo ? { validTo } : {}),
         },
-      }),
+      });
+      await tx.auditEvent.create({
+        data: {
+          firmId: ctx.firmId,
+          userId: ctx.userId,
+          actorKind: ctx.actorKind,
+          action: "tax.activity.created",
+          entityType: "EconomicActivity",
+          entityId: created.id,
+          after: { code: created.code, name: created.name, jurisdictionId: created.jurisdictionId },
+        },
+      });
+      return created;
+    }).catch((err: unknown) => {
+      if (isUniqueConstraintError(err)) {
+        throw new FiscalError(
+          "CATALOG_CODE_CONFLICT",
+          "Ya existe una actividad con ese código en la jurisdicción",
+        );
+      }
+      throw err;
+    });
+  }
+
+  /**
+   * Edición de atributos descriptivos y vigencia. `code` y `jurisdictionId`
+   * no son editables: el código es el vínculo textual de las reglas
+   * (tax_rate_rules.activityCode) y cambiarlo rompería reglas vigentes; la
+   * jurisdicción es parte de la unicidad del catálogo. El rechazo es explícito
+   * (el schema Zod de la ruta ya lo excluye; aquí se revalida por defensa).
+   */
+  async updateActivity(
+    ctx: TenantContext,
+    input: {
+      activityId: string;
+      name?: string;
+      source?: string | null;
+      validFrom?: string;
+      validTo?: string | null;
+    },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const row = await tx.economicActivity.findUnique({ where: { id: input.activityId } });
+      if (!row) {
+        throw new FiscalError("ACTIVITY_NOT_FOUND", "Actividad económica no encontrada");
+      }
+      const validFrom = input.validFrom ? new Date(input.validFrom) : row.validFrom;
+      const validTo =
+        input.validTo === undefined ? row.validTo : input.validTo ? new Date(input.validTo) : null;
+      assertActivityValidity(validFrom, validTo);
+      const updated = await tx.economicActivity.update({
+        where: { id: row.id },
+        data: {
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.source !== undefined ? { source: input.source === null ? null : input.source.trim() } : {}),
+          ...(input.validFrom !== undefined ? { validFrom } : {}),
+          ...(input.validTo !== undefined ? { validTo } : {}),
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          firmId: ctx.firmId,
+          userId: ctx.userId,
+          actorKind: ctx.actorKind,
+          action: "tax.activity.updated",
+          entityType: "EconomicActivity",
+          entityId: row.id,
+          before: { name: row.name, source: row.source, validFrom: row.validFrom, validTo: row.validTo },
+          after: { name: updated.name, source: updated.source, validFrom: updated.validFrom, validTo: updated.validTo },
+        },
+      });
+      return withActiveClientLinks(tx, updated);
+    });
+  }
+
+  /**
+   * Activación/desactivación. Nunca borra: la desactivación saca la actividad
+   * de los selectores y bloquea vínculos nuevos, pero las reglas vigentes
+   * siguen resolviendo por código y el historial del cliente queda intacto.
+   */
+  async setActivityState(ctx: TenantContext, input: { activityId: string; isActive: boolean }) {
+    return withTenantContext(ctx, async (tx) => {
+      const row = await tx.economicActivity.findUnique({ where: { id: input.activityId } });
+      if (!row) {
+        throw new FiscalError("ACTIVITY_NOT_FOUND", "Actividad económica no encontrada");
+      }
+      if (row.isActive === input.isActive) {
+        throw new FiscalError(
+          "ACTIVITY_STATE_UNCHANGED",
+          input.isActive
+            ? "La actividad ya está activa"
+            : "La actividad ya está desactivada",
+        );
+      }
+      const updated = await tx.economicActivity.update({
+        where: { id: row.id },
+        data: { isActive: input.isActive },
+      });
+      await tx.auditEvent.create({
+        data: {
+          firmId: ctx.firmId,
+          userId: ctx.userId,
+          actorKind: ctx.actorKind,
+          action: input.isActive ? "tax.activity.activated" : "tax.activity.deactivated",
+          entityType: "EconomicActivity",
+          entityId: row.id,
+          before: { isActive: row.isActive },
+          after: { isActive: updated.isActive },
+        },
+      });
+      return withActiveClientLinks(tx, updated);
+    });
+  }
+}
+
+function assertActivityValidity(validFrom: Date, validTo: Date | null): void {
+  if (validTo && validTo < validFrom) {
+    throw new FiscalError(
+      "ACTIVITY_VALIDITY_INVALID",
+      "La vigencia es inválida: validTo no puede ser anterior a validFrom",
     );
   }
+}
+
+/**
+ * Valida el vínculo código-regla contra el catálogo, del lado del servidor:
+ * `tax_rate_rules.activityCode` es texto libre históricamente; a partir de
+ * este corte toda ALTA de regla con activityCode debe apuntar a un código
+ * existente (y activo, para altas nuevas) del catálogo de actividades.
+ *
+ * - La comparación es por `code` normalizado (trim + mayúsculas), igual que
+ *   el importador.
+ * - Si la regla declara jurisdicción, el catálogo debe tener la actividad en
+ *   ESA jurisdicción (la unicidad del catálogo es code+jurisdicción).
+ * - `requireActive=false` (reemplazo de borrador): exige sólo existencia, para
+ *   no romper borradores clonados de versiones históricas con códigos hoy
+ *   desactivados. Las reglas vigentes nunca se reescriben (versiones
+ *   APPROVED/ACTIVE inmutables), así la compatibilidad histórica se conserva.
+ */
+async function assertActivityCodeExists(
+  tx: Prisma.TransactionClient,
+  activityCode: string,
+  jurisdictionId: string | undefined,
+  options: { requireActive: boolean },
+): Promise<void> {
+  const code = normalizeActivityCode(activityCode);
+  if (!ACTIVITY_CODE_PATTERN.test(code)) {
+    throw new FiscalError("ACTIVITY_CODE_INVALID", `El código "${code}" no cumple el formato del catálogo`);
+  }
+  const matches = await tx.economicActivity.findMany({ where: { code } });
+  if (matches.length === 0) {
+    throw new FiscalError(
+      "ACTIVITY_CODE_UNKNOWN",
+      `El código de actividad "${code}" no existe en el catálogo de actividades`,
+    );
+  }
+  const jurisdictionMatches = jurisdictionId
+    ? matches.filter((row) => row.jurisdictionId === jurisdictionId)
+    : matches;
+  if (jurisdictionMatches.length === 0) {
+    throw new FiscalError(
+      "ACTIVITY_CODE_JURISDICTION_MISMATCH",
+      `El código de actividad "${code}" no está publicado para la jurisdicción de la regla`,
+    );
+  }
+  if (options.requireActive && !jurisdictionMatches.some((row) => row.isActive)) {
+    throw new FiscalError(
+      "ACTIVITY_CODE_INACTIVE",
+      `La actividad "${code}" está desactivada en el catálogo: no admite reglas nuevas`,
+    );
+  }
+}
+
+/** Vínculos de clientes sin baja (vigentes) que referencian la actividad. */
+async function withActiveClientLinks(
+  tx: Prisma.TransactionClient,
+  row: { id: string } & Record<string, unknown>,
+) {
+  const activeClientLinks = await tx.clientActivity.count({
+    where: { activityId: row.id, validTo: null },
+  });
+  return { ...row, activeClientLinks };
 }
 
 // ---------------------------------------------------------------------------
@@ -500,8 +717,21 @@ export class TaxpayerProfileService {
     ctx: TenantContext,
     input: { clientId: string; profileVersionId: string; activityId: string; isPrimary?: boolean; validFrom: string },
   ) {
-    return withTenantContext(ctx, (tx) =>
-      tx.clientActivity.create({
+    return withTenantContext(ctx, async (tx) => {
+      // Coherencia ficha ↔ catálogo: el vínculo se hace contra una actividad
+      // del catálogo, existente y activa. Los vínculos ya guardados no se
+      // invalidan si la actividad se desactiva después (historial intacto).
+      const activity = await tx.economicActivity.findUnique({ where: { id: input.activityId } });
+      if (!activity) {
+        throw new FiscalError("ACTIVITY_NOT_FOUND", "Actividad económica no encontrada");
+      }
+      if (!activity.isActive) {
+        throw new FiscalError(
+          "ACTIVITY_INACTIVE",
+          "La actividad está desactivada en el catálogo: no admite nuevos vínculos",
+        );
+      }
+      return tx.clientActivity.create({
         data: {
           firmId: ctx.firmId,
           clientId: input.clientId,
@@ -510,8 +740,8 @@ export class TaxpayerProfileService {
           isPrimary: input.isPrimary ?? false,
           validFrom: new Date(input.validFrom),
         },
-      }),
-    );
+      });
+    });
   }
 
   async endClientActivity(ctx: TenantContext, input: { clientActivityId: string; validTo: string }) {
@@ -866,12 +1096,19 @@ export class TaxRuleService {
   ) {
     return withTenantContext(ctx, async (tx) => {
       await this.assertDraft(tx, input.ruleVersionId);
+      if (input.activityCode) {
+        await assertActivityCodeExists(tx, input.activityCode, input.jurisdictionId, {
+          requireActive: true,
+        });
+      }
       const rule = await tx.taxRateRule.create({
         data: {
           ruleVersionId: input.ruleVersionId,
           concept: input.concept,
           rate: new Prisma.Decimal(input.rate),
-          ...(input.activityCode ? { activityCode: input.activityCode } : {}),
+          // El código se guarda normalizado (trim + mayúsculas): es la clave de
+          // vínculo con el catálogo y el importador la normaliza igual.
+          ...(input.activityCode ? { activityCode: normalizeActivityCode(input.activityCode) } : {}),
           ...(input.jurisdictionId ? { jurisdictionId: input.jurisdictionId } : {}),
           ...(input.minAmount ? { minAmount: new Prisma.Decimal(input.minAmount) } : {}),
           validFrom: new Date(input.validFrom),
@@ -901,6 +1138,19 @@ export class TaxRuleService {
   ) {
     return withTenantContext(ctx, async (tx) => {
       await this.assertDraft(tx, input.ruleVersionId);
+      // La validación del catálogo corre ANTES del reemplazo: un lote con un
+      // código fantasma no debe destruir las reglas existentes del borrador.
+      // Sólo exige existencia (no estado activo): los borradores clonados de
+      // versiones históricas pueden conservar códigos hoy desactivados, y el
+      // catálogo nunca borra filas.
+      const withCode = input.rules.filter((rule) => rule.activityCode);
+      await Promise.all(
+        withCode.map((rule) =>
+          assertActivityCodeExists(tx, rule.activityCode!, rule.jurisdictionId, {
+            requireActive: false,
+          }),
+        ),
+      );
       await tx.taxRateRule.deleteMany({ where: { ruleVersionId: input.ruleVersionId } });
       if (input.rules.length > 0) {
         await tx.taxRateRule.createMany({
@@ -908,7 +1158,8 @@ export class TaxRuleService {
             ruleVersionId: input.ruleVersionId,
             concept: rule.concept,
             ...(rule.rate ? { rate: new Prisma.Decimal(rule.rate) } : {}),
-            ...(rule.activityCode ? { activityCode: rule.activityCode } : {}),
+            // Guarda normalizado (trim + mayúsculas), coherente con el catálogo.
+            ...(rule.activityCode ? { activityCode: normalizeActivityCode(rule.activityCode) } : {}),
             ...(rule.jurisdictionId ? { jurisdictionId: rule.jurisdictionId } : {}),
             ...(rule.minAmount ? { minAmount: new Prisma.Decimal(rule.minAmount) } : {}),
             validFrom: new Date(rule.validFrom),
