@@ -124,11 +124,11 @@ describe("StudyCatalogosFiscales", () => {
   it("crea autoridad y régimen enlazados a la misma jurisdicción", async () => {
     renderCatalogs();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Nueva autoridad" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo organismo" }));
     fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "E2E_SYN_AUTH" } });
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Autoridad sintética E2E" } });
     fireEvent.change(screen.getByLabelText("Jurisdicción"), { target: { value: jurisdiction.id } });
-    fireEvent.click(screen.getByRole("button", { name: "Crear autoridad" }));
+    fireEvent.click(screen.getByRole("button", { name: "Crear organismo" }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/tax/authorities", {
       code: "E2E_SYN_AUTH",
@@ -142,7 +142,7 @@ describe("StudyCatalogosFiscales", () => {
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Régimen sintético E2E" } });
     fireEvent.change(screen.getByLabelText("Impuesto"), { target: { value: taxType.id } });
     fireEvent.change(screen.getByLabelText("Jurisdicción"), { target: { value: jurisdiction.id } });
-    fireEvent.change(screen.getByLabelText("Autoridad fiscal"), { target: { value: "authority-e2e" } });
+    fireEvent.change(screen.getByLabelText("Organismo recaudador"), { target: { value: "authority-e2e" } });
     fireEvent.click(screen.getByRole("button", { name: "Crear régimen" }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/tax/regimes", {
@@ -159,7 +159,10 @@ describe("StudyCatalogosFiscales", () => {
     renderCatalogs();
 
     expect(await screen.findByRole("heading", { name: "Catálogos fiscales" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Nueva autoridad" })).toBeNull();
+    expect(await screen.findByRole("heading", { name: "Organismos recaudadores" })).toBeTruthy();
+    expect(screen.getByText(/ARCA en Nación \(ex AFIP\)/)).toBeTruthy();
+    expect(screen.queryByText(/compartidos entre estudios/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Nuevo organismo" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Nuevo régimen" })).toBeNull();
     expect(api.post).not.toHaveBeenCalled();
   });
