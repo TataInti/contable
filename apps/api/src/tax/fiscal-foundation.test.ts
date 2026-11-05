@@ -501,7 +501,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     await rules.addRateRule(ctxOwner, {
       ruleVersionId: version.id,
       concept: "SINTETICO",
-      activityCode: "General",
+      activityCode: "620100-F",
       rate: "21",
       minAmount: "0",
       validFrom: "2026-01-01",
@@ -515,7 +515,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
         data: [{
           ruleVersionId: version.id,
           concept: "SINTETICO",
-          activityCode: "General",
+          activityCode: "620100-F",
           rate: new Prisma.Decimal("7.25"),
           minAmount: new Prisma.Decimal("0"),
           validFrom: new Date("2026-01-01"),
@@ -531,7 +531,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
       ruleVersionId: version.id,
       rules: [{
         concept: "SINTETICO",
-        activityCode: "General",
+        activityCode: "620100-F",
         rate: "3.17",
         minAmount: "0",
         validFrom: "2026-01-01",

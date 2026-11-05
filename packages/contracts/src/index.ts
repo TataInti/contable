@@ -11,3 +11,4 @@ export * from "./auth.js";
 export * from "./clients.js";
 export * from "./jurisdictions.js";
 export * from "./accounting-standards.js";
+export * from "./economic-activities.js";

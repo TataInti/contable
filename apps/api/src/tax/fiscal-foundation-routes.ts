@@ -10,6 +10,10 @@ import {
   type TaxpayerProfileChanges,
 } from "./fiscal-foundation-service.js";
 import { rulePackValidator } from "./rule-pack-validator.js";
+import {
+  createEconomicActivitySchema,
+  updateEconomicActivitySchema,
+} from "@contable/contracts";
 import { z } from "zod";
 
 /** Con `exactOptionalPropertyTypes`, los opcionales se pasan sólo si están definidos. */
@@ -40,6 +44,14 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     reply: { status: (code: number) => { send: (body: object) => void } },
     err: unknown,
   ) => {
+    if (err instanceof z.ZodError) {
+      return reply.status(400).send({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: err.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; "),
+        },
+      });
+    }
     if (err instanceof FiscalError) {
       const status = err.code.includes("NOT_FOUND") ? 404 : 409;
       return reply.status(status).send({ error: { code: err.code, message: err.message } });
@@ -162,9 +174,19 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/v1/tax/activities", async (req, reply) => {
-    const q = z.object({ jurisdictionId: z.string().uuid().optional() }).parse(req.query);
     try {
-      const data = await masters.listActivities(tenantContextFromRequest(req), q.jurisdictionId);
+      const q = z
+        .object({
+          jurisdictionId: z.string().uuid().optional(),
+          includeInactive: z.enum(["true", "false"]).optional(),
+        })
+        .strict()
+        .parse(req.query);
+      const data = await masters.listActivities(
+        tenantContextFromRequest(req),
+        q.jurisdictionId,
+        q.includeInactive === "true",
+      );
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -172,19 +194,67 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/tax/activities", async (req, reply) => {
-    const body = z
-      .object({
-        code: z.string().min(1).max(40),
-        name: z.string().min(1).max(200),
-        jurisdictionId: z.string().uuid(),
-        source: z.string().max(200).optional(),
-        validFrom: z.string().date(),
-      })
-      .strict()
-      .parse(req.body);
     try {
-      const data = await masters.createActivity(tenantContextFromRequest(req), pickDefined(body) as { code: string; name: string; jurisdictionId: string; source?: string; validFrom: string });
+      const body = createEconomicActivitySchema.parse(req.body);
+      const data = await masters.createActivity(tenantContextFromRequest(req), pickDefined(body) as {
+        code: string;
+        name: string;
+        jurisdictionId: string;
+        source?: string;
+        validFrom: string;
+        validTo?: string;
+      });
       return reply.status(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // Edición del catálogo: atributos descriptivos y vigencia. code y
+  // jurisdictionId no son editables (vínculo con reglas e historial).
+  app.patch("/api/v1/tax/activities/:activityId", async (req, reply) => {
+    const { activityId } = req.params as { activityId: string };
+    try {
+      const body = updateEconomicActivitySchema.parse(req.body);
+      const data = await masters.updateActivity(tenantContextFromRequest(req), {
+        activityId,
+        ...pickDefined(body),
+      } as {
+        activityId: string;
+        name?: string;
+        source?: string | null;
+        validFrom?: string;
+        validTo?: string | null;
+      });
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // Activación/desactivación explícita (no hay borrado: el catálogo conserva
+  // el historial completo y las reglas vigentes siguen resolviendo por código).
+  app.post("/api/v1/tax/activities/:activityId/deactivate", async (req, reply) => {
+    const { activityId } = req.params as { activityId: string };
+    try {
+      const data = await masters.setActivityState(tenantContextFromRequest(req), {
+        activityId,
+        isActive: false,
+      });
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post("/api/v1/tax/activities/:activityId/activate", async (req, reply) => {
+    const { activityId } = req.params as { activityId: string };
+    try {
+      const data = await masters.setActivityState(tenantContextFromRequest(req), {
+        activityId,
+        isActive: true,
+      });
+      return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
     }
