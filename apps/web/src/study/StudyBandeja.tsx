@@ -11,6 +11,7 @@ import {
   type DocumentRequest,
 } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
+import { belongsToDocumentQueue, type DocumentQueueFilter } from "./documentQueue";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { SectionIndex } from "../ui/SectionIndex";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -26,11 +27,6 @@ interface UploadComplete {
   documentId: string;
   status: string;
 }
-
-type DocumentQueueFilter = "ALL" | "PROCESSING" | "NEEDS_REVIEW" | "REVIEWED" | "ERROR";
-
-const PROCESSING_DOCUMENT_STATUSES = new Set(["UPLOADED", "VALIDATING", "PROCESSING", "IN_PROGRESS", "RUNNING"]);
-const ERROR_DOCUMENT_STATUSES = new Set(["EXTRACTION_FAILED", "INFECTED", "FAILED"]);
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
@@ -78,14 +74,6 @@ function normalizeDocumentSearch(value: string) {
     .toLocaleLowerCase("es-AR");
 }
 
-function belongsToDocumentQueue(document: Document, filter: DocumentQueueFilter) {
-  if (filter === "ALL") return true;
-  if (filter === "PROCESSING") return PROCESSING_DOCUMENT_STATUSES.has(document.status);
-  if (filter === "NEEDS_REVIEW") return document.status === "EXTRACTED";
-  if (filter === "REVIEWED") return document.status === "REVIEWED";
-  return ERROR_DOCUMENT_STATUSES.has(document.status);
-}
-
 export function StudyBandeja() {
   const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
@@ -127,7 +115,9 @@ export function StudyBandeja() {
   const extraction = useQuery({
     queryKey: ["extraction", firmId, clientId, selectedId],
     queryFn: () => api.get<DocumentExtraction>(`${base}/documents/${selectedId}/extraction`),
-    enabled: Boolean(base && selectedId && detail.data?.status === "EXTRACTED"),
+    enabled: Boolean(
+      base && selectedId && (detail.data?.status === "EXTRACTED" || detail.data?.status === "REVIEWED"),
+    ),
     retry: false,
   });
 
@@ -670,7 +660,7 @@ export function StudyBandeja() {
                     <StatusBadge status={detail.data?.status} />
                   </div>
                 </div>
-                {detail.data?.status !== "EXTRACTED" ? (
+                {detail.data?.status !== "EXTRACTED" && detail.data?.status !== "REVIEWED" ? (
                   <div className="processing-state">
                     <div>
                       <h3>Procesando comprobante</h3>
