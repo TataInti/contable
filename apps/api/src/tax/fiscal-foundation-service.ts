@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { calculateDueDate } from "@contable/tax-engine";
-import { ACTIVITY_CODE_PATTERN, normalizeActivityCode } from "@contable/contracts";
+import {
+  ACTIVITY_CODE_PATTERN,
+  normalizeActivityCode,
+  taxEngineVersionCompatibilityError,
+} from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 
 /**
@@ -37,6 +41,7 @@ export type FiscalErrorCode =
   | "OBLIGATION_NOT_FOUND"
   | "RULE_PACK_NOT_FOUND"
   | "RULE_VERSION_NOT_FOUND"
+  | "UNSUPPORTED_TAX_ENGINE_VERSION"
   | "RULE_VERSION_IMMUTABLE"
   | "RULE_VERSION_ALREADY_APPROVED"
   | "CREDENTIAL_NOT_FOUND"
@@ -59,6 +64,15 @@ export class FiscalError extends Error {
     this.name = "FiscalError";
     this.code = code;
   }
+}
+
+export function assertTaxEngineVersionCompatible(
+  regimeCode: string,
+  engineVersion: string,
+  jurisdictionCode?: string,
+): void {
+  const issue = taxEngineVersionCompatibilityError(regimeCode, engineVersion, jurisdictionCode);
+  if (issue) throw new FiscalError("UNSUPPORTED_TAX_ENGINE_VERSION", issue);
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
@@ -929,8 +943,18 @@ export class TaxRuleService {
     },
   ) {
     return withTenantContext(ctx, async (tx) => {
-      const pack = await tx.taxRulePack.findUnique({ where: { id: input.packId } });
+      const pack = await tx.taxRulePack.findUnique({
+        where: { id: input.packId },
+        include: {
+          regime: { select: { code: true, jurisdiction: { select: { code: true } } } },
+        },
+      });
       if (!pack) throw new FiscalError("RULE_PACK_NOT_FOUND", "Rule pack no encontrado");
+      assertTaxEngineVersionCompatible(
+        pack.regime.code,
+        input.engineVersion,
+        pack.regime.jurisdiction.code,
+      );
       const count = await tx.taxRuleVersion.count({ where: { packId: input.packId } });
       return tx.taxRuleVersion.create({
         data: {
@@ -955,9 +979,25 @@ export class TaxRuleService {
       const source = await tx.taxRuleVersion.findFirst({
         where: { packId: input.packId },
         orderBy: { version: "desc" },
-        include: { rateRules: true, minimumRules: true, dueDateRules: true, roundingRules: true, sources: true },
+        include: {
+          rateRules: true,
+          minimumRules: true,
+          dueDateRules: true,
+          roundingRules: true,
+          sources: true,
+          pack: {
+            include: {
+              regime: { select: { code: true, jurisdiction: { select: { code: true } } } },
+            },
+          },
+        },
       });
       if (!source) throw new FiscalError("RULE_VERSION_NOT_FOUND", "El pack no tiene una versión para clonar");
+      assertTaxEngineVersionCompatible(
+        source.pack.regime.code,
+        source.engineVersion,
+        source.pack.regime.jurisdiction.code,
+      );
       const count = await tx.taxRuleVersion.count({ where: { packId: input.packId } });
       const version = await tx.taxRuleVersion.create({
         data: {
@@ -1346,11 +1386,25 @@ export class TaxRuleService {
   }
 
   private async assertDraft(tx: Prisma.TransactionClient, ruleVersionId: string) {
-    const v = await tx.taxRuleVersion.findUnique({ where: { id: ruleVersionId } });
+    const v = await tx.taxRuleVersion.findUnique({
+      where: { id: ruleVersionId },
+      include: {
+        pack: {
+          include: {
+            regime: { select: { code: true, jurisdiction: { select: { code: true } } } },
+          },
+        },
+      },
+    });
     if (!v) throw new FiscalError("RULE_VERSION_NOT_FOUND", "Versión de regla no encontrada");
     if (v.status !== "DRAFT") {
       throw new FiscalError("RULE_VERSION_IMMUTABLE", "Sólo se editan versiones DRAFT; las aprobadas/activas son inmutables");
     }
+    assertTaxEngineVersionCompatible(
+      v.pack.regime.code,
+      v.engineVersion,
+      v.pack.regime.jurisdiction.code,
+    );
   }
 }
 

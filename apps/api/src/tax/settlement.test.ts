@@ -438,6 +438,21 @@ beforeEach(async () => {
 });
 
 describe("G3-1 cobertura y cálculo determinista", () => {
+  it("rechaza motor desconocido en despacho y no deriva a IVA legacy", async () => {
+    await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      const pack = await tx.taxRulePack.findUniqueOrThrow({ where: { code: "VAT_SET_V1" } });
+      await tx.taxRuleVersion.updateMany({
+        where: { packId: pack.id },
+        data: { engineVersion: "tax-engine-v1" },
+      });
+    });
+
+    await expect(settlements.calculate(ctxOwner, calculateParams())).rejects.toMatchObject({
+      code: "UNSUPPORTED_ENGINE_VERSION",
+      message: expect.stringContaining("tax-engine-v1"),
+    });
+  });
+
   it("coverage reporta entradas y estado", async () => {
     const covBefore = await settlements.coverage(ctxOwner, {
       clientId: CLIENT_SET,
