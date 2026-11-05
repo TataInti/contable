@@ -128,8 +128,12 @@ test("ciclo vertical del expediente mensual (§10)", async ({ request, playwrigh
   // ---------- 6. Expediente mensual ----------
   // Período único por corrida: evita colisiones con fixtures de corridas
   // previas (el expediente es idempotente por cliente+período).
-  // Año único por corrida: 2100 + (minutos desde epoch mod 100).
-  const runYear = 2100 + (Math.floor(Date.now() / 1000) % 9000);
+  // Año rotativo por segundo dentro del rango de cuatro dígitos. Se reserva
+  // 9999 para los vencimientos y presentaciones del año siguiente.
+  const firstRunYear = 2100;
+  const lastRunYear = 9998;
+  const runYearRange = lastRunYear - firstRunYear + 1;
+  const runYear = firstRunYear + (Math.floor(Date.now() / 1000) % runYearRange);
   const periodLabel = `E2E ${runYear} ${runTag}`;
   const period = await request.post(`${base}/tax-periods`, {
     headers,
