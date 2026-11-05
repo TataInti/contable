@@ -84,6 +84,8 @@ describe("extracción (integración DB)", () => {
       const fv = await tx.documentFileVersion.findFirst({ where: { documentId: doc.id } });
       if (!fv) return null;
 
+      // Estado previo: documento extraído esperando revisión (como deja el worker).
+      await tx.document.update({ where: { id: doc.id }, data: { status: "EXTRACTED" } });
       const extraction = await tx.documentExtraction.create({
         data: {
           firmId: FIRM_ALFA,
@@ -94,15 +96,21 @@ describe("extracción (integración DB)", () => {
           status: "NEEDS_REVIEW",
         },
       });
-      return extraction.id;
+      return { extractionId: extraction.id, documentId: doc.id };
     });
 
     if (result) {
-      await service.approve(FIRM_ALFA, CLIENT_ALFA, result, OWNER_A);
+      await service.approve(FIRM_ALFA, CLIENT_ALFA, result.extractionId, OWNER_A);
       const updated = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
-        tx.documentExtraction.findUnique({ where: { id: result } }),
+        tx.documentExtraction.findUnique({ where: { id: result.extractionId } }),
       );
       expect(updated?.status).toBe("REVIEWED");
+      // Regresión: aprobar la extracción también cierra la revisión del documento
+      // (sale de "Para revisar" y pasa a "Revisados" en la bandeja).
+      const document = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+        tx.document.findUnique({ where: { id: result.documentId } }),
+      );
+      expect(document?.status).toBe("REVIEWED");
     }
   });
 });

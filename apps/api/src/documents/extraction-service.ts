@@ -35,6 +35,9 @@ export class ExtractionService {
       const extraction = await tx.documentExtraction.findFirst({ where: { id: extractionId, firmId, clientId } });
       if (!extraction) throw new Error("EXTRACTION_NOT_FOUND");
       await tx.documentExtraction.update({ where: { id: extractionId }, data: { status: "REVIEWED", reviewedByUserId: userId, reviewedAt: new Date() } });
+      // La aprobación cierra la revisión del documento: sale de "Para revisar" (EXTRACTED)
+      // y pasa a "Revisados" (REVIEWED) en la bandeja documental.
+      await tx.document.update({ where: { id: extraction.documentId }, data: { status: "REVIEWED" } });
       await tx.auditEvent.create({ data: { firmId, clientId, userId, actorKind: ctx?.actorKind ?? "USER", action: "document.extraction.approved", entityType: "DocumentExtraction", entityId: extractionId, before: { status: extraction.status }, after: { status: "REVIEWED" } } });
     });
   }
