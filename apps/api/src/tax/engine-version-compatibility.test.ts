@@ -13,50 +13,129 @@ import {
 import {
   compatibleTaxEnginesForRegime,
   taxEngineVersionCompatibilityError,
+  type TaxRegimeEngineScope,
 } from "@contable/contracts";
 
-describe("compatibilidad de motores fiscales", () => {
-  it("enumera versiones implementadas por régimen, incluidas las legacy", () => {
-    const implementedVersions: Record<string, string[]> = {
-      RI: [VAT_RI_ENGINE_VERSION, VAT_ENGINE_VERSION],
-      IIBB_LOCAL_TUC: [IIBB_TUC_ENGINE_VERSION, IIBB_TUC_LEGACY_ENGINE_VERSION],
-      CM_ART2: [CM03_ENGINE_VERSION, CM03_LEGACY_ENGINE_VERSION],
-      TEM_SMT: [TEM_SMT_ENGINE_VERSION, TEM_SMT_LEGACY_ENGINE_VERSION],
-      MONOTRIBUTO: [MONOTRIBUTO_ENGINE_VERSION],
-    };
+function scope(
+  regimeCode: string,
+  taxTypeCode: string,
+  jurisdictionCode: string,
+): TaxRegimeEngineScope {
+  return { regimeCode, taxTypeCode, jurisdictionCode };
+}
 
-    for (const [regimeCode, versions] of Object.entries(implementedVersions)) {
+const CANONICAL_SCOPES: Array<[string, TaxRegimeEngineScope, string[]]> = [
+  ["IVA RI", scope("RI", "IVA", "AR"), [VAT_RI_ENGINE_VERSION, VAT_ENGINE_VERSION]],
+  [
+    "IIBB local Tucumán",
+    scope("IIBB_LOCAL_TUC", "IIBB", "AR-T"),
+    [IIBB_TUC_ENGINE_VERSION, IIBB_TUC_LEGACY_ENGINE_VERSION],
+  ],
+  [
+    "CM03 artículo 2",
+    scope("CM_ART2", "IIBB", "AR"),
+    [CM03_ENGINE_VERSION, CM03_LEGACY_ENGINE_VERSION],
+  ],
+  [
+    "TEM San Miguel de Tucumán",
+    scope("TEM_SMT", "TEM", "AR-T"),
+    [TEM_SMT_ENGINE_VERSION, TEM_SMT_LEGACY_ENGINE_VERSION],
+  ],
+  [
+    "Monotributo",
+    scope("MONOTRIBUTO", "MONOTRIBUTO", "AR"),
+    [MONOTRIBUTO_ENGINE_VERSION],
+  ],
+];
+
+describe("compatibilidad de motores fiscales", () => {
+  it("enumera las versiones implementadas por familia, incluidas las legacy", () => {
+    for (const [, regimeScope, versions] of CANONICAL_SCOPES) {
       expect(
-        compatibleTaxEnginesForRegime(regimeCode).map((option) => option.engineVersion),
+        compatibleTaxEnginesForRegime(regimeScope).map((option) => option.engineVersion),
       ).toEqual(versions);
       for (const version of versions) {
-        expect(taxEngineVersionCompatibilityError(regimeCode, version)).toBeNull();
+        expect(taxEngineVersionCompatibilityError(regimeScope, version)).toBeNull();
       }
     }
   });
 
-  it("rechaza la versión ficticia y los motores reales incompatibles con el régimen", () => {
-    expect(taxEngineVersionCompatibilityError("RI", "tax-engine-v1")).toContain(
-      "no está soportado",
-    );
-    expect(taxEngineVersionCompatibilityError("RI", CM03_ENGINE_VERSION)).toContain(
-      "Motores compatibles",
-    );
-    expect(compatibleTaxEnginesForRegime("REGIMEN_SIN_MOTOR")).toEqual([]);
-    expect(taxEngineVersionCompatibilityError("REGIMEN_SIN_MOTOR", "tax-engine-v1")).toContain(
-      "No hay motores fiscales soportados",
-    );
+  it("resuelve regímenes con código propio del estudio usando impuesto y jurisdicción", () => {
+    const configurableScopes: Array<[TaxRegimeEngineScope, string]> = [
+      [scope("RI_ESTUDIO_2026", "IVA", "AR"), VAT_RI_ENGINE_VERSION],
+      [scope("IIBB_TUC_PROPIO", "IIBB", "AR-T"), IIBB_TUC_ENGINE_VERSION],
+      [scope("CONVENIO_MULTILATERAL_ESTUDIO", "IIBB", "AR"), CM03_ENGINE_VERSION],
+      [scope("TEM_PROPIO", "TEM", "AR-SMT"), TEM_SMT_ENGINE_VERSION],
+      [scope("MONO_ESTUDIO", "MONOTRIBUTO", "AR"), MONOTRIBUTO_ENGINE_VERSION],
+    ];
+
+    for (const [regimeScope, expected] of configurableScopes) {
+      expect(compatibleTaxEnginesForRegime(regimeScope)[0]?.engineVersion).toBe(expected);
+    }
   });
 
-  it("resuelve los códigos de régimen usados por los packs de prueba", () => {
-    expect(compatibleTaxEnginesForRegime("RI-SET")[0]?.engineVersion).toBe(VAT_RI_ENGINE_VERSION);
-    expect(compatibleTaxEnginesForRegime("IIBB_LOCAL-IIBB", "AR-T-IIBB")[0]?.engineVersion).toBe(
-      IIBB_TUC_ENGINE_VERSION,
+  it("rechaza la versión ficticia tax-engine-v1 en todas las familias", () => {
+    for (const [, regimeScope] of CANONICAL_SCOPES) {
+      expect(taxEngineVersionCompatibilityError(regimeScope, "tax-engine-v1")).toContain(
+        "no está soportado",
+      );
+      expect(taxEngineVersionCompatibilityError(regimeScope, "tax-engine-v1")).toContain(
+        "Motores compatibles",
+      );
+    }
+    expect(compatibleTaxEnginesForRegime(scope("DESCONOCIDO", "OTRO", "AR"))).toEqual([]);
+  });
+
+  it("no permite cruces entre familias aunque el motor exista", () => {
+    const crosses: Array<[TaxRegimeEngineScope, string]> = [
+      [scope("RI", "IVA", "AR"), CM03_ENGINE_VERSION],
+      [scope("RI", "IVA", "AR"), MONOTRIBUTO_ENGINE_VERSION],
+      [scope("IIBB_LOCAL_TUC", "IIBB", "AR-T"), CM03_ENGINE_VERSION],
+      [scope("CM_ART2", "IIBB", "AR"), IIBB_TUC_ENGINE_VERSION],
+      [scope("TEM_SMT", "TEM", "AR-T"), IIBB_TUC_ENGINE_VERSION],
+      [scope("MONOTRIBUTO", "MONOTRIBUTO", "AR"), CM03_ENGINE_VERSION],
+    ];
+
+    for (const [regimeScope, crossedEngine] of crosses) {
+      expect(taxEngineVersionCompatibilityError(regimeScope, crossedEngine)).toContain(
+        "no está soportado",
+      );
+    }
+  });
+
+  it("no infiere la familia por prefijos ni coincidencias parciales del código de régimen", () => {
+    // El código dice RI, pero el impuesto es IIBB: manda el impuesto.
+    expect(
+      compatibleTaxEnginesForRegime(scope("RI-FALSO", "IIBB", "AR"))[0]?.engineVersion,
+    ).toBe(CM03_ENGINE_VERSION);
+    expect(
+      compatibleTaxEnginesForRegime(scope("IIBB_LOCAL_TUC-FALSO", "IIBB", "AR"))[0]?.engineVersion,
+    ).toBe(CM03_ENGINE_VERSION);
+    expect(compatibleTaxEnginesForRegime(scope("TEM_SMT", "TEM", "CBA"))).toEqual([]);
+  });
+
+  it("no ofrece motores para impuestos o jurisdicciones sin implementación", () => {
+    const unsupported = [
+      scope("RI", "OTRO", "AR"),
+      scope("IIBB_CBA", "IIBB", "CBA"),
+      scope("TEM_CBA", "TEM", "CBA"),
+      scope("REGIMEN_SIN_MOTOR", "SIN_IMPUESTO", "AR"),
+    ];
+    for (const regimeScope of unsupported) {
+      expect(compatibleTaxEnginesForRegime(regimeScope)).toEqual([]);
+      expect(taxEngineVersionCompatibilityError(regimeScope, "ar-vat-ri-v2.1.0")).toContain(
+        "No hay motores fiscales soportados",
+      );
+    }
+  });
+
+  it("corrige el maestro canónico histórico que asoció Monotributo al impuesto IIBB", () => {
+    const legacyMono = scope("MONOTRIBUTO", "IIBB", "AR");
+    expect(compatibleTaxEnginesForRegime(legacyMono).map((option) => option.engineVersion)).toEqual(
+      [MONOTRIBUTO_ENGINE_VERSION],
     );
-    expect(compatibleTaxEnginesForRegime("CM_ART2-CM")[0]?.engineVersion).toBe(CM03_ENGINE_VERSION);
-    expect(compatibleTaxEnginesForRegime("TEM_SMT-TEM")[0]?.engineVersion).toBe(TEM_SMT_ENGINE_VERSION);
-    expect(compatibleTaxEnginesForRegime("MONOTRIBUTO-MONO")[0]?.engineVersion).toBe(
-      MONOTRIBUTO_ENGINE_VERSION,
+    expect(taxEngineVersionCompatibilityError(legacyMono, CM03_ENGINE_VERSION)).toContain(
+      "no está soportado",
     );
   });
 });

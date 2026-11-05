@@ -21,7 +21,7 @@ const FIRM_WP = "99999999-9999-4999-8999-999999999998";
 const CLIENT_WP = "99999999-2222-4333-8444-999999999999";
 const JURISDICTION_WP = "99999999-3333-4333-8444-999999999999";
 const AUTHORITY_WP = "99999999-4444-4333-8444-999999999999";
-const TAX_TYPE_WP = "99999999-5555-4333-8444-999999999999";
+let taxTypeId = "99999999-5555-4333-8444-999999999999";
 const REGIME_WP = "99999999-6666-4333-8444-999999999999";
 const PROFILE_WP = "99999999-7777-4333-8444-999999999999";
 const PERIOD_WP = "99999999-8888-4333-8444-999999999999";
@@ -140,19 +140,20 @@ async function setupFiscalComponent() {
       jurisdictionId: JURISDICTION_WP,
     },
   });
-  await prisma.taxType.upsert({
-    where: { code: "IVA_WP" },
+  const taxType = await prisma.taxType.upsert({
+    where: { code: "IVA" },
     update: {},
-    create: { id: TAX_TYPE_WP, code: "IVA_WP", name: "IVA WP" },
+    create: { id: taxTypeId, code: "IVA", name: "IVA WP" },
   });
+  taxTypeId = taxType.id;
   await prisma.taxRegime.upsert({
     where: { code: "RI_WP" },
-    update: {},
+    update: { taxTypeId },
     create: {
       id: REGIME_WP,
       code: "RI_WP",
       name: "Responsable Inscripto WP",
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       jurisdictionId: JURISDICTION_WP,
       authorityId: AUTHORITY_WP,
     },
@@ -173,11 +174,15 @@ async function setupFiscalComponent() {
       status: "ACTIVE",
     },
   });
+  // Fixtures previas podían apuntar a otro impuesto con el mismo id fijo;
+  // se alinea antes del upsert por clave natural para que el setup sea
+  // idempotente sobre bases ya usadas por corridas anteriores.
+  await prisma.taxPeriod.updateMany({ where: { id: PERIOD_WP }, data: { taxTypeId } });
   await prisma.taxPeriod.upsert({
     where: {
       clientId_taxTypeId_startDate_endDate: {
         clientId: CLIENT_WP,
-        taxTypeId: TAX_TYPE_WP,
+        taxTypeId,
         startDate: new Date("2026-01-01T00:00:00.000Z"),
         endDate: new Date("2026-01-31T00:00:00.000Z"),
       },
@@ -187,7 +192,7 @@ async function setupFiscalComponent() {
       id: PERIOD_WP,
       firmId: FIRM_WP,
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       startDate: new Date("2026-01-01T00:00:00.000Z"),
       endDate: new Date("2026-01-31T00:00:00.000Z"),
       label: "2026-01 WP",
@@ -602,7 +607,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
     });
     const input = {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "5000",
@@ -654,7 +659,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
   it("carga un saldo inicial manual sin documento y conserva el usuario que lo registró", async () => {
     const input = {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "2500",
@@ -675,7 +680,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
   it("edita metadatos de un lote y audita el cambio en el historial", async () => {
     const input = {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "3000",
@@ -717,7 +722,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
   it("no registra historial si la edición no cambia nada", async () => {
     const input = {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "1500",
@@ -742,7 +747,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
   it("§3.1.1: un saldo manual nace PENDING_VERIFICATION y no entra al cálculo", async () => {
     const lot = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "4000",
@@ -764,7 +769,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
   it("§3.1.2: la verificación exige evidencia o referencia oficial y registra usuario/fecha", async () => {
     const lot = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "3500",
@@ -794,7 +799,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
   it("§3.1.3: maker-checker — quien creó el saldo no puede verificarlo", async () => {
     const lot = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "2000",
@@ -809,7 +814,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
   it("§3.1.4: un saldo ya verificado no se reverifica", async () => {
     const lot = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "1200",
@@ -825,11 +830,11 @@ describe("F1.1 expediente mensual de liquidación", () => {
   });
 
   it("§3.1.7: un saldo sólo se aplica al mismo impuesto (alcance fiscal)", async () => {
-    // El lote pertenece a TAX_TYPE_WP (IVA WP); una obligación de otro
+    // El lote pertenece a taxTypeId (IVA WP); una obligación de otro
     // impuesto no debe verlo. Se valida por el filtro taxTypeId del cálculo.
     const lot = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "1800",
@@ -839,7 +844,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
     });
     const ledger = await service.creditLedger(ctxOwner, CLIENT_WP, {});
     const entry = ledger.find((item) => item.id === lot.id);
-    expect(entry?.taxTypeId).toBe(TAX_TYPE_WP);
+    expect(entry?.taxTypeId).toBe(taxTypeId);
     // El cálculo del expediente (mismo impuesto) sí lo consume.
     const wp = await service.create(ctxPreparer, {
       clientId: CLIENT_WP,
@@ -854,11 +859,33 @@ describe("F1.1 expediente mensual de liquidación", () => {
 
   it("§3.1.8: IVA_TECNICO, IVA_LIBRE y SALDO_A_FAVOR no se mezclan", async () => {
     // El guard de naturaleza: IVA_TECNICO/IVA_LIBRE sólo existen para IVA.
+    // Se usa un impuesto no IVA con período propio para ejercitar el guard sin
+    // depender de un código sintético de impuesto.
+    const nonIvaTaxType = await prisma.taxType.findUniqueOrThrow({ where: { code: "IIBB" } });
+    const nonIvaPeriod = await prisma.taxPeriod.upsert({
+      where: {
+        clientId_taxTypeId_startDate_endDate: {
+          clientId: CLIENT_WP,
+          taxTypeId: nonIvaTaxType.id,
+          startDate: new Date("2026-01-01T00:00:00.000Z"),
+          endDate: new Date("2026-01-31T00:00:00.000Z"),
+        },
+      },
+      update: {},
+      create: {
+        firmId: FIRM_WP,
+        clientId: CLIENT_WP,
+        taxTypeId: nonIvaTaxType.id,
+        startDate: new Date("2026-01-01T00:00:00.000Z"),
+        endDate: new Date("2026-01-31T00:00:00.000Z"),
+        label: "2026-01 WP IIBB",
+      },
+    });
     await expect(
       service.createOpeningCredit(ctxOwner, {
         clientId: CLIENT_WP,
-        taxTypeId: TAX_TYPE_WP,
-        periodId: PERIOD_WP,
+        taxTypeId: nonIvaTaxType.id,
+        periodId: nonIvaPeriod.id,
         kind: "IVA_TECNICO" as const,
         amount: "1000",
       }),
@@ -867,7 +894,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
     // SALDO_A_FAVOR es genérico y se mantiene separado de las naturalezas IVA.
     const saldo = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "2000",
@@ -887,7 +914,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
   async function createVerifiedLot(amount: string) {
     const lot = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount,
@@ -1053,7 +1080,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
   it("§3.2.9: un saldo no verificado no puede aplicarse", async () => {
     const lot = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "500",
@@ -1075,7 +1102,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
     // Presentación original verificada.
     const original = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "1000",
@@ -1088,7 +1115,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
     // Rectificativa del mismo alcance: la original queda SUPERSEDED.
     const rectificativa = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "1500",
@@ -1132,7 +1159,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
   it("§3.1.4: usar una presentación superada abre un control bloqueante", async () => {
     const original = await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "800",
@@ -1145,7 +1172,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
     // La rectificativa supera a la original (queda SUPERSEDED con disponible).
     await service.createOpeningCredit(ctxOwner, {
       clientId: CLIENT_WP,
-      taxTypeId: TAX_TYPE_WP,
+      taxTypeId,
       periodId: PERIOD_WP,
       kind: "SALDO_A_FAVOR" as const,
       amount: "1200",

@@ -98,7 +98,11 @@ async function setupMasters() {
     const arca = await tx.taxAuthority.create({
       data: { code: "ARCA-F", name: "ARCA", jurisdictionId: nacion.id },
     });
-    const iva = await tx.taxType.create({ data: { code: "IVA-F", name: "IVA" } });
+    const iva = await tx.taxType.upsert({
+      where: { code: "IVA" },
+      update: {},
+      create: { code: "IVA", name: "IVA" },
+    });
     const ri = await tx.taxRegime.create({
       data: {
         code: "RI-F",

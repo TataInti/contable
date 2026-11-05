@@ -115,9 +115,9 @@ async function setupMasters() {
       create: { code: "ARCA-PIL", name: "ARCA Piloto", jurisdictionId: nacion.id },
     });
     const iva = await tx.taxType.upsert({
-      where: { code: "IVA-PIL" },
+      where: { code: "IVA" },
       update: {},
-      create: { code: "IVA-PIL", name: "IVA Piloto" },
+      create: { code: "IVA", name: "IVA" },
     });
     const ri = await tx.taxRegime.upsert({
       where: { code: "RI-PIL" },

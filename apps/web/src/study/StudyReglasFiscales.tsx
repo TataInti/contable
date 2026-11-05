@@ -50,7 +50,12 @@ interface RulePack {
   id: string;
   code: string;
   name: string;
-  regime: { name: string; code: string; taxType: { name: string }; jurisdiction: { name: string; code?: string } };
+  regime: {
+    name: string;
+    code: string;
+    taxType: { name: string; code: string };
+    jurisdiction: { name: string; code?: string };
+  };
   versions: RuleVersion[];
 }
 
@@ -154,13 +159,18 @@ export function StudyReglasFiscales() {
   );
   const compatibleEngineOptions = useMemo(
     () =>
-      detailQuery.data?.regime.code
-        ? compatibleTaxEnginesForRegime(
-            detailQuery.data.regime.code,
-            detailQuery.data.regime.jurisdiction.code,
-          )
+      detailQuery.data?.regime.taxType.code
+        ? compatibleTaxEnginesForRegime({
+            regimeCode: detailQuery.data.regime.code,
+            taxTypeCode: detailQuery.data.regime.taxType.code,
+            jurisdictionCode: detailQuery.data.regime.jurisdiction.code,
+          })
         : [],
-    [detailQuery.data?.regime.code, detailQuery.data?.regime.jurisdiction.code],
+    [
+      detailQuery.data?.regime.code,
+      detailQuery.data?.regime.taxType.code,
+      detailQuery.data?.regime.jurisdiction.code,
+    ],
   );
 
   useEffect(() => {

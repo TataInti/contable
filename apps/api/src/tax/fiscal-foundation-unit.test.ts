@@ -43,7 +43,12 @@ const mockState = vi.hoisted(() => ({
   jurisdictions: [] as Array<{ id: string }>,
   taxAuthorities: [] as Array<{ id: string; jurisdictionId: string }>,
   taxRegimes: [] as Array<Record<string, unknown>>,
-  taxRulePacks: [] as Array<{ id: string; regimeCode: string; jurisdictionCode: string }>,
+  taxRulePacks: [] as Array<{
+    id: string;
+    regimeCode: string;
+    taxTypeCode: string;
+    jurisdictionCode: string;
+  }>,
   ruleVersions: [] as Array<{
     id: string;
     packId: string;
@@ -195,7 +200,14 @@ function makeTransaction(ctx: TestContext) {
       findUnique: async ({ where }: { where: { id: string } }) => {
         const pack = mockState.taxRulePacks.find((item) => item.id === where.id);
         return pack
-          ? { id: pack.id, regime: { code: pack.regimeCode, jurisdiction: { code: pack.jurisdictionCode } } }
+          ? {
+              id: pack.id,
+              regime: {
+                code: pack.regimeCode,
+                taxType: { code: pack.taxTypeCode },
+                jurisdiction: { code: pack.jurisdictionCode },
+              },
+            }
           : null;
       },
     },
@@ -221,6 +233,7 @@ function makeTransaction(ctx: TestContext) {
               pack: {
                 regime: {
                   code: pack.regimeCode,
+                  taxType: { code: pack.taxTypeCode },
                   jurisdiction: { code: pack.jurisdictionCode },
                 },
               },
@@ -307,7 +320,12 @@ beforeEach(() => {
 
 describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
   it("rechaza motores desconocidos al crear y configurar reglas antes de escribir", async () => {
-    mockState.taxRulePacks.push({ id: "pack-ri", regimeCode: "RI", jurisdictionCode: "AR" });
+    mockState.taxRulePacks.push({
+      id: "pack-ri",
+      regimeCode: "RI",
+      taxTypeCode: "IVA",
+      jurisdictionCode: "AR",
+    });
 
     await expect(
       rules.createVersion(ctxOwner, {
@@ -343,7 +361,12 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
   });
 
   it("conserva IVA legacy al crear una versión compatible", async () => {
-    mockState.taxRulePacks.push({ id: "pack-ri", regimeCode: "RI", jurisdictionCode: "AR" });
+    mockState.taxRulePacks.push({
+      id: "pack-ri",
+      regimeCode: "RI",
+      taxTypeCode: "IVA",
+      jurisdictionCode: "AR",
+    });
     const version = await rules.createVersion(ctxOwner, {
       packId: "pack-ri",
       validFrom: "2026-01-01",
@@ -353,6 +376,55 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
 
     expect(version.engineVersion).toBe("ar-vat-ri-v1.0.0");
     expect(version.status).toBe("DRAFT");
+  });
+
+  it("acepta un régimen con código propio del estudio según su impuesto", async () => {
+    mockState.taxRulePacks.push({
+      id: "pack-propio",
+      regimeCode: "RI_ESTUDIO_2026",
+      taxTypeCode: "IVA",
+      jurisdictionCode: "AR",
+    });
+
+    const version = await rules.createVersion(ctxOwner, {
+      packId: "pack-propio",
+      validFrom: "2026-01-01",
+      engineVersion: "ar-vat-ri-v2.1.0",
+      rulesHash: "reglas-propias",
+    });
+
+    expect(version.engineVersion).toBe("ar-vat-ri-v2.1.0");
+    expect(mockState.ruleVersions).toHaveLength(1);
+  });
+
+  it("rechaza motores de otra familia y códigos de régimen engañosos", async () => {
+    mockState.taxRulePacks.push({
+      id: "pack-iibb",
+      regimeCode: "RI-FALSO",
+      taxTypeCode: "IIBB",
+      jurisdictionCode: "AR-T",
+    });
+
+    await expect(
+      rules.createVersion(ctxOwner, {
+        packId: "pack-iibb",
+        validFrom: "2026-01-01",
+        engineVersion: "ar-iibb-cm-art2-v1.1.0",
+        rulesHash: "cruzado",
+      }),
+    ).rejects.toMatchObject({
+      code: "UNSUPPORTED_TAX_ENGINE_VERSION",
+      message: expect.stringContaining("ar-iibb-cm-art2-v1.1.0"),
+    });
+    await expect(
+      rules.createVersion(ctxOwner, {
+        packId: "pack-iibb",
+        validFrom: "2026-01-01",
+        engineVersion: "ar-vat-ri-v2.1.0",
+        rulesHash: "cruzado",
+      }),
+    ).rejects.toMatchObject({ code: "UNSUPPORTED_TAX_ENGINE_VERSION" });
+    expect(mockState.ruleVersions).toHaveLength(0);
   });
 
   it("crea el perfil inicial como versión 1 DRAFT", async () => {

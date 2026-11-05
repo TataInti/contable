@@ -273,7 +273,13 @@ export class SettlementService {
       const pack = await tx.taxRulePack.findFirst({
         where: { regimeId: input.regimeId },
         include: {
-          regime: { select: { code: true, jurisdiction: { select: { code: true } } } },
+          regime: {
+            select: {
+              code: true,
+              taxType: { select: { code: true } },
+              jurisdiction: { select: { code: true } },
+            },
+          },
         },
       });
       if (!pack) throw new SettlementError("RULE_VERSION_NOT_FOUND", "No existe rule pack para el régimen");
@@ -296,9 +302,12 @@ export class SettlementService {
         );
       }
       const unsupportedEngine = taxEngineVersionCompatibilityError(
-        pack.regime.code,
+        {
+          regimeCode: pack.regime.code,
+          taxTypeCode: pack.regime.taxType.code,
+          jurisdictionCode: pack.regime.jurisdiction.code,
+        },
         activeVersion.engineVersion,
-        pack.regime.jurisdiction.code,
       );
       if (unsupportedEngine) {
         throw new SettlementError("UNSUPPORTED_ENGINE_VERSION", unsupportedEngine);

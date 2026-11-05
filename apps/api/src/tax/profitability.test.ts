@@ -111,9 +111,9 @@ async function setupMasters() {
       create: { code: "ARCA-P5", name: "ARCA P5", jurisdictionId: nacion.id },
     });
     const iva = await tx.taxType.upsert({
-      where: { code: "IVA-P5" },
+      where: { code: "IVA" },
       update: {},
-      create: { code: "IVA-P5", name: "IVA P5" },
+      create: { code: "IVA", name: "IVA P5" },
     });
     const ri = await tx.taxRegime.upsert({
       where: { code: "RI-P5" },

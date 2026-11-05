@@ -151,7 +151,11 @@ function makeTransaction() {
         return {
           ...row,
           pack: {
-            regime: { code: "IIBB_LOCAL", jurisdiction: { code: "AR-T" } },
+            regime: {
+              code: "IIBB_LOCAL",
+              taxType: { code: "IIBB" },
+              jurisdiction: { code: "AR-T" },
+            },
           },
           rateRules: mockState.rateRules.filter((rule) => rule.ruleVersionId === row.id),
           minimumRules: [],

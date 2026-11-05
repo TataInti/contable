@@ -98,9 +98,9 @@ async function setupMembership() {
 async function setupMasters() {
   return runAsRuntime(OWNER_IIBB, FIRM_IIBB, async (tx) => {
     const tucuman = await tx.jurisdiction.upsert({
-      where: { code: "AR-T-IIBB" },
+      where: { code: "AR-T" },
       update: {},
-      create: { code: "AR-T-IIBB", name: "Tucumán IIBB", kind: "PROVINCIAL" },
+      create: { code: "AR-T", name: "Tucumán IIBB", kind: "PROVINCIAL" },
     });
     const dgr = await tx.taxAuthority.upsert({
       where: { code: "DGR-IIBB" },
@@ -108,9 +108,9 @@ async function setupMasters() {
       create: { code: "DGR-IIBB", name: "DGR IIBB", jurisdictionId: tucuman.id },
     });
     const iibb = await tx.taxType.upsert({
-      where: { code: "IIBB-IIBB" },
+      where: { code: "IIBB" },
       update: {},
-      create: { code: "IIBB-IIBB", name: "IIBB Test" },
+      create: { code: "IIBB", name: "IIBB Test" },
     });
     const regime = await tx.taxRegime.upsert({
       where: { code: "IIBB_LOCAL-IIBB" },

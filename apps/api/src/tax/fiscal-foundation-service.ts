@@ -5,6 +5,7 @@ import {
   ACTIVITY_CODE_PATTERN,
   normalizeActivityCode,
   taxEngineVersionCompatibilityError,
+  type TaxRegimeEngineScope,
 } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 
@@ -67,12 +68,23 @@ export class FiscalError extends Error {
 }
 
 export function assertTaxEngineVersionCompatible(
-  regimeCode: string,
+  scope: TaxRegimeEngineScope,
   engineVersion: string,
-  jurisdictionCode?: string,
 ): void {
-  const issue = taxEngineVersionCompatibilityError(regimeCode, engineVersion, jurisdictionCode);
+  const issue = taxEngineVersionCompatibilityError(scope, engineVersion);
   if (issue) throw new FiscalError("UNSUPPORTED_TAX_ENGINE_VERSION", issue);
+}
+
+function taxRegimeEngineScope(regime: {
+  code: string;
+  taxType: { code: string };
+  jurisdiction: { code: string };
+}): TaxRegimeEngineScope {
+  return {
+    regimeCode: regime.code,
+    taxTypeCode: regime.taxType.code,
+    jurisdictionCode: regime.jurisdiction.code,
+  };
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
@@ -946,14 +958,19 @@ export class TaxRuleService {
       const pack = await tx.taxRulePack.findUnique({
         where: { id: input.packId },
         include: {
-          regime: { select: { code: true, jurisdiction: { select: { code: true } } } },
+          regime: {
+            select: {
+              code: true,
+              taxType: { select: { code: true } },
+              jurisdiction: { select: { code: true } },
+            },
+          },
         },
       });
       if (!pack) throw new FiscalError("RULE_PACK_NOT_FOUND", "Rule pack no encontrado");
       assertTaxEngineVersionCompatible(
-        pack.regime.code,
+        taxRegimeEngineScope(pack.regime),
         input.engineVersion,
-        pack.regime.jurisdiction.code,
       );
       const count = await tx.taxRuleVersion.count({ where: { packId: input.packId } });
       return tx.taxRuleVersion.create({
@@ -987,16 +1004,21 @@ export class TaxRuleService {
           sources: true,
           pack: {
             include: {
-              regime: { select: { code: true, jurisdiction: { select: { code: true } } } },
+              regime: {
+                select: {
+                  code: true,
+                  taxType: { select: { code: true } },
+                  jurisdiction: { select: { code: true } },
+                },
+              },
             },
           },
         },
       });
       if (!source) throw new FiscalError("RULE_VERSION_NOT_FOUND", "El pack no tiene una versión para clonar");
       assertTaxEngineVersionCompatible(
-        source.pack.regime.code,
+        taxRegimeEngineScope(source.pack.regime),
         source.engineVersion,
-        source.pack.regime.jurisdiction.code,
       );
       const count = await tx.taxRuleVersion.count({ where: { packId: input.packId } });
       const version = await tx.taxRuleVersion.create({
@@ -1391,7 +1413,13 @@ export class TaxRuleService {
       include: {
         pack: {
           include: {
-            regime: { select: { code: true, jurisdiction: { select: { code: true } } } },
+            regime: {
+              select: {
+                code: true,
+                taxType: { select: { code: true } },
+                jurisdiction: { select: { code: true } },
+              },
+            },
           },
         },
       },
@@ -1401,9 +1429,8 @@ export class TaxRuleService {
       throw new FiscalError("RULE_VERSION_IMMUTABLE", "Sólo se editan versiones DRAFT; las aprobadas/activas son inmutables");
     }
     assertTaxEngineVersionCompatible(
-      v.pack.regime.code,
+      taxRegimeEngineScope(v.pack.regime),
       v.engineVersion,
-      v.pack.regime.jurisdiction.code,
     );
   }
 }
