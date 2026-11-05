@@ -58,6 +58,9 @@ test("ciclo de rentabilidad gerencial de punta a punta (Puerta 5)", async ({ req
 
   // 4. Período único por ejecución en un año futuro (2099): nunca se solapa con
   //    períodos reales ni con corridas previas (unique clientId+taxTypeId+startDate+endDate).
+  //    El mismo spec corre dos veces por corrida (proyectos chromium y mobile sobre
+  //    la misma DB): si ambas generan el mismo rango (month/day derivados de Date.now()),
+  //    el segundo POST recibe 409 PERIOD_OVERLAP y se reutiliza el período existente.
   const stamp = Date.now();
   const month = String(1 + (stamp % 12)).padStart(2, "0");
   const day = String(1 + (stamp % 15)).padStart(2, "0");
@@ -71,9 +74,26 @@ test("ciclo de rentabilidad gerencial de punta a punta (Puerta 5)", async ({ req
       data: { taxTypeId, startDate, endDate, label },
     },
   );
-  expect(period.status()).toBe(201);
-  const periodBody = (await period.json()) as { data: { id: string } };
-  const periodId = periodBody.data.id;
+  let periodId: string;
+  if (period.status() === 201) {
+    const periodBody = (await period.json()) as { data: { id: string } };
+    periodId = periodBody.data.id;
+  } else {
+    // 409 PERIOD_OVERLAP: la corrida gemela ya creó este rango; reutilizarlo.
+    expect(period.status()).toBe(409);
+    const periods = await request.get(
+      `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-periods`,
+    );
+    expect(periods.status()).toBe(200);
+    const body = (await periods.json()) as {
+      data?: Array<{ id: string; startDate: string; endDate: string }>;
+    };
+    const existing = (body.data ?? []).find(
+      (p) => p.startDate?.startsWith(startDate) && p.endDate?.startsWith(endDate),
+    );
+    expect(existing, "período 2099 de la corrida gemela para reutilizar").toBeTruthy();
+    periodId = existing!.id;
+  }
 
   // Perfil fiscal: reutiliza el activo existente (el cliente demo ya tiene
   // uno de corridas previas; PROFILE_ALREADY_ACTIVE da 500).
