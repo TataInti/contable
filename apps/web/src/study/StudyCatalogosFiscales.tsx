@@ -148,7 +148,7 @@ export function StudyCatalogosFiscales() {
   const failedQueries = [
     { label: "jurisdicciones", query: jurisdictionsQuery },
     { label: "impuestos", query: taxTypesQuery },
-    { label: "autoridades fiscales", query: authoritiesQuery },
+    { label: "organismos recaudadores", query: authoritiesQuery },
     { label: "regímenes", query: regimesQuery },
   ].filter((item) => item.query.isError);
 
@@ -159,13 +159,13 @@ export function StudyCatalogosFiscales() {
           <p className="study-page__eyebrow">Administración fiscal</p>
           <h1 className="study-page__title">Catálogos fiscales</h1>
           <p className="study-page__subtitle">
-            Administrá autoridades y regímenes para vincularlos a la configuración fiscal de cada cliente.
+            Administrá organismos recaudadores y regímenes para vincularlos a la configuración fiscal de cada cliente.
           </p>
         </div>
       </header>
 
       <p className="study-panel">
-        Las jurisdicciones, autoridades e impuestos integran catálogos compartidos entre estudios. Usá códigos y nombres verificados; los datos de prueba deben identificarse claramente como sintéticos.
+        Las jurisdicciones, organismos recaudadores e impuestos integran los catálogos del estudio. Usá códigos y nombres verificados; los datos de prueba deben identificarse claramente como sintéticos.
       </p>
 
       {failedQueries.map(({ label, query }) => (
@@ -180,22 +180,26 @@ export function StudyCatalogosFiscales() {
       <section className="study-panel" aria-labelledby="tax-authorities-title">
         <div className="study-panel__heading">
           <div>
-            <h2 id="tax-authorities-title">Autoridades fiscales</h2>
-            <p>Vinculá cada autoridad con su jurisdicción de competencia.</p>
+            <h2 id="tax-authorities-title">Organismos recaudadores</h2>
+            <p>
+              El organismo que recauda cada impuesto según la jurisdicción: ARCA en Nación (ex AFIP), la
+              Dirección General de Rentas provincial (ej. DGR Tucumán) o la dirección municipal de rentas
+              (ej. SMT San Miguel de Tucumán).
+            </p>
           </div>
           {canPropose ? (
             <Button size="sm" onClick={() => setDrawer("authority")}>
-              Nueva autoridad
+              Nuevo organismo
             </Button>
           ) : null}
         </div>
         {authoritiesQuery.isLoading ? (
-          <p className="muted-copy">Cargando autoridades fiscales…</p>
+          <p className="muted-copy">Cargando organismos recaudadores…</p>
         ) : authoritiesQuery.isError ? null : (authoritiesQuery.data?.length ?? 0) === 0 ? (
           <EmptyState
             size="compact"
-            title="Todavía no hay autoridades fiscales"
-            description="Creá una autoridad asociada a una jurisdicción para poder registrar regímenes."
+            title="Todavía no hay organismos recaudadores"
+            description="Creá un organismo asociado a una jurisdicción para poder registrar regímenes."
           />
         ) : (
           <Table<TaxAuthorityRow>
@@ -203,7 +207,7 @@ export function StudyCatalogosFiscales() {
             rowKey={(row) => row.id}
             columns={[
               { key: "code", header: "Código", render: (row) => row.code },
-              { key: "name", header: "Autoridad", render: (row) => row.name },
+              { key: "name", header: "Organismo", render: (row) => row.name },
               {
                 key: "jurisdiction",
                 header: "Jurisdicción",
@@ -218,7 +222,7 @@ export function StudyCatalogosFiscales() {
         <div className="study-panel__heading">
           <div>
             <h2 id="tax-regimes-title">Regímenes</h2>
-            <p>Cada régimen requiere impuesto, jurisdicción y autoridad compatibles.</p>
+            <p>Cada régimen requiere impuesto, jurisdicción y organismo recaudador compatibles.</p>
           </div>
           {canPropose ? (
             <Button
@@ -240,7 +244,7 @@ export function StudyCatalogosFiscales() {
           <EmptyState
             size="compact"
             title="Todavía no hay regímenes fiscales"
-            description="Definí un régimen con una autoridad y jurisdicción verificadas."
+            description="Definí un régimen con un organismo recaudador y jurisdicción verificados."
           />
         ) : (
           <Table<TaxRegimeRow>
@@ -251,7 +255,7 @@ export function StudyCatalogosFiscales() {
               { key: "name", header: "Régimen", render: (row) => row.name },
               { key: "taxType", header: "Impuesto", render: (row) => `${row.taxType.name} (${row.taxType.code})` },
               { key: "jurisdiction", header: "Jurisdicción", render: (row) => row.jurisdiction.name },
-              { key: "authority", header: "Autoridad", render: (row) => row.authority.name },
+              { key: "authority", header: "Organismo", render: (row) => row.authority.name },
             ]}
           />
         )}
@@ -260,9 +264,9 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={drawer === "authority"}
         onClose={() => setDrawer(null)}
-        eyebrow="Catálogo fiscal compartido"
-        title="Nueva autoridad fiscal"
-        description="La jurisdicción define el alcance en el que puede asignarse esta autoridad."
+        eyebrow="Catálogo fiscal del estudio"
+        title="Nuevo organismo recaudador"
+        description="La jurisdicción define el alcance en el que puede asignarse este organismo: ARCA recauda en Nación, las DGR en cada provincia y las direcciones de rentas en cada municipio."
       >
         <form
           className="study-form study-form--compact"
@@ -311,7 +315,7 @@ export function StudyCatalogosFiscales() {
               loading={createAuthority.isPending}
               disabled={!authorityForm.code.trim() || !authorityForm.name.trim() || !authorityForm.jurisdictionId}
             >
-              Crear autoridad
+              Crear organismo
             </Button>
             <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
               Cancelar
@@ -323,9 +327,9 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={drawer === "regime"}
         onClose={() => setDrawer(null)}
-        eyebrow="Catálogo fiscal compartido"
+        eyebrow="Catálogo fiscal del estudio"
         title="Nuevo régimen"
-        description="La autoridad seleccionada debe corresponder a la jurisdicción del régimen."
+        description="El organismo recaudador seleccionado debe corresponder a la jurisdicción del régimen."
       >
         <form
           className="study-form study-form--compact"
@@ -385,7 +389,7 @@ export function StudyCatalogosFiscales() {
             </select>
           </div>
           <div className="ds-field">
-            <label className="ds-field__label" htmlFor="regime-authority">Autoridad fiscal</label>
+            <label className="ds-field__label" htmlFor="regime-authority">Organismo recaudador</label>
             <select
               id="regime-authority"
               className="ds-field__input"
@@ -394,7 +398,7 @@ export function StudyCatalogosFiscales() {
               required
               disabled={!regimeForm.jurisdictionId}
             >
-              <option value="">Seleccioná una autoridad…</option>
+              <option value="">Seleccioná un organismo…</option>
               {matchingAuthorities.map((authority) => (
                 <option key={authority.id} value={authority.id}>
                   {authority.name} ({authority.code})
@@ -402,7 +406,7 @@ export function StudyCatalogosFiscales() {
               ))}
             </select>
             {regimeForm.jurisdictionId && matchingAuthorities.length === 0 ? (
-              <p className="muted-copy">Creá primero una autoridad para esta jurisdicción.</p>
+              <p className="muted-copy">Creá primero un organismo para esta jurisdicción.</p>
             ) : null}
           </div>
           <MutationError error={createRegime.error} />
