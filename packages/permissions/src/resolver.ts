@@ -9,6 +9,7 @@ const ROLE_CAPABILITIES: Record<FirmRole, ReadonlySet<Capability>> = {
     "client.read",
     "client.manage",
     "client.assign",
+    "data.delete",
     "document.upload",
     "document.prepare",
     "document.review",

@@ -132,6 +132,11 @@ model Firm {
   portalMemberships PortalMembership[]
   portalInvitations PortalInvitation[]
   accountingStandards AccountingStandard[]
+  createdTaxAuthorities TaxAuthority[] @relation("TaxAuthorityCreatorFirm")
+  createdTaxRegimes TaxRegime[] @relation("TaxRegimeCreatorFirm")
+  createdEconomicActivities EconomicActivity[] @relation("EconomicActivityCreatorFirm")
+  createdTaxRulePacks TaxRulePack[] @relation("TaxRulePackCreatorFirm")
+  createdTaxRuleVersions TaxRuleVersion[] @relation("TaxRuleVersionCreatorFirm")
 
   @@map("firms")
 }
@@ -140,6 +145,11 @@ enum FirmStatus {
   ACTIVE
   SUSPENDED
   ARCHIVED
+}
+
+enum CatalogOrigin {
+  REFERENCE
+  UI
 }
 
 model FirmMembership {
@@ -1902,8 +1912,11 @@ model TaxAuthority {
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  origin         CatalogOrigin @default(REFERENCE)
+  createdByFirmId String?
 
   jurisdiction Jurisdiction @relation(fields: [jurisdictionId], references: [id])
+  createdByFirm Firm? @relation("TaxAuthorityCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
   regimes      TaxRegime[]
   sources      NormativeSource[]
   credentials  ProfessionalCredential[]
@@ -1941,8 +1954,11 @@ model TaxRegime {
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  origin         CatalogOrigin @default(REFERENCE)
+  createdByFirmId String?
 
   taxType        TaxType          @relation(fields: [taxTypeId], references: [id])
+  createdByFirm  Firm?            @relation("TaxRegimeCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
   jurisdiction   Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
   authority      TaxAuthority     @relation(fields: [authorityId], references: [id])
   authorityId    String
@@ -2052,8 +2068,11 @@ model EconomicActivity {
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  origin         CatalogOrigin @default(REFERENCE)
+  createdByFirmId String?
 
   jurisdiction Jurisdiction    @relation(fields: [jurisdictionId], references: [id])
+  createdByFirm Firm? @relation("EconomicActivityCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
   clientLinks  ClientActivity[]
 
   @@unique([code, jurisdictionId])
@@ -2191,8 +2210,11 @@ model TaxRulePack {
   status      TaxRulePackStatus @default(DRAFT)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  origin      CatalogOrigin @default(REFERENCE)
+  createdByFirmId String?
 
   regime   TaxRegime          @relation(fields: [regimeId], references: [id])
+  createdByFirm Firm? @relation("TaxRulePackCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
   versions TaxRuleVersion[]
 
   @@unique([code])
@@ -2223,8 +2245,11 @@ model TaxRuleVersion {
   supersedesId  String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  origin        CatalogOrigin @default(REFERENCE)
+  createdByFirmId String?
 
   pack      TaxRulePack        @relation(fields: [packId], references: [id], onDelete: Cascade)
+  createdByFirm Firm? @relation("TaxRuleVersionCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
   approvedBy User?             @relation(fields: [approvedByUserId], references: [id])
   rateRules TaxRateRule[]
   minimumRules TaxMinimumRule[]

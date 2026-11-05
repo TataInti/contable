@@ -148,7 +148,9 @@ export class FiscalMasterService {
       if (!jurisdiction) {
         throw new FiscalError("JURISDICTION_NOT_FOUND", "Jurisdicción no encontrada");
       }
-      return tx.taxAuthority.create({ data: input });
+      return tx.taxAuthority.create({
+        data: { ...input, origin: "UI", createdByFirmId: ctx.firmId },
+      });
     }).catch((err: unknown) => {
       if (isUniqueConstraintError(err)) {
         throw new FiscalError(
@@ -195,7 +197,9 @@ export class FiscalMasterService {
           "La autoridad fiscal debe corresponder a la jurisdicción del régimen",
         );
       }
-      return tx.taxRegime.create({ data: input });
+      return tx.taxRegime.create({
+        data: { ...input, origin: "UI", createdByFirmId: ctx.firmId },
+      });
     }).catch((err: unknown) => {
       if (isUniqueConstraintError(err)) {
         throw new FiscalError(
@@ -255,6 +259,8 @@ export class FiscalMasterService {
           code,
           name: input.name.trim(),
           jurisdictionId: input.jurisdictionId,
+          origin: "UI",
+          createdByFirmId: ctx.firmId,
           ...(input.source ? { source: input.source.trim() } : {}),
           validFrom,
           ...(validTo ? { validTo } : {}),
@@ -914,7 +920,9 @@ export class TaxRuleService {
 
   /** Crea un rule pack para un régimen. */
   async createPack(ctx: TenantContext, input: { code: string; name: string; regimeId: string }) {
-    return withTenantContext(ctx, (tx) => tx.taxRulePack.create({ data: input }));
+    return withTenantContext(ctx, (tx) =>
+      tx.taxRulePack.create({ data: { ...input, origin: "UI", createdByFirmId: ctx.firmId } }),
+    );
   }
 
   /** Crea la primera versión de un rule pack. */
@@ -935,6 +943,8 @@ export class TaxRuleService {
       return tx.taxRuleVersion.create({
         data: {
           packId: input.packId,
+          origin: "UI",
+          createdByFirmId: ctx.firmId,
           version: count + 1,
           validFrom: new Date(input.validFrom),
           ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
@@ -962,6 +972,8 @@ export class TaxRuleService {
       const version = await tx.taxRuleVersion.create({
         data: {
           packId: input.packId,
+          origin: "UI",
+          createdByFirmId: ctx.firmId,
           version: count + 1,
           status: "DRAFT",
           validFrom: new Date(input.validFrom),

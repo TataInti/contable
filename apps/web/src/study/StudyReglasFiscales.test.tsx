@@ -55,6 +55,9 @@ function makeDetail(activityCode: string | null) {
     id: "pack-1",
     code: "IVA-RI-ARCA",
     name: "IVA Responsable Inscripto",
+    status: "DRAFT",
+    origin: "UI" as "REFERENCE" | "UI",
+    createdByFirmId: "firm-a" as string | null,
     regime: {
       id: "regime-1",
       code: "RI",
@@ -68,6 +71,8 @@ function makeDetail(activityCode: string | null) {
         id: "version-1",
         version: 1,
         status: "DRAFT",
+        origin: "UI" as "REFERENCE" | "UI",
+        createdByFirmId: "firm-a" as string | null,
         validFrom: "2026-01-01",
         validTo: null,
         engineVersion: "ar-vat-ri-v2.1.0",
@@ -97,6 +102,9 @@ function packList(detail: ReturnType<typeof makeDetail>) {
       id: detail.id,
       code: detail.code,
       name: detail.name,
+      status: detail.status,
+      origin: detail.origin,
+      createdByFirmId: detail.createdByFirmId,
       regime: {
         name: detail.regime.name,
         code: detail.regime.code,
@@ -286,5 +294,36 @@ describe("StudyReglasFiscales — CTA único y submit deshabilitado explicado (F
     })) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     expect(screen.getByText(/Completá el concepto y la alícuota o el mínimo/)).toBeTruthy();
+  });
+
+  it("muestra al Titular el borrado del paquete y del borrador creados desde UI", async () => {
+    const owner = context();
+    owner.capabilities = new Set([...owner.capabilities, "data.delete"]);
+    contextMock.current = owner;
+    mockApi(makeDetail(null));
+    renderReglas();
+
+    expect(await screen.findByRole("button", { name: "Eliminar paquete" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Eliminar borrador v1" })).toBeTruthy();
+  });
+
+  it("mantiene protegidos los paquetes y versiones de referencia", async () => {
+    const owner = context();
+    owner.capabilities = new Set([...owner.capabilities, "data.delete"]);
+    contextMock.current = owner;
+    const detail = makeDetail(null);
+    detail.origin = "REFERENCE";
+    detail.createdByFirmId = null;
+    detail.versions = detail.versions.map((version) => ({
+      ...version,
+      origin: "REFERENCE",
+      createdByFirmId: null,
+    }));
+    mockApi(detail);
+    renderReglas();
+
+    expect(await screen.findByRole("heading", { name: "IVA Responsable Inscripto" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Eliminar paquete" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Eliminar borrador/ })).toBeNull();
   });
 });

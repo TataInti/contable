@@ -5,6 +5,7 @@ import { ACTIVITY_CODE_PATTERN, normalizeActivityCode } from "@contable/contract
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
+import { DeletionDrawer } from "../ui/DeletionDrawer";
 import "./study.css";
 
 interface JurisdictionOption {
@@ -26,6 +27,8 @@ interface TaxAuthorityRow {
   name: string;
   jurisdictionId: string;
   isActive: boolean;
+  origin?: "REFERENCE" | "UI";
+  createdByFirmId?: string | null;
   jurisdiction: JurisdictionOption;
 }
 
@@ -34,6 +37,8 @@ interface TaxRegimeRow {
   code: string;
   name: string;
   isActive: boolean;
+  origin?: "REFERENCE" | "UI";
+  createdByFirmId?: string | null;
   authority: TaxAuthorityRow;
   jurisdiction: JurisdictionOption;
   taxType: TaxTypeOption;
@@ -62,6 +67,8 @@ interface CatalogActivityRow {
   validFrom: string;
   validTo: string | null;
   isActive: boolean;
+  origin?: "REFERENCE" | "UI";
+  createdByFirmId?: string | null;
   activeClientLinks?: number;
 }
 
@@ -97,6 +104,13 @@ function ActivityStateBadge({ isActive }: { isActive: boolean }) {
   );
 }
 
+function isOwnedUiRecord(
+  row: { origin?: string; createdByFirmId?: string | null },
+  firmId: string,
+): boolean {
+  return row.origin === "UI" && row.createdByFirmId === firmId;
+}
+
 function MutationError({ error }: { error: unknown }) {
   if (!error) return null;
   return (
@@ -110,12 +124,14 @@ export function StudyCatalogosFiscales() {
   const { firmId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const canPropose = capabilities.has("tax.rules.propose");
+  const canDelete = capabilities.has("data.delete");
   const [drawer, setDrawer] = useState<"authority" | "regime" | null>(null);
   const [activityDrawer, setActivityDrawer] = useState<"create" | "edit" | "deactivate" | null>(null);
   const [editingActivity, setEditingActivity] = useState<CatalogActivityRow | null>(null);
   const [activityForm, setActivityForm] = useState<ActivityForm>(emptyActivityForm);
   const [activitySearch, setActivitySearch] = useState("");
   const [receipt, setReceipt] = useState<string | null>(null);
+  const [deletingTarget, setDeletingTarget] = useState<{ path: string } | null>(null);
   const [authorityForm, setAuthorityForm] = useState<AuthorityForm>({
     code: "",
     name: "",
@@ -227,7 +243,8 @@ export function StudyCatalogosFiscales() {
       setReceipt("Los datos de la actividad quedaron actualizados. El código se conserva.");
     },
   });
-  // No hay borrado: desactivar es la baja lógica y el historial se conserva.
+  // Desactivar conserva el historial. El Titular también puede eliminar una
+  // actividad UI sin dependencias desde su preview de impacto.
   const toggleActivity = useMutation({
     mutationFn: (row: CatalogActivityRow) =>
       api.post<CatalogActivityRow & { activeClientLinks?: number }>(
@@ -346,6 +363,19 @@ export function StudyCatalogosFiscales() {
                 header: "Jurisdicción",
                 render: (row) => `${row.jurisdiction.name} (${row.jurisdiction.code})`,
               },
+              {
+                key: "actions",
+                header: "",
+                render: (row) => canDelete && isOwnedUiRecord(row, firmId) ? (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => setDeletingTarget({ path: `/firms/${firmId}/tax/authorities/${row.id}` })}
+                  >
+                    Eliminar
+                  </Button>
+                ) : null,
+              },
             ]}
           />
         )}
@@ -389,6 +419,19 @@ export function StudyCatalogosFiscales() {
               { key: "taxType", header: "Impuesto", render: (row) => `${row.taxType.name} (${row.taxType.code})` },
               { key: "jurisdiction", header: "Jurisdicción", render: (row) => row.jurisdiction.name },
               { key: "authority", header: "Organismo", render: (row) => row.authority.name },
+              {
+                key: "actions",
+                header: "",
+                render: (row) => canDelete && isOwnedUiRecord(row, firmId) ? (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => setDeletingTarget({ path: `/firms/${firmId}/tax/regimes/${row.id}` })}
+                  >
+                    Eliminar
+                  </Button>
+                ) : null,
+              },
             ]}
           />
         )}
@@ -399,9 +442,10 @@ export function StudyCatalogosFiscales() {
           <div>
             <h2 id="tax-activities-title">Actividades económicas</h2>
             <p>
-              Catálogo de actividades por jurisdicción con fuente y vigencia. El código es la clave
-              con la que las reglas y los vínculos de clientes resuelven el historial: no se edita ni
-              se borra; la baja es lógica (desactivar) y los valores históricos siguen resolviendo.
+              Catálogo de actividades por jurisdicción con fuente y vigencia. El código se conserva
+              como clave histórica. El Titular puede eliminar las actividades creadas desde UI cuando
+              el preview confirma que no tienen dependencias; las demás se desactivan para preservar
+              el historial.
             </p>
           </div>
           {canPropose ? (
@@ -489,50 +533,62 @@ export function StudyCatalogosFiscales() {
               {
                 key: "actions",
                 header: "",
-                render: (row) =>
-                  canPropose ? (
-                    <div className="fiscal-activity-actions">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setEditingActivity(row);
-                          setActivityForm({
-                            code: row.code,
-                            name: row.name,
-                            jurisdictionId: row.jurisdictionId,
-                            source: row.source ?? "",
-                            validFrom: row.validFrom.slice(0, 10),
-                            validTo: row.validTo?.slice(0, 10) ?? "",
-                          });
-                          setActivityDrawer("edit");
-                        }}
-                      >
-                        Editar
-                      </Button>
-                      {row.isActive ? (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          onClick={() => {
-                            setEditingActivity(row);
-                            setActivityDrawer("deactivate");
-                          }}
-                        >
-                          Desactivar
-                        </Button>
-                      ) : (
+                render: (row) => canPropose || (canDelete && isOwnedUiRecord(row, firmId)) ? (
+                  <div className="fiscal-activity-actions">
+                    {canPropose ? (
+                      <>
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => toggleActivity.mutate(row)}
-                          loading={toggleActivity.isPending && toggleActivity.variables?.id === row.id}
+                          onClick={() => {
+                            setEditingActivity(row);
+                            setActivityForm({
+                              code: row.code,
+                              name: row.name,
+                              jurisdictionId: row.jurisdictionId,
+                              source: row.source ?? "",
+                              validFrom: row.validFrom.slice(0, 10),
+                              validTo: row.validTo?.slice(0, 10) ?? "",
+                            });
+                            setActivityDrawer("edit");
+                          }}
                         >
-                          Reactivar
+                          Editar
                         </Button>
-                      )}
-                    </div>
-                  ) : null,
+                        {row.isActive ? (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => {
+                              setEditingActivity(row);
+                              setActivityDrawer("deactivate");
+                            }}
+                          >
+                            Desactivar
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => toggleActivity.mutate(row)}
+                            loading={toggleActivity.isPending && toggleActivity.variables?.id === row.id}
+                          >
+                            Reactivar
+                          </Button>
+                        )}
+                      </>
+                    ) : null}
+                    {canDelete && isOwnedUiRecord(row, firmId) ? (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => setDeletingTarget({ path: `/firms/${firmId}/tax/activities/${row.id}` })}
+                      >
+                        Eliminar
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null,
               },
             ]}
           />
@@ -965,6 +1021,25 @@ export function StudyCatalogosFiscales() {
           </form>
         ) : null}
       </ActionDrawer>
+
+      {deletingTarget ? (
+        <DeletionDrawer
+          isOpen
+          path={deletingTarget.path}
+          onClose={() => setDeletingTarget(null)}
+          onDeleted={async () => {
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["tax-authorities", firmId] }),
+              queryClient.invalidateQueries({ queryKey: ["tax-regimes", firmId] }),
+              queryClient.invalidateQueries({ queryKey: ["tax-activities-catalog", firmId] }),
+              queryClient.invalidateQueries({ queryKey: ["tax-activities", firmId] }),
+              queryClient.invalidateQueries({ queryKey: ["client-profile-activity-catalog", firmId] }),
+              queryClient.invalidateQueries({ queryKey: ["tax-rule-packs", firmId] }),
+            ]);
+            setReceipt("El catálogo quedó eliminado y la auditoría del estudio conserva el registro de la acción.");
+          }}
+        />
+      ) : null}
     </div>
   );
 }

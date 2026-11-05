@@ -13,6 +13,9 @@ export type Capability =
   | "client.read"
   | "client.manage"
   | "client.assign"
+  // Borrado definitivo (solo Titular/OWNER): clientes con toda su cascada,
+  // catálogos fiscales creados por UI y paquetes/versiones de reglas.
+  | "data.delete"
   | "document.upload"
   | "document.prepare"
   | "document.review"
