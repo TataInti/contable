@@ -205,3 +205,86 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     expect(within(select).getByRole("option", { name: /código histórico/ })).toBeTruthy();
   });
 });
+
+describe("StudyReglasFiscales — rótulos de versión sin ambigüedad (F4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = context();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("distingue el borrador en edición de la versión activa del paquete", async () => {
+    const detail = makeDetail(null);
+    detail.versions = [
+      { ...detail.versions[0]!, id: "version-draft", version: 2, status: "DRAFT", rateRules: [] },
+      { ...detail.versions[0]!, id: "version-active", version: 4, status: "ACTIVE", rateRules: [] },
+    ];
+    mockApi(detail);
+    renderReglas();
+
+    // El índice menciona ambas versiones: borrador en curso y vigente.
+    expect(await screen.findByText("Borrador v2 · Vigente v4")).toBeTruthy();
+    // El resumen dice explícitamente qué se está editando y cuál es la activa.
+    expect(await screen.findByText("Editando borrador")).toBeTruthy();
+    expect(await screen.findByText("Versión activa")).toBeTruthy();
+    // El CTA guiado identifica la versión: Editar borrador v2.
+    expect(screen.getByRole("button", { name: "Editar borrador v2" })).toBeTruthy();
+  });
+
+  it("mantiene el rótulo previo cuando no hay borrador en curso", async () => {
+    const detail = makeDetail(null);
+    detail.versions = [
+      { ...detail.versions[0]!, id: "version-active", version: 4, status: "ACTIVE", rateRules: [] },
+    ];
+    mockApi(detail);
+    renderReglas();
+
+    expect(await screen.findByText("Vigente v4")).toBeTruthy();
+    // El detalle cargó: muestra "Versión" como rótulo simple, sin activa extra.
+    expect(await screen.findByText(/^Versión$/)).toBeTruthy();
+    expect(screen.queryByText("Editando borrador")).toBeNull();
+    expect(screen.queryByText("Versión activa")).toBeNull();
+  });
+});
+
+describe("StudyReglasFiscales — CTA único y submit deshabilitado explicado (F8)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = context();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("deja un único alta de paquete y explica el submit deshabilitado", async () => {
+    mockApi(makeDetail(null));
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo paquete" }));
+    expect(await screen.findByRole("button", { name: "Crear paquete" })).toBeTruthy();
+    // No hay un segundo CTA "Nuevo" en el índice de paquetes.
+    expect(screen.queryByRole("button", { name: "Nuevo" })).toBeNull();
+    expect(await screen.findByText(/Completá código, nombre y régimen/)).toBeTruthy();
+  });
+
+  it("explica por qué no se puede guardar un borrador con filas incompletas", async () => {
+    const detail = makeDetail(null);
+    detail.versions = [
+      { ...detail.versions[0]!, rateRules: [{ ...detail.versions[0]!.rateRules[0]!, concept: "" }] },
+    ];
+    mockApi(detail);
+    renderReglas();
+
+    const save = (await screen.findByRole("button", {
+      name: "Guardar borrador",
+    })) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    expect(screen.getByText(/Completá el concepto y la alícuota o el mínimo/)).toBeTruthy();
+  });
+});

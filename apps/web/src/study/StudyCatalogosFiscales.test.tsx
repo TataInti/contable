@@ -228,6 +228,32 @@ describe("StudyCatalogosFiscales", () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
+  it("jerarquiza Desactivar como destructiva y expone el valor completo en tooltip", async () => {
+    activities.push({
+      id: "activity-a",
+      code: "E2E_SYN_ACTIVIDAD_LA_RGA_20261105",
+      name: "Comercio mayorista sintético con nombre extenso",
+      jurisdictionId: jurisdiction.id,
+      source: "CM03",
+      validFrom: "2026-01-01",
+      validTo: null,
+      isActive: true,
+    });
+    renderCatalogs();
+
+    // La baja lógica se ve como acción destructiva, no como una acción más.
+    const deactivate = (await screen.findByRole("button", {
+      name: "Desactivar",
+    })) as HTMLButtonElement;
+    expect(deactivate.className).toContain("ds-button--danger");
+
+    // El código completo queda accesible (tooltip) aunque la celda se trunque.
+    const code = screen.getByText("E2E_SYN_ACTIVIDAD_LA_RGA_20261105");
+    expect(code.getAttribute("title")).toBe("E2E_SYN_ACTIVIDAD_LA_RGA_20261105");
+    const name = screen.getByText("Comercio mayorista sintético con nombre extenso");
+    expect(name.getAttribute("title")).toBe("Comercio mayorista sintético con nombre extenso");
+  });
+
   it("consulta el catálogo con includeInactive y crea una actividad con código normalizado", async () => {
     renderCatalogs();
 

@@ -450,17 +450,31 @@ export function StudyCatalogosFiscales() {
             rows={visibleActivities}
             rowKey={(row) => row.id}
             columns={[
-              { key: "code", header: "Código", render: (row) => row.code },
-              { key: "name", header: "Actividad", render: (row) => row.name },
+              {
+                key: "code",
+                header: "Código",
+                render: (row) => <span title={row.code}>{row.code}</span>,
+              },
+              {
+                key: "name",
+                header: "Actividad",
+                render: (row) => <span title={row.name}>{row.name}</span>,
+              },
               {
                 key: "jurisdiction",
                 header: "Jurisdicción",
-                render: (row) => jurisdictionName(row.jurisdictionId),
+                render: (row) => (
+                  <span title={jurisdictionName(row.jurisdictionId)}>
+                    {jurisdictionName(row.jurisdictionId)}
+                  </span>
+                ),
               },
               {
                 key: "source",
                 header: "Fuente",
-                render: (row) => row.source ?? "—",
+                render: (row) => (
+                  <span title={row.source ?? undefined}>{row.source ?? "—"}</span>
+                ),
               },
               {
                 key: "validity",
@@ -499,7 +513,7 @@ export function StudyCatalogosFiscales() {
                       {row.isActive ? (
                         <Button
                           size="sm"
-                          variant="ghost"
+                          variant="danger"
                           onClick={() => {
                             setEditingActivity(row);
                             setActivityDrawer("deactivate");
@@ -795,6 +809,16 @@ export function StudyCatalogosFiscales() {
             }
           />
           <MutationError error={createActivity.error} />
+          {!activityForm.code.trim() ||
+          !activityForm.name.trim() ||
+          !activityForm.jurisdictionId ||
+          !activityForm.validFrom ||
+          !activityCodeValid ||
+          !activityValidityValid ? (
+            <p className="form-submit-hint" role="note">
+              Completá código, nombre, jurisdicción y vigencia para poder crear la actividad.
+            </p>
+          ) : null}
           <div className="study-form__actions">
             <Button
               type="submit"
