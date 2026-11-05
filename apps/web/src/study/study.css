@@ -155,6 +155,14 @@
   line-height: 1.2;
 }
 
+/* Los botones de cabecera no se comprimen: si el título es largo, el rótulo
+   desborda el propio botón y parece recortado en el borde del panel. */
+.study-panel__heading > .ds-button,
+.section-heading > .ds-button,
+.study-page__header > .ds-button {
+  flex-shrink: 0;
+}
+
 .study-panel__heading p:not(.study-page__eyebrow) {
   margin-top: var(--ds-space-1);
   color: var(--ds-color-text-muted);

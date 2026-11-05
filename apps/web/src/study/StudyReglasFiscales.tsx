@@ -151,7 +151,7 @@ export function StudyReglasFiscales() {
     onSuccess: () => {
       invalidate();
       setShowCloneForm(false);
-      setReceipt("Se creó un borrador independiente a partir de la versión vigente.");
+      setReceipt("Se creó una nueva versión borrador a partir de la vigente. La versión anterior sigue vigente hasta que se active la nueva.");
     },
   });
   const createPackMutation = useMutation({
@@ -298,7 +298,7 @@ export function StudyReglasFiscales() {
       return { label: "Activar versión", description: "La versión aprobada quedará disponible para los próximos cálculos.", onClick: () => activateMutation.mutate() };
     }
     if (selectedVersion.status !== "DRAFT" && canPropose) {
-      return { label: "Crear borrador", description: "Partí de esta versión para preparar una nueva vigencia sin alterar la actual.", onClick: () => setShowCloneForm(true) };
+      return { label: "Modificar alícuotas", description: "Prepará una nueva versión a partir de esta: modifica alícuotas en un borrador nuevo y la versión vigente sigue aplicando hasta que se active la nueva.", onClick: () => setShowCloneForm(true) };
     }
     return null;
   })();
@@ -557,8 +557,8 @@ export function StudyReglasFiscales() {
         isOpen={showCloneForm && Boolean(selectedVersion) && selectedVersion?.status !== "DRAFT"}
         onClose={() => setShowCloneForm(false)}
         eyebrow="Reglas fiscales"
-        title="Crear borrador"
-        description="Partí de la versión vigente para preparar cambios sin modificar el cálculo actualmente activo."
+        title="Modificar alícuotas"
+        description="Se crea una nueva versión borrador a partir de la vigente para ajustar alícuotas, vencimientos y fuentes. La versión vigente sigue aplicando hasta que la nueva se apruebe y active."
       >
         <form
           className="study-form study-form--compact fiscal-action-form"
@@ -577,12 +577,16 @@ export function StudyReglasFiscales() {
           />
           <div className="study-form__actions">
             <Button type="submit" loading={cloneMutation.isPending}>
-              <Icon name="plus" size={16} /> Crear borrador
+              <Icon name="plus" size={16} /> Crear nueva versión
             </Button>
             <Button type="button" variant="ghost" onClick={() => setShowCloneForm(false)}>
               Cancelar
             </Button>
           </div>
+          <p className="muted-copy">
+            La versión vigente no se modifica: sigue activa hasta que esta nueva versión se apruebe
+            y se active.
+          </p>
         </form>
       </ActionDrawer>
 
