@@ -398,7 +398,7 @@
   .study__mobile-header {
     position: fixed;
     inset: 0 0 auto 0;
-    z-index: calc(var(--ds-z-dropdown) + 2);
+    z-index: var(--ds-z-toast);
     display: flex;
     align-items: center;
     justify-content: space-between;
