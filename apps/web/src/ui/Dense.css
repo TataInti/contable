@@ -1268,3 +1268,68 @@ button.dense-stat:hover {
 .dense-page--flow .ds-table tbody td .table-actions .ds-button {
   white-space: nowrap;
 }
+
+/* ───────── Resumen operativo: agenda y enlaces ───────── */
+.dense-agenda {
+  display: grid;
+  gap: 1px;
+  margin: 0 0 var(--ds-space-3);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-border);
+  list-style: none;
+}
+
+.dense-agenda li {
+  background: var(--ds-color-surface);
+}
+
+.dense-agenda__link {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  color: inherit;
+  text-decoration: none;
+}
+
+.dense-agenda__link:hover {
+  background: var(--ds-color-surface-muted);
+}
+
+.dense-agenda__count {
+  font-family: var(--ds-font-serif);
+  font-size: var(--ds-text-xl, 1.4rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: center;
+}
+
+.dense-agenda li[data-tone="danger"] .dense-agenda__count,
+.dense-agenda li[data-tone="warn"] .dense-agenda__count {
+  color: var(--ds-color-warning-text, var(--ds-color-warning));
+}
+
+.dense-agenda__copy {
+  display: grid;
+  min-width: 0;
+}
+
+.dense-agenda__copy small {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.dense-link {
+  color: var(--ds-color-primary-hover);
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dense-link:hover {
+  text-decoration: underline;
+}

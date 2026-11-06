@@ -8,6 +8,7 @@ import { api } from "../lib/api";
 import { StudyAdministracionPlataforma } from "./StudyAdministracionPlataforma";
 import { StudyBandeja } from "./StudyBandeja";
 import { StudyContabilidad } from "./StudyContabilidad";
+import { StudyDashboard } from "./StudyDashboard";
 import { StudyExpedienteMensual } from "./StudyExpedienteMensual";
 import { StudyLiquidaciones } from "./StudyLiquidaciones";
 import { StudyRentabilidad } from "./StudyRentabilidad";
@@ -122,5 +123,43 @@ describe("Páginas con el marco denso", () => {
     fireEvent.change(screen.getByLabelText(/Buscar módulos/), { target: { value: "reportes" } });
     expect(within(screen.getByRole("table")).getByText("Reportes")).toBeTruthy();
     expect(within(screen.getByRole("table")).queryByText("Módulo fiscal")).toBeNull();
+  });
+
+  it("Resumen operativo lista las liquidaciones y filtra por estado desde la franja", async () => {
+    contextMock.current = {
+      ...contextMock.current,
+      capabilities: new Set(["client.read", "tax.settlements.read"]),
+    };
+    vi.mocked(api.get).mockImplementation(((path: string) => {
+      if (path.endsWith("/dashboard")) {
+        return Promise.resolve({
+          clients: 3,
+          documents: 10,
+          extracted: 4,
+          processing: 2,
+          openRequests: 1,
+          pendingObligations: 5,
+        });
+      }
+      if (path.endsWith("/portfolio/tax-worklist")) {
+        return Promise.resolve([
+          { id: "s1", status: "CHANGES_REQUESTED", clientId: "client-a", version: 1, cutoff: "2026-01-31", regime: { code: "IVA", name: "IVA RI", taxType: { code: "IVA", name: "IVA" } } },
+          { id: "s2", status: "IN_REVIEW", clientId: "client-a", version: 2, cutoff: "2026-01-31", regime: { code: "IIBB", name: "IIBB Tucumán", taxType: { code: "IIBB", name: "Ingresos Brutos" } } },
+        ]);
+      }
+      return Promise.resolve([]);
+    }) as never);
+    renderPage(<StudyDashboard />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Resumen operativo" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: /Liquidaciones en curso/ })).toBeTruthy();
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("Ingresos Brutos")).toBeTruthy();
+    expect(within(table).getByText("IVA")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Con correcciones/ }));
+    expect(within(screen.getByRole("table")).queryByText("Ingresos Brutos")).toBeNull();
+    expect(within(screen.getByRole("table")).getByText("IVA")).toBeTruthy();
+    expect(screen.getByRole("complementary", { name: "Mesa de trabajo" })).toBeTruthy();
   });
 });

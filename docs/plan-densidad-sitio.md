@@ -28,12 +28,11 @@ Extiende el patrón denso de Catálogos fiscales y Usuarios y accesos
 | 2 | Reglas fiscales | Paquetes en tabla densa; versión con pestañas (Alícuotas, Vencimientos, Fuentes, Control profesional); "Próximo paso" como alerta de una línea. | Hecha |
 | 3 | Bandeja documental, Trabajo | Franja con las colas/pedidos/cierres como filtros, búsqueda en barra de herramientas, sin banners. | Hecha |
 | 4 | Liquidaciones, Rentabilidad, Reportes, Módulos de estudios | Encabezado + franja de métricas; Módulos de estudios con tabla densa y filtros. | Hecha |
-| 5 | Expediente mensual, Contabilidad, Resumen del cliente, Onboarding fiscal | Encabezado + franja; Resumen del cliente unifica identidad, métricas y búsqueda en dos filas. | Hecha, **excepto Dashboard** |
-| 6 | Portal del cliente | Pasada de densidad solo por CSS (`portal.css`): encabezado, tablas y resumen más compactos. | Hecha |
+| 5 | Dashboard, Expediente mensual, Contabilidad, Resumen del cliente, Onboarding fiscal | Encabezado + franja; Resumen del cliente unifica identidad, métricas y búsqueda en dos filas; Dashboard con franja, liquidaciones en tabla y mesa de trabajo lateral. | Hecha |
+| 6 | Portal del cliente | Pasada de densidad solo por CSS (`portal.css`) ya aplicada; falta llevar las tablas al patrón denso con detalle. | Parcial; sigue en el próximo commit |
 
-Quedan fuera a propósito: **Dashboard** (hay trabajo propio sin commitear sobre
-`StudyDashboard.tsx` y `study.css`), **Asistente** (es una conversación, no un listado)
-y **Ayuda** (es un manual con capítulos).
+Quedan fuera a propósito: **Asistente** (es una conversación, no un listado) y **Ayuda**
+(es un manual con capítulos).
 
 ## Criterios de salida de cada fase
 
