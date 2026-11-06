@@ -61,15 +61,56 @@ export function normalizeSearch(value: string): string {
 
 export function DensePage({
   density,
+  flow = false,
+  className,
   children,
 }: {
   density: DenseDensity;
+  /** Clase heredada de la página (estilos propios del módulo). */
+  className?: string;
+  /** Página de varias secciones apiladas: scrollea completa en vez de fijar el alto. */
+  flow?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="dense-page" style={{ "--dense-row-h": `${density}px` } as CSSProperties}>
+    <div
+      className={`dense-page${flow ? " dense-page--flow" : ""}${className ? ` ${className}` : ""}`}
+      style={{ "--dense-row-h": `${density}px` } as CSSProperties}
+    >
       {children}
     </div>
+  );
+}
+
+/** Sección compacta de una página de flujo: título, conteo, acciones y contenido. */
+export function DenseSection({
+  id,
+  title,
+  count,
+  description,
+  actions,
+  children,
+}: {
+  id?: string;
+  title: string;
+  count?: ReactNode;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const headingId = id ? `${id}-title` : undefined;
+  return (
+    <section id={id} className="dense-block" aria-labelledby={headingId}>
+      <header className="dense-block__head">
+        <h2 id={headingId}>
+          {title}
+          {count !== undefined ? <span className="dense-count">{count}</span> : null}
+        </h2>
+        {description ? <p>{description}</p> : null}
+        {actions ? <div className="dense-block__actions">{actions}</div> : null}
+      </header>
+      <div className="dense-block__body">{children}</div>
+    </section>
   );
 }
 
@@ -468,6 +509,44 @@ export function ShortcutHint({ items }: { items: ReadonlyArray<[string, string]>
         </span>
       ))}
     </span>
+  );
+}
+
+/** Pie estándar de las tablas densas: conteo, nota y atajos. */
+export function DenseFooter({
+  count,
+  noun,
+  hint,
+  newShortcut = true,
+}: {
+  count: number;
+  noun: string;
+  hint?: string;
+  newShortcut?: boolean;
+}) {
+  const shortcuts: Array<[string, string]> = [["/", "buscar"]];
+  if (newShortcut) shortcuts.push(["N", "nuevo"]);
+  shortcuts.push(["Esc", "cerrar"]);
+  return (
+    <>
+      <span>
+        {count} {noun}
+      </span>
+      {hint ? <span>{hint}</span> : null}
+      <span className="dense-table-foot__spacer" />
+      <ShortcutHint items={shortcuts} />
+    </>
+  );
+}
+
+/** Estado de carga con el mismo marco que la tabla. */
+export function DenseLoading({ label }: { label: string }) {
+  return (
+    <div className="dense-table-card">
+      <div className="query-state" role="status">
+        <span className="loading-copy">{label}</span>
+      </div>
+    </div>
   );
 }
 

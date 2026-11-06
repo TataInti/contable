@@ -8,7 +8,13 @@ import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import { SectionIndex } from "../ui/SectionIndex";
+import {
+  DenseAlert,
+  DenseHeader,
+  DensePage,
+  StatStrip,
+  useDensity,
+} from "../ui/Dense";
 import "./study.css";
 
 interface CloseCycle {
@@ -52,6 +58,7 @@ interface EvidencePreview {
 const DATE = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 
 export function StudyTrabajo() {
+  const [density] = useDensity();
   const { firmId, clientId, periodId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -276,16 +283,13 @@ export function StudyTrabajo() {
     requests.isError || closes.isError || obligations.isError;
 
   return (
-    <div className="study-page study-page--wide">
-      <div className="study-page__header">
-        <div>
-          <p className="study-page__eyebrow">Seguimiento del cliente</p>
-          <h1 className="study-page__title">Trabajo</h1>
-          <p className="study-page__subtitle">
-            Revisiones, pedidos, cierres y vencimientos que requieren una decisión.
-          </p>
-        </div>
-        <div className="study-page__header-actions">
+    <DensePage density={density} flow>
+      <DenseHeader
+        eyebrow="Seguimiento del cliente"
+        title="Trabajo"
+        description="Revisiones, pedidos, cierres y vencimientos que requieren una decisión."
+        actions={
+          <>
           <Button
             variant="ghost"
             onClick={() => {
@@ -328,49 +332,41 @@ export function StudyTrabajo() {
               {showRequest ? "Cancelar" : "Pedir documentación"}
             </Button>
           ) : null}
-        </div>
-      </div>
-
-      <SectionIndex
-        items={[
-          { id: "work-requests-section", label: "Pedidos", meta: String(activeRequests.length) },
-          { id: "work-closes-section", label: "Cierres", meta: String(openCloses.length) },
-          { id: "work-obligations-section", label: "Obligaciones", meta: String(obligationRows.length) },
-        ]}
+        
+          </>
+        }
       />
 
-      <section className="guided-context" aria-labelledby="work-context-title"><div className="guided-context__heading"><div><p className="study-page__eyebrow">Coordinación operativa</p><h2 id="work-context-title">Trabajo del período</h2><p>Pedidos, vencimientos y cierres se gestionan dentro del cliente y período seleccionados.</p></div><StatusBadge status={openCloses.length ? "IN_PROGRESS" : "ACTIVE"} /></div><dl className="guided-context__facts"><div><dt>Pedidos abiertos</dt><dd>{activeRequests.length}</dd></div><div><dt>Cierres en curso</dt><dd>{openCloses.length}</dd></div><div><dt>Obligaciones</dt><dd>{obligationRows.length}</dd></div></dl></section>
-      <section className="guided-next-step" aria-labelledby="work-next-step-title"><div><p className="study-page__eyebrow">Flujo guiado</p><h2 id="work-next-step-title">Próximo paso</h2><p>{activeRequests.length ? "Revisá los pedidos abiertos y pedí la evidencia que todavía falta." : openCloses.length ? "Continuá el cierre que está en curso para este período." : "Iniciá un pedido documental para reunir la evidencia del período."}</p></div>{activeRequests.length && capabilities.has("request.manage") ? <Button onClick={() => setShowRequest(true)}>Verificar pedidos</Button> : !openCloses.length && capabilities.has("request.manage") ? <Button onClick={() => setShowRequest(true)}>Pedir documentación</Button> : capabilities.has("period.soft_close") ? <Button onClick={() => setShowClose(true)} disabled={!periodId || !activeFiscalYear}>Iniciar cierre</Button> : null}</section>
+      <StatStrip
+        label="Resumen del trabajo"
+        items={[
+          { key: "requests", label: "Pedidos abiertos", value: activeRequests.length, tone: activeRequests.length > 0 ? "warn" : undefined },
+          { key: "closes", label: "Cierres en curso", value: openCloses.length },
+          { key: "obligations", label: "Obligaciones", value: obligationRows.length },
+        ]}
+      />
+      <DenseAlert
+        tone="ok"
+        action={
+          activeRequests.length && capabilities.has("request.manage") ? (
+            <Button size="sm" onClick={() => setShowRequest(true)}>Verificar pedidos</Button>
+          ) : !openCloses.length && capabilities.has("request.manage") ? (
+            <Button size="sm" onClick={() => setShowRequest(true)}>Pedir documentación</Button>
+          ) : capabilities.has("period.soft_close") ? (
+            <Button size="sm" onClick={() => setShowClose(true)} disabled={!periodId || !activeFiscalYear}>Iniciar cierre</Button>
+          ) : undefined
+        }
+      >
+        <strong>Próximo paso:</strong>{" "}
+        {activeRequests.length
+          ? "Revisá los pedidos abiertos y pedí la evidencia que todavía falta."
+          : openCloses.length
+            ? "Continuá el cierre que está en curso para este período."
+            : "Iniciá un pedido documental para reunir la evidencia del período."}
+      </DenseAlert>
 
-      <div className="work-summary" aria-label="Resumen del trabajo">
-        <div>
-          <span className="work-summary__icon work-summary__icon--warn">
-            <Icon name="message" size={18} />
-          </span>
-          <span>
-            <strong>{activeRequests.length}</strong>
-            <small>pedidos abiertos</small>
-          </span>
-        </div>
-        <div>
-          <span className="work-summary__icon">
-            <Icon name="calendar" size={18} />
-          </span>
-          <span>
-            <strong>{obligationRows.length}</strong>
-            <small>obligaciones</small>
-          </span>
-        </div>
-        <div>
-          <span className="work-summary__icon">
-            <Icon name="tasks" size={18} />
-          </span>
-          <span>
-            <strong>{openCloses.length}</strong>
-            <small>cierres en curso</small>
-          </span>
-        </div>
-      </div>
+
+
 
       {receipt ? (
         <div className="action-receipt action-receipt--page" role="status">
@@ -969,6 +965,6 @@ export function StudyTrabajo() {
         )}
       </section>
       <ConfirmDialog confirm={confirm} />
-    </div>
+    </DensePage>
   );
 }

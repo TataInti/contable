@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -102,8 +102,14 @@ function renderClientes() {
   );
 }
 
+async function selectClient() {
+  fireEvent.click(within(await screen.findByRole("table")).getByText("Alfa Uno S.A."));
+  return screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
+}
+
 async function openFirstProfileDrawer() {
-  fireEvent.click(await screen.findByText("Editar ficha"));
+  await selectClient();
+  fireEvent.click(await screen.findByRole("button", { name: "Editar ficha" }));
 }
 
 describe("StudyClientes — ficha con catálogos", () => {
@@ -138,7 +144,7 @@ describe("StudyClientes — ficha con catálogos", () => {
     mockApi({});
     renderClientes();
 
-    expect(await screen.findByText("Alfa Uno S.A.")).toBeTruthy();
+    await selectClient();
     expect(screen.queryByRole("button", { name: "Eliminar" })).toBeNull();
     expect(api.del).not.toHaveBeenCalled();
   });
@@ -154,6 +160,7 @@ describe("StudyClientes — ficha con catálogos", () => {
     vi.mocked(api.del).mockResolvedValue({});
     renderClientes();
 
+    await selectClient();
     fireEvent.click(await screen.findByRole("button", { name: "Eliminar" }));
     const input = await screen.findByRole("textbox", {
       name: "Escribí la razón social exacta para confirmar",
@@ -196,7 +203,7 @@ describe("StudyClientes — ficha con catálogos", () => {
     expect(tuc.checked).toBe(false);
 
     // El valor guardado sin match se avisa al usuario; no desaparece en silencio.
-    expect(screen.getByText(/Sin match/)).toBeTruthy();
+    expect(within(screen.getByRole("dialog")).getByText(/Sin match/)).toBeTruthy();
     expect(screen.getByText(/no están en el catálogo fiscal/)).toBeTruthy();
 
     fireEvent.click(tuc);
@@ -491,5 +498,118 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
         legalForm: "Sociedad anónima (SA)",
       }),
     );
+  });
+});
+
+describe("StudyClientes — cartera densa", () => {
+  const completeProfile = {
+    functionalCurrency: "ARS",
+    accountingStandard: "RTIC",
+    fiscalYearEndMonth: 6,
+    vatCondition: "RESPONSABLE_INSCRIPTO",
+    iibbJurisdictions: [],
+    province: "Tucumán",
+    activity: "Comercio",
+    legalForm: "S.A.",
+    serviceStartDate: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = {
+      firmId: "firm-a",
+      clientId: null,
+      periodId: null,
+      isReady: true,
+      capabilities: new Set(["client.read", "client.manage"]),
+      hasClientAccess: () => true,
+      setFirmId: vi.fn(),
+      setClientId: vi.fn(),
+      setPeriodId: vi.fn(),
+    };
+    sessionMock.current = {
+      status: "authenticated",
+      me: null,
+      portalContexts: [],
+      error: null,
+      refresh: async () => {},
+    };
+    vi.mocked(api.get).mockImplementation(((path: string) => {
+      if (path === "/tax/jurisdictions") return Promise.resolve(catalogFixture);
+      if (path.includes("/client-profile-catalogs/activities")) return Promise.resolve(activitiesFixture);
+      if (path.includes("/accounting-standards")) return Promise.resolve(standardsFixture);
+      if (path.includes("/clients")) {
+        return Promise.resolve([
+          { ...clientFixture(completeProfile), id: "c1", legalName: "Alfa Uno S.A.", cuit: "20111111112" },
+          { ...clientFixture({}), id: "c2", legalName: "Beta Dos S.R.L.", cuit: "30222222223" },
+          {
+            ...clientFixture(completeProfile),
+            id: "c3",
+            legalName: "Gamma Tres S.A.",
+            cuit: "30333333334",
+            status: "INACTIVE",
+          },
+        ]);
+      }
+      return Promise.resolve(null);
+    }) as never);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("muestra la franja de métricas y filtra por ficha incompleta", async () => {
+    renderClientes();
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("Alfa Uno S.A.")).toBeTruthy();
+    expect(within(table).getByText("Beta Dos S.R.L.")).toBeTruthy();
+
+    const stats = screen.getByRole("group", { name: "Resumen de la cartera" });
+    expect(within(stats).getByText("Ficha incompleta")).toBeTruthy();
+    fireEvent.click(within(stats).getByRole("button", { name: /Ficha incompleta/ }));
+
+    expect(within(screen.getByRole("table")).queryByText("Alfa Uno S.A.")).toBeNull();
+    expect(within(screen.getByRole("table")).getByText("Beta Dos S.R.L.")).toBeTruthy();
+  });
+
+  it("filtra por estado y por condición de IVA", async () => {
+    renderClientes();
+    await screen.findByRole("table");
+
+    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "INACTIVE" } });
+    expect(within(screen.getByRole("table")).getByText("Gamma Tres S.A.")).toBeTruthy();
+    expect(within(screen.getByRole("table")).queryByText("Alfa Uno S.A.")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Filtrar por condición IVA"), {
+      target: { value: "RESPONSABLE_INSCRIPTO" },
+    });
+    expect(within(screen.getByRole("table")).queryByText("Beta Dos S.R.L.")).toBeNull();
+    expect(within(screen.getByRole("table")).getByText("Alfa Uno S.A.")).toBeTruthy();
+  });
+
+  it("abre el detalle con las faltas de la ficha y lo cierra con Esc", async () => {
+    renderClientes();
+    fireEvent.click(within(await screen.findByRole("table")).getByText("Beta Dos S.R.L."));
+
+    const detail = await screen.findByRole("complementary", { name: "Detalle de Beta Dos S.R.L." });
+    expect(within(detail).getByText(/Ficha incompleta: falta condición IVA/)).toBeTruthy();
+    expect(within(detail).getByRole("button", { name: "Abrir trabajo" })).toBeTruthy();
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("complementary", { name: "Detalle de Beta Dos S.R.L." })).toBeNull(),
+    );
+  });
+
+  it("abre el espacio de trabajo desde la fila sin seleccionar el cliente", async () => {
+    const setClientId = vi.fn();
+    contextMock.current = { ...contextMock.current, setClientId };
+    renderClientes();
+    fireEvent.click(await screen.findByRole("button", { name: "Abrir trabajo de Beta Dos S.R.L." }));
+    expect(setClientId).toHaveBeenCalledWith("c2");
+    expect(screen.queryByRole("complementary")).toBeNull();
   });
 });

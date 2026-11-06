@@ -13,9 +13,17 @@ import {
 import { useClientContext } from "../context/ClientContext";
 import { belongsToDocumentQueue, type DocumentQueueFilter } from "./documentQueue";
 import { ActionDrawer } from "../ui/ActionDrawer";
-import { SectionIndex } from "../ui/SectionIndex";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
+import {
+  DenseAlert,
+  DenseHeader,
+  DensePage,
+  DenseSearch,
+  DenseToolbar,
+  StatStrip,
+  useDensity,
+} from "../ui/Dense";
 import "./study.css";
 
 interface UploadSession {
@@ -75,6 +83,7 @@ function normalizeDocumentSearch(value: string) {
 }
 
 export function StudyBandeja() {
+  const [density] = useDensity();
   const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -248,17 +257,13 @@ export function StudyBandeja() {
       .map((item) => ({ ...item, requestTitle: request.title })),
   );
   return (
-    <div className="study-page study-page--wide document-inbox">
-      <div className="study-page__header">
-        <div>
-          <p className="study-page__eyebrow">Ingreso y evidencia</p>
-          <h1 className="study-page__title">Bandeja documental</h1>
-          <p className="study-page__subtitle">
-            Cargá comprobantes, validá los datos extraídos y prepará el asiento sin perder la
-            evidencia.
-          </p>
-        </div>
-        <div className="study-page__header-actions">
+    <DensePage density={density} flow className="document-inbox">
+      <DenseHeader
+        eyebrow="Ingreso y evidencia"
+        title="Bandeja documental"
+        description="Cargá comprobantes, validá los datos extraídos y prepará el asiento sin perder la evidencia."
+        actions={
+          <>
           <Button
             variant="ghost"
             onClick={() => {
@@ -280,63 +285,48 @@ export function StudyBandeja() {
               {showUpload ? "Cerrar carga" : "Subir documento"}
             </Button>
           ) : null}
-        </div>
-      </div>
-
-      <SectionIndex
-        items={[
-          { id: "inbox-context-title", label: "Contexto", meta: `${rows.length} documentos` },
-          { id: "inbox-next-step-title", label: "Siguiente paso" },
-          ...(base ? [{ id: "document-explorer-title", label: "Explorador" }] : []),
-        ]}
+        
+          </>
+        }
       />
 
-      <section className="document-inbox__context" aria-labelledby="inbox-context-title">
-        <div className="document-inbox__context-heading">
-          <div>
-            <p className="study-page__eyebrow">Evidencia del cliente</p>
-            <h2 id="inbox-context-title">Documentos y pedidos</h2>
-            <p>La bandeja conserva el vínculo entre cada archivo y el pedido que lo originó.</p>
-          </div>
-          <StatusBadge status={base ? "ACTIVE" : "PENDING"} />
-        </div>
-        <dl className="document-inbox__context-facts">
-          <div>
-            <dt>Documentos</dt>
-            <dd>{rows.length}</dd>
-          </div>
-          <div>
-            <dt>Ítems pendientes</dt>
-            <dd>{pendingRequestItems.length}</dd>
-          </div>
-          <div>
-            <dt>Cliente</dt>
-            <dd>{base ? "Seleccionado" : "Sin seleccionar"}</dd>
-          </div>
-          <div>
-            <dt>Orden</dt>
-            <dd>Más recientes primero</dd>
-          </div>
-        </dl>
-      </section>
+      <StatStrip
+        label="Vistas de la bandeja"
+        items={[
+          ...documentQueue.map((queue) => ({
+            key: queue.id,
+            label: queue.label,
+            value: documents.isLoading ? "…" : queue.count,
+            active: base ? documentFilter === queue.id : false,
+            onSelect: base ? () => setDocumentFilter(queue.id) : undefined,
+          })),
+          {
+            key: "pending-items",
+            label: "Ítems pendientes",
+            value: pendingRequestItems.length,
+            tone: pendingRequestItems.length > 0 ? ("warn" as const) : undefined,
+          },
+        ]}
+      />
+      <DenseAlert
+        tone="ok"
+        action={
+          base && pendingRequestItems.length && capabilities.has("document.upload") ? (
+            <Button size="sm" onClick={() => setShowUpload(true)}>Subir documento</Button>
+          ) : base && capabilities.has("request.manage") ? (
+            <Button size="sm" onClick={() => navigate("/trabajo")}>Crear pedido</Button>
+          ) : undefined
+        }
+      >
+        {!base
+          ? "Seleccioná un cliente para revisar su evidencia."
+          : pendingRequestItems.length
+            ? "Hay pedidos documentales pendientes."
+            : "No hay pedidos documentales pendientes."}
+      </DenseAlert>
 
-      <section className="document-inbox__next-step" aria-labelledby="inbox-next-step-title">
-        <div>
-          <p className="study-page__eyebrow">Siguiente paso</p>
-          <h2 id="inbox-next-step-title">
-            {!base
-              ? "Seleccioná un cliente para revisar su evidencia."
-              : pendingRequestItems.length
-                ? "Hay pedidos documentales pendientes."
-                : "No hay pedidos documentales pendientes."}
-          </h2>
-        </div>
-        {base && pendingRequestItems.length && capabilities.has("document.upload") ? (
-          <Button onClick={() => setShowUpload(true)}>Subir documento</Button>
-        ) : base && capabilities.has("request.manage") ? (
-          <Button onClick={() => navigate("/trabajo")}>Crear pedido</Button>
-        ) : null}
-      </section>
+
+
 
       <ActionDrawer
         isOpen={showUpload && Boolean(base)}
@@ -474,52 +464,27 @@ export function StudyBandeja() {
         />
       ) : (
         <>
-          <section className="document-inbox__explorer" aria-labelledby="document-explorer-title">
-            <div className="document-inbox__explorer-heading">
-              <div>
-                <p className="study-page__eyebrow">Explorar bandeja</p>
-                <h2 id="document-explorer-title">Encontrá un documento</h2>
-                <p>Filtrá por nombre o estado antes de abrir un comprobante.</p>
-              </div>
-              <div className="document-inbox__filters">
-                <label>
-                  <span>Buscar</span>
-                  <input
-                    type="search"
-                    value={documentSearch}
-                    onChange={(event) => setDocumentSearch(event.target.value)}
-                    placeholder="Nombre, categoría o estado…"
-                  />
-                </label>
-                <label>
-                  <span>Estado</span>
-                  <select
-                    value={documentFilter}
-                    onChange={(event) => setDocumentFilter(event.target.value as DocumentQueueFilter)}
-                  >
-                    {documentQueue.map((queue) => (
-                      <option key={queue.id} value={queue.id}>
-                        {queue.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </div>
-            <nav className="document-inbox__queue-index" aria-label="Vistas de la bandeja">
+          <DenseToolbar>
+            <DenseSearch
+              value={documentSearch}
+              onChange={setDocumentSearch}
+              placeholder="Nombre, categoría o estado…"
+              label="Buscar"
+            />
+            <select
+              className="dense-select"
+              aria-label="Estado"
+              value={documentFilter}
+              onChange={(event) => setDocumentFilter(event.target.value as DocumentQueueFilter)}
+            >
               {documentQueue.map((queue) => (
-                <button
-                  key={queue.id}
-                  type="button"
-                  aria-current={documentFilter === queue.id ? "page" : undefined}
-                  onClick={() => setDocumentFilter(queue.id)}
-                >
-                  <span>{queue.label}</span>
-                  <small>{queue.count}</small>
-                </button>
+                <option key={queue.id} value={queue.id}>
+                  {queue.label}
+                </option>
               ))}
-            </nav>
-          </section>
+            </select>
+          </DenseToolbar>
+
 
           <div className="review-workspace">
           <section className="review-list" aria-label="Documentos">
@@ -772,6 +737,6 @@ export function StudyBandeja() {
         </>
       )}
       <ConfirmDialog confirm={confirm} />
-    </div>
+    </DensePage>
   );
 }

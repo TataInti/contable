@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { Button, EmptyState, Field } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import {
   ARGENTINA_PROVINCES,
@@ -20,12 +20,62 @@ import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer, type DeletionResult } from "../ui/DeletionDrawer";
 import { Icon } from "../ui/Icon";
-import { SectionIndex } from "../ui/SectionIndex";
+import {
+  DenseAlert,
+  DenseFooter,
+  DenseHeader,
+  DenseLoading,
+  DensePage,
+  DenseSearch,
+  DenseTable,
+  DenseToolbar,
+  DenseWorkspace,
+  DensitySwitch,
+  Inspector,
+  InspectorFacts,
+  InspectorSection,
+  StatStrip,
+  useDenseShortcuts,
+  useDensity,
+  type DenseColumn,
+} from "../ui/Dense";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
 
 function formatCuit(cuit: string) {
   return cuit.length === 11 ? `${cuit.slice(0, 2)}-${cuit.slice(2, 10)}-${cuit.slice(10)}` : cuit;
+}
+
+const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const MONTH_LONG = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+function vatLabel(value: string | null | undefined): string {
+  if (!value) return "";
+  return (CLIENT_VAT_CONDITION_LABELS as Record<string, string>)[value] ?? value;
+}
+
+/** Datos de la ficha que todavía no se completaron (alimenta la métrica y el aviso). */
+function profileGaps(client: { profile?: ClientProfile | null }): string[] {
+  const profile = client.profile;
+  const gaps: string[] = [];
+  if (!profile?.vatCondition) gaps.push("condición IVA");
+  if (!profile?.province) gaps.push("provincia");
+  if (!profile?.activity) gaps.push("actividad");
+  if (!profile?.accountingStandard) gaps.push("norma contable");
+  return gaps;
 }
 
 interface ClientProfile {
@@ -87,6 +137,12 @@ export function StudyClientes() {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [vatFilter, setVatFilter] = useState("");
+  const [onlyIncomplete, setOnlyIncomplete] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [density, setDensity] = useDensity();
+  const searchRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     legalName: "",
     tradeName: "",
@@ -256,13 +312,20 @@ export function StudyClientes() {
   });
   const rows = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("es-AR");
-    if (!needle) return query.data ?? [];
-    return (query.data ?? []).filter(
-      (client) =>
+    const digits = needle.replace(/\D/g, "");
+    return (query.data ?? []).filter((client) => {
+      if (statusFilter === "ACTIVE" && client.status !== "ACTIVE") return false;
+      if (statusFilter === "INACTIVE" && client.status === "ACTIVE") return false;
+      if (vatFilter && client.profile?.vatCondition !== vatFilter) return false;
+      if (onlyIncomplete && profileGaps(client).length === 0) return false;
+      if (!needle) return true;
+      return (
         client.legalName.toLocaleLowerCase("es-AR").includes(needle) ||
-        client.cuit.includes(needle.replace(/\D/g, "")),
-    );
-  }, [query.data, search]);
+        (client.tradeName ?? "").toLocaleLowerCase("es-AR").includes(needle) ||
+        (digits !== "" && client.cuit.includes(digits))
+      );
+    });
+  }, [query.data, search, statusFilter, vatFilter, onlyIncomplete]);
 
   const openClientWorkspace = (id: string) => {
     setClientId(id);
@@ -281,56 +344,363 @@ export function StudyClientes() {
     setProfileForm(profileFormFrom(client));
   };
 
-  return (
-    <div className="study-page">
-      <div className="study-page__header">
-        <div>
-          <p className="study-page__eyebrow">Cartera del estudio</p>
-          <h1 className="study-page__title">Clientes</h1>
-          <p className="study-page__subtitle">
-            Elegí el contexto de trabajo o incorporá una nueva empresa.
-          </p>
-        </div>
-        {capabilities.has("client.manage") ? (
-          <Button
-            onClick={() => {
-              setEditingClient(null);
-              setCreating((value) => !value);
-            }}
-            variant={creating ? "secondary" : "primary"}
-          >
-            <Icon name={creating ? "close" : "plus"} size={17} />
-            {creating ? "Cancelar" : "Nuevo cliente"}
-          </Button>
-        ) : null}
-      </div>
+  const clients = query.data ?? [];
+  const missingProfileFields = (client: ClientWithProfile) => profileGaps(client);
+  const incompleteCount = clients.filter((client) => missingProfileFields(client).length > 0).length;
+  const activeCount = clients.filter((client) => client.status === "ACTIVE").length;
+  const selectedClient = selectedId ? (clients.find((client) => client.id === selectedId) ?? null) : null;
+  const currentClient = clientId ? (clients.find((client) => client.id === clientId) ?? null) : null;
+  const canManage = capabilities.has("client.manage");
 
-      <SectionIndex
+  const openNew = () => {
+    setEditingClient(null);
+    setCreating(true);
+  };
+  const newRef = useRef(openNew);
+  newRef.current = openNew;
+  useDenseShortcuts({
+    searchRef,
+    onNew: canManage ? () => newRef.current() : undefined,
+    onEscape: () => setSelectedId(null),
+  });
+  useEffect(() => {
+    if (selectedId && query.data && !query.data.some((client) => client.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [query.data, selectedId]);
+
+  const columns: DenseColumn<ClientWithProfile>[] = [
+    {
+      key: "legalName",
+      header: "Cliente",
+      sortValue: (row) => row.legalName.toLocaleLowerCase("es-AR"),
+      render: (row) => (
+        <span className="dense-name">
+          <span className="dense-avatar" aria-hidden="true">
+            {row.legalName.slice(0, 1).toLocaleUpperCase("es-AR")}
+          </span>
+          <span className="dense-name__text">
+            <strong>{row.legalName}</strong>
+            {row.tradeName ? <small>{row.tradeName}</small> : null}
+          </span>
+          {clientId === row.id ? <span className="dense-tag">En contexto</span> : null}
+        </span>
+      ),
+    },
+    {
+      key: "cuit",
+      header: "CUIT",
+      sortValue: (row) => row.cuit,
+      render: (row) => <span className="tabular-copy">{formatCuit(row.cuit)}</span>,
+    },
+    {
+      key: "vat",
+      header: "Condición IVA",
+      sortValue: (row) => vatLabel(row.profile?.vatCondition),
+      render: (row) => vatLabel(row.profile?.vatCondition) || <span className="dense-dim">—</span>,
+    },
+    {
+      key: "province",
+      header: "Provincia",
+      secondary: true,
+      sortValue: (row) => row.profile?.province ?? "",
+      render: (row) => row.profile?.province || <span className="dense-dim">—</span>,
+    },
+    {
+      key: "activity",
+      header: "Actividad",
+      secondary: true,
+      sortValue: (row) => row.profile?.activity ?? "",
+      render: (row) => row.profile?.activity || <span className="dense-dim">—</span>,
+    },
+    {
+      key: "standard",
+      header: "Norma",
+      secondary: true,
+      sortValue: (row) => row.profile?.accountingStandard ?? "",
+      render: (row) => row.profile?.accountingStandard || <span className="dense-dim">—</span>,
+    },
+    {
+      key: "closing",
+      header: "Cierre",
+      secondary: true,
+      sortValue: (row) => row.profile?.fiscalYearEndMonth ?? 0,
+      render: (row) =>
+        row.profile?.fiscalYearEndMonth ? (
+          MONTH_SHORT[row.profile.fiscalYearEndMonth - 1]
+        ) : (
+          <span className="dense-dim">—</span>
+        ),
+    },
+    {
+      key: "gaps",
+      header: "Ficha",
+      sortValue: (row) => missingProfileFields(row).length,
+      render: (row) => {
+        const gaps = missingProfileFields(row);
+        return gaps.length === 0 ? (
+          <span className="dense-dim">Completa</span>
+        ) : (
+          <span className="dense-tag dense-tag--warn" title={`Falta: ${gaps.join(", ")}`}>
+            Faltan {gaps.length}
+          </span>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "Estado",
+      sortValue: (row) => row.status,
+      render: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "open",
+      header: "",
+      align: "right",
+      render: (row) => (
+        <Button
+          size="sm"
+          variant="secondary"
+          aria-label={`Abrir trabajo de ${row.legalName}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            openClientWorkspace(row.id);
+          }}
+        >
+          Abrir
+        </Button>
+      ),
+    },
+  ];
+
+  const inspector = selectedClient ? (
+    <Inspector
+      label={`Detalle de ${selectedClient.legalName}`}
+      eyebrow="Cliente"
+      title={selectedClient.legalName}
+      subtitle={`CUIT ${formatCuit(selectedClient.cuit)}`}
+      leading={
+        <span className="dense-avatar dense-avatar--lg" aria-hidden="true">
+          {selectedClient.legalName.slice(0, 1).toLocaleUpperCase("es-AR")}
+        </span>
+      }
+      onClose={() => setSelectedId(null)}
+      footer={
+        <>
+          <Button size="sm" onClick={() => openClientWorkspace(selectedClient.id)}>
+            Abrir trabajo
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => openClientSummary(selectedClient.id)}>
+            Resumen
+          </Button>
+          {canManage ? (
+            <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
+              Editar ficha
+            </Button>
+          ) : null}
+          {capabilities.has("data.delete") ? (
+            <Button size="sm" variant="danger" onClick={() => setDeletingClient(selectedClient)}>
+              Eliminar
+            </Button>
+          ) : null}
+        </>
+      }
+    >
+      <InspectorSection title="Identificación">
+        <InspectorFacts
+          items={[
+            ["Estado", <StatusBadge key="s" status={selectedClient.status} />],
+            ["Nombre de fantasía", selectedClient.tradeName || "—"],
+            ["Forma jurídica", selectedClient.profile?.legalForm || "—"],
+            ["Provincia", selectedClient.profile?.province || "—"],
+            ["Actividad", selectedClient.profile?.activity || "—"],
+          ]}
+        />
+      </InspectorSection>
+      <InspectorSection title="Perfil fiscal y contable">
+        <InspectorFacts
+          items={[
+            ["Condición IVA", vatLabel(selectedClient.profile?.vatCondition) || "—"],
+            ["Norma contable", selectedClient.profile?.accountingStandard || "—"],
+            [
+              "Cierre del ejercicio",
+              selectedClient.profile?.fiscalYearEndMonth
+                ? MONTH_LONG[selectedClient.profile.fiscalYearEndMonth - 1]
+                : "—",
+            ],
+            ["Moneda funcional", selectedClient.profile?.functionalCurrency || "—"],
+            [
+              "Jurisdicciones IIBB",
+              selectedClient.profile?.iibbJurisdictions?.length
+                ? selectedClient.profile.iibbJurisdictions.join(", ")
+                : "—",
+            ],
+            ["Inicio del servicio", selectedClient.profile?.serviceStartDate?.slice(0, 10) || "—"],
+          ]}
+        />
+      </InspectorSection>
+      {missingProfileFields(selectedClient).length > 0 ? (
+        <DenseAlert
+          action={
+            canManage ? (
+              <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
+                Completar
+              </Button>
+            ) : undefined
+          }
+        >
+          Ficha incompleta: falta {missingProfileFields(selectedClient).join(", ")}.
+        </DenseAlert>
+      ) : null}
+    </Inspector>
+  ) : null;
+
+  const tableBody = query.isLoading ? (
+    <DenseLoading label="Cargando la cartera…" />
+  ) : query.isError ? (
+    <EmptyState
+      title="No se pudieron cargar los clientes"
+      description="Reintentá en unos minutos o comprobá tu conexión."
+      action={
+        <Button variant="secondary" onClick={() => void query.refetch()}>
+          Reintentar
+        </Button>
+      }
+    />
+  ) : (
+    <DenseTable<ClientWithProfile>
+      label="Cartera de clientes"
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      selectedKey={selectedId}
+      onSelect={setSelectedId}
+      inspectorOpen={Boolean(inspector)}
+      rowClassName={(row) => (row.status === "ACTIVE" ? undefined : "dense-row--muted")}
+      footer={
+        <DenseFooter
+          count={rows.length}
+          noun={rows.length === 1 ? "cliente" : "clientes"}
+          hint="Elegí una fila para ver la ficha y sus acciones."
+          newShortcut={canManage}
+        />
+      }
+      empty={
+        <EmptyState
+          size="compact"
+          title={clients.length === 0 ? "Todavía no hay clientes" : "Ningún cliente coincide"}
+          description={
+            clients.length === 0
+              ? "Creá el primer cliente para comenzar a organizar la operación."
+              : "Probá con otro nombre o CUIT, o quitá filtros."
+          }
+          action={
+            clients.length === 0 && canManage ? (
+              <Button size="sm" onClick={openNew}>
+                Crear cliente
+              </Button>
+            ) : undefined
+          }
+        />
+      }
+    />
+  );
+
+  return (
+    <DensePage density={density}>
+      <DenseHeader
+        eyebrow="Cartera del estudio"
+        title="Clientes"
+        description="Elegí el contexto de trabajo o incorporá una nueva empresa."
+        actions={
+          canManage ? (
+            <Button size="sm" onClick={openNew}>
+              <Icon name="plus" size={16} /> Nuevo cliente
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <StatStrip
+        label="Resumen de la cartera"
         items={[
-          { id: "clients-context-title", label: "Contexto" },
-          { id: "clients-next-step-title", label: "Siguiente paso" },
-          { id: "client-list-title", label: "Cartera", meta: `${rows.length} clientes` },
+          { key: "total", label: "Clientes", value: query.data ? clients.length : "—" },
+          {
+            key: "active",
+            label: "Activos",
+            value: query.data ? activeCount : "—",
+            detail: query.data ? `${clients.length - activeCount} inactivos` : undefined,
+            active: statusFilter === "ACTIVE",
+            onSelect: () => setStatusFilter((current) => (current === "ACTIVE" ? "" : "ACTIVE")),
+          },
+          {
+            key: "incomplete",
+            label: "Ficha incompleta",
+            value: query.data ? incompleteCount : "—",
+            detail: "Faltan datos fiscales",
+            tone: incompleteCount > 0 ? "warn" : undefined,
+            active: onlyIncomplete,
+            onSelect: () => setOnlyIncomplete((current) => !current),
+          },
+          {
+            key: "context",
+            label: "Contexto actual",
+            value: currentClient ? currentClient.legalName : "Sin seleccionar",
+            detail: currentClient ? formatCuit(currentClient.cuit) : "Abrí un cliente para trabajar",
+          },
         ]}
       />
 
       {notice ? (
         <div className="action-receipt action-receipt--page" role="status">
-          <Icon name="check" size={18} />
           <span>
             <strong>Actualización guardada</strong>
             <small>{notice}</small>
           </span>
           <button type="button" aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
-            <Icon name="close" size={15} />
+            Cerrar
           </button>
         </div>
       ) : null}
 
-      <section className="guided-context" aria-labelledby="clients-context-title">
-        <div className="guided-context__heading"><div><p className="study-page__eyebrow">Cartera operativa</p><h2 id="clients-context-title">Contexto de clientes</h2><p>Elegí una empresa para continuar con su trabajo, documentos y configuración fiscal.</p></div><StatusBadge status={clientId ? "ACTIVE" : "PENDING"} /></div>
-        <dl className="guided-context__facts"><div><dt>Clientes</dt><dd>{query.data?.length ?? "—"}</dd></div><div><dt>Contexto actual</dt><dd>{clientId ? "Seleccionado" : "Sin seleccionar"}</dd></div><div><dt>Resultados</dt><dd>{rows.length}</dd></div></dl>
-      </section>
-      <section className="guided-next-step" aria-labelledby="clients-next-step-title"><div><p className="study-page__eyebrow">Flujo guiado</p><h2 id="clients-next-step-title">Próximo paso</h2><p>{clientId ? "Abrí el espacio de trabajo del cliente seleccionado o completá su configuración fiscal." : "Incorporá una empresa o elegí una de la cartera para comenzar a trabajar."}</p></div>{clientId ? <Button onClick={() => navigate("/trabajo")}>Abrir trabajo</Button> : capabilities.has("client.manage") ? <Button onClick={() => setCreating(true)}>Crear cliente</Button> : null}</section>
+      <DenseToolbar>
+        <DenseSearch
+          inputRef={searchRef}
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar por nombre o CUIT…"
+          label="Buscar clientes"
+        />
+        <select
+          className="dense-select"
+          aria-label="Filtrar por estado"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+        >
+          <option value="">Estado: todos</option>
+          <option value="ACTIVE">Activos</option>
+          <option value="INACTIVE">Inactivos</option>
+        </select>
+        <select
+          className="dense-select"
+          aria-label="Filtrar por condición IVA"
+          value={vatFilter}
+          onChange={(event) => setVatFilter(event.target.value)}
+        >
+          <option value="">IVA: todas</option>
+          {CLIENT_VAT_CONDITIONS.map((value) => (
+            <option key={value} value={value}>
+              {CLIENT_VAT_CONDITION_LABELS[value]}
+            </option>
+          ))}
+        </select>
+        <span className="dense-toolbar__spacer" />
+        <DensitySwitch value={density} onChange={setDensity} />
+      </DenseToolbar>
+
+      <DenseWorkspace panelId="clients-panel" inspector={inspector}>
+        {tableBody}
+      </DenseWorkspace>
 
       <ActionDrawer
         isOpen={creating}
@@ -770,133 +1140,6 @@ export function StudyClientes() {
         />
       ) : null}
 
-      <section className="study-page__section" aria-labelledby="client-list-title">
-        <div className="collection-toolbar">
-          <div>
-            <h2 id="client-list-title">Cartera</h2>
-            <p>
-              {query.isLoading
-                ? "Consultando clientes…"
-                : `${rows.length} ${rows.length === 1 ? "cliente" : "clientes"}`}
-            </p>
-          </div>
-          <label className="collection-search">
-            <span className="sr-only">Buscar clientes</span>
-            <Icon name="search" size={17} />
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por nombre o CUIT"
-            />
-          </label>
-        </div>
-        {query.isLoading ? (
-          <div className="query-state" role="status">
-            <span className="loading-copy">Cargando la cartera…</span>
-          </div>
-        ) : query.isError ? (
-          <EmptyState
-            title="No se pudieron cargar los clientes"
-            description="Reintentá en unos minutos o comprobá tu conexión."
-            action={
-              <Button variant="secondary" onClick={() => void query.refetch()}>
-                Reintentar
-              </Button>
-            }
-          />
-        ) : rows.length === 0 ? (
-          <EmptyState
-            title={search ? "No encontramos coincidencias" : "Todavía no hay clientes"}
-            description={
-              search
-                ? "Probá con otro nombre o CUIT."
-                : "Creá el primer cliente para comenzar a organizar la operación."
-            }
-            action={
-              !search && capabilities.has("client.manage") ? (
-                <Button
-                  onClick={() => {
-                    setEditingClient(null);
-                    setCreating(true);
-                  }}
-                >
-                  Crear cliente
-                </Button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <Table
-            rows={rows}
-            rowKey={(row) => row.id}
-            columns={[
-              {
-                key: "legalName",
-                header: "Cliente",
-                render: (row) => (
-                  <button
-                    className="client-link"
-                    aria-current={clientId === row.id ? "true" : undefined}
-                    onClick={() => openClientWorkspace(row.id)}
-                  >
-                    <span className="client-link__avatar" aria-hidden="true">
-                      {row.legalName.slice(0, 1).toLocaleUpperCase("es-AR")}
-                    </span>
-                    <span>
-                      <strong>{row.legalName}</strong>
-                      <small>{clientId === row.id ? "Contexto activo" : "Abrir contexto"}</small>
-                    </span>
-                  </button>
-                ),
-              },
-              {
-                key: "cuit",
-                header: "CUIT",
-                render: (row) => <span className="tabular-copy">{formatCuit(row.cuit)}</span>,
-              },
-              {
-                key: "status",
-                header: "Estado",
-                render: (row) => <StatusBadge status={row.status} />,
-              },
-              {
-                key: "action",
-                header: "Acciones",
-                align: "right",
-                render: (row) => (
-                  <div className="table-actions">
-                    {capabilities.has("client.manage") ? (
-                      <Button size="sm" variant="ghost" onClick={() => startProfileEdit(row)}>
-                        Editar ficha
-                      </Button>
-                    ) : null}
-                    {capabilities.has("data.delete") ? (
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => setDeletingClient(row)}
-                      >
-                        Eliminar
-                      </Button>
-                    ) : null}
-                    <Button size="sm" variant="ghost" onClick={() => openClientSummary(row.id)}>
-                      Resumen
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => openClientWorkspace(row.id)}
-                    >
-                      Abrir <Icon name="arrow-right" size={15} />
-                    </Button>
-                  </div>
-                ),
-              },
-            ]}
-          />
-        )}
-      </section>
-    </div>
+    </DensePage>
   );
 }

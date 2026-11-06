@@ -5,8 +5,13 @@ import { api, type Account, type FiscalYear, type TrialBalance } from "../lib/ap
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
-import { SectionIndex } from "../ui/SectionIndex";
 import { StatusBadge } from "../ui/StatusBadge";
+import {
+  DenseHeader,
+  DensePage,
+  StatStrip,
+  useDensity,
+} from "../ui/Dense";
 import "./study.css";
 
 interface JournalLine {
@@ -61,6 +66,7 @@ function money(value: string | number | undefined) {
 }
 
 export function StudyContabilidad() {
+  const [density] = useDensity();
   const { firmId, clientId, periodId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const [view, setView] = useState<LedgerView>("journal");
@@ -251,17 +257,13 @@ export function StudyContabilidad() {
   const activeQuery = view === "journal" ? journal : view === "ledger" ? ledger : trialBalance;
 
   return (
-    <div className="study-page study-page--wide">
-      <div className="study-page__header">
-        <div>
-          <p className="study-page__eyebrow">Libros canónicos</p>
-          <h1 className="study-page__title">Contabilidad</h1>
-          <p className="study-page__subtitle">
-            Consultá asientos contabilizados, movimientos por cuenta y el balance del período
-            activo.
-          </p>
-        </div>
-        <div className="study-page__header-actions">
+    <DensePage density={density} flow>
+      <DenseHeader
+        eyebrow="Libros canónicos"
+        title="Contabilidad"
+        description="Consultá asientos contabilizados, movimientos por cuenta y el balance del período activo."
+        actions={
+          <>
           <Button
             variant="ghost"
             onClick={() => {
@@ -298,15 +300,31 @@ export function StudyContabilidad() {
           <Button variant="secondary" onClick={() => window.print()}>
             <Icon name="file" size={17} /> Imprimir vista
           </Button>
-        </div>
-      </div>
+        
+          </>
+        }
+      />
 
-      <SectionIndex
+      <StatStrip
+        label="Resumen contable"
         items={[
-          { id: "accounting-views-title", label: "Libros y balances" },
-          { id: "drafts-title", label: "Asientos en preparación", meta: `${selectedDrafts.length}` },
+          { key: "posted", label: "Asientos contabilizados", value: journal.data?.length ?? "—" },
+          {
+            key: "drafts",
+            label: "En preparación",
+            value: selectedDrafts.length,
+            tone: selectedDrafts.length > 0 ? "warn" : undefined,
+          },
+          { key: "accounts", label: "Cuentas", value: accounts.data?.length ?? "—", detail: `${postingAccounts.length} posteables` },
+          {
+            key: "period",
+            label: "Período",
+            value: activePeriod ? (activePeriod.status === "OPEN" ? "Abierto" : "Cerrado") : "Sin seleccionar",
+          },
         ]}
       />
+
+
 
       {receipt ? (
         <div className="action-receipt action-receipt--page" role="status">
@@ -821,6 +839,7 @@ export function StudyContabilidad() {
           )}
         </section>
       ) : null}
-    </div>
+    
+    </DensePage>
   );
 }

@@ -7,6 +7,12 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
+import {
+  DenseHeader,
+  DensePage,
+  StatStrip,
+  useDensity,
+} from "../ui/Dense";
 import "./study.css";
 
 type FiscalStep = "perfil" | "inscripcion" | "actividades" | "periodos" | "obligaciones";
@@ -94,6 +100,7 @@ function MutationError({ error }: { error: unknown }) {
 }
 
 export function StudyOnboardingFiscal() {
+  const [density] = useDensity();
   const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const canWrite = capabilities.has("tax.profile.write");
@@ -257,10 +264,25 @@ export function StudyOnboardingFiscal() {
     setOpenFormStep(nextStep);
   };
   return (
-    <div className="study-page">
-      <header className="study-page__header">
-        <div><p className="study-page__eyebrow">Configuración fiscal</p><h1>Onboarding fiscal del cliente</h1><p className="study-page__subtitle">Perfil, adhesiones, actividades, períodos y obligaciones. Cada paso persiste y queda auditado.</p></div>
-      </header>
+    <DensePage density={density} flow>
+      <DenseHeader
+        eyebrow="Configuración fiscal"
+        title="Onboarding fiscal del cliente"
+        description="Perfil, adhesiones, actividades, períodos y obligaciones. Cada paso persiste y queda auditado."
+      />
+
+      <StatStrip
+        label="Avance del onboarding fiscal"
+        items={FISCAL_STEPS.map((item) => ({
+          key: item.key,
+          label: item.label,
+          value: stepCompletion[item.key] ? "Completo" : "Pendiente",
+          tone: stepCompletion[item.key] ? undefined : ("warn" as const),
+          active: step === item.key,
+          onSelect: () => openStepForm(item.key),
+        }))}
+      />
+
 
       <div className="fiscal-onboarding-layout">
         <nav className="fiscal-steps" aria-label="Pasos del onboarding fiscal">
@@ -449,6 +471,7 @@ export function StudyOnboardingFiscal() {
       </ActionDrawer>
 
       <ConfirmDialog confirm={confirm} />
-    </div>
+    
+    </DensePage>
   );
 }
