@@ -1163,6 +1163,12 @@ button.dense-stat:hover {
   font-size: var(--ds-text-md, 1rem);
 }
 
+.dense-block__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
 .dense-block__head p {
   margin: 0;
   color: var(--ds-color-text-muted);

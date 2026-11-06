@@ -406,6 +406,11 @@
     padding: 0 var(--ds-space-4);
     border-bottom: 1px solid var(--ds-color-border);
     background: var(--ds-color-surface);
+    pointer-events: none;
+  }
+
+  .study__mobile-header .study__menu-button {
+    pointer-events: auto;
   }
 
   .study__brand--compact {
