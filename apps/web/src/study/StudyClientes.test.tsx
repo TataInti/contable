@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { api } from "../lib/api";
@@ -97,13 +97,20 @@ function renderClientes() {
     <QueryClientProvider client={client}>
       <MemoryRouter>
         <StudyClientes />
+        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
+function LocationProbe() {
+  const { pathname } = useLocation();
+  return <output data-testid="current-path">{pathname}</output>;
+}
+
 async function selectClient() {
-  fireEvent.click(within(await screen.findByRole("table")).getByText("Alfa Uno S.A."));
+  const table = await screen.findByRole("table");
+  fireEvent.click(within(table).getByText("20-11111111-2"));
   return screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
 }
 
@@ -592,7 +599,7 @@ describe("StudyClientes — cartera densa", () => {
 
   it("abre el detalle con las faltas de la ficha y lo cierra con Esc", async () => {
     renderClientes();
-    fireEvent.click(within(await screen.findByRole("table")).getByText("Beta Dos S.R.L."));
+    fireEvent.click(within(await screen.findByRole("table")).getByText("30-22222222-3"));
 
     const detail = await screen.findByRole("complementary", { name: "Detalle de Beta Dos S.R.L." });
     expect(within(detail).getByText(/Ficha incompleta: falta condición IVA/)).toBeTruthy();
@@ -610,6 +617,18 @@ describe("StudyClientes — cartera densa", () => {
     renderClientes();
     fireEvent.click(await screen.findByRole("button", { name: "Abrir trabajo de Beta Dos S.R.L." }));
     expect(setClientId).toHaveBeenCalledWith("c2");
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("muestra la razón social como botón accesible y abre el espacio de trabajo", async () => {
+    const setClientId = vi.fn();
+    contextMock.current = { ...contextMock.current, setClientId };
+    renderClientes();
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Beta Dos S\.R\.L\.$/ }));
+
+    expect(setClientId).toHaveBeenCalledWith("c2");
+    await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/trabajo"));
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 });
