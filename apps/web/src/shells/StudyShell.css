@@ -399,16 +399,23 @@
     position: fixed;
     inset: 0 0 auto 0;
     z-index: calc(var(--ds-z-dropdown) + 2);
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: var(--ds-space-3);
     align-items: center;
-    justify-content: space-between;
     height: 64px;
     padding: 0 var(--ds-space-4);
     border-bottom: 1px solid var(--ds-color-border);
     background: var(--ds-color-surface);
+    pointer-events: none;
+  }
+
+  .study__mobile-header .study__menu-button {
+    pointer-events: auto;
   }
 
   .study__brand--compact {
+    min-width: 0;
     min-height: 0;
     padding: 0;
     border: 0;

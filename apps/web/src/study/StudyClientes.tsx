@@ -375,7 +375,13 @@ export function StudyClientes() {
       header: "Cliente",
       sortValue: (row) => row.legalName.toLocaleLowerCase("es-AR"),
       render: (row) => (
-        <span className="dense-name">
+        <button
+          type="button"
+          className="dense-name-button"
+          aria-label={row.legalName}
+          aria-current={clientId === row.id ? "true" : undefined}
+          onClick={() => openClientWorkspace(row.id)}
+        >
           <span className="dense-avatar" aria-hidden="true">
             {row.legalName.slice(0, 1).toLocaleUpperCase("es-AR")}
           </span>
@@ -384,7 +390,7 @@ export function StudyClientes() {
             {row.tradeName ? <small>{row.tradeName}</small> : null}
           </span>
           {clientId === row.id ? <span className="dense-tag">En contexto</span> : null}
-        </span>
+        </button>
       ),
     },
     {

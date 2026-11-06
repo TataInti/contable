@@ -486,6 +486,35 @@ button.dense-stat:hover {
   box-shadow: inset 3px 0 0 var(--ds-color-primary);
 }
 
+.dense-name-button {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dense-name-button:hover,
+.dense-name-button[aria-current="true"] {
+  color: var(--ds-color-primary);
+}
+
+.dense-name-button:focus-visible {
+  outline: 2px solid var(--ds-color-focus);
+  outline-offset: 2px;
+}
+
+.dense-name__text {
+  min-width: 0;
+}
+
 .dense-row--muted td {
   color: var(--ds-color-text-faint);
 }
@@ -1132,6 +1161,12 @@ button.dense-stat:hover {
   gap: var(--ds-space-2);
   margin: 0;
   font-size: var(--ds-text-md, 1rem);
+}
+
+.dense-block__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
 }
 
 .dense-block__head p {

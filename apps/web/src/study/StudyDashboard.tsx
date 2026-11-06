@@ -462,10 +462,10 @@ export function StudyDashboard() {
           <DenseWorkspace panelId="dashboard-panel" inspector={agenda}>
             <section className="dense-block" aria-labelledby="risk-portfolio-title">
               <header className="dense-block__head">
-                <h2 id="risk-portfolio-title">
-                  Liquidaciones en curso
+                <div className="dense-block__title">
+                  <h2 id="risk-portfolio-title">Liquidaciones en curso</h2>
                   <span className="dense-count">{worklist.length}</span>
-                </h2>
+                </div>
                 <p>
                   {atRisk} con correcciones pendientes · {inReview} en revisión
                 </p>
