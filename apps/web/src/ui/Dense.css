@@ -1064,3 +1064,272 @@ button.dense-stat:hover {
   background: var(--ds-color-warning-subtle);
   color: var(--ds-color-warning);
 }
+
+/* ───────── Páginas de flujo (varias secciones apiladas) ───────── */
+@media (min-width: 1025px) {
+  .study__content:has(> .dense-page--flow) {
+    display: block;
+    overflow: auto;
+    padding: 16px 24px 28px;
+  }
+
+  .study__content > .dense-page--flow {
+    flex: none;
+  }
+}
+
+.dense-page--flow .dense-table-card {
+  flex: none;
+}
+
+.dense-page--flow .dense-table-scroll {
+  max-height: var(--dense-flow-max, 340px);
+}
+
+.dense-note {
+  margin: 0 0 var(--ds-space-3);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.4;
+}
+
+.dense-note strong {
+  color: var(--ds-color-text);
+}
+
+.dense-packs {
+  margin-bottom: var(--ds-space-3);
+  --dense-flow-max: 232px;
+}
+
+.dense-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+
+.dense-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+
+.dense-block {
+  margin-bottom: var(--ds-space-4);
+}
+
+.dense-block__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ds-space-1) var(--ds-space-3);
+  margin-bottom: var(--ds-space-2);
+}
+
+.dense-block__head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin: 0;
+  font-size: var(--ds-text-md, 1rem);
+}
+
+.dense-block__head p {
+  margin: 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.dense-block__actions {
+  display: flex;
+  gap: var(--ds-space-2);
+  margin-left: auto;
+}
+
+.dense-block__body {
+  min-width: 0;
+}
+
+.dense-two-col {
+  display: grid;
+  gap: var(--ds-space-4);
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  align-items: start;
+}
+
+.dense-kv {
+  display: grid;
+  gap: 1px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  font-size: var(--ds-text-sm);
+}
+
+.dense-kv > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--ds-color-border);
+}
+
+.dense-kv dt {
+  color: var(--ds-color-text-muted);
+}
+
+.dense-kv dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Resumen del paquete: metadatos en una sola línea. */
+.dense-page .fiscal-rule-summary {
+  padding: var(--ds-space-3) var(--ds-space-4);
+}
+
+.dense-page .fiscal-rule-summary__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--ds-space-5);
+  margin-top: var(--ds-space-2);
+}
+
+.dense-page .fiscal-rule-summary__meta > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: var(--ds-text-sm);
+}
+
+.dense-page .fiscal-rule-summary h2 {
+  margin: 2px 0;
+  font-size: var(--ds-text-lg, 1.15rem);
+}
+
+.dense-page .fiscal-rule-summary__meta strong {
+  display: inline;
+  margin: 0;
+}
+
+/* ───────── Compactación de contenido heredado dentro de páginas de flujo ───────── */
+.dense-page--flow .study-panel,
+.dense-page--flow .study-page__section {
+  margin-bottom: var(--ds-space-3);
+}
+
+.dense-page--flow .study-panel {
+  padding: var(--ds-space-3) var(--ds-space-4);
+}
+
+.dense-page--flow .study-panel__heading {
+  margin-bottom: var(--ds-space-2);
+}
+
+.dense-page--flow .study-panel__heading h2,
+.dense-page--flow .study-page__section-title,
+.dense-page--flow .collection-toolbar h2 {
+  font-size: var(--ds-text-md, 1rem);
+}
+
+.dense-page--flow .ds-table thead th {
+  padding: 6px 10px;
+  font-size: var(--ds-text-xs);
+}
+
+.dense-page--flow .ds-table tbody td {
+  padding: 6px 10px;
+  font-size: var(--ds-text-sm);
+  line-height: 1.3;
+}
+
+.dense-page--flow .ds-table__wrapper {
+  max-height: var(--dense-flow-max, 420px);
+  overflow: auto;
+}
+
+.dense-page--flow .collection-toolbar {
+  margin-bottom: var(--ds-space-2);
+}
+
+.dense-page--flow .work-columns {
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, 1fr);
+  gap: var(--ds-space-3);
+}
+
+.dense-page--flow .ds-table tbody td .ds-button,
+.dense-page--flow .ds-table tbody td .table-actions .ds-button {
+  white-space: nowrap;
+}
+
+/* ───────── Resumen operativo: agenda y enlaces ───────── */
+.dense-agenda {
+  display: grid;
+  gap: 1px;
+  margin: 0 0 var(--ds-space-3);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-border);
+  list-style: none;
+}
+
+.dense-agenda li {
+  background: var(--ds-color-surface);
+}
+
+.dense-agenda__link {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  color: inherit;
+  text-decoration: none;
+}
+
+.dense-agenda__link:hover {
+  background: var(--ds-color-surface-muted);
+}
+
+.dense-agenda__count {
+  font-family: var(--ds-font-serif);
+  font-size: var(--ds-text-xl, 1.4rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: center;
+}
+
+.dense-agenda li[data-tone="danger"] .dense-agenda__count,
+.dense-agenda li[data-tone="warn"] .dense-agenda__count {
+  color: var(--ds-color-warning-text, var(--ds-color-warning));
+}
+
+.dense-agenda__copy {
+  display: grid;
+  min-width: 0;
+}
+
+.dense-agenda__copy small {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.dense-link {
+  color: var(--ds-color-primary-hover);
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dense-link:hover {
+  text-decoration: underline;
+}

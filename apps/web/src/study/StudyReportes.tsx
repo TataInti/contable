@@ -6,7 +6,12 @@ import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import { SectionIndex } from "../ui/SectionIndex";
+import {
+  DenseHeader,
+  DensePage,
+  StatStrip,
+  useDensity,
+} from "../ui/Dense";
 import "./study.css";
 
 interface BiPlan {
@@ -27,6 +32,7 @@ interface BiExecution {
 }
 
 export function StudyReportes() {
+  const [density] = useDensity();
   const { firmId, clientId, periodId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const [templateId, setTemplateId] = useState("");
@@ -127,16 +133,13 @@ export function StudyReportes() {
   }
 
   return (
-    <div className="study-page">
-      <div className="study-page__header">
-        <div>
-          <p className="study-page__eyebrow">Información verificable</p>
-          <h1 className="study-page__title">Reportes y análisis</h1>
-          <p className="study-page__subtitle">
-            Generá estados desde el mayor canónico, revisalos y publicalos al portal.
-          </p>
-        </div>
-        <div className="study-page__header-actions">
+    <DensePage density={density} flow>
+      <DenseHeader
+        eyebrow="Información verificable"
+        title="Reportes y análisis"
+        description="Generá estados desde el mayor canónico, revisalos y publicalos al portal."
+        actions={
+          <>
           <Button
             variant="ghost"
             onClick={() => {
@@ -160,16 +163,22 @@ export function StudyReportes() {
               <Icon name="plus" size={17} /> Nueva plantilla base
             </Button>
           ) : null}
-        </div>
-      </div>
+        
+          </>
+        }
+      />
 
-      <SectionIndex
+      <StatStrip
+        label="Resumen de reportes"
         items={[
-          { id: "generate-report-title", label: "Nueva ejecución" },
-          { id: "report-history-title", label: "Historial", meta: String(rows.length) },
-          ...(capabilities.has("bi.use") ? [{ id: "bi-title", label: "Análisis BI" }] : []),
+          { key: "templates", label: "Plantillas", value: templates.data?.length ?? "—" },
+          { key: "runs", label: "Ejecuciones", value: rows.length },
+          { key: "drafts", label: "Borradores", value: rows.filter((run) => run.status === "DRAFT").length },
+          { key: "published", label: "Publicados", value: rows.filter((run) => run.status === "PUBLISHED").length },
         ]}
       />
+
+
 
       {receipt ? (
         <div className="action-receipt action-receipt--page" role="status">
@@ -422,6 +431,7 @@ export function StudyReportes() {
         </section>
       ) : null}
       <ConfirmDialog confirm={confirm} />
-    </div>
+    
+    </DensePage>
   );
 }

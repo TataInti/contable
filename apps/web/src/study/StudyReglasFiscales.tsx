@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
 import {
@@ -12,6 +12,22 @@ import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
+import {
+  DenseAlert,
+  DenseFooter,
+  DenseHeader,
+  DensePage,
+  DenseSearch,
+  DenseTable,
+  DenseTabs,
+  DenseToolbar,
+  DensitySwitch,
+  StatStrip,
+  useDenseShortcuts,
+  useDensity,
+  normalizeSearch,
+  type DenseColumn,
+} from "../ui/Dense";
 import "./study.css";
 
 type RuleStatus = "DRAFT" | "IN_REVIEW" | "APPROVED" | "ACTIVE" | "RETIRED";
@@ -96,6 +112,11 @@ export function StudyReglasFiscales() {
   const { firmId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [ruleTab, setRuleTab] = useState<"rates" | "dueDates" | "sources" | "approval">("rates");
+  const [packSearch, setPackSearch] = useState("");
+  const [packFilter, setPackFilter] = useState<"" | "ACTIVE" | "DRAFT" | "IN_REVIEW">("");
+  const [density, setDensity] = useDensity();
+  const searchRef = useRef<HTMLInputElement>(null);
   const [deletingTarget, setDeletingTarget] = useState<{
     path: string;
     kind: "pack" | "version";
@@ -384,7 +405,7 @@ export function StudyReglasFiscales() {
       return { label: `Editar borrador v${selectedVersion.version}`, description: "Revisá las reglas y guardá los cambios antes de enviarlo a revisión.", onClick: () => document.getElementById("rule-rates-title")?.scrollIntoView({ behavior: "smooth", block: "start" }) };
     }
     if (selectedVersion.status === "IN_REVIEW" && capabilities.has("tax.rules.approve")) {
-      return { label: "Revisar y aprobar", description: "Seleccioná la matrícula profesional para aprobar esta versión.", onClick: () => document.getElementById("rule-approval")?.scrollIntoView({ behavior: "smooth", block: "start" }) };
+      return { label: "Revisar y aprobar", description: "Seleccioná la matrícula profesional para aprobar esta versión.", onClick: () => { setRuleTab("approval"); window.setTimeout(() => document.getElementById("rule-approval")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); } };
     }
     if (selectedVersion.status === "APPROVED" && capabilities.has("tax.rules.activate")) {
       return { label: "Activar versión", description: "La versión aprobada quedará disponible para los próximos cálculos.", onClick: () => activateMutation.mutate() };
@@ -395,29 +416,117 @@ export function StudyReglasFiscales() {
     return null;
   })();
 
-  return (
-    <section className="study-page study-page--wide" aria-labelledby="tax-rules-title">
-      <header className="study-page__header">
-        <div>
-          <p className="study-page__eyebrow">Configuración del estudio</p>
-          <h1 id="tax-rules-title" className="study-page__title">
-            Reglas fiscales
-          </h1>
-          <p className="study-page__subtitle">
-            Alícuotas, mínimos y porcentajes normativos con vigencia y aprobación profesional.
-          </p>
-        </div>
-        {canPropose ? (
-          <Button onClick={() => setShowPackForm((visible) => !visible)}>
-            <Icon name={showPackForm ? "close" : "plus"} size={16} />{" "}
-            {showPackForm ? "Cerrar alta" : "Nuevo paquete"}
-          </Button>
-        ) : null}
-      </header>
+  const allPacks = packsQuery.data ?? [];
+  const packsWith = (status: RuleStatus) =>
+    allPacks.filter((pack) => pack.versions.some((version) => version.status === status)).length;
+  const visiblePacks = useMemo(() => {
+    const needle = normalizeSearch(packSearch);
+    return allPacks.filter((pack) => {
+      if (packFilter && !pack.versions.some((version) => version.status === packFilter)) return false;
+      if (!needle) return true;
+      return normalizeSearch(
+        `${pack.name} ${pack.code} ${pack.regime.taxType.name} ${pack.regime.jurisdiction.name}`,
+      ).includes(needle);
+    });
+  }, [allPacks, packFilter, packSearch]);
+  const newPackRef = useRef<() => void>(() => undefined);
+  newPackRef.current = () => setShowPackForm(true);
+  useDenseShortcuts({
+    searchRef,
+    onNew: canPropose ? () => newPackRef.current() : undefined,
+  });
+  const versionsLabel = (pack: RulePack) => {
+    const active = pack.versions.find((version) => version.status === "ACTIVE");
+    const draft = pack.versions.find((version) => version.status === "DRAFT");
+    const review = pack.versions.find((version) => version.status === "IN_REVIEW");
+    const parts = [
+      draft ? `Borrador v${draft.version}` : null,
+      review ? `En revisión v${review.version}` : null,
+      active ? `Vigente v${active.version}` : null,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(" · ") : "Sin versión activa";
+  };
+  const packColumns: DenseColumn<RulePack>[] = [
+    {
+      key: "name",
+      header: "Paquete",
+      sortValue: (pack) => pack.name.toLocaleLowerCase("es-AR"),
+      render: (pack) => (
+        <span className="dense-name">
+          <span className="dense-name__text">
+            <strong>{pack.name}</strong>
+            <small>{pack.code}</small>
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "tax",
+      header: "Impuesto",
+      sortValue: (pack) => pack.regime.taxType.name,
+      render: (pack) => pack.regime.taxType.name,
+    },
+    {
+      key: "jurisdiction",
+      header: "Jurisdicción",
+      sortValue: (pack) => pack.regime.jurisdiction.name,
+      render: (pack) => pack.regime.jurisdiction.name,
+    },
+    {
+      key: "versions",
+      header: "Versiones",
+      render: (pack) => <span>{versionsLabel(pack)}</span>,
+    },
+  ];
 
-      <p className="fiscal-rules-sequence" role="note">
+  return (
+    <DensePage density={density} flow>
+      <DenseHeader
+        eyebrow="Configuración del estudio"
+        title="Reglas fiscales"
+        description="Alícuotas, mínimos y porcentajes normativos con vigencia y aprobación profesional."
+        actions={
+          canPropose ? (
+            <Button size="sm" onClick={() => setShowPackForm((visible) => !visible)}>
+              <Icon name={showPackForm ? "close" : "plus"} size={16} />{" "}
+              {showPackForm ? "Cerrar alta" : "Nuevo paquete"}
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <StatStrip
+        label="Resumen de paquetes de reglas"
+        items={[
+          { key: "packs", label: "Paquetes", value: allPacks.length },
+          {
+            key: "active",
+            label: "Con versión vigente",
+            value: packsWith("ACTIVE"),
+            active: packFilter === "ACTIVE",
+            onSelect: () => setPackFilter((current) => (current === "ACTIVE" ? "" : "ACTIVE")),
+          },
+          {
+            key: "draft",
+            label: "Con borrador",
+            value: packsWith("DRAFT"),
+            active: packFilter === "DRAFT",
+            onSelect: () => setPackFilter((current) => (current === "DRAFT" ? "" : "DRAFT")),
+          },
+          {
+            key: "review",
+            label: "En revisión",
+            value: packsWith("IN_REVIEW"),
+            tone: packsWith("IN_REVIEW") > 0 ? "warn" : undefined,
+            active: packFilter === "IN_REVIEW",
+            onSelect: () => setPackFilter((current) => (current === "IN_REVIEW" ? "" : "IN_REVIEW")),
+          },
+        ]}
+      />
+
+      <p className="dense-note" role="note">
         <strong>Secuencia de cambios:</strong> borrador → revisión → aprobación con matrícula
-        profesional → activa. Las versiones aprobadas y activas quedan inmutables; todo cambio
+        profesional → activa. Las versiones aprobadas y activas son inmutables; todo cambio
         posterior se prepara en una nueva versión a partir de la vigente.
       </p>
 
@@ -721,45 +830,58 @@ export function StudyReglasFiscales() {
         </div>
       ) : null}
 
-      <div className="fiscal-rules-layout">
-        <aside className="fiscal-rules-index" aria-label="Paquetes de reglas disponibles">
-          <div className="fiscal-rules-index__heading">
-            <p className="fiscal-rules-index__label">Paquetes fiscales</p>
-          </div>
-          <small className="fiscal-rules-index__count">{packsQuery.data?.length ?? 0} configurados</small>
-          {packsQuery.isLoading ? <p className="muted-copy">Cargando reglas…</p> : null}
-          {!packsQuery.isLoading && (packsQuery.data?.length ?? 0) === 0 ? (
-            <p className="muted-copy">No hay paquetes configurados.</p>
-          ) : null}
-          {packsQuery.data?.map((pack) => {
-            const active = pack.versions.find((version) => version.status === "ACTIVE");
-            const draft = pack.versions.find((version) => version.status === "DRAFT");
-            return (
-              <button
-                key={pack.id}
-                type="button"
-                className={`fiscal-rules-index__item${selectedPackId === pack.id ? " fiscal-rules-index__item--active" : ""}`}
-                onClick={() => setSelectedPackId(pack.id)}
-              >
-                <strong>{pack.name}</strong>
-                <span>
-                  {pack.regime.taxType.name} · {pack.regime.jurisdiction.name}
-                </span>
-                <small>
-                  {active && draft
-                    ? `Borrador v${draft.version} · Vigente v${active.version}`
-                    : active
-                      ? `Vigente v${active.version}`
-                      : draft
-                        ? `Borrador v${draft.version}`
-                        : "Sin versión activa"}
-                </small>
-              </button>
-            );
-          })}
-        </aside>
+      <DenseToolbar>
+        <DenseSearch
+          inputRef={searchRef}
+          value={packSearch}
+          onChange={setPackSearch}
+          placeholder="Buscar paquete, impuesto o jurisdicción…"
+          label="Buscar paquetes"
+        />
+        {packFilter ? (
+          <button type="button" className="dense-toggle" aria-pressed onClick={() => setPackFilter("")}>
+            Filtro activo · quitar
+          </button>
+        ) : null}
+        <span className="dense-toolbar__spacer" />
+        <DensitySwitch value={density} onChange={setDensity} />
+      </DenseToolbar>
 
-          <div className="fiscal-rules-detail">
+      {packsQuery.isLoading ? (
+        <div className="dense-table-card">
+          <div className="query-state" role="status">
+            <span className="loading-copy">Cargando reglas…</span>
+          </div>
+        </div>
+      ) : (
+        <div className="dense-packs">
+          <DenseTable<RulePack>
+            label="Paquetes de reglas disponibles"
+            columns={packColumns}
+            rows={visiblePacks}
+            rowKey={(pack) => pack.id}
+            selectedKey={selectedPackId}
+            onSelect={(key) => {
+              if (key) setSelectedPackId(key);
+            }}
+            footer={
+              <DenseFooter
+                count={visiblePacks.length}
+                noun={visiblePacks.length === 1 ? "paquete" : "paquetes"}
+                hint="Elegí un paquete para ver sus versiones y reglas."
+                newShortcut={canPropose}
+              />
+            }
+            empty={
+              <p className="muted-copy">
+                {allPacks.length === 0 ? "No hay paquetes configurados." : "Ningún paquete coincide."}
+              </p>
+            }
+          />
+        </div>
+      )}
+
+      <div className="fiscal-rules-detail dense-detail">
           {detailQuery.isLoading ? (
             <div className="query-state">Cargando detalle de reglas…</div>
           ) : null}
@@ -772,14 +894,14 @@ export function StudyReglasFiscales() {
               description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
             />
           ) : null}
-          {rulesNextAction ? <section className="fiscal-rules-next-step" aria-labelledby="rules-next-step-title">
-            <div>
-              <p className="study-page__eyebrow">Flujo guiado</p>
-              <h2 id="rules-next-step-title">Próximo paso</h2>
-              <p>{rulesNextAction.description}</p>
-            </div>
-            <Button onClick={rulesNextAction.onClick}>{rulesNextAction.label}</Button>
-          </section> : null}
+          {rulesNextAction ? (
+            <DenseAlert
+              tone="ok"
+              action={<Button size="sm" onClick={rulesNextAction.onClick}>{rulesNextAction.label}</Button>}
+            >
+              <strong>Próximo paso:</strong> {rulesNextAction.description}
+            </DenseAlert>
+          ) : null}
           {detailQuery.data && canDeletePack ? (
             <section className="study-panel fiscal-rule-delete" aria-label="Administración del paquete">
               <div>
@@ -868,6 +990,20 @@ export function StudyReglasFiscales() {
                 </div>
               </section>
 
+              <DenseTabs<"rates" | "dueDates" | "sources" | "approval">
+                label="Secciones de la versión"
+                idPrefix="rule-tab"
+                active={ruleTab}
+                onChange={setRuleTab}
+                tabs={[
+                  { id: "rates", label: "Alícuotas", count: selectedVersion.rateRules.length },
+                  { id: "dueDates", label: "Vencimientos", count: selectedVersion.dueDateRules.length },
+                  { id: "sources", label: "Fuentes", count: selectedVersion.sources.length },
+                  { id: "approval", label: "Control profesional" },
+                ]}
+              />
+              <div role="tabpanel" id="rule-tab-panel" className="dense-tabpanel">
+              {ruleTab === "rates" ? (
               <section className="study-panel" aria-labelledby="rule-rates-title">
                 <div className="study-panel__heading">
                   <div>
@@ -1099,7 +1235,8 @@ export function StudyReglasFiscales() {
                   </p>
                 ) : null}
               </section>
-
+              ) : null}
+              {ruleTab === "dueDates" ? (
               <section className="study-panel" aria-labelledby="rule-due-dates-title">
                 <div className="study-panel__heading">
                   <div>
@@ -1140,7 +1277,8 @@ export function StudyReglasFiscales() {
                   ]}
                 />
               </section>
-
+              ) : null}
+              {ruleTab === "sources" ? (
               <section className="study-panel" aria-labelledby="rule-sources-title">
                 <div className="study-panel__heading">
                   <div>
@@ -1176,7 +1314,8 @@ export function StudyReglasFiscales() {
                   ]}
                 />
               </section>
-
+              ) : null}
+              {ruleTab === "approval" ? (
               <section id="rule-approval" className="study-panel fiscal-rule-approval">
                 <div>
                   <h2>Control profesional</h2>
@@ -1237,9 +1376,10 @@ export function StudyReglasFiscales() {
                   <p className="fiscal-rule-approval__sources">Sin fuente normativa cargada.</p>
                 )}
               </section>
+              ) : null}
+              </div>
             </>
           ) : null}
-        </div>
       </div>
       {mutationError ? (
         <p className="form-error" role="alert">
@@ -1266,6 +1406,6 @@ export function StudyReglasFiscales() {
           }}
         />
       ) : null}
-    </section>
+    </DensePage>
   );
 }

@@ -6,6 +6,14 @@ import { CLIENT_VAT_CONDITION_LABELS } from "@contable/contracts";
 import { api, type ClientSummary } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
+import {
+  DenseHeader,
+  DensePage,
+  DenseSearch,
+  DenseToolbar,
+  StatStrip,
+  useDensity,
+} from "../ui/Dense";
 import "./study.css";
 
 const DATE_FORMAT = new Intl.DateTimeFormat("es-AR", {
@@ -261,6 +269,7 @@ function countsLabel(value: number) {
 }
 
 export function StudyResumenCliente() {
+  const [density] = useDensity();
   const { firmId, clientId } = useClientContext();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<SummarySectionId>("overview");
@@ -338,16 +347,13 @@ export function StudyResumenCliente() {
   const sectionGroups: SummarySectionDefinition["group"][] = ["Resumen", "Contable", "Fiscal", "Configuración"];
 
   return (
-    <div className="study-page study-page--wide client-summary">
-      <header className="study-page__header client-summary__header">
-        <div>
-          <p className="study-page__eyebrow">Ficha consolidada</p>
-          <h1 className="study-page__title">Resumen del cliente</h1>
-          <p className="study-page__subtitle">
-            Períodos, configuración contable y situación fiscal en una sola vista de consulta.
-          </p>
-        </div>
-        <div className="client-summary__actions">
+    <DensePage density={density} flow className="client-summary">
+      <DenseHeader
+        eyebrow="Ficha consolidada"
+        title="Resumen del cliente"
+        description={`${client.legalName}${client.tradeName ? ` · ${client.tradeName}` : ""} · CUIT ${client.cuit}`}
+        actions={
+          <>
           <Button variant="ghost" onClick={() => navigate("/clientes")}>
             Volver a clientes
           </Button>
@@ -355,74 +361,40 @@ export function StudyResumenCliente() {
             Configuración fiscal
           </Button>
           <Button onClick={() => navigate("/trabajo")}>Abrir trabajo</Button>
-        </div>
-      </header>
+        
+          </>
+        }
+      />
 
-      <section className="client-summary__identity" aria-labelledby="client-summary-name">
-        <div className="client-summary__identity-heading">
-          <div>
-            <p className="study-page__eyebrow">Cliente activo</p>
-            <h2 id="client-summary-name">{client.legalName}</h2>
-            <p>
-              {client.tradeName ? `${client.tradeName} · ` : ""}CUIT {client.cuit}
-            </p>
-          </div>
-          <StatusBadge status={client.status} />
-        </div>
-        <dl className="client-summary__identity-facts">
-          <SummaryFact label="Alta en el estudio" value={formatDate(client.createdAt)} />
-          <SummaryFact label="Última actualización" value={formatDate(client.updatedAt)} />
-          <SummaryFact label="Ficha contable" value={profile ? "Configurada" : "Pendiente"} />
-          <SummaryFact
-            label="Onboarding fiscal"
-            value={client.onboarding?.completed ? "Completo" : "Pendiente"}
-          />
-        </dl>
-      </section>
+      <StatStrip
+        label="Resumen cuantitativo del cliente"
+        items={[
+          { key: "status", label: "Estado", value: <StatusBadge status={client.status} /> },
+          { key: "since", label: "Alta en el estudio", value: formatDate(client.createdAt), detail: `Actualizado ${formatDate(client.updatedAt)}` },
+          { key: "profile", label: "Ficha contable", value: profile ? "Configurada" : "Pendiente", tone: profile ? undefined : "warn" },
+          { key: "onboarding", label: "Onboarding fiscal", value: client.onboarding?.completed ? "Completo" : "Pendiente", tone: client.onboarding?.completed ? undefined : "warn" },
+          { key: "years", label: "Ejercicios contables", value: accounting.fiscalYears.length, detail: `${accountingPeriodCount} períodos` },
+          { key: "fiscal", label: "Períodos fiscales", value: fiscal.periods.length },
+          { key: "obligations", label: "Obligaciones", value: fiscal.obligations.length, detail: `${activeRegistrations} inscripciones vigentes` },
+        ]}
+      />
 
-      <ul className="client-summary__metrics" aria-label="Resumen cuantitativo del cliente">
-        <li>
-          <span>Ejercicios contables</span>
-          <strong>{accounting.fiscalYears.length}</strong>
-          <small>con sus períodos mensuales</small>
-        </li>
-        <li>
-          <span>Períodos contables</span>
-          <strong>{accountingPeriodCount}</strong>
-          <small>abiertos y cerrados</small>
-        </li>
-        <li>
-          <span>Períodos fiscales</span>
-          <strong>{fiscal.periods.length}</strong>
-          <small>disponibles para obligaciones</small>
-        </li>
-        <li>
-          <span>Obligaciones</span>
-          <strong>{fiscal.obligations.length}</strong>
-          <small>{activeRegistrations} inscripciones vigentes</small>
-        </li>
-      </ul>
+      <DenseToolbar>
+        <DenseSearch
+          value={search}
+          onChange={setSearch}
+          placeholder="CUIT, período, impuesto, obligación…"
+          label="Buscar en este cliente"
+        />
+        {search.trim() ? (
+          <span className="client-summary__search-status" role="status" aria-live="polite">
+            {searchResults.length > 0 ? `${searchResults.length} coincidencias` : "Sin coincidencias"}
+          </span>
+        ) : null}
+      </DenseToolbar>
 
-      <section className="client-summary__search" aria-label="Buscar en la ficha del cliente">
-        <div>
-          <label htmlFor="client-summary-search">Buscar en este cliente</label>
-          <p>Encontrá una sección, período, impuesto, obligación o dato fiscal.</p>
-        </div>
-        <div className="client-summary__search-control">
-          <input
-            id="client-summary-search"
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="CUIT, período, impuesto, obligación…"
-          />
-          {search.trim() ? (
-            <span className="client-summary__search-status" role="status" aria-live="polite">
-              {searchResults.length > 0 ? `${searchResults.length} coincidencias` : "Sin coincidencias"}
-            </span>
-          ) : null}
-        </div>
-      </section>
+
+
 
       <div className="client-summary__workspace">
         <nav className="client-summary__section-index" aria-label="Secciones internas del cliente">
@@ -849,6 +821,6 @@ export function StudyResumenCliente() {
           ) : null}
         </div>
       </div>
-    </div>
+    </DensePage>
   );
 }

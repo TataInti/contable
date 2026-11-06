@@ -6,8 +6,14 @@ import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
-import { SectionIndex } from "../ui/SectionIndex";
 import { StatusBadge } from "../ui/StatusBadge";
+import {
+  DenseAlert,
+  DenseHeader,
+  DensePage,
+  StatStrip,
+  useDensity,
+} from "../ui/Dense";
 import "./study.css";
 
 interface TaxSettlement {
@@ -53,6 +59,7 @@ function taxPeriodLabel(period: TaxPeriod) {
 }
 
 export function StudyLiquidaciones() {
+  const [density] = useDensity();
   const { firmId, clientId, periodId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -169,15 +176,13 @@ export function StudyLiquidaciones() {
     artifactMutation.error;
 
   return (
-    <section className="study-page" aria-labelledby="liquidaciones-title">
-      <header className="study-page__header">
-        <div>
-          <p className="study-page__eyebrow">Impuestos</p>
-          <h1 id="liquidaciones-title" className="study-page__title">
-            Liquidaciones
-          </h1>
-        </div>
-        <span className="study-page__actions">
+    <DensePage density={density} flow>
+      <DenseHeader
+        eyebrow="Impuestos"
+        title="Liquidaciones"
+        description="Cada liquidación conserva su versión, las reglas aplicadas y la evidencia del corte de cálculo."
+        actions={
+          <>
           {canCalculate ? (
             <Button
               onClick={() => setShowCalculator((visible) => !visible)}
@@ -190,23 +195,39 @@ export function StudyLiquidaciones() {
           <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>
             Ver expediente
           </Button>
-        </span>
-      </header>
-      <p className="study-page__hint">
-        Cada liquidación conserva su versión, las reglas aplicadas y la evidencia del corte de
-        cálculo.
-      </p>
+        
+          </>
+        }
+      />
 
-      <SectionIndex
+      <StatStrip
+        label="Estado del período"
         items={[
-          { id: "settlements-context-title", label: "Estado del período" },
-          { id: "settlements-next-step-title", label: "Siguiente paso" },
-          { id: "settlements-list-title", label: "Liquidaciones", meta: `${data.length}` },
+          { key: "settlements", label: "Liquidaciones", value: data.length },
+          { key: "periods", label: "Períodos fiscales", value: taxPeriodsQuery.data?.length ?? "—" },
+          { key: "regimes", label: "Regímenes disponibles", value: availableRegimes.length },
         ]}
       />
 
-      <section className="guided-context" aria-labelledby="settlements-context-title"><div className="guided-context__heading"><div><p className="study-page__eyebrow">Cartera fiscal</p><h2 id="settlements-context-title">Estado del período</h2><p>Calculá sólo sobre obligaciones configuradas y evidencia aprobada hasta la fecha de corte.</p></div><StatusBadge status={data.length ? "ACTIVE" : "PENDING"} /></div><dl className="guided-context__facts"><div><dt>Liquidaciones</dt><dd>{data.length}</dd></div><div><dt>Períodos fiscales</dt><dd>{taxPeriodsQuery.data?.length ?? "—"}</dd></div><div><dt>Regímenes disponibles</dt><dd>{availableRegimes.length}</dd></div></dl></section>
-      <section className="guided-next-step" aria-labelledby="settlements-next-step-title"><div><p className="study-page__eyebrow">Flujo guiado</p><h2 id="settlements-next-step-title">Próximo paso</h2><p>{data.length ? "Revisá la cartera y avanzá la liquidación que requiere la próxima decisión." : canCalculate ? "Calculá una liquidación para un régimen y período fiscal configurados." : "Prepará la evidencia y el expediente antes de iniciar el cálculo."}</p></div>{canCalculate ? <Button onClick={() => setShowCalculator(true)}>Calcular liquidación</Button> : <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>Abrir expediente</Button>}</section>
+      <DenseAlert
+        tone="ok"
+        action={
+          canCalculate ? (
+            <Button size="sm" onClick={() => setShowCalculator(true)}>Calcular liquidación</Button>
+          ) : (
+            <Button size="sm" variant="secondary" onClick={() => navigate("/expediente-mensual")}>Abrir expediente</Button>
+          )
+        }
+      >
+        <strong>Próximo paso:</strong>{" "}
+        {data.length
+          ? "Revisá la cartera y avanzá la liquidación que requiere la próxima decisión."
+          : canCalculate
+            ? "Calculá una liquidación para un régimen y período fiscal configurados."
+            : "Prepará la evidencia y el expediente antes de iniciar el cálculo."}
+      </DenseAlert>
+
+
 
       <ActionDrawer
         isOpen={showCalculator}
@@ -436,6 +457,7 @@ export function StudyLiquidaciones() {
           {mutationError.message}
         </p>
       ) : null}
-    </section>
+    
+    </DensePage>
   );
 }

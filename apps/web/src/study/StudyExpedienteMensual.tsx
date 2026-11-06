@@ -7,6 +7,13 @@ import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
+import {
+  DenseAlert,
+  DenseHeader,
+  DensePage,
+  StatStrip,
+  useDensity,
+} from "../ui/Dense";
 import "./study.css";
 
 /**
@@ -518,6 +525,7 @@ async function fileToHash(file: File): Promise<string> {
 }
 
 export function StudyExpedienteMensual() {
+  const [density] = useDensity();
   const { firmId, clientId, periodId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -1103,7 +1111,7 @@ export function StudyExpedienteMensual() {
     setActiveStep((value) => Math.min(value + 1, WORKPAPER_STEPS.length - 1));
 
   return (
-    <div className="study-page">
+    <DensePage density={density} flow>
       {sifereReceipt ? (
         <div className="action-receipt action-receipt--page" role="status">
           <span>{sifereReceipt}</span>
@@ -1116,14 +1124,12 @@ export function StudyExpedienteMensual() {
           </button>
         </div>
       ) : null}
-      <header className="study-page__header">
-        <div>
-          <h1>Expediente mensual</h1>
-          <p className="study-page__subtitle">
-            Coordina IVA, IIBB y TEM del período con evidencia trazable.
-          </p>
-        </div>
-        <span className="study-page__actions">
+      <DenseHeader
+        eyebrow="Impuestos"
+        title="Expediente mensual"
+        description="Coordina IVA, IIBB y TEM del período con evidencia trazable."
+        actions={
+          <>
           <Button
             variant="secondary"
             disabled={!capabilities.has("tax.vouchers.prepare")}
@@ -1140,11 +1146,34 @@ export function StudyExpedienteMensual() {
             <Icon name="plus" size={16} />
             Nuevo expediente
           </Button>
-        </span>
-      </header>
+        
+          </>
+        }
+      />
 
-      <section className="guided-context" aria-labelledby="workpaper-context-title"><div className="guided-context__heading"><div><p className="study-page__eyebrow">Período en trabajo</p><h2 id="workpaper-context-title">Expediente y evidencia</h2><p>El expediente reúne fuentes, controles y posiciones fiscales antes del cierre mensual.</p></div><StatusBadge status={workpapers.length ? "IN_PROGRESS" : "PENDING"} /></div><dl className="guided-context__facts"><div><dt>Expedientes</dt><dd>{workpapers.length}</dd></div><div><dt>Etapa actual</dt><dd>{activeStepMeta.title}</dd></div><div><dt>Componentes</dt><dd>{coverageQuery.data?.components.length ?? "—"}</dd></div></dl></section>
-      <section className="guided-next-step" aria-labelledby="workpaper-next-step-title"><div><p className="study-page__eyebrow">Flujo guiado</p><h2 id="workpaper-next-step-title">Próximo paso</h2><p>{workpapers.length ? `${activeStepMeta.description} Avanzá cuando la evidencia de esta etapa esté completa.` : "Creá el expediente del período para ordenar la evidencia y los controles fiscales."}</p></div>{workpapers.length ? <Button variant="secondary" onClick={goToNextStep} disabled={!nextStep}>Continuar a {nextStep?.title ?? "cierre"}</Button> : <Button onClick={() => void createMutation.mutate()} disabled={createMutation.isPending || !capabilities.has("tax.settlements.calculate")}>Nuevo expediente</Button>}</section>
+      <StatStrip
+        label="Estado del expediente"
+        items={[
+          { key: "workpapers", label: "Expedientes", value: workpapers.length },
+          { key: "step", label: "Etapa actual", value: activeStepMeta.title },
+          { key: "components", label: "Componentes", value: coverageQuery.data?.components.length ?? "—" },
+        ]}
+      />
+
+      <DenseAlert
+        tone="ok"
+        action={
+          workpapers.length ? (
+            <Button size="sm" variant="secondary" onClick={goToNextStep} disabled={!nextStep}>Continuar a {nextStep?.title ?? "cierre"}</Button>
+          ) : (
+            <Button size="sm" onClick={() => void createMutation.mutate()} disabled={createMutation.isPending || !capabilities.has("tax.settlements.calculate")}>Nuevo expediente</Button>
+          )
+        }
+      >
+        <strong>Próximo paso:</strong>{" "}
+        {workpapers.length ? `${activeStepMeta.description} Avanzá cuando la evidencia de esta etapa esté completa.` : "Creá el expediente del período para ordenar la evidencia y los controles fiscales."}
+      </DenseAlert>
+
 
       <ActionDrawer
         isOpen={showSifereModal}
@@ -2948,6 +2977,7 @@ export function StudyExpedienteMensual() {
           }
         </p>
       ) : null}
-    </div>
+    
+    </DensePage>
   );
 }
