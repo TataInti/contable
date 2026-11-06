@@ -40,8 +40,8 @@ export default defineConfig({
       timeout: 60_000,
     },
   ],
+  // Proyecto móvil fuera de alcance en esta etapa (decisión de Inti, 06-nov-2026). Reactivar cuando se revise la UX móvil.
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
   ],
 });
