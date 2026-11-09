@@ -579,6 +579,24 @@ export function StudyReglasFiscales() {
                 </option>
               ))}
             </select>
+            {regimesQuery.isError ? (
+              <p className="form-error" role="alert">
+                No pudimos consultar los regímenes.{" "}
+                <button type="button" className="fiscal-retry" onClick={() => void regimesQuery.refetch()}>
+                  Reintentar
+                </button>
+              </p>
+            ) : regimesQuery.isSuccess && regimesQuery.data.length === 0 ? (
+              <p className="form-submit-hint" role="note">
+                Todavía no hay regímenes. Creá uno en{" "}
+                <a
+                  className="dense-link"
+                  href="/catalogos-fiscales"
+                >
+                  Catálogos fiscales
+                </a>.
+              </p>
+            ) : null}
           </div>
           <div className="study-form__actions">
             <Button

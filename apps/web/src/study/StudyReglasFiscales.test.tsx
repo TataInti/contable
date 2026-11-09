@@ -368,3 +368,47 @@ describe("StudyReglasFiscales — CTA único y submit deshabilitado explicado (F
     expect(screen.queryByRole("button", { name: /Eliminar borrador/ })).toBeNull();
   });
 });
+
+describe("StudyReglasFiscales — estado del selector de regímenes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = context();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("distingue la lista vacía y enlaza a Catálogos fiscales", async () => {
+    mockApi(makeDetail(null));
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo paquete" }));
+    expect(await screen.findByText(/Todavía no hay regímenes/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Catálogos fiscales" }).getAttribute("href")).toBe("/catalogos-fiscales");
+    expect(screen.queryByText(/No pudimos consultar los regímenes/)).toBeNull();
+  });
+
+  it("muestra error de consulta con reintento separado del estado vacío", async () => {
+    mockApi(makeDetail(null));
+    const originalGet = vi.mocked(api.get).getMockImplementation();
+    let regimeReads = 0;
+    vi.mocked(api.get).mockImplementation(((path: string) => {
+      if (path === "/tax/regimes") {
+        regimeReads += 1;
+        return regimeReads === 1
+          ? Promise.reject(new Error("Error sintético de consulta"))
+          : Promise.resolve([]);
+      }
+      return originalGet?.(path) ?? Promise.resolve([]);
+    }) as never);
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo paquete" }));
+    expect(await screen.findByText(/No pudimos consultar los regímenes/)).toBeTruthy();
+    expect(screen.queryByText(/Todavía no hay regímenes/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(await screen.findByText(/Todavía no hay regímenes/)).toBeTruthy();
+  });
+});
