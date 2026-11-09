@@ -16,6 +16,40 @@ const confirmationSchema = z
 export function fiscalDeletionRoutes(app: FastifyInstance) {
   const service = new FiscalDeletionService();
 
+  app.get("/api/v1/firms/:firmId/tax/jurisdictions/:jurisdictionId/deletion-preview", async (req, reply) => {
+    const { jurisdictionId } = req.params as { jurisdictionId: string };
+    const data = await service.previewJurisdiction(jurisdictionId, tenantContextFromRequest(req));
+    return reply.send({ data });
+  });
+
+  app.delete("/api/v1/firms/:firmId/tax/jurisdictions/:jurisdictionId", async (req, reply) => {
+    const { jurisdictionId } = req.params as { jurisdictionId: string };
+    const body = confirmationSchema.parse(req.body ?? {});
+    const data = await service.deleteJurisdiction(
+      jurisdictionId,
+      body.confirmation,
+      tenantContextFromRequest(req),
+    );
+    return reply.send({ data });
+  });
+
+  app.get("/api/v1/firms/:firmId/tax/types/:taxTypeId/deletion-preview", async (req, reply) => {
+    const { taxTypeId } = req.params as { taxTypeId: string };
+    const data = await service.previewTaxType(taxTypeId, tenantContextFromRequest(req));
+    return reply.send({ data });
+  });
+
+  app.delete("/api/v1/firms/:firmId/tax/types/:taxTypeId", async (req, reply) => {
+    const { taxTypeId } = req.params as { taxTypeId: string };
+    const body = confirmationSchema.parse(req.body ?? {});
+    const data = await service.deleteTaxType(
+      taxTypeId,
+      body.confirmation,
+      tenantContextFromRequest(req),
+    );
+    return reply.send({ data });
+  });
+
   app.get("/api/v1/firms/:firmId/tax/authorities/:authorityId/deletion-preview", async (req, reply) => {
     const { authorityId } = req.params as { authorityId: string };
     const data = await service.previewAuthority(authorityId, tenantContextFromRequest(req));

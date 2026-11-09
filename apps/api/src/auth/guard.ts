@@ -134,8 +134,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   // Borrado definitivo de catálogos y reglas fiscales: sólo Titular (OWNER).
   // Las rutas de preview y DELETE se declaran antes de los mapeos generales
   // para que no caigan en tax.rules.propose / tax.profile.write.
-  { match: /\/tax\/(authorities|regimes|activities)\/[^/]+\/deletion-preview$/, resolve: () => "data.delete" },
-  { match: /\/tax\/(authorities|regimes|activities)\/[^/]+$/, resolve: (m) => (m === "DELETE" ? "data.delete" : (m === "GET" ? "tax.rules.read" : "tax.rules.propose")) },
+  { match: /\/tax\/(authorities|regimes|activities|jurisdictions|types)\/[^/]+\/deletion-preview$/, resolve: () => "data.delete" },
+  { match: /\/tax\/(authorities|regimes|activities|jurisdictions|types)\/[^/]+$/, resolve: (m) => (m === "DELETE" ? "data.delete" : (m === "GET" ? "tax.rules.read" : "tax.rules.propose")) },
   { match: /\/tax\/rule-packs\/[^/]+\/deletion-preview$/, resolve: () => "data.delete" },
   { match: /\/tax\/rule-packs\/[^/]+$/, resolve: (m) => (m === "DELETE" ? "data.delete" : (m === "GET" ? "tax.rules.read" : "tax.rules.propose")) },
   { match: /\/tax\/rule-versions\/[^/]+\/deletion-preview$/, resolve: () => "data.delete" },
