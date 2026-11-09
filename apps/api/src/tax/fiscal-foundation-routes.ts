@@ -78,8 +78,8 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   app.post("/api/v1/tax/jurisdictions", async (req, reply) => {
     const body = z
       .object({
-        code: z.string().min(1).max(40),
-        name: z.string().min(1).max(160),
+        code: z.string().trim().min(1).max(40),
+        name: z.string().trim().min(1).max(160),
         kind: z.enum(["NATIONAL", "PROVINCIAL", "MUNICIPAL"]),
         parentId: z.string().uuid().optional(),
       })
@@ -88,6 +88,30 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     try {
       const data = await masters.createJurisdiction(tenantContextFromRequest(req), pickDefined(body) as { code: string; name: string; kind: "NATIONAL" | "PROVINCIAL" | "MUNICIPAL"; parentId?: string });
       return reply.status(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.patch("/api/v1/tax/jurisdictions/:jurisdictionId", async (req, reply) => {
+    const { jurisdictionId } = req.params as { jurisdictionId: string };
+    const body = z
+      .object({
+        name: z.string().trim().min(1).max(160).optional(),
+        isActive: z.boolean().optional(),
+      })
+      .strict()
+      .refine((value) => value.name !== undefined || value.isActive !== undefined, {
+        message: "Indicá el nombre o el estado que querés actualizar",
+      })
+      .parse(req.body);
+    try {
+      const data = await masters.updateJurisdiction(tenantContextFromRequest(req), {
+        jurisdictionId,
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+      });
+      return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
     }
@@ -103,10 +127,34 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/tax/types", async (req, reply) => {
-    const body = z.object({ code: z.string().min(1).max(40), name: z.string().min(1).max(160) }).strict().parse(req.body);
+    const body = z.object({ code: z.string().trim().min(1).max(40), name: z.string().trim().min(1).max(160) }).strict().parse(req.body);
     try {
       const data = await masters.createTaxType(tenantContextFromRequest(req), body);
       return reply.status(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.patch("/api/v1/tax/types/:taxTypeId", async (req, reply) => {
+    const { taxTypeId } = req.params as { taxTypeId: string };
+    const body = z
+      .object({
+        name: z.string().trim().min(1).max(160).optional(),
+        isActive: z.boolean().optional(),
+      })
+      .strict()
+      .refine((value) => value.name !== undefined || value.isActive !== undefined, {
+        message: "Indicá el nombre o el estado que querés actualizar",
+      })
+      .parse(req.body);
+    try {
+      const data = await masters.updateTaxType(tenantContextFromRequest(req), {
+        taxTypeId,
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+      });
+      return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
     }

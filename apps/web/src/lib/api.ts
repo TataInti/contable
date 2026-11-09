@@ -169,6 +169,37 @@ export interface PortalContext {
   periods: { periodId: string; label: string; status: string }[];
 }
 
+export type FiscalCatalogOrigin = "REFERENCE" | "UI";
+export type FiscalJurisdictionKind = "NATIONAL" | "PROVINCIAL" | "MUNICIPAL";
+
+export interface FiscalJurisdictionParent {
+  id: string;
+  code: string;
+  name: string;
+  kind: FiscalJurisdictionKind;
+}
+
+export interface FiscalJurisdiction {
+  id: string;
+  code: string;
+  name: string;
+  kind: FiscalJurisdictionKind;
+  parentId: string | null;
+  parent?: FiscalJurisdictionParent | null;
+  isActive: boolean;
+  origin: FiscalCatalogOrigin;
+  createdByFirmId: string | null;
+}
+
+export interface FiscalTaxType {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  origin: FiscalCatalogOrigin;
+  createdByFirmId: string | null;
+}
+
 export interface Client {
   id: string;
   legalName: string;

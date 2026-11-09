@@ -32,8 +32,22 @@ const jurisdiction = {
   code: "AR-E2E-SYN",
   name: "Jurisdicción sintética E2E",
   kind: "NATIONAL",
+  parentId: null,
+  parent: null,
+  isActive: true,
+  origin: "REFERENCE" as const,
+  createdByFirmId: null,
 };
-const taxType = { id: "tax-type-e2e", code: "E2E_TEST_TAX", name: "Impuesto sintético E2E" };
+const taxType = {
+  id: "tax-type-e2e",
+  code: "E2E_TEST_TAX",
+  name: "Impuesto sintético E2E",
+  isActive: true,
+  origin: "REFERENCE" as const,
+  createdByFirmId: null,
+};
+const jurisdictions: Array<typeof jurisdiction | Record<string, unknown>> = [jurisdiction];
+const taxTypes: Array<typeof taxType | Record<string, unknown>> = [taxType];
 const authorities: Array<{
   id: string;
   code: string;
@@ -75,14 +89,42 @@ function context(canPropose = true): ClientContextValue {
 
 function mockApi() {
   vi.mocked(api.get).mockImplementation(((path: string) => {
-    if (path === "/tax/jurisdictions") return Promise.resolve([jurisdiction]);
-    if (path === "/tax/types") return Promise.resolve([taxType]);
+    if (path === "/tax/jurisdictions") return Promise.resolve([...jurisdictions]);
+    if (path === "/tax/types") return Promise.resolve([...taxTypes]);
     if (path === "/tax/authorities") return Promise.resolve([...authorities]);
     if (path === "/tax/regimes") return Promise.resolve([...regimes]);
     if (path === "/tax/activities?includeInactive=true") return Promise.resolve([...activities]);
     return Promise.resolve([]);
   }) as never);
   vi.mocked(api.post).mockImplementation(((path: string, body: Record<string, string>) => {
+    if (path === "/tax/jurisdictions") {
+      const parent = jurisdictions.find((item) => item.id === body.parentId);
+      const created = {
+        id: "jurisdiction-created",
+        code: String(body.code ?? ""),
+        name: String(body.name ?? ""),
+        kind: String(body.kind ?? "NATIONAL"),
+        parentId: body.parentId ?? null,
+        parent: parent ? { id: parent.id, code: parent.code, name: parent.name, kind: parent.kind } : null,
+        isActive: true,
+        origin: "UI" as const,
+        createdByFirmId: "firm-a",
+      };
+      jurisdictions.push(created);
+      return Promise.resolve(created);
+    }
+    if (path === "/tax/types") {
+      const created = {
+        id: "tax-type-created",
+        code: String(body.code ?? ""),
+        name: String(body.name ?? ""),
+        isActive: true,
+        origin: "UI" as const,
+        createdByFirmId: "firm-a",
+      };
+      taxTypes.push(created);
+      return Promise.resolve(created);
+    }
     if (path === "/tax/authorities") {
       const created = {
         id: "authority-e2e",
@@ -147,6 +189,24 @@ function mockApi() {
     return Promise.resolve({});
   }) as never);
   vi.mocked(api.patch).mockImplementation(((path: string, body: Record<string, unknown>) => {
+    const jurisdictionMatch = path.match(/^\/tax\/jurisdictions\/([^/]+)$/);
+    if (jurisdictionMatch) {
+      const index = jurisdictions.findIndex((item) => item.id === jurisdictionMatch[1]);
+      const current = jurisdictions[index];
+      if (!current) return Promise.resolve({});
+      const updated = { ...current, ...body };
+      jurisdictions[index] = updated;
+      return Promise.resolve(updated);
+    }
+    const taxTypeMatch = path.match(/^\/tax\/types\/([^/]+)$/);
+    if (taxTypeMatch) {
+      const index = taxTypes.findIndex((item) => item.id === taxTypeMatch[1]);
+      const current = taxTypes[index];
+      if (!current) return Promise.resolve({});
+      const updated = { ...current, ...body };
+      taxTypes[index] = updated;
+      return Promise.resolve(updated);
+    }
     const match = path.match(/^\/tax\/activities\/([^/]+)$/);
     if (match) {
       const index = activities.findIndex((item) => item.id === match[1]);
@@ -175,6 +235,8 @@ describe("StudyCatalogosFiscales", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authorities.length = 0;
+    jurisdictions.splice(0, jurisdictions.length, jurisdiction);
+    taxTypes.splice(0, taxTypes.length, taxType);
     regimes.length = 0;
     activities.length = 0;
     contextMock.current = context();
@@ -225,15 +287,101 @@ describe("StudyCatalogosFiscales", () => {
     }));
   });
 
+  it("expone jurisdicciones e impuestos y los crea desde sus pestañas", async () => {
+    renderCatalogs();
+
+    expect(await screen.findByRole("tab", { name: /Jurisdicciones/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Tipos de impuesto/ })).toBeTruthy();
+    await openTab(/^Jurisdicciones/);
+    fireEvent.click(await screen.findByRole("button", { name: "Nueva jurisdicción" }));
+    fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "AR-UI-P" } });
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Provincia UI" } });
+    fireEvent.change(screen.getByLabelText("Nivel"), { target: { value: "PROVINCIAL" } });
+    fireEvent.change(screen.getByLabelText("Jurisdicción padre"), { target: { value: jurisdiction.id } });
+    fireEvent.click(screen.getByRole("button", { name: "Crear jurisdicción" }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/tax/jurisdictions", {
+        code: "AR-UI-P",
+        name: "Provincia UI",
+        kind: "PROVINCIAL",
+        parentId: jurisdiction.id,
+      }),
+    );
+    expect(await screen.findByText("Provincia UI")).toBeTruthy();
+
+    await openTab(/^Organismos recaudadores/);
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo organismo" }));
+    expect(
+      await screen.findAllByRole("option", { name: /Provincia UI — Provincia, Nación Jurisdicción sintética E2E/ }),
+    ).toHaveLength(2);
+
+    await openTab(/^Tipos de impuesto/);
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo tipo de impuesto" }));
+    fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "UI-IIBB" } });
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Impuesto provincial propio" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crear tipo de impuesto" }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/tax/types", {
+        code: "UI-IIBB",
+        name: "Impuesto provincial propio",
+      }),
+    );
+    expect(await screen.findByText("Impuesto provincial propio")).toBeTruthy();
+  });
+
+  it("explica qué tipo de impuesto falta para crear un régimen y enlaza a su pestaña", async () => {
+    taxTypes.length = 0;
+    renderCatalogs();
+
+    await openTab(/^Regímenes/);
+    expect((await screen.findByRole("button", { name: "Nuevo régimen" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/Falta un tipo de impuesto: crealo en/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("link", { name: "Tipos de impuesto" }));
+    expect(screen.getByRole("tab", { name: /Tipos de impuesto/ }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("distingue el catálogo vacío de un error y permite reintentar la consulta", async () => {
+    taxTypes.length = 0;
+    renderCatalogs();
+    await openTab(/^Tipos de impuesto/);
+    expect(await screen.findByText("Todavía no hay tipos de impuesto")).toBeTruthy();
+    expect(screen.queryByText("No pudimos cargar impuestos.")).toBeNull();
+
+    cleanup();
+    let typeReads = 0;
+    vi.mocked(api.get).mockImplementation(((path: string) => {
+      if (path === "/tax/types") {
+        typeReads += 1;
+        return typeReads === 1 ? Promise.reject(new Error("Consulta sintética no disponible")) : Promise.resolve([]);
+      }
+      if (path === "/tax/jurisdictions") return Promise.resolve([...jurisdictions]);
+      if (path === "/tax/authorities") return Promise.resolve([...authorities]);
+      if (path === "/tax/regimes") return Promise.resolve([...regimes]);
+      if (path === "/tax/activities?includeInactive=true") return Promise.resolve([...activities]);
+      return Promise.resolve([]);
+    }) as never);
+    renderCatalogs();
+    await openTab(/^Tipos de impuesto/);
+    expect(await screen.findByText("No pudimos cargar impuestos.")).toBeTruthy();
+    expect(screen.queryByText("Todavía no hay tipos de impuesto")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(await screen.findByText("Todavía no hay tipos de impuesto")).toBeTruthy();
+  });
+
   it("mantiene la lectura disponible y oculta altas a quien no propone reglas", async () => {
     contextMock.current = context(false);
     renderCatalogs();
 
     expect(await screen.findByRole("heading", { name: "Catálogos fiscales" })).toBeTruthy();
+    expect(await screen.findByRole("tab", { name: /Jurisdicciones/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /Tipos de impuesto/ })).toBeTruthy();
     expect(await screen.findByRole("tab", { name: /Organismos recaudadores/ })).toBeTruthy();
     expect(screen.getByRole("tab", { name: /Regímenes/ })).toBeTruthy();
     expect(screen.getByRole("tab", { name: /Actividades económicas/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Nuevo organismo" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Nueva jurisdicción" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Nuevo tipo de impuesto" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Nuevo régimen" })).toBeNull();
     expect(api.post).not.toHaveBeenCalled();
   });
@@ -440,7 +588,7 @@ describe("StudyCatalogosFiscales", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Editar" }));
     expect(screen.getAllByText("CM03-02").length).toBeGreaterThanOrEqual(1);
     expect((screen.getByLabelText("Jurisdicción (no editable)") as HTMLInputElement).value).toBe(
-      `${jurisdiction.name} (${jurisdiction.code})`,
+      `${jurisdiction.name} — Nación (${jurisdiction.code})`,
     );
     fireEvent.change(await screen.findByLabelText("Nombre"), {
       target: { value: "Comercio mayorista ampliado" },

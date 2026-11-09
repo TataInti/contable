@@ -35,7 +35,14 @@ export type FiscalErrorCode =
   | "ACTIVITY_LINK_NOT_FOUND"
   | "REGIME_NOT_FOUND"
   | "JURISDICTION_NOT_FOUND"
+  | "JURISDICTION_PARENT_REQUIRED"
+  | "JURISDICTION_PARENT_INVALID"
+  | "JURISDICTION_PARENT_NOT_FOUND"
   | "ACTIVITY_NOT_FOUND"
+  | "CATALOG_NOT_FOUND"
+  | "CATALOG_REFERENCE_IMMUTABLE"
+  | "CATALOG_IN_USE"
+  | "CATALOG_STATE_UNCHANGED"
   | "PERIOD_OVERLAP"
   | "PERIOD_NOT_FOUND"
   | "OBLIGATION_EXISTS"
@@ -116,6 +123,50 @@ async function lockProfileVersionSequence(tx: Prisma.TransactionClient, clientId
 const PROFILE_VERSION_CONFLICT_MESSAGE =
   "Ya existe una versión fiscal en curso o el perfil no es la versión vigente";
 
+async function jurisdictionDependencyCount(
+  tx: Prisma.TransactionClient,
+  jurisdictionId: string,
+): Promise<number> {
+  const counts = await Promise.all([
+    tx.jurisdiction.count({ where: { parentId: jurisdictionId } }),
+    tx.taxAuthority.count({ where: { jurisdictionId } }),
+    tx.taxRegime.count({ where: { jurisdictionId } }),
+    tx.economicActivity.count({ where: { jurisdictionId } }),
+    tx.taxRateRule.count({ where: { jurisdictionId } }),
+    tx.taxMinimumRule.count({ where: { jurisdictionId } }),
+    tx.dueDateRule.count({ where: { jurisdictionId } }),
+    tx.holiday.count({ where: { jurisdictionId } }),
+    tx.professionalCredential.count({ where: { jurisdictionId } }),
+    tx.taxSettlement.count({ where: { jurisdictionId } }),
+    tx.taxCreditLedgerEntry.count({ where: { jurisdictionId } }),
+    tx.withholdingCertificate.count({ where: { jurisdictionId } }),
+    tx.perceptionCertificate.count({ where: { jurisdictionId } }),
+    tx.taxInputAllocation.count({ where: { jurisdictionId } }),
+    tx.supplierTaxProfile.count({ where: { jurisdictionId } }),
+    tx.taxCreditLot.count({ where: { jurisdictionId } }),
+  ]);
+  return counts.reduce((total: number, count: number) => total + count, 0);
+}
+
+async function taxTypeDependencyCount(
+  tx: Prisma.TransactionClient,
+  taxTypeId: string,
+): Promise<number> {
+  const counts = await Promise.all([
+    tx.taxRegime.count({ where: { taxTypeId } }),
+    tx.taxPeriod.count({ where: { taxTypeId } }),
+    tx.importBatch.count({ where: { taxTypeId } }),
+    tx.taxSettlement.count({ where: { taxTypeId } }),
+    tx.taxCreditLedgerEntry.count({ where: { taxTypeId } }),
+    tx.importAdapter.count({ where: { taxTypeId } }),
+    tx.withholdingCertificate.count({ where: { taxTypeId } }),
+    tx.perceptionCertificate.count({ where: { taxTypeId } }),
+    tx.taxInputAllocation.count({ where: { taxTypeId } }),
+    tx.taxCreditLot.count({ where: { taxTypeId } }),
+  ]);
+  return counts.reduce((total: number, count: number) => total + count, 0);
+}
+
 // ---------------------------------------------------------------------------
 // G1-02: Maestros (jurisdicción, autoridad, impuesto, régimen)
 // ---------------------------------------------------------------------------
@@ -124,7 +175,11 @@ export class FiscalMasterService {
   /** Lista jurisdicciones (filtradas por firma vía RLS). */
   async listJurisdictions(ctx: TenantContext) {
     return withTenantContext(ctx, (tx) =>
-      tx.jurisdiction.findMany({ orderBy: { code: "asc" }, take: 500 }),
+      tx.jurisdiction.findMany({
+        include: { parent: { select: { id: true, code: true, name: true, kind: true } } },
+        orderBy: { code: "asc" },
+        take: 500,
+      }),
     );
   }
 
@@ -132,16 +187,45 @@ export class FiscalMasterService {
     ctx: TenantContext,
     input: { code: string; name: string; kind: "NATIONAL" | "PROVINCIAL" | "MUNICIPAL"; parentId?: string },
   ) {
-    return withTenantContext(ctx, (tx) =>
-      tx.jurisdiction.create({
+    return withTenantContext(ctx, async (tx) => {
+      if (input.kind === "NATIONAL" && input.parentId) {
+        throw new FiscalError("JURISDICTION_PARENT_INVALID", "Una jurisdicción nacional no puede tener padre");
+      }
+      if (input.kind !== "NATIONAL" && !input.parentId) {
+        throw new FiscalError(
+          "JURISDICTION_PARENT_REQUIRED",
+          `${input.kind === "PROVINCIAL" ? "Una provincia" : "Un municipio"} debe tener una jurisdicción padre`,
+        );
+      }
+      if (input.parentId) {
+        const parent = await tx.jurisdiction.findUnique({ where: { id: input.parentId } });
+        if (!parent) {
+          throw new FiscalError("JURISDICTION_PARENT_NOT_FOUND", "La jurisdicción padre no existe");
+        }
+        const expectedParentKind = input.kind === "PROVINCIAL" ? "NATIONAL" : "PROVINCIAL";
+        if (parent.kind !== expectedParentKind) {
+          throw new FiscalError(
+            "JURISDICTION_PARENT_INVALID",
+            `${input.kind === "PROVINCIAL" ? "Una provincia requiere una jurisdicción nacional" : "Un municipio requiere una jurisdicción provincial"}; el padre seleccionado es ${parent.kind}`,
+          );
+        }
+      }
+      return tx.jurisdiction.create({
         data: {
           code: input.code,
           name: input.name,
           kind: input.kind,
           ...(input.parentId ? { parentId: input.parentId } : {}),
+          origin: "UI",
+          createdByFirmId: ctx.firmId,
         },
-      }),
-    );
+      });
+    }).catch((err: unknown) => {
+      if (isUniqueConstraintError(err)) {
+        throw new FiscalError("CATALOG_CODE_CONFLICT", "Ya existe una jurisdicción con ese código");
+      }
+      throw err;
+    });
   }
 
   async listTaxTypes(ctx: TenantContext) {
@@ -149,7 +233,104 @@ export class FiscalMasterService {
   }
 
   async createTaxType(ctx: TenantContext, input: { code: string; name: string }) {
-    return withTenantContext(ctx, (tx) => tx.taxType.create({ data: input }));
+    return withTenantContext(ctx, (tx) =>
+      tx.taxType.create({ data: { ...input, origin: "UI", createdByFirmId: ctx.firmId } }),
+    ).catch((err: unknown) => {
+      if (isUniqueConstraintError(err)) {
+        throw new FiscalError("CATALOG_CODE_CONFLICT", "Ya existe un tipo de impuesto con ese código");
+      }
+      throw err;
+    });
+  }
+
+  async updateJurisdiction(
+    ctx: TenantContext,
+    input: { jurisdictionId: string; name?: string; isActive?: boolean },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const row = await tx.jurisdiction.findUnique({ where: { id: input.jurisdictionId } });
+      if (!row || (row.origin === "UI" && row.createdByFirmId !== ctx.firmId)) {
+        throw new FiscalError("CATALOG_NOT_FOUND", "La jurisdicción no existe o no pertenece a este estudio");
+      }
+      if (input.name !== undefined && row.origin !== "UI") {
+        throw new FiscalError("CATALOG_REFERENCE_IMMUTABLE", "El nombre de una jurisdicción de referencia no se puede editar");
+      }
+      if (input.isActive === row.isActive) {
+        throw new FiscalError("CATALOG_STATE_UNCHANGED", input.isActive ? "La jurisdicción ya está activa" : "La jurisdicción ya está desactivada");
+      }
+      if (input.isActive === false && row.origin === "REFERENCE") {
+        const dependencies = await jurisdictionDependencyCount(tx, row.id);
+        if (dependencies > 0) {
+          const dependencyLabel = dependencies === 1 ? "dependencia" : "dependencias";
+          throw new FiscalError("CATALOG_IN_USE", `La jurisdicción de referencia tiene ${dependencies} ${dependencyLabel} y no se puede desactivar`);
+        }
+      }
+      const updated = await tx.jurisdiction.update({
+        where: { id: row.id },
+        data: {
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          firmId: ctx.firmId,
+          userId: ctx.userId,
+          actorKind: ctx.actorKind,
+          action: input.isActive === undefined ? "tax.jurisdiction.updated" : input.isActive ? "tax.jurisdiction.activated" : "tax.jurisdiction.deactivated",
+          entityType: "Jurisdiction",
+          entityId: row.id,
+          before: { name: row.name, isActive: row.isActive },
+          after: { name: updated.name, isActive: updated.isActive },
+        },
+      });
+      return updated;
+    });
+  }
+
+  async updateTaxType(
+    ctx: TenantContext,
+    input: { taxTypeId: string; name?: string; isActive?: boolean },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const row = await tx.taxType.findUnique({ where: { id: input.taxTypeId } });
+      if (!row || (row.origin === "UI" && row.createdByFirmId !== ctx.firmId)) {
+        throw new FiscalError("CATALOG_NOT_FOUND", "El tipo de impuesto no existe o no pertenece a este estudio");
+      }
+      if (input.name !== undefined && row.origin !== "UI") {
+        throw new FiscalError("CATALOG_REFERENCE_IMMUTABLE", "El nombre de un tipo de impuesto de referencia no se puede editar");
+      }
+      if (input.isActive === row.isActive) {
+        throw new FiscalError("CATALOG_STATE_UNCHANGED", input.isActive ? "El tipo de impuesto ya está activo" : "El tipo de impuesto ya está desactivado");
+      }
+      if (input.isActive === false && row.origin === "REFERENCE") {
+        const dependencies = await taxTypeDependencyCount(tx, row.id);
+        if (dependencies > 0) {
+          const dependencyLabel = dependencies === 1 ? "dependencia" : "dependencias";
+          throw new FiscalError("CATALOG_IN_USE", `El tipo de impuesto de referencia tiene ${dependencies} ${dependencyLabel} y no se puede desactivar`);
+        }
+      }
+      const updated = await tx.taxType.update({
+        where: { id: row.id },
+        data: {
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          firmId: ctx.firmId,
+          userId: ctx.userId,
+          actorKind: ctx.actorKind,
+          action: input.isActive === undefined ? "tax.type.updated" : input.isActive ? "tax.type.activated" : "tax.type.deactivated",
+          entityType: "TaxType",
+          entityId: row.id,
+          before: { name: row.name, isActive: row.isActive },
+          after: { name: updated.name, isActive: updated.isActive },
+        },
+      });
+      return updated;
+    });
   }
 
   async listTaxAuthorities(ctx: TenantContext, jurisdictionId?: string) {

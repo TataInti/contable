@@ -2,7 +2,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field } from "@contable/design-system";
 import { ACTIVITY_CODE_PATTERN, normalizeActivityCode } from "@contable/contracts";
-import { api } from "../lib/api";
+import { api, type FiscalJurisdiction, type FiscalTaxType } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
@@ -29,18 +29,8 @@ import {
 import { Icon } from "../ui/Icon";
 import "./study.css";
 
-interface JurisdictionOption {
-  id: string;
-  code: string;
-  name: string;
-  kind: string;
-}
-
-interface TaxTypeOption {
-  id: string;
-  code: string;
-  name: string;
-}
+type JurisdictionOption = FiscalJurisdiction;
+type TaxTypeOption = FiscalTaxType;
 
 interface TaxAuthorityRow {
   id: string;
@@ -79,6 +69,18 @@ interface RegimeForm {
   authorityId: string;
 }
 
+interface JurisdictionForm {
+  code: string;
+  name: string;
+  kind: JurisdictionOption["kind"];
+  parentId: string;
+}
+
+interface TaxTypeForm {
+  code: string;
+  name: string;
+}
+
 interface CatalogActivityRow {
   id: string;
   code: string;
@@ -113,11 +115,27 @@ const emptyActivityForm: ActivityForm = {
   validTo: "",
 };
 
+const emptyJurisdictionForm: JurisdictionForm = {
+  code: "",
+  name: "",
+  kind: "NATIONAL",
+  parentId: "",
+};
+
+const emptyTaxTypeForm: TaxTypeForm = { code: "", name: "" };
+
 function shortDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString("es-AR") : "—";
 }
 
-type CatalogTab = "authorities" | "regimes" | "activities";
+type CatalogTab = "jurisdictions" | "taxTypes" | "authorities" | "regimes" | "activities";
+type MasterDrawer = "jurisdiction-create" | "jurisdiction-edit" | "tax-type-create" | "tax-type-edit";
+
+const jurisdictionKindLabel: Record<JurisdictionOption["kind"], string> = {
+  NATIONAL: "Nación",
+  PROVINCIAL: "Provincia",
+  MUNICIPAL: "Municipio",
+};
 
 function ActivityStateBadge({ isActive }: { isActive: boolean }) {
   return (
@@ -166,9 +184,14 @@ export function StudyCatalogosFiscales() {
   const canPropose = capabilities.has("tax.rules.propose");
   const canDelete = capabilities.has("data.delete");
   const [drawer, setDrawer] = useState<"authority" | "regime" | null>(null);
+  const [masterDrawer, setMasterDrawer] = useState<MasterDrawer | null>(null);
   const [activityDrawer, setActivityDrawer] = useState<"create" | "edit" | "deactivate" | null>(null);
   const [editingActivity, setEditingActivity] = useState<CatalogActivityRow | null>(null);
   const [activityForm, setActivityForm] = useState<ActivityForm>(emptyActivityForm);
+  const [editingJurisdiction, setEditingJurisdiction] = useState<JurisdictionOption | null>(null);
+  const [jurisdictionForm, setJurisdictionForm] = useState<JurisdictionForm>(emptyJurisdictionForm);
+  const [editingTaxType, setEditingTaxType] = useState<TaxTypeOption | null>(null);
+  const [taxTypeForm, setTaxTypeForm] = useState<TaxTypeForm>(emptyTaxTypeForm);
   const [tab, setTab] = useState<CatalogTab>("authorities");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -261,6 +284,74 @@ export function StudyCatalogosFiscales() {
       setDrawer(null);
     },
   });
+  const createJurisdiction = useMutation({
+    mutationFn: () =>
+      api.post<JurisdictionOption>("/tax/jurisdictions", {
+        code: jurisdictionForm.code.trim(),
+        name: jurisdictionForm.name.trim(),
+        kind: jurisdictionForm.kind,
+        ...(jurisdictionForm.kind === "NATIONAL" ? {} : { parentId: jurisdictionForm.parentId }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tax-jurisdictions", firmId] });
+      setJurisdictionForm(emptyJurisdictionForm);
+      setMasterDrawer(null);
+      setReceipt("La jurisdicción quedó registrada en el catálogo.");
+    },
+  });
+  const updateJurisdiction = useMutation({
+    mutationFn: () =>
+      api.patch<JurisdictionOption>(`/tax/jurisdictions/${editingJurisdiction?.id ?? ""}`, {
+        name: jurisdictionForm.name.trim(),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tax-jurisdictions", firmId] });
+      setEditingJurisdiction(null);
+      setMasterDrawer(null);
+      setReceipt("El nombre de la jurisdicción quedó actualizado.");
+    },
+  });
+  const toggleJurisdiction = useMutation({
+    mutationFn: (row: JurisdictionOption) =>
+      api.patch<JurisdictionOption>(`/tax/jurisdictions/${row.id}`, { isActive: !row.isActive }),
+    onSuccess: (_updated, row) => {
+      void queryClient.invalidateQueries({ queryKey: ["tax-jurisdictions", firmId] });
+      setReceipt(row.isActive ? "La jurisdicción quedó desactivada." : "La jurisdicción vuelve a estar activa.");
+    },
+  });
+  const createTaxType = useMutation({
+    mutationFn: () =>
+      api.post<TaxTypeOption>("/tax/types", {
+        code: taxTypeForm.code.trim(),
+        name: taxTypeForm.name.trim(),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tax-types", firmId] });
+      setTaxTypeForm(emptyTaxTypeForm);
+      setMasterDrawer(null);
+      setReceipt("El tipo de impuesto quedó registrado en el catálogo.");
+    },
+  });
+  const updateTaxType = useMutation({
+    mutationFn: () =>
+      api.patch<TaxTypeOption>(`/tax/types/${editingTaxType?.id ?? ""}`, {
+        name: taxTypeForm.name.trim(),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tax-types", firmId] });
+      setEditingTaxType(null);
+      setMasterDrawer(null);
+      setReceipt("El nombre del tipo de impuesto quedó actualizado.");
+    },
+  });
+  const toggleTaxType = useMutation({
+    mutationFn: (row: TaxTypeOption) =>
+      api.patch<TaxTypeOption>(`/tax/types/${row.id}`, { isActive: !row.isActive }),
+    onSuccess: (_updated, row) => {
+      void queryClient.invalidateQueries({ queryKey: ["tax-types", firmId] });
+      setReceipt(row.isActive ? "El tipo de impuesto quedó desactivado." : "El tipo de impuesto vuelve a estar activo.");
+    },
+  });
 
   const createActivity = useMutation({
     mutationFn: () =>
@@ -338,9 +429,16 @@ export function StudyCatalogosFiscales() {
     { label: "actividades económicas", query: activitiesQuery },
   ].filter((item) => item.query.isError);
 
+  const jurisdictions = jurisdictionsQuery.data ?? [];
+  const taxTypes = taxTypesQuery.data ?? [];
+  const jurisdictionLabel = (jurisdiction: JurisdictionOption) => {
+    const parent = jurisdiction.parent ?? jurisdictions.find((item) => item.id === jurisdiction.parentId);
+    const ancestry = parent ? `, ${jurisdictionKindLabel[parent.kind]} ${parent.name}` : "";
+    return `${jurisdiction.name} — ${jurisdictionKindLabel[jurisdiction.kind]}${ancestry} (${jurisdiction.code})`;
+  };
   const jurisdictionName = (jurisdictionId: string) => {
-    const jurisdiction = jurisdictionsQuery.data?.find((item) => item.id === jurisdictionId);
-    return jurisdiction ? `${jurisdiction.name} (${jurisdiction.code})` : "—";
+    const jurisdiction = jurisdictions.find((item) => item.id === jurisdictionId);
+    return jurisdiction ? jurisdictionLabel(jurisdiction) : "—";
   };
   const activityCodeValid = ACTIVITY_CODE_PATTERN.test(normalizeActivityCode(activityForm.code));
   const activityValidityValid =
@@ -363,11 +461,11 @@ export function StudyCatalogosFiscales() {
   const mismatchedRegimes = regimes.filter(regimeMismatch);
   const regimesByAuthority = (authorityId: string) =>
     regimes.filter((row) => row.authority.id === authorityId);
-  const originKnown = [...authorities, ...regimes, ...activities].some((row) => row.origin);
-  const studioRecords = [...authorities, ...regimes, ...activities].filter(
+  const originKnown = [...jurisdictions, ...taxTypes, ...authorities, ...regimes, ...activities].some((row) => row.origin);
+  const studioRecords = [...jurisdictions, ...taxTypes, ...authorities, ...regimes, ...activities].filter(
     (row) => row.origin === "UI",
   ).length;
-  const totalRecords = authorities.length + regimes.length + activities.length;
+  const totalRecords = jurisdictions.length + taxTypes.length + authorities.length + regimes.length + activities.length;
 
   const searchQuery = normalizeSearch(search);
   const textMatch = (...parts: Array<string | null | undefined>) =>
@@ -404,11 +502,28 @@ export function StudyCatalogosFiscales() {
       commonMatch(row, row.jurisdictionId) &&
       textMatch(row.code, row.name, row.source, jurisdictionName(row.jurisdictionId)),
   );
+  const visibleJurisdictions = jurisdictions.filter(
+    (row) =>
+      (!jurisdictionFilter || row.id === jurisdictionFilter || row.parentId === jurisdictionFilter) &&
+      (!originFilter || row.origin === originFilter) &&
+      (!stateFilter || (stateFilter === "active") === row.isActive) &&
+      textMatch(row.code, row.name, jurisdictionKindLabel[row.kind], row.parent?.name),
+  );
+  const visibleTaxTypes = taxTypes.filter(
+    (row) =>
+      (!originFilter || row.origin === originFilter) &&
+      (!stateFilter || (stateFilter === "active") === row.isActive) &&
+      textMatch(row.code, row.name),
+  );
 
+  const selectedJurisdiction = jurisdictions.find((row) => row.id === selectedId) ?? null;
+  const selectedTaxType = taxTypes.find((row) => row.id === selectedId) ?? null;
   const selectedAuthority = authorities.find((row) => row.id === selectedId) ?? null;
   const selectedRegime = regimes.find((row) => row.id === selectedId) ?? null;
   const selectedActivity = activities.find((row) => row.id === selectedId) ?? null;
   const inspectorOpen =
+    (tab === "jurisdictions" && Boolean(selectedJurisdiction)) ||
+    (tab === "taxTypes" && Boolean(selectedTaxType)) ||
     (tab === "authorities" && Boolean(selectedAuthority)) ||
     (tab === "regimes" && Boolean(selectedRegime)) ||
     (tab === "activities" && Boolean(selectedActivity));
@@ -417,6 +532,9 @@ export function StudyCatalogosFiscales() {
     setTab(next);
     setSelectedId(null);
     setAlertsOnly(false);
+    setDrawer(null);
+    setMasterDrawer(null);
+    setActivityDrawer(null);
   };
   const showMismatches = () => {
     setTab("regimes");
@@ -436,22 +554,47 @@ export function StudyCatalogosFiscales() {
     });
     setActivityDrawer("edit");
   };
+  const openJurisdictionEdit = (row: JurisdictionOption) => {
+    setEditingJurisdiction(row);
+    setJurisdictionForm({ code: row.code, name: row.name, kind: row.kind, parentId: row.parentId ?? "" });
+    setMasterDrawer("jurisdiction-edit");
+  };
+  const openTaxTypeEdit = (row: TaxTypeOption) => {
+    setEditingTaxType(row);
+    setTaxTypeForm({ code: row.code, name: row.name });
+    setMasterDrawer("tax-type-edit");
+  };
 
   const jurisdictionsReady = (jurisdictionsQuery.data?.length ?? 0) > 0;
+  const regimePrerequisitesLoaded =
+    !jurisdictionsQuery.isLoading && !taxTypesQuery.isLoading && !authoritiesQuery.isLoading &&
+    !jurisdictionsQuery.isError && !taxTypesQuery.isError && !authoritiesQuery.isError;
   const canCreateRegime =
     jurisdictionsReady &&
-    (taxTypesQuery.data?.length ?? 0) > 0 &&
+    taxTypes.length > 0 &&
     (authoritiesQuery.data?.length ?? 0) > 0;
   const createLabel = {
+    jurisdictions: "Nueva jurisdicción",
+    taxTypes: "Nuevo tipo de impuesto",
     authorities: "Nuevo organismo",
     regimes: "Nuevo régimen",
     activities: "Nueva actividad",
   }[tab];
   const createDisabled =
-    tab === "regimes" ? !canCreateRegime : tab === "activities" ? !jurisdictionsReady : false;
+    tab === "regimes"
+      ? !regimePrerequisitesLoaded || !canCreateRegime
+      : tab === "activities"
+        ? !jurisdictionsReady
+        : false;
   const openCreate = () => {
     if (!canPropose || createDisabled) return;
-    if (tab === "authorities") setDrawer("authority");
+    if (tab === "jurisdictions") {
+      setJurisdictionForm(emptyJurisdictionForm);
+      setMasterDrawer("jurisdiction-create");
+    } else if (tab === "taxTypes") {
+      setTaxTypeForm(emptyTaxTypeForm);
+      setMasterDrawer("tax-type-create");
+    } else if (tab === "authorities") setDrawer("authority");
     else if (tab === "regimes") setDrawer("regime");
     else {
       setEditingActivity(null);
@@ -463,6 +606,8 @@ export function StudyCatalogosFiscales() {
 
   const count = (value: number, loading: boolean) => (loading ? "—" : value);
   const tabHints: Record<CatalogTab, string> = {
+    jurisdictions: "Jerarquía fiscal: Nación → provincia → municipio. El código identifica la jurisdicción y se conserva.",
+    taxTypes: "Tipos de impuesto disponibles para los regímenes fiscales del estudio.",
     authorities:
       "Quién recauda cada impuesto según la jurisdicción: ARCA en Nación, la DGR provincial o la dirección municipal de rentas.",
     regimes: "Cada régimen requiere impuesto, jurisdicción y organismo recaudador compatibles.",
@@ -470,13 +615,17 @@ export function StudyCatalogosFiscales() {
       "El código es clave histórica: las actividades con dependencias se desactivan en lugar de eliminarse.",
   };
   const visibleCount =
-    tab === "authorities"
-      ? visibleAuthorities.length
-      : tab === "regimes"
-        ? visibleRegimes.length
-        : visibleActivities.length;
+    tab === "jurisdictions" ? visibleJurisdictions.length
+      : tab === "taxTypes" ? visibleTaxTypes.length
+        : tab === "authorities" ? visibleAuthorities.length
+          : tab === "regimes" ? visibleRegimes.length
+            : visibleActivities.length;
   const totalCount =
-    tab === "authorities" ? authorities.length : tab === "regimes" ? regimes.length : activities.length;
+    tab === "jurisdictions" ? jurisdictions.length
+      : tab === "taxTypes" ? taxTypes.length
+        : tab === "authorities" ? authorities.length
+          : tab === "regimes" ? regimes.length
+            : activities.length;
 
   const tableFooter = (
     <>
@@ -515,7 +664,88 @@ export function StudyCatalogosFiscales() {
   );
 
   let inspector: ReactNode = null;
-  if (tab === "authorities" && selectedAuthority) {
+  if (tab === "jurisdictions" && selectedJurisdiction) {
+    const parent = selectedJurisdiction.parent ?? jurisdictions.find((row) => row.id === selectedJurisdiction.parentId);
+    const ownedUi = isOwnedUiRecord(selectedJurisdiction, firmId);
+    inspector = (
+      <Inspector
+        label="Detalle de la jurisdicción"
+        eyebrow="Jurisdicción"
+        title={selectedJurisdiction.code}
+        subtitle={selectedJurisdiction.name}
+        onClose={() => setSelectedId(null)}
+        footer={canPropose || (canDelete && ownedUi) ? (
+          <>
+            {canPropose && ownedUi ? (
+              <Button size="sm" variant="secondary" onClick={() => openJurisdictionEdit(selectedJurisdiction)}>Editar</Button>
+            ) : null}
+            {canPropose ? (
+              <Button
+                size="sm"
+                variant={selectedJurisdiction.isActive ? "danger" : "secondary"}
+                onClick={() => toggleJurisdiction.mutate(selectedJurisdiction)}
+                loading={toggleJurisdiction.isPending && toggleJurisdiction.variables?.id === selectedJurisdiction.id}
+              >
+                {selectedJurisdiction.isActive ? "Desactivar" : "Reactivar"}
+              </Button>
+            ) : null}
+            {canDelete && ownedUi ? deleteButton(`/tax/jurisdictions/${selectedJurisdiction.id}`, true) : null}
+          </>
+        ) : undefined}
+      >
+        <InspectorSection title="Ficha">
+          <InspectorFacts
+            items={[
+              ["Nivel", jurisdictionKindLabel[selectedJurisdiction.kind]],
+              ["Padre", parent ? `${jurisdictionKindLabel[parent.kind]} ${parent.name}` : "—"],
+              ["Origen", <OriginBadge key="origin" origin={selectedJurisdiction.origin} />],
+              ["Estado", <ActiveBadge key="state" active={selectedJurisdiction.isActive} />],
+            ]}
+          />
+          <MutationError error={toggleJurisdiction.error} />
+        </InspectorSection>
+      </Inspector>
+    );
+  } else if (tab === "taxTypes" && selectedTaxType) {
+    const ownedUi = isOwnedUiRecord(selectedTaxType, firmId);
+    inspector = (
+      <Inspector
+        label="Detalle del tipo de impuesto"
+        eyebrow="Tipo de impuesto"
+        title={selectedTaxType.code}
+        subtitle={selectedTaxType.name}
+        onClose={() => setSelectedId(null)}
+        footer={canPropose || (canDelete && ownedUi) ? (
+          <>
+            {canPropose && ownedUi ? (
+              <Button size="sm" variant="secondary" onClick={() => openTaxTypeEdit(selectedTaxType)}>Editar</Button>
+            ) : null}
+            {canPropose ? (
+              <Button
+                size="sm"
+                variant={selectedTaxType.isActive ? "danger" : "secondary"}
+                onClick={() => toggleTaxType.mutate(selectedTaxType)}
+                loading={toggleTaxType.isPending && toggleTaxType.variables?.id === selectedTaxType.id}
+              >
+                {selectedTaxType.isActive ? "Desactivar" : "Reactivar"}
+              </Button>
+            ) : null}
+            {canDelete && ownedUi ? deleteButton(`/tax/types/${selectedTaxType.id}`, true) : null}
+          </>
+        ) : undefined}
+      >
+        <InspectorSection title="Ficha">
+          <InspectorFacts
+            items={[
+              ["Origen", <OriginBadge key="origin" origin={selectedTaxType.origin} />],
+              ["Estado", <ActiveBadge key="state" active={selectedTaxType.isActive} />],
+            ]}
+          />
+          <MutationError error={toggleTaxType.error} />
+        </InspectorSection>
+      </Inspector>
+    );
+  } else if (tab === "authorities" && selectedAuthority) {
     const linked = regimesByAuthority(selectedAuthority.id);
     inspector = (
       <Inspector
@@ -882,10 +1112,129 @@ export function StudyCatalogosFiscales() {
     },
   ];
 
+  const jurisdictionParentLabel = (jurisdiction: JurisdictionOption) => {
+    const parent = jurisdiction.parent ?? jurisdictions.find((row) => row.id === jurisdiction.parentId);
+    return parent ? `${jurisdictionKindLabel[parent.kind]} ${parent.name}` : "—";
+  };
+  const jurisdictionColumns: DenseColumn<JurisdictionOption>[] = [
+    {
+      key: "code",
+      header: "Código",
+      sortValue: (row) => row.code,
+      render: (row) => <span className="dense-code">{row.code}</span>,
+    },
+    {
+      key: "name",
+      header: "Jurisdicción",
+      sortValue: (row) => row.name,
+      render: (row) => <span title={row.name}>{row.name}</span>,
+    },
+    {
+      key: "kind",
+      header: "Nivel",
+      sortValue: (row) => jurisdictionKindLabel[row.kind],
+      render: (row) => jurisdictionKindLabel[row.kind],
+    },
+    {
+      key: "parent",
+      header: "Padre",
+      sortValue: jurisdictionParentLabel,
+      render: jurisdictionParentLabel,
+    },
+    {
+      key: "origin",
+      header: "Origen",
+      secondary: true,
+      sortValue: (row) => row.origin ?? "",
+      render: (row) => <OriginBadge origin={row.origin} />,
+    },
+    {
+      key: "state",
+      header: "Estado",
+      secondary: true,
+      sortValue: (row) => row.isActive,
+      render: (row) => <ActiveBadge active={row.isActive} />,
+    },
+  ];
+  const taxTypeColumns: DenseColumn<TaxTypeOption>[] = [
+    {
+      key: "code",
+      header: "Código",
+      sortValue: (row) => row.code,
+      render: (row) => <span className="dense-code">{row.code}</span>,
+    },
+    {
+      key: "name",
+      header: "Tipo de impuesto",
+      sortValue: (row) => row.name,
+      render: (row) => <span title={row.name}>{row.name}</span>,
+    },
+    {
+      key: "origin",
+      header: "Origen",
+      secondary: true,
+      sortValue: (row) => row.origin ?? "",
+      render: (row) => <OriginBadge origin={row.origin} />,
+    },
+    {
+      key: "state",
+      header: "Estado",
+      secondary: true,
+      sortValue: (row) => row.isActive,
+      render: (row) => <ActiveBadge active={row.isActive} />,
+    },
+  ];
+
   const select = (key: string | null) => setSelectedId(key);
 
   let tableBody: ReactNode;
-  if (tab === "authorities") {
+  if (tab === "jurisdictions") {
+    tableBody =
+      loadingFor(jurisdictionsQuery.isLoading, "Cargando jurisdicciones…") ??
+      (jurisdictionsQuery.isError ? null : (
+        <DenseTable<JurisdictionOption>
+          label="Jurisdicciones"
+          columns={jurisdictionColumns}
+          rows={visibleJurisdictions}
+          rowKey={(row) => row.id}
+          selectedKey={selectedId}
+          onSelect={select}
+          inspectorOpen={inspectorOpen}
+          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
+          footer={tableFooter}
+          empty={
+            <EmptyState
+              size="compact"
+              title={jurisdictions.length === 0 ? "Todavía no hay jurisdicciones" : "Ninguna jurisdicción coincide con los filtros"}
+              description={jurisdictions.length === 0 ? "Creá Nación, provincia y municipio para completar el alcance fiscal del estudio." : "Probá con otro código o nombre, o quitá filtros."}
+            />
+          }
+        />
+      ));
+  } else if (tab === "taxTypes") {
+    tableBody =
+      loadingFor(taxTypesQuery.isLoading, "Cargando tipos de impuesto…") ??
+      (taxTypesQuery.isError ? null : (
+        <DenseTable<TaxTypeOption>
+          label="Tipos de impuesto"
+          columns={taxTypeColumns}
+          rows={visibleTaxTypes}
+          rowKey={(row) => row.id}
+          selectedKey={selectedId}
+          onSelect={select}
+          inspectorOpen={inspectorOpen}
+          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
+          footer={tableFooter}
+          empty={
+            <EmptyState
+              size="compact"
+              title={taxTypes.length === 0 ? "Todavía no hay tipos de impuesto" : "Ningún tipo de impuesto coincide con los filtros"}
+              description={taxTypes.length === 0 ? "Creá un tipo de impuesto para poder iniciar regímenes fiscales." : "Probá con otro código o nombre, o quitá filtros."}
+            />
+          }
+        />
+      ));
+  } else if (tab === "authorities") {
     tableBody =
       loadingFor(authoritiesQuery.isLoading, "Cargando organismos recaudadores…") ??
       (authoritiesQuery.isError ? null : (
@@ -985,7 +1334,7 @@ export function StudyCatalogosFiscales() {
       <DenseHeader
         eyebrow="Administración fiscal"
         title="Catálogos fiscales"
-        description="Organismos recaudadores, regímenes y actividades que se vinculan a la configuración fiscal de cada cliente. Usá códigos verificados e identificá los datos de prueba como sintéticos."
+        description="Administrá jurisdicciones, tipos de impuesto, organismos recaudadores, regímenes y actividades que organizan la configuración fiscal del estudio."
         actions={
           canPropose ? (
             <Button size="sm" onClick={openCreate} disabled={createDisabled}>
@@ -998,6 +1347,20 @@ export function StudyCatalogosFiscales() {
       <StatStrip
         label="Resumen de catálogos"
         items={[
+          {
+            key: "jurisdictions",
+            label: "Jurisdicciones",
+            value: count(jurisdictions.length, jurisdictionsQuery.isLoading),
+            active: tab === "jurisdictions",
+            onSelect: () => switchTab("jurisdictions"),
+          },
+          {
+            key: "taxTypes",
+            label: "Tipos de impuesto",
+            value: count(taxTypes.length, taxTypesQuery.isLoading),
+            active: tab === "taxTypes",
+            onSelect: () => switchTab("taxTypes"),
+          },
           {
             key: "authorities",
             label: "Organismos",
@@ -1040,12 +1403,43 @@ export function StudyCatalogosFiscales() {
         ]}
       />
 
+      {tab === "regimes" && canPropose && regimePrerequisitesLoaded && !canCreateRegime ? (
+        <DenseAlert>
+          {!jurisdictionsReady ? (
+            <p>
+              Falta una jurisdicción: creala en{" "}
+              <a className="dense-link" href="#catalog-tab-jurisdictions" onClick={(event) => { event.preventDefault(); switchTab("jurisdictions"); }}>
+                Jurisdicciones
+              </a>.
+            </p>
+          ) : null}
+          {taxTypes.length === 0 ? (
+            <p>
+              Falta un tipo de impuesto: crealo en{" "}
+              <a className="dense-link" href="#catalog-tab-taxTypes" onClick={(event) => { event.preventDefault(); switchTab("taxTypes"); }}>
+                Tipos de impuesto
+              </a>.
+            </p>
+          ) : null}
+          {authorities.length === 0 ? (
+            <p>
+              Falta un organismo recaudador: crealo en{" "}
+              <a className="dense-link" href="#catalog-tab-authorities" onClick={(event) => { event.preventDefault(); switchTab("authorities"); }}>
+                Organismos recaudadores
+              </a>.
+            </p>
+          ) : null}
+        </DenseAlert>
+      ) : null}
+
       <DenseTabs<CatalogTab>
         label="Catálogos fiscales"
         idPrefix="catalog-tab"
         active={tab}
         onChange={switchTab}
         tabs={[
+          { id: "jurisdictions", label: "Jurisdicciones", count: jurisdictions.length },
+          { id: "taxTypes", label: "Tipos de impuesto", count: taxTypes.length },
           { id: "authorities", label: "Organismos recaudadores", count: authorities.length },
           {
             id: "regimes",
@@ -1080,9 +1474,9 @@ export function StudyCatalogosFiscales() {
           onChange={(event) => setJurisdictionFilter(event.target.value)}
         >
           <option value="">Jurisdicción: todas</option>
-          {jurisdictionsQuery.data?.map((jurisdiction) => (
+          {jurisdictions.map((jurisdiction) => (
             <option key={jurisdiction.id} value={jurisdiction.id}>
-              {jurisdiction.name} ({jurisdiction.code})
+              {jurisdictionLabel(jurisdiction)}
             </option>
           ))}
         </select>
@@ -1188,9 +1582,9 @@ export function StudyCatalogosFiscales() {
               required
             >
               <option value="">Seleccioná una jurisdicción…</option>
-              {jurisdictionsQuery.data?.map((jurisdiction) => (
+              {jurisdictions.map((jurisdiction) => (
                 <option key={jurisdiction.id} value={jurisdiction.id}>
-                  {jurisdiction.name} ({jurisdiction.code})
+                  {jurisdictionLabel(jurisdiction)}
                 </option>
               ))}
             </select>
@@ -1268,9 +1662,9 @@ export function StudyCatalogosFiscales() {
               required
             >
               <option value="">Seleccioná una jurisdicción…</option>
-              {jurisdictionsQuery.data?.map((jurisdiction) => (
+              {jurisdictions.map((jurisdiction) => (
                 <option key={jurisdiction.id} value={jurisdiction.id}>
-                  {jurisdiction.name} ({jurisdiction.code})
+                  {jurisdictionLabel(jurisdiction)}
                 </option>
               ))}
             </select>
@@ -1390,9 +1784,9 @@ export function StudyCatalogosFiscales() {
               required
             >
               <option value="">Seleccioná una jurisdicción…</option>
-              {jurisdictionsQuery.data?.map((jurisdiction) => (
+              {jurisdictions.map((jurisdiction) => (
                 <option key={jurisdiction.id} value={jurisdiction.id}>
-                  {jurisdiction.name} ({jurisdiction.code})
+                  {jurisdictionLabel(jurisdiction)}
                 </option>
               ))}
             </select>
@@ -1591,6 +1985,191 @@ export function StudyCatalogosFiscales() {
         ) : null}
       </ActionDrawer>
 
+      <ActionDrawer
+        isOpen={masterDrawer === "jurisdiction-create"}
+        onClose={() => setMasterDrawer(null)}
+        eyebrow="Catálogo fiscal del estudio"
+        title="Nueva jurisdicción"
+        description="Registrá una jurisdicción dentro del árbol fiscal: Nación, provincia o municipio con su padre correspondiente."
+      >
+        <form
+          className="study-form study-form--compact dense-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createJurisdiction.mutate();
+          }}
+        >
+          <Field
+            id="jurisdiction-code"
+            label="Código"
+            value={jurisdictionForm.code}
+            onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, code: event.target.value.toUpperCase() })}
+            maxLength={40}
+            required
+          />
+          <Field
+            id="jurisdiction-name"
+            label="Nombre"
+            value={jurisdictionForm.name}
+            onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, name: event.target.value })}
+            maxLength={160}
+            required
+          />
+          <div className="ds-field">
+            <label className="ds-field__label" htmlFor="jurisdiction-kind">Nivel</label>
+            <select
+              id="jurisdiction-kind"
+              className="ds-field__input"
+              value={jurisdictionForm.kind}
+              onChange={(event) => setJurisdictionForm({
+                ...jurisdictionForm,
+                kind: event.target.value as JurisdictionOption["kind"],
+                parentId: "",
+              })}
+            >
+              <option value="NATIONAL">Nación</option>
+              <option value="PROVINCIAL">Provincia</option>
+              <option value="MUNICIPAL">Municipio</option>
+            </select>
+          </div>
+          {jurisdictionForm.kind !== "NATIONAL" ? (
+            <div className="ds-field dense-form__full">
+              <label className="ds-field__label" htmlFor="jurisdiction-parent">Jurisdicción padre</label>
+              <select
+                id="jurisdiction-parent"
+                className="ds-field__input"
+                value={jurisdictionForm.parentId}
+                onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, parentId: event.target.value })}
+                required
+              >
+                <option value="">Seleccioná una jurisdicción padre…</option>
+                {jurisdictions
+                  .filter((row) => row.kind === (jurisdictionForm.kind === "PROVINCIAL" ? "NATIONAL" : "PROVINCIAL"))
+                  .map((row) => <option key={row.id} value={row.id}>{jurisdictionLabel(row)}</option>)}
+              </select>
+              <p className="ds-field__hint">
+                {jurisdictionForm.kind === "PROVINCIAL" ? "Una provincia requiere una jurisdicción de nivel Nación." : "Un municipio requiere una jurisdicción de nivel Provincia."}
+              </p>
+            </div>
+          ) : null}
+          <MutationError error={createJurisdiction.error} />
+          <div className="study-form__actions">
+            <Button
+              type="submit"
+              loading={createJurisdiction.isPending}
+              disabled={!jurisdictionForm.code.trim() || !jurisdictionForm.name.trim() || (jurisdictionForm.kind !== "NATIONAL" && !jurisdictionForm.parentId)}
+            >
+              Crear jurisdicción
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+          </div>
+        </form>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={masterDrawer === "jurisdiction-edit" && Boolean(editingJurisdiction)}
+        onClose={() => setMasterDrawer(null)}
+        eyebrow="Catálogo fiscal del estudio"
+        title="Editar jurisdicción"
+        description="El código, el nivel y la relación con su padre se conservan para mantener la jerarquía y el historial fiscal."
+      >
+        {editingJurisdiction ? (
+          <form
+            className="study-form study-form--compact dense-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateJurisdiction.mutate();
+            }}
+          >
+            <p><strong>{editingJurisdiction.code}</strong> · {jurisdictionKindLabel[editingJurisdiction.kind]} · {jurisdictionParentLabel(editingJurisdiction)}</p>
+            <Field
+              id="jurisdiction-edit-name"
+              label="Nombre"
+              value={jurisdictionForm.name}
+              onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, name: event.target.value })}
+              maxLength={160}
+              required
+            />
+            <MutationError error={updateJurisdiction.error} />
+            <div className="study-form__actions">
+              <Button type="submit" loading={updateJurisdiction.isPending} disabled={!jurisdictionForm.name.trim()}>Guardar cambios</Button>
+              <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+            </div>
+          </form>
+        ) : null}
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={masterDrawer === "tax-type-create"}
+        onClose={() => setMasterDrawer(null)}
+        eyebrow="Catálogo fiscal del estudio"
+        title="Nuevo tipo de impuesto"
+        description="Agregá el impuesto que usa el estudio para definir sus regímenes fiscales."
+      >
+        <form
+          className="study-form study-form--compact dense-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            createTaxType.mutate();
+          }}
+        >
+          <Field
+            id="tax-type-code"
+            label="Código"
+            value={taxTypeForm.code}
+            onChange={(event) => setTaxTypeForm({ ...taxTypeForm, code: event.target.value.toUpperCase() })}
+            maxLength={40}
+            required
+          />
+          <Field
+            id="tax-type-name"
+            label="Nombre"
+            value={taxTypeForm.name}
+            onChange={(event) => setTaxTypeForm({ ...taxTypeForm, name: event.target.value })}
+            maxLength={160}
+            required
+          />
+          <MutationError error={createTaxType.error} />
+          <div className="study-form__actions">
+            <Button type="submit" loading={createTaxType.isPending} disabled={!taxTypeForm.code.trim() || !taxTypeForm.name.trim()}>Crear tipo de impuesto</Button>
+            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+          </div>
+        </form>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={masterDrawer === "tax-type-edit" && Boolean(editingTaxType)}
+        onClose={() => setMasterDrawer(null)}
+        eyebrow="Catálogo fiscal del estudio"
+        title="Editar tipo de impuesto"
+        description="El código se conserva como clave utilizada por los regímenes fiscales."
+      >
+        {editingTaxType ? (
+          <form
+            className="study-form study-form--compact dense-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateTaxType.mutate();
+            }}
+          >
+            <p><strong>{editingTaxType.code}</strong></p>
+            <Field
+              id="tax-type-edit-name"
+              label="Nombre"
+              value={taxTypeForm.name}
+              onChange={(event) => setTaxTypeForm({ ...taxTypeForm, name: event.target.value })}
+              maxLength={160}
+              required
+            />
+            <MutationError error={updateTaxType.error} />
+            <div className="study-form__actions">
+              <Button type="submit" loading={updateTaxType.isPending} disabled={!taxTypeForm.name.trim()}>Guardar cambios</Button>
+              <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+            </div>
+          </form>
+        ) : null}
+      </ActionDrawer>
+
       {deletingTarget ? (
         <DeletionDrawer
           isOpen
@@ -1598,6 +2177,8 @@ export function StudyCatalogosFiscales() {
           onClose={() => setDeletingTarget(null)}
           onDeleted={async () => {
             await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["tax-jurisdictions", firmId] }),
+              queryClient.invalidateQueries({ queryKey: ["tax-types", firmId] }),
               queryClient.invalidateQueries({ queryKey: ["tax-authorities", firmId] }),
               queryClient.invalidateQueries({ queryKey: ["tax-regimes", firmId] }),
               queryClient.invalidateQueries({ queryKey: ["tax-activities-catalog", firmId] }),

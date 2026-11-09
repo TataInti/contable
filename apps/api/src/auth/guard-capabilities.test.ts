@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { capabilitiesForRole } from "@contable/permissions";
-import { requiredCapability } from "./guard.js";
+import { assertCapability, requiredCapability } from "./guard.js";
 
 /**
  * Fija el mapeo ruta→capacidad del guard deny-by-default (PLAN §4.3).
@@ -54,7 +54,21 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(requiredCapability("GET", authoritiesPath)).toBe("tax.rules.read");
     expect(requiredCapability("POST", authoritiesPath)).toBe("tax.rules.propose");
     expect(capabilitiesForRole("OWNER").has("tax.rules.propose")).toBe(true);
+    expect(capabilitiesForRole("ADMIN").has("tax.rules.propose")).toBe(true);
     expect(capabilitiesForRole("AUDITOR_READONLY").has("tax.rules.propose")).toBe(false);
+  });
+
+  it("jurisdicciones y tipos usan tax.rules.propose y el guard devuelve 403 sin esa capacidad", () => {
+    for (const path of ["/api/v1/tax/jurisdictions", "/api/v1/tax/types"]) {
+      expect(requiredCapability("GET", path)).toBe("tax.rules.read");
+      expect(requiredCapability("POST", path)).toBe("tax.rules.propose");
+      expect(requiredCapability("PATCH", `${path}/id`)).toBe("tax.rules.propose");
+    }
+
+    const auditor = { capabilities: capabilitiesForRole("AUDITOR_READONLY") } as never;
+    expect(() => assertCapability(auditor, "tax.rules.propose")).toThrow(
+      expect.objectContaining({ statusCode: 403, code: "CAPABILITY_REQUIRED" }),
+    );
   });
 
   it("portal-invitations exige client.read (GET) / client.manage (POST)", () => {
@@ -233,6 +247,8 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
       "/api/v1/firms/f/tax/authorities/a",
       "/api/v1/firms/f/tax/regimes/r",
       "/api/v1/firms/f/tax/activities/a",
+      "/api/v1/firms/f/tax/jurisdictions/j",
+      "/api/v1/firms/f/tax/types/t",
       "/api/v1/firms/f/tax/rule-packs/p",
       "/api/v1/firms/f/tax/rule-versions/v",
     ];

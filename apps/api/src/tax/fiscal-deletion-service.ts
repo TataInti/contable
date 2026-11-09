@@ -39,6 +39,76 @@ function isBlocker(items: DeletionCountItem[], keys: string[]): boolean {
   return items.some((item) => keys.includes(item.key) && item.count > 0);
 }
 
+const MASTER_DEPENDENCY_LABELS: Record<string, string> = {
+  children: "Jurisdicciones dependientes",
+  tax_authorities: "Organismos recaudadores",
+  tax_regimes: "Regímenes fiscales",
+  economic_activities: "Actividades económicas",
+  tax_rate_rules: "Reglas de alícuota",
+  tax_minimum_rules: "Reglas de mínimos",
+  due_date_rules: "Reglas de vencimiento",
+  holidays: "Feriados",
+  professional_credentials: "Matrículas profesionales",
+  tax_settlements: "Liquidaciones fiscales",
+  tax_credit_ledger_entries: "Movimientos del libro de créditos",
+  withholding_certificates: "Certificados de retención",
+  perception_certificates: "Certificados de percepción",
+  tax_input_allocations: "Asignaciones de comprobantes fiscales",
+  supplier_tax_profiles: "Perfiles fiscales de proveedores",
+  tax_credit_lots: "Lotes de crédito fiscal",
+  tax_periods: "Períodos fiscales",
+  import_batches: "Importaciones fiscales",
+  import_adapters: "Adaptadores de importación",
+};
+
+function masterDependencyItems(counts: Record<string, number>): DeletionCountItem[] {
+  return Object.entries(counts)
+    .map(([key, count]) => ({
+      key,
+      label: MASTER_DEPENDENCY_LABELS[key] ?? key.replaceAll("_", " "),
+      count: Number(count),
+    }))
+    .filter((item) => item.count > 0);
+}
+
+async function masterCatalogImpact(
+  tx: Prisma.TransactionClient,
+  kind: "JURISDICTION" | "TAX_TYPE",
+  id: string,
+  ctx: TenantContext,
+): Promise<Record<string, number>> {
+  try {
+    const rows = await tx.$queryRaw<Array<{ result: Record<string, number> }>>`
+      SELECT app_tax_master_deletion_preview(
+        ${kind}, ${id}, ${ctx.firmId}, ${ctx.userId}
+      ) AS result
+    `;
+    return rows[0]?.result ?? {};
+  } catch (err) {
+    mapFunctionError(err);
+  }
+}
+
+async function deleteMasterCatalogEntity(
+  tx: Prisma.TransactionClient,
+  kind: "JURISDICTION" | "TAX_TYPE",
+  id: string,
+  ctx: TenantContext,
+): Promise<{ deletedRows: number; counts: Record<string, number> }> {
+  try {
+    const rows = await tx.$queryRaw<
+      Array<{ result: { deletedRows: number; counts: Record<string, number> } }>
+    >`
+      SELECT app_delete_tax_master_entity(
+        ${kind}, ${id}, ${ctx.firmId}, ${ctx.userId}
+      ) AS result
+    `;
+    return rows[0]?.result ?? { deletedRows: 0, counts: {} };
+  } catch (err) {
+    mapFunctionError(err);
+  }
+}
+
 function mapFunctionError(err: unknown): never {
   const error = err as {
     code?: string;
@@ -410,6 +480,133 @@ export class FiscalDeletionService {
         after: { code: activity.code, name: activity.name, ...deleted.counts },
       });
       return { id: activityId, ...deleted };
+    }, TRANSACTION_OPTIONS);
+  }
+
+  async previewJurisdiction(jurisdictionId: string, ctx: TenantContext): Promise<DeletionPreview> {
+    return withTenantContext(ctx, async (tx) => {
+      const jurisdiction = await tx.jurisdiction.findUnique({
+        where: { id: jurisdictionId },
+        include: { parent: { select: { code: true, name: true, kind: true } } },
+      });
+      if (!jurisdiction) {
+        throw new DeletionError("CATALOG_NOT_FOUND", "La jurisdicción no existe", 404);
+      }
+      assertUiOwnedCatalog(jurisdiction, ctx);
+      const impact = await masterCatalogImpact(tx, "JURISDICTION", jurisdictionId, ctx);
+      const items = masterDependencyItems(impact);
+      const blocked = items.length > 0;
+
+      return {
+        entity: {
+          id: jurisdiction.id,
+          kind: "TAX_JURISDICTION",
+          label: jurisdiction.name,
+          secondary: `${jurisdiction.code} · ${jurisdiction.kind}${jurisdiction.parent ? ` · ${jurisdiction.parent.name}` : ""}`,
+        },
+        confirmation: {
+          expected: jurisdiction.code,
+          label: "Escribí el código de la jurisdicción para confirmar",
+        },
+        totals: { rows: items.reduce((sum, item) => sum + item.count, 0) },
+        groups: previewGroups(items),
+        items,
+        blockers: blocked ? items : [],
+        canDelete: !blocked,
+        notes: blocked
+          ? ["La jurisdicción tiene dependencias y se conserva mientras estén en uso."]
+          : ["La jurisdicción no tiene dependencias y se puede eliminar."],
+      };
+    });
+  }
+
+  async deleteJurisdiction(jurisdictionId: string, confirmation: string, ctx: TenantContext) {
+    return withTenantContext(ctx, async (tx) => {
+      const jurisdiction = await tx.jurisdiction.findUnique({ where: { id: jurisdictionId } });
+      if (!jurisdiction) {
+        throw new DeletionError("CATALOG_NOT_FOUND", "La jurisdicción no existe", 404);
+      }
+      assertUiOwnedCatalog(jurisdiction, ctx);
+      if (confirmation.trim() !== jurisdiction.code) {
+        throw new DeletionError(
+          "CATALOG_CONFIRMATION_MISMATCH",
+          "El código escrito no coincide con el de la jurisdicción",
+          409,
+        );
+      }
+
+      const deleted = await deleteMasterCatalogEntity(tx, "JURISDICTION", jurisdictionId, ctx);
+      await recordAudit(tx, {
+        firmId: ctx.firmId,
+        userId: ctx.userId,
+        action: "tax.catalog.delete",
+        entityType: "Jurisdiction",
+        entityId: jurisdictionId,
+        after: { code: jurisdiction.code, name: jurisdiction.name, kind: jurisdiction.kind, ...deleted.counts },
+      });
+      return { id: jurisdictionId, ...deleted };
+    }, TRANSACTION_OPTIONS);
+  }
+
+  async previewTaxType(taxTypeId: string, ctx: TenantContext): Promise<DeletionPreview> {
+    return withTenantContext(ctx, async (tx) => {
+      const taxType = await tx.taxType.findUnique({ where: { id: taxTypeId } });
+      if (!taxType) {
+        throw new DeletionError("CATALOG_NOT_FOUND", "El tipo de impuesto no existe", 404);
+      }
+      assertUiOwnedCatalog(taxType, ctx);
+      const impact = await masterCatalogImpact(tx, "TAX_TYPE", taxTypeId, ctx);
+      const items = masterDependencyItems(impact);
+      const blocked = items.length > 0;
+
+      return {
+        entity: {
+          id: taxType.id,
+          kind: "TAX_TYPE",
+          label: taxType.name,
+          secondary: taxType.code,
+        },
+        confirmation: {
+          expected: taxType.code,
+          label: "Escribí el código del tipo de impuesto para confirmar",
+        },
+        totals: { rows: items.reduce((sum, item) => sum + item.count, 0) },
+        groups: previewGroups(items),
+        items,
+        blockers: blocked ? items : [],
+        canDelete: !blocked,
+        notes: blocked
+          ? ["El tipo de impuesto tiene dependencias y se conserva mientras estén en uso."]
+          : ["El tipo de impuesto no tiene dependencias y se puede eliminar."],
+      };
+    });
+  }
+
+  async deleteTaxType(taxTypeId: string, confirmation: string, ctx: TenantContext) {
+    return withTenantContext(ctx, async (tx) => {
+      const taxType = await tx.taxType.findUnique({ where: { id: taxTypeId } });
+      if (!taxType) {
+        throw new DeletionError("CATALOG_NOT_FOUND", "El tipo de impuesto no existe", 404);
+      }
+      assertUiOwnedCatalog(taxType, ctx);
+      if (confirmation.trim() !== taxType.code) {
+        throw new DeletionError(
+          "CATALOG_CONFIRMATION_MISMATCH",
+          "El código escrito no coincide con el del tipo de impuesto",
+          409,
+        );
+      }
+
+      const deleted = await deleteMasterCatalogEntity(tx, "TAX_TYPE", taxTypeId, ctx);
+      await recordAudit(tx, {
+        firmId: ctx.firmId,
+        userId: ctx.userId,
+        action: "tax.catalog.delete",
+        entityType: "TaxType",
+        entityId: taxTypeId,
+        after: { code: taxType.code, name: taxType.name, ...deleted.counts },
+      });
+      return { id: taxTypeId, ...deleted };
     }, TRANSACTION_OPTIONS);
   }
 
