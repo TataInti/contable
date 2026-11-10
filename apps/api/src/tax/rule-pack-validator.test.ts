@@ -1,9 +1,9 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { createHash } from "node:crypto";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { RulePackValidator } from "./rule-pack-validator.js";
+import { computeLegacyRulesHashSchemaV1, computeRulesHashV2 } from "./rules-hash.js";
 
 /**
  * F2.3: revalidación programada de rule packs.
@@ -101,8 +101,12 @@ async function createActivePack(code: string, expired: boolean) {
     });
     const validFrom = expired ? new Date("2020-01-01") : new Date("2026-01-01");
     const validTo = expired ? new Date("2021-01-01") : null;
-    // Hash canónico de una versión sin reglas (mismo cálculo que el validator).
-    const emptyHash = createHash("sha256").update(JSON.stringify({ rate: [], min: [], bracket: [], due: [] })).digest("hex");
+    const emptyHash = computeLegacyRulesHashSchemaV1({
+      rateRules: [],
+      minimumRules: [],
+      bracketRules: [],
+      dueDateRules: [],
+    });
     await tx.taxRuleVersion.create({
       data: {
         packId: pack.id,
@@ -128,11 +132,54 @@ describe("F2.3 revalidación de rule packs", () => {
 
   it("mantiene un pack ACTIVE con versión vigente", async () => {
     const pack = await createActivePack("RV_VIGENTE", false);
+    const before = await prisma.taxRuleVersion.findFirstOrThrow({ where: { packId: pack.id } });
     const results = await validator.revalidateAll(ctxOwner);
     const result = results.find((r) => r.packId === pack.id);
+    const after = await prisma.taxRuleVersion.findUniqueOrThrow({ where: { id: before.id } });
     expect(result).toBeTruthy();
     expect(result!.status).toBe("ACTIVE");
     expect(result!.issues).toEqual([]);
+    expect(before.rulesHashSchemaVersion).toBe(1);
+    expect(result!.rulesHash).toBe(before.rulesHash);
+    expect(after.rulesHash).toBe(before.rulesHash);
+    expect(after.rulesHashSchemaVersion).toBe(1);
+  });
+
+  it("revalida las reglas v2 con el hash canónico compartido", async () => {
+    const pack = await createActivePack("RV_V2_CANONICAL", false);
+    const version = await prisma.taxRuleVersion.findFirstOrThrow({ where: { packId: pack.id } });
+    const versionHash = await runAsRuntime(OWNER_RV, FIRM_RV, async (tx) => {
+      const bracket = await tx.taxBracketRule.create({
+        data: {
+          ruleVersionId: version.id,
+          concept: "ESCALA",
+          fromAmount: new Prisma.Decimal("0"),
+          toAmount: new Prisma.Decimal("1000"),
+          rate: new Prisma.Decimal("2.5"),
+          fixedAmount: new Prisma.Decimal("15"),
+          validFrom: new Date("2026-01-01"),
+        },
+      });
+      const rounding = await tx.roundingRule.create({
+        data: { ruleVersionId: version.id, concept: "ESCALA", precision: 2, mode: "HALF_UP" },
+      });
+      const rulesHash = computeRulesHashV2({
+        engineVersion: version.engineVersion,
+        bracketRules: [bracket],
+        roundingRules: [rounding],
+      });
+      await tx.taxRuleVersion.update({
+        where: { id: version.id },
+        data: { rulesHashSchemaVersion: 2, rulesHash },
+      });
+      return rulesHash;
+    });
+
+    const results = await runAsRuntime(OWNER_RV, FIRM_RV, () => validator.revalidateAll(ctxOwner));
+    const result = results.find((item) => item.packId === pack.id);
+
+    expect(result?.rulesHash).toBe(versionHash);
+    expect(result?.issues).toEqual([]);
   });
 
   it("retira un pack ACTIVE sin versión vigente (fail-safe)", async () => {

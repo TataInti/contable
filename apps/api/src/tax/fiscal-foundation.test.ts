@@ -9,6 +9,8 @@ import {
   TaxPeriodService,
   TaxRuleService,
 } from "./fiscal-foundation-service.js";
+import { RulePackValidator } from "./rule-pack-validator.js";
+import { computeRulesHashV2 } from "./rules-hash.js";
 
 /**
  * Tests de integración de la fundación fiscal (Puerta 1).
@@ -487,6 +489,66 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
   beforeEach(async () => {
     await setupMembership();
     await cleanupFiscal();
+  });
+
+  it("crea versiones v2, clona tramos y comparte el SHA con el validador", async () => {
+    const fx = await setupMasters();
+    const pack = await rules.createPack(ctxOwner, {
+      code: "AR_RULE_HASH_CLONE-F",
+      name: "Prueba de hash y clonación",
+      regimeId: fx.ri.id,
+    });
+    const source = await rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineVersion: "ar-vat-ri-v1.0.0",
+      rulesHash: "caller-value-is-not-canonical",
+    });
+
+    expect(source.rulesHashSchemaVersion).toBe(2);
+    expect(source.rulesHash).toBe(computeRulesHashV2({ engineVersion: source.engineVersion }));
+
+    await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      await tx.taxBracketRule.create({
+        data: {
+          ruleVersionId: source.id,
+          concept: "VENTAS",
+          fromAmount: new Prisma.Decimal("0"),
+          toAmount: new Prisma.Decimal("100000"),
+          rate: new Prisma.Decimal("3.5"),
+          fixedAmount: new Prisma.Decimal("0"),
+          validFrom: new Date("2026-01-01"),
+        },
+      });
+      await tx.roundingRule.create({
+        data: {
+          ruleVersionId: source.id,
+          concept: "VENTAS",
+          precision: 2,
+          mode: "HALF_UP",
+        },
+      });
+    });
+
+    const cloned = await rules.cloneVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-07-01",
+    });
+    expect(cloned.rulesHashSchemaVersion).toBe(2);
+    expect(cloned.bracketRules).toHaveLength(1);
+    expect(cloned.roundingRules).toHaveLength(1);
+    expect(cloned.bracketRules[0]?.validFrom).toEqual(new Date("2026-07-01"));
+    expect(cloned.rulesHash).toBe(computeRulesHashV2(cloned));
+
+    await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      await tx.taxRuleVersion.update({ where: { id: cloned.id }, data: { status: "ACTIVE" } });
+      await tx.taxRulePack.update({ where: { id: pack.id }, data: { status: "ACTIVE" } });
+    });
+    const validation = await new RulePackValidator().revalidateAll(ctxOwner);
+    const result = validation.find((item) => item.packId === pack.id);
+
+    expect(result?.rulesHash).toBe(cloned.rulesHash);
+    expect(result?.issues).toEqual([]);
   });
 
   it("el rol runtime puede reemplazar una regla de alícuota en un borrador", async () => {
