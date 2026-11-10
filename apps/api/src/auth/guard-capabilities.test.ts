@@ -58,6 +58,19 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(capabilitiesForRole("AUDITOR_READONLY").has("tax.rules.propose")).toBe(false);
   });
 
+  it("activar reglas fiscales requiere tax.rules.propose para OWNER/ADMIN", () => {
+    const activationPath = "/api/v1/tax/rule-versions/version-1/activate";
+    expect(requiredCapability("POST", activationPath)).toBe("tax.rules.propose");
+    expect(capabilitiesForRole("OWNER").has("tax.rules.propose")).toBe(true);
+    expect(capabilitiesForRole("ADMIN").has("tax.rules.propose")).toBe(true);
+    for (const role of ["PREPARER", "REVIEWER", "AUDITOR_READONLY"] as const) {
+      const actor = { capabilities: capabilitiesForRole(role) } as never;
+      expect(() => assertCapability(actor, "tax.rules.propose")).toThrow(
+        expect.objectContaining({ statusCode: 403, code: "CAPABILITY_REQUIRED" }),
+      );
+    }
+  });
+
   it("jurisdicciones y tipos usan tax.rules.propose y el guard devuelve 403 sin esa capacidad", () => {
     for (const path of ["/api/v1/tax/jurisdictions", "/api/v1/tax/types"]) {
       expect(requiredCapability("GET", path)).toBe("tax.rules.read");

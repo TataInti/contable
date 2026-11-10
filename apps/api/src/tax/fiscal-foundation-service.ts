@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { calculateDueDate } from "@contable/tax-engine";
-import { computeRulesHashV2, RULES_HASH_SCHEMA_VERSION_V2 } from "./rules-hash.js";
+import {
+  computeLegacyRulesHashSchemaV1,
+  computeRulesHashV2,
+  RULES_HASH_SCHEMA_VERSION_V1,
+  RULES_HASH_SCHEMA_VERSION_V2,
+} from "./rules-hash.js";
 import {
   ACTIVITY_CODE_PATTERN,
   normalizeActivityCode,
@@ -63,6 +68,10 @@ export type FiscalErrorCode =
   | "ACTIVITY_CODE_UNKNOWN"
   | "ACTIVITY_CODE_INACTIVE"
   | "ACTIVITY_CODE_JURISDICTION_MISMATCH"
+  | "RULE_VERSION_INVALID"
+  | "RULE_VERSION_EMPTY"
+  | "RULES_HASH_MISMATCH"
+  | "RULES_HASH_SCHEMA_UNSUPPORTED"
   | "INVALID_TRANSITION";
 
 export class FiscalError extends Error {
@@ -92,6 +101,41 @@ function taxRegimeEngineScope(regime: {
     taxTypeCode: regime.taxType.code,
     jurisdictionCode: regime.jurisdiction.code,
   };
+}
+
+function hasValidDateRange(validFrom: Date, validTo: Date | null): boolean {
+  return Number.isFinite(validFrom.getTime()) &&
+    (validTo === null || (Number.isFinite(validTo.getTime()) && validTo >= validFrom));
+}
+
+function ruleDateRangesAreValid(
+  rules: Array<{ validFrom: Date; validTo: Date | null }>,
+): boolean {
+  return rules.every((rule) => hasValidDateRange(rule.validFrom, rule.validTo));
+}
+
+async function recordAudit(
+  tx: Prisma.TransactionClient,
+  input: {
+    firmId: string;
+    userId: string;
+    action: string;
+    entityType: string;
+    entityId: string;
+    after: Prisma.InputJsonValue;
+  },
+): Promise<void> {
+  await tx.auditEvent.create({
+    data: {
+      firmId: input.firmId,
+      userId: input.userId,
+      actorKind: "USER",
+      action: input.action,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      after: input.after,
+    },
+  });
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
@@ -1568,22 +1612,135 @@ export class TaxRuleService {
     });
   }
 
-  /** Activa una versión aprobada. */
+  /** Activa directamente una versión fiscal validada por el Administrador/Titular. */
   async activate(ctx: TenantContext, ruleVersionId: string) {
     return withTenantContext(ctx, async (tx) => {
-      const v = await tx.taxRuleVersion.findUnique({ where: { id: ruleVersionId } });
+      const versionInclude = {
+        rateRules: true,
+        minimumRules: true,
+        bracketRules: true,
+        dueDateRules: true,
+        roundingRules: true,
+        pack: {
+          include: {
+            regime: {
+              select: {
+                code: true,
+                taxType: { select: { code: true } },
+                jurisdiction: { select: { code: true } },
+              },
+            },
+          },
+        },
+      } as const;
+      const initial = await tx.taxRuleVersion.findUnique({
+        where: { id: ruleVersionId },
+        include: versionInclude,
+      });
+      if (!initial) throw new FiscalError("RULE_VERSION_NOT_FOUND", "Versión de regla no encontrada");
+
+      // Serializa la activación por paquete para que no queden dos versiones
+      // ACTIVAS ante solicitudes administrativas concurrentes.
+      await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtext(${initial.packId}), 1)) AS activation_lock`;
+      const v = await tx.taxRuleVersion.findUnique({
+        where: { id: ruleVersionId },
+        include: versionInclude,
+      });
       if (!v) throw new FiscalError("RULE_VERSION_NOT_FOUND", "Versión de regla no encontrada");
-      if (v.status !== "APPROVED") {
-        throw new FiscalError("INVALID_TRANSITION", `Sólo una versión APPROVED puede activarse (estado: ${v.status})`);
+      if (!["DRAFT", "IN_REVIEW", "APPROVED"].includes(v.status)) {
+        throw new FiscalError(
+          "INVALID_TRANSITION",
+          `Sólo una versión DRAFT, IN_REVIEW o APPROVED puede activarse (estado: ${v.status})`,
+        );
+      }
+      if (!Number.isInteger(v.version) || v.version < 1 || !hasValidDateRange(v.validFrom, v.validTo)) {
+        throw new FiscalError(
+          "RULE_VERSION_INVALID",
+          "La versión tiene un número o una vigencia inválidos; corregí la vigencia antes de activar.",
+        );
+      }
+      if (typeof v.engineVersion !== "string" || v.engineVersion.trim() === "") {
+        throw new FiscalError("RULE_VERSION_INVALID", "La versión no tiene un motor fiscal definido.");
+      }
+      assertTaxEngineVersionCompatible(
+        taxRegimeEngineScope(v.pack.regime),
+        v.engineVersion,
+      );
+      if (!v.rulesHash || v.rulesHash.trim() === "") {
+        throw new FiscalError("RULE_VERSION_INVALID", "La versión no tiene un hash de reglas calculado.");
+      }
+      if (
+        !ruleDateRangesAreValid([
+          ...v.rateRules,
+          ...v.minimumRules,
+          ...v.bracketRules,
+          ...v.dueDateRules,
+        ])
+      ) {
+        throw new FiscalError(
+          "RULE_VERSION_INVALID",
+          "Una regla tiene una vigencia inválida; revisá las fechas antes de activar.",
+        );
+      }
+      if (v.rateRules.length + v.minimumRules.length + v.bracketRules.length + v.dueDateRules.length === 0) {
+        throw new FiscalError(
+          "RULE_VERSION_EMPTY",
+          "La versión no contiene reglas fiscales ni vencimientos para activar.",
+        );
+      }
+      const computedHash = v.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V1
+        ? computeLegacyRulesHashSchemaV1(v)
+        : v.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V2
+          ? computeRulesHashV2(v)
+          : null;
+      if (computedHash === null) {
+        throw new FiscalError(
+          "RULES_HASH_SCHEMA_UNSUPPORTED",
+          `El esquema de hash ${v.rulesHashSchemaVersion} no es compatible para activar.`,
+        );
+      }
+      if (computedHash !== v.rulesHash) {
+        throw new FiscalError(
+          "RULES_HASH_MISMATCH",
+          "El hash no coincide con las reglas guardadas; guardá nuevamente el borrador antes de activar.",
+        );
       }
       await tx.taxRuleVersion.updateMany({
         where: { packId: v.packId, status: "ACTIVE" },
         data: { status: "RETIRED" },
       });
-      return tx.taxRuleVersion.update({
+      const activatedAt = new Date();
+      const activated = await tx.taxRuleVersion.update({
         where: { id: ruleVersionId },
-        data: { status: "ACTIVE", activatedAt: new Date() },
+        data: { status: "ACTIVE", activatedByUserId: ctx.userId, activatedAt },
       });
+      const activeVersions = await tx.taxRuleVersion.findMany({
+        where: { packId: v.packId, status: "ACTIVE" },
+        select: { id: true },
+      });
+      if (activeVersions.length !== 1 || activeVersions[0]?.id !== ruleVersionId) {
+        throw new FiscalError(
+          "RULE_VERSION_INVALID",
+          "La vigencia se solapa con otra versión activa del paquete; revisá las versiones antes de activar.",
+        );
+      }
+      await recordAudit(tx, {
+        firmId: ctx.firmId,
+        userId: ctx.userId,
+        action: "tax_rule_version.activated",
+        entityType: "TaxRuleVersion",
+        entityId: ruleVersionId,
+        after: {
+          status: "ACTIVE",
+          version: v.version,
+          activatedByUserId: ctx.userId,
+          activatedAt: activatedAt.toISOString(),
+          rulesHash: v.rulesHash,
+          validFrom: v.validFrom.toISOString(),
+          validTo: v.validTo?.toISOString() ?? null,
+        },
+      });
+      return activated;
     });
   }
 

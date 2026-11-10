@@ -108,10 +108,29 @@ function shortDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString("es-AR") : "Sin vencimiento";
 }
 
+function sameRuleRows(draftRows: RuleRow[], savedRows: RuleRow[]): boolean {
+  if (draftRows.length !== savedRows.length) return false;
+  const savedById = new Map(savedRows.map((row) => [row.id, row]));
+  return draftRows.every((row) => {
+    const saved = savedById.get(row.id);
+    return Boolean(
+      saved &&
+      row.concept === saved.concept &&
+      row.activityCode === saved.activityCode &&
+      row.jurisdictionId === saved.jurisdictionId &&
+      row.rate === saved.rate &&
+      row.minAmount === saved.minAmount &&
+      row.validFrom.slice(0, 10) === saved.validFrom.slice(0, 10) &&
+      (row.validTo?.slice(0, 10) ?? null) === (saved.validTo?.slice(0, 10) ?? null),
+    );
+  });
+}
+
 export function StudyReglasFiscales() {
   const { firmId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [ruleTab, setRuleTab] = useState<"rates" | "dueDates" | "sources" | "approval">("rates");
   const [packSearch, setPackSearch] = useState("");
   const [packFilter, setPackFilter] = useState<"" | "ACTIVE" | "DRAFT" | "IN_REVIEW">("");
@@ -124,6 +143,7 @@ export function StudyReglasFiscales() {
   const [validFrom, setValidFrom] = useState(today);
   const [credentialId, setCredentialId] = useState("");
   const [draftRows, setDraftRows] = useState<RuleRow[]>([]);
+  const [draftRowsVersionId, setDraftRowsVersionId] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [showPackForm, setShowPackForm] = useState(false);
   const [showSourceForm, setShowSourceForm] = useState(false);
@@ -183,11 +203,20 @@ export function StudyReglasFiscales() {
   });
 
   const selectedVersion = useMemo(
-    () =>
-      detailQuery.data?.versions.find((version) => version.status === "DRAFT") ??
-      detailQuery.data?.versions[0],
-    [detailQuery.data],
+    () => {
+      const versions = detailQuery.data?.versions ?? [];
+      return versions.find((version) => version.id === selectedVersionId) ??
+        versions.find((version) => version.status === "DRAFT") ??
+        versions.find((version) => version.status === "IN_REVIEW") ??
+        versions.find((version) => version.status === "APPROVED") ??
+        versions[0];
+    },
+    [detailQuery.data, selectedVersionId],
   );
+
+  useEffect(() => {
+    setSelectedVersionId(null);
+  }, [selectedPackId]);
   const compatibleEngineOptions = useMemo(
     () =>
       detailQuery.data?.regime.taxType.code
@@ -231,7 +260,9 @@ export function StudyReglasFiscales() {
   );
 
   useEffect(() => {
-    setDraftRows(selectedVersion?.status === "DRAFT" ? selectedVersion.rateRules : []);
+    const selectedDraft = selectedVersion?.status === "DRAFT" ? selectedVersion : null;
+    setDraftRows(selectedDraft?.rateRules ?? []);
+    setDraftRowsVersionId(selectedDraft?.id ?? null);
   }, [selectedVersion?.id]);
 
   const invalidate = () => {
@@ -329,10 +360,13 @@ export function StudyReglasFiscales() {
     },
   });
   const activateMutation = useMutation({
-    mutationFn: () => api.post(`/tax/rule-versions/${selectedVersion?.id}/activate`),
-    onSuccess: () => {
+    mutationFn: (ruleVersionId: string) => api.post(`/tax/rule-versions/${ruleVersionId}/activate`),
+    onSuccess: (_result, ruleVersionId) => {
       invalidate();
-      setReceipt("La versión activa quedó disponible para próximos cálculos.");
+      const activatedVersion = detailQuery.data?.versions.find((version) => version.id === ruleVersionId);
+      setReceipt(
+        `La versión v${activatedVersion?.version ?? ""} quedó activa y disponible para próximos cálculos.`,
+      );
     },
   });
   const addSourceMutation = useMutation({
@@ -389,6 +423,22 @@ export function StudyReglasFiscales() {
     addSourceMutation.error ??
     addDueDateMutation.error;
   const canPropose = capabilities.has("tax.rules.propose");
+  const canActivateSelectedVersion = Boolean(
+    selectedVersion &&
+    ["DRAFT", "IN_REVIEW", "APPROVED"].includes(selectedVersion.status) &&
+    canPropose,
+  );
+  const activationBlockedByUnsavedChanges = Boolean(
+    selectedVersion?.status === "DRAFT" &&
+    (draftRowsVersionId !== selectedVersion.id || !sameRuleRows(draftRows, selectedVersion.rateRules)),
+  );
+  const requestActivation = (version: RuleVersion) => {
+    const validity = `${shortDate(version.validFrom)} — ${shortDate(version.validTo)}`;
+    const versionName = `${detailQuery.data?.name ?? "Paquete fiscal"} · versión v${version.version}`;
+    if (window.confirm(`¿Activar ${versionName}?\nVigencia: ${validity}`)) {
+      activateMutation.mutate(version.id);
+    }
+  };
   const rulesNextAction = (() => {
     if (!selectedPackId) {
       return canPropose
@@ -402,13 +452,10 @@ export function StudyReglasFiscales() {
     }
     if (!selectedVersion) return null;
     if (selectedVersion.status === "DRAFT" && canPropose) {
-      return { label: `Editar borrador v${selectedVersion.version}`, description: "Revisá las reglas y guardá los cambios antes de enviarlo a revisión.", onClick: () => document.getElementById("rule-rates-title")?.scrollIntoView({ behavior: "smooth", block: "start" }) };
+      return { label: `Editar borrador v${selectedVersion.version}`, description: "Revisá las reglas y guardá los cambios; después podés activar directamente esta versión.", onClick: () => document.getElementById("rule-rates-title")?.scrollIntoView({ behavior: "smooth", block: "start" }) };
     }
-    if (selectedVersion.status === "IN_REVIEW" && capabilities.has("tax.rules.approve")) {
-      return { label: "Revisar y aprobar", description: "Seleccioná la matrícula profesional para aprobar esta versión.", onClick: () => { setRuleTab("approval"); window.setTimeout(() => document.getElementById("rule-approval")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); } };
-    }
-    if (selectedVersion.status === "APPROVED" && capabilities.has("tax.rules.activate")) {
-      return { label: "Activar versión", description: "La versión aprobada quedará disponible para los próximos cálculos.", onClick: () => activateMutation.mutate() };
+    if (["IN_REVIEW", "APPROVED"].includes(selectedVersion.status) && canActivateSelectedVersion) {
+      return { label: "Activar versión", description: "La versión quedará vigente para los próximos cálculos.", onClick: () => requestActivation(selectedVersion) };
     }
     if (selectedVersion.status !== "DRAFT" && canPropose) {
       return { label: "Modificar alícuotas", description: "Prepará una nueva versión a partir de esta: modifica alícuotas en un borrador nuevo y la versión vigente sigue aplicando hasta que se active la nueva.", onClick: () => setShowCloneForm(true) };
@@ -484,7 +531,7 @@ export function StudyReglasFiscales() {
       <DenseHeader
         eyebrow="Configuración del estudio"
         title="Reglas fiscales"
-        description="Alícuotas, mínimos y porcentajes normativos con vigencia y aprobación profesional."
+        description="Alícuotas, mínimos y porcentajes normativos con vigencia; activación directa por Administrador o Titular."
         actions={
           canPropose ? (
             <Button size="sm" onClick={() => setShowPackForm((visible) => !visible)}>
@@ -525,9 +572,9 @@ export function StudyReglasFiscales() {
       />
 
       <p className="dense-note" role="note">
-        <strong>Secuencia de cambios:</strong> borrador → revisión → aprobación con matrícula
-        profesional → activa. Las versiones aprobadas y activas son inmutables; todo cambio
-        posterior se prepara en una nueva versión a partir de la vigente.
+        <strong>Secuencia de cambios:</strong> borrador → activación directa por Administrador o
+        Titular. Las versiones activas son inmutables; todo cambio posterior se prepara en una nueva
+        versión a partir de la vigente. Las versiones antiguas conservan su flujo de revisión.
       </p>
 
       <ActionDrawer
@@ -803,7 +850,7 @@ export function StudyReglasFiscales() {
         onClose={() => setShowCloneForm(false)}
         eyebrow="Reglas fiscales"
         title="Modificar alícuotas"
-        description="Se crea una nueva versión borrador a partir de la vigente para ajustar alícuotas, vencimientos y fuentes. La versión vigente sigue aplicando hasta que la nueva se apruebe y active."
+        description="Se crea una nueva versión borrador a partir de la vigente para ajustar alícuotas, vencimientos y fuentes. La versión vigente sigue aplicando hasta que el Administrador o Titular active la nueva."
       >
         <form
           className="study-form study-form--compact fiscal-action-form"
@@ -829,8 +876,8 @@ export function StudyReglasFiscales() {
             </Button>
           </div>
           <p className="muted-copy">
-            La versión vigente no se modifica: sigue activa hasta que esta nueva versión se apruebe
-            y se active.
+            La versión vigente no se modifica: sigue activa hasta que el Administrador o Titular
+            active esta nueva versión.
           </p>
         </form>
       </ActionDrawer>
@@ -965,6 +1012,16 @@ export function StudyReglasFiscales() {
                   </div>
                   <div className="table-actions">
                     <StatusBadge status={selectedVersion.status} />
+                    {canActivateSelectedVersion ? (
+                      <Button
+                        size="sm"
+                        loading={activateMutation.isPending}
+                        disabled={activationBlockedByUnsavedChanges}
+                        onClick={() => requestActivation(selectedVersion)}
+                      >
+                        Activar
+                      </Button>
+                    ) : null}
                     {canDeleteVersion ? (
                       <Button
                         size="sm"
@@ -984,6 +1041,23 @@ export function StudyReglasFiscales() {
                   </div>
                 </div>
                 <div className="fiscal-rule-summary__meta">
+                  {detailQuery.data.versions.length > 1 ? (
+                    <label className="ds-field">
+                      <span className="ds-field__label">Versión del paquete</span>
+                      <select
+                        className="ds-field__input"
+                        aria-label="Versión del paquete"
+                        value={selectedVersion.id}
+                        onChange={(event) => setSelectedVersionId(event.target.value)}
+                      >
+                        {detailQuery.data.versions.map((version) => (
+                          <option key={version.id} value={version.id}>
+                            v{version.version} · {version.status} · {shortDate(version.validFrom)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <span>
                     Régimen <strong>{detailQuery.data.regime.name}</strong>
                   </span>
@@ -1006,6 +1080,11 @@ export function StudyReglasFiscales() {
                     Motor <strong>{selectedVersion.engineVersion}</strong>
                   </span>
                 </div>
+                {activationBlockedByUnsavedChanges ? (
+                  <p className="form-submit-hint" role="note">
+                    Guardá los cambios del borrador antes de activarlo para incluir las reglas editadas.
+                  </p>
+                ) : null}
               </section>
 
               <DenseTabs<"rates" | "dueDates" | "sources" | "approval">
@@ -1237,13 +1316,6 @@ export function StudyReglasFiscales() {
                     >
                       Guardar borrador
                     </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => submitMutation.mutate()}
-                      loading={submitMutation.isPending}
-                    >
-                      Enviar a revisión
-                    </Button>
                   </div>
                 ) : null}
                 {editable && draftRows.some((row) => !row.concept.trim() || (!row.rate && !row.minAmount)) ? (
@@ -1336,13 +1408,22 @@ export function StudyReglasFiscales() {
               {ruleTab === "approval" ? (
               <section id="rule-approval" className="study-panel fiscal-rule-approval">
                 <div>
-                  <h2>Control profesional</h2>
+                  <h2>Flujo de revisión anterior</h2>
                   <p>
-                    Las versiones aprobadas y activas quedan inmutables; un cambio posterior siempre
-                    crea una nueva versión.
+                    La activación directa es el recorrido principal. Las versiones históricas pueden
+                    conservar revisión profesional; las versiones activas siguen siendo inmutables.
                   </p>
                 </div>
                 <div className="fiscal-rule-approval__actions">
+                  {selectedVersion.status === "DRAFT" && canPropose ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => submitMutation.mutate()}
+                      loading={submitMutation.isPending}
+                    >
+                      Enviar a revisión (flujo anterior)
+                    </Button>
+                  ) : null}
                   {selectedVersion.status === "IN_REVIEW" &&
                   capabilities.has("tax.rules.approve") ? (
                     <>
@@ -1372,15 +1453,6 @@ export function StudyReglasFiscales() {
                         </p>
                       ) : null}
                     </>
-                  ) : null}
-                  {selectedVersion.status === "APPROVED" &&
-                  capabilities.has("tax.rules.activate") ? (
-                    <Button
-                      onClick={() => activateMutation.mutate()}
-                      loading={activateMutation.isPending}
-                    >
-                      Activar versión
-                    </Button>
                   ) : null}
                 </div>
                 {selectedVersion.sources.length > 0 ? (
