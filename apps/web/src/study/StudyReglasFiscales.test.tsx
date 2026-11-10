@@ -412,3 +412,82 @@ describe("StudyReglasFiscales — estado del selector de regímenes", () => {
     expect(await screen.findByText(/Todavía no hay regímenes/)).toBeTruthy();
   });
 });
+
+describe("StudyReglasFiscales — activación directa por Administrador", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = context();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("muestra Activar con capacidad y confirma nombre y vigencia antes de llamar a API", async () => {
+    mockApi(makeDetail(null));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(api.post).mockResolvedValue({} as never);
+    renderReglas();
+
+    const activateButton = (await screen.findByRole("button", { name: /^Activar$/ })) as HTMLButtonElement;
+    await waitFor(() => expect(activateButton.disabled).toBe(false));
+    fireEvent.click(activateButton);
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      expect.stringContaining("IVA Responsable Inscripto · versión v1"),
+    );
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Vigencia:"));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/tax/rule-versions/version-1/activate"),
+    );
+  });
+
+  it("oculta Activar cuando falta tax.rules.propose aunque exista la capacidad legacy", async () => {
+    contextMock.current = {
+      ...context(),
+      capabilities: new Set(["tax.rules.read", "tax.rules.activate"]),
+    };
+    mockApi(makeDetail(null));
+    renderReglas();
+
+    expect(await screen.findByRole("heading", { name: "IVA Responsable Inscripto" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Activar$/ })).toBeNull();
+  });
+
+  it("pide guardar las reglas editadas antes de activar el borrador", async () => {
+    mockApi(makeDetail(null));
+    renderReglas();
+
+    fireEvent.change(await screen.findByLabelText("Concepto rule-1"), {
+      target: { value: "Operaciones modificadas" },
+    });
+    const activateButton = (await screen.findByRole("button", { name: /^Activar$/ })) as HTMLButtonElement;
+
+    expect(activateButton.disabled).toBe(true);
+    expect(screen.getByText(/Guardá los cambios del borrador/)).toBeTruthy();
+  });
+
+  it("muestra error de validación y permite activar una versión histórica en revisión", async () => {
+    const detail = makeDetail(null);
+    detail.versions = [
+      { ...detail.versions[0]!, id: "version-draft", version: 4, status: "DRAFT" },
+      { ...detail.versions[0]!, id: "version-review", version: 2, status: "IN_REVIEW" },
+      { ...detail.versions[0]!, id: "version-active", version: 3, status: "ACTIVE" },
+    ];
+    mockApi(detail);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(api.post).mockRejectedValue(new Error("El hash no coincide con las reglas guardadas."));
+    renderReglas();
+
+    const versionSelect = await screen.findByLabelText("Versión del paquete");
+    fireEvent.change(versionSelect, { target: { value: "version-review" } });
+    fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith("/tax/rule-versions/version-review/activate");
+      expect(screen.getByRole("alert").textContent).toContain("El hash no coincide");
+    });
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("versión v2"));
+  });
+});

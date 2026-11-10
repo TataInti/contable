@@ -1,7 +1,12 @@
 import { describe, expect, it, beforeEach } from "vitest";
+import { randomUUID } from "node:crypto";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import Fastify from "fastify";
+import cookie from "@fastify/cookie";
 import { prisma } from "../lib/prisma.js";
+import { authGuardPlugin } from "../auth/guard.js";
+import { sha256 } from "../auth/sessions.js";
 import {
   FiscalError,
   FiscalMasterService,
@@ -9,6 +14,7 @@ import {
   TaxPeriodService,
   TaxRuleService,
 } from "./fiscal-foundation-service.js";
+import { fiscalFoundationRoutes } from "./fiscal-foundation-routes.js";
 import { RulePackValidator } from "./rule-pack-validator.js";
 import { computeRulesHashV2 } from "./rules-hash.js";
 
@@ -694,6 +700,148 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     expect(active.status).toBe("ACTIVE");
   });
 
+  it("activa un borrador directamente sin matrícula y guarda usuario, fecha y auditoría", async () => {
+    const refreshToken = randomUUID();
+    const csrfToken = "0123456789abcdef0123456789abcdef";
+    const refreshTokenHash = sha256(refreshToken);
+    const fx = await setupMasters();
+    const pack = await rules.createPack(ctxOwner, {
+      code: "AR_VAT_DIRECT-F",
+      name: "IVA RI activación directa",
+      regimeId: fx.ri.id,
+    });
+    const version = await rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineVersion: "ar-vat-ri-v2.1.0",
+      rulesHash: "pending",
+    });
+    await rules.addRateRule(ctxOwner, {
+      ruleVersionId: version.id,
+      concept: "VENTAS",
+      rate: "21",
+      validFrom: "2026-01-01",
+    });
+    await prisma.deviceSession.create({
+      data: {
+        userId: OWNER_A,
+        refreshTokenHash,
+        familyId: randomUUID(),
+        expiresAt: new Date("2030-01-01T00:00:00.000Z"),
+      },
+    });
+
+    const app = Fastify({ logger: false });
+    try {
+      await app.register(cookie);
+      authGuardPlugin(app);
+      fiscalFoundationRoutes(app);
+      await app.ready();
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/v1/tax/rule-versions/${version.id}/activate`,
+        headers: {
+          cookie: `refresh_token=${refreshToken}; csrf_token=${csrfToken}`,
+          "x-csrf-token": csrfToken,
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      const activated = response.json().data;
+      expect(activated).toMatchObject({
+        status: "ACTIVE",
+        activatedByUserId: OWNER_A,
+        activatedAt: expect.any(String),
+        approvedAt: null,
+        approvedByUserId: null,
+      });
+
+      const auditEvent = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+        tx.auditEvent.findFirst({
+          where: {
+            action: "tax_rule_version.activated",
+            entityType: "TaxRuleVersion",
+            entityId: version.id,
+          },
+        }),
+      );
+      expect(auditEvent).toMatchObject({
+        firmId: FIRM_ALFA,
+        userId: OWNER_A,
+        entityId: version.id,
+        after: expect.objectContaining({
+          status: "ACTIVE",
+          activatedByUserId: OWNER_A,
+        }),
+      });
+    } finally {
+      await app.close();
+      await prisma.deviceSession.deleteMany({ where: { refreshTokenHash } });
+    }
+  });
+
+  it("devuelve 403 por API al PREPARER sin tax.rules.propose", async () => {
+    const preparerId = randomUUID();
+    const refreshToken = randomUUID();
+    const csrfToken = "0123456789abcdef0123456789abcdef";
+    const refreshTokenHash = sha256(refreshToken);
+    await prisma.user.upsert({
+      where: { id: preparerId },
+      update: {},
+      create: {
+        id: preparerId,
+        emailNormalized: `preparer.activation-guard.${preparerId}@test.local`,
+        name: "Preparer activation guard",
+        passwordHash: "synthetic-test-hash",
+      },
+    });
+    await prisma.firmMembership.upsert({
+      where: { firmId_userId: { firmId: FIRM_ALFA, userId: preparerId } },
+      update: { role: "PREPARER", status: "ACTIVE" },
+      create: {
+        firmId: FIRM_ALFA,
+        userId: preparerId,
+        role: "PREPARER",
+        status: "ACTIVE",
+        acceptedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    });
+    await prisma.deviceSession.create({
+      data: {
+        userId: preparerId,
+        refreshTokenHash,
+        familyId: randomUUID(),
+        expiresAt: new Date("2030-01-01T00:00:00.000Z"),
+      },
+    });
+
+    const app = Fastify({ logger: false });
+    try {
+      await app.register(cookie);
+      authGuardPlugin(app);
+      fiscalFoundationRoutes(app);
+      await app.ready();
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/tax/rule-versions/nonexistent/activate",
+        headers: {
+          cookie: `refresh_token=${refreshToken}; csrf_token=${csrfToken}`,
+          "x-csrf-token": csrfToken,
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({
+        code: "CAPABILITY_REQUIRED",
+        message: "Falta la capacidad tax.rules.propose",
+      });
+    } finally {
+      await app.close();
+      await prisma.deviceSession.deleteMany({ where: { refreshTokenHash } });
+      await prisma.firmMembership.deleteMany({ where: { firmId: FIRM_ALFA, userId: preparerId } });
+      await prisma.user.deleteMany({ where: { id: preparerId } });
+    }
+  });
+
   it("activar una versión retira la anterior", async () => {
     const fx = await setupMasters();
     const pack = await rules.createPack(ctxOwner, {
@@ -706,6 +854,12 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
       validFrom: "2026-01-01",
       engineVersion: "ar-vat-ri-v1.0.0",
       rulesHash: "h1",
+    });
+    await rules.addRateRule(ctxOwner, {
+      ruleVersionId: v1.id,
+      concept: "VENTAS",
+      rate: "21",
+      validFrom: "2026-01-01",
     });
     const cred = await profiles.addCredential(ctxOwner, {
       userId: PROFESSIONAL_A,
@@ -723,6 +877,12 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
       validFrom: "2026-07-01",
       engineVersion: "ar-vat-ri-v1.0.0",
       rulesHash: "h2",
+    });
+    await rules.addRateRule(ctxOwner, {
+      ruleVersionId: v2.id,
+      concept: "VENTAS",
+      rate: "21",
+      validFrom: "2026-07-01",
     });
     await rules.submitReview(ctxOwner, v2.id);
     await rules.approve(ctxProfessional, { ruleVersionId: v2.id, credentialId: cred.id });

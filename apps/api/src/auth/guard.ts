@@ -147,6 +147,14 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/tax\/activities/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
   { match: /\/tax\/holidays/, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
   {
+    match: /\/tax\/rule-versions\//,
+    resolve: (m, path) => {
+      if (path.endsWith("/approve")) return "tax.rules.approve";
+      if (path.endsWith("/activate") || path.endsWith("/submit-review")) return "tax.rules.propose";
+      return m === "GET" ? "tax.rules.read" : "tax.rules.propose";
+    },
+  },
+  {
     match: /\/tax-rule-versions/,
     resolve: (m, path) => {
       if (path.endsWith("/approve")) return "tax.rules.approve";

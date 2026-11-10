@@ -47,6 +47,7 @@ model User {
   professionalCredentials ProfessionalCredential[]
   ruleApprovals          RuleApproval[]
   ruleVersionApprovals   TaxRuleVersion[]
+  activatedRuleVersions  TaxRuleVersion[]        @relation("TaxRuleVersionActivatedBy")
   preparedTaxSettlements TaxSettlement[]       @relation("settlementPreparedBy")
   reviewedTaxSettlements TaxSettlement[]       @relation("settlementReviewedBy")
   finalizedTaxSettlements TaxSettlement[]      @relation("settlementFinalizedBy")
@@ -2252,6 +2253,7 @@ model TaxRuleVersion {
   engineVersion String
   approvedByUserId String?
   approvedAt    DateTime?
+  activatedByUserId String?
   activatedAt   DateTime?
   supersedesId  String?
   createdAt     DateTime @default(now())
@@ -2262,6 +2264,7 @@ model TaxRuleVersion {
   pack      TaxRulePack        @relation(fields: [packId], references: [id], onDelete: Cascade)
   createdByFirm Firm? @relation("TaxRuleVersionCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
   approvedBy User?             @relation(fields: [approvedByUserId], references: [id])
+  activatedBy User?            @relation("TaxRuleVersionActivatedBy", fields: [activatedByUserId], references: [id], onDelete: SetNull)
   rateRules TaxRateRule[]
   minimumRules TaxMinimumRule[]
   bracketRules TaxBracketRule[]

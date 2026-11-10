@@ -7,6 +7,7 @@ import {
   TaxRuleService,
 } from "./fiscal-foundation-service.js";
 import { fiscalFoundationRoutes } from "./fiscal-foundation-routes.js";
+import { computeLegacyRulesHashSchemaV1, computeRulesHashV2 } from "./rules-hash.js";
 
 type StoredProfile = {
   id: string;
@@ -55,11 +56,15 @@ const mockState = vi.hoisted(() => ({
     version: number;
     status: string;
     validFrom: Date;
-    validTo?: Date;
+    validTo?: Date | null;
     engineVersion: string;
     rulesHash: string;
+    rulesHashSchemaVersion?: number;
+    activatedByUserId?: string | null;
+    activatedAt?: Date | null;
   }>,
   rateRules: [] as Array<Record<string, unknown>>,
+  auditEvents: [] as Array<Record<string, unknown>>,
   lockQueues: new Map<string, Promise<void>>(),
   context: {
     userId: "11111111-1111-4111-8111-111111111111",
@@ -103,6 +108,54 @@ const profileInput = {
   nationalCondition: "RESPONSABLE_INSCRIPTO" as const,
   validFrom: "2026-01-01",
 };
+
+function seedActivatableRuleVersion(options: {
+  status?: string;
+  engineVersion?: string;
+  validFrom?: Date;
+  validTo?: Date | null;
+  rulesHash?: string;
+  empty?: boolean;
+} = {}) {
+  const packId = "pack-ri-activation";
+  const versionId = `version-${mockState.ruleVersions.length + 1}`;
+  if (!mockState.taxRulePacks.some((pack: (typeof mockState.taxRulePacks)[number]) => pack.id === packId)) {
+    mockState.taxRulePacks.push({
+      id: packId,
+      regimeCode: "RI",
+      taxTypeCode: "IVA",
+      jurisdictionCode: "AR",
+    });
+  }
+  const engineVersion = options.engineVersion ?? "ar-vat-ri-v2.1.0";
+  const validFrom = options.validFrom ?? new Date("2026-01-01T00:00:00.000Z");
+  const rateRules = options.empty
+    ? []
+    : [{
+        ruleVersionId: versionId,
+        concept: "VENTAS",
+        activityCode: null,
+        jurisdictionId: null,
+        rate: "21.000000",
+        minAmount: null,
+        validFrom,
+        validTo: null,
+      }];
+  mockState.rateRules.push(...rateRules);
+  const version = {
+    id: versionId,
+    packId,
+    version: 1,
+    status: options.status ?? "DRAFT",
+    validFrom,
+    validTo: options.validTo ?? null,
+    engineVersion,
+    rulesHash: options.rulesHash ?? computeRulesHashV2({ engineVersion, rateRules }),
+    rulesHashSchemaVersion: 2,
+  };
+  mockState.ruleVersions.push(version);
+  return version;
+}
 
 async function acquireLock(key: string): Promise<() => void> {
   const previous = mockState.lockQueues.get(key) ?? Promise.resolve();
@@ -230,6 +283,11 @@ function makeTransaction(ctx: TestContext) {
         return version && pack
           ? {
               ...version,
+              rateRules: mockState.rateRules.filter((rule: Record<string, unknown>) => rule.ruleVersionId === version.id),
+              minimumRules: [],
+              bracketRules: [],
+              dueDateRules: [],
+              roundingRules: [],
               pack: {
                 regime: {
                   code: pack.regimeCode,
@@ -239,6 +297,30 @@ function makeTransaction(ctx: TestContext) {
               },
             }
           : null;
+      },
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const rows = mockState.ruleVersions.filter((version: (typeof mockState.ruleVersions)[number]) =>
+          Object.entries(where).every(([key, value]) => version[key as keyof typeof version] === value),
+        );
+        rows.forEach((version: (typeof mockState.ruleVersions)[number]) => Object.assign(version, data));
+        return { count: rows.length };
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const version = mockState.ruleVersions.find((item: (typeof mockState.ruleVersions)[number]) => item.id === where.id);
+        if (!version) throw new Error("Missing rule version in in-memory transaction");
+        Object.assign(version, data);
+        return version;
+      },
+      findMany: async ({ where }: { where: Record<string, unknown> }) =>
+        mockState.ruleVersions.filter((version: (typeof mockState.ruleVersions)[number]) =>
+          Object.entries(where).every(([key, value]) => version[key as keyof typeof version] === value),
+        ),
+    },
+    auditEvent: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        const event = { id: `audit-${mockState.auditEvents.length + 1}`, ...data };
+        mockState.auditEvents.push(event);
+        return event;
       },
     },
     taxRateRule: {
@@ -303,6 +385,7 @@ beforeEach(() => {
   mockState.taxRulePacks.length = 0;
   mockState.ruleVersions.length = 0;
   mockState.rateRules.length = 0;
+  mockState.auditEvents.length = 0;
   mockState.lockQueues.clear();
   mockState.idCounter = 0;
   mockState.regimeFindUniqueCalls = 0;
@@ -319,6 +402,131 @@ beforeEach(() => {
 });
 
 describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
+  it("activa un borrador sin matrícula y registra actor, fecha y auditoría", async () => {
+    const version = seedActivatableRuleVersion();
+
+    const activated = await rules.activate(ctxOwner, version.id);
+
+    expect(activated).toMatchObject({
+      id: version.id,
+      status: "ACTIVE",
+      activatedByUserId: OWNER_ID,
+      activatedAt: expect.any(Date),
+    });
+    expect(mockState.auditEvents).toHaveLength(1);
+    expect(mockState.auditEvents[0]).toMatchObject({
+      firmId: FIRM_ID,
+      userId: OWNER_ID,
+      action: "tax_rule_version.activated",
+      entityType: "TaxRuleVersion",
+      entityId: version.id,
+    });
+  });
+
+  it.each(["IN_REVIEW", "APPROVED"])("activa directamente una versión histórica %s", async (status: string) => {
+    const version = seedActivatableRuleVersion({ status });
+
+    await expect(rules.activate(ctxOwner, version.id)).resolves.toMatchObject({
+      status: "ACTIVE",
+      activatedByUserId: OWNER_ID,
+    });
+  });
+
+  it("activa una versión histórica con hash legacy v1 sin reescribirlo", async () => {
+    const version = seedActivatableRuleVersion({ status: "IN_REVIEW" });
+    const rateRules = mockState.rateRules.filter(
+      (rule: Record<string, unknown>) => rule.ruleVersionId === version.id,
+    );
+    version.rulesHashSchemaVersion = 1;
+    version.rulesHash = computeLegacyRulesHashSchemaV1({
+      rateRules: rateRules as Array<{
+        concept: string;
+        activityCode: string | null;
+        jurisdictionId: string | null;
+        rate: string | null;
+        minAmount: string | null;
+      }>,
+      minimumRules: [],
+      bracketRules: [],
+      dueDateRules: [],
+    });
+
+    const activated = await rules.activate(ctxOwner, version.id);
+
+    expect(activated).toMatchObject({ status: "ACTIVE", rulesHashSchemaVersion: 1 });
+  });
+
+  it("rechaza hash inconsistente, vigencia inválida, versión vacía y motor incompatible", async () => {
+    const badHash = seedActivatableRuleVersion({ rulesHash: "hash-incorrecto" });
+    await expect(rules.activate(ctxOwner, badHash.id)).rejects.toMatchObject({
+      code: "RULES_HASH_MISMATCH",
+      message: expect.stringContaining("hash no coincide"),
+    });
+
+    const badValidity = seedActivatableRuleVersion({
+      validFrom: new Date("2026-08-01T00:00:00.000Z"),
+      validTo: new Date("2026-07-31T00:00:00.000Z"),
+    });
+    await expect(rules.activate(ctxOwner, badValidity.id)).rejects.toMatchObject({
+      code: "RULE_VERSION_INVALID",
+      message: expect.stringContaining("vigencia inválidos"),
+    });
+
+    const empty = seedActivatableRuleVersion({ empty: true });
+    await expect(rules.activate(ctxOwner, empty.id)).rejects.toMatchObject({
+      code: "RULE_VERSION_EMPTY",
+      message: expect.stringContaining("no contiene reglas"),
+    });
+
+    const incompatible = seedActivatableRuleVersion({ engineVersion: "tax-engine-v1" });
+    await expect(rules.activate(ctxOwner, incompatible.id)).rejects.toMatchObject({
+      code: "UNSUPPORTED_TAX_ENGINE_VERSION",
+      message: expect.stringContaining("tax-engine-v1"),
+    });
+    expect(mockState.ruleVersions.map((item: (typeof mockState.ruleVersions)[number]) => item.status)).toEqual([
+      "DRAFT",
+      "DRAFT",
+      "DRAFT",
+      "DRAFT",
+    ]);
+  });
+
+  it("mantiene inmutable una versión activa", async () => {
+    const version = seedActivatableRuleVersion();
+    await rules.activate(ctxOwner, version.id);
+
+    await expect(
+      rules.addRateRule(ctxOwner, {
+        ruleVersionId: version.id,
+        concept: "COMPRAS",
+        rate: "10.5",
+        validFrom: "2026-01-01",
+      }),
+    ).rejects.toMatchObject({ code: "RULE_VERSION_IMMUTABLE" });
+  });
+
+  it("expone un error claro del hash al intentar activar por API", async () => {
+    const version = seedActivatableRuleVersion({ rulesHash: "hash-incorrecto" });
+    const app = Fastify({ logger: false });
+    fiscalFoundationRoutes(app);
+    await app.ready();
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/v1/tax/rule-versions/${version.id}/activate`,
+      });
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toMatchObject({
+        error: {
+          code: "RULES_HASH_MISMATCH",
+          message: expect.stringContaining("hash no coincide"),
+        },
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("rechaza motores desconocidos al crear y configurar reglas antes de escribir", async () => {
     mockState.taxRulePacks.push({
       id: "pack-ri",
