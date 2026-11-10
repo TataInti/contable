@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { calculateDueDate } from "@contable/tax-engine";
+import { computeRulesHashV2, RULES_HASH_SCHEMA_VERSION_V2 } from "./rules-hash.js";
 import {
   ACTIVITY_CODE_PATTERN,
   normalizeActivityCode,
@@ -1171,7 +1171,8 @@ export class TaxRuleService {
           validFrom: new Date(input.validFrom),
           ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
           engineVersion: input.engineVersion,
-          rulesHash: input.rulesHash,
+          rulesHash: computeRulesHashV2({ engineVersion: input.engineVersion }),
+          rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V2,
           status: "DRAFT",
         },
       });
@@ -1190,6 +1191,7 @@ export class TaxRuleService {
         include: {
           rateRules: true,
           minimumRules: true,
+          bracketRules: true,
           dueDateRules: true,
           roundingRules: true,
           sources: true,
@@ -1223,6 +1225,7 @@ export class TaxRuleService {
           ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
           engineVersion: source.engineVersion,
           rulesHash: source.rulesHash,
+          rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V2,
           supersedesId: source.id,
         },
       });
@@ -1249,6 +1252,20 @@ export class TaxRuleService {
                 ...(rule.jurisdictionId ? { jurisdictionId: rule.jurisdictionId } : {}),
                 amount: rule.amount,
                 isConditional: rule.isConditional,
+                validFrom: new Date(input.validFrom),
+                ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
+              })),
+            })
+          : Promise.resolve({ count: 0 }),
+        source.bracketRules.length
+          ? tx.taxBracketRule.createMany({
+              data: source.bracketRules.map((rule) => ({
+                ruleVersionId: version.id,
+                concept: rule.concept,
+                fromAmount: rule.fromAmount,
+                ...(rule.toAmount ? { toAmount: rule.toAmount } : {}),
+                rate: rule.rate,
+                ...(rule.fixedAmount ? { fixedAmount: rule.fixedAmount } : {}),
                 validFrom: new Date(input.validFrom),
                 ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
               })),
@@ -1295,7 +1312,14 @@ export class TaxRuleService {
       await this.refreshHash(tx, version.id);
       return tx.taxRuleVersion.findUniqueOrThrow({
         where: { id: version.id },
-        include: { rateRules: true, minimumRules: true, dueDateRules: true, sources: true },
+        include: {
+          rateRules: true,
+          minimumRules: true,
+          bracketRules: true,
+          dueDateRules: true,
+          roundingRules: true,
+          sources: true,
+        },
       });
     });
   }
@@ -1577,26 +1601,21 @@ export class TaxRuleService {
   private async refreshHash(tx: Prisma.TransactionClient, ruleVersionId: string) {
     const version = await tx.taxRuleVersion.findUnique({
       where: { id: ruleVersionId },
-      include: { rateRules: true, minimumRules: true, dueDateRules: true, roundingRules: true },
+      include: {
+        rateRules: true,
+        minimumRules: true,
+        bracketRules: true,
+        dueDateRules: true,
+        roundingRules: true,
+      },
     });
     if (!version) throw new FiscalError("RULE_VERSION_NOT_FOUND", "Versión de regla no encontrada");
-    const canonical = JSON.stringify({
-      rate: version.rateRules
-        .map((rule) => [rule.concept, rule.activityCode, rule.jurisdictionId, rule.rate?.toString(), rule.minAmount?.toString(), rule.validFrom.toISOString(), rule.validTo?.toISOString()])
-        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-      minimum: version.minimumRules
-        .map((rule) => [rule.concept, rule.jurisdictionId, rule.amount.toString(), rule.isConditional, rule.validFrom.toISOString(), rule.validTo?.toISOString()])
-        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-      due: version.dueDateRules
-        .map((rule) => [rule.jurisdictionId, rule.frequency, rule.dueDay, rule.monthOffset, rule.cuitEnding, rule.validFrom.toISOString(), rule.validTo?.toISOString()])
-        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-      rounding: version.roundingRules
-        .map((rule) => [rule.concept, rule.precision, rule.mode])
-        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
-    });
     return tx.taxRuleVersion.update({
       where: { id: ruleVersionId },
-      data: { rulesHash: createHash("sha256").update(canonical).digest("hex") },
+      data: {
+        rulesHash: computeRulesHashV2(version),
+        rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V2,
+      },
     });
   }
 

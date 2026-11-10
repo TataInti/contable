@@ -1,6 +1,9 @@
-import { createHash } from "node:crypto";
-import { Prisma } from "@prisma/client";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import {
+  computeLegacyRulesHashSchemaV1,
+  computeRulesHashV2,
+  RULES_HASH_SCHEMA_VERSION_V1,
+} from "./rules-hash.js";
 
 /**
  * F2.3: revalidación programada de rule packs.
@@ -39,7 +42,13 @@ export class RulePackValidator {
         include: {
           versions: {
             orderBy: { version: "desc" },
-            include: { rateRules: true, minimumRules: true, bracketRules: true, dueDateRules: true },
+            include: {
+              rateRules: true,
+              minimumRules: true,
+              bracketRules: true,
+              dueDateRules: true,
+              roundingRules: true,
+            },
           },
         },
       });
@@ -60,7 +69,9 @@ export class RulePackValidator {
         // Hash estable: recalcula sobre las reglas y compara con el persistido.
         let rulesHash: string | null = null;
         if (activeVersion) {
-          rulesHash = this.computeRulesHash(activeVersion);
+          rulesHash = activeVersion.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V1
+            ? computeLegacyRulesHashSchemaV1(activeVersion)
+            : computeRulesHashV2(activeVersion);
           if (rulesHash !== activeVersion.rulesHash) issues.push("HASH_MISMATCH");
         }
 
@@ -81,22 +92,6 @@ export class RulePackValidator {
 
       return results;
     });
-  }
-
-  /** Hash canónico de las reglas de una versión (estable y determinista). */
-  private computeRulesHash(version: {
-    rateRules: { concept: string; activityCode: string | null; jurisdictionId: string | null; rate: Prisma.Decimal | null; minAmount: Prisma.Decimal | null }[];
-    minimumRules: { concept: string; jurisdictionId: string | null; amount: Prisma.Decimal }[];
-    bracketRules: { concept: string; fromAmount: Prisma.Decimal; toAmount: Prisma.Decimal | null; rate: Prisma.Decimal; fixedAmount: Prisma.Decimal | null }[];
-    dueDateRules: { jurisdictionId: string; frequency: string; dueDay: number; cuitEnding: string | null }[];
-  }): string {
-    const canonical = JSON.stringify({
-      rate: version.rateRules.map((r) => [r.concept, r.activityCode, r.jurisdictionId, r.rate?.toString(), r.minAmount?.toString()]),
-      min: version.minimumRules.map((r) => [r.concept, r.jurisdictionId, r.amount.toString()]),
-      bracket: version.bracketRules.map((r) => [r.concept, r.fromAmount.toString(), r.toAmount?.toString(), r.rate.toString(), r.fixedAmount?.toString()]),
-      due: version.dueDateRules.map((r) => [r.jurisdictionId, r.frequency, r.dueDay, r.cuitEnding]),
-    });
-    return createHash("sha256").update(canonical).digest("hex");
   }
 }
 

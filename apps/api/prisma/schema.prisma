@@ -2248,6 +2248,7 @@ model TaxRuleVersion {
   validFrom     DateTime
   validTo       DateTime?
   rulesHash     String
+  rulesHashSchemaVersion Int @default(1)
   engineVersion String
   approvedByUserId String?
   approvedAt    DateTime?
