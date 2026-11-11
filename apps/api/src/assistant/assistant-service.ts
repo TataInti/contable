@@ -34,6 +34,31 @@ export interface AiClientConfig {
   serviceId: string;
 }
 
+/** Uso informado por el servicio AI; ausente en modo determinista. */
+interface AssistantAiUsage {
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  costUsd?: string | null;
+}
+
+interface AssistantAiResult extends AssistantAiUsage {
+  answer: string;
+  abstained: boolean;
+  abstentionReason: string | null;
+  evidence: { kind: string; sourceType: string; sourceId: string; label: string | null; value: string | null }[];
+  model: string | null;
+  provider: string | null;
+  promptVersion: string | null;
+}
+
+function nonNegativeInteger(value: number | null | undefined): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
+function decimalCost(value: string | null | undefined): string {
+  return typeof value === "string" && /^\d+(\.\d+)?$/.test(value) ? value : "0";
+}
+
 export function loadAiClientConfig(): AiClientConfig {
   return {
     baseUrl: process.env.AI_SERVICE_URL ?? "http://localhost:8000",
@@ -135,7 +160,7 @@ export class AssistantService {
         include: { evidence: true },
       });
 
-      // Registrar usage
+      // Registrar usage con los contadores reales cuando la IA los informa.
       await tx.assistantUsage.create({
         data: {
           firmId: ctx.firmId,
@@ -144,9 +169,9 @@ export class AssistantService {
           turnId: assistantTurn.id,
           model: result.model ?? "unknown",
           provider: result.provider ?? "internal",
-          inputTokens: 0,
-          outputTokens: 0,
-          costUsd: "0",
+          inputTokens: nonNegativeInteger(result.inputTokens),
+          outputTokens: nonNegativeInteger(result.outputTokens),
+          costUsd: decimalCost(result.costUsd),
         },
       });
 
@@ -241,19 +266,11 @@ export class AssistantService {
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      throw new AssistantError("AI_UNAVAILABLE", `AI falló: ${res.status} ${text}`);
+      // Sólo el estado HTTP: el texto remoto nunca se propaga al cliente.
+      throw new AssistantError("AI_UNAVAILABLE", `El asistente no está disponible (HTTP ${res.status})`);
     }
 
-    return (await res.json()) as {
-      answer: string;
-      abstained: boolean;
-      abstentionReason: string | null;
-      evidence: { kind: string; sourceType: string; sourceId: string; label: string | null; value: string | null }[];
-      model: string | null;
-      provider: string | null;
-      promptVersion: string | null;
-    };
+    return (await res.json()) as AssistantAiResult;
   }
 
   private async resolveToolResults(
