@@ -76,6 +76,9 @@ async function setupMembership() {
     VALUES ('${FIRM_ALFA}', 'Estudio Alfa', 'Estudio Alfa', now())
     ON CONFLICT ("id") DO NOTHING
   `);
+  await prisma.$executeRawUnsafe(
+    `UPDATE firms SET "allowSelfReview" = false WHERE "id" = '${FIRM_ALFA}'`,
+  );
   await prisma.$executeRawUnsafe(`
     INSERT INTO clients ("id", "firmId", "legalName", cuit, "updatedAt")
     VALUES ('${CLIENT_ING}', '${FIRM_ALFA}', 'Cliente Ingestion', '20999999998', now())
@@ -506,13 +509,17 @@ describe("F1.2 evidencia del expediente mensual", () => {
     await ingestion.commitBatch(ctxPreparer, batch.id, "20999999998");
 
     const before = await workpapers.coverage(ctxPreparer, workpaper.id);
+    expect(before.allowSelfReview).toBe(false);
     const salesBefore = before.sources.find((source) => source.code === "ARCA_IVA_SALES");
     expect(salesBefore?.present).toBe(false);
     const sourceLinkId = salesBefore?.batches[0]?.id;
     expect(sourceLinkId).toBeTruthy();
     await expect(
       workpapers.reviewSource(ctxPreparer, workpaper.id, sourceLinkId!),
-    ).rejects.toMatchObject({ code: "MAKER_CHECKER_VIOLATION" });
+    ).rejects.toMatchObject({
+      code: "MAKER_CHECKER_VIOLATION",
+      message: "Quien importó el lote no puede revisar su propia fuente",
+    });
 
     await workpapers.reviewSource(ctxReviewer, workpaper.id, sourceLinkId!);
     const after = await workpapers.coverage(ctxReviewer, workpaper.id);
@@ -526,6 +533,53 @@ describe("F1.2 evidencia del expediente mensual", () => {
       tx.fiscalVoucher.findUniqueOrThrow({ where: { id: row.voucherId! } }),
     );
     expect(voucher.status).toBe("APPROVED");
+
+    const selfReviewBatch = await ingestion.createBatch(ctxPreparer, {
+      clientId: CLIENT_ING,
+      origin: "ARCA",
+      taxTypeId: exact.taxTypeId,
+      periodId: exact.periodId,
+      adapterVersion: "ARCA_LIBRO_IVA_V1",
+      fileHash: "sha256:wp-sales-empty-self-review",
+      workpaperId: workpaper.id,
+      sourceCode: "ARCA_IVA_SALES",
+    });
+    await ingestion.validateBatch(ctxPreparer, selfReviewBatch.id, []);
+    await ingestion.commitBatch(ctxPreparer, selfReviewBatch.id, "20999999998");
+    const selfReviewCoverage = await workpapers.coverage(ctxPreparer, workpaper.id);
+    expect(selfReviewCoverage.allowSelfReview).toBe(false);
+    const selfReviewLink = selfReviewCoverage.sources
+      .find((source) => source.code === "ARCA_IVA_SALES")
+      ?.batches.find((item) => item.importBatchId === selfReviewBatch.id);
+    expect(selfReviewLink?.id).toBeTruthy();
+    await expect(
+      workpapers.reviewSource(ctxPreparer, workpaper.id, selfReviewLink!.id),
+    ).rejects.toMatchObject({
+      code: "MAKER_CHECKER_VIOLATION",
+      message: "Quien importó el lote no puede revisar su propia fuente",
+    });
+
+    await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.firm.update({ where: { id: FIRM_ALFA }, data: { allowSelfReview: true } }),
+    );
+    const enabledCoverage = await workpapers.coverage(ctxPreparer, workpaper.id);
+    expect(enabledCoverage.allowSelfReview).toBe(true);
+    const selfReviewed = await workpapers.reviewSource(ctxPreparer, workpaper.id, selfReviewLink!.id);
+    expect(selfReviewed.reviewedByUserId).toBe(PREPARER_A);
+    const selfReviewAudit = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.auditEvent.findMany({
+        where: {
+          firmId: FIRM_ALFA,
+          action: "SELF_REVIEW",
+          entityType: "WorkpaperImportBatch",
+          entityId: selfReviewLink!.id,
+          userId: PREPARER_A,
+        },
+      }),
+    );
+    expect(selfReviewAudit).toHaveLength(1);
+    expect(selfReviewAudit[0]?.createdAt).toBeInstanceOf(Date);
+
     await expect(workpapers.calculate(ctxPreparer, workpaper.id)).rejects.toMatchObject({
       code: "SOURCE_NOT_REVIEWED",
     });

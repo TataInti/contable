@@ -5,8 +5,10 @@ import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-s
 import { ApiError, api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
+import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
+import { WorkpaperSourceReviewAction } from "./WorkpaperSourceReviewAction";
 import { Icon } from "../ui/Icon";
 import {
   DenseAlert,
@@ -52,6 +54,9 @@ function WorkpaperActionError({ error }: { error: Error | null | undefined }) {
 
 interface Workpaper {
   id: string;
+  preparedByUserId: string | null;
+  reviewedByUserId: string | null;
+  finalizedByUserId: string | null;
   periodStart: string;
   periodEnd: string;
   revision: number;
@@ -236,6 +241,8 @@ interface WorkpaperSourceBatch {
   errorRows: number;
   snapshotHash: string | null;
   reviewedAt: string | null;
+  reviewedByUserId: string | null;
+  createdByUserId: string | null;
   createdAt: string;
 }
 interface WorkpaperSource {
@@ -616,6 +623,8 @@ async function fileToHash(file: File): Promise<string> {
 export function StudyExpedienteMensual() {
   const [density] = useDensity();
   const { firmId, clientId, capabilities } = useClientContext();
+  const { me } = useSession();
+  const currentUserId = me?.userId ?? null;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const taxPeriodStorageKey =
@@ -735,6 +744,7 @@ export function StudyExpedienteMensual() {
           settlementStatus: string | null;
         }>;
         sources: WorkpaperSource[];
+        allowSelfReview: boolean;
       }>(
         `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/coverage`,
       ),
@@ -1897,6 +1907,14 @@ export function StudyExpedienteMensual() {
                   isPending: calculateMutation.isPending,
                 })
               : null;
+            const selfReviewBlocked = Boolean(
+              currentUserId &&
+              wp.preparedByUserId === currentUserId &&
+              coverageQuery.data &&
+              !coverageQuery.data.allowSelfReview &&
+              ((wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review")) ||
+                (wp.status === "REVIEWED" && capabilities.has("tax.settlements.finalize"))),
+            );
             return (
               <article className="workpaper-card" key={wp.id}>
                 <div className="workpaper-card__header">
@@ -1905,6 +1923,16 @@ export function StudyExpedienteMensual() {
                       {wp.periodStart.slice(0, 7)} · Revisión {wp.revision}
                     </h2>
                     <StatusBadge status={wp.status} />
+                    {wp.preparedByUserId && wp.reviewedByUserId === wp.preparedByUserId ? (
+                      <small className="muted-copy" role="status">
+                        Expediente revisado por la misma persona que lo preparó.
+                      </small>
+                    ) : null}
+                    {wp.preparedByUserId && wp.finalizedByUserId === wp.preparedByUserId ? (
+                      <small className="muted-copy" role="status">
+                        Expediente finalizado por la misma persona que lo preparó.
+                      </small>
+                    ) : null}
                   </div>
                   {blocking.length > 0 ? (
                     <span className="workpaper-card__blocking" role="alert">
@@ -2251,19 +2279,22 @@ export function StudyExpedienteMensual() {
                                                 : batch.batchStatus
                                             }
                                           />
-                                          {batch.batchStatus === "COMMITTED" &&
-                                          batch.reviewStatus !== "REVIEWED" &&
-                                          canEditSources &&
-                                          capabilities.has("tax.vouchers.review") ? (
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              disabled={reviewSourceMutation.isPending}
-                                              onClick={() => reviewSourceMutation.mutate(batch.id)}
-                                            >
-                                              Revisar
-                                            </Button>
-                                          ) : null}
+                                          <WorkpaperSourceReviewAction
+                                            batch={batch}
+                                            currentUserId={currentUserId}
+                                            allowSelfReview={coverageQuery.data?.allowSelfReview === true}
+                                            canEditSources={canEditSources}
+                                            canReview={capabilities.has("tax.vouchers.review")}
+                                            pending={reviewSourceMutation.isPending}
+                                            error={
+                                              reviewSourceMutation.variables === batch.id
+                                                ? reviewSourceMutation.error
+                                                : null
+                                            }
+                                            onReview={(sourceLinkId) =>
+                                              reviewSourceMutation.mutate(sourceLinkId)
+                                            }
+                                          />
                                         </div>
                                       ))}
                                     </div>
@@ -3200,14 +3231,14 @@ export function StudyExpedienteMensual() {
                         <>
                           <Button
                             variant="primary"
-                            disabled={reviewMutation.isPending}
+                            disabled={reviewMutation.isPending || selfReviewBlocked}
                             onClick={() => reviewMutation.mutate({ id: wp.id, approved: true })}
                           >
                             Aprobar revisión
                           </Button>
                           <Button
                             variant="secondary"
-                            disabled={reviewMutation.isPending}
+                            disabled={reviewMutation.isPending || selfReviewBlocked}
                             onClick={() => reviewMutation.mutate({ id: wp.id, approved: false })}
                           >
                             Solicitar cambios
@@ -3221,11 +3252,19 @@ export function StudyExpedienteMensual() {
                       error={reviewMutation.variables?.id === wp.id ? reviewMutation.error : null}
                     />
                   ) : null}
+                  {selfReviewBlocked && ["IN_REVIEW", "REVIEWED"].includes(wp.status) ? (
+                    <small className="muted-copy">
+                      Para revisar o finalizar este expediente, el Titular puede habilitar la
+                      autorrevisión en Configuración del estudio.
+                    </small>
+                  ) : null}
                   {wp.status === "REVIEWED" ? (
                     <Button
                       variant="primary"
                       disabled={
-                        finalizeMutation.isPending || !capabilities.has("tax.settlements.finalize")
+                        finalizeMutation.isPending ||
+                        !capabilities.has("tax.settlements.finalize") ||
+                        selfReviewBlocked
                       }
                       onClick={() => void finalizeMutation.mutate(wp.id)}
                     >
@@ -3257,7 +3296,6 @@ export function StudyExpedienteMensual() {
           })}
         </div>
       )}
-
     
     </DensePage>
   );

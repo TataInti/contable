@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
+import { calculateIIbbTuc, dec, IIBB_TUC_ENGINE_VERSION } from "@contable/tax-engine";
 import { fiscalFoundationRoutes } from "./fiscal-foundation-routes.js";
 
 /**
@@ -8,7 +9,8 @@ import { fiscalFoundationRoutes } from "./fiscal-foundation-routes.js";
  * Cobertura:
  * - GET sólo activo por defecto (selectores) + includeInactive para admin.
  * - Alta con normalización de código, unicidad y vigencia.
- * - PATCH de atributos/vigencia con code y jurisdictionId inmutables.
+ * - PATCH de atributos/vigencia con renombre de código propagado en transacción.
+ * - Las referencias de versiones ACTIVE/RETIRED conservan sus códigos e hashes.
  * - Activación/desactivación explícitas, sin borrado (historial intacto).
  * - Auditoría (auditEvent) en toda mutación del catálogo.
  * - Vínculo código-regla validado en servidor (altas y reemplazos DRAFT).
@@ -35,6 +37,10 @@ const mockState = vi.hoisted(() => ({
   clientActivities: [] as Array<Record<string, unknown>>,
   ruleVersions: [] as Array<Record<string, unknown>>,
   rateRules: [] as Array<Record<string, unknown>>,
+  fiscalVoucherLines: [] as Array<Record<string, unknown>>,
+  workpaperVoucherClassifications: [] as Array<Record<string, unknown>>,
+  supplierTaxProfiles: [] as Array<Record<string, unknown>>,
+  clientProfiles: [] as Array<Record<string, unknown>>,
   auditEvents: [] as Array<Record<string, unknown>>,
   idCounter: 0,
   withTenantContext: null as unknown as (
@@ -60,6 +66,42 @@ function nextUuid() {
 
 function matches(row: Record<string, unknown>, where: Record<string, unknown>) {
   return Object.entries(where).every(([key, value]) => row[key] === value);
+}
+
+function matchesRateRule(row: Record<string, unknown>, where: Record<string, unknown>) {
+  const alternatives = where.OR as Array<Record<string, unknown>> | undefined;
+  if (alternatives && !alternatives.some((item) => matchesRateRule(row, item))) return false;
+  for (const [key, value] of Object.entries(where)) {
+    if (key === "OR" || key === "ruleVersion") continue;
+    if (row[key] !== value) return false;
+  }
+  const relation = where.ruleVersion as { is?: { status?: unknown } } | undefined;
+  const statusFilter = relation?.is?.status;
+  if (statusFilter === undefined) return true;
+  const version = mockState.ruleVersions.find((item) => item.id === row.ruleVersionId);
+  if (typeof statusFilter === "string") return version?.status === statusFilter;
+  if (typeof statusFilter === "object" && statusFilter !== null && "not" in statusFilter) {
+    return version?.status !== (statusFilter as { not: unknown }).not;
+  }
+  return false;
+}
+
+function matchesClientProfile(row: Record<string, unknown>, where: Record<string, unknown>) {
+  const activityFilter = where.activity as { startsWith?: string } | undefined;
+  if (activityFilter?.startsWith !== undefined) {
+    return typeof row.activity === "string" && row.activity.startsWith(activityFilter.startsWith);
+  }
+  return matches(row, where);
+}
+
+function updateRows(
+  rows: Array<Record<string, unknown>>,
+  where: Record<string, unknown>,
+  data: Record<string, unknown>,
+) {
+  const matched = rows.filter((row) => matches(row, where));
+  matched.forEach((row) => Object.assign(row, data));
+  return { count: matched.length };
 }
 
 function seedActivity(overrides: Record<string, unknown> = {}) {
@@ -192,8 +234,36 @@ function makeTransaction() {
         for (const row of data) mockState.rateRules.push({ id: nextUuid(), ...row });
         return { count: data.length };
       },
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const matched = mockState.rateRules.filter((row) => matchesRateRule(row, where));
+        matched.forEach((row) => Object.assign(row, data));
+        return { count: matched.length };
+      },
+      count: async ({ where }: { where: Record<string, unknown> }) =>
+        mockState.rateRules.filter((row) => matchesRateRule(row, where)).length,
       findMany: async ({ where = {} }: { where?: Record<string, unknown> }) =>
-        mockState.rateRules.filter((row) => matches(row, where)),
+        mockState.rateRules.filter((row) => matchesRateRule(row, where)),
+    },
+    fiscalVoucherLine: {
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) =>
+        updateRows(mockState.fiscalVoucherLines, where, data),
+    },
+    workpaperVoucherClassification: {
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) =>
+        updateRows(mockState.workpaperVoucherClassifications, where, data),
+    },
+    supplierTaxProfile: {
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) =>
+        updateRows(mockState.supplierTaxProfiles, where, data),
+    },
+    clientProfile: {
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const matched = mockState.clientProfiles.filter((row) => matchesClientProfile(row, where));
+        matched.forEach((row) => Object.assign(row, data));
+        return { count: matched.length };
+      },
+      count: async ({ where }: { where: Record<string, unknown> }) =>
+        mockState.clientProfiles.filter((row) => matchesClientProfile(row, where)).length,
     },
     auditEvent: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -218,6 +288,10 @@ beforeEach(async () => {
   mockState.clientActivities.length = 0;
   mockState.ruleVersions.length = 0;
   mockState.rateRules.length = 0;
+  mockState.fiscalVoucherLines.length = 0;
+  mockState.workpaperVoucherClassifications.length = 0;
+  mockState.supplierTaxProfiles.length = 0;
+  mockState.clientProfiles.length = 0;
   mockState.auditEvents.length = 0;
   mockState.idCounter = 0;
   mockState.withTenantContext = async (_ctx, fn) => fn(makeTransaction());
@@ -404,6 +478,89 @@ describe("catálogo de actividades: edición y estado", () => {
     expect(mockState.auditEvents[0]).toMatchObject({ action: "tax.activity.updated", userId: mockState.context.userId });
     expect(mockState.auditEvents[0]!.before).toMatchObject({ code: "COMERCIO", name: "Comercio", jurisdictionId: JURISDICTION_ID });
     expect(mockState.auditEvents[0]!.after).toMatchObject({ code: "COMERCIO-V2", name: "Comercio minorista", jurisdictionId: OTHER_JURISDICTION_ID });
+  });
+
+  it("propaga el renombre en la misma transacción y conserva las referencias de versiones no borrador", async () => {
+    const activity = seedActivity({ code: "COMERCIO", name: "Comercio" });
+    const draft = seedRuleVersion("DRAFT");
+    const active = seedRuleVersion("ACTIVE");
+    const retired = seedRuleVersion("RETIRED");
+    Object.assign(draft, { rulesHash: "draft-before", rulesHashSchemaVersion: 2 });
+    Object.assign(active, { rulesHash: "active-hash", rulesHashSchemaVersion: 2 });
+    Object.assign(retired, { rulesHash: "retired-hash", rulesHashSchemaVersion: 2 });
+    const draftVersion = draft as Record<string, unknown>;
+    const activeVersion = active as Record<string, unknown>;
+    const retiredVersion = retired as Record<string, unknown>;
+    const draftRule = {
+      id: nextUuid(),
+      ruleVersionId: draft.id,
+      concept: "COMERCIO",
+      activityCode: "COMERCIO",
+      rate: "3",
+    };
+    const activeRule = {
+      id: nextUuid(),
+      ruleVersionId: active.id,
+      concept: "COMERCIO",
+      activityCode: null,
+      rate: "3",
+    };
+    const retiredRule = {
+      id: nextUuid(),
+      ruleVersionId: retired.id,
+      concept: "RATE",
+      activityCode: "COMERCIO",
+      rate: "3",
+    };
+    mockState.rateRules.push(draftRule, activeRule, retiredRule);
+    mockState.fiscalVoucherLines.push({ id: nextUuid(), activityCode: "COMERCIO" });
+    mockState.workpaperVoucherClassifications.push({ id: nextUuid(), activityCode: "COMERCIO" });
+    mockState.supplierTaxProfiles.push({ id: nextUuid(), activityCode: "COMERCIO" });
+    mockState.clientProfiles.push({ id: nextUuid(), activity: "COMERCIO — Nombre histórico" });
+
+    const calculateDraftTax = () => {
+      const activityCode = String(draftRule.activityCode ?? draftRule.concept);
+      return calculateIIbbTuc({
+        engineVersion: IIBB_TUC_ENGINE_VERSION,
+        period: { startDate: "2026-01-01", endDate: "2026-01-31", cutoff: "2026-02-01T00:00:00.000Z" },
+        facts: [],
+        rules: [{
+          id: String(draftRule.id),
+          concept: activityCode,
+          rate: dec(String(draftRule.rate)).div(100),
+          validFrom: "2026-01-01",
+          code: String(draftRule.concept),
+        }],
+        incomeByActivity: { [activityCode]: "100000" },
+      }).totalDue;
+    };
+    const before = calculateDraftTax();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/tax/activities/${activity.id}`,
+      payload: { code: "COMERCIO-V2", name: "Comercio ampliado" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.codeChange).toEqual({
+      previousCode: "COMERCIO",
+      updatedReferences: 6,
+      retainedReferences: 2,
+    });
+    expect(draftRule).toMatchObject({ concept: "COMERCIO-V2", activityCode: "COMERCIO-V2" });
+    expect(activeRule).toMatchObject({ concept: "COMERCIO", activityCode: null });
+    expect(retiredRule).toMatchObject({ concept: "RATE", activityCode: "COMERCIO" });
+    expect(mockState.fiscalVoucherLines[0]).toMatchObject({ activityCode: "COMERCIO-V2" });
+    expect(mockState.workpaperVoucherClassifications[0]).toMatchObject({ activityCode: "COMERCIO-V2" });
+    expect(mockState.supplierTaxProfiles[0]).toMatchObject({ activityCode: "COMERCIO-V2" });
+    expect(mockState.clientProfiles[0]).toMatchObject({ activity: "COMERCIO-V2 — Comercio ampliado" });
+    expect(calculateDraftTax()).toBe(before);
+    expect(mockState.ruleVersions.map((version) => version.status)).toEqual(["DRAFT", "ACTIVE", "RETIRED"]);
+    expect(draftVersion.rulesHash).not.toBe("draft-before");
+    expect(draftVersion.rulesHashSchemaVersion).toBe(2);
+    expect(activeVersion.rulesHash).toBe("active-hash");
+    expect(retiredVersion.rulesHash).toBe("retired-hash");
   });
 
   it("rechaza un código con formato inválido y actividad inexistente", async () => {

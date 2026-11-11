@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { createUploadSessionSchema } from "@contable/contracts";
 import { DocumentService } from "./document-service.js";
-import { ExtractionService } from "./extraction-service.js";
+import { ExtractionError, ExtractionService } from "./extraction-service.js";
 import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
 import { MAX_FILE_SIZE } from "../storage/file-validator.js";
 import { tenantContextFromRequest } from "../auth/tenant.js";
@@ -185,6 +185,9 @@ export function documentRoutes(app: FastifyInstance) {
       await extractionService.approve(firmId, clientId, extractionId, userId, tenantContextFromRequest(req));
       return reply.send({ data: { status: "REVIEWED" } });
     } catch (err) {
+      if (err instanceof ExtractionError) {
+        return reply.status(409).send({ error: { code: err.code, message: err.message } });
+      }
       if (err instanceof Error && err.message === "EXTRACTION_NOT_FOUND") {
         return reply.status(404).send({ error: { code: "EXTRACTION_NOT_FOUND", message: "Extracción no encontrada" } });
       }
@@ -202,6 +205,9 @@ export function documentRoutes(app: FastifyInstance) {
       await extractionService.reject(firmId, clientId, extractionId, userId, body.reason, tenantContextFromRequest(req));
       return reply.send({ data: { status: "FAILED" } });
     } catch (err) {
+      if (err instanceof ExtractionError) {
+        return reply.status(409).send({ error: { code: err.code, message: err.message } });
+      }
       if (err instanceof Error && err.message === "EXTRACTION_NOT_FOUND") {
         return reply.status(404).send({ error: { code: "EXTRACTION_NOT_FOUND", message: "Extracción no encontrada" } });
       }

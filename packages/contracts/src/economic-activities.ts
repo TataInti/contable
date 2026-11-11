@@ -83,3 +83,16 @@ export interface CatalogEconomicActivity {
   validTo: string | null;
   isActive: boolean;
 }
+
+/** Conteos auditables del renombre de código de una actividad. */
+export interface EconomicActivityCodeChange {
+  previousCode: string;
+  updatedReferences: number;
+  retainedReferences: number;
+}
+
+/** Respuesta de PATCH /api/v1/tax/activities/:activityId. */
+export interface UpdatedEconomicActivity extends CatalogEconomicActivity {
+  activeClientLinks?: number;
+  codeChange: EconomicActivityCodeChange | null;
+}

@@ -221,7 +221,10 @@ function mockApi() {
       const index = activities.findIndex((item) => item.id === match[1]);
       const current = activities[index];
       if (!current) return Promise.resolve({});
-      const updated = { ...current, ...body };
+      const codeChange = typeof body.code === "string" && body.code !== current.code
+        ? { previousCode: current.code, updatedReferences: 5, retainedReferences: 2 }
+        : null;
+      const updated = { ...current, ...body, codeChange };
       activities[index] = updated;
       return Promise.resolve(updated);
     }
@@ -664,6 +667,75 @@ describe("StudyCatalogosFiscales", () => {
     expect(within(detail).getByText(/recauda en Otra jurisdicción/)).toBeTruthy();
   });
 
+  it("muestra junto a los códigos de tipo de impuesto y jurisdicción qué decisión siguen", async () => {
+    const tucuman = {
+      ...jurisdiction,
+      id: "jurisdiction-tuc-warning",
+      code: "AR-T",
+      name: "Tucumán",
+      kind: "PROVINCIAL",
+    };
+    const iibb = { ...taxType, id: "tax-type-iibb-warning", code: "IIBB", name: "Ingresos Brutos" };
+    jurisdictions.push(tucuman);
+    taxTypes.push(iibb);
+    renderCatalogs();
+
+    await openTab(/^Jurisdicciones/);
+    fireEvent.click(await screen.findByText("Tucumán"));
+    const jurisdictionDetail = await screen.findByRole("complementary", { name: "Detalle de la jurisdicción" });
+    fireEvent.click(within(jurisdictionDetail).getByRole("button", { name: "Editar" }));
+    let editDialog = await screen.findByRole("dialog");
+    expect(within(editDialog).getByText("Hoy, el código de la jurisdicción define la familia del motor. Más adelante podrás elegir esa decisión por separado.")).toBeTruthy();
+
+    await openTab(/^Tipos de impuesto/);
+    fireEvent.click(await screen.findByText("Ingresos Brutos"));
+    const taxTypeDetail = await screen.findByRole("complementary", { name: "Detalle del tipo de impuesto" });
+    fireEvent.click(within(taxTypeDetail).getByRole("button", { name: "Editar" }));
+    editDialog = await screen.findByRole("dialog");
+    expect(within(editDialog).getByText("Hoy, el código del impuesto define la familia del motor y la fuente de importación. Más adelante podrás elegir cada decisión por separado.")).toBeTruthy();
+  });
+
+  it("muestra junto al código de un régimen de sistema qué decisiones siguen ese código", async () => {
+    const tucuman = {
+      ...jurisdiction,
+      id: "jurisdiction-tuc",
+      code: "AR-T",
+      name: "Tucumán",
+      kind: "PROVINCIAL",
+    };
+    const iibb = { ...taxType, id: "tax-type-iibb", code: "IIBB", name: "Ingresos Brutos" };
+    const authority = {
+      id: "authority-tuc",
+      code: "DGR-TUC",
+      name: "DGR Tucumán",
+      jurisdictionId: tucuman.id,
+      isActive: true,
+      jurisdiction: tucuman,
+    };
+    jurisdictions.push(tucuman);
+    taxTypes.push(iibb);
+    authorities.push(authority);
+    regimes.push({
+      id: "regime-iibb-local",
+      code: "IIBB_LOCAL_TUC",
+      name: "Ingresos Brutos local",
+      isActive: true,
+      authority,
+      jurisdiction: tucuman,
+      taxType: iibb,
+    });
+    renderCatalogs();
+    await openTab(/^Regímenes/);
+    fireEvent.click(await screen.findByText("Ingresos Brutos local"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle del régimen" });
+    fireEvent.click(within(detail).getByRole("button", { name: "Editar" }));
+
+    const editDialog = await screen.findByRole("dialog");
+    expect(within(editDialog).getByLabelText("Código")).toBeTruthy();
+    expect(within(editDialog).getByText("Hoy, el código del régimen define las excepciones del motor, la fuente de importación y el permiso. Más adelante podrás elegir cada decisión por separado.")).toBeTruthy();
+    expect(within(editDialog).getByRole("button", { name: "Guardar cambios" })).toBeTruthy();
+  });
+
   it("presenta Ocultar como acción reversible y neutra y expone el valor completo en tooltip", async () => {
     activities.push({
       id: "activity-a",
@@ -787,7 +859,7 @@ describe("StudyCatalogosFiscales", () => {
         validTo: "2027-06-30",
       }),
     );
-    expect(await screen.findByText(/Los datos de la actividad quedaron actualizados/)).toBeTruthy();
+    expect(await screen.findByText(/Se propagó el cambio de código CM03-02 → CM03-02-V2: 5 referencias actualizadas\. 2 referencias conservan el código anterior \(CM03-02\)\./)).toBeTruthy();
   });
 
   it("oculta una actividad en uso y la vuelve a mostrar", async () => {

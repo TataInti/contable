@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field } from "@contable/design-system";
-import { ACTIVITY_CODE_PATTERN, normalizeActivityCode } from "@contable/contracts";
+import { ACTIVITY_CODE_PATTERN, normalizeActivityCode, type EconomicActivityCodeChange } from "@contable/contracts";
 import { ApiError, api, type FiscalJurisdiction, type FiscalTaxType } from "../lib/api";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useClientContext } from "../context/ClientContext";
@@ -94,6 +94,7 @@ interface CatalogActivityRow {
   origin?: "REFERENCE" | "UI";
   createdByFirmId?: string | null;
   activeClientLinks?: number;
+  codeChange?: EconomicActivityCodeChange | null;
 }
 
 interface ActivityForm {
@@ -524,12 +525,21 @@ export function StudyCatalogosFiscales() {
         validFrom: activityForm.validFrom,
         ...(activityForm.validTo ? { validTo: activityForm.validTo } : { validTo: null }),
       }),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-activities-catalog", firmId] });
       setEditingActivity(null);
       setActivityForm(emptyActivityForm);
       setActivityDrawer(null);
-      setReceipt("Los datos de la actividad quedaron actualizados.");
+      if (updated.codeChange) {
+        const { previousCode, updatedReferences, retainedReferences } = updated.codeChange;
+        const updatedLabel = `${updatedReferences} ${updatedReferences === 1 ? "referencia actualizada" : "referencias actualizadas"}`;
+        const retainedLabel = retainedReferences > 0
+          ? `${retainedReferences} ${retainedReferences === 1 ? "referencia conserva" : "referencias conservan"} el código anterior (${previousCode}).`
+          : "No quedan referencias al código anterior.";
+        setReceipt(`Se propagó el cambio de código ${previousCode} → ${updated.code}: ${updatedLabel}. ${retainedLabel}`);
+      } else {
+        setReceipt("Los datos de la actividad quedaron actualizados.");
+      }
     },
   });
   // Desactivar conserva el historial. El Titular también puede eliminar una
@@ -1850,6 +1860,7 @@ export function StudyCatalogosFiscales() {
             value={regimeForm.code}
             onChange={(event) => setRegimeForm({ ...regimeForm, code: event.target.value })}
             error={codeConflict(editingRegime ? updateRegime.error : createRegime.error)}
+            hint={editingRegime ? "Hoy, el código del régimen define las excepciones del motor, la fuente de importación y el permiso. Más adelante podrás elegir cada decisión por separado." : undefined}
             maxLength={40}
             required
           />
@@ -1930,7 +1941,7 @@ export function StudyCatalogosFiscales() {
           <div className="study-form__actions">
             <Button
               type="submit"
-              loading={createRegime.isPending}
+              loading={editingRegime ? updateRegime.isPending : createRegime.isPending}
               disabled={
                 !regimeForm.code.trim() ||
                 !regimeForm.name.trim() ||
@@ -1939,7 +1950,7 @@ export function StudyCatalogosFiscales() {
                 !regimeForm.authorityId
               }
             >
-              Crear régimen
+              {editingRegime ? "Guardar cambios" : "Crear régimen"}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
               Cancelar
@@ -2356,6 +2367,7 @@ export function StudyCatalogosFiscales() {
                 value={jurisdictionForm.code}
                 onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, code: event.target.value.toUpperCase() })}
                 error={codeConflict(updateJurisdiction.error)}
+                hint="Hoy, el código de la jurisdicción define la familia del motor. Más adelante podrás elegir esa decisión por separado."
                 maxLength={40}
                 required
               />
@@ -2468,6 +2480,7 @@ export function StudyCatalogosFiscales() {
               value={taxTypeForm.code}
               onChange={(event) => setTaxTypeForm({ ...taxTypeForm, code: event.target.value.toUpperCase() })}
               error={codeConflict(updateTaxType.error)}
+              hint="Hoy, el código del impuesto define la familia del motor y la fuente de importación. Más adelante podrás elegir cada decisión por separado."
               maxLength={40}
               required
             />

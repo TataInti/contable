@@ -8,6 +8,21 @@ import { assertCapability, requiredCapability } from "./guard.js";
  * nunca debe caer en una capacidad de lectura o en una de menor privilegio.
  */
 describe("requiredCapability (mapeo ruta → capacidad)", () => {
+  it("la configuración de autorrevisión requiere OWNER y devuelve 403 para otros roles", () => {
+    const path = "/api/v1/firms/f/settings/self-review";
+    const capability = "firm.self_review.manage";
+    expect(requiredCapability("GET", path)).toBe("firm.manage");
+    expect(requiredCapability("PATCH", path)).toBe(capability);
+    expect(capabilitiesForRole("OWNER").has(capability)).toBe(true);
+
+    for (const role of ["ADMIN", "PREPARER", "REVIEWER", "AUDITOR_READONLY"] as const) {
+      const actor = { capabilities: capabilitiesForRole(role) } as never;
+      expect(() => assertCapability(actor, capability)).toThrow(
+        expect.objectContaining({ statusCode: 403, code: "CAPABILITY_REQUIRED" }),
+      );
+    }
+  });
+
   it("GET dashboard del estudio exige client.read", () => {
     expect(requiredCapability("GET", "/api/v1/firms/f/dashboard")).toBe("client.read");
     // POST dashboard no existe: sin mapeo → null → deny-by-default (404).
@@ -16,6 +31,17 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
 
   it("GET resumen del cliente exige client.read", () => {
     expect(requiredCapability("GET", "/api/v1/firms/f/clients/c/summary")).toBe("client.read");
+  });
+
+  it("aprobar y rechazar extracciones mantienen document.review", () => {
+    const base = "/api/v1/firms/f/clients/c/extractions/e";
+    expect(requiredCapability("POST", `${base}/approve`)).toBe("document.review");
+    expect(requiredCapability("POST", `${base}/reject`)).toBe("document.review");
+    expect(capabilitiesForRole("REVIEWER").has("document.review")).toBe(true);
+    const auditor = { capabilities: capabilitiesForRole("AUDITOR_READONLY") } as never;
+    expect(() => assertCapability(auditor, "document.review")).toThrow(
+      expect.objectContaining({ statusCode: 403, code: "CAPABILITY_REQUIRED" }),
+    );
   });
 
   it("identidad y contactos requieren client.manage, con rechazo 403 para sólo lectura", () => {

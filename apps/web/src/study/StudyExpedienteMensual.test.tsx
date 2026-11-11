@@ -13,6 +13,16 @@ vi.mock("../context/ClientContext", () => ({
   useClientContext: () => contextMock.current,
 }));
 
+vi.mock("../session/SessionContext", () => ({
+  useSession: () => ({
+    status: "authenticated",
+    me: null,
+    portalContexts: [],
+    error: null,
+    refresh: async () => {},
+  }),
+}));
+
 vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
   return {
