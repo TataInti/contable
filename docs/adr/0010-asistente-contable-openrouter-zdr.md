@@ -74,6 +74,20 @@ Inti aprobó por escrito el 2026-11-11 el corte de retención cero y `anthropic/
 - Los 10 endpoints del modelo no anuncian `temperature` en `supported_parameters`.
 - El request vigente enviaba `temperature: 0` sin `provider`; con `require_parameters=true` y la allowlist de proveedores, la temperatura debe excluirse para que quede un endpoint elegible.
 
+## Prueba de humo con datos sintéticos — 2026-11-11
+
+Llamada real a OpenRouter desde el proceso local de prueba (`ASSISTANT_OPENROUTER_ENABLED=true` y `OPENROUTER_MODEL=anthropic/claude-haiku-5.5` sólo en ese proceso; compose y producción sin cambios). Entrada: ledger ficticio con una cuenta (`CAJA`, saldo `1254300.50`) y la consulta «¿Cuál es el saldo de la cuenta Caja del ledger de prueba?».
+
+| Caso | HTTP | Proveedor | Tokens entrada/salida | Latencia | Costo informado | `_verified` |
+|---|---|---|---|---|---|---|
+| Modelo + compuerta activos | 200 | `Google` (= `google-vertex/global`, tag del catálogo de OpenRouter) | 251 / 80 | 1021 ms | USD 0,0000651 | Sí (`abstained=false`) |
+| Modelo vacío | — | `deterministic` | — | — | — | Sin llamada de red (0 intentos) |
+| Compuerta `false` con clave y modelo | — | `deterministic` | — | — | — | Sin llamada de red (0 intentos) |
+
+- La respuesta del modelo fue «El saldo de la cuenta **Caja** ... es **$1.254.300,50**»; la verificación de cifras del servicio la aceptó contra la evidencia canónica.
+- El catálogo de OpenRouter expone el endpoint con `provider_name: "Google"` y `tag: "google-vertex/global"`; el bloque `provider.only` restringe el routing a `google-vertex` y `amazon-bedrock`, sin fallbacks.
+- Dos llamadas de completion en total (se repitió una vez para capturar el identificador de generación), gasto acumulado USD 0,0001267, tope USD 0,05. Sin reintentos ante fallo ni cambio de proveedor.
+
 ## Pendientes antes de producción
 
 1. Evaluación de calidad y costo del asistente (cobertura, errores, latencia, tokens y costo por turno) con datos sintéticos.
