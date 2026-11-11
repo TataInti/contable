@@ -6,11 +6,9 @@ import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import { ActionDrawer } from "../ui/ActionDrawer";
-import { Icon } from "../ui/Icon";
 import {
   DenseHeader,
   DensePage,
-  StatStrip,
   useDensity,
 } from "../ui/Dense";
 import "./study.css";
@@ -269,22 +267,9 @@ export function StudyOnboardingFiscal() {
     <DensePage density={density} flow>
       <DenseHeader
         eyebrow="Configuración fiscal"
-        title="Onboarding fiscal del cliente"
+        title="Configuración fiscal"
         description="Perfil, adhesiones, actividades, períodos y obligaciones. Cada paso persiste y queda auditado."
       />
-
-      <StatStrip
-        label="Avance del onboarding fiscal"
-        items={FISCAL_STEPS.map((item) => ({
-          key: item.key,
-          label: item.label,
-          value: stepCompletion[item.key] ? "Completo" : "Pendiente",
-          tone: stepCompletion[item.key] ? undefined : ("warn" as const),
-          active: step === item.key,
-          onSelect: () => openStepForm(item.key),
-        }))}
-      />
-
 
       <div className="fiscal-onboarding-layout">
         <nav className="fiscal-steps" aria-label="Pasos del onboarding fiscal">
@@ -293,12 +278,15 @@ export function StudyOnboardingFiscal() {
               <li key={item.key} className="fiscal-steps__item">
                 <button
                   type="button"
-                  className={`fiscal-steps__button${step === item.key ? " fiscal-steps__button--active" : ""}${stepCompletion[item.key] ? " fiscal-steps__button--done" : ""}`}
+                  className={`fiscal-steps__button${step === item.key ? " fiscal-steps__button--active" : ""}`}
                   aria-current={step === item.key ? "step" : undefined}
                   onClick={() => openStepForm(item.key)}
                 >
-                  <span className="fiscal-steps__marker" aria-hidden="true">{stepCompletion[item.key] ? <Icon name="check" size={13} /> : index + 1}</span>
+                  <span className="fiscal-steps__marker" aria-hidden="true">{index + 1}</span>
                   <span className="fiscal-steps__label">{item.label}</span>
+                  <span className={`fiscal-steps__status${stepCompletion[item.key] ? " fiscal-steps__status--complete" : ""}`}>
+                    {stepCompletion[item.key] ? "Completo" : "Pendiente"}
+                  </span>
                 </button>
               </li>
             ))}
@@ -331,7 +319,7 @@ export function StudyOnboardingFiscal() {
                 </dl>
                 {canWrite || (profileQuery.data?.length ?? 0) > 1 ? <div className="study-panel__actions fiscal-contributor__actions">
                   {canWrite && latestProfile.status === "DRAFT" ? <Button variant="secondary" onClick={() => submitReview.mutate()} loading={submitReview.isPending}>Enviar a revisión</Button> : null}
-                  {canWrite && latestProfile.status === "IN_REVIEW" ? <Button onClick={() => activate.mutate()} loading={activate.isPending}>Activar perfil</Button> : null}
+                  {canWrite && latestProfile.status === "IN_REVIEW" ? <Button variant="secondary" onClick={() => activate.mutate()} loading={activate.isPending}>Activar perfil</Button> : null}
                   {canWrite && latestProfile.status === "ACTIVE" ? <Button variant="secondary" onClick={() => { setProfileId(null); setForm({ legalName: latestProfile.legalName, cuit: latestProfile.cuit, personType: latestProfile.personType, nationalCondition: latestProfile.nationalCondition, validFrom: today }); openStepForm("perfil"); }}>Crear nueva versión</Button> : null}
                   {(profileQuery.data?.length ?? 0) > 1 ? <Button type="button" variant="ghost" onClick={() => setShowProfileHistory((visible) => !visible)} aria-expanded={showProfileHistory}>{showProfileHistory ? "Ocultar historial" : "Ver historial"}</Button> : null}
                 </div> : null}
@@ -343,7 +331,7 @@ export function StudyOnboardingFiscal() {
             ) : (
               <div className="fiscal-contributor__empty">
                 <p>Todavía no hay un perfil fiscal configurado para este cliente.</p>
-                {canWrite ? <Button onClick={() => openStepForm("perfil")}>Crear perfil fiscal</Button> : <p className="muted-copy">Tenés acceso de consulta. Pedí permiso de edición para crear el perfil.</p>}
+                {!canWrite ? <p className="muted-copy">Tenés acceso de consulta. Pedí permiso de edición para crear el perfil.</p> : null}
               </div>
             )}
           </section>
@@ -354,7 +342,13 @@ export function StudyOnboardingFiscal() {
               <h2 id="next-fiscal-step-title">{nextRequiredStep ? "Próximo paso" : "Configuración completa"}</h2>
               <p>{nextRequiredStep ? `Completá ${nextRequiredStep.label.toLowerCase()} para continuar con la configuración fiscal.` : "El perfil, las adhesiones, las actividades, los períodos y las obligaciones ya están configurados."}</p>
             </div>
-            {nextRequiredStep && canWrite ? <Button onClick={() => openStepForm(nextRequiredStep.key)}>Completar {nextRequiredStep.label}</Button> : null}
+            {nextRequiredStep && canWrite ? (
+              <Button onClick={() => openStepForm(nextRequiredStep.key)}>
+                {nextRequiredStep.key === "perfil"
+                  ? latestProfile ? "Completar perfil fiscal" : "Crear perfil fiscal"
+                  : `Completar ${nextRequiredStep.label.toLowerCase()}`}
+              </Button>
+            ) : null}
           </section>
 
       <section className="study-panel fiscal-client-overview" aria-labelledby="fiscal-setup-title">
@@ -397,15 +391,24 @@ export function StudyOnboardingFiscal() {
         title={latestProfile ? "Crear nueva versión del perfil" : "Crear perfil fiscal"}
         description="Completá la identidad y condición fiscal del contribuyente."
         size="wide"
+        footer={
+          <>
+            <Button type="submit" form="fiscal-profile-form" loading={createProfile.isPending}>
+              Crear perfil
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setOpenFormStep(null)}>
+              Cancelar
+            </Button>
+          </>
+        }
       >
-        <form className="study-form" onSubmit={(event) => { event.preventDefault(); createProfile.mutate(); }}>
+        <form id="fiscal-profile-form" className="study-form" onSubmit={(event) => { event.preventDefault(); createProfile.mutate(); }}>
           <Field label="Razón social" id="pf-legal-name" value={form.legalName} onChange={(event) => setForm({ ...form, legalName: event.target.value })} required />
           <Field label="CUIT" id="pf-cuit" value={form.cuit} onChange={(event) => setForm({ ...form, cuit: event.target.value.replace(/\D/g, "").slice(0, 11) })} inputMode="numeric" pattern="\d{11}" required />
           <div className="ds-field"><label className="ds-field__label" htmlFor="pf-person-type">Tipo de persona</label><select id="pf-person-type" className="ds-field__input" value={form.personType} onChange={(event) => setForm({ ...form, personType: event.target.value as "FISICA" | "JURIDICA" })}><option value="JURIDICA">Jurídica</option><option value="FISICA">Física</option></select></div>
           <div className="ds-field"><label className="ds-field__label" htmlFor="pf-condition">Condición nacional</label><select id="pf-condition" className="ds-field__input" value={form.nationalCondition} onChange={(event) => setForm({ ...form, nationalCondition: event.target.value as keyof typeof CONDITION_LABELS })}>{Object.entries(CONDITION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
           <Field label="Vigencia desde" id="pf-valid-from" type="date" value={form.validFrom} onChange={(event) => setForm({ ...form, validFrom: event.target.value })} required />
           <MutationError error={createProfile.error} />
-          <div className="study-form__actions"><Button type="submit" loading={createProfile.isPending}>Crear perfil</Button><Button type="button" variant="ghost" onClick={() => setOpenFormStep(null)}>Cancelar</Button></div>
         </form>
       </ActionDrawer>
 

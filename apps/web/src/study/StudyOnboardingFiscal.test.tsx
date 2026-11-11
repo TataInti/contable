@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -142,5 +142,26 @@ describe("StudyOnboardingFiscal — acciones de la versión sucesora", () => {
     });
     expect(profiles.find((profile) => profile.id === "profile-v2")?.status).toBe("ACTIVE");
     expect(profiles.find((profile) => profile.id === "profile-v1")?.status).toBe("SUPERSEDED");
+  });
+
+  it("presenta una acción principal, un stepper y un estado por paso", async () => {
+    profiles.splice(0, profiles.length);
+    renderOnboarding();
+
+    expect(screen.getByRole("heading", { name: "Configuración fiscal" })).toBeTruthy();
+    const page = document.querySelector(".dense-page") as HTMLElement;
+    expect(page.querySelectorAll("button.ds-button--primary")).toHaveLength(1);
+    expect(within(page).getByRole("button", { name: "Crear perfil fiscal" })).toBeTruthy();
+
+    const stepper = screen.getByRole("navigation", { name: "Pasos del onboarding fiscal" });
+    expect(screen.getAllByRole("navigation", { name: "Pasos del onboarding fiscal" })).toHaveLength(1);
+    expect(within(stepper).getAllByText("Pendiente", { exact: true })).toHaveLength(5);
+    expect(screen.queryByRole("group", { name: "Avance del onboarding fiscal" })).toBeNull();
+
+    fireEvent.click(within(page).getByRole("button", { name: "Crear perfil fiscal" }));
+    const drawer = await screen.findByRole("dialog", { name: "Crear perfil fiscal" });
+    const footer = drawer.querySelector(".action-drawer__footer") as HTMLElement;
+    expect(within(footer).getByRole("button", { name: "Crear perfil" })).toBeTruthy();
+    expect(within(footer).getByRole("button", { name: "Cancelar" })).toBeTruthy();
   });
 });
