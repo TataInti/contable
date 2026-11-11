@@ -124,6 +124,7 @@ model Firm {
   taxId       String?
   timezone    String     @default("America/Argentina/Buenos_Aires")
   status      FirmStatus @default(ACTIVE)
+  allowSelfReview Boolean @default(false)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

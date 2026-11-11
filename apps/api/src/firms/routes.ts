@@ -38,6 +38,8 @@ const accessRecoveryRequestSchema = z.object({
   ttlMinutes: z.number().int().min(5).max(1440).optional(),
 }).strict();
 
+const selfReviewSettingSchema = z.object({ allowSelfReview: z.boolean() }).strict();
+
 /**
  * Rutas de firmas, miembros, invitaciones y asignaciones.
  * El contexto de firma se resuelve por ruta; la autorización por capacidad server-side.
@@ -92,6 +94,53 @@ export function firmRoutes(app: FastifyInstance) {
     });
     return true;
   };
+
+  app.get("/api/v1/firms/:firmId/settings/self-review", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const firm = await withTenantContext(ctx, (tx) =>
+      tx.firm.findUnique({ where: { id: ctx.firmId }, select: { allowSelfReview: true } }),
+    );
+    if (!firm) {
+      return reply.status(404).send({ error: { code: "FIRM_NOT_FOUND", message: "Estudio no encontrado" } });
+    }
+    return reply.send({ data: firm });
+  });
+
+  app.patch("/api/v1/firms/:firmId/settings/self-review", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const body = selfReviewSettingSchema.parse(req.body);
+    const setting = await withTenantContext(ctx, async (tx) => {
+      const current = await tx.firm.findUnique({
+        where: { id: ctx.firmId },
+        select: { allowSelfReview: true },
+      });
+      if (!current) return null;
+      if (current.allowSelfReview === body.allowSelfReview) return current;
+
+      const updated = await tx.firm.update({
+        where: { id: ctx.firmId },
+        data: { allowSelfReview: body.allowSelfReview },
+        select: { allowSelfReview: true },
+      });
+      await tx.auditEvent.create({
+        data: {
+          firmId: ctx.firmId,
+          userId: ctx.userId,
+          actorKind: ctx.actorKind,
+          action: "firm.self_review_setting.updated",
+          entityType: "Firm",
+          entityId: ctx.firmId,
+          before: { allowSelfReview: current.allowSelfReview },
+          after: { allowSelfReview: updated.allowSelfReview },
+        },
+      });
+      return updated;
+    });
+    if (!setting) {
+      return reply.status(404).send({ error: { code: "FIRM_NOT_FOUND", message: "Estudio no encontrado" } });
+    }
+    return reply.send({ data: setting });
+  });
 
   app.get("/api/v1/firms/:firmId/dashboard", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);

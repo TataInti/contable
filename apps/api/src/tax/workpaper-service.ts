@@ -84,6 +84,34 @@ export class MonthlyWorkpaperService {
     "CHANGES_REQUESTED",
   ] as const;
 
+  private async selfReviewEnabled(tx: Prisma.TransactionClient, firmId: string) {
+    const firm = await tx.firm.findUnique({
+      where: { id: firmId },
+      select: { allowSelfReview: true },
+    });
+    return firm?.allowSelfReview === true;
+  }
+
+  private async auditSelfReview(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    entityType: string,
+    entityId: string,
+    scope: string,
+  ) {
+    await tx.auditEvent.create({
+      data: {
+        firmId: ctx.firmId,
+        userId: ctx.userId,
+        actorKind: ctx.actorKind,
+        action: "SELF_REVIEW",
+        entityType,
+        entityId,
+        after: { type: "SELF_REVIEW", scope },
+      },
+    });
+  }
+
   private async sourceCoverage(
     tx: Prisma.TransactionClient,
     workpaper: { id: string },
@@ -137,6 +165,8 @@ export class MonthlyWorkpaperService {
           totals: item.importBatch.totals,
           snapshotHash: item.snapshotHash,
           reviewedAt: item.reviewedAt,
+          reviewedByUserId: item.reviewedByUserId,
+          createdByUserId: item.importBatch.createdByUserId,
           createdAt: item.createdAt,
         })),
       };
@@ -664,11 +694,16 @@ export class MonthlyWorkpaperService {
       const sources = await this.sourceCoverage(tx, wp, obligations);
       const classifications = await classificationCoverage(tx, wp.id);
       const allocations = await workpaperAllocationCoverage(tx, wp.id);
+      const firm = await tx.firm.findUnique({
+        where: { id: ctx.firmId },
+        select: { allowSelfReview: true },
+      });
 
       return {
         workpaperId,
         periodStart: wp.periodStart,
         periodEnd: wp.periodEnd,
+        allowSelfReview: firm?.allowSelfReview === true,
         components,
         sources,
         classifications: {
@@ -1002,7 +1037,8 @@ export class MonthlyWorkpaperService {
           "El lote debe estar confirmado y sin errores antes de revisarse",
         );
       }
-      if (link.importBatch.createdByUserId === ctx.userId) {
+      const isSelfReview = link.importBatch.createdByUserId === ctx.userId;
+      if (isSelfReview && !(await this.selfReviewEnabled(tx, ctx.firmId))) {
         throw new WorkpaperError(
           "MAKER_CHECKER_VIOLATION",
           "Quien importó el lote no puede revisar su propia fuente",
@@ -1108,6 +1144,9 @@ export class MonthlyWorkpaperService {
       await materializeWorkpaperClassifications(tx, link.workpaper, voucherIds);
       await this.ensureAllocations(tx, workpaperId);
       await this.refreshPreparationStatus(tx, link.workpaper);
+      if (isSelfReview) {
+        await this.auditSelfReview(tx, ctx, "WorkpaperImportBatch", link.id, "SOURCE_REVIEW");
+      }
 
       return reviewed;
     });
@@ -1604,8 +1643,11 @@ export class MonthlyWorkpaperService {
       if (wp.status !== "IN_REVIEW") {
         throw new WorkpaperError("INVALID_TRANSITION", `No se puede revisar desde ${wp.status}`);
       }
-      // Maker-checker: el preparador no revisa su propio expediente.
-      if (wp.preparedByUserId === ctx.userId) {
+      // Maker-checker stays active unless the OWNER explicitly enabled this
+      // audited option for the study.
+      const isSelfReview = wp.preparedByUserId === ctx.userId;
+      const allowSelfReview = isSelfReview && (await this.selfReviewEnabled(tx, ctx.firmId));
+      if (isSelfReview && !allowSelfReview) {
         throw new WorkpaperError(
           "MAKER_CHECKER_VIOLATION",
           "El preparador no puede revisar su propio expediente",
@@ -1630,6 +1672,7 @@ export class MonthlyWorkpaperService {
               tx,
               link.settlement.id,
               comment,
+              allowSelfReview,
             );
             await tx.workpaperSettlement.update({
               where: { id: link.id },
@@ -1637,10 +1680,14 @@ export class MonthlyWorkpaperService {
             });
           }
         }
-        return tx.monthlyTaxWorkpaper.update({
+        const updated = await tx.monthlyTaxWorkpaper.update({
           where: { id: wp.id },
           data: { status: "CHANGES_REQUESTED", reviewedByUserId: ctx.userId },
         });
+        if (isSelfReview) {
+          await this.auditSelfReview(tx, ctx, "MonthlyTaxWorkpaper", wp.id, "WORKPAPER_REVIEW");
+        }
+        return updated;
       }
 
       for (const link of wp.settlements) {
@@ -1651,6 +1698,7 @@ export class MonthlyWorkpaperService {
             tx,
             link.settlement.id,
             input.comment,
+            allowSelfReview,
           );
           await tx.workpaperSettlement.update({
             where: { id: link.id },
@@ -1666,10 +1714,14 @@ export class MonthlyWorkpaperService {
         }
       }
 
-      return tx.monthlyTaxWorkpaper.update({
+      const updated = await tx.monthlyTaxWorkpaper.update({
         where: { id: wp.id },
         data: { status: "REVIEWED", reviewedByUserId: ctx.userId },
       });
+      if (isSelfReview) {
+        await this.auditSelfReview(tx, ctx, "MonthlyTaxWorkpaper", wp.id, "WORKPAPER_REVIEW");
+      }
+      return updated;
     });
   }
 
@@ -1686,7 +1738,9 @@ export class MonthlyWorkpaperService {
       if (wp.status !== "REVIEWED") {
         throw new WorkpaperError("INVALID_TRANSITION", `No se puede finalizar desde ${wp.status}`);
       }
-      if (wp.preparedByUserId === ctx.userId) {
+      const isSelfReview = wp.preparedByUserId === ctx.userId;
+      const allowSelfReview = isSelfReview && (await this.selfReviewEnabled(tx, ctx.firmId));
+      if (isSelfReview && !allowSelfReview) {
         throw new WorkpaperError(
           "MAKER_CHECKER_VIOLATION",
           "El preparador no puede finalizar su propio expediente",
@@ -1724,6 +1778,7 @@ export class MonthlyWorkpaperService {
             ctx,
             tx,
             link.settlement.id,
+            allowSelfReview,
           );
           finalizedSettlements.push(settlement);
           await tx.workpaperSettlement.update({
@@ -1757,7 +1812,7 @@ export class MonthlyWorkpaperService {
         controls: wp.controls.map((c) => `${c.code}:${c.status}`).sort(),
       });
 
-      return tx.monthlyTaxWorkpaper.update({
+      const finalized = await tx.monthlyTaxWorkpaper.update({
         where: { id: wp.id },
         data: {
           status: "FINALIZED",
@@ -1766,6 +1821,10 @@ export class MonthlyWorkpaperService {
           cutoffAt: wp.cutoffAt ?? new Date(),
         },
       });
+      if (isSelfReview) {
+        await this.auditSelfReview(tx, ctx, "MonthlyTaxWorkpaper", wp.id, "WORKPAPER_FINALIZE");
+      }
+      return finalized;
     });
   }
 
