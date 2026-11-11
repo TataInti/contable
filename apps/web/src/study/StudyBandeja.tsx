@@ -12,6 +12,7 @@ import {
 } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { belongsToDocumentQueue, type DocumentQueueFilter } from "./documentQueue";
+import { ExtractionFiscalTable } from "./ExtractionFiscalTable";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
@@ -39,16 +40,27 @@ interface UploadComplete {
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
 const FIELD_LABELS: Record<string, string> = {
-  issueDate: "Fecha de emisión",
-  totalAmount: "Importe total",
-  netAmount: "Neto gravado",
-  vatAmount: "IVA",
-  issuerTaxId: "CUIT del emisor",
-  issuerName: "Emisor",
-  voucherNumber: "Número de comprobante",
-  voucherType: "Tipo de comprobante",
+  voucherType: "Tipo de documento",
+  letter: "Letra",
   pointOfSale: "Punto de venta",
+  voucherNumber: "Número",
+  issueDate: "Fecha",
+  issuerTaxId: "CUIT emisor",
+  receiverTaxId: "CUIT receptor",
+  issuerName: "Razón social emisor",
+  receiverName: "Razón social receptor",
+  vatCondition: "Condición frente al IVA",
+  netAmount: "Neto gravado",
+  vatRate: "Alícuota de IVA",
+  vatAmount: "Importe de IVA",
+  nonTaxableAmount: "No gravado",
+  exemptAmount: "Exento",
+  perceptionType: "Tipo de percepción",
+  perceptionAmount: "Importe de percepción",
+  totalAmount: "Total",
   currency: "Moneda",
+  cae: "CAE",
+  caeExpiration: "Vencimiento del CAE",
 };
 
 function validateFile(selected: File | null) {
@@ -649,37 +661,55 @@ export function StudyBandeja() {
                         <p className="study-page__eyebrow">Datos detectados</p>
                         <h3>Revisá contra el comprobante</h3>
                       </div>
-                      <span>{extraction.data.fields.length} campos</span>
+                      <span>
+                        {extraction.data.fields.filter((field) => FIELD_LABELS[field.key]).length} campos corregibles
+                      </span>
                     </div>
-                    <div className="extraction-fields">
-                      {extraction.data.fields.map((field) => (
-                        <div className="extraction-field" key={field.id}>
-                          <Field
-                            id={`extracted-${field.id}`}
-                            label={FIELD_LABELS[field.key] ?? field.key}
-                            value={corrections[field.id] ?? ""}
-                            hint={`Confianza ${Math.round(field.confidence * 100)}% · ${field.correction ? "corregido manualmente" : "valor extraído"}`}
-                            onChange={(event) =>
-                              setCorrections((current) => ({
-                                ...current,
-                                [field.id]: event.target.value,
-                              }))
-                            }
-                            onBlur={() => {
-                              const next = corrections[field.id] ?? "";
-                              const original =
-                                field.correction ?? field.normalizedValue ?? field.rawValue ?? "";
-                              if (next && next !== original)
-                                correct.mutate({ fieldId: field.id, correction: next });
-                            }}
-                          />
-                          <span
-                            className={`confidence-mark confidence-mark--${field.confidence >= 0.9 ? "high" : field.confidence >= 0.7 ? "medium" : "low"}`}
-                            aria-hidden="true"
-                          />
+                    <ExtractionFiscalTable
+                      voucherData={extraction.data.voucherData}
+                      documentReviewReason={extraction.data.reviewReason}
+                      reviewIssues={extraction.data.reviewIssues}
+                      fields={extraction.data.fields}
+                    />
+                    {extraction.data.fields.some((field) => FIELD_LABELS[field.key]) ? (
+                      <section
+                        className="extraction-corrections"
+                        aria-labelledby="extraction-corrections-title"
+                      >
+                        <h4 id="extraction-corrections-title">Corregir campos detectados</h4>
+                        <div className="extraction-fields">
+                          {extraction.data.fields
+                            .filter((field) => FIELD_LABELS[field.key])
+                            .map((field) => (
+                              <div className="extraction-field" key={field.id}>
+                                <Field
+                                  id={`extracted-${field.id}`}
+                                  label={FIELD_LABELS[field.key]!}
+                                  value={corrections[field.id] ?? ""}
+                                  hint={`Confianza ${Math.round(field.confidence * 100)}% · ${field.correction ? "corregido manualmente" : "valor extraído"}`}
+                                  onChange={(event) =>
+                                    setCorrections((current) => ({
+                                      ...current,
+                                      [field.id]: event.target.value,
+                                    }))
+                                  }
+                                  onBlur={() => {
+                                    const next = corrections[field.id] ?? "";
+                                    const original =
+                                      field.correction ?? field.normalizedValue ?? field.rawValue ?? "";
+                                    if (next && next !== original)
+                                      correct.mutate({ fieldId: field.id, correction: next });
+                                  }}
+                                />
+                                <span
+                                  className={`confidence-mark confidence-mark--${field.confidence >= 0.9 ? "high" : field.confidence >= 0.7 ? "medium" : "low"}`}
+                                  aria-hidden="true"
+                                />
+                              </div>
+                            ))}
                         </div>
-                      ))}
-                    </div>
+                      </section>
+                    ) : null}
                     {correct.isError ? (
                       <p className="form-error" role="alert">
                         No se pudo guardar una corrección. Volvé a intentarlo.

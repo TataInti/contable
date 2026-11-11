@@ -1,0 +1,174 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ClientContextValue } from "../context/ClientContext";
+import { api } from "../lib/api";
+import { StudyBandeja } from "./StudyBandeja";
+
+const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
+
+vi.mock("../context/ClientContext", () => ({
+  useClientContext: () => contextMock.current,
+}));
+
+vi.mock("../session/SessionContext", () => ({
+  useSession: () => ({
+    status: "authenticated",
+    me: { firms: [{ firmId: "firm-a", firmName: "Estudio Demo" }] },
+    portalContexts: [],
+    error: null,
+    refresh: async () => {},
+  }),
+}));
+
+vi.mock("../lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/api")>();
+  return {
+    ...actual,
+    api: {
+      get: vi.fn(),
+      post: vi.fn(),
+      patch: vi.fn(),
+      put: vi.fn(),
+      del: vi.fn(),
+      postWithHeaders: vi.fn(),
+    } as unknown as typeof actual.api,
+  };
+});
+
+const documentFixture = {
+  id: "document-a",
+  status: "EXTRACTED",
+  createdAt: "2026-10-31T12:00:00.000Z",
+  category: null,
+  direction: null,
+  fileVersions: [{ originalName: "factura.pdf", mimeType: "application/pdf", bucket: "originals" }],
+};
+
+const extractionFixture = {
+  id: "extraction-a",
+  status: "NEEDS_REVIEW",
+  reviewReason: null,
+  voucherData: {
+    tipo_documento: "factura",
+    letra: "A",
+    punto_venta: "0004",
+    numero: "00001234",
+    fecha: "2026-10-31",
+    hora: "10:15:00",
+    cuit_emisor: "20123456786",
+    cuit_receptor: "30712345678",
+    razon_social_emisor: "Proveedor S.A.",
+    razon_social_receptor: "Cliente S.R.L.",
+    condicion_iva: "Responsable inscripto",
+    neto_gravado: "1000.00",
+    iva: [{ alicuota: "21", importe: "210.00" }],
+    no_gravado: "0.00",
+    exento: "0.00",
+    percepciones: [{ tipo: "IIBB", importe: "15.00" }],
+    total: "1225.00",
+    moneda: "ARS",
+    cae: "12345678901234",
+    cae_vencimiento: "2026-11-10",
+    confianza: {},
+  },
+  fields: [
+    {
+      id: "field-cuit",
+      key: "issuerTaxId",
+      rawValue: "20123456786",
+      normalizedValue: "20123456786",
+      correction: null,
+      confidence: 0.98,
+      status: "ACCEPTED",
+      reason: null,
+    },
+    {
+      id: "field-time",
+      key: "time",
+      rawValue: "10:15:00",
+      normalizedValue: "10:15:00",
+      correction: null,
+      confidence: 0.98,
+      status: "ACCEPTED",
+      reason: null,
+    },
+  ],
+  items: [],
+};
+
+function renderBandeja() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <StudyBandeja />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+async function openExtraction() {
+  renderBandeja();
+  fireEvent.click(await screen.findByRole("button", { name: /factura\.pdf/ }));
+  return screen.findByRole("table", { name: "Datos fiscales extraídos" });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  contextMock.current = {
+    firmId: "firm-a",
+    clientId: "client-a",
+    periodId: "period-a",
+    isReady: true,
+    capabilities: new Set(["client.read", "document.review"]),
+    hasClientAccess: () => true,
+    setFirmId: vi.fn(),
+    setClientId: vi.fn(),
+    setPeriodId: vi.fn(),
+  };
+  vi.mocked(api.get).mockImplementation(((path: string) => {
+    if (path.endsWith("/documents")) return Promise.resolve([documentFixture]);
+    if (path.endsWith("/documents/document-a/extraction")) return Promise.resolve(extractionFixture);
+    if (path.endsWith("/documents/document-a")) return Promise.resolve(documentFixture);
+    return Promise.resolve([]);
+  }) as never);
+  vi.mocked(api.patch).mockResolvedValue({} as never);
+  vi.mocked(api.post).mockResolvedValue({} as never);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+describe("StudyBandeja — revisión de extracción", () => {
+  it("conserva las correcciones y la aprobación, y oculta campos fuera de la tabla fiscal", async () => {
+    const table = await openExtraction();
+    expect(within(table).getByText("Fecha")).toBeTruthy();
+    expect(screen.queryByLabelText("time")).toBeNull();
+
+    const cuit = screen.getByLabelText("CUIT emisor");
+    fireEvent.change(cuit, { target: { value: "20123456780" } });
+    fireEvent.blur(cuit);
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/firms/firm-a/clients/client-a/extractions/extraction-a/fields/field-cuit",
+        { correction: "20123456780", reason: "Corrección manual en bandeja" },
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Aprobar extracción" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "¿Aprobar la extracción?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Aprobar extracción" }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        "/firms/firm-a/clients/client-a/extractions/extraction-a/approve",
+      ),
+    );
+  });
+});
