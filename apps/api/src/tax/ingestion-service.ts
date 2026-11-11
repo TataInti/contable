@@ -12,12 +12,13 @@ import {
   type Cm03ImportRow,
   type F931Input,
   type IibbTucImportRow,
+  type ImportTotals,
   type TemSmtImportRow,
   type WithholdingInput,
   type SifereDirection,
 } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
-import { getWorkpaperSourcePolicy } from "./workpaper-source-policy.js";
+import { getWorkpaperSourcePolicy, WORKPAPER_SOURCE_POLICIES } from "./workpaper-source-policy.js";
 
 /**
  * Servicio de ingestión fiscal (Puerta 2).
@@ -49,6 +50,7 @@ export type ImportErrorCode =
   | "NO_ROWS"
   | "WORKPAPER_NOT_FOUND"
   | "SOURCE_POLICY_INVALID"
+  | "UNKNOWN_ADAPTER"
   | "INVALID_TRANSITION";
 
 export class ImportError extends Error {
@@ -118,6 +120,101 @@ function summarizeNormalizedRows(rows: readonly NormalizedImportRow[]) {
     validRows,
     errorRows,
   };
+}
+
+type AdapterNormalizer = (rows: readonly unknown[]) => {
+  rows: unknown[];
+  totals: ImportTotals;
+};
+
+type CommitBranch = "VOUCHER" | "WITHHOLDING" | "IIBB" | "TEM" | "CM03" | "F931";
+
+type SourceAdapter = {
+  normalize: AdapterNormalizer;
+  commitBranch: CommitBranch;
+};
+
+/**
+ * P2: el normalizador y la rama de escritura se eligen por la política de
+ * fuente resuelta, no por el texto de `adapterVersion`. La tabla es explícita:
+ * una política sin entrada no se procesa (nunca cae a un adaptador por defecto).
+ */
+const SOURCE_ADAPTERS: Readonly<Record<string, SourceAdapter>> = {
+  ARCA_IVA_SALES: {
+    normalize: (rows) => normalizeArcaVoucherBatch(rows as ArcaVoucherInput[]),
+    commitBranch: "VOUCHER",
+  },
+  ARCA_IVA_PURCHASES: {
+    normalize: (rows) => normalizeArcaVoucherBatch(rows as ArcaVoucherInput[]),
+    commitBranch: "VOUCHER",
+  },
+  SICORE_IVA: {
+    normalize: (rows) => normalizeWithholdingBatch(rows as WithholdingInput[]),
+    commitBranch: "WITHHOLDING",
+  },
+  F931: {
+    normalize: (rows) => normalizeF931Batch(rows as F931Input[]),
+    commitBranch: "F931",
+  },
+  DGR_IIBB_TUC: {
+    normalize: (rows) => normalizeIibbTucBatch(rows as IibbTucImportRow[]),
+    commitBranch: "IIBB",
+  },
+  SIFERE_CM03: {
+    normalize: (rows) => normalizeCm03Batch(rows as Cm03ImportRow[]),
+    commitBranch: "CM03",
+  },
+  IIBB_RPI_TUC: {
+    normalize: (rows) => normalizeWithholdingBatch(rows as WithholdingInput[]),
+    commitBranch: "WITHHOLDING",
+  },
+  SIFERE_RPI_CM: {
+    normalize: (rows) => normalizeWithholdingBatch(rows as WithholdingInput[]),
+    commitBranch: "WITHHOLDING",
+  },
+  SMT_TEM: {
+    normalize: (rows) => normalizeTemSmtBatch(rows as TemSmtImportRow[]),
+    commitBranch: "TEM",
+  },
+  SMT_RPI_TEM: {
+    normalize: (rows) => normalizeWithholdingBatch(rows as WithholdingInput[]),
+    commitBranch: "WITHHOLDING",
+  },
+};
+
+const AVAILABLE_ADAPTERS = [
+  ...new Set(WORKPAPER_SOURCE_POLICIES.map((policy) => policy.adapterVersion)),
+].sort();
+
+function unknownAdapterError(adapterVersion: string) {
+  return new ImportError(
+    "UNKNOWN_ADAPTER",
+    `El adaptador de importación "${adapterVersion}" no tiene una política de fuente registrada. ` +
+      `Adaptadores disponibles: ${AVAILABLE_ADAPTERS.join(", ")}.`,
+  );
+}
+
+/**
+ * Resuelve la política de fuente de un lote. La fuente con la que se vinculó
+ * el lote manda; para lotes sin vínculo se busca la política por su
+ * `adapterVersion` exacto. Sin política no hay comportamiento por defecto.
+ */
+function resolveSourceAdapter(
+  batch: { adapterVersion: string },
+  linkedSourceCode: string | null,
+): SourceAdapter {
+  const linkedPolicy = linkedSourceCode
+    ? getWorkpaperSourcePolicy(linkedSourceCode)
+    : undefined;
+  const policy =
+    linkedPolicy ??
+    WORKPAPER_SOURCE_POLICIES.find(
+      (candidate) => candidate.adapterVersion === batch.adapterVersion,
+    );
+  if (!policy) throw unknownAdapterError(batch.adapterVersion);
+  const adapter = SOURCE_ADAPTERS[policy.code];
+  if (!adapter) throw unknownAdapterError(batch.adapterVersion);
+  return adapter;
 }
 
 export class IngestionService {
@@ -302,22 +399,8 @@ export class IngestionService {
         throw new ImportError("INVALID_TRANSITION", `No se puede validar un lote en estado ${batch.status}`);
       }
 
-      const isWithholding = batch.adapterVersion.startsWith("ARCA_RET");
-      const isIibb = batch.adapterVersion.startsWith("DGR_IIBB");
-      const isTem = batch.adapterVersion.startsWith("SMT_TEM");
-      const isCm03 = batch.adapterVersion.startsWith("CM03");
-      const isF931 = batch.adapterVersion.startsWith("F931");
-      const normalizedRows = isWithholding
-        ? normalizeWithholdingBatch(rows as WithholdingInput[])
-        : isIibb
-          ? normalizeIibbTucBatch(rows as IibbTucImportRow[])
-          : isTem
-            ? normalizeTemSmtBatch(rows as TemSmtImportRow[])
-            : isCm03
-              ? normalizeCm03Batch(rows as Cm03ImportRow[])
-              : isF931
-                ? normalizeF931Batch(rows as F931Input[])
-                : normalizeArcaVoucherBatch(rows as ArcaVoucherInput[]);
+      const adapter = await this.sourceAdapterForBatch(tx, ctx, batch);
+      const normalizedRows = adapter.normalize(rows as readonly unknown[]);
 
       const checkedRows = enforceBatchPeriod(
         normalizedRows.rows as unknown as NormalizedImportRow[],
@@ -392,15 +475,12 @@ export class IngestionService {
         throw new ImportError("BATCH_HAS_ERRORS", `El lote tiene ${batch.errorRows} filas con error`);
       }
 
-      const isWithholding = batch.adapterVersion.startsWith("ARCA_RET");
-      const isIibb = batch.adapterVersion.startsWith("DGR_IIBB");
-      const isTem = batch.adapterVersion.startsWith("SMT_TEM");
-      const isCm03 = batch.adapterVersion.startsWith("CM03");
-      const isF931 = batch.adapterVersion.startsWith("F931");
+      const adapter = await this.sourceAdapterForBatch(tx, ctx, batch);
+      const branch = adapter.commitBranch;
       let committed = 0;
       let duplicates = 0;
 
-      if (isF931) {
+      if (branch === "F931") {
         committed = await this.commitF931Rows(tx, ctx, batch);
       }
 
@@ -409,7 +489,7 @@ export class IngestionService {
       // excepción propaga y la transacción hace rollback de TODAS las
       // escrituras de negocio. El lote nunca queda COMMITTED parcialmente.
       for (const row of batch.rows) {
-        if (isF931) break;
+        if (branch === "F931") break;
         if (row.status !== "VALID") {
           throw new ImportError(
             "BATCH_HAS_ERRORS",
@@ -421,16 +501,16 @@ export class IngestionService {
           continue;
         }
 
-        if (isWithholding) {
+        if (branch === "WITHHOLDING") {
           await this.commitWithholdingRow(tx, ctx, batch, row, clientCuit);
           committed += 1;
-        } else if (isIibb) {
+        } else if (branch === "IIBB") {
           await this.commitIibbRow(tx, ctx, batch, row, clientCuit);
           committed += 1;
-        } else if (isTem) {
+        } else if (branch === "TEM") {
           await this.commitTemRow(tx, ctx, batch, row, clientCuit);
           committed += 1;
-        } else if (isCm03) {
+        } else if (branch === "CM03") {
           await this.commitCm03Row(tx, ctx, batch, row, clientCuit);
           committed += 1;
         } else {
@@ -526,6 +606,23 @@ export class IngestionService {
       },
       validation: validated.totals,
     };
+  }
+
+  /**
+   * P2: la política de fuente del lote decide el adaptador. El vínculo con el
+   * expediente aporta el `sourceCode`; un lote suelto se resuelve por su
+   * `adapterVersion` exacto. Sin política registrada, error explícito.
+   */
+  private async sourceAdapterForBatch(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    batch: { id: string; adapterVersion: string },
+  ): Promise<SourceAdapter> {
+    const link = await tx.workpaperImportBatch.findFirst({
+      where: { importBatchId: batch.id, firmId: ctx.firmId },
+      select: { sourceCode: true },
+    });
+    return resolveSourceAdapter(batch, link?.sourceCode ?? null);
   }
 
   private async commitVoucherRow(

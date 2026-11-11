@@ -5895,6 +5895,178 @@
   }
 }
 
+/* D3c: grilla de la ficha, menú de acciones y editor por secciones. */
+.client-summary {
+  --client-summary-line: var(--ds-color-border-subtle);
+}
+
+.client-summary__workspace {
+  grid-template-columns: calc(var(--ds-space-16) * 3) minmax(0, 1fr);
+  gap: var(--ds-space-8);
+}
+
+.client-summary__section-index {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.client-summary__index-select-control {
+  display: none;
+  min-width: 0;
+}
+
+.client-summary__index-select {
+  width: 100%;
+  max-width: calc(var(--ds-space-16) * 4);
+  min-height: var(--ds-control-height-sm);
+  padding: 0 var(--ds-space-3);
+  border: var(--ds-border-width) solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text);
+  font: inherit;
+}
+
+.client-summary__index-link {
+  padding: var(--ds-space-2) 0;
+  border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  border-radius: 0;
+}
+
+.client-summary__index-link[aria-current="page"] {
+  border-bottom-color: var(--ds-color-primary);
+  background: transparent;
+}
+
+.client-summary__overview-facts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-block: var(--ds-space-4);
+  border-block: var(--ds-border-width) solid var(--ds-color-border);
+}
+
+.client-summary__fact dd {
+  font-variant-numeric: tabular-nums;
+}
+
+.client-summary__overview-links {
+  width: 100%;
+}
+
+.client-summary__overview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ds-space-3);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.client-summary__overview-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.client-summary__updated {
+  padding-left: var(--ds-space-3);
+  border-left: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  white-space: nowrap;
+}
+
+.client-summary__overview-created {
+  padding-left: var(--ds-space-3);
+  border-left: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  white-space: nowrap;
+}
+
+.client-list__client-column .dense-name__secondary {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.client-list__client-column .dense-name__secondary > small {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-list__client-column .dense-tag--context {
+  flex: 0 0 auto;
+}
+
+.dense-row--selected .dense-tag--context {
+  display: none;
+}
+
+.client-list__status-column .status-badge {
+  white-space: nowrap;
+}
+
+.client-edit-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ds-space-6);
+}
+
+.client-edit__section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ds-space-3);
+  min-width: 0;
+}
+
+.client-edit__section + .client-edit__section {
+  padding-top: var(--ds-space-5);
+  border-top: var(--ds-border-width) solid var(--ds-color-border-subtle);
+}
+
+.client-edit__section > h3,
+.client-edit__section > .form-error,
+.client-edit__section > #client-profile-iibb {
+  grid-column: 1 / -1;
+}
+
+.client-edit__section > h3 {
+  margin: 0;
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-lg);
+}
+
+.client-contacts__anchor {
+  scroll-margin-block: var(--ds-space-4);
+}
+
+@media (max-width: 1280px) {
+  .client-summary__workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--ds-space-4);
+  }
+
+  .client-summary__index-select-control {
+    display: block;
+  }
+
+  .client-summary__section-index {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .client-summary__overview-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .client-summary__fact--wrap dd,
 .client-summary__fact--wrap small {
   overflow: visible;
