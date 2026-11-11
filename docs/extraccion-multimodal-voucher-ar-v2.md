@@ -85,7 +85,7 @@ La clasificación de `Percep. RG 2408 - DGI` en RP007 y `Percep. IVA-RG2408` en 
 | Vencimiento del CAE posterior a la fecha | 25 / 1 / 4 | 25 / 1 / 4 |
 | Suma de componentes vs. total | 1 / 1 / 28 | 1 / 1 / 28 |
 
-El cambio de CUIT receptor corresponde a RP024: el modelo devolvió un dígito distinto al visible y la nueva regla lo envió a revisión. En RP007 la clasificación de RG 2408 mejoró a IVA; la respuesta final incluyó dos percepciones, frente a cinco en una corrida v6 previa, por lo que la cobertura de las percepciones restantes requiere seguimiento.
+El cambio de CUIT receptor corresponde a RP024: el modelo devolvió un dígito distinto al visible y la nueva regla lo envió a revisión. En RP007 la clasificación de RG 2408 quedó en IVA. La respuesta final incluyó dos percepciones frente a cinco en la primera corrida v6 y omitió tres rótulos que sí aparecieron en esa respuesta anterior y en el texto del PDF: `Fdo. Des. Ene. Prov. (10,00%)`, `Tasa de Regulac. ERSeP - Dto. 2298 (0,40%)` y `Tasa de Seguridad Eléct. - Ley 10281 (0,10%)`. La línea base v5 también había devuelto dos percepciones; la cobertura de esos rótulos queda pendiente, sin otra iteración de prompt.
 
 El benchmark sintético v4 conserva los 12 motivos previos `sin datos fiscales` y no genera ningún motivo de CUIT ni de vencimiento de CAE. El error sin marca está en `PH002.cae`: verdad `75000000000022`, predicción `75500000000022`. Es el único desacierto entre 800 campos y no queda cubierto por las tres reglas de integridad actuales.
 
