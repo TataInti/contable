@@ -185,6 +185,35 @@
   grid-template-columns: repeat(3, minmax(160px, 1fr));
 }
 
+/* Alta de cliente: alinear las dos columnas y ajustar el drawer al contenido. */
+.action-drawer__panel:has(#client-create-form) {
+  align-self: center;
+  height: auto;
+  max-height: calc(100dvh - var(--ds-space-8));
+}
+
+.action-drawer__panel:has(#client-create-form) .action-drawer__content {
+  flex: 0 1 auto;
+}
+
+.action-drawer__panel:has(#client-create-form) #client-create-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--ds-space-4) var(--ds-space-5);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.client-create__hint {
+  flex: 1 1 auto;
+  margin-right: auto;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-normal);
+}
+
 .study-inline-form .ctxbar__input {
   width: 100%;
   height: var(--ds-control-height-md);
@@ -2518,21 +2547,20 @@
 
 .fiscal-steps__list {
   display: grid;
-  gap: var(--ds-space-1);
+  gap: 0;
   margin: 0;
-  padding: var(--ds-space-3);
-  border: 1px solid var(--ds-color-border);
-  border-radius: var(--ds-radius-lg);
-  background: var(--ds-color-surface);
+  padding: 0;
   list-style: none;
 }
 
 .fiscal-steps__item + .fiscal-steps__item {
-  margin-top: var(--ds-space-1);
+  padding-top: var(--ds-space-1);
+  border-top: var(--ds-border-width) solid var(--ds-color-border-subtle);
 }
 
 .fiscal-steps__button {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--ds-space-2);
   width: 100%;
@@ -2563,22 +2591,18 @@
 }
 
 .fiscal-steps__marker {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-  border: 1px solid var(--ds-color-border);
-  border-radius: 999px;
-  background: var(--ds-color-surface);
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-xs);
   font-variant-numeric: tabular-nums;
 }
 
-.fiscal-steps__button--done .fiscal-steps__marker {
-  border-color: var(--ds-color-success);
-  background: var(--ds-color-success-subtle);
+.fiscal-steps__status {
+  color: var(--ds-color-warning);
+  font-size: var(--ds-text-xs);
+  white-space: nowrap;
+}
+
+.fiscal-steps__status--complete {
   color: var(--ds-color-success);
 }
 
@@ -2603,9 +2627,10 @@
 }
 
 .fiscal-contributor {
-  padding: var(--ds-space-4);
-  border-color: color-mix(in srgb, var(--ds-color-primary) 22%, var(--ds-color-border));
-  background: var(--ds-color-surface);
+  padding: 0 0 var(--ds-space-4);
+  border: 0;
+  border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  background: transparent;
 }
 
 .fiscal-contributor__heading,
@@ -2637,9 +2662,8 @@
 
 .fiscal-contributor__facts > div {
   min-width: 0;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border-radius: var(--ds-radius-md);
-  background: color-mix(in srgb, var(--ds-color-surface) 72%, var(--ds-color-background));
+  padding: 0;
+  background: transparent;
 }
 
 .fiscal-contributor__facts dt {
@@ -2690,14 +2714,54 @@
 }
 
 .fiscal-next-step {
-  padding: var(--ds-space-4);
-  border: 1px solid color-mix(in srgb, var(--ds-color-primary) 24%, var(--ds-color-border));
-  border-radius: var(--ds-radius-lg);
-  background: var(--ds-color-primary-soft);
+  padding: 0 0 var(--ds-space-4);
+  border: 0;
+  border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  border-radius: 0;
+  background: transparent;
 }
 
 .fiscal-next-step .ds-button {
   flex: 0 0 auto;
+}
+
+.fiscal-client-overview {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.fiscal-rules .fiscal-rules-guide {
+  display: block;
+  max-width: min(100%, calc(var(--ds-space-16) * 9));
+  margin: 0 0 var(--ds-space-3);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-base);
+  line-height: var(--ds-leading-normal);
+}
+
+.fiscal-rules .fiscal-rules-guide strong {
+  color: var(--ds-color-text);
+}
+
+/* Usuarios: controles legibles y objetivos de fila de 44 px. */
+.administration-users .dense-select--inline {
+  height: var(--ds-control-height-md);
+  min-height: var(--ds-control-height-md);
+  padding-inline: var(--ds-space-2);
+  font-size: var(--ds-text-base);
+}
+
+.administration-users .dense-row-actions {
+  gap: var(--ds-space-2);
+}
+
+.administration-users .dense-row-actions .ds-button {
+  min-height: var(--ds-touch-target);
 }
 
 .fiscal-client-overview__periods {
@@ -5829,4 +5893,12 @@
   .dense-table[aria-label="Cartera de clientes"] .client-list__secondary-column {
     display: none;
   }
+}
+
+.client-summary__fact--wrap dd,
+.client-summary__fact--wrap small {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field } from "@contable/design-system";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ARGENTINA_PROVINCES,
   BACKED_CURRENCIES,
@@ -110,6 +110,13 @@ interface ClientContactForm {
   isPrimary: boolean;
 }
 
+interface ContactRetryTarget {
+  firmId: string;
+  clientId: string;
+  legalName: string;
+  email: string;
+}
+
 interface ClientProfileForm {
   functionalCurrency: string;
   accountingStandard: string;
@@ -142,6 +149,7 @@ export function StudyClientes() {
   const { firmId, clientId, capabilities, setClientId } = useClientContext();
   const session = useSession();
   const queryClient = useQueryClient();
+  const location = useLocation();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
@@ -171,6 +179,7 @@ export function StudyClientes() {
     legalName: "",
     tradeName: "",
     cuit: "",
+    contactEmail: "",
     vatCondition: "",
     province: "",
     activity: "",
@@ -190,6 +199,7 @@ export function StudyClientes() {
     serviceStartDate: "",
   }));
   const [notice, setNotice] = useState<string | null>(null);
+  const [contactRetry, setContactRetry] = useState<ContactRetryTarget | null>(null);
   const query = useQuery({
     queryKey: ["clients", firmId],
     queryFn: () => api.get<ClientWithProfile[]>(`/firms/${firmId}/clients`),
@@ -287,17 +297,41 @@ export function StudyClientes() {
     allActivityValues.has(profileForm.activity) &&
     !activeActivityValues.has(profileForm.activity);
   const create = useMutation({
-    mutationFn: () =>
+    mutationFn: (submittedForm: typeof form) =>
       api.post<Client>(`/firms/${firmId}/clients`, {
-        legalName: form.legalName.trim(),
-        cuit: form.cuit,
-        ...(form.tradeName.trim() ? { tradeName: form.tradeName.trim() } : {}),
-        ...(form.vatCondition ? { vatCondition: form.vatCondition } : {}),
-        ...(form.province ? { province: form.province } : {}),
-        ...(form.activity ? { activity: form.activity } : {}),
-        ...(form.legalForm ? { legalForm: form.legalForm } : {}),
+        legalName: submittedForm.legalName.trim(),
+        cuit: submittedForm.cuit,
+        ...(submittedForm.tradeName.trim() ? { tradeName: submittedForm.tradeName.trim() } : {}),
+        ...(submittedForm.vatCondition ? { vatCondition: submittedForm.vatCondition } : {}),
+        ...(submittedForm.province ? { province: submittedForm.province } : {}),
+        ...(submittedForm.activity ? { activity: submittedForm.activity } : {}),
+        ...(submittedForm.legalForm ? { legalForm: submittedForm.legalForm } : {}),
       }),
-    onSuccess: async (client) => {
+    onSuccess: async (client, submittedForm) => {
+      const email = submittedForm.contactEmail.trim();
+      let contactFailed = false;
+      if (email && firmId) {
+        const target = {
+          firmId,
+          clientId: client.id,
+          legalName: submittedForm.legalName.trim(),
+          email,
+        };
+        try {
+          await api.post<ClientContact>(`/firms/${firmId}/clients/${client.id}/contacts`, {
+            name: target.legalName,
+            email: target.email,
+            isPrimary: true,
+          });
+          await queryClient.invalidateQueries({ queryKey: ["client-contacts", firmId, client.id] });
+          setContactRetry(null);
+        } catch {
+          contactFailed = true;
+          setContactRetry(target);
+        }
+      } else {
+        setContactRetry(null);
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["clients", firmId] }),
         session.refresh(),
@@ -308,11 +342,39 @@ export function StudyClientes() {
         legalName: "",
         tradeName: "",
         cuit: "",
+        contactEmail: "",
         vatCondition: "",
         province: "",
         activity: "",
         legalForm: "",
       });
+      setNotice(null);
+      if (!contactFailed) navigate("/configuracion-fiscal");
+    },
+  });
+  const retryContact = useMutation({
+    mutationFn: async (target: ContactRetryTarget) => {
+      const path = `/firms/${target.firmId}/clients/${target.clientId}/contacts`;
+      const contacts = await api.get<ClientContact[]>(path);
+      const normalizedEmail = target.email.trim().toLocaleLowerCase("en");
+      const alreadyRegistered = contacts.some(
+        (contact) =>
+          contact.isActive &&
+          contact.isPrimary &&
+          contact.email?.trim().toLocaleLowerCase("en") === normalizedEmail,
+      );
+      if (alreadyRegistered) return null;
+      return api.post<ClientContact>(path, {
+        name: target.legalName,
+        email: target.email,
+        isPrimary: true,
+      });
+    },
+    onSuccess: async (_contact, target) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["client-contacts", target.firmId, target.clientId],
+      });
+      setContactRetry(null);
       navigate("/configuracion-fiscal");
     },
   });
@@ -466,6 +528,13 @@ export function StudyClientes() {
   const selectedClient = selectedId ? (clients.find((client) => client.id === selectedId) ?? null) : null;
   const currentClient = clientId ? (clients.find((client) => client.id === clientId) ?? null) : null;
   const canManage = capabilities.has("client.manage");
+  const missingCreateFields = [
+    ...(form.legalName.trim().length < 2 ? ["razón social"] : []),
+    ...(form.cuit.length !== 11 ? ["CUIT"] : []),
+  ];
+  const createFieldsHint = missingCreateFields.length > 0
+    ? `Falta completar ${missingCreateFields.length} ${missingCreateFields.length === 1 ? "campo" : "campos"}: ${missingCreateFields.join(" y ")}.`
+    : "Los datos requeridos están completos.";
 
   const openNew = () => {
     setEditingClient(null);
@@ -483,6 +552,15 @@ export function StudyClientes() {
       setSelectedId(null);
     }
   }, [query.data, selectedId]);
+  const contactClientId = (location.state as { contactClientId?: unknown } | null)?.contactClientId;
+  useEffect(() => {
+    if (
+      typeof contactClientId === "string" &&
+      query.data?.some((client) => client.id === contactClientId)
+    ) {
+      setSelectedId(contactClientId);
+    }
+  }, [contactClientId, query.data]);
 
   const columns: DenseColumn<ClientWithProfile>[] = [
     {
@@ -874,7 +952,23 @@ export function StudyClientes() {
         ]}
       />
 
-      {notice ? (
+      {contactRetry ? (
+        <div className="action-receipt action-receipt--page" role="alert">
+          <span>
+            <strong>Cliente creado</strong>
+            <small>Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.</small>
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={retryContact.isPending}
+            loadingLabel="Reintentando correo"
+            onClick={() => retryContact.mutate(contactRetry)}
+          >
+            Reintentar
+          </Button>
+        </div>
+      ) : notice ? (
         <div className="action-receipt action-receipt--page" role="status">
           <span>
             <strong>Actualización guardada</strong>
@@ -932,23 +1026,29 @@ export function StudyClientes() {
         title="Alta de cliente"
         description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
         footer={
-          <Button
-            type="submit"
-            form="client-create-form"
-            loading={create.isPending}
-            loadingLabel="Creando cliente"
-            disabled={form.legalName.trim().length < 2 || form.cuit.length !== 11}
-          >
-            Crear cliente
-          </Button>
+          <>
+            <span id="client-create-hint" className="client-create__hint" aria-live="polite">
+              {createFieldsHint}
+            </span>
+            <Button
+              type="submit"
+              form="client-create-form"
+              aria-describedby="client-create-hint"
+              loading={create.isPending}
+              loadingLabel="Creando cliente"
+              disabled={missingCreateFields.length > 0}
+            >
+              Crear cliente
+            </Button>
+          </>
         }
       >
         <form
           id="client-create-form"
-          className="study-inline-form study-inline-form--client"
+          className="study-inline-form study-inline-form--client client-create-form"
           onSubmit={(event) => {
             event.preventDefault();
-            create.mutate();
+            create.mutate({ ...form });
           }}
         >
           <Field
@@ -958,6 +1058,15 @@ export function StudyClientes() {
             onChange={(event) => setForm({ ...form, legalName: event.target.value })}
             maxLength={200}
             required
+          />
+          <Field
+            id="client-create-contact-email"
+            label="Correo de contacto"
+            type="email"
+            value={form.contactEmail}
+            onChange={(event) => setForm({ ...form, contactEmail: event.target.value })}
+            autoComplete="email"
+            maxLength={254}
           />
           <Field
             id="client-trade-name"

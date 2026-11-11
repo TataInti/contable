@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field } from "@contable/design-system";
 import { ACTIVITY_CODE_PATTERN, normalizeActivityCode } from "@contable/contracts";
 import { ApiError, api, type FiscalJurisdiction, type FiscalTaxType } from "../lib/api";
+import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
@@ -20,7 +21,6 @@ import {
   InspectorFacts,
   InspectorSection,
   ShortcutHint,
-  StatStrip,
   normalizeSearch,
   useDenseShortcuts,
   useDensity,
@@ -28,6 +28,7 @@ import {
 } from "../ui/Dense";
 import { Icon } from "../ui/Icon";
 import "./study.css";
+import "./StudyCatalogosFiscales.css";
 
 type JurisdictionOption = FiscalJurisdiction;
 type TaxTypeOption = FiscalTaxType;
@@ -135,6 +136,12 @@ function shortDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString("es-AR") : "—";
 }
 
+function validityLabel(validFrom: string, validTo: string | null) {
+  return validTo
+    ? `${shortDate(validFrom)} — ${shortDate(validTo)}`
+    : `Desde ${shortDate(validFrom)}`;
+}
+
 type CatalogTab = "jurisdictions" | "taxTypes" | "authorities" | "regimes" | "activities";
 type MasterDrawer = "jurisdiction-create" | "jurisdiction-edit" | "tax-type-create" | "tax-type-edit";
 type CatalogDrawer = "authority-create" | "authority-edit" | "regime-create" | "regime-edit";
@@ -179,10 +186,46 @@ function isOwnedUiRecord(
 
 function MutationError({ error }: { error: unknown }) {
   if (!error || codeConflict(error)) return null;
+  if (error instanceof ApiError) return <FieldErrorsFromDetails error={error} />;
   return (
     <p className="form-error" role="alert">
       {error instanceof Error ? error.message : "Ocurrió un error inesperado."}
     </p>
+  );
+}
+
+function InspectorActions({
+  onEdit,
+  children,
+  menu,
+}: {
+  onEdit?: () => void;
+  children?: ReactNode;
+  menu?: ReactNode;
+}) {
+  return (
+    <div className="dense-inspector-actions">
+      {onEdit ? (
+        <Button size="sm" variant="primary" onClick={onEdit}>
+          Editar
+        </Button>
+      ) : null}
+      {children}
+      {menu ? (
+        <details className="dense-inspector-actions__menu">
+          <summary
+            className="dense-inspector-actions__trigger"
+            aria-label="Más acciones"
+            title="Más acciones"
+          >
+            ⋯
+          </summary>
+          <div className="dense-inspector-actions__items" role="group" aria-label="Acciones secundarias">
+            {menu}
+          </div>
+        </details>
+      ) : null}
+    </div>
   );
 }
 
@@ -531,7 +574,7 @@ export function StudyCatalogosFiscales() {
   const selectableTaxTypes = taxTypes.filter((row) => row.isActive);
   const jurisdictionLabel = (jurisdiction: JurisdictionOption) => {
     const parent = jurisdiction.parent ?? jurisdictions.find((item) => item.id === jurisdiction.parentId);
-    const ancestry = parent ? `, ${jurisdictionKindLabel[parent.kind]} ${parent.name}` : "";
+    const ancestry = parent ? `, ${parent.name}` : "";
     return `${jurisdiction.name} — ${jurisdictionKindLabel[jurisdiction.kind]}${ancestry} (${jurisdiction.code})`;
   };
   const jurisdictionName = (jurisdictionId: string) => {
@@ -564,7 +607,9 @@ export function StudyCatalogosFiscales() {
   const studioRecords = [...jurisdictions, ...taxTypes, ...authorities, ...regimes, ...activities].filter(
     (row) => row.origin === "UI",
   ).length;
-  const totalRecords = jurisdictions.length + taxTypes.length + authorities.length + regimes.length + activities.length;
+  const referenceRecords = [...jurisdictions, ...taxTypes, ...authorities, ...regimes, ...activities].filter(
+    (row) => row.origin === "REFERENCE",
+  ).length;
   const selectedUsageSummary = usageQuery.isLoading
     ? "Verificando usos…"
     : usageQuery.isError
@@ -624,6 +669,7 @@ export function StudyCatalogosFiscales() {
   );
 
   const selectedJurisdiction = jurisdictions.find((row) => row.id === selectedId) ?? null;
+  const duplicateJurisdictionSource = jurisdictions.find((row) => row.id === duplicateOfId) ?? null;
   const selectedTaxType = taxTypes.find((row) => row.id === selectedId) ?? null;
   const selectedAuthority = authorities.find((row) => row.id === selectedId) ?? null;
   const selectedRegime = regimes.find((row) => row.id === selectedId) ?? null;
@@ -642,11 +688,6 @@ export function StudyCatalogosFiscales() {
     setDrawer(null);
     setMasterDrawer(null);
     setActivityDrawer(null);
-  };
-  const showMismatches = () => {
-    setTab("regimes");
-    setSelectedId(null);
-    setAlertsOnly((current) => !current);
   };
 
   const openActivityEdit = (row: CatalogActivityRow) => {
@@ -694,10 +735,11 @@ export function StudyCatalogosFiscales() {
     setDrawer("regime-edit");
   };
   const duplicateJurisdiction = (row: JurisdictionOption) => {
+    const copySuffix = " (copia)";
     setDuplicateOfId(row.id);
     setJurisdictionForm({
       code: suggestedCode(row.code, jurisdictions.map((item) => item.code)),
-      name: row.name,
+      name: `${row.name.slice(0, 160 - copySuffix.length).trimEnd()}${copySuffix}`,
       kind: row.kind,
       parentId: row.parentId ?? "",
     });
@@ -785,7 +827,6 @@ export function StudyCatalogosFiscales() {
   };
   createRef.current = openCreate;
 
-  const count = (value: number, loading: boolean) => (loading ? "—" : value);
   const tabHints: Record<CatalogTab, string> = {
     jurisdictions: "Jerarquía fiscal: Nación → provincia → municipio. El código es editable y los vínculos se conservan por identificador.",
     taxTypes: "Tipos de impuesto disponibles para los regímenes fiscales del estudio.",
@@ -833,11 +874,10 @@ export function StudyCatalogosFiscales() {
       </div>
     ) : null;
 
-  const deleteButton = (path: string, push = false) => (
+  const deleteButton = (path: string) => (
     <Button
       size="sm"
       variant="danger"
-      className={push ? "dense-push" : undefined}
       onClick={() => setDeletingTarget({ path: `/firms/${firmId}${path}` })}
     >
       Eliminar
@@ -856,34 +896,35 @@ export function StudyCatalogosFiscales() {
         subtitle={selectedJurisdiction.name}
         onClose={() => setSelectedId(null)}
         footer={canPropose || (canDelete && ownedUi && usageQuery.data?.used === false) ? (
-          <>
-            {canEditSelected ? (
-              <Button size="sm" variant="secondary" onClick={() => openJurisdictionEdit(selectedJurisdiction)}>Editar</Button>
-            ) : null}
+          <InspectorActions
+            onEdit={canEditSelected ? () => openJurisdictionEdit(selectedJurisdiction) : undefined}
+            menu={canDelete && ownedUi && usageQuery.data?.used === false
+              ? deleteButton(`/tax/jurisdictions/${selectedJurisdiction.id}`)
+              : null}
+          >
             {canPropose ? (
               <Button size="sm" variant="secondary" onClick={() => duplicateJurisdiction(selectedJurisdiction)}>
-                Crear nuevo a partir de este
+                Duplicar
               </Button>
             ) : null}
             {canPropose ? (
               <Button
                 size="sm"
-                variant={selectedJurisdiction.isActive ? "danger" : "secondary"}
+                variant="ghost"
                 onClick={() => toggleJurisdiction.mutate(selectedJurisdiction)}
                 loading={toggleJurisdiction.isPending && toggleJurisdiction.variables?.id === selectedJurisdiction.id}
               >
                 {selectedJurisdiction.isActive ? "Ocultar" : "Mostrar"}
               </Button>
             ) : null}
-            {canDelete && ownedUi && usageQuery.data?.used === false ? deleteButton(`/tax/jurisdictions/${selectedJurisdiction.id}`, true) : null}
-          </>
+          </InspectorActions>
         ) : undefined}
       >
         <InspectorSection title="Ficha">
           <InspectorFacts
             items={[
               ["Nivel", jurisdictionKindLabel[selectedJurisdiction.kind]],
-              ["Padre", parent ? `${jurisdictionKindLabel[parent.kind]} ${parent.name}` : "—"],
+              ["Padre", parent ? parent.name : "—"],
               ["Origen", <OriginBadge key="origin" origin={selectedJurisdiction.origin} />],
               ["Estado", <ActiveBadge key="state" active={selectedJurisdiction.isActive} />],
             ]}
@@ -903,27 +944,23 @@ export function StudyCatalogosFiscales() {
         subtitle={selectedTaxType.name}
         onClose={() => setSelectedId(null)}
         footer={canPropose || (canDelete && ownedUi && usageQuery.data?.used === false) ? (
-          <>
-            {canEditSelected ? (
-              <Button size="sm" variant="secondary" onClick={() => openTaxTypeEdit(selectedTaxType)}>Editar</Button>
-            ) : null}
+          <InspectorActions
+            onEdit={canEditSelected ? () => openTaxTypeEdit(selectedTaxType) : undefined}
+            menu={canDelete && ownedUi && usageQuery.data?.used === false
+              ? deleteButton(`/tax/types/${selectedTaxType.id}`)
+              : null}
+          >
             {canPropose ? (
               <Button size="sm" variant="secondary" onClick={() => duplicateTaxType(selectedTaxType)}>
-                Crear nuevo a partir de este
+                Duplicar
               </Button>
             ) : null}
             {canPropose ? (
-              <Button
-                size="sm"
-                variant={selectedTaxType.isActive ? "danger" : "secondary"}
-                onClick={() => toggleTaxType.mutate(selectedTaxType)}
-                loading={toggleTaxType.isPending && toggleTaxType.variables?.id === selectedTaxType.id}
-              >
+              <Button size="sm" variant="ghost" onClick={() => toggleTaxType.mutate(selectedTaxType)}>
                 {selectedTaxType.isActive ? "Ocultar" : "Mostrar"}
               </Button>
             ) : null}
-            {canDelete && ownedUi && usageQuery.data?.used === false ? deleteButton(`/tax/types/${selectedTaxType.id}`, true) : null}
-          </>
+          </InspectorActions>
         ) : undefined}
       >
         <InspectorSection title="Ficha">
@@ -949,16 +986,23 @@ export function StudyCatalogosFiscales() {
         subtitle={selectedAuthority.name}
         onClose={() => setSelectedId(null)}
         footer={canPropose || (canDelete && ownedUi && usageQuery.data?.used === false) ? (
-          <>
-            {canEditSelected ? <Button size="sm" variant="secondary" onClick={() => openAuthorityEdit(selectedAuthority)}>Editar</Button> : null}
-            {canPropose ? <Button size="sm" variant="secondary" onClick={() => duplicateAuthority(selectedAuthority)}>Crear nuevo a partir de este</Button> : null}
+          <InspectorActions
+            onEdit={canEditSelected ? () => openAuthorityEdit(selectedAuthority) : undefined}
+            menu={canDelete && ownedUi && usageQuery.data?.used === false
+              ? deleteButton(`/tax/authorities/${selectedAuthority.id}`)
+              : null}
+          >
             {canPropose ? (
-              <Button size="sm" variant={selectedAuthority.isActive ? "danger" : "secondary"} onClick={() => toggleAuthority.mutate(selectedAuthority)}>
+              <Button size="sm" variant="secondary" onClick={() => duplicateAuthority(selectedAuthority)}>
+                Duplicar
+              </Button>
+            ) : null}
+            {canPropose ? (
+              <Button size="sm" variant="ghost" onClick={() => toggleAuthority.mutate(selectedAuthority)}>
                 {selectedAuthority.isActive ? "Ocultar" : "Mostrar"}
               </Button>
             ) : null}
-            {canDelete && ownedUi && usageQuery.data?.used === false ? deleteButton(`/tax/authorities/${selectedAuthority.id}`) : null}
-          </>
+          </InspectorActions>
         ) : undefined}
       >
         <InspectorSection title="Ficha">
@@ -1004,16 +1048,23 @@ export function StudyCatalogosFiscales() {
         subtitle={selectedRegime.name}
         onClose={() => setSelectedId(null)}
         footer={canPropose || (canDelete && ownedUi && usageQuery.data?.used === false) ? (
-          <>
-            {canEditSelected ? <Button size="sm" variant="secondary" onClick={() => openRegimeEdit(selectedRegime)}>Editar</Button> : null}
-            {canPropose ? <Button size="sm" variant="secondary" onClick={() => duplicateRegime(selectedRegime)}>Crear nuevo a partir de este</Button> : null}
+          <InspectorActions
+            onEdit={canEditSelected ? () => openRegimeEdit(selectedRegime) : undefined}
+            menu={canDelete && ownedUi && usageQuery.data?.used === false
+              ? deleteButton(`/tax/regimes/${selectedRegime.id}`)
+              : null}
+          >
             {canPropose ? (
-              <Button size="sm" variant={selectedRegime.isActive ? "danger" : "secondary"} onClick={() => toggleRegime.mutate(selectedRegime)}>
+              <Button size="sm" variant="secondary" onClick={() => duplicateRegime(selectedRegime)}>
+                Duplicar
+              </Button>
+            ) : null}
+            {canPropose ? (
+              <Button size="sm" variant="ghost" onClick={() => toggleRegime.mutate(selectedRegime)}>
                 {selectedRegime.isActive ? "Ocultar" : "Mostrar"}
               </Button>
             ) : null}
-            {canDelete && ownedUi && usageQuery.data?.used === false ? deleteButton(`/tax/regimes/${selectedRegime.id}`) : null}
-          </>
+          </InspectorActions>
         ) : undefined}
       >
         <InspectorSection title="Cadena de vinculación">
@@ -1076,38 +1127,43 @@ export function StudyCatalogosFiscales() {
         onClose={() => setSelectedId(null)}
         footer={
           canPropose || (canDelete && ownedUi && usageQuery.data?.used === false) ? (
-            <>
+            <InspectorActions
+              onEdit={canEditSelected ? () => openActivityEdit(selectedActivity) : undefined}
+              menu={canDelete && ownedUi && usageQuery.data?.used === false
+                ? deleteButton(`/tax/activities/${selectedActivity.id}`)
+                : null}
+            >
               {canPropose ? (
-                <>
-                  {canEditSelected ? <Button size="sm" variant="secondary" onClick={() => openActivityEdit(selectedActivity)}>Editar</Button> : null}
-                  <Button size="sm" variant="secondary" onClick={() => duplicateActivity(selectedActivity)}>Crear nuevo a partir de este</Button>
-                  {selectedActivity.isActive ? (
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => {
-                        setEditingActivity(selectedActivity);
-                        setActivityDrawer("deactivate");
-                      }}
-                    >
-                      Ocultar
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => toggleActivity.mutate(selectedActivity)}
-                      loading={
-                        toggleActivity.isPending && toggleActivity.variables?.id === selectedActivity.id
-                      }
-                    >
-                      Mostrar
-                    </Button>
-                  )}
-                </>
+                <Button size="sm" variant="secondary" onClick={() => duplicateActivity(selectedActivity)}>
+                  Duplicar
+                </Button>
               ) : null}
-              {canDelete && ownedUi && usageQuery.data?.used === false ? deleteButton(`/tax/activities/${selectedActivity.id}`, true) : null}
-            </>
+              {canPropose ? (
+                selectedActivity.isActive ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditingActivity(selectedActivity);
+                      setActivityDrawer("deactivate");
+                    }}
+                  >
+                    Ocultar
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => toggleActivity.mutate(selectedActivity)}
+                    loading={
+                      toggleActivity.isPending && toggleActivity.variables?.id === selectedActivity.id
+                    }
+                  >
+                    Mostrar
+                  </Button>
+                )
+              ) : null}
+            </InspectorActions>
           ) : undefined
         }
       >
@@ -1118,7 +1174,7 @@ export function StudyCatalogosFiscales() {
               ["Fuente", selectedActivity.source ?? "—"],
               [
                 "Vigencia",
-                `${shortDate(selectedActivity.validFrom)} → ${shortDate(selectedActivity.validTo)}`,
+                validityLabel(selectedActivity.validFrom, selectedActivity.validTo),
               ],
               ["Origen", selectedActivity.origin ? <OriginBadge key="origin" origin={selectedActivity.origin} /> : null],
               ["Estado", <ActivityStateBadge key="state" isActive={selectedActivity.isActive} />],
@@ -1280,9 +1336,20 @@ export function StudyCatalogosFiscales() {
       key: "jurisdiction",
       header: "Jurisdicción",
       sortValue: (row) => jurisdictionName(row.jurisdictionId),
-      render: (row) => (
-        <span title={jurisdictionName(row.jurisdictionId)}>{jurisdictionName(row.jurisdictionId)}</span>
-      ),
+      render: (row) => {
+        const jurisdiction = jurisdictions.find((item) => item.id === row.jurisdictionId);
+        return (
+          <span className="dense-activity-jurisdiction" title={jurisdictionName(row.jurisdictionId)}>
+            <span>{jurisdiction?.name ?? "—"}</span>
+            {jurisdiction ? (
+              <small>
+                {jurisdictionKindLabel[jurisdiction.kind]} · {jurisdiction.code}
+                {!jurisdiction.isActive ? " (oculta)" : ""}
+              </small>
+            ) : null}
+          </span>
+        );
+      },
     },
     {
       key: "source",
@@ -1294,7 +1361,7 @@ export function StudyCatalogosFiscales() {
       key: "validity",
       header: "Vigencia",
       sortValue: (row) => row.validFrom,
-      render: (row) => `${shortDate(row.validFrom)} — ${shortDate(row.validTo)}`,
+      render: (row) => validityLabel(row.validFrom, row.validTo),
     },
     {
       key: "origin",
@@ -1315,7 +1382,7 @@ export function StudyCatalogosFiscales() {
   const jurisdictionParentLabel = (jurisdiction: JurisdictionOption) => {
     const parent = jurisdictions.find((row) => row.id === jurisdiction.parentId) ?? jurisdiction.parent;
     const hidden = parent && "isActive" in parent && !parent.isActive;
-    return parent ? `${jurisdictionKindLabel[parent.kind]} ${parent.name}${hidden ? " (oculto)" : ""}` : "—";
+    return parent ? `${parent.name}${hidden ? " (oculto)" : ""}` : "—";
   };
   const jurisdictionColumns: DenseColumn<JurisdictionOption>[] = [
     {
@@ -1531,7 +1598,7 @@ export function StudyCatalogosFiscales() {
   }
 
   return (
-    <DensePage density={density}>
+    <DensePage density={density} flow className="fiscal-catalog-page">
       <DenseHeader
         eyebrow="Administración fiscal"
         title="Catálogos fiscales"
@@ -1545,64 +1612,18 @@ export function StudyCatalogosFiscales() {
         }
       />
 
-      <StatStrip
-        label="Resumen de catálogos"
-        items={[
-          {
-            key: "jurisdictions",
-            label: "Jurisdicciones",
-            value: count(jurisdictions.length, jurisdictionsQuery.isLoading),
-            active: tab === "jurisdictions",
-            onSelect: () => switchTab("jurisdictions"),
-          },
-          {
-            key: "taxTypes",
-            label: "Tipos de impuesto",
-            value: count(taxTypes.length, taxTypesQuery.isLoading),
-            active: tab === "taxTypes",
-            onSelect: () => switchTab("taxTypes"),
-          },
-          {
-            key: "authorities",
-            label: "Organismos",
-            value: count(authorities.length, authoritiesQuery.isLoading),
-            active: tab === "authorities",
-            onSelect: () => switchTab("authorities"),
-          },
-          {
-            key: "regimes",
-            label: "Regímenes",
-            value: count(regimes.length, regimesQuery.isLoading),
-            active: tab === "regimes",
-            onSelect: () => switchTab("regimes"),
-          },
-          {
-            key: "activities",
-            label: "Actividades",
-            value: count(activities.length, activitiesQuery.isLoading),
-            active: tab === "activities",
-            onSelect: () => switchTab("activities"),
-          },
-          ...(originKnown
-            ? [
-                {
-                  key: "studio",
-                  label: "Creados por el estudio",
-                  value: studioRecords,
-                  detail: `de ${totalRecords}`,
-                },
-              ]
-            : []),
-          {
-            key: "mismatch",
-            label: "Alertas de coherencia",
-            value: mismatchedRegimes.length,
-            detail: mismatchedRegimes.length > 0 ? "ver regímenes" : "sin alertas",
-            tone: mismatchedRegimes.length > 0 ? "warn" : undefined,
-            onSelect: mismatchedRegimes.length > 0 ? showMismatches : undefined,
-          },
-        ]}
-      />
+      <p className="dense-catalog-summary" role="status">
+        <span>
+          {originKnown
+            ? `${studioRecords} propios, ${referenceRecords} de referencia`
+            : "— propios, — de referencia"}
+        </span>
+        <span>
+          {regimesQuery.isLoading
+            ? "— alertas"
+            : `${mismatchedRegimes.length} ${mismatchedRegimes.length === 1 ? "alerta" : "alertas"}`}
+        </span>
+      </p>
 
       {tab === "regimes" && canPropose && regimePrerequisitesLoaded && !canCreateRegime ? (
         <DenseAlert>
@@ -1701,7 +1722,7 @@ export function StudyCatalogosFiscales() {
         >
           <option value="">Estado: todos</option>
           <option value="active">Activos</option>
-          <option value="inactive">Inactivos</option>
+          <option value="inactive">Ocultos</option>
         </select>
         {tab === "regimes" ? (
           <button
@@ -2210,111 +2231,46 @@ export function StudyCatalogosFiscales() {
         isOpen={masterDrawer === "jurisdiction-create"}
         onClose={() => setMasterDrawer(null)}
         eyebrow="Catálogo fiscal del estudio"
-        title="Nueva jurisdicción"
-        description="Registrá una jurisdicción dentro del árbol fiscal: Nación, provincia o municipio con su padre correspondiente."
+        title={duplicateJurisdictionSource
+          ? `Nueva jurisdicción a partir de ${duplicateJurisdictionSource.code}`
+          : "Nueva jurisdicción"}
+        description={duplicateJurisdictionSource
+          ? `Copia de ${duplicateJurisdictionSource.code} · ${duplicateJurisdictionSource.name}. Ajustá los datos del nuevo registro.`
+          : "Registrá una jurisdicción de nivel Nación, provincia o municipio."}
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+            <Button
+              type="submit"
+              form="jurisdiction-create-form"
+              loading={createJurisdiction.isPending}
+              disabled={!jurisdictionForm.code.trim() || !jurisdictionForm.name.trim() || (jurisdictionForm.kind !== "NATIONAL" && !jurisdictionForm.parentId)}
+            >
+              Crear jurisdicción
+            </Button>
+          </>
+        }
       >
         <form
+          id="jurisdiction-create-form"
           className="study-form study-form--compact dense-form"
           onSubmit={(event) => {
             event.preventDefault();
             createJurisdiction.mutate();
           }}
         >
-          <Field
-            id="jurisdiction-code"
-            label="Código"
-            value={jurisdictionForm.code}
-            onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, code: event.target.value.toUpperCase() })}
-            error={codeConflict(createJurisdiction.error)}
-            maxLength={40}
-            required
-          />
-          <Field
-            id="jurisdiction-name"
-            label="Nombre"
-            value={jurisdictionForm.name}
-            onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, name: event.target.value })}
-            maxLength={160}
-            required
-          />
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="jurisdiction-kind">Nivel</label>
-            <select
-              id="jurisdiction-kind"
-              className="ds-field__input"
-              value={jurisdictionForm.kind}
-              onChange={(event) => setJurisdictionForm({
-                ...jurisdictionForm,
-                kind: event.target.value as JurisdictionOption["kind"],
-                parentId: "",
-              })}
-            >
-              <option value="NATIONAL">Nación</option>
-              <option value="PROVINCIAL">Provincia</option>
-              <option value="MUNICIPAL">Municipio</option>
-            </select>
-          </div>
-          {jurisdictionForm.kind !== "NATIONAL" ? (
-            <div className="ds-field dense-form__full">
-              <label className="ds-field__label" htmlFor="jurisdiction-parent">Jurisdicción padre</label>
-              <select
-                id="jurisdiction-parent"
-                className="ds-field__input"
-                value={jurisdictionForm.parentId}
-                onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, parentId: event.target.value })}
-                required
-              >
-                <option value="">Seleccioná una jurisdicción padre…</option>
-                {selectionOptions<JurisdictionOption>(
-                  jurisdictions.filter((row) => row.kind === (jurisdictionForm.kind === "PROVINCIAL" ? "NATIONAL" : "PROVINCIAL")),
-                  jurisdictionForm.parentId,
-                ).map((row) => <option key={row.id} value={row.id} disabled={!row.isActive}>{jurisdictionLabel(row)}{!row.isActive ? " (oculto)" : ""}</option>)}
-              </select>
-              <p className="ds-field__hint">
-                {jurisdictionForm.kind === "PROVINCIAL" ? "Una provincia requiere una jurisdicción de nivel Nación." : "Un municipio requiere una jurisdicción de nivel Provincia."}
-              </p>
-            </div>
-          ) : null}
-          <MutationError error={createJurisdiction.error} />
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={createJurisdiction.isPending}
-              disabled={!jurisdictionForm.code.trim() || !jurisdictionForm.name.trim() || (jurisdictionForm.kind !== "NATIONAL" && !jurisdictionForm.parentId)}
-            >
-              Crear jurisdicción
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
-          </div>
-        </form>
-      </ActionDrawer>
-
-      <ActionDrawer
-        isOpen={masterDrawer === "jurisdiction-edit" && Boolean(editingJurisdiction)}
-        onClose={() => setMasterDrawer(null)}
-        eyebrow="Catálogo fiscal del estudio"
-        title="Editar jurisdicción"
-        description="Actualizá el código, el nivel, el nombre o la jurisdicción padre."
-      >
-        {editingJurisdiction ? (
-          <form
-            className="study-form study-form--compact dense-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              updateJurisdiction.mutate();
-            }}
-          >
+          <div className="dense-form__fields">
             <Field
-              id="jurisdiction-edit-code"
+              id="jurisdiction-code"
               label="Código"
               value={jurisdictionForm.code}
               onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, code: event.target.value.toUpperCase() })}
-              error={codeConflict(updateJurisdiction.error)}
+              error={codeConflict(createJurisdiction.error)}
               maxLength={40}
               required
             />
             <Field
-              id="jurisdiction-edit-name"
+              id="jurisdiction-name"
               label="Nombre"
               value={jurisdictionForm.name}
               onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, name: event.target.value })}
@@ -2322,9 +2278,9 @@ export function StudyCatalogosFiscales() {
               required
             />
             <div className="ds-field">
-              <label className="ds-field__label" htmlFor="jurisdiction-edit-kind">Nivel</label>
+              <label className="ds-field__label" htmlFor="jurisdiction-kind">Nivel</label>
               <select
-                id="jurisdiction-edit-kind"
+                id="jurisdiction-kind"
                 className="ds-field__input"
                 value={jurisdictionForm.kind}
                 onChange={(event) => setJurisdictionForm({
@@ -2340,9 +2296,9 @@ export function StudyCatalogosFiscales() {
             </div>
             {jurisdictionForm.kind !== "NATIONAL" ? (
               <div className="ds-field dense-form__full">
-                <label className="ds-field__label" htmlFor="jurisdiction-edit-parent">Jurisdicción padre</label>
+                <label className="ds-field__label" htmlFor="jurisdiction-parent">Jurisdicción padre</label>
                 <select
-                  id="jurisdiction-edit-parent"
+                  id="jurisdiction-parent"
                   className="ds-field__input"
                   value={jurisdictionForm.parentId}
                   onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, parentId: event.target.value })}
@@ -2354,16 +2310,99 @@ export function StudyCatalogosFiscales() {
                     jurisdictionForm.parentId,
                   ).map((row) => <option key={row.id} value={row.id} disabled={!row.isActive}>{jurisdictionLabel(row)}{!row.isActive ? " (oculto)" : ""}</option>)}
                 </select>
+                <p className="ds-field__hint">
+                  {jurisdictionForm.kind === "PROVINCIAL" ? "Una provincia requiere una jurisdicción de nivel Nación." : "Un municipio requiere una jurisdicción de nivel Provincia."}
+                </p>
               </div>
             ) : null}
-            <MutationError error={updateJurisdiction.error} />
-            <div className="study-form__actions">
-              <Button
-                type="submit"
-                loading={updateJurisdiction.isPending}
-                disabled={!jurisdictionForm.code.trim() || !jurisdictionForm.name.trim() || (jurisdictionForm.kind !== "NATIONAL" && !jurisdictionForm.parentId)}
-              >Guardar cambios</Button>
-              <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+            <MutationError error={createJurisdiction.error} />
+          </div>
+        </form>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={masterDrawer === "jurisdiction-edit" && Boolean(editingJurisdiction)}
+        onClose={() => setMasterDrawer(null)}
+        eyebrow="Catálogo fiscal del estudio"
+        title="Editar jurisdicción"
+        description="Actualizá el código, el nivel o el nombre."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+            <Button
+              type="submit"
+              form="jurisdiction-edit-form"
+              loading={updateJurisdiction.isPending}
+              disabled={!jurisdictionForm.code.trim() || !jurisdictionForm.name.trim() || (jurisdictionForm.kind !== "NATIONAL" && !jurisdictionForm.parentId)}
+            >
+              Guardar cambios
+            </Button>
+          </>
+        }
+      >
+        {editingJurisdiction ? (
+          <form
+            id="jurisdiction-edit-form"
+            className="study-form study-form--compact dense-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateJurisdiction.mutate();
+            }}
+          >
+            <div className="dense-form__fields">
+              <Field
+                id="jurisdiction-edit-code"
+                label="Código"
+                value={jurisdictionForm.code}
+                onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, code: event.target.value.toUpperCase() })}
+                error={codeConflict(updateJurisdiction.error)}
+                maxLength={40}
+                required
+              />
+              <Field
+                id="jurisdiction-edit-name"
+                label="Nombre"
+                value={jurisdictionForm.name}
+                onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, name: event.target.value })}
+                maxLength={160}
+                required
+              />
+              <div className="ds-field">
+                <label className="ds-field__label" htmlFor="jurisdiction-edit-kind">Nivel</label>
+                <select
+                  id="jurisdiction-edit-kind"
+                  className="ds-field__input"
+                  value={jurisdictionForm.kind}
+                  onChange={(event) => setJurisdictionForm({
+                    ...jurisdictionForm,
+                    kind: event.target.value as JurisdictionOption["kind"],
+                    parentId: "",
+                  })}
+                >
+                  <option value="NATIONAL">Nación</option>
+                  <option value="PROVINCIAL">Provincia</option>
+                  <option value="MUNICIPAL">Municipio</option>
+                </select>
+              </div>
+              {jurisdictionForm.kind !== "NATIONAL" ? (
+                <div className="ds-field dense-form__full">
+                  <label className="ds-field__label" htmlFor="jurisdiction-edit-parent">Jurisdicción padre</label>
+                  <select
+                    id="jurisdiction-edit-parent"
+                    className="ds-field__input"
+                    value={jurisdictionForm.parentId}
+                    onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, parentId: event.target.value })}
+                    required
+                  >
+                    <option value="">Seleccioná una jurisdicción padre…</option>
+                    {selectionOptions<JurisdictionOption>(
+                      jurisdictions.filter((row) => row.kind === (jurisdictionForm.kind === "PROVINCIAL" ? "NATIONAL" : "PROVINCIAL")),
+                      jurisdictionForm.parentId,
+                    ).map((row) => <option key={row.id} value={row.id} disabled={!row.isActive}>{jurisdictionLabel(row)}{!row.isActive ? " (oculto)" : ""}</option>)}
+                  </select>
+                </div>
+              ) : null}
+              <MutationError error={updateJurisdiction.error} />
             </div>
           </form>
         ) : null}

@@ -495,6 +495,8 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
 
     await waitFor(() => expect(vi.mocked(api.post)).toHaveBeenCalled());
+    expect(vi.mocked(api.post)).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(vi.mocked(api.post)).toHaveBeenCalledWith(
       "/firms/firm-a/clients",
       expect.objectContaining({
@@ -506,6 +508,74 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
         legalForm: "Sociedad anónima (SA)",
       }),
     );
+  });
+
+  it("registra el correo opcional como contacto principal después de crear el cliente", async () => {
+    mockApi({});
+    vi.mocked(api.post).mockImplementation(((path: string) =>
+      Promise.resolve(path.endsWith("/contacts") ? { id: "contact-new" } : { id: "client-new" })) as never);
+    renderClientes();
+    fireEvent.click(screen.getByRole("button", { name: "Nuevo cliente" }));
+
+    fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Alta libre S.A." } });
+    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20111111112" } });
+    const emailInput = screen.getByLabelText("Correo de contacto") as HTMLInputElement;
+    expect(emailInput.type).toBe("email");
+    fireEvent.change(emailInput, { target: { value: "correo-inválido" } });
+    expect(emailInput.validity.typeMismatch).toBe(true);
+    fireEvent.change(emailInput, { target: { value: "contacto@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+    expect(api.post).toHaveBeenNthCalledWith(1, "/firms/firm-a/clients", expect.objectContaining({
+      legalName: "Alta libre S.A.",
+      cuit: "20111111112",
+    }));
+    expect(api.post).toHaveBeenNthCalledWith(2, "/firms/firm-a/clients/client-new/contacts", {
+      name: "Alta libre S.A.",
+      email: "contacto@example.com",
+      isPrimary: true,
+    });
+    await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/configuracion-fiscal"));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("mantiene el cliente si falla el POST de contacto y reintenta sin duplicarlo", async () => {
+    mockApi({});
+    const savedContact: ClientContact = {
+      id: "contact-created-before-timeout",
+      name: "Alta libre S.A.",
+      function: null,
+      email: "contacto@example.com",
+      phone: null,
+      isPrimary: true,
+      isActive: true,
+    };
+    const fallbackGet = vi.mocked(api.get).getMockImplementation();
+    vi.mocked(api.get).mockImplementation(((path: string) => {
+      if (path.endsWith("/contacts")) return Promise.resolve([savedContact]);
+      return fallbackGet ? fallbackGet(path) : Promise.resolve([]);
+    }) as never);
+    vi.mocked(api.post).mockImplementation(((path: string) => {
+      if (path.endsWith("/contacts")) return Promise.reject(new Error("La respuesta se perdió"));
+      return Promise.resolve({ id: "client-new" });
+    }) as never);
+    renderClientes();
+    fireEvent.click(screen.getByRole("button", { name: "Nuevo cliente" }));
+    fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Alta libre S.A." } });
+    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20111111112" } });
+    fireEvent.change(screen.getByLabelText("Correo de contacto"), { target: { value: "contacto@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText("Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.")).toBeTruthy();
+    expect(screen.getByTestId("current-path").textContent).toBe("/");
+    expect(api.post).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(within(alert).getByRole("button", { name: "Reintentar" }));
+    await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/configuracion-fiscal"));
+    expect(api.get).toHaveBeenCalledWith("/firms/firm-a/clients/client-new/contacts");
+    expect(vi.mocked(api.post).mock.calls.filter(([path]) => path.endsWith("/contacts"))).toHaveLength(1);
   });
 });
 
@@ -823,5 +893,22 @@ describe("StudyClientes — cartera densa", () => {
     expect(setClientId).toHaveBeenCalledWith("c2");
     await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/trabajo"));
     expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("alinea el alta en dos columnas y explica los campos que faltan junto al CTA", async () => {
+    renderClientes();
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
+
+    const drawer = await screen.findByRole("dialog", { name: "Alta de cliente" });
+    const form = drawer.querySelector("#client-create-form") as HTMLFormElement;
+    expect(form.classList.contains("study-inline-form--client")).toBe(true);
+    expect(form.classList.contains("client-create-form")).toBe(true);
+    expect(form.querySelectorAll(".ds-field")).toHaveLength(8);
+
+    const createButton = within(drawer).getByRole("button", { name: "Crear cliente" }) as HTMLButtonElement;
+    expect(createButton.disabled).toBe(true);
+    expect(createButton.getAttribute("aria-describedby")).toBe("client-create-hint");
+    expect(within(drawer).getByText("Falta completar 2 campos: razón social y CUIT.")).toBeTruthy();
+    expect(drawer.querySelector(".action-drawer__footer")?.querySelectorAll("button.ds-button--primary")).toHaveLength(1);
   });
 });

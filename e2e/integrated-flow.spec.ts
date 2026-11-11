@@ -12,6 +12,15 @@ async function navigateStudy(page: Page, label: string) {
   const menu = page.getByRole("button", { name: "Abrir navegación" });
   if (await menu.isVisible()) await menu.click();
   await dismissGuidedTour(page);
+  if (["Usuarios y accesos", "Módulos de estudios", "Reglas fiscales", "Catálogos fiscales"].includes(label)) {
+    const settingsToggle = page.getByRole("button", { name: "Ajustes del estudio", exact: true });
+    if (
+      (await settingsToggle.isVisible()) &&
+      (await settingsToggle.getAttribute("aria-expanded")) === "false"
+    ) {
+      await settingsToggle.click();
+    }
+  }
   await page.getByRole("link", { name: label, exact: true }).click();
 }
 
@@ -72,7 +81,7 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   await expect(page.getByRole("heading", { name: "Trabajo", exact: true })).toBeVisible();
 
   await navigateStudy(page, "Configuración fiscal");
-  await expect(page.getByRole("heading", { name: "Onboarding fiscal del cliente", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Configuración fiscal", exact: true })).toBeVisible();
 
   await navigateStudy(page, "Catálogos fiscales");
   await expect(page.getByRole("heading", { name: "Catálogos fiscales", exact: true })).toBeVisible();

@@ -488,6 +488,42 @@ describe("G3-1 cobertura y cálculo determinista", () => {
     expect(cov.missing).toHaveLength(0);
   });
 
+  it("lista liquidaciones por el período fiscal seleccionado", async () => {
+    const january = await settlements.calculate(ctxOwner, calculateParams());
+    const februaryPeriod = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.taxPeriod.upsert({
+        where: {
+          clientId_taxTypeId_startDate_endDate: {
+            clientId: CLIENT_SET,
+            taxTypeId,
+            startDate: new Date("2026-02-01T00:00:00.000Z"),
+            endDate: new Date("2026-02-28T00:00:00.000Z"),
+          },
+        },
+        update: { label: "Febrero 2026" },
+        create: {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_SET,
+          taxTypeId,
+          startDate: new Date("2026-02-01T00:00:00.000Z"),
+          endDate: new Date("2026-02-28T00:00:00.000Z"),
+          label: "Febrero 2026",
+        },
+      }),
+    );
+    const february = await settlements.calculate(ctxOwner, {
+      ...calculateParams(),
+      periodId: februaryPeriod.id,
+      cutoff: "2026-02-28",
+    });
+
+    const result = await settlements.list(ctxOwner, CLIENT_SET, { periodId });
+
+    expect(result.meta.total).toBe(1);
+    expect(result.data.map((settlement) => settlement.id)).toEqual([january.settlement.id]);
+    expect(result.data.map((settlement) => settlement.id)).not.toContain(february.settlement.id);
+  });
+
   it("calcula IVA: 2 ventas 100k y 1 compra 40k → débito 42.000, crédito 8.400, total 33.600", async () => {
     await createApprovedVouchers();
     const result = await settlements.calculate(ctxOwner, calculateParams());

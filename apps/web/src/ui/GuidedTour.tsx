@@ -33,51 +33,51 @@ const TOUR_STEPS: readonly TourStep[] = [
   {
     selector: "#context-bar",
     eyebrow: "Paso 1 · Contexto",
-    title: "Empezá por el alcance de trabajo",
+    title: "Definí el estudio, el cliente y el período",
     description:
-      "Estudio, cliente y período definen qué información vas a consultar y sobre qué vas a operar. Si cambiás el contexto, la aplicación conserva esa referencia en toda la navegación.",
+      "El contexto activo reúne el estudio, el cliente y el período de trabajo. Cada consulta y cada tarea queda vinculada a esa referencia para mantener el foco en la gestión que estás realizando.",
   },
   {
     selector: '[data-tour="nav-general"]',
-    eyebrow: "Paso 2 · General",
-    title: "Tu punto de entrada y tu cartera",
+    eyebrow: "Paso 2 · Estudio",
+    title: "Todo el trabajo del estudio, en una sola navegación",
     description:
-      "Inicio muestra el estado general del estudio. Clientes y Resumen del cliente te llevan a la cartera y al expediente de cada empresa.",
+      "El bloque Estudio reúne Inicio, Clientes, Bandeja documental, Trabajo, Liquidaciones, Expediente mensual y Rentabilidad. El bloque Del cliente incluye Configuración fiscal. Desde Clientes, el botón «Abrir» lleva al Resumen del cliente.",
   },
   {
     selector: '[data-tour="nav-preparacion"]',
-    eyebrow: "Paso 3 · Preparación",
-    title: "Reuní la evidencia antes de decidir",
+    eyebrow: "Paso 3 · Bandeja documental",
+    title: "Tené la documentación a mano",
     description:
-      "En Preparación encontrás la bandeja documental y la configuración fiscal. Es el lugar para dejar listos los datos que respaldan el trabajo.",
+      "La Bandeja documental reúne los archivos recibidos para consultar su estado y contar con evidencia organizada al avanzar con el trabajo.",
   },
   {
     selector: '[data-tour="nav-ejecucion"]',
-    eyebrow: "Paso 4 · Ejecución",
-    title: "Convertí pendientes en trabajo trazable",
+    eyebrow: "Paso 4 · Trabajo y cierres",
+    title: "Organizá las tareas del período",
     description:
-      "Trabajo, Liquidaciones y Expediente mensual ordenan pedidos, tareas y cierres. Avanzá por el flujo sin perder el vínculo con la evidencia.",
+      "Trabajo, Liquidaciones y Expediente mensual concentran los pedidos, las obligaciones y el seguimiento mensual dentro del bloque Estudio.",
   },
   {
     selector: '[data-tour="nav-analisis"]',
-    eyebrow: "Paso 5 · Análisis",
-    title: "Revisá resultados y excepciones",
+    eyebrow: "Paso 5 · Rentabilidad",
+    title: "Analizá la rentabilidad de tu cartera",
     description:
-      "Análisis reúne rentabilidad y las herramientas de revisión disponibles para tu rol. Usalo para detectar desvíos y respaldar la próxima decisión.",
+      "Rentabilidad reúne indicadores para evaluar resultados y orientar las prioridades del estudio.",
   },
   {
     selector: '[data-tour="nav-configuracion"]',
-    eyebrow: "Paso 6 · Configuración",
-    title: "Ajustá el estudio con control",
+    eyebrow: "Paso 6 · Ajustes del estudio",
+    title: "Configurá los recursos del estudio",
     description:
-      "Desde Configuración administrás accesos, módulos y reglas fiscales. Cada opción aparece según las capacidades de tu rol.",
+      "El bloque colapsable agrupa Usuarios y accesos, Módulos de estudios, Reglas fiscales y Catálogos fiscales. Abrilo para gestionar cada opción según las capacidades de tu rol.",
   },
   {
     selector: '[data-tour="portal-link"]',
-    eyebrow: "Paso 7 · Portal",
-    title: "Cuando quieras, cambiá de espacio",
+    eyebrow: "Paso 7 · Portal del cliente",
+    title: "Conectá el estudio con el portal del cliente",
     description:
-      "El Portal del cliente es la vista simple para que las empresas consulten información, respondan pedidos y carguen documentación.",
+      "El Portal del cliente permite que las empresas consulten información, respondan pedidos y carguen documentación en su espacio.",
   },
 ];
 
