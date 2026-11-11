@@ -163,6 +163,10 @@ export function StudyReglasFiscales() {
   const [draftRows, setDraftRows] = useState<RuleRow[]>([]);
   const [draftRowsVersionId, setDraftRowsVersionId] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
+  const [activationReceipt, setActivationReceipt] = useState<{ versionId: string; message: string } | null>(null);
+  const [activationError, setActivationError] = useState<Error | null>(null);
+  const activationFeedbackRef = useRef<HTMLDivElement | null>(null);
+  const [activationTarget, setActivationTarget] = useState<RuleVersion | null>(null);
   const [showPackForm, setShowPackForm] = useState(false);
   const [showSourceForm, setShowSourceForm] = useState(false);
   const [showDueDateForm, setShowDueDateForm] = useState(false);
@@ -185,6 +189,12 @@ export function StudyReglasFiscales() {
     cuitEnding: "",
     validFrom: today,
   });
+
+  useEffect(() => {
+    if (!activationError || !activationFeedbackRef.current) return;
+    activationFeedbackRef.current.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    activationFeedbackRef.current.focus();
+  }, [activationError]);
 
   const packsQuery = useQuery({
     queryKey: ["tax-rule-packs", firmId],
@@ -381,9 +391,12 @@ export function StudyReglasFiscales() {
     onSuccess: (_result, ruleVersionId) => {
       invalidate();
       const activatedVersion = detailQuery.data?.versions.find((version) => version.id === ruleVersionId);
-      setReceipt(
-        `La versión v${activatedVersion?.version ?? ""} quedó activa y disponible para próximos cálculos.`,
-      );
+      const message = `La versión v${activatedVersion?.version ?? ""} quedó activa y disponible para próximos cálculos.`;
+      setReceipt(message);
+      setActivationReceipt({ versionId: ruleVersionId, message });
+    },
+    onError: (error) => {
+      setActivationError(error instanceof Error ? error : new Error(String(error)));
     },
   });
   const addSourceMutation = useMutation({
@@ -449,12 +462,36 @@ export function StudyReglasFiscales() {
     selectedVersion?.status === "DRAFT" &&
     (draftRowsVersionId !== selectedVersion.id || !sameRuleRows(draftRows, selectedVersion.rateRules)),
   );
+  const resetOtherMutationErrors = () => {
+    cloneMutation.reset();
+    createPackMutation.reset();
+    createVersionMutation.reset();
+    saveMutation.reset();
+    submitMutation.reset();
+    approveMutation.reset();
+    addSourceMutation.reset();
+    addDueDateMutation.reset();
+  };
+  const confirmActivation = () => {
+    if (!activationTarget) return;
+    const versionId = activationTarget.id;
+    setActivationTarget(null);
+    setActivationError(null);
+    setActivationReceipt(null);
+    setReceipt(null);
+    resetOtherMutationErrors();
+    activateMutation.reset();
+    activateMutation.mutate(versionId);
+  };
   const requestActivation = (version: RuleVersion) => {
-    const validity = `${shortDate(version.validFrom)} — ${shortDate(version.validTo)}`;
-    const versionName = `${detailQuery.data?.name ?? "Paquete fiscal"} · versión v${version.version}`;
-    if (window.confirm(`¿Activar ${versionName}?\nVigencia: ${validity}`)) {
-      activateMutation.mutate(version.id);
+    setActivationReceipt(null);
+    if (activationBlockedByUnsavedChanges) {
+      setActivationError(new Error("Guardá los cambios del borrador antes de activarlo."));
+      return;
     }
+    activateMutation.reset();
+    setActivationError(null);
+    setActivationTarget(version);
   };
   const rulesNextAction = (() => {
     if (!selectedPackId) {
@@ -1075,7 +1112,6 @@ export function StudyReglasFiscales() {
                       <Button
                         size="sm"
                         loading={activateMutation.isPending}
-                        disabled={activationBlockedByUnsavedChanges}
                         onClick={() => requestActivation(selectedVersion)}
                       >
                         Activar
@@ -1139,10 +1175,25 @@ export function StudyReglasFiscales() {
                     Motor <strong>{selectedVersion.engineVersion}</strong>
                   </span>
                 </div>
-                {activationBlockedByUnsavedChanges ? (
-                  <p className="form-submit-hint" role="note">
-                    Guardá los cambios del borrador antes de activarlo para incluir las reglas editadas.
-                  </p>
+                {activationError ? (
+                  <div ref={activationFeedbackRef} className="activation-feedback" tabIndex={-1}>
+                    {activationError instanceof ApiError ? (
+                      <FieldErrorsFromDetails error={activationError} />
+                    ) : (
+                      <p className="form-error" role="alert">
+                        {activationError.message}
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+                {activationReceipt?.versionId === selectedVersion.id ? (
+                  <div className="action-receipt" role="status">
+                    <Icon name="check" size={19} />
+                    <span>
+                      <strong>Activación registrada</strong>
+                      <small>{activationReceipt.message}</small>
+                    </span>
+                  </div>
                 ) : null}
               </section>
 
@@ -1546,6 +1597,36 @@ export function StudyReglasFiscales() {
           </p>
         )
       ) : null}
+      <ActionDrawer
+        isOpen={Boolean(activationTarget)}
+        onClose={() => setActivationTarget(null)}
+        eyebrow="Confirmar activación"
+        title={
+          activationTarget
+            ? `${detailQuery.data?.name ?? "Paquete fiscal"} · versión v${activationTarget.version}`
+            : "Confirmar activación"
+        }
+        description="Revisá el paquete y la vigencia antes de activar esta versión."
+        footer={
+          <div className="study-form__actions">
+            <Button type="button" loading={activateMutation.isPending} onClick={confirmActivation}>
+              Activar versión
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setActivationTarget(null)}>
+              Cancelar
+            </Button>
+          </div>
+        }
+      >
+        {activationTarget ? (
+          <div>
+            <p>Vigencia: {shortDate(activationTarget.validFrom)} — {shortDate(activationTarget.validTo)}</p>
+            {activeVersion ? (
+              <p role="note">Al activar esta versión, la versión vigente quedará retirada</p>
+            ) : null}
+          </div>
+        ) : null}
+      </ActionDrawer>
       {deletingTarget ? (
         <DeletionDrawer
           isOpen
