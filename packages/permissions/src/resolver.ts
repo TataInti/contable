@@ -4,6 +4,7 @@ import type { Capability, FirmRole } from "./capabilities.js";
 const ROLE_CAPABILITIES: Record<FirmRole, ReadonlySet<Capability>> = {
   OWNER: new Set([
     "firm.manage",
+    "firm.self_review.manage",
     "firm.users.manage",
     "firm.audit.read",
     "client.read",

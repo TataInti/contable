@@ -84,6 +84,10 @@ interface RoutePolicy {
 }
 
 const ROUTE_POLICY: readonly RoutePolicy[] = [
+  {
+    match: /\/firms\/[^/]+\/settings\/self-review$/,
+    resolve: (m) => (m === "GET" ? "firm.manage" : m === "PATCH" ? "firm.self_review.manage" : null),
+  },
   { match: /\/feature-flags/, resolve: () => "firm.manage" },
   { match: /\/client-profile-catalogs\/activities$/, resolve: (m) => (m === "GET" ? "client.read" : null) },
   // Catálogo de normas contables del estudio: lectura con la ficha de cliente

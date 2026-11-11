@@ -3441,6 +3441,40 @@
   gap: var(--ds-space-2);
 }
 
+.workpaper-source-review {
+  display: grid;
+  justify-items: start;
+  gap: var(--ds-space-1);
+  min-width: 12rem;
+}
+
+.workpaper-source-review small {
+  max-width: 26rem;
+}
+
+.self-review-setting {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.self-review-setting .study-panel__heading {
+  margin-bottom: 0;
+}
+
+.self-review-setting__toggle {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: var(--ds-space-2);
+  font-weight: 650;
+}
+
+.self-review-setting__toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--ds-color-primary);
+}
+
 .sifere-upload {
   display: grid;
   grid-template-columns: 1fr 1fr;

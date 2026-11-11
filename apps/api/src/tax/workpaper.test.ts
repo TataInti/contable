@@ -104,6 +104,9 @@ async function setupMembership() {
     VALUES ('${FIRM_WP}', 'Estudio WP', 'Estudio WP', now())
     ON CONFLICT ("id") DO NOTHING
   `);
+  await prisma.$executeRawUnsafe(
+    `UPDATE firms SET "allowSelfReview" = false WHERE "id" = '${FIRM_WP}'`,
+  );
   await prisma.$executeRawUnsafe(`
     INSERT INTO clients ("id", "firmId", "legalName", cuit, "updatedAt")
     VALUES ('${CLIENT_WP}', '${FIRM_WP}', 'Cliente WP', '20999999977', now())
@@ -480,6 +483,74 @@ describe("F1.1 expediente mensual de liquidación", () => {
       WorkpaperError,
     );
     await expect(service.finalize(ctxPreparer, wp.id)).rejects.toThrow(WorkpaperError);
+  });
+
+  it("mantiene el rechazo de revisión y finalización cuando la opción está apagada", async () => {
+    const firm = await runAsRuntime(OWNER_WP, FIRM_WP, (tx) =>
+      tx.firm.findUniqueOrThrow({ where: { id: FIRM_WP }, select: { allowSelfReview: true } }),
+    );
+    expect(firm.allowSelfReview).toBe(false);
+
+    const wp = await service.create(ctxPreparer, {
+      clientId: CLIENT_WP,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+    });
+    await service.calculate(ctxPreparer, wp.id);
+    await resolveGeneratedBlockingControls(wp.id);
+    await service.submitReview(ctxPreparer, wp.id);
+
+    await expect(service.review(ctxPreparer, wp.id, { approved: true })).rejects.toMatchObject({
+      code: "MAKER_CHECKER_VIOLATION",
+      message: "El preparador no puede revisar su propio expediente",
+    });
+    const reviewedByOther = await service.review(ctxReviewer, wp.id, { approved: true });
+    expect(reviewedByOther.status).toBe("REVIEWED");
+    await expect(service.finalize(ctxPreparer, wp.id)).rejects.toMatchObject({
+      code: "MAKER_CHECKER_VIOLATION",
+      message: "El preparador no puede finalizar su propio expediente",
+    });
+  });
+
+  it("permite autorrevisar y finalizar con opción activa, y audita cada entidad", async () => {
+    const wp = await service.create(ctxOwner, {
+      clientId: CLIENT_WP,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+    });
+    await service.calculate(ctxOwner, wp.id);
+    await resolveGeneratedBlockingControls(wp.id);
+    await service.submitReview(ctxOwner, wp.id);
+    await runAsRuntime(OWNER_WP, FIRM_WP, (tx) =>
+      tx.firm.update({ where: { id: FIRM_WP }, data: { allowSelfReview: true } }),
+    );
+
+    const reviewed = await service.review(ctxOwner, wp.id, { approved: true });
+    expect(reviewed.status).toBe("REVIEWED");
+    const finalized = await service.finalize(ctxOwner, wp.id);
+    expect(finalized.status).toBe("FINALIZED");
+
+    const audits = await runAsRuntime(OWNER_WP, FIRM_WP, (tx) =>
+      tx.auditEvent.findMany({
+        where: { firmId: FIRM_WP, userId: OWNER_WP, action: "SELF_REVIEW" },
+        orderBy: { createdAt: "asc" },
+      }),
+    );
+    const detail = await service.get(ctxOwner, wp.id);
+    const settlementId = detail?.settlements[0]?.settlement?.id;
+    const workpaperAudits = audits.filter(
+      (event) => event.entityType === "MonthlyTaxWorkpaper" && event.entityId === wp.id,
+    );
+    expect(settlementId).toBeTruthy();
+    const settlementAudits = audits.filter(
+      (event) => event.entityType === "TaxSettlement" && event.entityId === settlementId,
+    );
+    expect(workpaperAudits).toHaveLength(2);
+    expect(workpaperAudits[0]?.after).toMatchObject({ type: "SELF_REVIEW", scope: "WORKPAPER_REVIEW" });
+    expect(workpaperAudits[1]?.after).toMatchObject({ type: "SELF_REVIEW", scope: "WORKPAPER_FINALIZE" });
+    expect(settlementAudits).toHaveLength(2);
+    expect(workpaperAudits.every((event) => event.createdAt instanceof Date)).toBe(true);
+    expect(settlementAudits.every((event) => event.createdAt instanceof Date)).toBe(true);
   });
 
   it("recorre el ciclo completo: calcular → revisar → finalizar", async () => {

@@ -1466,6 +1466,7 @@ export class SettlementService {
     tx: Tx,
     settlementId: string,
     comment: string,
+    allowSelfReview = false,
   ) {
       const s = await this.getOwned(ctx, tx, settlementId);
       if (s.status !== "IN_REVIEW") {
@@ -1474,7 +1475,8 @@ export class SettlementService {
           `Solo una revisión en curso puede pedir cambios (estado: ${s.status})`,
         );
       }
-      if (s.preparedByUserId === ctx.userId) {
+      const isSelfReview = s.preparedByUserId === ctx.userId;
+      if (isSelfReview && !allowSelfReview) {
         throw new SettlementError("MAKER_CHECKER_VIOLATION", "El preparador no puede revisar su propia liquidación");
       }
       await tx.taxDifference.create({
@@ -1488,10 +1490,25 @@ export class SettlementService {
           message: comment,
         },
       });
-      return tx.taxSettlement.update({
+      const updated = await tx.taxSettlement.update({
         where: { id: settlementId },
         data: { status: "CHANGES_REQUESTED", reviewedByUserId: ctx.userId, reviewedAt: new Date() },
       });
+      if (isSelfReview) {
+        await tx.auditEvent.create({
+          data: {
+            firmId: ctx.firmId,
+            clientId: s.clientId,
+            userId: ctx.userId,
+            actorKind: ctx.actorKind,
+            action: "SELF_REVIEW",
+            entityType: "TaxSettlement",
+            entityId: settlementId,
+            after: { type: "SELF_REVIEW", scope: "SETTLEMENT_REVIEW_CHANGES" },
+          },
+        });
+      }
+      return updated;
   }
 
   /** IN_REVIEW → REVIEWED (aprobación del revisor; exige revisor distinto). */
@@ -1506,6 +1523,7 @@ export class SettlementService {
     tx: Tx,
     settlementId: string,
     comment?: string,
+    allowSelfReview = false,
   ) {
       const s = await this.getOwned(ctx, tx, settlementId);
       if (s.status !== "IN_REVIEW") {
@@ -1514,7 +1532,8 @@ export class SettlementService {
           `Solo IN_REVIEW puede aprobarse (estado: ${s.status})`,
         );
       }
-      if (s.preparedByUserId === ctx.userId) {
+      const isSelfReview = s.preparedByUserId === ctx.userId;
+      if (isSelfReview && !allowSelfReview) {
         throw new SettlementError("MAKER_CHECKER_VIOLATION", "El preparador no puede revisar su propia liquidación");
       }
       const blocking = await tx.taxDifference.count({
@@ -1538,10 +1557,25 @@ export class SettlementService {
           },
         });
       }
-      return tx.taxSettlement.update({
+      const updated = await tx.taxSettlement.update({
         where: { id: settlementId },
         data: { status: "REVIEWED", reviewedByUserId: ctx.userId, reviewedAt: new Date() },
       });
+      if (isSelfReview) {
+        await tx.auditEvent.create({
+          data: {
+            firmId: ctx.firmId,
+            clientId: s.clientId,
+            userId: ctx.userId,
+            actorKind: ctx.actorKind,
+            action: "SELF_REVIEW",
+            entityType: "TaxSettlement",
+            entityId: settlementId,
+            after: { type: "SELF_REVIEW", scope: "SETTLEMENT_REVIEW" },
+          },
+        });
+      }
+      return updated;
   }
 
   /** REVIEWED → FINALIZED (V-002: revisor distinto; V-003: inmutable luego). */
@@ -1551,7 +1585,12 @@ export class SettlementService {
     );
   }
 
-  async finalizeWithTransaction(ctx: TenantContext, tx: Tx, settlementId: string) {
+  async finalizeWithTransaction(
+    ctx: TenantContext,
+    tx: Tx,
+    settlementId: string,
+    allowSelfReview = false,
+  ) {
       const s = await this.getOwned(ctx, tx, settlementId);
       if (s.status === "FINALIZED") throw new SettlementError("SETTLEMENT_IMMUTABLE", "La liquidación ya está finalizada");
       if (s.status !== "REVIEWED") {
@@ -1560,7 +1599,8 @@ export class SettlementService {
           `No se puede finalizar desde ${s.status}; la revisión debe completarse antes`,
         );
       }
-      if (s.preparedByUserId === ctx.userId) {
+      const isSelfReview = s.preparedByUserId === ctx.userId;
+      if (isSelfReview && !allowSelfReview) {
         throw new SettlementError("MAKER_CHECKER_VIOLATION", "El preparador no puede finalizar su propia liquidación");
       }
       const settledStatus = "FINALIZED";
@@ -1579,6 +1619,20 @@ export class SettlementService {
         },
         data: { status: "READY_TO_FILE" },
       });
+      if (isSelfReview) {
+        await tx.auditEvent.create({
+          data: {
+            firmId: ctx.firmId,
+            clientId: s.clientId,
+            userId: ctx.userId,
+            actorKind: ctx.actorKind,
+            action: "SELF_REVIEW",
+            entityType: "TaxSettlement",
+            entityId: settlementId,
+            after: { type: "SELF_REVIEW", scope: "SETTLEMENT_FINALIZE" },
+          },
+        });
+      }
       return finalized;
   }
 

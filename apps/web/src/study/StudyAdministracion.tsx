@@ -231,6 +231,7 @@ export function StudyAdministracion() {
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
   const [density, setDensity] = useDensity();
+  const canManageSelfReview = capabilities.has("firm.self_review.manage");
   const searchRef = useRef<HTMLInputElement>(null);
   const newRef = useRef<() => void>(() => undefined);
   useDenseShortcuts({
@@ -246,6 +247,27 @@ export function StudyAdministracion() {
     queryKey: ["internal-members", firmId],
     queryFn: () => api.get<InternalMember[]>(`/firms/${firmId}/members`),
     enabled: Boolean(firmId && capabilities.has("firm.users.manage")),
+  });
+  const selfReviewSetting = useQuery({
+    queryKey: ["firm-self-review", firmId],
+    queryFn: () => api.get<{ allowSelfReview: boolean }>(`/firms/${firmId}/settings/self-review`),
+    enabled: Boolean(firmId && capabilities.has("firm.manage")),
+  });
+  const updateSelfReviewSetting = useMutation({
+    mutationFn: (allowSelfReview: boolean) =>
+      api.patch<{ allowSelfReview: boolean }>(`/firms/${firmId}/settings/self-review`, {
+        allowSelfReview,
+      }),
+    onSuccess: (setting) => {
+      setActionError(null);
+      setNotice(
+        setting.allowSelfReview
+          ? "La autorrevisión quedó habilitada para este estudio. Cada uso queda auditado."
+          : "La autorrevisión quedó deshabilitada para este estudio.",
+      );
+      queryClient.setQueryData(["firm-self-review", firmId], setting);
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpaper-coverage", firmId] });
+    },
   });
   const inviteInternal = useMutation({
     mutationFn: () =>
@@ -1161,6 +1183,54 @@ export function StudyAdministracion() {
           </>
         }
       />
+
+      {capabilities.has("firm.manage") ? (
+        <section className="study-panel self-review-setting" aria-labelledby="self-review-setting-title">
+          <div className="study-panel__heading">
+            <div>
+              <p className="study-page__eyebrow">Control interno</p>
+              <h2 id="self-review-setting-title">Permitir autorrevisión de fuentes y expedientes</h2>
+              <p>
+                Permite que quien importó un lote revise su fuente y que quien preparó un expediente
+                lo revise y finalice. La opción reduce el control interno de cuatro ojos; cada
+                autorrevisión queda registrada en la auditoría.
+              </p>
+            </div>
+          </div>
+          <label className="self-review-setting__toggle">
+            <input
+              type="checkbox"
+              aria-label="Permitir autorrevisión de fuentes y expedientes"
+              checked={selfReviewSetting.data?.allowSelfReview ?? false}
+              disabled={
+                !canManageSelfReview ||
+                selfReviewSetting.isLoading ||
+                selfReviewSetting.isError ||
+                updateSelfReviewSetting.isPending
+              }
+              onChange={(event) => updateSelfReviewSetting.mutate(event.target.checked)}
+            />
+            <span>{selfReviewSetting.data?.allowSelfReview ? "Activada" : "Desactivada"}</span>
+          </label>
+          {!canManageSelfReview ? (
+            <small className="muted-copy">Solo el Titular puede cambiar esta opción.</small>
+          ) : null}
+          {selfReviewSetting.isError ? (
+            <p className="form-error" role="alert">
+              {selfReviewSetting.error instanceof Error
+                ? selfReviewSetting.error.message
+                : "No se pudo consultar la configuración de autorrevisión."}
+            </p>
+          ) : null}
+          {updateSelfReviewSetting.isError ? (
+            <p className="form-error" role="alert">
+              {updateSelfReviewSetting.error instanceof Error
+                ? updateSelfReviewSetting.error.message
+                : "No se pudo actualizar la configuración de autorrevisión."}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <StatStrip
         label="Resumen de accesos"

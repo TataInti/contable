@@ -75,6 +75,7 @@ const membersFixture = [
 
 function mockApi(standards = standardsFixture, members: unknown[] = []) {
   vi.mocked(api.get).mockImplementation(((path: string) => {
+    if (path.includes("/settings/self-review")) return Promise.resolve({ allowSelfReview: false });
     if (path.includes("/accounting-standards")) return Promise.resolve(standards);
     if (path.includes("/portal-invitations")) return Promise.resolve([]);
     if (path.includes("/portal-memberships")) return Promise.resolve([]);
@@ -119,6 +120,46 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("permite al Titular activar autorrevisión desde la configuración del estudio", async () => {
+    contextMock.current = {
+      ...contextMock.current,
+      capabilities: new Set([
+        "firm.manage",
+        "firm.users.manage",
+        "firm.self_review.manage",
+        "client.read",
+      ]),
+    };
+    vi.mocked(api.patch).mockResolvedValue({ allowSelfReview: true } as never);
+    renderAdministracion();
+
+    const toggle = (await screen.findByRole("checkbox", {
+      name: "Permitir autorrevisión de fuentes y expedientes",
+    })) as HTMLInputElement;
+    await waitFor(() => expect(toggle.disabled).toBe(false));
+    expect(toggle.disabled).toBe(false);
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith("/firms/firm-a/settings/self-review", {
+        allowSelfReview: true,
+      }),
+    );
+    expect(await screen.findByText("Activada")).toBeTruthy();
+    expect(screen.getByText(/reduce el control interno de cuatro ojos/)).toBeTruthy();
+  });
+
+  it("presenta la opción al Administrador como lectura y reserva el cambio al Titular", async () => {
+    renderAdministracion();
+
+    const toggle = (await screen.findByRole("checkbox", {
+      name: "Permitir autorrevisión de fuentes y expedientes",
+    })) as HTMLInputElement;
+    expect(toggle.disabled).toBe(true);
+    expect(screen.getByText("Solo el Titular puede cambiar esta opción.")).toBeTruthy();
+    expect(api.patch).not.toHaveBeenCalled();
   });
 
   it("muestra el catálogo del estudio con su estado, sin valores precargados", async () => {
