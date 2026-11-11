@@ -11,7 +11,6 @@ import {
   DensePage,
   DenseSearch,
   DenseToolbar,
-  StatStrip,
   useDensity,
 } from "../ui/Dense";
 import "./study.css";
@@ -108,9 +107,8 @@ type SummarySectionId =
 
 type SummarySectionDefinition = {
   id: SummarySectionId;
-  group: "Resumen" | "Contable" | "Fiscal" | "Configuración";
+  group: "Resumen" | "Contable" | "Fiscal" | "Configuración fiscal" | "Configuración";
   label: string;
-  count?: number;
 };
 
 type SummarySearchResult = {
@@ -291,8 +289,9 @@ export function StudyResumenCliente() {
       query.data?.fiscal.profiles[0],
     [query.data],
   );
-  const activeRegistrations = query.data?.fiscal.registrations.filter((item) => item.status === "ACTIVE").length ?? 0;
   const activeActivities = query.data?.fiscal.activities.filter((item) => !item.validTo).length ?? 0;
+  const openAccountingYearCount =
+    query.data?.accounting.fiscalYears.filter((year) => year.status === "OPEN").length ?? 0;
 
   if (!firmId || !clientId) {
     return (
@@ -334,17 +333,23 @@ export function StudyResumenCliente() {
   const profile = client.profile;
   const sections: SummarySectionDefinition[] = [
     { id: "overview", group: "Resumen", label: "Resumen" },
-    { id: "accounting-periods", group: "Contable", label: "Períodos contables", count: accountingPeriodCount },
-    { id: "tax-periods", group: "Fiscal", label: "Períodos fiscales", count: fiscal.periods.length },
-    { id: "obligations", group: "Fiscal", label: "Obligaciones", count: fiscal.obligations.length },
-    { id: "tax-profile", group: "Fiscal", label: "Perfil fiscal", count: fiscal.profiles.length },
-    { id: "registrations", group: "Fiscal", label: "Regímenes adheridos", count: fiscal.registrations.length },
-    { id: "activities", group: "Fiscal", label: "Actividades registradas", count: fiscal.activities.length },
-    { id: "base-config", group: "Configuración", label: "Ficha contable", count: profile ? 1 : 0 },
-    { id: "catalogs", group: "Configuración", label: "Catálogos", count: counts.accounts + counts.counterparties + counts.costCenters },
+    { id: "accounting-periods", group: "Contable", label: "Períodos contables" },
+    { id: "tax-periods", group: "Fiscal", label: "Períodos fiscales" },
+    { id: "obligations", group: "Fiscal", label: "Obligaciones" },
+    { id: "tax-profile", group: "Configuración fiscal", label: "Perfil fiscal" },
+    { id: "registrations", group: "Configuración fiscal", label: "Regímenes adheridos" },
+    { id: "activities", group: "Configuración fiscal", label: "Actividades registradas" },
+    { id: "base-config", group: "Configuración", label: "Ficha contable" },
+    { id: "catalogs", group: "Configuración", label: "Catálogos" },
   ];
   const searchResults = buildSearchResults(query.data, search);
-  const sectionGroups: SummarySectionDefinition["group"][] = ["Resumen", "Contable", "Fiscal", "Configuración"];
+  const sectionGroups: SummarySectionDefinition["group"][] = [
+    "Resumen",
+    "Contable",
+    "Fiscal",
+    "Configuración fiscal",
+    "Configuración",
+  ];
 
   return (
     <DensePage density={density} flow className="client-summary">
@@ -366,19 +371,6 @@ export function StudyResumenCliente() {
         }
       />
 
-      <StatStrip
-        label="Resumen cuantitativo del cliente"
-        items={[
-          { key: "status", label: "Estado", value: <StatusBadge status={client.status} /> },
-          { key: "since", label: "Alta en el estudio", value: formatDate(client.createdAt), detail: `Actualizado ${formatDate(client.updatedAt)}` },
-          { key: "profile", label: "Ficha contable", value: profile ? "Configurada" : "Pendiente", tone: profile ? undefined : "warn" },
-          { key: "onboarding", label: "Onboarding fiscal", value: client.onboarding?.completed ? "Completo" : "Pendiente", tone: client.onboarding?.completed ? undefined : "warn" },
-          { key: "years", label: "Ejercicios contables", value: accounting.fiscalYears.length, detail: `${accountingPeriodCount} períodos` },
-          { key: "fiscal", label: "Períodos fiscales", value: fiscal.periods.length },
-          { key: "obligations", label: "Obligaciones", value: fiscal.obligations.length, detail: `${activeRegistrations} inscripciones vigentes` },
-        ]}
-      />
-
       <DenseToolbar>
         <DenseSearch
           value={search}
@@ -397,10 +389,27 @@ export function StudyResumenCliente() {
 
 
       <div className="client-summary__workspace">
+        <label className="client-summary__index-select-control">
+          <span className="sr-only">Sección del cliente</span>
+          <select
+            className="client-summary__index-select"
+            aria-label="Sección del cliente"
+            value={activeSection}
+            onChange={(event) => {
+              setSearch("");
+              setActiveSection(event.target.value as SummarySectionId);
+            }}
+          >
+            {sections.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.group === section.label ? section.label : `${section.group} · ${section.label}`}
+              </option>
+            ))}
+          </select>
+        </label>
         <nav className="client-summary__section-index" aria-label="Secciones internas del cliente">
           <div className="client-summary__index-heading">
             <p className="study-page__eyebrow">Índice de la ficha</p>
-            <span>{sections.length} secciones</span>
           </div>
           {sectionGroups.map((group) => {
             const groupSections = sections.filter((section) => section.group === group);
@@ -420,7 +429,6 @@ export function StudyResumenCliente() {
                         }}
                       >
                         <span>{section.label}</span>
-                        {section.count !== undefined ? <small>{section.count}</small> : null}
                       </button>
                     </li>
                   ))}
@@ -474,37 +482,55 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="client-summary-overview-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Resumen</p>
-                  <h2 id="client-summary-overview-title">Estado del cliente</h2>
+                  <h2 id="client-summary-overview-title">Resumen</h2>
                   <p>Una lectura rápida para decidir dónde continuar.</p>
                 </div>
-                <StatusBadge status={client.status} />
+                <div className="client-summary__overview-meta">
+                  <span className="client-summary__overview-status">
+                    <span>Estado</span>
+                    <StatusBadge status={client.status} />
+                  </span>
+                  <span className="client-summary__overview-created">
+                    Alta en el estudio {formatDate(client.createdAt)}
+                  </span>
+                  <span className="client-summary__updated">Actualizado {formatDate(client.updatedAt)}</span>
+                </div>
               </div>
               <dl className="client-summary__overview-facts">
                 <SummaryFact label="Ficha contable" value={profile ? "Configurada" : "Pendiente"} />
                 <SummaryFact label="Onboarding fiscal" value={client.onboarding?.completed ? "Completo" : "Pendiente"} />
-                <SummaryFact label="Inscripciones vigentes" value={String(activeRegistrations)} />
-                <SummaryFact label="Actividades vigentes" value={String(activeActivities)} />
+                {openAccountingYearCount > 0 ? (
+                  <SummaryFact
+                    label={openAccountingYearCount === 1 ? "Ejercicio contable" : "Ejercicios contables"}
+                    value={String(openAccountingYearCount)}
+                  />
+                ) : null}
+                <SummaryFact
+                  label="Actividades registradas"
+                  value={String(fiscal.activities.length)}
+                  detail={`${activeActivities} vigente${activeActivities === 1 ? "" : "s"}`}
+                />
+                <SummaryFact
+                  label={fiscal.obligations.length === 1 ? "Obligación materializada" : "Obligaciones materializadas"}
+                  value={String(fiscal.obligations.length)}
+                />
               </dl>
               <div className="client-summary__overview-links">
                 <h3>Accesos rápidos</h3>
                 <ul>
                   <li>
-                    <button type="button" onClick={() => setActiveSection("accounting-periods")}>
-                      <strong>Períodos contables</strong>
-                      <small>{accountingPeriodCount} períodos en {accounting.fiscalYears.length} ejercicios</small>
+                    <button type="button" onClick={() => navigate("/expediente-mensual")}>
+                      <strong>Cargar período</strong>
                     </button>
                   </li>
                   <li>
-                    <button type="button" onClick={() => setActiveSection("obligations")}>
-                      <strong>Obligaciones</strong>
-                      <small>{fiscal.obligations.length} obligaciones materializadas</small>
+                    <button type="button" onClick={() => navigate("/configuracion-fiscal")}>
+                      <strong>Materializar obligaciones</strong>
                     </button>
                   </li>
                   <li>
-                    <button type="button" onClick={() => setActiveSection("tax-profile")}>
-                      <strong>Perfil fiscal</strong>
-                      <small>{fiscal.profiles.length} versiones registradas</small>
+                    <button type="button" onClick={() => navigate("/configuracion-fiscal")}>
+                      <strong>Nueva versión del perfil</strong>
                     </button>
                   </li>
                 </ul>
@@ -747,7 +773,7 @@ export function StudyResumenCliente() {
                 <div>
                   <p className="study-page__eyebrow">Inscripciones</p>
                   <h2 id="registrations-title">Regímenes adheridos</h2>
-                  <p>{activeRegistrations} vigentes · {fiscal.registrations.length} registrados.</p>
+                  <p>Inscripciones fiscales y su vigencia.</p>
                 </div>
                 <span className="section-count">{fiscal.registrations.length}</span>
               </div>
