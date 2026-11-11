@@ -15,6 +15,11 @@ import httpx
 from PIL import Image
 from pydantic import ValidationError
 
+from .openrouter_policy import (
+    ALLOWED_OPENROUTER_MODELS,
+    ALLOWED_OPENROUTER_PROVIDERS,
+    build_provider_payload,
+)
 from .voucher_v2 import (
     VoucherARV2,
     VoucherExtractionResponse,
@@ -31,14 +36,11 @@ MAX_PAGES = 3
 MAX_OUTPUT_TOKENS = 4096
 MODEL_TIMEOUT_SECONDS = 55.0
 
-# ADR-0005 no contiene IDs de modelos/proveedores aprobados. Fallar cerrado
-# impide activar modelos no aprobados; la allowlist requiere un cambio revisado.
-ALLOWED_OPENROUTER_MODELS: frozenset[str] = frozenset()
-ALLOWED_OPENROUTER_PROVIDERS: tuple[str, ...] = ()
+SYSTEM_PROMPT = """Sos un extractor multimodal de comprobantes argentinos. Leé únicamente las imágenes de páginas adjuntas. No uses OCR externo, texto embebido del PDF, QR ni conocimiento previo para completar datos. Devolvé un único objeto JSON plano, sin markdown, fences ni texto circundante.
 
-SYSTEM_PROMPT = """Sos un extractor multimodal de comprobantes argentinos. Leé únicamente las imágenes de páginas adjuntas. No uses OCR externo, texto embebido del PDF, QR ni conocimiento previo para completar datos. Devolvé solo un objeto JSON compatible con el esquema voucher-ar-v2 solicitado.
+Usá sólo estas claves exactas de voucher-ar-v2: tipo_documento, letra, punto_venta, numero, fecha, hora, cuit_emisor, cuit_receptor, razon_social_emisor, razon_social_receptor, condicion_iva, neto_gravado, iva, no_gravado, exento, percepciones, total, moneda, cae, cae_vencimiento y confianza. Los datos del emisor y del receptor van en sus claves planas; no los anides. No agregues claves schema, vencimiento, punto_de_venta, base_imponible ni envoltorios emisor, receptor o voucher. Cada elemento de iva sólo usa alicuota e importe; cada elemento de percepciones sólo usa tipo e importe.
 
-Para cada campo, copiá únicamente texto o valores que sean visibles y legibles en la imagen. Si el campo no aparece o no se puede leer, devolvé null; para listas, devolvé null si no hay evidencia legible de esa sección. No inventes valores, no infieras CUIT, CAE, fecha, importes, moneda ni condición fiscal. Conservá importes como cadenas decimales con punto, sin separadores de miles. La fecha y el vencimiento deben ser YYYY-MM-DD. CUIT debe tener once dígitos o ser null. Usá tipo_documento=ilegible cuando el comprobante no pueda clasificarse por su imagen.
+Para cada campo, copiá únicamente texto o valores que sean visibles y legibles en la imagen. Omití las claves ausentes o no legibles; el contrato las interpreta como null. No inventes valores, no infieras CUIT, CAE, fecha, importes, moneda ni condición fiscal. Conservá importes y alícuotas como cadenas decimales con punto, sin separadores de miles. La fecha y cae_vencimiento deben ser YYYY-MM-DD. CUIT debe tener once dígitos. Usá tipo_documento=ilegible cuando el comprobante no pueda clasificarse por su imagen.
 
 Incluí en confianza un valor entre 0 y 1 por cada campo no nulo, usando como clave el nombre del campo o la ruta de lista (por ejemplo iva.0.importe, percepciones.0.tipo). La confianza es una estimación del modelo, no una validación contable. No agregues explicaciones fuera del JSON."""
 
@@ -113,15 +115,11 @@ def _prepare_page_images(data: bytes, mime_type: str, max_pages: int) -> list[by
     raise ValueError("UNSUPPORTED_MIME_TYPE")
 
 
-def _json_schema() -> dict[str, Any]:
-    return VoucherARV2.model_json_schema()
-
-
 def _request_payload(model: str, pages: list[bytes]) -> dict[str, Any]:
     content: list[dict[str, Any]] = [
         {
             "type": "text",
-            "text": "Extraé este comprobante según voucher-ar-v2. Cada imagen corresponde a una página, en orden; usá null para los campos no visibles y no inventes valores.",
+            "text": "Extraé este comprobante según voucher-ar-v2. Cada imagen corresponde a una página, en orden. Usá las claves exactas y planas de voucher-ar-v2 indicadas por el sistema; omití campos ausentes y no inventes valores.",
         }
     ]
     for index, page in enumerate(pages, start=1):
@@ -134,24 +132,10 @@ def _request_payload(model: str, pages: list[bytes]) -> dict[str, Any]:
         )
     return {
         "model": model,
-        "temperature": 0,
         "max_tokens": MAX_OUTPUT_TOKENS,
         "usage": {"include": True},
-        "provider": {
-            "only": list(ALLOWED_OPENROUTER_PROVIDERS),
-            "zdr": True,
-            "data_collection": "deny",
-            "require_parameters": True,
-            "allow_fallbacks": False,
-        },
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "voucher_ar_v2",
-                "strict": False,
-                "schema": _json_schema(),
-            },
-        },
+        "provider": build_provider_payload(ALLOWED_OPENROUTER_PROVIDERS),
+        "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": content},
@@ -216,6 +200,18 @@ def _model_content(payload: dict[str, Any]) -> str:
         if fragments:
             return "".join(fragments)
     raise ValueError("MODEL_RESPONSE_SCHEMA_INVALID")
+
+
+def _parse_model_json(content: str) -> Any:
+    """Parse JSON while tolerating a surrounding Markdown code fence."""
+    text = content.strip()
+    lines = text.splitlines()
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    return json.loads(text)
 
 
 def _aggregated_usage(
@@ -313,9 +309,13 @@ async def run_model_extraction(
                         last_reason = "MODEL_RESPONSE_JSON_INVALID"
                         continue
                     attempts.append(_usage_numbers(payload))
+                    response_model = payload.get("model")
+                    if isinstance(response_model, str) and response_model != model:
+                        last_reason = "MODEL_RESPONSE_MODEL_MISMATCH"
+                        continue
                     try:
                         content = _model_content(payload)
-                        decoded = json.loads(content)
+                        decoded = _parse_model_json(content)
                     except json.JSONDecodeError:
                         last_reason = "MODEL_JSON_INVALID"
                         continue
@@ -335,10 +335,16 @@ async def run_model_extraction(
                         continue
 
                     input_tokens, output_tokens, cost = _aggregated_usage(attempts)
+                    response_provider = payload.get("provider")
+                    provider = (
+                        response_provider.strip()
+                        if isinstance(response_provider, str) and response_provider.strip()
+                        else "openrouter"
+                    )
                     return response_from_voucher(
                         voucher,
                         model=model,
-                        provider="openrouter",
+                        provider=provider,
                         prompt_version=PROMPT_VERSION,
                         input_tokens=input_tokens,
                         output_tokens=output_tokens,

@@ -21,3 +21,4 @@ Este directorio contiene las decisiones de arquitectura de **Contable**, la plat
 | [ADR-006](./0006-rls-obligatorio-runtime-non-owner.md) | RLS obligatorio y runtime non-owner | Aceptado |
 | [ADR-007](./0007-monolito-modular-node-workers.md) | Monolito modular Node más workers | Aceptado |
 | [ADR-008](./0008-navegacion-foco-liquidacion-fiscal.md) | Navegación enfocada en la liquidación fiscal mensual | Aceptado |
+| [ADR-009](./0009-modelo-extraccion-claude-haiku-5-5.md) | Modelo de extracción multimodal Claude Haiku 5.5 | Aceptado (sintéticos) |

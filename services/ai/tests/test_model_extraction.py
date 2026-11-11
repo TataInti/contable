@@ -6,9 +6,10 @@ import json
 from typing import Any, Self, cast
 
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app import main, model_extraction
+from app import main, model_extraction, openrouter_policy
 from app.contracts import ExtractionRunRequest
 from app.model_extraction import run_model_extraction
 from app.voucher_v2 import VoucherARV2, response_from_voucher
@@ -227,6 +228,8 @@ def test_default_engine_does_not_call_legacy_extractor(monkeypatch: pytest.Monke
     monkeypatch.delenv("EXTRACTION_ENGINE", raising=False)
     monkeypatch.delenv("EXTRACTION_MODEL", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("NODE_ENV", "development")
+    monkeypatch.setenv("EXTRACTION_CUSTOMER_DATA_ENABLED", "false")
     monkeypatch.setattr(
         model_extraction,
         "_prepare_page_images",
@@ -286,6 +289,60 @@ def test_default_engine_does_not_call_legacy_extractor(monkeypatch: pytest.Monke
     assert response.voucher is None
     assert not hasattr(main, "extract_from_pdf_bytes")
     assert not hasattr(main, "extract_from_image_bytes")
+
+
+def test_production_customer_data_gate_blocks_before_source_download(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("NODE_ENV", "production")
+    monkeypatch.delenv("EXTRACTION_CUSTOMER_DATA_ENABLED", raising=False)
+    fake_pdf = b"%PDF-1.4 synthetic fixture"
+    payload_data = {
+        "contractVersion": "1.0",
+        "runId": "01900000-0000-7000-8000-000000000001",
+        "firmId": "11111111-1111-4111-8111-111111111111",
+        "clientId": "22222222-2222-4222-8222-222222222222",
+        "documentId": "33333333-3333-4333-8333-333333333333",
+        "source": {
+            "downloadUrl": "https://signed.example/synthetic.pdf",
+            "mimeType": "application/pdf",
+            "sizeBytes": len(fake_pdf),
+            "sha256": hashlib.sha256(fake_pdf).hexdigest(),
+        },
+        "options": {"country": "AR", "language": "es", "maxPages": 3},
+        "callback": {
+            "url": "http://api:3000/internal/v1/extractions/complete",
+            "expiresAt": "2026-11-11T12:00:00Z",
+        },
+    }
+    request = ExtractionRunRequest.model_validate(payload_data)
+    monkeypatch.setattr(
+        main.httpx,
+        "AsyncClient",
+        lambda *_args, **_kwargs: pytest.fail("la compuerta debe ejecutarse antes de descargar"),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(main.start_extraction(request, cast(Any, None)))
+
+    assert error.value.status_code == 503
+    assert error.value.detail == "CUSTOMER_DATA_EXTRACTION_DISABLED"
+
+
+def test_approved_model_builds_exact_zdr_provider_payload() -> None:
+    assert openrouter_policy.ALLOWED_OPENROUTER_MODELS == frozenset({"anthropic/claude-haiku-5.5"})
+    assert openrouter_policy.ALLOWED_OPENROUTER_PROVIDERS == (
+        "google-vertex",
+        "amazon-bedrock",
+    )
+    payload = model_extraction._request_payload("anthropic/claude-haiku-5.5", [])
+    assert payload["provider"] == {
+        "zdr": True,
+        "data_collection": "deny",
+        "require_parameters": True,
+        "allow_fallbacks": False,
+        "only": ["google-vertex", "amazon-bedrock"],
+    }
 
 
 def test_unallowlisted_qwen_is_blocked_before_network_or_rasterization(
@@ -361,6 +418,8 @@ def test_mocked_multimodal_success_records_usage_and_zdr_options(
     response = ModelResponse(
         200,
         {
+            "model": "test/model",
+            "provider": "Amazon Bedrock",
             "usage": {"prompt_tokens": 120, "completion_tokens": 48, "cost": 0.0002},
             "choices": [{"message": {"content": json.dumps(payload)}}],
         },
@@ -375,7 +434,7 @@ def test_mocked_multimodal_success_records_usage_and_zdr_options(
     request = observed[0]["request"]
     assert len(observed) == 1
     assert request["model"] == "test/model"
-    assert request["temperature"] == 0
+    assert request["response_format"] == {"type": "json_object"}
     assert request["provider"] == {
         "only": ["test-provider"],
         "zdr": True,
@@ -385,10 +444,40 @@ def test_mocked_multimodal_success_records_usage_and_zdr_options(
     }
     assert any(part.get("type") == "image_url" for part in request["messages"][1]["content"])
     assert result.model == "test/model"
-    assert result.provider == "openrouter"
+    assert result.provider == "Amazon Bedrock"
     assert result.inputTokens == 120
     assert result.outputTokens == 48
     assert result.estimatedCostUsd == 0.0002
+
+
+def test_unexpected_response_model_is_rejected_without_accepting_voucher(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_mock_model(monkeypatch)
+    observed: list[dict[str, Any]] = []
+    response = ModelResponse(
+        200,
+        {
+            "model": "test/unapproved",
+            "usage": {"prompt_tokens": 20, "completion_tokens": 10, "cost": 0.01},
+            "choices": [{"message": {"content": json.dumps(_valid_voucher())}}],
+        },
+    )
+    monkeypatch.setattr(
+        model_extraction.httpx,
+        "AsyncClient",
+        lambda **_kwargs: ModelClientSequence([response, response], observed),
+    )
+
+    result = asyncio.run(run_model_extraction(b"synthetic image", "image/png", 1))
+
+    assert len(observed) == 2
+    assert result.reviewReason == "MODEL_RESPONSE_MODEL_MISMATCH"
+    assert result.voucher is None
+
+
+def test_markdown_fenced_json_is_parsed_before_schema_validation() -> None:
+    assert model_extraction._parse_model_json('```json\n{"ok": true}\n```') == {"ok": True}
 
 
 def test_mocked_non_fiscal_ticket_requires_manual_review(
