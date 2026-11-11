@@ -122,7 +122,7 @@ async function recordAudit(
     action: string;
     entityType: string;
     entityId: string;
-    before?: Prisma.InputJsonValue;
+    before?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
     after: Prisma.InputJsonValue;
   },
 ): Promise<void> {
@@ -282,22 +282,6 @@ function summarizeCatalogUsage(entityId: string, places: CatalogUsagePlace[]): C
   return { entityId, used: count > 0, count, places };
 }
 
-async function assertCatalogUnused(
-  tx: Prisma.TransactionClient,
-  kind: FiscalCatalogKind,
-  id: string,
-  label: string,
-  value?: { code: string; name: string },
-): Promise<void> {
-  const usage = summarizeCatalogUsage(id, await catalogUsagePlaces(tx, kind, id, value));
-  if (!usage.used) return;
-  const places = usage.places.map((place) => `${place.count} ${place.label.toLocaleLowerCase("es-AR")}`).join(", ");
-  throw new FiscalError(
-    "CATALOG_IN_USE",
-    `No se puede editar ${label}: tiene ${usage.count} uso(s) (${places}). Creá uno nuevo a partir de este y ocultá el anterior.`,
-  );
-}
-
 // ---------------------------------------------------------------------------
 // G1-02: Maestros (jurisdicción, autoridad, impuesto, régimen)
 // ---------------------------------------------------------------------------
@@ -424,7 +408,6 @@ export class FiscalMasterService {
       const row = await tx.jurisdiction.findUnique({ where: { id: input.jurisdictionId } });
       if (!row) throw new FiscalError("CATALOG_NOT_FOUND", "La jurisdicción no existe");
       const hasEditableFields = input.code !== undefined || input.name !== undefined || input.kind !== undefined || input.parentId !== undefined;
-      if (hasEditableFields) await assertCatalogUnused(tx, "jurisdiction", row.id, "la jurisdicción", { code: row.code, name: row.name });
       if (!hasEditableFields && input.isActive === row.isActive) {
         throw new FiscalError("CATALOG_STATE_UNCHANGED", input.isActive ? "La jurisdicción ya está activa" : "La jurisdicción ya está desactivada");
       }
@@ -484,7 +467,6 @@ export class FiscalMasterService {
       const row = await tx.taxType.findUnique({ where: { id: input.taxTypeId } });
       if (!row) throw new FiscalError("CATALOG_NOT_FOUND", "El tipo de impuesto no existe");
       const hasEditableFields = input.code !== undefined || input.name !== undefined;
-      if (hasEditableFields) await assertCatalogUnused(tx, "taxType", row.id, "el tipo de impuesto");
       if (!hasEditableFields && input.isActive === row.isActive) {
         throw new FiscalError("CATALOG_STATE_UNCHANGED", input.isActive ? "El tipo de impuesto ya está activo" : "El tipo de impuesto ya está desactivado");
       }
@@ -573,7 +555,6 @@ export class FiscalMasterService {
       const row = await tx.taxAuthority.findUnique({ where: { id: input.authorityId } });
       if (!row) throw new FiscalError("CATALOG_NOT_FOUND", "El organismo no existe");
       const hasEditableFields = input.code !== undefined || input.name !== undefined || input.jurisdictionId !== undefined;
-      if (hasEditableFields) await assertCatalogUnused(tx, "authority", row.id, "el organismo");
       if (!hasEditableFields && input.isActive === row.isActive) {
         throw new FiscalError("CATALOG_STATE_UNCHANGED", input.isActive ? "El organismo ya está activo" : "El organismo ya está oculto");
       }
@@ -698,7 +679,6 @@ export class FiscalMasterService {
       if (!row) throw new FiscalError("CATALOG_NOT_FOUND", "El régimen no existe");
       const hasEditableFields = input.code !== undefined || input.name !== undefined || input.taxTypeId !== undefined ||
         input.jurisdictionId !== undefined || input.authorityId !== undefined;
-      if (hasEditableFields) await assertCatalogUnused(tx, "regime", row.id, "el régimen");
       if (!hasEditableFields && input.isActive === row.isActive) {
         throw new FiscalError("CATALOG_STATE_UNCHANGED", input.isActive ? "El régimen ya está activo" : "El régimen ya está oculto");
       }
@@ -868,9 +848,6 @@ export class FiscalMasterService {
       if (!row) {
         throw new FiscalError("ACTIVITY_NOT_FOUND", "Actividad económica no encontrada");
       }
-      const hasEditableFields = input.code !== undefined || input.name !== undefined || input.jurisdictionId !== undefined ||
-        input.source !== undefined || input.validFrom !== undefined || input.validTo !== undefined;
-      if (hasEditableFields) await assertCatalogUnused(tx, "activity", row.id, "la actividad", { code: row.code, name: row.name });
       const code = input.code === undefined ? row.code : normalizeActivityCode(input.code);
       if (!ACTIVITY_CODE_PATTERN.test(code)) {
         throw new FiscalError("ACTIVITY_CODE_INVALID", `El código "${code}" no cumple el formato del catálogo`);

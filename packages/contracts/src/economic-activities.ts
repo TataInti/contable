@@ -10,8 +10,8 @@ import { z } from "zod";
  *
  * Invariantes que este contrato fija para TODOS los consumidores:
  * - El `code` es la clave de vínculo con las reglas: se normaliza
- *   (trim + mayúsculas). Sólo se edita cuando no hay usos asociados.
- * - La jurisdicción también se edita cuando la actividad no tiene usos.
+ *   (trim + mayúsculas) y siempre se puede editar.
+ * - La jurisdicción también se puede editar en cualquier momento.
  * - Desactivar (isActive=false) NO borra ni invalida valores históricos:
  *   los vínculos de cliente y las reglas existentes siguen resolviendo.
  *   Sólo deja de ofrecerse en los selectores y se rechaza en vínculos nuevos.
@@ -48,8 +48,7 @@ export const createEconomicActivitySchema = z
 export type CreateEconomicActivity = z.infer<typeof createEconomicActivitySchema>;
 
 /**
- * Edición de actividad económica. La API bloquea cualquier edición cuando hay
- * dependencias; por eso todos los campos de catálogo son editables sin uso.
+ * Edición de actividad económica. Todos los campos del catálogo son editables.
  */
 export const updateEconomicActivitySchema = z
   .object({

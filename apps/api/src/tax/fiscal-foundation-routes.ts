@@ -142,7 +142,11 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       duplicateOfId: z.string().uuid().optional(),
     }).strict().parse(req.body);
     try {
-      const data = await masters.createTaxType(tenantContextFromRequest(req), body);
+      const data = await masters.createTaxType(tenantContextFromRequest(req), {
+        code: body.code,
+        name: body.name,
+        ...(body.duplicateOfId !== undefined ? { duplicateOfId: body.duplicateOfId } : {}),
+      });
       return reply.status(201).send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -203,10 +207,12 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       .strict()
       .parse(req.body);
     try {
-      const data = await masters.createTaxAuthority(
-        tenantContextFromRequest(req),
-        body,
-      );
+      const data = await masters.createTaxAuthority(tenantContextFromRequest(req), {
+        code: body.code,
+        name: body.name,
+        jurisdictionId: body.jurisdictionId,
+        ...(body.duplicateOfId !== undefined ? { duplicateOfId: body.duplicateOfId } : {}),
+      });
       return reply.status(201).send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -224,7 +230,13 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       message: "Indicá al menos un campo para actualizar",
     }).parse(req.body);
     try {
-      const data = await masters.updateTaxAuthority(tenantContextFromRequest(req), { authorityId, ...pickDefined(body) });
+      const data = await masters.updateTaxAuthority(tenantContextFromRequest(req), {
+        authorityId,
+        ...(body.code !== undefined ? { code: body.code } : {}),
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.jurisdictionId !== undefined ? { jurisdictionId: body.jurisdictionId } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+      });
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -254,7 +266,14 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       .strict()
       .parse(req.body);
     try {
-      const data = await masters.createRegime(tenantContextFromRequest(req), body);
+      const data = await masters.createRegime(tenantContextFromRequest(req), {
+        code: body.code,
+        name: body.name,
+        taxTypeId: body.taxTypeId,
+        jurisdictionId: body.jurisdictionId,
+        authorityId: body.authorityId,
+        ...(body.duplicateOfId !== undefined ? { duplicateOfId: body.duplicateOfId } : {}),
+      });
       return reply.status(201).send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -270,13 +289,19 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       jurisdictionId: z.string().uuid().optional(),
       authorityId: z.string().uuid().optional(),
       isActive: z.boolean().optional(),
-    }).strict().refine((value: {
-      code?: string; name?: string; taxTypeId?: string; jurisdictionId?: string; authorityId?: string; isActive?: boolean;
-    }) => Object.values(value).some((field) => field !== undefined), {
+    }).strict().refine((value) => Object.values(value).some((field) => field !== undefined), {
       message: "Indicá al menos un campo para actualizar",
     }).parse(req.body);
     try {
-      const data = await masters.updateRegime(tenantContextFromRequest(req), { regimeId, ...pickDefined(body) });
+      const data = await masters.updateRegime(tenantContextFromRequest(req), {
+        regimeId,
+        ...(body.code !== undefined ? { code: body.code } : {}),
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.taxTypeId !== undefined ? { taxTypeId: body.taxTypeId } : {}),
+        ...(body.jurisdictionId !== undefined ? { jurisdictionId: body.jurisdictionId } : {}),
+        ...(body.authorityId !== undefined ? { authorityId: body.authorityId } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+      });
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);

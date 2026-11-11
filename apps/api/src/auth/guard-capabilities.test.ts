@@ -71,8 +71,14 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     }
   });
 
-  it("jurisdicciones y tipos usan tax.rules.propose y el guard devuelve 403 sin esa capacidad", () => {
-    for (const path of ["/api/v1/tax/jurisdictions", "/api/v1/tax/types"]) {
+  it("los cinco catálogos requieren tax.rules.propose y el guard devuelve 403 sin esa capacidad", () => {
+    for (const path of [
+      "/api/v1/tax/jurisdictions",
+      "/api/v1/tax/types",
+      "/api/v1/tax/authorities",
+      "/api/v1/tax/regimes",
+      "/api/v1/tax/activities",
+    ]) {
       expect(requiredCapability("GET", path)).toBe("tax.rules.read");
       expect(requiredCapability("POST", path)).toBe("tax.rules.propose");
       expect(requiredCapability("PATCH", `${path}/id`)).toBe("tax.rules.propose");
