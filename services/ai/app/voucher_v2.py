@@ -1,4 +1,4 @@
-"""Contrato voucher-ar-v2 y validaciones no modificantes."""
+"""Contrato voucher-ar-v2.1 y validaciones no modificantes."""
 
 from __future__ import annotations
 
@@ -18,6 +18,24 @@ VoucherType = Literal[
     "otro",
     "ilegible",
 ]
+PERCEPTION_CATEGORIES = (
+    "IIBB",
+    "IVA",
+    "Ganancias",
+    "SUSS",
+    "Impuestos internos",
+    "Municipal",
+    "Otras",
+)
+PerceptionCategory = Literal[
+    "IIBB",
+    "IVA",
+    "Ganancias",
+    "SUSS",
+    "Impuestos internos",
+    "Municipal",
+    "Otras",
+]
 AmountText = Annotated[str, StringConstraints(pattern=r"^-?\d+(?:\.\d{1,6})?$")]
 Confidence = Annotated[float, Field(ge=0, le=1)]
 
@@ -32,11 +50,12 @@ class VatAmount(StrictModel):
 
 
 class Perception(StrictModel):
-    tipo: str | None = None
+    categoria: PerceptionCategory
+    tipo_texto: str | None = None
     importe: AmountText | None = None
 
 
-class VoucherARV2(StrictModel):
+class VoucherARV21(StrictModel):
     """Contenido reconocido desde las imágenes, sin completar valores ausentes."""
 
     tipo_documento: VoucherType
@@ -62,11 +81,11 @@ class VoucherARV2(StrictModel):
     confianza: dict[str, Confidence] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_confidence_and_dates(self) -> VoucherARV2:
+    def validate_confidence_and_dates(self) -> VoucherARV21:
         from datetime import date
 
         if any(path == "items" or path.startswith("items.") for path in self.confianza):
-            raise ValueError("voucher-ar-v2 no contempla confianza de ítems")
+            raise ValueError("voucher-ar-v2.1 no contempla confianza de ítems")
 
         for date_field in ("fecha", "cae_vencimiento"):
             value = getattr(self, date_field)
@@ -115,17 +134,25 @@ class VoucherARV2(StrictModel):
             raise ValueError(f"falta confianza para {field_path}")
 
 
+class ReviewIssue(StrictModel):
+    """Motivo de revisión y, cuando aplica, ruta estable al campo."""
+
+    reason: str
+    sourcePath: str | None = None
+
+
 class VoucherExtractionResponse(StrictModel):
-    schemaVersion: Literal["voucher-ar-v2"] = "voucher-ar-v2"
-    voucher: VoucherARV2 | None = None
+    schemaVersion: Literal["voucher-ar-v2.1"] = "voucher-ar-v2.1"
+    voucher: VoucherARV21 | None = None
     classificationConfidence: Confidence | None = None
     fields: list[ExtractedField] = Field(default_factory=list)
     issues: list[str] = Field(default_factory=list)
     reviewReason: str | None = None
+    reviewIssues: list[ReviewIssue] = Field(default_factory=list)
     ocrEngine: str = "multimodal-model"
     model: str | None = None
     provider: str | None = None
-    promptVersion: str = "vision-ar-v2"
+    promptVersion: str = "vision-ar-v5"
     inputTokens: int | None = Field(default=None, ge=0)
     outputTokens: int | None = Field(default=None, ge=0)
     latencyMs: int = Field(default=0, ge=0)
@@ -157,7 +184,12 @@ _UI_FIELD_KEYS = {
 ARITHMETIC_TOLERANCE = Decimal("0.02")
 
 
-def validate_arithmetic(voucher: VoucherARV2) -> list[str]:
+def source_path_for(group_name: str, index: int, field_name: str) -> str:
+    """Construye una ruta estable con índice de lista basado en cero."""
+    return f"{group_name}[{index}].{field_name}"
+
+
+def validate_arithmetic(voucher: VoucherARV21) -> list[str]:
     """Marca desvíos aritméticos y preserva todos los importes originales."""
     reasons: list[str] = []
     if voucher.total is None:
@@ -196,7 +228,7 @@ def validate_arithmetic(voucher: VoucherARV2) -> list[str]:
 
 
 def response_from_voucher(
-    voucher: VoucherARV2,
+    voucher: VoucherARV21,
     *,
     model: str,
     provider: str,
@@ -205,6 +237,7 @@ def response_from_voucher(
     output_tokens: int | None,
     latency_ms: int,
     estimated_cost_usd: float | None,
+    unrecognized_perception_indexes: tuple[int, ...] = (),
 ) -> VoucherExtractionResponse:
     fields: list[ExtractedField] = []
 
@@ -228,7 +261,14 @@ def response_from_voucher(
 
     for group_name, aliases in (
         ("iva", {"alicuota": "vatRate", "importe": "vatAmount"}),
-        ("percepciones", {"tipo": "perceptionType", "importe": "perceptionAmount"}),
+        (
+            "percepciones",
+            {
+                "categoria": "perceptionCategory",
+                "tipo_texto": "perceptionText",
+                "importe": "perceptionAmount",
+            },
+        ),
     ):
         for index, entry in enumerate(getattr(voucher, group_name) or []):
             for source_key, ui_key in aliases.items():
@@ -237,18 +277,29 @@ def response_from_voucher(
 
     has_fiscal_data = any((voucher.cuit_emisor, voucher.cuit_receptor, voucher.cae, voucher.letra))
     if voucher.tipo_documento == "ticket_no_fiscal" or not has_fiscal_data:
-        issues = ["sin datos fiscales"]
+        document_issues = ["sin datos fiscales"]
     else:
-        issues = validate_arithmetic(voucher)
+        document_issues = validate_arithmetic(voucher)
         if voucher.tipo_documento == "ilegible":
-            issues.append("DOCUMENT_ILLEGIBLE")
-    unique_issues = list(dict.fromkeys(issues))
+            document_issues.append("DOCUMENT_ILLEGIBLE")
+    field_review_issues = [
+        ReviewIssue(
+            reason="percepción no reconocida",
+            sourcePath=source_path_for("percepciones", index, "categoria"),
+        )
+        for index in unrecognized_perception_indexes
+    ]
+    review_issues = field_review_issues + [
+        ReviewIssue(reason=reason) for reason in dict.fromkeys(document_issues)
+    ]
+    unique_issues = list(dict.fromkeys(issue.reason for issue in review_issues))
     return VoucherExtractionResponse(
         voucher=voucher,
         classificationConfidence=voucher.confianza["tipo_documento"],
         fields=fields,
         issues=unique_issues,
         reviewReason=", ".join(unique_issues) or None,
+        reviewIssues=review_issues,
         model=model,
         provider=provider,
         promptVersion=prompt_version,
@@ -264,7 +315,7 @@ def manual_review_response(
     *,
     model: str | None = None,
     provider: str | None = None,
-    prompt_version: str = "vision-ar-v2",
+    prompt_version: str = "vision-ar-v5",
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     latency_ms: int = 0,
@@ -273,6 +324,7 @@ def manual_review_response(
     return VoucherExtractionResponse(
         reviewReason=reason,
         issues=[reason],
+        reviewIssues=[ReviewIssue(reason=reason)],
         model=model,
         provider=provider,
         promptVersion=prompt_version,

@@ -945,6 +945,7 @@ model DocumentExtraction {
   latencyMs        Int?
   estimatedCostUsd Float?
   reviewReason     String?
+  reviewIssues     Json?
   voucherData      Json?
   normalizedText   String?
   reviewedByUserId String?

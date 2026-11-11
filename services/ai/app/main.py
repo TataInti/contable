@@ -1,4 +1,5 @@
 import hashlib
+import os
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -20,6 +21,16 @@ app = FastAPI(title="Contable AI", version="0.1.0")
 auth = ServiceAuth()
 
 
+def _customer_document_extraction_enabled() -> bool:
+    """Keep production customer documents disabled until explicitly activated."""
+    if os.getenv("NODE_ENV", "").strip().lower() != "production":
+        return True
+    return os.getenv("EXTRACTION_CUSTOMER_DATA_ENABLED", "false").strip().lower() in {
+        "1",
+        "true",
+    }
+
+
 @app.get("/health/live", response_model=HealthLive)
 async def health_live() -> HealthLive:
     return HealthLive()
@@ -39,6 +50,8 @@ async def start_extraction(
     payload: ExtractionRunRequest, request: Request
 ) -> VoucherExtractionResponse:
     """Descarga la fuente y entrega sus páginas al modelo multimodal."""
+    if not _customer_document_extraction_enabled():
+        raise HTTPException(status_code=503, detail="CUSTOMER_DATA_EXTRACTION_DISABLED")
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(payload.source.downloadUrl)
         resp.raise_for_status()

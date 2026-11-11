@@ -1,58 +1,78 @@
-# Extracción multimodal de comprobantes — voucher-ar-v2
+# Extracción multimodal de comprobantes — voucher-ar-v2.1
 
-## Flujo implementado
+## Flujo y contrato vigente
 
-El endpoint normal usa exclusivamente `EXTRACTION_ENGINE=model` (default) y `services/ai/app/model_extraction.py`. El servicio rasteriza cada página del PDF o convierte la imagen directa y envía esas imágenes al modelo multimodal de OpenRouter. El texto embebido del PDF no se usa para extraer. `services/ai/app/extractor.py` permanece como código heredado, sin conexión con el endpoint normal; su eliminación queda para un PR posterior a la evaluación de Fase 0.
+El endpoint normal usa exclusivamente `EXTRACTION_ENGINE=model` (default) y `services/ai/app/model_extraction.py`. El servicio rasteriza cada página de PDF o convierte la imagen directa y envía las imágenes al modelo multimodal. El texto embebido del PDF no participa en la extracción. El motor heredado permanece desconectado y el worker no crea filas de ítems.
 
-El modelo responde con el esquema `voucher-ar-v2`, versión de prompt `vision-ar-v2`, temperatura 0. El contrato canónico está definido en `services/ai/app/voucher_v2.py` y `packages/contracts/src/documents.ts`. La respuesta preserva nulls, y sólo adapta los datos fiscales visibles al formato persistido que consume la bandeja. El esquema no incluye ítems y el worker no crea filas de ítems. Las claves UI usadas por `StudyBandeja.tsx` incluyen `issuerTaxId`, `voucherNumber`, `voucherType`, `pointOfSale`, `issueDate`, `totalAmount`, `netAmount`, `vatAmount` y `currency`.
+El modelo devuelve JSON plano validado con `VoucherARV21` en `services/ai/app/voucher_v2.py` y `voucherARV21Schema` en `packages/contracts/src/documents.ts`. La versión de esquema vigente es `voucher-ar-v2.1`. Cada percepción tiene:
 
-La única comprobación aritmética usa tolerancia absoluta de 0,02 unidades de la moneda informada: compara neto + IVA + no gravado + exento + percepciones con el total cuando todos los componentes están disponibles. Un desvío agrega un motivo de revisión y conserva sin cambios los valores devueltos por el modelo. Un comprobante clasificado como `ticket_no_fiscal`, o sin CUIT, CAE ni letra, pasa a revisión manual con motivo «sin datos fiscales» y omite la comprobación de suma. Los campos ausentes o no legibles permanecen null; no se estiman.
+- `categoria`: `IIBB | IVA | Ganancias | SUSS | Impuestos internos | Municipal | Otras`.
+- `tipo_texto`: `string | null`, transcripción literal del texto impreso.
+- `importe`: `string | null`.
 
-## Privacidad y estado de la allowlist
+### Fuente del catálogo
 
-ADR-0005 exige ZDR, `data_collection: deny`, parámetros requeridos y proveedores/modelos allowlisted, pero el ADR y el checkout `origin/main` no enumeran IDs de modelo ni proveedores aprobados. `qwen/qwen3.8-flash` no aparece en esa allowlist verificable. Por eso el código mantiene las allowlists de extracción vacías y falla cerrado: configurar un modelo no aprobado devuelve revisión manual con motivo y no contacta OpenRouter. `EXTRACTION_MODEL` queda vacío en `.env.example`; el Qwen solicitado no queda como default ni se activa en este PR.
+La aplicación no tenía un catálogo canónico de tipos de percepción para extracción. El plan de cuentas define tipos contables generales (`ASSET`, `LIABILITY`, `EQUITY`, `REVENUE`, `EXPENSE`, `MEMO`) y el rol `PERCEPTION`; `PerceptionCertificate.concept` es texto libre y sus referencias `taxTypeId`/`regimeId` dan alcance fiscal, no un enum para clasificar el rótulo impreso. El importador Excel reconoce columnas de origen como IIBB, IVA, municipales, internos y otros tributos. Esas columnas de importación tampoco forman un catálogo único: son específicas del formato y no cubren, por ejemplo, Ganancias y SUSS.
 
-La llamada reutiliza `OPENROUTER_API_KEY`, la variable que ya consume `services/ai/app/assistant.py`; no se introduce otra clave. Cuando un futuro cambio agregue IDs aprobados, el request enviará `provider.zdr=true`, `provider.data_collection="deny"`, `provider.require_parameters=true`, `provider.allow_fallbacks=false` y `provider.only` limitado a la allowlist revisada. Este PR no cambia configuración de producción.
+Por eso se implementa el catálogo fijo aprobado por Inti, sin sumar categorías inferidas de esas otras listas. Si el modelo devuelve una categoría fuera del catálogo, `Otras`, o una percepción que no puede clasificar por falta de `tipo_texto`, el motor conserva el texto visible, fija `categoria: "Otras"`, asigna confianza 0 a esa categoría derivada y marca revisión con `percepción no reconocida`.
 
-Los prompts, imágenes y respuestas completas no se guardan en logs ni en la base. Cada extracción sí guarda proveedor, modelo, promptVersion, tokens de entrada/salida, latencia, costo estimado y motivo de revisión. Si OpenRouter no devuelve costo y no se configuran ambas tarifas, `estimatedCostUsd` queda null para evitar inventar un importe.
+## Prompt y validaciones
 
-## Límites y costo/legibilidad
+El prompt `vision-ar-v5` instruye el catálogo y el formato `categoria` + `tipo_texto` + `importe`, con ejemplo. Conserva las reglas anteriores: valores ausentes o no legibles como null; CUIT de exactamente 11 dígitos consecutivos; transcripción literal completa de `condicion_iva`; no inventar datos ni anteponer `Percepcion` si no está impresa. `tipo_texto` se preserva como aparece, incluidos prefijos o calificadores realmente impresos.
 
-- Máximo: 3 páginas por PDF. Se rasterizan hasta 4 para detectar que el documento excede el límite; un PDF mayor pasa a revisión manual y no se envía parcialmente al modelo.
-- PDF: 150 DPI, JPEG calidad 85, máximo de 2048 px en el lado mayor. Esta resolución conserva texto habitual de comprobantes A4 y acota píxeles, payload y consumo multimodal.
-- Imagen directa: conserva tamaño legible hasta 2048 px por lado mayor; imágenes superiores se reducen, nunca se amplían.
-- El tope de 3 páginas y 4096 tokens de salida limita costo y latencia; su calidad debe verificarse en el set sintético/validado de Fase 0.
-- Timeout configurado: OpenRouter 55 s, worker 75 s; es un presupuesto provisional con 15 s para descarga y margen de coordinación. La prueba de humo de este PR no se ejecutó por el bloqueo de allowlist/credencial, por lo que estos valores no son una medición. Si el benchmark multi-página excede el timeout, la alternativa es un PR aparte con ejecución asíncrona.
+La comprobación aritmética mantiene tolerancia absoluta 0,02 y suma neto + IVA + no gravado + exento + percepciones frente al total cuando los componentes están disponibles. `sin datos fiscales` y desvíos aritméticos son motivos a nivel documento.
 
-## Configuración
+## Rutas estables de revisión
 
-- `EXTRACTION_ENGINE=model`: motor por defecto. Otro valor se cierra en revisión manual; no existe ruta de reglas de fallback.
-- `EXTRACTION_MODEL`: ID exacto del modelo, requerido y sujeto a allowlist de privacidad. Permanece vacío hasta una aprobación versionada.
-- `OPENROUTER_API_KEY`: clave existente compartida con el asistente.
-- `EXTRACTION_MODEL_TIMEOUT_SECONDS`: timeout del proveedor, default 55, máximo 60.
-- `EXTRACTION_WORKER_TIMEOUT_MS`: timeout del worker, default 75000.
-- `EXTRACTION_INPUT_USD_PER_MILLION_TOKENS` y `EXTRACTION_OUTPUT_USD_PER_MILLION_TOKENS`: tarifas opcionales para estimar costo cuando la respuesta no incluye costo. Configurar ambas.
+El formato es `coleccion[indice].campo`, con índice de lista basado en cero. Ejemplos: `iva[1].importe` y `percepciones[0].categoria`. Para los campos de percepción también puede usarse `percepciones[0].tipo_texto` o `.importe`.
 
-Las fallas HTTP, timeout, JSON inválido o respuesta fuera de esquema reciben exactamente un reintento. Si persiste la falla, se guarda una extracción `NEEDS_REVIEW`, el documento queda `EXTRACTED` para la bandeja y `reviewReason` conserva un código sin almacenar payloads. No hay OCR, parsing de texto ni extracción alternativa.
+El motor expone `reviewIssues: Array<{ reason: string; sourcePath: string | null }>` en la respuesta AI y la API. Cada motivo asociado a una fila lleva su `sourcePath`; los motivos del documento, como `sin datos fiscales` o `COMPONENT_SUM_MISMATCH`, llevan `sourcePath: null`. `reviewReason` e `issues` se conservan en la respuesta AI por compatibilidad. La corrección y aprobación mantienen el flujo existente.
 
-## Datos y migración
+Los GET `/api/v1/firms/:firmId/clients/:clientId/documents/:documentId/extraction` y `/api/v1/firms/:firmId/clients/:clientId/extractions/:extractionId` exponen `reviewIssues`. Para el PR #30, la UI puede usar `sourcePath` para resolver la fila en `voucherData`; las propiedades de cada percepción nueva son `categoria: string` (enum anterior), `tipo_texto: string | null`, `importe: string | null`.
 
-La migración `20261111000000_extraction_v2_metrics` agrega tokens, latencia, costo estimado, motivo de revisión y `voucherData` JSONB a `document_extractions`. `voucherData` conserva el esquema voucher-ar-v2 íntegro, incluidos nulls y la confianza por campo; las tablas relacionales mantienen los campos adaptados a la bandeja. La tabla existente `extracted_line_items` se conserva y este flujo no agrega filas. `provider`, `model` y `promptVersion` ya existían. No se agregan seeds.
+## Versionado y registros existentes
 
-El alcance cubre los datos fiscales del comprobante; la lectura de QR queda fuera de esta extracción.
+Se eleva el esquema a `voucher-ar-v2.1` porque cambia la forma de `percepciones`; no se reutiliza el nombre v2 con una estructura incompatible. Las nuevas extracciones guardan `schemaVersion: "voucher-ar-v2.1"` y `percepciones[].categoria/tipo_texto/importe`.
+
+Los registros guardados antes de este cambio permanecen intactos como `schemaVersion: "voucher-ar-v2"` con `percepciones[].tipo/importe`. La API los devuelve con esa estructura y versión, sin reinterpretar ni reescribir su JSON. El contrato compartido acepta las dos versiones para que los clientes discriminen por `schemaVersion`. Las filas antiguas sin motivos estructurados se exponen con `reviewIssues: []`.
+
+La única migración de base es aditiva: agrega `document_extractions.reviewIssues JSONB` nullable. No transforma ni borra `voucherData`, no requiere backfill, y no altera las tablas de campos ni el flujo de aprobación/corrección.
+
+## Privacidad y configuración
+
+ADR-0009 mantiene el modelo aprobado `anthropic/claude-haiku-5.5` y los proveedores `google-vertex` y `amazon-bedrock`. `services/ai/app/openrouter_policy.py`, la allowlist, el payload ZDR y la compuerta productiva no se modifican. En producción, `EXTRACTION_CUSTOMER_DATA_ENABLED=false` sigue bloqueando documentos de clientes hasta autorización separada. Sólo se usaron documentos sintéticos.
+
+`OPENROUTER_API_KEY` se cargó en el proceso del benchmark desde el `.env` del servidor. No se escribió en el repositorio, artefactos, logs ni reporte.
+
+## Benchmark sintético
+
+El benchmark v3 usa los mismos 40 documentos y el mismo harness del benchmark v2, adaptado al esquema v2.1. La verdad se copió a `benchmark_v3/verdad/`; `tipo` se conservó literalmente en `tipo_texto` y el único rótulo legado, `IIBB - dato sintetico`, se derivó a `IIBB` por coincidencia de la sigla. No se modificaron `benchmark/`, `benchmark_v2/` ni `verdad/` originales.
+
+| Métrica | v2 | v3 |
+|---|---:|---:|
+| Exactitud global | 773/800 (96,62%) | 800/800 (100,00%) |
+| Categoría de percepciones | 40/40 | 40/40 |
+| Importe de percepciones | 40/40 | 40/40 |
+| `tipo_texto` literal exacto (informativo, no suma errores) | 1/28 (3,57%) | 3/28 (10,71%) |
+| Errores de campo sin marca | 27 | 0 |
+| Documentos marcados para revisión | 12 | 12 |
+| Respuestas finales inválidas | 0 | 0 |
+| Llamadas HTTP | 40 | 40 |
+| Latencia media / p95 | 5936 / 8548 ms | 6308 / 8577 ms |
+| Costo reportado por OpenRouter | USD 0,03737860 | USD 0,03819510 |
+
+En v2, categoría e importe se calcularon desde el `tipo` legado con la misma derivación de etiquetas de la verdad adaptada; ambos coincidieron en los 40 documentos. `tipo_texto` se comparó por separado, sin contabilizarlo como error global. El benchmark v3 superó la meta de más de 98% global y logró cero errores sin marca, por lo que no se hizo otra iteración de prompt. Gasto nuevo acumulado en este encargo: USD 0,03819510 de USD 0,20; las 40 llamadas devolvieron costo informado.
+
+Los artefactos completos están fuera del repositorio en `/root/.hermes/cache/eval/voucher-ar-sintetico-v1/benchmark_v3/`.
 
 ## Verificación
 
-- Unit tests del servicio AI: `uv run --no-project --with-requirements services/ai/requirements.txt --with-requirements services/ai/requirements-dev.txt --with pytest pytest -q services/ai/tests` desde la raíz del repo.
-- TypeScript: `npm run --workspace @contable/worker typecheck` y las pruebas focalizadas del workspace.
-- Los tests usan respuestas/archivos sintéticos y clientes mockeados; CI no llama al modelo.
-- Prueba de humo con imagen/documento sintético: NO EJECUTADA. Bloqueada: qwen no está en una allowlist verificable de ADR-0005 y `OPENROUTER_API_KEY` no está presente en este VPS. No se sustituyó por otra extracción.
+- Servicio AI: `pytest -q services/ai/tests`.
+- Servicio AI: `ruff check app tests` y `mypy -p app` desde `services/ai`.
+- Servicio AI: `ruff format --check` aplicado a los archivos modificados.
+- Contrato/API/worker: lint, typecheck y tests de la aplicación; CI del PR.
+- Benchmark: `benchmark_v3/benchmark.py --preflight` verificó 40 documentos y 46 páginas sin llamadas; la corrida real usó 40 llamadas en allowlist.
 
-## Bloqueos antes de producción
+## Riesgos y alcance
 
-1. OK escrito de privacidad de Inti.
-2. Confirmación contractual de retención y subencargados de OpenRouter para proveedor/modelo.
-3. Decisión versionada que agregue a la allowlist los IDs exactos aprobados; incluye `qwen/qwen3.8-flash` sólo si privacidad lo aprueba.
-4. Benchmark de calidad/confianza contra el set de Fase 0.
-5. Medición de latencia por número de páginas y confirmación de timeout; PR asíncrono separado si corresponde.
-6. Decisión posterior sobre eliminación del extractor de reglas.
+La verdad sintética sólo contiene rótulos IIBB; no mide clasificación real de IVA, Ganancias, SUSS, Impuestos internos ni Municipal. `Otras` se revisa de forma conservadora para que ningún rótulo no reconocido pase sin revisión. La transcripción literal permanece como dato visible y métrica informativa separada; en v3 coincidió exactamente en 3/28 percepciones. El benchmark no autoriza documentos reales ni despliegue.

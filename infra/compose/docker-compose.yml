@@ -137,9 +137,13 @@ services:
       context: ../..
       dockerfile: services/ai/Dockerfile
     environment:
+      NODE_ENV: development
       AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:-dev-ai-service-secret-change-me}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+      EXTRACTION_ENGINE: ${EXTRACTION_ENGINE:-model}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-anthropic/claude-haiku-5.5}
+      EXTRACTION_CUSTOMER_DATA_ENABLED: ${EXTRACTION_CUSTOMER_DATA_ENABLED:-false}
     depends_on:
       - valkey
 

@@ -29,7 +29,7 @@ VALID_PAYLOAD = {
         "country": "AR",
         "language": "es",
         "maxPages": 3,
-        "schemaVersion": "voucher-ar-v2",
+        "schemaVersion": "voucher-ar-v2.1",
     },
     "callback": {
         "url": "http://api:3000/internal/v1/extractions/complete",
@@ -119,10 +119,10 @@ def test_extraction_valid_hmac(monkeypatch: pytest.MonkeyPatch) -> None:
     res = client.post("/internal/v1/extractions", content=body, headers=_headers(body))
     assert res.status_code == 200
     data = res.json()
-    assert data["schemaVersion"] == "voucher-ar-v2"
+    assert data["schemaVersion"] == "voucher-ar-v2.1"
     assert data["voucher"] is None
     assert data["ocrEngine"] == "multimodal-model"
-    assert data["promptVersion"] == "vision-ar-v2"
+    assert data["promptVersion"] == "vision-ar-v5"
     assert data["reviewReason"] == "MODEL_NOT_CONFIGURED"
 
 
