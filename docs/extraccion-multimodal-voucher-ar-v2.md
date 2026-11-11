@@ -18,17 +18,17 @@ Por eso se implementa el catálogo fijo aprobado por Inti, sin sumar categorías
 
 ## Prompt y validaciones
 
-El prompt `vision-ar-v5` instruye el catálogo y el formato `categoria` + `tipo_texto` + `importe`, con ejemplo. Conserva las reglas anteriores: valores ausentes o no legibles como null; CUIT de exactamente 11 dígitos consecutivos; transcripción literal completa de `condicion_iva`; no inventar datos ni anteponer `Percepcion` si no está impresa. `tipo_texto` se preserva como aparece, incluidos prefijos o calificadores realmente impresos.
+El prompt `vision-ar-v6` instruye el catálogo, las equivalencias respaldadas por rótulos visibles y el formato `categoria` + `tipo_texto` + `importe`. Usa el formato numérico argentino: punto para miles, coma para decimales; por ejemplo, `$100.000` → `100000.00`, `$121.000` → `121000.00`, `$1.234,56` → `1234.56` y `$121.000,00` → `121000.00`. Un punto seguido de exactamente tres dígitos no se interpreta como decimal; ante ambigüedad se elige la lectura argentina. Los rótulos `Percep. IVA-RG2408` y `Percep. RG 2408 - DGI` se clasifican como `IVA`; el resto de equivalencias se limita a los rótulos claros presentes en los comprobantes evaluados y las categorías aprobadas. Conserva las reglas anteriores: valores ausentes o no legibles como null; CUIT de exactamente 11 dígitos consecutivos; transcripción literal completa de `condicion_iva`; no inventar datos ni anteponer `Percepcion` si no está impresa. `tipo_texto` se preserva como aparece, incluidos prefijos o calificadores realmente impresos.
 
-La comprobación aritmética mantiene tolerancia absoluta 0,02 y suma neto + IVA + no gravado + exento + percepciones frente al total cuando los componentes están disponibles. `sin datos fiscales` y desvíos aritméticos son motivos a nivel documento.
+Por aprobación escrita de Inti del 11-11-2026, la decisión previa de aplicar una única validación aritmética se reemplaza por tres reglas de integridad simples y deterministas: (1) neto + IVA + no gravado + exento + percepciones vs. total, con tolerancia absoluta 0,02 cuando los componentes están disponibles; (2) dígito verificador de `cuit_emisor` y `cuit_receptor`, validados por separado con los pesos 5,4,3,2,7,6,5,4,3,2; (3) `cae_vencimiento` anterior a `fecha` cuando ambas fechas existen. Los motivos de las reglas nuevas son `CUIT con dígito verificador inválido` y `vencimiento del CAE anterior a la fecha del comprobante`; se emiten en `reviewIssues` con `sourcePath` igual a `cuit_emisor`, `cuit_receptor` o `cae_vencimiento`. Los valores extraídos se conservan sin corregir ni descartar. Estas comprobaciones no cambian el esquema voucher-ar-v2.1, los contratos ni la API y no requieren migraciones. `sin datos fiscales` y desvíos aritméticos siguen siendo motivos a nivel documento.
 
 ## Rutas estables de revisión
 
-El formato es `coleccion[indice].campo`, con índice de lista basado en cero. Ejemplos: `iva[1].importe` y `percepciones[0].categoria`. Para los campos de percepción también puede usarse `percepciones[0].tipo_texto` o `.importe`.
+El formato es `coleccion[indice].campo`, con índice de lista basado en cero. Ejemplos: `iva[1].importe` y `percepciones[0].categoria`. Las rutas de campos simples son el nombre exacto del campo: `cuit_emisor`, `cuit_receptor` y `cae_vencimiento`, entre otros. Para los campos de percepción también puede usarse `percepciones[0].tipo_texto` o `.importe`.
 
 El motor expone `reviewIssues: Array<{ reason: string; sourcePath: string | null }>` en la respuesta AI y la API. Cada motivo asociado a una fila lleva su `sourcePath`; los motivos del documento, como `sin datos fiscales` o `COMPONENT_SUM_MISMATCH`, llevan `sourcePath: null`. `reviewReason` e `issues` se conservan en la respuesta AI por compatibilidad. La corrección y aprobación mantienen el flujo existente.
 
-Los GET `/api/v1/firms/:firmId/clients/:clientId/documents/:documentId/extraction` y `/api/v1/firms/:firmId/clients/:clientId/extractions/:extractionId` exponen `reviewIssues`. Para el PR #30, la UI puede usar `sourcePath` para resolver la fila en `voucherData`; las propiedades de cada percepción nueva son `categoria: string` (enum anterior), `tipo_texto: string | null`, `importe: string | null`.
+Los GET `/api/v1/firms/:firmId/clients/:clientId/documents/:documentId/extraction` y `/api/v1/firms/:firmId/clients/:clientId/extractions/:extractionId` exponen `reviewIssues`. La UI resuelve `sourcePath` contra la fila correspondiente de `voucherData`, incluidos `cuit_emisor`, `cuit_receptor` y `cae_vencimiento`. Para el PR #30, las propiedades de cada percepción nueva son `categoria: string` (enum anterior), `tipo_texto: string | null`, `importe: string | null`.
 
 ## Versionado y registros existentes
 
@@ -40,9 +40,9 @@ La única migración de base es aditiva: agrega `document_extractions.reviewIssu
 
 ## Privacidad y configuración
 
-ADR-0009 mantiene el modelo aprobado `anthropic/claude-haiku-5.5` y los proveedores `google-vertex` y `amazon-bedrock`. `services/ai/app/openrouter_policy.py`, la allowlist, el payload ZDR y la compuerta productiva no se modifican. En producción, `EXTRACTION_CUSTOMER_DATA_ENABLED=false` sigue bloqueando documentos de clientes hasta autorización separada. Sólo se usaron documentos sintéticos.
+ADR-0009 mantiene el modelo aprobado `anthropic/claude-haiku-5.5` y los proveedores `google-vertex` y `amazon-bedrock`. `services/ai/app/openrouter_policy.py`, la allowlist, el payload ZDR y la compuerta productiva no se modifican. En producción, `EXTRACTION_CUSTOMER_DATA_ENABLED=false` sigue bloqueando documentos de clientes hasta autorización separada. Los benchmarks de este cambio usan únicamente los comprobantes públicos indicados y el set sintético, sin datos de clientes.
 
-`OPENROUTER_API_KEY` se cargó en el proceso del benchmark desde el `.env` del servidor. No se escribió en el repositorio, artefactos, logs ni reporte.
+`OPENROUTER_API_KEY` se cargó solo en el proceso del benchmark desde el archivo de credenciales de demo; no se escribió en el repositorio, artefactos, logs ni reporte.
 
 ## Benchmark sintético
 
@@ -61,9 +61,35 @@ El benchmark v3 usa los mismos 40 documentos y el mismo harness del benchmark v2
 | Latencia media / p95 | 5936 / 8548 ms | 6308 / 8577 ms |
 | Costo reportado por OpenRouter | USD 0,03737860 | USD 0,03819510 |
 
-En v2, categoría e importe se calcularon desde el `tipo` legado con la misma derivación de etiquetas de la verdad adaptada; ambos coincidieron en los 40 documentos. `tipo_texto` se comparó por separado, sin contabilizarlo como error global. El benchmark v3 superó la meta de más de 98% global y logró cero errores sin marca, por lo que no se hizo otra iteración de prompt. Gasto nuevo acumulado en este encargo: USD 0,03819510 de USD 0,20; las 40 llamadas devolvieron costo informado.
+En v2, categoría e importe se calcularon desde el `tipo` legado con la misma derivación de etiquetas de la verdad adaptada; ambos coincidieron en los 40 documentos. `tipo_texto` se comparó por separado, sin contabilizarlo como error global. El benchmark v3 superó la meta de más de 98% global y logró cero errores sin marca; ese resultado histórico no requirió una iteración de prompt. El costo de aquella corrida fue USD 0,03819510.
 
 Los artefactos completos están fuera del repositorio en `/root/.hermes/cache/eval/voucher-ar-sintetico-v1/benchmark_v3/`.
+
+## Evaluación del prompt v6 y las validaciones
+
+El motor con `vision-ar-v6` se midió con el benchmark público `benchmark_v2/` (30 comprobantes, 30/30 respuestas) y el benchmark sintético `benchmark_v4/` (40 documentos, 40/40 respuestas). La tabla compara la línea base previa con el resultado final después de una única iteración de ajuste para no omitir subtotales legibles.
+
+| Set | Antes | Final v6 |
+|---|---|---|
+| Público, 30 | RP027, RP028, RP029 y RP030 tenían hallazgos observables sin marca; RP028 devolvía neto `100.00` y total `121.00`; 4 documentos tenían `reviewReason`. | Los cuatro quedan marcados: RP027/RP028 por CUIT emisor; RP029 por CUIT emisor y receptor; RP030 por CAE vencido. RP028 devuelve neto `100000.00` y total `121000.00`; 8 documentos tienen `reviewReason`. |
+| Sintético, 40 | v3: 800/800 campos, cero errores sin marca y 12 documentos marcados. | v4: 799/800 campos; PH002.CAE es un error sin marca; 12 documentos marcados y cero documentos sintéticos marcados por las dos reglas nuevas. |
+
+La inspección visual confirmó que RP027 muestra subtotal `$100.000`, IVA `$21.000` y total `$121.000`; RP028 muestra subtotal `$100.000` y total `$121.000`; RP029 muestra subtotal y total `$100.000`. Los importes finales extraídos coinciden con la escala argentina en los tres comprobantes. El control visual reúne 121 campos; queda una diferencia en RP023: la segunda línea de IVA al 21% está impresa, pero su importe no se lee con esta resolución. El contraste incluye 188 valores de los 22 PDF con texto y no encontró valores contrastables ausentes de ese texto.
+
+La clasificación de `Percep. RG 2408 - DGI` en RP007 y `Percep. IVA-RG2408` en RP013 y RP024 quedó en `IVA`. RP024 también quedó a revisión porque la respuesta del modelo leyó el CUIT receptor como `30715446950`; la imagen muestra `30-71544695-9` (`30715446959`). La revisión se asocia a `cuit_receptor` y conserva el valor extraído sin corregirlo. RP023 mantiene `COMPONENT_SUM_MISMATCH` y ahora registra además el CUIT emisor inválido.
+
+| Regla comprobada en el set público | Antes: cumple / no cumple / no aplica | Final v6: cumple / no cumple / no aplica |
+|---|---:|---:|
+| Dígito verificador de `cuit_emisor` | 23 / 4 / 3 | 23 / 4 / 3 |
+| Dígito verificador de `cuit_receptor` | 23 / 1 / 6 | 22 / 2 / 6 |
+| Vencimiento del CAE posterior a la fecha | 25 / 1 / 4 | 25 / 1 / 4 |
+| Suma de componentes vs. total | 1 / 1 / 28 | 1 / 1 / 28 |
+
+El cambio de CUIT receptor corresponde a RP024: el modelo devolvió un dígito distinto al visible y la nueva regla lo envió a revisión. En RP007 la clasificación de RG 2408 quedó en IVA. La respuesta final incluyó dos percepciones frente a cinco en la primera corrida v6 y omitió tres rótulos que sí aparecieron en esa respuesta anterior y en el texto del PDF: `Fdo. Des. Ene. Prov. (10,00%)`, `Tasa de Regulac. ERSeP - Dto. 2298 (0,40%)` y `Tasa de Seguridad Eléct. - Ley 10281 (0,10%)`. La línea base v5 también había devuelto dos percepciones; la cobertura de esos rótulos queda pendiente, sin otra iteración de prompt.
+
+El benchmark sintético v4 conserva los 12 motivos previos `sin datos fiscales` y no genera ningún motivo de CUIT ni de vencimiento de CAE. El error sin marca está en `PH002.cae`: verdad `75000000000022`, predicción `75500000000022`. Es el único desacierto entre 800 campos y no queda cubierto por las tres reglas de integridad actuales.
+
+El costo real acumulado de las corridas de este encargo fue USD 0,10474170 en 100 llamadas, todas con costo informado, dentro del tope de USD 0,40. Los artefactos permanecen fuera del repositorio en `/root/.hermes/cache/eval/voucher-ar-real-publico-v1/benchmark_v2/` y `/root/.hermes/cache/eval/voucher-ar-sintetico-v1/benchmark_v4/`.
 
 ## Verificación
 

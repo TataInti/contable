@@ -225,7 +225,7 @@ export class DocumentProcessor {
           schemaVersion: "voucher-ar-v2.1",
           status: "NEEDS_REVIEW",
           ocrEngine: "multimodal-model",
-          promptVersion: "vision-ar-v5",
+          promptVersion: "vision-ar-v6",
           latencyMs: Date.now() - extractionStartedAt,
           reviewReason,
           reviewIssues: [{ reason: reviewReason, sourcePath: null }],

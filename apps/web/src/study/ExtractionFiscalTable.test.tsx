@@ -236,6 +236,23 @@ describe("ExtractionFiscalTable", () => {
     expect(rowForField(table, "Percepciones")[2]!.textContent).toBe("no visible");
   });
 
+  it.each([
+    ["cuit_emisor", "CUIT emisor", "CUIT receptor"],
+    ["cuit_receptor", "CUIT receptor", "CUIT emisor"],
+    ["cae_vencimiento", "Vencimiento del CAE", "Fecha"],
+  ])("asigna el motivo de revisión de %s a su fila escalar", (sourcePath, label, otherLabel) => {
+    renderTable({
+      reviewIssues: [{ reason: "dato inválido", sourcePath }],
+    });
+    const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+    const flagged = rowForField(table, label);
+
+    expect(flagged[2]!.textContent).toBe("a revisar");
+    expect(flagged[3]!.textContent).toBe("dato inválido");
+    expect(rowForField(table, otherLabel)[2]!.textContent).toBe("leído");
+    expect(screen.queryByRole("status", { name: "Estado del documento" })).toBeNull();
+  });
+
   it("marca a revisar el campo escalar que tiene motivo sin alterar los demás", () => {
     renderTable({
       fields: [

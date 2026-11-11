@@ -121,12 +121,13 @@ function buildRows(
   const scalarRow = (index: number): FiscalRow => {
     const definition = SCALAR_FIELDS[index]!;
     const relatedFields = fields.filter((field) => field.key === definition.extractedKey);
+    const relatedIssues = reviewIssues.filter((issue) => issue.sourcePath === definition.voucherKey);
     return makeRow(
       definition.voucherKey,
       definition.field,
       voucher?.[definition.voucherKey] ?? null,
       relatedFields,
-      [],
+      relatedIssues,
     );
   };
   const vatRows: FiscalRow[] =

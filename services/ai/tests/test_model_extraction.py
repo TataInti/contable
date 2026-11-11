@@ -15,6 +15,8 @@ from app.model_extraction import run_model_extraction
 from app.voucher_v2 import (
     PERCEPTION_CATEGORIES,
     VoucherARV21,
+    VoucherExtractionResponse,
+    _has_invalid_cuit_check_digit,
     response_from_voucher,
     source_path_for,
 )
@@ -28,7 +30,7 @@ def _valid_voucher() -> dict[str, Any]:
         "numero": "00000023",
         "fecha": "2026-11-11",
         "hora": None,
-        "cuit_emisor": "30712345675",
+        "cuit_emisor": "30712345671",
         "cuit_receptor": None,
         "razon_social_emisor": "Proveedor Sintético SA",
         "razon_social_receptor": None,
@@ -59,6 +61,19 @@ def _valid_voucher() -> dict[str, Any]:
     }
 
 
+def _response_from_payload(payload: dict[str, Any]) -> VoucherExtractionResponse:
+    return response_from_voucher(
+        VoucherARV21.model_validate(payload),
+        model="test/model",
+        provider="test-provider",
+        prompt_version="vision-ar-v6",
+        input_tokens=None,
+        output_tokens=None,
+        latency_ms=0,
+        estimated_cost_usd=None,
+    )
+
+
 def test_prompt_specifies_ticket_enum_cuit_and_literal_tax_text() -> None:
     ticket_example = (
         '{"tipo_documento":"ticket_no_fiscal","letra":null,"cuit_emisor":null,'
@@ -68,7 +83,7 @@ def test_prompt_specifies_ticket_enum_cuit_and_literal_tax_text() -> None:
         "content"
     ]
 
-    assert model_extraction.PROMPT_VERSION == "vision-ar-v5"
+    assert model_extraction.PROMPT_VERSION == "vision-ar-v6"
     assert ticket_example in prompt
     assert VoucherARV21.model_validate(json.loads(ticket_example)).tipo_documento == (
         "ticket_no_fiscal"
@@ -91,6 +106,18 @@ def test_prompt_specifies_ticket_enum_cuit_and_literal_tax_text() -> None:
     assert (
         "Omití las claves ausentes o no legibles; el contrato las interpreta como null." in prompt
     )
+    assert "punto para separar miles y coma para decimales" in prompt
+    assert '`$100.000` es cien mil y se devuelve `"100000.00"`' in prompt
+    assert '`$121.000` se devuelve `"121000.00"`' in prompt
+    assert '`$1.234,56` se devuelve `"1234.56"`' in prompt
+    assert '`$121.000,00` se devuelve `"121000.00"`' in prompt
+    assert "Nunca interpretes un punto seguido de exactamente tres dígitos como decimal" in prompt
+    assert "Ante un formato ambiguo, elegí la lectura argentina y no inventes decimales." in prompt
+    assert (
+        "En facturas, registrá el importe visible rotulado `Subtotal` o `Neto` en `neto_gravado`"
+        in prompt
+    )
+    assert "`Percep. RG 2408 - DGI` → `IVA`" in prompt
 
 
 def test_natural_language_ticket_label_is_rejected_by_enum() -> None:
@@ -110,7 +137,7 @@ def test_voucher_ar_v2_validates_and_maps_existing_ui_keys() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v5",
+        prompt_version="vision-ar-v6",
         input_tokens=120,
         output_tokens=48,
         latency_ms=850,
@@ -118,7 +145,7 @@ def test_voucher_ar_v2_validates_and_maps_existing_ui_keys() -> None:
     )
     mapped = {field.key: field.normalizedValue for field in result.fields}
     assert result.schemaVersion == "voucher-ar-v2.1"
-    assert mapped["issuerTaxId"] == "30712345675"
+    assert mapped["issuerTaxId"] == "30712345671"
     assert mapped["issuerName"] == "Proveedor Sintético SA"
     assert mapped["voucherNumber"] == "00000023"
     assert mapped["voucherType"] == "factura"
@@ -186,7 +213,7 @@ def test_unknown_perception_category_becomes_others_and_marks_review() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v5",
+        prompt_version="vision-ar-v6",
         input_tokens=None,
         output_tokens=None,
         latency_ms=0,
@@ -229,7 +256,7 @@ def test_extraction_response_and_voucher_do_not_contain_items() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v5",
+        prompt_version="vision-ar-v6",
         input_tokens=10,
         output_tokens=5,
         latency_ms=100,
@@ -267,6 +294,134 @@ def test_invalid_schema_values_and_unknown_fields_are_rejected() -> None:
         VoucherARV21.model_validate(payload)
 
 
+def test_cuit_with_dv_10_is_flagged_for_emitter_and_value_is_preserved() -> None:
+    payload = _valid_voucher()
+    payload["cuit_emisor"] = "20000000010"
+
+    result = _response_from_payload(payload)
+
+    assert result.reviewReason == "CUIT con dígito verificador inválido"
+    assert [issue.model_dump() for issue in result.reviewIssues] == [
+        {
+            "reason": "CUIT con dígito verificador inválido",
+            "sourcePath": "cuit_emisor",
+        }
+    ]
+    assert result.voucher is not None
+    assert result.voucher.cuit_emisor == "20000000010"
+
+
+def test_cuit_dv_11_maps_to_zero_and_valid_cuit_does_not_mark_review() -> None:
+    payload = _valid_voucher()
+    payload["cuit_emisor"] = "20000000060"
+    assert _has_invalid_cuit_check_digit(payload["cuit_emisor"]) is False
+
+    result = _response_from_payload(payload)
+
+    assert result.reviewIssues == []
+    assert result.reviewReason is None
+
+
+def test_valid_cuit_does_not_mark_review() -> None:
+    payload = _valid_voucher()
+    payload["cuit_emisor"] = "20123456786"
+
+    result = _response_from_payload(payload)
+
+    assert result.reviewIssues == []
+    assert result.reviewReason is None
+
+
+def test_invalid_emitter_and_receiver_cuits_have_independent_source_paths() -> None:
+    payload = _valid_voucher()
+    payload["cuit_emisor"] = "30123456789"
+    payload["cuit_receptor"] = "20123456789"
+    payload["confianza"]["cuit_receptor"] = 0.9
+
+    result = _response_from_payload(payload)
+
+    assert result.reviewReason == "CUIT con dígito verificador inválido"
+    assert [issue.model_dump() for issue in result.reviewIssues] == [
+        {
+            "reason": "CUIT con dígito verificador inválido",
+            "sourcePath": "cuit_emisor",
+        },
+        {
+            "reason": "CUIT con dígito verificador inválido",
+            "sourcePath": "cuit_receptor",
+        },
+    ]
+    assert result.voucher is not None
+    assert result.voucher.cuit_emisor == "30123456789"
+    assert result.voucher.cuit_receptor == "20123456789"
+
+
+def test_null_or_short_cuit_skips_check_digit_rule() -> None:
+    assert _has_invalid_cuit_check_digit(None) is False
+    assert _has_invalid_cuit_check_digit("20-123") is False
+
+    payload = _valid_voucher()
+    payload["cuit_emisor"] = None
+    payload["confianza"].pop("cuit_emisor")
+
+    result = _response_from_payload(payload)
+
+    assert result.reviewIssues == []
+    assert result.reviewReason is None
+
+
+@pytest.mark.parametrize(
+    ("cae_expiration", "expected_issues"),
+    [
+        (
+            "2026-11-10",
+            [
+                {
+                    "reason": "vencimiento del CAE anterior a la fecha del comprobante",
+                    "sourcePath": "cae_vencimiento",
+                }
+            ],
+        ),
+        ("2026-11-11", []),
+        ("2026-11-12", []),
+    ],
+)
+def test_cae_expiration_review_rule(
+    cae_expiration: str, expected_issues: list[dict[str, str]]
+) -> None:
+    payload = _valid_voucher()
+    payload["cae_vencimiento"] = cae_expiration
+    payload["confianza"]["cae_vencimiento"] = 0.9
+
+    result = _response_from_payload(payload)
+
+    assert [issue.model_dump() for issue in result.reviewIssues] == expected_issues
+    assert result.voucher is not None
+    assert result.voucher.cae_vencimiento == cae_expiration
+
+
+def test_cae_validation_skips_when_one_date_is_missing() -> None:
+    for missing_field in ("fecha", "cae_vencimiento"):
+        payload = _valid_voucher()
+        payload["cae_vencimiento"] = "2026-11-10"
+        payload["confianza"]["cae_vencimiento"] = 0.9
+        payload[missing_field] = None
+        payload["confianza"].pop(missing_field)
+
+        result = _response_from_payload(payload)
+
+        assert result.reviewIssues == []
+        assert result.reviewReason is None
+
+
+def test_clean_response_has_no_review_reasons() -> None:
+    result = _response_from_payload(_valid_voucher())
+
+    assert result.reviewReason is None
+    assert result.issues == []
+    assert result.reviewIssues == []
+
+
 def test_arithmetic_mismatch_marks_review_without_changing_values() -> None:
     payload = _valid_voucher()
     payload["total"] = "122.00"
@@ -279,7 +434,7 @@ def test_arithmetic_mismatch_marks_review_without_changing_values() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v5",
+        prompt_version="vision-ar-v6",
         input_tokens=None,
         output_tokens=None,
         latency_ms=0,
@@ -310,7 +465,7 @@ def test_non_fiscal_ticket_requires_manual_review() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v5",
+        prompt_version="vision-ar-v6",
         input_tokens=20,
         output_tokens=12,
         latency_ms=250,
@@ -344,7 +499,7 @@ def test_missing_fiscal_identifiers_skip_arithmetic_validation() -> None:
         VoucherARV21.model_validate(payload),
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v5",
+        prompt_version="vision-ar-v6",
         input_tokens=20,
         output_tokens=12,
         latency_ms=250,
@@ -584,6 +739,46 @@ def test_mocked_multimodal_success_records_usage_and_zdr_options(
     assert result.inputTokens == 120
     assert result.outputTokens == 48
     assert result.estimatedCostUsd == 0.0002
+
+
+def test_mocked_argentine_thousands_amounts_are_preserved_and_pass_arithmetic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_mock_model(monkeypatch)
+    payload = _valid_voucher()
+    payload["neto_gravado"] = "100000.00"
+    payload["iva"][0]["importe"] = "21000.00"
+    payload["no_gravado"] = "0.00"
+    payload["exento"] = "0.00"
+    payload["percepciones"] = []
+    payload["total"] = "121000.00"
+    payload["confianza"].update({"no_gravado": 0.9, "exento": 0.9})
+    observed: list[dict[str, Any]] = []
+    response = ModelResponse(
+        200,
+        {
+            "model": "test/model",
+            "usage": {"prompt_tokens": 32, "completion_tokens": 12, "cost": 0.0001},
+            "choices": [{"message": {"content": json.dumps(payload)}}],
+        },
+    )
+    monkeypatch.setattr(
+        model_extraction.httpx,
+        "AsyncClient",
+        lambda **_kwargs: ModelClientSequence([response], observed),
+    )
+
+    result = asyncio.run(run_model_extraction(b"synthetic invoice image", "image/png", 1))
+
+    assert result.voucher is not None
+    assert result.voucher.neto_gravado == "100000.00"
+    assert result.voucher.iva is not None
+    assert result.voucher.iva[0].importe == "21000.00"
+    assert result.voucher.total == "121000.00"
+    assert result.reviewReason is None
+    assert result.reviewIssues == []
+    system_prompt = observed[0]["request"]["messages"][0]["content"]
+    assert '`$100.000` es cien mil y se devuelve `"100000.00"`' in system_prompt
 
 
 def test_unexpected_response_model_is_rejected_without_accepting_voucher(

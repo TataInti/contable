@@ -122,7 +122,7 @@ def test_extraction_valid_hmac(monkeypatch: pytest.MonkeyPatch) -> None:
     assert data["schemaVersion"] == "voucher-ar-v2.1"
     assert data["voucher"] is None
     assert data["ocrEngine"] == "multimodal-model"
-    assert data["promptVersion"] == "vision-ar-v5"
+    assert data["promptVersion"] == "vision-ar-v6"
     assert data["reviewReason"] == "MODEL_NOT_CONFIGURED"
 
 

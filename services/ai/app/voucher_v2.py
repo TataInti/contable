@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -152,7 +153,7 @@ class VoucherExtractionResponse(StrictModel):
     ocrEngine: str = "multimodal-model"
     model: str | None = None
     provider: str | None = None
-    promptVersion: str = "vision-ar-v5"
+    promptVersion: str = "vision-ar-v6"
     inputTokens: int | None = Field(default=None, ge=0)
     outputTokens: int | None = Field(default=None, ge=0)
     latencyMs: int = Field(default=0, ge=0)
@@ -182,11 +183,47 @@ _UI_FIELD_KEYS = {
 
 
 ARITHMETIC_TOLERANCE = Decimal("0.02")
+CUIT_CHECK_DIGIT_WEIGHTS = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+CUIT_INVALID_REASON = "CUIT con dígito verificador inválido"
+CAE_EXPIRATION_REASON = "vencimiento del CAE anterior a la fecha del comprobante"
 
 
 def source_path_for(group_name: str, index: int, field_name: str) -> str:
     """Construye una ruta estable con índice de lista basado en cero."""
     return f"{group_name}[{index}].{field_name}"
+
+
+def _has_invalid_cuit_check_digit(value: str | None) -> bool:
+    """Valida el dígito de control sólo si hay once dígitos disponibles."""
+    if value is None:
+        return False
+    digits = "".join(character for character in value if character.isdigit())
+    if len(digits) != 11:
+        return False
+
+    weighted_sum = sum(
+        int(digit) * weight for digit, weight in zip(digits[:10], CUIT_CHECK_DIGIT_WEIGHTS)
+    )
+    check_digit = 11 - weighted_sum % 11
+    if check_digit == 11:
+        check_digit = 0
+    return check_digit == 10 or check_digit != int(digits[10])
+
+
+def validate_identifier_and_cae_dates(voucher: VoucherARV21) -> list[ReviewIssue]:
+    """Devuelve hallazgos deterministas por campo sin corregir valores."""
+    issues: list[ReviewIssue] = []
+    for field_name in ("cuit_emisor", "cuit_receptor"):
+        if _has_invalid_cuit_check_digit(getattr(voucher, field_name)):
+            issues.append(ReviewIssue(reason=CUIT_INVALID_REASON, sourcePath=field_name))
+
+    if (
+        voucher.fecha is not None
+        and voucher.cae_vencimiento is not None
+        and date.fromisoformat(voucher.cae_vencimiento) < date.fromisoformat(voucher.fecha)
+    ):
+        issues.append(ReviewIssue(reason=CAE_EXPIRATION_REASON, sourcePath="cae_vencimiento"))
+    return issues
 
 
 def validate_arithmetic(voucher: VoucherARV21) -> list[str]:
@@ -289,6 +326,7 @@ def response_from_voucher(
         )
         for index in unrecognized_perception_indexes
     ]
+    field_review_issues.extend(validate_identifier_and_cae_dates(voucher))
     review_issues = field_review_issues + [
         ReviewIssue(reason=reason) for reason in dict.fromkeys(document_issues)
     ]
@@ -315,7 +353,7 @@ def manual_review_response(
     *,
     model: str | None = None,
     provider: str | None = None,
-    prompt_version: str = "vision-ar-v5",
+    prompt_version: str = "vision-ar-v6",
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     latency_ms: int = 0,
