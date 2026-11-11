@@ -4,19 +4,37 @@
  * Respuestas de la API: { data: T } o { error: { code, message } }.
  */
 
+export interface ApiErrorValidationIssue {
+  path: Array<string | number>;
+  message: string;
+}
+
+export type ApiErrorPayloadDetails =
+  | ApiErrorValidationIssue[]
+  | Record<string, unknown>
+  | string
+  | null;
+
+export interface ApiErrorPayload extends Record<string, unknown> {
+  code?: string;
+  message?: string;
+  requestId?: string;
+  details?: ApiErrorPayloadDetails;
+}
+
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
   readonly requestId: string | null;
   readonly retryable: boolean;
-  readonly details: Record<string, unknown> | null;
+  readonly details: ApiErrorPayload | null;
 
   constructor(
     code: string,
     message: string,
     status: number,
     requestId: string | null = null,
-    details: Record<string, unknown> | null = null,
+    details: ApiErrorPayload | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -81,7 +99,7 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
   const payload = (await res.json().catch(() => null)) as
     | {
         data?: T;
-        error?: { code?: string; message?: string; requestId?: string } & Record<string, unknown>;
+        error?: ApiErrorPayload;
       }
     | null;
 
@@ -112,7 +130,7 @@ export async function downloadFile(path: string): Promise<void> {
   const res = await fetch(`${BASE}${path}`, { credentials: "same-origin" });
   if (!res.ok) {
     const payload = await res.json().catch(() => null) as
-      | { error?: { code?: string; message?: string; requestId?: string } & Record<string, unknown> }
+      | { error?: ApiErrorPayload }
       | null;
     throw new ApiError(
       payload?.error?.code ?? "DOWNLOAD_FAILED",
@@ -350,13 +368,69 @@ export interface ExtractedField {
   correction?: string | null;
   confidence: number;
   status: string;
+  reason?: string | null;
+}
+
+export type VoucherPerceptionCategory =
+  | "IIBB"
+  | "IVA"
+  | "Ganancias"
+  | "SUSS"
+  | "Impuestos internos"
+  | "Municipal"
+  | "Otras";
+
+interface VoucherARBaseData {
+  tipo_documento: "factura" | "ticket_no_fiscal" | "recibo" | "nota_credito" | "nota_debito" | "otro" | "ilegible";
+  letra: string | null;
+  punto_venta: string | null;
+  numero: string | null;
+  fecha: string | null;
+  hora: string | null;
+  cuit_emisor: string | null;
+  cuit_receptor: string | null;
+  razon_social_emisor: string | null;
+  razon_social_receptor: string | null;
+  condicion_iva: string | null;
+  neto_gravado: string | null;
+  iva: { alicuota: string | null; importe: string | null }[] | null;
+  no_gravado: string | null;
+  exento: string | null;
+  total: string | null;
+  moneda: string | null;
+  cae: string | null;
+  cae_vencimiento: string | null;
+  confianza: Record<string, number>;
+}
+
+export interface VoucherARV2Data extends VoucherARBaseData {
+  percepciones: { tipo: string | null; importe: string | null }[] | null;
+}
+
+export interface VoucherARV21Data extends VoucherARBaseData {
+  percepciones: {
+    categoria: VoucherPerceptionCategory;
+    tipo_texto: string | null;
+    importe: string | null;
+  }[] | null;
+}
+
+export type VoucherData = VoucherARV2Data | VoucherARV21Data;
+
+export interface ExtractionReviewIssue {
+  reason: string;
+  sourcePath: string | null;
 }
 
 export interface DocumentExtraction {
   id: string;
   status: string;
+  schemaVersion: string;
   classification?: string | null;
   confidence?: number | null;
+  reviewReason: string | null;
+  reviewIssues?: ExtractionReviewIssue[];
+  voucherData: VoucherData | null;
   fields: ExtractedField[];
   items: unknown[];
 }

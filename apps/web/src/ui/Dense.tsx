@@ -514,13 +514,16 @@ export function DenseTable<T>({
 
 export function ShortcutHint({ items }: { items: ReadonlyArray<[string, string]> }) {
   return (
-    <span className="dense-shortcuts">
-      {items.map(([key, text]) => (
-        <span key={key}>
-          <kbd>{key}</kbd> {text}
-        </span>
-      ))}
-    </span>
+    <details className="dense-shortcuts">
+      <summary aria-label="Atajos de teclado" title="Atajos de teclado">?</summary>
+      <span className="dense-shortcuts__panel" role="note">
+        {items.map(([key, text]) => (
+          <span key={key}>
+            <kbd>{key}</kbd> {text}
+          </span>
+        ))}
+      </span>
+    </details>
   );
 }
 
