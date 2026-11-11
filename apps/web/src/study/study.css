@@ -5894,3 +5894,11 @@
     display: none;
   }
 }
+
+.client-summary__fact--wrap dd,
+.client-summary__fact--wrap small {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
