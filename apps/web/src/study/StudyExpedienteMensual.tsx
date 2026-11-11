@@ -114,6 +114,7 @@ interface TaxType {
 interface TaxRegime {
   id: string;
   name: string;
+  isActive: boolean;
   taxTypeId: string;
   jurisdictionId: string;
   jurisdiction: { name: string; isActive: boolean };
@@ -1098,10 +1099,10 @@ export function StudyExpedienteMensual() {
 
   const workpapers = listQuery.data ?? [];
   const openingRegimes = (regimesQuery.data ?? []).filter(
-    (regime) => !opening.taxTypeId || regime.taxTypeId === opening.taxTypeId,
+    (regime) => regime.isActive && (!opening.taxTypeId || regime.taxTypeId === opening.taxTypeId),
   );
   const openingTaxPeriods = (taxPeriodsQuery.data ?? []).filter(
-    (taxPeriod) => !opening.taxTypeId || taxPeriod.taxTypeId === opening.taxTypeId,
+    (taxPeriod) => taxPeriod.taxType.isActive && (!opening.taxTypeId || taxPeriod.taxTypeId === opening.taxTypeId),
   );
   const safeActiveStep = Math.min(Math.max(activeStep, 0), WORKPAPER_STEPS.length - 1);
   const activeStepMeta = WORKPAPER_STEPS[safeActiveStep]!;
@@ -1298,7 +1299,7 @@ export function StudyExpedienteMensual() {
               required
             >
               <option value="">Seleccioná…</option>
-              {taxTypesQuery.data?.map((type) => (
+              {(taxTypesQuery.data ?? []).filter((type) => type.isActive).map((type) => (
                 <option key={type.id} value={type.id}>
                   {type.name}
                 </option>
@@ -1323,7 +1324,7 @@ export function StudyExpedienteMensual() {
               {openingTaxPeriods.map((taxPeriod) => (
                 <option key={taxPeriod.id} value={taxPeriod.id}>
                   {taxPeriod.label ??
-                    `${taxPeriod.startDate.slice(0, 10)} a ${taxPeriod.endDate.slice(0, 10)}`}{!taxPeriod.taxType.isActive ? " (oculto)" : ""}
+                    `${taxPeriod.startDate.slice(0, 10)} a ${taxPeriod.endDate.slice(0, 10)}`}
                 </option>
               ))}
             </select>
@@ -1348,7 +1349,7 @@ export function StudyExpedienteMensual() {
               <option value="">Sin régimen específico</option>
               {openingRegimes.map((regime) => (
                 <option key={regime.id} value={regime.id}>
-                  {regime.name} · {regime.jurisdiction.name}{!regime.jurisdiction.isActive ? " (oculto)" : ""}
+                  {regime.name} · {regime.jurisdiction.name}
                 </option>
               ))}
             </select>

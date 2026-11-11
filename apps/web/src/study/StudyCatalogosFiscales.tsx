@@ -546,8 +546,6 @@ export function StudyCatalogosFiscales() {
   const regimes = regimesQuery.data ?? [];
   const activities = activitiesQuery.data ?? [];
   const selectableAuthorities = authorities.filter((row) => row.isActive);
-  const selectableRegimes = regimes.filter((row) => row.isActive);
-  const selectableActivities = activities.filter((row) => row.isActive);
   // El régimen puede venir con el organismo "plano": se completa con la lista de organismos.
   const authorityOf = (row: TaxRegimeRow) =>
     authorities.find((item) => item.id === row.authority.id) ?? row.authority;
@@ -572,9 +570,9 @@ export function StudyCatalogosFiscales() {
     : usageQuery.isError
       ? "No pudimos consultar los usos del registro."
       : usageQuery.data?.used
-        ? `${usageQuery.data.count} uso(s): ${usageQuery.data.places.map((place) => `${place.label} (${place.count})`).join(", ")}`
+        ? `Se usa en ${usageQuery.data.count} lugares: ${usageQuery.data.places.map((place) => `${place.label} (${place.count})`).join(", ")}`
         : "Sin usos registrados.";
-  const canEditSelected = canPropose && usageQuery.data?.used === false;
+  const canEditSelected = canPropose;
 
   const searchQuery = normalizeSearch(search);
   const textMatch = (...parts: Array<string | null | undefined>) =>
@@ -789,13 +787,13 @@ export function StudyCatalogosFiscales() {
 
   const count = (value: number, loading: boolean) => (loading ? "—" : value);
   const tabHints: Record<CatalogTab, string> = {
-    jurisdictions: "Jerarquía fiscal: Nación → provincia → municipio. El código identifica la jurisdicción y se conserva.",
+    jurisdictions: "Jerarquía fiscal: Nación → provincia → municipio. El código es editable y los vínculos se conservan por identificador.",
     taxTypes: "Tipos de impuesto disponibles para los regímenes fiscales del estudio.",
     authorities:
       "Quién recauda cada impuesto según la jurisdicción: ARCA en Nación, la DGR provincial o la dirección municipal de rentas.",
     regimes: "Cada régimen requiere impuesto, jurisdicción y organismo recaudador compatibles.",
     activities:
-      "El código es clave histórica: las actividades con dependencias se desactivan en lugar de eliminarse.",
+      "Editá la actividad o creá una nueva versión; ocultar conserva sus vínculos y reglas.",
   };
   const visibleCount =
     tab === "jurisdictions" ? visibleJurisdictions.length
@@ -1315,8 +1313,9 @@ export function StudyCatalogosFiscales() {
   ];
 
   const jurisdictionParentLabel = (jurisdiction: JurisdictionOption) => {
-    const parent = jurisdiction.parent ?? jurisdictions.find((row) => row.id === jurisdiction.parentId);
-    return parent ? `${jurisdictionKindLabel[parent.kind]} ${parent.name}${!parent.isActive ? " (oculto)" : ""}` : "—";
+    const parent = jurisdictions.find((row) => row.id === jurisdiction.parentId) ?? jurisdiction.parent;
+    const hidden = parent && "isActive" in parent && !parent.isActive;
+    return parent ? `${jurisdictionKindLabel[parent.kind]} ${parent.name}${hidden ? " (oculto)" : ""}` : "—";
   };
   const jurisdictionColumns: DenseColumn<JurisdictionOption>[] = [
     {
@@ -1945,7 +1944,7 @@ export function StudyCatalogosFiscales() {
         onClose={() => setActivityDrawer(null)}
         eyebrow="Catálogo de actividades"
         title="Nueva actividad económica"
-        description="El código se guarda en mayúsculas. Los cambios quedan disponibles cuando la actividad no tiene usos asociados."
+        description="El código se guarda en mayúsculas. Completá sus campos de catálogo y vigencia."
       >
         <form
           className="study-form study-form--compact dense-form"
@@ -2067,7 +2066,7 @@ export function StudyCatalogosFiscales() {
         onClose={() => setActivityDrawer(null)}
         eyebrow="Catálogo de actividades"
         title="Editar actividad económica"
-        description="Los campos del catálogo se editan cuando la actividad no tiene usos asociados."
+        description="Actualizá el código, la jurisdicción, la fuente o la vigencia de la actividad."
       >
         {editingActivity ? (
           <form
@@ -2295,7 +2294,7 @@ export function StudyCatalogosFiscales() {
         onClose={() => setMasterDrawer(null)}
         eyebrow="Catálogo fiscal del estudio"
         title="Editar jurisdicción"
-        description="Actualizá los campos de la jurisdicción cuando no tenga usos asociados."
+        description="Actualizá el código, el nivel, el nombre o la jurisdicción padre."
       >
         {editingJurisdiction ? (
           <form
@@ -2414,7 +2413,7 @@ export function StudyCatalogosFiscales() {
         onClose={() => setMasterDrawer(null)}
         eyebrow="Catálogo fiscal del estudio"
         title="Editar tipo de impuesto"
-        description="Actualizá el código o nombre cuando el tipo de impuesto no tenga usos asociados."
+        description="Actualizá el código o el nombre del tipo de impuesto."
       >
         {editingTaxType ? (
           <form

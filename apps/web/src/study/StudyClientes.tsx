@@ -988,7 +988,7 @@ export function StudyClientes() {
                   return <option key={`${activity.code}:${activity.name}`} value={value}>{value}</option>;
                 })}
                 {activityIsInactive ? (
-                  <option value={profileForm.activity}>
+                  <option value={profileForm.activity} disabled>
                     {profileForm.activity} — (oculto) en el catálogo (conservado)
                   </option>
                 ) : null}

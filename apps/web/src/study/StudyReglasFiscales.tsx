@@ -194,12 +194,11 @@ export function StudyReglasFiscales() {
     queryFn: () => api.get<RuleRegimeOption[]>("/tax/regimes"),
     enabled: capabilities.has("tax.rules.propose"),
   });
-  // Catálogo de actividades (sólo activas): alimenta el selector de cada regla.
-  // Los borradores clonados pueden conservar códigos hoy desactivados; el
-  // selector los mantiene como opción histórica para no romper el borrador.
+  // Se leen ambas vigencias para identificar el código asignado oculto; el
+  // selector sólo ofrece actividades activas.
   const activitiesQuery = useQuery({
     queryKey: ["tax-activities", firmId],
-    queryFn: () => api.get<CatalogEconomicActivity[]>("/tax/activities"),
+    queryFn: () => api.get<CatalogEconomicActivity[]>("/tax/activities?includeInactive=true"),
     enabled: Boolean(firmId && capabilities.has("tax.rules.read")),
   });
 
@@ -1168,22 +1167,28 @@ export function StudyReglasFiscales() {
                       header: "Actividad",
                       render: (row) => {
                         if (!editable) {
-                          return row.activityCode ?? "General";
+                          const currentCode = normalizeActivityCode(row.activityCode ?? "");
+                          const currentActivity = (activitiesQuery.data ?? []).find(
+                            (activity) => activity.code === currentCode,
+                          );
+                          return row.activityCode
+                            ? `${row.activityCode}${currentActivity && !currentActivity.isActive ? " (oculto)" : ""}`
+                            : "General";
                         }
-                        // El selector ofrece las actividades activas del
-                        // catálogo. Cuando el pack declara jurisdicción, filtra
-                        // por ella (el servidor exige publicación para la
-                        // jurisdicción de la regla). Un código histórico que ya
-                        // no figure (desactivado o de otra jurisdicción) se
-                        // conserva como opción para que el borrador clonado
-                        // pueda guardarse sin perder el vínculo.
+                        // La opción actual oculta o ajena a la jurisdicción se
+                        // conserva como lectura deshabilitada; para elegirla
+                        // nuevamente hay que mostrarla en el catálogo.
                         const packJurisdictionId = detailQuery.data?.regime.jurisdiction.id;
-                        const options = (activitiesQuery.data ?? []).filter(
+                        const catalogActivities = activitiesQuery.data ?? [];
+                        const options = catalogActivities.filter(
                           (activity) =>
-                            !packJurisdictionId ||
-                            activity.jurisdictionId === packJurisdictionId,
+                            activity.isActive &&
+                            (!packJurisdictionId || activity.jurisdictionId === packJurisdictionId),
                         );
                         const currentCode = normalizeActivityCode(row.activityCode ?? "");
+                        const currentActivity = catalogActivities.find(
+                          (activity) => activity.code === currentCode,
+                        );
                         const isLegacyCode =
                           currentCode !== "" &&
                           !options.some((activity) => activity.code === currentCode);
@@ -1223,9 +1228,10 @@ export function StudyReglasFiscales() {
                                 </option>
                               ))}
                               {isLegacyCode ? (
-                                <option value={row.activityCode ?? ""}>
-                                  {row.activityCode} — código histórico (desactivado o fuera de la
-                                  jurisdicción del paquete)
+                                <option value={row.activityCode ?? ""} disabled>
+                                  {currentActivity && !currentActivity.isActive
+                                    ? `${row.activityCode} (oculto)`
+                                    : `${row.activityCode} — código histórico fuera de la jurisdicción del paquete`}
                                 </option>
                               ) : null}
                             </select>

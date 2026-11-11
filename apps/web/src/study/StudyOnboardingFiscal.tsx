@@ -171,9 +171,11 @@ export function StudyOnboardingFiscal() {
     [profileQuery.data],
   );
   const effectiveProfileId = profileId ?? latestProfile?.id;
+  const selectablePeriods = (periodsQuery.data ?? []).filter((period) => period.taxType.isActive);
   const selectedPeriod = periodsQuery.data?.find((period) => period.id === obligationForm.periodId);
   const eligibleRegistrations = (registrationsQuery.data ?? []).filter(
-    (registration) => registration.status === "ACTIVE" && (!selectedPeriod || registration.regime.taxType.id === selectedPeriod.taxTypeId),
+    (registration) => registration.status === "ACTIVE" && registration.regime.isActive &&
+      (!selectedPeriod || registration.regime.taxType.id === selectedPeriod.taxTypeId),
   );
   const stepCompletion: Record<FiscalStep, boolean> = {
     perfil: Boolean(latestProfile),
@@ -462,7 +464,7 @@ export function StudyOnboardingFiscal() {
         size="wide"
       >
         <form className="study-form study-form--compact" onSubmit={(event) => { event.preventDefault(); createObligation.mutate(); }}>
-          <div className="ds-field"><label className="ds-field__label" htmlFor="obl-period">Período fiscal</label><select id="obl-period" className="ds-field__input" value={obligationForm.periodId} onChange={(event) => setObligationForm({ ...obligationForm, periodId: event.target.value, regimeId: "" })} required><option value="">Seleccioná un período…</option>{periodsQuery.data?.map((period) => <option key={period.id} value={period.id}>{period.taxType.name}{!period.taxType.isActive ? " (oculto)" : ""} · {periodDisplayLabel(period)}</option>)}</select></div>
+          <div className="ds-field"><label className="ds-field__label" htmlFor="obl-period">Período fiscal</label><select id="obl-period" className="ds-field__input" value={obligationForm.periodId} onChange={(event) => setObligationForm({ ...obligationForm, periodId: event.target.value, regimeId: "" })} required><option value="">Seleccioná un período…</option>{selectablePeriods.map((period) => <option key={period.id} value={period.id}>{period.taxType.name} · {periodDisplayLabel(period)}</option>)}</select></div>
           <div className="ds-field"><label className="ds-field__label" htmlFor="obl-regime">Régimen adherido</label><select id="obl-regime" className="ds-field__input" value={obligationForm.regimeId} onChange={(event) => setObligationForm({ ...obligationForm, regimeId: event.target.value })} required disabled={!obligationForm.periodId}><option value="">Seleccioná un régimen…</option>{eligibleRegistrations.map((registration) => <option key={registration.id} value={registration.regime.id}>{registration.regime.name}{!registration.regime.isActive ? " (oculto)" : ""} · {registration.regime.jurisdiction.name}{!registration.regime.jurisdiction.isActive ? " (oculto)" : ""}</option>)}</select></div>
           <Field label="Vencimiento (opcional)" id="obl-due-date" type="date" value={obligationForm.dueDate} onChange={(event) => setObligationForm({ ...obligationForm, dueDate: event.target.value })} />
           <MutationError error={createObligation.error} />

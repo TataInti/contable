@@ -42,6 +42,7 @@ interface TaxPeriod {
 interface TaxRegime {
   id: string;
   name: string;
+  isActive: boolean;
   taxTypeId: string;
   jurisdictionId: string;
   taxType: { name: string; isActive: boolean };
@@ -88,12 +89,16 @@ export function StudyLiquidaciones() {
     enabled: Boolean(firmId),
   });
 
+  const selectableTaxPeriods = useMemo(
+    () => (taxPeriodsQuery.data ?? []).filter((period) => period.taxType.isActive),
+    [taxPeriodsQuery.data],
+  );
   const selectedTaxPeriod = useMemo(
-    () => taxPeriodsQuery.data?.find((period) => period.id === calculation.periodId),
-    [calculation.periodId, taxPeriodsQuery.data],
+    () => selectableTaxPeriods.find((period) => period.id === calculation.periodId),
+    [calculation.periodId, selectableTaxPeriods],
   );
   const availableRegimes = (regimesQuery.data ?? []).filter(
-    (regime) => !selectedTaxPeriod || regime.taxTypeId === selectedTaxPeriod.taxTypeId,
+    (regime) => regime.isActive && (!selectedTaxPeriod || regime.taxTypeId === selectedTaxPeriod.taxTypeId),
   );
   const selectedRegime = availableRegimes.find((regime) => regime.id === calculation.regimeId);
   const invalidate = () => {
@@ -258,9 +263,9 @@ export function StudyLiquidaciones() {
               required
             >
               <option value="">Seleccioná un período…</option>
-              {taxPeriodsQuery.data?.map((period) => (
+              {selectableTaxPeriods.map((period) => (
                 <option key={period.id} value={period.id}>
-                  {period.taxType.name}{!period.taxType.isActive ? " (oculto)" : ""} · {taxPeriodLabel(period)}
+                  {period.taxType.name} · {taxPeriodLabel(period)}
                 </option>
               ))}
             </select>
