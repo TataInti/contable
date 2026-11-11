@@ -1191,7 +1191,7 @@ describe("G4 CM03 — adaptador de importación", () => {
       origin: "ARCA",
       taxTypeId: ivaId,
       periodId,
-      adapterVersion: "ARCA_V1",
+      adapterVersion: "ARCA_LIBRO_IVA_V1",
       fileHash: "sha256:filter1",
     });
     await ingestion.validateBatch(ctxOwner, batch.id, [
@@ -1216,7 +1216,7 @@ describe("G4 CM03 — adaptador de importación", () => {
       origin: "ARCA",
       taxTypeId: ivaId,
       periodId: februaryPeriod.id,
-      adapterVersion: "ARCA_V1",
+      adapterVersion: "ARCA_LIBRO_IVA_V1",
       fileHash: "sha256:filter2",
     });
     await ingestion.validateBatch(ctxOwner, februaryBatch.id, [
@@ -1235,5 +1235,48 @@ describe("G4 CM03 — adaptador de importación", () => {
     const febNums = feb.filter((v) => v.type === "A").map((v) => v.number);
     expect(febNums).toContain(101);
     expect(febNums).not.toContain(100);
+  });
+});
+
+describe("Corte 0 — adaptador desconocido (P2/P4)", () => {
+  it("responde UNKNOWN_ADAPTER sin escribir filas", async () => {
+    const batch = await ingestion.createBatch(ctxOwner, {
+      clientId: CLIENT_ING,
+      origin: "ARCA",
+      taxTypeId: ivaId,
+      periodId,
+      adapterVersion: "ADAPTADOR_DESCONOCIDO_V1",
+      fileHash: "sha256:unknown-adapter",
+    });
+
+    const error = await ingestion
+      .validateBatch(ctxOwner, batch.id, [
+        {
+          direction: "SALE",
+          letter: "A",
+          pointOfSale: "0001",
+          numberFrom: "900",
+          cuit: "20111111111",
+          issuedOn: "2026-01-10",
+          net: "1000.00",
+          hasIva: true,
+          iva21: "210.00",
+        },
+      ])
+      .then(() => null)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ImportError);
+    expect(error).toMatchObject({ code: "UNKNOWN_ADAPTER" });
+    expect((error as ImportError).message).toContain("ADAPTADOR_DESCONOCIDO_V1");
+    expect((error as ImportError).message).toContain("ARCA_LIBRO_IVA_V1");
+
+    const rows = await ingestion.listBatchRows(ctxOwner, batch.id);
+    expect(rows).toHaveLength(0);
+    const stored = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.importBatch.findUnique({ where: { id: batch.id } }),
+    );
+    expect(stored?.status).toBe("UPLOADED");
+    expect(stored?.totalRows).toBe(0);
   });
 });
