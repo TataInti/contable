@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
-import { api } from "../lib/api";
+import { ApiError, api } from "../lib/api";
 import { StudyReglasFiscales } from "./StudyReglasFiscales";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -456,7 +456,6 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
 
   it("muestra Activar con capacidad y confirma nombre y vigencia antes de llamar a API", async () => {
     mockApi(makeDetail(null));
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.mocked(api.post).mockResolvedValue({} as never);
     renderReglas();
 
@@ -464,13 +463,70 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     await waitFor(() => expect(activateButton.disabled).toBe(false));
     fireEvent.click(activateButton);
 
-    expect(window.confirm).toHaveBeenCalledWith(
-      expect.stringContaining("IVA Responsable Inscripto · versión v1"),
-    );
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("Vigencia:"));
+    const confirmation = await screen.findByRole("dialog");
+    expect(
+      within(confirmation).getByRole("heading", {
+        name: "IVA Responsable Inscripto · versión v1",
+      }),
+    ).toBeTruthy();
+    const validity = within(confirmation).getByText(/Vigencia:/);
+    expect(validity.textContent).toContain("—");
+    expect(api.post).not.toHaveBeenCalled();
+    expect(within(confirmation).queryByText(/Al activar esta versión/)).toBeNull();
+  });
+
+  it("muestra la advertencia de retiro cuando el paquete ya tiene una versión activa", async () => {
+    const detail = makeDetail(null);
+    detail.versions.push({ ...detail.versions[0]!, id: "version-active", version: 3, status: "ACTIVE" });
+    mockApi(detail);
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
+    const confirmation = await screen.findByRole("dialog");
+    expect(
+      within(confirmation).getByText(
+        "Al activar esta versión, la versión vigente quedará retirada",
+      ),
+    ).toBeTruthy();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("cancelar no llama a la API y devuelve el foco al botón Activar", async () => {
+    mockApi(makeDetail(null));
+    renderReglas();
+
+    const activateButton = await screen.findByRole("button", { name: /^Activar$/ });
+    activateButton.focus();
+    fireEvent.click(activateButton);
+    const confirmation = await screen.findByRole("dialog");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Cancelar" }));
+
+    await waitFor(() => expect(document.activeElement).toBe(activateButton));
+    expect(api.post).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("confirmar llama al endpoint y muestra el recibo junto a la tarjeta del paquete", async () => {
+    mockApi(makeDetail(null));
+    vi.mocked(api.post).mockResolvedValue({} as never);
+    renderReglas();
+
+    const activateButton = await screen.findByRole("button", { name: /^Activar$/ });
+    fireEvent.click(activateButton);
+    const confirmation = await screen.findByRole("dialog");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Activar versión" }));
+
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/tax/rule-versions/version-1/activate"),
     );
+    const packageCard = activateButton.closest("section");
+    expect(packageCard).not.toBeNull();
+    expect(
+      await within(packageCard!).findByText(
+        "La versión v1 quedó activa y disponible para próximos cálculos.",
+      ),
+    ).toBeTruthy();
+    expect(within(packageCard!).getByRole("status")).toBeTruthy();
   });
 
   it("oculta Activar cuando falta tax.rules.propose aunque exista la capacidad legacy", async () => {
@@ -494,8 +550,17 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     });
     const activateButton = (await screen.findByRole("button", { name: /^Activar$/ })) as HTMLButtonElement;
 
-    expect(activateButton.disabled).toBe(true);
-    expect(screen.getByText(/Guardá los cambios del borrador/)).toBeTruthy();
+    expect(activateButton.disabled).toBe(false);
+    fireEvent.click(activateButton);
+
+    const packageCard = activateButton.closest("section");
+    expect(packageCard).not.toBeNull();
+    const activationAlert = await within(packageCard!).findByRole("alert");
+    expect(activationAlert.textContent).toContain(
+      "Guardá los cambios del borrador antes de activarlo.",
+    );
+    expect(api.post).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("muestra error de validación y permite activar una versión histórica en revisión", async () => {
@@ -506,19 +571,65 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
       { ...detail.versions[0]!, id: "version-active", version: 3, status: "ACTIVE" },
     ];
     mockApi(detail);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.mocked(api.post).mockRejectedValue(new Error("El hash no coincide con las reglas guardadas."));
     renderReglas();
 
     const versionSelect = await screen.findByLabelText("Versión del paquete");
     fireEvent.change(versionSelect, { target: { value: "version-review" } });
     fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
+    const confirmation = await screen.findByRole("dialog");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Activar versión" }));
 
+    const packageCard = screen.getByRole("heading", { name: "IVA Responsable Inscripto" }).closest("section");
+    expect(packageCard).not.toBeNull();
     await waitFor(() => {
       expect(api.post).toHaveBeenCalledWith("/tax/rule-versions/version-review/activate");
-      expect(screen.getByRole("alert").textContent).toContain("El hash no coincide");
+      expect(within(packageCard!).getByRole("alert").textContent).toContain("El hash no coincide");
     });
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("versión v2"));
+  });
+
+  it("muestra junto al botón un ApiError 409 con su campo y mensaje", async () => {
+    mockApi(makeDetail(null));
+    vi.mocked(api.post).mockRejectedValue(
+      new ApiError("RULE_VERSION_INVALID", "La vigencia no es válida.", 409, null, {
+        details: [{ path: ["validFrom"], message: "La vigencia se superpone." }],
+      }),
+    );
+    renderReglas();
+
+    const activateButton = await screen.findByRole("button", { name: /^Activar$/ });
+    fireEvent.click(activateButton);
+    const confirmation = await screen.findByRole("dialog");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Activar versión" }));
+
+    const packageCard = activateButton.closest("section");
+    expect(packageCard).not.toBeNull();
+    const alert = await within(packageCard!).findByRole("alert");
+    expect(alert.textContent).toContain("Vigencia desde");
+    expect(alert.textContent).toContain("La vigencia se superpone.");
+  });
+
+  it("limpia el error viejo de otra mutación para mostrar el error de activación actual", async () => {
+    mockApi(makeDetail(null));
+    vi.mocked(api.put).mockRejectedValue(new Error("Error viejo de guardado"));
+    vi.mocked(api.post).mockRejectedValue(new Error("Error actual de activación"));
+    renderReglas();
+
+    const concept = await screen.findByLabelText("Concepto rule-1");
+    fireEvent.change(concept, { target: { value: "Cambio temporal" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
+    expect(await screen.findByText("Error viejo de guardado")).toBeTruthy();
+
+    fireEvent.change(concept, { target: { value: "Operaciones generales" } });
+    const activateButton = await screen.findByRole("button", { name: /^Activar$/ });
+    fireEvent.click(activateButton);
+    const confirmation = await screen.findByRole("dialog");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Activar versión" }));
+
+    const packageCard = activateButton.closest("section");
+    expect(packageCard).not.toBeNull();
+    expect(await within(packageCard!).findByText("Error actual de activación")).toBeTruthy();
+    expect(screen.queryByText("Error viejo de guardado")).toBeNull();
   });
 });
 
