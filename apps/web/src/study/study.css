@@ -1242,6 +1242,12 @@
   gap: var(--ds-space-2);
 }
 
+.review-actions__copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+
 .review-actions p {
   display: flex;
   align-items: center;
@@ -1249,6 +1255,11 @@
   margin: 0;
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-sm);
+}
+
+.review-actions .review-actions__hint {
+  color: var(--ds-color-text);
+  font-weight: 600;
 }
 
 .entry-proposal {

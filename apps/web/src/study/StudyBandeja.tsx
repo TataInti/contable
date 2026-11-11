@@ -13,6 +13,7 @@ import {
 import { useClientContext } from "../context/ClientContext";
 import { belongsToDocumentQueue, type DocumentQueueFilter } from "./documentQueue";
 import { ExtractionFiscalTable } from "./ExtractionFiscalTable";
+import { hasEffectiveFiscalData } from "./extractionReadiness";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
@@ -153,6 +154,15 @@ export function StudyBandeja() {
     ),
     retry: false,
   });
+  const correctableExtractionFields = (extraction.data?.fields ?? []).filter(
+    (field) => FIELD_LABELS[field.key],
+  );
+  // Sin datos leídos ni correcciones vigentes no hay nada que aprobar.
+  const canApproveExtraction = hasEffectiveFiscalData(
+    extraction.data?.voucherData ?? null,
+    correctableExtractionFields,
+    corrections,
+  );
 
   useEffect(() => {
     if (extraction.data)
@@ -755,7 +765,14 @@ export function StudyBandeja() {
                     {capabilities.has("document.review") &&
                     extraction.data.status !== "REVIEWED" ? (
                       <div className="review-actions">
-                        <p>Confirmá que los datos coinciden con la evidencia antes de aprobar.</p>
+                        <div className="review-actions__copy">
+                          <p>Confirmá que los datos coinciden con la evidencia antes de aprobar.</p>
+                          {canApproveExtraction ? null : (
+                            <p className="review-actions__hint" role="note">
+                              Cargá al menos un dato para aprobar.
+                            </p>
+                          )}
+                        </div>
                         <div className="review-actions__buttons">
                           <Button
                             onClick={() =>
@@ -768,6 +785,7 @@ export function StudyBandeja() {
                               })
                             }
                             loading={approve.isPending}
+                            disabled={!canApproveExtraction}
                           >
                             Aprobar extracción
                           </Button>

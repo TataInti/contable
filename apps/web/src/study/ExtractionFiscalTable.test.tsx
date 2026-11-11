@@ -7,6 +7,7 @@ import type {
   VoucherData,
 } from "../lib/api";
 import { ExtractionFiscalTable } from "./ExtractionFiscalTable";
+import { AUTOMATED_READING_UNAVAILABLE_MESSAGE } from "./extractionReadiness";
 
 const voucherFixture: VoucherData = {
   tipo_documento: "factura",
@@ -204,6 +205,32 @@ describe("ExtractionFiscalTable", () => {
     expect(rowForField(table, "Neto gravado")[2]!.textContent).toBe("leído");
     expect(rowForField(table, "Neto gravado")[3]!.textContent).toBe("");
     expect(rowForField(table, "IVA · alícuota 21%")[2]!.textContent).toBe("leído");
+  });
+
+  it.each([
+    "CUSTOMER_DATA_EXTRACTION_DISABLED",
+    "AI_SERVICE_UNAVAILABLE",
+    "MODEL_NOT_CONFIGURED",
+  ])("traduce el motivo %s de lectura no disponible a un mensaje accionable", (reason) => {
+    renderTable({
+      voucher: null,
+      reviewReason: reason,
+      reviewIssues: [{ reason, sourcePath: null }],
+    });
+
+    const documentStatus = screen.getByRole("status", { name: "Estado del documento" });
+    expect(documentStatus.textContent).toBe(
+      `Estado del documento: a revisar · ${AUTOMATED_READING_UNAVAILABLE_MESSAGE}`,
+    );
+    expect(documentStatus.textContent).not.toContain(reason);
+  });
+
+  it("traduce el reviewReason legado de lectura no disponible sin reviewIssues", () => {
+    renderTable({ voucher: null, reviewReason: "AI_SERVICE_UNAVAILABLE" });
+
+    const documentStatus = screen.getByRole("status", { name: "Estado del documento" });
+    expect(documentStatus.textContent).toContain(AUTOMATED_READING_UNAVAILABLE_MESSAGE);
+    expect(documentStatus.textContent).not.toContain("AI_SERVICE_UNAVAILABLE");
   });
 
   it("mantiene reviewReason legado en el estado del documento sin marcar todas las filas", () => {

@@ -99,6 +99,8 @@ const extractionFixture = {
   items: [],
 };
 
+const extractionFixtureSnapshot = structuredClone(extractionFixture);
+
 function renderBandeja() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -121,7 +123,7 @@ async function openExtraction() {
 beforeEach(() => {
   vi.clearAllMocks();
   documentFixture.status = "EXTRACTED";
-  extractionFixture.status = "NEEDS_REVIEW";
+  Object.assign(extractionFixture, structuredClone(extractionFixtureSnapshot));
   contextMock.current = {
     firmId: "firm-a",
     clientId: "client-a",
@@ -255,5 +257,58 @@ describe("StudyBandeja — revisión de extracción", () => {
     const alert = await within(dialog).findByRole("alert");
     expect(alert.textContent).toContain("No se pudo rechazar el documento. Volvé a intentarlo.");
     expect(screen.getByRole("dialog", { name: "¿Rechazar este documento?" })).toBeTruthy();
+  });
+
+  it("no permite aprobar una extracción sin datos y explica que la lectura no está activada", async () => {
+    Object.assign(extractionFixture, {
+      voucherData: null,
+      fields: [],
+      reviewReason: "CUSTOMER_DATA_EXTRACTION_DISABLED",
+      reviewIssues: [{ reason: "CUSTOMER_DATA_EXTRACTION_DISABLED", sourcePath: null }],
+    });
+
+    await openExtraction();
+
+    expect(screen.getByRole("status", { name: "Estado del documento" }).textContent).toContain(
+      "La lectura automática no está activada para este documento.",
+    );
+    const approve = screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement;
+    expect(approve.disabled).toBe(true);
+    expect(screen.getByRole("note").textContent).toBe("Cargá al menos un dato para aprobar.");
+    const reject = screen.getByRole("button", { name: "Rechazar" }) as HTMLButtonElement;
+    expect(reject.disabled).toBe(false);
+  });
+
+  it("habilita Aprobar cuando el revisor carga un dato a mano", async () => {
+    Object.assign(extractionFixture, {
+      voucherData: null,
+      reviewReason: "CUSTOMER_DATA_EXTRACTION_DISABLED",
+      reviewIssues: [{ reason: "CUSTOMER_DATA_EXTRACTION_DISABLED", sourcePath: null }],
+      fields: [
+        {
+          id: "field-total",
+          key: "totalAmount",
+          rawValue: null,
+          normalizedValue: null,
+          correction: null,
+          confidence: 0.2,
+          status: "NEEDS_REVIEW",
+          reason: null,
+        },
+      ],
+    });
+
+    await openExtraction();
+
+    expect(
+      (screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.change(screen.getByLabelText("Total"), { target: { value: "1210.00" } });
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
+    expect(screen.queryByRole("note")).toBeNull();
   });
 });

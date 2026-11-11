@@ -117,6 +117,30 @@ export interface ExtractionResult {
   estimatedCostUsd: number | null;
 }
 
+/**
+ * Error HTTP del servicio de IA. Conserva el status y el código de dominio
+ * (campo `detail` de FastAPI) para que el worker pueda distinguir, por
+ * ejemplo, que la lectura automática está desactivada de una caída real.
+ */
+export class AiExtractionHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+  ) {
+    super(`AI_EXTRACTION_HTTP_${status}`);
+    this.name = "AiExtractionHttpError";
+  }
+}
+
+async function readErrorDetail(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { detail?: unknown } | null;
+    return body && typeof body.detail === "string" ? body.detail : null;
+  } catch {
+    return null;
+  }
+}
+
 export class AiClient {
   constructor(
     private storage: ObjectStorage,
@@ -198,7 +222,7 @@ export class AiClient {
     });
 
     if (!res.ok) {
-      throw new Error(`AI_EXTRACTION_HTTP_${res.status}`);
+      throw new AiExtractionHttpError(res.status, await readErrorDetail(res));
     }
 
     try {

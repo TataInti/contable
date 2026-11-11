@@ -1,5 +1,9 @@
 import { Table } from "@contable/design-system";
 import type { ExtractedField, ExtractionReviewIssue, VoucherData } from "../lib/api";
+import {
+  AUTOMATED_READING_UNAVAILABLE_MESSAGE,
+  isAutomatedReadingUnavailableReason,
+} from "./extractionReadiness";
 
 interface ExtractionFiscalTableProps {
   voucherData: VoucherData | null;
@@ -191,6 +195,16 @@ function buildRows(
   ];
 }
 
+/**
+ * Los motivos de «lectura automática no disponible» se traducen a un mensaje
+ * para el revisor; el resto conserva el texto original del backend.
+ */
+function displayDocumentReason(reason: string): string {
+  return isAutomatedReadingUnavailableReason(reason)
+    ? AUTOMATED_READING_UNAVAILABLE_MESSAGE
+    : reason;
+}
+
 export function ExtractionFiscalTable({
   voucherData,
   documentReviewReason,
@@ -199,7 +213,9 @@ export function ExtractionFiscalTable({
 }: ExtractionFiscalTableProps) {
   const issues = reviewIssues ?? [];
   const rows = buildRows(voucherData, fields, issues);
-  const documentReasons = documentReviewReasons(fields, documentReviewReason, reviewIssues);
+  const documentReasons = uniqueReasons(
+    documentReviewReasons(fields, documentReviewReason, reviewIssues).map(displayDocumentReason),
+  );
 
   return (
     <>
