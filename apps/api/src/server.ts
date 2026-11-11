@@ -29,6 +29,7 @@ import { prisma } from "./lib/prisma.js";
 import { ZodError } from "zod";
 import { createConnection } from "node:net";
 import { outboxPublisher } from "./jobs/outbox-publisher.js";
+import { assertEngineRegistryAtBoot } from "./tax/engine-registry-boot.js";
 
 export interface HealthChecks {
   postgres: () => Promise<boolean>;
@@ -202,6 +203,7 @@ export async function start() {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
   try {
+    await assertEngineRegistryAtBoot(prisma);
     await app.listen({ host: config.host, port: config.port });
     app.log.info(`API escuchando en ${config.host}:${config.port}`);
   } catch (err) {

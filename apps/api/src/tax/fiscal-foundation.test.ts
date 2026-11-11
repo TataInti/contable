@@ -106,10 +106,12 @@ async function setupMasters() {
     const arca = await tx.taxAuthority.create({
       data: { code: "ARCA-F", name: "ARCA", jurisdictionId: nacion.id },
     });
+    const vatFamily = await tx.calcFamily.findUnique({ where: { key: "VAT_RI" } });
+    if (!vatFamily) throw new Error("Falta la familia de cálculo VAT_RI sembrada por la migración");
     const iva = await tx.taxType.upsert({
       where: { code: "IVA" },
-      update: {},
-      create: { code: "IVA", name: "IVA" },
+      update: { defaultFamilyId: vatFamily.id },
+      create: { code: "IVA", name: "IVA", defaultFamilyId: vatFamily.id },
     });
     const ri = await tx.taxRegime.create({
       data: {
@@ -118,6 +120,7 @@ async function setupMasters() {
         taxTypeId: iva.id,
         jurisdictionId: nacion.id,
         authorityId: arca.id,
+        calcFamilyId: vatFamily.id,
       },
     });
     const actividad = await tx.economicActivity.create({
@@ -230,6 +233,110 @@ describe("G1-02 maestros (integración DB)", () => {
     expect(fx.ri.code).toBe("RI-F");
     expect(fx.ri.taxTypeId).toBe(fx.iva.id);
     expect(fx.actividad.code).toBe("620100-F");
+  });
+
+  it("filtra motores por familia, valida el id y mantiene la selección al renombrar", async () => {
+    const fx = await setupMasters();
+    const iibbFamily = await prisma.calcFamily.findUnique({ where: { key: "IIBB_LOCAL" } });
+    if (!iibbFamily) throw new Error("Falta la familia de cálculo IIBB_LOCAL sembrada por la migración");
+    const iibbType = await masters.createTaxType(ctxOwner, {
+      code: "CODIGO-IIBB-P2-F",
+      name: "Impuesto configurable",
+      defaultFamilyId: iibbFamily.id,
+    });
+    const dgr = await masters.createTaxAuthority(ctxOwner, {
+      code: "DGR-P2-F",
+      name: "Dirección provincial",
+      jurisdictionId: fx.tucuman.id,
+    });
+    const regime = await masters.createRegime(ctxOwner, {
+      code: "MI_IIBB_PROPIO-P2-F",
+      name: "IIBB configurado por el estudio",
+      taxTypeId: iibbType.id,
+      jurisdictionId: fx.tucuman.id,
+      authorityId: dgr.id,
+      calcFamilyId: iibbFamily.id,
+    });
+    const engines = await masters.listEnginesForRegime(ctxOwner, regime.id);
+    expect(engines.map((engine) => engine.engineVersion)).toEqual([
+      "ar-iibb-tuc-local-v1.1.0",
+      "ar-iibb-tuc-local-v1.0.0",
+    ]);
+
+    const app = Fastify({ logger: false });
+    app.addHook("preHandler", async (req) => {
+      Object.assign(req, { userId: OWNER_A, firmId: FIRM_ALFA });
+    });
+    fiscalFoundationRoutes(app);
+    await app.ready();
+    try {
+      const familiesResponse = await app.inject({ method: "GET", url: "/api/v1/tax/calc-families" });
+      expect(familiesResponse.statusCode).toBe(200);
+      expect(familiesResponse.json().data).toHaveLength(5);
+      const enginesResponse = await app.inject({
+        method: "GET",
+        url: `/api/v1/tax/regimes/${regime.id}/engines`,
+      });
+      expect(enginesResponse.statusCode).toBe(200);
+      expect(enginesResponse.json().data.map((engine: { engineVersion: string }) => engine.engineVersion))
+        .toEqual(engines.map((engine) => engine.engineVersion));
+    } finally {
+      await app.close();
+    }
+
+    const pack = await rules.createPack(ctxOwner, {
+      code: "P2_IIBB_PROPIO-F",
+      name: "Pack por familia",
+      regimeId: regime.id,
+    });
+    const vatEngine = await prisma.taxEngine.findUnique({ where: { engineKey: "vat-ri" } });
+    if (!vatEngine) throw new Error("Falta el motor vat-ri sembrado por la migración");
+    await expect(rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineId: vatEngine.id,
+      rulesHash: "caller-value-is-not-canonical",
+    })).rejects.toMatchObject({ code: "ENGINE_FAMILY_MISMATCH", path: ["engineId"] });
+    expect(await prisma.taxRuleVersion.count({ where: { packId: pack.id } })).toBe(0);
+
+    const selectedEngine = engines[0];
+    if (!selectedEngine) throw new Error("La familia IIBB_LOCAL no tiene motores activos");
+    const version = await rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineId: selectedEngine.id,
+      rulesHash: "caller-value-is-not-canonical",
+    });
+    expect(version).toMatchObject({
+      engineId: selectedEngine.id,
+      engineVersion: "ar-iibb-tuc-local-v1.1.0",
+    });
+
+    const renamed = await masters.updateRegime(ctxOwner, { regimeId: regime.id, code: "RENOMBRADO-P2-F" });
+    expect(renamed.calcFamilyId).toBe(iibbFamily.id);
+    await expect(masters.updateRegime(ctxOwner, {
+      regimeId: regime.id,
+      calcFamilyId: fx.iva.defaultFamilyId,
+    })).rejects.toMatchObject({ code: "ENGINE_FAMILY_MISMATCH", path: ["calcFamilyId"] });
+    expect((await masters.listEnginesForRegime(ctxOwner, regime.id)).map((engine) => engine.id))
+      .toEqual(engines.map((engine) => engine.id));
+
+    const noFamilyType = await masters.createTaxType(ctxOwner, {
+      code: "IMPUESTO-SIN-FAMILIA-P2-F",
+      name: "Impuesto sin familia",
+    });
+    const noFamilyRegime = await masters.createRegime(ctxOwner, {
+      code: "REGIMEN-SIN-FAMILIA-P2-F",
+      name: "Régimen sin familia",
+      taxTypeId: noFamilyType.id,
+      jurisdictionId: fx.tucuman.id,
+      authorityId: dgr.id,
+    });
+    await expect(masters.listEnginesForRegime(ctxOwner, noFamilyRegime.id)).rejects.toMatchObject({
+      code: "REGIME_FAMILY_REQUIRED",
+      path: ["calcFamilyId"],
+      message: "Elegí la familia de cálculo del régimen",
+    });
   });
 
   it("los maestros son catálogos compartidos: un no-miembro no los ve (RLS runtime)", async () => {

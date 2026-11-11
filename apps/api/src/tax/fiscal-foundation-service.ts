@@ -39,6 +39,11 @@ export type FiscalErrorCode =
   | "REGISTRATION_NOT_FOUND"
   | "ACTIVITY_LINK_NOT_FOUND"
   | "REGIME_NOT_FOUND"
+  | "CALC_FAMILY_NOT_FOUND"
+  | "REGIME_FAMILY_REQUIRED"
+  | "REGIME_CALC_FAMILY_IN_USE"
+  | "ENGINE_FAMILY_MISMATCH"
+  | "TAX_ENGINE_NOT_FOUND"
   | "JURISDICTION_NOT_FOUND"
   | "JURISDICTION_PARENT_REQUIRED"
   | "JURISDICTION_PARENT_INVALID"
@@ -76,11 +81,29 @@ export type FiscalErrorCode =
 
 export class FiscalError extends Error {
   readonly code: FiscalErrorCode;
-  constructor(code: FiscalErrorCode, message: string) {
+  readonly path: string[] | undefined;
+  constructor(code: FiscalErrorCode, message: string, path?: string[]) {
     super(message);
     this.name = "FiscalError";
     this.code = code;
+    this.path = path;
   }
+}
+
+async function requireActiveCalcFamily(
+  tx: Prisma.TransactionClient,
+  calcFamilyId: string,
+  path = "calcFamilyId",
+) {
+  const family = await tx.calcFamily.findFirst({ where: { id: calcFamilyId, isActive: true } });
+  if (!family) {
+    throw new FiscalError(
+      "CALC_FAMILY_NOT_FOUND",
+      "La familia de cálculo seleccionada no existe o está inactiva",
+      [path],
+    );
+  }
+  return family;
 }
 
 export function assertTaxEngineVersionCompatible(
@@ -366,10 +389,22 @@ export class FiscalMasterService {
     }));
   }
 
-  async createTaxType(ctx: TenantContext, input: { code: string; name: string; duplicateOfId?: string }) {
+  async createTaxType(ctx: TenantContext, input: {
+    code: string;
+    name: string;
+    defaultFamilyId?: string | null;
+    duplicateOfId?: string;
+  }) {
     return withTenantContext(ctx, async (tx) => {
+      if (input.defaultFamilyId) await requireActiveCalcFamily(tx, input.defaultFamilyId, "defaultFamilyId");
       const created = await tx.taxType.create({
-        data: { code: input.code, name: input.name, origin: "UI", createdByFirmId: ctx.firmId },
+        data: {
+          code: input.code,
+          name: input.name,
+          defaultFamilyId: input.defaultFamilyId ?? null,
+          origin: "UI",
+          createdByFirmId: ctx.firmId,
+        },
       });
       await recordAudit(tx, {
         firmId: ctx.firmId,
@@ -382,7 +417,12 @@ export class FiscalMasterService {
             code: source.code, name: source.name, isActive: source.isActive,
           }))
           : Prisma.JsonNull,
-        after: { code: created.code, name: created.name, isActive: created.isActive },
+        after: {
+          code: created.code,
+          name: created.name,
+          defaultFamilyId: created.defaultFamilyId,
+          isActive: created.isActive,
+        },
       });
       return created;
     }).catch((err: unknown) => {
@@ -461,20 +501,29 @@ export class FiscalMasterService {
 
   async updateTaxType(
     ctx: TenantContext,
-    input: { taxTypeId: string; code?: string; name?: string; isActive?: boolean },
+    input: {
+      taxTypeId: string;
+      code?: string;
+      name?: string;
+      defaultFamilyId?: string | null;
+      isActive?: boolean;
+    },
   ) {
     return withTenantContext(ctx, async (tx) => {
       const row = await tx.taxType.findUnique({ where: { id: input.taxTypeId } });
       if (!row) throw new FiscalError("CATALOG_NOT_FOUND", "El tipo de impuesto no existe");
-      const hasEditableFields = input.code !== undefined || input.name !== undefined;
+      const hasEditableFields = input.code !== undefined || input.name !== undefined ||
+        input.defaultFamilyId !== undefined;
       if (!hasEditableFields && input.isActive === row.isActive) {
         throw new FiscalError("CATALOG_STATE_UNCHANGED", input.isActive ? "El tipo de impuesto ya está activo" : "El tipo de impuesto ya está desactivado");
       }
+      if (input.defaultFamilyId) await requireActiveCalcFamily(tx, input.defaultFamilyId, "defaultFamilyId");
       const updated = await tx.taxType.update({
         where: { id: row.id },
         data: {
           ...(input.code !== undefined ? { code: input.code.trim() } : {}),
           ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.defaultFamilyId !== undefined ? { defaultFamilyId: input.defaultFamilyId } : {}),
           ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
         },
       });
@@ -484,8 +533,18 @@ export class FiscalMasterService {
         action: hasEditableFields ? "tax.type.updated" : input.isActive ? "tax.type.shown" : "tax.type.hidden",
         entityType: "TaxType",
         entityId: row.id,
-        before: { code: row.code, name: row.name, isActive: row.isActive },
-        after: { code: updated.code, name: updated.name, isActive: updated.isActive },
+        before: {
+          code: row.code,
+          name: row.name,
+          defaultFamilyId: row.defaultFamilyId,
+          isActive: row.isActive,
+        },
+        after: {
+          code: updated.code,
+          name: updated.name,
+          defaultFamilyId: updated.defaultFamilyId,
+          isActive: updated.isActive,
+        },
       });
       return updated;
     }).catch((err: unknown) => {
@@ -586,11 +645,52 @@ export class FiscalMasterService {
     });
   }
 
+  async listCalcFamilies(ctx: TenantContext) {
+    return withTenantContext(ctx, (tx) => tx.calcFamily.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { key: "asc" }],
+    }));
+  }
+
+  async listEnginesForRegime(ctx: TenantContext, regimeId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const regime = await tx.taxRegime.findUnique({
+        where: { id: regimeId },
+        select: { id: true, calcFamilyId: true },
+      });
+      if (!regime) throw new FiscalError("REGIME_NOT_FOUND", "El régimen no existe");
+      if (!regime.calcFamilyId) {
+        throw new FiscalError(
+          "REGIME_FAMILY_REQUIRED",
+          "Elegí la familia de cálculo del régimen",
+          ["calcFamilyId"],
+        );
+      }
+      const family = await requireActiveCalcFamily(tx, regime.calcFamilyId);
+      const engines = await tx.taxEngine.findMany({
+        where: { familyId: family.id, isActive: true },
+        select: {
+          id: true,
+          engineKey: true,
+          engineVersion: true,
+          familyId: true,
+          label: true,
+          family: { select: { key: true } },
+        },
+        orderBy: [{ sortOrder: "asc" }, { engineKey: "asc" }],
+      });
+      return engines.map(({ family: engineFamily, ...engine }) => ({
+        ...engine,
+        familyKey: engineFamily.key,
+      }));
+    });
+  }
+
   async listRegimes(ctx: TenantContext, includeInactive = false) {
     return withTenantContext(ctx, (tx) =>
       tx.taxRegime.findMany({
         where: includeInactive ? {} : { isActive: true },
-        include: { taxType: true, jurisdiction: true, authority: true },
+        include: { taxType: true, jurisdiction: true, authority: true, calcFamily: true },
         orderBy: { code: "asc" },
         take: 200,
       }),
@@ -599,11 +699,21 @@ export class FiscalMasterService {
 
   async createRegime(
     ctx: TenantContext,
-    input: { code: string; name: string; taxTypeId: string; jurisdictionId: string; authorityId: string; duplicateOfId?: string },
+    input: {
+      code: string;
+      name: string;
+      taxTypeId: string;
+      jurisdictionId: string;
+      authorityId: string;
+      calcFamilyId?: string;
+      duplicateOfId?: string;
+    },
   ) {
     return withTenantContext(ctx, async (tx) => {
       const taxType = await tx.taxType.findUnique({ where: { id: input.taxTypeId } });
       if (!taxType) throw new FiscalError("TAX_TYPE_NOT_FOUND", "Impuesto no encontrado");
+      const calcFamilyId = input.calcFamilyId ?? taxType.defaultFamilyId;
+      if (calcFamilyId) await requireActiveCalcFamily(tx, calcFamilyId);
       const jurisdiction = await tx.jurisdiction.findUnique({
         where: { id: input.jurisdictionId },
       });
@@ -629,6 +739,7 @@ export class FiscalMasterService {
           taxTypeId: input.taxTypeId,
           jurisdictionId: input.jurisdictionId,
           authorityId: input.authorityId,
+          calcFamilyId: calcFamilyId ?? null,
           origin: "UI",
           createdByFirmId: ctx.firmId,
         },
@@ -640,14 +751,14 @@ export class FiscalMasterService {
         entityType: "TaxRegime",
         entityId: created.id,
         before: input.duplicateOfId
-          ? await tx.taxRegime.findUniqueOrThrow({ where: { id: input.duplicateOfId } }).then((source: { code: string; name: string; taxTypeId: string; jurisdictionId: string; authorityId: string; isActive: boolean }) => ({
+          ? await tx.taxRegime.findUniqueOrThrow({ where: { id: input.duplicateOfId } }).then((source: { code: string; name: string; taxTypeId: string; jurisdictionId: string; authorityId: string; calcFamilyId: string | null; isActive: boolean }) => ({
             code: source.code, name: source.name, taxTypeId: source.taxTypeId, jurisdictionId: source.jurisdictionId,
-            authorityId: source.authorityId, isActive: source.isActive,
+            authorityId: source.authorityId, calcFamilyId: source.calcFamilyId, isActive: source.isActive,
           }))
           : Prisma.JsonNull,
         after: {
           code: created.code, name: created.name, taxTypeId: created.taxTypeId, jurisdictionId: created.jurisdictionId,
-          authorityId: created.authorityId, isActive: created.isActive,
+          authorityId: created.authorityId, calcFamilyId: created.calcFamilyId, isActive: created.isActive,
         },
       });
       return created;
@@ -671,6 +782,7 @@ export class FiscalMasterService {
       taxTypeId?: string;
       jurisdictionId?: string;
       authorityId?: string;
+      calcFamilyId?: string | null;
       isActive?: boolean;
     },
   ) {
@@ -678,19 +790,22 @@ export class FiscalMasterService {
       const row = await tx.taxRegime.findUnique({ where: { id: input.regimeId } });
       if (!row) throw new FiscalError("CATALOG_NOT_FOUND", "El régimen no existe");
       const hasEditableFields = input.code !== undefined || input.name !== undefined || input.taxTypeId !== undefined ||
-        input.jurisdictionId !== undefined || input.authorityId !== undefined;
+        input.jurisdictionId !== undefined || input.authorityId !== undefined || input.calcFamilyId !== undefined;
       if (!hasEditableFields && input.isActive === row.isActive) {
         throw new FiscalError("CATALOG_STATE_UNCHANGED", input.isActive ? "El régimen ya está activo" : "El régimen ya está oculto");
       }
       const taxTypeId = input.taxTypeId ?? row.taxTypeId;
       const jurisdictionId = input.jurisdictionId ?? row.jurisdictionId;
       const authorityId = input.authorityId ?? row.authorityId;
+      const calcFamilyId = input.calcFamilyId === undefined ? row.calcFamilyId : input.calcFamilyId;
+      const familyChanged = calcFamilyId !== row.calcFamilyId;
       if (input.taxTypeId !== undefined && !(await tx.taxType.findUnique({ where: { id: taxTypeId } }))) {
         throw new FiscalError("TAX_TYPE_NOT_FOUND", "Impuesto no encontrado");
       }
       if (input.jurisdictionId !== undefined && !(await tx.jurisdiction.findUnique({ where: { id: jurisdictionId } }))) {
         throw new FiscalError("JURISDICTION_NOT_FOUND", "Jurisdicción no encontrada");
       }
+      if (calcFamilyId) await requireActiveCalcFamily(tx, calcFamilyId);
       const authority = input.authorityId !== undefined || input.jurisdictionId !== undefined
         ? await tx.taxAuthority.findUnique({ where: { id: authorityId } })
         : null;
@@ -700,6 +815,30 @@ export class FiscalMasterService {
       if (authority && authority.jurisdictionId !== jurisdictionId) {
         throw new FiscalError("AUTHORITY_JURISDICTION_MISMATCH", "La autoridad fiscal debe corresponder a la jurisdicción del régimen");
       }
+      if (familyChanged) {
+        const [activeVersions, settlements, versionsWithEngine] = await Promise.all([
+          tx.taxRuleVersion.count({ where: { pack: { regimeId: row.id }, status: "ACTIVE" } }),
+          tx.taxSettlement.count({ where: { regimeId: row.id } }),
+          tx.taxRuleVersion.findMany({
+            where: { pack: { regimeId: row.id }, engineId: { not: null } },
+            select: { engine: { select: { familyId: true } } },
+          }),
+        ]);
+        if (activeVersions > 0 || settlements > 0) {
+          throw new FiscalError(
+            "REGIME_CALC_FAMILY_IN_USE",
+            "El régimen tiene versiones activas o liquidaciones; creá un régimen nuevo para cambiar la familia",
+            ["calcFamilyId"],
+          );
+        }
+        if (versionsWithEngine.some(({ engine }) => engine?.familyId !== calcFamilyId)) {
+          throw new FiscalError(
+            "ENGINE_FAMILY_MISMATCH",
+            "La familia no coincide con el motor asociado a una versión del régimen",
+            ["calcFamilyId"],
+          );
+        }
+      }
       const updated = await tx.taxRegime.update({
         where: { id: row.id },
         data: {
@@ -708,6 +847,7 @@ export class FiscalMasterService {
           ...(input.taxTypeId !== undefined ? { taxTypeId } : {}),
           ...(input.jurisdictionId !== undefined ? { jurisdictionId } : {}),
           ...(input.authorityId !== undefined ? { authorityId } : {}),
+          ...(input.calcFamilyId !== undefined ? { calcFamilyId: input.calcFamilyId } : {}),
           ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
         },
       });
@@ -719,11 +859,11 @@ export class FiscalMasterService {
         entityId: row.id,
         before: {
           code: row.code, name: row.name, taxTypeId: row.taxTypeId, jurisdictionId: row.jurisdictionId,
-          authorityId: row.authorityId, isActive: row.isActive,
+          authorityId: row.authorityId, calcFamilyId: row.calcFamilyId, isActive: row.isActive,
         },
         after: {
           code: updated.code, name: updated.name, taxTypeId: updated.taxTypeId, jurisdictionId: updated.jurisdictionId,
-          authorityId: updated.authorityId, isActive: updated.isActive,
+          authorityId: updated.authorityId, calcFamilyId: updated.calcFamilyId, isActive: updated.isActive,
         },
       });
       return updated;
@@ -1533,7 +1673,10 @@ export class TaxRuleService {
   async listPacks(ctx: TenantContext) {
     return withTenantContext(ctx, (tx) =>
       tx.taxRulePack.findMany({
-        include: { regime: { include: { taxType: true, jurisdiction: true } }, versions: { orderBy: { version: "desc" }, take: 5 } },
+        include: {
+          regime: { include: { taxType: true, jurisdiction: true, calcFamily: true } },
+          versions: { orderBy: { version: "desc" }, take: 5, include: { engine: true } },
+        },
         orderBy: { code: "asc" },
         take: 200,
       }),
@@ -1546,10 +1689,11 @@ export class TaxRuleService {
       const pack = await tx.taxRulePack.findUnique({
         where: { id: packId },
         include: {
-          regime: { include: { taxType: true, jurisdiction: true, authority: true } },
+          regime: { include: { taxType: true, jurisdiction: true, authority: true, calcFamily: true } },
           versions: {
             orderBy: { version: "desc" },
             include: {
+              engine: true,
               rateRules: { orderBy: [{ concept: "asc" }, { activityCode: "asc" }] },
               minimumRules: { orderBy: { concept: "asc" } },
               dueDateRules: { orderBy: { dueDay: "asc" } },
@@ -1578,7 +1722,8 @@ export class TaxRuleService {
       packId: string;
       validFrom: string;
       validTo?: string;
-      engineVersion: string;
+      engineId?: string;
+      engineVersion?: string;
       rulesHash: string;
     },
   ) {
@@ -1589,6 +1734,7 @@ export class TaxRuleService {
           regime: {
             select: {
               code: true,
+              calcFamilyId: true,
               taxType: { select: { code: true } },
               jurisdiction: { select: { code: true } },
             },
@@ -1596,10 +1742,63 @@ export class TaxRuleService {
         },
       });
       if (!pack) throw new FiscalError("RULE_PACK_NOT_FOUND", "Rule pack no encontrado");
-      assertTaxEngineVersionCompatible(
-        taxRegimeEngineScope(pack.regime),
-        input.engineVersion,
-      );
+
+      let engine: { id: string; engineVersion: string; familyId: string } | null;
+      if (input.engineId) {
+        if (!pack.regime.calcFamilyId) {
+          throw new FiscalError(
+            "REGIME_FAMILY_REQUIRED",
+            "Elegí la familia de cálculo del régimen",
+            ["calcFamilyId"],
+          );
+        }
+        engine = await tx.taxEngine.findFirst({
+          where: { id: input.engineId, isActive: true },
+          select: { id: true, engineVersion: true, familyId: true },
+        });
+        if (!engine) {
+          throw new FiscalError("TAX_ENGINE_NOT_FOUND", "El motor seleccionado no existe o está inactivo", ["engineId"]);
+        }
+        if (engine.familyId !== pack.regime.calcFamilyId) {
+          throw new FiscalError(
+            "ENGINE_FAMILY_MISMATCH",
+            "El motor seleccionado no pertenece a la familia de cálculo del régimen",
+            ["engineId"],
+          );
+        }
+      } else {
+        if (!input.engineVersion) {
+          throw new FiscalError("TAX_ENGINE_NOT_FOUND", "Elegí un motor del catálogo", ["engineId"]);
+        }
+        const engines = await tx.taxEngine.findMany({
+          where: { engineVersion: input.engineVersion, isActive: true },
+          select: { id: true, engineVersion: true, familyId: true },
+        });
+        if (engines.length !== 1) {
+          if (!engines.length && !pack.regime.calcFamilyId) {
+            assertTaxEngineVersionCompatible(taxRegimeEngineScope(pack.regime), input.engineVersion);
+          }
+          throw new FiscalError(
+            "UNSUPPORTED_TAX_ENGINE_VERSION",
+            engines.length ? "La versión del motor no identifica un motor único del catálogo" :
+              `El motor "${input.engineVersion}" no existe o está inactivo en el catálogo`,
+            ["engineVersion"],
+          );
+        }
+        engine = engines[0];
+        if (pack.regime.calcFamilyId) {
+          if (engine.familyId !== pack.regime.calcFamilyId) {
+            throw new FiscalError(
+              "ENGINE_FAMILY_MISMATCH",
+              "El motor seleccionado no pertenece a la familia de cálculo del régimen",
+              ["engineVersion"],
+            );
+          }
+        } else {
+          assertTaxEngineVersionCompatible(taxRegimeEngineScope(pack.regime), input.engineVersion);
+        }
+      }
+
       const count = await tx.taxRuleVersion.count({ where: { packId: input.packId } });
       return tx.taxRuleVersion.create({
         data: {
@@ -1609,8 +1808,9 @@ export class TaxRuleService {
           version: count + 1,
           validFrom: new Date(input.validFrom),
           ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
-          engineVersion: input.engineVersion,
-          rulesHash: computeRulesHashV2({ engineVersion: input.engineVersion }),
+          engineId: engine.id,
+          engineVersion: engine.engineVersion,
+          rulesHash: computeRulesHashV2({ engineVersion: engine.engineVersion }),
           rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V2,
           status: "DRAFT",
         },
@@ -1628,6 +1828,7 @@ export class TaxRuleService {
         where: { packId: input.packId },
         orderBy: { version: "desc" },
         include: {
+          engine: { select: { familyId: true } },
           rateRules: true,
           minimumRules: true,
           bracketRules: true,
@@ -1639,6 +1840,7 @@ export class TaxRuleService {
               regime: {
                 select: {
                   code: true,
+                  calcFamilyId: true,
                   taxType: { select: { code: true } },
                   jurisdiction: { select: { code: true } },
                 },
@@ -1648,10 +1850,20 @@ export class TaxRuleService {
         },
       });
       if (!source) throw new FiscalError("RULE_VERSION_NOT_FOUND", "El pack no tiene una versión para clonar");
-      assertTaxEngineVersionCompatible(
-        taxRegimeEngineScope(source.pack.regime),
-        source.engineVersion,
-      );
+      if (source.engineId && source.engine && source.pack.regime.calcFamilyId) {
+        if (source.engine.familyId !== source.pack.regime.calcFamilyId) {
+          throw new FiscalError(
+            "ENGINE_FAMILY_MISMATCH",
+            "La familia del régimen no coincide con el motor de la versión a clonar",
+            ["calcFamilyId"],
+          );
+        }
+      } else {
+        assertTaxEngineVersionCompatible(
+          taxRegimeEngineScope(source.pack.regime),
+          source.engineVersion,
+        );
+      }
       const count = await tx.taxRuleVersion.count({ where: { packId: input.packId } });
       const version = await tx.taxRuleVersion.create({
         data: {
@@ -1662,6 +1874,7 @@ export class TaxRuleService {
           status: "DRAFT",
           validFrom: new Date(input.validFrom),
           ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
+          engineId: source.engineId,
           engineVersion: source.engineVersion,
           rulesHash: source.rulesHash,
           rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V2,
