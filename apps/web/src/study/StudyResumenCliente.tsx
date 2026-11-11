@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, EmptyState, Table } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { CLIENT_VAT_CONDITION_LABELS } from "@contable/contracts";
-import { api, type ClientSummary } from "../lib/api";
+import { api, type ClientContact, type ClientSummary } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
@@ -80,9 +80,19 @@ function displayVatCondition(value: string | null | undefined) {
   return (CLIENT_VAT_CONDITION_LABELS as Record<string, string>)[value] ?? value;
 }
 
-function SummaryFact({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function SummaryFact({
+  label,
+  value,
+  detail,
+  wrap = false,
+}: {
+  label: string;
+  value: string;
+  detail?: ReactNode;
+  wrap?: boolean;
+}) {
   return (
-    <div className="client-summary__fact">
+    <div className={`client-summary__fact${wrap ? " client-summary__fact--wrap" : ""}`}>
       <dt>{label}</dt>
       <dd>{value}</dd>
       {detail ? <small>{detail}</small> : null}
@@ -268,14 +278,20 @@ function countsLabel(value: number) {
 
 export function StudyResumenCliente() {
   const [density] = useDensity();
-  const { firmId, clientId } = useClientContext();
+  const { firmId, clientId, capabilities } = useClientContext();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<SummarySectionId>("overview");
   const [search, setSearch] = useState("");
+  const canManageContacts = capabilities.has("client.manage");
   const query = useQuery({
     queryKey: ["client-summary", firmId, clientId],
     queryFn: () => api.get<ClientSummary>(`/firms/${firmId}/clients/${clientId}/summary`),
     enabled: Boolean(firmId && clientId),
+  });
+  const contactsQuery = useQuery({
+    queryKey: ["client-contacts", firmId, clientId],
+    queryFn: () => api.get<ClientContact[]>(`/firms/${firmId}/clients/${clientId}/contacts`),
+    enabled: Boolean(firmId && clientId && canManageContacts),
   });
 
   const accountingPeriodCount = useMemo(
@@ -289,6 +305,31 @@ export function StudyResumenCliente() {
       query.data?.fiscal.profiles[0],
     [query.data],
   );
+  const primaryContact = useMemo(
+    () => contactsQuery.data?.find((contact) => contact.isPrimary && contact.isActive) ?? null,
+    [contactsQuery.data],
+  );
+  const contactValue = contactsQuery.isLoading
+    ? "Cargando…"
+    : contactsQuery.isError
+      ? "No disponible"
+      : primaryContact?.name.trim() || "No cargado";
+  const contactEmailValue = contactsQuery.isLoading
+    ? "Cargando…"
+    : contactsQuery.isError
+      ? "No disponible"
+      : primaryContact?.email?.trim() || "No cargado";
+  const contactPhoneValue = contactsQuery.isLoading
+    ? "Cargando…"
+    : contactsQuery.isError
+      ? "No disponible"
+      : primaryContact?.phone?.trim() || "No cargado";
+  const contactAction =
+    contactsQuery.isLoading || (primaryContact && !contactsQuery.isError)
+      ? undefined
+      : contactsQuery.isError
+        ? <><span>No se pudo cargar. </span><a href="/clientes" onClick={(event) => { event.preventDefault(); navigate("/clientes", { state: { contactClientId: clientId } }); }}>Abrir Contactos</a></>
+        : <a href="/clientes" onClick={(event) => { event.preventDefault(); navigate("/clientes", { state: { contactClientId: clientId } }); }}>Cargar en Contactos</a>;
   const activeActivities = query.data?.fiscal.activities.filter((item) => !item.validTo).length ?? 0;
   const openAccountingYearCount =
     query.data?.accounting.fiscalYears.filter((year) => year.status === "OPEN").length ?? 0;
@@ -700,27 +741,51 @@ export function StudyResumenCliente() {
                   <p>Parámetros generales que sostienen el trabajo del cliente.</p>
                 </div>
               </div>
-              {profile ? (
-                <dl className="client-summary__facts">
-                  <SummaryFact label="Moneda funcional" value={profile.functionalCurrency} />
-                  <SummaryFact label="Cierre de ejercicio" value={MONTH_LABELS[profile.fiscalYearEndMonth - 1] ?? "Sin configurar"} />
-                  <SummaryFact label="Condición IVA" value={displayVatCondition(profile.vatCondition)} />
-                  <SummaryFact label="Forma jurídica" value={displayValue(profile.legalForm)} />
-                  <SummaryFact label="Provincia" value={displayValue(profile.province)} />
-                  <SummaryFact label="Actividad principal" value={displayValue(profile.activity)} />
-                  <SummaryFact label="Norma contable" value={displayValue(profile.accountingStandard)} />
+              <dl className="client-summary__facts">
+                {profile ? (
+                  <>
+                    <SummaryFact label="Moneda funcional" value={profile.functionalCurrency} />
+                    <SummaryFact label="Cierre de ejercicio" value={MONTH_LABELS[profile.fiscalYearEndMonth - 1] ?? "Sin configurar"} />
+                    <SummaryFact label="Condición IVA" value={displayVatCondition(profile.vatCondition)} />
+                    <SummaryFact label="Forma jurídica" value={displayValue(profile.legalForm)} />
+                    <SummaryFact label="Provincia" value={displayValue(profile.province)} />
+                    <SummaryFact label="Actividad principal" value={displayValue(profile.activity)} />
+                    <SummaryFact label="Norma contable" value={displayValue(profile.accountingStandard)} />
+                    <SummaryFact
+                      label="Jurisdicciones IIBB"
+                      value={profile.iibbJurisdictions.length > 0 ? profile.iibbJurisdictions.join(", ") : "Sin configurar"}
+                    />
+                    <SummaryFact label="Inicio del servicio" value={formatDate(profile.serviceStartDate)} />
+                  </>
+                ) : (
                   <SummaryFact
-                    label="Jurisdicciones IIBB"
-                    value={profile.iibbJurisdictions.length > 0 ? profile.iibbJurisdictions.join(", ") : "Sin configurar"}
+                    label="Ficha contable"
+                    value="No cargado"
+                    detail={
+                      <a href="/clientes" onClick={(event) => { event.preventDefault(); navigate("/clientes", { state: { contactClientId: clientId } }); }}>
+                        Completar desde Clientes
+                      </a>
+                    }
                   />
-                  <SummaryFact label="Inicio del servicio" value={formatDate(profile.serviceStartDate)} />
-                </dl>
-              ) : (
-                <SummarySectionEmpty
-                  title="Ficha pendiente"
-                  description="Completá la ficha desde la cartera de clientes para dejar estos datos disponibles."
+                )}
+                {canManageContacts ? (
+                  <>
+                    <SummaryFact label="Contacto principal" value={contactValue} detail={contactAction} wrap />
+                    <SummaryFact label="Correo de contacto" value={contactEmailValue} wrap />
+                    <SummaryFact label="Teléfono de contacto" value={contactPhoneValue} wrap />
+                  </>
+                ) : null}
+                <SummaryFact
+                  label="Domicilio fiscal"
+                  value={activeProfile?.fiscalAddress?.trim() || "No cargado"}
+                  wrap
+                  detail={
+                    activeProfile?.fiscalAddress?.trim()
+                      ? undefined
+                      : <a href="/configuracion-fiscal" onClick={(event) => { event.preventDefault(); navigate("/configuracion-fiscal"); }}>Cargar en Onboarding fiscal</a>
+                  }
                 />
-              )}
+              </dl>
             </section>
           ) : null}
 
@@ -743,7 +808,6 @@ export function StudyResumenCliente() {
                     <SummaryFact label="Condición nacional" value={CONDITION_LABELS[activeProfile.nationalCondition] ?? activeProfile.nationalCondition} />
                     <SummaryFact label="Versión" value={`v${activeProfile.version}`} />
                     <SummaryFact label="Vigente desde" value={formatDate(activeProfile.validFrom)} />
-                    <SummaryFact label="Domicilio fiscal" value={displayValue(activeProfile.fiscalAddress)} />
                     <SummaryFact label="Categoría monotributo" value={displayValue(activeProfile.monotributoCategory)} />
                   </dl>
                   <div className="client-summary__history">

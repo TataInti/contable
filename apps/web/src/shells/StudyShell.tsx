@@ -7,10 +7,8 @@ import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { GuidedTour } from "../ui/GuidedTour";
 import {
-  STUDY_NAVIGATION_GROUPS,
   modulesForNavigation,
   type StudyModule,
-  type StudyNavigationGroup,
 } from "../study/moduleRegistry";
 import { helpHrefForPath } from "../study/helpAnchors";
 import "./StudyShell.css";
@@ -24,13 +22,34 @@ const ROLE_LABELS: Record<string, string> = {
   AUDITOR: "Auditor",
 };
 
-const NAV_TOUR_IDS: Record<StudyNavigationGroup, string> = {
-  General: "nav-general",
-  Preparación: "nav-preparacion",
-  Ejecución: "nav-ejecucion",
-  Análisis: "nav-analisis",
-  Configuración: "nav-configuracion",
+const NAV_ITEM_TOUR_IDS: Partial<Record<StudyModule["id"], string>> = {
+  bandeja: "nav-preparacion",
+  trabajo: "nav-ejecucion",
+  rentabilidad: "nav-analisis",
 };
+
+const STUDY_NAVIGATION_IDS = [
+  "inicio",
+  "clientes",
+  "bandeja",
+  "trabajo",
+  "liquidaciones",
+  "expediente-mensual",
+  "rentabilidad",
+] as const;
+const CLIENT_NAVIGATION_IDS = ["configuracion-fiscal"] as const;
+const STUDY_SETTINGS_NAVIGATION_IDS = [
+  "usuarios",
+  "administracion-plataforma",
+  "reglas-fiscales",
+  "catalogos-fiscales",
+] as const;
+const STUDY_SETTINGS_PATHS = new Set([
+  "/administracion",
+  "/administracion-plataforma",
+  "/reglas-fiscales",
+  "/catalogos-fiscales",
+]);
 
 const CLIENT_INDEPENDENT_SECTIONS = new Set([
   "/catalogos-fiscales",
@@ -38,6 +57,14 @@ const CLIENT_INDEPENDENT_SECTIONS = new Set([
   "/administracion",
   "/administracion-plataforma",
 ]);
+
+function modulesInOrder(modules: readonly StudyModule[], ids: readonly string[]) {
+  const modulesById = new Map(modules.map((module) => [module.id, module]));
+  return ids.flatMap((id) => {
+    const module = modulesById.get(id);
+    return module ? [module] : [];
+  });
+}
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -59,13 +86,12 @@ function StudyNavLink({ item }: { item: StudyModule }) {
       key={item.id}
       to={item.path}
       end={item.end}
+      data-tour={NAV_ITEM_TOUR_IDS[item.id]}
       className={({ isActive }) =>
         `study__nav-link${isActive ? " study__nav-link--active" : ""}`
       }
     >
-      <Icon name={item.icon} size={18} />
       <span>{item.label}</span>
-      <Icon name="chevron" size={14} className="study__nav-chevron" />
     </NavLink>
   );
 }
@@ -74,23 +100,33 @@ export function StudyShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const session = useSession();
-  const { firmId, capabilities } = useClientContext();
+  const { firmId, clientId, capabilities } = useClientContext();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(() =>
+    STUDY_SETTINGS_PATHS.has(location.pathname),
+  );
   const firm = session.me?.firms.find((item) => item.firmId === firmId);
+  const selectedClient = firm?.clients.find((item) => item.clientId === clientId);
   const navigationModules = modulesForNavigation(capabilities);
+  const studyModules = modulesInOrder(navigationModules, STUDY_NAVIGATION_IDS);
+  const clientModules = modulesInOrder(navigationModules, CLIENT_NAVIGATION_IDS);
+  const settingsModules = modulesInOrder(navigationModules, STUDY_SETTINGS_NAVIGATION_IDS);
   const navRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => setMenuOpen(false), [location.pathname]);
+  useEffect(() => {
+    setMenuOpen(false);
+    if (STUDY_SETTINGS_PATHS.has(location.pathname)) setSettingsOpen(true);
+  }, [location.pathname]);
 
   // En escritorio el menú puede superar la altura del viewport: al navegar,
-  // el ítem activo (p.ej. la sección Configuración) queda a la vista sin que
+  // el ítem activo (p.ej. Ajustes del estudio) queda a la vista sin que
   // el pie de Ayuda lo tape. En móvil no aplica (el menú se abre cerrado).
   useEffect(() => {
     const activeLink = navRef.current?.querySelector<HTMLAnchorElement>(
       ".study__nav-link--active",
     );
     activeLink?.scrollIntoView?.({ block: "nearest" });
-  }, [location.pathname]);
+  }, [location.pathname, settingsOpen]);
 
   const openNavigationForTour = useCallback(() => {
     if (window.matchMedia?.("(max-width: 1024px)").matches) {
@@ -132,38 +168,81 @@ export function StudyShell() {
       <aside className="study__sidebar" id="study-navigation">
         <Brand />
         <nav className="study__nav" aria-label="Navegación del estudio" ref={navRef}>
-          {STUDY_NAVIGATION_GROUPS.map((group) => {
-            const items = navigationModules.filter((item) => item.navigationGroup === group);
-            if (items.length === 0) return null;
-            const admin = group === "Configuración";
-            return (
-              <div
-                className={[
-                  "study__nav-group",
-                  admin ? "study__nav-group--admin" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                key={group}
-                data-tour={NAV_TOUR_IDS[group]}
+          <div className="study__scope-line">
+            <span>En contexto</span>
+            <strong>{selectedClient?.clientName ?? "Sin elegir"}</strong>
+          </div>
+
+          <div
+            className="study__nav-group"
+            role="group"
+            aria-labelledby="study-navigation-study-label"
+            data-tour="nav-general"
+          >
+            <p className="study__nav-label" id="study-navigation-study-label">
+              Estudio
+            </p>
+            {studyModules.map((item) => (
+              <StudyNavLink item={item} key={item.id} />
+            ))}
+          </div>
+
+          <div
+            className="study__nav-group"
+            role="group"
+            aria-labelledby="study-navigation-client-label"
+          >
+            <p className="study__nav-label" id="study-navigation-client-label">
+              Del cliente
+            </p>
+            {clientId ? (
+              clientModules.map((item) => <StudyNavLink item={item} key={item.id} />)
+            ) : (
+              <div className="study__client-empty">
+                <strong>Elegí un cliente</strong>
+                {capabilities.has("client.read") ? (
+                  <NavLink to="/clientes">Elegir cliente</NavLink>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          {settingsModules.length > 0 ? (
+            <div
+              className="study__nav-group"
+              role="group"
+              aria-labelledby="study-navigation-settings-label"
+            >
+              <button
+                type="button"
+                className="study__nav-toggle"
+                id="study-navigation-settings-label"
+                aria-expanded={settingsOpen}
+                aria-controls="study-settings-items"
+                data-tour="nav-configuracion"
+                onClick={() => setSettingsOpen((current) => !current)}
               >
-                <p className="study__nav-label">{group}</p>
-                {items.map((item) => (
+                <span>Ajustes del estudio</span>
+                <span className="study__settings-chevron" aria-hidden="true">
+                  ▾
+                </span>
+              </button>
+              <div id="study-settings-items" hidden={!settingsOpen}>
+                {settingsModules.map((item) => (
                   <StudyNavLink item={item} key={item.id} />
                 ))}
               </div>
-            );
-          })}
+            </div>
+          ) : null}
         </nav>
 
         <div className="study__sidebar-footer">
           <details className="study__help">
             <summary className="study__tour-trigger">
-              <span className="study__tour-trigger-mark" aria-hidden="true">?</span>
-              <span>
-                <strong>Ayuda</strong>
-                <small>Manual y recorrido</small>
+              <span className="study__tour-trigger-mark" aria-hidden="true">
+                ?
               </span>
+              <strong>Ayuda y tour</strong>
               <Icon name="chevron" size={15} className="study__help-chevron" />
             </summary>
             <div className="study__help-menu">
@@ -211,7 +290,7 @@ export function StudyShell() {
               aria-label="Cerrar sesión"
               title="Cerrar sesión"
             >
-              <Icon name="logout" size={18} />
+              Salir
             </button>
           </div>
         </div>

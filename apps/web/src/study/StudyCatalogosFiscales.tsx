@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field } from "@contable/design-system";
 import { ACTIVITY_CODE_PATTERN, normalizeActivityCode } from "@contable/contracts";
 import { ApiError, api, type FiscalJurisdiction, type FiscalTaxType } from "../lib/api";
+import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
@@ -184,6 +185,7 @@ function isOwnedUiRecord(
 
 function MutationError({ error }: { error: unknown }) {
   if (!error || codeConflict(error)) return null;
+  if (error instanceof ApiError) return <FieldErrorsFromDetails error={error} />;
   return (
     <p className="form-error" role="alert">
       {error instanceof Error ? error.message : "Ocurrió un error inesperado."}

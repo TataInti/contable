@@ -16,6 +16,15 @@ describe("registro de módulos del estudio", () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
+  it("reserva el período contable global para módulos contables", () => {
+    const moduleById = new Map(STUDY_MODULES.map((module) => [module.id, module]));
+
+    expect(moduleById.get("liquidaciones")?.requirements.period).toBeUndefined();
+    expect(moduleById.get("expediente-mensual")?.requirements.period).toBeUndefined();
+    expect(moduleById.get("contabilidad")?.requirements.period).toBe(true);
+    expect(moduleById.get("rentabilidad")?.requirements.period).toBe(true);
+  });
+
   it("muestra cada módulo liberado cuando el rol tiene la capacidad requerida", () => {
     const capabilities = new Set(
       STUDY_MODULES.flatMap((module) => (module.requiredCapability ? [module.requiredCapability] : [])),

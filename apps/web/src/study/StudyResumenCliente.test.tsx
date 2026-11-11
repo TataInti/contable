@@ -2,9 +2,9 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
-import { api, type ClientSummary } from "../lib/api";
+import { api, type ClientContact, type ClientSummary } from "../lib/api";
 import { StudyResumenCliente } from "./StudyResumenCliente";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -20,11 +20,20 @@ vi.mock("../lib/api", async (importOriginal) => {
     api: {
       ...actual.api,
       get: vi.fn(),
+      post: vi.fn(),
+      patch: vi.fn(),
+      put: vi.fn(),
+      del: vi.fn(),
+      postWithHeaders: vi.fn(),
     } as unknown as typeof actual.api,
   };
 });
 
-function summaryFixture(accountingStatus = "CLOSED"): ClientSummary {
+function summaryFixture(
+  accountingStatus = "CLOSED",
+  fiscalAddress: string | null = "Tucumán",
+  includeAccountingProfile = true,
+): ClientSummary {
   const profile = {
     functionalCurrency: "ARS",
     accountingStandard: "RTIC",
@@ -58,7 +67,7 @@ function summaryFixture(accountingStatus = "CLOSED"): ClientSummary {
       status: "ONBOARDING",
       createdAt: date,
       updatedAt: "2026-11-09T00:00:00.000Z",
-      profile,
+      profile: includeAccountingProfile ? profile : null,
       onboarding: { completed: false, updatedAt: date },
     },
     accounting: {
@@ -82,7 +91,7 @@ function summaryFixture(accountingStatus = "CLOSED"): ClientSummary {
           cuit: "20111111112",
           personType: "JURIDICA",
           nationalCondition: "RESPONSABLE_INSCRIPTO",
-          fiscalAddress: "Tucumán",
+          fiscalAddress,
           fiscalYearEndMonth: 12,
           monotributoCategory: null,
           validFrom: date,
@@ -153,20 +162,27 @@ function LocationProbe() {
   return <output data-testid="current-path">{pathname}</output>;
 }
 
-function renderSummary(summary = summaryFixture()) {
+function renderSummary(
+  summary = summaryFixture(),
+  contacts: ClientContact[] = [],
+  canManageContacts = false,
+) {
   contextMock.current = {
     firmId: "firm-a",
     clientId: "client-a",
     periodId: null,
     isReady: true,
-    capabilities: new Set(["client.read"]),
+    capabilities: new Set(canManageContacts ? ["client.read", "client.manage"] : ["client.read"]),
     hasClientAccess: (id) => id === "client-a",
     setFirmId: vi.fn(),
     setClientId: vi.fn(),
     setPeriodId: vi.fn(),
   };
-  vi.mocked(api.get).mockImplementation(((path: string) =>
-    path.endsWith("/summary") ? Promise.resolve(summary) : Promise.resolve(null)) as never);
+  vi.mocked(api.get).mockImplementation(((path: string) => {
+    if (path.endsWith("/summary")) return Promise.resolve(summary);
+    if (path.endsWith("/contacts")) return Promise.resolve(contacts);
+    return Promise.resolve([]);
+  }) as never);
 
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -237,5 +253,112 @@ describe("StudyResumenCliente — composición del resumen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Nueva versión del perfil" }));
     await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/configuracion-fiscal"));
+  });
+});
+
+function openAccountingFacts() {
+  const index = screen.getByRole("navigation", { name: "Secciones internas del cliente" });
+  fireEvent.click(within(index).getByRole("button", { name: /Ficha contable/ }));
+  return screen.getByRole("region", { name: "Ficha contable" });
+}
+
+describe("StudyResumenCliente — datos de contacto y domicilio", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = {
+      firmId: "firm-a",
+      clientId: "client-a",
+      periodId: null,
+      isReady: true,
+      capabilities: new Set(["client.read", "client.manage"]),
+      hasClientAccess: () => true,
+      setFirmId: vi.fn(),
+      setClientId: vi.fn(),
+      setPeriodId: vi.fn(),
+    };
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("renderiza el contacto principal y el domicilio fiscal en la Ficha contable", async () => {
+    const contacts: ClientContact[] = [
+      {
+        id: "contact-secondary",
+        name: "Otra persona",
+        function: null,
+        email: "otra@example.com",
+        phone: "111",
+        isPrimary: false,
+        isActive: true,
+      },
+      {
+        id: "contact-primary",
+        name: "Ana Contacto",
+        function: "Administración",
+        email: "ana@example.com",
+        phone: "381-555-0101",
+        isPrimary: true,
+        isActive: true,
+      },
+    ];
+    renderSummary(summaryFixture("CLOSED", "Av. Rivadavia 123", false), contacts, true);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" })).toBeTruthy();
+    const ficha = openAccountingFacts();
+    await waitFor(() => expect(within(ficha).getByText("Ana Contacto")).toBeTruthy());
+    expect(within(ficha).getByText(/ana@example\.com/)).toBeTruthy();
+    expect(within(ficha).getByText(/381-555-0101/)).toBeTruthy();
+    expect(within(ficha).getByText("Av. Rivadavia 123")).toBeTruthy();
+    expect(within(ficha).queryByText("Otra persona")).toBeNull();
+    expect(api.get).toHaveBeenCalledWith("/firms/firm-a/clients/client-a/contacts");
+
+    const navigation = screen.getByRole("navigation", { name: "Secciones internas del cliente" });
+    fireEvent.click(within(navigation).getByRole("button", { name: "Perfil fiscal" }));
+    expect(
+      within(screen.getByRole("region", { name: "Perfil del contribuyente" })).queryByText("Av. Rivadavia 123"),
+    ).toBeNull();
+  });
+
+  it("muestra No cargado y enlaces de carga cuando la lista de contactos y el domicilio están vacíos", async () => {
+    renderSummary(summaryFixture("CLOSED", null, false), [], true);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" })).toBeTruthy();
+    const ficha = openAccountingFacts();
+    await waitFor(() => expect(within(ficha).getAllByText("No cargado").length).toBeGreaterThanOrEqual(3));
+    expect(within(ficha).getByRole("link", { name: "Cargar en Contactos" })).toBeTruthy();
+    expect(within(ficha).getByRole("link", { name: "Cargar en Onboarding fiscal" })).toBeTruthy();
+  });
+
+  it("no consulta ni expone contactos para quien no tiene client.manage", async () => {
+    contextMock.current = {
+      ...contextMock.current,
+      capabilities: new Set(["client.read"]),
+    };
+    renderSummary(
+      summaryFixture("CLOSED", null, false),
+      [
+        {
+          id: "private-contact",
+          name: "Dato Privado",
+          function: null,
+          email: "privado@example.com",
+          phone: "999",
+          isPrimary: true,
+          isActive: true,
+        },
+      ],
+    );
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" })).toBeTruthy();
+    const ficha = openAccountingFacts();
+    await waitFor(() => expect(within(ficha).getByText("Domicilio fiscal")).toBeTruthy());
+    expect(within(ficha).queryByText("Contacto principal")).toBeNull();
+    expect(within(ficha).queryByText("Dato Privado")).toBeNull();
+    expect(
+      vi.mocked(api.get).mock.calls.some(([path]: Parameters<typeof api.get>) => path.endsWith("/contacts")),
+    ).toBe(false);
   });
 });

@@ -17,6 +17,7 @@ type FiscalStep = "perfil" | "inscripcion" | "actividades" | "periodos" | "oblig
 type ProfileForm = {
   legalName: string;
   cuit: string;
+  fiscalAddress: string;
   personType: "FISICA" | "JURIDICA";
   nationalCondition: keyof typeof CONDITION_LABELS;
   validFrom: string;
@@ -32,6 +33,7 @@ interface TaxpayerProfileVersion {
   cuit: string;
   personType: "FISICA" | "JURIDICA";
   nationalCondition: keyof typeof CONDITION_LABELS;
+  fiscalAddress: string | null;
   status: "DRAFT" | "IN_REVIEW" | "ACTIVE" | "SUPERSEDED";
 }
 interface TaxPeriod {
@@ -108,6 +110,7 @@ export function StudyOnboardingFiscal() {
   const [form, setForm] = useState<ProfileForm>({
     legalName: "",
     cuit: "",
+    fiscalAddress: "",
     personType: "JURIDICA",
     nationalCondition: "RESPONSABLE_INSCRIPTO",
     validFrom: today,
@@ -208,6 +211,7 @@ export function StudyOnboardingFiscal() {
   const createProfile = useMutation({
     mutationFn: () => api.post<TaxpayerProfileVersion>(`/firms/${firmId}/clients/${clientId}/tax-profile-versions`, {
       legalName: form.legalName.trim(), cuit: form.cuit, personType: form.personType, nationalCondition: form.nationalCondition, validFrom: form.validFrom,
+      ...(form.fiscalAddress.trim() ? { fiscalAddress: form.fiscalAddress.trim() } : {}),
     }),
     onSuccess: (profile) => { setProfileId(profile.id); invalidateClientFiscal(); setOpenFormStep(null); setStep("inscripcion"); },
   });
@@ -316,11 +320,12 @@ export function StudyOnboardingFiscal() {
                   <div><dt>Tipo</dt><dd>{latestProfile.personType === "JURIDICA" ? "Persona jurídica" : "Persona física"}</dd></div>
                   <div><dt>Condición</dt><dd>{CONDITION_LABELS[latestProfile.nationalCondition]}</dd></div>
                   <div><dt>Versión</dt><dd>v{latestProfile.version}</dd></div>
+                  <div><dt>Domicilio fiscal</dt><dd>{latestProfile.fiscalAddress?.trim() || "No cargado"}</dd></div>
                 </dl>
                 {canWrite || (profileQuery.data?.length ?? 0) > 1 ? <div className="study-panel__actions fiscal-contributor__actions">
                   {canWrite && latestProfile.status === "DRAFT" ? <Button variant="secondary" onClick={() => submitReview.mutate()} loading={submitReview.isPending}>Enviar a revisión</Button> : null}
                   {canWrite && latestProfile.status === "IN_REVIEW" ? <Button variant="secondary" onClick={() => activate.mutate()} loading={activate.isPending}>Activar perfil</Button> : null}
-                  {canWrite && latestProfile.status === "ACTIVE" ? <Button variant="secondary" onClick={() => { setProfileId(null); setForm({ legalName: latestProfile.legalName, cuit: latestProfile.cuit, personType: latestProfile.personType, nationalCondition: latestProfile.nationalCondition, validFrom: today }); openStepForm("perfil"); }}>Crear nueva versión</Button> : null}
+                  {canWrite && latestProfile.status === "ACTIVE" ? <Button variant="secondary" onClick={() => { setProfileId(null); setForm({ legalName: latestProfile.legalName, cuit: latestProfile.cuit, fiscalAddress: latestProfile.fiscalAddress ?? "", personType: latestProfile.personType, nationalCondition: latestProfile.nationalCondition, validFrom: today }); openStepForm("perfil"); }}>Crear nueva versión</Button> : null}
                   {(profileQuery.data?.length ?? 0) > 1 ? <Button type="button" variant="ghost" onClick={() => setShowProfileHistory((visible) => !visible)} aria-expanded={showProfileHistory}>{showProfileHistory ? "Ocultar historial" : "Ver historial"}</Button> : null}
                 </div> : null}
                 {showProfileHistory ? <ul className="fiscal-contributor__history" aria-label="Historial de versiones fiscales">
@@ -405,6 +410,7 @@ export function StudyOnboardingFiscal() {
         <form id="fiscal-profile-form" className="study-form" onSubmit={(event) => { event.preventDefault(); createProfile.mutate(); }}>
           <Field label="Razón social" id="pf-legal-name" value={form.legalName} onChange={(event) => setForm({ ...form, legalName: event.target.value })} required />
           <Field label="CUIT" id="pf-cuit" value={form.cuit} onChange={(event) => setForm({ ...form, cuit: event.target.value.replace(/\D/g, "").slice(0, 11) })} inputMode="numeric" pattern="\d{11}" required />
+          <Field label="Domicilio fiscal" id="pf-fiscal-address" value={form.fiscalAddress} onChange={(event) => setForm({ ...form, fiscalAddress: event.target.value })} pattern=".*\S.*" title="Ingresá un domicilio fiscal o dejá el campo vacío." />
           <div className="ds-field"><label className="ds-field__label" htmlFor="pf-person-type">Tipo de persona</label><select id="pf-person-type" className="ds-field__input" value={form.personType} onChange={(event) => setForm({ ...form, personType: event.target.value as "FISICA" | "JURIDICA" })}><option value="JURIDICA">Jurídica</option><option value="FISICA">Física</option></select></div>
           <div className="ds-field"><label className="ds-field__label" htmlFor="pf-condition">Condición nacional</label><select id="pf-condition" className="ds-field__input" value={form.nationalCondition} onChange={(event) => setForm({ ...form, nationalCondition: event.target.value as keyof typeof CONDITION_LABELS })}>{Object.entries(CONDITION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
           <Field label="Vigencia desde" id="pf-valid-from" type="date" value={form.validFrom} onChange={(event) => setForm({ ...form, validFrom: event.target.value })} required />
