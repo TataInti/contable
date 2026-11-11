@@ -26,8 +26,9 @@ interface TaxSettlement {
   regime: {
     code: string;
     name: string;
-    taxType: { code: string; name: string };
-    jurisdiction: { name: string };
+    isActive: boolean;
+    taxType: { code: string; name: string; isActive: boolean };
+    jurisdiction: { name: string; isActive: boolean };
   };
 }
 interface TaxPeriod {
@@ -36,15 +37,15 @@ interface TaxPeriod {
   startDate: string;
   endDate: string;
   label: string | null;
-  taxType: { name: string };
+  taxType: { name: string; code: string; isActive: boolean };
 }
 interface TaxRegime {
   id: string;
   name: string;
   taxTypeId: string;
   jurisdictionId: string;
-  taxType: { name: string };
-  jurisdiction: { name: string };
+  taxType: { name: string; isActive: boolean };
+  jurisdiction: { name: string; isActive: boolean };
 }
 
 const today = new Date().toISOString().slice(0, 10);
@@ -259,7 +260,7 @@ export function StudyLiquidaciones() {
               <option value="">Seleccioná un período…</option>
               {taxPeriodsQuery.data?.map((period) => (
                 <option key={period.id} value={period.id}>
-                  {period.taxType.name} · {taxPeriodLabel(period)}
+                  {period.taxType.name}{!period.taxType.isActive ? " (oculto)" : ""} · {taxPeriodLabel(period)}
                 </option>
               ))}
             </select>
@@ -279,7 +280,7 @@ export function StudyLiquidaciones() {
               <option value="">Seleccioná un régimen…</option>
               {availableRegimes.map((regime) => (
                 <option key={regime.id} value={regime.id}>
-                  {regime.name} · {regime.jurisdiction.name}
+                  {regime.name} · {regime.jurisdiction.name}{!regime.jurisdiction.isActive ? " (oculto)" : ""}
                 </option>
               ))}
             </select>
@@ -370,10 +371,10 @@ export function StudyLiquidaciones() {
               header: "Impuesto",
               render: (row) => (
                 <>
-                  <strong>{row.regime.taxType.name}</strong>
+                  <strong>{row.regime.taxType.name}{!row.regime.taxType.isActive ? " (oculto)" : ""}</strong>
                   <br />
                   <small>
-                    {row.regime.name} · {row.regime.jurisdiction.name}
+                    {row.regime.name}{!row.regime.isActive ? " (oculto)" : ""} · {row.regime.jurisdiction.name}{!row.regime.jurisdiction.isActive ? " (oculto)" : ""}
                   </small>
                 </>
               ),

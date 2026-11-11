@@ -279,7 +279,7 @@ export async function workpaperAllocationCoverage(
             }
           : null,
         allocatedJurisdiction: jurisdiction
-          ? { id: jurisdiction.id, code: jurisdiction.code, name: jurisdiction.name }
+          ? { id: jurisdiction.id, code: jurisdiction.code, name: jurisdiction.name, isActive: jurisdiction.isActive }
           : null,
       };
     }),

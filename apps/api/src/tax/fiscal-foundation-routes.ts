@@ -67,8 +67,9 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
 
   app.get("/api/v1/tax/jurisdictions", async (req, reply) => {
+    const query = z.object({ includeInactive: z.enum(["true", "false"]).optional() }).strict().parse(req.query);
     try {
-      const data = await masters.listJurisdictions(tenantContextFromRequest(req));
+      const data = await masters.listJurisdictions(tenantContextFromRequest(req), query.includeInactive === "true");
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -82,11 +83,12 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         name: z.string().trim().min(1).max(160),
         kind: z.enum(["NATIONAL", "PROVINCIAL", "MUNICIPAL"]),
         parentId: z.string().uuid().optional(),
+        duplicateOfId: z.string().uuid().optional(),
       })
       .strict()
       .parse(req.body);
     try {
-      const data = await masters.createJurisdiction(tenantContextFromRequest(req), pickDefined(body) as { code: string; name: string; kind: "NATIONAL" | "PROVINCIAL" | "MUNICIPAL"; parentId?: string });
+      const data = await masters.createJurisdiction(tenantContextFromRequest(req), pickDefined(body) as { code: string; name: string; kind: "NATIONAL" | "PROVINCIAL" | "MUNICIPAL"; parentId?: string; duplicateOfId?: string });
       return reply.status(201).send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -97,18 +99,24 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     const { jurisdictionId } = req.params as { jurisdictionId: string };
     const body = z
       .object({
+        code: z.string().trim().min(1).max(40).optional(),
         name: z.string().trim().min(1).max(160).optional(),
+        kind: z.enum(["NATIONAL", "PROVINCIAL", "MUNICIPAL"]).optional(),
+        parentId: z.string().uuid().nullable().optional(),
         isActive: z.boolean().optional(),
       })
       .strict()
-      .refine((value) => value.name !== undefined || value.isActive !== undefined, {
-        message: "Indicá el nombre o el estado que querés actualizar",
+      .refine((value) => Object.values(value).some((field) => field !== undefined), {
+        message: "Indicá al menos un campo para actualizar",
       })
       .parse(req.body);
     try {
       const data = await masters.updateJurisdiction(tenantContextFromRequest(req), {
         jurisdictionId,
+        ...(body.code !== undefined ? { code: body.code } : {}),
         ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.kind !== undefined ? { kind: body.kind } : {}),
+        ...(body.parentId !== undefined ? { parentId: body.parentId } : {}),
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
       });
       return reply.send({ data });
@@ -118,8 +126,9 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/v1/tax/types", async (req, reply) => {
+    const query = z.object({ includeInactive: z.enum(["true", "false"]).optional() }).strict().parse(req.query);
     try {
-      const data = await masters.listTaxTypes(tenantContextFromRequest(req));
+      const data = await masters.listTaxTypes(tenantContextFromRequest(req), query.includeInactive === "true");
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -127,7 +136,11 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/tax/types", async (req, reply) => {
-    const body = z.object({ code: z.string().trim().min(1).max(40), name: z.string().trim().min(1).max(160) }).strict().parse(req.body);
+    const body = z.object({
+      code: z.string().trim().min(1).max(40),
+      name: z.string().trim().min(1).max(160),
+      duplicateOfId: z.string().uuid().optional(),
+    }).strict().parse(req.body);
     try {
       const data = await masters.createTaxType(tenantContextFromRequest(req), body);
       return reply.status(201).send({ data });
@@ -140,17 +153,19 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     const { taxTypeId } = req.params as { taxTypeId: string };
     const body = z
       .object({
+        code: z.string().trim().min(1).max(40).optional(),
         name: z.string().trim().min(1).max(160).optional(),
         isActive: z.boolean().optional(),
       })
       .strict()
-      .refine((value) => value.name !== undefined || value.isActive !== undefined, {
-        message: "Indicá el nombre o el estado que querés actualizar",
+      .refine((value) => Object.values(value).some((field) => field !== undefined), {
+        message: "Indicá al menos un campo para actualizar",
       })
       .parse(req.body);
     try {
       const data = await masters.updateTaxType(tenantContextFromRequest(req), {
         taxTypeId,
+        ...(body.code !== undefined ? { code: body.code } : {}),
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
       });
@@ -161,11 +176,15 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/v1/tax/authorities", async (req, reply) => {
-    const query = z.object({ jurisdictionId: z.string().uuid().optional() }).parse(req.query);
+    const query = z.object({
+      jurisdictionId: z.string().uuid().optional(),
+      includeInactive: z.enum(["true", "false"]).optional(),
+    }).strict().parse(req.query);
     try {
       const data = await masters.listTaxAuthorities(
         tenantContextFromRequest(req),
         query.jurisdictionId,
+        query.includeInactive === "true",
       );
       return reply.send({ data });
     } catch (err) {
@@ -179,6 +198,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         code: z.string().trim().min(1).max(40),
         name: z.string().trim().min(1).max(160),
         jurisdictionId: z.string().uuid(),
+        duplicateOfId: z.string().uuid().optional(),
       })
       .strict()
       .parse(req.body);
@@ -193,9 +213,28 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get("/api/v1/tax/regimes", async (req, reply) => {
+  app.patch("/api/v1/tax/authorities/:authorityId", async (req, reply) => {
+    const { authorityId } = req.params as { authorityId: string };
+    const body = z.object({
+      code: z.string().trim().min(1).max(40).optional(),
+      name: z.string().trim().min(1).max(160).optional(),
+      jurisdictionId: z.string().uuid().optional(),
+      isActive: z.boolean().optional(),
+    }).strict().refine((value) => Object.values(value).some((field) => field !== undefined), {
+      message: "Indicá al menos un campo para actualizar",
+    }).parse(req.body);
     try {
-      const data = await masters.listRegimes(tenantContextFromRequest(req));
+      const data = await masters.updateTaxAuthority(tenantContextFromRequest(req), { authorityId, ...pickDefined(body) });
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.get("/api/v1/tax/regimes", async (req, reply) => {
+    const query = z.object({ includeInactive: z.enum(["true", "false"]).optional() }).strict().parse(req.query);
+    try {
+      const data = await masters.listRegimes(tenantContextFromRequest(req), query.includeInactive === "true");
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -210,12 +249,35 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         taxTypeId: z.string().uuid(),
         jurisdictionId: z.string().uuid(),
         authorityId: z.string().uuid(),
+        duplicateOfId: z.string().uuid().optional(),
       })
       .strict()
       .parse(req.body);
     try {
       const data = await masters.createRegime(tenantContextFromRequest(req), body);
       return reply.status(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.patch("/api/v1/tax/regimes/:regimeId", async (req, reply) => {
+    const { regimeId } = req.params as { regimeId: string };
+    const body = z.object({
+      code: z.string().trim().min(1).max(40).optional(),
+      name: z.string().trim().min(1).max(160).optional(),
+      taxTypeId: z.string().uuid().optional(),
+      jurisdictionId: z.string().uuid().optional(),
+      authorityId: z.string().uuid().optional(),
+      isActive: z.boolean().optional(),
+    }).strict().refine((value: {
+      code?: string; name?: string; taxTypeId?: string; jurisdictionId?: string; authorityId?: string; isActive?: boolean;
+    }) => Object.values(value).some((field) => field !== undefined), {
+      message: "Indicá al menos un campo para actualizar",
+    }).parse(req.body);
+    try {
+      const data = await masters.updateRegime(tenantContextFromRequest(req), { regimeId, ...pickDefined(body) });
+      return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
     }
@@ -241,9 +303,20 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/api/v1/tax/catalog-usage/:kind/:catalogId", async (req, reply) => {
+    const { kind, catalogId } = req.params as { kind: string; catalogId: string };
+    const catalogKind = z.enum(["jurisdiction", "taxType", "authority", "regime", "activity"]).parse(kind);
+    try {
+      const data = await masters.getCatalogUsage(tenantContextFromRequest(req), catalogKind, catalogId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.post("/api/v1/tax/activities", async (req, reply) => {
     try {
-      const body = createEconomicActivitySchema.parse(req.body);
+      const body = createEconomicActivitySchema.extend({ duplicateOfId: z.string().uuid().optional() }).parse(req.body);
       const data = await masters.createActivity(tenantContextFromRequest(req), pickDefined(body) as {
         code: string;
         name: string;
@@ -251,6 +324,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         source?: string;
         validFrom: string;
         validTo?: string;
+        duplicateOfId?: string;
       });
       return reply.status(201).send({ data });
     } catch (err) {
@@ -258,8 +332,6 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
-  // Edición del catálogo: atributos descriptivos y vigencia. code y
-  // jurisdictionId no son editables (vínculo con reglas e historial).
   app.patch("/api/v1/tax/activities/:activityId", async (req, reply) => {
     const { activityId } = req.params as { activityId: string };
     try {
@@ -269,7 +341,9 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         ...pickDefined(body),
       } as {
         activityId: string;
+        code?: string;
         name?: string;
+        jurisdictionId?: string;
         source?: string | null;
         validFrom?: string;
         validTo?: string | null;

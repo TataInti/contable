@@ -270,8 +270,9 @@ export interface ClientSummary {
         id: string;
         code: string;
         name: string;
-        taxType: { id: string; code: string; name: string };
-        jurisdiction: { id: string; code: string; name: string };
+        isActive: boolean;
+        taxType: { id: string; code: string; name: string; isActive: boolean };
+        jurisdiction: { id: string; code: string; name: string; isActive: boolean };
       };
     }>;
     activities: Array<{
@@ -284,7 +285,8 @@ export interface ClientSummary {
         id: string;
         code: string;
         name: string;
-        jurisdiction: { code: string; name: string };
+        isActive: boolean;
+        jurisdiction: { code: string; name: string; isActive: boolean };
       };
     }>;
     periods: Array<{
@@ -292,7 +294,7 @@ export interface ClientSummary {
       startDate: string;
       endDate: string;
       label: string | null;
-      taxType: { id: string; code: string; name: string };
+      taxType: { id: string; code: string; name: string; isActive: boolean };
     }>;
     obligations: Array<{
       id: string;
@@ -303,8 +305,9 @@ export interface ClientSummary {
         id: string;
         code: string;
         name: string;
-        taxType: { id: string; code: string; name: string };
-        jurisdiction: { id: string; code: string; name: string };
+        isActive: boolean;
+        taxType: { id: string; code: string; name: string; isActive: boolean };
+        jurisdiction: { id: string; code: string; name: string; isActive: boolean };
       };
       period: { id: string; label: string | null; startDate: string; endDate: string };
     }>;

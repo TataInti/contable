@@ -586,8 +586,8 @@ export function StudyResumenCliente() {
                       header: "Impuesto",
                       render: (period) => (
                         <div className="summary-table__primary">
-                          <strong>{period.taxType.name}</strong>
-                          <small>{period.taxType.code}</small>
+                          <strong>{period.taxType.name}{!period.taxType.isActive ? " (oculto)" : ""}</strong>
+                          <small>{period.taxType.code}{!period.taxType.isActive ? " (oculto)" : ""}</small>
                         </div>
                       ),
                     },
@@ -632,8 +632,10 @@ export function StudyResumenCliente() {
                       header: "Régimen",
                       render: (obligation) => (
                         <div className="summary-table__primary">
-                          <strong>{obligation.regime.name}</strong>
-                          <small>{obligation.regime.taxType.name} · {obligation.regime.jurisdiction.name}</small>
+                          <strong>{obligation.regime.name}{!obligation.regime.isActive ? " (oculto)" : ""}</strong>
+                          <small>
+                            {obligation.regime.taxType.name}{!obligation.regime.taxType.isActive ? " (oculto)" : ""} · {obligation.regime.jurisdiction.name}{!obligation.regime.jurisdiction.isActive ? " (oculto)" : ""}
+                          </small>
                         </div>
                       ),
                     },
@@ -759,8 +761,10 @@ export function StudyResumenCliente() {
                   {fiscal.registrations.map((registration) => (
                     <li key={registration.id}>
                       <div>
-                        <strong>{registration.regime.name}</strong>
-                        <small>{registration.regime.taxType.name} · {registration.regime.jurisdiction.name}</small>
+                        <strong>{registration.regime.name}{!registration.regime.isActive ? " (oculto)" : ""}</strong>
+                        <small>
+                          {registration.regime.taxType.name}{!registration.regime.taxType.isActive ? " (oculto)" : ""} · {registration.regime.jurisdiction.name}{!registration.regime.jurisdiction.isActive ? " (oculto)" : ""}
+                        </small>
                         <small>Desde {formatDate(registration.validFrom)}{registration.validTo ? ` · hasta ${formatDate(registration.validTo)}` : ""}</small>
                       </div>
                       <StatusBadge status={registration.status} />
@@ -791,8 +795,10 @@ export function StudyResumenCliente() {
                   {fiscal.activities.map((item) => (
                     <li key={item.id}>
                       <div>
-                        <strong>{item.activity.name}</strong>
-                        <small>{item.activity.code} · {item.activity.jurisdiction.name}</small>
+                        <strong>{item.activity.name}{!item.activity.isActive ? " (oculto)" : ""}</strong>
+                        <small>
+                          {item.activity.code} · {item.activity.jurisdiction.name}{!item.activity.jurisdiction.isActive ? " (oculto)" : ""}
+                        </small>
                         <small>Desde {formatDate(item.validFrom)}{item.validTo ? ` · hasta ${formatDate(item.validTo)}` : ""}</small>
                       </div>
                       <span className="client-summary__detail-tag">{item.isPrimary ? "Principal" : "Secundaria"}</span>

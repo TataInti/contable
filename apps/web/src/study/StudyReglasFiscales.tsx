@@ -75,8 +75,9 @@ interface RulePack {
   regime: {
     name: string;
     code: string;
-    taxType: { name: string; code: string };
-    jurisdiction: { name: string; code?: string };
+    isActive: boolean;
+    taxType: { name: string; code: string; isActive: boolean };
+    jurisdiction: { name: string; code?: string; isActive: boolean };
   };
   versions: RuleVersion[];
 }
@@ -84,7 +85,7 @@ interface RulePack {
 interface RulePackDetail extends RulePack {
   regime: RulePack["regime"] & {
     jurisdiction: { id: string; name: string; code: string };
-    authority: { id: string; name: string };
+    authority: { id: string; name: string; isActive: boolean };
   };
 }
 
@@ -502,7 +503,7 @@ export function StudyReglasFiscales() {
         <span className="dense-name">
           <span className="dense-name__text">
             <strong>{pack.name}</strong>
-            <small>{pack.code}</small>
+            <small>{pack.code} · {pack.regime.name}{!pack.regime.isActive ? " (oculto)" : ""}</small>
           </span>
         </span>
       ),
@@ -511,13 +512,13 @@ export function StudyReglasFiscales() {
       key: "tax",
       header: "Impuesto",
       sortValue: (pack) => pack.regime.taxType.name,
-      render: (pack) => pack.regime.taxType.name,
+      render: (pack) => `${pack.regime.taxType.name}${!pack.regime.taxType.isActive ? " (oculto)" : ""}`,
     },
     {
       key: "jurisdiction",
       header: "Jurisdicción",
       sortValue: (pack) => pack.regime.jurisdiction.name,
-      render: (pack) => pack.regime.jurisdiction.name,
+      render: (pack) => `${pack.regime.jurisdiction.name}${!pack.regime.jurisdiction.isActive ? " (oculto)" : ""}`,
     },
     {
       key: "versions",
@@ -1002,12 +1003,12 @@ export function StudyReglasFiscales() {
                   <div>
                     <p className="study-page__eyebrow">Paquete seleccionado</p>
                     <p className="fiscal-rule-context__regime">
-                      {detailQuery.data.regime.taxType.name} ·{" "}
-                      {detailQuery.data.regime.jurisdiction.name}
+                      {detailQuery.data.regime.taxType.name}{!detailQuery.data.regime.taxType.isActive ? " (oculto)" : ""} ·{" "}
+                      {detailQuery.data.regime.jurisdiction.name}{!detailQuery.data.regime.jurisdiction.isActive ? " (oculto)" : ""}
                     </p>
                     <h2>{detailQuery.data.name}</h2>
                     <p>
-                      {detailQuery.data.code} · Organismo recaudador {detailQuery.data.regime.authority.name}
+                      {detailQuery.data.code} · Régimen {detailQuery.data.regime.name}{!detailQuery.data.regime.isActive ? " (oculto)" : ""} · Organismo recaudador {detailQuery.data.regime.authority.name}{!detailQuery.data.regime.authority.isActive ? " (oculto)" : ""}
                     </p>
                   </div>
                   <div className="table-actions">

@@ -24,9 +24,9 @@ type ProfileForm = {
   validFrom: string;
 };
 
-interface TaxRegime { id: string; code: string; name: string }
-interface EconomicActivity { id: string; code: string; name: string }
-interface TaxType { id: string; code: string; name: string }
+interface TaxRegime { id: string; code: string; name: string; isActive: boolean }
+interface EconomicActivity { id: string; code: string; name: string; isActive: boolean }
+interface TaxType { id: string; code: string; name: string; isActive: boolean }
 interface TaxpayerProfileVersion {
   id: string;
   version: number;
@@ -42,13 +42,13 @@ interface TaxPeriod {
   startDate: string;
   endDate: string;
   label: string | null;
-  taxType: { id: string; code: string; name: string };
+  taxType: { id: string; code: string; name: string; isActive: boolean };
 }
 interface TaxObligation {
   id: string;
   status: string;
   dueDate: string | null;
-  regime: { id: string; code: string; name: string; taxType: { name: string }; jurisdiction: { name: string } };
+  regime: { id: string; code: string; name: string; isActive: boolean; taxType: { name: string; isActive: boolean }; jurisdiction: { name: string; isActive: boolean } };
   period: { id: string; label: string | null; startDate: string; endDate: string };
 }
 interface TaxRegistration {
@@ -57,14 +57,14 @@ interface TaxRegistration {
   validFrom: string;
   validTo: string | null;
   registrationNumber: string | null;
-  regime: { id: string; code: string; name: string; taxType: { id: string; name: string }; jurisdiction: { name: string } };
+  regime: { id: string; code: string; name: string; isActive: boolean; taxType: { id: string; name: string; isActive: boolean }; jurisdiction: { name: string; isActive: boolean } };
 }
 interface ClientActivityLink {
   id: string;
   isPrimary: boolean;
   validFrom: string;
   validTo: string | null;
-  activity: { code: string; name: string; jurisdiction: { name: string } };
+  activity: { code: string; name: string; isActive: boolean; jurisdiction: { name: string; isActive: boolean } };
 }
 
 const today = new Date().toISOString().slice(0, 10);
@@ -361,7 +361,7 @@ export function StudyOnboardingFiscal() {
           <div>
             <div className="fiscal-client-overview__heading"><h3>Regímenes adheridos</h3>{canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("inscripcion")}>Agregar</Button> : null}</div>
             {registrationsQuery.isLoading ? <p className="muted-copy">Cargando adhesiones…</p> : (registrationsQuery.data?.length ?? 0) === 0 ? <EmptyState size="compact" title="Sin regímenes adheridos" description="Registrá el régimen fiscal que aplica al contribuyente." action={canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("inscripcion")}>Registrar inscripción</Button> : undefined} /> : <Table<TaxRegistration> rows={registrationsQuery.data ?? []} rowKey={(row) => row.id} columns={[
-              { key: "regime", header: "Régimen", render: (row) => <><strong>{row.regime.name}</strong><br /><small>{row.regime.taxType.name} · {row.regime.jurisdiction.name}</small></> },
+              { key: "regime", header: "Régimen", render: (row) => <><strong>{row.regime.name}{!row.regime.isActive ? " (oculto)" : ""}</strong><br /><small>{row.regime.taxType.name}{!row.regime.taxType.isActive ? " (oculto)" : ""} · {row.regime.jurisdiction.name}{!row.regime.jurisdiction.isActive ? " (oculto)" : ""}</small></> },
               { key: "status", header: "Estado", render: (row) => <StatusBadge status={row.status} /> },
               { key: "actions", header: "", render: (row) => canWrite && row.status === "ACTIVE" ? <Button size="sm" variant="ghost" loading={cancelRegistration.isPending} onClick={() => confirm.ask({ title: `¿Dar de baja ${row.regime.name}?`, description: "La adhesión al régimen quedará cancelada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Dar de baja", tone: "danger", onConfirm: () => cancelRegistration.mutate(row.id) })}>Dar de baja</Button> : null },
             ]} />}
@@ -369,7 +369,7 @@ export function StudyOnboardingFiscal() {
           <div>
             <div className="fiscal-client-overview__heading"><h3>Actividades</h3>{canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("actividades")}>Agregar</Button> : null}</div>
             {clientActivitiesQuery.isLoading ? <p className="muted-copy">Cargando actividades…</p> : (clientActivitiesQuery.data?.length ?? 0) === 0 ? <EmptyState size="compact" title="Sin actividades vinculadas" description="Vinculá la actividad económica principal del contribuyente." action={canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("actividades")}>Vincular actividad</Button> : undefined} /> : <Table<ClientActivityLink> rows={clientActivitiesQuery.data ?? []} rowKey={(row) => row.id} columns={[
-              { key: "activity", header: "Actividad", render: (row) => <><strong>{row.activity.code}</strong><br /><small>{row.activity.name}</small></> },
+              { key: "activity", header: "Actividad", render: (row) => <><strong>{row.activity.code}{!row.activity.isActive ? " (oculto)" : ""}</strong><br /><small>{row.activity.name}{!row.activity.isActive ? " (oculto)" : ""} · {row.activity.jurisdiction.name}{!row.activity.jurisdiction.isActive ? " (oculto)" : ""}</small></> },
               { key: "status", header: "Estado", render: (row) => row.validTo ? "Finalizada" : row.isPrimary ? "Principal" : "Vigente" },
               { key: "actions", header: "", render: (row) => canWrite && !row.validTo ? <Button size="sm" variant="ghost" loading={endActivity.isPending} onClick={() => confirm.ask({ title: `¿Finalizar ${row.activity.name}?`, description: "La actividad quedará finalizada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Finalizar", tone: "danger", onConfirm: () => endActivity.mutate(row.id) })}>Finalizar</Button> : null },
             ]} />}
@@ -378,7 +378,7 @@ export function StudyOnboardingFiscal() {
         <div className="fiscal-client-overview__periods">
           <div className="fiscal-client-overview__heading"><h3>Períodos fiscales</h3>{canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("periodos")}>Agregar</Button> : null}</div>
           {periodsQuery.isLoading ? <p className="muted-copy">Cargando períodos…</p> : (periodsQuery.data?.length ?? 0) === 0 ? <p className="muted-copy">Todavía no hay períodos fiscales.</p> : <Table<TaxPeriod> rows={periodsQuery.data ?? []} rowKey={(row) => row.id} columns={[
-            { key: "period", header: "Período", render: (row) => <><strong>{row.taxType.name}</strong><br /><small>{periodDisplayLabel(row)}</small></> },
+            { key: "period", header: "Período", render: (row) => <><strong>{row.taxType.name}{!row.taxType.isActive ? " (oculto)" : ""}</strong><br /><small>{row.taxType.code}{!row.taxType.isActive ? " (oculto)" : ""} · {periodDisplayLabel(row)}</small></> },
             { key: "actions", header: "", render: (row) => canWrite ? <Button size="sm" variant="ghost" onClick={() => { setObligationForm({ regimeId: "", periodId: row.id, dueDate: "" }); openStepForm("obligaciones"); }}>Crear obligación</Button> : null },
           ]} />}
         </div>
@@ -462,8 +462,8 @@ export function StudyOnboardingFiscal() {
         size="wide"
       >
         <form className="study-form study-form--compact" onSubmit={(event) => { event.preventDefault(); createObligation.mutate(); }}>
-          <div className="ds-field"><label className="ds-field__label" htmlFor="obl-period">Período fiscal</label><select id="obl-period" className="ds-field__input" value={obligationForm.periodId} onChange={(event) => setObligationForm({ ...obligationForm, periodId: event.target.value, regimeId: "" })} required><option value="">Seleccioná un período…</option>{periodsQuery.data?.map((period) => <option key={period.id} value={period.id}>{period.taxType.name} · {periodDisplayLabel(period)}</option>)}</select></div>
-          <div className="ds-field"><label className="ds-field__label" htmlFor="obl-regime">Régimen adherido</label><select id="obl-regime" className="ds-field__input" value={obligationForm.regimeId} onChange={(event) => setObligationForm({ ...obligationForm, regimeId: event.target.value })} required disabled={!obligationForm.periodId}><option value="">Seleccioná un régimen…</option>{eligibleRegistrations.map((registration) => <option key={registration.id} value={registration.regime.id}>{registration.regime.name} · {registration.regime.jurisdiction.name}</option>)}</select></div>
+          <div className="ds-field"><label className="ds-field__label" htmlFor="obl-period">Período fiscal</label><select id="obl-period" className="ds-field__input" value={obligationForm.periodId} onChange={(event) => setObligationForm({ ...obligationForm, periodId: event.target.value, regimeId: "" })} required><option value="">Seleccioná un período…</option>{periodsQuery.data?.map((period) => <option key={period.id} value={period.id}>{period.taxType.name}{!period.taxType.isActive ? " (oculto)" : ""} · {periodDisplayLabel(period)}</option>)}</select></div>
+          <div className="ds-field"><label className="ds-field__label" htmlFor="obl-regime">Régimen adherido</label><select id="obl-regime" className="ds-field__input" value={obligationForm.regimeId} onChange={(event) => setObligationForm({ ...obligationForm, regimeId: event.target.value })} required disabled={!obligationForm.periodId}><option value="">Seleccioná un régimen…</option>{eligibleRegistrations.map((registration) => <option key={registration.id} value={registration.regime.id}>{registration.regime.name}{!registration.regime.isActive ? " (oculto)" : ""} · {registration.regime.jurisdiction.name}{!registration.regime.jurisdiction.isActive ? " (oculto)" : ""}</option>)}</select></div>
           <Field label="Vencimiento (opcional)" id="obl-due-date" type="date" value={obligationForm.dueDate} onChange={(event) => setObligationForm({ ...obligationForm, dueDate: event.target.value })} />
           <MutationError error={createObligation.error} />
           <div className="study-form__actions"><Button type="submit" loading={createObligation.isPending} disabled={!effectiveProfileId || !obligationForm.regimeId || !obligationForm.periodId}>Crear obligación</Button><Button type="button" variant="ghost" onClick={() => setOpenFormStep(null)}>Cancelar</Button></div>

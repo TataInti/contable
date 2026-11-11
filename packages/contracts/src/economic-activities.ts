@@ -10,9 +10,8 @@ import { z } from "zod";
  *
  * Invariantes que este contrato fija para TODOS los consumidores:
  * - El `code` es la clave de vínculo con las reglas: se normaliza
- *   (trim + mayúsculas) y no se edita una vez creado (PATCH lo rechaza),
- *   porque las reglas vigentes lo referencian como texto.
- * - La jurisdicción tampoco se edita: la unicidad es (code, jurisdiction).
+ *   (trim + mayúsculas). Sólo se edita cuando no hay usos asociados.
+ * - La jurisdicción también se edita cuando la actividad no tiene usos.
  * - Desactivar (isActive=false) NO borra ni invalida valores históricos:
  *   los vínculos de cliente y las reglas existentes siguen resolviendo.
  *   Sólo deja de ofrecerse en los selectores y se rechaza en vínculos nuevos.
@@ -49,13 +48,24 @@ export const createEconomicActivitySchema = z
 export type CreateEconomicActivity = z.infer<typeof createEconomicActivitySchema>;
 
 /**
- * Edición de actividad económica. `code` y `jurisdictionId` NO son editables:
- * el código es el vínculo textual de las reglas y la jurisdicción es parte de
- * la clave de unicidad; cambiarlos rompería reglas vigentes e historial.
+ * Edición de actividad económica. La API bloquea cualquier edición cuando hay
+ * dependencias; por eso todos los campos de catálogo son editables sin uso.
  */
 export const updateEconomicActivitySchema = z
   .object({
+    code: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .transform(normalizeActivityCode)
+      .refine((code) => ACTIVITY_CODE_PATTERN.test(code), {
+        message:
+          "El código debe empezar con alfanumérico y sólo contener letras, números, punto, guion, guion bajo o barra",
+      })
+      .optional(),
     name: z.string().trim().min(1).max(200).optional(),
+    jurisdictionId: z.string().uuid().optional(),
     source: z.string().trim().min(1).max(200).nullable().optional(),
     validFrom: z.string().date().optional(),
     validTo: z.string().date().nullable().optional(),

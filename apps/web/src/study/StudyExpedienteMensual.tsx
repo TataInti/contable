@@ -87,8 +87,9 @@ interface TaxPosition {
   regime: {
     id: string;
     name: string;
-    taxType: { id: string; name: string };
-    jurisdiction: { id: string; name: string };
+    isActive: boolean;
+    taxType: { id: string; name: string; isActive: boolean };
+    jurisdiction: { id: string; name: string; isActive: boolean };
   };
   settlement: {
     id: string;
@@ -108,14 +109,15 @@ interface TaxType {
   id: string;
   code: string;
   name: string;
+  isActive: boolean;
 }
 interface TaxRegime {
   id: string;
   name: string;
   taxTypeId: string;
   jurisdictionId: string;
-  jurisdiction: { name: string };
-  taxType: { name: string };
+  jurisdiction: { name: string; isActive: boolean };
+  taxType: { name: string; isActive: boolean };
 }
 interface FiscalTaxPeriod {
   id: string;
@@ -123,7 +125,7 @@ interface FiscalTaxPeriod {
   startDate: string;
   endDate: string;
   label: string | null;
-  taxType: { name: string };
+  taxType: { name: string; isActive: boolean };
 }
 interface EvidenceDocument {
   id: string;
@@ -228,7 +230,7 @@ interface WorkpaperAllocation {
   sourceType: "WITHHOLDING" | "PERCEPTION";
   amount: string;
   status: "ALLOCATED";
-  allocatedJurisdiction: { id: string; code: string; name: string } | null;
+  allocatedJurisdiction: { id: string; code: string; name: string; isActive: boolean } | null;
   certificate: {
     cuitAgent: string;
     certificateNumber: string | null;
@@ -239,8 +241,9 @@ interface WorkpaperAllocation {
   obligation: {
     regime: {
       name: string;
-      taxType: { name: string };
-      jurisdiction: { name: string };
+      isActive: boolean;
+      taxType: { name: string; isActive: boolean };
+      jurisdiction: { name: string; isActive: boolean };
     };
     period: { label: string | null; startDate: string; endDate: string };
   } | null;
@@ -1320,7 +1323,7 @@ export function StudyExpedienteMensual() {
               {openingTaxPeriods.map((taxPeriod) => (
                 <option key={taxPeriod.id} value={taxPeriod.id}>
                   {taxPeriod.label ??
-                    `${taxPeriod.startDate.slice(0, 10)} a ${taxPeriod.endDate.slice(0, 10)}`}
+                    `${taxPeriod.startDate.slice(0, 10)} a ${taxPeriod.endDate.slice(0, 10)}`}{!taxPeriod.taxType.isActive ? " (oculto)" : ""}
                 </option>
               ))}
             </select>
@@ -1345,7 +1348,7 @@ export function StudyExpedienteMensual() {
               <option value="">Sin régimen específico</option>
               {openingRegimes.map((regime) => (
                 <option key={regime.id} value={regime.id}>
-                  {regime.name} · {regime.jurisdiction.name}
+                  {regime.name} · {regime.jurisdiction.name}{!regime.jurisdiction.isActive ? " (oculto)" : ""}
                 </option>
               ))}
             </select>
@@ -2339,10 +2342,10 @@ export function StudyExpedienteMensual() {
                                   render: (allocation) => (
                                     <>
                                       <strong>
-                                        {allocation.obligation?.regime.taxType.name ?? "Impuesto"}
+                                        {allocation.obligation?.regime.taxType.name ?? "Impuesto"}{allocation.obligation && !allocation.obligation.regime.taxType.isActive ? " (oculto)" : ""}
                                       </strong>
                                       <br />
-                                      <small>{allocation.obligation?.regime.name}</small>
+                                      <small>{allocation.obligation?.regime.name}{allocation.obligation && !allocation.obligation.regime.isActive ? " (oculto)" : ""}</small>
                                     </>
                                   ),
                                 },
@@ -2367,16 +2370,21 @@ export function StudyExpedienteMensual() {
                                         }
                                       >
                                         <option value="">Jurisdicción…</option>
-                                        {(jurisdictionsQuery.data ?? [])
-                                          .filter((jurisdiction) => jurisdiction.isActive)
-                                          .map((jurisdiction) => (
-                                            <option key={jurisdiction.id} value={jurisdiction.code}>
-                                              {jurisdiction.code} · {jurisdiction.name}
-                                            </option>
-                                          ))}
+                                        {[
+                                          ...(jurisdictionsQuery.data ?? []).filter((jurisdiction) => jurisdiction.isActive),
+                                          ...(allocation.allocatedJurisdiction && !allocation.allocatedJurisdiction.isActive
+                                            ? [allocation.allocatedJurisdiction]
+                                            : []),
+                                        ].map((jurisdiction) => (
+                                          <option key={jurisdiction.id} value={jurisdiction.code} disabled={!jurisdiction.isActive}>
+                                            {jurisdiction.code} · {jurisdiction.name}{!jurisdiction.isActive ? " (oculto)" : ""}
+                                          </option>
+                                        ))}
                                       </select>
                                     ) : (
-                                      allocation.allocatedJurisdiction?.name ?? "Sin jurisdicción"
+                                      allocation.allocatedJurisdiction
+                                        ? `${allocation.allocatedJurisdiction.name}${!allocation.allocatedJurisdiction.isActive ? " (oculto)" : ""}`
+                                        : "Sin jurisdicción"
                                     ),
                                 },
                                 {
@@ -2561,10 +2569,10 @@ export function StudyExpedienteMensual() {
                                 header: "Impuesto",
                                 render: (position) => (
                                   <>
-                                    <strong>{position.regime.taxType.name}</strong>
+                                    <strong>{position.regime.taxType.name}{!position.regime.taxType.isActive ? " (oculto)" : ""}</strong>
                                     <br />
                                     <small>
-                                      {position.regime.name} · {position.regime.jurisdiction.name}
+                                      {position.regime.name}{!position.regime.isActive ? " (oculto)" : ""} · {position.regime.jurisdiction.name}{!position.regime.jurisdiction.isActive ? " (oculto)" : ""}
                                     </small>
                                   </>
                                 ),

@@ -173,7 +173,7 @@ export function StudyClientes() {
   });
   const jurisdictionCatalog = useQuery({
     queryKey: ["jurisdiction-catalog", firmId],
-    queryFn: () => api.get<CatalogJurisdiction[]>("/tax/jurisdictions"),
+    queryFn: () => api.get<(CatalogJurisdiction & { isActive: boolean })[]>("/tax/jurisdictions?includeInactive=true"),
     enabled: Boolean(firmId),
   });
   const clientActivityCatalog = useQuery({
@@ -989,7 +989,7 @@ export function StudyClientes() {
                 })}
                 {activityIsInactive ? (
                   <option value={profileForm.activity}>
-                    {profileForm.activity} — desactivada en el catálogo (conservada)
+                    {profileForm.activity} — (oculto) en el catálogo (conservado)
                   </option>
                 ) : null}
                 {activityIsLegacy ? (
@@ -1044,7 +1044,7 @@ export function StudyClientes() {
                 </p>
               ) : (
                 <div className="study-check-list">
-                  {catalogData?.map((entry) => (
+                  {catalogData?.filter((entry) => entry.isActive).map((entry) => (
                     <label key={entry.code} className="study-check-option">
                       <input
                         type="checkbox"
@@ -1054,6 +1054,12 @@ export function StudyClientes() {
                       <span>
                         {entry.code} — {entry.name}
                       </span>
+                    </label>
+                  ))}
+                  {catalogData?.filter((entry) => !entry.isActive && selectedJurisdictions.includes(entry.code)).map((entry) => (
+                    <label key={entry.code} className="study-check-option">
+                      <input type="checkbox" checked disabled />
+                      <span>{entry.code} — {entry.name} (oculto)</span>
                     </label>
                   ))}
                 </div>
