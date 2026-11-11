@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
-import { api, type Client } from "../lib/api";
+import { ApiError, api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
+import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -17,6 +18,30 @@ import {
   useDensity,
 } from "../ui/Dense";
 import "./study.css";
+
+function WorkpaperActionError({ error }: { error: Error | null | undefined }) {
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!error || !errorRef.current) return;
+    errorRef.current.focus({ preventScroll: true });
+    errorRef.current.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  }, [error]);
+
+  if (!error) return null;
+
+  return (
+    <div className="workpaper-action-error" ref={errorRef} tabIndex={-1}>
+      {error instanceof ApiError ? (
+        <FieldErrorsFromDetails error={error} />
+      ) : (
+        <p className="form-error" role="alert">
+          {error.message || "No se pudo completar la acción."}
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * Expediente mensual de liquidación (F1.6, PLAN §4.6).
@@ -338,6 +363,38 @@ interface WorkpaperCalculationComponent {
   } | null;
 }
 type PositionAction = { kind: "PAYMENT" | "FILING"; position: TaxPosition } | null;
+
+function calculationDisabledMessage({
+  status,
+  sources,
+  classifications,
+  allocations,
+  canCalculate,
+  isPending,
+}: {
+  status: string;
+  sources: WorkpaperSource[] | undefined;
+  classifications: ClassificationCoverage | undefined;
+  allocations: AllocationCoverage | undefined;
+  canCalculate: boolean;
+  isPending: boolean;
+}): string {
+  if (isPending) return "El cálculo está en curso.";
+  if (!canCalculate) return "Tu perfil no tiene permiso para calcular este expediente.";
+
+  const missingSources = sources?.some((source) => source.required && !source.present) ?? false;
+  const missingClassifications = (classifications?.pending ?? 0) > 0;
+  const missingAllocations = (allocations?.pending ?? 0) > 0;
+  const reasons = [
+    missingSources ? "Faltan fuentes obligatorias revisadas." : null,
+    missingClassifications ? "Faltan clasificaciones por completar." : null,
+    missingAllocations ? "Faltan retenciones o percepciones por imputar." : null,
+  ].filter((reason): reason is string => reason !== null);
+
+  if (reasons.length > 0) return reasons.join(" ");
+  if (status === "DRAFT") return "Completá y revisá las fuentes obligatorias para iniciar el cálculo.";
+  return "Completá y revisá las fuentes, clasificaciones e imputaciones obligatorias.";
+}
 
 const CALCULATION_LABELS: Record<string, string> = {
   BASE_PAIS: "Base país",
@@ -1233,6 +1290,7 @@ export function StudyExpedienteMensual() {
             <Icon name="plus" size={16} />
             Nuevo expediente
           </Button>
+          <WorkpaperActionError error={createMutation.error} />
         
           </>
         }
@@ -1387,6 +1445,20 @@ export function StudyExpedienteMensual() {
                     Importar
                   </Button>
                 </div>
+                <WorkpaperActionError
+                  error={
+                    analyzeSifereMutation.variables?.direction === direction
+                      ? analyzeSifereMutation.error
+                      : null
+                  }
+                />
+                <WorkpaperActionError
+                  error={
+                    importSifereMutation.variables?.direction === direction
+                      ? importSifereMutation.error
+                      : null
+                  }
+                />
                 {analysis ? <SifereAnalysisPanel analysis={analysis} /> : null}
               </section>
             );
@@ -1548,6 +1620,7 @@ export function StudyExpedienteMensual() {
               Cancelar
             </Button>
           </div>
+          <WorkpaperActionError error={openingMutation.error} />
         </form>
       </ActionDrawer>
 
@@ -1614,11 +1687,7 @@ export function StudyExpedienteMensual() {
                 ))}
               </select>
             </div>
-            {editLotMutation.isError ? (
-              <p className="form-error" role="alert">
-                {editLotMutation.error.message}
-              </p>
-            ) : null}
+            <WorkpaperActionError error={editLotMutation.error} />
             <div className="opening-credit-form__actions">
               <Button type="submit" loading={editLotMutation.isPending}>
                 Guardar cambios
@@ -1702,6 +1771,7 @@ export function StudyExpedienteMensual() {
                 Cancelar
               </Button>
             </div>
+            <WorkpaperActionError error={recordPaymentMutation.error} />
           </form>
         ) : null}
       </ActionDrawer>
@@ -1780,6 +1850,7 @@ export function StudyExpedienteMensual() {
                 Cancelar
               </Button>
             </div>
+            <WorkpaperActionError error={recordFilingMutation.error} />
           </form>
         ) : null}
       </ActionDrawer>
@@ -1821,6 +1892,21 @@ export function StudyExpedienteMensual() {
               "READY_TO_CALCULATE",
               "CHANGES_REQUESTED",
             ].includes(wp.status);
+            const canCalculate = capabilities.has("tax.settlements.calculate");
+            const calculateDisabled =
+              calculateMutation.isPending ||
+              wp.status !== "READY_TO_CALCULATE" ||
+              !canCalculate;
+            const calculateDisabledReason = calculateDisabled
+              ? calculationDisabledMessage({
+                  status: wp.status,
+                  sources: coverageQuery.data?.sources,
+                  classifications: classificationQuery.data,
+                  allocations: allocationQuery.data,
+                  canCalculate,
+                  isPending: calculateMutation.isPending,
+                })
+              : null;
             const selfReviewBlocked = Boolean(
               currentUserId &&
               wp.preparedByUserId === currentUserId &&
@@ -2135,6 +2221,7 @@ export function StudyExpedienteMensual() {
                               >
                                 {sourceUploadMutation.isPending ? "Procesando…" : "Importar lote"}
                               </Button>
+                              <WorkpaperActionError error={sourceUploadMutation.error} />
                               {sourceCode ? (
                                 <small>
                                   Columnas esperadas: {coverageQuery.data?.sources
@@ -2230,6 +2317,25 @@ export function StudyExpedienteMensual() {
                               },
                             ]}
                           />
+                          {coverageQuery.data?.sources.some(
+                            (source) => source.required && !source.present && source.count === 0,
+                          ) ? (
+                            <p className="workpaper-stage__note" role="status">
+                              La cobertura cuenta solo lotes revisados. Los lotes pendientes de
+                              revisión mantienen el conteo en 0 registros.
+                            </p>
+                          ) : null}
+                          <WorkpaperActionError
+                            error={
+                              coverageQuery.data?.sources.some((source) =>
+                                source.batches.some(
+                                  (batch) => batch.id === reviewSourceMutation.variables,
+                                ),
+                              )
+                                ? reviewSourceMutation.error
+                                : null
+                            }
+                          />
                           <Table
                             rows={coverageQuery.data?.components ?? []}
                             rowKey={(component) => component.obligationId}
@@ -2253,7 +2359,7 @@ export function StudyExpedienteMensual() {
                                   component.settlementStatus ? (
                                     <StatusBadge status={component.settlementStatus} />
                                   ) : (
-                                    "Pendiente de vincular"
+                                    "Sin liquidación calculada"
                                   ),
                               },
                             ]}
@@ -2422,26 +2528,44 @@ export function StudyExpedienteMensual() {
                                 render: (classification) =>
                                   classification.status === "CLASSIFIED" ? (
                                     canEditSources && capabilities.has("tax.vouchers.prepare") ? (
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        disabled={classifyVoucherMutation.isPending}
-                                        onClick={() => classifyVoucherMutation.mutate(classification)}
-                                      >
-                                        Actualizar
-                                      </Button>
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          disabled={classifyVoucherMutation.isPending}
+                                          onClick={() => classifyVoucherMutation.mutate(classification)}
+                                        >
+                                          Actualizar
+                                        </Button>
+                                        <WorkpaperActionError
+                                          error={
+                                            classifyVoucherMutation.variables?.id === classification.id
+                                              ? classifyVoucherMutation.error
+                                              : null
+                                          }
+                                        />
+                                      </>
                                     ) : (
                                       <StatusBadge status="READY" />
                                     )
                                   ) : canEditSources && capabilities.has("tax.vouchers.prepare") ? (
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
-                                      disabled={classifyVoucherMutation.isPending}
-                                      onClick={() => classifyVoucherMutation.mutate(classification)}
-                                    >
-                                      Guardar
-                                    </Button>
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        disabled={classifyVoucherMutation.isPending}
+                                        onClick={() => classifyVoucherMutation.mutate(classification)}
+                                      >
+                                        Guardar
+                                      </Button>
+                                      <WorkpaperActionError
+                                        error={
+                                          classifyVoucherMutation.variables?.id === classification.id
+                                            ? classifyVoucherMutation.error
+                                            : null
+                                        }
+                                      />
+                                    </>
                                   ) : (
                                     <StatusBadge status="WAITING_INPUTS" />
                                   ),
@@ -2563,14 +2687,23 @@ export function StudyExpedienteMensual() {
                                   header: "Estado",
                                   render: (allocation) =>
                                     canEditSources && capabilities.has("tax.vouchers.prepare") ? (
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        disabled={reallocateInputMutation.isPending}
-                                        onClick={() => reallocateInputMutation.mutate(allocation)}
-                                      >
-                                        Reimputar
-                                      </Button>
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          disabled={reallocateInputMutation.isPending}
+                                          onClick={() => reallocateInputMutation.mutate(allocation)}
+                                        >
+                                          Reimputar
+                                        </Button>
+                                        <WorkpaperActionError
+                                          error={
+                                            reallocateInputMutation.variables?.id === allocation.id
+                                              ? reallocateInputMutation.error
+                                              : null
+                                          }
+                                        />
+                                      </>
                                     ) : (
                                       <StatusBadge status="READY" />
                                     ),
@@ -2818,19 +2951,29 @@ export function StudyExpedienteMensual() {
                                     new Date(position.dueDate) < new Date() &&
                                     position.settlement?.status === "FINALIZED" &&
                                     capabilities.has("tax.payments.record") ? (
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        loading={calculateInterestMutation.isPending}
-                                        onClick={() =>
-                                          calculateInterestMutation.mutate({
-                                            workpaperId: wp.id,
-                                            obligationId: position.obligationId,
-                                          })
-                                        }
-                                      >
-                                        Calcular mora
-                                      </Button>
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          loading={calculateInterestMutation.isPending}
+                                          onClick={() =>
+                                            calculateInterestMutation.mutate({
+                                              workpaperId: wp.id,
+                                              obligationId: position.obligationId,
+                                            })
+                                          }
+                                        >
+                                          Calcular mora
+                                        </Button>
+                                        <WorkpaperActionError
+                                          error={
+                                            calculateInterestMutation.variables?.obligationId ===
+                                            position.obligationId
+                                              ? calculateInterestMutation.error
+                                              : null
+                                          }
+                                        />
+                                      </>
                                     ) : null}
                                     {Number(position.totalPayable) > 0 &&
                                     capabilities.has("tax.payments.record") ? (
@@ -2959,6 +3102,13 @@ export function StudyExpedienteMensual() {
                                     Eximir
                                   </Button>
                                 ) : null}
+                                <WorkpaperActionError
+                                  error={
+                                    resolveControlMutation.variables?.findingId === control.id
+                                      ? resolveControlMutation.error
+                                      : null
+                                  }
+                                />
                               </span>
                             ) : null}
                           </div>
@@ -3022,46 +3172,58 @@ export function StudyExpedienteMensual() {
 
                 <div className="workpaper-card__actions">
                   {["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE"].includes(wp.status) ? (
-                    <Button
-                      variant="primary"
-                      disabled={
-                        calculateMutation.isPending ||
-                        wp.status !== "READY_TO_CALCULATE" ||
-                        !capabilities.has("tax.settlements.calculate")
-                      }
-                      title={
-                        wp.status === "READY_TO_CALCULATE"
-                          ? "Calcular el expediente"
-                          : "Completá y revisá las fuentes y clasificaciones obligatorias"
-                      }
-                      onClick={() => void calculateMutation.mutate(wp.id)}
-                    >
-                      Calcular
-                    </Button>
+                    <>
+                      <Button
+                        variant="primary"
+                        disabled={calculateDisabled}
+                        title={calculateDisabledReason ?? "Calcular el expediente"}
+                        onClick={() => void calculateMutation.mutate(wp.id)}
+                      >
+                        Calcular
+                      </Button>
+                      <WorkpaperActionError
+                        error={calculateMutation.variables === wp.id ? calculateMutation.error : null}
+                      />
+                      {calculateDisabledReason ? (
+                        <small className="muted-copy" role="status">
+                          {calculateDisabledReason}
+                        </small>
+                      ) : null}
+                    </>
                   ) : null}
                   {wp.status === "CHANGES_REQUESTED" ? (
-                    <Button
-                      variant="primary"
-                      disabled={
-                        calculateMutation.isPending ||
-                        !capabilities.has("tax.settlements.calculate")
-                      }
-                      onClick={() => calculateMutation.mutate(wp.id)}
-                    >
-                      Recalcular
-                    </Button>
+                    <>
+                      <Button
+                        variant="primary"
+                        disabled={
+                          calculateMutation.isPending ||
+                          !capabilities.has("tax.settlements.calculate")
+                        }
+                        onClick={() => calculateMutation.mutate(wp.id)}
+                      >
+                        Recalcular
+                      </Button>
+                      <WorkpaperActionError
+                        error={calculateMutation.variables === wp.id ? calculateMutation.error : null}
+                      />
+                    </>
                   ) : null}
                   {wp.status === "CALCULATED" ? (
-                    <Button
-                      variant="primary"
-                      disabled={
-                        submitMutation.isPending ||
-                        !capabilities.has("tax.settlements.submit_review")
-                      }
-                      onClick={() => void submitMutation.mutate(wp.id)}
-                    >
-                      Enviar a revisión
-                    </Button>
+                    <>
+                      <Button
+                        variant="primary"
+                        disabled={
+                          submitMutation.isPending ||
+                          !capabilities.has("tax.settlements.submit_review")
+                        }
+                        onClick={() => void submitMutation.mutate(wp.id)}
+                      >
+                        Enviar a revisión
+                      </Button>
+                      <WorkpaperActionError
+                        error={submitMutation.variables === wp.id ? submitMutation.error : null}
+                      />
+                    </>
                   ) : null}
                   {wp.status === "IN_REVIEW" ? (
                     <span className="study-table__actions">
@@ -3085,14 +3247,16 @@ export function StudyExpedienteMensual() {
                       ) : null}
                     </span>
                   ) : null}
+                  {wp.status === "IN_REVIEW" ? (
+                    <WorkpaperActionError
+                      error={reviewMutation.variables?.id === wp.id ? reviewMutation.error : null}
+                    />
+                  ) : null}
                   {selfReviewBlocked && ["IN_REVIEW", "REVIEWED"].includes(wp.status) ? (
                     <small className="muted-copy">
                       Para revisar o finalizar este expediente, el Titular puede habilitar la
                       autorrevisión en Configuración del estudio.
                     </small>
-                  ) : null}
-                  {reviewMutation.isError && reviewMutation.variables?.id === wp.id ? (
-                    <p className="form-error" role="alert">{reviewMutation.error.message}</p>
                   ) : null}
                   {wp.status === "REVIEWED" ? (
                     <Button
@@ -3107,8 +3271,10 @@ export function StudyExpedienteMensual() {
                       Finalizar
                     </Button>
                   ) : null}
-                  {finalizeMutation.isError && finalizeMutation.variables === wp.id ? (
-                    <p className="form-error" role="alert">{finalizeMutation.error.message}</p>
+                  {wp.status === "REVIEWED" ? (
+                    <WorkpaperActionError
+                      error={finalizeMutation.variables === wp.id ? finalizeMutation.error : null}
+                    />
                   ) : null}
                   {wp.status === "FINALIZED" && capabilities.has("tax.settlements.rectify") ? (
                     <Button
@@ -3119,43 +3285,17 @@ export function StudyExpedienteMensual() {
                       Crear rectificativa
                     </Button>
                   ) : null}
+                  {wp.status === "FINALIZED" ? (
+                    <WorkpaperActionError
+                      error={rectifyMutation.variables === wp.id ? rectifyMutation.error : null}
+                    />
+                  ) : null}
                 </div>
               </article>
             );
           })}
         </div>
       )}
-      {createMutation.isError ||
-      calculateMutation.isError ||
-      submitMutation.isError ||
-      openingMutation.isError ||
-      resolveControlMutation.isError ||
-      rectifyMutation.isError ||
-      recordPaymentMutation.isError ||
-      calculateInterestMutation.isError ||
-      recordFilingMutation.isError ||
-      sourceUploadMutation.isError ||
-      classifyVoucherMutation.isError ||
-      reallocateInputMutation.isError ? (
-        <p className="form-error" role="alert">
-          {
-            (
-              createMutation.error ??
-              calculateMutation.error ??
-              submitMutation.error ??
-              openingMutation.error ??
-              resolveControlMutation.error ??
-              rectifyMutation.error ??
-              recordPaymentMutation.error ??
-              calculateInterestMutation.error ??
-              recordFilingMutation.error ??
-              sourceUploadMutation.error ??
-              classifyVoucherMutation.error ??
-              reallocateInputMutation.error
-            )?.message
-          }
-        </p>
-      ) : null}
     
     </DensePage>
   );
