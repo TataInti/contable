@@ -503,3 +503,37 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("versión v2"));
   });
 });
+
+describe("StudyReglasFiscales — estado vacío de paquetes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = context();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("muestra un único estado vacío y una sola acción para crear paquetes", async () => {
+    mockApi(makeDetail(null));
+    const originalGet = vi.mocked(api.get).getMockImplementation();
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path === "/tax/rule-packs" ? Promise.resolve([]) : originalGet?.(path) ?? Promise.resolve([])) as never);
+    renderReglas();
+
+    expect(await screen.findByRole("heading", { name: "Todavía no hay paquetes de reglas" })).toBeTruthy();
+    expect(document.querySelectorAll(".ds-empty")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Nuevo paquete" })).toHaveLength(1);
+    expect(document.querySelectorAll(".fiscal-rules .ds-button--primary")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Crear paquete" })).toBeNull();
+    expect(screen.queryByRole("table", { name: "Paquetes de reglas disponibles" })).toBeNull();
+    expect(screen.queryByText("No hay paquetes configurados.")).toBeNull();
+
+    const guide = screen.getByText(/Secuencia de cambios:/);
+    const guideBlock = guide.closest(".fiscal-rules-guide");
+    expect(guideBlock).not.toBeNull();
+    expect(guideBlock?.parentElement?.classList.contains("fiscal-rules")).toBe(true);
+    expect(document.querySelectorAll(".fiscal-rules > .fiscal-rules-guide")).toHaveLength(1);
+  });
+});

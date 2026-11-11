@@ -466,6 +466,13 @@ export function StudyClientes() {
   const selectedClient = selectedId ? (clients.find((client) => client.id === selectedId) ?? null) : null;
   const currentClient = clientId ? (clients.find((client) => client.id === clientId) ?? null) : null;
   const canManage = capabilities.has("client.manage");
+  const missingCreateFields = [
+    ...(form.legalName.trim().length < 2 ? ["razón social"] : []),
+    ...(form.cuit.length !== 11 ? ["CUIT"] : []),
+  ];
+  const createFieldsHint = missingCreateFields.length > 0
+    ? `Falta completar ${missingCreateFields.length} ${missingCreateFields.length === 1 ? "campo" : "campos"}: ${missingCreateFields.join(" y ")}.`
+    : "Los datos requeridos están completos.";
 
   const openNew = () => {
     setEditingClient(null);
@@ -932,20 +939,26 @@ export function StudyClientes() {
         title="Alta de cliente"
         description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
         footer={
-          <Button
-            type="submit"
-            form="client-create-form"
-            loading={create.isPending}
-            loadingLabel="Creando cliente"
-            disabled={form.legalName.trim().length < 2 || form.cuit.length !== 11}
-          >
-            Crear cliente
-          </Button>
+          <>
+            <span id="client-create-hint" className="client-create__hint" aria-live="polite">
+              {createFieldsHint}
+            </span>
+            <Button
+              type="submit"
+              form="client-create-form"
+              aria-describedby="client-create-hint"
+              loading={create.isPending}
+              loadingLabel="Creando cliente"
+              disabled={missingCreateFields.length > 0}
+            >
+              Crear cliente
+            </Button>
+          </>
         }
       >
         <form
           id="client-create-form"
-          className="study-inline-form study-inline-form--client"
+          className="study-inline-form study-inline-form--client client-create-form"
           onSubmit={(event) => {
             event.preventDefault();
             create.mutate();

@@ -824,4 +824,21 @@ describe("StudyClientes — cartera densa", () => {
     await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/trabajo"));
     expect(screen.queryByRole("complementary")).toBeNull();
   });
+
+  it("alinea el alta en dos columnas y explica los campos que faltan junto al CTA", async () => {
+    renderClientes();
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
+
+    const drawer = await screen.findByRole("dialog", { name: "Alta de cliente" });
+    const form = drawer.querySelector("#client-create-form") as HTMLFormElement;
+    expect(form.classList.contains("study-inline-form--client")).toBe(true);
+    expect(form.classList.contains("client-create-form")).toBe(true);
+    expect(form.querySelectorAll(".ds-field")).toHaveLength(7);
+
+    const createButton = within(drawer).getByRole("button", { name: "Crear cliente" }) as HTMLButtonElement;
+    expect(createButton.disabled).toBe(true);
+    expect(createButton.getAttribute("aria-describedby")).toBe("client-create-hint");
+    expect(within(drawer).getByText("Falta completar 2 campos: razón social y CUIT.")).toBeTruthy();
+    expect(drawer.querySelector(".action-drawer__footer")?.querySelectorAll("button.ds-button--primary")).toHaveLength(1);
+  });
 });

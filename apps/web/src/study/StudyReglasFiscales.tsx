@@ -476,6 +476,7 @@ export function StudyReglasFiscales() {
       ).includes(needle);
     });
   }, [allPacks, packFilter, packSearch]);
+  const isEmptyPackList = packsQuery.isSuccess && allPacks.length === 0;
   const newPackRef = useRef<() => void>(() => undefined);
   newPackRef.current = () => setShowPackForm(true);
   useDenseShortcuts({
@@ -527,7 +528,7 @@ export function StudyReglasFiscales() {
   ];
 
   return (
-    <DensePage density={density} flow>
+    <DensePage density={density} flow className="fiscal-rules">
       <DenseHeader
         eyebrow="Configuración del estudio"
         title="Reglas fiscales"
@@ -571,7 +572,7 @@ export function StudyReglasFiscales() {
         ]}
       />
 
-      <p className="dense-note" role="note">
+      <p className="dense-note fiscal-rules-guide" role="note">
         <strong>Secuencia de cambios:</strong> borrador → activación directa por Administrador o
         Titular. Las versiones activas son inmutables; todo cambio posterior se prepara en una nueva
         versión a partir de la vigente. Las versiones antiguas conservan su flujo de revisión.
@@ -895,22 +896,24 @@ export function StudyReglasFiscales() {
         </div>
       ) : null}
 
-      <DenseToolbar>
-        <DenseSearch
-          inputRef={searchRef}
-          value={packSearch}
-          onChange={setPackSearch}
-          placeholder="Buscar paquete, impuesto o jurisdicción…"
-          label="Buscar paquetes"
-        />
-        {packFilter ? (
-          <button type="button" className="dense-toggle" aria-pressed onClick={() => setPackFilter("")}>
-            Filtro activo · quitar
-          </button>
-        ) : null}
-        <span className="dense-toolbar__spacer" />
-        <DensitySwitch value={density} onChange={setDensity} />
-      </DenseToolbar>
+      {!isEmptyPackList ? (
+        <DenseToolbar>
+          <DenseSearch
+            inputRef={searchRef}
+            value={packSearch}
+            onChange={setPackSearch}
+            placeholder="Buscar paquete, impuesto o jurisdicción…"
+            label="Buscar paquetes"
+          />
+          {packFilter ? (
+            <button type="button" className="dense-toggle" aria-pressed onClick={() => setPackFilter("")}>
+              Filtro activo · quitar
+            </button>
+          ) : null}
+          <span className="dense-toolbar__spacer" />
+          <DensitySwitch value={density} onChange={setDensity} />
+        </DenseToolbar>
+      ) : null}
 
       {packsQuery.isLoading ? (
         <div className="dense-table-card">
@@ -918,6 +921,13 @@ export function StudyReglasFiscales() {
             <span className="loading-copy">Cargando reglas…</span>
           </div>
         </div>
+      ) : isEmptyPackList ? (
+        <EmptyState
+          size="compact"
+          className="fiscal-rules-empty"
+          title="Todavía no hay paquetes de reglas"
+          description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
+        />
       ) : (
         <div className="dense-packs">
           <DenseTable<RulePack>
@@ -939,7 +949,7 @@ export function StudyReglasFiscales() {
             }
             empty={
               <p className="muted-copy">
-                {allPacks.length === 0 ? "No hay paquetes configurados." : "Ningún paquete coincide."}
+                Ningún paquete coincide.
               </p>
             }
           />
@@ -953,13 +963,13 @@ export function StudyReglasFiscales() {
           {detailQuery.isError ? (
             <EmptyState title="No se pudo cargar el paquete de reglas" />
           ) : null}
-          {!selectedPackId && !packsQuery.isLoading ? (
+          {!selectedPackId && !packsQuery.isLoading && allPacks.length > 0 ? (
             <EmptyState
               title="Todavía no hay paquetes de reglas"
               description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
             />
           ) : null}
-          {rulesNextAction ? (
+          {selectedPackId && rulesNextAction ? (
             <DenseAlert
               tone="ok"
               action={<Button size="sm" onClick={rulesNextAction.onClick}>{rulesNextAction.label}</Button>}

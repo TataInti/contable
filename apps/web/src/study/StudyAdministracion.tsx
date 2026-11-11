@@ -137,21 +137,16 @@ function initials(name: string | null | undefined): string {
     .toLocaleUpperCase("es-AR");
 }
 
-/** Huella de módulos habilitados: una barra por módulo, llena si el rol lo abre. */
-function ModuleFingerprint({ role, compact = false }: { role: string; compact?: boolean }) {
+/** Resumen textual de los módulos internos habilitados para el rol. */
+function ModuleFingerprint({ role }: { role: string }) {
   const enabled = INTERNAL_MODULES_BY_ROLE[role] ?? [];
   return (
-    <span className="dense-fp" title={enabled.join(" · ") || "Sin módulos internos"}>
-      <span className="dense-fp__bars" aria-hidden="true">
-        {INTERNAL_MODULES.map((module) => (
-          <i key={module} className={enabled.includes(module) ? "is-on" : undefined} />
-        ))}
-      </span>
-      {compact ? null : (
-        <span>
-          {enabled.length}/{INTERNAL_MODULES.length}
-        </span>
-      )}
+    <span
+      className="dense-fp"
+      title={enabled.join(" · ") || "Sin módulos internos"}
+      aria-label={`${enabled.length} de ${INTERNAL_MODULES.length} módulos habilitados`}
+    >
+      <span>{enabled.length} de {INTERNAL_MODULES.length}</span>
     </span>
   );
 }
@@ -1146,7 +1141,7 @@ export function StudyAdministracion() {
   ];
 
   return (
-    <DensePage density={density}>
+    <DensePage density={density} className="administration-users">
       <DenseHeader
         eyebrow="Configuración del estudio"
         title="Usuarios y accesos"
@@ -1411,7 +1406,6 @@ export function StudyAdministracion() {
                           · {(INTERNAL_MODULES_BY_ROLE[value] ?? []).length} de {INTERNAL_MODULES.length} módulos
                         </small>
                       </span>
-                      <ModuleFingerprint role={value} compact />
                     </label>
                   ))}
                   <small className="muted-copy">
