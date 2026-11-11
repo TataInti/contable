@@ -21,6 +21,7 @@ const mockState = vi.hoisted(() => ({
   authorities: [] as Array<Record<string, unknown>>,
   regimes: [] as Array<Record<string, unknown>>,
   obligations: [] as Array<Record<string, unknown>>,
+  auditEvents: [] as Array<Record<string, unknown>>,
   idCounter: 0,
   withTenantContext: null as unknown as (
     ctx: TestContext,
@@ -70,6 +71,11 @@ function makeTransaction() {
     taxAuthority: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         mockState.authorities.find((row) => row.id === where.id) ?? null,
+      findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
+        const row = mockState.authorities.find((item) => item.id === where.id);
+        if (!row) throw new Error("authority not found in mock");
+        return row;
+      },
       findMany: async ({ where = {}, include }: { where?: Record<string, unknown>; include?: Record<string, unknown> }) =>
         mockState.authorities
           .filter((row) => matches(row, where))
@@ -91,8 +97,22 @@ function makeTransaction() {
         mockState.authorities.push(row);
         return row;
       },
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const index = mockState.authorities.findIndex((item) => item.id === where.id);
+        if (index === -1) throw new Error("authority not found in mock");
+        const updated = { ...mockState.authorities[index], ...data };
+        mockState.authorities[index] = updated;
+        return updated;
+      },
     },
     taxRegime: {
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        mockState.regimes.find((row) => row.id === where.id) ?? null,
+      findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
+        const row = mockState.regimes.find((item) => item.id === where.id);
+        if (!row) throw new Error("regime not found in mock");
+        return row;
+      },
       findMany: async () =>
         mockState.regimes.map((row) => ({
           ...row,
@@ -111,6 +131,13 @@ function makeTransaction() {
         };
         mockState.regimes.push(row);
         return row;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const index = mockState.regimes.findIndex((item) => item.id === where.id);
+        if (index === -1) throw new Error("regime not found in mock");
+        const updated = { ...mockState.regimes[index], ...data };
+        mockState.regimes[index] = updated;
+        return updated;
       },
     },
     taxObligation: {
@@ -133,6 +160,13 @@ function makeTransaction() {
           period: { id: row.periodId, label: "Período sintético E2E" },
         })),
     },
+    auditEvent: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        const event = { id: nextUuid(), ...data };
+        mockState.auditEvents.push(event);
+        return event;
+      },
+    },
   };
 }
 
@@ -153,6 +187,7 @@ beforeEach(async () => {
   mockState.authorities.length = 0;
   mockState.regimes.length = 0;
   mockState.obligations.length = 0;
+  mockState.auditEvents.length = 0;
   mockState.idCounter = 0;
   mockState.withTenantContext = async (_ctx, fn) => fn(makeTransaction());
 
@@ -292,5 +327,84 @@ describe("catálogo fiscal: autoridades, regímenes y obligaciones", () => {
     expect(mismatchedRegime.statusCode).toBe(409);
     expect(mismatchedRegime.json().error.code).toBe("AUTHORITY_JURISDICTION_MISMATCH");
     expect(mockState.regimes).toHaveLength(0);
+  });
+
+  it("edita, duplica, oculta y muestra organismos y regímenes en uso", async () => {
+    const authorityResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/tax/authorities",
+      payload: { code: "AUTH-V1", name: "Organismo V1", jurisdictionId: JURISDICTION_ID },
+    });
+    expect(authorityResponse.statusCode).toBe(201);
+    const authority = authorityResponse.json().data;
+    const regimeResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/tax/regimes",
+      payload: {
+        code: "REGIME-V1",
+        name: "Régimen V1",
+        taxTypeId: TAX_TYPE_ID,
+        jurisdictionId: JURISDICTION_ID,
+        authorityId: authority.id,
+      },
+    });
+    expect(regimeResponse.statusCode).toBe(201);
+    const regime = regimeResponse.json().data;
+    mockState.obligations.push({ id: nextUuid(), regimeId: regime.id });
+
+    const editAuthority = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/tax/authorities/${authority.id}`,
+      payload: { code: "AUTH-V2", name: "Organismo editado" },
+    });
+    expect(editAuthority.statusCode).toBe(200);
+    expect(editAuthority.json().data).toMatchObject({ code: "AUTH-V2", name: "Organismo editado" });
+    const hideAuthority = await app.inject({ method: "PATCH", url: `/api/v1/tax/authorities/${authority.id}`, payload: { isActive: false } });
+    expect(hideAuthority.statusCode).toBe(200);
+    const showAuthority = await app.inject({ method: "PATCH", url: `/api/v1/tax/authorities/${authority.id}`, payload: { isActive: true } });
+    expect(showAuthority.statusCode).toBe(200);
+
+    const editRegime = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/tax/regimes/${regime.id}`,
+      payload: { code: "REGIME-V2", name: "Régimen editado" },
+    });
+    expect(editRegime.statusCode).toBe(200);
+    expect(editRegime.json().data).toMatchObject({ code: "REGIME-V2", name: "Régimen editado" });
+    const hideRegime = await app.inject({ method: "PATCH", url: `/api/v1/tax/regimes/${regime.id}`, payload: { isActive: false } });
+    expect(hideRegime.statusCode).toBe(200);
+    const showRegime = await app.inject({ method: "PATCH", url: `/api/v1/tax/regimes/${regime.id}`, payload: { isActive: true } });
+    expect(showRegime.statusCode).toBe(200);
+
+    const duplicateAuthority = await app.inject({
+      method: "POST",
+      url: "/api/v1/tax/authorities",
+      payload: { code: "AUTH-COPY", name: "Organismo copiado", jurisdictionId: JURISDICTION_ID, duplicateOfId: authority.id },
+    });
+    expect(duplicateAuthority.statusCode).toBe(201);
+    const duplicateRegime = await app.inject({
+      method: "POST",
+      url: "/api/v1/tax/regimes",
+      payload: {
+        code: "REGIME-COPY",
+        name: "Régimen copiado",
+        taxTypeId: TAX_TYPE_ID,
+        jurisdictionId: JURISDICTION_ID,
+        authorityId: authority.id,
+        duplicateOfId: regime.id,
+      },
+    });
+    expect(duplicateRegime.statusCode).toBe(201);
+    expect(mockState.regimes.filter((row) => row.isActive === true)).toHaveLength(2);
+    expect(mockState.auditEvents).toHaveLength(10);
+    expect(mockState.auditEvents.every((event) => event.userId === mockState.context.userId)).toBe(true);
+    expect(mockState.auditEvents.find((event) => event.action === "tax.authority.updated")).toMatchObject({
+      before: { code: "AUTH-V1", name: "Organismo V1" },
+      after: { code: "AUTH-V2", name: "Organismo editado" },
+    });
+    expect(mockState.auditEvents.find((event) => event.action === "tax.regime.updated")).toMatchObject({
+      before: { code: "REGIME-V1", name: "Régimen V1" },
+      after: { code: "REGIME-V2", name: "Régimen editado" },
+    });
   });
 });

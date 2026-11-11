@@ -49,6 +49,16 @@ const activeActivities = [
     isActive: true,
   },
 ];
+const hiddenActivity = {
+  id: "act-hidden",
+  code: "CM03-OLD",
+  name: "Comercio histórico",
+  jurisdictionId: "jur-ar",
+  source: null,
+  validFrom: "2020-01-01",
+  validTo: null,
+  isActive: false,
+};
 
 function makeDetail(activityCode: string | null) {
   return {
@@ -120,7 +130,7 @@ function mockApi(detail: ReturnType<typeof makeDetail>) {
   vi.mocked(api.get).mockImplementation(((path: string) => {
     if (path === "/tax/rule-packs") return Promise.resolve(packList(detail));
     if (path === "/tax/rule-packs/pack-1") return Promise.resolve(detail);
-    if (path === "/tax/activities") return Promise.resolve([...activeActivities]);
+    if (path === "/tax/activities" || path === "/tax/activities?includeInactive=true") return Promise.resolve([...activeActivities, hiddenActivity]);
     if (path === "/tax/regimes") return Promise.resolve([]);
     return Promise.resolve([]);
   }) as never);
@@ -245,13 +255,15 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     ).toBeNull();
   });
 
-  it("conserva como opción un código histórico hoy desactivado", async () => {
+  it("muestra como oculto el código asignado y deshabilita su opción", async () => {
     mockApi(makeDetail("CM03-OLD"));
     renderReglas();
 
     const select = (await screen.findByLabelText("Actividad rule-1")) as HTMLSelectElement;
     expect(select.value).toBe("CM03-OLD");
-    expect(within(select).getByRole("option", { name: /código histórico/ })).toBeTruthy();
+    const hiddenOption = within(select).getByRole("option", { name: "CM03-OLD (oculto)" }) as HTMLOptionElement;
+    expect(hiddenOption.disabled).toBe(true);
+    expect(within(select).getByRole("option", { name: "CM03-02 · Comercio mayorista" })).toBeTruthy();
   });
 });
 

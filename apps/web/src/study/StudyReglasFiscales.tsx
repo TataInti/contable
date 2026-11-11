@@ -75,8 +75,9 @@ interface RulePack {
   regime: {
     name: string;
     code: string;
-    taxType: { name: string; code: string };
-    jurisdiction: { name: string; code?: string };
+    isActive: boolean;
+    taxType: { name: string; code: string; isActive: boolean };
+    jurisdiction: { name: string; code?: string; isActive: boolean };
   };
   versions: RuleVersion[];
 }
@@ -84,7 +85,7 @@ interface RulePack {
 interface RulePackDetail extends RulePack {
   regime: RulePack["regime"] & {
     jurisdiction: { id: string; name: string; code: string };
-    authority: { id: string; name: string };
+    authority: { id: string; name: string; isActive: boolean };
   };
 }
 
@@ -193,12 +194,11 @@ export function StudyReglasFiscales() {
     queryFn: () => api.get<RuleRegimeOption[]>("/tax/regimes"),
     enabled: capabilities.has("tax.rules.propose"),
   });
-  // Catálogo de actividades (sólo activas): alimenta el selector de cada regla.
-  // Los borradores clonados pueden conservar códigos hoy desactivados; el
-  // selector los mantiene como opción histórica para no romper el borrador.
+  // Se leen ambas vigencias para identificar el código asignado oculto; el
+  // selector sólo ofrece actividades activas.
   const activitiesQuery = useQuery({
     queryKey: ["tax-activities", firmId],
-    queryFn: () => api.get<CatalogEconomicActivity[]>("/tax/activities"),
+    queryFn: () => api.get<CatalogEconomicActivity[]>("/tax/activities?includeInactive=true"),
     enabled: Boolean(firmId && capabilities.has("tax.rules.read")),
   });
 
@@ -502,7 +502,7 @@ export function StudyReglasFiscales() {
         <span className="dense-name">
           <span className="dense-name__text">
             <strong>{pack.name}</strong>
-            <small>{pack.code}</small>
+            <small>{pack.code} · {pack.regime.name}{!pack.regime.isActive ? " (oculto)" : ""}</small>
           </span>
         </span>
       ),
@@ -511,13 +511,13 @@ export function StudyReglasFiscales() {
       key: "tax",
       header: "Impuesto",
       sortValue: (pack) => pack.regime.taxType.name,
-      render: (pack) => pack.regime.taxType.name,
+      render: (pack) => `${pack.regime.taxType.name}${!pack.regime.taxType.isActive ? " (oculto)" : ""}`,
     },
     {
       key: "jurisdiction",
       header: "Jurisdicción",
       sortValue: (pack) => pack.regime.jurisdiction.name,
-      render: (pack) => pack.regime.jurisdiction.name,
+      render: (pack) => `${pack.regime.jurisdiction.name}${!pack.regime.jurisdiction.isActive ? " (oculto)" : ""}`,
     },
     {
       key: "versions",
@@ -1002,12 +1002,12 @@ export function StudyReglasFiscales() {
                   <div>
                     <p className="study-page__eyebrow">Paquete seleccionado</p>
                     <p className="fiscal-rule-context__regime">
-                      {detailQuery.data.regime.taxType.name} ·{" "}
-                      {detailQuery.data.regime.jurisdiction.name}
+                      {detailQuery.data.regime.taxType.name}{!detailQuery.data.regime.taxType.isActive ? " (oculto)" : ""} ·{" "}
+                      {detailQuery.data.regime.jurisdiction.name}{!detailQuery.data.regime.jurisdiction.isActive ? " (oculto)" : ""}
                     </p>
                     <h2>{detailQuery.data.name}</h2>
                     <p>
-                      {detailQuery.data.code} · Organismo recaudador {detailQuery.data.regime.authority.name}
+                      {detailQuery.data.code} · Régimen {detailQuery.data.regime.name}{!detailQuery.data.regime.isActive ? " (oculto)" : ""} · Organismo recaudador {detailQuery.data.regime.authority.name}{!detailQuery.data.regime.authority.isActive ? " (oculto)" : ""}
                     </p>
                   </div>
                   <div className="table-actions">
@@ -1167,22 +1167,28 @@ export function StudyReglasFiscales() {
                       header: "Actividad",
                       render: (row) => {
                         if (!editable) {
-                          return row.activityCode ?? "General";
+                          const currentCode = normalizeActivityCode(row.activityCode ?? "");
+                          const currentActivity = (activitiesQuery.data ?? []).find(
+                            (activity) => activity.code === currentCode,
+                          );
+                          return row.activityCode
+                            ? `${row.activityCode}${currentActivity && !currentActivity.isActive ? " (oculto)" : ""}`
+                            : "General";
                         }
-                        // El selector ofrece las actividades activas del
-                        // catálogo. Cuando el pack declara jurisdicción, filtra
-                        // por ella (el servidor exige publicación para la
-                        // jurisdicción de la regla). Un código histórico que ya
-                        // no figure (desactivado o de otra jurisdicción) se
-                        // conserva como opción para que el borrador clonado
-                        // pueda guardarse sin perder el vínculo.
+                        // La opción actual oculta o ajena a la jurisdicción se
+                        // conserva como lectura deshabilitada; para elegirla
+                        // nuevamente hay que mostrarla en el catálogo.
                         const packJurisdictionId = detailQuery.data?.regime.jurisdiction.id;
-                        const options = (activitiesQuery.data ?? []).filter(
+                        const catalogActivities = activitiesQuery.data ?? [];
+                        const options = catalogActivities.filter(
                           (activity) =>
-                            !packJurisdictionId ||
-                            activity.jurisdictionId === packJurisdictionId,
+                            activity.isActive &&
+                            (!packJurisdictionId || activity.jurisdictionId === packJurisdictionId),
                         );
                         const currentCode = normalizeActivityCode(row.activityCode ?? "");
+                        const currentActivity = catalogActivities.find(
+                          (activity) => activity.code === currentCode,
+                        );
                         const isLegacyCode =
                           currentCode !== "" &&
                           !options.some((activity) => activity.code === currentCode);
@@ -1222,9 +1228,10 @@ export function StudyReglasFiscales() {
                                 </option>
                               ))}
                               {isLegacyCode ? (
-                                <option value={row.activityCode ?? ""}>
-                                  {row.activityCode} — código histórico (desactivado o fuera de la
-                                  jurisdicción del paquete)
+                                <option value={row.activityCode ?? ""} disabled>
+                                  {currentActivity && !currentActivity.isActive
+                                    ? `${row.activityCode} (oculto)`
+                                    : `${row.activityCode} — código histórico fuera de la jurisdicción del paquete`}
                                 </option>
                               ) : null}
                             </select>

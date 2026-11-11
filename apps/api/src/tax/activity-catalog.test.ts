@@ -106,6 +106,11 @@ function makeTransaction() {
           .sort((a, b) => String(a.code).localeCompare(String(b.code))),
       findUnique: async ({ where }: { where: { id: string } }) =>
         mockState.activities.find((row) => row.id === where.id) ?? null,
+      findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
+        const row = mockState.activities.find((item) => item.id === where.id);
+        if (!row) throw new Error("activity not found in mock");
+        return row;
+      },
       create: async ({ data }: { data: Record<string, unknown> }) => {
         if (
           mockState.activities.some(
@@ -252,7 +257,34 @@ describe("catálogo de actividades: alta con validación y auditoría", () => {
       action: "tax.activity.created",
       entityType: "EconomicActivity",
       actorKind: "USER",
+      userId: mockState.context.userId,
       after: { code: "COMERCIO" },
+    });
+  });
+
+  it("crea otra versión activa y audita la duplicación con usuario y before/after", async () => {
+    const source = seedActivity({ code: "COMERCIO", origin: "REFERENCE" });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/tax/activities",
+      payload: {
+        code: "COMERCIO-2026",
+        name: "Comercio versión 2026",
+        jurisdictionId: JURISDICTION_ID,
+        source: "DGR",
+        validFrom: "2026-01-01",
+        duplicateOfId: source.id,
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().data).toMatchObject({ code: "COMERCIO-2026", isActive: true });
+    expect(mockState.activities.filter((row) => row.isActive === true)).toHaveLength(2);
+    expect(mockState.auditEvents[0]).toMatchObject({
+      userId: mockState.context.userId,
+      action: "tax.activity.duplicated",
+      before: { code: "COMERCIO", name: "Comercio" },
+      after: { code: "COMERCIO-2026", name: "Comercio versión 2026" },
     });
   });
 
@@ -344,34 +376,42 @@ describe("catálogo de actividades: lectura para selectores y administración", 
 });
 
 describe("catálogo de actividades: edición y estado", () => {
-  it("edita nombre, fuente y vigencia, y reporta vínculos vigentes", async () => {
-    const activity = seedActivity({ code: "COMERCIO" });
+  it("edita todos los campos aunque sea REFERENCE y tenga vínculos", async () => {
+    const activity = seedActivity({ code: "COMERCIO", origin: "REFERENCE", createdByFirmId: null });
     mockState.clientActivities.push({ id: nextUuid(), activityId: activity.id, validTo: null });
 
     const response = await app.inject({
       method: "PATCH",
       url: `/api/v1/tax/activities/${activity.id}`,
-      payload: { name: "Comercio minorista", source: null, validTo: "2027-12-31" },
+      payload: {
+        code: "COMERCIO-V2",
+        name: "Comercio minorista",
+        source: null,
+        jurisdictionId: OTHER_JURISDICTION_ID,
+        validTo: "2027-12-31",
+      },
     });
     expect(response.statusCode).toBe(200);
     expect(response.json().data).toMatchObject({
       id: activity.id,
+      code: "COMERCIO-V2",
       name: "Comercio minorista",
+      jurisdictionId: OTHER_JURISDICTION_ID,
       source: null,
       validTo: "2027-12-31T00:00:00.000Z",
       activeClientLinks: 1,
     });
-    expect(mockState.auditEvents[0]).toMatchObject({ action: "tax.activity.updated" });
-    expect(mockState.auditEvents[0]!.before).toMatchObject({ name: "Comercio" });
-    expect(mockState.auditEvents[0]!.after).toMatchObject({ name: "Comercio minorista" });
+    expect(mockState.auditEvents[0]).toMatchObject({ action: "tax.activity.updated", userId: mockState.context.userId });
+    expect(mockState.auditEvents[0]!.before).toMatchObject({ code: "COMERCIO", name: "Comercio", jurisdictionId: JURISDICTION_ID });
+    expect(mockState.auditEvents[0]!.after).toMatchObject({ code: "COMERCIO-V2", name: "Comercio minorista", jurisdictionId: OTHER_JURISDICTION_ID });
   });
 
-  it("rechaza editar code (vínculo de reglas) y actividad inexistente", async () => {
+  it("rechaza un código con formato inválido y actividad inexistente", async () => {
     const activity = seedActivity({ code: "COMERCIO" });
     const codeChange = await app.inject({
       method: "PATCH",
       url: `/api/v1/tax/activities/${activity.id}`,
-      payload: { code: "OTRO" },
+      payload: { code: "IVA;21" },
     });
     expect(codeChange.statusCode).toBe(400);
 
@@ -386,15 +426,16 @@ describe("catálogo de actividades: edición y estado", () => {
 
   it("desactiva y reactiva con auditoría; nunca borra la fila", async () => {
     const activity = seedActivity({ code: "COMERCIO" });
+    mockState.clientActivities.push({ id: nextUuid(), activityId: activity.id, validTo: null });
 
     const deactivate = await app.inject({
       method: "POST",
       url: `/api/v1/tax/activities/${activity.id}/deactivate`,
     });
     expect(deactivate.statusCode).toBe(200);
-    expect(deactivate.json().data).toMatchObject({ isActive: false, activeClientLinks: 0 });
+    expect(deactivate.json().data).toMatchObject({ isActive: false, activeClientLinks: 1 });
     expect(mockState.activities.find((row) => row.id === activity.id)?.code).toBe("COMERCIO");
-    expect(mockState.auditEvents[0]).toMatchObject({ action: "tax.activity.deactivated" });
+    expect(mockState.auditEvents[0]).toMatchObject({ action: "tax.activity.hidden", userId: mockState.context.userId });
 
     const repeat = await app.inject({
       method: "POST",
@@ -408,8 +449,8 @@ describe("catálogo de actividades: edición y estado", () => {
       url: `/api/v1/tax/activities/${activity.id}/activate`,
     });
     expect(reactivate.statusCode).toBe(200);
-    expect(reactivate.json().data.isActive).toBe(true);
-    expect(mockState.auditEvents[1]).toMatchObject({ action: "tax.activity.activated" });
+    expect(reactivate.json().data).toMatchObject({ isActive: true, activeClientLinks: 1 });
+    expect(mockState.auditEvents[1]).toMatchObject({ action: "tax.activity.shown", userId: mockState.context.userId });
   });
 });
 

@@ -81,7 +81,7 @@ function mockApi(profile: Record<string, unknown>, standards = standardsFixture)
         notes: ["La auditoría se conserva."],
       });
     }
-    if (path === "/tax/jurisdictions") return Promise.resolve(catalogFixture);
+    if (path === "/tax/jurisdictions" || path === "/tax/jurisdictions?includeInactive=true") return Promise.resolve(catalogFixture);
     if (path.includes("/client-profile-catalogs/activities")) return Promise.resolve(activitiesFixture);
     if (path.includes("/accounting-standards")) return Promise.resolve(standards);
     if (path.includes("/clients")) return Promise.resolve([clientFixture(profile)]);
@@ -542,7 +542,7 @@ describe("StudyClientes — cartera densa", () => {
       refresh: async () => {},
     };
     vi.mocked(api.get).mockImplementation(((path: string) => {
-      if (path === "/tax/jurisdictions") return Promise.resolve(catalogFixture);
+      if (path === "/tax/jurisdictions" || path === "/tax/jurisdictions?includeInactive=true") return Promise.resolve(catalogFixture);
       if (path.includes("/client-profile-catalogs/activities")) return Promise.resolve(activitiesFixture);
       if (path.includes("/accounting-standards")) return Promise.resolve(standardsFixture);
       if (path.includes("/clients")) {

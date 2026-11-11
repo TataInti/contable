@@ -72,6 +72,7 @@ const activities: Array<{
   createdByFirmId?: string | null;
   activeClientLinks?: number;
 }> = [];
+let catalogHasUsage = false;
 
 function context(canPropose = true): ClientContextValue {
   return {
@@ -89,10 +90,18 @@ function context(canPropose = true): ClientContextValue {
 
 function mockApi() {
   vi.mocked(api.get).mockImplementation(((path: string) => {
-    if (path === "/tax/jurisdictions") return Promise.resolve([...jurisdictions]);
-    if (path === "/tax/types") return Promise.resolve([...taxTypes]);
-    if (path === "/tax/authorities") return Promise.resolve([...authorities]);
-    if (path === "/tax/regimes") return Promise.resolve([...regimes]);
+    if (path.startsWith("/tax/catalog-usage/")) {
+      return Promise.resolve({
+        entityId: path.split("/").at(-1) ?? "",
+        used: catalogHasUsage,
+        count: catalogHasUsage ? 2 : 0,
+        places: catalogHasUsage ? [{ label: "Períodos fiscales", count: 2 }] : [],
+      });
+    }
+    if (path === "/tax/jurisdictions" || path === "/tax/jurisdictions?includeInactive=true") return Promise.resolve([...jurisdictions]);
+    if (path === "/tax/types" || path === "/tax/types?includeInactive=true") return Promise.resolve([...taxTypes]);
+    if (path === "/tax/authorities" || path === "/tax/authorities?includeInactive=true") return Promise.resolve([...authorities]);
+    if (path === "/tax/regimes" || path === "/tax/regimes?includeInactive=true") return Promise.resolve([...regimes]);
     if (path === "/tax/activities?includeInactive=true") return Promise.resolve([...activities]);
     return Promise.resolve([]);
   }) as never);
@@ -239,6 +248,7 @@ describe("StudyCatalogosFiscales", () => {
     taxTypes.splice(0, taxTypes.length, taxType);
     regimes.length = 0;
     activities.length = 0;
+    catalogHasUsage = false;
     contextMock.current = context();
     mockApi();
   });
@@ -351,13 +361,13 @@ describe("StudyCatalogosFiscales", () => {
     cleanup();
     let typeReads = 0;
     vi.mocked(api.get).mockImplementation(((path: string) => {
-      if (path === "/tax/types") {
+      if (path === "/tax/types" || path === "/tax/types?includeInactive=true") {
         typeReads += 1;
         return typeReads === 1 ? Promise.reject(new Error("Consulta sintética no disponible")) : Promise.resolve([]);
       }
-      if (path === "/tax/jurisdictions") return Promise.resolve([...jurisdictions]);
-      if (path === "/tax/authorities") return Promise.resolve([...authorities]);
-      if (path === "/tax/regimes") return Promise.resolve([...regimes]);
+      if (path === "/tax/jurisdictions" || path === "/tax/jurisdictions?includeInactive=true") return Promise.resolve([...jurisdictions]);
+      if (path === "/tax/authorities" || path === "/tax/authorities?includeInactive=true") return Promise.resolve([...authorities]);
+      if (path === "/tax/regimes" || path === "/tax/regimes?includeInactive=true") return Promise.resolve([...regimes]);
       if (path === "/tax/activities?includeInactive=true") return Promise.resolve([...activities]);
       return Promise.resolve([]);
     }) as never);
@@ -404,6 +414,105 @@ describe("StudyCatalogosFiscales", () => {
     const strip = screen.getByRole("group", { name: "Resumen de catálogos" });
     expect(within(strip).getByText("Creados por el estudio")).toBeTruthy();
     expect(within(strip).getByText("Alertas de coherencia")).toBeTruthy();
+  });
+
+  it("ofrece editar, duplicar y ocultar con usos en las cinco entidades", async () => {
+    catalogHasUsage = true;
+    authorities.push({
+      id: "authority-used",
+      code: "AUTH-USED",
+      name: "Organismo con uso",
+      jurisdictionId: jurisdiction.id,
+      isActive: true,
+      origin: "REFERENCE",
+      createdByFirmId: null,
+      jurisdiction,
+    });
+    regimes.push({
+      id: "regime-used",
+      code: "REGIME-USED",
+      name: "Régimen con uso",
+      isActive: true,
+      origin: "REFERENCE",
+      createdByFirmId: null,
+      authority: authorities[0],
+      jurisdiction,
+      taxType,
+    });
+    activities.push({
+      id: "activity-used",
+      code: "ACT-USED",
+      name: "Actividad con uso",
+      jurisdictionId: jurisdiction.id,
+      source: null,
+      validFrom: "2026-01-01",
+      validTo: null,
+      isActive: true,
+      origin: "REFERENCE",
+      createdByFirmId: null,
+    });
+    renderCatalogs();
+
+    const cases = [
+      { tab: /^Jurisdicciones/, name: jurisdiction.name, detail: "Detalle de la jurisdicción" },
+      { tab: /^Tipos de impuesto/, name: taxType.name, detail: "Detalle del tipo de impuesto" },
+      { tab: /^Organismos recaudadores/, name: "Organismo con uso", detail: "Detalle del organismo" },
+      { tab: /^Regímenes/, name: "Régimen con uso", detail: "Detalle del régimen" },
+      { tab: /^Actividades económicas/, name: "Actividad con uso", detail: "Detalle de la actividad" },
+    ];
+
+    for (const item of cases) {
+      await openTab(item.tab);
+      fireEvent.click(await screen.findByText(item.name));
+      const detail = await screen.findByRole("complementary", { name: item.detail });
+      expect(await within(detail).findByText(/Se usa en 2 lugares/)).toBeTruthy();
+      expect(within(detail).getByRole("button", { name: "Editar" })).toBeTruthy();
+      expect(within(detail).getByRole("button", { name: "Crear nuevo a partir de este" })).toBeTruthy();
+      expect(within(detail).getByRole("button", { name: "Ocultar" })).toBeTruthy();
+    }
+  });
+
+  it("muestra una relación oculta ya asignada como opción deshabilitada", async () => {
+    const hiddenTaxType = {
+      ...taxType,
+      id: "tax-type-hidden",
+      code: "IIBB-OLD",
+      name: "Impuesto anterior",
+      isActive: false,
+    };
+    taxTypes.push(hiddenTaxType);
+    const authority = {
+      id: "authority-for-hidden-regime",
+      code: "AUTH-HIDDEN-REGIME",
+      name: "Organismo del régimen",
+      jurisdictionId: jurisdiction.id,
+      isActive: true,
+      jurisdiction,
+    };
+    authorities.push(authority);
+    regimes.push({
+      id: "regime-hidden-type",
+      code: "REGIME-HIDDEN-TYPE",
+      name: "Régimen con impuesto oculto",
+      isActive: true,
+      authority,
+      jurisdiction,
+      taxType: hiddenTaxType,
+    });
+    renderCatalogs();
+
+    await openTab(/^Regímenes/);
+    fireEvent.click(await screen.findByText("Régimen con impuesto oculto"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle del régimen" });
+    fireEvent.click(within(detail).getByRole("button", { name: "Editar" }));
+
+    const select = (await screen.findByLabelText("Impuesto")) as HTMLSelectElement;
+    const hiddenOption = within(select).getByRole("option", {
+      name: "Impuesto anterior (IIBB-OLD) (oculto)",
+    }) as HTMLOptionElement;
+    expect(hiddenOption.disabled).toBe(true);
+    expect(select.value).toBe(hiddenTaxType.id);
+    expect(within(select).getByRole("option", { name: "Impuesto sintético E2E (E2E_TEST_TAX)" })).toBeTruthy();
   });
 
   it("filtra por búsqueda y abre el detalle del organismo con sus regímenes vinculados", async () => {
@@ -501,7 +610,7 @@ describe("StudyCatalogosFiscales", () => {
     expect(within(detail).getByText(/recauda en Otra jurisdicción/)).toBeTruthy();
   });
 
-  it("jerarquiza Desactivar como destructiva y expone el valor completo en tooltip", async () => {
+  it("presenta Ocultar como acción destructiva y expone el valor completo en tooltip", async () => {
     activities.push({
       id: "activity-a",
       code: "E2E_SYN_ACTIVIDAD_LA_RGA_20261105",
@@ -521,12 +630,12 @@ describe("StudyCatalogosFiscales", () => {
     const name = screen.getByText("Comercio mayorista sintético con nombre extenso");
     expect(name.getAttribute("title")).toBe("Comercio mayorista sintético con nombre extenso");
 
-    // La baja lógica se ve como acción destructiva, no como una acción más.
+    // Ocultar conserva el dato y se presenta como acción destructiva.
     fireEvent.click(code);
-    const deactivate = (await screen.findByRole("button", {
-      name: "Desactivar",
+    const hide = (await screen.findByRole("button", {
+      name: "Ocultar",
     })) as HTMLButtonElement;
-    expect(deactivate.className).toContain("ds-button--danger");
+    expect(hide.className).toContain("ds-button--danger");
   });
 
   it("consulta el catálogo con includeInactive y crea una actividad con código normalizado", async () => {
@@ -570,7 +679,17 @@ describe("StudyCatalogosFiscales", () => {
     expect(await screen.findByText("CM03-02")).toBeTruthy();
   });
 
-  it("edita nombre, fuente y vigencia sin tocar el código ni la jurisdicción", async () => {
+  it("edita código, jurisdicción, nombre, fuente y vigencia", async () => {
+    const anotherJurisdiction = {
+      ...jurisdiction,
+      id: "jurisdiction-tuc",
+      code: "TUC",
+      name: "Tucumán",
+      kind: "PROVINCIAL",
+      parentId: jurisdiction.id,
+      parent: { id: jurisdiction.id, code: jurisdiction.code, name: jurisdiction.name, kind: jurisdiction.kind },
+    };
+    jurisdictions.push(anotherJurisdiction);
     activities.push({
       id: "activity-a",
       code: "CM03-02",
@@ -586,10 +705,10 @@ describe("StudyCatalogosFiscales", () => {
 
     fireEvent.click(await screen.findByText("Comercio mayorista"));
     fireEvent.click(await screen.findByRole("button", { name: "Editar" }));
-    expect(screen.getAllByText("CM03-02").length).toBeGreaterThanOrEqual(1);
-    expect((screen.getByLabelText("Jurisdicción (no editable)") as HTMLInputElement).value).toBe(
-      `${jurisdiction.name} — Nación (${jurisdiction.code})`,
-    );
+    fireEvent.change(screen.getByLabelText("Código"), { target: { value: "CM03-02-V2" } });
+    fireEvent.change(document.getElementById("activity-edit-jurisdiction") as HTMLSelectElement, {
+      target: { value: anotherJurisdiction.id },
+    });
     fireEvent.change(await screen.findByLabelText("Nombre"), {
       target: { value: "Comercio mayorista ampliado" },
     });
@@ -601,7 +720,9 @@ describe("StudyCatalogosFiscales", () => {
 
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith("/tax/activities/activity-a", {
+        code: "CM03-02-V2",
         name: "Comercio mayorista ampliado",
+        jurisdictionId: anotherJurisdiction.id,
         source: null,
         validFrom: "2026-01-01",
         validTo: "2027-06-30",
@@ -610,7 +731,7 @@ describe("StudyCatalogosFiscales", () => {
     expect(await screen.findByText(/Los datos de la actividad quedaron actualizados/)).toBeTruthy();
   });
 
-  it("desactiva una actividad avisando los vínculos vigentes y la reactiva", async () => {
+  it("oculta una actividad en uso y la vuelve a mostrar", async () => {
     activities.push({
       id: "activity-a",
       code: "CM03-02",
@@ -626,20 +747,20 @@ describe("StudyCatalogosFiscales", () => {
     await openTab(/^Actividades económicas/);
 
     fireEvent.click(await screen.findByText("Comercio mayorista"));
-    fireEvent.click(await screen.findByRole("button", { name: "Desactivar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ocultar" }));
     const drawer = document.querySelector(".action-drawer") as HTMLElement;
-    fireEvent.click(within(drawer).getByRole("button", { name: "Desactivar" }));
+    fireEvent.click(within(drawer).getByRole("button", { name: "Ocultar" }));
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/tax/activities/activity-a/deactivate"),
     );
-    expect(await screen.findByText(/Conserva 1 vínculo/)).toBeTruthy();
+    expect(await screen.findByText(/La actividad quedó oculta en los selectores/)).toBeTruthy();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Reactivar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Mostrar" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/tax/activities/activity-a/activate"),
     );
-    expect(await screen.findByText(/vuelve a estar activa/)).toBeTruthy();
+    expect(await screen.findByText(/La actividad vuelve a mostrarse/)).toBeTruthy();
   });
 
   it("muestra el catálogo en solo lectura y oculta la gestión a quien no propone", async () => {
@@ -658,12 +779,12 @@ describe("StudyCatalogosFiscales", () => {
     await openTab(/^Actividades económicas/);
 
     expect(await screen.findByText("Servicios profesionales")).toBeTruthy();
-    expect(screen.getByText("Desactivada")).toBeTruthy();
+    expect(screen.getByText("Oculta")).toBeTruthy();
     fireEvent.click(screen.getByText("Servicios profesionales"));
     await screen.findByRole("complementary", { name: "Detalle de la actividad" });
     expect(screen.queryByRole("button", { name: "Nueva actividad" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Editar" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Reactivar" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mostrar" })).toBeNull();
     expect(api.post).not.toHaveBeenCalled();
   });
 
@@ -721,7 +842,7 @@ describe("StudyCatalogosFiscales", () => {
     // Organismos: sólo el creado desde la UI por este estudio ofrece Eliminar.
     fireEvent.click(await screen.findByText("Organismo propio sintético"));
     let detail = await screen.findByRole("complementary", { name: "Detalle del organismo" });
-    expect(within(detail).getAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
+    expect(await within(detail).findAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
     fireEvent.click(screen.getByText("Organismo de referencia sintético"));
     detail = await screen.findByRole("complementary", { name: "Detalle del organismo" });
     expect(within(detail).getByText("SYN-REFERENCE-AUTH")).toBeTruthy();
@@ -730,11 +851,11 @@ describe("StudyCatalogosFiscales", () => {
     await openTab(/^Regímenes/);
     fireEvent.click(await screen.findByText("Régimen propio sintético"));
     detail = await screen.findByRole("complementary", { name: "Detalle del régimen" });
-    expect(within(detail).getAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
+    expect(await within(detail).findAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
 
     await openTab(/^Actividades económicas/);
     fireEvent.click(await screen.findByText("Actividad propia sintética"));
     detail = await screen.findByRole("complementary", { name: "Detalle de la actividad" });
-    expect(within(detail).getAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
+    expect(await within(detail).findAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
   });
 });

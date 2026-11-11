@@ -70,7 +70,7 @@ export function clientRoutes(app: FastifyInstance) {
   // (el mismo maestro que usa el onboarding fiscal) con permiso de lectura de
   // clientes, sin abrir permisos de administración de reglas fiscales.
   app.get("/api/v1/firms/:firmId/client-profile-catalogs/activities", async (req, reply) => {
-    const data = await masters.listActivities(tenantContextFromRequest(req));
+    const data = await masters.listActivities(tenantContextFromRequest(req), undefined, true);
     return reply.send({ data });
   });
 
@@ -177,8 +177,9 @@ export function clientRoutes(app: FastifyInstance) {
                   id: true,
                   code: true,
                   name: true,
-                  taxType: { select: { id: true, code: true, name: true } },
-                  jurisdiction: { select: { id: true, code: true, name: true } },
+                  isActive: true,
+                  taxType: { select: { id: true, code: true, name: true, isActive: true } },
+                  jurisdiction: { select: { id: true, code: true, name: true, isActive: true } },
                 },
               },
             },
@@ -198,7 +199,8 @@ export function clientRoutes(app: FastifyInstance) {
                   id: true,
                   code: true,
                   name: true,
-                  jurisdiction: { select: { code: true, name: true } },
+                  isActive: true,
+                  jurisdiction: { select: { code: true, name: true, isActive: true } },
                 },
               },
             },
@@ -212,7 +214,7 @@ export function clientRoutes(app: FastifyInstance) {
               startDate: true,
               endDate: true,
               label: true,
-              taxType: { select: { id: true, code: true, name: true } },
+              taxType: { select: { id: true, code: true, name: true, isActive: true } },
             },
             orderBy: [{ startDate: "desc" }, { taxType: { code: "asc" } }],
             take: 500,
@@ -229,8 +231,9 @@ export function clientRoutes(app: FastifyInstance) {
                   id: true,
                   code: true,
                   name: true,
-                  taxType: { select: { id: true, code: true, name: true } },
-                  jurisdiction: { select: { id: true, code: true, name: true } },
+                  isActive: true,
+                  taxType: { select: { id: true, code: true, name: true, isActive: true } },
+                  jurisdiction: { select: { id: true, code: true, name: true, isActive: true } },
                 },
               },
               period: { select: { id: true, label: true, startDate: true, endDate: true } },
@@ -326,16 +329,27 @@ export function clientRoutes(app: FastifyInstance) {
     // Valores sin match → 422 con detalle; no se inventan códigos ni se
     // borra información guardada (el rechazo no modifica el perfil).
     if (Array.isArray(clean.iibbJurisdictions) && (clean.iibbJurisdictions as string[]).length > 0) {
-      const catalog = await masters.listJurisdictions(tenantContextFromRequest(req));
+      const catalog = await masters.listJurisdictions(tenantContextFromRequest(req), true);
       const { canonical, unknown } = matchIibbJurisdictions(catalog, clean.iibbJurisdictions as string[]);
-      if (unknown.length > 0) {
+      const existing = await withTenantContext(tenantContextFromRequest(req), (tx) =>
+        tx.clientProfile.findFirst({
+          where: { firmId, clientId },
+          select: { iibbJurisdictions: true },
+        }),
+      );
+      const inactiveNewValues = canonical.filter((code) =>
+        catalog.some((entry) => entry.code === code && !entry.isActive) &&
+        !existing?.iibbJurisdictions.includes(code),
+      );
+      const rejected = [...unknown, ...inactiveNewValues];
+      if (rejected.length > 0) {
         return reply.status(422).send({
           error: {
             code: "IIBB_JURISDICTION_UNKNOWN",
-            message: `Jurisdicciones IIBB fuera del catálogo fiscal: ${unknown.join(", ")}. Seleccioná jurisdicciones del catálogo.`,
+            message: `Jurisdicciones fuera de las opciones activas: ${rejected.join(", ")}. Seleccioná jurisdicciones activas del catálogo.`,
             details: {
-              unknown,
-              available: catalog.map((entry) => entry.code),
+              unknown: rejected,
+              available: catalog.filter((entry) => entry.isActive).map((entry) => entry.code),
             },
             requestId: req.id,
           },

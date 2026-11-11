@@ -37,12 +37,17 @@ describe("contrato del catálogo de actividades económicas", () => {
     }
   });
 
-  it("la edición no admite code ni jurisdictionId (vínculo con reglas)", () => {
+  it("permite editar code y jurisdictionId", () => {
     const result = updateEconomicActivitySchema.safeParse({
-      code: "OTRO",
+      code: " otro ",
       jurisdictionId: "11111111-2222-4333-8444-555555555555",
     });
-    expect(result.success).toBe(false);
-    expect(updateEconomicActivitySchema.safeParse({ name: "Nuevo nombre" }).success).toBe(true);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({
+        code: "OTRO",
+        jurisdictionId: "11111111-2222-4333-8444-555555555555",
+      });
+    }
   });
 });
