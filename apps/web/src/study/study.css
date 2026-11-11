@@ -3044,8 +3044,8 @@
   border: 1px dashed var(--ds-border);
   border-radius: var(--ds-radius-sm);
   background: var(--ds-color-surface-muted);
-  color: var(--ds-color-text-strong);
-  font-family: var(--ds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--ds-color-text);
+  font-family: var(--ds-font-mono);
   font-size: var(--ds-text-sm);
 }
 
