@@ -213,6 +213,24 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     expect(within(select).getByRole("option", { name: /ar-vat-ri-v1.0.0/ })).toBeTruthy();
   });
 
+  it("marca una vigencia fuera de rango y evita enviar la versión", async () => {
+    mockApi({ ...makeDetail(null), versions: [] });
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
+    const date = (await screen.findByLabelText("Vigencia desde")) as HTMLInputElement;
+    expect(date.min).toBe("1900-01-01");
+    expect(date.max).toBe("2100-12-31");
+    fireEvent.change(date, { target: { value: "61001-02-02" } });
+    const form = date.closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+
+    expect(await screen.findByText(/año entre 1900 y 2100/)).toBeTruthy();
+    expect(date.getAttribute("aria-invalid")).toBe("true");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
   it("ofrece las actividades activas del catálogo y guarda el código elegido", async () => {
     mockApi(makeDetail(null));
     renderReglas();
