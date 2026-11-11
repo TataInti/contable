@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ExtractedField, VoucherARV2Data } from "../lib/api";
+import type {
+  ExtractedField,
+  ExtractionReviewIssue,
+  VoucherData,
+} from "../lib/api";
 import { ExtractionFiscalTable } from "./ExtractionFiscalTable";
 
-const voucherFixture: VoucherARV2Data = {
+const voucherFixture: VoucherData = {
   tipo_documento: "factura",
   letra: "A",
   punto_venta: "0004",
@@ -38,15 +42,18 @@ function renderTable({
   voucher = voucherFixture,
   fields = [],
   reviewReason = null,
+  reviewIssues,
 }: {
-  voucher?: VoucherARV2Data | null;
+  voucher?: VoucherData | null;
   fields?: ExtractedField[];
   reviewReason?: string | null;
+  reviewIssues?: ExtractionReviewIssue[];
 } = {}) {
   return render(
     <ExtractionFiscalTable
       voucherData={voucher}
       documentReviewReason={reviewReason}
+      reviewIssues={reviewIssues}
       fields={fields}
     />,
   );
@@ -63,7 +70,7 @@ function rowForField(table: HTMLElement, name: string) {
 afterEach(() => cleanup());
 
 describe("ExtractionFiscalTable", () => {
-  it("muestra los campos fiscales aprobados y separa cada alícuota y percepción", () => {
+  it("muestra los campos fiscales y conserva el texto de percepciones v2 antiguas", () => {
     renderTable();
     const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
     const rows = within(table).getAllByRole("row");
@@ -86,8 +93,8 @@ describe("ExtractionFiscalTable", () => {
       "IVA · alícuota 10.5%",
       "No gravado",
       "Exento",
-      "Percepción · IIBB",
-      "Percepción · IVA",
+      "Percepción – sin clasificar",
+      "Percepción – sin clasificar",
       "Total",
       "Moneda",
       "CAE",
@@ -107,14 +114,107 @@ describe("ExtractionFiscalTable", () => {
     expect(rowForField(table, "IVA · alícuota 10.5%")[1]!.textContent).toBe(
       "Alícuota: 10.5% · Importe: 52.50",
     );
-    expect(rowForField(table, "Percepción · IIBB")[1]!.textContent).toBe(
-      "Tipo: IIBB · Importe: 15.00",
-    );
-    expect(rowForField(table, "Percepción · IVA")[1]!.textContent).toBe(
-      "Tipo: IVA · Importe: 5.00",
+    expect(rowForField(table, "Percepción – sin clasificar")[1]!.textContent).toBe(
+      "Texto original: IIBB · Importe: 15.00",
     );
     expect(within(table).queryByText("hora", { exact: true })).toBeNull();
     expect(within(table).queryByText("confianza", { exact: true })).toBeNull();
+  });
+
+  it("muestra cada percepción v2.1 con categoría e impresión original", () => {
+    renderTable({
+      voucher: {
+        ...voucherFixture,
+        percepciones: [
+          { categoria: "IIBB", tipo_texto: "IIBB Buenos Aires", importe: "15.00" },
+          { categoria: "IVA", tipo_texto: "Percepción IVA", importe: "5.00" },
+          { categoria: "Ganancias", tipo_texto: "Retención ganancias", importe: "20.00" },
+        ],
+      },
+    });
+    const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+
+    expect(rowForField(table, "Percepción – IIBB")[1]!.textContent).toBe(
+      "Texto original: IIBB Buenos Aires · Importe: 15.00",
+    );
+    expect(rowForField(table, "Percepción – IVA")[1]!.textContent).toBe(
+      "Texto original: Percepción IVA · Importe: 5.00",
+    );
+    expect(rowForField(table, "Percepción – Ganancias")[1]!.textContent).toBe(
+      "Texto original: Retención ganancias · Importe: 20.00",
+    );
+    expect(rowForField(table, "Percepción – IIBB")[2]!.textContent).toBe("leído");
+  });
+
+  it("asigna percepción no reconocida a la fila Otras exacta", () => {
+    renderTable({
+      voucher: {
+        ...voucherFixture,
+        percepciones: [
+          { categoria: "IIBB", tipo_texto: "IIBB Buenos Aires", importe: "15.00" },
+          { categoria: "Otras", tipo_texto: "Tributo sin clasificar", importe: "7.00" },
+        ],
+      },
+      reviewIssues: [{ reason: "percepción no reconocida", sourcePath: "percepciones[1].categoria" }],
+    });
+    const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+    const iibb = rowForField(table, "Percepción – IIBB");
+    const other = rowForField(table, "Percepción – Otras");
+
+    expect(iibb[2]!.textContent).toBe("leído");
+    expect(iibb[3]!.textContent).toBe("");
+    expect(other[2]!.textContent).toBe("a revisar");
+    expect(other[3]!.textContent).toBe("percepción no reconocida");
+  });
+
+  it("asigna el motivo de IVA a la segunda de tres filas por sourcePath", () => {
+    renderTable({
+      voucher: {
+        ...voucherFixture,
+        iva: [
+          { alicuota: "10.5", importe: "10.50" },
+          { alicuota: "21", importe: "21.00" },
+          { alicuota: "27", importe: "27.00" },
+        ],
+      },
+      reviewIssues: [{ reason: "importe poco legible", sourcePath: "iva[1].importe" }],
+    });
+    const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+    const first = rowForField(table, "IVA · alícuota 10.5%");
+    const second = rowForField(table, "IVA · alícuota 21%");
+    const third = rowForField(table, "IVA · alícuota 27%");
+
+    expect(first[2]!.textContent).toBe("leído");
+    expect(first[3]!.textContent).toBe("");
+    expect(second[2]!.textContent).toBe("a revisar");
+    expect(second[3]!.textContent).toBe("importe poco legible");
+    expect(third[2]!.textContent).toBe("leído");
+    expect(third[3]!.textContent).toBe("");
+  });
+
+  it("muestra motivos sin sourcePath en el estado del documento", () => {
+    renderTable({
+      reviewReason: "COMPONENT_SUM_MISMATCH",
+      reviewIssues: [{ reason: "COMPONENT_SUM_MISMATCH", sourcePath: null }],
+    });
+    const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+    const documentStatus = screen.getByRole("status", { name: "Estado del documento" });
+
+    expect(documentStatus.textContent).toBe("Estado del documento: a revisar · COMPONENT_SUM_MISMATCH");
+    expect(rowForField(table, "Neto gravado")[2]!.textContent).toBe("leído");
+    expect(rowForField(table, "Neto gravado")[3]!.textContent).toBe("");
+    expect(rowForField(table, "IVA · alícuota 21%")[2]!.textContent).toBe("leído");
+  });
+
+  it("mantiene reviewReason legado en el estado del documento sin marcar todas las filas", () => {
+    renderTable({ reviewReason: "neto + IVA no cierra con el total" });
+    const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+
+    expect(screen.getByRole("status", { name: "Estado del documento" }).textContent).toContain(
+      "neto + IVA no cierra con el total",
+    );
+    expect(rowForField(table, "Neto gravado")[2]!.textContent).toBe("leído");
+    expect(rowForField(table, "IVA · alícuota 21%")[2]!.textContent).toBe("leído");
   });
 
   it("marca los valores null como no visibles", () => {
@@ -136,7 +236,7 @@ describe("ExtractionFiscalTable", () => {
     expect(rowForField(table, "Percepciones")[2]!.textContent).toBe("no visible");
   });
 
-  it("marca a revisar el campo que tiene motivo y muestra el motivo registrado", () => {
+  it("marca a revisar el campo escalar que tiene motivo sin alterar los demás", () => {
     renderTable({
       fields: [
         {
@@ -159,12 +259,16 @@ describe("ExtractionFiscalTable", () => {
     expect(rowForField(table, "CUIT receptor")[2]!.textContent).toBe("leído");
   });
 
-  it("propaga el motivo de revisión del documento a sus filas", () => {
-    renderTable({ reviewReason: "neto + IVA no cierra con el total" });
-    const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
-    const net = rowForField(table, "Neto gravado");
+  it("tolera reviewIssues vacío o ausente", () => {
+    renderTable({ reviewIssues: [] });
+    let table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+    expect(screen.queryByRole("status", { name: "Estado del documento" })).toBeNull();
+    expect(rowForField(table, "IVA · alícuota 21%")[2]!.textContent).toBe("leído");
 
-    expect(net[2]!.textContent).toBe("a revisar");
-    expect(net[3]!.textContent).toBe("neto + IVA no cierra con el total");
+    cleanup();
+    renderTable();
+    table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+    expect(screen.queryByRole("status", { name: "Estado del documento" })).toBeNull();
+    expect(rowForField(table, "Percepción – sin clasificar")[2]!.textContent).toBe("leído");
   });
 });

@@ -668,6 +668,7 @@ export function StudyBandeja() {
                     <ExtractionFiscalTable
                       voucherData={extraction.data.voucherData}
                       documentReviewReason={extraction.data.reviewReason}
+                      reviewIssues={extraction.data.reviewIssues}
                       fields={extraction.data.fields}
                     />
                     {extraction.data.fields.some((field) => FIELD_LABELS[field.key]) ? (

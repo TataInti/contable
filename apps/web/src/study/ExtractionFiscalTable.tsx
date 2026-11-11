@@ -1,9 +1,10 @@
 import { Table } from "@contable/design-system";
-import type { ExtractedField, VoucherARV2Data } from "../lib/api";
+import type { ExtractedField, ExtractionReviewIssue, VoucherData } from "../lib/api";
 
 interface ExtractionFiscalTableProps {
-  voucherData: VoucherARV2Data | null;
+  voucherData: VoucherData | null;
   documentReviewReason: string | null;
+  reviewIssues?: ExtractionReviewIssue[] | null;
   fields: ExtractedField[];
 }
 
@@ -15,7 +16,7 @@ interface FiscalRow {
   reason: string;
 }
 
-type ScalarVoucherKey = Exclude<keyof VoucherARV2Data, "hora" | "iva" | "percepciones" | "confianza">;
+type ScalarVoucherKey = Exclude<keyof VoucherData, "hora" | "iva" | "percepciones" | "confianza">;
 
 const SCALAR_FIELDS: { field: string; voucherKey: ScalarVoucherKey; extractedKey: string }[] = [
   { field: "Tipo de documento", voucherKey: "tipo_documento", extractedKey: "voucherType" },
@@ -37,24 +38,70 @@ const SCALAR_FIELDS: { field: string; voucherKey: ScalarVoucherKey; extractedKey
   { field: "Vencimiento del CAE", voucherKey: "cae_vencimiento", extractedKey: "caeExpiration" },
 ];
 
+const REPEATED_FIELD_GROUPS: Record<string, string> = {
+  vatRate: "IVA",
+  vatAmount: "IVA",
+  perceptionType: "Percepciones",
+  perceptionAmount: "Percepciones",
+  perceptionCategory: "Percepciones",
+  perceptionText: "Percepciones",
+};
+
 function nonEmptyReason(reason: string | null | undefined): string | null {
   return typeof reason === "string" && reason.trim().length > 0 ? reason : null;
 }
 
-function reviewReason(fields: ExtractedField[], documentReason: string | null): string {
-  const reasons = [
-    ...fields.map((field) => nonEmptyReason(field.reason)),
-    nonEmptyReason(documentReason),
-  ].filter((reason): reason is string => reason !== null);
-  return [...new Set(reasons)].join(" · ");
+function uniqueReasons(reasons: Array<string | null | undefined>): string[] {
+  return [...new Set(reasons.map(nonEmptyReason).filter((reason): reason is string => reason !== null))];
+}
+
+function rowReviewReason(fields: ExtractedField[], issues: ExtractionReviewIssue[]): string {
+  return uniqueReasons([
+    ...fields.map((field) => field.reason),
+    ...issues.map((issue) => issue.reason),
+  ]).join(" · ");
+}
+
+function issuesForRow(
+  issues: ExtractionReviewIssue[],
+  collection: "iva" | "percepciones",
+  index: number,
+): ExtractionReviewIssue[] {
+  const prefix = `${collection}[${index}].`;
+  return issues.filter((issue) => issue.sourcePath?.startsWith(prefix));
+}
+
+function documentReviewReasons(
+  fields: ExtractedField[],
+  documentReason: string | null,
+  reviewIssues: ExtractionReviewIssue[] | null | undefined,
+): string[] {
+  const issues = reviewIssues ?? [];
+  const structuredDocumentReasons = issues
+    .filter((issue) => issue.sourcePath === null)
+    .map((issue) => issue.reason);
+  const structuredReasons = new Set(issues.map((issue) => issue.reason));
+  const useLegacyDocumentReason = reviewIssues == null || issues.length === 0;
+  const unscopedRepeatedReasons = fields.flatMap((field) => {
+    const reason = nonEmptyReason(field.reason);
+    const group = REPEATED_FIELD_GROUPS[field.key];
+    if (!reason || !group || structuredReasons.has(reason)) return [];
+    return [`${group}: ${reason}`];
+  });
+
+  return uniqueReasons([
+    ...structuredDocumentReasons,
+    ...(useLegacyDocumentReason ? [documentReason] : []),
+    ...unscopedRepeatedReasons,
+  ]);
 }
 
 function makeRow(
   id: string,
   field: string,
   value: string | null,
-  fields: ExtractedField[],
-  documentReason: string | null,
+  relatedFields: ExtractedField[],
+  relatedIssues: ExtractionReviewIssue[],
   hasValue = value !== null,
 ): FiscalRow {
   return {
@@ -62,14 +109,14 @@ function makeRow(
     field,
     value,
     hasValue,
-    reason: reviewReason(fields, documentReason),
+    reason: rowReviewReason(relatedFields, relatedIssues),
   };
 }
 
 function buildRows(
-  voucher: VoucherARV2Data | null,
+  voucher: VoucherData | null,
   fields: ExtractedField[],
-  documentReason: string | null,
+  reviewIssues: ExtractionReviewIssue[],
 ): FiscalRow[] {
   const scalarRow = (index: number): FiscalRow => {
     const definition = SCALAR_FIELDS[index]!;
@@ -79,20 +126,14 @@ function buildRows(
       definition.field,
       voucher?.[definition.voucherKey] ?? null,
       relatedFields,
-      documentReason,
+      [],
     );
   };
-  // La API devuelve IVA y percepciones como campos repetidos sin índice estable;
-  // sus motivos se muestran en todas las filas del grupo para no atribuirlos mal.
-  const vatFields = fields.filter((field) => field.key === "vatRate" || field.key === "vatAmount");
-  const perceptionFields = fields.filter(
-    (field) => field.key === "perceptionType" || field.key === "perceptionAmount",
-  );
   const vatRows: FiscalRow[] =
     voucher?.iva == null
-      ? [makeRow("iva-unseen", "IVA", null, vatFields, documentReason)]
+      ? [makeRow("iva-unseen", "IVA", null, [], [])]
       : voucher.iva.length === 0
-        ? [makeRow("iva-empty", "IVA", "Sin alícuotas", vatFields, documentReason)]
+        ? [makeRow("iva-empty", "IVA", "Sin alícuotas", [], [])]
         : voucher.iva.map((entry, index) => {
             const hasValue = entry.alicuota !== null || entry.importe !== null;
             const rate = entry.alicuota === null ? "no visible" : `${entry.alicuota}%`;
@@ -101,24 +142,27 @@ function buildRows(
               `iva-${index}`,
               entry.alicuota === null ? `IVA · alícuota ${index + 1}` : `IVA · alícuota ${rate}`,
               `Alícuota: ${rate} · Importe: ${amount}`,
-              vatFields,
-              documentReason,
+              [],
+              issuesForRow(reviewIssues, "iva", index),
               hasValue,
             );
           });
   const perceptionRows: FiscalRow[] =
     voucher?.percepciones == null
-      ? [makeRow("percepciones-unseen", "Percepciones", null, perceptionFields, documentReason)]
+      ? [makeRow("percepciones-unseen", "Percepciones", null, [], [])]
       : voucher.percepciones.length === 0
-        ? [makeRow("percepciones-empty", "Percepciones", "Sin percepciones", perceptionFields, documentReason)]
+        ? [makeRow("percepciones-empty", "Percepciones", "Sin percepciones", [], [])]
         : voucher.percepciones.map((entry, index) => {
-            const hasValue = entry.tipo !== null || entry.importe !== null;
+            const isV21 = "categoria" in entry;
+            const category = isV21 ? entry.categoria : "sin clasificar";
+            const originalText = isV21 ? entry.tipo_texto : entry.tipo;
+            const hasValue = originalText !== null || entry.importe !== null;
             return makeRow(
               `percepcion-${index}`,
-              entry.tipo === null ? `Percepción ${index + 1}` : `Percepción · ${entry.tipo}`,
-              `Tipo: ${entry.tipo ?? "no visible"} · Importe: ${entry.importe ?? "no visible"}`,
-              perceptionFields,
-              documentReason,
+              `Percepción – ${category}`,
+              `Texto original: ${originalText ?? "no visible"} · Importe: ${entry.importe ?? "no visible"}`,
+              [],
+              issuesForRow(reviewIssues, "percepciones", index),
               hasValue,
             );
           });
@@ -149,25 +193,35 @@ function buildRows(
 export function ExtractionFiscalTable({
   voucherData,
   documentReviewReason,
+  reviewIssues,
   fields,
 }: ExtractionFiscalTableProps) {
-  const rows = buildRows(voucherData, fields, documentReviewReason);
+  const issues = reviewIssues ?? [];
+  const rows = buildRows(voucherData, fields, issues);
+  const documentReasons = documentReviewReasons(fields, documentReviewReason, reviewIssues);
 
   return (
-    <Table
-      aria-label="Datos fiscales extraídos"
-      rows={rows}
-      rowKey={(row) => row.id}
-      columns={[
-        { key: "field", header: "Campo", accessor: (row) => row.field },
-        { key: "value", header: "Valor", accessor: (row) => row.value ?? "—" },
-        {
-          key: "state",
-          header: "Estado",
-          accessor: (row) => (row.reason ? "a revisar" : row.hasValue ? "leído" : "no visible"),
-        },
-        { key: "reason", header: "Motivo", accessor: (row) => row.reason },
-      ]}
-    />
+    <>
+      {documentReasons.length > 0 ? (
+        <div className="extraction-document-review" role="status" aria-label="Estado del documento">
+          Estado del documento: a revisar · {documentReasons.join(" · ")}
+        </div>
+      ) : null}
+      <Table
+        aria-label="Datos fiscales extraídos"
+        rows={rows}
+        rowKey={(row) => row.id}
+        columns={[
+          { key: "field", header: "Campo", accessor: (row) => row.field },
+          { key: "value", header: "Valor", accessor: (row) => row.value ?? "—" },
+          {
+            key: "state",
+            header: "Estado",
+            accessor: (row) => (row.reason ? "a revisar" : row.hasValue ? "leído" : "no visible"),
+          },
+          { key: "reason", header: "Motivo", accessor: (row) => row.reason },
+        ]}
+      />
+    </>
   );
 }

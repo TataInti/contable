@@ -353,7 +353,16 @@ export interface ExtractedField {
   reason?: string | null;
 }
 
-export interface VoucherARV2Data {
+export type VoucherPerceptionCategory =
+  | "IIBB"
+  | "IVA"
+  | "Ganancias"
+  | "SUSS"
+  | "Impuestos internos"
+  | "Municipal"
+  | "Otras";
+
+interface VoucherARBaseData {
   tipo_documento: "factura" | "ticket_no_fiscal" | "recibo" | "nota_credito" | "nota_debito" | "otro" | "ilegible";
   letra: string | null;
   punto_venta: string | null;
@@ -369,7 +378,6 @@ export interface VoucherARV2Data {
   iva: { alicuota: string | null; importe: string | null }[] | null;
   no_gravado: string | null;
   exento: string | null;
-  percepciones: { tipo: string | null; importe: string | null }[] | null;
   total: string | null;
   moneda: string | null;
   cae: string | null;
@@ -377,13 +385,34 @@ export interface VoucherARV2Data {
   confianza: Record<string, number>;
 }
 
+export interface VoucherARV2Data extends VoucherARBaseData {
+  percepciones: { tipo: string | null; importe: string | null }[] | null;
+}
+
+export interface VoucherARV21Data extends VoucherARBaseData {
+  percepciones: {
+    categoria: VoucherPerceptionCategory;
+    tipo_texto: string | null;
+    importe: string | null;
+  }[] | null;
+}
+
+export type VoucherData = VoucherARV2Data | VoucherARV21Data;
+
+export interface ExtractionReviewIssue {
+  reason: string;
+  sourcePath: string | null;
+}
+
 export interface DocumentExtraction {
   id: string;
   status: string;
+  schemaVersion: string;
   classification?: string | null;
   confidence?: number | null;
   reviewReason: string | null;
-  voucherData: VoucherARV2Data | null;
+  reviewIssues?: ExtractionReviewIssue[];
+  voucherData: VoucherData | null;
   fields: ExtractedField[];
   items: unknown[];
 }
