@@ -63,6 +63,14 @@ const FIELD_LABELS: Record<string, string> = {
   caeExpiration: "Vencimiento del CAE",
 };
 
+const REJECTION_REASONS = [
+  { value: "ILLEGIBLE", label: "Ilegible" },
+  { value: "DUPLICATE", label: "Duplicado" },
+  { value: "NOT_A_VOUCHER", label: "No es un comprobante" },
+  { value: "OTHER_CLIENT", label: "Datos de otro cliente" },
+  { value: "OTHER", label: "Otro" },
+] as const;
+
 function validateFile(selected: File | null) {
   if (!selected) return "Elegí un archivo para continuar.";
   if (!ALLOWED_TYPES.has(selected.type) || selected.size > MAX_FILE_SIZE)
@@ -102,6 +110,10 @@ export function StudyBandeja() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const confirm = useConfirmAction();
   const [corrections, setCorrections] = useState<Record<string, string>>({});
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectionReasonCode, setRejectionReasonCode] = useState("");
+  const [rejectionNote, setRejectionNote] = useState("");
+  const [rejectionReceipts, setRejectionReceipts] = useState<Record<string, string>>({});
   const [showUpload, setShowUpload] = useState(false);
   const [uploadRequestItemId, setUploadRequestItemId] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -215,6 +227,23 @@ export function StudyBandeja() {
         queryKey: ["extraction", firmId, clientId, selectedId],
       }),
   });
+  const reject = useMutation({
+    mutationFn: ({ extractionId, reason }: { documentId: string; extractionId: string; reason: string }) =>
+      api.post(`${base}/extractions/${extractionId}/reject`, { reason }),
+    onSuccess: (_result, variables) => {
+      setRejectionReceipts((current) => ({
+        ...current,
+        [variables.documentId]: variables.reason,
+      }));
+      setShowRejectDialog(false);
+      setRejectionReasonCode("");
+      setRejectionNote("");
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
+        queryClient.invalidateQueries({ queryKey: ["document", firmId, clientId, variables.documentId] }),
+      ]);
+    },
+  });
   // G2-07.5: ver/descargar el archivo subido. La URL firmada se pide al servidor
   // en el momento (reautoriza por RLS) y sólo se expone una vez validada.
   const openFile = useMutation({
@@ -230,6 +259,7 @@ export function StudyBandeja() {
     (detail.data?.fileVersions?.[0]?.bucket === "originals" ||
       detail.data?.status === "EXTRACTED" ||
       detail.data?.fileVersions?.[0]?.antivirusStatus === "CLEAN");
+  const rejectionReceipt = detail.data ? rejectionReceipts[detail.data.id] : undefined;
 
   const rows = documents.data ?? [];
   const normalizedDocumentSearch = normalizeDocumentSearch(documentSearch.trim());
@@ -637,7 +667,14 @@ export function StudyBandeja() {
                     <StatusBadge status={detail.data?.status} />
                   </div>
                 </div>
-                {detail.data?.status !== "EXTRACTED" && detail.data?.status !== "REVIEWED" ? (
+                {rejectionReceipt ? (
+                  <div className="action-receipt action-receipt--rejected" role="status">
+                    <span>
+                      <strong>Documento rechazado</strong>
+                      <small>Motivo: {rejectionReceipt}</small>
+                    </span>
+                  </div>
+                ) : detail.data?.status !== "EXTRACTED" && detail.data?.status !== "REVIEWED" ? (
                   <div className="processing-state">
                     <div>
                       <h3>Procesando comprobante</h3>
@@ -719,20 +756,33 @@ export function StudyBandeja() {
                     extraction.data.status !== "REVIEWED" ? (
                       <div className="review-actions">
                         <p>Confirmá que los datos coinciden con la evidencia antes de aprobar.</p>
-                        <Button
-                          onClick={() =>
-                            confirm.ask({
-                              title: "¿Aprobar la extracción?",
-                              description:
-                                "Confirmá que revisaste los datos contra el comprobante. La aprobación queda registrada en la auditoría.",
-                              confirmLabel: "Aprobar extracción",
-                              onConfirm: () => approve.mutate(),
-                            })
-                          }
-                          loading={approve.isPending}
-                        >
-                          Aprobar extracción
-                        </Button>
+                        <div className="review-actions__buttons">
+                          <Button
+                            onClick={() =>
+                              confirm.ask({
+                                title: "¿Aprobar la extracción?",
+                                description:
+                                  "Confirmá que revisaste los datos contra el comprobante. La aprobación queda registrada en la auditoría.",
+                                confirmLabel: "Aprobar extracción",
+                                onConfirm: () => approve.mutate(),
+                              })
+                            }
+                            loading={approve.isPending}
+                          >
+                            Aprobar extracción
+                          </Button>
+                          <Button
+                            variant="danger"
+                            onClick={() => {
+                              reject.reset();
+                              setRejectionReasonCode("");
+                              setRejectionNote("");
+                              setShowRejectDialog(true);
+                            }}
+                          >
+                            Rechazar
+                          </Button>
+                        </div>
                       </div>
                     ) : null}
                     {extraction.data.status === "REVIEWED" ? (
@@ -766,6 +816,83 @@ export function StudyBandeja() {
           </div>
         </>
       )}
+      <ActionDrawer
+        isOpen={showRejectDialog}
+        onClose={() => setShowRejectDialog(false)}
+        eyebrow="Revisión documental"
+        title="¿Rechazar este documento?"
+        description="Elegí el motivo del rechazo. La decisión queda registrada y el documento sale de Para revisar."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setShowRejectDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="document-rejection-form"
+              variant="danger"
+              loading={reject.isPending}
+              disabled={!rejectionReasonCode || reject.isPending}
+            >
+              Confirmar rechazo
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="document-rejection-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const selectedReason = REJECTION_REASONS.find(
+              (option) => option.value === rejectionReasonCode,
+            );
+            if (!selectedReason || !selectedId || !extraction.data) return;
+            const reason = [selectedReason.label, rejectionNote.trim()].filter(Boolean).join(" — ");
+            reject.mutate({
+              documentId: selectedId,
+              extractionId: extraction.data.id,
+              reason,
+            });
+          }}
+        >
+          <label className="ds-field" htmlFor="document-rejection-reason">
+            <span className="ds-field__label">Motivo del rechazo</span>
+            <select
+              id="document-rejection-reason"
+              className="ctxbar__input"
+              value={rejectionReasonCode}
+              onChange={(event) => setRejectionReasonCode(event.target.value)}
+              required
+            >
+              <option value="">Elegí un motivo</option>
+              {REJECTION_REASONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="ds-field" htmlFor="document-rejection-note">
+            <span className="ds-field__label">Detalle (opcional)</span>
+            <textarea
+              id="document-rejection-note"
+              className="study-textarea"
+              rows={3}
+              maxLength={450}
+              value={rejectionNote}
+              onChange={(event) => setRejectionNote(event.target.value)}
+              placeholder="Agregá un detalle para facilitar la revisión."
+            />
+          </label>
+          {reject.isError ? (
+            <p className="form-error" role="alert">
+              {reject.error instanceof ApiError
+                ? reject.error.message
+                : "No se pudo rechazar el documento. Volvé a intentarlo."}
+            </p>
+          ) : null}
+        </form>
+      </ActionDrawer>
       <ConfirmDialog confirm={confirm} />
     </DensePage>
   );
