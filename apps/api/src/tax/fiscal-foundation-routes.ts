@@ -142,20 +142,20 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.patch("/api/v1/tax/jurisdictions/:jurisdictionId", async (req, reply) => {
     const { jurisdictionId } = req.params as { jurisdictionId: string };
-    const body = z
-      .object({
-        code: z.string().trim().min(1).max(40).optional(),
-        name: z.string().trim().min(1).max(160).optional(),
-        kind: z.enum(["NATIONAL", "PROVINCIAL", "MUNICIPAL"]).optional(),
-        parentId: z.string().uuid().nullable().optional(),
-        isActive: z.boolean().optional(),
-      })
-      .strict()
-      .refine((value) => Object.values(value).some((field) => field !== undefined), {
-        message: "Indicá al menos un campo para actualizar",
-      })
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          code: z.string().trim().min(1).max(40).optional(),
+          name: z.string().trim().min(1).max(160).optional(),
+          kind: z.enum(["NATIONAL", "PROVINCIAL", "MUNICIPAL"]).optional(),
+          parentId: z.string().uuid().nullable().optional(),
+          isActive: z.boolean().optional(),
+        })
+        .strict()
+        .refine((value) => Object.values(value).some((field) => field !== undefined), {
+          message: "Indicá al menos un campo para actualizar",
+        })
+        .parse(req.body);
       const data = await masters.updateJurisdiction(tenantContextFromRequest(req), {
         jurisdictionId,
         ...(body.code !== undefined ? { code: body.code } : {}),
