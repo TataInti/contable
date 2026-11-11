@@ -120,6 +120,8 @@ async function openExtraction() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  documentFixture.status = "EXTRACTED";
+  extractionFixture.status = "NEEDS_REVIEW";
   contextMock.current = {
     firmId: "firm-a",
     clientId: "client-a",
@@ -170,5 +172,88 @@ describe("StudyBandeja — revisión de extracción", () => {
         "/firms/firm-a/clients/client-a/extractions/extraction-a/approve",
       ),
     );
+  });
+
+  it("exige un motivo y permite cancelar el rechazo", async () => {
+    await openExtraction();
+    fireEvent.click(screen.getByRole("button", { name: "Rechazar" }));
+    const dialog = await screen.findByRole("dialog", { name: "¿Rechazar este documento?" });
+    const confirm = within(dialog).getByRole("button", { name: "Confirmar rechazo" }) as HTMLButtonElement;
+
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
+      target: { value: "ILLEGIBLE" },
+    });
+    expect(confirm.disabled).toBe(false);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("dialog", { name: "¿Rechazar este documento?" })).toBeNull();
+    expect(api.post).not.toHaveBeenCalledWith(
+      "/firms/firm-a/clients/client-a/extractions/extraction-a/reject",
+      expect.anything(),
+    );
+  });
+
+  it("muestra aprobar y rechazar sólo con el permiso document.review", async () => {
+    contextMock.current = {
+      ...contextMock.current,
+      capabilities: new Set(["client.read"]),
+    };
+
+    await openExtraction();
+
+    expect(screen.queryByRole("button", { name: "Aprobar extracción" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rechazar" })).toBeNull();
+  });
+
+  it("rechaza con motivo, saca el documento de Para revisar y muestra el motivo en el detalle", async () => {
+    vi.mocked(api.post).mockImplementation((async (path: string) => {
+      if (path.endsWith("/reject")) {
+        documentFixture.status = "EXTRACTION_FAILED";
+        extractionFixture.status = "FAILED";
+        return { status: "FAILED" };
+      }
+      return {};
+    }) as never);
+
+    await openExtraction();
+    fireEvent.click(screen.getByRole("button", { name: "Rechazar" }));
+    const dialog = await screen.findByRole("dialog", { name: "¿Rechazar este documento?" });
+    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
+      target: { value: "ILLEGIBLE" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Detalle (opcional)"), {
+      target: { value: "El número no se distingue" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar rechazo" }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        "/firms/firm-a/clients/client-a/extractions/extraction-a/reject",
+        { reason: "Ilegible — El número no se distingue" },
+      ),
+    );
+    expect(await screen.findByText("Motivo: Ilegible — El número no se distingue")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Para revisar/ }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /factura\.pdf/ })).toBeNull(),
+    );
+  });
+
+  it("mantiene el diálogo abierto y comunica el error de la API", async () => {
+    vi.mocked(api.post).mockRejectedValue(new Error("Falla de red"));
+
+    await openExtraction();
+    fireEvent.click(screen.getByRole("button", { name: "Rechazar" }));
+    const dialog = await screen.findByRole("dialog", { name: "¿Rechazar este documento?" });
+    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
+      target: { value: "OTHER" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar rechazo" }));
+
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.textContent).toContain("No se pudo rechazar el documento. Volvé a intentarlo.");
+    expect(screen.getByRole("dialog", { name: "¿Rechazar este documento?" })).toBeTruthy();
   });
 });
