@@ -47,7 +47,7 @@ POST /internal/v1/extractions
     "country": "AR",
     "language": "es",
     "maxPages": 3,
-    "schemaVersion": "voucher-ar-v2"
+    "schemaVersion": "voucher-ar-v2.1"
   },
   "callback": {
     "url": "http://api:3000/internal/v1/extractions/complete",
@@ -58,7 +58,9 @@ POST /internal/v1/extractions
 
 ### Response
 
-La respuesta HTTP contiene el voucher-ar-v2 validado, campos fiscales compatibles con la bandeja, motivos de revisión y telemetría (`provider`, modelo exacto, `promptVersion`, tokens de entrada/salida, latencia y costo estimado). El esquema no incluye ítems ni procesa QR. El modelo recibe imágenes de cada página; el texto embebido del PDF no participa en la extracción. El motor de reglas heredado permanece desconectado del endpoint normal.
+La respuesta HTTP usa `schemaVersion: "voucher-ar-v2.1"`. Cada percepción en `voucher.percepciones` tiene `categoria` (enum `IIBB | IVA | Ganancias | SUSS | Impuestos internos | Municipal | Otras`), `tipo_texto: string | null` (transcripción literal) e `importe: string | null`. El resultado incluye `reviewIssues: Array<{ reason: string; sourcePath: string | null }>`; los motivos por campo llevan una ruta como `iva[1].importe` o `percepciones[0].categoria`, y los motivos del documento llevan `sourcePath: null`. `reviewReason` e `issues` se mantienen por compatibilidad.
+
+El endpoint público de lectura de extracciones preserva registros existentes `schemaVersion: "voucher-ar-v2"` con `percepciones[].tipo` sin modificar su JSON. Las respuestas de esos registros exponen `reviewIssues: []` cuando el campo aún no existía. La migración sólo agrega el JSONB `reviewIssues`; no transforma ni borra datos guardados. El esquema no incluye ítems ni procesa QR. El modelo recibe imágenes de cada página; el texto embebido del PDF no participa en la extracción. El motor de reglas heredado permanece desconectado del endpoint normal.
 
 ## Asistente
 

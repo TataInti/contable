@@ -21,13 +21,14 @@ from .openrouter_policy import (
     build_provider_payload,
 )
 from .voucher_v2 import (
-    VoucherARV2,
+    PERCEPTION_CATEGORIES,
+    VoucherARV21,
     VoucherExtractionResponse,
     manual_review_response,
     response_from_voucher,
 )
 
-PROMPT_VERSION = "vision-ar-v4"
+PROMPT_VERSION = "vision-ar-v5"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 PDF_DPI = 150
 PDF_JPEG_QUALITY = 85
@@ -38,16 +39,16 @@ MODEL_TIMEOUT_SECONDS = 55.0
 
 SYSTEM_PROMPT = """Sos un extractor multimodal de comprobantes argentinos. Leé únicamente las imágenes de páginas adjuntas. No uses OCR externo, texto embebido del PDF, QR ni conocimiento previo para completar datos. Devolvé un único objeto JSON plano, sin markdown, fences ni texto circundante.
 
-Usá sólo estas claves exactas de voucher-ar-v2: tipo_documento, letra, punto_venta, numero, fecha, hora, cuit_emisor, cuit_receptor, razon_social_emisor, razon_social_receptor, condicion_iva, neto_gravado, iva, no_gravado, exento, percepciones, total, moneda, cae, cae_vencimiento y confianza. Los datos del emisor y del receptor van en sus claves planas; no los anides. No agregues claves schema, vencimiento, punto_de_venta, base_imponible ni envoltorios emisor, receptor o voucher. Cada elemento de iva sólo usa alicuota e importe; cada elemento de percepciones sólo usa tipo e importe.
+Usá sólo estas claves exactas de voucher-ar-v2.1: tipo_documento, letra, punto_venta, numero, fecha, hora, cuit_emisor, cuit_receptor, razon_social_emisor, razon_social_receptor, condicion_iva, neto_gravado, iva, no_gravado, exento, percepciones, total, moneda, cae, cae_vencimiento y confianza. Los datos del emisor y del receptor van en sus claves planas; no los anides. No agregues claves schema, vencimiento, punto_de_venta, base_imponible ni envoltorios emisor, receptor o voucher. Cada elemento de iva usa alicuota e importe. Cada elemento de percepciones usa categoria, tipo_texto e importe.
 
 Para cada campo, copiá únicamente texto o valores que sean visibles y legibles en la imagen. Omití las claves ausentes o no legibles; el contrato las interpreta como null. No inventes valores, no infieras CUIT, CAE, fecha, importes, moneda ni condición fiscal. Conservá importes y alícuotas como cadenas decimales con punto, sin separadores de miles. La fecha y cae_vencimiento deben ser YYYY-MM-DD. CUIT debe tener exactamente once dígitos consecutivos, sin guiones ni espacios. Usá tipo_documento=ilegible cuando el comprobante no pueda clasificarse por su imagen.
 
-tipo_documento sólo admite estos literales exactos: `factura`, `ticket_no_fiscal`, `recibo`, `nota_credito`, `nota_debito`, `otro` o `ilegible`. Un recibo de pago es `recibo`; usá `ticket_no_fiscal` únicamente para un ticket no fiscal, no porque falten datos tributarios. Si el documento es un ticket no fiscal, tipo_documento debe ser exactamente `ticket_no_fiscal`, nunca su etiqueta en lenguaje natural. Ejemplo mínimo válido de voucher-ar-v2 para un ticket no fiscal:
+tipo_documento sólo admite estos literales exactos: `factura`, `ticket_no_fiscal`, `recibo`, `nota_credito`, `nota_debito`, `otro` o `ilegible`. Un recibo de pago es `recibo`; usá `ticket_no_fiscal` únicamente para un ticket no fiscal, no porque falten datos tributarios. Si el documento es un ticket no fiscal, tipo_documento debe ser exactamente `ticket_no_fiscal`, nunca su etiqueta en lenguaje natural. Ejemplo mínimo válido para un ticket no fiscal:
 {"tipo_documento":"ticket_no_fiscal","letra":null,"cuit_emisor":null,"cuit_receptor":null,"cae":null,"confianza":{"tipo_documento":0.95}}
 
-`percepciones.tipo` y `condicion_iva` son transcripciones literales del texto impreso completo. No antepongas la palabra `Percepcion` por tratarse del campo `percepciones`; incluila en `tipo` solo si se ve impresa. Conservá todas las palabras impresas, incluidas las posteriores al nombre del impuesto; no omitas calificadores, no reformules y no trunques. Si el texto no se ve o no se puede leer, omití la clave para que quede null.
+`percepciones.categoria` debe ser exactamente una de estas categorías: `IIBB`, `IVA`, `Ganancias`, `SUSS`, `Impuestos internos`, `Municipal` u `Otras`. Clasificá por el impuesto/régimen que se ve; usá `Otras` como respaldo cuando no puedas clasificar. `percepciones.tipo_texto` es la transcripción literal completa del texto impreso que identifica esa percepción. No antepongas `Percepcion` si no está impresa, conservá las palabras y calificadores posteriores al nombre del impuesto, no reformules ni trunques. Ejemplo: para el rótulo impreso `IIBB - dato sintetico`, devolvé `{"categoria":"IIBB","tipo_texto":"IIBB - dato sintetico","importe":"157.30"}`. Si el texto no se ve o no se puede leer, dejá tipo_texto en null; no lo completes. `condicion_iva` también es transcripción literal completa; conservá cada palabra impresa.
 
-Incluí en confianza un valor entre 0 y 1 por cada campo no nulo, usando como clave el nombre del campo o la ruta de lista (por ejemplo iva.0.importe, percepciones.0.tipo). La confianza es una estimación del modelo, no una validación contable. No agregues explicaciones fuera del JSON."""
+Incluí en confianza un valor entre 0 y 1 por cada campo no nulo, usando como clave el nombre del campo o la ruta de lista (por ejemplo iva.0.importe, percepciones.0.categoria, percepciones.0.tipo_texto). La confianza es una estimación del modelo, no una validación contable. No agregues explicaciones fuera del JSON."""
 
 
 def _model_name() -> str | None:
@@ -124,7 +125,7 @@ def _request_payload(model: str, pages: list[bytes]) -> dict[str, Any]:
     content: list[dict[str, Any]] = [
         {
             "type": "text",
-            "text": "Extraé este comprobante según voucher-ar-v2. Cada imagen corresponde a una página, en orden. Usá las claves exactas y planas de voucher-ar-v2 indicadas por el sistema; omití campos ausentes y no inventes valores.",
+            "text": "Extraé este comprobante según voucher-ar-v2.1. Cada imagen corresponde a una página, en orden. Usá las claves exactas y planas de voucher-ar-v2.1 indicadas por el sistema; omití campos ausentes y no inventes valores.",
         }
     ]
     for index, page in enumerate(pages, start=1):
@@ -234,6 +235,42 @@ def _aggregated_usage(
     return input_tokens, output_tokens, cost
 
 
+def _normalize_perception_categories(
+    decoded: dict[str, Any],
+) -> tuple[dict[str, Any], tuple[int, ...]]:
+    """Mapea categorías inválidas o de respaldo a Otras y las marca para revisión."""
+    perceptions = decoded.get("percepciones")
+    if not isinstance(perceptions, list):
+        return decoded, ()
+
+    normalized = dict(decoded)
+    normalized_perceptions: list[Any] = []
+    confidence = decoded.get("confianza")
+    normalized_confidence = dict(confidence) if isinstance(confidence, dict) else {}
+    unknown_indexes: list[int] = []
+    for index, perception in enumerate(perceptions):
+        if not isinstance(perception, dict):
+            normalized_perceptions.append(perception)
+            continue
+        category = perception.get("categoria")
+        text = perception.get("tipo_texto")
+        if (
+            category not in PERCEPTION_CATEGORIES
+            or category == "Otras"
+            or not isinstance(text, str)
+            or not text.strip()
+        ):
+            category = "Otras"
+            unknown_indexes.append(index)
+            normalized_confidence[f"percepciones.{index}.categoria"] = 0.0
+        normalized_perceptions.append({**perception, "categoria": category})
+
+    normalized["percepciones"] = normalized_perceptions
+    if "confianza" in decoded or unknown_indexes:
+        normalized["confianza"] = normalized_confidence
+    return normalized, tuple(unknown_indexes)
+
+
 async def run_model_extraction(
     data: bytes,
     mime_type: str,
@@ -334,7 +371,10 @@ async def run_model_extraction(
                         last_reason = "MODEL_SCHEMA_INVALID"
                         continue
                     try:
-                        voucher = VoucherARV2.model_validate(decoded)
+                        normalized, unknown_perception_indexes = _normalize_perception_categories(
+                            decoded
+                        )
+                        voucher = VoucherARV21.model_validate(normalized)
                     except ValidationError:
                         last_reason = "MODEL_SCHEMA_INVALID"
                         continue
@@ -355,6 +395,7 @@ async def run_model_extraction(
                         output_tokens=output_tokens,
                         latency_ms=round((time.perf_counter() - started) * 1000),
                         estimated_cost_usd=cost,
+                        unrecognized_perception_indexes=unknown_perception_indexes,
                     )
                 except httpx.TimeoutException:
                     attempts.append((None, None, None))

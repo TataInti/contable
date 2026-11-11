@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import { extractionForApi } from "./extraction-contract.js";
 
 export class ExtractionService {
   private scoped<T>(ctx: TenantContext | undefined, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
@@ -8,15 +9,17 @@ export class ExtractionService {
   }
 
   async getLatestForDocument(firmId: string, clientId: string, documentId: string, ctx?: TenantContext) {
-    return this.scoped(ctx, (tx) => tx.documentExtraction.findFirst({
+    const extraction = await this.scoped(ctx, (tx) => tx.documentExtraction.findFirst({
       where: { firmId, clientId, documentId }, orderBy: { createdAt: "desc" }, include: { fields: true, items: true },
     }));
+    return extraction ? extractionForApi(extraction) : null;
   }
 
   async getById(firmId: string, clientId: string, extractionId: string, ctx?: TenantContext) {
-    return this.scoped(ctx, (tx) => tx.documentExtraction.findFirst({
+    const extraction = await this.scoped(ctx, (tx) => tx.documentExtraction.findFirst({
       where: { id: extractionId, firmId, clientId }, include: { fields: true, items: true },
     }));
+    return extraction ? extractionForApi(extraction) : null;
   }
 
   async correctField(firmId: string, clientId: string, extractionId: string, fieldId: string, correction: string, reason: string, userId: string, ctx?: TenantContext) {

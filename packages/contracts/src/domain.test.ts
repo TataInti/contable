@@ -17,7 +17,7 @@ const extractionRequest = {
     country: "AR",
     language: "es",
     maxPages: 3,
-    schemaVersion: "voucher-ar-v2",
+    schemaVersion: "voucher-ar-v2.1",
   },
   callback: {
     url: "https://api.example/internal/v1/extractions/complete",

@@ -1,65 +1,78 @@
-# Extracción multimodal de comprobantes — voucher-ar-v2
+# Extracción multimodal de comprobantes — voucher-ar-v2.1
 
-## Flujo implementado
+## Flujo y contrato vigente
 
-El endpoint normal usa exclusivamente `EXTRACTION_ENGINE=model` (default) y `services/ai/app/model_extraction.py`. El servicio rasteriza cada página del PDF o convierte la imagen directa y envía esas imágenes al modelo multimodal de OpenRouter. El texto embebido del PDF no se usa para extraer. `services/ai/app/extractor.py` permanece como código heredado, sin conexión con el endpoint normal; su eliminación queda para un PR posterior a la evaluación de Fase 0.
+El endpoint normal usa exclusivamente `EXTRACTION_ENGINE=model` (default) y `services/ai/app/model_extraction.py`. El servicio rasteriza cada página de PDF o convierte la imagen directa y envía las imágenes al modelo multimodal. El texto embebido del PDF no participa en la extracción. El motor heredado permanece desconectado y el worker no crea filas de ítems.
 
-El modelo devuelve JSON en formato objeto, que el servicio valida contra `voucher-ar-v2` con `VoucherARV2`. El contrato canónico está definido en `services/ai/app/voucher_v2.py` y `packages/contracts/src/documents.ts`. La respuesta preserva nulls, y sólo adapta los datos fiscales visibles al formato persistido que consume la bandeja. El esquema no incluye ítems y el worker no crea filas de ítems. Las claves UI usadas por `StudyBandeja.tsx` incluyen `issuerTaxId`, `voucherNumber`, `voucherType`, `pointOfSale`, `issueDate`, `totalAmount`, `netAmount`, `vatAmount` y `currency`.
+El modelo devuelve JSON plano validado con `VoucherARV21` en `services/ai/app/voucher_v2.py` y `voucherARV21Schema` en `packages/contracts/src/documents.ts`. La versión de esquema vigente es `voucher-ar-v2.1`. Cada percepción tiene:
 
-El prompt versionado `vision-ar-v4` solicita los literales exactos de `tipo_documento` (incluido `ticket_no_fiscal`), CUIT de exactamente 11 dígitos consecutivos y transcripción literal completa de `percepciones.tipo` y `condicion_iva`, sin prefijos añadidos ni omisiones. Los datos ausentes o no legibles permanecen null; el ejemplo mínimo de ticket fija `letra`, ambos CUIT y `cae` en null.
+- `categoria`: `IIBB | IVA | Ganancias | SUSS | Impuestos internos | Municipal | Otras`.
+- `tipo_texto`: `string | null`, transcripción literal del texto impreso.
+- `importe`: `string | null`.
 
-La única comprobación aritmética usa tolerancia absoluta de 0,02 unidades de la moneda informada: compara neto + IVA + no gravado + exento + percepciones con el total cuando todos los componentes están disponibles. Un desvío agrega un motivo de revisión y conserva sin cambios los valores devueltos por el modelo. Un comprobante clasificado como `ticket_no_fiscal`, o sin CUIT, CAE ni letra, pasa a revisión manual con motivo «sin datos fiscales» y omite la comprobación de suma. Los campos ausentes o no legibles permanecen null; no se estiman.
+### Fuente del catálogo
 
-## Privacidad y estado de la allowlist
+La aplicación no tenía un catálogo canónico de tipos de percepción para extracción. El plan de cuentas define tipos contables generales (`ASSET`, `LIABILITY`, `EQUITY`, `REVENUE`, `EXPENSE`, `MEMO`) y el rol `PERCEPTION`; `PerceptionCertificate.concept` es texto libre y sus referencias `taxTypeId`/`regimeId` dan alcance fiscal, no un enum para clasificar el rótulo impreso. El importador Excel reconoce columnas de origen como IIBB, IVA, municipales, internos y otros tributos. Esas columnas de importación tampoco forman un catálogo único: son específicas del formato y no cubren, por ejemplo, Ganancias y SUSS.
 
-ADR-0005 exige ZDR, `data_collection: deny`, parámetros requeridos y proveedores/modelos allowlisted. ADR-0009 aprueba `anthropic/claude-haiku-5.5` con los slugs `google-vertex` y `amazon-bedrock`. La política en `services/ai/app/openrouter_policy.py` limita modelo y proveedores; el payload envía `zdr=true`, `data_collection="deny"`, `require_parameters=true`, `allow_fallbacks=false` y `only` con ambos proveedores aprobados. Si falta configuración o un ID no está allowlisted, el motor falla cerrado antes de rasterizar o llamar a OpenRouter.
+Por eso se implementa el catálogo fijo aprobado por Inti, sin sumar categorías inferidas de esas otras listas. Si el modelo devuelve una categoría fuera del catálogo, `Otras`, o una percepción que no puede clasificar por falta de `tipo_texto`, el motor conserva el texto visible, fija `categoria: "Otras"`, asigna confianza 0 a esa categoría derivada y marca revisión con `percepción no reconocida`.
 
-La solicitud usa `response_format: {"type":"json_object"}` y valida el contenido con `VoucherARV2`. `temperature` no se envía porque los endpoints aprobados no lo anuncian entre sus parámetros soportados; así `require_parameters=true` conserva compatibilidad con el routing. La variable `EXTRACTION_MODEL` queda configurada con el ID aprobado en `.env.example` y Compose.
+## Prompt y validaciones
 
-En producción, `NODE_ENV=production` y `EXTRACTION_CUSTOMER_DATA_ENABLED=false` bloquean la extracción antes de descargar el documento. El valor es `false` por defecto en configuración productiva. Desarrollo y pruebas con documentos sintéticos siguen permitidos; esta aprobación no habilita documentos de clientes.
+El prompt `vision-ar-v5` instruye el catálogo y el formato `categoria` + `tipo_texto` + `importe`, con ejemplo. Conserva las reglas anteriores: valores ausentes o no legibles como null; CUIT de exactamente 11 dígitos consecutivos; transcripción literal completa de `condicion_iva`; no inventar datos ni anteponer `Percepcion` si no está impresa. `tipo_texto` se preserva como aparece, incluidos prefijos o calificadores realmente impresos.
 
-La llamada reutiliza `OPENROUTER_API_KEY`, la variable que ya consume `services/ai/app/assistant.py`; no se introduce otra clave. Los prompts, imágenes y respuestas completas no se guardan en logs ni en la base. Cada extracción guarda el modelo solicitado, el proveedor informado por OpenRouter cuando está disponible, promptVersion, tokens de entrada/salida, latencia, costo estimado y motivo de revisión. Si OpenRouter no devuelve costo y no se configuran ambas tarifas, `estimatedCostUsd` queda null para evitar inventar un importe.
+La comprobación aritmética mantiene tolerancia absoluta 0,02 y suma neto + IVA + no gravado + exento + percepciones frente al total cuando los componentes están disponibles. `sin datos fiscales` y desvíos aritméticos son motivos a nivel documento.
 
-## Límites y costo/legibilidad
+## Rutas estables de revisión
 
-- Máximo: 3 páginas por PDF. Se rasterizan hasta 4 para detectar que el documento excede el límite; un PDF mayor pasa a revisión manual y no se envía parcialmente al modelo.
-- PDF: 150 DPI, JPEG calidad 85, máximo de 2048 px en el lado mayor. Esta resolución conserva texto habitual de comprobantes A4 y acota píxeles, payload y consumo multimodal.
-- Imagen directa: conserva tamaño legible hasta 2048 px por lado mayor; imágenes superiores se reducen, nunca se amplían.
-- El tope de 3 páginas y 4096 tokens de salida limita costo y latencia; su calidad debe verificarse en el set sintético/validado de Fase 0.
-- Timeout configurado: OpenRouter 55 s, worker 75 s; es un presupuesto provisional con 15 s para descarga y margen de coordinación. El humo sintético de una imagen midió 5948 ms; aún falta evaluar latencia con documentos de varias páginas. Si el benchmark multi-página excede el timeout, la alternativa es un PR aparte con ejecución asíncrona.
+El formato es `coleccion[indice].campo`, con índice de lista basado en cero. Ejemplos: `iva[1].importe` y `percepciones[0].categoria`. Para los campos de percepción también puede usarse `percepciones[0].tipo_texto` o `.importe`.
 
-## Configuración
+El motor expone `reviewIssues: Array<{ reason: string; sourcePath: string | null }>` en la respuesta AI y la API. Cada motivo asociado a una fila lleva su `sourcePath`; los motivos del documento, como `sin datos fiscales` o `COMPONENT_SUM_MISMATCH`, llevan `sourcePath: null`. `reviewReason` e `issues` se conservan en la respuesta AI por compatibilidad. La corrección y aprobación mantienen el flujo existente.
 
-- `EXTRACTION_ENGINE=model`: motor por defecto. Otro valor se cierra en revisión manual; no existe ruta de reglas de fallback.
-- `EXTRACTION_MODEL`: ID exacto del modelo; default `anthropic/claude-haiku-5.5`, sujeto a la allowlist de privacidad de ADR-0009.
-- `EXTRACTION_CUSTOMER_DATA_ENABLED=false`: compuerta productiva; requiere activación explícita para procesar documentos de clientes.
-- `OPENROUTER_API_KEY`: clave existente compartida con el asistente.
-- `EXTRACTION_MODEL_TIMEOUT_SECONDS`: timeout del proveedor, default 55, máximo 60.
-- `EXTRACTION_WORKER_TIMEOUT_MS`: timeout del worker, default 75000.
-- `EXTRACTION_INPUT_USD_PER_MILLION_TOKENS` y `EXTRACTION_OUTPUT_USD_PER_MILLION_TOKENS`: tarifas opcionales para estimar costo cuando la respuesta no incluye costo. Configurar ambas.
+Los GET `/api/v1/firms/:firmId/clients/:clientId/documents/:documentId/extraction` y `/api/v1/firms/:firmId/clients/:clientId/extractions/:extractionId` exponen `reviewIssues`. Para el PR #30, la UI puede usar `sourcePath` para resolver la fila en `voucherData`; las propiedades de cada percepción nueva son `categoria: string` (enum anterior), `tipo_texto: string | null`, `importe: string | null`.
 
-Las fallas HTTP, timeout, JSON inválido o respuesta fuera de esquema reciben exactamente un reintento. Si persiste la falla, se guarda una extracción `NEEDS_REVIEW`, el documento queda `EXTRACTED` para la bandeja y `reviewReason` conserva un código sin almacenar payloads. No hay OCR, parsing de texto ni extracción alternativa.
+## Versionado y registros existentes
 
-## Datos y migración
+Se eleva el esquema a `voucher-ar-v2.1` porque cambia la forma de `percepciones`; no se reutiliza el nombre v2 con una estructura incompatible. Las nuevas extracciones guardan `schemaVersion: "voucher-ar-v2.1"` y `percepciones[].categoria/tipo_texto/importe`.
 
-La migración `20261111000000_extraction_v2_metrics` agrega tokens, latencia, costo estimado, motivo de revisión y `voucherData` JSONB a `document_extractions`. `voucherData` conserva el esquema voucher-ar-v2 íntegro, incluidos nulls y la confianza por campo; las tablas relacionales mantienen los campos adaptados a la bandeja. La tabla existente `extracted_line_items` se conserva y este flujo no agrega filas. `provider`, `model` y `promptVersion` ya existían. No se agregan seeds.
+Los registros guardados antes de este cambio permanecen intactos como `schemaVersion: "voucher-ar-v2"` con `percepciones[].tipo/importe`. La API los devuelve con esa estructura y versión, sin reinterpretar ni reescribir su JSON. El contrato compartido acepta las dos versiones para que los clientes discriminen por `schemaVersion`. Las filas antiguas sin motivos estructurados se exponen con `reviewIssues: []`.
 
-El alcance cubre los datos fiscales del comprobante; la lectura de QR queda fuera de esta extracción.
+La única migración de base es aditiva: agrega `document_extractions.reviewIssues JSONB` nullable. No transforma ni borra `voucherData`, no requiere backfill, y no altera las tablas de campos ni el flujo de aprobación/corrección.
+
+## Privacidad y configuración
+
+ADR-0009 mantiene el modelo aprobado `anthropic/claude-haiku-5.5` y los proveedores `google-vertex` y `amazon-bedrock`. `services/ai/app/openrouter_policy.py`, la allowlist, el payload ZDR y la compuerta productiva no se modifican. En producción, `EXTRACTION_CUSTOMER_DATA_ENABLED=false` sigue bloqueando documentos de clientes hasta autorización separada. Sólo se usaron documentos sintéticos.
+
+`OPENROUTER_API_KEY` se cargó en el proceso del benchmark desde el `.env` del servidor. No se escribió en el repositorio, artefactos, logs ni reporte.
+
+## Benchmark sintético
+
+El benchmark v3 usa los mismos 40 documentos y el mismo harness del benchmark v2, adaptado al esquema v2.1. La verdad se copió a `benchmark_v3/verdad/`; `tipo` se conservó literalmente en `tipo_texto` y el único rótulo legado, `IIBB - dato sintetico`, se derivó a `IIBB` por coincidencia de la sigla. No se modificaron `benchmark/`, `benchmark_v2/` ni `verdad/` originales.
+
+| Métrica | v2 | v3 |
+|---|---:|---:|
+| Exactitud global | 773/800 (96,62%) | 800/800 (100,00%) |
+| Categoría de percepciones | 40/40 | 40/40 |
+| Importe de percepciones | 40/40 | 40/40 |
+| `tipo_texto` literal exacto (informativo, no suma errores) | 1/28 (3,57%) | 3/28 (10,71%) |
+| Errores de campo sin marca | 27 | 0 |
+| Documentos marcados para revisión | 12 | 12 |
+| Respuestas finales inválidas | 0 | 0 |
+| Llamadas HTTP | 40 | 40 |
+| Latencia media / p95 | 5936 / 8548 ms | 6308 / 8577 ms |
+| Costo reportado por OpenRouter | USD 0,03737860 | USD 0,03819510 |
+
+En v2, categoría e importe se calcularon desde el `tipo` legado con la misma derivación de etiquetas de la verdad adaptada; ambos coincidieron en los 40 documentos. `tipo_texto` se comparó por separado, sin contabilizarlo como error global. El benchmark v3 superó la meta de más de 98% global y logró cero errores sin marca, por lo que no se hizo otra iteración de prompt. Gasto nuevo acumulado en este encargo: USD 0,03819510 de USD 0,20; las 40 llamadas devolvieron costo informado.
+
+Los artefactos completos están fuera del repositorio en `/root/.hermes/cache/eval/voucher-ar-sintetico-v1/benchmark_v3/`.
 
 ## Verificación
 
-- Unit tests del servicio AI: `uv run --no-project --with-requirements services/ai/requirements.txt --with-requirements services/ai/requirements-dev.txt --with pytest pytest -q services/ai/tests` desde la raíz del repo.
-- TypeScript: `npm run --workspace @contable/worker typecheck` y las pruebas focalizadas del workspace.
-- Los tests usan respuestas/archivos sintéticos y clientes mockeados; CI no llama al modelo.
-- Benchmark sintético de 40 documentos: v1 obtuvo 81,88% (655/800), 6 respuestas inválidas finales, media/p95 de 6964/8981 ms y USD 0,03784430. Con `vision-ar-v4`, v2 obtuvo 96,62% (773/800), 0 inválidas, media/p95 de 5936/8548 ms y USD 0,03737860. Los 6 tickets pasan `tipo_documento`; `condicion_iva` queda 40/40 exacta.
-- Siguen 27/40 desaciertos de `percepciones.tipo` sin marca: el modelo antepone `Percepcion `; los 27 importes coinciden. La primera corrida v2 dejó 28 errores de percepción sin marca; una iteración mejoró a 27 y se detuvo. El comparador conserva coincidencia literal porque los 24 casos detallados de v1 presentan prefijos añadidos y/o sufijos omitidos, sin desacuerdos solo de mayúsculas/espacios. La tabla de los 24 casos y tablas comparativas están en el artefacto externo `benchmark_v2/resumen.md`.
-- No se implementó una detección automática por catálogo: la muestra solo incluye un rótulo sintético y no acredita sensibilidad ni falsos positivos de etiquetas fiscales reales. Se recomienda ampliar el catálogo y el conjunto sintético antes de automatizar alertas de percepción.
-- Prueba de humo real con PNG sintético y CUIT ficticio válido `30000000007`: OpenRouter devolvió HTTP 200, modelo `anthropic/claude-haiku-5.5`, proveedor `Amazon Bedrock`. El resultado pasó validación `voucher-ar-v2`: 3295 tokens de entrada, 808 de salida, 5948 ms y costo estimado devuelto por OpenRouter de USD 0.0007335. La llamada se restringió al proveedor Bedrock, que forma parte de la allowlist aprobada.
+- Servicio AI: `pytest -q services/ai/tests`.
+- Servicio AI: `ruff check app tests` y `mypy -p app` desde `services/ai`.
+- Servicio AI: `ruff format --check` aplicado a los archivos modificados.
+- Contrato/API/worker: lint, typecheck y tests de la aplicación; CI del PR.
+- Benchmark: `benchmark_v3/benchmark.py --preflight` verificó 40 documentos y 46 páginas sin llamadas; la corrida real usó 40 llamadas en allowlist.
 
-## Bloqueos antes de producción
+## Riesgos y alcance
 
-1. Resolver los 27 desaciertos actuales de `percepciones.tipo` sin marca y validar una estrategia de revisión con catálogo y negativos representativos.
-2. Cerrar el informe de evaluación de calidad, cobertura, errores, latencia y costo con las correcciones pendientes.
-3. Confirmar contractualmente retención, transferencias y subencargados.
-4. Obtener OK escrito explícito de Inti para activar el procesamiento de datos reales.
-5. Obtener aprobación de despliegue por separado.
+La verdad sintética sólo contiene rótulos IIBB; no mide clasificación real de IVA, Ganancias, SUSS, Impuestos internos ni Municipal. `Otras` se revisa de forma conservadora para que ningún rótulo no reconocido pase sin revisión. La transcripción literal permanece como dato visible y métrica informativa separada; en v3 coincidió exactamente en 3/28 percepciones. El benchmark no autoriza documentos reales ni despliegue.

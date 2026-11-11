@@ -10,7 +10,7 @@ const workerMocks = vi.hoisted(() => ({ withWorkerTenant: vi.fn() }));
 vi.mock("./lib/prisma.js", () => ({ withWorkerTenant: workerMocks.withWorkerTenant }));
 
 const extractionResult: ExtractionResult = {
-  schemaVersion: "voucher-ar-v2",
+  schemaVersion: "voucher-ar-v2.1",
   voucher: {
     tipo_documento: "factura",
     letra: "A",
@@ -38,10 +38,11 @@ const extractionResult: ExtractionResult = {
   fields: [],
   issues: [],
   reviewReason: null,
+  reviewIssues: [],
   ocrEngine: "multimodal-model",
   model: "synthetic/model",
   provider: "synthetic-provider",
-  promptVersion: "vision-ar-v4",
+  promptVersion: "vision-ar-v5",
   inputTokens: null,
   outputTokens: null,
   latencyMs: 0,
@@ -96,6 +97,7 @@ describe("DocumentProcessor extracción sin ítems", () => {
     expect(createExtraction).toHaveBeenCalledOnce();
     const createArgs = createExtraction.mock.calls[0]?.[0];
     expect(createArgs?.data).not.toHaveProperty("items");
+    expect(createArgs?.data.reviewIssues).toEqual([]);
     expect(fakeTx.extractedLineItem.create).not.toHaveBeenCalled();
   });
 });
