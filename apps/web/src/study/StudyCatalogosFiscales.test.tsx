@@ -483,17 +483,47 @@ describe("StudyCatalogosFiscales", () => {
       expect(await within(detail).findByText(/Se usa en 2 lugares/)).toBeTruthy();
       const edit = within(detail).getByRole("button", { name: "Editar" });
       expect(edit.className).toContain("ds-button--primary");
+      const duplicate = within(detail).getByRole("button", { name: "Duplicar" });
+      expect(duplicate.className).toContain("ds-button--secondary");
       const hide = within(detail).getByRole("button", { name: "Ocultar" });
-      const actionMenu = hide.closest("details") as HTMLDetailsElement;
-      expect(actionMenu.className).toContain("dense-inspector-actions__menu");
-      expect(actionMenu.open).toBe(false);
-      fireEvent.click(within(detail).getByText("Más acciones"));
-      expect(actionMenu.open).toBe(true);
-      const secondaryActions = within(detail).getByRole("group", { name: "Acciones secundarias" });
-      expect(within(secondaryActions).queryByRole("button", { name: "Editar" })).toBeNull();
-      expect(within(secondaryActions).getByRole("button", { name: "Duplicar como nuevo" })).toBeTruthy();
-      expect(within(secondaryActions).getByRole("button", { name: "Ocultar" })).toBeTruthy();
+      expect(hide.className).toContain("ds-button--ghost");
+      expect(within(detail).queryByText("⋯")).toBeNull();
     }
+  });
+
+  it("identifica la copia de jurisdicción, diferencia el nombre y ancla acciones del drawer", async () => {
+    renderCatalogs();
+    await openTab(/^Jurisdicciones/);
+    fireEvent.click(await screen.findByText(jurisdiction.name));
+    const detail = await screen.findByRole("complementary", { name: "Detalle de la jurisdicción" });
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Duplicar" }));
+    const createDialog = await screen.findByRole("dialog");
+    expect(within(createDialog).getByRole("heading", {
+      name: `Nueva jurisdicción a partir de ${jurisdiction.code}`,
+    })).toBeTruthy();
+    expect((within(createDialog).getByLabelText("Nombre") as HTMLInputElement).value)
+      .toBe(`${jurisdiction.name} (copia)`);
+    expect(within(createDialog).getByText(new RegExp(`Copia de ${jurisdiction.code}`))).toBeTruthy();
+    const createButton = within(createDialog).getByRole("button", { name: "Crear jurisdicción" });
+    expect(createDialog.querySelector(".action-drawer__footer")?.contains(createButton)).toBe(true);
+    expect(createButton.getAttribute("form")).toBe("jurisdiction-create-form");
+    fireEvent.click(within(createDialog).getByRole("button", { name: "Cancelar" }));
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Editar" }));
+    const editDialog = await screen.findByRole("dialog");
+    expect(within(editDialog).getByText("Actualizá el código, el nivel o el nombre.")).toBeTruthy();
+    expect(within(editDialog).queryByLabelText("Jurisdicción padre")).toBeNull();
+    const saveButton = within(editDialog).getByRole("button", { name: "Guardar cambios" });
+    expect(editDialog.querySelector(".action-drawer__footer")?.contains(saveButton)).toBe(true);
+    expect(saveButton.getAttribute("form")).toBe("jurisdiction-edit-form");
+  });
+
+  it("nombra Ocultos en el filtro de estado", async () => {
+    renderCatalogs();
+    const stateFilter = await screen.findByRole("combobox", { name: "Filtrar por estado" });
+    expect(within(stateFilter).getByRole("option", { name: "Ocultos" }).getAttribute("value"))
+      .toBe("inactive");
   });
 
   it("muestra una relación oculta ya asignada como opción deshabilitada", async () => {
@@ -634,7 +664,7 @@ describe("StudyCatalogosFiscales", () => {
     expect(within(detail).getByText(/recauda en Otra jurisdicción/)).toBeTruthy();
   });
 
-  it("presenta Ocultar como acción destructiva y expone el valor completo en tooltip", async () => {
+  it("presenta Ocultar como acción reversible y neutra y expone el valor completo en tooltip", async () => {
     activities.push({
       id: "activity-a",
       code: "E2E_SYN_ACTIVIDAD_LA_RGA_20261105",
@@ -659,12 +689,12 @@ describe("StudyCatalogosFiscales", () => {
     expect(screen.getByText(/^Desde /)).toBeTruthy();
     expect(screen.queryByText(/— —$/)).toBeNull();
 
-    // Ocultar conserva el dato y se presenta como acción destructiva.
+    // Ocultar conserva el dato y se presenta como acción neutra.
     fireEvent.click(code);
     const hide = (await screen.findByRole("button", {
       name: "Ocultar",
     })) as HTMLButtonElement;
-    expect(hide.className).toContain("ds-button--danger");
+    expect(hide.className).toContain("ds-button--ghost");
   });
 
   it("consulta el catálogo con includeInactive y crea una actividad con código normalizado", async () => {
@@ -871,20 +901,33 @@ describe("StudyCatalogosFiscales", () => {
     // Organismos: sólo el creado desde la UI por este estudio ofrece Eliminar.
     fireEvent.click(await screen.findByText("Organismo propio sintético"));
     let detail = await screen.findByRole("complementary", { name: "Detalle del organismo" });
-    expect(await within(detail).findAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
+    await within(detail).findByText("Sin usos registrados.");
+    fireEvent.click(within(detail).getByText("⋯"));
+    let secondaryActions = within(detail).getByRole("group", { name: "Acciones secundarias" });
+    let remove = within(secondaryActions).getByRole("button", { name: "Eliminar" });
+    expect(remove.className).toContain("ds-button--danger");
     fireEvent.click(screen.getByText("Organismo de referencia sintético"));
     detail = await screen.findByRole("complementary", { name: "Detalle del organismo" });
     expect(within(detail).getByText("SYN-REFERENCE-AUTH")).toBeTruthy();
     expect(within(detail).queryByRole("button", { name: "Eliminar" })).toBeNull();
+    expect(within(detail).queryByText("⋯")).toBeNull();
 
     await openTab(/^Regímenes/);
     fireEvent.click(await screen.findByText("Régimen propio sintético"));
     detail = await screen.findByRole("complementary", { name: "Detalle del régimen" });
-    expect(await within(detail).findAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
+    await within(detail).findByText("Sin usos registrados.");
+    fireEvent.click(within(detail).getByText("⋯"));
+    secondaryActions = within(detail).getByRole("group", { name: "Acciones secundarias" });
+    remove = within(secondaryActions).getByRole("button", { name: "Eliminar" });
+    expect(remove.className).toContain("ds-button--danger");
 
     await openTab(/^Actividades económicas/);
     fireEvent.click(await screen.findByText("Actividad propia sintética"));
     detail = await screen.findByRole("complementary", { name: "Detalle de la actividad" });
-    expect(await within(detail).findAllByRole("button", { name: "Eliminar" })).toHaveLength(1);
+    await within(detail).findByText("Sin usos registrados.");
+    fireEvent.click(within(detail).getByText("⋯"));
+    secondaryActions = within(detail).getByRole("group", { name: "Acciones secundarias" });
+    remove = within(secondaryActions).getByRole("button", { name: "Eliminar" });
+    expect(remove.className).toContain("ds-button--danger");
   });
 });
