@@ -91,9 +91,7 @@ function StudyNavLink({ item }: { item: StudyModule }) {
         `study__nav-link${isActive ? " study__nav-link--active" : ""}`
       }
     >
-      <Icon name={item.icon} size={18} />
       <span>{item.label}</span>
-      <Icon name="chevron" size={14} className="study__nav-chevron" />
     </NavLink>
   );
 }
