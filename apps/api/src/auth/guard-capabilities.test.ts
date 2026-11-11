@@ -18,6 +18,17 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(requiredCapability("GET", "/api/v1/firms/f/clients/c/summary")).toBe("client.read");
   });
 
+  it("aprobar y rechazar extracciones mantienen document.review", () => {
+    const base = "/api/v1/firms/f/clients/c/extractions/e";
+    expect(requiredCapability("POST", `${base}/approve`)).toBe("document.review");
+    expect(requiredCapability("POST", `${base}/reject`)).toBe("document.review");
+    expect(capabilitiesForRole("REVIEWER").has("document.review")).toBe(true);
+    const auditor = { capabilities: capabilitiesForRole("AUDITOR_READONLY") } as never;
+    expect(() => assertCapability(auditor, "document.review")).toThrow(
+      expect.objectContaining({ statusCode: 403, code: "CAPABILITY_REQUIRED" }),
+    );
+  });
+
   it("identidad y contactos requieren client.manage, con rechazo 403 para sólo lectura", () => {
     expect(requiredCapability("PATCH", "/api/v1/firms/f/clients/c")).toBe("client.manage");
     for (const [method, path] of [

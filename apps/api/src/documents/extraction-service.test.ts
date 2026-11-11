@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import Fastify from "fastify";
+import { prisma } from "../lib/prisma.js";
 import { ExtractionService } from "./extraction-service.js";
+import { documentRoutes } from "./routes.js";
 
 /**
  * Tests de integración del servicio de extracción (Fase 5).
@@ -11,6 +14,7 @@ import { ExtractionService } from "./extraction-service.js";
 const OWNER_A = "11111111-1111-4111-8111-111111111111";
 const FIRM_ALFA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT_ALFA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const EXTRACTION_TEST_CLIENT = "11111111-2222-4333-8444-555555555555";
 
 const runtimeConnection =
   process.env.RUNTIME_DATABASE_URL ??
@@ -112,5 +116,257 @@ describe("extracción (integración DB)", () => {
       );
       expect(document?.status).toBe("REVIEWED");
     }
+  });
+});
+
+type ExtractionFixtureStatus = "GENERATED" | "NEEDS_REVIEW" | "REVIEWED" | "FAILED";
+type ExtractionFixture = { extractionId: string; documentId: string };
+
+const createdFixtures: ExtractionFixture[] = [];
+const extractionContext = {
+  userId: OWNER_A,
+  firmId: FIRM_ALFA,
+  clientId: EXTRACTION_TEST_CLIENT,
+  actorKind: "USER" as const,
+};
+
+async function createExtractionFixture(status: ExtractionFixtureStatus): Promise<ExtractionFixture> {
+  const fixture = await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+    const document = await tx.document.create({
+      data: {
+        firmId: FIRM_ALFA,
+        clientId: EXTRACTION_TEST_CLIENT,
+        uploadedByUserId: OWNER_A,
+        uploadOrigin: "FIRM",
+        status: status === "REVIEWED" ? "REVIEWED" : status === "FAILED" ? "EXTRACTION_FAILED" : "EXTRACTED",
+      },
+    });
+    const fileVersion = await tx.documentFileVersion.create({
+      data: {
+        firmId: FIRM_ALFA,
+        clientId: EXTRACTION_TEST_CLIENT,
+        documentId: document.id,
+        originalName: `extraction-${document.id}.pdf`,
+        mimeType: "application/pdf",
+        extension: "pdf",
+        sizeBytes: 1,
+        sha256: "a".repeat(64),
+        bucket: "originals",
+        objectKey: `test/${document.id}.pdf`,
+        antivirusStatus: "CLEAN",
+      },
+    });
+    const extraction = await tx.documentExtraction.create({
+      data: {
+        firmId: FIRM_ALFA,
+        clientId: EXTRACTION_TEST_CLIENT,
+        documentId: document.id,
+        fileVersionId: fileVersion.id,
+        schemaVersion: "voucher-ar-v1",
+        status,
+        ...(status === "REVIEWED" || status === "FAILED"
+          ? { reviewedByUserId: OWNER_A, reviewedAt: new Date("2026-01-01T00:00:00.000Z") }
+          : {}),
+      },
+    });
+    await tx.document.update({ where: { id: document.id }, data: { currentFileVersionId: fileVersion.id } });
+    if (status === "FAILED") {
+      await tx.auditEvent.create({
+        data: {
+          firmId: FIRM_ALFA,
+          clientId: EXTRACTION_TEST_CLIENT,
+          userId: OWNER_A,
+          actorKind: "USER",
+          action: "document.extraction.rejected",
+          entityType: "DocumentExtraction",
+          entityId: extraction.id,
+          before: { status: "NEEDS_REVIEW" },
+          after: { status: "FAILED", reason: "Rechazo previo" },
+        },
+      });
+    }
+    return { extractionId: extraction.id, documentId: document.id };
+  });
+  createdFixtures.push(fixture);
+  return fixture;
+}
+
+afterEach(async () => {
+  const fixtures = createdFixtures.splice(0);
+  if (fixtures.length === 0) return;
+  const documentIds = fixtures.map((fixture) => fixture.documentId);
+  await prisma.document.deleteMany({ where: { id: { in: documentIds } } });
+});
+
+describe("validación de estado de extracción", () => {
+  it.each(["GENERATED", "NEEDS_REVIEW"] as const)(
+    "rechaza una extracción pendiente en estado %s y registra auditoría",
+    async (status) => {
+      const fixture = await createExtractionFixture(status);
+
+      await service.reject(
+        FIRM_ALFA,
+        EXTRACTION_TEST_CLIENT,
+        fixture.extractionId,
+        OWNER_A,
+        "Falta respaldo",
+        extractionContext,
+      );
+
+      const extraction = await prisma.documentExtraction.findUnique({ where: { id: fixture.extractionId } });
+      const document = await prisma.document.findUnique({ where: { id: fixture.documentId } });
+      const events = await prisma.auditEvent.findMany({
+        where: { action: "document.extraction.rejected", entityId: fixture.extractionId },
+      });
+      expect(extraction?.status).toBe("FAILED");
+      expect(document?.status).toBe("EXTRACTION_FAILED");
+      expect(events).toHaveLength(1);
+      expect(events[0]?.before).toEqual({ status });
+      expect(events[0]?.after).toEqual({ status: "FAILED", reason: "Falta respaldo" });
+    },
+  );
+
+  it("aprueba una extracción pendiente y conserva la auditoría normal", async () => {
+    const fixture = await createExtractionFixture("NEEDS_REVIEW");
+
+    await service.approve(FIRM_ALFA, EXTRACTION_TEST_CLIENT, fixture.extractionId, OWNER_A, extractionContext);
+
+    const extraction = await prisma.documentExtraction.findUnique({ where: { id: fixture.extractionId } });
+    const document = await prisma.document.findUnique({ where: { id: fixture.documentId } });
+    const events = await prisma.auditEvent.findMany({
+      where: { action: "document.extraction.approved", entityId: fixture.extractionId },
+    });
+    expect(extraction?.status).toBe("REVIEWED");
+    expect(document?.status).toBe("REVIEWED");
+    expect(events).toHaveLength(1);
+    expect(events[0]?.before).toEqual({ status: "NEEDS_REVIEW" });
+    expect(events[0]?.after).toEqual({ status: "REVIEWED" });
+  });
+
+  it("no rechaza una extracción REVIEWED ni modifica documento o auditoría", async () => {
+    const fixture = await createExtractionFixture("REVIEWED");
+    const beforeExtraction = await prisma.documentExtraction.findUnique({ where: { id: fixture.extractionId } });
+    const beforeDocument = await prisma.document.findUnique({ where: { id: fixture.documentId } });
+    const beforeRejectionEvents = await prisma.auditEvent.count({
+      where: { action: "document.extraction.rejected", entityId: fixture.extractionId },
+    });
+
+    await expect(
+      service.reject(FIRM_ALFA, EXTRACTION_TEST_CLIENT, fixture.extractionId, OWNER_A, "Duplicada", extractionContext),
+    ).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+
+    const extraction = await prisma.documentExtraction.findUnique({ where: { id: fixture.extractionId } });
+    const document = await prisma.document.findUnique({ where: { id: fixture.documentId } });
+    const rejectionEvents = await prisma.auditEvent.count({
+      where: { action: "document.extraction.rejected", entityId: fixture.extractionId },
+    });
+    expect(extraction).toEqual(beforeExtraction);
+    expect(document).toEqual(beforeDocument);
+    expect(extraction?.status).toBe("REVIEWED");
+    expect(document?.status).toBe("REVIEWED");
+    expect(rejectionEvents).toBe(beforeRejectionEvents);
+  });
+
+  it("no rechaza una extracción ya rechazada ni vuelve a auditarla", async () => {
+    const fixture = await createExtractionFixture("FAILED");
+    const beforeExtraction = await prisma.documentExtraction.findUnique({ where: { id: fixture.extractionId } });
+    const beforeDocument = await prisma.document.findUnique({ where: { id: fixture.documentId } });
+    const beforeRejectionEvents = await prisma.auditEvent.count({
+      where: { action: "document.extraction.rejected", entityId: fixture.extractionId },
+    });
+
+    await expect(
+      service.reject(FIRM_ALFA, EXTRACTION_TEST_CLIENT, fixture.extractionId, OWNER_A, "Otro motivo", extractionContext),
+    ).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+
+    const extraction = await prisma.documentExtraction.findUnique({ where: { id: fixture.extractionId } });
+    const document = await prisma.document.findUnique({ where: { id: fixture.documentId } });
+    const rejectionEvents = await prisma.auditEvent.count({
+      where: { action: "document.extraction.rejected", entityId: fixture.extractionId },
+    });
+    expect(extraction).toEqual(beforeExtraction);
+    expect(document).toEqual(beforeDocument);
+    expect(extraction?.status).toBe("FAILED");
+    expect(document?.status).toBe("EXTRACTION_FAILED");
+    expect(beforeRejectionEvents).toBe(1);
+    expect(rejectionEvents).toBe(beforeRejectionEvents);
+  });
+});
+
+describe("ruta HTTP de rechazo de extracción", () => {
+  it("devuelve 409 INVALID_TRANSITION cuando la extracción ya está revisada", async () => {
+    const fixture = await createExtractionFixture("REVIEWED");
+    const app = Fastify({ logger: false });
+    app.decorateRequest("userId", undefined);
+    app.decorateRequest("firmId", undefined);
+    app.decorateRequest("clientId", undefined);
+    app.addHook("onRequest", async (request) => {
+      request.userId = OWNER_A;
+      request.firmId = FIRM_ALFA;
+      request.clientId = EXTRACTION_TEST_CLIENT;
+    });
+    documentRoutes(app);
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/v1/firms/${FIRM_ALFA}/clients/${EXTRACTION_TEST_CLIENT}/extractions/${fixture.extractionId}/reject`,
+        payload: { reason: "No corresponde" },
+      });
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toMatchObject({ error: { code: "INVALID_TRANSITION" } });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("compare-and-set de aprobación", () => {
+  it("devuelve conflicto si el estado cambió a rechazado después de leerlo", async () => {
+    let extractionStatus: "NEEDS_REVIEW" | "FAILED" | "REVIEWED" = "NEEDS_REVIEW";
+    let documentStatus: "EXTRACTED" | "EXTRACTION_FAILED" | "REVIEWED" = "EXTRACTED";
+    const auditActions: string[] = [];
+    const documentUpdate = vi.fn();
+    const approvalAudit = vi.fn();
+    const updateMany = vi.fn(async (args: { where: { status: string }; data: { status: string } }) => {
+      if (args.where.status !== extractionStatus) return { count: 0 };
+      extractionStatus = args.data.status as typeof extractionStatus;
+      return { count: 1 };
+    });
+    const fakeTx = {
+      documentExtraction: {
+        findFirst: async () => {
+          const read = {
+            id: "extraction-test",
+            firmId: FIRM_ALFA,
+            clientId: EXTRACTION_TEST_CLIENT,
+            documentId: "document-test",
+            status: extractionStatus,
+          };
+          // Simula que un rechazo concurrente confirma antes del UPDATE de aprobación.
+          extractionStatus = "FAILED";
+          documentStatus = "EXTRACTION_FAILED";
+          auditActions.push("document.extraction.rejected");
+          return read;
+        },
+        updateMany,
+      },
+      document: { update: documentUpdate },
+      auditEvent: { create: approvalAudit },
+    } as unknown as Prisma.TransactionClient;
+    const racedService = new ExtractionService(async (fn) => fn(fakeTx));
+
+    await expect(
+      racedService.approve(FIRM_ALFA, EXTRACTION_TEST_CLIENT, "extraction-test", OWNER_A),
+    ).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ status: "NEEDS_REVIEW" }),
+    }));
+    expect(extractionStatus).toBe("FAILED");
+    expect(documentStatus).toBe("EXTRACTION_FAILED");
+    expect(auditActions).toEqual(["document.extraction.rejected"]);
+    expect(documentUpdate).not.toHaveBeenCalled();
+    expect(approvalAudit).not.toHaveBeenCalled();
   });
 });
