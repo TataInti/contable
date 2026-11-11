@@ -32,6 +32,13 @@ const NAV_TOUR_IDS: Record<StudyNavigationGroup, string> = {
   Configuración: "nav-configuracion",
 };
 
+const CLIENT_INDEPENDENT_SECTIONS = new Set([
+  "/catalogos-fiscales",
+  "/reglas-fiscales",
+  "/administracion",
+  "/administracion-plataforma",
+]);
+
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`study__brand${compact ? " study__brand--compact" : ""}`} aria-label="Contable">
@@ -150,36 +157,33 @@ export function StudyShell() {
         </nav>
 
         <div className="study__sidebar-footer">
-          <a
-            className="study__tour-trigger"
-            href={helpHrefForPath(location.pathname)}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Ayuda paso a paso, se abre en una pestaña nueva"
-          >
-            <span className="study__tour-trigger-mark" aria-hidden="true">
-              <Icon name="file" size={16} />
-            </span>
-            <span>
-              <strong>Ayuda paso a paso</strong>
-              <small>Manual del estudio</small>
-            </span>
-            <Icon name="arrow-right" size={15} />
-          </a>
-          <GuidedTour onNavigationRequired={openNavigationForTour}>
-            {({ startTour }) => (
-              <button type="button" className="study__tour-trigger" onClick={startTour}>
-                <span className="study__tour-trigger-mark" aria-hidden="true">
-                  ?
-                </span>
-                <span>
-                  <strong>Recorrer el estudio</strong>
-                  <small>Volver a ver el tour</small>
-                </span>
-                <Icon name="arrow-right" size={15} />
-              </button>
-            )}
-          </GuidedTour>
+          <details className="study__help">
+            <summary className="study__tour-trigger">
+              <span className="study__tour-trigger-mark" aria-hidden="true">?</span>
+              <span>
+                <strong>Ayuda</strong>
+                <small>Manual y recorrido</small>
+              </span>
+              <Icon name="chevron" size={15} className="study__help-chevron" />
+            </summary>
+            <div className="study__help-menu">
+              <a
+                className="study__help-action"
+                href={helpHrefForPath(location.pathname)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Ayuda paso a paso
+              </a>
+              <GuidedTour onNavigationRequired={openNavigationForTour}>
+                {({ startTour }) => (
+                  <button type="button" className="study__help-action" onClick={startTour}>
+                    Recorrer el estudio
+                  </button>
+                )}
+              </GuidedTour>
+            </div>
+          </details>
           {session.portalContexts.length > 0 ? (
             <NavLink to="/portal" className="study__portal-link" data-tour="portal-link">
               <span className="study__portal-icon">
@@ -214,7 +218,7 @@ export function StudyShell() {
       </aside>
 
       <div className="study__main">
-        <ContextBar />
+        {CLIENT_INDEPENDENT_SECTIONS.has(location.pathname) ? null : <ContextBar />}
         <main className="study__content" id="main-content">
           <Outlet />
         </main>
