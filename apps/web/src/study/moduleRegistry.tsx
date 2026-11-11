@@ -144,7 +144,7 @@ export const STUDY_MODULES: readonly StudyModule[] = [
     icon: "reports",
     navigationGroup: "Ejecución",
     requiredCapability: "tax.settlements.read",
-    requirements: { firm: true, client: true, period: true },
+    requirements: { firm: true, client: true },
     status: "released",
     component: lazy(() =>
       import("./StudyLiquidaciones").then((module) => ({ default: module.StudyLiquidaciones })),
@@ -157,7 +157,7 @@ export const STUDY_MODULES: readonly StudyModule[] = [
     icon: "reports",
     navigationGroup: "Ejecución",
     requiredCapability: "tax.settlements.read",
-    requirements: { firm: true, client: true, period: true },
+    requirements: { firm: true, client: true },
     status: "released",
     component: lazy(() =>
       import("./StudyExpedienteMensual").then((module) => ({

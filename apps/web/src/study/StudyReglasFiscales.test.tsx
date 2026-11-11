@@ -213,6 +213,24 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     expect(within(select).getByRole("option", { name: /ar-vat-ri-v1.0.0/ })).toBeTruthy();
   });
 
+  it("marca una vigencia fuera de rango y evita enviar la versión", async () => {
+    mockApi({ ...makeDetail(null), versions: [] });
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
+    const date = (await screen.findByLabelText("Vigencia desde")) as HTMLInputElement;
+    expect(date.min).toBe("1900-01-01");
+    expect(date.max).toBe("2100-12-31");
+    fireEvent.change(date, { target: { value: "61001-02-02" } });
+    const form = date.closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+
+    expect(await screen.findByText(/año entre 1900 y 2100/)).toBeTruthy();
+    expect(date.getAttribute("aria-invalid")).toBe("true");
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
   it("ofrece las actividades activas del catálogo y guarda el código elegido", async () => {
     mockApi(makeDetail(null));
     renderReglas();
@@ -501,5 +519,39 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
       expect(screen.getByRole("alert").textContent).toContain("El hash no coincide");
     });
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("versión v2"));
+  });
+});
+
+describe("StudyReglasFiscales — estado vacío de paquetes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = context();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("muestra un único estado vacío y una sola acción para crear paquetes", async () => {
+    mockApi(makeDetail(null));
+    const originalGet = vi.mocked(api.get).getMockImplementation();
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path === "/tax/rule-packs" ? Promise.resolve([]) : originalGet?.(path) ?? Promise.resolve([])) as never);
+    renderReglas();
+
+    expect(await screen.findByRole("heading", { name: "Todavía no hay paquetes de reglas" })).toBeTruthy();
+    expect(document.querySelectorAll(".ds-empty")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Nuevo paquete" })).toHaveLength(1);
+    expect(document.querySelectorAll(".fiscal-rules .ds-button--primary")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Crear paquete" })).toBeNull();
+    expect(screen.queryByRole("table", { name: "Paquetes de reglas disponibles" })).toBeNull();
+    expect(screen.queryByText("No hay paquetes configurados.")).toBeNull();
+
+    const guide = screen.getByText(/Secuencia de cambios:/);
+    const guideBlock = guide.closest(".fiscal-rules-guide");
+    expect(guideBlock).not.toBeNull();
+    expect(guideBlock?.parentElement?.classList.contains("fiscal-rules")).toBe(true);
+    expect(document.querySelectorAll(".fiscal-rules > .fiscal-rules-guide")).toHaveLength(1);
   });
 });

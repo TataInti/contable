@@ -1,0 +1,30 @@
+.fiscal-catalog-page .dense-inspector-actions__menu {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.fiscal-catalog-page .dense-inspector-actions__trigger {
+  width: var(--ds-control-height-sm);
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.fiscal-catalog-page .study-form.dense-form > .dense-form__fields {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ds-space-3);
+  align-items: start;
+}
+
+.fiscal-catalog-page .dense-form__fields > .dense-form__full,
+.fiscal-catalog-page .dense-form__fields > .form-error,
+.fiscal-catalog-page .dense-form__fields > p {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .fiscal-catalog-page .study-form.dense-form > .dense-form__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

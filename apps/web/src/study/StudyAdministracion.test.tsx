@@ -1,4 +1,7 @@
+/// <reference types="node" />
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -183,8 +186,8 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(await screen.findByText("Owner A")).toBeTruthy();
     expect(screen.getByText("Revisor Demo")).toBeTruthy();
     // El auditor sólo abre 4 de los 7 módulos internos.
-    expect(screen.getByText("4/7")).toBeTruthy();
-    expect(screen.getAllByText("7/7").length).toBe(2);
+    expect(screen.getByText("4 de 7")).toBeTruthy();
+    expect(screen.getAllByText("7 de 7").length).toBe(2);
     expect(screen.getByText("Suspendido")).toBeTruthy();
 
     const strip = screen.getByRole("group", { name: "Resumen de accesos" });
@@ -193,6 +196,28 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "revisor" } });
     expect(screen.queryByText("Owner A")).toBeNull();
     expect(screen.getByText("Revisor Demo")).toBeTruthy();
+  });
+
+  it("usa controles de rol estándar y objetivos de 44 px en las acciones de fila", async () => {
+    mockApi(standardsFixture, membersFixture);
+    renderAdministracion();
+
+    await screen.findByText("Owner A");
+    const page = document.querySelector(".administration-users") as HTMLElement;
+    const roleSelects = page.querySelectorAll(".dense-select--inline");
+    expect(roleSelects).toHaveLength(3);
+
+    const rowActions = page.querySelectorAll<HTMLButtonElement>(".dense-row-actions .ds-button");
+    expect(rowActions.length).toBeGreaterThan(0);
+    expect(Array.from(rowActions).every((action) => action.tagName === "BUTTON")).toBe(true);
+    expect(page.querySelectorAll(".dense-fp__bars")).toHaveLength(0);
+
+    const studyStyles = readFileSync(resolve(process.cwd(), "src/study/study.css"), "utf8");
+    const tokens = readFileSync(resolve(process.cwd(), "../../packages/design-system/src/tokens.css"), "utf8");
+    expect(studyStyles).toMatch(/\.administration-users \.dense-select--inline\s*\{[^}]*height:\s*var\(--ds-control-height-md\);[^}]*font-size:\s*var\(--ds-text-base\);/);
+    expect(studyStyles).toMatch(/\.administration-users \.dense-row-actions \.ds-button\s*\{\s*min-height:\s*var\(--ds-touch-target\);\s*\}/);
+    expect(tokens).toMatch(/--ds-control-height-md:\s*40px;/);
+    expect(tokens).toMatch(/--ds-touch-target:\s*44px;/);
   });
 
   it("abre el detalle con la matriz de roles y las acciones del usuario", async () => {

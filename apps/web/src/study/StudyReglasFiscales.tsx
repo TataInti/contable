@@ -6,7 +6,8 @@ import {
   normalizeActivityCode,
   type CatalogEconomicActivity,
 } from "@contable/contracts";
-import { api } from "../lib/api";
+import { ApiError, api } from "../lib/api";
+import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
@@ -105,6 +106,21 @@ interface Credential {
 
 const today = new Date().toISOString().slice(0, 10);
 
+function validateRuleVersionDate(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return "La fecha debe tener formato AAAA-MM-DD y un año entre 1900 y 2100.";
+  }
+  const year = Number(value.slice(0, 4));
+  if (year < 1900 || year > 2100) return "El año debe estar entre 1900 y 2100.";
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return "Ingresá una fecha válida.";
+  }
+  return null;
+}
+
 function shortDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString("es-AR") : "Sin vencimiento";
 }
@@ -142,6 +158,7 @@ export function StudyReglasFiscales() {
     kind: "pack" | "version";
   } | null>(null);
   const [validFrom, setValidFrom] = useState(today);
+  const [versionDateError, setVersionDateError] = useState<string | null>(null);
   const [credentialId, setCredentialId] = useState("");
   const [draftRows, setDraftRows] = useState<RuleRow[]>([]);
   const [draftRowsVersionId, setDraftRowsVersionId] = useState<string | null>(null);
@@ -476,6 +493,7 @@ export function StudyReglasFiscales() {
       ).includes(needle);
     });
   }, [allPacks, packFilter, packSearch]);
+  const isEmptyPackList = packsQuery.isSuccess && allPacks.length === 0;
   const newPackRef = useRef<() => void>(() => undefined);
   newPackRef.current = () => setShowPackForm(true);
   useDenseShortcuts({
@@ -527,7 +545,7 @@ export function StudyReglasFiscales() {
   ];
 
   return (
-    <DensePage density={density} flow>
+    <DensePage density={density} flow className="fiscal-rules">
       <DenseHeader
         eyebrow="Configuración del estudio"
         title="Reglas fiscales"
@@ -571,7 +589,7 @@ export function StudyReglasFiscales() {
         ]}
       />
 
-      <p className="dense-note" role="note">
+      <p className="dense-note fiscal-rules-guide" role="note">
         <strong>Secuencia de cambios:</strong> borrador → activación directa por Administrador o
         Titular. Las versiones activas son inmutables; todo cambio posterior se prepara en una nueva
         versión a partir de la vigente. Las versiones antiguas conservan su flujo de revisión.
@@ -795,6 +813,9 @@ export function StudyReglasFiscales() {
           className="study-form study-form--compact fiscal-action-form"
           onSubmit={(event) => {
             event.preventDefault();
+            const dateError = validateRuleVersionDate(validFrom);
+            setVersionDateError(dateError);
+            if (dateError) return;
             createVersionMutation.mutate();
           }}
         >
@@ -802,8 +823,21 @@ export function StudyReglasFiscales() {
             label="Vigencia desde"
             id="first-rule-version-valid-from"
             type="date"
+            min="1900-01-01"
+            max="2100-12-31"
             value={validFrom}
-            onChange={(event) => setValidFrom(event.target.value)}
+            error={versionDateError ?? undefined}
+            onChange={(event) => {
+              setValidFrom(event.target.value);
+              setVersionDateError(null);
+            }}
+            onInvalid={(event) => {
+              event.preventDefault();
+              setVersionDateError(
+                validateRuleVersionDate(event.currentTarget.value) ??
+                  "La fecha debe estar entre 01/01/1900 y 31/12/2100.",
+              );
+            }}
             required
           />
           <div className="ds-field">
@@ -856,6 +890,9 @@ export function StudyReglasFiscales() {
           className="study-form study-form--compact fiscal-action-form"
           onSubmit={(event) => {
             event.preventDefault();
+            const dateError = validateRuleVersionDate(validFrom);
+            setVersionDateError(dateError);
+            if (dateError) return;
             cloneMutation.mutate();
           }}
         >
@@ -863,8 +900,21 @@ export function StudyReglasFiscales() {
             label="Nueva vigencia desde"
             id="rule-valid-from"
             type="date"
+            min="1900-01-01"
+            max="2100-12-31"
             value={validFrom}
-            onChange={(event) => setValidFrom(event.target.value)}
+            error={versionDateError ?? undefined}
+            onChange={(event) => {
+              setValidFrom(event.target.value);
+              setVersionDateError(null);
+            }}
+            onInvalid={(event) => {
+              event.preventDefault();
+              setVersionDateError(
+                validateRuleVersionDate(event.currentTarget.value) ??
+                  "La fecha debe estar entre 01/01/1900 y 31/12/2100.",
+              );
+            }}
             required
           />
           <div className="study-form__actions">
@@ -895,22 +945,24 @@ export function StudyReglasFiscales() {
         </div>
       ) : null}
 
-      <DenseToolbar>
-        <DenseSearch
-          inputRef={searchRef}
-          value={packSearch}
-          onChange={setPackSearch}
-          placeholder="Buscar paquete, impuesto o jurisdicción…"
-          label="Buscar paquetes"
-        />
-        {packFilter ? (
-          <button type="button" className="dense-toggle" aria-pressed onClick={() => setPackFilter("")}>
-            Filtro activo · quitar
-          </button>
-        ) : null}
-        <span className="dense-toolbar__spacer" />
-        <DensitySwitch value={density} onChange={setDensity} />
-      </DenseToolbar>
+      {!isEmptyPackList ? (
+        <DenseToolbar>
+          <DenseSearch
+            inputRef={searchRef}
+            value={packSearch}
+            onChange={setPackSearch}
+            placeholder="Buscar paquete, impuesto o jurisdicción…"
+            label="Buscar paquetes"
+          />
+          {packFilter ? (
+            <button type="button" className="dense-toggle" aria-pressed onClick={() => setPackFilter("")}>
+              Filtro activo · quitar
+            </button>
+          ) : null}
+          <span className="dense-toolbar__spacer" />
+          <DensitySwitch value={density} onChange={setDensity} />
+        </DenseToolbar>
+      ) : null}
 
       {packsQuery.isLoading ? (
         <div className="dense-table-card">
@@ -918,6 +970,13 @@ export function StudyReglasFiscales() {
             <span className="loading-copy">Cargando reglas…</span>
           </div>
         </div>
+      ) : isEmptyPackList ? (
+        <EmptyState
+          size="compact"
+          className="fiscal-rules-empty"
+          title="Todavía no hay paquetes de reglas"
+          description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
+        />
       ) : (
         <div className="dense-packs">
           <DenseTable<RulePack>
@@ -939,7 +998,7 @@ export function StudyReglasFiscales() {
             }
             empty={
               <p className="muted-copy">
-                {allPacks.length === 0 ? "No hay paquetes configurados." : "Ningún paquete coincide."}
+                Ningún paquete coincide.
               </p>
             }
           />
@@ -953,13 +1012,13 @@ export function StudyReglasFiscales() {
           {detailQuery.isError ? (
             <EmptyState title="No se pudo cargar el paquete de reglas" />
           ) : null}
-          {!selectedPackId && !packsQuery.isLoading ? (
+          {!selectedPackId && !packsQuery.isLoading && allPacks.length > 0 ? (
             <EmptyState
               title="Todavía no hay paquetes de reglas"
               description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
             />
           ) : null}
-          {rulesNextAction ? (
+          {selectedPackId && rulesNextAction ? (
             <DenseAlert
               tone="ok"
               action={<Button size="sm" onClick={rulesNextAction.onClick}>{rulesNextAction.label}</Button>}
@@ -1479,9 +1538,13 @@ export function StudyReglasFiscales() {
           ) : null}
       </div>
       {mutationError ? (
-        <p className="form-error" role="alert">
-          {mutationError.message}
-        </p>
+        mutationError instanceof ApiError ? (
+          <FieldErrorsFromDetails error={mutationError} />
+        ) : (
+          <p className="form-error" role="alert">
+            {mutationError.message}
+          </p>
+        )
       ) : null}
       {deletingTarget ? (
         <DeletionDrawer
