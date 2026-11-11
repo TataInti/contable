@@ -23,6 +23,50 @@ function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
   ) as Partial<T>;
 }
 
+const ruleVersionDateSchema = z
+  .string()
+  .refine((value) => /^\d{4}-\d{2}-\d{2}$/.test(value), {
+    message: "La fecha debe tener el formato AAAA-MM-DD y un año entre 1900 y 2100.",
+  })
+  .pipe(z.string().date())
+  .refine((value) => {
+    const year = Number(value.slice(0, 4));
+    return year >= 1900 && year <= 2100;
+  }, {
+    message: "El año de vigencia debe estar entre 1900 y 2100.",
+  });
+
+function validateRuleVersionRange(
+  value: { validFrom: string; validTo?: string | undefined },
+  ctx: z.RefinementCtx,
+) {
+  if (value.validTo && value.validTo < value.validFrom) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["validTo"],
+      message: "La vigencia hasta debe ser igual o posterior a la vigencia desde.",
+    });
+  }
+}
+
+export const createRulePackVersionSchema = z
+  .object({
+    validFrom: ruleVersionDateSchema,
+    validTo: ruleVersionDateSchema.optional(),
+    engineVersion: z.string().min(1).max(80),
+    rulesHash: z.string().min(1).max(128),
+  })
+  .strict()
+  .superRefine(validateRuleVersionRange);
+
+const cloneRulePackVersionSchema = z
+  .object({
+    validFrom: ruleVersionDateSchema,
+    validTo: ruleVersionDateSchema.optional(),
+  })
+  .strict()
+  .superRefine(validateRuleVersionRange);
+
 /**
  * Rutas de la fundación fiscal (Puerta 1).
  * Base: /api/v1/firms/{firmId}/clients/{clientId}
@@ -49,6 +93,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         error: {
           code: "VALIDATION_ERROR",
           message: err.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; "),
+          details: err.issues.map(({ path, message }) => ({ path, message })),
         },
       });
     }
@@ -77,17 +122,17 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/tax/jurisdictions", async (req, reply) => {
-    const body = z
-      .object({
-        code: z.string().trim().min(1).max(40),
-        name: z.string().trim().min(1).max(160),
-        kind: z.enum(["NATIONAL", "PROVINCIAL", "MUNICIPAL"]),
-        parentId: z.string().uuid().optional(),
-        duplicateOfId: z.string().uuid().optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          code: z.string().trim().min(1).max(40),
+          name: z.string().trim().min(1).max(160),
+          kind: z.enum(["NATIONAL", "PROVINCIAL", "MUNICIPAL"]),
+          parentId: z.string().uuid().optional(),
+          duplicateOfId: z.string().uuid().optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await masters.createJurisdiction(tenantContextFromRequest(req), pickDefined(body) as { code: string; name: string; kind: "NATIONAL" | "PROVINCIAL" | "MUNICIPAL"; parentId?: string; duplicateOfId?: string });
       return reply.status(201).send({ data });
     } catch (err) {
@@ -97,20 +142,20 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.patch("/api/v1/tax/jurisdictions/:jurisdictionId", async (req, reply) => {
     const { jurisdictionId } = req.params as { jurisdictionId: string };
-    const body = z
-      .object({
-        code: z.string().trim().min(1).max(40).optional(),
-        name: z.string().trim().min(1).max(160).optional(),
-        kind: z.enum(["NATIONAL", "PROVINCIAL", "MUNICIPAL"]).optional(),
-        parentId: z.string().uuid().nullable().optional(),
-        isActive: z.boolean().optional(),
-      })
-      .strict()
-      .refine((value) => Object.values(value).some((field) => field !== undefined), {
-        message: "Indicá al menos un campo para actualizar",
-      })
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          code: z.string().trim().min(1).max(40).optional(),
+          name: z.string().trim().min(1).max(160).optional(),
+          kind: z.enum(["NATIONAL", "PROVINCIAL", "MUNICIPAL"]).optional(),
+          parentId: z.string().uuid().nullable().optional(),
+          isActive: z.boolean().optional(),
+        })
+        .strict()
+        .refine((value) => Object.values(value).some((field) => field !== undefined), {
+          message: "Indicá al menos un campo para actualizar",
+        })
+        .parse(req.body);
       const data = await masters.updateJurisdiction(tenantContextFromRequest(req), {
         jurisdictionId,
         ...(body.code !== undefined ? { code: body.code } : {}),
@@ -136,12 +181,12 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/tax/types", async (req, reply) => {
-    const body = z.object({
-      code: z.string().trim().min(1).max(40),
-      name: z.string().trim().min(1).max(160),
-      duplicateOfId: z.string().uuid().optional(),
-    }).strict().parse(req.body);
     try {
+      const body = z.object({
+        code: z.string().trim().min(1).max(40),
+        name: z.string().trim().min(1).max(160),
+        duplicateOfId: z.string().uuid().optional(),
+      }).strict().parse(req.body);
       const data = await masters.createTaxType(tenantContextFromRequest(req), {
         code: body.code,
         name: body.name,
@@ -155,18 +200,18 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.patch("/api/v1/tax/types/:taxTypeId", async (req, reply) => {
     const { taxTypeId } = req.params as { taxTypeId: string };
-    const body = z
-      .object({
-        code: z.string().trim().min(1).max(40).optional(),
-        name: z.string().trim().min(1).max(160).optional(),
-        isActive: z.boolean().optional(),
-      })
-      .strict()
-      .refine((value) => Object.values(value).some((field) => field !== undefined), {
-        message: "Indicá al menos un campo para actualizar",
-      })
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          code: z.string().trim().min(1).max(40).optional(),
+          name: z.string().trim().min(1).max(160).optional(),
+          isActive: z.boolean().optional(),
+        })
+        .strict()
+        .refine((value) => Object.values(value).some((field) => field !== undefined), {
+          message: "Indicá al menos un campo para actualizar",
+        })
+        .parse(req.body);
       const data = await masters.updateTaxType(tenantContextFromRequest(req), {
         taxTypeId,
         ...(body.code !== undefined ? { code: body.code } : {}),
@@ -197,16 +242,16 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/tax/authorities", async (req, reply) => {
-    const body = z
-      .object({
-        code: z.string().trim().min(1).max(40),
-        name: z.string().trim().min(1).max(160),
-        jurisdictionId: z.string().uuid(),
-        duplicateOfId: z.string().uuid().optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          code: z.string().trim().min(1).max(40),
+          name: z.string().trim().min(1).max(160),
+          jurisdictionId: z.string().uuid(),
+          duplicateOfId: z.string().uuid().optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await masters.createTaxAuthority(tenantContextFromRequest(req), {
         code: body.code,
         name: body.name,
@@ -221,15 +266,15 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.patch("/api/v1/tax/authorities/:authorityId", async (req, reply) => {
     const { authorityId } = req.params as { authorityId: string };
-    const body = z.object({
-      code: z.string().trim().min(1).max(40).optional(),
-      name: z.string().trim().min(1).max(160).optional(),
-      jurisdictionId: z.string().uuid().optional(),
-      isActive: z.boolean().optional(),
-    }).strict().refine((value) => Object.values(value).some((field) => field !== undefined), {
-      message: "Indicá al menos un campo para actualizar",
-    }).parse(req.body);
     try {
+      const body = z.object({
+        code: z.string().trim().min(1).max(40).optional(),
+        name: z.string().trim().min(1).max(160).optional(),
+        jurisdictionId: z.string().uuid().optional(),
+        isActive: z.boolean().optional(),
+      }).strict().refine((value) => Object.values(value).some((field) => field !== undefined), {
+        message: "Indicá al menos un campo para actualizar",
+      }).parse(req.body);
       const data = await masters.updateTaxAuthority(tenantContextFromRequest(req), {
         authorityId,
         ...(body.code !== undefined ? { code: body.code } : {}),
@@ -254,18 +299,18 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/tax/regimes", async (req, reply) => {
-    const body = z
-      .object({
-        code: z.string().min(1).max(40),
-        name: z.string().min(1).max(160),
-        taxTypeId: z.string().uuid(),
-        jurisdictionId: z.string().uuid(),
-        authorityId: z.string().uuid(),
-        duplicateOfId: z.string().uuid().optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          code: z.string().min(1).max(40),
+          name: z.string().min(1).max(160),
+          taxTypeId: z.string().uuid(),
+          jurisdictionId: z.string().uuid(),
+          authorityId: z.string().uuid(),
+          duplicateOfId: z.string().uuid().optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await masters.createRegime(tenantContextFromRequest(req), {
         code: body.code,
         name: body.name,
@@ -282,17 +327,17 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.patch("/api/v1/tax/regimes/:regimeId", async (req, reply) => {
     const { regimeId } = req.params as { regimeId: string };
-    const body = z.object({
-      code: z.string().trim().min(1).max(40).optional(),
-      name: z.string().trim().min(1).max(160).optional(),
-      taxTypeId: z.string().uuid().optional(),
-      jurisdictionId: z.string().uuid().optional(),
-      authorityId: z.string().uuid().optional(),
-      isActive: z.boolean().optional(),
-    }).strict().refine((value) => Object.values(value).some((field) => field !== undefined), {
-      message: "Indicá al menos un campo para actualizar",
-    }).parse(req.body);
     try {
+      const body = z.object({
+        code: z.string().trim().min(1).max(40).optional(),
+        name: z.string().trim().min(1).max(160).optional(),
+        taxTypeId: z.string().uuid().optional(),
+        jurisdictionId: z.string().uuid().optional(),
+        authorityId: z.string().uuid().optional(),
+        isActive: z.boolean().optional(),
+      }).strict().refine((value) => Object.values(value).some((field) => field !== undefined), {
+        message: "Indicá al menos un campo para actualizar",
+      }).parse(req.body);
       const data = await masters.updateRegime(tenantContextFromRequest(req), {
         regimeId,
         ...(body.code !== undefined ? { code: body.code } : {}),
@@ -330,8 +375,8 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/tax/catalog-usage/:kind/:catalogId", async (req, reply) => {
     const { kind, catalogId } = req.params as { kind: string; catalogId: string };
-    const catalogKind = z.enum(["jurisdiction", "taxType", "authority", "regime", "activity"]).parse(kind);
     try {
+      const catalogKind = z.enum(["jurisdiction", "taxType", "authority", "regime", "activity"]).parse(kind);
       const data = await masters.getCatalogUsage(tenantContextFromRequest(req), catalogKind, catalogId);
       return reply.send({ data });
     } catch (err) {
@@ -423,21 +468,21 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.post("/api/v1/firms/:firmId/clients/:clientId/tax-profile-versions", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const body = z
-      .object({
-        legalName: z.string().min(1).max(200),
-        cuit: z.string().regex(/^\d{11}$/),
-        personType: z.enum(["FISICA", "JURIDICA"]),
-        nationalCondition: z.enum(["RESPONSABLE_INSCRIPTO", "MONOTRIBUTISTA", "EXENTO", "NO_RESPONSABLE"]),
-        fiscalAddress: z.string().max(300).optional(),
-        fiscalYearEndMonth: z.number().int().min(1).max(12).optional(),
-        monotributoCategory: z.enum(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]).optional(),
-        validFrom: z.string().date(),
-        source: z.string().max(200).optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          legalName: z.string().min(1).max(200),
+          cuit: z.string().regex(/^\d{11}$/),
+          personType: z.enum(["FISICA", "JURIDICA"]),
+          nationalCondition: z.enum(["RESPONSABLE_INSCRIPTO", "MONOTRIBUTISTA", "EXENTO", "NO_RESPONSABLE"]),
+          fiscalAddress: z.string().max(300).optional(),
+          fiscalYearEndMonth: z.number().int().min(1).max(12).optional(),
+          monotributoCategory: z.enum(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]).optional(),
+          validFrom: z.string().date(),
+          source: z.string().max(200).optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await profiles.createProfile(ctx, pickDefined({ ...body, clientId: ctx.clientId! }) as { clientId: string; legalName: string; cuit: string; personType: "FISICA" | "JURIDICA"; nationalCondition: "RESPONSABLE_INSCRIPTO" | "MONOTRIBUTISTA" | "EXENTO" | "NO_RESPONSABLE"; fiscalAddress?: string; fiscalYearEndMonth?: number; monotributoCategory?: string; validFrom: string; source?: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -464,11 +509,11 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const ctx = tenantContextFromRequest(req);
       const { profileVersionId } = req.params as { profileVersionId: string };
-      const body = z
-        .object({ reason: z.string().trim().min(1).max(200), changes: profileChangesSchema })
-        .strict()
-        .parse(req.body);
       try {
+        const body = z
+          .object({ reason: z.string().trim().min(1).max(200), changes: profileChangesSchema })
+          .strict()
+          .parse(req.body);
         const data = await profiles.newVersion(ctx, {
           profileVersionId,
           reason: body.reason,
@@ -505,17 +550,17 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.post("/api/v1/firms/:firmId/clients/:clientId/tax-registrations", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const body = z
-      .object({
-        profileVersionId: z.string().uuid(),
-        regimeId: z.string().uuid(),
-        validFrom: z.string().date(),
-        validTo: z.string().date().optional(),
-        registrationNumber: z.string().max(80).optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          profileVersionId: z.string().uuid(),
+          regimeId: z.string().uuid(),
+          validFrom: z.string().date(),
+          validTo: z.string().date().optional(),
+          registrationNumber: z.string().max(80).optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await profiles.addRegistration(ctx, pickDefined({ clientId: ctx.clientId!, ...body }) as { clientId: string; profileVersionId: string; regimeId: string; validFrom: string; validTo?: string; registrationNumber?: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -538,8 +583,8 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const ctx = tenantContextFromRequest(req);
       const { registrationId } = req.params as { registrationId: string };
-      const body = z.object({ validTo: z.string().date() }).strict().parse(req.body);
       try {
+        const body = z.object({ validTo: z.string().date() }).strict().parse(req.body);
         const data = await profiles.cancelRegistration(ctx, { registrationId, validTo: body.validTo });
         return reply.send({ data });
       } catch (err) {
@@ -550,16 +595,16 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.post("/api/v1/firms/:firmId/clients/:clientId/activities", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const body = z
-      .object({
-        profileVersionId: z.string().uuid(),
-        activityId: z.string().uuid(),
-        isPrimary: z.boolean().optional(),
-        validFrom: z.string().date(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          profileVersionId: z.string().uuid(),
+          activityId: z.string().uuid(),
+          isPrimary: z.boolean().optional(),
+          validFrom: z.string().date(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await profiles.addClientActivity(ctx, pickDefined({ clientId: ctx.clientId!, ...body }) as { clientId: string; profileVersionId: string; activityId: string; isPrimary?: boolean; validFrom: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -582,8 +627,8 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const ctx = tenantContextFromRequest(req);
       const { clientActivityId } = req.params as { clientActivityId: string };
-      const body = z.object({ validTo: z.string().date() }).strict().parse(req.body);
       try {
+        const body = z.object({ validTo: z.string().date() }).strict().parse(req.body);
         const data = await profiles.endClientActivity(ctx, { clientActivityId, validTo: body.validTo });
         return reply.send({ data });
       } catch (err) {
@@ -594,18 +639,18 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.post("/api/v1/tax/credentials", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const body = z
-      .object({
-        userId: z.string().uuid(),
-        jurisdictionId: z.string().uuid(),
-        authorityId: z.string().uuid(),
-        registrationNumber: z.string().min(1).max(80),
-        validFrom: z.string().date(),
-        validTo: z.string().date().optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          userId: z.string().uuid(),
+          jurisdictionId: z.string().uuid(),
+          authorityId: z.string().uuid(),
+          registrationNumber: z.string().min(1).max(80),
+          validFrom: z.string().date(),
+          validTo: z.string().date().optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await profiles.addCredential(ctx, pickDefined(body) as { userId: string; jurisdictionId: string; authorityId: string; registrationNumber: string; validFrom: string; validTo?: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -629,16 +674,16 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.post("/api/v1/firms/:firmId/clients/:clientId/tax-periods", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const body = z
-      .object({
-        taxTypeId: z.string().uuid(),
-        startDate: z.string().date(),
-        endDate: z.string().date(),
-        label: z.string().max(120).optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          taxTypeId: z.string().uuid(),
+          startDate: z.string().date(),
+          endDate: z.string().date(),
+          label: z.string().max(120).optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await periods.createPeriod(ctx, pickDefined({ clientId: ctx.clientId!, ...body }) as { clientId: string; taxTypeId: string; startDate: string; endDate: string; label?: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -658,16 +703,16 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.post("/api/v1/firms/:firmId/clients/:clientId/tax-obligations", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const body = z
-      .object({
-        profileVersionId: z.string().uuid(),
-        regimeId: z.string().uuid(),
-        periodId: z.string().uuid(),
-        dueDate: z.string().date().optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          profileVersionId: z.string().uuid(),
+          regimeId: z.string().uuid(),
+          periodId: z.string().uuid(),
+          dueDate: z.string().date().optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await periods.materializeObligation(ctx, pickDefined({ clientId: ctx.clientId!, ...body }) as { clientId: string; profileVersionId: string; regimeId: string; periodId: string; dueDate?: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -736,11 +781,11 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.post("/api/v1/tax/rule-packs", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const body = z
-      .object({ code: z.string().min(1).max(40), name: z.string().min(1).max(160), regimeId: z.string().uuid() })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({ code: z.string().min(1).max(40), name: z.string().min(1).max(160), regimeId: z.string().uuid() })
+        .strict()
+        .parse(req.body);
       const data = await rules.createPack(ctx, body);
       return reply.code(201).send({ data });
     } catch (err) {
@@ -751,16 +796,8 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   app.post("/api/v1/tax/rule-packs/:packId/versions", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { packId } = req.params as { packId: string };
-    const body = z
-      .object({
-        validFrom: z.string().date(),
-        validTo: z.string().date().optional(),
-        engineVersion: z.string().min(1).max(80),
-        rulesHash: z.string().min(1).max(128),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = createRulePackVersionSchema.parse(req.body);
       const data = await rules.createVersion(ctx, pickDefined({ ...body, packId }) as { packId: string; validFrom: string; validTo?: string; engineVersion: string; rulesHash: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -771,8 +808,8 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   app.post("/api/v1/tax/rule-packs/:packId/versions/clone", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { packId } = req.params as { packId: string };
-    const body = z.object({ validFrom: z.string().date(), validTo: z.string().date().optional() }).strict().parse(req.body);
     try {
+      const body = cloneRulePackVersionSchema.parse(req.body);
       const data = await rules.cloneVersion(ctx, pickDefined({ packId, ...body }) as { packId: string; validFrom: string; validTo?: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -783,19 +820,19 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   app.post("/api/v1/tax/rule-versions/:ruleVersionId/rate-rules", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { ruleVersionId } = req.params as { ruleVersionId: string };
-    const body = z
-      .object({
-        concept: z.string().min(1).max(80),
-        rate: z.string().regex(/^\d+(\.\d+)?$/),
-        activityCode: z.string().max(40).optional(),
-        jurisdictionId: z.string().uuid().optional(),
-        minAmount: z.string().regex(/^\d+(\.\d+)?$/).optional(),
-        validFrom: z.string().date(),
-        validTo: z.string().date().optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          concept: z.string().min(1).max(80),
+          rate: z.string().regex(/^\d+(\.\d+)?$/),
+          activityCode: z.string().max(40).optional(),
+          jurisdictionId: z.string().uuid().optional(),
+          minAmount: z.string().regex(/^\d+(\.\d+)?$/).optional(),
+          validFrom: z.string().date(),
+          validTo: z.string().date().optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await rules.addRateRule(ctx, pickDefined({ ...body, ruleVersionId }) as { ruleVersionId: string; concept: string; rate: string; activityCode?: string; jurisdictionId?: string; minAmount?: string; validFrom: string; validTo?: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -807,28 +844,28 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     const ctx = tenantContextFromRequest(req);
     const { ruleVersionId } = req.params as { ruleVersionId: string };
     const rate = z.string().regex(/^\d+(\.\d+)?$/).optional();
-    const body = z
-      .object({
-        rules: z
-          .array(
-            z
-              .object({
-                concept: z.string().min(1).max(80),
-                rate,
-                activityCode: z.string().max(40).optional(),
-                jurisdictionId: z.string().uuid().optional(),
-                minAmount: z.string().regex(/^\d+(\.\d+)?$/).optional(),
-                validFrom: z.string().date(),
-                validTo: z.string().date().optional(),
-              })
-              .strict()
-              .refine((rule) => Boolean(rule.rate || rule.minAmount), "Cada regla debe tener una tasa o importe"),
-          )
-          .max(500),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          rules: z
+            .array(
+              z
+                .object({
+                  concept: z.string().min(1).max(80),
+                  rate,
+                  activityCode: z.string().max(40).optional(),
+                  jurisdictionId: z.string().uuid().optional(),
+                  minAmount: z.string().regex(/^\d+(\.\d+)?$/).optional(),
+                  validFrom: z.string().date(),
+                  validTo: z.string().date().optional(),
+                })
+                .strict()
+                .refine((rule) => Boolean(rule.rate || rule.minAmount), "Cada regla debe tener una tasa o importe"),
+            )
+            .max(500),
+        })
+        .strict()
+        .parse(req.body);
       const data = await rules.replaceRateRules(ctx, {
         ruleVersionId,
         rules: body.rules.map((rule) => ({
@@ -850,19 +887,19 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   app.post("/api/v1/tax/rule-versions/:ruleVersionId/due-date-rules", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { ruleVersionId } = req.params as { ruleVersionId: string };
-    const body = z
-      .object({
-        jurisdictionId: z.string().uuid(),
-        frequency: z.string().max(40).optional(),
-        dueDay: z.number().int().min(1).max(31),
-        monthOffset: z.number().int().min(0).max(24).optional(),
-        cuitEnding: z.string().max(4).optional(),
-        validFrom: z.string().date(),
-        validTo: z.string().date().optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          jurisdictionId: z.string().uuid(),
+          frequency: z.string().max(40).optional(),
+          dueDay: z.number().int().min(1).max(31),
+          monthOffset: z.number().int().min(0).max(24).optional(),
+          cuitEnding: z.string().max(4).optional(),
+          validFrom: z.string().date(),
+          validTo: z.string().date().optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await rules.addDueDateRule(ctx, pickDefined({ ...body, ruleVersionId }) as { ruleVersionId: string; jurisdictionId: string; frequency?: string; dueDay: number; monthOffset?: number; cuitEnding?: string; validFrom: string; validTo?: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -873,18 +910,18 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   app.post("/api/v1/tax/rule-versions/:ruleVersionId/sources", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { ruleVersionId } = req.params as { ruleVersionId: string };
-    const body = z
-      .object({
-        authorityId: z.string().uuid(),
-        title: z.string().min(1).max(300),
-        url: z.string().url().optional(),
-        reference: z.string().max(120).optional(),
-        fileChecksum: z.string().max(128).optional(),
-        consultedAt: z.string().date(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          authorityId: z.string().uuid(),
+          title: z.string().min(1).max(300),
+          url: z.string().url().optional(),
+          reference: z.string().max(120).optional(),
+          fileChecksum: z.string().max(128).optional(),
+          consultedAt: z.string().date(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await rules.addSource(ctx, pickDefined({ ...body, ruleVersionId }) as { ruleVersionId: string; authorityId: string; title: string; url?: string; reference?: string; fileChecksum?: string; consultedAt: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -906,15 +943,15 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   app.post("/api/v1/tax/rule-versions/:ruleVersionId/approve", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { ruleVersionId } = req.params as { ruleVersionId: string };
-    const body = z
-      .object({
-        credentialId: z.string().uuid(),
-        comment: z.string().max(500).optional(),
-        goldenResultsHash: z.string().max(128).optional(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          credentialId: z.string().uuid(),
+          comment: z.string().max(500).optional(),
+          goldenResultsHash: z.string().max(128).optional(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await rules.approve(ctx, pickDefined({ ...body, ruleVersionId }) as { ruleVersionId: string; credentialId: string; comment?: string; goldenResultsHash?: string });
       return reply.send({ data });
     } catch (err) {
@@ -960,11 +997,11 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
 
   app.post("/api/v1/tax/holidays", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const body = z
-      .object({ jurisdictionId: z.string().uuid(), date: z.string().date(), name: z.string().max(160).optional() })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({ jurisdictionId: z.string().uuid(), date: z.string().date(), name: z.string().max(160).optional() })
+        .strict()
+        .parse(req.body);
       const data = await calendar.addHoliday(ctx, pickDefined(body) as { jurisdictionId: string; date: string; name?: string });
       return reply.code(201).send({ data });
     } catch (err) {
@@ -986,15 +1023,15 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   // Materializa la obligación calculando el vencimiento desde la regla vigente.
   app.post("/api/v1/firms/:firmId/clients/:clientId/tax-obligations/from-calendar", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
-    const body = z
-      .object({
-        profileVersionId: z.string().uuid(),
-        regimeId: z.string().uuid(),
-        periodId: z.string().uuid(),
-      })
-      .strict()
-      .parse(req.body);
     try {
+      const body = z
+        .object({
+          profileVersionId: z.string().uuid(),
+          regimeId: z.string().uuid(),
+          periodId: z.string().uuid(),
+        })
+        .strict()
+        .parse(req.body);
       const data = await calendar.materializeObligationWithDueDate(ctx, { clientId: ctx.clientId!, ...body });
       return reply.code(201).send({ data });
     } catch (err) {

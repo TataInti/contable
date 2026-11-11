@@ -39,4 +39,28 @@ describe("cliente API", () => {
       details: expect.objectContaining({ dependencies: { minio: false } }),
     });
   });
+
+  it("conserva los detalles estructurados de validación del backend", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "La solicitud contiene datos inválidos",
+          details: [{ path: ["validFrom"], message: "Invalid date" }],
+        },
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const error = await api.post("/tax/rule-packs/pack-1/versions", {}).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      details: {
+        details: [{ path: ["validFrom"], message: "Invalid date" }],
+      },
+    });
+  });
 });

@@ -6,7 +6,8 @@ import {
   normalizeActivityCode,
   type CatalogEconomicActivity,
 } from "@contable/contracts";
-import { api } from "../lib/api";
+import { ApiError, api } from "../lib/api";
+import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
@@ -105,6 +106,21 @@ interface Credential {
 
 const today = new Date().toISOString().slice(0, 10);
 
+function validateRuleVersionDate(value: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return "La fecha debe tener formato AAAA-MM-DD y un año entre 1900 y 2100.";
+  }
+  const year = Number(value.slice(0, 4));
+  if (year < 1900 || year > 2100) return "El año debe estar entre 1900 y 2100.";
+  const month = Number(value.slice(5, 7));
+  const day = Number(value.slice(8, 10));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return "Ingresá una fecha válida.";
+  }
+  return null;
+}
+
 function shortDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString("es-AR") : "Sin vencimiento";
 }
@@ -142,6 +158,7 @@ export function StudyReglasFiscales() {
     kind: "pack" | "version";
   } | null>(null);
   const [validFrom, setValidFrom] = useState(today);
+  const [versionDateError, setVersionDateError] = useState<string | null>(null);
   const [credentialId, setCredentialId] = useState("");
   const [draftRows, setDraftRows] = useState<RuleRow[]>([]);
   const [draftRowsVersionId, setDraftRowsVersionId] = useState<string | null>(null);
@@ -796,6 +813,9 @@ export function StudyReglasFiscales() {
           className="study-form study-form--compact fiscal-action-form"
           onSubmit={(event) => {
             event.preventDefault();
+            const dateError = validateRuleVersionDate(validFrom);
+            setVersionDateError(dateError);
+            if (dateError) return;
             createVersionMutation.mutate();
           }}
         >
@@ -803,8 +823,21 @@ export function StudyReglasFiscales() {
             label="Vigencia desde"
             id="first-rule-version-valid-from"
             type="date"
+            min="1900-01-01"
+            max="2100-12-31"
             value={validFrom}
-            onChange={(event) => setValidFrom(event.target.value)}
+            error={versionDateError ?? undefined}
+            onChange={(event) => {
+              setValidFrom(event.target.value);
+              setVersionDateError(null);
+            }}
+            onInvalid={(event) => {
+              event.preventDefault();
+              setVersionDateError(
+                validateRuleVersionDate(event.currentTarget.value) ??
+                  "La fecha debe estar entre 01/01/1900 y 31/12/2100.",
+              );
+            }}
             required
           />
           <div className="ds-field">
@@ -857,6 +890,9 @@ export function StudyReglasFiscales() {
           className="study-form study-form--compact fiscal-action-form"
           onSubmit={(event) => {
             event.preventDefault();
+            const dateError = validateRuleVersionDate(validFrom);
+            setVersionDateError(dateError);
+            if (dateError) return;
             cloneMutation.mutate();
           }}
         >
@@ -864,8 +900,21 @@ export function StudyReglasFiscales() {
             label="Nueva vigencia desde"
             id="rule-valid-from"
             type="date"
+            min="1900-01-01"
+            max="2100-12-31"
             value={validFrom}
-            onChange={(event) => setValidFrom(event.target.value)}
+            error={versionDateError ?? undefined}
+            onChange={(event) => {
+              setValidFrom(event.target.value);
+              setVersionDateError(null);
+            }}
+            onInvalid={(event) => {
+              event.preventDefault();
+              setVersionDateError(
+                validateRuleVersionDate(event.currentTarget.value) ??
+                  "La fecha debe estar entre 01/01/1900 y 31/12/2100.",
+              );
+            }}
             required
           />
           <div className="study-form__actions">
@@ -1489,9 +1538,13 @@ export function StudyReglasFiscales() {
           ) : null}
       </div>
       {mutationError ? (
-        <p className="form-error" role="alert">
-          {mutationError.message}
-        </p>
+        mutationError instanceof ApiError ? (
+          <FieldErrorsFromDetails error={mutationError} />
+        ) : (
+          <p className="form-error" role="alert">
+            {mutationError.message}
+          </p>
+        )
       ) : null}
       {deletingTarget ? (
         <DeletionDrawer

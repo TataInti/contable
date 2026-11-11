@@ -6,7 +6,7 @@ import {
   TaxpayerProfileService,
   TaxRuleService,
 } from "./fiscal-foundation-service.js";
-import { fiscalFoundationRoutes } from "./fiscal-foundation-routes.js";
+import { createRulePackVersionSchema, fiscalFoundationRoutes } from "./fiscal-foundation-routes.js";
 import { computeLegacyRulesHashSchemaV1, computeRulesHashV2 } from "./rules-hash.js";
 
 type StoredProfile = {
@@ -503,6 +503,118 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
         validFrom: "2026-01-01",
       }),
     ).rejects.toMatchObject({ code: "RULE_VERSION_IMMUTABLE" });
+  });
+
+  it("valida el schema de creación de versión y devuelve los campos con error", async () => {
+    mockState.taxRulePacks.push({
+      id: "pack-ri",
+      regimeCode: "RI",
+      taxTypeCode: "IVA",
+      jurisdictionCode: "AR",
+    });
+    expect(createRulePackVersionSchema.safeParse({
+      validFrom: "2026-10-01",
+      engineVersion: "ar-vat-ri-v1.0.0",
+      rulesHash: "PENDING_DRAFT",
+    }).success).toBe(true);
+    const futureValidFrom = createRulePackVersionSchema.safeParse({
+      validFrom: "2101-01-01",
+      engineVersion: "ar-vat-ri-v1.0.0",
+      rulesHash: "PENDING_DRAFT",
+    });
+    expect(futureValidFrom.success).toBe(false);
+    if (!futureValidFrom.success) {
+      expect(futureValidFrom.error.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          path: ["validFrom"],
+          message: "El año de vigencia debe estar entre 1900 y 2100.",
+        }),
+      ]));
+    }
+    const futureValidTo = createRulePackVersionSchema.safeParse({
+      validFrom: "2026-10-01",
+      validTo: "2101-01-01",
+      engineVersion: "ar-vat-ri-v1.0.0",
+      rulesHash: "PENDING_DRAFT",
+    });
+    expect(futureValidTo.success).toBe(false);
+    if (!futureValidTo.success) {
+      expect(futureValidTo.error.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          path: ["validTo"],
+          message: "El año de vigencia debe estar entre 1900 y 2100.",
+        }),
+      ]));
+    }
+
+    const app = Fastify({ logger: false });
+    fiscalFoundationRoutes(app);
+    await app.ready();
+    try {
+      const valid = await app.inject({
+        method: "POST",
+        url: "/api/v1/tax/rule-packs/pack-ri/versions",
+        payload: {
+          validFrom: "2026-10-01",
+          engineVersion: "ar-vat-ri-v1.0.0",
+          rulesHash: "PENDING_DRAFT",
+        },
+      });
+      expect(valid.statusCode).toBe(201);
+
+      const invalidDate = await app.inject({
+        method: "POST",
+        url: "/api/v1/tax/rule-packs/pack-ri/versions",
+        payload: {
+          validFrom: "61001-02-02",
+          engineVersion: "ar-vat-ri-v1.0.0",
+          rulesHash: "PENDING_DRAFT",
+        },
+      });
+      expect(invalidDate.statusCode).toBe(400);
+      expect(invalidDate.json()).toMatchObject({
+        error: {
+          code: "VALIDATION_ERROR",
+          details: expect.arrayContaining([expect.objectContaining({ path: ["validFrom"] })]),
+        },
+      });
+
+      const missingEngine = await app.inject({
+        method: "POST",
+        url: "/api/v1/tax/rule-packs/pack-ri/versions",
+        payload: { validFrom: "2026-10-01", rulesHash: "PENDING_DRAFT" },
+      });
+      expect(missingEngine.statusCode).toBe(400);
+      expect(missingEngine.json()).toMatchObject({
+        error: {
+          details: expect.arrayContaining([expect.objectContaining({ path: ["engineVersion"] })]),
+        },
+      });
+
+      const invertedRange = await app.inject({
+        method: "POST",
+        url: "/api/v1/tax/rule-packs/pack-ri/versions",
+        payload: {
+          validFrom: "2026-10-01",
+          validTo: "2026-09-30",
+          engineVersion: "ar-vat-ri-v1.0.0",
+          rulesHash: "PENDING_DRAFT",
+        },
+      });
+      expect(invertedRange.statusCode).toBe(400);
+      expect(invertedRange.json()).toMatchObject({
+        error: {
+          details: expect.arrayContaining([
+            expect.objectContaining({
+              path: ["validTo"],
+              message: "La vigencia hasta debe ser igual o posterior a la vigencia desde.",
+            }),
+          ]),
+        },
+      });
+    } finally {
+      await app.close();
+    }
   });
 
   it("expone un error claro del hash al intentar activar por API", async () => {
