@@ -39,11 +39,8 @@ export const extractionRequestSchema = z
     options: z.object({
       country: z.literal("AR"),
       language: z.string().default("es"),
-      maxPages: z.number().int().positive().max(100).default(100),
-      runQrParser: z.boolean().default(true),
-      runOcr: z.boolean().default(true),
-      runVisionFallback: z.boolean().default(true),
-      schemaVersion: z.string(),
+      maxPages: z.number().int().positive().max(3).default(3),
+      schemaVersion: z.literal("voucher-ar-v2"),
     }),
     callback: z.object({
       url: z.string().url(),

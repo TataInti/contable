@@ -132,6 +132,7 @@ export class DocumentProcessor {
     mimeType: string,
   ): Promise<void> {
     const runId = crypto.randomUUID();
+    const extractionStartedAt = Date.now();
     try {
       const result = await this.ai.runExtraction({
         runId,
@@ -142,7 +143,7 @@ export class DocumentProcessor {
         mimeType,
         sizeBytes: fileVersion.sizeBytes,
         sha256: fileVersion.sha256,
-        schemaVersion: "voucher-ar-v1",
+        schemaVersion: "voucher-ar-v2",
       });
 
       await withWorkerTenant(payload.firmId, payload.clientId, (tx) => tx.documentExtraction.create({
@@ -151,14 +152,23 @@ export class DocumentProcessor {
           clientId: payload.clientId,
           documentId: payload.documentId,
           fileVersionId: fileVersion.id,
-          schemaVersion: "voucher-ar-v1",
-          status: result.issues.length > 0 ? "NEEDS_REVIEW" : "GENERATED",
-          classification: result.documentType,
-          confidence: result.classificationConfidence,
+          schemaVersion: "voucher-ar-v2",
+          status:
+            result.reviewReason || result.issues.length > 0 ? "NEEDS_REVIEW" : "GENERATED",
+          classification: result.voucher?.tipo_documento ?? null,
+          confidence: result.classificationConfidence ?? null,
           ocrEngine: result.ocrEngine,
           model: result.model ?? null,
           provider: result.provider ?? null,
-          promptVersion: result.promptVersion ?? null,
+          promptVersion: result.promptVersion,
+          inputTokens: result.inputTokens ?? null,
+          outputTokens: result.outputTokens ?? null,
+          latencyMs: result.latencyMs,
+          estimatedCostUsd: result.estimatedCostUsd ?? null,
+          reviewReason: result.reviewReason ?? null,
+          ...(result.voucher
+            ? { voucherData: result.voucher as unknown as Prisma.InputJsonValue }
+            : {}),
           fields: {
             create: result.fields.map((f) => {
               const data: Prisma.ExtractedFieldCreateWithoutExtractionInput = {
@@ -204,31 +214,48 @@ export class DocumentProcessor {
         await tx.document.update({ where: { id: payload.documentId }, data: { status: "EXTRACTED" } });
         await tx.documentProcessingJob.updateMany({
           where: { fileVersionId: payload.fileVersionId, type: "VALIDATE" },
-          data: { status: "SUCCEEDED", stage: "EXTRACTED", progress: 100, finishedAt: new Date(), error: null },
+          data: {
+            status: "SUCCEEDED",
+            stage:
+              result.reviewReason || result.issues.length > 0 ? "NEEDS_REVIEW" : "EXTRACTED",
+            progress: 100,
+            finishedAt: new Date(),
+            error: result.reviewReason ?? null,
+          },
         });
       });
     } catch (err) {
-      console.error(`[documents] extracción falló para ${payload.documentId}:`, err);
+      const reviewReason =
+        err instanceof Error && err.name === "TimeoutError"
+          ? "AI_SERVICE_TIMEOUT"
+          : "AI_SERVICE_UNAVAILABLE";
+      console.error(
+        `[documents] extracción requiere revisión para ${payload.documentId}: ${reviewReason}`,
+      );
       await withWorkerTenant(payload.firmId, payload.clientId, (tx) => tx.documentExtraction.create({
         data: {
           firmId: payload.firmId,
           clientId: payload.clientId,
           documentId: payload.documentId,
           fileVersionId: fileVersion.id,
-          schemaVersion: "voucher-ar-v1",
-          status: "FAILED",
+          schemaVersion: "voucher-ar-v2",
+          status: "NEEDS_REVIEW",
+          ocrEngine: "multimodal-model",
+          promptVersion: "vision-ar-v2",
+          latencyMs: Date.now() - extractionStartedAt,
+          reviewReason,
         },
       }));
       await withWorkerTenant(payload.firmId, payload.clientId, (tx) => tx.document.update({
         where: { id: payload.documentId },
-        data: { status: "EXTRACTION_FAILED" },
+        data: { status: "EXTRACTED" },
       }));
       await withWorkerTenant(payload.firmId, payload.clientId, (tx) => tx.documentProcessingJob.updateMany({
         where: { fileVersionId: payload.fileVersionId, type: "VALIDATE" },
         data: {
-          status: "FAILED",
-          stage: "EXTRACTION_FAILED",
-          error: err instanceof Error ? err.message.slice(0, 1000) : "UNKNOWN_EXTRACTION_ERROR",
+          status: "SUCCEEDED",
+          stage: "NEEDS_REVIEW",
+          error: reviewReason,
           finishedAt: new Date(),
         },
       }));

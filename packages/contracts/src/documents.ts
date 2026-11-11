@@ -14,7 +14,7 @@ export const extractedFieldSchema = z.object({
   rawValue: z.string().nullable(),
   normalizedValue: z.string().nullable(),
   confidence: z.number().min(0).max(1),
-  page: z.number().int().positive().optional(),
+  page: z.number().int().positive().nullable().optional(),
   boundingBox: z
     .object({
       x: z.number(),
@@ -22,25 +22,26 @@ export const extractedFieldSchema = z.object({
       width: z.number(),
       height: z.number(),
     })
+    .nullable()
     .optional(),
   method: extractionMethod,
   status: extractionFieldStatus.default("ACCEPTED"),
-  correction: z.string().optional(),
-  reason: z.string().optional(),
+  correction: z.string().nullable().optional(),
+  reason: z.string().nullable().optional(),
 });
 export type ExtractedField = z.infer<typeof extractedFieldSchema>;
 
 /** Ítem de línea extraído */
 export const extractedLineItemSchema = z.object({
   description: z.string(),
-  quantity: z.string().optional(),
-  unitPrice: z.string().optional(),
-  netAmount: z.string().optional(),
-  vatRate: z.string().optional(),
-  vatAmount: z.string().optional(),
-  totalAmount: z.string().optional(),
+  quantity: z.string().nullable().optional(),
+  unitPrice: z.string().nullable().optional(),
+  netAmount: z.string().nullable().optional(),
+  vatRate: z.string().nullable().optional(),
+  vatAmount: z.string().nullable().optional(),
+  totalAmount: z.string().nullable().optional(),
   confidence: z.number().min(0).max(1),
-  page: z.number().int().positive().optional(),
+  page: z.number().int().positive().nullable().optional(),
   boundingBox: z
     .object({
       x: z.number(),
@@ -48,28 +49,99 @@ export const extractedLineItemSchema = z.object({
       width: z.number(),
       height: z.number(),
     })
+    .nullable()
     .optional(),
   method: extractionMethod,
   status: extractionFieldStatus.default("ACCEPTED"),
 });
 export type ExtractedLineItem = z.infer<typeof extractedLineItemSchema>;
 
-/** Resultado de extracción (contrato del schema de extracción) */
+const amountText = z.string().regex(/^-?\d+(?:\.\d{1,6})?$/);
+
+/** Esquema canónico del comprobante argentino voucher-ar-v2. */
+export const voucherARV2Schema = z
+  .object({
+    tipo_documento: z.enum([
+      "factura",
+      "ticket_no_fiscal",
+      "recibo",
+      "nota_credito",
+      "nota_debito",
+      "otro",
+      "ilegible",
+    ]),
+    letra: z.string().nullable(),
+    punto_venta: z.string().nullable(),
+    numero: z.string().nullable(),
+    fecha: isoDate.nullable(),
+    hora: z.string().nullable(),
+    cuit_emisor: z.string().regex(/^\d{11}$/).nullable(),
+    cuit_receptor: z.string().regex(/^\d{11}$/).nullable(),
+    razon_social_emisor: z.string().nullable(),
+    razon_social_receptor: z.string().nullable(),
+    condicion_iva: z.string().nullable(),
+    neto_gravado: amountText.nullable(),
+    iva: z
+      .array(
+        z
+          .object({
+            alicuota: amountText.nullable(),
+            importe: amountText.nullable(),
+          })
+          .strict(),
+      )
+      .nullable(),
+    no_gravado: amountText.nullable(),
+    exento: amountText.nullable(),
+    percepciones: z
+      .array(
+        z
+          .object({
+            tipo: z.string().nullable(),
+            importe: amountText.nullable(),
+          })
+          .strict(),
+      )
+      .nullable(),
+    total: amountText.nullable(),
+    moneda: z.string().regex(/^[A-Z]{3}$/).nullable(),
+    cae: z.string().nullable(),
+    cae_vencimiento: isoDate.nullable(),
+    items: z
+      .array(
+        z
+          .object({
+            descripcion: z.string().nullable(),
+            cantidad: amountText.nullable(),
+            precio_unitario: amountText.nullable(),
+            alicuota_iva: amountText.nullable(),
+            importe: amountText.nullable(),
+          })
+          .strict(),
+      )
+      .nullable(),
+    confianza: z.record(z.string(), z.number().min(0).max(1)),
+  })
+  .strict();
+export type VoucherARV2 = z.infer<typeof voucherARV2Schema>;
+
+/** Resultado multimodal de extracción y telemetría asociada. */
 export const extractionResultSchema = z.object({
-  documentType: z.string(),
-  letter: voucherLetter.optional(),
-  direction: voucherDirection,
-  pointOfSale: z.string().optional(),
-  number: z.string().optional(),
-  emitterCuit: cuit.optional(),
-  receiverCuit: cuit.optional(),
-  issueDate: isoDate.optional(),
-  totalAmount: money.optional(),
-  netAmount: money.optional(),
-  vatAmount: money.optional(),
-  currency: z.string().length(3).optional(),
+  schemaVersion: z.literal("voucher-ar-v2"),
+  voucher: voucherARV2Schema.nullable(),
+  classificationConfidence: z.number().min(0).max(1).nullable(),
   fields: z.array(extractedFieldSchema),
-  items: z.array(extractedLineItemSchema).optional(),
+  items: z.array(extractedLineItemSchema),
+  issues: z.array(z.string()),
+  reviewReason: z.string().nullable(),
+  ocrEngine: z.string(),
+  model: z.string().nullable(),
+  provider: z.string().nullable(),
+  promptVersion: z.string(),
+  inputTokens: z.number().int().nonnegative().nullable(),
+  outputTokens: z.number().int().nonnegative().nullable(),
+  latencyMs: z.number().int().nonnegative(),
+  estimatedCostUsd: z.number().nonnegative().nullable(),
 });
 export type ExtractionResult = z.infer<typeof extractionResultSchema>;
 

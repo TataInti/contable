@@ -46,11 +46,8 @@ POST /internal/v1/extractions
   "options": {
     "country": "AR",
     "language": "es",
-    "maxPages": 100,
-    "runQrParser": true,
-    "runOcr": true,
-    "runVisionFallback": true,
-    "schemaVersion": "voucher-ar-v1"
+    "maxPages": 3,
+    "schemaVersion": "voucher-ar-v2"
   },
   "callback": {
     "url": "http://api:3000/internal/v1/extractions/complete",
@@ -59,26 +56,9 @@ POST /internal/v1/extractions
 }
 ```
 
-### Callback
+### Response
 
-```http
-POST /internal/v1/extractions/complete
-```
-
-El callback incluye:
-
-- Estado.
-- Clasificación.
-- Campos/líneas.
-- Evidencia.
-- Issues.
-- Checks.
-- Versiones.
-- Métricas.
-- Costo.
-- Checksum de entrada.
-
-Idempotente por `runId + resultHash`; un segundo hash distinto genera conflicto y alerta.
+La respuesta HTTP contiene el voucher-ar-v2 validado, campos compatibles con la bandeja, líneas, motivos de revisión y telemetría (`provider`, modelo exacto, `promptVersion`, tokens de entrada/salida, latencia y costo estimado). El modelo recibe imágenes de cada página; el texto embebido del PDF no participa en la extracción. El motor de reglas heredado permanece desconectado del endpoint normal.
 
 ## Asistente
 
