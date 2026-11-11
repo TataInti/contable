@@ -32,10 +32,7 @@ export interface ExtractionOptions {
   country: string;
   language: string;
   maxPages: number;
-  runQrParser: boolean;
-  runOcr: boolean;
-  runVisionFallback: boolean;
-  schemaVersion: string;
+  schemaVersion: "voucher-ar-v2.1";
 }
 
 export interface ExtractionRunRequest {
@@ -60,42 +57,64 @@ export interface ExtractedField {
   status: string;
 }
 
-export interface ExtractedLineItem {
-  description: string;
-  quantity?: string | null;
-  unitPrice?: string | null;
-  netAmount?: string | null;
-  vatRate?: string | null;
-  vatAmount?: string | null;
-  totalAmount?: string | null;
-  confidence: number;
-  page?: number | null;
-  boundingBox?: Record<string, unknown> | null;
-  method: string;
-  status: string;
+export type PerceptionCategory =
+  | "IIBB"
+  | "IVA"
+  | "Ganancias"
+  | "SUSS"
+  | "Impuestos internos"
+  | "Municipal"
+  | "Otras";
+
+export interface VoucherARV21 {
+  tipo_documento:
+    | "factura"
+    | "ticket_no_fiscal"
+    | "recibo"
+    | "nota_credito"
+    | "nota_debito"
+    | "otro"
+    | "ilegible";
+  letra: string | null;
+  punto_venta: string | null;
+  numero: string | null;
+  fecha: string | null;
+  hora: string | null;
+  cuit_emisor: string | null;
+  cuit_receptor: string | null;
+  razon_social_emisor: string | null;
+  razon_social_receptor: string | null;
+  condicion_iva: string | null;
+  neto_gravado: string | null;
+  iva: { alicuota: string | null; importe: string | null }[] | null;
+  no_gravado: string | null;
+  exento: string | null;
+  percepciones:
+    | { categoria: PerceptionCategory; tipo_texto: string | null; importe: string | null }[]
+    | null;
+  total: string | null;
+  moneda: string | null;
+  cae: string | null;
+  cae_vencimiento: string | null;
+  confianza: Record<string, number>;
 }
 
 export interface ExtractionResult {
-  documentType: string;
-  direction: string;
-  letter?: string | null;
-  pointOfSale?: string | null;
-  number?: string | null;
-  emitterCuit?: string | null;
-  receiverCuit?: string | null;
-  issueDate?: string | null;
-  totalAmount?: string | null;
-  netAmount?: string | null;
-  vatAmount?: string | null;
-  currency?: string | null;
-  classificationConfidence: number;
+  schemaVersion: "voucher-ar-v2.1";
+  voucher: VoucherARV21 | null;
+  classificationConfidence: number | null;
   fields: ExtractedField[];
-  items: ExtractedLineItem[];
   issues: string[];
+  reviewReason: string | null;
+  reviewIssues: { reason: string; sourcePath: string | null }[];
   ocrEngine: string;
-  model?: string | null;
-  provider?: string | null;
-  promptVersion?: string | null;
+  model: string | null;
+  provider: string | null;
+  promptVersion: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  latencyMs: number;
+  estimatedCostUsd: number | null;
 }
 
 export class AiClient {
@@ -126,7 +145,7 @@ export class AiClient {
     mimeType: string;
     sizeBytes: number;
     sha256: string;
-    schemaVersion: string;
+    schemaVersion: "voucher-ar-v2.1";
   }): Promise<ExtractionResult> {
     const downloadUrl = await this.storage.getPresignedGetUrl(BUCKETS.originals, input.objectKey, 300);
 
@@ -145,10 +164,7 @@ export class AiClient {
       options: {
         country: "AR",
         language: "es",
-        maxPages: 100,
-        runQrParser: true,
-        runOcr: true,
-        runVisionFallback: true,
+        maxPages: 3,
         schemaVersion: input.schemaVersion,
       },
       callback: {
@@ -164,7 +180,10 @@ export class AiClient {
     const signature = this.sign("POST", path, timestamp, nonce, this.sha256Hex(body));
 
     // Timeout: un fallo de IA no puede colgar el worker.
-    const timeout = AbortSignal.timeout(30_000);
+    const timeoutMs = Number(process.env.EXTRACTION_WORKER_TIMEOUT_MS ?? 75_000);
+    const timeout = AbortSignal.timeout(
+      Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 75_000,
+    );
     const res = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}${path}`, {
       method: "POST",
       headers: {
@@ -179,10 +198,13 @@ export class AiClient {
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`AI_EXTRACTION_FAILED ${res.status}: ${text}`);
+      throw new Error(`AI_EXTRACTION_HTTP_${res.status}`);
     }
 
-    return (await res.json()) as ExtractionResult;
+    try {
+      return (await res.json()) as ExtractionResult;
+    } catch {
+      throw new Error("AI_EXTRACTION_INVALID_RESPONSE");
+    }
   }
 }

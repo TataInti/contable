@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -27,11 +29,8 @@ class ExtractionOptions(BaseModel):
 
     country: str = "AR"
     language: str = "es"
-    maxPages: int = Field(default=100, gt=0, le=100)
-    runQrParser: bool = True
-    runOcr: bool = True
-    runVisionFallback: bool = True
-    schemaVersion: str
+    maxPages: int = Field(default=3, gt=0, le=3)
+    schemaVersion: Literal["voucher-ar-v2.1"] = "voucher-ar-v2.1"
 
 
 class ExtractionCallback(BaseModel):

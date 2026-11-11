@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.auth import sha256_hex, sign
 from app.main import app
+from app.voucher_v2 import manual_review_response
 
 client = TestClient(app)
 
@@ -27,11 +28,8 @@ VALID_PAYLOAD = {
     "options": {
         "country": "AR",
         "language": "es",
-        "maxPages": 100,
-        "runQrParser": True,
-        "runOcr": True,
-        "runVisionFallback": True,
-        "schemaVersion": "voucher-ar-v1",
+        "maxPages": 3,
+        "schemaVersion": "voucher-ar-v2.1",
     },
     "callback": {
         "url": "http://api:3000/internal/v1/extractions/complete",
@@ -59,6 +57,10 @@ def _headers(body: bytes, secret: str = "test-secret") -> dict[str, str]:
     }
 
 
+async def _manual_model_result(_data: bytes, _mime_type: str, _max_pages: int):
+    return manual_review_response("MODEL_NOT_CONFIGURED")
+
+
 def test_health_live() -> None:
     res = client.get("/health/live")
     assert res.status_code == 200
@@ -79,6 +81,7 @@ def test_extraction_requires_auth() -> None:
 def test_extraction_valid_hmac(monkeypatch: pytest.MonkeyPatch) -> None:
     # Mock de la descarga del PDF desde la URL firmada
     fake_pdf = b"%PDF-1.4 fake pdf body"
+
     class FakeResp:
         content = fake_pdf
 
@@ -100,20 +103,27 @@ def test_extraction_valid_hmac(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("app.main.httpx.AsyncClient", FakeClient)
     monkeypatch.setattr(
-        "app.main.extract_from_pdf_bytes",
-        lambda _data, schema: __import__("app.extractor", fromlist=["extract_from_text"]).extract_from_text(
-            "CUIT 30712345675 Fecha 12/08/2026 Total: 121000.00", schema
-        ),
+        "app.main.run_model_extraction",
+        _manual_model_result,
     )
 
-    payload = {**VALID_PAYLOAD, "source": {**VALID_PAYLOAD["source"], "sizeBytes": len(fake_pdf), "sha256": hashlib.sha256(fake_pdf).hexdigest()}}
+    payload = {
+        **VALID_PAYLOAD,
+        "source": {
+            **VALID_PAYLOAD["source"],
+            "sizeBytes": len(fake_pdf),
+            "sha256": hashlib.sha256(fake_pdf).hexdigest(),
+        },
+    }
     body = json.dumps(payload).encode()
     res = client.post("/internal/v1/extractions", content=body, headers=_headers(body))
     assert res.status_code == 200
     data = res.json()
-    assert data["documentType"] == "INVOICE"
-    assert data["ocrEngine"] == "embedded-text"
-    assert data["promptVersion"] == "voucher-ar-v1"
+    assert data["schemaVersion"] == "voucher-ar-v2.1"
+    assert data["voucher"] is None
+    assert data["ocrEngine"] == "multimodal-model"
+    assert data["promptVersion"] == "vision-ar-v5"
+    assert data["reviewReason"] == "MODEL_NOT_CONFIGURED"
 
 
 def test_extraction_invalid_signature() -> None:
@@ -157,10 +167,8 @@ def test_hmac_replay_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("app.main.httpx.AsyncClient", FakeClient)
     monkeypatch.setattr(
-        "app.main.extract_from_pdf_bytes",
-        lambda _data, schema: __import__("app.extractor", fromlist=["extract_from_text"]).extract_from_text(
-            "CUIT 30712345675 Fecha 12/08/2026 Total: 121000.00", schema
-        ),
+        "app.main.run_model_extraction",
+        _manual_model_result,
     )
 
     payload = {
