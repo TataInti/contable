@@ -1743,7 +1743,7 @@ export class TaxRuleService {
       });
       if (!pack) throw new FiscalError("RULE_PACK_NOT_FOUND", "Rule pack no encontrado");
 
-      let engine: { id: string; engineVersion: string; familyId: string } | null;
+      let engine: { id: string; engineVersion: string; familyId: string } | null | undefined;
       if (input.engineId) {
         if (!pack.regime.calcFamilyId) {
           throw new FiscalError(
@@ -1786,6 +1786,9 @@ export class TaxRuleService {
           );
         }
         engine = engines[0];
+        if (!engine) {
+          throw new FiscalError("UNSUPPORTED_TAX_ENGINE_VERSION", "La versión del motor no identifica un motor del catálogo", ["engineVersion"]);
+        }
         if (pack.regime.calcFamilyId) {
           if (engine.familyId !== pack.regime.calcFamilyId) {
             throw new FiscalError(
@@ -1799,6 +1802,9 @@ export class TaxRuleService {
         }
       }
 
+      if (!engine) {
+        throw new FiscalError("TAX_ENGINE_NOT_FOUND", "El motor seleccionado no existe o está inactivo", ["engineId"]);
+      }
       const count = await tx.taxRuleVersion.count({ where: { packId: input.packId } });
       return tx.taxRuleVersion.create({
         data: {

@@ -189,8 +189,8 @@ describe("decisiones fiscales no dependen del texto del catálogo", () => {
     const stale = baseline.entries.filter((entry) => !currentKeys.has(findingKey(entry)));
 
     if (added.length || stale.length) {
-      const newLines = added.map(({ file, line, rule, property }) =>
-        `nuevo ${file}:${line} ${rule} ${property}`);
+      const newLines = added.map(({ file, line, rule, property, snippetHash }) =>
+        `nuevo ${file}:${line} ${rule} ${property} ${snippetHash}`);
       const staleLines = stale.map(({ file, rule, property, closesIn }) =>
         `stale ${file} ${rule} ${property} (cerrar: ${closesIn})`);
       throw new Error([...newLines, ...staleLines].join("\n") || "El baseline anti-texto cambió");

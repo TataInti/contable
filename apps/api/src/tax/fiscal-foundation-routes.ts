@@ -103,7 +103,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       });
     }
     if (err instanceof FiscalError) {
-      const status = err.code.includes("NOT_FOUND") ? 404 : err.path ? 422 : 409;
+      const status = /NOT_FOUND/.test(err.code) ? 404 : err.path ? 422 : 409;
       return reply.status(status).send({
         error: {
           code: err.code,
