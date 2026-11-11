@@ -220,7 +220,7 @@ export class DocumentProcessor {
           schemaVersion: "voucher-ar-v2",
           status: "NEEDS_REVIEW",
           ocrEngine: "multimodal-model",
-          promptVersion: "vision-ar-v2",
+          promptVersion: "vision-ar-v4",
           latencyMs: Date.now() - extractionStartedAt,
           reviewReason,
         },

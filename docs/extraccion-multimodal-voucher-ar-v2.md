@@ -6,6 +6,8 @@ El endpoint normal usa exclusivamente `EXTRACTION_ENGINE=model` (default) y `ser
 
 El modelo devuelve JSON en formato objeto, que el servicio valida contra `voucher-ar-v2` con `VoucherARV2`. El contrato canónico está definido en `services/ai/app/voucher_v2.py` y `packages/contracts/src/documents.ts`. La respuesta preserva nulls, y sólo adapta los datos fiscales visibles al formato persistido que consume la bandeja. El esquema no incluye ítems y el worker no crea filas de ítems. Las claves UI usadas por `StudyBandeja.tsx` incluyen `issuerTaxId`, `voucherNumber`, `voucherType`, `pointOfSale`, `issueDate`, `totalAmount`, `netAmount`, `vatAmount` y `currency`.
 
+El prompt versionado `vision-ar-v4` solicita los literales exactos de `tipo_documento` (incluido `ticket_no_fiscal`), CUIT de exactamente 11 dígitos consecutivos y transcripción literal completa de `percepciones.tipo` y `condicion_iva`, sin prefijos añadidos ni omisiones. Los datos ausentes o no legibles permanecen null; el ejemplo mínimo de ticket fija `letra`, ambos CUIT y `cae` en null.
+
 La única comprobación aritmética usa tolerancia absoluta de 0,02 unidades de la moneda informada: compara neto + IVA + no gravado + exento + percepciones con el total cuando todos los componentes están disponibles. Un desvío agrega un motivo de revisión y conserva sin cambios los valores devueltos por el modelo. Un comprobante clasificado como `ticket_no_fiscal`, o sin CUIT, CAE ni letra, pasa a revisión manual con motivo «sin datos fiscales» y omite la comprobación de suma. Los campos ausentes o no legibles permanecen null; no se estiman.
 
 ## Privacidad y estado de la allowlist
@@ -49,11 +51,15 @@ El alcance cubre los datos fiscales del comprobante; la lectura de QR queda fuer
 - Unit tests del servicio AI: `uv run --no-project --with-requirements services/ai/requirements.txt --with-requirements services/ai/requirements-dev.txt --with pytest pytest -q services/ai/tests` desde la raíz del repo.
 - TypeScript: `npm run --workspace @contable/worker typecheck` y las pruebas focalizadas del workspace.
 - Los tests usan respuestas/archivos sintéticos y clientes mockeados; CI no llama al modelo.
+- Benchmark sintético de 40 documentos: v1 obtuvo 81,88% (655/800), 6 respuestas inválidas finales, media/p95 de 6964/8981 ms y USD 0,03784430. Con `vision-ar-v4`, v2 obtuvo 96,62% (773/800), 0 inválidas, media/p95 de 5936/8548 ms y USD 0,03737860. Los 6 tickets pasan `tipo_documento`; `condicion_iva` queda 40/40 exacta.
+- Siguen 27/40 desaciertos de `percepciones.tipo` sin marca: el modelo antepone `Percepcion `; los 27 importes coinciden. La primera corrida v2 dejó 28 errores de percepción sin marca; una iteración mejoró a 27 y se detuvo. El comparador conserva coincidencia literal porque los 24 casos detallados de v1 presentan prefijos añadidos y/o sufijos omitidos, sin desacuerdos solo de mayúsculas/espacios. La tabla de los 24 casos y tablas comparativas están en el artefacto externo `benchmark_v2/resumen.md`.
+- No se implementó una detección automática por catálogo: la muestra solo incluye un rótulo sintético y no acredita sensibilidad ni falsos positivos de etiquetas fiscales reales. Se recomienda ampliar el catálogo y el conjunto sintético antes de automatizar alertas de percepción.
 - Prueba de humo real con PNG sintético y CUIT ficticio válido `30000000007`: OpenRouter devolvió HTTP 200, modelo `anthropic/claude-haiku-5.5`, proveedor `Amazon Bedrock`. El resultado pasó validación `voucher-ar-v2`: 3295 tokens de entrada, 808 de salida, 5948 ms y costo estimado devuelto por OpenRouter de USD 0.0007335. La llamada se restringió al proveedor Bedrock, que forma parte de la allowlist aprobada.
 
 ## Bloqueos antes de producción
 
-1. Informe de evaluación de calidad, cobertura, errores, latencia y costo.
-2. Confirmación contractual de retención, transferencias y subencargados.
-3. OK escrito explícito de Inti para activar el procesamiento de datos reales.
-4. Aprobación de despliegue por separado.
+1. Resolver los 27 desaciertos actuales de `percepciones.tipo` sin marca y validar una estrategia de revisión con catálogo y negativos representativos.
+2. Cerrar el informe de evaluación de calidad, cobertura, errores, latencia y costo con las correcciones pendientes.
+3. Confirmar contractualmente retención, transferencias y subencargados.
+4. Obtener OK escrito explícito de Inti para activar el procesamiento de datos reales.
+5. Obtener aprobación de despliegue por separado.

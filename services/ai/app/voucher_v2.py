@@ -125,7 +125,7 @@ class VoucherExtractionResponse(StrictModel):
     ocrEngine: str = "multimodal-model"
     model: str | None = None
     provider: str | None = None
-    promptVersion: str = "vision-ar-v2"
+    promptVersion: str = "vision-ar-v4"
     inputTokens: int | None = Field(default=None, ge=0)
     outputTokens: int | None = Field(default=None, ge=0)
     latencyMs: int = Field(default=0, ge=0)
@@ -264,7 +264,7 @@ def manual_review_response(
     *,
     model: str | None = None,
     provider: str | None = None,
-    prompt_version: str = "vision-ar-v2",
+    prompt_version: str = "vision-ar-v4",
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     latency_ms: int = 0,

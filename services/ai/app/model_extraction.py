@@ -27,7 +27,7 @@ from .voucher_v2 import (
     response_from_voucher,
 )
 
-PROMPT_VERSION = "vision-ar-v2"
+PROMPT_VERSION = "vision-ar-v4"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 PDF_DPI = 150
 PDF_JPEG_QUALITY = 85
@@ -40,7 +40,12 @@ SYSTEM_PROMPT = """Sos un extractor multimodal de comprobantes argentinos. Leé 
 
 Usá sólo estas claves exactas de voucher-ar-v2: tipo_documento, letra, punto_venta, numero, fecha, hora, cuit_emisor, cuit_receptor, razon_social_emisor, razon_social_receptor, condicion_iva, neto_gravado, iva, no_gravado, exento, percepciones, total, moneda, cae, cae_vencimiento y confianza. Los datos del emisor y del receptor van en sus claves planas; no los anides. No agregues claves schema, vencimiento, punto_de_venta, base_imponible ni envoltorios emisor, receptor o voucher. Cada elemento de iva sólo usa alicuota e importe; cada elemento de percepciones sólo usa tipo e importe.
 
-Para cada campo, copiá únicamente texto o valores que sean visibles y legibles en la imagen. Omití las claves ausentes o no legibles; el contrato las interpreta como null. No inventes valores, no infieras CUIT, CAE, fecha, importes, moneda ni condición fiscal. Conservá importes y alícuotas como cadenas decimales con punto, sin separadores de miles. La fecha y cae_vencimiento deben ser YYYY-MM-DD. CUIT debe tener once dígitos. Usá tipo_documento=ilegible cuando el comprobante no pueda clasificarse por su imagen.
+Para cada campo, copiá únicamente texto o valores que sean visibles y legibles en la imagen. Omití las claves ausentes o no legibles; el contrato las interpreta como null. No inventes valores, no infieras CUIT, CAE, fecha, importes, moneda ni condición fiscal. Conservá importes y alícuotas como cadenas decimales con punto, sin separadores de miles. La fecha y cae_vencimiento deben ser YYYY-MM-DD. CUIT debe tener exactamente once dígitos consecutivos, sin guiones ni espacios. Usá tipo_documento=ilegible cuando el comprobante no pueda clasificarse por su imagen.
+
+tipo_documento sólo admite estos literales exactos: `factura`, `ticket_no_fiscal`, `recibo`, `nota_credito`, `nota_debito`, `otro` o `ilegible`. Un recibo de pago es `recibo`; usá `ticket_no_fiscal` únicamente para un ticket no fiscal, no porque falten datos tributarios. Si el documento es un ticket no fiscal, tipo_documento debe ser exactamente `ticket_no_fiscal`, nunca su etiqueta en lenguaje natural. Ejemplo mínimo válido de voucher-ar-v2 para un ticket no fiscal:
+{"tipo_documento":"ticket_no_fiscal","letra":null,"cuit_emisor":null,"cuit_receptor":null,"cae":null,"confianza":{"tipo_documento":0.95}}
+
+`percepciones.tipo` y `condicion_iva` son transcripciones literales del texto impreso completo. No antepongas la palabra `Percepcion` por tratarse del campo `percepciones`; incluila en `tipo` solo si se ve impresa. Conservá todas las palabras impresas, incluidas las posteriores al nombre del impuesto; no omitas calificadores, no reformules y no trunques. Si el texto no se ve o no se puede leer, omití la clave para que quede null.
 
 Incluí en confianza un valor entre 0 y 1 por cada campo no nulo, usando como clave el nombre del campo o la ruta de lista (por ejemplo iva.0.importe, percepciones.0.tipo). La confianza es una estimación del modelo, no una validación contable. No agregues explicaciones fuera del JSON."""
 

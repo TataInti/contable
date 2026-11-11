@@ -54,13 +54,55 @@ def _valid_voucher() -> dict[str, Any]:
     }
 
 
+def test_prompt_specifies_ticket_enum_cuit_and_literal_tax_text() -> None:
+    ticket_example = (
+        '{"tipo_documento":"ticket_no_fiscal","letra":null,"cuit_emisor":null,'
+        '"cuit_receptor":null,"cae":null,"confianza":{"tipo_documento":0.95}}'
+    )
+    prompt = model_extraction._request_payload("test/model", [b"synthetic page"])["messages"][0][
+        "content"
+    ]
+
+    assert model_extraction.PROMPT_VERSION == "vision-ar-v4"
+    assert ticket_example in prompt
+    assert VoucherARV2.model_validate(json.loads(ticket_example)).tipo_documento == (
+        "ticket_no_fiscal"
+    )
+    assert (
+        "CUIT debe tener exactamente once dígitos consecutivos, sin guiones ni espacios." in prompt
+    )
+    assert "tipo_documento sólo admite estos literales exactos:" in prompt
+    assert "Un recibo de pago es `recibo`" in prompt
+    assert (
+        "Si el documento es un ticket no fiscal, tipo_documento debe ser exactamente `ticket_no_fiscal`"
+        in prompt
+    )
+    assert "`percepciones.tipo` y `condicion_iva` son transcripciones literales" in prompt
+    assert "No antepongas la palabra `Percepcion`" in prompt
+    assert "no omitas calificadores, no reformules y no trunques" in prompt
+    assert (
+        "Omití las claves ausentes o no legibles; el contrato las interpreta como null." in prompt
+    )
+
+
+def test_natural_language_ticket_label_is_rejected_by_enum() -> None:
+    payload = _valid_voucher()
+    payload["tipo_documento"] = "TICKET NO FISCAL"
+
+    with pytest.raises(ValidationError) as error:
+        VoucherARV2.model_validate(payload)
+
+    assert error.value.errors()[0]["loc"] == ("tipo_documento",)
+    assert error.value.errors()[0]["type"] == "literal_error"
+
+
 def test_voucher_ar_v2_validates_and_maps_existing_ui_keys() -> None:
     voucher = VoucherARV2.model_validate(_valid_voucher())
     result = response_from_voucher(
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v2",
+        prompt_version="vision-ar-v4",
         input_tokens=120,
         output_tokens=48,
         latency_ms=850,
@@ -102,7 +144,7 @@ def test_extraction_response_and_voucher_do_not_contain_items() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v2",
+        prompt_version="vision-ar-v4",
         input_tokens=10,
         output_tokens=5,
         latency_ms=100,
@@ -152,7 +194,7 @@ def test_arithmetic_mismatch_marks_review_without_changing_values() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v2",
+        prompt_version="vision-ar-v4",
         input_tokens=None,
         output_tokens=None,
         latency_ms=0,
@@ -180,7 +222,7 @@ def test_non_fiscal_ticket_requires_manual_review() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v2",
+        prompt_version="vision-ar-v4",
         input_tokens=20,
         output_tokens=12,
         latency_ms=250,
@@ -211,7 +253,7 @@ def test_missing_fiscal_identifiers_skip_arithmetic_validation() -> None:
         VoucherARV2.model_validate(payload),
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v2",
+        prompt_version="vision-ar-v4",
         input_tokens=20,
         output_tokens=12,
         latency_ms=250,

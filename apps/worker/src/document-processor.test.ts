@@ -41,7 +41,7 @@ const extractionResult: ExtractionResult = {
   ocrEngine: "multimodal-model",
   model: "synthetic/model",
   provider: "synthetic-provider",
-  promptVersion: "vision-ar-v2",
+  promptVersion: "vision-ar-v4",
   inputTokens: null,
   outputTokens: null,
   latencyMs: 0,
