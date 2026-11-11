@@ -25,6 +25,8 @@ let taxTypeId = "99999999-5555-4333-8444-999999999999";
 const REGIME_WP = "99999999-6666-4333-8444-999999999999";
 const PROFILE_WP = "99999999-7777-4333-8444-999999999999";
 const PERIOD_WP = "99999999-8888-4333-8444-999999999999";
+const FISCAL_YEAR_WP = "99999999-dddd-4ddd-8ddd-999999999999";
+const ACCOUNTING_PERIOD_WP = "99999999-eeee-4eee-8eee-999999999999";
 const OBLIGATION_WP = "99999999-aaaa-4333-8444-999999999999";
 const PACK_WP = "99999999-bbbb-4333-8444-999999999999";
 const RULE_VERSION_WP = "99999999-cccc-4333-8444-999999999999";
@@ -361,6 +363,64 @@ describe("F1.1 expediente mensual de liquidación", () => {
     const list = await service.list(ctxOwner, CLIENT_WP);
     expect(list.length).toBeGreaterThanOrEqual(1);
     expect(list[0]?.clientId).toBe(CLIENT_WP);
+  });
+
+  it("lista por fechas fiscales igual que por el período contable equivalente", async () => {
+    const workpaper = await service.create(ctxOwner, {
+      clientId: CLIENT_WP,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+    });
+    const startDate = new Date("2026-01-01T00:00:00.000Z");
+    const endDate = new Date("2026-01-31T00:00:00.000Z");
+    const accountingPeriod = await runAsRuntime(OWNER_WP, FIRM_WP, async (tx) => {
+      const fiscalYear = await tx.fiscalYear.upsert({
+        where: {
+          clientId_startDate_endDate: {
+            clientId: CLIENT_WP,
+            startDate: new Date("2026-01-01T00:00:00.000Z"),
+            endDate: new Date("2026-12-31T00:00:00.000Z"),
+          },
+        },
+        update: { firmId: FIRM_WP, label: "2026 WP", status: "OPEN" },
+        create: {
+          id: FISCAL_YEAR_WP,
+          firmId: FIRM_WP,
+          clientId: CLIENT_WP,
+          startDate: new Date("2026-01-01T00:00:00.000Z"),
+          endDate: new Date("2026-12-31T00:00:00.000Z"),
+          label: "2026 WP",
+        },
+      });
+      return tx.accountingPeriod.upsert({
+        where: {
+          clientId_startDate_endDate: { clientId: CLIENT_WP, startDate, endDate },
+        },
+        update: {
+          firmId: FIRM_WP,
+          fiscalYearId: fiscalYear.id,
+          ordinal: 1,
+          status: "OPEN",
+        },
+        create: {
+          id: ACCOUNTING_PERIOD_WP,
+          firmId: FIRM_WP,
+          clientId: CLIENT_WP,
+          fiscalYearId: fiscalYear.id,
+          startDate,
+          endDate,
+          ordinal: 1,
+        },
+      });
+    });
+
+    const [byDates, byAccountingPeriod] = await Promise.all([
+      service.list(ctxOwner, CLIENT_WP, "2026-01-01", "2026-01-31"),
+      service.listForAccountingPeriod(ctxOwner, CLIENT_WP, accountingPeriod.id),
+    ]);
+
+    expect(byDates.map((item) => item.id)).toEqual(byAccountingPeriod.map((item) => item.id));
+    expect(byDates.map((item) => item.id)).toContain(workpaper.id);
   });
 
   it("no permite calcular ni cerrar un expediente sin obligaciones materializadas", async () => {

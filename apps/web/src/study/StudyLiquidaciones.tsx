@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
@@ -62,7 +62,7 @@ function taxPeriodLabel(period: TaxPeriod) {
 
 export function StudyLiquidaciones() {
   const [density] = useDensity();
-  const { firmId, clientId, periodId, capabilities } = useClientContext();
+  const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [receipt, setReceipt] = useState<string | null>(null);
@@ -70,14 +70,6 @@ export function StudyLiquidaciones() {
   const [calculation, setCalculation] = useState({ periodId: "", regimeId: "", cutoff: today });
   const canCalculate = capabilities.has("tax.settlements.calculate");
 
-  const listQuery = useQuery({
-    queryKey: ["tax-settlements", firmId, clientId, periodId],
-    queryFn: () =>
-      api.get<TaxSettlement[]>(
-        `/firms/${firmId}/clients/${clientId}/tax-settlements?accountingPeriodId=${encodeURIComponent(periodId ?? "")}`,
-      ),
-    enabled: Boolean(firmId && clientId && periodId),
-  });
   const taxPeriodsQuery = useQuery({
     queryKey: ["tax-periods", firmId, clientId],
     queryFn: () => api.get<TaxPeriod[]>(`/firms/${firmId}/clients/${clientId}/tax-periods`),
@@ -97,6 +89,21 @@ export function StudyLiquidaciones() {
     () => selectableTaxPeriods.find((period) => period.id === calculation.periodId),
     [calculation.periodId, selectableTaxPeriods],
   );
+  useEffect(() => {
+    if (!taxPeriodsQuery.data) return;
+    setCalculation((current) => {
+      if (selectableTaxPeriods.some((period) => period.id === current.periodId)) return current;
+      return { ...current, periodId: selectableTaxPeriods[0]?.id ?? "", regimeId: "" };
+    });
+  }, [selectableTaxPeriods, taxPeriodsQuery.data]);
+  const listQuery = useQuery({
+    queryKey: ["tax-settlements", firmId, clientId, calculation.periodId],
+    queryFn: () =>
+      api.get<TaxSettlement[]>(
+        `/firms/${firmId}/clients/${clientId}/tax-settlements?periodId=${encodeURIComponent(calculation.periodId)}`,
+      ),
+    enabled: Boolean(firmId && clientId && calculation.periodId),
+  });
   const availableRegimes = (regimesQuery.data ?? []).filter(
     (regime) => regime.isActive && (!selectedTaxPeriod || regime.taxTypeId === selectedTaxPeriod.taxTypeId),
   );
@@ -118,7 +125,7 @@ export function StudyLiquidaciones() {
     onSuccess: () => {
       invalidate();
       setShowCalculator(false);
-      setCalculation({ periodId: "", regimeId: "", cutoff: today });
+      setCalculation((current) => ({ ...current, regimeId: "", cutoff: today }));
       setReceipt("La liquidación fue calculada con los comprobantes aprobados al corte indicado.");
     },
   });
@@ -163,11 +170,11 @@ export function StudyLiquidaciones() {
       setReceipt(`Se generó el papel de trabajo en ${variables.format.toUpperCase()}.`),
   });
 
-  if (!firmId || !clientId || !periodId) {
+  if (!firmId || !clientId) {
     return (
       <EmptyState
-        title="Elegí un cliente y período"
-        description="La cartera fiscal necesita un cliente y un período contable activos."
+        title="Elegí un cliente"
+        description="La cartera fiscal se organiza dentro de un cliente explícito."
       />
     );
   }
@@ -193,6 +200,7 @@ export function StudyLiquidaciones() {
             <Button
               onClick={() => setShowCalculator((visible) => !visible)}
               variant={showCalculator ? "secondary" : "primary"}
+              disabled={!selectableTaxPeriods.length}
             >
               <Icon name={showCalculator ? "close" : "plus"} size={16} />{" "}
               {showCalculator ? "Cerrar cálculo" : "Calcular liquidación"}
@@ -215,11 +223,37 @@ export function StudyLiquidaciones() {
         ]}
       />
 
+      {taxPeriodsQuery.isLoading ? (
+        <div className="study-state" role="status">
+          Cargando períodos fiscales…
+        </div>
+      ) : taxPeriodsQuery.isError ? (
+        <EmptyState
+          title="No se pudieron cargar los períodos fiscales"
+          description="Reintentá la consulta para volver a cargar los períodos del cliente."
+          action={
+            <Button variant="secondary" onClick={() => void taxPeriodsQuery.refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      ) : selectableTaxPeriods.length === 0 ? (
+        <EmptyState
+          title="Configurá un período fiscal"
+          description="Seleccioná un período fiscal para consultar o calcular liquidaciones."
+          action={
+            <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
+              Abrir configuración fiscal
+            </Button>
+          }
+        />
+      ) : null}
+
       <DenseAlert
         tone="ok"
         action={
           canCalculate ? (
-            <Button size="sm" onClick={() => setShowCalculator(true)}>Calcular liquidación</Button>
+            <Button size="sm" onClick={() => setShowCalculator(true)} disabled={!selectableTaxPeriods.length}>Calcular liquidación</Button>
           ) : (
             <Button size="sm" variant="secondary" onClick={() => navigate("/expediente-mensual")}>Abrir expediente</Button>
           )
@@ -331,7 +365,12 @@ export function StudyLiquidaciones() {
         <div>
           <p className="study-page__eyebrow">Seguimiento</p>
           <h2 id="settlements-list-title">Liquidaciones registradas</h2>
-          <p>Consultá versiones, estados y acciones disponibles para cada liquidación.</p>
+          <p>
+            {selectedTaxPeriod
+              ? `Período fiscal: ${selectedTaxPeriod.taxType.name} · ${taxPeriodLabel(selectedTaxPeriod)}. `
+              : "Seleccioná un período fiscal. "}
+            Consultá versiones, estados y acciones disponibles para cada liquidación.
+          </p>
         </div>
         <span className="section-count">{data.length}</span>
       </div>
@@ -349,13 +388,15 @@ export function StudyLiquidaciones() {
             </Button>
           }
         />
-      ) : data.length === 0 ? (
+      ) : !selectedTaxPeriod ? null : data.length === 0 ? (
         <EmptyState
           title="Todavía no hay liquidaciones"
           description="Iniciá el cálculo para un régimen configurado o prepará la evidencia desde el expediente mensual."
           action={
             canCalculate ? (
-              <Button onClick={() => setShowCalculator(true)}>Calcular liquidación</Button>
+              <Button onClick={() => setShowCalculator(true)} disabled={!selectableTaxPeriods.length}>
+                Calcular liquidación
+              </Button>
             ) : (
               <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>
                 Abrir expediente
