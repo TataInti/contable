@@ -859,11 +859,73 @@ export class FiscalMasterService {
       const validTo =
         input.validTo === undefined ? row.validTo : input.validTo ? new Date(input.validTo) : null;
       assertActivityValidity(validFrom, validTo);
+      const nextName = input.name === undefined ? row.name : input.name.trim();
+      let codeChange: {
+        previousCode: string;
+        updatedReferences: number;
+        retainedReferences: number;
+      } | null = null;
+      if (code !== row.code) {
+        const oldProfileActivityPrefix = `${row.code} —`;
+        const [draftConcepts, draftActivityCodes, voucherLines, classifications, supplierProfiles, clientProfiles] =
+          await Promise.all([
+            tx.taxRateRule.updateMany({
+              where: {
+                concept: row.code,
+                ruleVersion: { is: { status: "DRAFT" } },
+              },
+              data: { concept: code },
+            }),
+            tx.taxRateRule.updateMany({
+              where: {
+                activityCode: row.code,
+                ruleVersion: { is: { status: "DRAFT" } },
+              },
+              data: { activityCode: code },
+            }),
+            tx.fiscalVoucherLine.updateMany({ where: { activityCode: row.code }, data: { activityCode: code } }),
+            tx.workpaperVoucherClassification.updateMany({
+              where: { activityCode: row.code },
+              data: { activityCode: code },
+            }),
+            tx.supplierTaxProfile.updateMany({ where: { activityCode: row.code }, data: { activityCode: code } }),
+            tx.clientProfile.updateMany({
+              where: { activity: { startsWith: oldProfileActivityPrefix } },
+              data: { activity: `${code} — ${nextName}` },
+            }),
+          ]);
+        const [retainedRuleConcepts, retainedRuleActivityCodes, retainedProfiles] = await Promise.all([
+          tx.taxRateRule.count({
+            where: {
+              concept: row.code,
+              ruleVersion: { is: { status: { not: "DRAFT" } } },
+            },
+          }),
+          tx.taxRateRule.count({
+            where: {
+              activityCode: row.code,
+              ruleVersion: { is: { status: { not: "DRAFT" } } },
+            },
+          }),
+          tx.clientProfile.count({ where: { activity: { startsWith: oldProfileActivityPrefix } } }),
+        ]);
+        codeChange = {
+          previousCode: row.code,
+          updatedReferences:
+            draftConcepts.count +
+            draftActivityCodes.count +
+            voucherLines.count +
+            classifications.count +
+            supplierProfiles.count +
+            clientProfiles.count,
+          retainedReferences: retainedRuleConcepts + retainedRuleActivityCodes + retainedProfiles,
+        };
+      }
       const updated = await tx.economicActivity.update({
         where: { id: row.id },
         data: {
           ...(input.code !== undefined ? { code } : {}),
-          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.name !== undefined ? { name: nextName } : {}),
           ...(input.jurisdictionId !== undefined ? { jurisdictionId: input.jurisdictionId } : {}),
           ...(input.source !== undefined ? { source: input.source === null ? null : input.source.trim() } : {}),
           ...(input.validFrom !== undefined ? { validFrom } : {}),
@@ -883,9 +945,10 @@ export class FiscalMasterService {
         after: {
           code: updated.code, name: updated.name, jurisdictionId: updated.jurisdictionId, source: updated.source,
           validFrom: updated.validFrom.toISOString(), validTo: updated.validTo?.toISOString() ?? null,
+          codeChange,
         },
       });
-      return withActiveClientLinks(tx, updated);
+      return { ...(await withActiveClientLinks(tx, updated)), codeChange };
     }).catch((err: unknown) => {
       if (isUniqueConstraintError(err)) throw new FiscalError("CATALOG_CODE_CONFLICT", "Ya existe una actividad con ese código en la jurisdicción");
       throw err;

@@ -94,6 +94,11 @@ interface CatalogActivityRow {
   origin?: "REFERENCE" | "UI";
   createdByFirmId?: string | null;
   activeClientLinks?: number;
+  codeChange?: {
+    previousCode: string;
+    updatedReferences: number;
+    retainedReferences: number;
+  } | null;
 }
 
 interface ActivityForm {
@@ -524,12 +529,21 @@ export function StudyCatalogosFiscales() {
         validFrom: activityForm.validFrom,
         ...(activityForm.validTo ? { validTo: activityForm.validTo } : { validTo: null }),
       }),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-activities-catalog", firmId] });
       setEditingActivity(null);
       setActivityForm(emptyActivityForm);
       setActivityDrawer(null);
-      setReceipt("Los datos de la actividad quedaron actualizados.");
+      if (updated.codeChange) {
+        const { previousCode, updatedReferences, retainedReferences } = updated.codeChange;
+        const updatedLabel = `${updatedReferences} ${updatedReferences === 1 ? "referencia actualizada" : "referencias actualizadas"}`;
+        const retainedLabel = retainedReferences > 0
+          ? `${retainedReferences} ${retainedReferences === 1 ? "referencia conserva" : "referencias conservan"} el código anterior (${previousCode}).`
+          : "No quedan referencias al código anterior.";
+        setReceipt(`Se propagó el cambio de código ${previousCode} → ${updated.code}: ${updatedLabel}. ${retainedLabel}`);
+      } else {
+        setReceipt("Los datos de la actividad quedaron actualizados.");
+      }
     },
   });
   // Desactivar conserva el historial. El Titular también puede eliminar una
@@ -1850,6 +1864,7 @@ export function StudyCatalogosFiscales() {
             value={regimeForm.code}
             onChange={(event) => setRegimeForm({ ...regimeForm, code: event.target.value })}
             error={codeConflict(editingRegime ? updateRegime.error : createRegime.error)}
+            hint={editingRegime ? "Este código define hoy excepciones del motor, la fuente de importación y el permiso del régimen. Al guardar, esas decisiones seguirán evaluándose con el código nuevo hasta los cortes 2a, 5 y 7." : undefined}
             maxLength={40}
             required
           />
@@ -2356,6 +2371,7 @@ export function StudyCatalogosFiscales() {
                 value={jurisdictionForm.code}
                 onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, code: event.target.value.toUpperCase() })}
                 error={codeConflict(updateJurisdiction.error)}
+                hint="Este código define hoy la familia del motor según la jurisdicción. Al guardar, el motor seguirá evaluando el código nuevo hasta el corte 2a."
                 maxLength={40}
                 required
               />
@@ -2468,6 +2484,7 @@ export function StudyCatalogosFiscales() {
               value={taxTypeForm.code}
               onChange={(event) => setTaxTypeForm({ ...taxTypeForm, code: event.target.value.toUpperCase() })}
               error={codeConflict(updateTaxType.error)}
+              hint="Este código define hoy la familia del motor y la fuente de importación. Al guardar, ambas decisiones seguirán evaluándose con el código nuevo hasta los cortes 2a y 5."
               maxLength={40}
               required
             />
