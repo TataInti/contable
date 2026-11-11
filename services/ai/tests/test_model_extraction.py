@@ -36,15 +36,6 @@ def _valid_voucher() -> dict[str, Any]:
         "moneda": "ARS",
         "cae": None,
         "cae_vencimiento": None,
-        "items": [
-            {
-                "descripcion": "Servicio de prueba sintético",
-                "cantidad": "1",
-                "precio_unitario": "100.00",
-                "alicuota_iva": "21",
-                "importe": "121.00",
-            }
-        ],
         "confianza": {
             "tipo_documento": 0.96,
             "letra": 0.93,
@@ -58,11 +49,6 @@ def _valid_voucher() -> dict[str, Any]:
             "iva.0.importe": 0.9,
             "total": 0.95,
             "moneda": 0.88,
-            "items.0.descripcion": 0.88,
-            "items.0.cantidad": 0.88,
-            "items.0.precio_unitario": 0.88,
-            "items.0.alicuota_iva": 0.88,
-            "items.0.importe": 0.89,
         },
     }
 
@@ -102,18 +88,14 @@ def test_missing_and_explicit_null_fields_remain_null() -> None:
     payload.pop("cuit_emisor")
     payload.pop("razon_social_emisor")
     payload["cae"] = None
-    payload["items"] = None
     voucher = VoucherARV2.model_validate(payload)
     assert voucher.cuit_emisor is None
     assert voucher.razon_social_emisor is None
     assert voucher.cae is None
-    assert voucher.items is None
 
 
-def test_missing_line_item_description_stays_null_without_synthesizing_a_row() -> None:
+def test_extraction_response_and_voucher_do_not_contain_items() -> None:
     payload = _valid_voucher()
-    payload["items"][0]["descripcion"] = None
-    payload["confianza"].pop("items.0.descripcion")
     voucher = VoucherARV2.model_validate(payload)
     result = response_from_voucher(
         voucher,
@@ -125,9 +107,9 @@ def test_missing_line_item_description_stays_null_without_synthesizing_a_row() -
         latency_ms=100,
         estimated_cost_usd=None,
     )
-    assert voucher.items is not None
-    assert voucher.items[0].descripcion is None
-    assert result.items == []
+    assert "items" not in VoucherARV2.model_json_schema()["properties"]
+    assert "items" not in voucher.model_dump()
+    assert "items" not in result.model_dump()
 
 
 def test_invalid_schema_values_and_unknown_fields_are_rejected() -> None:
@@ -138,6 +120,16 @@ def test_invalid_schema_values_and_unknown_fields_are_rejected() -> None:
 
     payload = _valid_voucher()
     payload["importe_inventado"] = "121.00"
+    with pytest.raises(ValidationError):
+        VoucherARV2.model_validate(payload)
+
+    payload = _valid_voucher()
+    payload["items"] = []
+    with pytest.raises(ValidationError):
+        VoucherARV2.model_validate(payload)
+
+    payload = _valid_voucher()
+    payload["confianza"]["items.0.descripcion"] = 0.9
     with pytest.raises(ValidationError):
         VoucherARV2.model_validate(payload)
 
@@ -165,7 +157,7 @@ def test_arithmetic_mismatch_marks_review_without_changing_values() -> None:
         latency_ms=0,
         estimated_cost_usd=None,
     )
-    assert result.reviewReason == "ITEM_SUM_MISMATCH, COMPONENT_SUM_MISMATCH"
+    assert result.reviewReason == "COMPONENT_SUM_MISMATCH"
     assert result.voucher is not None
     assert result.voucher.total == "122.00"
     assert (
@@ -174,11 +166,13 @@ def test_arithmetic_mismatch_marks_review_without_changing_values() -> None:
     )
 
 
-def test_ticket_without_cuit_or_cae_is_kept_as_model_classification() -> None:
+def test_non_fiscal_ticket_requires_manual_review() -> None:
     payload = _valid_voucher()
     payload["tipo_documento"] = "ticket_no_fiscal"
+    payload["letra"] = None
     payload["cuit_emisor"] = None
     payload["cae"] = None
+    payload["confianza"].pop("letra")
     payload["confianza"].pop("cuit_emisor")
     voucher = VoucherARV2.model_validate(payload)
     result = response_from_voucher(
@@ -195,7 +189,38 @@ def test_ticket_without_cuit_or_cae_is_kept_as_model_classification() -> None:
     assert result.voucher.tipo_documento == "ticket_no_fiscal"
     assert result.voucher.cuit_emisor is None
     assert result.voucher.cae is None
-    assert result.reviewReason is None
+    assert result.reviewReason == "sin datos fiscales"
+    assert result.issues == ["sin datos fiscales"]
+
+
+def test_missing_fiscal_identifiers_skip_arithmetic_validation() -> None:
+    payload = _valid_voucher()
+    payload["letra"] = None
+    payload["cuit_emisor"] = None
+    payload["cae"] = None
+    payload["total"] = "122.00"
+    payload["no_gravado"] = "0.00"
+    payload["exento"] = "0.00"
+    payload["percepciones"] = []
+    payload["confianza"].pop("letra")
+    payload["confianza"].pop("cuit_emisor")
+    payload["confianza"].update({"no_gravado": 0.8, "exento": 0.8})
+
+    result = response_from_voucher(
+        VoucherARV2.model_validate(payload),
+        model="test/model",
+        provider="openrouter",
+        prompt_version="vision-ar-v2",
+        input_tokens=20,
+        output_tokens=12,
+        latency_ms=250,
+        estimated_cost_usd=None,
+    )
+
+    assert result.reviewReason == "sin datos fiscales"
+    assert result.issues == ["sin datos fiscales"]
+    assert result.voucher is not None
+    assert result.voucher.total == "122.00"
 
 
 def test_default_engine_does_not_call_legacy_extractor(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -366,7 +391,7 @@ def test_mocked_multimodal_success_records_usage_and_zdr_options(
     assert result.estimatedCostUsd == 0.0002
 
 
-def test_mocked_ticket_without_cuit_or_cae_keeps_model_output(
+def test_mocked_non_fiscal_ticket_requires_manual_review(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _configure_mock_model(monkeypatch)
@@ -395,7 +420,8 @@ def test_mocked_ticket_without_cuit_or_cae_keeps_model_output(
     assert result.voucher.tipo_documento == "ticket_no_fiscal"
     assert result.voucher.cuit_emisor is None
     assert result.voucher.cae is None
-    assert result.reviewReason is None
+    assert result.reviewReason == "sin datos fiscales"
+    assert result.issues == ["sin datos fiscales"]
 
 
 def test_pdf_over_page_limit_is_not_partially_sent_to_model(
@@ -435,7 +461,6 @@ def test_model_failure_retries_once_then_returns_manual_review_without_fallback(
     assert result.reviewReason == "MODEL_HTTP_ERROR_503"
     assert result.voucher is None
     assert result.fields == []
-    assert result.items == []
 
 
 def test_invalid_model_json_retries_once_then_requires_manual_review(

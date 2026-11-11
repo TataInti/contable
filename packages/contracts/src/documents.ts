@@ -31,31 +31,6 @@ export const extractedFieldSchema = z.object({
 });
 export type ExtractedField = z.infer<typeof extractedFieldSchema>;
 
-/** Ítem de línea extraído */
-export const extractedLineItemSchema = z.object({
-  description: z.string(),
-  quantity: z.string().nullable().optional(),
-  unitPrice: z.string().nullable().optional(),
-  netAmount: z.string().nullable().optional(),
-  vatRate: z.string().nullable().optional(),
-  vatAmount: z.string().nullable().optional(),
-  totalAmount: z.string().nullable().optional(),
-  confidence: z.number().min(0).max(1),
-  page: z.number().int().positive().nullable().optional(),
-  boundingBox: z
-    .object({
-      x: z.number(),
-      y: z.number(),
-      width: z.number(),
-      height: z.number(),
-    })
-    .nullable()
-    .optional(),
-  method: extractionMethod,
-  status: extractionFieldStatus.default("ACCEPTED"),
-});
-export type ExtractedLineItem = z.infer<typeof extractedLineItemSchema>;
-
 const amountText = z.string().regex(/^-?\d+(?:\.\d{1,6})?$/);
 
 /** Esquema canónico del comprobante argentino voucher-ar-v2. */
@@ -107,20 +82,13 @@ export const voucherARV2Schema = z
     moneda: z.string().regex(/^[A-Z]{3}$/).nullable(),
     cae: z.string().nullable(),
     cae_vencimiento: isoDate.nullable(),
-    items: z
-      .array(
-        z
-          .object({
-            descripcion: z.string().nullable(),
-            cantidad: amountText.nullable(),
-            precio_unitario: amountText.nullable(),
-            alicuota_iva: amountText.nullable(),
-            importe: amountText.nullable(),
-          })
-          .strict(),
-      )
-      .nullable(),
-    confianza: z.record(z.string(), z.number().min(0).max(1)),
+    confianza: z
+      .record(z.string(), z.number().min(0).max(1))
+      .refine(
+        (confidence) =>
+          !Object.keys(confidence).some((path) => path === "items" || path.startsWith("items.")),
+        "voucher-ar-v2 no contempla confianza de ítems",
+      ),
   })
   .strict();
 export type VoucherARV2 = z.infer<typeof voucherARV2Schema>;
@@ -131,7 +99,6 @@ export const extractionResultSchema = z.object({
   voucher: voucherARV2Schema.nullable(),
   classificationConfidence: z.number().min(0).max(1).nullable(),
   fields: z.array(extractedFieldSchema),
-  items: z.array(extractedLineItemSchema),
   issues: z.array(z.string()),
   reviewReason: z.string().nullable(),
   ocrEngine: z.string(),
@@ -142,7 +109,7 @@ export const extractionResultSchema = z.object({
   outputTokens: z.number().int().nonnegative().nullable(),
   latencyMs: z.number().int().nonnegative(),
   estimatedCostUsd: z.number().nonnegative().nullable(),
-});
+}).strict();
 export type ExtractionResult = z.infer<typeof extractionResultSchema>;
 
 /** Voucher aprobado */

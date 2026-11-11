@@ -40,7 +40,7 @@ SYSTEM_PROMPT = """Sos un extractor multimodal de comprobantes argentinos. Leé 
 
 Para cada campo, copiá únicamente texto o valores que sean visibles y legibles en la imagen. Si el campo no aparece o no se puede leer, devolvé null; para listas, devolvé null si no hay evidencia legible de esa sección. No inventes valores, no infieras CUIT, CAE, fecha, importes, moneda ni condición fiscal. Conservá importes como cadenas decimales con punto, sin separadores de miles. La fecha y el vencimiento deben ser YYYY-MM-DD. CUIT debe tener once dígitos o ser null. Usá tipo_documento=ilegible cuando el comprobante no pueda clasificarse por su imagen.
 
-Incluí en confianza un valor entre 0 y 1 por cada campo no nulo, usando como clave el nombre del campo o la ruta de lista (por ejemplo iva.0.importe, percepciones.0.tipo, items.0.descripcion). La confianza es una estimación del modelo, no una validación contable. No agregues explicaciones fuera del JSON."""
+Incluí en confianza un valor entre 0 y 1 por cada campo no nulo, usando como clave el nombre del campo o la ruta de lista (por ejemplo iva.0.importe, percepciones.0.tipo). La confianza es una estimación del modelo, no una validación contable. No agregues explicaciones fuera del JSON."""
 
 
 def _model_name() -> str | None:

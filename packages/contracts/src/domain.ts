@@ -41,7 +41,7 @@ export const extractionRequestSchema = z
       language: z.string().default("es"),
       maxPages: z.number().int().positive().max(3).default(3),
       schemaVersion: z.literal("voucher-ar-v2"),
-    }),
+    }).strict(),
     callback: z.object({
       url: z.string().url(),
       expiresAt: z.string().datetime(),

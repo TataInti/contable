@@ -4,9 +4,9 @@
 
 El endpoint normal usa exclusivamente `EXTRACTION_ENGINE=model` (default) y `services/ai/app/model_extraction.py`. El servicio rasteriza cada página del PDF o convierte la imagen directa y envía esas imágenes al modelo multimodal de OpenRouter. El texto embebido del PDF no se usa para extraer. `services/ai/app/extractor.py` permanece como código heredado, sin conexión con el endpoint normal; su eliminación queda para un PR posterior a la evaluación de Fase 0.
 
-El modelo responde con el esquema `voucher-ar-v2`, versión de prompt `vision-ar-v2`, temperatura 0. El contrato canónico está definido en `services/ai/app/voucher_v2.py` y `packages/contracts/src/documents.ts`. La respuesta preserva nulls, y sólo adapta los campos visibles al formato persistido que consume la bandeja. Las claves UI usadas por `StudyBandeja.tsx` incluyen `issuerTaxId`, `voucherNumber`, `voucherType`, `pointOfSale`, `issueDate`, `totalAmount`, `netAmount`, `vatAmount` y `currency`.
+El modelo responde con el esquema `voucher-ar-v2`, versión de prompt `vision-ar-v2`, temperatura 0. El contrato canónico está definido en `services/ai/app/voucher_v2.py` y `packages/contracts/src/documents.ts`. La respuesta preserva nulls, y sólo adapta los datos fiscales visibles al formato persistido que consume la bandeja. El esquema no incluye ítems y el worker no crea filas de ítems. Las claves UI usadas por `StudyBandeja.tsx` incluyen `issuerTaxId`, `voucherNumber`, `voucherType`, `pointOfSale`, `issueDate`, `totalAmount`, `netAmount`, `vatAmount` y `currency`.
 
-Las comprobaciones aritméticas usan tolerancia absoluta de 0,02 unidades de la moneda informada. Cuando hay datos suficientes, comparan la suma de importes de ítems y la suma de neto + IVA + no gravado + exento + percepciones con el total. Un desvío agrega un motivo de revisión y conserva sin cambios los valores devueltos por el modelo. Los campos ausentes o no legibles permanecen null; no se estiman.
+La única comprobación aritmética usa tolerancia absoluta de 0,02 unidades de la moneda informada: compara neto + IVA + no gravado + exento + percepciones con el total cuando todos los componentes están disponibles. Un desvío agrega un motivo de revisión y conserva sin cambios los valores devueltos por el modelo. Un comprobante clasificado como `ticket_no_fiscal`, o sin CUIT, CAE ni letra, pasa a revisión manual con motivo «sin datos fiscales» y omite la comprobación de suma. Los campos ausentes o no legibles permanecen null; no se estiman.
 
 ## Privacidad y estado de la allowlist
 
@@ -37,9 +37,9 @@ Las fallas HTTP, timeout, JSON inválido o respuesta fuera de esquema reciben ex
 
 ## Datos y migración
 
-La migración `20261111000000_extraction_v2_metrics` agrega tokens, latencia, costo estimado, motivo de revisión y `voucherData` JSONB a `document_extractions`. `voucherData` conserva el esquema voucher-ar-v2 íntegro, incluidos nulls y la confianza por campo; las tablas relacionales existentes mantienen los campos adaptados a la bandeja y las líneas. `provider`, `model` y `promptVersion` ya existían. No se agregan seeds.
+La migración `20261111000000_extraction_v2_metrics` agrega tokens, latencia, costo estimado, motivo de revisión y `voucherData` JSONB a `document_extractions`. `voucherData` conserva el esquema voucher-ar-v2 íntegro, incluidos nulls y la confianza por campo; las tablas relacionales mantienen los campos adaptados a la bandeja. La tabla existente `extracted_line_items` se conserva y este flujo no agrega filas. `provider`, `model` y `promptVersion` ya existían. No se agregan seeds.
 
-QR de ARCA queda pendiente de decisión de Inti y no se implementa aquí.
+El alcance cubre los datos fiscales del comprobante; la lectura de QR queda fuera de esta extracción.
 
 ## Verificación
 

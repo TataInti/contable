@@ -58,7 +58,7 @@ POST /internal/v1/extractions
 
 ### Response
 
-La respuesta HTTP contiene el voucher-ar-v2 validado, campos compatibles con la bandeja, líneas, motivos de revisión y telemetría (`provider`, modelo exacto, `promptVersion`, tokens de entrada/salida, latencia y costo estimado). El modelo recibe imágenes de cada página; el texto embebido del PDF no participa en la extracción. El motor de reglas heredado permanece desconectado del endpoint normal.
+La respuesta HTTP contiene el voucher-ar-v2 validado, campos fiscales compatibles con la bandeja, motivos de revisión y telemetría (`provider`, modelo exacto, `promptVersion`, tokens de entrada/salida, latencia y costo estimado). El esquema no incluye ítems ni procesa QR. El modelo recibe imágenes de cada página; el texto embebido del PDF no participa en la extracción. El motor de reglas heredado permanece desconectado del endpoint normal.
 
 ## Asistente
 

@@ -186,27 +186,6 @@ export class DocumentProcessor {
               return data;
             }),
           },
-          items: {
-            create: result.items.map((i) => {
-              const data: Prisma.ExtractedLineItemCreateWithoutExtractionInput = {
-                firmId: payload.firmId,
-                clientId: payload.clientId,
-                description: i.description,
-                quantity: i.quantity ?? null,
-                unitPrice: i.unitPrice ?? null,
-                netAmount: i.netAmount ?? null,
-                vatRate: i.vatRate ?? null,
-                vatAmount: i.vatAmount ?? null,
-                totalAmount: i.totalAmount ?? null,
-                confidence: i.confidence,
-                page: i.page ?? null,
-                method: i.method,
-                status: i.status,
-              };
-              if (i.boundingBox) data.boundingBox = i.boundingBox as Prisma.InputJsonValue;
-              return data;
-            }),
-          },
         },
       }));
 

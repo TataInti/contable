@@ -57,21 +57,6 @@ export interface ExtractedField {
   status: string;
 }
 
-export interface ExtractedLineItem {
-  description: string;
-  quantity?: string | null;
-  unitPrice?: string | null;
-  netAmount?: string | null;
-  vatRate?: string | null;
-  vatAmount?: string | null;
-  totalAmount?: string | null;
-  confidence: number;
-  page?: number | null;
-  boundingBox?: Record<string, unknown> | null;
-  method: string;
-  status: string;
-}
-
 export interface VoucherARV2 {
   tipo_documento:
     | "factura"
@@ -100,13 +85,6 @@ export interface VoucherARV2 {
   moneda: string | null;
   cae: string | null;
   cae_vencimiento: string | null;
-  items: {
-    descripcion: string | null;
-    cantidad: string | null;
-    precio_unitario: string | null;
-    alicuota_iva: string | null;
-    importe: string | null;
-  }[] | null;
   confianza: Record<string, number>;
 }
 
@@ -115,7 +93,6 @@ export interface ExtractionResult {
   voucher: VoucherARV2 | null;
   classificationConfidence: number | null;
   fields: ExtractedField[];
-  items: ExtractedLineItem[];
   issues: string[];
   reviewReason: string | null;
   ocrEngine: string;

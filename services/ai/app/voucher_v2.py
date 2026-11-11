@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from .extraction import ExtractedField, ExtractedLineItem
+from .extraction import ExtractedField
 
 VoucherType = Literal[
     "factura",
@@ -36,14 +36,6 @@ class Perception(StrictModel):
     importe: AmountText | None = None
 
 
-class VoucherItem(StrictModel):
-    descripcion: str | None = None
-    cantidad: AmountText | None = None
-    precio_unitario: AmountText | None = None
-    alicuota_iva: AmountText | None = None
-    importe: AmountText | None = None
-
-
 class VoucherARV2(StrictModel):
     """Contenido reconocido desde las imágenes, sin completar valores ausentes."""
 
@@ -67,12 +59,14 @@ class VoucherARV2(StrictModel):
     moneda: Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")] | None = None
     cae: str | None = None
     cae_vencimiento: str | None = None
-    items: list[VoucherItem] | None = None
     confianza: dict[str, Confidence] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_confidence_and_dates(self) -> VoucherARV2:
         from datetime import date
+
+        if any(path == "items" or path.startswith("items.") for path in self.confianza):
+            raise ValueError("voucher-ar-v2 no contempla confianza de ítems")
 
         for date_field in ("fecha", "cae_vencimiento"):
             value = getattr(self, date_field)
@@ -106,7 +100,7 @@ class VoucherARV2(StrictModel):
             if getattr(self, field_name) is not None:
                 self._require_confidence(field_name)
 
-        for group_name in ("iva", "percepciones", "items"):
+        for group_name in ("iva", "percepciones"):
             entries = getattr(self, group_name)
             if entries is None:
                 continue
@@ -126,7 +120,6 @@ class VoucherExtractionResponse(StrictModel):
     voucher: VoucherARV2 | None = None
     classificationConfidence: Confidence | None = None
     fields: list[ExtractedField] = Field(default_factory=list)
-    items: list[ExtractedLineItem] = Field(default_factory=list)
     issues: list[str] = Field(default_factory=list)
     reviewReason: str | None = None
     ocrEngine: str = "multimodal-model"
@@ -170,14 +163,6 @@ def validate_arithmetic(voucher: VoucherARV2) -> list[str]:
     if voucher.total is None:
         return reasons
     total = Decimal(voucher.total)
-
-    if voucher.items and all(item.importe is not None for item in voucher.items):
-        item_sum = sum(
-            (Decimal(item.importe) for item in voucher.items if item.importe is not None),
-            Decimal(0),
-        )
-        if abs(item_sum - total) > ARITHMETIC_TOLERANCE:
-            reasons.append("ITEM_SUM_MISMATCH")
 
     # Los null indican que el campo no fue visible; no se los interpreta como cero.
     components_available = (
@@ -250,42 +235,18 @@ def response_from_voucher(
                 value = getattr(entry, source_key)
                 append_field(f"{group_name}.{index}.{source_key}", ui_key, value)
 
-    line_items: list[ExtractedLineItem] = []
-    for index, item in enumerate(voucher.items or []):
-        confidence_paths = (
-            (f"items.{index}.descripcion", item.descripcion),
-            (f"items.{index}.cantidad", item.cantidad),
-            (f"items.{index}.precio_unitario", item.precio_unitario),
-            (f"items.{index}.alicuota_iva", item.alicuota_iva),
-            (f"items.{index}.importe", item.importe),
-        )
-        confidence_values = [
-            voucher.confianza[path] for path, value in confidence_paths if value is not None
-        ]
-        if item.descripcion is None or not confidence_values:
-            continue
-        line_items.append(
-            ExtractedLineItem(
-                description=item.descripcion,
-                quantity=item.cantidad,
-                unitPrice=item.precio_unitario,
-                vatRate=item.alicuota_iva,
-                totalAmount=item.importe,
-                confidence=min(confidence_values),
-                method="VISION",
-                status="ACCEPTED",
-            )
-        )
-
-    issues = validate_arithmetic(voucher)
-    if voucher.tipo_documento == "ilegible":
-        issues.append("DOCUMENT_ILLEGIBLE")
+    has_fiscal_data = any((voucher.cuit_emisor, voucher.cuit_receptor, voucher.cae, voucher.letra))
+    if voucher.tipo_documento == "ticket_no_fiscal" or not has_fiscal_data:
+        issues = ["sin datos fiscales"]
+    else:
+        issues = validate_arithmetic(voucher)
+        if voucher.tipo_documento == "ilegible":
+            issues.append("DOCUMENT_ILLEGIBLE")
     unique_issues = list(dict.fromkeys(issues))
     return VoucherExtractionResponse(
         voucher=voucher,
         classificationConfidence=voucher.confianza["tipo_documento"],
         fields=fields,
-        items=line_items,
         issues=unique_issues,
         reviewReason=", ".join(unique_issues) or None,
         model=model,
