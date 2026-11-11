@@ -867,6 +867,14 @@ export class FiscalMasterService {
       } | null = null;
       if (code !== row.code) {
         const oldProfileActivityPrefix = `${row.code} —`;
+        const draftRules = await tx.taxRateRule.findMany({
+          where: {
+            ruleVersion: { is: { status: "DRAFT" } },
+            OR: [{ concept: row.code }, { activityCode: row.code }],
+          },
+          select: { ruleVersionId: true },
+        });
+        const draftRuleVersionIds = [...new Set(draftRules.map((rule) => rule.ruleVersionId))];
         const [draftConcepts, draftActivityCodes, voucherLines, classifications, supplierProfiles, clientProfiles] =
           await Promise.all([
             tx.taxRateRule.updateMany({
@@ -894,6 +902,26 @@ export class FiscalMasterService {
               data: { activity: `${code} — ${nextName}` },
             }),
           ]);
+        for (const ruleVersionId of draftRuleVersionIds) {
+          const version = await tx.taxRuleVersion.findUnique({
+            where: { id: ruleVersionId },
+            include: {
+              rateRules: true,
+              minimumRules: true,
+              bracketRules: true,
+              dueDateRules: true,
+              roundingRules: true,
+            },
+          });
+          if (!version) throw new FiscalError("RULE_VERSION_NOT_FOUND", "Versión de regla no encontrada");
+          await tx.taxRuleVersion.update({
+            where: { id: ruleVersionId },
+            data: {
+              rulesHash: computeRulesHashV2(version),
+              rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V2,
+            },
+          });
+        }
         const [retainedRuleConcepts, retainedRuleActivityCodes, retainedProfiles] = await Promise.all([
           tx.taxRateRule.count({
             where: {

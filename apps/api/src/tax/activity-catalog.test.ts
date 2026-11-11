@@ -9,7 +9,8 @@ import { fiscalFoundationRoutes } from "./fiscal-foundation-routes.js";
  * Cobertura:
  * - GET sólo activo por defecto (selectores) + includeInactive para admin.
  * - Alta con normalización de código, unicidad y vigencia.
- * - PATCH de atributos/vigencia con code y jurisdictionId inmutables.
+ * - PATCH de atributos/vigencia con renombre de código propagado en transacción.
+ * - Las referencias de versiones ACTIVE/RETIRED conservan sus códigos e hashes.
  * - Activación/desactivación explícitas, sin borrado (historial intacto).
  * - Auditoría (auditEvent) en toda mutación del catálogo.
  * - Vínculo código-regla validado en servidor (altas y reemplazos DRAFT).
@@ -68,8 +69,12 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown>) {
 }
 
 function matchesRateRule(row: Record<string, unknown>, where: Record<string, unknown>) {
-  if (where.concept !== undefined && row.concept !== where.concept) return false;
-  if (where.activityCode !== undefined && row.activityCode !== where.activityCode) return false;
+  const alternatives = where.OR as Array<Record<string, unknown>> | undefined;
+  if (alternatives && !alternatives.some((item) => matchesRateRule(row, item))) return false;
+  for (const [key, value] of Object.entries(where)) {
+    if (key === "OR" || key === "ruleVersion") continue;
+    if (row[key] !== value) return false;
+  }
   const relation = where.ruleVersion as { is?: { status?: unknown } } | undefined;
   const statusFilter = relation?.is?.status;
   if (statusFilter === undefined) return true;
@@ -237,7 +242,7 @@ function makeTransaction() {
       count: async ({ where }: { where: Record<string, unknown> }) =>
         mockState.rateRules.filter((row) => matchesRateRule(row, where)).length,
       findMany: async ({ where = {} }: { where?: Record<string, unknown> }) =>
-        mockState.rateRules.filter((row) => matches(row, where)),
+        mockState.rateRules.filter((row) => matchesRateRule(row, where)),
     },
     fiscalVoucherLine: {
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) =>
@@ -480,6 +485,12 @@ describe("catálogo de actividades: edición y estado", () => {
     const draft = seedRuleVersion("DRAFT");
     const active = seedRuleVersion("ACTIVE");
     const retired = seedRuleVersion("RETIRED");
+    Object.assign(draft, { rulesHash: "draft-before", rulesHashSchemaVersion: 2 });
+    Object.assign(active, { rulesHash: "active-hash", rulesHashSchemaVersion: 2 });
+    Object.assign(retired, { rulesHash: "retired-hash", rulesHashSchemaVersion: 2 });
+    const draftVersion = draft as Record<string, unknown>;
+    const activeVersion = active as Record<string, unknown>;
+    const retiredVersion = retired as Record<string, unknown>;
     const draftRule = {
       id: nextUuid(),
       ruleVersionId: draft.id,
@@ -546,6 +557,10 @@ describe("catálogo de actividades: edición y estado", () => {
     expect(mockState.clientProfiles[0]).toMatchObject({ activity: "COMERCIO-V2 — Comercio ampliado" });
     expect(calculateDraftTax()).toBe(before);
     expect(mockState.ruleVersions.map((version) => version.status)).toEqual(["DRAFT", "ACTIVE", "RETIRED"]);
+    expect(draftVersion.rulesHash).not.toBe("draft-before");
+    expect(draftVersion.rulesHashSchemaVersion).toBe(2);
+    expect(activeVersion.rulesHash).toBe("active-hash");
+    expect(retiredVersion.rulesHash).toBe("retired-hash");
   });
 
   it("rechaza un código con formato inválido y actividad inexistente", async () => {

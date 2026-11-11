@@ -667,6 +667,34 @@ describe("StudyCatalogosFiscales", () => {
     expect(within(detail).getByText(/recauda en Otra jurisdicción/)).toBeTruthy();
   });
 
+  it("muestra junto a los códigos de tipo de impuesto y jurisdicción qué decisión siguen", async () => {
+    const tucuman = {
+      ...jurisdiction,
+      id: "jurisdiction-tuc-warning",
+      code: "AR-T",
+      name: "Tucumán",
+      kind: "PROVINCIAL",
+    };
+    const iibb = { ...taxType, id: "tax-type-iibb-warning", code: "IIBB", name: "Ingresos Brutos" };
+    jurisdictions.push(tucuman);
+    taxTypes.push(iibb);
+    renderCatalogs();
+
+    await openTab(/^Jurisdicciones/);
+    fireEvent.click(await screen.findByText("Tucumán"));
+    const jurisdictionDetail = await screen.findByRole("complementary", { name: "Detalle de la jurisdicción" });
+    fireEvent.click(within(jurisdictionDetail).getByRole("button", { name: "Editar" }));
+    let editDialog = await screen.findByRole("dialog");
+    expect(within(editDialog).getByText(/Este código define hoy la familia del motor según la jurisdicción/)).toBeTruthy();
+
+    await openTab(/^Tipos de impuesto/);
+    fireEvent.click(await screen.findByText("Ingresos Brutos"));
+    const taxTypeDetail = await screen.findByRole("complementary", { name: "Detalle del tipo de impuesto" });
+    fireEvent.click(within(taxTypeDetail).getByRole("button", { name: "Editar" }));
+    editDialog = await screen.findByRole("dialog");
+    expect(within(editDialog).getByText(/Este código define hoy la familia del motor y la fuente de importación/)).toBeTruthy();
+  });
+
   it("muestra junto al código de un régimen de sistema qué decisiones siguen ese código", async () => {
     const tucuman = {
       ...jurisdiction,
