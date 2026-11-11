@@ -12,7 +12,12 @@ from pydantic import ValidationError
 from app import main, model_extraction, openrouter_policy
 from app.contracts import ExtractionRunRequest
 from app.model_extraction import run_model_extraction
-from app.voucher_v2 import VoucherARV2, response_from_voucher
+from app.voucher_v2 import (
+    PERCEPTION_CATEGORIES,
+    VoucherARV21,
+    response_from_voucher,
+    source_path_for,
+)
 
 
 def _valid_voucher() -> dict[str, Any]:
@@ -63,9 +68,9 @@ def test_prompt_specifies_ticket_enum_cuit_and_literal_tax_text() -> None:
         "content"
     ]
 
-    assert model_extraction.PROMPT_VERSION == "vision-ar-v4"
+    assert model_extraction.PROMPT_VERSION == "vision-ar-v5"
     assert ticket_example in prompt
-    assert VoucherARV2.model_validate(json.loads(ticket_example)).tipo_documento == (
+    assert VoucherARV21.model_validate(json.loads(ticket_example)).tipo_documento == (
         "ticket_no_fiscal"
     )
     assert (
@@ -77,9 +82,12 @@ def test_prompt_specifies_ticket_enum_cuit_and_literal_tax_text() -> None:
         "Si el documento es un ticket no fiscal, tipo_documento debe ser exactamente `ticket_no_fiscal`"
         in prompt
     )
-    assert "`percepciones.tipo` y `condicion_iva` son transcripciones literales" in prompt
-    assert "No antepongas la palabra `Percepcion`" in prompt
-    assert "no omitas calificadores, no reformules y no trunques" in prompt
+    assert "`percepciones.categoria` debe ser exactamente una" in prompt
+    assert all(f"`{category}`" in prompt for category in PERCEPTION_CATEGORIES)
+    assert "`percepciones.tipo_texto` es la transcripción literal completa" in prompt
+    assert "No antepongas `Percepcion` si no está impresa" in prompt
+    assert "no reformules ni trunques" in prompt
+    assert "`condicion_iva` también es transcripción literal completa" in prompt
     assert (
         "Omití las claves ausentes o no legibles; el contrato las interpreta como null." in prompt
     )
@@ -90,26 +98,26 @@ def test_natural_language_ticket_label_is_rejected_by_enum() -> None:
     payload["tipo_documento"] = "TICKET NO FISCAL"
 
     with pytest.raises(ValidationError) as error:
-        VoucherARV2.model_validate(payload)
+        VoucherARV21.model_validate(payload)
 
     assert error.value.errors()[0]["loc"] == ("tipo_documento",)
     assert error.value.errors()[0]["type"] == "literal_error"
 
 
 def test_voucher_ar_v2_validates_and_maps_existing_ui_keys() -> None:
-    voucher = VoucherARV2.model_validate(_valid_voucher())
+    voucher = VoucherARV21.model_validate(_valid_voucher())
     result = response_from_voucher(
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v4",
+        prompt_version="vision-ar-v5",
         input_tokens=120,
         output_tokens=48,
         latency_ms=850,
         estimated_cost_usd=0.0002,
     )
     mapped = {field.key: field.normalizedValue for field in result.fields}
-    assert result.schemaVersion == "voucher-ar-v2"
+    assert result.schemaVersion == "voucher-ar-v2.1"
     assert mapped["issuerTaxId"] == "30712345675"
     assert mapped["issuerName"] == "Proveedor Sintético SA"
     assert mapped["voucherNumber"] == "00000023"
@@ -126,12 +134,89 @@ def test_voucher_ar_v2_validates_and_maps_existing_ui_keys() -> None:
     assert result.estimatedCostUsd == 0.0002
 
 
+@pytest.mark.parametrize("category", PERCEPTION_CATEGORIES)
+def test_perception_catalog_accepts_each_category(category: str) -> None:
+    payload = _valid_voucher()
+    payload["percepciones"] = [
+        {"categoria": category, "tipo_texto": "texto impreso", "importe": "1.00"}
+    ]
+    payload["confianza"].update(
+        {
+            "percepciones.0.categoria": 0.9,
+            "percepciones.0.tipo_texto": 0.9,
+            "percepciones.0.importe": 0.9,
+        }
+    )
+
+    voucher = VoucherARV21.model_validate(payload)
+
+    assert voucher.percepciones is not None
+    assert voucher.percepciones[0].categoria == category
+
+
+def test_unknown_perception_category_becomes_others_and_marks_review() -> None:
+    payload = _valid_voucher()
+    payload["iva"] = [
+        {"alicuota": "21", "importe": "21.00"},
+        {"alicuota": "10.5", "importe": "2.00"},
+    ]
+    payload["percepciones"] = [
+        {"categoria": "IIBB", "tipo_texto": "IIBB - dato sintetico", "importe": "1.00"},
+        {
+            "categoria": "Impuesto Inventado",
+            "tipo_texto": "Rótulo fiscal raro",
+            "importe": "2.00",
+        },
+    ]
+    payload["confianza"].update(
+        {
+            "iva.1.alicuota": 0.9,
+            "iva.1.importe": 0.9,
+            "percepciones.0.categoria": 0.95,
+            "percepciones.0.tipo_texto": 0.95,
+            "percepciones.0.importe": 0.95,
+            "percepciones.1.categoria": 0.95,
+            "percepciones.1.tipo_texto": 0.95,
+            "percepciones.1.importe": 0.95,
+        }
+    )
+    normalized, unknown_indexes = model_extraction._normalize_perception_categories(payload)
+    voucher = VoucherARV21.model_validate(normalized)
+    result = response_from_voucher(
+        voucher,
+        model="test/model",
+        provider="openrouter",
+        prompt_version="vision-ar-v5",
+        input_tokens=None,
+        output_tokens=None,
+        latency_ms=0,
+        estimated_cost_usd=None,
+        unrecognized_perception_indexes=unknown_indexes,
+    )
+
+    assert voucher.percepciones is not None
+    assert voucher.percepciones[1].categoria == "Otras"
+    assert voucher.confianza["percepciones.1.categoria"] == 0.0
+    assert result.reviewReason == "percepción no reconocida"
+    assert [issue.model_dump() for issue in result.reviewIssues] == [
+        {
+            "reason": "percepción no reconocida",
+            "sourcePath": "percepciones[1].categoria",
+        }
+    ]
+
+
+def test_source_paths_are_stable_for_indexed_vat_and_perception_lists() -> None:
+    assert source_path_for("iva", 1, "importe") == "iva[1].importe"
+    assert source_path_for("percepciones", 2, "categoria") == "percepciones[2].categoria"
+
+
 def test_missing_and_explicit_null_fields_remain_null() -> None:
     payload = _valid_voucher()
     payload.pop("cuit_emisor")
     payload.pop("razon_social_emisor")
     payload["cae"] = None
-    voucher = VoucherARV2.model_validate(payload)
+    voucher = VoucherARV21.model_validate(payload)
     assert voucher.cuit_emisor is None
     assert voucher.razon_social_emisor is None
     assert voucher.cae is None
@@ -139,18 +224,18 @@ def test_missing_and_explicit_null_fields_remain_null() -> None:
 
 def test_extraction_response_and_voucher_do_not_contain_items() -> None:
     payload = _valid_voucher()
-    voucher = VoucherARV2.model_validate(payload)
+    voucher = VoucherARV21.model_validate(payload)
     result = response_from_voucher(
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v4",
+        prompt_version="vision-ar-v5",
         input_tokens=10,
         output_tokens=5,
         latency_ms=100,
         estimated_cost_usd=None,
     )
-    assert "items" not in VoucherARV2.model_json_schema()["properties"]
+    assert "items" not in VoucherARV21.model_json_schema()["properties"]
     assert "items" not in voucher.model_dump()
     assert "items" not in result.model_dump()
 
@@ -159,27 +244,27 @@ def test_invalid_schema_values_and_unknown_fields_are_rejected() -> None:
     payload = _valid_voucher()
     payload["tipo_documento"] = "invoice"
     with pytest.raises(ValidationError):
-        VoucherARV2.model_validate(payload)
+        VoucherARV21.model_validate(payload)
 
     payload = _valid_voucher()
     payload["importe_inventado"] = "121.00"
     with pytest.raises(ValidationError):
-        VoucherARV2.model_validate(payload)
+        VoucherARV21.model_validate(payload)
 
     payload = _valid_voucher()
     payload["items"] = []
     with pytest.raises(ValidationError):
-        VoucherARV2.model_validate(payload)
+        VoucherARV21.model_validate(payload)
 
     payload = _valid_voucher()
     payload["confianza"]["items.0.descripcion"] = 0.9
     with pytest.raises(ValidationError):
-        VoucherARV2.model_validate(payload)
+        VoucherARV21.model_validate(payload)
 
     payload = _valid_voucher()
     payload["confianza"].pop("total")
     with pytest.raises(ValidationError):
-        VoucherARV2.model_validate(payload)
+        VoucherARV21.model_validate(payload)
 
 
 def test_arithmetic_mismatch_marks_review_without_changing_values() -> None:
@@ -189,18 +274,21 @@ def test_arithmetic_mismatch_marks_review_without_changing_values() -> None:
     payload["exento"] = "0.00"
     payload["percepciones"] = []
     payload["confianza"].update({"no_gravado": 0.8, "exento": 0.8})
-    voucher = VoucherARV2.model_validate(payload)
+    voucher = VoucherARV21.model_validate(payload)
     result = response_from_voucher(
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v4",
+        prompt_version="vision-ar-v5",
         input_tokens=None,
         output_tokens=None,
         latency_ms=0,
         estimated_cost_usd=None,
     )
     assert result.reviewReason == "COMPONENT_SUM_MISMATCH"
+    assert [issue.model_dump() for issue in result.reviewIssues] == [
+        {"reason": "COMPONENT_SUM_MISMATCH", "sourcePath": None}
+    ]
     assert result.voucher is not None
     assert result.voucher.total == "122.00"
     assert (
@@ -217,12 +305,12 @@ def test_non_fiscal_ticket_requires_manual_review() -> None:
     payload["cae"] = None
     payload["confianza"].pop("letra")
     payload["confianza"].pop("cuit_emisor")
-    voucher = VoucherARV2.model_validate(payload)
+    voucher = VoucherARV21.model_validate(payload)
     result = response_from_voucher(
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v4",
+        prompt_version="vision-ar-v5",
         input_tokens=20,
         output_tokens=12,
         latency_ms=250,
@@ -234,6 +322,9 @@ def test_non_fiscal_ticket_requires_manual_review() -> None:
     assert result.voucher.cae is None
     assert result.reviewReason == "sin datos fiscales"
     assert result.issues == ["sin datos fiscales"]
+    assert [issue.model_dump() for issue in result.reviewIssues] == [
+        {"reason": "sin datos fiscales", "sourcePath": None}
+    ]
 
 
 def test_missing_fiscal_identifiers_skip_arithmetic_validation() -> None:
@@ -250,10 +341,10 @@ def test_missing_fiscal_identifiers_skip_arithmetic_validation() -> None:
     payload["confianza"].update({"no_gravado": 0.8, "exento": 0.8})
 
     result = response_from_voucher(
-        VoucherARV2.model_validate(payload),
+        VoucherARV21.model_validate(payload),
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v4",
+        prompt_version="vision-ar-v5",
         input_tokens=20,
         output_tokens=12,
         latency_ms=250,
@@ -262,6 +353,9 @@ def test_missing_fiscal_identifiers_skip_arithmetic_validation() -> None:
 
     assert result.reviewReason == "sin datos fiscales"
     assert result.issues == ["sin datos fiscales"]
+    assert [issue.model_dump() for issue in result.reviewIssues] == [
+        {"reason": "sin datos fiscales", "sourcePath": None}
+    ]
     assert result.voucher is not None
     assert result.voucher.total == "122.00"
 
@@ -318,7 +412,7 @@ def test_default_engine_does_not_call_legacy_extractor(monkeypatch: pytest.Monke
             "country": "AR",
             "language": "es",
             "maxPages": 3,
-            "schemaVersion": "voucher-ar-v2",
+            "schemaVersion": "voucher-ar-v2.1",
         },
         "callback": {
             "url": "http://api:3000/internal/v1/extractions/complete",
@@ -553,6 +647,9 @@ def test_mocked_non_fiscal_ticket_requires_manual_review(
     assert result.voucher.cae is None
     assert result.reviewReason == "sin datos fiscales"
     assert result.issues == ["sin datos fiscales"]
+    assert [issue.model_dump() for issue in result.reviewIssues] == [
+        {"reason": "sin datos fiscales", "sourcePath": None}
+    ]
 
 
 def test_pdf_over_page_limit_is_not_partially_sent_to_model(

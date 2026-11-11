@@ -30,7 +30,7 @@ class ExtractionOptions(BaseModel):
     country: str = "AR"
     language: str = "es"
     maxPages: int = Field(default=3, gt=0, le=3)
-    schemaVersion: Literal["voucher-ar-v2"] = "voucher-ar-v2"
+    schemaVersion: Literal["voucher-ar-v2.1"] = "voucher-ar-v2.1"
 
 
 class ExtractionCallback(BaseModel):

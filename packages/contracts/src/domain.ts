@@ -40,7 +40,7 @@ export const extractionRequestSchema = z
       country: z.literal("AR"),
       language: z.string().default("es"),
       maxPages: z.number().int().positive().max(3).default(3),
-      schemaVersion: z.literal("voucher-ar-v2"),
+      schemaVersion: z.literal("voucher-ar-v2.1"),
     }).strict(),
     callback: z.object({
       url: z.string().url(),

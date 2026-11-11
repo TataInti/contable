@@ -32,7 +32,7 @@ export interface ExtractionOptions {
   country: string;
   language: string;
   maxPages: number;
-  schemaVersion: "voucher-ar-v2";
+  schemaVersion: "voucher-ar-v2.1";
 }
 
 export interface ExtractionRunRequest {
@@ -57,7 +57,16 @@ export interface ExtractedField {
   status: string;
 }
 
-export interface VoucherARV2 {
+export type PerceptionCategory =
+  | "IIBB"
+  | "IVA"
+  | "Ganancias"
+  | "SUSS"
+  | "Impuestos internos"
+  | "Municipal"
+  | "Otras";
+
+export interface VoucherARV21 {
   tipo_documento:
     | "factura"
     | "ticket_no_fiscal"
@@ -80,7 +89,9 @@ export interface VoucherARV2 {
   iva: { alicuota: string | null; importe: string | null }[] | null;
   no_gravado: string | null;
   exento: string | null;
-  percepciones: { tipo: string | null; importe: string | null }[] | null;
+  percepciones:
+    | { categoria: PerceptionCategory; tipo_texto: string | null; importe: string | null }[]
+    | null;
   total: string | null;
   moneda: string | null;
   cae: string | null;
@@ -89,12 +100,13 @@ export interface VoucherARV2 {
 }
 
 export interface ExtractionResult {
-  schemaVersion: "voucher-ar-v2";
-  voucher: VoucherARV2 | null;
+  schemaVersion: "voucher-ar-v2.1";
+  voucher: VoucherARV21 | null;
   classificationConfidence: number | null;
   fields: ExtractedField[];
   issues: string[];
   reviewReason: string | null;
+  reviewIssues: { reason: string; sourcePath: string | null }[];
   ocrEngine: string;
   model: string | null;
   provider: string | null;
@@ -133,7 +145,7 @@ export class AiClient {
     mimeType: string;
     sizeBytes: number;
     sha256: string;
-    schemaVersion: "voucher-ar-v2";
+    schemaVersion: "voucher-ar-v2.1";
   }): Promise<ExtractionResult> {
     const downloadUrl = await this.storage.getPresignedGetUrl(BUCKETS.originals, input.objectKey, 300);
 

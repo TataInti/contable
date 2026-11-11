@@ -143,7 +143,7 @@ export class DocumentProcessor {
         mimeType,
         sizeBytes: fileVersion.sizeBytes,
         sha256: fileVersion.sha256,
-        schemaVersion: "voucher-ar-v2",
+        schemaVersion: "voucher-ar-v2.1",
       });
 
       await withWorkerTenant(payload.firmId, payload.clientId, (tx) => tx.documentExtraction.create({
@@ -152,9 +152,11 @@ export class DocumentProcessor {
           clientId: payload.clientId,
           documentId: payload.documentId,
           fileVersionId: fileVersion.id,
-          schemaVersion: "voucher-ar-v2",
+          schemaVersion: "voucher-ar-v2.1",
           status:
-            result.reviewReason || result.issues.length > 0 ? "NEEDS_REVIEW" : "GENERATED",
+            result.reviewReason || result.issues.length > 0 || result.reviewIssues.length > 0
+              ? "NEEDS_REVIEW"
+              : "GENERATED",
           classification: result.voucher?.tipo_documento ?? null,
           confidence: result.classificationConfidence ?? null,
           ocrEngine: result.ocrEngine,
@@ -166,6 +168,7 @@ export class DocumentProcessor {
           latencyMs: result.latencyMs,
           estimatedCostUsd: result.estimatedCostUsd ?? null,
           reviewReason: result.reviewReason ?? null,
+          reviewIssues: result.reviewIssues as unknown as Prisma.InputJsonValue,
           ...(result.voucher
             ? { voucherData: result.voucher as unknown as Prisma.InputJsonValue }
             : {}),
@@ -196,7 +199,9 @@ export class DocumentProcessor {
           data: {
             status: "SUCCEEDED",
             stage:
-              result.reviewReason || result.issues.length > 0 ? "NEEDS_REVIEW" : "EXTRACTED",
+              result.reviewReason || result.issues.length > 0 || result.reviewIssues.length > 0
+                ? "NEEDS_REVIEW"
+                : "EXTRACTED",
             progress: 100,
             finishedAt: new Date(),
             error: result.reviewReason ?? null,
@@ -217,12 +222,13 @@ export class DocumentProcessor {
           clientId: payload.clientId,
           documentId: payload.documentId,
           fileVersionId: fileVersion.id,
-          schemaVersion: "voucher-ar-v2",
+          schemaVersion: "voucher-ar-v2.1",
           status: "NEEDS_REVIEW",
           ocrEngine: "multimodal-model",
-          promptVersion: "vision-ar-v4",
+          promptVersion: "vision-ar-v5",
           latencyMs: Date.now() - extractionStartedAt,
           reviewReason,
+          reviewIssues: [{ reason: reviewReason, sourcePath: null }],
         },
       }));
       await withWorkerTenant(payload.firmId, payload.clientId, (tx) => tx.document.update({
