@@ -124,6 +124,68 @@ describe("asistente (integración DB)", () => {
     ).rejects.toThrow(AssistantError);
   });
 
+  it("persiste tokens y costo informados por la IA", async () => {
+    const fx = await setupFixtures();
+    const service = new AssistantService({ baseUrl: "http://localhost:8000", secret: "test", serviceId: "api" });
+    vi.spyOn(service as unknown as { callAssistant: () => Promise<unknown> }, "callAssistant").mockResolvedValue({
+      answer: "El saldo de caja es $100.000,00",
+      abstained: false,
+      abstentionReason: null,
+      evidence: [],
+      model: "anthropic/claude-haiku-5.5",
+      provider: "Amazon Bedrock",
+      promptVersion: "assistant-ar-v1",
+      inputTokens: 812,
+      outputTokens: 37,
+      costUsd: "0.000431",
+    });
+
+    const conversation = await service.createConversation(ctx, {
+      clientId: CLIENT_ALFA,
+      periodId: fx.period.id,
+    });
+    const { assistantTurn } = await service.sendTurn(ctx, {
+      conversationId: conversation.id,
+      query: "¿Cuál es el saldo de caja?",
+    });
+
+    const usage = await prisma.assistantUsage.findFirst({ where: { turnId: assistantTurn.id } });
+    expect(usage).not.toBeNull();
+    expect(usage?.inputTokens).toBe(812);
+    expect(usage?.outputTokens).toBe(37);
+    expect(Number(usage?.costUsd)).toBeCloseTo(0.000431, 8);
+    expect(usage?.provider).toBe("Amazon Bedrock");
+    expect(usage?.model).toBe("anthropic/claude-haiku-5.5");
+  });
+
+  it("persiste cero cuando la IA no informa uso", async () => {
+    const fx = await setupFixtures();
+    const service = new AssistantService({ baseUrl: "http://localhost:8000", secret: "test", serviceId: "api" });
+    vi.spyOn(service as unknown as { callAssistant: () => Promise<unknown> }, "callAssistant").mockResolvedValue({
+      answer: "ok",
+      abstained: false,
+      abstentionReason: null,
+      evidence: [],
+      model: null,
+      provider: "deterministic",
+      promptVersion: "assistant-ar-v1",
+    });
+
+    const conversation = await service.createConversation(ctx, {
+      clientId: CLIENT_ALFA,
+      periodId: fx.period.id,
+    });
+    const { assistantTurn } = await service.sendTurn(ctx, {
+      conversationId: conversation.id,
+      query: "¿Saldo?",
+    });
+
+    const usage = await prisma.assistantUsage.findFirst({ where: { turnId: assistantTurn.id } });
+    expect(usage?.inputTokens).toBe(0);
+    expect(usage?.outputTokens).toBe(0);
+    expect(Number(usage?.costUsd)).toBe(0);
+  });
+
   it("registra feedback de un turno", async () => {
     const fx = await setupFixtures();
     const service = new AssistantService({ baseUrl: "http://localhost:8000", secret: "test", serviceId: "api" });
