@@ -18,6 +18,21 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(requiredCapability("GET", "/api/v1/firms/f/clients/c/summary")).toBe("client.read");
   });
 
+  it("identidad y contactos requieren client.manage, con rechazo 403 para sólo lectura", () => {
+    expect(requiredCapability("PATCH", "/api/v1/firms/f/clients/c")).toBe("client.manage");
+    for (const [method, path] of [
+      ["GET", "/api/v1/firms/f/clients/c/contacts"],
+      ["POST", "/api/v1/firms/f/clients/c/contacts"],
+      ["PATCH", "/api/v1/firms/f/clients/c/contacts/contact-a"],
+    ]) {
+      expect(requiredCapability(method!, path!)).toBe("client.manage");
+    }
+    const auditor = { capabilities: capabilitiesForRole("AUDITOR_READONLY") } as never;
+    expect(() => assertCapability(auditor, "client.manage")).toThrow(
+      expect.objectContaining({ statusCode: 403, code: "CAPABILITY_REQUIRED" }),
+    );
+  });
+
   it("el catálogo de actividad de la ficha se lee con client.read", () => {
     const path = "/api/v1/firms/f/client-profile-catalogs/activities";
     expect(requiredCapability("GET", path)).toBe("client.read");

@@ -207,6 +207,16 @@ export interface Client {
   status: string;
 }
 
+export interface ClientContact {
+  id: string;
+  name: string;
+  function: string | null;
+  email: string | null;
+  phone: string | null;
+  isPrimary: boolean;
+  isActive: boolean;
+}
+
 export interface ClientSummary {
   client: Client & {
     tradeName: string | null;

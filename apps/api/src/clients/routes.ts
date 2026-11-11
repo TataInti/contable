@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import {
   createClientSchema,
+  updateClientSchema,
+  createClientContactSchema,
+  updateClientContactSchema,
   clientProfilePatchInputSchema,
   createAccountSchema,
   createCounterpartySchema,
@@ -64,6 +67,55 @@ export function clientRoutes(app: FastifyInstance) {
     }
     const client = await repo.create(firmId, body, ctx);
     return reply.status(201).send({ data: client });
+  });
+
+  // Actualizar identidad y estado conservando el ID del cliente.
+  app.patch("/api/v1/firms/:firmId/clients/:clientId", async (req, reply) => {
+    const { firmId, clientId } = req.params as { firmId: string; clientId: string };
+    const body = updateClientSchema.parse(req.body);
+    const client = await repo.updateIdentity(
+      firmId,
+      clientId,
+      body,
+      tenantContextFromRequest(req),
+    );
+    return reply.send({ data: client });
+  });
+
+  // Contactos: la colección conserva filas ocultas para poder mostrarlas otra vez.
+  app.get("/api/v1/firms/:firmId/clients/:clientId/contacts", async (req, reply) => {
+    const { firmId, clientId } = req.params as { firmId: string; clientId: string };
+    const contacts = await repo.listContacts(firmId, clientId, tenantContextFromRequest(req));
+    return reply.send({ data: contacts });
+  });
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/contacts", async (req, reply) => {
+    const { firmId, clientId } = req.params as { firmId: string; clientId: string };
+    const body = createClientContactSchema.parse(req.body);
+    const contact = await repo.createContact(
+      firmId,
+      clientId,
+      body,
+      tenantContextFromRequest(req),
+    );
+    return reply.status(201).send({ data: contact });
+  });
+
+  app.patch("/api/v1/firms/:firmId/clients/:clientId/contacts/:contactId", async (req, reply) => {
+    const { firmId, clientId, contactId } = req.params as {
+      firmId: string;
+      clientId: string;
+      contactId: string;
+    };
+    const body = updateClientContactSchema.parse(req.body);
+    const contact = await repo.updateContact(
+      firmId,
+      clientId,
+      contactId,
+      body,
+      tenantContextFromRequest(req),
+    );
+    return reply.send({ data: contact });
   });
 
   // Catálogo de actividad principal para la ficha. Reutiliza EconomicActivity

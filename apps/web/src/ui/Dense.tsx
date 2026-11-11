@@ -349,6 +349,7 @@ export interface DenseColumn<T> {
   align?: "right";
   width?: string;
   className?: string;
+  sticky?: "right";
 }
 
 export function DenseTable<T>({
@@ -426,8 +427,18 @@ export function DenseTable<T>({
                   return (
                     <th
                       key={column.key}
-                      className={column.align === "right" ? "dense-cell--right" : undefined}
-                      style={column.width ? { width: column.width } : undefined}
+                      className={[
+                        column.align === "right" ? "dense-cell--right" : "",
+                        column.className ?? "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      style={{
+                        ...(column.width ? { width: column.width } : {}),
+                        ...(column.sticky === "right"
+                          ? { position: "sticky", right: 0 }
+                          : {}),
+                      }}
                       aria-sort={
                         direction === 1 ? "ascending" : direction === -1 ? "descending" : undefined
                       }
@@ -484,6 +495,7 @@ export function DenseTable<T>({
                         ]
                           .filter(Boolean)
                           .join(" ")}
+                        style={column.sticky === "right" ? { position: "sticky", right: 0 } : undefined}
                       >
                         {column.render(row)}
                       </td>
@@ -561,6 +573,7 @@ export function Inspector({
   children,
   footer,
   label,
+  banner,
 }: {
   eyebrow?: string;
   title: ReactNode;
@@ -570,6 +583,7 @@ export function Inspector({
   children: ReactNode;
   footer?: ReactNode;
   label: string;
+  banner?: ReactNode;
 }) {
   return (
     <aside className="dense-inspector" aria-label={label}>
@@ -592,6 +606,7 @@ export function Inspector({
           </button>
         ) : null}
       </header>
+      {banner ? <div className="dense-inspector__banner">{banner}</div> : null}
       <div className="dense-inspector__body">{children}</div>
       {footer ? <footer className="dense-inspector__foot">{footer}</footer> : null}
     </aside>

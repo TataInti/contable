@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
-import { api } from "../lib/api";
+import { ApiError, api, type ClientContact } from "../lib/api";
 import { StudyClientes } from "./StudyClientes";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -84,6 +84,7 @@ function mockApi(profile: Record<string, unknown>, standards = standardsFixture)
     if (path === "/tax/jurisdictions" || path === "/tax/jurisdictions?includeInactive=true") return Promise.resolve(catalogFixture);
     if (path.includes("/client-profile-catalogs/activities")) return Promise.resolve(activitiesFixture);
     if (path.includes("/accounting-standards")) return Promise.resolve(standards);
+    if (path.endsWith("/contacts")) return Promise.resolve([]);
     if (path.includes("/clients")) return Promise.resolve([clientFixture(profile)]);
     return Promise.resolve(null);
   }) as never);
@@ -509,6 +510,7 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
 });
 
 describe("StudyClientes — cartera densa", () => {
+  let contactRows: ClientContact[] = [];
   const completeProfile = {
     functionalCurrency: "ARS",
     accountingStandard: "RTIC",
@@ -523,6 +525,7 @@ describe("StudyClientes — cartera densa", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    contactRows = [];
     contextMock.current = {
       firmId: "firm-a",
       clientId: null,
@@ -545,10 +548,17 @@ describe("StudyClientes — cartera densa", () => {
       if (path === "/tax/jurisdictions" || path === "/tax/jurisdictions?includeInactive=true") return Promise.resolve(catalogFixture);
       if (path.includes("/client-profile-catalogs/activities")) return Promise.resolve(activitiesFixture);
       if (path.includes("/accounting-standards")) return Promise.resolve(standardsFixture);
+      if (path.endsWith("/contacts")) return Promise.resolve(contactRows);
       if (path.includes("/clients")) {
         return Promise.resolve([
           { ...clientFixture(completeProfile), id: "c1", legalName: "Alfa Uno S.A.", cuit: "20111111112" },
-          { ...clientFixture({}), id: "c2", legalName: "Beta Dos S.R.L.", cuit: "30222222223" },
+          {
+            ...clientFixture({}),
+            id: "c2",
+            legalName: "Beta Dos S.R.L.",
+            tradeName: "Beta Comercial",
+            cuit: "30222222223",
+          },
           {
             ...clientFixture(completeProfile),
             id: "c3",
@@ -581,6 +591,56 @@ describe("StudyClientes — cartera densa", () => {
     expect(within(screen.getByRole("table")).getByText("Beta Dos S.R.L.")).toBeTruthy();
   });
 
+  it("fija Abrir, define anchos y mantiene Completar visible sobre el pie", async () => {
+    renderClientes();
+    const table = await screen.findByRole("table", { name: "Cartera de clientes" });
+    const actionHeader = table.querySelector(
+      "thead th.client-list__action-column",
+    ) as HTMLTableCellElement | null;
+    const profileHeader = table.querySelector(
+      "thead th.client-list__profile-column",
+    ) as HTMLTableCellElement | null;
+    const statusHeader = table.querySelector(
+      "thead th.client-list__status-column",
+    ) as HTMLTableCellElement | null;
+
+    expect(actionHeader).not.toBeNull();
+    expect(actionHeader?.style.position).toBe("sticky");
+    expect(actionHeader?.style.right).toBe("0px");
+    expect(actionHeader?.style.width).toBe("9%");
+    expect(profileHeader?.style.width).toBe("8%");
+    expect(statusHeader?.style.width).toBe("10%");
+    const actionCells = table.querySelectorAll("tbody td.client-list__action-column");
+    expect(actionCells).toHaveLength(3);
+    expect((actionCells[0] as HTMLTableCellElement).style.position).toBe("sticky");
+    expect((actionCells[0] as HTMLTableCellElement).style.right).toBe("0px");
+    expect(
+      within(actionCells[0] as HTMLTableCellElement).getByRole("button", {
+        name: "Abrir trabajo de Alfa Uno S.A.",
+      }),
+    ).toBeTruthy();
+
+    const betaButton = within(table).getByRole("button", { name: "Beta Dos S.R.L." });
+    expect(betaButton.getAttribute("title")).toBe("Beta Dos S.R.L. — Beta Comercial");
+    expect(within(betaButton).getByText("Beta Dos S.R.L.").tagName).toBe("STRONG");
+    expect(within(betaButton).getByText("Beta Comercial").tagName).toBe("SMALL");
+
+    fireEvent.click(within(table).getByText("30-22222222-3"));
+    const detail = await screen.findByRole("complementary", {
+      name: "Detalle de Beta Dos S.R.L.",
+    });
+    const alert = detail.querySelector(
+      ".dense-inspector__banner .dense-alert",
+    ) as HTMLElement | null;
+    expect(alert).not.toBeNull();
+    expect(alert?.parentElement?.classList.contains("dense-inspector__banner")).toBe(true);
+    expect(detail.querySelector(".dense-inspector__body")?.contains(alert)).toBe(false);
+    expect(detail.querySelector(".dense-inspector__foot")?.contains(alert)).toBe(false);
+
+    fireEvent.click(within(alert as HTMLElement).getByRole("button", { name: "Completar" }));
+    expect(await screen.findByRole("button", { name: "Guardar ficha" })).toBeTruthy();
+  });
+
   it("filtra por estado y por condición de IVA", async () => {
     renderClientes();
     await screen.findByRole("table");
@@ -609,6 +669,139 @@ describe("StudyClientes — cartera densa", () => {
     await waitFor(() =>
       expect(screen.queryByRole("complementary", { name: "Detalle de Beta Dos S.R.L." })).toBeNull(),
     );
+  });
+
+  it("edita la identidad desde la ficha con los valores actuales y guarda el PATCH", async () => {
+    const updated = {
+      id: "c1",
+      legalName: "Alfa Actualizada S.A.",
+      tradeName: "Alfa Comercial",
+      cuit: "20333333334",
+      status: "ACTIVE",
+    };
+    vi.mocked(api.patch).mockResolvedValue(updated as never);
+    renderClientes();
+    const table = await screen.findByRole("table");
+    fireEvent.click(within(table).getByText("20-11111111-2"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
+    fireEvent.click(within(detail).getByRole("button", { name: "Editar" }));
+
+    expect((screen.getByLabelText("Razón social") as HTMLInputElement).value).toBe("Alfa Uno S.A.");
+    expect((screen.getByLabelText("Nombre comercial") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("CUIT") as HTMLInputElement).value).toBe("20111111112");
+    expect((screen.getByLabelText("Estado") as HTMLSelectElement).value).toBe("ACTIVE");
+
+    fireEvent.change(screen.getByLabelText("Razón social"), {
+      target: { value: "Alfa Actualizada S.A." },
+    });
+    fireEvent.change(screen.getByLabelText("Nombre comercial"), {
+      target: { value: "Alfa Comercial" },
+    });
+    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20333333334" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith("/firms/firm-a/clients/c1", {
+        legalName: "Alfa Actualizada S.A.",
+        tradeName: "Alfa Comercial",
+        cuit: "20333333334",
+        status: "ACTIVE",
+      }),
+    );
+  });
+
+  it("muestra el conflicto de CUIT junto al campo de identidad", async () => {
+    vi.mocked(api.patch).mockRejectedValue(
+      new ApiError("CLIENT_CUIT_CONFLICT", "Ya existe un cliente con ese CUIT en este estudio.", 409),
+    );
+    renderClientes();
+    const table = await screen.findByRole("table");
+    fireEvent.click(within(table).getByText("20-11111111-2"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
+    fireEvent.click(within(detail).getByRole("button", { name: "Editar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(await screen.findByText("Ya existe un cliente con ese CUIT en este estudio.")).toBeTruthy();
+    expect(screen.getByLabelText("CUIT").getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("permite alta, edición, cambio de principal y ocultar/mostrar contactos", async () => {
+    vi.mocked(api.post).mockImplementation(((path: string, payload: unknown) => {
+      expect(path).toBe("/firms/firm-a/clients/c1/contacts");
+      const fields = payload as Omit<ClientContact, "id" | "isActive">;
+      if (fields.isPrimary) {
+        contactRows = contactRows.map((contact) => ({ ...contact, isPrimary: false }));
+      }
+      const created: ClientContact = {
+        id: `contact-${contactRows.length + 1}`,
+        ...fields,
+        isActive: true,
+      };
+      contactRows = [...contactRows, created];
+      return Promise.resolve(created);
+    }) as never);
+    vi.mocked(api.patch).mockImplementation(((path: string, payload: unknown) => {
+      const contactId = path.split("/").at(-1);
+      const changes = payload as Partial<ClientContact>;
+      if (changes.isPrimary) {
+        contactRows = contactRows.map((contact) =>
+          contact.id === contactId ? contact : { ...contact, isPrimary: false },
+        );
+      }
+      contactRows = contactRows.map((contact) =>
+        contact.id === contactId ? { ...contact, ...changes } : contact,
+      );
+      const updated = contactRows.find((contact) => contact.id === contactId);
+      if (!updated) return Promise.reject(new Error("Contacto inexistente en el mock"));
+      return Promise.resolve(updated);
+    }) as never);
+
+    renderClientes();
+    const table = await screen.findByRole("table");
+    fireEvent.click(within(table).getByText("20-11111111-2"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Nuevo contacto" }));
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Contacto Uno" } });
+    fireEvent.change(screen.getByLabelText("Función"), { target: { value: "Administración" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "uno@example.com" } });
+    fireEvent.change(screen.getByLabelText("Teléfono"), { target: { value: "+54 11 1234-5678" } });
+    fireEvent.click(screen.getByLabelText("Contacto principal"));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar contacto" }));
+    await screen.findByText("Contacto Uno");
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Nuevo contacto" }));
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Contacto Dos" } });
+    fireEvent.click(screen.getByLabelText("Contacto principal"));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar contacto" }));
+    await screen.findByText("Contacto Dos");
+    expect(within(detail).getAllByText("Principal")).toHaveLength(1);
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Editar contacto de Contacto Uno" }));
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Contacto Uno Editado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar contacto" }));
+    await screen.findByText("Contacto Uno Editado");
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Ocultar contacto de Contacto Uno Editado" }));
+    await within(detail).findByRole("button", { name: "Mostrar contacto de Contacto Uno Editado" });
+    fireEvent.click(within(detail).getByRole("button", { name: "Mostrar contacto de Contacto Uno Editado" }));
+    await within(detail).findByRole("button", { name: "Ocultar contacto de Contacto Uno Editado" });
+
+    expect(api.post).toHaveBeenCalledTimes(2);
+    expect(api.patch).toHaveBeenCalledTimes(3);
+  });
+
+  it("oculta las acciones de edición a quien no tiene client.manage", async () => {
+    contextMock.current = {
+      ...contextMock.current,
+      capabilities: new Set(["client.read"]),
+    };
+    renderClientes();
+    const table = await screen.findByRole("table");
+    fireEvent.click(within(table).getByText("20-11111111-2"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
+    expect(within(detail).queryByRole("button", { name: "Editar" })).toBeNull();
+    expect(within(detail).queryByRole("button", { name: "Editar ficha" })).toBeNull();
   });
 
   it("abre el espacio de trabajo desde la fila sin seleccionar el cliente", async () => {

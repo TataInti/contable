@@ -14,7 +14,7 @@ import {
   type CatalogJurisdiction,
   type ClientEconomicActivityOption,
 } from "@contable/contracts";
-import { ApiError, api, type Client } from "../lib/api";
+import { ApiError, api, type Client, type ClientContact } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -102,6 +102,14 @@ interface ClientWithProfile extends Client {
   profile?: ClientProfile | null;
 }
 
+interface ClientContactForm {
+  name: string;
+  function: string;
+  email: string;
+  phone: string;
+  isPrimary: boolean;
+}
+
 interface ClientProfileForm {
   functionalCurrency: string;
   accountingStandard: string;
@@ -143,6 +151,22 @@ export function StudyClientes() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [density, setDensity] = useDensity();
   const searchRef = useRef<HTMLInputElement>(null);
+  const [identityClient, setIdentityClient] = useState<ClientWithProfile | null>(null);
+  const [identityForm, setIdentityForm] = useState({
+    legalName: "",
+    tradeName: "",
+    cuit: "",
+    status: "ONBOARDING",
+  });
+  const [contactEditorOpen, setContactEditorOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
+  const [contactForm, setContactForm] = useState<ClientContactForm>({
+    name: "",
+    function: "",
+    email: "",
+    phone: "",
+    isPrimary: false,
+  });
   const [form, setForm] = useState({
     legalName: "",
     tradeName: "",
@@ -170,6 +194,14 @@ export function StudyClientes() {
     queryKey: ["clients", firmId],
     queryFn: () => api.get<ClientWithProfile[]>(`/firms/${firmId}/clients`),
     enabled: Boolean(firmId),
+  });
+  const contactsQuery = useQuery({
+    queryKey: ["client-contacts", firmId, selectedId],
+    queryFn: () => {
+      if (!firmId || !selectedId) return Promise.resolve([]);
+      return api.get<ClientContact[]>(`/firms/${firmId}/clients/${selectedId}/contacts`);
+    },
+    enabled: Boolean(firmId && selectedId && capabilities.has("client.manage")),
   });
   const jurisdictionCatalog = useQuery({
     queryKey: ["jurisdiction-catalog", firmId],
@@ -310,6 +342,55 @@ export function StudyClientes() {
       setNotice(`La ficha de ${clientName} quedó actualizada.`);
     },
   });
+  const updateIdentity = useMutation({
+    mutationFn: () => {
+      if (!identityClient) throw new Error("Elegí un cliente para actualizar su identidad");
+      return api.patch<Client>(`/firms/${firmId}/clients/${identityClient.id}`, {
+        legalName: identityForm.legalName.trim(),
+        tradeName: identityForm.tradeName.trim() || null,
+        cuit: identityForm.cuit,
+        status: identityForm.status,
+      });
+    },
+    onSuccess: async (client) => {
+      await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
+      setIdentityClient(null);
+      setNotice(`Los datos de ${client.legalName} se actualizaron.`);
+    },
+  });
+  const saveContact = useMutation({
+    mutationFn: () => {
+      if (!firmId || !selectedId) throw new Error("Elegí un cliente para administrar contactos");
+      const path = `/firms/${firmId}/clients/${selectedId}/contacts`;
+      const payload = {
+        name: contactForm.name.trim(),
+        function: contactForm.function.trim() || null,
+        email: contactForm.email.trim() || null,
+        phone: contactForm.phone.trim() || null,
+        isPrimary: contactForm.isPrimary,
+      };
+      return editingContact
+        ? api.patch<ClientContact>(`${path}/${editingContact.id}`, payload)
+        : api.post<ClientContact>(path, payload);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["client-contacts", firmId, selectedId] });
+      setContactEditorOpen(false);
+      setEditingContact(null);
+    },
+  });
+  const toggleContactState = useMutation({
+    mutationFn: (contact: ClientContact) => {
+      if (!firmId || !selectedId) throw new Error("Elegí un cliente para administrar contactos");
+      return api.patch<ClientContact>(
+        `/firms/${firmId}/clients/${selectedId}/contacts/${contact.id}`,
+        { isActive: !contact.isActive },
+      );
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["client-contacts", firmId, selectedId] });
+    },
+  });
   const rows = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("es-AR");
     const digits = needle.replace(/\D/g, "");
@@ -339,9 +420,43 @@ export function StudyClientes() {
 
   const startProfileEdit = (client: ClientWithProfile) => {
     setCreating(false);
+    setIdentityClient(null);
     setNotice(null);
     setEditingClient(client);
     setProfileForm(profileFormFrom(client));
+  };
+
+  const startIdentityEdit = (client: ClientWithProfile) => {
+    setCreating(false);
+    setEditingClient(null);
+    setNotice(null);
+    updateIdentity.reset();
+    setIdentityClient(client);
+    setIdentityForm({
+      legalName: client.legalName,
+      tradeName: client.tradeName ?? "",
+      cuit: client.cuit,
+      status: client.status,
+    });
+  };
+
+  const openContactEditor = (contact?: ClientContact) => {
+    saveContact.reset();
+    setEditingContact(contact ?? null);
+    setContactForm({
+      name: contact?.name ?? "",
+      function: contact?.function ?? "",
+      email: contact?.email ?? "",
+      phone: contact?.phone ?? "",
+      isPrimary: contact?.isPrimary ?? false,
+    });
+    setContactEditorOpen(true);
+  };
+
+  const closeContactEditor = () => {
+    setContactEditorOpen(false);
+    setEditingContact(null);
+    saveContact.reset();
   };
 
   const clients = query.data ?? [];
@@ -373,12 +488,15 @@ export function StudyClientes() {
     {
       key: "legalName",
       header: "Cliente",
+      width: "20%",
+      className: "client-list__client-column",
       sortValue: (row) => row.legalName.toLocaleLowerCase("es-AR"),
       render: (row) => (
         <button
           type="button"
           className="dense-name-button"
           aria-label={row.legalName}
+          title={`${row.legalName}${row.tradeName ? ` — ${row.tradeName}` : ""}`}
           aria-current={clientId === row.id ? "true" : undefined}
           onClick={() => openClientWorkspace(row.id)}
         >
@@ -396,18 +514,24 @@ export function StudyClientes() {
     {
       key: "cuit",
       header: "CUIT",
+      width: "13%",
+      className: "client-list__cuit-column",
       sortValue: (row) => row.cuit,
       render: (row) => <span className="tabular-copy">{formatCuit(row.cuit)}</span>,
     },
     {
       key: "vat",
       header: "Condición IVA",
+      width: "11%",
+      className: "client-list__vat-column",
       sortValue: (row) => vatLabel(row.profile?.vatCondition),
       render: (row) => vatLabel(row.profile?.vatCondition) || <span className="dense-dim">—</span>,
     },
     {
       key: "province",
       header: "Provincia",
+      width: "8%",
+      className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.province ?? "",
       render: (row) => row.profile?.province || <span className="dense-dim">—</span>,
@@ -415,6 +539,8 @@ export function StudyClientes() {
     {
       key: "activity",
       header: "Actividad",
+      width: "8%",
+      className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.activity ?? "",
       render: (row) => row.profile?.activity || <span className="dense-dim">—</span>,
@@ -422,6 +548,8 @@ export function StudyClientes() {
     {
       key: "standard",
       header: "Norma",
+      width: "7%",
+      className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.accountingStandard ?? "",
       render: (row) => row.profile?.accountingStandard || <span className="dense-dim">—</span>,
@@ -429,6 +557,8 @@ export function StudyClientes() {
     {
       key: "closing",
       header: "Cierre",
+      width: "6%",
+      className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.fiscalYearEndMonth ?? 0,
       render: (row) =>
@@ -441,6 +571,8 @@ export function StudyClientes() {
     {
       key: "gaps",
       header: "Ficha",
+      width: "8%",
+      className: "client-list__profile-column",
       sortValue: (row) => missingProfileFields(row).length,
       render: (row) => {
         const gaps = missingProfileFields(row);
@@ -456,12 +588,17 @@ export function StudyClientes() {
     {
       key: "status",
       header: "Estado",
+      width: "10%",
+      className: "client-list__status-column",
       sortValue: (row) => row.status,
       render: (row) => <StatusBadge status={row.status} />,
     },
     {
       key: "open",
       header: "",
+      width: "9%",
+      className: "client-list__action-column",
+      sticky: "right",
       align: "right",
       render: (row) => (
         <Button
@@ -490,6 +627,21 @@ export function StudyClientes() {
           {selectedClient.legalName.slice(0, 1).toLocaleUpperCase("es-AR")}
         </span>
       }
+      banner={
+        missingProfileFields(selectedClient).length > 0 ? (
+          <DenseAlert
+            action={
+              canManage ? (
+                <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
+                  Completar
+                </Button>
+              ) : undefined
+            }
+          >
+            Ficha incompleta: falta {missingProfileFields(selectedClient).join(", ")}.
+          </DenseAlert>
+        ) : undefined
+      }
       onClose={() => setSelectedId(null)}
       footer={
         <>
@@ -500,9 +652,14 @@ export function StudyClientes() {
             Resumen
           </Button>
           {canManage ? (
-            <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
-              Editar ficha
-            </Button>
+            <>
+              <Button size="sm" variant="secondary" onClick={() => startIdentityEdit(selectedClient)}>
+                Editar
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
+                Editar ficha
+              </Button>
+            </>
           ) : null}
           {capabilities.has("data.delete") ? (
             <Button size="sm" variant="danger" onClick={() => setDeletingClient(selectedClient)}>
@@ -545,18 +702,78 @@ export function StudyClientes() {
           ]}
         />
       </InspectorSection>
-      {missingProfileFields(selectedClient).length > 0 ? (
-        <DenseAlert
-          action={
-            canManage ? (
-              <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
-                Completar
-              </Button>
-            ) : undefined
-          }
-        >
-          Ficha incompleta: falta {missingProfileFields(selectedClient).join(", ")}.
-        </DenseAlert>
+      {canManage ? (
+        <InspectorSection title="Contactos">
+          <div className="client-contacts__toolbar">
+            <span className="dense-dim">
+              {contactsQuery.data?.length ?? 0} {(contactsQuery.data?.length ?? 0) === 1 ? "contacto" : "contactos"}
+            </span>
+            <Button size="sm" onClick={() => openContactEditor()}>
+              Nuevo contacto
+            </Button>
+          </div>
+          {contactsQuery.isLoading ? (
+            <p role="status">Cargando contactos…</p>
+          ) : contactsQuery.isError ? (
+            <p className="form-error" role="alert">
+              No se pudieron cargar los contactos. Reintentá.
+            </p>
+          ) : contactsQuery.data?.length ? (
+            <div className="client-contact-list">
+              {contactsQuery.data.map((contact) => (
+                <article
+                  key={contact.id}
+                  className={`client-contact${contact.isActive ? "" : " client-contact--inactive"}`}
+                >
+                  <div className="client-contact__main">
+                    <div className="client-contact__heading">
+                      <strong>{contact.name}</strong>
+                      {contact.isPrimary ? <span className="dense-tag">Principal</span> : null}
+                      {!contact.isActive ? <span className="dense-tag">Oculto</span> : null}
+                    </div>
+                    <div className="client-contact__details">
+                      {contact.function ? <span>{contact.function}</span> : null}
+                      {contact.email ? <span>{contact.email}</span> : null}
+                      {contact.phone ? <span>{contact.phone}</span> : null}
+                    </div>
+                  </div>
+                  <div className="client-contact__actions">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      aria-label={`Editar contacto de ${contact.name}`}
+                      onClick={() => openContactEditor(contact)}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`${contact.isActive ? "Ocultar" : "Mostrar"} contacto de ${contact.name}`}
+                      loading={toggleContactState.isPending}
+                      onClick={() => toggleContactState.mutate(contact)}
+                    >
+                      {contact.isActive ? "Ocultar" : "Mostrar"}
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              size="compact"
+              title="Todavía no hay contactos"
+              description="Agregá personas de referencia para este cliente."
+            />
+          )}
+          {toggleContactState.isError ? (
+            <p className="form-error" role="alert">
+              {toggleContactState.error instanceof ApiError
+                ? toggleContactState.error.message
+                : "No se pudo actualizar el contacto. Revisá los datos e intentá nuevamente."}
+            </p>
+          ) : null}
+        </InspectorSection>
       ) : null}
     </Inspector>
   ) : null;
@@ -832,6 +1049,99 @@ export function StudyClientes() {
             </p>
           ) : null}
         </form>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={Boolean(identityClient)}
+        onClose={() => {
+          setIdentityClient(null);
+          updateIdentity.reset();
+        }}
+        eyebrow="Cartera"
+        title="Editar cliente"
+        description="Actualizá la identidad y el estado del cliente."
+        footer={
+          <Button
+            type="submit"
+            form="client-identity-form"
+            loading={updateIdentity.isPending}
+            loadingLabel="Guardando cliente"
+            disabled={identityForm.legalName.trim().length === 0 || identityForm.cuit.length !== 11}
+          >
+            Guardar cambios
+          </Button>
+        }
+      >
+        {identityClient ? (
+          <form
+            id="client-identity-form"
+            className="study-inline-form study-inline-form--client"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateIdentity.mutate();
+            }}
+          >
+            <Field
+              id="client-identity-legal-name"
+              label="Razón social"
+              value={identityForm.legalName}
+              onChange={(event) => setIdentityForm({ ...identityForm, legalName: event.target.value })}
+              maxLength={200}
+              required
+            />
+            <Field
+              id="client-identity-trade-name"
+              label="Nombre comercial"
+              value={identityForm.tradeName}
+              onChange={(event) => setIdentityForm({ ...identityForm, tradeName: event.target.value })}
+              maxLength={100}
+            />
+            <Field
+              id="client-identity-cuit"
+              label="CUIT"
+              value={identityForm.cuit}
+              onChange={(event) =>
+                setIdentityForm({
+                  ...identityForm,
+                  cuit: event.target.value.replace(/\D/g, "").slice(0, 11),
+                })
+              }
+              inputMode="numeric"
+              pattern="[0-9]{11}"
+              hint="11 dígitos, sin guiones"
+              error={
+                updateIdentity.error instanceof ApiError &&
+                updateIdentity.error.code === "CLIENT_CUIT_CONFLICT"
+                  ? updateIdentity.error.message
+                  : undefined
+              }
+              required
+            />
+            <label className="ds-field">
+              <span className="ds-field__label">Estado</span>
+              <select
+                id="client-identity-status"
+                className="ctxbar__input"
+                value={identityForm.status}
+                onChange={(event) => setIdentityForm({ ...identityForm, status: event.target.value })}
+              >
+                <option value="ONBOARDING">En configuración</option>
+                <option value="ACTIVE">Activo</option>
+                <option value="INACTIVE">Inactivo</option>
+                <option value="ARCHIVED">Archivado</option>
+              </select>
+            </label>
+            {updateIdentity.isError &&
+            !(updateIdentity.error instanceof ApiError &&
+              updateIdentity.error.code === "CLIENT_CUIT_CONFLICT") ? (
+              <p className="form-error study-inline-form__feedback" role="alert">
+                {updateIdentity.error instanceof ApiError
+                  ? updateIdentity.error.message
+                  : "No se pudo guardar el cliente. Revisá los datos y los permisos."}
+              </p>
+            ) : null}
+          </form>
+        ) : null}
       </ActionDrawer>
 
       <ActionDrawer
@@ -1130,6 +1440,86 @@ export function StudyClientes() {
             ) : null}
           </form>
         ) : null}
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={contactEditorOpen}
+        onClose={closeContactEditor}
+        eyebrow="Cliente"
+        title={editingContact ? "Editar contacto" : "Nuevo contacto"}
+        description="Completá los datos de contacto y, si corresponde, marcá el principal."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={closeContactEditor}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="client-contact-form"
+              loading={saveContact.isPending}
+              loadingLabel="Guardando contacto"
+              disabled={contactForm.name.trim().length === 0}
+            >
+              Guardar contacto
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="client-contact-form"
+          className="study-inline-form study-inline-form--client"
+          onSubmit={(event) => {
+            event.preventDefault();
+            saveContact.mutate();
+          }}
+        >
+          <Field
+            id="client-contact-name"
+            label="Nombre"
+            value={contactForm.name}
+            onChange={(event) => setContactForm({ ...contactForm, name: event.target.value })}
+            maxLength={200}
+            required
+          />
+          <Field
+            id="client-contact-function"
+            label="Función"
+            value={contactForm.function}
+            onChange={(event) => setContactForm({ ...contactForm, function: event.target.value })}
+            maxLength={100}
+          />
+          <Field
+            id="client-contact-email"
+            label="Email"
+            type="email"
+            value={contactForm.email}
+            onChange={(event) => setContactForm({ ...contactForm, email: event.target.value })}
+            maxLength={254}
+          />
+          <Field
+            id="client-contact-phone"
+            label="Teléfono"
+            type="tel"
+            value={contactForm.phone}
+            onChange={(event) => setContactForm({ ...contactForm, phone: event.target.value })}
+            maxLength={50}
+          />
+          <label className="client-contact-primary">
+            <input
+              type="checkbox"
+              checked={contactForm.isPrimary}
+              onChange={(event) => setContactForm({ ...contactForm, isPrimary: event.target.checked })}
+            />
+            <span>Contacto principal</span>
+          </label>
+          {saveContact.isError ? (
+            <p className="form-error study-inline-form__feedback" role="alert">
+              {saveContact.error instanceof ApiError
+                ? saveContact.error.message
+                : "No se pudo guardar el contacto. Revisá los datos e intentá nuevamente."}
+            </p>
+          ) : null}
+        </form>
       </ActionDrawer>
 
       {deletingClient && firmId ? (
