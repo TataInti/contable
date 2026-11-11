@@ -642,6 +642,28 @@ button.dense-stat:hover {
   overflow-wrap: anywhere;
 }
 
+.dense-inspector__banner {
+  flex: none;
+  padding: var(--ds-space-3) var(--ds-space-3) 0;
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+}
+
+.dense-inspector__banner .dense-alert {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-3);
+}
+
+.dense-inspector__banner .dense-alert > span:not(.dense-alert__action) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.dense-inspector__banner .dense-alert__action {
+  margin-left: auto;
+}
+
 .dense-inspector__sub {
   margin: 2px 0 0;
   color: var(--ds-color-text-muted);

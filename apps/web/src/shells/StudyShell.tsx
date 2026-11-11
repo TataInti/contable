@@ -134,7 +134,6 @@ export function StudyShell() {
                 className={[
                   "study__nav-group",
                   admin ? "study__nav-group--admin" : "",
-                  admin ? "study__nav-group--in-scroll" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
@@ -149,18 +148,6 @@ export function StudyShell() {
             );
           })}
         </nav>
-
-        {/* En escritorio la sección Configuración queda fija sobre el pie de
-            Ayuda, siempre visible; en móvil se sigue mostrando dentro del
-            scroll del menú (misma navegación que antes). */}
-        <div className="study__nav-admin" aria-label="Configuración del estudio">
-          <p className="study__nav-label">Configuración</p>
-          {navigationModules
-            .filter((item) => item.navigationGroup === "Configuración")
-            .map((item) => (
-              <StudyNavLink item={item} key={item.id} />
-            ))}
-        </div>
 
         <div className="study__sidebar-footer">
           <a

@@ -552,7 +552,13 @@ describe("StudyClientes — cartera densa", () => {
       if (path.includes("/clients")) {
         return Promise.resolve([
           { ...clientFixture(completeProfile), id: "c1", legalName: "Alfa Uno S.A.", cuit: "20111111112" },
-          { ...clientFixture({}), id: "c2", legalName: "Beta Dos S.R.L.", cuit: "30222222223" },
+          {
+            ...clientFixture({}),
+            id: "c2",
+            legalName: "Beta Dos S.R.L.",
+            tradeName: "Beta Comercial",
+            cuit: "30222222223",
+          },
           {
             ...clientFixture(completeProfile),
             id: "c3",
@@ -583,6 +589,56 @@ describe("StudyClientes — cartera densa", () => {
 
     expect(within(screen.getByRole("table")).queryByText("Alfa Uno S.A.")).toBeNull();
     expect(within(screen.getByRole("table")).getByText("Beta Dos S.R.L.")).toBeTruthy();
+  });
+
+  it("fija Abrir, define anchos y mantiene Completar visible sobre el pie", async () => {
+    renderClientes();
+    const table = await screen.findByRole("table", { name: "Cartera de clientes" });
+    const actionHeader = table.querySelector(
+      "thead th.client-list__action-column",
+    ) as HTMLTableCellElement | null;
+    const profileHeader = table.querySelector(
+      "thead th.client-list__profile-column",
+    ) as HTMLTableCellElement | null;
+    const statusHeader = table.querySelector(
+      "thead th.client-list__status-column",
+    ) as HTMLTableCellElement | null;
+
+    expect(actionHeader).not.toBeNull();
+    expect(actionHeader?.style.position).toBe("sticky");
+    expect(actionHeader?.style.right).toBe("0px");
+    expect(actionHeader?.style.width).toBe("9%");
+    expect(profileHeader?.style.width).toBe("8%");
+    expect(statusHeader?.style.width).toBe("10%");
+    const actionCells = table.querySelectorAll("tbody td.client-list__action-column");
+    expect(actionCells).toHaveLength(3);
+    expect((actionCells[0] as HTMLTableCellElement).style.position).toBe("sticky");
+    expect((actionCells[0] as HTMLTableCellElement).style.right).toBe("0px");
+    expect(
+      within(actionCells[0] as HTMLTableCellElement).getByRole("button", {
+        name: "Abrir trabajo de Alfa Uno S.A.",
+      }),
+    ).toBeTruthy();
+
+    const betaButton = within(table).getByRole("button", { name: "Beta Dos S.R.L." });
+    expect(betaButton.getAttribute("title")).toBe("Beta Dos S.R.L. — Beta Comercial");
+    expect(within(betaButton).getByText("Beta Dos S.R.L.").tagName).toBe("STRONG");
+    expect(within(betaButton).getByText("Beta Comercial").tagName).toBe("SMALL");
+
+    fireEvent.click(within(table).getByText("30-22222222-3"));
+    const detail = await screen.findByRole("complementary", {
+      name: "Detalle de Beta Dos S.R.L.",
+    });
+    const alert = detail.querySelector(
+      ".dense-inspector__banner .dense-alert",
+    ) as HTMLElement | null;
+    expect(alert).not.toBeNull();
+    expect(alert?.parentElement?.classList.contains("dense-inspector__banner")).toBe(true);
+    expect(detail.querySelector(".dense-inspector__body")?.contains(alert)).toBe(false);
+    expect(detail.querySelector(".dense-inspector__foot")?.contains(alert)).toBe(false);
+
+    fireEvent.click(within(alert as HTMLElement).getByRole("button", { name: "Completar" }));
+    expect(await screen.findByRole("button", { name: "Guardar ficha" })).toBeTruthy();
   });
 
   it("filtra por estado y por condición de IVA", async () => {

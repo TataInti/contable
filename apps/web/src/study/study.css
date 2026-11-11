@@ -5769,3 +5769,64 @@
 .client-contact-primary input {
   accent-color: var(--ds-color-primary);
 }
+
+/* Cartera de clientes: conservar la acción de fila y truncar datos largos. */
+.dense-table[aria-label="Cartera de clientes"] {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.client-list__client-column .dense-name-button {
+  width: 100%;
+  min-width: 0;
+}
+
+.client-list__client-column .dense-name__text {
+  display: grid;
+  min-width: 0;
+  gap: var(--ds-space-1);
+  overflow: hidden;
+}
+
+.client-list__client-column .dense-name__text > strong,
+.client-list__client-column .dense-name__text > small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-list__client-column .dense-name__text > small {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.client-list__action-column {
+  z-index: var(--ds-z-sticky);
+  background: var(--ds-color-surface);
+}
+
+.dense-table thead .client-list__action-column {
+  z-index: calc(var(--ds-z-sticky) + 1);
+  background: var(--ds-color-surface-muted);
+}
+
+.dense-row--selectable:hover .client-list__action-column {
+  background: var(--ds-color-surface-hover);
+}
+
+.dense-row--selected .client-list__action-column {
+  background: var(--ds-color-selected);
+}
+
+.client-list__profile-column,
+.client-list__status-column,
+.client-list__action-column {
+  padding-inline: var(--ds-space-2) !important;
+}
+
+@media (max-width: 1280px) {
+  .dense-table[aria-label="Cartera de clientes"] .client-list__secondary-column {
+    display: none;
+  }
+}

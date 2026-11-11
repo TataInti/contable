@@ -488,12 +488,15 @@ export function StudyClientes() {
     {
       key: "legalName",
       header: "Cliente",
+      width: "20%",
+      className: "client-list__client-column",
       sortValue: (row) => row.legalName.toLocaleLowerCase("es-AR"),
       render: (row) => (
         <button
           type="button"
           className="dense-name-button"
           aria-label={row.legalName}
+          title={`${row.legalName}${row.tradeName ? ` — ${row.tradeName}` : ""}`}
           aria-current={clientId === row.id ? "true" : undefined}
           onClick={() => openClientWorkspace(row.id)}
         >
@@ -511,18 +514,24 @@ export function StudyClientes() {
     {
       key: "cuit",
       header: "CUIT",
+      width: "13%",
+      className: "client-list__cuit-column",
       sortValue: (row) => row.cuit,
       render: (row) => <span className="tabular-copy">{formatCuit(row.cuit)}</span>,
     },
     {
       key: "vat",
       header: "Condición IVA",
+      width: "11%",
+      className: "client-list__vat-column",
       sortValue: (row) => vatLabel(row.profile?.vatCondition),
       render: (row) => vatLabel(row.profile?.vatCondition) || <span className="dense-dim">—</span>,
     },
     {
       key: "province",
       header: "Provincia",
+      width: "8%",
+      className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.province ?? "",
       render: (row) => row.profile?.province || <span className="dense-dim">—</span>,
@@ -530,6 +539,8 @@ export function StudyClientes() {
     {
       key: "activity",
       header: "Actividad",
+      width: "8%",
+      className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.activity ?? "",
       render: (row) => row.profile?.activity || <span className="dense-dim">—</span>,
@@ -537,6 +548,8 @@ export function StudyClientes() {
     {
       key: "standard",
       header: "Norma",
+      width: "7%",
+      className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.accountingStandard ?? "",
       render: (row) => row.profile?.accountingStandard || <span className="dense-dim">—</span>,
@@ -544,6 +557,8 @@ export function StudyClientes() {
     {
       key: "closing",
       header: "Cierre",
+      width: "6%",
+      className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.fiscalYearEndMonth ?? 0,
       render: (row) =>
@@ -556,6 +571,8 @@ export function StudyClientes() {
     {
       key: "gaps",
       header: "Ficha",
+      width: "8%",
+      className: "client-list__profile-column",
       sortValue: (row) => missingProfileFields(row).length,
       render: (row) => {
         const gaps = missingProfileFields(row);
@@ -571,12 +588,17 @@ export function StudyClientes() {
     {
       key: "status",
       header: "Estado",
+      width: "10%",
+      className: "client-list__status-column",
       sortValue: (row) => row.status,
       render: (row) => <StatusBadge status={row.status} />,
     },
     {
       key: "open",
       header: "",
+      width: "9%",
+      className: "client-list__action-column",
+      sticky: "right",
       align: "right",
       render: (row) => (
         <Button
@@ -604,6 +626,21 @@ export function StudyClientes() {
         <span className="dense-avatar dense-avatar--lg" aria-hidden="true">
           {selectedClient.legalName.slice(0, 1).toLocaleUpperCase("es-AR")}
         </span>
+      }
+      banner={
+        missingProfileFields(selectedClient).length > 0 ? (
+          <DenseAlert
+            action={
+              canManage ? (
+                <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
+                  Completar
+                </Button>
+              ) : undefined
+            }
+          >
+            Ficha incompleta: falta {missingProfileFields(selectedClient).join(", ")}.
+          </DenseAlert>
+        ) : undefined
       }
       onClose={() => setSelectedId(null)}
       footer={
@@ -737,19 +774,6 @@ export function StudyClientes() {
             </p>
           ) : null}
         </InspectorSection>
-      ) : null}
-      {missingProfileFields(selectedClient).length > 0 ? (
-        <DenseAlert
-          action={
-            canManage ? (
-              <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
-                Completar
-              </Button>
-            ) : undefined
-          }
-        >
-          Ficha incompleta: falta {missingProfileFields(selectedClient).join(", ")}.
-        </DenseAlert>
       ) : null}
     </Inspector>
   ) : null;
