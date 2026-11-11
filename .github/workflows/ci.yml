@@ -125,7 +125,11 @@ jobs:
         run: npm run build
 
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        # Sin --with-deps: la imagen ubuntu-latest ya trae todas las
+        # bibliotecas de sistema que Chromium usa en tiempo de ejecución.
+        # --with-deps solo sumaba paquetes de fuentes (fonts-*/xfonts-*) vía
+        # apt, y una falla de DNS de archive.ubuntu.com tumbaba el job.
+        run: npx playwright install chromium
 
       - name: Start and wait for document worker
         run: |

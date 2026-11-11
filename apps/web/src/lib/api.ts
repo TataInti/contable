@@ -4,19 +4,37 @@
  * Respuestas de la API: { data: T } o { error: { code, message } }.
  */
 
+export interface ApiErrorValidationIssue {
+  path: Array<string | number>;
+  message: string;
+}
+
+export type ApiErrorPayloadDetails =
+  | ApiErrorValidationIssue[]
+  | Record<string, unknown>
+  | string
+  | null;
+
+export interface ApiErrorPayload extends Record<string, unknown> {
+  code?: string;
+  message?: string;
+  requestId?: string;
+  details?: ApiErrorPayloadDetails;
+}
+
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
   readonly requestId: string | null;
   readonly retryable: boolean;
-  readonly details: Record<string, unknown> | null;
+  readonly details: ApiErrorPayload | null;
 
   constructor(
     code: string,
     message: string,
     status: number,
     requestId: string | null = null,
-    details: Record<string, unknown> | null = null,
+    details: ApiErrorPayload | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -81,7 +99,7 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
   const payload = (await res.json().catch(() => null)) as
     | {
         data?: T;
-        error?: { code?: string; message?: string; requestId?: string } & Record<string, unknown>;
+        error?: ApiErrorPayload;
       }
     | null;
 
@@ -112,7 +130,7 @@ export async function downloadFile(path: string): Promise<void> {
   const res = await fetch(`${BASE}${path}`, { credentials: "same-origin" });
   if (!res.ok) {
     const payload = await res.json().catch(() => null) as
-      | { error?: { code?: string; message?: string; requestId?: string } & Record<string, unknown> }
+      | { error?: ApiErrorPayload }
       | null;
     throw new ApiError(
       payload?.error?.code ?? "DOWNLOAD_FAILED",

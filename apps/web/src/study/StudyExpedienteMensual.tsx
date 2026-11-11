@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
@@ -128,6 +128,34 @@ interface FiscalTaxPeriod {
   label: string | null;
   taxType: { name: string; isActive: boolean };
 }
+
+function fiscalTaxPeriodLabel(period: FiscalTaxPeriod) {
+  return period.label ?? `${period.startDate.slice(0, 10)} a ${period.endDate.slice(0, 10)}`;
+}
+
+function fiscalTaxPeriodSelectionKey(firmId: string, clientId: string) {
+  return `contable:${firmId}:${clientId}:selected-tax-period`;
+}
+
+function readFiscalTaxPeriodSelection(key: string) {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.sessionStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeFiscalTaxPeriodSelection(key: string, periodId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    if (periodId) window.sessionStorage.setItem(key, periodId);
+    else window.sessionStorage.removeItem(key);
+  } catch {
+    // La selección en memoria sigue funcionando si el navegador bloquea storage.
+  }
+}
+
 interface EvidenceDocument {
   id: string;
   category: string | null;
@@ -530,9 +558,17 @@ async function fileToHash(file: File): Promise<string> {
 
 export function StudyExpedienteMensual() {
   const [density] = useDensity();
-  const { firmId, clientId, periodId, capabilities } = useClientContext();
+  const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const taxPeriodStorageKey =
+    firmId && clientId ? fiscalTaxPeriodSelectionKey(firmId, clientId) : null;
+  const [taxPeriodSelection, setTaxPeriodSelection] = useState<{
+    key: string | null;
+    id: string;
+  }>({ key: null, id: "" });
+  const selectedTaxPeriodId =
+    taxPeriodSelection.key === taxPeriodStorageKey ? taxPeriodSelection.id : "";
   const [activeStep, setActiveStep] = useState(0);
   const [showOpening, setShowOpening] = useState(false);
   const [opening, setOpening] = useState({
@@ -582,13 +618,50 @@ export function StudyExpedienteMensual() {
   }>({ sales: null, purchases: null });
   const [sifereReceipt, setSifereReceipt] = useState<string | null>(null);
 
+  const taxPeriodsQuery = useQuery({
+    queryKey: ["tax-periods", firmId, clientId],
+    queryFn: () => api.get<FiscalTaxPeriod[]>(`/firms/${firmId}/clients/${clientId}/tax-periods`),
+    enabled: Boolean(firmId && clientId),
+  });
+  const selectableTaxPeriods = (taxPeriodsQuery.data ?? []).filter(
+    (taxPeriod) => taxPeriod.taxType.isActive,
+  );
+  const selectedTaxPeriod =
+    taxPeriodSelection.key === taxPeriodStorageKey
+      ? selectableTaxPeriods.find((taxPeriod) => taxPeriod.id === selectedTaxPeriodId)
+      : undefined;
+
+  useEffect(() => {
+    if (taxPeriodSelection.key !== taxPeriodStorageKey) {
+      setTaxPeriodSelection({
+        key: taxPeriodStorageKey,
+        id: taxPeriodStorageKey ? readFiscalTaxPeriodSelection(taxPeriodStorageKey) : "",
+      });
+      return;
+    }
+    if (!taxPeriodStorageKey || !taxPeriodsQuery.data) return;
+
+    const availablePeriods = taxPeriodsQuery.data.filter((taxPeriod) => taxPeriod.taxType.isActive);
+    const nextId = availablePeriods.some((taxPeriod) => taxPeriod.id === taxPeriodSelection.id)
+      ? taxPeriodSelection.id
+      : (availablePeriods[0]?.id ?? "");
+    if (nextId !== taxPeriodSelection.id) {
+      setTaxPeriodSelection({ key: taxPeriodStorageKey, id: nextId });
+    }
+    writeFiscalTaxPeriodSelection(taxPeriodStorageKey, nextId);
+  }, [taxPeriodSelection, taxPeriodStorageKey, taxPeriodsQuery.data]);
+
   const listQuery = useQuery({
-    queryKey: ["monthly-workpapers", firmId, clientId, periodId],
-    queryFn: () =>
-      api.get<Workpaper[]>(
-        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers?accountingPeriodId=${encodeURIComponent(periodId ?? "")}`,
-      ),
-    enabled: Boolean(firmId && clientId && periodId),
+    queryKey: ["monthly-workpapers", firmId, clientId, selectedTaxPeriod?.id],
+    queryFn: () => {
+      if (!selectedTaxPeriod) throw new Error("Seleccioná un período fiscal");
+      const from = encodeURIComponent(selectedTaxPeriod.startDate.slice(0, 10));
+      const to = encodeURIComponent(selectedTaxPeriod.endDate.slice(0, 10));
+      return api.get<Workpaper[]>(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers?from=${from}&to=${to}`,
+      );
+    },
+    enabled: Boolean(firmId && clientId && selectedTaxPeriod),
   });
 
   const activeWorkpaperId = listQuery.data?.[0]?.id;
@@ -650,12 +723,14 @@ export function StudyExpedienteMensual() {
     enabled: Boolean(firmId && clientId),
   });
   const positionQuery = useQuery({
-    queryKey: ["tax-position", firmId, clientId, periodId],
-    queryFn: () =>
-      api.get<TaxPosition[]>(
-        `/firms/${firmId}/clients/${clientId}/tax-position?accountingPeriodId=${encodeURIComponent(periodId ?? "")}`,
-      ),
-    enabled: Boolean(firmId && clientId && periodId),
+    queryKey: ["tax-position", firmId, clientId, selectedTaxPeriod?.id],
+    queryFn: () => {
+      if (!selectedTaxPeriod) throw new Error("Seleccioná un período fiscal");
+      return api.get<TaxPosition[]>(
+        `/firms/${firmId}/clients/${clientId}/tax-position?periodId=${encodeURIComponent(selectedTaxPeriod.id)}`,
+      );
+    },
+    enabled: Boolean(firmId && clientId && selectedTaxPeriod),
   });
   const taxTypesQuery = useQuery({
     queryKey: ["tax-types"],
@@ -667,11 +742,6 @@ export function StudyExpedienteMensual() {
     queryFn: () => api.get<TaxRegime[]>("/tax/regimes"),
     enabled: Boolean(firmId),
   });
-  const taxPeriodsQuery = useQuery({
-    queryKey: ["tax-periods", firmId, clientId],
-    queryFn: () => api.get<FiscalTaxPeriod[]>(`/firms/${firmId}/clients/${clientId}/tax-periods`),
-    enabled: Boolean(firmId && clientId),
-  });
   const documentsQuery = useQuery({
     queryKey: ["documents", firmId, clientId],
     queryFn: () => api.get<EvidenceDocument[]>(`/firms/${firmId}/clients/${clientId}/documents`),
@@ -679,10 +749,13 @@ export function StudyExpedienteMensual() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers`, {
-        accountingPeriodId: periodId,
-      }),
+    mutationFn: () => {
+      if (!selectedTaxPeriod) throw new Error("Seleccioná un período fiscal");
+      return api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers`, {
+        periodStart: selectedTaxPeriod.startDate.slice(0, 10),
+        periodEnd: selectedTaxPeriod.endDate.slice(0, 10),
+      });
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
     },
@@ -973,7 +1046,7 @@ export function StudyExpedienteMensual() {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["tax-position", firmId, clientId, periodId],
+        queryKey: ["tax-position", firmId, clientId],
       });
       void queryClient.invalidateQueries({
         queryKey: ["monthly-workpapers", firmId, clientId],
@@ -1003,7 +1076,7 @@ export function StudyExpedienteMensual() {
         reference: "",
       });
       void queryClient.invalidateQueries({
-        queryKey: ["tax-position", firmId, clientId, periodId],
+        queryKey: ["tax-position", firmId, clientId],
       });
     },
   });
@@ -1030,7 +1103,7 @@ export function StudyExpedienteMensual() {
         evidenceDocumentId: "",
       });
       void queryClient.invalidateQueries({
-        queryKey: ["tax-position", firmId, clientId, periodId],
+        queryKey: ["tax-position", firmId, clientId],
       });
     },
   });
@@ -1059,7 +1132,7 @@ export function StudyExpedienteMensual() {
       });
       void queryClient.invalidateQueries({ queryKey: ["tax-credit-ledger", firmId, clientId] });
       void queryClient.invalidateQueries({
-        queryKey: ["tax-position", firmId, clientId, periodId],
+        queryKey: ["tax-position", firmId, clientId],
       });
     },
   });
@@ -1086,12 +1159,12 @@ export function StudyExpedienteMensual() {
     },
   });
 
-  if (!firmId || !clientId || !periodId) {
+  if (!firmId || !clientId) {
     return (
       <div className="study-page">
         <EmptyState
-          title="Elegí un cliente y período"
-          description="El expediente mensual necesita un cliente y un período activos."
+          title="Elegí un cliente"
+          description="El expediente mensual se organiza dentro de un cliente explícito."
         />
       </div>
     );
@@ -1144,7 +1217,7 @@ export function StudyExpedienteMensual() {
           </Button>
           <Button
             variant="primary"
-            disabled={createMutation.isPending || !capabilities.has("tax.settlements.calculate")}
+            disabled={!selectedTaxPeriod || createMutation.isPending || !capabilities.has("tax.settlements.calculate")}
             onClick={() => void createMutation.mutate()}
           >
             <Icon name="plus" size={16} />
@@ -1154,6 +1227,59 @@ export function StudyExpedienteMensual() {
           </>
         }
       />
+
+      {taxPeriodsQuery.isLoading ? (
+        <div className="study-state" role="status">
+          Cargando períodos fiscales…
+        </div>
+      ) : taxPeriodsQuery.isError ? (
+        <EmptyState
+          title="No se pudieron cargar los períodos fiscales"
+          description="Reintentá la consulta para volver a cargar los períodos del cliente."
+          action={
+            <Button variant="secondary" onClick={() => void taxPeriodsQuery.refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      ) : selectableTaxPeriods.length ? (
+        <section className="study-page__section" aria-label="Período fiscal">
+          <div className="ds-field">
+            <label className="ds-field__label" htmlFor="monthly-workpaper-tax-period">
+              Período fiscal
+            </label>
+            <select
+              id="monthly-workpaper-tax-period"
+              className="ds-field__input"
+              value={selectedTaxPeriodId}
+              onChange={(event) => {
+                const id = event.target.value;
+                setTaxPeriodSelection({ key: taxPeriodStorageKey, id });
+                if (taxPeriodStorageKey) {
+                  writeFiscalTaxPeriodSelection(taxPeriodStorageKey, id);
+                }
+              }}
+            >
+              <option value="">Seleccioná un período fiscal…</option>
+              {selectableTaxPeriods.map((taxPeriod) => (
+                <option key={taxPeriod.id} value={taxPeriod.id}>
+                  {taxPeriod.taxType.name} · {fiscalTaxPeriodLabel(taxPeriod)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </section>
+      ) : (
+        <EmptyState
+          title="Configurá un período fiscal"
+          description="El expediente mensual organiza las obligaciones del mes seleccionado."
+          action={
+            <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
+              Abrir configuración fiscal
+            </Button>
+          }
+        />
+      )}
 
       <StatStrip
         label="Estado del expediente"
@@ -1170,7 +1296,7 @@ export function StudyExpedienteMensual() {
           workpapers.length ? (
             <Button size="sm" variant="secondary" onClick={goToNextStep} disabled={!nextStep}>Continuar a {nextStep?.title ?? "cierre"}</Button>
           ) : (
-            <Button size="sm" onClick={() => void createMutation.mutate()} disabled={createMutation.isPending || !capabilities.has("tax.settlements.calculate")}>Nuevo expediente</Button>
+            <Button size="sm" onClick={() => void createMutation.mutate()} disabled={!selectedTaxPeriod || createMutation.isPending || !capabilities.has("tax.settlements.calculate")}>Nuevo expediente</Button>
           )
         }
       >
@@ -1656,6 +1782,11 @@ export function StudyExpedienteMensual() {
         <div className="study-page__state" role="alert">
           No se pudieron cargar los expedientes. Reintentá en un momento.
         </div>
+      ) : !selectedTaxPeriod ? (
+        <EmptyState
+          title="Elegí un período fiscal"
+          description="Seleccioná un período fiscal para consultar o crear el expediente del mes."
+        />
       ) : workpapers.length === 0 ? (
         <EmptyState
           title="Sin expedientes para este período"

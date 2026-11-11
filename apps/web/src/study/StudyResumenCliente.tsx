@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, EmptyState, Table } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { CLIENT_VAT_CONDITION_LABELS } from "@contable/contracts";
-import { api, type ClientSummary } from "../lib/api";
+import { api, type ClientContact, type ClientSummary } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
@@ -11,7 +11,6 @@ import {
   DensePage,
   DenseSearch,
   DenseToolbar,
-  StatStrip,
   useDensity,
 } from "../ui/Dense";
 import "./study.css";
@@ -81,9 +80,19 @@ function displayVatCondition(value: string | null | undefined) {
   return (CLIENT_VAT_CONDITION_LABELS as Record<string, string>)[value] ?? value;
 }
 
-function SummaryFact({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function SummaryFact({
+  label,
+  value,
+  detail,
+  wrap = false,
+}: {
+  label: string;
+  value: string;
+  detail?: ReactNode;
+  wrap?: boolean;
+}) {
   return (
-    <div className="client-summary__fact">
+    <div className={`client-summary__fact${wrap ? " client-summary__fact--wrap" : ""}`}>
       <dt>{label}</dt>
       <dd>{value}</dd>
       {detail ? <small>{detail}</small> : null}
@@ -108,9 +117,8 @@ type SummarySectionId =
 
 type SummarySectionDefinition = {
   id: SummarySectionId;
-  group: "Resumen" | "Contable" | "Fiscal" | "Configuración";
+  group: "Resumen" | "Contable" | "Fiscal" | "Configuración fiscal" | "Configuración";
   label: string;
-  count?: number;
 };
 
 type SummarySearchResult = {
@@ -270,14 +278,20 @@ function countsLabel(value: number) {
 
 export function StudyResumenCliente() {
   const [density] = useDensity();
-  const { firmId, clientId } = useClientContext();
+  const { firmId, clientId, capabilities } = useClientContext();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<SummarySectionId>("overview");
   const [search, setSearch] = useState("");
+  const canManageContacts = capabilities.has("client.manage");
   const query = useQuery({
     queryKey: ["client-summary", firmId, clientId],
     queryFn: () => api.get<ClientSummary>(`/firms/${firmId}/clients/${clientId}/summary`),
     enabled: Boolean(firmId && clientId),
+  });
+  const contactsQuery = useQuery({
+    queryKey: ["client-contacts", firmId, clientId],
+    queryFn: () => api.get<ClientContact[]>(`/firms/${firmId}/clients/${clientId}/contacts`),
+    enabled: Boolean(firmId && clientId && canManageContacts),
   });
 
   const accountingPeriodCount = useMemo(
@@ -291,8 +305,34 @@ export function StudyResumenCliente() {
       query.data?.fiscal.profiles[0],
     [query.data],
   );
-  const activeRegistrations = query.data?.fiscal.registrations.filter((item) => item.status === "ACTIVE").length ?? 0;
+  const primaryContact = useMemo(
+    () => contactsQuery.data?.find((contact) => contact.isPrimary && contact.isActive) ?? null,
+    [contactsQuery.data],
+  );
+  const contactValue = contactsQuery.isLoading
+    ? "Cargando…"
+    : contactsQuery.isError
+      ? "No disponible"
+      : primaryContact?.name.trim() || "No cargado";
+  const contactEmailValue = contactsQuery.isLoading
+    ? "Cargando…"
+    : contactsQuery.isError
+      ? "No disponible"
+      : primaryContact?.email?.trim() || "No cargado";
+  const contactPhoneValue = contactsQuery.isLoading
+    ? "Cargando…"
+    : contactsQuery.isError
+      ? "No disponible"
+      : primaryContact?.phone?.trim() || "No cargado";
+  const contactAction =
+    contactsQuery.isLoading || (primaryContact && !contactsQuery.isError)
+      ? undefined
+      : contactsQuery.isError
+        ? <><span>No se pudo cargar. </span><a href="/clientes" onClick={(event) => { event.preventDefault(); navigate("/clientes", { state: { contactClientId: clientId } }); }}>Abrir Contactos</a></>
+        : <a href="/clientes" onClick={(event) => { event.preventDefault(); navigate("/clientes", { state: { contactClientId: clientId } }); }}>Cargar en Contactos</a>;
   const activeActivities = query.data?.fiscal.activities.filter((item) => !item.validTo).length ?? 0;
+  const openAccountingYearCount =
+    query.data?.accounting.fiscalYears.filter((year) => year.status === "OPEN").length ?? 0;
 
   if (!firmId || !clientId) {
     return (
@@ -334,17 +374,23 @@ export function StudyResumenCliente() {
   const profile = client.profile;
   const sections: SummarySectionDefinition[] = [
     { id: "overview", group: "Resumen", label: "Resumen" },
-    { id: "accounting-periods", group: "Contable", label: "Períodos contables", count: accountingPeriodCount },
-    { id: "tax-periods", group: "Fiscal", label: "Períodos fiscales", count: fiscal.periods.length },
-    { id: "obligations", group: "Fiscal", label: "Obligaciones", count: fiscal.obligations.length },
-    { id: "tax-profile", group: "Fiscal", label: "Perfil fiscal", count: fiscal.profiles.length },
-    { id: "registrations", group: "Fiscal", label: "Regímenes adheridos", count: fiscal.registrations.length },
-    { id: "activities", group: "Fiscal", label: "Actividades registradas", count: fiscal.activities.length },
-    { id: "base-config", group: "Configuración", label: "Ficha contable", count: profile ? 1 : 0 },
-    { id: "catalogs", group: "Configuración", label: "Catálogos", count: counts.accounts + counts.counterparties + counts.costCenters },
+    { id: "accounting-periods", group: "Contable", label: "Períodos contables" },
+    { id: "tax-periods", group: "Fiscal", label: "Períodos fiscales" },
+    { id: "obligations", group: "Fiscal", label: "Obligaciones" },
+    { id: "tax-profile", group: "Configuración fiscal", label: "Perfil fiscal" },
+    { id: "registrations", group: "Configuración fiscal", label: "Regímenes adheridos" },
+    { id: "activities", group: "Configuración fiscal", label: "Actividades registradas" },
+    { id: "base-config", group: "Configuración", label: "Ficha contable" },
+    { id: "catalogs", group: "Configuración", label: "Catálogos" },
   ];
   const searchResults = buildSearchResults(query.data, search);
-  const sectionGroups: SummarySectionDefinition["group"][] = ["Resumen", "Contable", "Fiscal", "Configuración"];
+  const sectionGroups: SummarySectionDefinition["group"][] = [
+    "Resumen",
+    "Contable",
+    "Fiscal",
+    "Configuración fiscal",
+    "Configuración",
+  ];
 
   return (
     <DensePage density={density} flow className="client-summary">
@@ -366,19 +412,6 @@ export function StudyResumenCliente() {
         }
       />
 
-      <StatStrip
-        label="Resumen cuantitativo del cliente"
-        items={[
-          { key: "status", label: "Estado", value: <StatusBadge status={client.status} /> },
-          { key: "since", label: "Alta en el estudio", value: formatDate(client.createdAt), detail: `Actualizado ${formatDate(client.updatedAt)}` },
-          { key: "profile", label: "Ficha contable", value: profile ? "Configurada" : "Pendiente", tone: profile ? undefined : "warn" },
-          { key: "onboarding", label: "Onboarding fiscal", value: client.onboarding?.completed ? "Completo" : "Pendiente", tone: client.onboarding?.completed ? undefined : "warn" },
-          { key: "years", label: "Ejercicios contables", value: accounting.fiscalYears.length, detail: `${accountingPeriodCount} períodos` },
-          { key: "fiscal", label: "Períodos fiscales", value: fiscal.periods.length },
-          { key: "obligations", label: "Obligaciones", value: fiscal.obligations.length, detail: `${activeRegistrations} inscripciones vigentes` },
-        ]}
-      />
-
       <DenseToolbar>
         <DenseSearch
           value={search}
@@ -397,10 +430,27 @@ export function StudyResumenCliente() {
 
 
       <div className="client-summary__workspace">
+        <label className="client-summary__index-select-control">
+          <span className="sr-only">Sección del cliente</span>
+          <select
+            className="client-summary__index-select"
+            aria-label="Sección del cliente"
+            value={activeSection}
+            onChange={(event) => {
+              setSearch("");
+              setActiveSection(event.target.value as SummarySectionId);
+            }}
+          >
+            {sections.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.group === section.label ? section.label : `${section.group} · ${section.label}`}
+              </option>
+            ))}
+          </select>
+        </label>
         <nav className="client-summary__section-index" aria-label="Secciones internas del cliente">
           <div className="client-summary__index-heading">
             <p className="study-page__eyebrow">Índice de la ficha</p>
-            <span>{sections.length} secciones</span>
           </div>
           {sectionGroups.map((group) => {
             const groupSections = sections.filter((section) => section.group === group);
@@ -420,7 +470,6 @@ export function StudyResumenCliente() {
                         }}
                       >
                         <span>{section.label}</span>
-                        {section.count !== undefined ? <small>{section.count}</small> : null}
                       </button>
                     </li>
                   ))}
@@ -474,37 +523,55 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="client-summary-overview-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Resumen</p>
-                  <h2 id="client-summary-overview-title">Estado del cliente</h2>
+                  <h2 id="client-summary-overview-title">Resumen</h2>
                   <p>Una lectura rápida para decidir dónde continuar.</p>
                 </div>
-                <StatusBadge status={client.status} />
+                <div className="client-summary__overview-meta">
+                  <span className="client-summary__overview-status">
+                    <span>Estado</span>
+                    <StatusBadge status={client.status} />
+                  </span>
+                  <span className="client-summary__overview-created">
+                    Alta en el estudio {formatDate(client.createdAt)}
+                  </span>
+                  <span className="client-summary__updated">Actualizado {formatDate(client.updatedAt)}</span>
+                </div>
               </div>
               <dl className="client-summary__overview-facts">
                 <SummaryFact label="Ficha contable" value={profile ? "Configurada" : "Pendiente"} />
                 <SummaryFact label="Onboarding fiscal" value={client.onboarding?.completed ? "Completo" : "Pendiente"} />
-                <SummaryFact label="Inscripciones vigentes" value={String(activeRegistrations)} />
-                <SummaryFact label="Actividades vigentes" value={String(activeActivities)} />
+                {openAccountingYearCount > 0 ? (
+                  <SummaryFact
+                    label={openAccountingYearCount === 1 ? "Ejercicio contable" : "Ejercicios contables"}
+                    value={String(openAccountingYearCount)}
+                  />
+                ) : null}
+                <SummaryFact
+                  label="Actividades registradas"
+                  value={String(fiscal.activities.length)}
+                  detail={`${activeActivities} vigente${activeActivities === 1 ? "" : "s"}`}
+                />
+                <SummaryFact
+                  label={fiscal.obligations.length === 1 ? "Obligación materializada" : "Obligaciones materializadas"}
+                  value={String(fiscal.obligations.length)}
+                />
               </dl>
               <div className="client-summary__overview-links">
                 <h3>Accesos rápidos</h3>
                 <ul>
                   <li>
-                    <button type="button" onClick={() => setActiveSection("accounting-periods")}>
-                      <strong>Períodos contables</strong>
-                      <small>{accountingPeriodCount} períodos en {accounting.fiscalYears.length} ejercicios</small>
+                    <button type="button" onClick={() => navigate("/expediente-mensual")}>
+                      <strong>Cargar período</strong>
                     </button>
                   </li>
                   <li>
-                    <button type="button" onClick={() => setActiveSection("obligations")}>
-                      <strong>Obligaciones</strong>
-                      <small>{fiscal.obligations.length} obligaciones materializadas</small>
+                    <button type="button" onClick={() => navigate("/configuracion-fiscal")}>
+                      <strong>Materializar obligaciones</strong>
                     </button>
                   </li>
                   <li>
-                    <button type="button" onClick={() => setActiveSection("tax-profile")}>
-                      <strong>Perfil fiscal</strong>
-                      <small>{fiscal.profiles.length} versiones registradas</small>
+                    <button type="button" onClick={() => navigate("/configuracion-fiscal")}>
+                      <strong>Nueva versión del perfil</strong>
                     </button>
                   </li>
                 </ul>
@@ -674,27 +741,51 @@ export function StudyResumenCliente() {
                   <p>Parámetros generales que sostienen el trabajo del cliente.</p>
                 </div>
               </div>
-              {profile ? (
-                <dl className="client-summary__facts">
-                  <SummaryFact label="Moneda funcional" value={profile.functionalCurrency} />
-                  <SummaryFact label="Cierre de ejercicio" value={MONTH_LABELS[profile.fiscalYearEndMonth - 1] ?? "Sin configurar"} />
-                  <SummaryFact label="Condición IVA" value={displayVatCondition(profile.vatCondition)} />
-                  <SummaryFact label="Forma jurídica" value={displayValue(profile.legalForm)} />
-                  <SummaryFact label="Provincia" value={displayValue(profile.province)} />
-                  <SummaryFact label="Actividad principal" value={displayValue(profile.activity)} />
-                  <SummaryFact label="Norma contable" value={displayValue(profile.accountingStandard)} />
+              <dl className="client-summary__facts">
+                {profile ? (
+                  <>
+                    <SummaryFact label="Moneda funcional" value={profile.functionalCurrency} />
+                    <SummaryFact label="Cierre de ejercicio" value={MONTH_LABELS[profile.fiscalYearEndMonth - 1] ?? "Sin configurar"} />
+                    <SummaryFact label="Condición IVA" value={displayVatCondition(profile.vatCondition)} />
+                    <SummaryFact label="Forma jurídica" value={displayValue(profile.legalForm)} />
+                    <SummaryFact label="Provincia" value={displayValue(profile.province)} />
+                    <SummaryFact label="Actividad principal" value={displayValue(profile.activity)} />
+                    <SummaryFact label="Norma contable" value={displayValue(profile.accountingStandard)} />
+                    <SummaryFact
+                      label="Jurisdicciones IIBB"
+                      value={profile.iibbJurisdictions.length > 0 ? profile.iibbJurisdictions.join(", ") : "Sin configurar"}
+                    />
+                    <SummaryFact label="Inicio del servicio" value={formatDate(profile.serviceStartDate)} />
+                  </>
+                ) : (
                   <SummaryFact
-                    label="Jurisdicciones IIBB"
-                    value={profile.iibbJurisdictions.length > 0 ? profile.iibbJurisdictions.join(", ") : "Sin configurar"}
+                    label="Ficha contable"
+                    value="No cargado"
+                    detail={
+                      <a href="/clientes" onClick={(event) => { event.preventDefault(); navigate("/clientes", { state: { contactClientId: clientId } }); }}>
+                        Completar desde Clientes
+                      </a>
+                    }
                   />
-                  <SummaryFact label="Inicio del servicio" value={formatDate(profile.serviceStartDate)} />
-                </dl>
-              ) : (
-                <SummarySectionEmpty
-                  title="Ficha pendiente"
-                  description="Completá la ficha desde la cartera de clientes para dejar estos datos disponibles."
+                )}
+                {canManageContacts ? (
+                  <>
+                    <SummaryFact label="Contacto principal" value={contactValue} detail={contactAction} wrap />
+                    <SummaryFact label="Correo de contacto" value={contactEmailValue} wrap />
+                    <SummaryFact label="Teléfono de contacto" value={contactPhoneValue} wrap />
+                  </>
+                ) : null}
+                <SummaryFact
+                  label="Domicilio fiscal"
+                  value={activeProfile?.fiscalAddress?.trim() || "No cargado"}
+                  wrap
+                  detail={
+                    activeProfile?.fiscalAddress?.trim()
+                      ? undefined
+                      : <a href="/configuracion-fiscal" onClick={(event) => { event.preventDefault(); navigate("/configuracion-fiscal"); }}>Cargar en Onboarding fiscal</a>
+                  }
                 />
-              )}
+              </dl>
             </section>
           ) : null}
 
@@ -717,7 +808,6 @@ export function StudyResumenCliente() {
                     <SummaryFact label="Condición nacional" value={CONDITION_LABELS[activeProfile.nationalCondition] ?? activeProfile.nationalCondition} />
                     <SummaryFact label="Versión" value={`v${activeProfile.version}`} />
                     <SummaryFact label="Vigente desde" value={formatDate(activeProfile.validFrom)} />
-                    <SummaryFact label="Domicilio fiscal" value={displayValue(activeProfile.fiscalAddress)} />
                     <SummaryFact label="Categoría monotributo" value={displayValue(activeProfile.monotributoCategory)} />
                   </dl>
                   <div className="client-summary__history">
@@ -747,7 +837,7 @@ export function StudyResumenCliente() {
                 <div>
                   <p className="study-page__eyebrow">Inscripciones</p>
                   <h2 id="registrations-title">Regímenes adheridos</h2>
-                  <p>{activeRegistrations} vigentes · {fiscal.registrations.length} registrados.</p>
+                  <p>Inscripciones fiscales y su vigencia.</p>
                 </div>
                 <span className="section-count">{fiscal.registrations.length}</span>
               </div>

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field } from "@contable/design-system";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ARGENTINA_PROVINCES,
   BACKED_CURRENCIES,
@@ -110,6 +110,13 @@ interface ClientContactForm {
   isPrimary: boolean;
 }
 
+interface ContactRetryTarget {
+  firmId: string;
+  clientId: string;
+  legalName: string;
+  email: string;
+}
+
 interface ClientProfileForm {
   functionalCurrency: string;
   accountingStandard: string;
@@ -142,6 +149,7 @@ export function StudyClientes() {
   const { firmId, clientId, capabilities, setClientId } = useClientContext();
   const session = useSession();
   const queryClient = useQueryClient();
+  const location = useLocation();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
@@ -151,13 +159,13 @@ export function StudyClientes() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [density, setDensity] = useDensity();
   const searchRef = useRef<HTMLInputElement>(null);
-  const [identityClient, setIdentityClient] = useState<ClientWithProfile | null>(null);
   const [identityForm, setIdentityForm] = useState({
     legalName: "",
     tradeName: "",
     cuit: "",
-    status: "ONBOARDING",
   });
+  const [statusClient, setStatusClient] = useState<ClientWithProfile | null>(null);
+  const [statusForm, setStatusForm] = useState("ONBOARDING");
   const [contactEditorOpen, setContactEditorOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [contactForm, setContactForm] = useState<ClientContactForm>({
@@ -171,6 +179,7 @@ export function StudyClientes() {
     legalName: "",
     tradeName: "",
     cuit: "",
+    contactEmail: "",
     vatCondition: "",
     province: "",
     activity: "",
@@ -190,6 +199,7 @@ export function StudyClientes() {
     serviceStartDate: "",
   }));
   const [notice, setNotice] = useState<string | null>(null);
+  const [contactRetry, setContactRetry] = useState<ContactRetryTarget | null>(null);
   const query = useQuery({
     queryKey: ["clients", firmId],
     queryFn: () => api.get<ClientWithProfile[]>(`/firms/${firmId}/clients`),
@@ -287,17 +297,41 @@ export function StudyClientes() {
     allActivityValues.has(profileForm.activity) &&
     !activeActivityValues.has(profileForm.activity);
   const create = useMutation({
-    mutationFn: () =>
+    mutationFn: (submittedForm: typeof form) =>
       api.post<Client>(`/firms/${firmId}/clients`, {
-        legalName: form.legalName.trim(),
-        cuit: form.cuit,
-        ...(form.tradeName.trim() ? { tradeName: form.tradeName.trim() } : {}),
-        ...(form.vatCondition ? { vatCondition: form.vatCondition } : {}),
-        ...(form.province ? { province: form.province } : {}),
-        ...(form.activity ? { activity: form.activity } : {}),
-        ...(form.legalForm ? { legalForm: form.legalForm } : {}),
+        legalName: submittedForm.legalName.trim(),
+        cuit: submittedForm.cuit,
+        ...(submittedForm.tradeName.trim() ? { tradeName: submittedForm.tradeName.trim() } : {}),
+        ...(submittedForm.vatCondition ? { vatCondition: submittedForm.vatCondition } : {}),
+        ...(submittedForm.province ? { province: submittedForm.province } : {}),
+        ...(submittedForm.activity ? { activity: submittedForm.activity } : {}),
+        ...(submittedForm.legalForm ? { legalForm: submittedForm.legalForm } : {}),
       }),
-    onSuccess: async (client) => {
+    onSuccess: async (client, submittedForm) => {
+      const email = submittedForm.contactEmail.trim();
+      let contactFailed = false;
+      if (email && firmId) {
+        const target = {
+          firmId,
+          clientId: client.id,
+          legalName: submittedForm.legalName.trim(),
+          email,
+        };
+        try {
+          await api.post<ClientContact>(`/firms/${firmId}/clients/${client.id}/contacts`, {
+            name: target.legalName,
+            email: target.email,
+            isPrimary: true,
+          });
+          await queryClient.invalidateQueries({ queryKey: ["client-contacts", firmId, client.id] });
+          setContactRetry(null);
+        } catch {
+          contactFailed = true;
+          setContactRetry(target);
+        }
+      } else {
+        setContactRetry(null);
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["clients", firmId] }),
         session.refresh(),
@@ -308,11 +342,39 @@ export function StudyClientes() {
         legalName: "",
         tradeName: "",
         cuit: "",
+        contactEmail: "",
         vatCondition: "",
         province: "",
         activity: "",
         legalForm: "",
       });
+      setNotice(null);
+      if (!contactFailed) navigate("/configuracion-fiscal");
+    },
+  });
+  const retryContact = useMutation({
+    mutationFn: async (target: ContactRetryTarget) => {
+      const path = `/firms/${target.firmId}/clients/${target.clientId}/contacts`;
+      const contacts = await api.get<ClientContact[]>(path);
+      const normalizedEmail = target.email.trim().toLocaleLowerCase("en");
+      const alreadyRegistered = contacts.some(
+        (contact) =>
+          contact.isActive &&
+          contact.isPrimary &&
+          contact.email?.trim().toLocaleLowerCase("en") === normalizedEmail,
+      );
+      if (alreadyRegistered) return null;
+      return api.post<ClientContact>(path, {
+        name: target.legalName,
+        email: target.email,
+        isPrimary: true,
+      });
+    },
+    onSuccess: async (_contact, target) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["client-contacts", target.firmId, target.clientId],
+      });
+      setContactRetry(null);
       navigate("/configuracion-fiscal");
     },
   });
@@ -335,27 +397,28 @@ export function StudyClientes() {
         ...(profileForm.serviceStartDate ? { serviceStartDate: profileForm.serviceStartDate } : {}),
       });
     },
-    onSuccess: async () => {
-      const clientName = editingClient?.legalName ?? "El cliente";
-      await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
-      setEditingClient(null);
-      setNotice(`La ficha de ${clientName} quedó actualizada.`);
-    },
   });
   const updateIdentity = useMutation({
     mutationFn: () => {
-      if (!identityClient) throw new Error("Elegí un cliente para actualizar su identidad");
-      return api.patch<Client>(`/firms/${firmId}/clients/${identityClient.id}`, {
+      if (!editingClient) throw new Error("Elegí un cliente para actualizar su identidad");
+      return api.patch<Client>(`/firms/${firmId}/clients/${editingClient.id}`, {
         legalName: identityForm.legalName.trim(),
         tradeName: identityForm.tradeName.trim() || null,
         cuit: identityForm.cuit,
-        status: identityForm.status,
+      });
+    },
+  });
+  const updateStatus = useMutation({
+    mutationFn: () => {
+      if (!statusClient) throw new Error("Elegí un cliente para cambiar su estado");
+      return api.patch<Client>(`/firms/${firmId}/clients/${statusClient.id}`, {
+        status: statusForm,
       });
     },
     onSuccess: async (client) => {
       await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
-      setIdentityClient(null);
-      setNotice(`Los datos de ${client.legalName} se actualizaron.`);
+      setStatusClient(null);
+      setNotice(`El estado de ${client.legalName} se actualizó.`);
     },
   });
   const saveContact = useMutation({
@@ -418,26 +481,40 @@ export function StudyClientes() {
     navigate("/resumen-cliente");
   };
 
-  const startProfileEdit = (client: ClientWithProfile) => {
+  const startClientEdit = (client: ClientWithProfile) => {
     setCreating(false);
-    setIdentityClient(null);
-    setNotice(null);
-    setEditingClient(client);
-    setProfileForm(profileFormFrom(client));
-  };
-
-  const startIdentityEdit = (client: ClientWithProfile) => {
-    setCreating(false);
-    setEditingClient(null);
     setNotice(null);
     updateIdentity.reset();
-    setIdentityClient(client);
+    updateProfile.reset();
+    setEditingClient(client);
     setIdentityForm({
       legalName: client.legalName,
       tradeName: client.tradeName ?? "",
       cuit: client.cuit,
-      status: client.status,
     });
+    setProfileForm(profileFormFrom(client));
+  };
+
+  const startStatusChange = (client: ClientWithProfile) => {
+    updateStatus.reset();
+    setStatusClient(client);
+    setStatusForm(client.status);
+  };
+
+  const submitClientEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingClient) return;
+
+    const clientName = editingClient.legalName;
+    const results = await Promise.allSettled([
+      updateIdentity.mutateAsync(),
+      updateProfile.mutateAsync(),
+    ]);
+    await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
+    if (results.every((result) => result.status === "fulfilled")) {
+      setEditingClient(null);
+      setNotice(`La ficha de ${clientName} quedó actualizada.`);
+    }
   };
 
   const openContactEditor = (contact?: ClientContact) => {
@@ -466,6 +543,14 @@ export function StudyClientes() {
   const selectedClient = selectedId ? (clients.find((client) => client.id === selectedId) ?? null) : null;
   const currentClient = clientId ? (clients.find((client) => client.id === clientId) ?? null) : null;
   const canManage = capabilities.has("client.manage");
+  const inspectorOpen = Boolean(selectedClient);
+  const missingCreateFields = [
+    ...(form.legalName.trim().length < 2 ? ["razón social"] : []),
+    ...(form.cuit.length !== 11 ? ["CUIT"] : []),
+  ];
+  const createFieldsHint = missingCreateFields.length > 0
+    ? `Falta completar ${missingCreateFields.length} ${missingCreateFields.length === 1 ? "campo" : "campos"}: ${missingCreateFields.join(" y ")}.`
+    : "Los datos requeridos están completos.";
 
   const openNew = () => {
     setEditingClient(null);
@@ -483,12 +568,21 @@ export function StudyClientes() {
       setSelectedId(null);
     }
   }, [query.data, selectedId]);
+  const contactClientId = (location.state as { contactClientId?: unknown } | null)?.contactClientId;
+  useEffect(() => {
+    if (
+      typeof contactClientId === "string" &&
+      query.data?.some((client) => client.id === contactClientId)
+    ) {
+      setSelectedId(contactClientId);
+    }
+  }, [contactClientId, query.data]);
 
   const columns: DenseColumn<ClientWithProfile>[] = [
     {
       key: "legalName",
       header: "Cliente",
-      width: "20%",
+      width: inspectorOpen ? "28%" : "24%",
       className: "client-list__client-column",
       sortValue: (row) => row.legalName.toLocaleLowerCase("es-AR"),
       render: (row) => (
@@ -505,16 +599,20 @@ export function StudyClientes() {
           </span>
           <span className="dense-name__text">
             <strong>{row.legalName}</strong>
-            {row.tradeName ? <small>{row.tradeName}</small> : null}
+            {row.tradeName || clientId === row.id ? (
+              <span className="dense-name__secondary">
+                {row.tradeName ? <small>{row.tradeName}</small> : null}
+                {clientId === row.id ? <span className="dense-tag dense-tag--context">En contexto</span> : null}
+              </span>
+            ) : null}
           </span>
-          {clientId === row.id ? <span className="dense-tag">En contexto</span> : null}
         </button>
       ),
     },
     {
       key: "cuit",
       header: "CUIT",
-      width: "13%",
+      width: "11%",
       className: "client-list__cuit-column",
       sortValue: (row) => row.cuit,
       render: (row) => <span className="tabular-copy">{formatCuit(row.cuit)}</span>,
@@ -522,7 +620,7 @@ export function StudyClientes() {
     {
       key: "vat",
       header: "Condición IVA",
-      width: "11%",
+      width: inspectorOpen ? "12%" : "13%",
       className: "client-list__vat-column",
       sortValue: (row) => vatLabel(row.profile?.vatCondition),
       render: (row) => vatLabel(row.profile?.vatCondition) || <span className="dense-dim">—</span>,
@@ -530,7 +628,7 @@ export function StudyClientes() {
     {
       key: "province",
       header: "Provincia",
-      width: "8%",
+      width: inspectorOpen ? "0%" : "5%",
       className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.province ?? "",
@@ -539,7 +637,7 @@ export function StudyClientes() {
     {
       key: "activity",
       header: "Actividad",
-      width: "8%",
+      width: inspectorOpen ? "0%" : "5%",
       className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.activity ?? "",
@@ -548,7 +646,7 @@ export function StudyClientes() {
     {
       key: "standard",
       header: "Norma",
-      width: "7%",
+      width: inspectorOpen ? "0%" : "4%",
       className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.accountingStandard ?? "",
@@ -557,7 +655,7 @@ export function StudyClientes() {
     {
       key: "closing",
       header: "Cierre",
-      width: "6%",
+      width: inspectorOpen ? "0%" : "4%",
       className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.fiscalYearEndMonth ?? 0,
@@ -571,7 +669,7 @@ export function StudyClientes() {
     {
       key: "gaps",
       header: "Ficha",
-      width: "8%",
+      width: inspectorOpen ? "10%" : "8%",
       className: "client-list__profile-column",
       sortValue: (row) => missingProfileFields(row).length,
       render: (row) => {
@@ -588,7 +686,7 @@ export function StudyClientes() {
     {
       key: "status",
       header: "Estado",
-      width: "10%",
+      width: inspectorOpen ? "26%" : "17%",
       className: "client-list__status-column",
       sortValue: (row) => row.status,
       render: (row) => <StatusBadge status={row.status} />,
@@ -596,7 +694,7 @@ export function StudyClientes() {
     {
       key: "open",
       header: "",
-      width: "9%",
+      width: inspectorOpen ? "13%" : "9%",
       className: "client-list__action-column",
       sticky: "right",
       align: "right",
@@ -604,10 +702,10 @@ export function StudyClientes() {
         <Button
           size="sm"
           variant="secondary"
-          aria-label={`Abrir trabajo de ${row.legalName}`}
+          aria-label={`Abrir ficha de ${row.legalName}`}
           onClick={(event) => {
             event.stopPropagation();
-            openClientWorkspace(row.id);
+            openClientSummary(row.id);
           }}
         >
           Abrir
@@ -632,7 +730,7 @@ export function StudyClientes() {
           <DenseAlert
             action={
               canManage ? (
-                <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
+                <Button size="sm" variant="secondary" onClick={() => startClientEdit(selectedClient)}>
                   Completar
                 </Button>
               ) : undefined
@@ -644,29 +742,47 @@ export function StudyClientes() {
       }
       onClose={() => setSelectedId(null)}
       footer={
-        <>
-          <Button size="sm" onClick={() => openClientWorkspace(selectedClient.id)}>
-            Abrir trabajo
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => openClientSummary(selectedClient.id)}>
-            Resumen
+        <div className="dense-inspector-actions">
+          <Button size="sm" onClick={() => openClientSummary(selectedClient.id)}>
+            Abrir
           </Button>
           {canManage ? (
-            <>
-              <Button size="sm" variant="secondary" onClick={() => startIdentityEdit(selectedClient)}>
-                Editar
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
-                Editar ficha
-              </Button>
-            </>
-          ) : null}
-          {capabilities.has("data.delete") ? (
-            <Button size="sm" variant="danger" onClick={() => setDeletingClient(selectedClient)}>
-              Eliminar
+            <Button size="sm" variant="secondary" onClick={() => startClientEdit(selectedClient)}>
+              Editar
             </Button>
           ) : null}
-        </>
+          <details className="dense-inspector-actions__menu">
+            <summary className="dense-inspector-actions__trigger">Más acciones</summary>
+            <div className="dense-inspector-actions__items" role="group" aria-label="Acciones secundarias">
+              <Button size="sm" variant="ghost" onClick={() => openClientWorkspace(selectedClient.id)}>
+                Abrir trabajo
+              </Button>
+              {canManage ? (
+                <>
+                  <Button size="sm" variant="ghost" onClick={() => startStatusChange(selectedClient)}>
+                    Cambiar estado
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      document
+                        .getElementById(`client-contacts-${selectedClient.id}`)
+                        ?.scrollIntoView?.({ block: "start" })
+                    }
+                  >
+                    Contactos
+                  </Button>
+                </>
+              ) : null}
+              {capabilities.has("data.delete") ? (
+                <Button size="sm" variant="danger" onClick={() => setDeletingClient(selectedClient)}>
+                  Eliminar
+                </Button>
+              ) : null}
+            </div>
+          </details>
+        </div>
       }
     >
       <InspectorSection title="Identificación">
@@ -703,12 +819,16 @@ export function StudyClientes() {
         />
       </InspectorSection>
       {canManage ? (
+        <div
+          id={`client-contacts-${selectedClient.id}`}
+          className="client-contacts__anchor"
+        >
         <InspectorSection title="Contactos">
           <div className="client-contacts__toolbar">
             <span className="dense-dim">
               {contactsQuery.data?.length ?? 0} {(contactsQuery.data?.length ?? 0) === 1 ? "contacto" : "contactos"}
             </span>
-            <Button size="sm" onClick={() => openContactEditor()}>
+            <Button size="sm" variant="secondary" onClick={() => openContactEditor()}>
               Nuevo contacto
             </Button>
           </div>
@@ -774,6 +894,7 @@ export function StudyClientes() {
             </p>
           ) : null}
         </InspectorSection>
+        </div>
       ) : null}
     </Inspector>
   ) : null;
@@ -874,7 +995,23 @@ export function StudyClientes() {
         ]}
       />
 
-      {notice ? (
+      {contactRetry ? (
+        <div className="action-receipt action-receipt--page" role="alert">
+          <span>
+            <strong>Cliente creado</strong>
+            <small>Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.</small>
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={retryContact.isPending}
+            loadingLabel="Reintentando correo"
+            onClick={() => retryContact.mutate(contactRetry)}
+          >
+            Reintentar
+          </Button>
+        </div>
+      ) : notice ? (
         <div className="action-receipt action-receipt--page" role="status">
           <span>
             <strong>Actualización guardada</strong>
@@ -932,23 +1069,29 @@ export function StudyClientes() {
         title="Alta de cliente"
         description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
         footer={
-          <Button
-            type="submit"
-            form="client-create-form"
-            loading={create.isPending}
-            loadingLabel="Creando cliente"
-            disabled={form.legalName.trim().length < 2 || form.cuit.length !== 11}
-          >
-            Crear cliente
-          </Button>
+          <>
+            <span id="client-create-hint" className="client-create__hint" aria-live="polite">
+              {createFieldsHint}
+            </span>
+            <Button
+              type="submit"
+              form="client-create-form"
+              aria-describedby="client-create-hint"
+              loading={create.isPending}
+              loadingLabel="Creando cliente"
+              disabled={missingCreateFields.length > 0}
+            >
+              Crear cliente
+            </Button>
+          </>
         }
       >
         <form
           id="client-create-form"
-          className="study-inline-form study-inline-form--client"
+          className="study-inline-form study-inline-form--client client-create-form"
           onSubmit={(event) => {
             event.preventDefault();
-            create.mutate();
+            create.mutate({ ...form });
           }}
         >
           <Field
@@ -958,6 +1101,15 @@ export function StudyClientes() {
             onChange={(event) => setForm({ ...form, legalName: event.target.value })}
             maxLength={200}
             required
+          />
+          <Field
+            id="client-create-contact-email"
+            label="Correo de contacto"
+            type="email"
+            value={form.contactEmail}
+            onChange={(event) => setForm({ ...form, contactEmail: event.target.value })}
+            autoComplete="email"
+            maxLength={254}
           />
           <Field
             id="client-trade-name"
@@ -1052,128 +1204,91 @@ export function StudyClientes() {
       </ActionDrawer>
 
       <ActionDrawer
-        isOpen={Boolean(identityClient)}
-        onClose={() => {
-          setIdentityClient(null);
-          updateIdentity.reset();
-        }}
-        eyebrow="Cartera"
-        title="Editar cliente"
-        description="Actualizá la identidad y el estado del cliente."
-        footer={
-          <Button
-            type="submit"
-            form="client-identity-form"
-            loading={updateIdentity.isPending}
-            loadingLabel="Guardando cliente"
-            disabled={identityForm.legalName.trim().length === 0 || identityForm.cuit.length !== 11}
-          >
-            Guardar cambios
-          </Button>
-        }
-      >
-        {identityClient ? (
-          <form
-            id="client-identity-form"
-            className="study-inline-form study-inline-form--client"
-            onSubmit={(event) => {
-              event.preventDefault();
-              updateIdentity.mutate();
-            }}
-          >
-            <Field
-              id="client-identity-legal-name"
-              label="Razón social"
-              value={identityForm.legalName}
-              onChange={(event) => setIdentityForm({ ...identityForm, legalName: event.target.value })}
-              maxLength={200}
-              required
-            />
-            <Field
-              id="client-identity-trade-name"
-              label="Nombre comercial"
-              value={identityForm.tradeName}
-              onChange={(event) => setIdentityForm({ ...identityForm, tradeName: event.target.value })}
-              maxLength={100}
-            />
-            <Field
-              id="client-identity-cuit"
-              label="CUIT"
-              value={identityForm.cuit}
-              onChange={(event) =>
-                setIdentityForm({
-                  ...identityForm,
-                  cuit: event.target.value.replace(/\D/g, "").slice(0, 11),
-                })
-              }
-              inputMode="numeric"
-              pattern="[0-9]{11}"
-              hint="11 dígitos, sin guiones"
-              error={
-                updateIdentity.error instanceof ApiError &&
-                updateIdentity.error.code === "CLIENT_CUIT_CONFLICT"
-                  ? updateIdentity.error.message
-                  : undefined
-              }
-              required
-            />
-            <label className="ds-field">
-              <span className="ds-field__label">Estado</span>
-              <select
-                id="client-identity-status"
-                className="ctxbar__input"
-                value={identityForm.status}
-                onChange={(event) => setIdentityForm({ ...identityForm, status: event.target.value })}
-              >
-                <option value="ONBOARDING">En configuración</option>
-                <option value="ACTIVE">Activo</option>
-                <option value="INACTIVE">Inactivo</option>
-                <option value="ARCHIVED">Archivado</option>
-              </select>
-            </label>
-            {updateIdentity.isError &&
-            !(updateIdentity.error instanceof ApiError &&
-              updateIdentity.error.code === "CLIENT_CUIT_CONFLICT") ? (
-              <p className="form-error study-inline-form__feedback" role="alert">
-                {updateIdentity.error instanceof ApiError
-                  ? updateIdentity.error.message
-                  : "No se pudo guardar el cliente. Revisá los datos y los permisos."}
-              </p>
-            ) : null}
-          </form>
-        ) : null}
-      </ActionDrawer>
-
-      <ActionDrawer
         isOpen={Boolean(editingClient)}
-        onClose={() => setEditingClient(null)}
-        eyebrow="Ficha operativa"
-        title={editingClient ? editingClient.legalName : "Cliente"}
-        description="Estos datos se usan como base contable y fiscal. Los regímenes y alícuotas se administran en configuración fiscal."
+        onClose={() => {
+          setEditingClient(null);
+          updateIdentity.reset();
+          updateProfile.reset();
+        }}
+        eyebrow="Ficha del cliente"
+        title="Editar cliente"
+        description="Actualizá la identidad y los datos fiscales del cliente."
         size="wide"
         footer={
           editingClient ? (
             <Button
               type="submit"
-              form="client-profile-form"
-              loading={updateProfile.isPending}
-              loadingLabel="Guardando ficha"
-              disabled={currencyNotBacked || standardUnknown}
+              form="client-edit-form"
+              loading={updateIdentity.isPending || updateProfile.isPending}
+              loadingLabel="Guardando cambios"
+              disabled={
+                identityForm.legalName.trim().length === 0 ||
+                identityForm.cuit.length !== 11 ||
+                currencyNotBacked ||
+                standardUnknown
+              }
             >
-              Guardar ficha
+              Guardar cambios
             </Button>
           ) : null
         }
       >
         {editingClient ? (
           <form
-            id="client-profile-form"
-            className="study-inline-form study-inline-form--client"
-            onSubmit={(event) => {
-              event.preventDefault();
-              updateProfile.mutate();
-            }}
+            id="client-edit-form"
+            className="study-inline-form study-inline-form--client client-edit-form"
+            onSubmit={submitClientEdit}
           >
+            <section className="client-edit__section" aria-labelledby="client-edit-identity-title">
+              <h3 id="client-edit-identity-title">Identidad</h3>
+              <Field
+                id="client-identity-legal-name"
+                label="Razón social"
+                value={identityForm.legalName}
+                onChange={(event) => setIdentityForm({ ...identityForm, legalName: event.target.value })}
+                maxLength={200}
+                required
+              />
+              <Field
+                id="client-identity-trade-name"
+                label="Nombre comercial"
+                value={identityForm.tradeName}
+                onChange={(event) => setIdentityForm({ ...identityForm, tradeName: event.target.value })}
+                maxLength={100}
+              />
+              <Field
+                id="client-identity-cuit"
+                label="CUIT"
+                value={identityForm.cuit}
+                onChange={(event) =>
+                  setIdentityForm({
+                    ...identityForm,
+                    cuit: event.target.value.replace(/\D/g, "").slice(0, 11),
+                  })
+                }
+                inputMode="numeric"
+                pattern="[0-9]{11}"
+                hint="11 dígitos, sin guiones"
+                error={
+                  updateIdentity.error instanceof ApiError &&
+                  updateIdentity.error.code === "CLIENT_CUIT_CONFLICT"
+                    ? updateIdentity.error.message
+                    : undefined
+                }
+                required
+              />
+              {updateIdentity.isError &&
+              !(updateIdentity.error instanceof ApiError &&
+                updateIdentity.error.code === "CLIENT_CUIT_CONFLICT") ? (
+                <p className="form-error study-inline-form__feedback" role="alert">
+                  {updateIdentity.error instanceof ApiError
+                    ? updateIdentity.error.message
+                    : "No se pudo guardar la identidad. Revisá los datos y los permisos."}
+                </p>
+              ) : null}
+            </section>
+            <section className="client-edit__section" aria-labelledby="client-edit-fiscal-title">
+              <h3 id="client-edit-fiscal-title">Datos fiscales</h3>
             <label className="ds-field">
               <span className="ds-field__label">Moneda funcional</span>
               <select
@@ -1431,11 +1546,67 @@ export function StudyClientes() {
                 setProfileForm({ ...profileForm, serviceStartDate: event.target.value })
               }
             />
-            {updateProfile.isError ? (
+            {updateProfile.isError &&
+            !(updateIdentity.isError && updateProfile.error.message === updateIdentity.error.message) ? (
               <p className="form-error study-inline-form__feedback" role="alert">
                 {updateProfile.error instanceof ApiError
                   ? updateProfile.error.message
                   : "No se pudo guardar la ficha. Revisá los datos e intentá nuevamente."}
+              </p>
+            ) : null}
+            </section>
+          </form>
+        ) : null}
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={Boolean(statusClient)}
+        onClose={() => {
+          setStatusClient(null);
+          updateStatus.reset();
+        }}
+        eyebrow="Ficha del cliente"
+        title="Cambiar estado"
+        description="Elegí el estado del cliente."
+        footer={
+          <Button
+            type="submit"
+            form="client-status-form"
+            loading={updateStatus.isPending}
+            loadingLabel="Guardando estado"
+          >
+            Guardar estado
+          </Button>
+        }
+      >
+        {statusClient ? (
+          <form
+            id="client-status-form"
+            className="study-inline-form study-inline-form--client"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateStatus.mutate();
+            }}
+          >
+            <label className="ds-field">
+              <span className="ds-field__label">Estado</span>
+              <select
+                id="client-status"
+                className="ctxbar__input"
+                value={statusForm}
+                onChange={(event) => setStatusForm(event.target.value)}
+              >
+                <option value="ONBOARDING">En configuración</option>
+                <option value="ACTIVE">Activo</option>
+                <option value="INACTIVE">Inactivo</option>
+                <option value="ARCHIVED">Archivado</option>
+              </select>
+            </label>
+            {updateStatus.isError ? (
+              <p className="form-error study-inline-form__feedback" role="alert">
+                {updateStatus.error instanceof ApiError
+                  ? updateStatus.error.message
+                  : "No se pudo actualizar el estado. Revisá los datos y los permisos."}
               </p>
             ) : null}
           </form>
