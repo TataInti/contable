@@ -129,4 +129,8 @@ class AssistantRunResponse(BaseModel):
     toolCalls: list[str] = Field(default_factory=list)
     model: str | None = None
     provider: str | None = None
+    # Uso informado por OpenRouter. Opcional: el modo determinista no lo produce.
+    inputTokens: int | None = None
+    outputTokens: int | None = None
+    costUsd: str | None = None
     promptVersion: str | None = None
