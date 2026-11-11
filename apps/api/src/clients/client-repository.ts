@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import type { CreateClient, ClientProfile, CreateAccount, CreateCounterparty, CreateCostCenter, CreateFiscalYear } from "@contable/contracts";
+import { redact } from "../audit/audit-repository.js";
+import type { CreateClient, UpdateClient, ClientProfile, CreateAccount, CreateCounterparty, CreateCostCenter, CreateFiscalYear } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 
 /**
@@ -8,9 +9,76 @@ import { withTenantContext, type TenantContext } from "../auth/tenant.js";
  * Todas las operaciones requieren contexto de firma (withTenantContext).
  */
 
+export class ClientMutationError extends Error {
+  constructor(
+    readonly statusCode: number,
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ClientMutationError";
+  }
+}
+
 export class ClientRepository {
   private scoped<T>(ctx: TenantContext | undefined, fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     return ctx ? withTenantContext(ctx, fn) : prisma.$transaction(fn);
+  }
+
+  /** Actualiza la identidad y registra before/after en la misma transacción. */
+  async updateIdentity(firmId: string, clientId: string, input: UpdateClient, ctx: TenantContext) {
+    const data: Prisma.ClientUncheckedUpdateInput = {};
+    if (input.legalName !== undefined) data.legalName = input.legalName;
+    if (input.tradeName !== undefined) data.tradeName = input.tradeName;
+    if (input.cuit !== undefined) data.cuit = input.cuit;
+    if (input.status !== undefined) data.status = input.status;
+
+    return this.scoped(ctx, async (tx) => {
+      const before = await tx.client.findFirst({ where: { firmId, id: clientId } });
+      if (!before) {
+        throw new ClientMutationError(404, "CLIENT_NOT_FOUND", "Cliente no encontrado");
+      }
+
+      const updated = await tx.client.update({ where: { id: clientId }, data });
+      await tx.auditEvent.create({
+        data: {
+          firmId,
+          clientId,
+          userId: ctx.userId,
+          actorKind: ctx.actorKind,
+          action: "client.updated",
+          entityType: "Client",
+          entityId: clientId,
+          before: redact({
+            legalName: before.legalName,
+            tradeName: before.tradeName,
+            cuit: before.cuit,
+            status: before.status,
+          }) as Prisma.InputJsonValue,
+          after: redact({
+            legalName: updated.legalName,
+            tradeName: updated.tradeName,
+            cuit: updated.cuit,
+            status: updated.status,
+          }) as Prisma.InputJsonValue,
+        },
+      });
+      return updated;
+    }).catch((error: unknown) => {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code?: unknown }).code === "P2002"
+      ) {
+        throw new ClientMutationError(
+          409,
+          "CLIENT_CUIT_CONFLICT",
+          "Ya existe un cliente con ese CUIT en este estudio.",
+        );
+      }
+      throw error;
+    });
   }
 
   /** Crea un cliente con su perfil por defecto. */

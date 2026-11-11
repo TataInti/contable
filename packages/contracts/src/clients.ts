@@ -18,8 +18,18 @@ export const createClientSchema = z
   .strict();
 export type CreateClient = z.infer<typeof createClientSchema>;
 
-/** Actualización de cliente */
-export const updateClientSchema = createClientSchema.partial();
+/** Actualización de identidad y estado del cliente. */
+export const updateClientSchema = z
+  .object({
+    legalName: z.string().trim().min(1).max(200).optional(),
+    tradeName: z.string().trim().max(100).nullable().optional(),
+    cuit: cuit.optional(),
+    status: z.enum(["ONBOARDING", "ACTIVE", "INACTIVE", "ARCHIVED"]).optional(),
+  })
+  .strict()
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "Indicá al menos un campo para actualizar el cliente",
+  });
 export type UpdateClient = z.infer<typeof updateClientSchema>;
 
 /** Perfil contable/fiscal del cliente */

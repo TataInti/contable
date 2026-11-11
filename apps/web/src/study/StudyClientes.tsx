@@ -143,6 +143,13 @@ export function StudyClientes() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [density, setDensity] = useDensity();
   const searchRef = useRef<HTMLInputElement>(null);
+  const [identityClient, setIdentityClient] = useState<ClientWithProfile | null>(null);
+  const [identityForm, setIdentityForm] = useState({
+    legalName: "",
+    tradeName: "",
+    cuit: "",
+    status: "ONBOARDING",
+  });
   const [form, setForm] = useState({
     legalName: "",
     tradeName: "",
@@ -310,6 +317,22 @@ export function StudyClientes() {
       setNotice(`La ficha de ${clientName} quedó actualizada.`);
     },
   });
+  const updateIdentity = useMutation({
+    mutationFn: () => {
+      if (!identityClient) throw new Error("Elegí un cliente para actualizar su identidad");
+      return api.patch<Client>(`/firms/${firmId}/clients/${identityClient.id}`, {
+        legalName: identityForm.legalName.trim(),
+        tradeName: identityForm.tradeName.trim() || null,
+        cuit: identityForm.cuit,
+        status: identityForm.status,
+      });
+    },
+    onSuccess: async (client) => {
+      await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
+      setIdentityClient(null);
+      setNotice(`Los datos de ${client.legalName} se actualizaron.`);
+    },
+  });
   const rows = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("es-AR");
     const digits = needle.replace(/\D/g, "");
@@ -339,9 +362,24 @@ export function StudyClientes() {
 
   const startProfileEdit = (client: ClientWithProfile) => {
     setCreating(false);
+    setIdentityClient(null);
     setNotice(null);
     setEditingClient(client);
     setProfileForm(profileFormFrom(client));
+  };
+
+  const startIdentityEdit = (client: ClientWithProfile) => {
+    setCreating(false);
+    setEditingClient(null);
+    setNotice(null);
+    updateIdentity.reset();
+    setIdentityClient(client);
+    setIdentityForm({
+      legalName: client.legalName,
+      tradeName: client.tradeName ?? "",
+      cuit: client.cuit,
+      status: client.status,
+    });
   };
 
   const clients = query.data ?? [];
@@ -500,9 +538,14 @@ export function StudyClientes() {
             Resumen
           </Button>
           {canManage ? (
-            <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
-              Editar ficha
-            </Button>
+            <>
+              <Button size="sm" variant="secondary" onClick={() => startIdentityEdit(selectedClient)}>
+                Editar
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => startProfileEdit(selectedClient)}>
+                Editar ficha
+              </Button>
+            </>
           ) : null}
           {capabilities.has("data.delete") ? (
             <Button size="sm" variant="danger" onClick={() => setDeletingClient(selectedClient)}>
@@ -832,6 +875,99 @@ export function StudyClientes() {
             </p>
           ) : null}
         </form>
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={Boolean(identityClient)}
+        onClose={() => {
+          setIdentityClient(null);
+          updateIdentity.reset();
+        }}
+        eyebrow="Cartera"
+        title="Editar cliente"
+        description="Actualizá la identidad y el estado del cliente."
+        footer={
+          <Button
+            type="submit"
+            form="client-identity-form"
+            loading={updateIdentity.isPending}
+            loadingLabel="Guardando cliente"
+            disabled={identityForm.legalName.trim().length === 0 || identityForm.cuit.length !== 11}
+          >
+            Guardar cambios
+          </Button>
+        }
+      >
+        {identityClient ? (
+          <form
+            id="client-identity-form"
+            className="study-inline-form study-inline-form--client"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateIdentity.mutate();
+            }}
+          >
+            <Field
+              id="client-identity-legal-name"
+              label="Razón social"
+              value={identityForm.legalName}
+              onChange={(event) => setIdentityForm({ ...identityForm, legalName: event.target.value })}
+              maxLength={200}
+              required
+            />
+            <Field
+              id="client-identity-trade-name"
+              label="Nombre comercial"
+              value={identityForm.tradeName}
+              onChange={(event) => setIdentityForm({ ...identityForm, tradeName: event.target.value })}
+              maxLength={100}
+            />
+            <Field
+              id="client-identity-cuit"
+              label="CUIT"
+              value={identityForm.cuit}
+              onChange={(event) =>
+                setIdentityForm({
+                  ...identityForm,
+                  cuit: event.target.value.replace(/\D/g, "").slice(0, 11),
+                })
+              }
+              inputMode="numeric"
+              pattern="[0-9]{11}"
+              hint="11 dígitos, sin guiones"
+              error={
+                updateIdentity.error instanceof ApiError &&
+                updateIdentity.error.code === "CLIENT_CUIT_CONFLICT"
+                  ? updateIdentity.error.message
+                  : undefined
+              }
+              required
+            />
+            <label className="ds-field">
+              <span className="ds-field__label">Estado</span>
+              <select
+                id="client-identity-status"
+                className="ctxbar__input"
+                value={identityForm.status}
+                onChange={(event) => setIdentityForm({ ...identityForm, status: event.target.value })}
+              >
+                <option value="ONBOARDING">En configuración</option>
+                <option value="ACTIVE">Activo</option>
+                <option value="INACTIVE">Inactivo</option>
+                <option value="ARCHIVED">Archivado</option>
+              </select>
+            </label>
+            {updateIdentity.isError &&
+            !(updateIdentity.error instanceof ApiError &&
+              updateIdentity.error.code === "CLIENT_CUIT_CONFLICT") ? (
+              <p className="form-error study-inline-form__feedback" role="alert">
+                {updateIdentity.error instanceof ApiError
+                  ? updateIdentity.error.message
+                  : "No se pudo guardar el cliente. Revisá los datos y los permisos."}
+              </p>
+            ) : null}
+          </form>
+        ) : null}
       </ActionDrawer>
 
       <ActionDrawer

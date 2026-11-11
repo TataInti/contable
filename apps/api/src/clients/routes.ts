@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
   createClientSchema,
+  updateClientSchema,
   clientProfilePatchInputSchema,
   createAccountSchema,
   createCounterpartySchema,
@@ -64,6 +65,19 @@ export function clientRoutes(app: FastifyInstance) {
     }
     const client = await repo.create(firmId, body, ctx);
     return reply.status(201).send({ data: client });
+  });
+
+  // Actualizar identidad y estado conservando el ID del cliente.
+  app.patch("/api/v1/firms/:firmId/clients/:clientId", async (req, reply) => {
+    const { firmId, clientId } = req.params as { firmId: string; clientId: string };
+    const body = updateClientSchema.parse(req.body);
+    const client = await repo.updateIdentity(
+      firmId,
+      clientId,
+      body,
+      tenantContextFromRequest(req),
+    );
+    return reply.send({ data: client });
   });
 
   // Catálogo de actividad principal para la ficha. Reutiliza EconomicActivity

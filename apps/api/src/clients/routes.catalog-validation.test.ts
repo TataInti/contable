@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import { ZodError } from "zod";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     activity: string | null;
     legalForm: string | null;
   },
+  updateIdentity: vi.fn(),
   create: vi.fn(),
   updateProfile: vi.fn(),
   findFirst: vi.fn(),
@@ -17,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("./client-repository.js", () => ({
   ClientRepository: class {
     create = mocks.create;
+    updateIdentity = mocks.updateIdentity;
     updateProfile = mocks.updateProfile;
   },
 }));
@@ -43,10 +46,21 @@ beforeEach(async () => {
   mocks.existingProfile = null;
   mocks.findFirst.mockImplementation(async () => mocks.existingProfile);
   mocks.create.mockImplementation(async () => ({ id: "client-a" }));
+  mocks.updateIdentity.mockImplementation(async (_firmId: string, clientId: string, input: unknown) => ({
+    id: clientId,
+    ...(input as Record<string, unknown>),
+  }));
   mocks.updateProfile.mockImplementation(
     async (_firmId: string, _clientId: string, data: unknown) => data,
   );
   app = Fastify();
+  app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof ZodError) {
+      return reply.status(400).send({ error: { code: "VALIDATION_ERROR" } });
+    }
+    const statusCode = (error as Error & { statusCode?: number }).statusCode ?? 500;
+    return reply.status(statusCode).send({ error: { code: "INTERNAL_ERROR" } });
+  });
   clientRoutes(app);
   await app.ready();
 });
@@ -143,5 +157,51 @@ describe("validación servidor de categorías de ficha cliente", () => {
       expect.objectContaining({ legalForm: "SRL" }),
       expect.objectContaining({ firmId: "firm-a" }),
     );
+  });
+});
+
+describe("PATCH de identidad de cliente", () => {
+  it("actualiza la identidad y conserva el ID del cliente", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/firms/firm-a/clients/client-a",
+      payload: {
+        legalName: "Razón social actualizada S.A.",
+        tradeName: "Comercial Alfa",
+        cuit: "20333333334",
+        status: "ACTIVE",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.id).toBe("client-a");
+    expect(mocks.updateIdentity).toHaveBeenCalledWith(
+      "firm-a",
+      "client-a",
+      {
+        legalName: "Razón social actualizada S.A.",
+        tradeName: "Comercial Alfa",
+        cuit: "20333333334",
+        status: "ACTIVE",
+      },
+      expect.objectContaining({ firmId: "firm-a", userId: "user-a" }),
+    );
+  });
+
+  it("rechaza una actualización vacía y los campos ajenos a Client", async () => {
+    const empty = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/firms/firm-a/clients/client-a",
+      payload: {},
+    });
+    const forged = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/firms/firm-a/clients/client-a",
+      payload: { id: "client-b", firmId: "firm-b" },
+    });
+
+    expect(empty.statusCode).toBe(400);
+    expect(forged.statusCode).toBe(400);
+    expect(mocks.updateIdentity).not.toHaveBeenCalled();
   });
 });

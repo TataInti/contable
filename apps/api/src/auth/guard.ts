@@ -279,6 +279,7 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/reports\//, resolve: () => "report.run" },
   { match: /\/assistant\//, resolve: () => "ai.use" },
   { match: /\/bi\//, resolve: () => "bi.use" },
+  { match: /\/clients\/[^/]+\/contacts(?:\/[^/]+)?$/, resolve: () => "client.manage" },
   // El tablero del estudio sólo agrega datos de clientes ya accesibles para
   // el miembro. No debe caer en el deny-by-default de las rutas de firma.
   { match: /\/firms\/[^/]+\/dashboard$/, resolve: (m) => (m === "GET" ? "client.read" : null) },

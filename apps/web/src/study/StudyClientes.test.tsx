@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
-import { api } from "../lib/api";
+import { ApiError, api } from "../lib/api";
 import { StudyClientes } from "./StudyClientes";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -609,6 +609,73 @@ describe("StudyClientes — cartera densa", () => {
     await waitFor(() =>
       expect(screen.queryByRole("complementary", { name: "Detalle de Beta Dos S.R.L." })).toBeNull(),
     );
+  });
+
+  it("edita la identidad desde la ficha con los valores actuales y guarda el PATCH", async () => {
+    const updated = {
+      id: "c1",
+      legalName: "Alfa Actualizada S.A.",
+      tradeName: "Alfa Comercial",
+      cuit: "20333333334",
+      status: "ACTIVE",
+    };
+    vi.mocked(api.patch).mockResolvedValue(updated as never);
+    renderClientes();
+    const table = await screen.findByRole("table");
+    fireEvent.click(within(table).getByText("20-11111111-2"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
+    fireEvent.click(within(detail).getByRole("button", { name: "Editar" }));
+
+    expect((screen.getByLabelText("Razón social") as HTMLInputElement).value).toBe("Alfa Uno S.A.");
+    expect((screen.getByLabelText("Nombre comercial") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("CUIT") as HTMLInputElement).value).toBe("20111111112");
+    expect((screen.getByLabelText("Estado") as HTMLSelectElement).value).toBe("ACTIVE");
+
+    fireEvent.change(screen.getByLabelText("Razón social"), {
+      target: { value: "Alfa Actualizada S.A." },
+    });
+    fireEvent.change(screen.getByLabelText("Nombre comercial"), {
+      target: { value: "Alfa Comercial" },
+    });
+    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20333333334" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith("/firms/firm-a/clients/c1", {
+        legalName: "Alfa Actualizada S.A.",
+        tradeName: "Alfa Comercial",
+        cuit: "20333333334",
+        status: "ACTIVE",
+      }),
+    );
+  });
+
+  it("muestra el conflicto de CUIT junto al campo de identidad", async () => {
+    vi.mocked(api.patch).mockRejectedValue(
+      new ApiError("CLIENT_CUIT_CONFLICT", "Ya existe un cliente con ese CUIT en este estudio.", 409),
+    );
+    renderClientes();
+    const table = await screen.findByRole("table");
+    fireEvent.click(within(table).getByText("20-11111111-2"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
+    fireEvent.click(within(detail).getByRole("button", { name: "Editar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(await screen.findByText("Ya existe un cliente con ese CUIT en este estudio.")).toBeTruthy();
+    expect(screen.getByLabelText("CUIT").getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("oculta las acciones de edición a quien no tiene client.manage", async () => {
+    contextMock.current = {
+      ...contextMock.current,
+      capabilities: new Set(["client.read"]),
+    };
+    renderClientes();
+    const table = await screen.findByRole("table");
+    fireEvent.click(within(table).getByText("20-11111111-2"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
+    expect(within(detail).queryByRole("button", { name: "Editar" })).toBeNull();
+    expect(within(detail).queryByRole("button", { name: "Editar ficha" })).toBeNull();
   });
 
   it("abre el espacio de trabajo desde la fila sin seleccionar el cliente", async () => {
