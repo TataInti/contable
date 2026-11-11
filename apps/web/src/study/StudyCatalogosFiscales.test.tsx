@@ -685,14 +685,14 @@ describe("StudyCatalogosFiscales", () => {
     const jurisdictionDetail = await screen.findByRole("complementary", { name: "Detalle de la jurisdicción" });
     fireEvent.click(within(jurisdictionDetail).getByRole("button", { name: "Editar" }));
     let editDialog = await screen.findByRole("dialog");
-    expect(within(editDialog).getByText(/Este código define hoy la familia del motor según la jurisdicción/)).toBeTruthy();
+    expect(within(editDialog).getByText("Hoy, el código de la jurisdicción define la familia del motor. Más adelante podrás elegir esa decisión por separado.")).toBeTruthy();
 
     await openTab(/^Tipos de impuesto/);
     fireEvent.click(await screen.findByText("Ingresos Brutos"));
     const taxTypeDetail = await screen.findByRole("complementary", { name: "Detalle del tipo de impuesto" });
     fireEvent.click(within(taxTypeDetail).getByRole("button", { name: "Editar" }));
     editDialog = await screen.findByRole("dialog");
-    expect(within(editDialog).getByText(/Este código define hoy la familia del motor y la fuente de importación/)).toBeTruthy();
+    expect(within(editDialog).getByText("Hoy, el código del impuesto define la familia del motor y la fuente de importación. Más adelante podrás elegir cada decisión por separado.")).toBeTruthy();
   });
 
   it("muestra junto al código de un régimen de sistema qué decisiones siguen ese código", async () => {
@@ -732,7 +732,8 @@ describe("StudyCatalogosFiscales", () => {
 
     const editDialog = await screen.findByRole("dialog");
     expect(within(editDialog).getByLabelText("Código")).toBeTruthy();
-    expect(within(editDialog).getByText(/Este código define hoy excepciones del motor, la fuente de importación y el permiso del régimen/)).toBeTruthy();
+    expect(within(editDialog).getByText("Hoy, el código del régimen define las excepciones del motor, la fuente de importación y el permiso. Más adelante podrás elegir cada decisión por separado.")).toBeTruthy();
+    expect(within(editDialog).getByRole("button", { name: "Guardar cambios" })).toBeTruthy();
   });
 
   it("presenta Ocultar como acción reversible y neutra y expone el valor completo en tooltip", async () => {

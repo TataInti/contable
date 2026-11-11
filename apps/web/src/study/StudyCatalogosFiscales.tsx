@@ -1860,7 +1860,7 @@ export function StudyCatalogosFiscales() {
             value={regimeForm.code}
             onChange={(event) => setRegimeForm({ ...regimeForm, code: event.target.value })}
             error={codeConflict(editingRegime ? updateRegime.error : createRegime.error)}
-            hint={editingRegime ? "Este código define hoy excepciones del motor, la fuente de importación y el permiso del régimen. Al guardar, esas decisiones seguirán evaluándose con el código nuevo hasta los cortes 2a, 5 y 7." : undefined}
+            hint={editingRegime ? "Hoy, el código del régimen define las excepciones del motor, la fuente de importación y el permiso. Más adelante podrás elegir cada decisión por separado." : undefined}
             maxLength={40}
             required
           />
@@ -1941,7 +1941,7 @@ export function StudyCatalogosFiscales() {
           <div className="study-form__actions">
             <Button
               type="submit"
-              loading={createRegime.isPending}
+              loading={editingRegime ? updateRegime.isPending : createRegime.isPending}
               disabled={
                 !regimeForm.code.trim() ||
                 !regimeForm.name.trim() ||
@@ -1950,7 +1950,7 @@ export function StudyCatalogosFiscales() {
                 !regimeForm.authorityId
               }
             >
-              Crear régimen
+              {editingRegime ? "Guardar cambios" : "Crear régimen"}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
               Cancelar
@@ -2367,7 +2367,7 @@ export function StudyCatalogosFiscales() {
                 value={jurisdictionForm.code}
                 onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, code: event.target.value.toUpperCase() })}
                 error={codeConflict(updateJurisdiction.error)}
-                hint="Este código define hoy la familia del motor según la jurisdicción. Al guardar, el motor seguirá evaluando el código nuevo hasta el corte 2a."
+                hint="Hoy, el código de la jurisdicción define la familia del motor. Más adelante podrás elegir esa decisión por separado."
                 maxLength={40}
                 required
               />
@@ -2480,7 +2480,7 @@ export function StudyCatalogosFiscales() {
               value={taxTypeForm.code}
               onChange={(event) => setTaxTypeForm({ ...taxTypeForm, code: event.target.value.toUpperCase() })}
               error={codeConflict(updateTaxType.error)}
-              hint="Este código define hoy la familia del motor y la fuente de importación. Al guardar, ambas decisiones seguirán evaluándose con el código nuevo hasta los cortes 2a y 5."
+              hint="Hoy, el código del impuesto define la familia del motor y la fuente de importación. Más adelante podrás elegir cada decisión por separado."
               maxLength={40}
               required
             />
