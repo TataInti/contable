@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field } from "@contable/design-system";
-import { ACTIVITY_CODE_PATTERN, normalizeActivityCode } from "@contable/contracts";
+import { ACTIVITY_CODE_PATTERN, normalizeActivityCode, type EconomicActivityCodeChange } from "@contable/contracts";
 import { ApiError, api, type FiscalJurisdiction, type FiscalTaxType } from "../lib/api";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useClientContext } from "../context/ClientContext";
@@ -94,11 +94,7 @@ interface CatalogActivityRow {
   origin?: "REFERENCE" | "UI";
   createdByFirmId?: string | null;
   activeClientLinks?: number;
-  codeChange?: {
-    previousCode: string;
-    updatedReferences: number;
-    retainedReferences: number;
-  } | null;
+  codeChange?: EconomicActivityCodeChange | null;
 }
 
 interface ActivityForm {
