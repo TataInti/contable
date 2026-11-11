@@ -113,6 +113,10 @@ def test_prompt_specifies_ticket_enum_cuit_and_literal_tax_text() -> None:
     assert '`$121.000,00` se devuelve `"121000.00"`' in prompt
     assert "Nunca interpretes un punto seguido de exactamente tres dígitos como decimal" in prompt
     assert "Ante un formato ambiguo, elegí la lectura argentina y no inventes decimales." in prompt
+    assert (
+        "En facturas, registrá el importe visible rotulado `Subtotal` o `Neto` en `neto_gravado`"
+        in prompt
+    )
     assert "`Percep. RG 2408 - DGI` → `IVA`" in prompt
 
 
