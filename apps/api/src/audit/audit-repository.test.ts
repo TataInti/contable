@@ -6,13 +6,17 @@ describe("audit redaction", () => {
     const input = {
       name: "Juan Pérez",
       cuit: "20123456789",
+      email: "juan@example.com",
       emailNormalized: "juan@example.com",
+      phone: "+54 11 1234 5678",
       passwordHash: "hash-secreto",
       role: "PREPARER",
     };
     const out = redact(input) as Record<string, unknown>;
     expect(out.cuit).toBe("[REDACTED]");
+    expect(out.email).toBe("[REDACTED]");
     expect(out.emailNormalized).toBe("[REDACTED]");
+    expect(out.phone).toBe("[REDACTED]");
     expect(out.passwordHash).toBe("[REDACTED]");
     expect(out.name).toBe("Juan Pérez");
     expect(out.role).toBe("PREPARER");

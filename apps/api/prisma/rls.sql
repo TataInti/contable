@@ -321,6 +321,37 @@ CREATE POLICY accounting_standards_firm_scope ON "accounting_standards"
   );
 
 -- ------------------------------------------------------------
+-- 9c. Contactos del cliente: tenant + cliente asignado, sin borrado físico.
+-- ------------------------------------------------------------
+ALTER TABLE "client_contacts" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "client_contacts" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS client_contacts_select ON "client_contacts";
+CREATE POLICY client_contacts_select ON "client_contacts" FOR SELECT
+  USING (app_can_access_tenant("firmId", "clientId"));
+
+DROP POLICY IF EXISTS client_contacts_insert ON "client_contacts";
+CREATE POLICY client_contacts_insert ON "client_contacts" FOR INSERT
+  WITH CHECK (
+    current_setting('app.actor_kind', true) <> 'PORTAL'
+    AND app_can_access_tenant("firmId", "clientId")
+  );
+
+DROP POLICY IF EXISTS client_contacts_update ON "client_contacts";
+CREATE POLICY client_contacts_update ON "client_contacts" FOR UPDATE
+  USING (
+    current_setting('app.actor_kind', true) <> 'PORTAL'
+    AND app_can_access_tenant("firmId", "clientId")
+  )
+  WITH CHECK (
+    current_setting('app.actor_kind', true) <> 'PORTAL'
+    AND app_can_access_tenant("firmId", "clientId")
+  );
+
+GRANT SELECT, INSERT, UPDATE ON "client_contacts" TO contable_runtime;
+REVOKE DELETE ON "client_contacts" FROM contable_runtime;
+
+-- ------------------------------------------------------------
 -- 10. Fase 4 — documents, document_file_versions, document_processing_jobs, upload_sessions
 -- ------------------------------------------------------------
 ALTER TABLE "documents" ENABLE ROW LEVEL SECURITY;

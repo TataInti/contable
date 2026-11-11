@@ -26,7 +26,9 @@ const SENSITIVE_FIELDS = new Set([
   "mfaSecretEncrypted",
   "refreshTokenHash",
   "cuit",
+  "email",
   "emailNormalized",
+  "phone",
   "backupCodesHash",
 ]);
 

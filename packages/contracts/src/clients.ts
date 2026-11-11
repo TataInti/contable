@@ -32,6 +32,34 @@ export const updateClientSchema = z
   });
 export type UpdateClient = z.infer<typeof updateClientSchema>;
 
+/** Contacto perteneciente a la ficha de un cliente. */
+export const createClientContactSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    function: z.string().trim().max(100).nullable().optional(),
+    email: z.string().trim().email().max(254).nullable().optional(),
+    phone: z.string().trim().max(50).nullable().optional(),
+    isPrimary: z.boolean().default(false),
+    isActive: z.boolean().default(true),
+  })
+  .strict();
+export type CreateClientContact = z.infer<typeof createClientContactSchema>;
+
+export const updateClientContactSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    function: z.string().trim().max(100).nullable().optional(),
+    email: z.string().trim().email().max(254).nullable().optional(),
+    phone: z.string().trim().max(50).nullable().optional(),
+    isPrimary: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict()
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "Indicá al menos un campo para actualizar el contacto",
+  });
+export type UpdateClientContact = z.infer<typeof updateClientContactSchema>;
+
 /** Perfil contable/fiscal del cliente */
 export const clientProfileSchema = z
   .object({

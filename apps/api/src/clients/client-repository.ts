@@ -1,7 +1,17 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { redact } from "../audit/audit-repository.js";
-import type { CreateClient, UpdateClient, ClientProfile, CreateAccount, CreateCounterparty, CreateCostCenter, CreateFiscalYear } from "@contable/contracts";
+import type {
+  CreateClient,
+  UpdateClient,
+  CreateClientContact,
+  UpdateClientContact,
+  ClientProfile,
+  CreateAccount,
+  CreateCounterparty,
+  CreateCostCenter,
+  CreateFiscalYear,
+} from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 
 /**
@@ -18,6 +28,54 @@ export class ClientMutationError extends Error {
     super(message);
     this.name = "ClientMutationError";
   }
+}
+
+interface ClientContactAuditSnapshot {
+  name: string;
+  function: string | null;
+  email: string | null;
+  phone: string | null;
+  isPrimary: boolean;
+  isActive: boolean;
+}
+
+async function lockClientContacts(
+  tx: Prisma.TransactionClient,
+  firmId: string,
+  clientId: string,
+): Promise<void> {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${firmId}), hashtext(${clientId}))::text`;
+}
+
+function clientContactAuditSnapshot(contact: ClientContactAuditSnapshot): Prisma.InputJsonValue {
+  return redact(contact) as Prisma.InputJsonValue;
+}
+
+async function recordClientContactAudit(
+  tx: Prisma.TransactionClient,
+  ctx: TenantContext,
+  input: {
+    firmId: string;
+    clientId: string;
+    contactId: string;
+    action: string;
+    before?: ClientContactAuditSnapshot;
+    after: ClientContactAuditSnapshot;
+  },
+): Promise<void> {
+  await tx.auditEvent.create({
+    data: {
+      firmId: input.firmId,
+      clientId: input.clientId,
+      userId: ctx.userId,
+      actorKind: ctx.actorKind,
+      action: input.action,
+      entityType: "ClientContact",
+      entityId: input.contactId,
+      ...(input.before ? { before: clientContactAuditSnapshot(input.before) } : {}),
+      after: clientContactAuditSnapshot(input.after),
+    },
+  });
 }
 
 export class ClientRepository {
@@ -75,6 +133,160 @@ export class ClientRepository {
           409,
           "CLIENT_CUIT_CONFLICT",
           "Ya existe un cliente con ese CUIT en este estudio.",
+        );
+      }
+      throw error;
+    });
+  }
+
+  /** Lista contactos activos e inactivos para permitir mostrarlos nuevamente. */
+  async listContacts(firmId: string, clientId: string, ctx: TenantContext) {
+    return this.scoped(ctx, (tx) =>
+      tx.clientContact.findMany({
+        where: { firmId, clientId },
+        orderBy: [{ isActive: "desc" }, { isPrimary: "desc" }, { name: "asc" }],
+      }),
+    );
+  }
+
+  /** Crea un contacto y mantiene un único principal por cliente. */
+  async createContact(
+    firmId: string,
+    clientId: string,
+    input: CreateClientContact,
+    ctx: TenantContext,
+  ) {
+    return this.scoped(ctx, async (tx) => {
+      await lockClientContacts(tx, firmId, clientId);
+
+      if (input.isPrimary) {
+        const previousPrimary = await tx.clientContact.findFirst({
+          where: { firmId, clientId, isPrimary: true },
+        });
+        if (previousPrimary) {
+          const unmarked = await tx.clientContact.update({
+            where: { id: previousPrimary.id },
+            data: { isPrimary: false },
+          });
+          await recordClientContactAudit(tx, ctx, {
+            firmId,
+            clientId,
+            contactId: unmarked.id,
+            action: "client.contact.updated",
+            before: previousPrimary,
+            after: unmarked,
+          });
+        }
+      }
+
+      const created = await tx.clientContact.create({
+        data: {
+          firmId,
+          clientId,
+          name: input.name,
+          function: input.function ?? null,
+          email: input.email ?? null,
+          phone: input.phone ?? null,
+          isPrimary: input.isPrimary,
+          isActive: input.isActive,
+        },
+      });
+      await recordClientContactAudit(tx, ctx, {
+        firmId,
+        clientId,
+        contactId: created.id,
+        action: "client.contact.created",
+        after: created,
+      });
+      return created;
+    }).catch((error: unknown) => {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code?: unknown }).code === "P2002"
+      ) {
+        throw new ClientMutationError(
+          409,
+          "CLIENT_CONTACT_PRIMARY_CONFLICT",
+          "No se pudo asignar el contacto principal; actualizá la lista e intentá nuevamente.",
+        );
+      }
+      throw error;
+    });
+  }
+
+  /** Edita u oculta/muestra un contacto sin borrarlo físicamente. */
+  async updateContact(
+    firmId: string,
+    clientId: string,
+    contactId: string,
+    input: UpdateClientContact,
+    ctx: TenantContext,
+  ) {
+    const data: Prisma.ClientContactUncheckedUpdateInput = {};
+    if (input.name !== undefined) data.name = input.name;
+    if (input.function !== undefined) data.function = input.function;
+    if (input.email !== undefined) data.email = input.email;
+    if (input.phone !== undefined) data.phone = input.phone;
+    if (input.isPrimary !== undefined) data.isPrimary = input.isPrimary;
+    if (input.isActive !== undefined) data.isActive = input.isActive;
+
+    return this.scoped(ctx, async (tx) => {
+      await lockClientContacts(tx, firmId, clientId);
+      const before = await tx.clientContact.findFirst({
+        where: { firmId, clientId, id: contactId },
+      });
+      if (!before) {
+        throw new ClientMutationError(404, "CLIENT_CONTACT_NOT_FOUND", "Contacto no encontrado");
+      }
+
+      if (input.isPrimary === true && !before.isPrimary) {
+        const previousPrimary = await tx.clientContact.findFirst({
+          where: { firmId, clientId, isPrimary: true, id: { not: contactId } },
+        });
+        if (previousPrimary) {
+          const unmarked = await tx.clientContact.update({
+            where: { id: previousPrimary.id },
+            data: { isPrimary: false },
+          });
+          await recordClientContactAudit(tx, ctx, {
+            firmId,
+            clientId,
+            contactId: unmarked.id,
+            action: "client.contact.updated",
+            before: previousPrimary,
+            after: unmarked,
+          });
+        }
+      }
+
+      const updated = await tx.clientContact.update({ where: { id: contactId }, data });
+      const action = input.isActive === undefined || input.isActive === before.isActive
+        ? "client.contact.updated"
+        : input.isActive
+          ? "client.contact.activated"
+          : "client.contact.deactivated";
+      await recordClientContactAudit(tx, ctx, {
+        firmId,
+        clientId,
+        contactId,
+        action,
+        before,
+        after: updated,
+      });
+      return updated;
+    }).catch((error: unknown) => {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code?: unknown }).code === "P2002"
+      ) {
+        throw new ClientMutationError(
+          409,
+          "CLIENT_CONTACT_PRIMARY_CONFLICT",
+          "No se pudo asignar el contacto principal; actualizá la lista e intentá nuevamente.",
         );
       }
       throw error;

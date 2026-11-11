@@ -297,11 +297,31 @@ model Client {
   supplierTaxProfiles    SupplierTaxProfile[]
   taxCreditLots          TaxCreditLot[]
   taxCreditMovements     TaxCreditMovement[]
+  contacts               ClientContact[]
 
   @@unique([firmId, cuit])
   @@index([firmId])
   @@unique([firmId, id])
   @@map("clients")
+}
+
+model ClientContact {
+  id        String   @id @default(uuid(7))
+  firmId    String
+  clientId  String
+  name      String
+  function  String?
+  email     String?
+  phone     String?
+  isPrimary Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [firmId, clientId], references: [firmId, id], onDelete: Cascade)
+
+  @@index([firmId, clientId, isActive])
+  @@map("client_contacts")
 }
 
 model ClientAssignment {

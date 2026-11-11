@@ -14,7 +14,7 @@ import {
   type CatalogJurisdiction,
   type ClientEconomicActivityOption,
 } from "@contable/contracts";
-import { ApiError, api, type Client } from "../lib/api";
+import { ApiError, api, type Client, type ClientContact } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -102,6 +102,14 @@ interface ClientWithProfile extends Client {
   profile?: ClientProfile | null;
 }
 
+interface ClientContactForm {
+  name: string;
+  function: string;
+  email: string;
+  phone: string;
+  isPrimary: boolean;
+}
+
 interface ClientProfileForm {
   functionalCurrency: string;
   accountingStandard: string;
@@ -150,6 +158,15 @@ export function StudyClientes() {
     cuit: "",
     status: "ONBOARDING",
   });
+  const [contactEditorOpen, setContactEditorOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
+  const [contactForm, setContactForm] = useState<ClientContactForm>({
+    name: "",
+    function: "",
+    email: "",
+    phone: "",
+    isPrimary: false,
+  });
   const [form, setForm] = useState({
     legalName: "",
     tradeName: "",
@@ -177,6 +194,14 @@ export function StudyClientes() {
     queryKey: ["clients", firmId],
     queryFn: () => api.get<ClientWithProfile[]>(`/firms/${firmId}/clients`),
     enabled: Boolean(firmId),
+  });
+  const contactsQuery = useQuery({
+    queryKey: ["client-contacts", firmId, selectedId],
+    queryFn: () => {
+      if (!firmId || !selectedId) return Promise.resolve([]);
+      return api.get<ClientContact[]>(`/firms/${firmId}/clients/${selectedId}/contacts`);
+    },
+    enabled: Boolean(firmId && selectedId && capabilities.has("client.manage")),
   });
   const jurisdictionCatalog = useQuery({
     queryKey: ["jurisdiction-catalog", firmId],
@@ -333,6 +358,39 @@ export function StudyClientes() {
       setNotice(`Los datos de ${client.legalName} se actualizaron.`);
     },
   });
+  const saveContact = useMutation({
+    mutationFn: () => {
+      if (!firmId || !selectedId) throw new Error("Elegí un cliente para administrar contactos");
+      const path = `/firms/${firmId}/clients/${selectedId}/contacts`;
+      const payload = {
+        name: contactForm.name.trim(),
+        function: contactForm.function.trim() || null,
+        email: contactForm.email.trim() || null,
+        phone: contactForm.phone.trim() || null,
+        isPrimary: contactForm.isPrimary,
+      };
+      return editingContact
+        ? api.patch<ClientContact>(`${path}/${editingContact.id}`, payload)
+        : api.post<ClientContact>(path, payload);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["client-contacts", firmId, selectedId] });
+      setContactEditorOpen(false);
+      setEditingContact(null);
+    },
+  });
+  const toggleContactState = useMutation({
+    mutationFn: (contact: ClientContact) => {
+      if (!firmId || !selectedId) throw new Error("Elegí un cliente para administrar contactos");
+      return api.patch<ClientContact>(
+        `/firms/${firmId}/clients/${selectedId}/contacts/${contact.id}`,
+        { isActive: !contact.isActive },
+      );
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["client-contacts", firmId, selectedId] });
+    },
+  });
   const rows = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("es-AR");
     const digits = needle.replace(/\D/g, "");
@@ -380,6 +438,25 @@ export function StudyClientes() {
       cuit: client.cuit,
       status: client.status,
     });
+  };
+
+  const openContactEditor = (contact?: ClientContact) => {
+    saveContact.reset();
+    setEditingContact(contact ?? null);
+    setContactForm({
+      name: contact?.name ?? "",
+      function: contact?.function ?? "",
+      email: contact?.email ?? "",
+      phone: contact?.phone ?? "",
+      isPrimary: contact?.isPrimary ?? false,
+    });
+    setContactEditorOpen(true);
+  };
+
+  const closeContactEditor = () => {
+    setContactEditorOpen(false);
+    setEditingContact(null);
+    saveContact.reset();
   };
 
   const clients = query.data ?? [];
@@ -588,6 +665,79 @@ export function StudyClientes() {
           ]}
         />
       </InspectorSection>
+      {canManage ? (
+        <InspectorSection title="Contactos">
+          <div className="client-contacts__toolbar">
+            <span className="dense-dim">
+              {contactsQuery.data?.length ?? 0} {(contactsQuery.data?.length ?? 0) === 1 ? "contacto" : "contactos"}
+            </span>
+            <Button size="sm" onClick={() => openContactEditor()}>
+              Nuevo contacto
+            </Button>
+          </div>
+          {contactsQuery.isLoading ? (
+            <p role="status">Cargando contactos…</p>
+          ) : contactsQuery.isError ? (
+            <p className="form-error" role="alert">
+              No se pudieron cargar los contactos. Reintentá.
+            </p>
+          ) : contactsQuery.data?.length ? (
+            <div className="client-contact-list">
+              {contactsQuery.data.map((contact) => (
+                <article
+                  key={contact.id}
+                  className={`client-contact${contact.isActive ? "" : " client-contact--inactive"}`}
+                >
+                  <div className="client-contact__main">
+                    <div className="client-contact__heading">
+                      <strong>{contact.name}</strong>
+                      {contact.isPrimary ? <span className="dense-tag">Principal</span> : null}
+                      {!contact.isActive ? <span className="dense-tag">Oculto</span> : null}
+                    </div>
+                    <div className="client-contact__details">
+                      {contact.function ? <span>{contact.function}</span> : null}
+                      {contact.email ? <span>{contact.email}</span> : null}
+                      {contact.phone ? <span>{contact.phone}</span> : null}
+                    </div>
+                  </div>
+                  <div className="client-contact__actions">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      aria-label={`Editar contacto de ${contact.name}`}
+                      onClick={() => openContactEditor(contact)}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`${contact.isActive ? "Ocultar" : "Mostrar"} contacto de ${contact.name}`}
+                      loading={toggleContactState.isPending}
+                      onClick={() => toggleContactState.mutate(contact)}
+                    >
+                      {contact.isActive ? "Ocultar" : "Mostrar"}
+                    </Button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              size="compact"
+              title="Todavía no hay contactos"
+              description="Agregá personas de referencia para este cliente."
+            />
+          )}
+          {toggleContactState.isError ? (
+            <p className="form-error" role="alert">
+              {toggleContactState.error instanceof ApiError
+                ? toggleContactState.error.message
+                : "No se pudo actualizar el contacto. Revisá los datos e intentá nuevamente."}
+            </p>
+          ) : null}
+        </InspectorSection>
+      ) : null}
       {missingProfileFields(selectedClient).length > 0 ? (
         <DenseAlert
           action={
@@ -1260,6 +1410,86 @@ export function StudyClientes() {
             ) : null}
           </form>
         ) : null}
+      </ActionDrawer>
+
+      <ActionDrawer
+        isOpen={contactEditorOpen}
+        onClose={closeContactEditor}
+        eyebrow="Cliente"
+        title={editingContact ? "Editar contacto" : "Nuevo contacto"}
+        description="Completá los datos de contacto y, si corresponde, marcá el principal."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={closeContactEditor}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="client-contact-form"
+              loading={saveContact.isPending}
+              loadingLabel="Guardando contacto"
+              disabled={contactForm.name.trim().length === 0}
+            >
+              Guardar contacto
+            </Button>
+          </>
+        }
+      >
+        <form
+          id="client-contact-form"
+          className="study-inline-form study-inline-form--client"
+          onSubmit={(event) => {
+            event.preventDefault();
+            saveContact.mutate();
+          }}
+        >
+          <Field
+            id="client-contact-name"
+            label="Nombre"
+            value={contactForm.name}
+            onChange={(event) => setContactForm({ ...contactForm, name: event.target.value })}
+            maxLength={200}
+            required
+          />
+          <Field
+            id="client-contact-function"
+            label="Función"
+            value={contactForm.function}
+            onChange={(event) => setContactForm({ ...contactForm, function: event.target.value })}
+            maxLength={100}
+          />
+          <Field
+            id="client-contact-email"
+            label="Email"
+            type="email"
+            value={contactForm.email}
+            onChange={(event) => setContactForm({ ...contactForm, email: event.target.value })}
+            maxLength={254}
+          />
+          <Field
+            id="client-contact-phone"
+            label="Teléfono"
+            type="tel"
+            value={contactForm.phone}
+            onChange={(event) => setContactForm({ ...contactForm, phone: event.target.value })}
+            maxLength={50}
+          />
+          <label className="client-contact-primary">
+            <input
+              type="checkbox"
+              checked={contactForm.isPrimary}
+              onChange={(event) => setContactForm({ ...contactForm, isPrimary: event.target.checked })}
+            />
+            <span>Contacto principal</span>
+          </label>
+          {saveContact.isError ? (
+            <p className="form-error study-inline-form__feedback" role="alert">
+              {saveContact.error instanceof ApiError
+                ? saveContact.error.message
+                : "No se pudo guardar el contacto. Revisá los datos e intentá nuevamente."}
+            </p>
+          ) : null}
+        </form>
       </ActionDrawer>
 
       {deletingClient && firmId ? (

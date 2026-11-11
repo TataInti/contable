@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
-import { ApiError, api } from "../lib/api";
+import { ApiError, api, type ClientContact } from "../lib/api";
 import { StudyClientes } from "./StudyClientes";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -84,6 +84,7 @@ function mockApi(profile: Record<string, unknown>, standards = standardsFixture)
     if (path === "/tax/jurisdictions") return Promise.resolve(catalogFixture);
     if (path.includes("/client-profile-catalogs/activities")) return Promise.resolve(activitiesFixture);
     if (path.includes("/accounting-standards")) return Promise.resolve(standards);
+    if (path.endsWith("/contacts")) return Promise.resolve([]);
     if (path.includes("/clients")) return Promise.resolve([clientFixture(profile)]);
     return Promise.resolve(null);
   }) as never);
@@ -509,6 +510,7 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
 });
 
 describe("StudyClientes — cartera densa", () => {
+  let contactRows: ClientContact[] = [];
   const completeProfile = {
     functionalCurrency: "ARS",
     accountingStandard: "RTIC",
@@ -523,6 +525,7 @@ describe("StudyClientes — cartera densa", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    contactRows = [];
     contextMock.current = {
       firmId: "firm-a",
       clientId: null,
@@ -545,6 +548,7 @@ describe("StudyClientes — cartera densa", () => {
       if (path === "/tax/jurisdictions") return Promise.resolve(catalogFixture);
       if (path.includes("/client-profile-catalogs/activities")) return Promise.resolve(activitiesFixture);
       if (path.includes("/accounting-standards")) return Promise.resolve(standardsFixture);
+      if (path.endsWith("/contacts")) return Promise.resolve(contactRows);
       if (path.includes("/clients")) {
         return Promise.resolve([
           { ...clientFixture(completeProfile), id: "c1", legalName: "Alfa Uno S.A.", cuit: "20111111112" },
@@ -663,6 +667,72 @@ describe("StudyClientes — cartera densa", () => {
 
     expect(await screen.findByText("Ya existe un cliente con ese CUIT en este estudio.")).toBeTruthy();
     expect(screen.getByLabelText("CUIT").getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("permite alta, edición, cambio de principal y ocultar/mostrar contactos", async () => {
+    vi.mocked(api.post).mockImplementation(((path: string, payload: unknown) => {
+      expect(path).toBe("/firms/firm-a/clients/c1/contacts");
+      const fields = payload as Omit<ClientContact, "id" | "isActive">;
+      if (fields.isPrimary) {
+        contactRows = contactRows.map((contact) => ({ ...contact, isPrimary: false }));
+      }
+      const created: ClientContact = {
+        id: `contact-${contactRows.length + 1}`,
+        ...fields,
+        isActive: true,
+      };
+      contactRows = [...contactRows, created];
+      return Promise.resolve(created);
+    }) as never);
+    vi.mocked(api.patch).mockImplementation(((path: string, payload: unknown) => {
+      const contactId = path.split("/").at(-1);
+      const changes = payload as Partial<ClientContact>;
+      if (changes.isPrimary) {
+        contactRows = contactRows.map((contact) =>
+          contact.id === contactId ? contact : { ...contact, isPrimary: false },
+        );
+      }
+      contactRows = contactRows.map((contact) =>
+        contact.id === contactId ? { ...contact, ...changes } : contact,
+      );
+      const updated = contactRows.find((contact) => contact.id === contactId);
+      if (!updated) return Promise.reject(new Error("Contacto inexistente en el mock"));
+      return Promise.resolve(updated);
+    }) as never);
+
+    renderClientes();
+    const table = await screen.findByRole("table");
+    fireEvent.click(within(table).getByText("20-11111111-2"));
+    const detail = await screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Nuevo contacto" }));
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Contacto Uno" } });
+    fireEvent.change(screen.getByLabelText("Función"), { target: { value: "Administración" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "uno@example.com" } });
+    fireEvent.change(screen.getByLabelText("Teléfono"), { target: { value: "+54 11 1234-5678" } });
+    fireEvent.click(screen.getByLabelText("Contacto principal"));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar contacto" }));
+    await screen.findByText("Contacto Uno");
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Nuevo contacto" }));
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Contacto Dos" } });
+    fireEvent.click(screen.getByLabelText("Contacto principal"));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar contacto" }));
+    await screen.findByText("Contacto Dos");
+    expect(within(detail).getAllByText("Principal")).toHaveLength(1);
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Editar contacto de Contacto Uno" }));
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Contacto Uno Editado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar contacto" }));
+    await screen.findByText("Contacto Uno Editado");
+
+    fireEvent.click(within(detail).getByRole("button", { name: "Ocultar contacto de Contacto Uno Editado" }));
+    await within(detail).findByRole("button", { name: "Mostrar contacto de Contacto Uno Editado" });
+    fireEvent.click(within(detail).getByRole("button", { name: "Mostrar contacto de Contacto Uno Editado" }));
+    await within(detail).findByRole("button", { name: "Ocultar contacto de Contacto Uno Editado" });
+
+    expect(api.post).toHaveBeenCalledTimes(2);
+    expect(api.patch).toHaveBeenCalledTimes(3);
   });
 
   it("oculta las acciones de edición a quien no tiene client.manage", async () => {
