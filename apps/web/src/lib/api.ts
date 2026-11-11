@@ -350,6 +350,31 @@ export interface ExtractedField {
   correction?: string | null;
   confidence: number;
   status: string;
+  reason?: string | null;
+}
+
+export interface VoucherARV2Data {
+  tipo_documento: "factura" | "ticket_no_fiscal" | "recibo" | "nota_credito" | "nota_debito" | "otro" | "ilegible";
+  letra: string | null;
+  punto_venta: string | null;
+  numero: string | null;
+  fecha: string | null;
+  hora: string | null;
+  cuit_emisor: string | null;
+  cuit_receptor: string | null;
+  razon_social_emisor: string | null;
+  razon_social_receptor: string | null;
+  condicion_iva: string | null;
+  neto_gravado: string | null;
+  iva: { alicuota: string | null; importe: string | null }[] | null;
+  no_gravado: string | null;
+  exento: string | null;
+  percepciones: { tipo: string | null; importe: string | null }[] | null;
+  total: string | null;
+  moneda: string | null;
+  cae: string | null;
+  cae_vencimiento: string | null;
+  confianza: Record<string, number>;
 }
 
 export interface DocumentExtraction {
@@ -357,6 +382,8 @@ export interface DocumentExtraction {
   status: string;
   classification?: string | null;
   confidence?: number | null;
+  reviewReason: string | null;
+  voucherData: VoucherARV2Data | null;
   fields: ExtractedField[];
   items: unknown[];
 }
