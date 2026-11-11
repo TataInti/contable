@@ -166,14 +166,16 @@
   width: 100%;
   margin-bottom: var(--ds-space-2);
   padding: var(--ds-space-3);
-  border: 1px solid color-mix(in srgb, var(--ds-color-primary) 26%, var(--ds-color-border));
+  border: var(--ds-border-width) solid var(--ds-color-border);
   border-radius: var(--ds-radius-lg);
-  background: var(--ds-color-primary-soft);
+  background: var(--ds-color-surface);
   color: var(--ds-color-text);
   text-align: left;
   text-decoration: none;
+  font: inherit;
   box-sizing: border-box;
   cursor: pointer;
+  list-style: none;
   transition:
     border-color 150ms ease-out,
     background-color 150ms ease-out,
@@ -181,10 +183,14 @@
 }
 
 .study__tour-trigger:hover {
-  border-color: var(--ds-color-primary);
-  background: color-mix(in srgb, var(--ds-color-primary-soft) 72%, var(--ds-color-surface));
+  border-color: var(--ds-color-border-strong);
+  background: var(--ds-color-surface-hover);
   transform: translateY(-1px);
   text-decoration: none;
+}
+
+.study__tour-trigger::-webkit-details-marker {
+  display: none;
 }
 
 .study__tour-trigger-mark {
@@ -192,9 +198,10 @@
   place-items: center;
   width: 32px;
   height: 32px;
-  border: 1px solid color-mix(in srgb, var(--ds-color-primary) 35%, transparent);
+  border: var(--ds-border-width) solid var(--ds-color-border);
   border-radius: 50%;
-  color: var(--ds-color-primary);
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
   font-family: var(--ds-font-serif);
   font-size: var(--ds-text-lg);
   font-weight: 700;
@@ -221,6 +228,43 @@
 .study__tour-trigger small {
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-xs);
+}
+
+.study__help-chevron {
+  color: var(--ds-color-text-muted);
+  transition: transform 150ms ease-out;
+}
+
+.study__help[open] .study__help-chevron {
+  transform: rotate(180deg);
+}
+
+.study__help-menu {
+  display: grid;
+  gap: var(--ds-space-1);
+  padding-top: var(--ds-space-1);
+}
+
+.study__help-action {
+  display: flex;
+  align-items: center;
+  min-height: var(--ds-control-height-sm);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 0;
+  border-radius: var(--ds-radius-md);
+  background: transparent;
+  color: var(--ds-color-text-muted);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.study__help-action:hover {
+  background: var(--ds-color-surface-hover);
+  color: var(--ds-color-text);
+  text-decoration: none;
 }
 
 .study__portal-link {

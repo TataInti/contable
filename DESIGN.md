@@ -362,13 +362,26 @@ La carga se representa con estado de carga; este componente comunica ausencia de
 
 `apps/web/src/study/StudyCatalogosFiscales.tsx` es el ejemplo observado de una página densa operativa; sus estilos base están en `study/study.css` y las primitivas densas en `ui/Dense.css`.
 
-- **Encabezado + métricas + pestañas:** `DenseHeader` presenta eyebrow “Administración fiscal”, título, descripción y CTA contextual para crear en la pestaña activa. `StatStrip` resume jurisdicciones, tipos de impuesto, organismos, regímenes, actividades, registros del estudio y alertas de coherencia; las métricas pertinentes permiten cambiar de categoría. `DenseTabs` organiza las cinco categorías y muestra conteos/alertas.
+- **Encabezado + pestañas + resumen:** `DenseHeader` presenta eyebrow “Administración fiscal”, título, descripción y CTA contextual para crear en la pestaña activa. `DenseTabs` organiza las cinco categorías y muestra sus conteos/alertas en una sola barra; una línea breve resume registros propios, de referencia y alertas.
 - **Filtros:** `DenseToolbar` combina búsqueda por código/nombre, jurisdicción, origen y estado; en regímenes agrega filtro de alertas y ofrece densidad de filas compacta/estándar/cómoda. La búsqueda normaliza tildes/mayúsculas; las reglas de selección y filtros se restablecen al cambiar pestaña.
 - **Tabla + panel de detalle:** `DenseWorkspace` contiene `DenseTable` y `Inspector`. Al seleccionar fila se abre el detalle lateral, oculta columnas secundarias y muestra ficha, relaciones y acciones disponibles. Las filas soportan Enter/Espacio y flechas arriba/abajo; el escritorio conserva scroll interior y el layout de inspector se apila bajo 1100 px.
 - **Estado vacío y carga/error:** cada categoría diferencia “todavía no hay registros” de “ningún registro coincide con filtros” con `EmptyState` compacto. La pantalla conserva placeholders de carga y alertas de consulta con acción de reintento.
 - **Formularios:** altas/ediciones usan `ActionDrawer`, jerarquía eyebrow/título/descripción y campos `Field`; los selects usan `label.ds-field` y `.ds-field__input`, como indica la guía UI. Las acciones de submit muestran loading y cancelación usa ghost. La creación de régimen comunica en vivo la coherencia entre jurisdicción y organismo.
 - **Confirmación destructiva:** la desactivación de una actividad usa un drawer que explica que se conserva historial y vínculos. La eliminación definitiva usa `DeletionDrawer`: primero obtiene un preview de impacto, dependencias y bloqueos; exige coincidencia exacta con el texto esperado; habilita “Eliminar definitivamente” sólo si no hay bloqueos y no está procesando; al terminar revalida consultas y muestra un recibo. Las acciones respetan capacidades y propiedad del registro.
 - **Guía existente:** se conserva como referencia la [guía de formularios y paneles](docs/guia-ui-formularios-paneles.md), que establece `ActionDrawer`, gestión del foco, Escape, cancelación y acciones sticky. El uso actual de `ActionDrawer` en esta pantalla coincide. La guía exige errores con `role="alert"`: `MutationError` y errores de consulta lo proporcionan, mientras el error local que renderiza `Field` sólo queda enlazado con `aria-describedby`; esta diferencia queda registrada para una futura decisión.
+
+### Composición: sin cajas y alineación
+
+1. Separá los grupos con espacio y alinealos a una grilla común; toda la pantalla comparte el mismo borde izquierdo y el mismo borde derecho.
+2. Usá una línea divisoria fina sólo entre secciones o entre filas de una tabla/lista, nunca alrededor de cada dato.
+3. Reservá bordes y contenedores para campos de entrada, tablas, paneles flotantes, modales y elementos accionables.
+4. Alineá etiquetas y valores por columna y línea base; alineá los números a la derecha con cifras tabulares, sin elementos flotantes ni centrados.
+5. Extendé listas y bloques al ancho de la grilla para que terminen en el mismo borde derecho.
+6. Mostrá cada dato una sola vez por pantalla.
+
+**Correcto — Catálogos fiscales:** una sola `DenseTabs` con los conteos de las cinco categorías; debajo, una línea breve con propios, referencia y alertas. La barra de filtros, la tabla y el detalle comparten la grilla; los datos del detalle usan columnas etiqueta/valor y los conteos numéricos se alinean a la derecha. Separá filas y secciones con `--ds-color-border-subtle` y espacios de `--ds-space-3`/`--ds-space-4`.
+
+**Incorrecto — Catálogos fiscales:** repetir los cinco conteos en `StatStrip` y en `DenseTabs`, encerrar cada dato en una tarjeta, centrar cifras o dar a la tabla un ancho distinto del resto de la pantalla.
 
 ## 7. Accesibilidad
 

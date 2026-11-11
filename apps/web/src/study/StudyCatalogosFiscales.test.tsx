@@ -318,12 +318,16 @@ describe("StudyCatalogosFiscales", () => {
         parentId: jurisdiction.id,
       }),
     );
-    expect(await screen.findByText("Provincia UI")).toBeTruthy();
+    const province = await screen.findByText("Provincia UI");
+    fireEvent.click(province);
+    const jurisdictionDetail = await screen.findByRole("complementary", { name: "Detalle de la jurisdicción" });
+    expect(within(jurisdictionDetail).getByText("Jurisdicción sintética E2E")).toBeTruthy();
+    expect(within(jurisdictionDetail).queryByText("Nación Jurisdicción sintética E2E")).toBeNull();
 
     await openTab(/^Organismos recaudadores/);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo organismo" }));
     expect(
-      await screen.findAllByRole("option", { name: /Provincia UI — Provincia, Nación Jurisdicción sintética E2E/ }),
+      await screen.findAllByRole("option", { name: /Provincia UI — Provincia, Jurisdicción sintética E2E/ }),
     ).toHaveLength(2);
 
     await openTab(/^Tipos de impuesto/);
@@ -396,7 +400,7 @@ describe("StudyCatalogosFiscales", () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
-  it("muestra los conteos por catálogo en la franja de métricas y en las pestañas", async () => {
+  it("concentra los conteos en una barra de pestañas y guarda los atajos en ayuda", async () => {
     authorities.push({
       id: "authority-a",
       code: "SYN-A",
@@ -409,11 +413,22 @@ describe("StudyCatalogosFiscales", () => {
     });
     renderCatalogs();
 
-    const tab = await screen.findByRole("tab", { name: /Organismos recaudadores/ });
-    await waitFor(() => expect(tab.textContent).toContain("1"));
-    const strip = screen.getByRole("group", { name: "Resumen de catálogos" });
-    expect(within(strip).getByText("Creados por el estudio")).toBeTruthy();
-    expect(within(strip).getByText("Alertas de coherencia")).toBeTruthy();
+    const tablist = await screen.findByRole("tablist", { name: "Catálogos fiscales" });
+    expect(screen.getAllByRole("tablist")).toHaveLength(1);
+    const authorityTab = within(tablist).getByRole("tab", { name: /Organismos recaudadores/ });
+    await waitFor(() => expect(authorityTab.textContent).toContain("1"));
+    expect(authorityTab).toBeTruthy();
+    expect(screen.queryByRole("group", { name: "Resumen de catálogos" })).toBeNull();
+    expect(screen.getByText("1 propios, 2 de referencia")).toBeTruthy();
+    expect(screen.getByText("0 alertas")).toBeTruthy();
+
+    const shortcuts = document.querySelector(".dense-shortcuts") as HTMLDetailsElement;
+    expect(shortcuts.open).toBe(false);
+    const shortcutTrigger = shortcuts.querySelector("summary");
+    if (!shortcutTrigger) throw new Error("Falta el control de atajos");
+    fireEvent.click(shortcutTrigger);
+    expect(shortcuts.open).toBe(true);
+    expect(screen.getByText("navegar")).toBeTruthy();
   });
 
   it("ofrece editar, duplicar y ocultar con usos en las cinco entidades", async () => {
@@ -466,9 +481,18 @@ describe("StudyCatalogosFiscales", () => {
       fireEvent.click(await screen.findByText(item.name));
       const detail = await screen.findByRole("complementary", { name: item.detail });
       expect(await within(detail).findByText(/Se usa en 2 lugares/)).toBeTruthy();
-      expect(within(detail).getByRole("button", { name: "Editar" })).toBeTruthy();
-      expect(within(detail).getByRole("button", { name: "Crear nuevo a partir de este" })).toBeTruthy();
-      expect(within(detail).getByRole("button", { name: "Ocultar" })).toBeTruthy();
+      const edit = within(detail).getByRole("button", { name: "Editar" });
+      expect(edit.className).toContain("ds-button--primary");
+      const hide = within(detail).getByRole("button", { name: "Ocultar" });
+      const actionMenu = hide.closest("details") as HTMLDetailsElement;
+      expect(actionMenu.className).toContain("dense-inspector-actions__menu");
+      expect(actionMenu.open).toBe(false);
+      fireEvent.click(within(detail).getByText("Más acciones"));
+      expect(actionMenu.open).toBe(true);
+      const secondaryActions = within(detail).getByRole("group", { name: "Acciones secundarias" });
+      expect(within(secondaryActions).queryByRole("button", { name: "Editar" })).toBeNull();
+      expect(within(secondaryActions).getByRole("button", { name: "Duplicar como nuevo" })).toBeTruthy();
+      expect(within(secondaryActions).getByRole("button", { name: "Ocultar" })).toBeTruthy();
     }
   });
 
@@ -629,6 +653,11 @@ describe("StudyCatalogosFiscales", () => {
     expect(code.getAttribute("title")).toBe("E2E_SYN_ACTIVIDAD_LA_RGA_20261105");
     const name = screen.getByText("Comercio mayorista sintético con nombre extenso");
     expect(name.getAttribute("title")).toBe("Comercio mayorista sintético con nombre extenso");
+    const jurisdictionCell = code.closest("tr")?.querySelector(".dense-activity-jurisdiction");
+    expect(jurisdictionCell?.textContent).toContain(jurisdiction.name);
+    expect(jurisdictionCell?.getAttribute("title")).toContain(jurisdiction.name);
+    expect(screen.getByText(/^Desde /)).toBeTruthy();
+    expect(screen.queryByText(/— —$/)).toBeNull();
 
     // Ocultar conserva el dato y se presenta como acción destructiva.
     fireEvent.click(code);
