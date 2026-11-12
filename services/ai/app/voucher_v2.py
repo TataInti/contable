@@ -152,7 +152,7 @@ class VoucherExtractionResponse(StrictModel):
     ocrEngine: str = "multimodal-model"
     model: str | None = None
     provider: str | None = None
-    promptVersion: str = "vision-ar-v6"
+    promptVersion: str = "vision-ar-v7"
     inputTokens: int | None = Field(default=None, ge=0)
     outputTokens: int | None = Field(default=None, ge=0)
     latencyMs: int = Field(default=0, ge=0)
@@ -266,6 +266,7 @@ def response_from_voucher(
     latency_ms: int,
     estimated_cost_usd: float | None,
     unrecognized_perception_indexes: tuple[int, ...] = (),
+    prevalidation_issues: tuple[ReviewIssue, ...] = (),
 ) -> VoucherExtractionResponse:
     fields: list[ExtractedField] = []
 
@@ -310,13 +311,14 @@ def response_from_voucher(
         document_issues = validate_arithmetic(voucher)
         if voucher.tipo_documento == "ilegible":
             document_issues.append("DOCUMENT_ILLEGIBLE")
-    field_review_issues = [
+    field_review_issues = list(prevalidation_issues)
+    field_review_issues.extend(
         ReviewIssue(
             reason="percepción no reconocida",
             sourcePath=source_path_for("percepciones", index, "categoria"),
         )
         for index in unrecognized_perception_indexes
-    ]
+    )
     field_review_issues.extend(validate_cuit_check_digits(voucher))
     review_issues = field_review_issues + [
         ReviewIssue(reason=reason) for reason in dict.fromkeys(document_issues)
@@ -344,7 +346,7 @@ def manual_review_response(
     *,
     model: str | None = None,
     provider: str | None = None,
-    prompt_version: str = "vision-ar-v6",
+    prompt_version: str = "vision-ar-v7",
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     latency_ms: int = 0,

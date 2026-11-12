@@ -66,7 +66,7 @@ def _response_from_payload(payload: dict[str, Any]) -> VoucherExtractionResponse
         VoucherARV21.model_validate(payload),
         model="test/model",
         provider="test-provider",
-        prompt_version="vision-ar-v6",
+        prompt_version="vision-ar-v7",
         input_tokens=None,
         output_tokens=None,
         latency_ms=0,
@@ -83,7 +83,7 @@ def test_prompt_specifies_ticket_enum_cuit_and_literal_tax_text() -> None:
         "content"
     ]
 
-    assert model_extraction.PROMPT_VERSION == "vision-ar-v6"
+    assert model_extraction.PROMPT_VERSION == "vision-ar-v7"
     assert ticket_example in prompt
     assert VoucherARV21.model_validate(json.loads(ticket_example)).tipo_documento == (
         "ticket_no_fiscal"
@@ -137,7 +137,7 @@ def test_voucher_ar_v2_validates_and_maps_existing_ui_keys() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v6",
+        prompt_version="vision-ar-v7",
         input_tokens=120,
         output_tokens=48,
         latency_ms=850,
@@ -213,7 +213,7 @@ def test_unknown_perception_category_becomes_others_and_marks_review() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v6",
+        prompt_version="vision-ar-v7",
         input_tokens=None,
         output_tokens=None,
         latency_ms=0,
@@ -256,7 +256,7 @@ def test_extraction_response_and_voucher_do_not_contain_items() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v6",
+        prompt_version="vision-ar-v7",
         input_tokens=10,
         output_tokens=5,
         latency_ms=100,
@@ -430,7 +430,7 @@ def test_arithmetic_mismatch_marks_review_without_changing_values() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v6",
+        prompt_version="vision-ar-v7",
         input_tokens=None,
         output_tokens=None,
         latency_ms=0,
@@ -461,7 +461,7 @@ def test_non_fiscal_ticket_requires_manual_review() -> None:
         voucher,
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v6",
+        prompt_version="vision-ar-v7",
         input_tokens=20,
         output_tokens=12,
         latency_ms=250,
@@ -495,7 +495,7 @@ def test_missing_fiscal_identifiers_skip_arithmetic_validation() -> None:
         VoucherARV21.model_validate(payload),
         model="test/model",
         provider="openrouter",
-        prompt_version="vision-ar-v6",
+        prompt_version="vision-ar-v7",
         input_tokens=20,
         output_tokens=12,
         latency_ms=250,
@@ -932,3 +932,175 @@ def test_model_schema_error_retries_once_then_requires_manual_review(
     assert len(observed) == 2
     assert result.reviewReason == "MODEL_SCHEMA_INVALID"
     assert result.voucher is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_date", "expected_time"),
+    [
+        ("2025-03-16", "2025-03-16", None),
+        ("16/03/2025", "2025-03-16", None),
+        ("16/03/25", "2025-03-16", None),
+        ("16-03-2025", "2025-03-16", None),
+        ("16/03/2025 14:35", "2025-03-16", "14:35:00"),
+        ("16/03/2025T14:35:22", "2025-03-16", "14:35:22"),
+        ("2025-03-16T14:35:00", "2025-03-16", "14:35:00"),
+    ],
+)
+def test_date_normalization_accepts_argentine_and_iso_formats(
+    raw: str, expected_date: str, expected_time: str | None
+) -> None:
+    payload = _valid_voucher()
+    payload["fecha"] = raw
+    payload["hora"] = None
+
+    normalized, issues = model_extraction._normalize_voucher_dates(payload)
+
+    assert issues == []
+    assert normalized["fecha"] == expected_date
+    assert normalized.get("hora") == expected_time
+    assert VoucherARV21.model_validate(normalized).fecha == expected_date
+
+
+def test_date_normalization_discards_only_impossible_date_and_keeps_total() -> None:
+    payload = _valid_voucher()
+    payload["fecha"] = "31/02/2025"
+
+    normalized, issues = model_extraction._normalize_voucher_dates(payload)
+
+    assert "fecha" not in normalized
+    assert "fecha" not in normalized["confianza"]
+    assert normalized["total"] == "121.00"
+    assert [issue.model_dump() for issue in issues] == [
+        {"reason": "fecha ilegible", "sourcePath": "fecha"}
+    ]
+    voucher = VoucherARV21.model_validate(normalized)
+    assert voucher.fecha is None
+    assert voucher.total == "121.00"
+
+
+def test_cae_expiration_accepts_local_date_and_normalizes_to_iso() -> None:
+    payload = _valid_voucher()
+    payload["cae_vencimiento"] = "16/03/25"
+    payload["confianza"]["cae_vencimiento"] = 0.9
+
+    normalized, issues = model_extraction._normalize_voucher_dates(payload)
+
+    assert issues == []
+    assert normalized["cae_vencimiento"] == "2025-03-16"
+    assert VoucherARV21.model_validate(normalized).cae_vencimiento == "2025-03-16"
+
+
+def test_time_normalization_accepts_hh_mm_and_discards_invalid_time_only() -> None:
+    payload = _valid_voucher()
+    payload["hora"] = "9:05"
+    payload["confianza"]["hora"] = 0.9
+
+    normalized, issues = model_extraction._normalize_voucher_dates(payload)
+
+    assert issues == []
+    assert normalized["hora"] == "09:05:00"
+
+    payload = _valid_voucher()
+    payload["hora"] = "25:00"
+    payload["confianza"]["hora"] = 0.9
+
+    normalized, issues = model_extraction._normalize_voucher_dates(payload)
+
+    assert "hora" not in normalized
+    assert "hora" not in normalized["confianza"]
+    assert [issue.model_dump() for issue in issues] == [
+        {"reason": "hora ilegible", "sourcePath": "hora"}
+    ]
+    voucher = VoucherARV21.model_validate(normalized)
+    assert voucher.fecha == "2026-11-11"
+    assert voucher.hora is None
+
+
+def test_prompt_v7_specifies_date_time_normalization_and_ticket_example() -> None:
+    prompt = model_extraction._request_payload("test/model", [b"synthetic page"])["messages"][0][
+        "content"
+    ]
+    example = (
+        '{"tipo_documento":"ticket_no_fiscal","fecha":"2025-03-16","hora":"14:35:00",'
+        '"total":"12500.00","letra":null,"cuit_emisor":null,"cuit_receptor":null,'
+        '"cae":null,"confianza":{"tipo_documento":0.95,"fecha":0.9,"hora":0.9,"total":0.95}}'
+    )
+
+    assert "Si la fecha impresa es dd/mm/aa o dd/mm/aaaa, con o sin hora" in prompt
+    assert "nunca otro formato" in prompt
+    assert "interpretala como día/mes y nunca como mes/día" in prompt
+    assert "un año de dos dígitos se completa como 20AA" in prompt
+    assert example in prompt
+    assert VoucherARV21.model_validate(json.loads(example)).hora == "14:35:00"
+
+
+def test_mocked_argentine_date_with_time_normalizes_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_mock_model(monkeypatch)
+    payload = _valid_voucher()
+    payload["fecha"] = "16/03/2025 14:35"
+    payload["hora"] = None
+    observed: list[dict[str, Any]] = []
+    response = ModelResponse(
+        200,
+        {
+            "model": "test/model",
+            "usage": {"prompt_tokens": 20, "completion_tokens": 10, "cost": 0.0001},
+            "choices": [{"message": {"content": json.dumps(payload)}}],
+        },
+    )
+    monkeypatch.setattr(
+        model_extraction.httpx,
+        "AsyncClient",
+        lambda **_kwargs: ModelClientSequence([response], observed),
+    )
+
+    result = asyncio.run(run_model_extraction(b"synthetic image", "image/png", 1))
+
+    assert len(observed) == 1
+    assert result.promptVersion == "vision-ar-v7"
+    assert result.reviewReason is None
+    assert result.voucher is not None
+    assert result.voucher.fecha == "2025-03-16"
+    assert result.voucher.hora == "14:35:00"
+    mapped = {field.key: field.normalizedValue for field in result.fields}
+    assert mapped["issueDate"] == "2025-03-16"
+    assert mapped["time"] == "14:35:00"
+
+
+def test_mocked_impossible_date_keeps_voucher_and_total_with_review_issue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_mock_model(monkeypatch)
+    payload = _valid_voucher()
+    payload["fecha"] = "31/02/2025"
+    observed: list[dict[str, Any]] = []
+    response = ModelResponse(
+        200,
+        {
+            "model": "test/model",
+            "usage": {"prompt_tokens": 20, "completion_tokens": 10, "cost": 0.0001},
+            "choices": [{"message": {"content": json.dumps(payload)}}],
+        },
+    )
+    monkeypatch.setattr(
+        model_extraction.httpx,
+        "AsyncClient",
+        lambda **_kwargs: ModelClientSequence([response], observed),
+    )
+
+    result = asyncio.run(run_model_extraction(b"synthetic image", "image/png", 1))
+
+    assert len(observed) == 1
+    assert result.promptVersion == "vision-ar-v7"
+    assert result.reviewReason == "fecha ilegible"
+    assert [issue.model_dump() for issue in result.reviewIssues] == [
+        {"reason": "fecha ilegible", "sourcePath": "fecha"}
+    ]
+    assert result.voucher is not None
+    assert result.voucher.fecha is None
+    assert result.voucher.total == "121.00"
+    mapped = {field.key: field.normalizedValue for field in result.fields}
+    assert "issueDate" not in mapped
+    assert mapped["totalAmount"] == "121.00"
