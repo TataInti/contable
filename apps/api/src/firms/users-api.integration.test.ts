@@ -30,6 +30,7 @@ let memberToken = "";
 let portalToken = "";
 const refreshTokens: string[] = [];
 const memberEmail = `member.${MEMBER_ID}@c5a.test.invalid`;
+const updatedMemberEmail = `new.member.${MEMBER_ID}@c5a.test.invalid`;
 const collisionEmail = `collision.${COLLISION_USER_ID}@c5a.test.invalid`;
 const portalEmail = `portal.${PORTAL_USER_ID}@c5a.test.invalid`;
 const otherEmail = `other.${OTHER_USER_ID}@c5a.test.invalid`;
@@ -135,7 +136,6 @@ beforeAll(async () => {
 afterAll(async () => {
   if (enabled) {
     await app?.close();
-    await adminPrisma.auditEvent.deleteMany({ where: { firmId: { in: [FIRM_ID, OTHER_FIRM_ID] } } });
     await adminPrisma.clientAssignment.deleteMany({ where: { firmId: FIRM_ID } });
     await adminPrisma.portalMembership.deleteMany({ where: { firmId: FIRM_ID } });
     await adminPrisma.deviceSession.deleteMany({ where: { userId: { in: [OWNER_ID, ADMIN_ID, MEMBER_ID, PORTAL_USER_ID] } } });
@@ -151,13 +151,13 @@ describe.skipIf(!enabled)("C5a usuarios, accesos y firma — HTTP/RLS real", () 
   it("edita identidad, preserva userId, devuelve 403 por rol y reporta correo global duplicado", async () => {
     const updated = await request("PATCH", `/api/v1/firms/${FIRM_ID}/users/${MEMBER_ID}`, adminToken, {
       name: "Miembro actualizado",
-      email: "  NEW.MEMBER@C5A.TEST.INVALID ",
+      email: `  ${updatedMemberEmail.toUpperCase()}  `,
     });
     expect(updated.statusCode).toBe(200);
-    expect(updated.json().data).toMatchObject({ userId: MEMBER_ID, name: "Miembro actualizado", emailNormalized: "new.member@c5a.test.invalid" });
+    expect(updated.json().data).toMatchObject({ userId: MEMBER_ID, name: "Miembro actualizado", emailNormalized: updatedMemberEmail });
     const stored = await adminPrisma.user.findUniqueOrThrow({ where: { id: MEMBER_ID } });
     expect(stored.id).toBe(MEMBER_ID);
-    expect(stored.emailNormalized).toBe("new.member@c5a.test.invalid");
+    expect(stored.emailNormalized).toBe(updatedMemberEmail);
 
     const audit = await adminPrisma.auditEvent.findFirstOrThrow({
       where: { firmId: FIRM_ID, userId: ADMIN_ID, entityType: "User", entityId: MEMBER_ID, action: "internal_user.identity_updated" },
@@ -165,7 +165,7 @@ describe.skipIf(!enabled)("C5a usuarios, accesos y firma — HTTP/RLS real", () 
     });
     expect(audit.before).toMatchObject({ name: "Miembro C5a", emailNormalized: "[REDACTED]" });
     expect(audit.after).toMatchObject({ name: "Miembro actualizado", emailNormalized: "[REDACTED]" });
-    expect(JSON.stringify([audit.before, audit.after])).not.toContain("new.member@c5a.test.invalid");
+    expect(JSON.stringify([audit.before, audit.after])).not.toContain(updatedMemberEmail);
 
     const denied = await request("PATCH", `/api/v1/firms/${FIRM_ID}/users/${MEMBER_ID}`, memberToken, { name: "No autorizado" });
     expect(denied.statusCode).toBe(403);
@@ -175,7 +175,7 @@ describe.skipIf(!enabled)("C5a usuarios, accesos y firma — HTTP/RLS real", () 
     expect(duplicate.statusCode).toBe(409);
     expect(duplicate.json().error.code).toBe("USER_EMAIL_CONFLICT");
     expect((await adminPrisma.user.findUniqueOrThrow({ where: { id: MEMBER_ID } })).emailNormalized)
-      .toBe("new.member@c5a.test.invalid");
+      .toBe(updatedMemberEmail);
   });
 
   it("edita los cuatro campos de firma y agrega/lista/quita asignaciones con auditoría", async () => {
@@ -239,12 +239,15 @@ describe.skipIf(!enabled)("C5a usuarios, accesos y firma — HTTP/RLS real", () 
     const lastAdmin = await request("PATCH", `/api/v1/firms/${FIRM_ID}/members/${OWNER_ID}`, ownerToken, { role: "PREPARER" });
     expect(lastAdmin.statusCode).toBe(409);
     expect(lastAdmin.json().error.code).toBe("LAST_ADMIN_REQUIRED");
-    expect((await adminPrisma.firmMembership.findUniqueOrThrow({
+    const lastAdminSuspension = await request("POST", `/api/v1/firms/${FIRM_ID}/members/${OWNER_ID}/suspend`, ownerToken);
+    expect(lastAdminSuspension.statusCode).toBe(409);
+    expect(lastAdminSuspension.json().error.code).toBe("LAST_ADMIN_REQUIRED");
+    expect(await adminPrisma.firmMembership.findUniqueOrThrow({
       where: { firmId_userId: { firmId: FIRM_ID, userId: OWNER_ID } },
-    })).role).toBe("ADMIN");
+    })).toMatchObject({ role: "ADMIN", status: "ACTIVE" });
     expect(await adminPrisma.auditEvent.count({
       where: { firmId: FIRM_ID, userId: OWNER_ID, action: "internal_member.last_admin_guard.rejected" },
-    })).toBe(1);
+    })).toBe(2);
   });
 
   it("edita, suspende y reactiva acceso portal con auditoría y revocación de sesiones", async () => {

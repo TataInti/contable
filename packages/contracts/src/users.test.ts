@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   firmProfilePatchSchema,
   internalMemberRolePatchSchema,
-  internalMemberStatusSchema,
   memberIdentityPatchSchema,
   portalMembershipPatchSchema,
 } from "./users.js";
@@ -28,7 +27,6 @@ describe("contratos de administración de usuarios y firma", () => {
 
   it("acepta roles y estados de membresía explícitos", () => {
     expect(internalMemberRolePatchSchema.parse({ role: "ADMIN" })).toEqual({ role: "ADMIN" });
-    expect(internalMemberStatusSchema.parse({ status: "SUSPENDED" })).toEqual({ status: "SUSPENDED" });
     expect(portalMembershipPatchSchema.parse({ role: "READONLY" })).toEqual({ role: "READONLY" });
     expect(portalMembershipPatchSchema.parse({ status: "ACTIVE" })).toEqual({ status: "ACTIVE" });
     expect(portalMembershipPatchSchema.safeParse({}).success).toBe(false);

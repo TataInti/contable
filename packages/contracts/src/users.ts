@@ -37,11 +37,6 @@ export type FirmProfilePatch = z.infer<typeof firmProfilePatchSchema>;
 export const internalMemberRolePatchSchema = z.object({ role: firmRoleSchema }).strict();
 export type InternalMemberRolePatch = z.infer<typeof internalMemberRolePatchSchema>;
 
-export const internalMemberStatusSchema = z.object({
-  status: z.enum(["ACTIVE", "SUSPENDED"]),
-}).strict();
-export type InternalMemberStatus = z.infer<typeof internalMemberStatusSchema>;
-
 export const portalMembershipPatchSchema = z
   .object({
     role: portalRoleSchema.optional(),
