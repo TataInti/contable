@@ -120,4 +120,9 @@ SET "activityId" = m."activityId"
 FROM activity_matches m
 WHERE r."id" = m."ruleId" AND r."activityId" IS NULL;
 
+DO $$ BEGIN
+  GRANT SELECT ON "tax_rule_kinds", "calc_family_rule_kinds" TO contable_runtime;
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
+
 COMMIT;
