@@ -55,8 +55,15 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
       ? CM03_LEGACY_ENGINE_VERSION
       : CM03_ENGINE_VERSION;
   const strict = engineVersion === CM03_ENGINE_VERSION;
+  const typed = input.ruleMode === "TYPED";
   const rounding = input.rounding ?? {};
   const rules = new Map(input.rules.map((r) => [r.concept, r]));
+  const typedRulesByJurisdiction = new Map(
+    input.rules
+      .filter((rule) => rule.kind === "RATE" && rule.jurisdictionId)
+      .map((rule) => [rule.jurisdictionId!, rule]),
+  );
+  const typedDefaultRule = input.rules.find((rule) => rule.kind === "RATE" && rule.isDefault);
   const lines: TaxEngineResult["lines"] = [];
   const warnings: string[] = [];
   const blocks: string[] = [];
@@ -92,12 +99,17 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
     base: DecimalValue;
     rate: DecimalValue;
     tax: DecimalValue;
+    defaultApplied: boolean;
   }> = [];
   for (const [jurisdiction, coeffStr] of coeffEntries) {
     const coeff = dec(coeffStr);
     const base = totalBase.mul(coeff);
-    const rule = rules.get(jurisdiction);
-    const rate = rule?.rate !== undefined ? rule.rate : rules.get("DEFAULT")?.rate;
+    const rule = typed
+      ? typedRulesByJurisdiction.get(jurisdiction)
+      : rules.get(jurisdiction);
+    const fallbackRule = typed ? typedDefaultRule : rules.get("DEFAULT");
+    const rate = rule?.rate !== undefined ? rule.rate : fallbackRule?.rate;
+    const defaultApplied = typed && rule?.rate === undefined && fallbackRule?.rate !== undefined;
     if (rate === undefined) {
       const message = `Jurisdicción ${jurisdiction} sin alícuota configurada; se omitió`;
       if (strict) blocks.push(message);
@@ -105,7 +117,7 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
       continue;
     }
     const tax = applyRate(base, rate);
-    jurisdictionLines.push({ jurisdiction, base, rate, tax });
+    jurisdictionLines.push({ jurisdiction, base, rate, tax, defaultApplied });
   }
 
   // --- Renglón total por alícuota ---
@@ -169,7 +181,13 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
     lines.push({
       concept: `JURISDICCION_${line.jurisdiction}`,
       formula: `base(${fmtMoney(line.base)}) × alícuota ${line.rate} = ${fmtMoney(line.tax)}`,
-      inputs: { jurisdiction: line.jurisdiction, base: fmtMoney(line.base), rate: line.rate.toString(), tax: fmtMoney(line.tax) },
+      inputs: {
+        jurisdiction: line.jurisdiction,
+        base: fmtMoney(line.base),
+        rate: line.rate.toString(),
+        tax: fmtMoney(line.tax),
+        ...(typed ? { defaultRuleApplied: String(line.defaultApplied) } : {}),
+      },
       result: fmtMoney(line.tax),
     });
     lines.push({
@@ -200,9 +218,20 @@ export function calculateCm03(input: Cm03Input): TaxEngineResult {
   const inputHash = taxHash({
     engineVersion,
     period: input.period,
+    ...(typed ? { ruleMode: "TYPED" } : {}),
     incomeByActivity: input.incomeByActivity,
     coefficients: input.coefficients,
-    rules: input.rules.map((r) => ({ concept: r.concept, rate: r.rate?.toString(), validFrom: r.validFrom })),
+    rules: input.rules.map((r) => typed
+      ? {
+          kind: r.kind,
+          activityId: r.activityId ?? null,
+          jurisdictionId: r.jurisdictionId ?? null,
+          categoryCode: r.categoryCode ?? null,
+          isDefault: r.isDefault ?? false,
+          rate: r.rate?.toString(),
+          validFrom: r.validFrom,
+        }
+      : { concept: r.concept, rate: r.rate?.toString(), validFrom: r.validFrom }),
     credits: input.credits ?? null,
     balances: input.cmBalances ?? null,
   });

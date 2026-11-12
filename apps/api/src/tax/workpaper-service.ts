@@ -848,22 +848,40 @@ export class MonthlyWorkpaperService {
             ),
           ];
           const voucherIds = idsFor("FISCAL_VOUCHER");
-          const cm03Coefficients = relevantFacts.flatMap((fact) => {
+          const cm03CoefficientRows = relevantFacts.flatMap((fact) => {
             if (fact.sourceType !== "CM03_COEFFICIENT") return [];
             const normalized = (fact.normalized ?? {}) as Record<string, unknown>;
-            const activityCode =
-              typeof normalized["activityCode"] === "string"
-                ? normalized["activityCode"].trim().toUpperCase()
+            const jurisdiction =
+              typeof normalized["jurisdiction"] === "string"
+                ? normalized["jurisdiction"].trim().toUpperCase()
                 : "";
             const coefficient = normalized["coefficient"];
-            if (!activityCode.startsWith("COEF_") || typeof coefficient !== "string") {
-              return [];
+            if (!jurisdiction || typeof coefficient !== "string") {
+              throw new WorkpaperError(
+                "INVALID_TRANSITION",
+                `El coeficiente CM03 ${fact.rowId} no tiene jurisdicción o coeficiente resuelto`,
+              );
             }
-            return [{
-              sourceId: fact.rowId,
-              jurisdiction: activityCode.slice("COEF_".length),
-              coefficient,
-            }];
+            return [{ sourceId: fact.rowId, jurisdiction, coefficient }];
+          });
+          const cm03Jurisdictions = cm03CoefficientRows.length > 0
+            ? await tx.jurisdiction.findMany({
+                where: { code: { in: [...new Set(cm03CoefficientRows.map((row) => row.jurisdiction))] } },
+                select: { id: true, code: true },
+              })
+            : [];
+          const jurisdictionIdByCode = new Map(
+            cm03Jurisdictions.map((jurisdiction) => [jurisdiction.code, jurisdiction.id]),
+          );
+          const cm03Coefficients = cm03CoefficientRows.map((row) => {
+            const jurisdictionId = jurisdictionIdByCode.get(row.jurisdiction);
+            if (!jurisdictionId) {
+              throw new WorkpaperError(
+                "INVALID_TRANSITION",
+                `La jurisdicción ${row.jurisdiction} del coeficiente CM03 ${row.sourceId} no existe en el catálogo`,
+              );
+            }
+            return { ...row, jurisdictionId };
           });
           const calculated = await settlementService.calculateWithTransaction(ctx, tx, {
             clientId: wp.clientId,

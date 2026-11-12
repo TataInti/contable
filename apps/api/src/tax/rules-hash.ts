@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 export const RULES_HASH_SCHEMA_VERSION_V1 = 1;
 export const RULES_HASH_SCHEMA_VERSION_V2 = 2;
+export const RULES_HASH_SCHEMA_VERSION_V3 = 3;
 
 type DecimalValue = { toString(): string } | string | null | undefined;
 type DateValue = Date | string | null | undefined;
@@ -10,6 +11,11 @@ type RateRuleForHash = {
   concept: string;
   activityCode?: string | null;
   jurisdictionId?: string | null;
+  kindKey?: string | null;
+  kind?: { key: string } | null;
+  activityId?: string | null;
+  categoryCode?: string | null;
+  isDefault?: boolean;
   rate?: DecimalValue;
   minAmount?: DecimalValue;
   validFrom?: DateValue;
@@ -102,6 +108,19 @@ export type CanonicalRulePackPayloadV2 = {
     concept: string;
     precision: number;
     mode: string;
+  }>;
+};
+
+export type CanonicalRulePackPayloadV3 = Omit<
+  CanonicalRulePackPayloadV2,
+  "rulesHashSchemaVersion" | "rates"
+> & {
+  rulesHashSchemaVersion: typeof RULES_HASH_SCHEMA_VERSION_V3;
+  rates: Array<CanonicalRulePackPayloadV2["rates"][number] & {
+    kindKey: string | null;
+    activityId: string | null;
+    categoryCode: string | null;
+    isDefault: boolean;
   }>;
 };
 
@@ -219,6 +238,38 @@ export function hashCanonicalRulePackPayload(payload: CanonicalRulePackPayloadV2
 
 export function computeRulesHashV2(version: RulePackForHash): string {
   return hashCanonicalRulePackPayload(canonicalRulePackPayload(version));
+}
+
+/** Hash tipado v3: mantiene el payload v2 y añade la identidad fiscal de cada regla. */
+export function canonicalRulePackPayloadV3(version: RulePackForHash): CanonicalRulePackPayloadV3 {
+  const payloadV2 = canonicalRulePackPayload(version);
+  return {
+    ...payloadV2,
+    rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V3,
+    rates: sortCanonicalRows(
+      (version.rateRules ?? []).map((rule) => ({
+        concept: rule.concept,
+        activityCode: rule.activityCode ?? null,
+        jurisdictionId: rule.jurisdictionId ?? null,
+        rate: decimalString(rule.rate),
+        minAmount: decimalString(rule.minAmount),
+        validFrom: dateString(rule.validFrom),
+        validTo: dateString(rule.validTo),
+        kindKey: rule.kind?.key ?? rule.kindKey ?? null,
+        activityId: rule.activityId ?? null,
+        categoryCode: rule.categoryCode ?? null,
+        isDefault: rule.isDefault ?? false,
+      })),
+    ),
+  };
+}
+
+export function hashCanonicalRulePackPayloadV3(payload: CanonicalRulePackPayloadV3): string {
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+export function computeRulesHashV3(version: RulePackForHash): string {
+  return hashCanonicalRulePackPayloadV3(canonicalRulePackPayloadV3(version));
 }
 
 /** Reproduce exactamente el cálculo usado por RulePackValidator antes del esquema v2. */
