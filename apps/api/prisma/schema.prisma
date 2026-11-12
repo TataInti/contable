@@ -2001,9 +2001,38 @@ model CalcFamily {
   engines  TaxEngine[]
   taxTypes TaxType[]
   regimes  TaxRegime[]
+  allowedRuleKinds CalcFamilyRuleKind[]
 
   @@index([isActive, sortOrder])
   @@map("calc_families")
+}
+
+/// Tipo de regla disponible en una familia fiscal.
+model TaxRuleKind {
+  id        String   @id @default(uuid(7))
+  key       String   @unique
+  label     String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  familyLinks CalcFamilyRuleKind[]
+  rateRules   TaxRateRule[]
+
+  @@index([isActive, sortOrder])
+  @@map("tax_rule_kinds")
+}
+
+model CalcFamilyRuleKind {
+  familyId String
+  kindId   String
+  family   CalcFamily  @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  kind     TaxRuleKind @relation(fields: [kindId], references: [id], onDelete: Restrict)
+
+  @@id([familyId, kindId])
+  @@index([kindId])
+  @@map("calc_family_rule_kinds")
 }
 
 /// Motor implementado. engineKey es la unión inmutable con el código.
@@ -2184,6 +2213,7 @@ model EconomicActivity {
   jurisdiction Jurisdiction    @relation(fields: [jurisdictionId], references: [id])
   createdByFirm Firm? @relation("EconomicActivityCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
   clientLinks  ClientActivity[]
+  activityRules TaxRateRule[]
 
   @@unique([code, jurisdictionId])
   @@index([jurisdictionId])
@@ -2389,6 +2419,10 @@ model TaxRateRule {
   concept         String
   activityCode    String?
   jurisdictionId  String?
+  kindId          String?
+  activityId      String?
+  categoryCode    String?
+  isDefault       Boolean  @default(false)
   rate            Decimal? @db.Decimal(10, 6)
   minAmount       Decimal? @db.Decimal(20, 4)
   validFrom       DateTime
@@ -2396,8 +2430,13 @@ model TaxRateRule {
   createdAt       DateTime @default(now())
 
   ruleVersion TaxRuleVersion @relation(fields: [ruleVersionId], references: [id], onDelete: Cascade)
+  kind        TaxRuleKind?   @relation(fields: [kindId], references: [id], onDelete: Restrict)
+  activity    EconomicActivity? @relation(fields: [activityId], references: [id], onDelete: Restrict)
 
   @@index([ruleVersionId])
+  @@index([kindId])
+  @@index([activityId])
+  @@index([ruleVersionId, kindId])
   @@map("tax_rate_rules")
 }
 

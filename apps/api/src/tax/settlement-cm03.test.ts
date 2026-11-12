@@ -4,6 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { IngestionService } from "./ingestion-service.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
+import { computeRulesHashV3 } from "./rules-hash.js";
 
 /**
  * Tests de integración CM03 artículo 2 (Puerta 4, Fase 4.3).
@@ -162,6 +163,45 @@ async function setupActiveRules(fx: Awaited<ReturnType<typeof setupMasters>>) {
       ],
     });
     return { pack, version };
+  });
+}
+
+async function enableTypedCm03Rules() {
+  const family = await prisma.calcFamily.findUniqueOrThrow({ where: { key: "IIBB_CM03" } });
+  const rateKind = await prisma.taxRuleKind.findUniqueOrThrow({ where: { key: "RATE" } });
+  const coefficientKind = await prisma.taxRuleKind.findUniqueOrThrow({ where: { key: "COEFFICIENT" } });
+  const tuc = await prisma.jurisdiction.findUniqueOrThrow({ where: { code: "TUC" } });
+  const cba = await prisma.jurisdiction.findUniqueOrThrow({ where: { code: "CBA" } });
+  const jurisdictionByCode = new Map([["TUC", tuc.id], ["CBA", cba.id]]);
+  await prisma.taxRegime.update({ where: { id: regimeId }, data: { calcFamilyId: family.id } });
+  const legacyRules = await prisma.taxRateRule.findMany({ where: { ruleVersionId } });
+  for (const [index, rule] of legacyRules.entries()) {
+    const isCoefficient = rule.concept.startsWith("COEF_");
+    const jurisdictionCode = isCoefficient ? rule.concept.slice("COEF_".length) : rule.concept;
+    await prisma.taxRateRule.update({
+      where: { id: rule.id },
+      data: {
+        concept: `renamed-rule-${index + 1}`,
+        kindId: isCoefficient ? coefficientKind.id : rateKind.id,
+        jurisdictionId: jurisdictionByCode.get(jurisdictionCode)!,
+        isDefault: false,
+      },
+    });
+  }
+  const version = await prisma.taxRuleVersion.findUniqueOrThrow({
+    where: { id: ruleVersionId },
+    include: {
+      rateRules: { include: { kind: true } },
+      minimumRules: true,
+      bracketRules: true,
+      dueDateRules: true,
+      roundingRules: true,
+    },
+  });
+  const rulesHash = computeRulesHashV3(version);
+  await prisma.taxRuleVersion.update({
+    where: { id: ruleVersionId },
+    data: { rulesHashSchemaVersion: 3, rulesHash },
   });
 }
 
@@ -382,6 +422,17 @@ describe("Fase 4.3 — CM03 artículo 2: cálculo", () => {
     // TUC: 150000 × 0.6 = 90000 × 4% = 3600; CBA: 150000 × 0.4 = 60000 × 3.5% = 2100
     expect(totals["IMPUESTO_POR_JURISDICCION"]).toBe("5700.00");
     expect(totals["TOTAL_A_INGRESAR"]).toBe("5700.00");
+  });
+
+  it("calcula v3 por jurisdictionId aunque se renombren los conceptos", async () => {
+    await enableTypedCm03Rules();
+    await createApprovedVouchersWithLines();
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+
+    expect(totals["IMPUESTO_POR_JURISDICCION"]).toBe("5700.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("5700.00");
+    expect(result.result.blocks).toHaveLength(0);
   });
 
   it("prioriza los coeficientes CM03 congelados por el expediente", async () => {

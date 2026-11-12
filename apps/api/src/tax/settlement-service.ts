@@ -25,6 +25,7 @@ import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
 import { exportReport, type ExportReportResult } from "../reporting/report-export.js";
 import { voucherDocumentKind } from "./workpaper-classification.js";
+import { RULES_HASH_SCHEMA_VERSION_V3 } from "./rules-hash.js";
 
 /**
  * Servicio de liquidaciones fiscales (Puerta 3).
@@ -56,6 +57,10 @@ export type SettlementErrorCode =
   | "MAKER_CHECKER_VIOLATION"
   | "NO_ACTIVE_RULES"
   | "RULE_VERSION_NOT_FOUND"
+  | "RULE_KIND_UNRESOLVED"
+  | "RULE_KIND_NOT_ALLOWED"
+  | "RULE_SUBJECT_UNRESOLVED"
+  | "ACTIVITY_RULE_UNRESOLVED"
   | "UNSUPPORTED_ENGINE_VERSION"
   | "PERIOD_NOT_FOUND"
   | "OBLIGATION_NOT_FOUND"
@@ -224,6 +229,7 @@ export interface SettlementCalculationInput {
     cm03Coefficients?: Array<{
       sourceId: string;
       jurisdiction: string;
+      jurisdictionId?: string;
       coefficient: string;
     }>;
   };
@@ -370,6 +376,8 @@ export class SettlementService {
         );
       }
       const isCmEngine = engineKey === "iibb-cm-art2" || engineKey === "iibb-cm-art2-legacy";
+      const isTypedRuleVersion =
+        activeVersion.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3;
       const rateRules = await tx.taxRateRule.findMany({
         where: {
           ruleVersionId: activeVersion.id,
@@ -384,7 +392,53 @@ export class SettlementService {
               }),
         },
         orderBy: [{ concept: "asc" }, { validFrom: "asc" }, { id: "asc" }],
+        include: {
+          kind: { include: { familyLinks: { select: { familyId: true } } } },
+        },
       });
+      if (isTypedRuleVersion) {
+        const familyId = pack.regime.calcFamilyId;
+        if (!familyId) {
+          throw new SettlementError(
+            "RULE_KIND_NOT_ALLOWED",
+            "La versión tipada no tiene una familia de cálculo para validar sus reglas",
+          );
+        }
+        for (const rule of rateRules) {
+          if (!rule.kindId || !rule.kind) {
+            throw new SettlementError(
+              "RULE_KIND_UNRESOLVED",
+              `La regla ${rule.id} no tiene un tipo de regla resuelto`,
+            );
+          }
+          if (!rule.kind.familyLinks.some((link) => link.familyId === familyId)) {
+            throw new SettlementError(
+              "RULE_KIND_NOT_ALLOWED",
+              `El tipo ${rule.kind.key} de la regla ${rule.id} no está permitido por la familia del régimen`,
+            );
+          }
+          const needsActivity = engineKey === "iibb-local-tuc" && rule.kind.key === "RATE";
+          const isCm03 = engineKey === "iibb-cm-art2" || engineKey === "iibb-cm-art2-legacy";
+          const needsJurisdiction = isCm03 && (
+            (rule.kind.key === "RATE" && !rule.isDefault && !rule.jurisdictionId) ||
+            (rule.kind.key === "COEFFICIENT" && !rule.jurisdictionId)
+          );
+          const needsCategory = engineKey === "monotributo" && rule.kind.key === "FEE";
+          if (
+            (needsActivity && !rule.activityId && !rule.isDefault) ||
+            needsJurisdiction ||
+            (needsCategory && !rule.categoryCode) ||
+            (rule.isDefault && rule.kind.key !== "RATE")
+          ) {
+            throw new SettlementError(
+              needsActivity
+                ? "ACTIVITY_RULE_UNRESOLVED"
+                : "RULE_SUBJECT_UNRESOLVED",
+              `La regla ${rule.id} (${rule.kind.key}) no tiene resuelto el sujeto requerido`,
+            );
+          }
+        }
+      }
       const inProgressSettlement = await tx.taxSettlement.findFirst({
         where: {
           firmId: ctx.firmId,
@@ -601,22 +655,65 @@ export class SettlementService {
         }
         return rule.concept;
       };
-      const duplicateRuleConcepts = rateRules
-        .map(effectiveRuleConcept)
-        .filter((concept, index, concepts) => concepts.indexOf(concept) !== index);
-      if (duplicateRuleConcepts.length > 0) {
-        throw new SettlementError(
-          "RULE_VERSION_NOT_FOUND",
-          `La versión normativa tiene reglas efectivas duplicadas para ${[
-            ...new Set(duplicateRuleConcepts),
-          ].join(", ")}`,
-        );
+      if (!isTypedRuleVersion) {
+        const duplicateRuleConcepts = rateRules
+          .map(effectiveRuleConcept)
+          .filter((concept, index, concepts) => concepts.indexOf(concept) !== index);
+        if (duplicateRuleConcepts.length > 0) {
+          throw new SettlementError(
+            "RULE_VERSION_NOT_FOUND",
+            `La versión normativa tiene reglas efectivas duplicadas para ${[
+              ...new Set(duplicateRuleConcepts),
+            ].join(", ")}`,
+          );
+        }
       }
+      const typedRuleSubjects = new Set<string>();
       const rules = rateRules.map((r) => {
+        if (isTypedRuleVersion) {
+          const kind = r.kind!.key;
+          const subject = r.isDefault
+            ? null
+            : kind === "RATE" && engineKey === "iibb-local-tuc"
+              ? r.activityId ?? null
+              : kind === "RATE" || kind === "COEFFICIENT"
+                ? r.jurisdictionId ?? null
+                : kind === "FEE"
+                  ? r.categoryCode ?? null
+                  : null;
+          if (kind === "RATE" || kind === "COEFFICIENT" || kind === "FEE") {
+            const subjectKey = JSON.stringify([kind, subject, r.isDefault]);
+            if (typedRuleSubjects.has(subjectKey)) {
+              throw new SettlementError(
+                "RULE_SUBJECT_UNRESOLVED",
+                `La versión normativa repite el sujeto de la regla ${r.id}`,
+              );
+            }
+            typedRuleSubjects.add(subjectKey);
+          }
+          const storedRate = r.rate !== null ? dec(r.rate.toString()) : undefined;
+          const normalized = storedRate === undefined
+            ? undefined
+            : kind === "RATE"
+              ? storedRate.div(100)
+              : storedRate;
+          return {
+            id: r.id,
+            concept: r.concept,
+            code: r.concept,
+            kind,
+            activityId: r.activityId,
+            jurisdictionId: r.jurisdictionId,
+            categoryCode: r.categoryCode,
+            isDefault: r.isDefault,
+            ...(normalized !== undefined ? { rate: normalized } : {}),
+            validFrom: r.validFrom.toISOString().slice(0, 10),
+            ...(r.validTo ? { validTo: r.validTo.toISOString().slice(0, 10) } : {}),
+          };
+        }
         const concept = effectiveRuleConcept(r);
         const rate = r.rate !== null ? dec(r.rate.toString()) : undefined;
-        // La persistencia expresa alícuotas en puntos porcentuales. Sólo los
-        // coeficientes CM se almacenan ya como razón 0..1.
+        // Compatibilidad v1/v2: sólo los coeficientes CM se guardan como razón 0..1.
         const normalized =
           rate !== undefined
             ? concept.startsWith("COEF_")
@@ -862,6 +959,9 @@ export class SettlementService {
             ...availableLots.map((entry) => entry.lot.jurisdictionId),
             ...withholdings.map((item) => item.jurisdictionId),
             ...perceptions.map((item) => item.jurisdictionId),
+            ...Object.keys(rectificationOpening ?? {})
+              .filter((key) => key.startsWith("SALDO_A_FAVOR_"))
+              .map((key) => key.slice("SALDO_A_FAVOR_".length)),
           ].filter(Boolean) as string[],
         ),
       ];
@@ -882,6 +982,16 @@ export class SettlementService {
           [jurisdiction.code, jurisdiction.code] as const,
         ]),
       );
+      const jurisdictionIdByCode = new Map(
+        allocationJurisdictions.map((jurisdiction) => [jurisdiction.code, jurisdiction.id]),
+      );
+      const jurisdictionKeyForCalculation = (idOrCode: string | null | undefined) => {
+        if (!idOrCode) return undefined;
+        if (!isTypedRuleVersion) return allocationJurisdictionById.get(idOrCode);
+        return allocationJurisdictions.some((jurisdiction) => jurisdiction.id === idOrCode)
+          ? idOrCode
+          : jurisdictionIdByCode.get(idOrCode);
+      };
       const withholdingById = new Map(withholdings.map((item) => [item.id, item]));
       const perceptionById = new Map(perceptions.map((item) => [item.id, item]));
       const isBankCollection = (source: { creditKind: string; concept: string }) => {
@@ -950,6 +1060,43 @@ export class SettlementService {
           voucher.direction === "SALE" &&
           voucher.lines.some((line) => line.activityCode && line.netAmount),
       );
+      const isTypedIibb = isTypedRuleVersion && engineKey === "iibb-local-tuc";
+      const activitiesByCode = new Map<string, Array<{ id: string; jurisdictionId: string }>>();
+      if (isTypedIibb) {
+        const activityCodes = [...new Set(vouchers.flatMap((voucher) => {
+          const imported = (voucher.importRow?.normalized ?? null) as Record<string, unknown> | null;
+          return [
+            ...voucher.lines.map((line) => line.activityCode),
+            classificationByVoucher.get(voucher.id)?.activityCode,
+            typeof imported?.["activityCode"] === "string" ? imported["activityCode"] : null,
+          ];
+        }).filter((code): code is string => typeof code === "string" && code.trim().length > 0)
+          .map((code) => code.trim().toUpperCase()))];
+        const activities = activityCodes.length > 0
+          ? await tx.economicActivity.findMany({
+              where: { code: { in: activityCodes } },
+              select: { id: true, code: true, jurisdictionId: true },
+            })
+          : [];
+        for (const activity of activities) {
+          const matches = activitiesByCode.get(activity.code) ?? [];
+          matches.push({ id: activity.id, jurisdictionId: activity.jurisdictionId });
+          activitiesByCode.set(activity.code, matches);
+        }
+      }
+      const resolveActivityId = (activityCode: string, ruleId?: string): string => {
+        const code = activityCode.trim().toUpperCase();
+        const matches = (activitiesByCode.get(code) ?? []).filter(
+          (activity) => activity.jurisdictionId === input.jurisdictionId,
+        );
+        if (matches.length !== 1) {
+          throw new SettlementError(
+            "ACTIVITY_RULE_UNRESOLVED",
+            `La actividad ${code} de ${ruleId ? `la regla ${ruleId}` : "los hechos"} no resuelve a una actividad única de la jurisdicción`,
+          );
+        }
+        return matches[0]!.id;
+      };
       for (const v of vouchers) {
         if (v.direction !== "SALE") continue;
         if (v.issuedOn.toISOString() > cutoffDate) continue;
@@ -969,7 +1116,7 @@ export class SettlementService {
           const declaredMinimum = importedParameters?.["minimum"];
           localTaxDeclaredParameters.push({
             sourceId: v.importRow.id,
-            activity: importedActivity,
+            activity: isTypedIibb ? resolveActivityId(importedActivity) : importedActivity,
             ...(typeof declaredRate === "string" && declaredRate.length > 0
               ? { rate: declaredRate }
               : {}),
@@ -979,7 +1126,13 @@ export class SettlementService {
           });
         }
         for (const line of v.lines) {
-          const activity = line.activityCode ?? "DEFAULT";
+          const activityCode = line.activityCode;
+          const legacyActivityCode = activityCode ?? "DEFAULT";
+          const activity = isTypedIibb
+            ? !activityCode || activityCode.trim().length === 0
+              ? ""
+              : resolveActivityId(activityCode)
+            : legacyActivityCode;
           const net = (line.netAmount ?? new Prisma.Decimal(0)).abs().times(sign);
           incomeByActivity[activity] = dec(incomeByActivity[activity] ?? "0")
             .plus(net)
@@ -995,26 +1148,29 @@ export class SettlementService {
               pointOfSale: v.pointOfSale,
               number: v.number,
               issuedOn: v.issuedOn.toISOString().slice(0, 10),
-              activityCode: activity,
+              activityCode: legacyActivityCode,
               netAmount: net.toString(),
               declaredRate:
-                importedActivity === activity ? importedParameters?.["rate"] ?? null : null,
+                importedActivity === legacyActivityCode ? importedParameters?.["rate"] ?? null : null,
               declaredMinimum:
-                importedActivity === activity ? importedParameters?.["minimum"] ?? null : null,
+                importedActivity === legacyActivityCode ? importedParameters?.["minimum"] ?? null : null,
               declaredExemption:
-                importedActivity === activity ? importedParameters?.["exemption"] ?? null : null,
+                importedActivity === legacyActivityCode ? importedParameters?.["exemption"] ?? null : null,
               documentKind,
               classificationHash: classification?.snapshotHash ?? null,
             },
           });
         }
         if (v.lines.length === 0 && !hasExplicitActivityLines && classification?.activityCode) {
+          const activity = isTypedIibb
+            ? resolveActivityId(classification.activityCode)
+            : classification.activityCode;
           const net = v.components
             .filter((component) => component.concept === "NETO")
             .reduce((sum, component) => sum.plus(component.base.abs()), new Prisma.Decimal(0))
             .times(sign);
-          incomeByActivity[classification.activityCode] = dec(
-            incomeByActivity[classification.activityCode] ?? "0",
+          incomeByActivity[activity] = dec(
+            incomeByActivity[activity] ?? "0",
           )
             .plus(net)
             .toString();
@@ -1082,6 +1238,7 @@ export class SettlementService {
           period: periodRange,
           facts: facts as TaxFact[],
           rules,
+          ...(isTypedRuleVersion ? { ruleMode: "TYPED" as const } : {}),
           incomeByActivity,
           ...(minimum !== undefined ? { minimum } : {}),
           credits: {
@@ -1117,30 +1274,49 @@ export class SettlementService {
         if (declaredCoefficients.length > 0) {
           const seenJurisdictions = new Set<string>();
           for (const coefficient of [...declaredCoefficients].sort((left, right) =>
-            left.jurisdiction.localeCompare(right.jurisdiction),
+            (left.jurisdictionId ?? left.jurisdiction).localeCompare(
+              right.jurisdictionId ?? right.jurisdiction,
+            ),
           )) {
-            if (seenJurisdictions.has(coefficient.jurisdiction)) {
+            const jurisdiction = isTypedRuleVersion
+              ? coefficient.jurisdictionId
+              : coefficient.jurisdiction;
+            if (!jurisdiction) {
               throw new SettlementError(
-                "INVALID_TRANSITION",
-                `La fuente CM03 repite el coeficiente de ${coefficient.jurisdiction}`,
+                "RULE_SUBJECT_UNRESOLVED",
+                `El coeficiente importado ${coefficient.sourceId} no tiene jurisdicción resuelta por id`,
               );
             }
-            seenJurisdictions.add(coefficient.jurisdiction);
-            coefficients[coefficient.jurisdiction] = coefficient.coefficient;
+            if (seenJurisdictions.has(jurisdiction)) {
+              throw new SettlementError(
+                "INVALID_TRANSITION",
+                `La fuente CM03 repite el coeficiente de ${jurisdiction}`,
+              );
+            }
+            seenJurisdictions.add(jurisdiction);
+            coefficients[jurisdiction] = coefficient.coefficient;
             inputs.push({
               kind: "CM03_COEFFICIENT",
               sourceId: coefficient.sourceId,
               snapshot: {
-                jurisdiction: coefficient.jurisdiction,
+                jurisdiction,
                 coefficient: coefficient.coefficient,
                 origin: "SIFERE_CM03",
               },
             });
           }
         } else {
-          for (const r of rateRules) {
-            if (r.concept.startsWith("COEF_") && r.rate !== null) {
-              coefficients[r.concept.slice(5)] = r.rate.toString();
+          if (isTypedRuleVersion) {
+            for (const r of rateRules) {
+              if (r.kind?.key === "COEFFICIENT" && r.jurisdictionId && r.rate !== null) {
+                coefficients[r.jurisdictionId] = r.rate.toString();
+              }
+            }
+          } else {
+            for (const r of rateRules) {
+              if (r.concept.startsWith("COEF_") && r.rate !== null) {
+                coefficients[r.concept.slice(5)] = r.rate.toString();
+              }
             }
           }
         }
@@ -1156,7 +1332,16 @@ export class SettlementService {
         if (rectificationOpening) {
           for (const [key, value] of Object.entries(rectificationOpening)) {
             if (key.startsWith("SALDO_ANTERIOR_") && key !== "SALDO_ANTERIOR") {
-              previousCreditByJurisdiction[key.slice("SALDO_ANTERIOR_".length)] = value;
+              const jurisdiction = jurisdictionKeyForCalculation(
+                key.slice("SALDO_ANTERIOR_".length),
+              );
+              if (jurisdiction) previousCreditByJurisdiction[jurisdiction] = value;
+              else if (isTypedRuleVersion) {
+                throw new SettlementError(
+                  "RULE_SUBJECT_UNRESOLVED",
+                  `El saldo anterior de ${key.slice("SALDO_ANTERIOR_".length)} no resuelve a una jurisdicción`,
+                );
+              }
             }
           }
           if (Object.keys(previousCreditByJurisdiction).length === 0) {
@@ -1165,9 +1350,7 @@ export class SettlementService {
         } else {
           for (const entry of availableLots) {
             if (entry.lot.kind !== "SALDO_A_FAVOR") continue;
-            const jurisdiction = entry.lot.jurisdictionId
-              ? allocationJurisdictionById.get(entry.lot.jurisdictionId)
-              : null;
+            const jurisdiction = jurisdictionKeyForCalculation(entry.lot.jurisdictionId);
             if (jurisdiction) {
               previousCreditByJurisdiction[jurisdiction] = new Prisma.Decimal(
                 previousCreditByJurisdiction[jurisdiction] ?? "0",
@@ -1202,7 +1385,7 @@ export class SettlementService {
         if (allocationScoped) {
           for (const allocation of inputAllocations) {
             if (!allocation.jurisdictionId) continue;
-            const jurisdiction = allocationJurisdictionById.get(allocation.jurisdictionId);
+            const jurisdiction = jurisdictionKeyForCalculation(allocation.jurisdictionId);
             if (!jurisdiction) continue;
             if (allocation.sourceType === "WITHHOLDING") {
               withholdingByJurisdiction[jurisdiction] = (
@@ -1216,12 +1399,12 @@ export class SettlementService {
           }
         } else if (declaredWithholding.length > 0 || declaredPerception.length > 0) {
           for (const w of declaredWithholding) {
-            const j = allocationJurisdictionById.get(w.jurisdictionId!);
+            const j = jurisdictionKeyForCalculation(w.jurisdictionId);
             if (!j) continue;
             withholdingByJurisdiction[j] = (withholdingByJurisdiction[j] ?? new Prisma.Decimal(0)).plus(w.amount);
           }
           for (const p of declaredPerception) {
-            const j = allocationJurisdictionById.get(p.jurisdictionId!);
+            const j = jurisdictionKeyForCalculation(p.jurisdictionId);
             if (!j) continue;
             perceptionByJurisdiction[j] = (perceptionByJurisdiction[j] ?? new Prisma.Decimal(0)).plus(p.amount);
           }
@@ -1236,6 +1419,7 @@ export class SettlementService {
           period: periodRange,
           facts: facts as TaxFact[],
           rules,
+          ...(isTypedRuleVersion ? { ruleMode: "TYPED" as const } : {}),
           incomeByActivity,
           coefficients,
           credits: {
@@ -1254,7 +1438,9 @@ export class SettlementService {
         const category = profile?.monotributoCategory ?? "A";
         const feeByCategory: Record<string, string> = {};
         for (const r of rateRules) {
-          if (r.concept.startsWith("CUOTA_")) {
+          if (isTypedRuleVersion && r.kind?.key === "FEE" && r.categoryCode) {
+            feeByCategory[r.categoryCode] = (r.minAmount ?? r.rate)?.toString() ?? "0";
+          } else if (!isTypedRuleVersion && r.concept.startsWith("CUOTA_")) {
             // La cuota es un importe; se guarda en minAmount (Decimal(20,4)).
             feeByCategory[r.concept.slice(6)] = (r.minAmount ?? r.rate)?.toString() ?? "0";
           }
@@ -1274,6 +1460,7 @@ export class SettlementService {
           period: periodRange,
           facts: facts as TaxFact[],
           rules,
+          ...(isTypedRuleVersion ? { ruleMode: "TYPED" as const } : {}),
           category,
           parameters: { monthlyFeeByCategory: feeByCategory },
           payments: {

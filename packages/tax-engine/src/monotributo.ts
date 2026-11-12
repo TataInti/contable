@@ -60,10 +60,15 @@ export function calculateMonotributo(input: MonotributoInput): TaxEngineResult {
   if (feeStr !== undefined) {
     fee = dec(feeStr);
   } else {
-    // Fallback: regla con concept = categoría.
-    const rule = rules.get(input.category);
-    if (rule?.minimum !== undefined) {
-      fee = rule.minimum;
+    if (input.ruleMode !== "TYPED") {
+      // Fallback: regla con concept = categoría (versiones históricas).
+      const rule = rules.get(input.category);
+      if (rule?.minimum !== undefined) {
+        fee = rule.minimum;
+      } else {
+        blocks.push(`No hay cuota configurada para la categoría ${input.category}`);
+        fee = dec(0);
+      }
     } else {
       blocks.push(`No hay cuota configurada para la categoría ${input.category}`);
       fee = dec(0);
@@ -111,6 +116,7 @@ export function calculateMonotributo(input: MonotributoInput): TaxEngineResult {
   // --- Hashes (V-004 / determinismo) ---
   const inputHash = taxHash({
     engineVersion: MONOTRIBUTO_ENGINE_VERSION,
+    ...(input.ruleMode === "TYPED" ? { ruleMode: "TYPED" } : {}),
     period: input.period,
     category: input.category,
     parameters: input.parameters ?? null,

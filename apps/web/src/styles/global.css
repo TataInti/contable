@@ -137,12 +137,16 @@ textarea {
   white-space: nowrap;
 }
 
+.status-badge.status-badge--regular {
+  font-weight: var(--ds-font-weight-regular);
+}
+
 .status-badge__dot,
 .status-badge:not(.status-badge--with-dot)::before {
   content: "";
-  inline-size: var(--ds-space-1);
-  block-size: var(--ds-space-1);
-  flex: 0 0 var(--ds-space-1);
+  inline-size: var(--ds-space-2);
+  block-size: var(--ds-space-2);
+  flex: 0 0 var(--ds-space-2);
   border-radius: var(--ds-radius-full);
   background: var(--ds-color-text-muted);
 }

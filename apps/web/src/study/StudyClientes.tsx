@@ -679,8 +679,8 @@ export function StudyClientes() {
         return gaps.length === 0 ? (
           <span className="dense-dim">Completa</span>
         ) : (
-          <span className="dense-tag dense-tag--warn" title={`Falta: ${gaps.join(", ")}`}>
-            Faltan {gaps.length}
+          <span title={`Falta: ${gaps.join(", ")}`}>
+            <StatusBadge status="MISSING" label={`Faltan ${gaps.length}`} />
           </span>
         );
       },

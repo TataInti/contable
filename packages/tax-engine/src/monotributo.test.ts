@@ -63,6 +63,26 @@ describe("Monotributo (AR_MONOTRIBUTO_V1)", () => {
     expect(result.subtotals["CUOTA_MENSUAL"]).toBe("28000.00");
   });
 
+  it("en reglas tipadas no toma la cuota desde el concept legacy", () => {
+    const result = calculateMonotributo({
+      engineVersion: MONOTRIBUTO_ENGINE_VERSION,
+      ruleMode: "TYPED",
+      period,
+      facts: [],
+      rules: [{
+        id: "legacy-B",
+        concept: "B",
+        code: "B",
+        minimum: new Decimal("28000"),
+        validFrom: "2026-01-01",
+      }],
+      category: "B",
+    });
+
+    expect(result.blocks).toContain("No hay cuota configurada para la categoría B");
+    expect(result.totalDue).toBe("0.00");
+  });
+
   it("bloquea sin cuota configurada para la categoría", () => {
     const result = calculateMonotributo({
       engineVersion: MONOTRIBUTO_ENGINE_VERSION,

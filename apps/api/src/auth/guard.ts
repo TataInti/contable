@@ -94,9 +94,11 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   // (cualquier rol que lee clientes necesita el selector), administración
   // (alta/edición/activación) reservada a firm.manage como los demás parámetros.
   { match: /\/accounting-standards/, resolve: (m) => (m === "GET" ? "client.read" : "firm.manage") },
+  { match: /\/firms\/[^/]+\/profile$/, resolve: () => "firm.users.manage" },
   { match: /\/members(?:\/|$)|\/users(?:\/|$)/, resolve: () => "firm.users.manage" },
-  { match: /\/invitations(?:\/|$)|\/portal-memberships(?:\/|$)/, resolve: () => "firm.manage" },
-  { match: /\/assignments/, resolve: () => "client.assign" },
+  { match: /\/portal-memberships(?:\/|$)/, resolve: () => "firm.users.manage" },
+  { match: /\/invitations(?:\/|$)/, resolve: () => "firm.manage" },
+  { match: /\/assignments/, resolve: () => "firm.users.manage" },
   { match: /\/document-upload-sessions/, resolve: () => "document.upload" },
   { match: /\/extractions\//, resolve: (m) => (m === "GET" ? "document.prepare" : "document.review") },
   { match: /\/documents/, resolve: (m) => (m === "GET" ? "client.read" : "document.upload") },

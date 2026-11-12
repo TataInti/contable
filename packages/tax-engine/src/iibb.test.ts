@@ -200,4 +200,40 @@ describe("motor IIBB Tucumán (golden)", () => {
     });
     expect(a.inputHash).toBe(b.inputHash);
   });
+
+  it("usa activityId e isDefault explícito en reglas tipadas y conserva el mínimo de catálogo", () => {
+    const result = calculateIIbbTuc({
+      engineVersion: IIBB_TUC_ENGINE_VERSION,
+      ruleMode: "TYPED",
+      period: PERIOD,
+      incomeByActivity: { "activity-1": "1000", "": "500" },
+      rules: [
+        {
+          id: "rate-1",
+          concept: "etiqueta libre",
+          code: "etiqueta libre",
+          kind: "RATE",
+          activityId: "activity-1",
+          rate: dec("0.035"),
+          validFrom: "2026-01-01",
+        },
+        {
+          id: "default-1",
+          concept: "otra etiqueta",
+          code: "otra etiqueta",
+          kind: "RATE",
+          isDefault: true,
+          rate: dec("0.04"),
+          validFrom: "2026-01-01",
+        },
+      ],
+      minimum: dec("60"),
+    });
+
+    expect(result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("55.00");
+    expect(result.subtotals["MINIMO_APLICADO"]).toBe("60.00");
+    expect(result.totalDue).toBe("60.00");
+    expect(result.lines.find((line) => line.inputs["activity"] === "")?.inputs["defaultRuleApplied"])
+      .toBe("true");
+  });
 });

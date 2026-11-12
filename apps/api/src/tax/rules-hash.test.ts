@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalRulePackPayload,
   computeRulesHashV2,
+  computeRulesHashV3,
   hashCanonicalRulePackPayload,
   type RulePackForHash,
 } from "./rules-hash.js";
@@ -81,6 +82,13 @@ describe("hash canónico de reglas v2", () => {
     const storedHash = computeRulesHashV2(version);
     const migratedVersion = {
       ...version,
+      rateRules: (version.rateRules ?? []).map((rule) => ({
+        ...rule,
+        kindKey: "RATE",
+        activityId: "activity-1",
+        categoryCode: "B",
+        isDefault: false,
+      })),
       engineId: "e1000000-0000-4000-8000-000000000001",
       rulesHash: storedHash,
       rulesHashSchemaVersion: 2,
@@ -156,5 +164,39 @@ describe("hash canónico de reglas v2", () => {
 
   it("mantiene el golden v2 para una versión sin tramos ni redondeos", () => {
     expect(computeRulesHashV2(versionWithoutBracketsOrRoundings())).toBe("a8793db606c14a7717d2413f630aa987720d4d32492e1be90d1a4399d5e3c024");
+  });
+
+  it("v3 cubre el tipo y los sujetos tipados sin cambiar v2", () => {
+    const version = versionWithoutBracketsOrRoundings();
+    const rule = {
+      ...version.rateRules![0]!,
+      kindKey: "RATE",
+      activityId: "activity-1",
+      categoryCode: null,
+      isDefault: false,
+    };
+    const typed = { ...version, rateRules: [rule] };
+    const originalV3 = computeRulesHashV3(typed);
+
+    expect(computeRulesHashV2(typed)).toBe(computeRulesHashV2(version));
+    expect(computeRulesHashV3({ ...typed, rateRules: [{ ...rule, kindKey: "COEFFICIENT" }] }))
+      .not.toBe(originalV3);
+    expect(computeRulesHashV3({ ...typed, rateRules: [{ ...rule, activityId: "activity-2" }] }))
+      .not.toBe(originalV3);
+    expect(computeRulesHashV3({ ...typed, rateRules: [{ ...rule, categoryCode: "C" }] }))
+      .not.toBe(originalV3);
+    expect(computeRulesHashV3({ ...typed, rateRules: [{ ...rule, isDefault: true }] }))
+      .not.toBe(originalV3);
+  });
+
+  it("v3 ordena las reglas tipadas canónicamente", () => {
+    const first = versionWithoutBracketsOrRoundings();
+    first.rateRules = [
+      { ...first.rateRules![0]!, kindKey: "RATE", activityId: "activity-1" },
+      { ...first.rateRules![0]!, concept: "OTRA", kindKey: "RATE", activityId: "activity-2" },
+    ];
+    const reversed = { ...first, rateRules: [...first.rateRules].reverse() };
+
+    expect(computeRulesHashV3(reversed)).toBe(computeRulesHashV3(first));
   });
 });

@@ -978,7 +978,7 @@ describe("StudyCatalogosFiscales", () => {
     await openTab(/^Actividades económicas/);
 
     expect(await screen.findByText("Servicios profesionales")).toBeTruthy();
-    expect(screen.getByText("Oculta")).toBeTruthy();
+    expect(screen.getByText("Oculto")).toBeTruthy();
     fireEvent.click(screen.getByText("Servicios profesionales"));
     await screen.findByRole("complementary", { name: "Detalle de la actividad" });
     expect(screen.queryByRole("button", { name: "Nueva actividad" })).toBeNull();

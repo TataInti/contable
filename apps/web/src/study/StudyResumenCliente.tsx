@@ -87,7 +87,7 @@ function SummaryFact({
   wrap = false,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   detail?: ReactNode;
   wrap?: boolean;
 }) {
@@ -542,8 +542,24 @@ export function StudyResumenCliente() {
                 </div>
               </div>
               <dl className="client-summary__overview-facts">
-                <SummaryFact label="Ficha contable" value={profile ? "Configurada" : "Pendiente"} />
-                <SummaryFact label="Onboarding fiscal" value={client.onboarding?.completed ? "Completo" : "Pendiente"} />
+                <SummaryFact
+                  label="Ficha contable"
+                  value={
+                    <StatusBadge
+                      status={profile ? "CONFIGURED" : "PENDING"}
+                      className="status-badge--regular"
+                    />
+                  }
+                />
+                <SummaryFact
+                  label="Onboarding fiscal"
+                  value={
+                    <StatusBadge
+                      status={client.onboarding?.completed ? "COMPLETED" : "PENDING"}
+                      className="status-badge--regular"
+                    />
+                  }
+                />
                 {openAccountingYearCount > 0 ? (
                   <SummaryFact
                     label={openAccountingYearCount === 1 ? "Ejercicio contable" : "Ejercicios contables"}
@@ -895,7 +911,11 @@ export function StudyResumenCliente() {
                         </small>
                         <small>Desde {formatDate(item.validFrom)}{item.validTo ? ` · hasta ${formatDate(item.validTo)}` : ""}</small>
                       </div>
-                      <span className="client-summary__detail-tag">{item.isPrimary ? "Principal" : "Secundaria"}</span>
+                      <StatusBadge
+                        status="INFO"
+                        label={item.isPrimary ? "Principal" : "Secundaria"}
+                        className="status-badge--regular"
+                      />
                     </li>
                   ))}
                 </ul>

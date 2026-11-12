@@ -249,8 +249,8 @@
     },
     "apps/web/src/study/study.css": {
       "fontSize": 17,
-      "spacing": 51,
-      "radius": 11,
+      "spacing": 49,
+      "radius": 10,
       "color": 11
     },
     "apps/web/src/study/StudyAdministracion.test.tsx": {

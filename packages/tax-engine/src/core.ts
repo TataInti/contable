@@ -87,6 +87,8 @@ export interface TaxEngineInput {
   facts: readonly TaxFact[];
   /** Reglas aplicables (con fuente y vigencia ya validadas). */
   rules: readonly TaxRule[];
+  /** Identifica el contrato tipado de reglas sin cambiar las versiones legacy. */
+  ruleMode?: "LEGACY" | "TYPED";
   /** Saldos y créditos previos. */
   balances?: {
     previousCredit?: string;
@@ -116,6 +118,11 @@ export interface TaxFact {
 export interface TaxRule {
   id: string;
   concept: string;
+  kind?: string;
+  activityId?: string | null;
+  jurisdictionId?: string | null;
+  categoryCode?: string | null;
+  isDefault?: boolean;
   /** Tasa aplicable (decimal, p.ej. 0.21). */
   rate?: Decimal;
   /** Mínimo a ingresar si aplica. */
