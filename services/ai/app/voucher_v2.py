@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -185,7 +184,6 @@ _UI_FIELD_KEYS = {
 ARITHMETIC_TOLERANCE = Decimal("0.02")
 CUIT_CHECK_DIGIT_WEIGHTS = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
 CUIT_INVALID_REASON = "CUIT con dígito verificador inválido"
-CAE_EXPIRATION_REASON = "vencimiento del CAE anterior a la fecha del comprobante"
 
 
 def source_path_for(group_name: str, index: int, field_name: str) -> str:
@@ -210,19 +208,12 @@ def _has_invalid_cuit_check_digit(value: str | None) -> bool:
     return check_digit == 10 or check_digit != int(digits[10])
 
 
-def validate_identifier_and_cae_dates(voucher: VoucherARV21) -> list[ReviewIssue]:
+def validate_cuit_check_digits(voucher: VoucherARV21) -> list[ReviewIssue]:
     """Devuelve hallazgos deterministas por campo sin corregir valores."""
     issues: list[ReviewIssue] = []
     for field_name in ("cuit_emisor", "cuit_receptor"):
         if _has_invalid_cuit_check_digit(getattr(voucher, field_name)):
             issues.append(ReviewIssue(reason=CUIT_INVALID_REASON, sourcePath=field_name))
-
-    if (
-        voucher.fecha is not None
-        and voucher.cae_vencimiento is not None
-        and date.fromisoformat(voucher.cae_vencimiento) < date.fromisoformat(voucher.fecha)
-    ):
-        issues.append(ReviewIssue(reason=CAE_EXPIRATION_REASON, sourcePath="cae_vencimiento"))
     return issues
 
 
@@ -326,7 +317,7 @@ def response_from_voucher(
         )
         for index in unrecognized_perception_indexes
     ]
-    field_review_issues.extend(validate_identifier_and_cae_dates(voucher))
+    field_review_issues.extend(validate_cuit_check_digits(voucher))
     review_issues = field_review_issues + [
         ReviewIssue(reason=reason) for reason in dict.fromkeys(document_issues)
     ]

@@ -47,7 +47,7 @@ const taxPeriod = {
   taxType: { name: "Ingresos Brutos", isActive: true },
 };
 
-function workpaper(status: string) {
+function workpaper(status: string, controls: unknown[] = []) {
   return {
     id: "wp-a",
     periodStart: "2026-10-01",
@@ -57,7 +57,7 @@ function workpaper(status: string) {
     inputHash: null,
     outputHash: null,
     settlements: [],
-    controls: [],
+    controls,
   };
 }
 
@@ -142,15 +142,20 @@ function mockPageApi({
   sourcePresent = false,
   classifications = { total: 0, classified: 0, pending: 0, ready: true, items: [] },
   allocations = { total: 0, allocated: 0, pending: 0, ready: true, items: [] },
+  controls = [],
+  documents = [],
 }: {
   status?: string;
   sourcePresent?: boolean;
   classifications?: unknown;
   allocations?: unknown;
+  controls?: unknown[];
+  documents?: unknown[];
 } = {}) {
   vi.mocked(api.get).mockImplementation(((path: string) => {
     if (path.endsWith("/tax-periods")) return Promise.resolve([taxPeriod]);
-    if (path.includes("/monthly-tax-workpapers?")) return Promise.resolve([workpaper(status)]);
+    if (path.includes("/monthly-tax-workpapers?")) return Promise.resolve([workpaper(status, controls)]);
+    if (path.endsWith("/documents")) return Promise.resolve(documents);
     if (path.endsWith("/coverage")) {
       return Promise.resolve({
         components: [
@@ -250,6 +255,111 @@ afterEach(() => {
 });
 
 describe("StudyExpedienteMensual", () => {
+  it("ofrece evidencia REVIEWED y habilita Resolver con explicación y respaldo", async () => {
+    const control = {
+      id: "control-reviewed",
+      code: "BOOK_RATE_RECONCILIATION",
+      severity: "BLOCKING",
+      status: "OPEN",
+      expected: null,
+      actual: null,
+      tolerance: null,
+      evidenceDocumentId: null,
+      resolution: null,
+    };
+    mockPageApi({
+      status: "REVIEWED",
+      controls: [control],
+      documents: [
+        {
+          id: "document-reviewed",
+          category: "INVOICE",
+          status: "REVIEWED",
+          createdAt: "2026-11-01T00:00:00.000Z",
+          fileVersions: [{ originalName: "factura-revisada.pdf" }],
+        },
+        {
+          id: "document-extracted",
+          category: "INVOICE",
+          status: "EXTRACTED",
+          createdAt: "2026-11-01T00:00:00.000Z",
+          fileVersions: [{ originalName: "factura-extraida.pdf" }],
+        },
+      ],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /Controles/ }));
+
+    const evidence = await screen.findByRole("combobox", {
+      name: "Evidencia BOOK_RATE_RECONCILIATION",
+    });
+    expect(
+      within(evidence).getByRole("option", { name: "factura-revisada.pdf · Revisado" }),
+    ).toBeTruthy();
+    expect(within(evidence).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }),
+      { target: { value: "Respaldo revisado y conciliado" } },
+    );
+    fireEvent.change(evidence, { target: { value: "document-reviewed" } });
+    const resolveButton = screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement;
+    expect(resolveButton.disabled).toBe(false);
+    fireEvent.click(resolveButton);
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        expect.stringContaining("/controls/control-reviewed/resolve"),
+        {
+          resolution: "Respaldo revisado y conciliado",
+          status: "RESOLVED",
+          evidenceDocumentId: "document-reviewed",
+        },
+      ),
+    );
+  });
+
+  it("explica cómo habilitar evidencia cuando solo hay documentos extraídos", async () => {
+    mockPageApi({
+      controls: [
+        {
+          id: "control-open",
+          code: "BOOK_RATE_RECONCILIATION",
+          severity: "BLOCKING",
+          status: "OPEN",
+          expected: null,
+          actual: null,
+          tolerance: null,
+          evidenceDocumentId: null,
+          resolution: null,
+        },
+      ],
+      documents: [
+        {
+          id: "document-extracted",
+          category: "INVOICE",
+          status: "EXTRACTED",
+          createdAt: "2026-11-01T00:00:00.000Z",
+          fileVersions: [{ originalName: "factura-extraida.pdf" }],
+        },
+      ],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /Controles/ }));
+
+    const evidence = await screen.findByRole("combobox", {
+      name: "Evidencia BOOK_RATE_RECONCILIATION",
+    });
+    const explanation = await screen.findByText(
+      "No hay documentos elegibles. Aprobá la extracción en Bandeja para usar el documento como respaldo.",
+    );
+    expect(evidence.parentElement?.contains(explanation)).toBe(true);
+    expect(within(evidence).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
+    expect(
+      (screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
   it("muestra el error de la acción actual, enfoca y desplaza el detalle de ApiError", async () => {
     mockPageApi({ status: "READY_TO_CALCULATE", sourcePresent: true });
     const validationError = new ApiError(

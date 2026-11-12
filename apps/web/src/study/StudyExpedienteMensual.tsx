@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
+import {
+  Button,
+  EmptyState,
+  Field,
+  getStatusBadgeMeta,
+  MoneyField,
+  Table,
+} from "@contable/design-system";
 import { ApiError, api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
@@ -1245,6 +1252,9 @@ export function StudyExpedienteMensual() {
     (taxPeriod) => taxPeriod.taxType.isActive && (!opening.taxTypeId || taxPeriod.taxTypeId === opening.taxTypeId),
   );
   const safeActiveStep = Math.min(Math.max(activeStep, 0), WORKPAPER_STEPS.length - 1);
+  const eligibleEvidenceDocuments = (documentsQuery.data ?? []).filter((document) =>
+    ["READY", "APPLIED", "REVIEWED"].includes(document.status),
+  );
   const activeStepMeta = WORKPAPER_STEPS[safeActiveStep]!;
   const previousStep = WORKPAPER_STEPS[safeActiveStep - 1];
   const nextStep = WORKPAPER_STEPS[safeActiveStep + 1];
@@ -3041,29 +3051,35 @@ export function StudyExpedienteMensual() {
                                   }
                                 />
                                 {control.severity === "BLOCKING" ? (
-                                  <select
-                                    aria-label={`Evidencia ${control.code}`}
-                                    value={controlEvidence[control.id] ?? ""}
-                                    onChange={(event) =>
-                                      setControlEvidence((values) => ({
-                                        ...values,
-                                        [control.id]: event.target.value,
-                                      }))
-                                    }
-                                  >
-                                    <option value="">Seleccionar evidencia…</option>
-                                    {documentsQuery.data
-                                      ?.filter((document) =>
-                                        ["READY", "APPLIED"].includes(document.status),
-                                      )
-                                      .map((document) => (
+                                  <>
+                                    <select
+                                      aria-label={`Evidencia ${control.code}`}
+                                      value={controlEvidence[control.id] ?? ""}
+                                      onChange={(event) =>
+                                        setControlEvidence((values) => ({
+                                          ...values,
+                                          [control.id]: event.target.value,
+                                        }))
+                                      }
+                                    >
+                                      <option value="">Seleccionar evidencia…</option>
+                                      {eligibleEvidenceDocuments.map((document) => (
                                         <option key={document.id} value={document.id}>
                                           {document.fileVersions?.[0]?.originalName ??
                                             document.category ??
-                                            "Documento"}
+                                            "Documento"}{" "}
+                                          · {getStatusBadgeMeta(document.status).label}
                                         </option>
                                       ))}
-                                  </select>
+                                    </select>
+                                    {documentsQuery.isSuccess &&
+                                    eligibleEvidenceDocuments.length === 0 ? (
+                                      <small className="muted-copy">
+                                        No hay documentos elegibles. Aprobá la extracción en Bandeja para usar el
+                                        documento como respaldo.
+                                      </small>
+                                    ) : null}
+                                  </>
                                 ) : null}
                                 <Button
                                   size="sm"

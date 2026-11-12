@@ -450,11 +450,37 @@ La clave debe ser estable y única por fila. `Table` es una tabla de lectura; pa
 
 La carga se representa con estado de carga; este componente comunica ausencia de contenido o de coincidencias.
 
+### Estados
+
+En tablas, listas y avisos, un estado usa punto + texto plano; el texto siempre nombra el estado. La píldora (borde y fondo) se reserva para la cabecera de la ficha de un registro y la ficha/Resumen del cliente. El punto comunica el tono y es decorativo (`aria-hidden="true"`); el texto usa `--ds-color-text` y mantiene contraste mínimo de 4,5:1. El tono `ok` usa `--ds-color-success` sólo en el punto, nunca texto verde ni fondo verde en tablas.
+
+| Tono | Uso | Color del punto |
+|---|---|---|
+| `ok` | Resultado correcto o activo | `--ds-color-success` |
+| `warn` (aviso) | Pendiente o requiere atención | `--ds-color-warning` |
+| `danger` (peligro) | Fallo, vencimiento o riesgo | `--ds-color-danger` |
+| `info` | En curso o informativo | `--ds-color-info` |
+| `muted` (neutro) | Borrador, inactividad o cierre normal | `--ds-color-text-muted` |
+
+**Correcto:**
+
+```tsx
+<StatusBadge status={row.status} />
+<StatusBadge status={client.status} variant="pill" />
+```
+
+**Incorrecto:**
+
+```tsx
+<StatusBadge status={row.status} variant="pill" />
+<span className="status-badge">{row.status}</span>
+```
+
 ### StatusBadge
 
 - **Propósito:** presentar un estado contable con su etiqueta conocida o un fallback legible.
-- **Props:** `status: string | null | undefined`; `className` opcional. `getStatusBadgeMeta` expone la etiqueta y el tono resuelto; `StatusTone` y `StatusBadgeMeta` son tipos públicos.
-- **Estados:** normaliza espacios, guiones y mayúsculas; los estados conocidos usan su etiqueta/tono configurados y los desconocidos se humanizan como neutros. El DOM conserva `status-badge` y `data-status`; las hojas globales y contextuales de la app mantienen el aspecto vigente.
+- **Props:** `status: string | null | undefined`; `className` y `variant` (`plain` por defecto o `pill`) son opcionales. `getStatusBadgeMeta` expone la etiqueta y el tono resuelto; `StatusTone`, `StatusBadgeMeta` y `StatusBadgeVariant` son tipos públicos.
+- **Estados:** normaliza espacios, guiones y mayúsculas; los estados conocidos usan su etiqueta/tono configurados y los desconocidos se humanizan como neutros. El DOM conserva `status-badge` y `data-status`, muestra siempre el texto y oculta el punto decorativo con `aria-hidden`.
 - **Correcto:**
 
 ```tsx

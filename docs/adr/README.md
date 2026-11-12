@@ -23,3 +23,4 @@ Este directorio contiene las decisiones de arquitectura de **Contable**, la plat
 | [ADR-008](./0008-navegacion-foco-liquidacion-fiscal.md) | Navegación enfocada en la liquidación fiscal mensual | Aceptado |
 | [ADR-009](./0009-modelo-extraccion-claude-haiku-5-5.md) | Modelo de extracción multimodal Claude Haiku 5.5 | Aceptado (sintéticos) |
 | [ADR-010](./0010-asistente-contable-openrouter-zdr.md) | Asistente contable sobre OpenRouter con retención cero | Aceptado (sintéticos) |
+| [ADR-011](./0011-foto-fija-extracciones-aprobadas.md) | Foto fija inmutable de extracciones aprobadas | Aceptado |
