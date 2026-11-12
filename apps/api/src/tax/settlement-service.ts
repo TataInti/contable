@@ -7,20 +7,15 @@ import {
   calculateTemSmt,
   calculateVat,
   calculateVatRi,
-  CM03_ENGINE_VERSION,
-  CM03_LEGACY_ENGINE_VERSION,
   dec,
-  IIBB_TUC_ENGINE_VERSION,
-  IIBB_TUC_LEGACY_ENGINE_VERSION,
-  MONOTRIBUTO_ENGINE_VERSION,
-  TEM_SMT_ENGINE_VERSION,
-  TEM_SMT_LEGACY_ENGINE_VERSION,
+  isTaxEngineKey,
+  taxEngineKeyForVersion,
   VAT_ENGINE_VERSION,
   VAT_RI_ENGINE_VERSION,
 } from "@contable/tax-engine";
-import { taxEngineVersionCompatibilityError } from "@contable/contracts";
 import type {
   LocalTaxDeclaredParameter,
+  TaxEngineKey,
   TaxEngineResult,
   TaxFact,
   VatRiComponent,
@@ -110,6 +105,61 @@ function settlementAmount(settlement: { totals: Prisma.JsonValue | null }): Pris
 }
 
 type Tx = Prisma.TransactionClient;
+
+/** Motor del catálogo con las capacidades de su familia (P2, corte 3). */
+interface ResolvedTaxEngine {
+  engineKey: string;
+  engineVersion: string;
+  familyId: string;
+  family: { allowsAdvancePayment: boolean; closesByJurisdiction: boolean };
+}
+
+const resolvedTaxEngineSelect = {
+  engineKey: true,
+  engineVersion: true,
+  familyId: true,
+  family: { select: { allowsAdvancePayment: true, closesByJurisdiction: true } },
+} as const;
+
+/**
+ * Resuelve el motor de una versión de reglas por id (catálogo `tax_engines`).
+ * R4: una versión histórica sin `engineId` conserva el respaldo por el texto
+ * `engineVersion`; un texto que no identifica motor devuelve `null` y la
+ * liquidación bloquea con el 409 actual.
+ */
+async function resolveTaxEngineForVersion(
+  tx: Tx,
+  version: { engineId: string | null; engineVersion: string },
+): Promise<ResolvedTaxEngine | null> {
+  if (version.engineId) {
+    const engine = await tx.taxEngine.findUnique({
+      where: { id: version.engineId },
+      select: resolvedTaxEngineSelect,
+    });
+    if (engine) return engine;
+  }
+  const engineKey = taxEngineKeyForVersion(version.engineVersion);
+  if (!engineKey) return null;
+  return tx.taxEngine.findUnique({
+    where: { engineKey },
+    select: resolvedTaxEngineSelect,
+  });
+}
+
+/** Motor que produjo una liquidación, vía su versión de reglas o el texto guardado. */
+async function resolveSettlementTaxEngine(
+  tx: Tx,
+  settlement: { ruleVersionId: string | null; engineVersion: string },
+): Promise<ResolvedTaxEngine | null> {
+  if (settlement.ruleVersionId) {
+    const version = await tx.taxRuleVersion.findUnique({
+      where: { id: settlement.ruleVersionId },
+      select: { engineId: true, engineVersion: true },
+    });
+    if (version) return resolveTaxEngineForVersion(tx, version);
+  }
+  return resolveTaxEngineForVersion(tx, { engineId: null, engineVersion: settlement.engineVersion });
+}
 
 function availableFromLots(
   lots: Array<{ originalAmount: Prisma.Decimal; movements: Array<{ amount: Prisma.Decimal }> }>,
@@ -276,6 +326,7 @@ export class SettlementService {
           regime: {
             select: {
               code: true,
+              calcFamilyId: true,
               taxType: { select: { code: true } },
               jurisdiction: { select: { code: true } },
             },
@@ -301,20 +352,24 @@ export class SettlementService {
           "No hay una versión normativa activada que cubra íntegramente el período",
         );
       }
-      const unsupportedEngine = taxEngineVersionCompatibilityError(
-        {
-          regimeCode: pack.regime.code,
-          taxTypeCode: pack.regime.taxType.code,
-          jurisdictionCode: pack.regime.jurisdiction.code,
-        },
-        activeVersion.engineVersion,
-      );
-      if (unsupportedEngine) {
-        throw new SettlementError("UNSUPPORTED_ENGINE_VERSION", unsupportedEngine);
+      // El motor se resuelve por id de catálogo (`TaxRuleVersion.engineId`).
+      // R4: una versión histórica sin id conserva el respaldo por el texto
+      // `engineVersion`; un motor sin calculador mantiene el bloqueo explícito.
+      const resolvedEngine = await resolveTaxEngineForVersion(tx, activeVersion);
+      if (!resolvedEngine || !isTaxEngineKey(resolvedEngine.engineKey)) {
+        throw new SettlementError(
+          "UNSUPPORTED_ENGINE_VERSION",
+          `No hay despacho implementado para el motor fiscal "${activeVersion.engineVersion}"; no se aplicó un motor alternativo.`,
+        );
       }
-      const isCmEngine =
-        activeVersion.engineVersion === CM03_ENGINE_VERSION ||
-        activeVersion.engineVersion === CM03_LEGACY_ENGINE_VERSION;
+      const engineKey = resolvedEngine.engineKey;
+      if (pack.regime.calcFamilyId && resolvedEngine.familyId !== pack.regime.calcFamilyId) {
+        throw new SettlementError(
+          "UNSUPPORTED_ENGINE_VERSION",
+          `El motor fiscal "${activeVersion.engineVersion}" pertenece a otra familia de cálculo que el régimen; no se aplicó un motor alternativo.`,
+        );
+      }
+      const isCmEngine = engineKey === "iibb-cm-art2" || engineKey === "iibb-cm-art2-legacy";
       const rateRules = await tx.taxRateRule.findMany({
         where: {
           ruleVersionId: activeVersion.id,
@@ -1018,15 +1073,222 @@ export class SettlementService {
         )
         .reduce((sum, adjustment) => sum.plus(adjustment.amount), new Prisma.Decimal(0));
 
-      let result: TaxEngineResult;
-      switch (activeVersion.engineVersion) {
-        case VAT_RI_ENGINE_VERSION: {
+      // Registro engineKey → calculador. El tipo `Record<TaxEngineKey, ...>`
+      // obliga en compilación a cubrir cada motor declarado: sumar un motor al
+      // catálogo sin calculador rompe el typecheck antes de producción.
+      const iibbTuc = (includeOtherCredits: boolean) =>
+        calculateIIbbTuc({
+          engineVersion: activeVersion.engineVersion,
+          period: periodRange,
+          facts: facts as TaxFact[],
+          rules,
+          incomeByActivity,
+          ...(minimum !== undefined ? { minimum } : {}),
+          credits: {
+            withholding: ordinaryWithholdingTotal,
+            perception: perceptionTotal,
+            collected: collectedTotal,
+            ...(includeOtherCredits ? { other: iibbOtherCredits } : {}),
+          },
+          balances: { previousCredit: previousFree.toString() },
+          declaredParameters: localTaxDeclaredParameters,
+        });
+      const temSmt = () =>
+        calculateTemSmt({
+          engineVersion: activeVersion.engineVersion,
+          period: periodRange,
+          facts: facts as TaxFact[],
+          rules,
+          incomeByActivity,
+          ...(minimum !== undefined ? { minimum } : {}),
+          credits: {
+            withholding: withholdingTotal,
+            perception: perceptionTotal,
+          },
+          balances: { previousCredit: previousFree.toString() },
+          declaredParameters: localTaxDeclaredParameters,
+        });
+      const cm03 = () => {
+        // --- CM03 artículo 2: coeficientes por jurisdicción ---
+        // Los coeficientes se toman de las reglas (concept = jurisdicción,
+        // rate = coeficiente). Se validan en el motor (suma = 1).
+        const coefficients: Record<string, string> = {};
+        const declaredCoefficients = input.sourceScope?.cm03Coefficients ?? [];
+        if (declaredCoefficients.length > 0) {
+          const seenJurisdictions = new Set<string>();
+          for (const coefficient of [...declaredCoefficients].sort((left, right) =>
+            left.jurisdiction.localeCompare(right.jurisdiction),
+          )) {
+            if (seenJurisdictions.has(coefficient.jurisdiction)) {
+              throw new SettlementError(
+                "INVALID_TRANSITION",
+                `La fuente CM03 repite el coeficiente de ${coefficient.jurisdiction}`,
+              );
+            }
+            seenJurisdictions.add(coefficient.jurisdiction);
+            coefficients[coefficient.jurisdiction] = coefficient.coefficient;
+            inputs.push({
+              kind: "CM03_COEFFICIENT",
+              sourceId: coefficient.sourceId,
+              snapshot: {
+                jurisdiction: coefficient.jurisdiction,
+                coefficient: coefficient.coefficient,
+                origin: "SIFERE_CM03",
+              },
+            });
+          }
+        } else {
+          for (const r of rateRules) {
+            if (r.concept.startsWith("COEF_") && r.rate !== null) {
+              coefficients[r.concept.slice(5)] = r.rate.toString();
+            }
+          }
+        }
+        // F1.4: los créditos se atribuyen por jurisdicción cuando el
+        // certificado declara jurisdictionId. Sólo si ningún certificado
+        // declara jurisdicción se usa el fallback a la jurisdicción
+        // principal (datos legacy), nunca mezclando créditos entre
+        // jurisdicciones.
+        const withholdingByJurisdiction: Record<string, Prisma.Decimal> = {};
+        const perceptionByJurisdiction: Record<string, Prisma.Decimal> = {};
+        const previousCreditByJurisdiction: Record<string, string> = {};
+        let unscopedPrevious = new Prisma.Decimal(0);
+        if (rectificationOpening) {
+          for (const [key, value] of Object.entries(rectificationOpening)) {
+            if (key.startsWith("SALDO_ANTERIOR_") && key !== "SALDO_ANTERIOR") {
+              previousCreditByJurisdiction[key.slice("SALDO_ANTERIOR_".length)] = value;
+            }
+          }
+          if (Object.keys(previousCreditByJurisdiction).length === 0) {
+            unscopedPrevious = previousFree;
+          }
+        } else {
+          for (const entry of availableLots) {
+            if (entry.lot.kind !== "SALDO_A_FAVOR") continue;
+            const jurisdiction = entry.lot.jurisdictionId
+              ? allocationJurisdictionById.get(entry.lot.jurisdictionId)
+              : null;
+            if (jurisdiction) {
+              previousCreditByJurisdiction[jurisdiction] = new Prisma.Decimal(
+                previousCreditByJurisdiction[jurisdiction] ?? "0",
+              )
+                .plus(entry.available)
+                .toString();
+            } else {
+              unscopedPrevious = unscopedPrevious.plus(entry.available);
+            }
+          }
+        }
+        const primaryJurisdiction = Object.entries(coefficients)
+          .sort(([leftCode, leftValue], [rightCode, rightValue]) => {
+            const byCoefficient = new Prisma.Decimal(rightValue).comparedTo(leftValue);
+            return byCoefficient !== 0 ? byCoefficient : leftCode.localeCompare(rightCode);
+          })[0]?.[0];
+        if (!rectificationOpening && creditLots.length === 0 && previousFree.isPositive()) {
+          // Fallback de migración para el ledger anterior a TaxCreditLot.
+          // Se concentra en una única jurisdicción; nunca se distribuye ni
+          // compensa contra deudas de las restantes.
+          unscopedPrevious = unscopedPrevious.plus(previousFree);
+        }
+        if (primaryJurisdiction && unscopedPrevious.isPositive()) {
+          previousCreditByJurisdiction[primaryJurisdiction] = new Prisma.Decimal(
+            previousCreditByJurisdiction[primaryJurisdiction] ?? "0",
+          )
+            .plus(unscopedPrevious)
+            .toString();
+        }
+        const declaredWithholding = withholdings.filter((w) => w.jurisdictionId);
+        const declaredPerception = perceptions.filter((p) => p.jurisdictionId);
+        if (allocationScoped) {
+          for (const allocation of inputAllocations) {
+            if (!allocation.jurisdictionId) continue;
+            const jurisdiction = allocationJurisdictionById.get(allocation.jurisdictionId);
+            if (!jurisdiction) continue;
+            if (allocation.sourceType === "WITHHOLDING") {
+              withholdingByJurisdiction[jurisdiction] = (
+                withholdingByJurisdiction[jurisdiction] ?? new Prisma.Decimal(0)
+              ).plus(allocation.amount);
+            } else {
+              perceptionByJurisdiction[jurisdiction] = (
+                perceptionByJurisdiction[jurisdiction] ?? new Prisma.Decimal(0)
+              ).plus(allocation.amount);
+            }
+          }
+        } else if (declaredWithholding.length > 0 || declaredPerception.length > 0) {
+          for (const w of declaredWithholding) {
+            const j = allocationJurisdictionById.get(w.jurisdictionId!);
+            if (!j) continue;
+            withholdingByJurisdiction[j] = (withholdingByJurisdiction[j] ?? new Prisma.Decimal(0)).plus(w.amount);
+          }
+          for (const p of declaredPerception) {
+            const j = allocationJurisdictionById.get(p.jurisdictionId!);
+            if (!j) continue;
+            perceptionByJurisdiction[j] = (perceptionByJurisdiction[j] ?? new Prisma.Decimal(0)).plus(p.amount);
+          }
+        } else {
+          if (primaryJurisdiction) {
+            withholdingByJurisdiction[primaryJurisdiction] = withholdingTotal;
+            perceptionByJurisdiction[primaryJurisdiction] = perceptionTotal;
+          }
+        }
+        return calculateCm03({
+          engineVersion: activeVersion.engineVersion,
+          period: periodRange,
+          facts: facts as TaxFact[],
+          rules,
+          incomeByActivity,
+          coefficients,
+          credits: {
+            withholdingByJurisdiction,
+            perceptionByJurisdiction,
+          },
+          cmBalances: { previousCreditByJurisdiction },
+        });
+      };
+      const monotributo = async () => {
+        // --- Monotributo: cuota por categoría ---
+        const profile = await tx.taxpayerProfileVersion.findFirst({
+          where: { firmId: ctx.firmId, clientId: input.clientId, status: "ACTIVE" },
+          orderBy: { version: "desc" },
+        });
+        const category = profile?.monotributoCategory ?? "A";
+        const feeByCategory: Record<string, string> = {};
+        for (const r of rateRules) {
+          if (r.concept.startsWith("CUOTA_")) {
+            // La cuota es un importe; se guarda en minAmount (Decimal(20,4)).
+            feeByCategory[r.concept.slice(6)] = (r.minAmount ?? r.rate)?.toString() ?? "0";
+          }
+        }
+        // Pagos ya registrados del período (se deducen de la cuota).
+        const periodPayments = await tx.taxPayment.aggregate({
+          where: {
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            status: "PAID",
+            paidAt: { gte: period.startDate, lte: period.endDate },
+          },
+          _sum: { amount: true },
+        });
+        return calculateMonotributo({
+          engineVersion: activeVersion.engineVersion,
+          period: periodRange,
+          facts: facts as TaxFact[],
+          rules,
+          category,
+          parameters: { monthlyFeeByCategory: feeByCategory },
+          payments: {
+            paid: periodPayments._sum.amount ?? new Prisma.Decimal(0),
+          },
+        });
+      };
+      const calculators: Record<TaxEngineKey, () => Promise<TaxEngineResult>> = {
+        "vat-ri": async () => {
           const decreeRule = rules.find((rule) => rule.concept === "DTO_814");
           const netRemuneration = f931Runs.reduce(
             (sum, run) => sum.plus(run.netRemuneration),
             new Prisma.Decimal(0),
           );
-          result = calculateVatRi({
+          return calculateVatRi({
             period: periodRange,
             components: vatRiComponents,
             missingRateVoucherIds,
@@ -1053,230 +1315,10 @@ export class SettlementService {
               freeAvailabilityPrevious: dec(previousFree.toString()),
             },
           });
-          break;
-        }
-        case IIBB_TUC_LEGACY_ENGINE_VERSION:
-        case IIBB_TUC_ENGINE_VERSION: {
-          // --- IIBB Tucumán local: ingresos por actividad + créditos RPI ---
-          result = calculateIIbbTuc({
+        },
+        "vat-ri-legacy": async () =>
+          calculateVat({
             engineVersion: activeVersion.engineVersion,
-            period: periodRange,
-            facts: facts as TaxFact[],
-            rules,
-            incomeByActivity,
-            ...(minimum !== undefined ? { minimum } : {}),
-            credits: {
-              withholding: ordinaryWithholdingTotal,
-              perception: perceptionTotal,
-              collected: collectedTotal,
-              ...(activeVersion.engineVersion === IIBB_TUC_ENGINE_VERSION
-                ? { other: iibbOtherCredits }
-                : {}),
-            },
-            balances: { previousCredit: previousFree.toString() },
-            declaredParameters: localTaxDeclaredParameters,
-          });
-          break;
-        }
-        case TEM_SMT_LEGACY_ENGINE_VERSION:
-        case TEM_SMT_ENGINE_VERSION: {
-          // --- TEM San Miguel de Tucumán ---
-          result = calculateTemSmt({
-            engineVersion: activeVersion.engineVersion,
-            period: periodRange,
-            facts: facts as TaxFact[],
-            rules,
-            incomeByActivity,
-            ...(minimum !== undefined ? { minimum } : {}),
-            credits: {
-              withholding: withholdingTotal,
-              perception: perceptionTotal,
-            },
-            balances: { previousCredit: previousFree.toString() },
-            declaredParameters: localTaxDeclaredParameters,
-          });
-          break;
-        }
-        case CM03_LEGACY_ENGINE_VERSION:
-        case CM03_ENGINE_VERSION: {
-          // --- CM03 artículo 2: coeficientes por jurisdicción ---
-          // Los coeficientes se toman de las reglas (concept = jurisdicción,
-          // rate = coeficiente). Se validan en el motor (suma = 1).
-          const coefficients: Record<string, string> = {};
-          const declaredCoefficients = input.sourceScope?.cm03Coefficients ?? [];
-          if (declaredCoefficients.length > 0) {
-            const seenJurisdictions = new Set<string>();
-            for (const coefficient of [...declaredCoefficients].sort((left, right) =>
-              left.jurisdiction.localeCompare(right.jurisdiction),
-            )) {
-              if (seenJurisdictions.has(coefficient.jurisdiction)) {
-                throw new SettlementError(
-                  "INVALID_TRANSITION",
-                  `La fuente CM03 repite el coeficiente de ${coefficient.jurisdiction}`,
-                );
-              }
-              seenJurisdictions.add(coefficient.jurisdiction);
-              coefficients[coefficient.jurisdiction] = coefficient.coefficient;
-              inputs.push({
-                kind: "CM03_COEFFICIENT",
-                sourceId: coefficient.sourceId,
-                snapshot: {
-                  jurisdiction: coefficient.jurisdiction,
-                  coefficient: coefficient.coefficient,
-                  origin: "SIFERE_CM03",
-                },
-              });
-            }
-          } else {
-            for (const r of rateRules) {
-              if (r.concept.startsWith("COEF_") && r.rate !== null) {
-                coefficients[r.concept.slice(5)] = r.rate.toString();
-              }
-            }
-          }
-          // F1.4: los créditos se atribuyen por jurisdicción cuando el
-          // certificado declara jurisdictionId. Sólo si ningún certificado
-          // declara jurisdicción se usa el fallback a la jurisdicción
-          // principal (datos legacy), nunca mezclando créditos entre
-          // jurisdicciones.
-          const withholdingByJurisdiction: Record<string, Prisma.Decimal> = {};
-          const perceptionByJurisdiction: Record<string, Prisma.Decimal> = {};
-          const previousCreditByJurisdiction: Record<string, string> = {};
-          let unscopedPrevious = new Prisma.Decimal(0);
-          if (rectificationOpening) {
-            for (const [key, value] of Object.entries(rectificationOpening)) {
-              if (key.startsWith("SALDO_ANTERIOR_") && key !== "SALDO_ANTERIOR") {
-                previousCreditByJurisdiction[key.slice("SALDO_ANTERIOR_".length)] = value;
-              }
-            }
-            if (Object.keys(previousCreditByJurisdiction).length === 0) {
-              unscopedPrevious = previousFree;
-            }
-          } else {
-            for (const entry of availableLots) {
-              if (entry.lot.kind !== "SALDO_A_FAVOR") continue;
-              const jurisdiction = entry.lot.jurisdictionId
-                ? allocationJurisdictionById.get(entry.lot.jurisdictionId)
-                : null;
-              if (jurisdiction) {
-                previousCreditByJurisdiction[jurisdiction] = new Prisma.Decimal(
-                  previousCreditByJurisdiction[jurisdiction] ?? "0",
-                )
-                  .plus(entry.available)
-                  .toString();
-              } else {
-                unscopedPrevious = unscopedPrevious.plus(entry.available);
-              }
-            }
-          }
-          const primaryJurisdiction = Object.entries(coefficients)
-            .sort(([leftCode, leftValue], [rightCode, rightValue]) => {
-              const byCoefficient = new Prisma.Decimal(rightValue).comparedTo(leftValue);
-              return byCoefficient !== 0 ? byCoefficient : leftCode.localeCompare(rightCode);
-            })[0]?.[0];
-          if (!rectificationOpening && creditLots.length === 0 && previousFree.isPositive()) {
-            // Fallback de migración para el ledger anterior a TaxCreditLot.
-            // Se concentra en una única jurisdicción; nunca se distribuye ni
-            // compensa contra deudas de las restantes.
-            unscopedPrevious = unscopedPrevious.plus(previousFree);
-          }
-          if (primaryJurisdiction && unscopedPrevious.isPositive()) {
-            previousCreditByJurisdiction[primaryJurisdiction] = new Prisma.Decimal(
-              previousCreditByJurisdiction[primaryJurisdiction] ?? "0",
-            )
-              .plus(unscopedPrevious)
-              .toString();
-          }
-          const declaredWithholding = withholdings.filter((w) => w.jurisdictionId);
-          const declaredPerception = perceptions.filter((p) => p.jurisdictionId);
-          if (allocationScoped) {
-            for (const allocation of inputAllocations) {
-              if (!allocation.jurisdictionId) continue;
-              const jurisdiction = allocationJurisdictionById.get(allocation.jurisdictionId);
-              if (!jurisdiction) continue;
-              if (allocation.sourceType === "WITHHOLDING") {
-                withholdingByJurisdiction[jurisdiction] = (
-                  withholdingByJurisdiction[jurisdiction] ?? new Prisma.Decimal(0)
-                ).plus(allocation.amount);
-              } else {
-                perceptionByJurisdiction[jurisdiction] = (
-                  perceptionByJurisdiction[jurisdiction] ?? new Prisma.Decimal(0)
-                ).plus(allocation.amount);
-              }
-            }
-          } else if (declaredWithholding.length > 0 || declaredPerception.length > 0) {
-            for (const w of declaredWithholding) {
-              const j = allocationJurisdictionById.get(w.jurisdictionId!);
-              if (!j) continue;
-              withholdingByJurisdiction[j] = (withholdingByJurisdiction[j] ?? new Prisma.Decimal(0)).plus(w.amount);
-            }
-            for (const p of declaredPerception) {
-              const j = allocationJurisdictionById.get(p.jurisdictionId!);
-              if (!j) continue;
-              perceptionByJurisdiction[j] = (perceptionByJurisdiction[j] ?? new Prisma.Decimal(0)).plus(p.amount);
-            }
-          } else {
-            if (primaryJurisdiction) {
-              withholdingByJurisdiction[primaryJurisdiction] = withholdingTotal;
-              perceptionByJurisdiction[primaryJurisdiction] = perceptionTotal;
-            }
-          }
-          result = calculateCm03({
-            engineVersion: activeVersion.engineVersion,
-            period: periodRange,
-            facts: facts as TaxFact[],
-            rules,
-            incomeByActivity,
-            coefficients,
-            credits: {
-              withholdingByJurisdiction,
-              perceptionByJurisdiction,
-            },
-            cmBalances: { previousCreditByJurisdiction },
-          });
-          break;
-        }
-        case MONOTRIBUTO_ENGINE_VERSION: {
-          // --- Monotributo: cuota por categoría ---
-          const profile = await tx.taxpayerProfileVersion.findFirst({
-            where: { firmId: ctx.firmId, clientId: input.clientId, status: "ACTIVE" },
-            orderBy: { version: "desc" },
-          });
-          const category = profile?.monotributoCategory ?? "A";
-          const feeByCategory: Record<string, string> = {};
-          for (const r of rateRules) {
-            if (r.concept.startsWith("CUOTA_")) {
-              // La cuota es un importe; se guarda en minAmount (Decimal(20,4)).
-              feeByCategory[r.concept.slice(6)] = (r.minAmount ?? r.rate)?.toString() ?? "0";
-            }
-          }
-          // Pagos ya registrados del período (se deducen de la cuota).
-          const periodPayments = await tx.taxPayment.aggregate({
-            where: {
-              firmId: ctx.firmId,
-              clientId: input.clientId,
-              status: "PAID",
-              paidAt: { gte: period.startDate, lte: period.endDate },
-            },
-            _sum: { amount: true },
-          });
-          result = calculateMonotributo({
-            engineVersion: MONOTRIBUTO_ENGINE_VERSION,
-            period: periodRange,
-            facts: facts as TaxFact[],
-            rules,
-            category,
-            parameters: { monthlyFeeByCategory: feeByCategory },
-            payments: {
-              paid: periodPayments._sum.amount ?? new Prisma.Decimal(0),
-            },
-          });
-          break;
-        }
-        case VAT_ENGINE_VERSION: {
-          // --- IVA responsable inscripto legacy explícito ---
-          result = calculateVat({
-            engineVersion: VAT_ENGINE_VERSION,
             period: periodRange,
             facts: facts as TaxFact[],
             rules,
@@ -1286,15 +1328,16 @@ export class SettlementService {
               technicalPrevious,
               freeAvailabilityPrevious: previousFree,
             },
-          });
-          break;
-        }
-        default:
-          throw new SettlementError(
-            "UNSUPPORTED_ENGINE_VERSION",
-            `No hay despacho implementado para el motor fiscal "${activeVersion.engineVersion}"; no se aplicó un motor alternativo.`,
-          );
-      }
+          }),
+        "iibb-local-tuc": async () => iibbTuc(true),
+        "iibb-local-tuc-legacy": async () => iibbTuc(false),
+        "iibb-cm-art2": async () => cm03(),
+        "iibb-cm-art2-legacy": async () => cm03(),
+        "tem-smt": async () => temSmt(),
+        "tem-smt-legacy": async () => temSmt(),
+        monotributo: async () => monotributo(),
+      };
+      const result = await calculators[engineKey]();
 
       const totals: Record<string, string> = { ...result.subtotals };
       const lines = result.lines.map((l, i) => ({
@@ -1920,9 +1963,12 @@ export class SettlementService {
       });
       if (!settlement) throw new SettlementError("SETTLEMENT_NOT_FOUND", "Liquidación no encontrada");
       assertSettlementMatchesObligation(settlement, o);
-      const isMonotributoAdvance =
-        settlement.status !== "FINALIZED" && settlement.engineVersion.startsWith("ar-monotributo-");
-      if (settlement.status !== "FINALIZED" && !isMonotributoAdvance) {
+      // El anticipo es una capacidad de la familia del motor (P2, corte 3),
+      // no un prefijo del texto `engineVersion`.
+      const settlementEngine = await resolveSettlementTaxEngine(tx, settlement);
+      const allowsAdvancePayment = settlementEngine?.family.allowsAdvancePayment ?? false;
+      const isAdvancePayment = settlement.status !== "FINALIZED" && allowsAdvancePayment;
+      if (settlement.status !== "FINALIZED" && !isAdvancePayment) {
         throw new SettlementError(
           "SETTLEMENT_IMMUTABLE",
           "El pago exige una liquidación finalizada; sólo Monotributo admite anticipos de cálculo",
@@ -1971,7 +2017,7 @@ export class SettlementService {
             orderBy: { createdAt: "desc" },
           })
         : null;
-      if (!isMonotributoAdvance && isLate && !interestSnapshot) {
+      if (!isAdvancePayment && isLate && !interestSnapshot) {
         throw new SettlementError(
           "INTEREST_SNAPSHOT_REQUIRED",
           "Antes de registrar un pago vencido calculá la mora para la misma fecha",
@@ -1981,17 +2027,17 @@ export class SettlementService {
         (interestSnapshot?.amount ?? new Prisma.Decimal(0)).minus(interestPaidBefore),
         0,
       );
-      const allowed = isMonotributoAdvance ? amount : principalDue.plus(interestDue);
-      if (!isMonotributoAdvance && amount.greaterThan(allowed.plus("0.01"))) {
+      const allowed = isAdvancePayment ? amount : principalDue.plus(interestDue);
+      if (!isAdvancePayment && amount.greaterThan(allowed.plus("0.01"))) {
         throw new SettlementError(
           "OVERPAYMENT",
           `El pago excede capital más mora pendientes (${allowed.toFixed(2)})`,
         );
       }
-      const principalAmount = isMonotributoAdvance
+      const principalAmount = isAdvancePayment
         ? amount
         : Prisma.Decimal.min(amount, principalDue);
-      const interestAmount = isMonotributoAdvance
+      const interestAmount = isAdvancePayment
         ? new Prisma.Decimal(0)
         : amount.minus(principalAmount);
       const payment = await tx.taxPayment.create({
@@ -2013,7 +2059,7 @@ export class SettlementService {
 
       // Estado de la obligación según lo exigido vs pagado.
       let paidStatus: "PARTIALLY_PAID" | "PAID" = "PARTIALLY_PAID";
-      if (!isMonotributoAdvance) {
+      if (!isAdvancePayment) {
         const paid = await tx.taxPayment.aggregate({
           where: { obligationId: o.id, status: "PAID" },
           _sum: { principalAmount: true, interestAmount: true },
@@ -2134,7 +2180,7 @@ export class SettlementService {
    */
   private async rollForwardClosingCredits(
     tx: Tx,
-    settlement: { id: string; firmId: string; clientId: string; taxTypeId: string; regimeId: string; jurisdictionId: string; periodId: string; engineVersion: string; version: number; supersedesId: string | null; totals: Prisma.JsonValue | null },
+    settlement: { id: string; firmId: string; clientId: string; taxTypeId: string; regimeId: string; jurisdictionId: string; periodId: string; ruleVersionId: string | null; engineVersion: string; version: number; supersedesId: string | null; totals: Prisma.JsonValue | null },
     userId: string,
   ) {
     const currentPeriod = await tx.taxPeriod.findUniqueOrThrow({
@@ -2178,6 +2224,10 @@ export class SettlementService {
     }
     const existingClosing = await tx.taxCreditLot.findFirst({ where: { sourceSettlementId: settlement.id } });
     if (existingClosing) return;
+    // El arrastre se resuelve por capacidad de la familia del motor (P2,
+    // corte 3): CM03 cierra por jurisdicción; el resto, por tipo de saldo.
+    const closingEngine = await resolveSettlementTaxEngine(tx, settlement);
+    const closesByJurisdiction = closingEngine?.family.closesByJurisdiction ?? false;
     const totals = (settlement.totals ?? {}) as Record<string, string>;
     const eligiblePeriodIds = await tx.taxPeriod.findMany({
       where: {
@@ -2199,16 +2249,14 @@ export class SettlementService {
             { periodId: { in: eligiblePeriodIds.map((item) => item.id) } },
           ],
           AND: {
-            OR:
-              settlement.engineVersion === CM03_ENGINE_VERSION ||
-              settlement.engineVersion === CM03_LEGACY_ENGINE_VERSION
-                ? [{ regimeId: settlement.regimeId }, { regimeId: null }]
-                : [
-                    { regimeId: settlement.regimeId, jurisdictionId: settlement.jurisdictionId },
-                    { regimeId: settlement.regimeId, jurisdictionId: null },
-                    { regimeId: null, jurisdictionId: settlement.jurisdictionId },
-                    { regimeId: null, jurisdictionId: null },
-                  ],
+            OR: closesByJurisdiction
+              ? [{ regimeId: settlement.regimeId }, { regimeId: null }]
+              : [
+                  { regimeId: settlement.regimeId, jurisdictionId: settlement.jurisdictionId },
+                  { regimeId: settlement.regimeId, jurisdictionId: null },
+                  { regimeId: null, jurisdictionId: settlement.jurisdictionId },
+                  { regimeId: null, jurisdictionId: null },
+                ],
           },
         },
         include: { movements: true },
@@ -2281,10 +2329,7 @@ export class SettlementService {
       await replaceKind("IVA_LIBRE", totals["SALDO_LIBRE_AFTER"] ?? "0");
       return;
     }
-    if (
-      settlement.engineVersion === CM03_ENGINE_VERSION ||
-      settlement.engineVersion === CM03_LEGACY_ENGINE_VERSION
-    ) {
+    if (closesByJurisdiction) {
       const closingByJurisdiction = Object.entries(totals)
         .filter(([key]) => key.startsWith("SALDO_A_FAVOR_") && key !== "SALDO_A_FAVOR")
         .sort(([left], [right]) => left.localeCompare(right));

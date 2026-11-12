@@ -122,15 +122,19 @@ async function setupMasters() {
       update: {},
       create: { code: "IVA", name: "IVA" },
     });
+    // La familia de cálculo la siembra la migración P2 (corte 2a); el régimen
+    // de la prueba se asigna a VAT_RI como en los datos reales.
+    const vatFamily = await tx.calcFamily.findUniqueOrThrow({ where: { key: "VAT_RI" } });
     const ri = await tx.taxRegime.upsert({
       where: { code: "RI-SET" },
-      update: {},
+      update: { calcFamilyId: vatFamily.id },
       create: {
         code: "RI-SET",
         name: "RI Sett",
         taxTypeId: iva.id,
         jurisdictionId: nacion.id,
         authorityId: arca.id,
+        calcFamilyId: vatFamily.id,
       },
     });
     return { nacion, arca, iva, ri };
@@ -466,6 +470,49 @@ describe("G3-1 cobertura y cálculo determinista", () => {
       code: "UNSUPPORTED_ENGINE_VERSION",
       message: expect.stringContaining("ar-iibb-cm-art2-v1.1.0"),
     });
+  });
+
+  it("una versión retirada sin engineId sigue calculando por respaldo de texto (R4)", async () => {
+    await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      const pack = await tx.taxRulePack.findUniqueOrThrow({ where: { code: "VAT_SET_V1" } });
+      await tx.taxRuleVersion.updateMany({
+        where: { packId: pack.id },
+        data: { status: "RETIRED", engineId: null },
+      });
+    });
+    await createApprovedVouchers();
+
+    const { settlement } = await settlements.calculate(ctxOwner, calculateParams());
+    expect(settlement.status).toBe("CALCULATED");
+    expect(settlement.engineVersion).toBe("ar-vat-ri-v1.0.0");
+    const totals = settlement.totals as Record<string, string>;
+    expect(totals["DEBITO_FISCAL"]).toBe("42000.00");
+    expect(totals["CREDITO_FISCAL"]).toBe("8400.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("33600.00");
+  });
+
+  it("despacha por engineId aunque el texto de la versión no coincida", async () => {
+    const legacyVatEngine = await prisma.taxEngine.findUniqueOrThrow({
+      where: { engineKey: "vat-ri-legacy" },
+    });
+    await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      const pack = await tx.taxRulePack.findUniqueOrThrow({ where: { code: "VAT_SET_V1" } });
+      await tx.taxRuleVersion.updateMany({
+        where: { packId: pack.id },
+        data: { engineId: legacyVatEngine.id, engineVersion: "ar-iibb-cm-art2-v1.1.0" },
+      });
+    });
+    await createApprovedVouchers();
+
+    // Si despachara por el texto, el motor CM03 o la compatibilidad vieja
+    // habrían bloqueado. El id manda: corre el calculador VAT legacy, que
+    // informa su propia versión.
+    const { settlement } = await settlements.calculate(ctxOwner, calculateParams());
+    expect(settlement.status).toBe("CALCULATED");
+    expect(settlement.engineVersion).toBe("ar-vat-ri-v1.0.0");
+    const totals = settlement.totals as Record<string, string>;
+    expect(totals["DEBITO_FISCAL"]).toBe("42000.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("33600.00");
   });
 
   it("coverage reporta entradas y estado", async () => {
@@ -1384,6 +1431,27 @@ describe("G3-5 presentación, pago y crédito", () => {
         amount: "5000",
       }),
     ).rejects.toThrow(SettlementError);
+  });
+
+  it("el anticipo se decide por capacidad de la familia, no por el prefijo del texto", async () => {
+    await createApprovedVouchers();
+    const { settlement } = await settlements.calculate(ctxPreparer, defaultParams());
+    // Texto con prefijo de Monotributo sobre un motor IVA: si el anticipo se
+    // decidiera por el prefijo, el pago se aceptaría. La capacidad VAT_RI lo
+    // rechaza porque la liquidación no está finalizada.
+    await prisma.taxSettlement.update({
+      where: { id: settlement.id },
+      data: { engineVersion: "ar-monotributo-v1.0.0" },
+    });
+    await expect(
+      settlements.recordPayment(ctxOwner, {
+        obligationId,
+        settlementId: settlement.id,
+        paidAt: "2026-01-15",
+        amount: "1000",
+        method: "DEBITO",
+      }),
+    ).rejects.toMatchObject({ code: "SETTLEMENT_IMMUTABLE" });
   });
 });
 
