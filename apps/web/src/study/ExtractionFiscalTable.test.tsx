@@ -315,4 +315,39 @@ describe("ExtractionFiscalTable", () => {
     expect(screen.queryByRole("status", { name: "Estado del documento" })).toBeNull();
     expect(rowForField(table, "Percepción – sin clasificar")[2]!.textContent).toBe("leído");
   });
+
+  it("muestra la corrección efectiva y distingue los campos cargados a mano", () => {
+    renderTable({
+      voucher: null,
+      fields: [
+        {
+          id: "field-total-corrected",
+          key: "totalAmount",
+          rawValue: "100",
+          normalizedValue: "100",
+          correction: "120 sin formato",
+          method: "EMBEDDED_TEXT",
+          confidence: 0.9,
+          status: "CORRECTED",
+          reason: null,
+        },
+        {
+          id: "field-issuer-manual",
+          key: "issuerTaxId",
+          rawValue: null,
+          normalizedValue: null,
+          correction: "dato cargado",
+          method: "HUMAN",
+          confidence: 0,
+          status: "CORRECTED",
+          reason: null,
+        },
+      ],
+    });
+    const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+
+    expect(rowForField(table, "Total")[1]!.textContent).toBe("120 sin formato");
+    expect(rowForField(table, "CUIT emisor")[1]!.textContent).toBe("dato cargado");
+    expect(rowForField(table, "CUIT emisor")[2]!.textContent).toBe("cargado a mano");
+  });
 });

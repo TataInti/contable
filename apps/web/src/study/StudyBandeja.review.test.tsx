@@ -311,4 +311,116 @@ describe("StudyBandeja — revisión de extracción", () => {
     );
     expect(screen.queryByRole("note")).toBeNull();
   });
+
+  it("guarda en bloque, recarga del servidor y muestra el dato manual antes de habilitar Aprobar", async () => {
+    Object.assign(extractionFixture, {
+      voucherData: null,
+      fields: [],
+      reviewReason: "CUSTOMER_DATA_EXTRACTION_DISABLED",
+      reviewIssues: [{ reason: "CUSTOMER_DATA_EXTRACTION_DISABLED", sourcePath: null }],
+    });
+    let persistedFields: {
+      id: string;
+      key: string;
+      rawValue: string | null;
+      normalizedValue: string | null;
+      correction: string | null;
+      method: string;
+      confidence: number;
+      status: string;
+      reason: string | null;
+    }[] = [];
+    vi.mocked(api.get).mockImplementation(((path: string) => {
+      if (path.endsWith("/documents")) return Promise.resolve([documentFixture]);
+      if (path.endsWith("/documents/document-a/extraction"))
+        return Promise.resolve({ ...structuredClone(extractionFixture), fields: structuredClone(persistedFields) });
+      if (path.endsWith("/documents/document-a")) return Promise.resolve(documentFixture);
+      return Promise.resolve([]);
+    }) as never);
+    vi.mocked(api.put).mockImplementation((async (_path: string, body: { fields: { key: string; value: string }[] }) => {
+      persistedFields = body.fields.map((field, index) => ({
+        id: `field-manual-${index}`,
+        key: field.key,
+        rawValue: null,
+        normalizedValue: null,
+        correction: field.value,
+        method: "HUMAN",
+        confidence: 0,
+        status: "CORRECTED",
+        reason: null,
+      }));
+      return { status: "NEEDS_REVIEW", savedCount: body.fields.length, addedCount: body.fields.length };
+    }) as never);
+
+    await openExtraction();
+    const loadButtons = screen.getAllByRole("button", { name: "Cargar datos a mano" });
+    expect(loadButtons).toHaveLength(2);
+    fireEvent.click(loadButtons[0]!);
+    const dialog = screen.getByRole("dialog", { name: "Cargar datos a mano" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }), {
+      target: { value: "totalAmount" },
+    });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), {
+      target: { value: "  importe libre  " },
+    });
+    const extractionReadsBeforeSave = vi.mocked(api.get).mock.calls.filter(([path]) =>
+      path.endsWith("/documents/document-a/extraction"),
+    ).length;
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByText("Datos guardados: 1 campo.")).toBeTruthy();
+    await waitFor(() => {
+      const extractionReadsAfterSave = vi.mocked(api.get).mock.calls.filter(([path]) =>
+        path.endsWith("/documents/document-a/extraction"),
+      ).length;
+      expect(extractionReadsAfterSave).toBeGreaterThan(extractionReadsBeforeSave);
+      expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText("importe libre")).toBeTruthy();
+      expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText("cargado a mano")).toBeTruthy();
+      expect((screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled).toBe(false);
+    });
+    expect(api.put).toHaveBeenCalledWith(
+      "/firms/firm-a/clients/client-a/extractions/extraction-a/fields",
+      { fields: [{ key: "totalAmount", value: "importe libre" }] },
+    );
+  });
+
+  it("mantiene el modal y los datos escritos cuando falla el guardado manual", async () => {
+    Object.assign(extractionFixture, {
+      voucherData: null,
+      fields: [],
+      reviewReason: "CUSTOMER_DATA_EXTRACTION_DISABLED",
+      reviewIssues: [{ reason: "CUSTOMER_DATA_EXTRACTION_DISABLED", sourcePath: null }],
+    });
+    vi.mocked(api.put).mockRejectedValue(new Error("Falla de red"));
+
+    await openExtraction();
+    fireEvent.click(screen.getAllByRole("button", { name: "Cargar datos a mano" })[0]!);
+    const dialog = screen.getByRole("dialog", { name: "Cargar datos a mano" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }), {
+      target: { value: "totalAmount" },
+    });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), {
+      target: { value: "borrador conservado" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar" }));
+
+    expect(await within(dialog).findByRole("alert")).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Cargar datos a mano" })).toBeTruthy();
+    expect((within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }) as HTMLInputElement).value).toBe("borrador conservado");
+    expect(within(dialog).getByRole("button", { name: "Guardar" })).toBeTruthy();
+  });
+
+  it("oculta la carga manual sin el permiso document.review", async () => {
+    Object.assign(extractionFixture, {
+      voucherData: null,
+      fields: [],
+      reviewReason: "CUSTOMER_DATA_EXTRACTION_DISABLED",
+      reviewIssues: [{ reason: "CUSTOMER_DATA_EXTRACTION_DISABLED", sourcePath: null }],
+    });
+    contextMock.current = { ...contextMock.current, capabilities: new Set(["client.read"]) };
+
+    await openExtraction();
+
+    expect(screen.queryByRole("button", { name: "Cargar datos a mano" })).toBeNull();
+  });
 });

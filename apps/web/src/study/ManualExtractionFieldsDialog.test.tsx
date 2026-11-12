@@ -154,6 +154,12 @@ describe("ManualExtractionFieldsDialog", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
+  it("Escape cierra directamente cuando no hay cambios", () => {
+    const { onClose } = renderDialog();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("al cancelar con cambios permite seguir editando o descartar", () => {
     const { onClose } = renderDialog();
     fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 1" }), {
