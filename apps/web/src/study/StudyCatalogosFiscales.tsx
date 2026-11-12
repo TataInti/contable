@@ -1,7 +1,12 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field } from "@contable/design-system";
-import { ACTIVITY_CODE_PATTERN, normalizeActivityCode, type EconomicActivityCodeChange } from "@contable/contracts";
+import {
+  ACTIVITY_CODE_PATTERN,
+  normalizeActivityCode,
+  type CalcFamilyOption,
+  type EconomicActivityCodeChange,
+} from "@contable/contracts";
 import { ApiError, api, type FiscalJurisdiction, type FiscalTaxType } from "../lib/api";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useClientContext } from "../context/ClientContext";
@@ -48,6 +53,7 @@ interface TaxRegimeRow {
   id: string;
   code: string;
   name: string;
+  calcFamilyId?: string | null;
   isActive: boolean;
   origin?: "REFERENCE" | "UI";
   createdByFirmId?: string | null;
@@ -66,6 +72,7 @@ interface RegimeForm {
   code: string;
   name: string;
   taxTypeId: string;
+  calcFamilyId: string;
   jurisdictionId: string;
   authorityId: string;
 }
@@ -80,6 +87,7 @@ interface JurisdictionForm {
 interface TaxTypeForm {
   code: string;
   name: string;
+  defaultFamilyId: string;
 }
 
 interface CatalogActivityRow {
@@ -131,7 +139,7 @@ const emptyJurisdictionForm: JurisdictionForm = {
   parentId: "",
 };
 
-const emptyTaxTypeForm: TaxTypeForm = { code: "", name: "" };
+const emptyTaxTypeForm: TaxTypeForm = { code: "", name: "", defaultFamilyId: "" };
 
 function shortDate(value: string | null) {
   return value ? new Date(value).toLocaleDateString("es-AR") : "—";
@@ -193,6 +201,18 @@ function MutationError({ error }: { error: unknown }) {
       {error instanceof Error ? error.message : "Ocurrió un error inesperado."}
     </p>
   );
+}
+
+function apiFieldIssue(error: unknown, field: string): string | undefined {
+  if (!(error instanceof ApiError)) return undefined;
+  const details = error.details?.details;
+  if (!Array.isArray(details)) return undefined;
+  const issue = details.find((candidate) => {
+    if (typeof candidate !== "object" || candidate === null) return false;
+    const path = (candidate as { path?: unknown }).path;
+    return Array.isArray(path) && path.some((part) => part === field);
+  }) as { message?: unknown } | undefined;
+  return typeof issue?.message === "string" ? issue.message : undefined;
 }
 
 function InspectorActions({
@@ -293,6 +313,7 @@ export function StudyCatalogosFiscales() {
     code: "",
     name: "",
     taxTypeId: "",
+    calcFamilyId: "",
     jurisdictionId: "",
     authorityId: "",
   });
@@ -317,6 +338,36 @@ export function StudyCatalogosFiscales() {
     queryFn: () => api.get<TaxRegimeRow[]>("/tax/regimes?includeInactive=true"),
     enabled: Boolean(firmId && capabilities.has("tax.rules.read")),
   });
+  const calcFamiliesQuery = useQuery({
+    queryKey: ["tax-calc-families", firmId],
+    queryFn: () => api.get<CalcFamilyOption[]>("/tax/calc-families"),
+    enabled: Boolean(firmId && capabilities.has("tax.rules.read")),
+  });
+  const deepLinkedRegimeId = useRef<string | null>(
+    new URLSearchParams(window.location.search).get("editRegime"),
+  );
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandled.current || !deepLinkedRegimeId.current || regimesQuery.isLoading) return;
+    const row = regimesQuery.data?.find((regime) => regime.id === deepLinkedRegimeId.current);
+    if (!row) {
+      deepLinkHandled.current = true;
+      return;
+    }
+    deepLinkHandled.current = true;
+    setTab("regimes");
+    setEditingRegime(row);
+    setDuplicateOfId(null);
+    setRegimeForm({
+      code: row.code,
+      name: row.name,
+      taxTypeId: row.taxType.id,
+      calcFamilyId: row.calcFamilyId ?? row.taxType.defaultFamilyId ?? "",
+      jurisdictionId: row.jurisdiction.id,
+      authorityId: row.authority.id,
+    });
+    setDrawer("regime-edit");
+  }, [regimesQuery.data, regimesQuery.isLoading]);
   // La administración del catálogo necesita también las desactivadas:
   // `includeInactive=true` es el parámetro acordado con el servidor.
   const activitiesQuery = useQuery({
@@ -379,6 +430,7 @@ export function StudyCatalogosFiscales() {
         code: regimeForm.code.trim(),
         name: regimeForm.name.trim(),
         taxTypeId: regimeForm.taxTypeId,
+        calcFamilyId: regimeForm.calcFamilyId,
         jurisdictionId: regimeForm.jurisdictionId,
         authorityId: regimeForm.authorityId,
         ...(duplicateOfId ? { duplicateOfId } : {}),
@@ -391,6 +443,7 @@ export function StudyCatalogosFiscales() {
         code: "",
         name: "",
         taxTypeId: "",
+        calcFamilyId: "",
         jurisdictionId: "",
         authorityId: "",
       });
@@ -402,6 +455,7 @@ export function StudyCatalogosFiscales() {
       code: regimeForm.code.trim(),
       name: regimeForm.name.trim(),
       taxTypeId: regimeForm.taxTypeId,
+      calcFamilyId: regimeForm.calcFamilyId || null,
       jurisdictionId: regimeForm.jurisdictionId,
       authorityId: regimeForm.authorityId,
     }),
@@ -464,6 +518,7 @@ export function StudyCatalogosFiscales() {
       api.post<TaxTypeOption>("/tax/types", {
         code: taxTypeForm.code.trim(),
         name: taxTypeForm.name.trim(),
+        ...(taxTypeForm.defaultFamilyId ? { defaultFamilyId: taxTypeForm.defaultFamilyId } : {}),
         ...(duplicateOfId ? { duplicateOfId } : {}),
       }),
     onSuccess: () => {
@@ -580,6 +635,7 @@ export function StudyCatalogosFiscales() {
 
   const jurisdictions = jurisdictionsQuery.data ?? [];
   const taxTypes = taxTypesQuery.data ?? [];
+  const calcFamilies = calcFamiliesQuery.data ?? [];
   const selectableJurisdictions = jurisdictions.filter((row) => row.isActive);
   const selectableTaxTypes = taxTypes.filter((row) => row.isActive);
   const jurisdictionLabel = (jurisdiction: JurisdictionOption) => {
@@ -722,7 +778,7 @@ export function StudyCatalogosFiscales() {
   const openTaxTypeEdit = (row: TaxTypeOption) => {
     setEditingTaxType(row);
     setDuplicateOfId(null);
-    setTaxTypeForm({ code: row.code, name: row.name });
+    setTaxTypeForm({ code: row.code, name: row.name, defaultFamilyId: row.defaultFamilyId ?? "" });
     setMasterDrawer("tax-type-edit");
   };
 
@@ -739,6 +795,7 @@ export function StudyCatalogosFiscales() {
       code: row.code,
       name: row.name,
       taxTypeId: row.taxType.id,
+      calcFamilyId: row.calcFamilyId ?? row.taxType.defaultFamilyId ?? "",
       jurisdictionId: row.jurisdiction.id,
       authorityId: row.authority.id,
     });
@@ -757,7 +814,11 @@ export function StudyCatalogosFiscales() {
   };
   const duplicateTaxType = (row: TaxTypeOption) => {
     setDuplicateOfId(row.id);
-    setTaxTypeForm({ code: suggestedCode(row.code, taxTypes.map((item) => item.code)), name: row.name });
+    setTaxTypeForm({
+      code: suggestedCode(row.code, taxTypes.map((item) => item.code)),
+      name: row.name,
+      defaultFamilyId: row.defaultFamilyId ?? "",
+    });
     setMasterDrawer("tax-type-create");
   };
   const duplicateAuthority = (row: TaxAuthorityRow) => {
@@ -775,6 +836,7 @@ export function StudyCatalogosFiscales() {
       code: suggestedCode(row.code, regimes.map((item) => item.code)),
       name: row.name,
       taxTypeId: row.taxType.id,
+      calcFamilyId: row.calcFamilyId ?? row.taxType.defaultFamilyId ?? "",
       jurisdictionId: row.jurisdiction.id,
       authorityId: row.authority.id,
     });
@@ -1860,7 +1922,7 @@ export function StudyCatalogosFiscales() {
             value={regimeForm.code}
             onChange={(event) => setRegimeForm({ ...regimeForm, code: event.target.value })}
             error={codeConflict(editingRegime ? updateRegime.error : createRegime.error)}
-            hint={editingRegime ? "Hoy, el código del régimen define las excepciones del motor, la fuente de importación y el permiso. Más adelante podrás elegir cada decisión por separado." : undefined}
+            hint={editingRegime ? "El código identifica el régimen. La familia de cálculo y la fuente de importación se configuran por separado." : undefined}
             maxLength={40}
             required
           />
@@ -1878,7 +1940,15 @@ export function StudyCatalogosFiscales() {
               id="regime-tax-type"
               className="ds-field__input"
               value={regimeForm.taxTypeId}
-              onChange={(event) => setRegimeForm({ ...regimeForm, taxTypeId: event.target.value })}
+              onChange={(event) => {
+                const taxTypeId = event.target.value;
+                const selectedTaxType = taxTypes.find((item) => item.id === taxTypeId);
+                setRegimeForm({
+                  ...regimeForm,
+                  taxTypeId,
+                  calcFamilyId: selectedTaxType?.defaultFamilyId ?? "",
+                });
+              }}
               required
             >
               <option value="">Seleccioná un impuesto…</option>
@@ -1888,6 +1958,35 @@ export function StudyCatalogosFiscales() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="ds-field">
+            <label className="ds-field__label" htmlFor="regime-calc-family">Familia de cálculo</label>
+            <select
+              id="regime-calc-family"
+              className="ds-field__input"
+              value={regimeForm.calcFamilyId}
+              onChange={(event) => setRegimeForm({ ...regimeForm, calcFamilyId: event.target.value })}
+              required
+            >
+              <option value="">Seleccioná una familia…</option>
+              {selectionOptions<CalcFamilyOption>(calcFamilies, regimeForm.calcFamilyId).map((family) => (
+                <option key={family.id} value={family.id} disabled={!family.isActive}>
+                  {family.label}{!family.isActive ? " (oculta)" : ""}
+                </option>
+              ))}
+            </select>
+            <p className="muted-copy">La familia determina las opciones de cálculo de este régimen.</p>
+            {calcFamiliesQuery.isLoading ? <p className="muted-copy">Cargando familias…</p> : null}
+            {calcFamiliesQuery.isError ? (
+              <p className="form-error" role="alert">
+                No pudimos cargar las familias de cálculo. <Button type="button" variant="ghost" size="sm" onClick={() => void calcFamiliesQuery.refetch()}>Reintentar</Button>
+              </p>
+            ) : null}
+            {apiFieldIssue(editingRegime ? updateRegime.error : createRegime.error, "calcFamilyId") ? (
+              <p className="form-error" role="alert">
+                {apiFieldIssue(editingRegime ? updateRegime.error : createRegime.error, "calcFamilyId")}
+              </p>
+            ) : null}
           </div>
           <div className="ds-field">
             <label className="ds-field__label" htmlFor="regime-jurisdiction">Jurisdicción</label>
@@ -1946,6 +2045,7 @@ export function StudyCatalogosFiscales() {
                 !regimeForm.code.trim() ||
                 !regimeForm.name.trim() ||
                 !regimeForm.taxTypeId ||
+                !regimeForm.calcFamilyId ||
                 !regimeForm.jurisdictionId ||
                 !regimeForm.authorityId
               }
@@ -2451,6 +2551,30 @@ export function StudyCatalogosFiscales() {
             maxLength={160}
             required
           />
+          <div className="ds-field">
+            <label className="ds-field__label" htmlFor="tax-type-default-family">Familia por defecto</label>
+            <select
+              id="tax-type-default-family"
+              className="ds-field__input"
+              value={taxTypeForm.defaultFamilyId}
+              onChange={(event) => setTaxTypeForm({ ...taxTypeForm, defaultFamilyId: event.target.value })}
+            >
+              <option value="">Sin familia predeterminada</option>
+              {calcFamilies.filter((family) => family.isActive).map((family) => (
+                <option key={family.id} value={family.id}>{family.label}</option>
+              ))}
+            </select>
+            <p className="muted-copy">Esta familia se propone al crear regímenes; cada régimen puede tener otra.</p>
+            {calcFamiliesQuery.isLoading ? <p className="muted-copy">Cargando familias…</p> : null}
+            {calcFamiliesQuery.isError ? (
+              <p className="form-error" role="alert">
+                No pudimos cargar las familias de cálculo. <Button type="button" variant="ghost" size="sm" onClick={() => void calcFamiliesQuery.refetch()}>Reintentar</Button>
+              </p>
+            ) : null}
+            {apiFieldIssue(createTaxType.error, "defaultFamilyId") ? (
+              <p className="form-error" role="alert">{apiFieldIssue(createTaxType.error, "defaultFamilyId")}</p>
+            ) : null}
+          </div>
           <MutationError error={createTaxType.error} />
           <div className="study-form__actions">
             <Button type="submit" loading={createTaxType.isPending} disabled={!taxTypeForm.code.trim() || !taxTypeForm.name.trim()}>Crear tipo de impuesto</Button>
@@ -2480,7 +2604,7 @@ export function StudyCatalogosFiscales() {
               value={taxTypeForm.code}
               onChange={(event) => setTaxTypeForm({ ...taxTypeForm, code: event.target.value.toUpperCase() })}
               error={codeConflict(updateTaxType.error)}
-              hint="Hoy, el código del impuesto define la familia del motor y la fuente de importación. Más adelante podrás elegir cada decisión por separado."
+              hint="El código identifica el tipo de impuesto. La fuente de importación se configura por separado."
               maxLength={40}
               required
             />

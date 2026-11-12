@@ -213,6 +213,7 @@ export interface FiscalTaxType {
   id: string;
   code: string;
   name: string;
+  defaultFamilyId?: string | null;
   isActive: boolean;
   origin: FiscalCatalogOrigin;
   createdByFirmId: string | null;
