@@ -35,6 +35,24 @@ export function taxEngineDeclaration(engineKey: string): TaxEngineDeclaration | 
   return TAX_ENGINE_DECLARATIONS.find((declaration) => declaration.engineKey === engineKey);
 }
 
+/** Guarda de tipo para claves leídas de la base (por ejemplo `TaxEngine.engineKey`). */
+export function isTaxEngineKey(value: string): value is TaxEngineKey {
+  return TAX_ENGINE_DECLARATIONS.some((declaration) => declaration.engineKey === value);
+}
+
+/**
+ * Respaldo de lectura (R4): versiones históricas sin `engineId` se despachan
+ * por el texto `engineVersion`, que identifica un motor único del registro.
+ * Devuelve `undefined` si el texto no pertenece a ningún motor implementado;
+ * el llamador decide el error.
+ */
+export function taxEngineKeyForVersion(engineVersion: string): TaxEngineKey | undefined {
+  const declaration = TAX_ENGINE_DECLARATIONS.find(
+    (candidate) => candidate.engineVersion === engineVersion,
+  );
+  return declaration?.engineKey;
+}
+
 export function assertTaxEngineCatalogMatchesRegistry(
   rows: readonly TaxEngineCatalogRow[],
 ): void {

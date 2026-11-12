@@ -594,6 +594,59 @@ describe("Fase 4.3 — CM03 artículo 2: workflow maker-checker", () => {
     expect(consumedOpening?.amount.toFixed(2)).toBe("6000.00");
   });
 
+  it("el arrastre por jurisdicción se decide por capacidad de la familia, no por el texto", async () => {
+    await createApprovedVouchersWithLines();
+    const jurisdictions = await prisma.jurisdiction.findMany({
+      where: { code: { in: ["TUC", "CBA"] } },
+    });
+    const tucId = jurisdictions.find((item) => item.code === "TUC")!.id;
+    const openingLot = await prisma.taxCreditLot.create({
+      data: {
+        firmId: FIRM_CM,
+        clientId: CLIENT_CM,
+        taxTypeId,
+        regimeId,
+        jurisdictionId: tucId,
+        periodId,
+        kind: "SALDO_A_FAVOR",
+        originalAmount: new Prisma.Decimal("6000"),
+        reference: "Saldo inicial TUC",
+        verificationStatus: "VERIFIED",
+        verifiedByUserId: REVIEWER_CM,
+        verifiedAt: new Date(),
+        createdByUserId: OWNER_CM,
+      },
+    });
+
+    const { settlement } = await settlements.calculate(ctxPreparer, calculateParams());
+    const totals = settlement.totals as Record<string, string>;
+    expect(totals["SALDO_A_FAVOR_TUC"]).toBe("2400.00");
+
+    // El id del motor manda: si el motor resuelto no cierra por jurisdicción,
+    // el texto CM03 no debe forzar el arrastre por jurisdicción.
+    const legacyVat = await prisma.taxEngine.findUniqueOrThrow({
+      where: { engineKey: "vat-ri-legacy" },
+    });
+    await prisma.taxRuleVersion.update({
+      where: { id: ruleVersionId },
+      data: { engineId: legacyVat.id },
+    });
+
+    await settlements.submitReview(ctxPreparer, settlement.id);
+    await settlements.review(ctxReviewer, settlement.id);
+    await settlements.finalize(ctxReviewer, settlement.id);
+
+    const closingLots = await prisma.taxCreditLot.findMany({
+      where: { sourceSettlementId: settlement.id },
+    });
+    expect(closingLots).toHaveLength(1);
+    expect(closingLots[0]?.kind).toBe("SALDO_A_FAVOR");
+    const consumedOpening = await prisma.taxCreditMovement.findFirst({
+      where: { lotId: openingLot.id, settlementId: settlement.id },
+    });
+    expect(consumedOpening).toBeNull();
+  });
+
   it("submit → review → finalize con revisor distinto", async () => {
     await createApprovedVouchersWithLines();
     const { settlement } = await settlements.calculate(ctxPreparer, calculateParams());

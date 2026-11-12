@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   assertTaxEngineCatalogMatchesRegistry,
+  isTaxEngineKey,
   TAX_ENGINE_DECLARATIONS,
+  taxEngineKeyForVersion,
   TaxEngineRegistryError,
   type TaxEngineCatalogRow,
 } from "./engine-registry.js";
@@ -43,5 +45,16 @@ describe("registro de motores fiscales", () => {
       : row);
 
     expect(() => assertTaxEngineCatalogMatchesRegistry(rows)).toThrow(/sin fila activa \[tem-smt\]/);
+  });
+
+  it("resuelve el respaldo por texto de una versión histórica sin engineId", () => {
+    expect(taxEngineKeyForVersion("ar-iibb-cm-art2-v1.0.0")).toBe("iibb-cm-art2-legacy");
+    expect(taxEngineKeyForVersion("ar-tem-smt-v1.1.0")).toBe("tem-smt");
+    expect(taxEngineKeyForVersion("tax-engine-v1")).toBeUndefined();
+  });
+
+  it("reconoce solo claves declaradas", () => {
+    expect(isTaxEngineKey("monotributo")).toBe(true);
+    expect(isTaxEngineKey("motor-sin-registro")).toBe(false);
   });
 });
