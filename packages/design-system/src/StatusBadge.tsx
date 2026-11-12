@@ -4,6 +4,7 @@ export type StatusBadgeVariant = "plain" | "pill";
 export interface StatusBadgeProps {
   status: string | null | undefined;
   className?: string;
+  label?: string;
   variant?: StatusBadgeVariant;
 }
 
@@ -20,15 +21,18 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   ATTACHED: { label: "Adjuntado", tone: "ok" },
   CLEAN: { label: "Validado", tone: "ok" },
   COMPLETED: { label: "Completado", tone: "ok" },
+  CONFIGURED: { label: "Configurada", tone: "ok" },
   EXTRACTED: { label: "Extraído", tone: "ok" },
   FILED: { label: "Presentado", tone: "ok" },
   PAID: { label: "Pagado", tone: "ok" },
   POSTED: { label: "Contabilizado", tone: "ok" },
   PUBLISHED: { label: "Publicado", tone: "ok" },
   READY: { label: "Listo", tone: "ok" },
+  RESOLVED: { label: "Resuelto", tone: "ok" },
   REVIEWED: { label: "Revisado", tone: "ok" },
   SUCCEEDED: { label: "Completado", tone: "ok" },
 
+  CHANGES_REQUESTED: { label: "Cambios solicitados", tone: "warn" },
   CLOSING: { label: "En cierre", tone: "warn" },
   CONFLICT: { label: "Con conflicto", tone: "warn" },
   CORRECTED: { label: "Corregido", tone: "warn" },
@@ -36,13 +40,17 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   MISSING: { label: "Faltante", tone: "warn" },
   NEEDS_REVIEW: { label: "Requiere revisión", tone: "warn" },
   ONBOARDING: { label: "En configuración", tone: "warn" },
+  PARTIALLY_PAID: { label: "Pago parcial", tone: "warn" },
   PENDING: { label: "Pendiente", tone: "warn" },
   QUEUED: { label: "En cola", tone: "warn" },
   RETRYING: { label: "Reintentando", tone: "warn" },
   SOFT_CLOSED: { label: "Cierre provisorio", tone: "warn" },
   VALIDATING: { label: "Validando", tone: "warn" },
+  WAITING_INPUTS: { label: "Esperando datos", tone: "warn" },
   WAITING_CLIENT: { label: "Esperando al cliente", tone: "warn" },
+  WARNING: { label: "Aviso", tone: "warn" },
 
+  BLOCKING: { label: "Bloqueante", tone: "danger" },
   DEAD_LETTER: { label: "Requiere intervención", tone: "danger" },
   EXPIRED: { label: "Vencido", tone: "danger" },
   EXTRACTION_FAILED: { label: "Falló la extracción", tone: "danger" },
@@ -56,11 +64,13 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
 
   CALCULATED: { label: "Calculado", tone: "info" },
   GENERATED: { label: "Generado", tone: "info" },
+  INFO: { label: "Informativo", tone: "info" },
   IN_PROGRESS: { label: "En proceso", tone: "info" },
   IN_REVIEW: { label: "En revisión", tone: "info" },
   OPEN: { label: "Abierto", tone: "info" },
   PROCESSING: { label: "Procesando", tone: "info" },
   READY_FOR_REVIEW: { label: "Listo para revisar", tone: "info" },
+  READY_TO_CALCULATE: { label: "Listo para calcular", tone: "info" },
   READY_TO_FILE: { label: "Lista para presentar", tone: "info" },
   RUNNING: { label: "En proceso", tone: "info" },
   SENT: { label: "Enviado", tone: "info" },
@@ -77,6 +87,7 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   INACTIVE: { label: "Inactivo", tone: "muted" },
   NOT_APPLICABLE: { label: "No aplica", tone: "muted" },
   REVERSED: { label: "Revertido", tone: "muted" },
+  RETIRED: { label: "Retirado", tone: "muted" },
   SUPERSEDED: { label: "Reemplazado", tone: "muted" },
 };
 
@@ -101,9 +112,15 @@ export function getStatusBadgeMeta(status: string | null | undefined): StatusBad
   return STATUS_BADGE_CONFIG[normalized] ?? { label: humanizeStatus(normalized), tone: "muted" };
 }
 
-export function StatusBadge({ status, className, variant = "plain" }: StatusBadgeProps) {
+export function StatusBadge({
+  status,
+  className,
+  label: labelOverride,
+  variant = "plain",
+}: StatusBadgeProps) {
   const normalized = normalizeStatus(status);
-  const { label, tone } = getStatusBadgeMeta(normalized);
+  const { label: configuredLabel, tone } = getStatusBadgeMeta(normalized);
+  const label = labelOverride ?? configuredLabel;
   const classes = [
     "status-badge",
     `status-badge--${tone}`,

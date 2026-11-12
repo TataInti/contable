@@ -3,7 +3,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { RulePackValidator } from "./rule-pack-validator.js";
-import { computeLegacyRulesHashSchemaV1, computeRulesHashV2 } from "./rules-hash.js";
+import { computeLegacyRulesHashSchemaV1, computeRulesHashV2, computeRulesHashV3 } from "./rules-hash.js";
 
 /**
  * F2.3: revalidación programada de rule packs.
@@ -180,6 +180,34 @@ describe("F2.3 revalidación de rule packs", () => {
 
     expect(result?.rulesHash).toBe(versionHash);
     expect(result?.issues).toEqual([]);
+  });
+
+  it("revalida v3 y marca un schema de hash desconocido", async () => {
+    const pack = await createActivePack("RV_V3_CANONICAL", false);
+    const version = await prisma.taxRuleVersion.findFirstOrThrow({ where: { packId: pack.id } });
+    const versionHash = computeRulesHashV3({ engineVersion: version.engineVersion });
+    await prisma.taxRuleVersion.update({
+      where: { id: version.id },
+      data: { rulesHashSchemaVersion: 3, rulesHash: versionHash },
+    });
+
+    const results = await runAsRuntime(OWNER_RV, FIRM_RV, () => validator.revalidateAll(ctxOwner));
+    const result = results.find((item) => item.packId === pack.id);
+    expect(result?.rulesHash).toBe(versionHash);
+    expect(result?.issues).toEqual([]);
+
+    await prisma.taxRuleVersion.update({
+      where: { id: version.id },
+      data: { rulesHashSchemaVersion: 99 },
+    });
+    const unsupportedResults = await runAsRuntime(
+      OWNER_RV,
+      FIRM_RV,
+      () => validator.revalidateAll(ctxOwner),
+    );
+    const unsupported = unsupportedResults.find((item) => item.packId === pack.id);
+    expect(unsupported?.rulesHash).toBeNull();
+    expect(unsupported?.issues).toContain("HASH_SCHEMA_UNSUPPORTED");
   });
 
   it("retira un pack ACTIVE sin versión vigente (fail-safe)", async () => {

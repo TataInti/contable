@@ -3,8 +3,10 @@ import { calculateDueDate } from "@contable/tax-engine";
 import {
   computeLegacyRulesHashSchemaV1,
   computeRulesHashV2,
+  computeRulesHashV3,
   RULES_HASH_SCHEMA_VERSION_V1,
   RULES_HASH_SCHEMA_VERSION_V2,
+  RULES_HASH_SCHEMA_VERSION_V3,
 } from "./rules-hash.js";
 import {
   ACTIVITY_CODE_PATTERN,
@@ -1046,7 +1048,7 @@ export class FiscalMasterService {
           const version = await tx.taxRuleVersion.findUnique({
             where: { id: ruleVersionId },
             include: {
-              rateRules: true,
+              rateRules: { include: { kind: true } },
               minimumRules: true,
               bracketRules: true,
               dueDateRules: true,
@@ -1057,8 +1059,12 @@ export class FiscalMasterService {
           await tx.taxRuleVersion.update({
             where: { id: ruleVersionId },
             data: {
-              rulesHash: computeRulesHashV2(version),
-              rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V2,
+              rulesHash: version.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3
+                ? computeRulesHashV3(version)
+                : computeRulesHashV2(version),
+              rulesHashSchemaVersion: version.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3
+                ? RULES_HASH_SCHEMA_VERSION_V3
+                : RULES_HASH_SCHEMA_VERSION_V2,
             },
           });
         }
@@ -1835,7 +1841,7 @@ export class TaxRuleService {
         orderBy: { version: "desc" },
         include: {
           engine: { select: { familyId: true } },
-          rateRules: true,
+          rateRules: { include: { kind: true } },
           minimumRules: true,
           bracketRules: true,
           dueDateRules: true,
@@ -1871,6 +1877,8 @@ export class TaxRuleService {
         );
       }
       const count = await tx.taxRuleVersion.count({ where: { packId: input.packId } });
+      const typedClone = source.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3 ||
+        (source.rateRules.length > 0 && source.rateRules.every((rule) => Boolean(rule.kindId)));
       const version = await tx.taxRuleVersion.create({
         data: {
           packId: input.packId,
@@ -1883,7 +1891,9 @@ export class TaxRuleService {
           engineId: source.engineId,
           engineVersion: source.engineVersion,
           rulesHash: source.rulesHash,
-          rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V2,
+          rulesHashSchemaVersion: typedClone
+            ? RULES_HASH_SCHEMA_VERSION_V3
+            : RULES_HASH_SCHEMA_VERSION_V2,
           supersedesId: source.id,
         },
       });
@@ -1895,6 +1905,10 @@ export class TaxRuleService {
                 concept: rule.concept,
                 ...(rule.activityCode ? { activityCode: rule.activityCode } : {}),
                 ...(rule.jurisdictionId ? { jurisdictionId: rule.jurisdictionId } : {}),
+                ...(rule.kindId ? { kindId: rule.kindId } : {}),
+                ...(rule.activityId ? { activityId: rule.activityId } : {}),
+                ...(rule.categoryCode ? { categoryCode: rule.categoryCode } : {}),
+                isDefault: rule.isDefault,
                 ...(rule.rate ? { rate: rule.rate } : {}),
                 ...(rule.minAmount ? { minAmount: rule.minAmount } : {}),
                 validFrom: new Date(input.validFrom),
@@ -2230,7 +2244,7 @@ export class TaxRuleService {
   async activate(ctx: TenantContext, ruleVersionId: string) {
     return withTenantContext(ctx, async (tx) => {
       const versionInclude = {
-        rateRules: true,
+        rateRules: { include: { kind: true } },
         minimumRules: true,
         bracketRules: true,
         dueDateRules: true,
@@ -2240,6 +2254,13 @@ export class TaxRuleService {
             regime: {
               select: {
                 code: true,
+                calcFamilyId: true,
+                calcFamily: {
+                  select: {
+                    key: true,
+                    allowedRuleKinds: { select: { kindId: true } },
+                  },
+                },
                 taxType: { select: { code: true } },
                 jurisdiction: { select: { code: true } },
               },
@@ -2280,6 +2301,48 @@ export class TaxRuleService {
         taxRegimeEngineScope(v.pack.regime),
         v.engineVersion,
       );
+      if (v.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3) {
+        const family = v.pack.regime.calcFamily;
+        if (!family || !v.pack.regime.calcFamilyId) {
+          throw new FiscalError(
+            "RULE_VERSION_INVALID",
+            "La versión tipada requiere una familia de cálculo para validar sus reglas",
+            ["calcFamilyId"],
+          );
+        }
+        for (const rule of v.rateRules) {
+          if (!rule.kindId || !rule.kind) {
+            throw new FiscalError(
+              "RULE_VERSION_INVALID",
+              `La regla ${rule.id} no tiene un tipo resuelto`,
+              ["rateRules", "kindId"],
+            );
+          }
+          if (!family.allowedRuleKinds.some((allowed) => allowed.kindId === rule.kindId)) {
+            throw new FiscalError(
+              "RULE_VERSION_INVALID",
+              `El tipo ${rule.kind.key} de la regla ${rule.id} no está permitido por la familia ${family.key}`,
+              ["rateRules", "kindId"],
+            );
+          }
+          const missingSubject =
+            (family.key === "IIBB_LOCAL" && rule.kind.key === "RATE" &&
+              !rule.activityId && !rule.isDefault) ||
+            (family.key === "IIBB_CM03" && rule.kind.key === "RATE" &&
+              !rule.jurisdictionId && !rule.isDefault) ||
+            (family.key === "IIBB_CM03" && rule.kind.key === "COEFFICIENT" &&
+              !rule.jurisdictionId) ||
+            (family.key === "MONOTRIBUTO" && rule.kind.key === "FEE" &&
+              !rule.categoryCode);
+          if (missingSubject) {
+            throw new FiscalError(
+              "RULE_VERSION_INVALID",
+              `La regla ${rule.id} (${rule.kind.key}) no tiene el sujeto requerido`,
+              ["rateRules", "activityId", "jurisdictionId", "categoryCode"],
+            );
+          }
+        }
+      }
       if (!v.rulesHash || v.rulesHash.trim() === "") {
         throw new FiscalError("RULE_VERSION_INVALID", "La versión no tiene un hash de reglas calculado.");
       }
@@ -2306,7 +2369,9 @@ export class TaxRuleService {
         ? computeLegacyRulesHashSchemaV1(v)
         : v.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V2
           ? computeRulesHashV2(v)
-          : null;
+          : v.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3
+            ? computeRulesHashV3(v)
+            : null;
       if (computedHash === null) {
         throw new FiscalError(
           "RULES_HASH_SCHEMA_UNSUPPORTED",
@@ -2373,7 +2438,7 @@ export class TaxRuleService {
     const version = await tx.taxRuleVersion.findUnique({
       where: { id: ruleVersionId },
       include: {
-        rateRules: true,
+        rateRules: { include: { kind: true } },
         minimumRules: true,
         bracketRules: true,
         dueDateRules: true,
@@ -2381,11 +2446,14 @@ export class TaxRuleService {
       },
     });
     if (!version) throw new FiscalError("RULE_VERSION_NOT_FOUND", "Versión de regla no encontrada");
+    const isTyped = version.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3;
     return tx.taxRuleVersion.update({
       where: { id: ruleVersionId },
       data: {
-        rulesHash: computeRulesHashV2(version),
-        rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V2,
+        rulesHash: isTyped ? computeRulesHashV3(version) : computeRulesHashV2(version),
+        rulesHashSchemaVersion: isTyped
+          ? RULES_HASH_SCHEMA_VERSION_V3
+          : RULES_HASH_SCHEMA_VERSION_V2,
       },
     });
   }

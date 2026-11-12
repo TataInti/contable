@@ -4,6 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { IngestionService } from "./ingestion-service.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
+import { computeRulesHashV3 } from "./rules-hash.js";
 
 /**
  * Tests de integración IIBB Tucumán local (Puerta 4, Fase 4.1).
@@ -155,6 +156,53 @@ async function setupActiveRules(fx: Awaited<ReturnType<typeof setupMasters>>) {
       ],
     });
     return { pack, version };
+  });
+}
+
+async function enableTypedIibbRules() {
+  const family = await prisma.calcFamily.findUniqueOrThrow({ where: { key: "IIBB_LOCAL" } });
+  const kind = await prisma.taxRuleKind.findUniqueOrThrow({ where: { key: "RATE" } });
+  const activityByCode = new Map<string, string>();
+  for (const code of ["COMERCIO", "SERVICIOS"]) {
+    const activity = await prisma.economicActivity.upsert({
+      where: { code_jurisdictionId: { code, jurisdictionId } },
+      update: {},
+      create: {
+        code,
+        name: `Actividad ${code}`,
+        jurisdictionId,
+        validFrom: new Date("2020-01-01"),
+      },
+    });
+    activityByCode.set(code, activity.id);
+  }
+  await prisma.taxRegime.update({ where: { id: regimeId }, data: { calcFamilyId: family.id } });
+  const rules = await prisma.taxRateRule.findMany({ where: { ruleVersionId } });
+  for (const rule of rules) {
+    const isDefault = rule.concept === "DEFAULT";
+    await prisma.taxRateRule.update({
+      where: { id: rule.id },
+      data: {
+        kindId: kind.id,
+        activityId: isDefault ? null : activityByCode.get(rule.concept) ?? null,
+        isDefault,
+      },
+    });
+  }
+  const version = await prisma.taxRuleVersion.findUniqueOrThrow({
+    where: { id: ruleVersionId },
+    include: {
+      rateRules: { include: { kind: true } },
+      minimumRules: true,
+      bracketRules: true,
+      dueDateRules: true,
+      roundingRules: true,
+    },
+  });
+  const rulesHash = computeRulesHashV3(version);
+  await prisma.taxRuleVersion.update({
+    where: { id: ruleVersionId },
+    data: { rulesHashSchemaVersion: 3, rulesHash },
   });
 }
 
@@ -387,6 +435,22 @@ describe("Fase 4.1 — IIBB Tucumán local: cálculo", () => {
     // COMERCIO: 100000 × 4% = 4000; SERVICIOS: 50000 × 4.5% = 2250
     expect(totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("6250.00");
     expect(totals["TOTAL_A_INGRESAR"]).toBe("6250.00");
+  });
+
+  it("resuelve actividad por id en reglas v3 y bloquea un código sin catálogo único", async () => {
+    await enableTypedIibbRules();
+    const { v1 } = await createApprovedVouchersWithLines();
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("6250.00");
+
+    await prisma.fiscalVoucherLine.updateMany({
+      where: { voucherId: v1.id },
+      data: { activityCode: "ACTIVITY_NOT_IN_CATALOG" },
+    });
+    await expect(settlements.calculate(ctxOwner, calculateParams())).rejects.toMatchObject({
+      code: "ACTIVITY_RULE_UNRESOLVED",
+    });
   });
 
   it("aplica mínimo si el cálculo por alícuota es menor", async () => {

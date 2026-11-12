@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as ts from "typescript";
@@ -17,6 +17,15 @@ type BaselineEntry = Omit<Finding, "line"> & { closesIn: string };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const baselinePath = resolve(root, "apps/api/src/tax/catalog-text-baseline.json");
+const fiscalScanPaths = [
+  "apps/api/src/tax",
+  "apps/api/src/flags/feature-flag-service.ts",
+  "apps/api/src/clients/client-repository.ts",
+  "packages/contracts/src/tax-engine-compatibility.ts",
+  "packages/tax-engine/src",
+  "apps/web/src/study/StudyExpedienteMensual.tsx",
+  "apps/web/src/study/StudyReglasFiscales.tsx",
+];
 const sensitiveNames = [
   "code",
   "name",
@@ -169,8 +178,11 @@ function findingKey(entry: Omit<Finding, "line">): string {
 }
 
 function scanRepository(): Finding[] {
-  return ["apps", "packages"]
-    .flatMap((directory) => collectFiles(resolve(root, directory)))
+  return fiscalScanPaths
+    .flatMap((path) => {
+      const absolute = resolve(root, path);
+      return statSync(absolute).isDirectory() ? collectFiles(absolute) : [absolute];
+    })
     .flatMap(scanFile);
 }
 

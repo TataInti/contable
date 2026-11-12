@@ -18,7 +18,13 @@ Por eso se implementa el catálogo fijo aprobado por Inti, sin sumar categorías
 
 ## Prompt y validaciones
 
-El prompt `vision-ar-v6` instruye el catálogo, las equivalencias respaldadas por rótulos visibles y el formato `categoria` + `tipo_texto` + `importe`. Usa el formato numérico argentino: punto para miles, coma para decimales; por ejemplo, `$100.000` → `100000.00`, `$121.000` → `121000.00`, `$1.234,56` → `1234.56` y `$121.000,00` → `121000.00`. Un punto seguido de exactamente tres dígitos no se interpreta como decimal; ante ambigüedad se elige la lectura argentina. Los rótulos `Percep. IVA-RG2408` y `Percep. RG 2408 - DGI` se clasifican como `IVA`; el resto de equivalencias se limita a los rótulos claros presentes en los comprobantes evaluados y las categorías aprobadas. Conserva las reglas anteriores: valores ausentes o no legibles como null; CUIT de exactamente 11 dígitos consecutivos; transcripción literal completa de `condicion_iva`; no inventar datos ni anteponer `Percepcion` si no está impresa. `tipo_texto` se preserva como aparece, incluidos prefijos o calificadores realmente impresos.
+El prompt `vision-ar-v7` instruye el catálogo, las equivalencias respaldadas por rótulos visibles y el formato `categoria` + `tipo_texto` + `importe`. Usa el formato numérico argentino: punto para miles, coma para decimales; por ejemplo, `$100.000` → `100000.00`, `$121.000` → `121000.00`, `$1.234,56` → `1234.56` y `$121.000,00` → `121000.00`. Un punto seguido de exactamente tres dígitos no se interpreta como decimal; ante ambigüedad se elige la lectura argentina. Los rótulos `Percep. IVA-RG2408` y `Percep. RG 2408 - DGI` se clasifican como `IVA`; el resto de equivalencias se limita a los rótulos claros presentes en los comprobantes evaluados y las categorías aprobadas. Conserva las reglas anteriores: valores ausentes o no legibles como null; CUIT de exactamente 11 dígitos consecutivos; transcripción literal completa de `condicion_iva`; no inventar datos ni anteponer `Percepcion` si no está impresa. `tipo_texto` se preserva como aparece, incluidos prefijos o calificadores realmente impresos.
+
+### Lectura tolerante de fechas
+
+`vision-ar-v7` agrega una regla explícita para tickets con fecha y hora: si la fecha impresa es `dd/mm/aa` o `dd/mm/aaaa`, con o sin hora, se devuelve `fecha` en `AAAA-MM-DD` y la hora en `hora` como `HH:MM:SS`; nunca otro formato. La fecha argentina se interpreta siempre como día/mes (nunca mes/día) y un año de dos dígitos se completa como `20AA`. El prompt incluye un ejemplo mínimo de ticket con fecha, hora y total.
+
+Antes de `VoucherARV21.model_validate`, `services/ai/app/model_extraction.py` normaliza `fecha`, `hora` y `cae_vencimiento`. Acepta `AAAA-MM-DD`, `DD/MM/AAAA`, `DD/MM/AA`, `DD-MM-AAAA` y una hora opcional separada por espacio o `T`. Si un valor no se puede parsear o la fecha no existe (por ejemplo `31/02/2025`), se descarta sólo ese campo (queda null), se elimina su entrada de `confianza` y se agrega un `ReviewIssue` con `reason: "fecha ilegible"` y `sourcePath` igual al campo (`fecha` o `cae_vencimiento`). Una hora ilegible se descarta igual con `reason: "hora ilegible"` y `sourcePath: "hora"`. El resto del comprobante, incluido el total, se conserva y no se repite la llamada al modelo por este motivo. El esquema sigue aceptando `AAAA-MM-DD` estricto.
 
 Por aprobación escrita de Inti del 11-11-2026, la decisión previa de aplicar una única validación aritmética se reemplaza por reglas de integridad simples y deterministas. El 12-11-2026 Inti decidió sacar la regla del vencimiento del CAE por el ruido de revisión que generaba, así que quedan dos reglas: (1) neto + IVA + no gravado + exento + percepciones vs. total, con tolerancia absoluta 0,02 cuando los componentes están disponibles; (2) dígito verificador de `cuit_emisor` y `cuit_receptor`, validados por separado con los pesos 5,4,3,2,7,6,5,4,3,2. El motivo de la regla de CUIT es `CUIT con dígito verificador inválido`; se emite en `reviewIssues` con `sourcePath` igual a `cuit_emisor` o `cuit_receptor`. El CAE y su vencimiento siguen siendo campos opcionales: el modelo los lee cuando están visibles, pero ninguna regla manda un documento a revisión por ellos. Los valores extraídos se conservan sin corregir ni descartar. Estas comprobaciones no cambian el esquema voucher-ar-v2.1, los contratos ni la API y no requieren migraciones. `sin datos fiscales` y desvíos aritméticos siguen siendo motivos a nivel documento.
 
@@ -92,6 +98,24 @@ El benchmark sintético v4 conserva los 12 motivos previos `sin datos fiscales` 
 La regla del vencimiento del CAE se eliminó el 12-11-2026 por decisión de Inti; las menciones de RP030 y de la fila «Vencimiento del CAE posterior a la fecha» corresponden a la corrida v6 y quedan como registro histórico.
 
 El costo real acumulado de las corridas de este encargo fue USD 0,10474170 en 100 llamadas, todas con costo informado, dentro del tope de USD 0,40. Los artefactos permanecen fuera del repositorio en `/root/.hermes/cache/eval/voucher-ar-real-publico-v1/benchmark_v2/` y `/root/.hermes/cache/eval/voucher-ar-sintetico-v1/benchmark_v4/`.
+
+## Benchmark v7 (lectura tolerante de fechas)
+
+La corrida v7 usó los mismos 40 documentos sintéticos de `benchmark_v4/` y el mismo harness, apuntado al worktree de este cambio y a la clave de demos fuera del repositorio. El set no incluye comprobantes reales ni datos de terceros.
+
+| Métrica | v6 (v4) | v7 |
+|---|---:|---:|
+| Exactitud global | 799/800 (99,88%) | 800/800 (100,00%) |
+| `fecha` | 40/40 | 40/40 |
+| `hora` | 40/40 | 40/40 |
+| `total` | 40/40 | 40/40 |
+| `cae` | 39/40 | 40/40 |
+| Documentos marcados para revisión | 12 | 12 |
+| Respuestas finales inválidas | 0 | 0 |
+| Llamadas HTTP | 40 | 41 |
+| Costo reportado por OpenRouter | USD 0,03819510 (v4) | USD 0,04169060 (parcial; una llamada 429 no informa costo) |
+
+No hubo empeoramiento en ningún campo. La única diferencia frente a v4 es `PH002.cae`, que pasó de error sin marca a acierto; no es atribuible a la regla de fechas y se reporta como variación de la corrida. La llamada extra fue un 429 transitorio de un proveedor, reintentado por el motor y resuelto en la segunda llamada; el harness se ajustó para no abortar la corrida completa ante un error de proveedor sin costo. Los artefactos completos quedan fuera del repositorio en `/root/.hermes/cache/eval/voucher-ar-sintetico-v1/benchmark_v7/`.
 
 ## Verificación
 

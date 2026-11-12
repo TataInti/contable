@@ -7,7 +7,9 @@ import base64
 import io
 import json
 import os
+import re
 import time
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -22,13 +24,22 @@ from .openrouter_policy import (
 )
 from .voucher_v2 import (
     PERCEPTION_CATEGORIES,
+    ReviewIssue,
     VoucherARV21,
     VoucherExtractionResponse,
     manual_review_response,
     response_from_voucher,
 )
 
-PROMPT_VERSION = "vision-ar-v6"
+PROMPT_VERSION = "vision-ar-v7"
+DATE_ILLEGIBLE_REASON = "fecha ilegible"
+TIME_ILLEGIBLE_REASON = "hora ilegible"
+_ISO_DATE = re.compile(r"^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})$")
+_DMY_DATE = re.compile(
+    r"^(?P<day>\d{1,2})(?P<separator>[/-])(?P<month>\d{1,2})"
+    r"(?P=separator)(?P<year>\d{4}|\d{2})$"
+)
+_CLOCK_TIME = re.compile(r"^(?P<hour>\d{1,2}):(?P<minute>\d{2})(?::(?P<second>\d{2}))?$")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 PDF_DPI = 150
 PDF_JPEG_QUALITY = 85
@@ -41,10 +52,12 @@ SYSTEM_PROMPT = """Sos un extractor multimodal de comprobantes argentinos. Leé 
 
 Usá sólo estas claves exactas de voucher-ar-v2.1: tipo_documento, letra, punto_venta, numero, fecha, hora, cuit_emisor, cuit_receptor, razon_social_emisor, razon_social_receptor, condicion_iva, neto_gravado, iva, no_gravado, exento, percepciones, total, moneda, cae, cae_vencimiento y confianza. Los datos del emisor y del receptor van en sus claves planas; no los anides. No agregues claves schema, vencimiento, punto_de_venta, base_imponible ni envoltorios emisor, receptor o voucher. Cada elemento de iva usa alicuota e importe. Cada elemento de percepciones usa categoria, tipo_texto e importe.
 
-Para cada campo, copiá únicamente texto o valores que sean visibles y legibles en la imagen. Omití las claves ausentes o no legibles; el contrato las interpreta como null. No inventes valores, no infieras CUIT, CAE, fecha, importes, moneda ni condición fiscal. El formato numérico de los comprobantes argentinos usa punto para separar miles y coma para decimales. Devolvé los importes como cadenas decimales con punto y sin separadores de miles: `$100.000` es cien mil y se devuelve `"100000.00"`; `$121.000` se devuelve `"121000.00"`; `$1.234,56` se devuelve `"1234.56"`; `$121.000,00` se devuelve `"121000.00"`. Nunca interpretes un punto seguido de exactamente tres dígitos como decimal: `$1.234` se lee como mil doscientos treinta y cuatro y se devuelve `"1234.00"`. Ante un formato ambiguo, elegí la lectura argentina y no inventes decimales. En facturas, registrá el importe visible rotulado `Subtotal` o `Neto` en `neto_gravado`; incluí en `iva` cada importe de IVA visible y no lo infieras si no se ve. Copiá `total` por separado. Nunca dejes `neto_gravado` en null si el subtotal legible está impreso. La fecha y cae_vencimiento deben ser YYYY-MM-DD. CUIT debe tener exactamente once dígitos consecutivos, sin guiones ni espacios. Usá tipo_documento=ilegible cuando el comprobante no pueda clasificarse por su imagen.
+Para cada campo, copiá únicamente texto o valores que sean visibles y legibles en la imagen. Omití las claves ausentes o no legibles; el contrato las interpreta como null. No inventes valores, no infieras CUIT, CAE, fecha, importes, moneda ni condición fiscal. El formato numérico de los comprobantes argentinos usa punto para separar miles y coma para decimales. Devolvé los importes como cadenas decimales con punto y sin separadores de miles: `$100.000` es cien mil y se devuelve `"100000.00"`; `$121.000` se devuelve `"121000.00"`; `$1.234,56` se devuelve `"1234.56"`; `$121.000,00` se devuelve `"121000.00"`. Nunca interpretes un punto seguido de exactamente tres dígitos como decimal: `$1.234` se lee como mil doscientos treinta y cuatro y se devuelve `"1234.00"`. Ante un formato ambiguo, elegí la lectura argentina y no inventes decimales. En facturas, registrá el importe visible rotulado `Subtotal` o `Neto` en `neto_gravado`; incluí en `iva` cada importe de IVA visible y no lo infieras si no se ve. Copiá `total` por separado. Nunca dejes `neto_gravado` en null si el subtotal legible está impreso. La fecha y cae_vencimiento no llevan hora en el JSON. Si la fecha impresa es dd/mm/aa o dd/mm/aaaa, con o sin hora, normalizala a AAAA-MM-DD y poné la hora en `hora`; nunca otro formato. La fecha argentina es siempre DD/MM: si es ambigua, interpretala como día/mes y nunca como mes/día; un año de dos dígitos se completa como 20AA. `cae_vencimiento` también va en AAAA-MM-DD, sin hora. CUIT debe tener exactamente once dígitos consecutivos, sin guiones ni espacios. Usá tipo_documento=ilegible cuando el comprobante no pueda clasificarse por su imagen.
 
 tipo_documento sólo admite estos literales exactos: `factura`, `ticket_no_fiscal`, `recibo`, `nota_credito`, `nota_debito`, `otro` o `ilegible`. Un recibo de pago es `recibo`; usá `ticket_no_fiscal` únicamente para un ticket no fiscal, no porque falten datos tributarios. Si el documento es un ticket no fiscal, tipo_documento debe ser exactamente `ticket_no_fiscal`, nunca su etiqueta en lenguaje natural. Ejemplo mínimo válido para un ticket no fiscal:
 {"tipo_documento":"ticket_no_fiscal","letra":null,"cuit_emisor":null,"cuit_receptor":null,"cae":null,"confianza":{"tipo_documento":0.95}}
+Ejemplo mínimo de ticket con fecha, hora y total:
+{"tipo_documento":"ticket_no_fiscal","fecha":"2025-03-16","hora":"14:35:00","total":"12500.00","letra":null,"cuit_emisor":null,"cuit_receptor":null,"cae":null,"confianza":{"tipo_documento":0.95,"fecha":0.9,"hora":0.9,"total":0.95}}
 
 `percepciones.categoria` debe ser exactamente una de estas categorías: `IIBB`, `IVA`, `Ganancias`, `SUSS`, `Impuestos internos`, `Municipal` u `Otras`. Clasificá por el impuesto/régimen que se ve. Equivalencias claras respaldadas por rótulos de los comprobantes evaluados: `Ingresos Brutos`, `I.BRUTOS` o `IIBB` → `IIBB`; `IVA`, `Percep. IVA-RG2408` y `Percep. RG 2408 - DGI` → `IVA`; `Impuesto a las Ganancias` → `Ganancias`; `Impuestos Internos` → `Impuestos internos`; `Impuestos Municipales`, `Ord. Imp. Municipal` e `Impuesto Municipal` → `Municipal`. Usá `SUSS` sólo si el comprobante lo identifica expresamente. No infieras normas ni categorías por datos que no estén impresos. Usá `Otras` como respaldo cuando no puedas clasificar y dejá esa percepción para revisión. `percepciones.tipo_texto` es la transcripción literal completa del texto impreso que identifica esa percepción. No antepongas `Percepcion` si no está impresa, conservá las palabras y calificadores posteriores al nombre del impuesto, no reformules ni trunques. Ejemplo: para el rótulo impreso `IIBB - dato sintetico`, devolvé `{"categoria":"IIBB","tipo_texto":"IIBB - dato sintetico","importe":"157.30"}`. Si el texto no se ve o no se puede leer, dejá tipo_texto en null; no lo completes. `condicion_iva` también es transcripción literal completa; conservá cada palabra impresa.
 
@@ -271,6 +284,122 @@ def _normalize_perception_categories(
     return normalized, tuple(unknown_indexes)
 
 
+def _split_date_and_time(text: str) -> tuple[str, str | None]:
+    for separator in ("T", " "):
+        if separator in text:
+            date_part, _, time_part = text.partition(separator)
+            return date_part.strip(), time_part.strip() or None
+    return text.strip(), None
+
+
+def _parse_clock_time(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    match = _CLOCK_TIME.fullmatch(value.strip())
+    if match is None:
+        return None
+    hour = int(match.group("hour"))
+    minute = int(match.group("minute"))
+    second = int(match.group("second") or 0)
+    if hour > 23 or minute > 59 or second > 59:
+        return None
+    return f"{hour:02d}:{minute:02d}:{second:02d}"
+
+
+def _normalize_date_text(value: Any) -> tuple[str | None, str | None, bool]:
+    """Devuelve fecha ISO, hora HH:MM:SS y si la hora impresa era inválida."""
+    if not isinstance(value, str):
+        return None, None, False
+    text = value.strip()
+    if not text:
+        return None, None, False
+    date_part, time_part = _split_date_and_time(text)
+    parsed_date: date | None = None
+    iso_match = _ISO_DATE.fullmatch(date_part)
+    local_match = _DMY_DATE.fullmatch(date_part)
+    try:
+        if iso_match is not None:
+            parsed_date = date(
+                int(iso_match.group("year")),
+                int(iso_match.group("month")),
+                int(iso_match.group("day")),
+            )
+        elif local_match is not None:
+            year = int(local_match.group("year"))
+            if year < 100:
+                year += 2000
+            parsed_date = date(
+                year,
+                int(local_match.group("month")),
+                int(local_match.group("day")),
+            )
+    except ValueError:
+        return None, None, False
+    if parsed_date is None:
+        return None, None, False
+    if time_part is None:
+        return parsed_date.isoformat(), None, False
+    normalized_time = _parse_clock_time(time_part)
+    if normalized_time is None:
+        return parsed_date.isoformat(), None, True
+    return parsed_date.isoformat(), normalized_time, False
+
+
+def _normalize_voucher_dates(
+    decoded: dict[str, Any],
+) -> tuple[dict[str, Any], list[ReviewIssue]]:
+    """Normaliza fecha, hora y cae_vencimiento antes de validar el contrato.
+
+    Acepta AAAA-MM-DD, DD/MM/AAAA, DD/MM/AA, DD-MM-AAAA y una hora opcional
+    separada por espacio o T. El comprobante argentino se interpreta siempre
+    como día/mes y un año de dos dígitos se completa como 20AA. Un valor
+    imposible descarta sólo ese campo y se marca para revisión.
+    """
+    normalized = dict(decoded)
+    confidence = decoded.get("confianza")
+    normalized_confidence = dict(confidence) if isinstance(confidence, dict) else {}
+    issues: list[ReviewIssue] = []
+
+    for field_name in ("fecha", "cae_vencimiento"):
+        raw_value = normalized.get(field_name)
+        if raw_value is None:
+            continue
+        date_value, time_value, time_invalid = _normalize_date_text(raw_value)
+        if date_value is None:
+            normalized.pop(field_name, None)
+            normalized_confidence.pop(field_name, None)
+            issues.append(ReviewIssue(reason=DATE_ILLEGIBLE_REASON, sourcePath=field_name))
+            continue
+        normalized[field_name] = date_value
+        if field_name != "fecha":
+            continue
+        if time_value is not None and normalized.get("hora") is None:
+            normalized["hora"] = time_value
+            date_confidence = normalized_confidence.get("fecha")
+            normalized_confidence["hora"] = (
+                date_confidence
+                if isinstance(date_confidence, (int, float))
+                and not isinstance(date_confidence, bool)
+                else 0.0
+            )
+        elif time_invalid and normalized.get("hora") is None:
+            issues.append(ReviewIssue(reason=TIME_ILLEGIBLE_REASON, sourcePath="hora"))
+
+    if normalized.get("hora") is not None:
+        normalized_time = _parse_clock_time(normalized["hora"])
+        if normalized_time is None:
+            normalized.pop("hora", None)
+            normalized_confidence.pop("hora", None)
+            if not any(issue.sourcePath == "hora" for issue in issues):
+                issues.append(ReviewIssue(reason=TIME_ILLEGIBLE_REASON, sourcePath="hora"))
+        else:
+            normalized["hora"] = normalized_time
+
+    if isinstance(confidence, dict):
+        normalized["confianza"] = normalized_confidence
+    return normalized, issues
+
+
 async def run_model_extraction(
     data: bytes,
     mime_type: str,
@@ -374,6 +503,7 @@ async def run_model_extraction(
                         normalized, unknown_perception_indexes = _normalize_perception_categories(
                             decoded
                         )
+                        normalized, date_issues = _normalize_voucher_dates(normalized)
                         voucher = VoucherARV21.model_validate(normalized)
                     except ValidationError:
                         last_reason = "MODEL_SCHEMA_INVALID"
@@ -396,6 +526,7 @@ async def run_model_extraction(
                         latency_ms=round((time.perf_counter() - started) * 1000),
                         estimated_cost_usd=cost,
                         unrecognized_perception_indexes=unknown_perception_indexes,
+                        prevalidation_issues=tuple(date_issues),
                     )
                 except httpx.TimeoutException:
                     attempts.append((None, None, None))
