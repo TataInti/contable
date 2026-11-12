@@ -11,6 +11,7 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./Dense.css": "./dist/Dense.css",
     "./tokens.css": "./src/tokens.css"
   },
   "scripts": {
