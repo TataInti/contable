@@ -69,10 +69,10 @@ describe("ManualExtractionFieldsDialog", () => {
     const secondSelect = screen.getByRole("combobox", { name: "Campo de la fila 2" }) as HTMLSelectElement;
     const repeated = within(secondSelect).getByRole("option", { name: "Tipo de documento" }) as HTMLOptionElement;
 
-    expect(screen.getAllByRole("combobox")).toHaveLength(2);
+    expect(screen.getAllByRole("combobox", { name: /Campo de la fila/ })).toHaveLength(2);
     expect(repeated.disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Quitar fila 2" }));
-    expect(screen.getAllByRole("combobox")).toHaveLength(1);
+    expect(screen.getAllByRole("combobox", { name: /Campo de la fila/ })).toHaveLength(1);
   });
 
   it("Quitar descarta solo el borrador y envía las filas que quedan", () => {
@@ -81,20 +81,20 @@ describe("ManualExtractionFieldsDialog", () => {
       target: { value: "totalAmount" },
     });
     fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "primer dato" },
+      target: { value: "1,00" },
     });
     fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 2" }), {
       target: { value: "currency" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 2" }), {
-      target: { value: "borrador a quitar" },
+    fireEvent.change(screen.getByRole("combobox", { name: "Valor de la fila 2" }), {
+      target: { value: "USD" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Quitar fila 2" }));
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledWith([{ key: "totalAmount", value: "primer dato" }]);
+    expect(onSave).toHaveBeenCalledWith([{ key: "totalAmount", value: "1.00" }]);
   });
 
   it("deshabilita los campos con valor existente y los identifica", () => {
@@ -131,28 +131,121 @@ describe("ManualExtractionFieldsDialog", () => {
     expect((screen.getByRole("textbox", { name: "Valor de la fila 1" }) as HTMLInputElement).disabled).toBe(true);
   });
 
-  it("envía los valores como texto libre, recorta espacios y descarta filas incompletas", () => {
+  it("normaliza importes, recorta espacios y descarta filas incompletas", () => {
     const { onSave } = renderDialog();
     fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 1" }), {
       target: { value: "totalAmount" },
     });
     fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "  importe libre  " },
+      target: { value: "  1.234,56  " },
     });
     fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 2" }), {
       target: { value: "currency" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 2" }), {
-      target: { value: "   " },
-    });
+    expect(screen.getByRole("combobox", { name: "Valor de la fila 2" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 3" }), {
       target: { value: "sin campo" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
 
-    expect(onSave).toHaveBeenCalledWith([{ key: "totalAmount", value: "importe libre" }]);
+    expect(onSave).toHaveBeenCalledWith([{ key: "totalAmount", value: "1234.56" }]);
+  });
+
+  it("muestra el error del importe asociado al campo y bloquea Guardar hasta corregirlo", () => {
+    const { onSave } = renderDialog();
+    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 1" }), {
+      target: { value: "totalAmount" },
+    });
+    const value = screen.getByRole("textbox", { name: "Valor de la fila 1" }) as HTMLInputElement;
+    expect(value.inputMode).toBe("decimal");
+    fireEvent.change(value, { target: { value: "no es un importe" } });
+
+    const error = screen.getByText("Ingresá un importe, por ejemplo 1.234,56");
+    expect(value.getAttribute("aria-describedby")).toBe(error.id);
+    expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(value, { target: { value: "1.234,56" } });
+    expect(screen.queryByText("Ingresá un importe, por ejemplo 1.234,56")).toBeNull();
+    expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(onSave).toHaveBeenCalledWith([{ key: "totalAmount", value: "1234.56" }]);
+  });
+
+  it("usa controles de fecha, numéricos y listas del catálogo con etiquetas accesibles", () => {
+    const { onSave } = renderDialog();
+    const chooseField = (row: number, key: string) => {
+      fireEvent.change(screen.getByRole("combobox", { name: `Campo de la fila ${row}` }), {
+        target: { value: key },
+      });
+    };
+    const addRow = () => fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
+
+    chooseField(1, "voucherType");
+    const documentType = screen.getByRole("combobox", { name: "Valor de la fila 1" }) as HTMLSelectElement;
+    expect(Array.from(documentType.options).map((option) => option.textContent)).toEqual([
+      "Seleccioná una opción",
+      "Factura",
+      "Ticket no fiscal",
+      "Recibo",
+      "Nota de crédito",
+      "Nota de débito",
+      "Otro",
+      "Ilegible",
+    ]);
+    addRow();
+    chooseField(2, "letter");
+    expect(Array.from((screen.getByRole("combobox", { name: "Valor de la fila 2" }) as HTMLSelectElement).options)
+      .slice(1).map((option) => option.value)).toEqual(["A", "B", "C", "M", "E", "X"]);
+    addRow();
+    chooseField(3, "currency");
+    expect(Array.from((screen.getByRole("combobox", { name: "Valor de la fila 3" }) as HTMLSelectElement).options)
+      .slice(1).map((option) => option.value)).toEqual(["ARS", "USD"]);
+    addRow();
+    chooseField(4, "vatCondition");
+    expect(Array.from((screen.getByRole("combobox", { name: "Valor de la fila 4" }) as HTMLSelectElement).options)
+      .slice(1).map((option) => option.value)).toEqual([
+      "RESPONSABLE_INSCRIPTO",
+      "MONOTRIBUTISTA",
+      "EXENTO",
+      "NO_RESPONSABLE",
+    ]);
+    addRow();
+    chooseField(5, "issueDate");
+    const issueDate = screen.getByLabelText("Valor de la fila 5") as HTMLInputElement;
+    expect(issueDate.type).toBe("date");
+    fireEvent.change(issueDate, { target: { value: "2026-11-12" } });
+    addRow();
+    chooseField(6, "issuerTaxId");
+    const issuerTaxId = screen.getByLabelText("Valor de la fila 6") as HTMLInputElement;
+    expect(issuerTaxId.inputMode).toBe("numeric");
+    fireEvent.change(issuerTaxId, { target: { value: "30-12345678-9" } });
+    expect(issuerTaxId.value).toBe("30123456789");
+    addRow();
+    chooseField(7, "pointOfSale");
+    const pointOfSale = screen.getByLabelText("Valor de la fila 7") as HTMLInputElement;
+    fireEvent.change(pointOfSale, { target: { value: "00a04" } });
+    expect(pointOfSale.value).toBe("0004");
+    addRow();
+    chooseField(8, "cae");
+    const cae = screen.getByLabelText("Valor de la fila 8") as HTMLInputElement;
+    fireEvent.change(cae, { target: { value: "75123456789012" } });
+    expect(cae.inputMode).toBe("numeric");
+    addRow();
+    chooseField(9, "issuerName");
+    const issuerName = screen.getByLabelText("Valor de la fila 9") as HTMLInputElement;
+    expect(issuerName.type).toBe("text");
+    expect(issuerName.inputMode).toBe("");
+    fireEvent.change(issuerName, { target: { value: "Proveedor S.A." } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(onSave).toHaveBeenCalledWith([
+      { key: "issueDate", value: "2026-11-12" },
+      { key: "issuerTaxId", value: "30123456789" },
+      { key: "pointOfSale", value: "0004" },
+      { key: "cae", value: "75123456789012" },
+      { key: "issuerName", value: "Proveedor S.A." },
+    ]);
   });
 
   it("mantiene el error visible y conserva lo escrito", () => {
@@ -164,7 +257,7 @@ describe("ManualExtractionFieldsDialog", () => {
       target: { value: "valor pendiente" },
     });
 
-    expect(screen.getByRole("alert").textContent).toBe("No se pudo conectar con el servidor");
+    expect(screen.getByText("No se pudo conectar con el servidor").textContent).toBe("No se pudo conectar con el servidor");
     expect((screen.getByRole("textbox", { name: "Valor de la fila 1" }) as HTMLInputElement).value).toBe("valor pendiente");
     expect((screen.getByRole("combobox", { name: "Campo de la fila 1" }) as HTMLSelectElement).value).toBe("totalAmount");
   });

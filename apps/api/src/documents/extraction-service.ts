@@ -1,5 +1,10 @@
 import { Prisma } from "@prisma/client";
-import type { ApprovedSnapshotData, ApprovedSnapshotField, ApprovedSnapshotSource } from "@contable/contracts";
+import {
+  type ApprovedSnapshotData,
+  type ApprovedSnapshotField,
+  type ApprovedSnapshotSource,
+  type ManualExtractionFieldKey,
+} from "@contable/contracts";
 import { prisma } from "../lib/prisma.js";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { apiReviewIssues, extractionForApi } from "./extraction-contract.js";
@@ -19,27 +24,7 @@ export class ExtractionError extends Error {
 
 const REVIEWABLE_EXTRACTION_STATUSES: readonly string[] = ["GENERATED", "NEEDS_REVIEW"];
 
-export const MANUAL_EXTRACTION_FIELD_KEYS = [
-  "voucherType",
-  "letter",
-  "pointOfSale",
-  "voucherNumber",
-  "issueDate",
-  "issuerTaxId",
-  "receiverTaxId",
-  "issuerName",
-  "receiverName",
-  "vatCondition",
-  "netAmount",
-  "nonTaxableAmount",
-  "exemptAmount",
-  "totalAmount",
-  "currency",
-  "cae",
-  "caeExpiration",
-] as const;
-
-export type ManualExtractionFieldKey = (typeof MANUAL_EXTRACTION_FIELD_KEYS)[number];
+export { MANUAL_EXTRACTION_FIELD_KEYS } from "@contable/contracts";
 
 export interface ManualExtractionFieldInput {
   key: ManualExtractionFieldKey;

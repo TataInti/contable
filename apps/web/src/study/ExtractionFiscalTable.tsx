@@ -1,4 +1,5 @@
 import { Button, Table } from "@contable/design-system";
+import { isValidManualExtractionIsoDate } from "@contable/contracts";
 import type { ExtractedField, ExtractionReviewIssue, VoucherData } from "../lib/api";
 import { effectiveExtractedFieldValue, EXTRACTION_SCALAR_FIELDS } from "./extractionScalarFields";
 import {
@@ -33,6 +34,18 @@ const REPEATED_FIELD_GROUPS: Record<string, string> = {
   perceptionCategory: "Percepciones",
   perceptionText: "Percepciones",
 };
+
+function displayScalarValue(key: string, value: string | null): string | null {
+  if (!value || (key !== "issueDate" && key !== "caeExpiration") || !isValidManualExtractionIsoDate(value)) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00.000Z`));
+}
 
 function nonEmptyReason(reason: string | null | undefined): string | null {
   return typeof reason === "string" && reason.trim().length > 0 ? reason : null;
@@ -122,7 +135,7 @@ function buildRows(
     return makeRow(
       definition.voucherKey,
       definition.field,
-      value,
+      displayScalarValue(definition.extractedKey, value),
       relatedFields,
       relatedIssues,
       value !== null,

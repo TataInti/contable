@@ -108,7 +108,8 @@ describe("ExtractionFiscalTable", () => {
       "Motivo",
     ]);
     expect(rowForField(table, "CUIT emisor")[1]!.textContent).toBe("20123456786");
-    expect(rowForField(table, "Vencimiento del CAE")[1]!.textContent).toBe("2026-11-10");
+    expect(rowForField(table, "Fecha")[1]!.textContent).toBe("31/10/2026");
+    expect(rowForField(table, "Vencimiento del CAE")[1]!.textContent).toBe("10/11/2026");
     expect(rowForField(table, "IVA · alícuota 21%")[1]!.textContent).toBe(
       "Alícuota: 21% · Importe: 210.00",
     );
@@ -349,5 +350,39 @@ describe("ExtractionFiscalTable", () => {
     expect(rowForField(table, "Total")[1]!.textContent).toBe("120 sin formato");
     expect(rowForField(table, "CUIT emisor")[1]!.textContent).toBe("dato cargado");
     expect(rowForField(table, "CUIT emisor")[2]!.textContent).toBe("cargado a mano");
+  });
+
+  it("muestra sin transformar los valores viejos no canónicos", () => {
+    renderTable({
+      voucher: null,
+      fields: [
+        {
+          id: "field-legacy-date",
+          key: "issueDate",
+          rawValue: null,
+          normalizedValue: null,
+          correction: "31/11/2026",
+          method: "HUMAN",
+          confidence: 0,
+          status: "CORRECTED",
+          reason: null,
+        },
+        {
+          id: "field-legacy-amount",
+          key: "totalAmount",
+          rawValue: null,
+          normalizedValue: null,
+          correction: "importe libre",
+          method: "HUMAN",
+          confidence: 0,
+          status: "CORRECTED",
+          reason: null,
+        },
+      ],
+    });
+    const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+
+    expect(rowForField(table, "Fecha")[1]!.textContent).toBe("31/11/2026");
+    expect(rowForField(table, "Total")[1]!.textContent).toBe("importe libre");
   });
 });

@@ -1371,6 +1371,12 @@
   font: inherit;
 }
 
+.manual-fields-dialog__field-error {
+  margin: var(--ds-space-1) 0 0;
+  color: var(--ds-color-danger);
+  font-size: var(--ds-text-xs);
+}
+
 .manual-fields-dialog__table select:focus-visible,
 .manual-fields-dialog__table input:focus-visible,
 .manual-fields-dialog__close:focus-visible {

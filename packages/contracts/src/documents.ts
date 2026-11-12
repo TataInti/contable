@@ -7,6 +7,7 @@ import {
   voucherLetter,
   voucherStatus,
 } from "./domain-enums.js";
+import { VOUCHER_DOCUMENT_TYPES } from "./manual-extraction.js";
 
 /** Campo extraído */
 export const extractedFieldSchema = z.object({
@@ -44,15 +45,7 @@ export const perceptionCategorySchema = z.enum([
 export type PerceptionCategory = z.infer<typeof perceptionCategorySchema>;
 
 const voucherCommonShape = {
-  tipo_documento: z.enum([
-    "factura",
-    "ticket_no_fiscal",
-    "recibo",
-    "nota_credito",
-    "nota_debito",
-    "otro",
-    "ilegible",
-  ]),
+  tipo_documento: z.enum(VOUCHER_DOCUMENT_TYPES),
   letra: z.string().nullable(),
   punto_venta: z.string().nullable(),
   numero: z.string().nullable(),

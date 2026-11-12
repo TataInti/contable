@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "@contable/design-system";
+import {
+  CLIENT_VAT_CONDITION_LABELS,
+  MANUAL_EXTRACTION_CURRENCIES,
+  MANUAL_EXTRACTION_LETTERS,
+  MANUAL_EXTRACTION_VAT_CONDITIONS,
+  VOUCHER_DOCUMENT_TYPES,
+  isManualExtractionAmountField,
+  manualExtractionFieldError,
+  normalizeManualExtractionAmount,
+} from "@contable/contracts";
 import type { ExtractedField, VoucherData } from "../lib/api";
 import {
   EXTRACTION_SCALAR_FIELDS,
@@ -30,6 +40,48 @@ interface ManualExtractionFieldsDialogProps {
 
 const FOCUSABLE_SELECTOR = "button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href]";
 
+const VOUCHER_TYPE_LABELS: Record<(typeof VOUCHER_DOCUMENT_TYPES)[number], string> = {
+  factura: "Factura",
+  ticket_no_fiscal: "Ticket no fiscal",
+  recibo: "Recibo",
+  nota_credito: "Nota de crédito",
+  nota_debito: "Nota de débito",
+  otro: "Otro",
+  ilegible: "Ilegible",
+};
+
+function selectOptions(key: ManualFiscalFieldKey): Array<{ value: string; label: string }> | null {
+  if (key === "voucherType") {
+    return VOUCHER_DOCUMENT_TYPES.map((value) => ({ value, label: VOUCHER_TYPE_LABELS[value] }));
+  }
+  if (key === "letter") return MANUAL_EXTRACTION_LETTERS.map((value) => ({ value, label: value }));
+  if (key === "currency") return MANUAL_EXTRACTION_CURRENCIES.map((value) => ({ value, label: value }));
+  if (key === "vatCondition") {
+    return MANUAL_EXTRACTION_VAT_CONDITIONS.map((value) => ({
+      value,
+      label: CLIENT_VAT_CONDITION_LABELS[value],
+    }));
+  }
+  return null;
+}
+
+function valueForSubmission(key: ManualFiscalFieldKey, value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return isManualExtractionAmountField(key) ? normalizeManualExtractionAmount(trimmed) : trimmed;
+}
+
+function inputError(key: ManualFiscalFieldKey | "", value: string): string | null {
+  const trimmed = value.trim();
+  if (!key || !trimmed) return null;
+  if (isManualExtractionAmountField(key)) {
+    return normalizeManualExtractionAmount(trimmed)
+      ? null
+      : "Ingresá un importe, por ejemplo 1.234,56";
+  }
+  return manualExtractionFieldError(key, trimmed);
+}
+
 export function ManualExtractionFieldsDialog({
   fields,
   voucherData,
@@ -57,13 +109,20 @@ export function ManualExtractionFieldsDialog({
   requestCloseRef.current = requestClose;
   confirmDiscardRef.current = confirmDiscard;
 
+  const rowErrors = useMemo(
+    () => new Map(rows.map((row) => [row.id, inputError(row.key, row.value)])),
+    [rows],
+  );
   const payload = useMemo(
     () => rows.flatMap((row) => {
-      const value = row.value.trim();
-      return row.key && value ? [{ key: row.key, value }] : [];
+      if (!row.key) return [];
+      const value = valueForSubmission(row.key, row.value);
+      return value ? [{ key: row.key, value }] : [];
     }),
     [rows],
   );
+  const hasInvalidValues = rows.some((row) => rowErrors.get(row.id) !== null);
+  const canSave = !isSaving && payload.length > 0 && !hasInvalidValues;
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -131,7 +190,7 @@ export function ManualExtractionFieldsDialog({
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSaving || payload.length === 0) return;
+    if (!canSave) return;
     onSave(payload);
   };
 
@@ -212,14 +271,56 @@ export function ManualExtractionFieldsDialog({
                       <label className="sr-only" htmlFor={`manual-field-value-${row.id}`}>
                         Valor de la fila {index + 1}
                       </label>
-                      <input
-                        id={`manual-field-value-${row.id}`}
-                        aria-label={`Valor de la fila ${index + 1}`}
-                        type="text"
-                        value={row.value}
-                        disabled={isSaving}
-                        onChange={(event) => updateRow(row.id, { value: event.target.value })}
-                      />
+                      {(() => {
+                        const options = row.key ? selectOptions(row.key) : null;
+                        const isDate = row.key === "issueDate" || row.key === "caeExpiration";
+                        const isAmount = row.key !== "" && isManualExtractionAmountField(row.key);
+                        const isDigitsOnly = ["pointOfSale", "voucherNumber", "issuerTaxId", "receiverTaxId", "cae"].includes(row.key);
+                        const message = rowErrors.get(row.id);
+                        const errorId = `manual-field-value-error-${row.id}`;
+                        const commonProps = {
+                          id: `manual-field-value-${row.id}`,
+                          "aria-label": `Valor de la fila ${index + 1}`,
+                          "aria-describedby": message ? errorId : undefined,
+                          "aria-invalid": message ? true : undefined,
+                          disabled: isSaving,
+                        };
+
+                        return (
+                          <>
+                            {options ? (
+                              <select
+                                {...commonProps}
+                                value={row.value}
+                                onChange={(event) => updateRow(row.id, { value: event.target.value })}
+                              >
+                                <option value="">Seleccioná una opción</option>
+                                {options.map((option) => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                {...commonProps}
+                                type={isDate ? "date" : "text"}
+                                inputMode={isDate ? undefined : isAmount ? "decimal" : isDigitsOnly ? "numeric" : undefined}
+                                value={row.value}
+                                onChange={(event) => {
+                                  const nextValue = isDigitsOnly
+                                    ? event.target.value.replace(/\D/g, "")
+                                    : event.target.value;
+                                  updateRow(row.id, { value: nextValue });
+                                }}
+                              />
+                            )}
+                            {message ? (
+                              <p id={errorId} className="manual-fields-dialog__field-error" role="alert">
+                                {message}
+                              </p>
+                            ) : null}
+                          </>
+                        );
+                      })()}
                     </td>
                     <td>
                       <Button
@@ -278,7 +379,7 @@ export function ManualExtractionFieldsDialog({
             <Button type="button" variant="ghost" disabled={isSaving} onClick={requestClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSaving || payload.length === 0}>
+            <Button type="submit" disabled={!canSave}>
               {isSaving ? "Guardando…" : "Guardar"}
             </Button>
           </footer>

@@ -12,6 +12,7 @@ import { MAX_FILE_SIZE } from "../storage/file-validator.js";
 import { tenantContextFromRequest } from "../auth/tenant.js";
 import { outboxPublisher } from "../jobs/outbox-publisher.js";
 import { z } from "zod";
+import { manualExtractionFieldError } from "@contable/contracts";
 
 const completeUploadSchema = z.object({
   originalName: z.string().trim().min(1).max(200),
@@ -35,7 +36,37 @@ const addManualExtractionFieldsSchema = z.object({
       message: "Cada campo se puede cargar una sola vez",
     });
   }
+  fields.forEach((field, index) => {
+    const formatError = manualExtractionFieldError(field.key, field.value);
+    if (formatError) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["fields", index, "value"],
+        message: `${MANUAL_EXTRACTION_FIELD_LABELS[field.key]}: ${formatError}`,
+      });
+    }
+  });
 });
+
+const MANUAL_EXTRACTION_FIELD_LABELS: Record<(typeof MANUAL_EXTRACTION_FIELD_KEYS)[number], string> = {
+  voucherType: "Tipo de documento",
+  letter: "Letra",
+  pointOfSale: "Punto de venta",
+  voucherNumber: "Número",
+  issueDate: "Fecha",
+  issuerTaxId: "CUIT emisor",
+  receiverTaxId: "CUIT receptor",
+  issuerName: "Razón social emisor",
+  receiverName: "Razón social receptor",
+  vatCondition: "Condición frente al IVA",
+  netAmount: "Neto gravado",
+  nonTaxableAmount: "No gravado",
+  exemptAmount: "Exento",
+  totalAmount: "Total",
+  currency: "Moneda",
+  cae: "CAE",
+  caeExpiration: "Vencimiento del CAE",
+};
 
 /**
  * Rutas de documentos (Fase 4-5).
@@ -176,8 +207,14 @@ export function documentRoutes(app: FastifyInstance) {
     };
     const parsed = addManualExtractionFieldsSchema.safeParse(req.body);
     if (!parsed.success) {
+      const invalidValue = parsed.error.issues.find(
+        (issue) => issue.path[0] === "fields" && issue.path[2] === "value" && issue.message.includes(": "),
+      );
       return reply.status(400).send({
-        error: { code: "INVALID_FIELDS", message: "Revisá los campos cargados e intentá de nuevo" },
+        error: {
+          code: "INVALID_FIELDS",
+          message: invalidValue?.message ?? "Revisá los campos cargados e intentá de nuevo",
+        },
       });
     }
     const ctx = tenantContextFromRequest(req);

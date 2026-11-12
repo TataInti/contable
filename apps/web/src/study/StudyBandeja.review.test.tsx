@@ -361,7 +361,7 @@ describe("StudyBandeja — revisión de extracción", () => {
       target: { value: "totalAmount" },
     });
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "  importe libre  " },
+      target: { value: "  1.234,56  " },
     });
     const extractionReadsBeforeSave = vi.mocked(api.get).mock.calls.filter(([path]) =>
       path.endsWith("/documents/document-a/extraction"),
@@ -374,13 +374,13 @@ describe("StudyBandeja — revisión de extracción", () => {
         path.endsWith("/documents/document-a/extraction"),
       ).length;
       expect(extractionReadsAfterSave).toBeGreaterThan(extractionReadsBeforeSave);
-      expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText("importe libre")).toBeTruthy();
+      expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText("1234.56")).toBeTruthy();
       expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText("cargado a mano")).toBeTruthy();
       expect((screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled).toBe(false);
     });
     expect(api.put).toHaveBeenCalledWith(
       "/firms/firm-a/clients/client-a/extractions/extraction-a/fields",
-      { fields: [{ key: "totalAmount", value: "importe libre" }] },
+      { fields: [{ key: "totalAmount", value: "1234.56" }] },
     );
   });
 
@@ -400,13 +400,13 @@ describe("StudyBandeja — revisión de extracción", () => {
       target: { value: "totalAmount" },
     });
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "borrador conservado" },
+      target: { value: "123.00" },
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar" }));
 
     expect(await within(dialog).findByRole("alert")).toBeTruthy();
     expect(screen.getByRole("dialog", { name: "Cargar datos a mano" })).toBeTruthy();
-    expect((within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }) as HTMLInputElement).value).toBe("borrador conservado");
+    expect((within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }) as HTMLInputElement).value).toBe("123.00");
     expect(within(dialog).getByRole("button", { name: "Guardar" })).toBeTruthy();
   });
 
