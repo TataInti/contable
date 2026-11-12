@@ -5,6 +5,9 @@ import {
   createAssignmentSchema,
   meContextsSchema,
   invitationSchema,
+  firmProfilePatchSchema,
+  internalMemberRolePatchSchema,
+  memberIdentityPatchSchema,
 } from "@contable/contracts";
 import { FirmRepository } from "./firm-repository.js";
 import { AuthError } from "../auth/auth-service.js";
@@ -25,8 +28,6 @@ const createInternalUserSchema = z.object({
   name: z.string().trim().min(2).max(120),
   role: z.enum(["OWNER", "ADMIN", "PREPARER", "REVIEWER", "AUDITOR_READONLY"]),
 }).strict();
-
-const internalRoleSchema = z.enum(["OWNER", "ADMIN", "PREPARER", "REVIEWER", "AUDITOR_READONLY"]);
 
 // Motivo opcional del ciclo de vida (viaja al evento de auditoría; se trunca a 500 en SQL).
 const memberLifecycleReasonSchema = z.object({
@@ -104,6 +105,39 @@ export function firmRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "FIRM_NOT_FOUND", message: "Estudio no encontrado" } });
     }
     return reply.send({ data: firm });
+  });
+
+  app.get("/api/v1/firms/:firmId/profile", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const firm = await withTenantContext(ctx, (tx) => tx.firm.findUnique({
+      where: { id: ctx.firmId },
+      select: { legalName: true, displayName: true, taxId: true, timezone: true },
+    }));
+    if (!firm) {
+      return reply.status(404).send({ error: { code: "FIRM_NOT_FOUND", message: "Estudio no encontrado" } });
+    }
+    return reply.send({ data: firm });
+  });
+
+  app.patch("/api/v1/firms/:firmId/profile", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const body = firmProfilePatchSchema.parse(req.body);
+    try {
+      const rows = await withTenantContext(ctx, (tx) => tx.$queryRaw<{
+        legalName: string; displayName: string; taxId: string | null; timezone: string;
+      }[]>`SELECT * FROM app_c5a_update_firm_profile(
+        ${ctx.userId}, ${ctx.firmId}, ${JSON.stringify(body)}::jsonb
+      )`);
+      if (!rows[0]) {
+        return reply.status(404).send({ error: { code: "FIRM_NOT_FOUND", message: "Estudio no encontrado" } });
+      }
+      return reply.send({ data: rows[0] });
+    } catch (error) {
+      if (String(error).includes("FIRM_NOT_FOUND")) {
+        return reply.status(404).send({ error: { code: "FIRM_NOT_FOUND", message: "Estudio no encontrado" } });
+      }
+      throw error;
+    }
   });
 
   app.patch("/api/v1/firms/:firmId/settings/self-review", async (req, reply) => {
@@ -303,24 +337,49 @@ export function firmRoutes(app: FastifyInstance) {
     }
   });
 
-  // El rol es la fuente de verdad del acceso a módulos internos. La operación
-  // vive en SQL (app_change_internal_member_role): guard de último administrador
-  // bajo advisory lock, OWNER protegido (un ADMIN no modifica a un OWNER),
-  // revocación de sesiones al degradar y auditoría actor/acción.
+  app.patch("/api/v1/firms/:firmId/users/:userId", async (req, reply) => {
+    const { firmId, userId } = req.params as { firmId: string; userId: string };
+    const body = memberIdentityPatchSchema.parse(req.body);
+    try {
+      const rows = await withTenantContext(tenantContextFromRequest(req), (tx) => tx.$queryRaw<{
+        userId: string; name: string; emailNormalized: string;
+      }[]>`SELECT * FROM app_c5a_update_member_identity(
+        ${req.userId!}, ${firmId}, ${userId}, ${body.name ?? null}, ${body.email ?? null}
+      )`);
+      if (!rows[0]) {
+        return reply.status(404).send({ error: { code: "MEMBER_NOT_FOUND", message: "Usuario interno no encontrado" } });
+      }
+      return reply.send({ data: rows[0] });
+    } catch (error) {
+      const message = String(error);
+      if (message.includes("USER_EMAIL_CONFLICT") || message.includes("23505")) {
+        return reply.status(409).send({
+          error: { code: "USER_EMAIL_CONFLICT", message: "Ese correo ya está asociado a otra cuenta" },
+        });
+      }
+      if (message.includes("MEMBER_NOT_FOUND")) {
+        return reply.status(404).send({ error: { code: "MEMBER_NOT_FOUND", message: "Usuario interno no encontrado" } });
+      }
+      throw error;
+    }
+  });
+
+  // El rol es la fuente de verdad del acceso a módulos internos. SQL conserva
+  // sólo la protección del último OWNER/ADMIN activo y revoca sesiones al degradar.
   app.patch("/api/v1/firms/:firmId/members/:userId", async (req, reply) => {
     const { firmId, userId } = req.params as { firmId: string; userId: string };
-    const body = z.object({ role: internalRoleSchema }).strict().parse(req.body);
+    const body = internalMemberRolePatchSchema.parse(req.body);
     try {
-      const rows = await prisma.$queryRaw<{ userId: string; membershipId: string; role: string; outcome: string }[]>`
-        SELECT "userId", "membershipId", role, outcome
-        FROM app_change_internal_member_role(
-          ${req.userId!}, ${firmId}, ${userId}, ${body.role}::"FirmRole"
-        )`;
-      if (!rows[0]) {
-        return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
-      }
-      const member = await withTenantContext(tenantContextFromRequest(req), (tx) =>
-        tx.firmMembership.findUnique({
+      const ctx = tenantContextFromRequest(req);
+      const member = await withTenantContext(ctx, async (tx) => {
+        const rows = await tx.$queryRaw<{
+          userId: string; membershipId: string; role: string; outcome: string;
+        }[]>`SELECT "userId", "membershipId", role, outcome
+          FROM app_c5a_change_internal_member_role(
+            ${ctx.userId}, ${firmId}, ${userId}, ${body.role}::"FirmRole"
+          )`;
+        if (!rows[0]) return null;
+        return tx.firmMembership.findUnique({
           where: { firmId_userId: { firmId, userId } },
           select: {
             id: true,
@@ -330,8 +389,8 @@ export function firmRoutes(app: FastifyInstance) {
             acceptedAt: true,
             user: { select: { name: true, emailNormalized: true, status: true } },
           },
-        }),
-      );
+        });
+      });
       if (!member) {
         return reply.status(404).send({ error: { code: "MEMBER_NOT_FOUND", message: "Usuario interno no encontrado" } });
       }
@@ -342,17 +401,18 @@ export function firmRoutes(app: FastifyInstance) {
     }
   });
 
-  // Baja reversible (suspensión) de un miembro interno. Las invariantes de
-  // autorización, guard de último administrador, revocación de sesiones y
-  // auditoría viven en SQL (app_suspend_internal_member). Sin hard-delete:
-  // el estado es la baja y el historial se conserva.
+  // Baja reversible: la operación registra before/after y revoca sesiones en SQL.
   app.post("/api/v1/firms/:firmId/members/:userId/suspend", async (req, reply) => {
     const { firmId, userId } = req.params as { firmId: string; userId: string };
-    const body = memberLifecycleReasonSchema.parse(req.body ?? {});
     try {
-      const rows = await prisma.$queryRaw<{ userId: string; membershipId: string; status: string }[]>`
+      const ctx = tenantContextFromRequest(req);
+      const rows = await withTenantContext(ctx, (tx) => tx.$queryRaw<{
+        userId: string; membershipId: string; status: string; outcome: string;
+      }[]>`
         SELECT "userId", "membershipId", status
-        FROM app_suspend_internal_member(${req.userId!}, ${firmId}, ${userId}, ${body.reason ?? null})`;
+        FROM app_c5a_set_internal_member_status(
+          ${ctx.userId}, ${firmId}, ${userId}, 'SUSPENDED'::"MembershipStatus"
+        )`);
       if (!rows[0]) {
         return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
       }
@@ -363,15 +423,18 @@ export function firmRoutes(app: FastifyInstance) {
     }
   });
 
-  // Reactivación explícita de un miembro suspendido. El admin debe pedirla:
-  // no hay re-creación de sesiones, el usuario reingresa con login nuevo.
+  // La reactivación cambia el estado; las sesiones anteriores siguen revocadas.
   app.post("/api/v1/firms/:firmId/members/:userId/reactivate", async (req, reply) => {
     const { firmId, userId } = req.params as { firmId: string; userId: string };
-    const body = memberLifecycleReasonSchema.parse(req.body ?? {});
     try {
-      const rows = await prisma.$queryRaw<{ userId: string; membershipId: string; status: string }[]>`
+      const ctx = tenantContextFromRequest(req);
+      const rows = await withTenantContext(ctx, (tx) => tx.$queryRaw<{
+        userId: string; membershipId: string; status: string; outcome: string;
+      }[]>`
         SELECT "userId", "membershipId", status
-        FROM app_reactivate_internal_member(${req.userId!}, ${firmId}, ${userId}, ${body.reason ?? null})`;
+        FROM app_c5a_set_internal_member_status(
+          ${ctx.userId}, ${firmId}, ${userId}, 'ACTIVE'::"MembershipStatus"
+        )`);
       if (!rows[0]) {
         return reply.status(403).send({ error: { code: "CAPABILITY_REQUIRED", message: "No autorizado" } });
       }
@@ -453,12 +516,81 @@ export function firmRoutes(app: FastifyInstance) {
     },
   );
 
-  // Asignar cliente a usuario
+  app.get("/api/v1/firms/:firmId/clients/:clientId/assignments", async (req, reply) => {
+    const { firmId, clientId } = req.params as { firmId: string; clientId: string };
+    const data = await withTenantContext(tenantContextFromRequest(req), (tx) =>
+      tx.clientAssignment.findMany({
+        where: { firmId, clientId },
+        select: { id: true, userId: true, clientId: true, capabilities: true, createdAt: true, assignedBy: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    );
+    return reply.send({ data });
+  });
+
   app.post("/api/v1/firms/:firmId/clients/:clientId/assignments", async (req, reply) => {
     const { firmId, clientId } = req.params as { firmId: string; clientId: string };
     const body = createAssignmentSchema.parse(req.body);
-    const assignment = await firms.assignClient(firmId, body.userId, clientId, tenantContextFromRequest(req));
-    return reply.status(201).send({ data: assignment });
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const assignment = await withTenantContext(ctx, async (tx) => {
+        const member = await tx.firmMembership.findFirst({
+          where: { firmId, userId: body.userId, status: "ACTIVE" },
+          select: { userId: true },
+        });
+        if (!member) return null;
+        const created = await tx.clientAssignment.create({
+          data: {
+            firmId,
+            clientId,
+            userId: body.userId,
+            capabilities: body.capabilities ?? [],
+            assignedBy: ctx.userId,
+          },
+        });
+        await tx.auditEvent.create({
+          data: {
+            firmId, clientId, userId: ctx.userId, actorKind: ctx.actorKind,
+            action: "client.assignment.created", entityType: "ClientAssignment", entityId: created.id,
+            before: { assignment: null },
+            after: { id: created.id, userId: created.userId, clientId: created.clientId, capabilities: created.capabilities },
+          },
+        });
+        return created;
+      });
+      if (!assignment) {
+        return reply.status(404).send({ error: { code: "MEMBER_NOT_FOUND", message: "Usuario interno no encontrado" } });
+      }
+      return reply.status(201).send({ data: assignment });
+    } catch (error) {
+      if (String(error).includes("P2002") || String(error).includes("23505")) {
+        return reply.status(409).send({ error: { code: "ASSIGNMENT_EXISTS", message: "El usuario ya está asignado a este cliente" } });
+      }
+      throw error;
+    }
+  });
+
+  app.delete("/api/v1/firms/:firmId/clients/:clientId/assignments/:userId", async (req, reply) => {
+    const { firmId, clientId, userId } = req.params as { firmId: string; clientId: string; userId: string };
+    const ctx = tenantContextFromRequest(req);
+    const removed = await withTenantContext(ctx, async (tx) => {
+      const existing = await tx.clientAssignment.findFirst({ where: { firmId, clientId, userId } });
+      if (!existing) return null;
+      const result = await tx.clientAssignment.delete({ where: { id: existing.id } });
+      await tx.auditEvent.create({
+        data: {
+          firmId, clientId, userId: ctx.userId, actorKind: ctx.actorKind,
+          action: "client.assignment.removed", entityType: "ClientAssignment", entityId: result.id,
+          before: { id: result.id, userId: result.userId, clientId: result.clientId, capabilities: result.capabilities },
+          after: { assignment: null },
+        },
+      });
+      return result;
+    });
+    if (!removed) {
+      return reply.status(404).send({ error: { code: "ASSIGNMENT_NOT_FOUND", message: "Asignación no encontrada" } });
+    }
+    return reply.send({ data: { id: removed.id, status: "REMOVED" } });
   });
 
   app.post("/api/v1/firms/:firmId/invitations", async (req, reply) => {
