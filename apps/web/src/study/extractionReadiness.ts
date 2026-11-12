@@ -14,7 +14,7 @@ export const AUTOMATED_READING_UNAVAILABLE_REASONS = [
 const AUTOMATED_READING_UNAVAILABLE = new Set<string>(AUTOMATED_READING_UNAVAILABLE_REASONS);
 
 export const AUTOMATED_READING_UNAVAILABLE_MESSAGE =
-  "La lectura automática no está activada para este documento. Podés cargar los datos a mano en la tabla y aprobar, o rechazarlo.";
+  "La lectura automática no está activada para este documento. Podés cargar los datos a mano con «Cargar datos a mano», o rechazarlo.";
 
 export function isAutomatedReadingUnavailableReason(reason: string): boolean {
   return AUTOMATED_READING_UNAVAILABLE.has(reason);

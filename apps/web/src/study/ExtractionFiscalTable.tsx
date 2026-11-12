@@ -1,5 +1,6 @@
-import { Table } from "@contable/design-system";
+import { Button, Table } from "@contable/design-system";
 import type { ExtractedField, ExtractionReviewIssue, VoucherData } from "../lib/api";
+import { effectiveExtractedFieldValue, EXTRACTION_SCALAR_FIELDS } from "./extractionScalarFields";
 import {
   AUTOMATED_READING_UNAVAILABLE_MESSAGE,
   isAutomatedReadingUnavailableReason,
@@ -10,6 +11,7 @@ interface ExtractionFiscalTableProps {
   documentReviewReason: string | null;
   reviewIssues?: ExtractionReviewIssue[] | null;
   fields: ExtractedField[];
+  onAddManualData?: () => void;
 }
 
 interface FiscalRow {
@@ -18,29 +20,10 @@ interface FiscalRow {
   value: string | null;
   hasValue: boolean;
   reason: string;
+  manual: boolean;
 }
 
-type ScalarVoucherKey = Exclude<keyof VoucherData, "hora" | "iva" | "percepciones" | "confianza">;
-
-const SCALAR_FIELDS: { field: string; voucherKey: ScalarVoucherKey; extractedKey: string }[] = [
-  { field: "Tipo de documento", voucherKey: "tipo_documento", extractedKey: "voucherType" },
-  { field: "Letra", voucherKey: "letra", extractedKey: "letter" },
-  { field: "Punto de venta", voucherKey: "punto_venta", extractedKey: "pointOfSale" },
-  { field: "Número", voucherKey: "numero", extractedKey: "voucherNumber" },
-  { field: "Fecha", voucherKey: "fecha", extractedKey: "issueDate" },
-  { field: "CUIT emisor", voucherKey: "cuit_emisor", extractedKey: "issuerTaxId" },
-  { field: "CUIT receptor", voucherKey: "cuit_receptor", extractedKey: "receiverTaxId" },
-  { field: "Razón social emisor", voucherKey: "razon_social_emisor", extractedKey: "issuerName" },
-  { field: "Razón social receptor", voucherKey: "razon_social_receptor", extractedKey: "receiverName" },
-  { field: "Condición frente al IVA", voucherKey: "condicion_iva", extractedKey: "vatCondition" },
-  { field: "Neto gravado", voucherKey: "neto_gravado", extractedKey: "netAmount" },
-  { field: "No gravado", voucherKey: "no_gravado", extractedKey: "nonTaxableAmount" },
-  { field: "Exento", voucherKey: "exento", extractedKey: "exemptAmount" },
-  { field: "Total", voucherKey: "total", extractedKey: "totalAmount" },
-  { field: "Moneda", voucherKey: "moneda", extractedKey: "currency" },
-  { field: "CAE", voucherKey: "cae", extractedKey: "cae" },
-  { field: "Vencimiento del CAE", voucherKey: "cae_vencimiento", extractedKey: "caeExpiration" },
-];
+const SCALAR_FIELDS = EXTRACTION_SCALAR_FIELDS;
 
 const REPEATED_FIELD_GROUPS: Record<string, string> = {
   vatRate: "IVA",
@@ -107,6 +90,7 @@ function makeRow(
   relatedFields: ExtractedField[],
   relatedIssues: ExtractionReviewIssue[],
   hasValue = value !== null,
+  manual = false,
 ): FiscalRow {
   return {
     id,
@@ -114,6 +98,7 @@ function makeRow(
     value,
     hasValue,
     reason: rowReviewReason(relatedFields, relatedIssues),
+    manual,
   };
 }
 
@@ -126,12 +111,22 @@ function buildRows(
     const definition = SCALAR_FIELDS[index]!;
     const relatedFields = fields.filter((field) => field.key === definition.extractedKey);
     const relatedIssues = reviewIssues.filter((issue) => issue.sourcePath === definition.voucherKey);
+    const correctedValue = relatedFields.find((field) => field.correction?.trim())?.correction ?? null;
+    const manualField = relatedFields.find(
+      (field) => field.method === "HUMAN" && effectiveExtractedFieldValue(field) !== null,
+    );
+    const fieldValue = manualField
+      ? effectiveExtractedFieldValue(manualField)
+      : relatedFields.map(effectiveExtractedFieldValue).find((item) => item !== null) ?? null;
+    const value = correctedValue ?? voucher?.[definition.voucherKey] ?? fieldValue;
     return makeRow(
       definition.voucherKey,
       definition.field,
-      voucher?.[definition.voucherKey] ?? null,
+      value,
       relatedFields,
       relatedIssues,
+      value !== null,
+      manualField !== undefined,
     );
   };
   const vatRows: FiscalRow[] =
@@ -210,18 +205,27 @@ export function ExtractionFiscalTable({
   documentReviewReason,
   reviewIssues,
   fields,
+  onAddManualData,
 }: ExtractionFiscalTableProps) {
   const issues = reviewIssues ?? [];
   const rows = buildRows(voucherData, fields, issues);
   const documentReasons = uniqueReasons(
     documentReviewReasons(fields, documentReviewReason, reviewIssues).map(displayDocumentReason),
   );
+  const automatedReadingUnavailable =
+    isAutomatedReadingUnavailableReason(documentReviewReason ?? "") ||
+    issues.some((issue) => isAutomatedReadingUnavailableReason(issue.reason));
 
   return (
     <>
       {documentReasons.length > 0 ? (
         <div className="extraction-document-review" role="status" aria-label="Estado del documento">
-          Estado del documento: a revisar · {documentReasons.join(" · ")}
+          <span>Estado del documento: a revisar · {documentReasons.join(" · ")}</span>
+          {automatedReadingUnavailable && onAddManualData ? (
+            <Button type="button" variant="ghost" onClick={onAddManualData}>
+              Cargar datos a mano
+            </Button>
+          ) : null}
         </div>
       ) : null}
       <Table
@@ -234,7 +238,7 @@ export function ExtractionFiscalTable({
           {
             key: "state",
             header: "Estado",
-            accessor: (row) => (row.reason ? "a revisar" : row.hasValue ? "leído" : "no visible"),
+            accessor: (row) => (row.manual ? "cargado a mano" : row.reason ? "a revisar" : row.hasValue ? "leído" : "no visible"),
           },
           { key: "reason", header: "Motivo", accessor: (row) => row.reason },
         ]}

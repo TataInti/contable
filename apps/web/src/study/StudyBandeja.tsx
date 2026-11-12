@@ -14,6 +14,8 @@ import { useClientContext } from "../context/ClientContext";
 import { belongsToDocumentQueue, type DocumentQueueFilter } from "./documentQueue";
 import { ExtractionFiscalTable } from "./ExtractionFiscalTable";
 import { hasEffectiveFiscalData } from "./extractionReadiness";
+import { ManualExtractionFieldsDialog, type ManualExtractionFieldValue } from "./ManualExtractionFieldsDialog";
+import { EXTRACTION_SCALAR_FIELDS, fiscalScalarHasValue } from "./extractionScalarFields";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
@@ -111,6 +113,9 @@ export function StudyBandeja() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const confirm = useConfirmAction();
   const [corrections, setCorrections] = useState<Record<string, string>>({});
+  const [showManualFieldsDialog, setShowManualFieldsDialog] = useState(false);
+  const [manualFieldsError, setManualFieldsError] = useState<string | null>(null);
+  const [manualFieldsSavedCount, setManualFieldsSavedCount] = useState<number | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReasonCode, setRejectionReasonCode] = useState("");
   const [rejectionNote, setRejectionNote] = useState("");
@@ -162,6 +167,15 @@ export function StudyBandeja() {
     extraction.data?.voucherData ?? null,
     correctableExtractionFields,
     corrections,
+  );
+  const canLoadManualFields =
+    capabilities.has("document.review") &&
+    (extraction.data?.status === "GENERATED" || extraction.data?.status === "NEEDS_REVIEW");
+  const hasEmptyScalarFields = Boolean(
+    extraction.data &&
+      EXTRACTION_SCALAR_FIELDS.some(
+        (field) => !fiscalScalarHasValue(extraction.data!.voucherData, extraction.data!.fields, field),
+      ),
   );
 
   useEffect(() => {
@@ -230,6 +244,40 @@ export function StudyBandeja() {
         queryKey: ["extraction", firmId, clientId, selectedId],
       }),
   });
+  const addManualFields = useMutation({
+    mutationFn: (fields: ManualExtractionFieldValue[]) =>
+      api.put<{ status: string; savedCount: number; addedCount: number }>(
+        `${base}/extractions/${extraction.data!.id}/fields`,
+        { fields },
+      ),
+    onMutate: () => setManualFieldsError(null),
+    onSuccess: async (result) => {
+      const queryKey = ["extraction", firmId, clientId, selectedId];
+      try {
+        await queryClient.invalidateQueries({ queryKey, exact: true, refetchType: "none" });
+        await queryClient.fetchQuery({
+          queryKey,
+          queryFn: () => api.get<DocumentExtraction>(`${base}/documents/${selectedId}/extraction`),
+          staleTime: 0,
+        });
+        setManualFieldsSavedCount(result.savedCount);
+        setShowManualFieldsDialog(false);
+      } catch {
+        setManualFieldsError("Los datos se guardaron, pero no se pudo recargar la extracción. Volvé a intentar guardar.");
+      }
+    },
+    onError: (error) => {
+      setManualFieldsError(
+        error instanceof ApiError ? error.message : "No se pudieron guardar los datos. Volvé a intentarlo.",
+      );
+    },
+  });
+  const openManualFields = () => {
+    addManualFields.reset();
+    setManualFieldsError(null);
+    setManualFieldsSavedCount(null);
+    setShowManualFieldsDialog(true);
+  };
   const approve = useMutation({
     mutationFn: () => api.post(`${base}/extractions/${extraction.data!.id}/approve`),
     onSuccess: () =>
@@ -717,7 +765,13 @@ export function StudyBandeja() {
                       documentReviewReason={extraction.data.reviewReason}
                       reviewIssues={extraction.data.reviewIssues}
                       fields={extraction.data.fields}
+                      onAddManualData={canLoadManualFields ? openManualFields : undefined}
                     />
+                    {manualFieldsSavedCount !== null ? (
+                      <p className="manual-fields-saved" role="status">
+                        Datos guardados: {manualFieldsSavedCount} {manualFieldsSavedCount === 1 ? "campo" : "campos"}.
+                      </p>
+                    ) : null}
                     {extraction.data.fields.some((field) => FIELD_LABELS[field.key]) ? (
                       <section
                         className="extraction-corrections"
@@ -774,6 +828,11 @@ export function StudyBandeja() {
                           )}
                         </div>
                         <div className="review-actions__buttons">
+                          {canLoadManualFields && hasEmptyScalarFields ? (
+                            <Button variant="ghost" onClick={openManualFields}>
+                              Cargar datos a mano
+                            </Button>
+                          ) : null}
                           <Button
                             onClick={() =>
                               confirm.ask({
@@ -823,6 +882,16 @@ export function StudyBandeja() {
                           </small>
                         </span>
                       </div>
+                    ) : null}
+                    {showManualFieldsDialog ? (
+                      <ManualExtractionFieldsDialog
+                        fields={extraction.data.fields}
+                        voucherData={extraction.data.voucherData}
+                        isSaving={addManualFields.isPending}
+                        error={manualFieldsError}
+                        onSave={(fields) => addManualFields.mutate(fields)}
+                        onClose={() => setShowManualFieldsDialog(false)}
+                      />
                     ) : null}
                   </>
                 ) : (
