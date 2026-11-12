@@ -250,8 +250,10 @@ function InspectorActions({
   );
 }
 
+const CATALOG_CODE_CONFLICT = "CATALOG_CODE_CONFLICT";
+
 function codeConflict(error: unknown): string | undefined {
-  return error instanceof ApiError && error.code === "CATALOG_CODE_CONFLICT" ? error.message : undefined;
+  return error instanceof ApiError && error.code === CATALOG_CODE_CONFLICT ? error.message : undefined;
 }
 
 function suggestedCode(current: string, usedCodes: string[], maxLength = 40): string {
@@ -1975,8 +1977,15 @@ export function StudyCatalogosFiscales() {
                 </option>
               ))}
             </select>
-            <p className="muted-copy">La familia determina las opciones de cálculo de este régimen.</p>
+            <p className="muted-copy">
+              {regimeForm.calcFamilyId
+                ? "La familia determina las opciones de cálculo de este régimen."
+                : "Elegí una familia de cálculo para completar el régimen."}
+            </p>
             {calcFamiliesQuery.isLoading ? <p className="muted-copy">Cargando familias…</p> : null}
+            {!calcFamiliesQuery.isLoading && !calcFamiliesQuery.isError && calcFamilies.length === 0 ? (
+              <p className="form-error" role="alert">No hay familias de cálculo disponibles para elegir.</p>
+            ) : null}
             {calcFamiliesQuery.isError ? (
               <p className="form-error" role="alert">
                 No pudimos cargar las familias de cálculo. <Button type="button" variant="ghost" size="sm" onClick={() => void calcFamiliesQuery.refetch()}>Reintentar</Button>
@@ -2467,7 +2476,6 @@ export function StudyCatalogosFiscales() {
                 value={jurisdictionForm.code}
                 onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, code: event.target.value.toUpperCase() })}
                 error={codeConflict(updateJurisdiction.error)}
-                hint="Hoy, el código de la jurisdicción define la familia del motor. Más adelante podrás elegir esa decisión por separado."
                 maxLength={40}
                 required
               />

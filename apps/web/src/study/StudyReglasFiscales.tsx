@@ -220,7 +220,7 @@ export function StudyReglasFiscales() {
       if (!regimeId) throw new Error("No se encontró el régimen del paquete.");
       return api.get<TaxEngineOption[]>(`/tax/regimes/${regimeId}/engines`);
     },
-    enabled: Boolean(showInitialVersionForm && detailQuery.data?.regime.id),
+    enabled: Boolean(showInitialVersionForm && detailQuery.data?.regime.id && detailQuery.data.regime.calcFamilyId),
   });
   const credentialQuery = useQuery({
     queryKey: ["tax-credentials", firmId],
@@ -872,7 +872,7 @@ export function StudyReglasFiscales() {
             }}
             required
           />
-          {regimeEnginesQuery.error instanceof ApiError && regimeEnginesQuery.error.code === "REGIME_FAMILY_REQUIRED" ? (
+          {!detailQuery.data?.regime.calcFamilyId ? (
             <EmptyState
               size="compact"
               role="alert"

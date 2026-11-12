@@ -59,6 +59,34 @@ const hiddenActivity = {
   validTo: null,
   isActive: false,
 };
+const vatEngines = [
+  {
+    id: "engine-vat-current",
+    engineKey: "vat-ri",
+    engineVersion: "ar-vat-ri-v2.1.0",
+    familyId: "family-vat",
+    familyKey: "VAT_RI",
+    label: "IVA RI por alícuota",
+  },
+  {
+    id: "engine-vat-legacy",
+    engineKey: "vat-ri-legacy",
+    engineVersion: "ar-vat-ri-v1.0.0",
+    familyId: "family-vat",
+    familyKey: "VAT_RI",
+    label: "IVA RI legacy",
+  },
+];
+const iibbEngines = [
+  {
+    id: "engine-iibb-local",
+    engineKey: "iibb-local-tuc",
+    engineVersion: "ar-iibb-tuc-local-v1.1.0",
+    familyId: "family-iibb",
+    familyKey: "IIBB_LOCAL",
+    label: "IIBB local Tucumán",
+  },
+];
 
 function makeDetail(activityCode: string | null) {
   return {
@@ -72,6 +100,7 @@ function makeDetail(activityCode: string | null) {
       id: "regime-1",
       code: "RI",
       name: "Responsable Inscripto",
+      calcFamilyId: "family-vat" as string | null,
       taxType: { name: "IVA", code: "IVA" },
       jurisdiction: { id: "jur-ar", name: "Nación", code: "AR" },
       authority: { id: "auth-1", name: "ARCA" },
@@ -116,8 +145,10 @@ function packList(detail: ReturnType<typeof makeDetail>) {
       origin: detail.origin,
       createdByFirmId: detail.createdByFirmId,
       regime: {
+        id: detail.regime.id,
         name: detail.regime.name,
         code: detail.regime.code,
+        calcFamilyId: detail.regime.calcFamilyId,
         taxType: { name: "IVA", code: "IVA" },
         jurisdiction: { name: detail.regime.jurisdiction.name },
       },
@@ -130,6 +161,16 @@ function mockApi(detail: ReturnType<typeof makeDetail>) {
   vi.mocked(api.get).mockImplementation(((path: string) => {
     if (path === "/tax/rule-packs") return Promise.resolve(packList(detail));
     if (path === "/tax/rule-packs/pack-1") return Promise.resolve(detail);
+    if (path === `/tax/regimes/${detail.regime.id}/engines`) {
+      if (!detail.regime.calcFamilyId) {
+        return Promise.reject(new ApiError(
+          "REGIME_FAMILY_REQUIRED",
+          "Elegí la familia de cálculo del régimen",
+          422,
+        ));
+      }
+      return Promise.resolve(detail.regime.calcFamilyId === "family-iibb" ? iibbEngines : vatEngines);
+    }
     if (path === "/tax/activities" || path === "/tax/activities?includeInactive=true") return Promise.resolve([...activeActivities, hiddenActivity]);
     if (path === "/tax/regimes") return Promise.resolve([]);
     return Promise.resolve([]);
@@ -172,18 +213,19 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     vi.restoreAllMocks();
   });
 
-  it("ofrece motores compatibles del régimen y envía la selección elegida", async () => {
+  it("ofrece opciones de cálculo del régimen y envía el identificador elegido", async () => {
     const detail = { ...makeDetail(null), versions: [] };
     mockApi(detail);
     renderReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
-    const select = (await screen.findByLabelText("Motor compatible con el régimen")) as HTMLSelectElement;
-    expect(select.value).toBe("ar-vat-ri-v2.1.0");
-    expect(within(select).getByRole("option", { name: /ar-vat-ri-v1.0.0/ })).toBeTruthy();
-    expect(within(select).queryByRole("option", { name: "tax-engine-v1" })).toBeNull();
+    const select = (await screen.findByLabelText("Opción de cálculo")) as HTMLSelectElement;
+    expect(select.value).toBe("engine-vat-current");
+    expect(within(select).getByRole("option", { name: "IVA RI legacy" })).toBeTruthy();
+    expect(within(select).queryByRole("option", { name: "IIBB local Tucumán" })).toBeNull();
+    expect(api.get).toHaveBeenCalledWith("/tax/regimes/regime-1/engines");
 
-    fireEvent.change(select, { target: { value: "ar-vat-ri-v1.0.0" } });
+    fireEvent.change(select, { target: { value: "engine-vat-legacy" } });
     const form = select.closest("form");
     expect(form).not.toBeNull();
     fireEvent.click(within(form!).getByRole("button", { name: "Crear primera versión" }));
@@ -191,13 +233,13 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/tax/rule-packs/pack-1/versions", {
         validFrom: expect.any(String),
-        engineVersion: "ar-vat-ri-v1.0.0",
+        engineId: "engine-vat-legacy",
         rulesHash: "PENDING_DRAFT",
       }),
     );
   });
 
-  it("resuelve el motor por impuesto aunque el código de régimen sea propio del estudio", async () => {
+  it("usa las opciones del régimen aunque su código sea propio del estudio", async () => {
     const base = makeDetail(null);
     const detail = {
       ...base,
@@ -208,9 +250,45 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     renderReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
-    const select = (await screen.findByLabelText("Motor compatible con el régimen")) as HTMLSelectElement;
-    expect(select.value).toBe("ar-vat-ri-v2.1.0");
-    expect(within(select).getByRole("option", { name: /ar-vat-ri-v1.0.0/ })).toBeTruthy();
+    const select = (await screen.findByLabelText("Opción de cálculo")) as HTMLSelectElement;
+    expect(select.value).toBe("engine-vat-current");
+    expect(within(select).getByRole("option", { name: "IVA RI legacy" })).toBeTruthy();
+  });
+
+  it("muestra únicamente las opciones que devuelve la familia del régimen", async () => {
+    const base = makeDetail(null);
+    const detail = {
+      ...base,
+      versions: [],
+      regime: { ...base.regime, calcFamilyId: "family-iibb" },
+    };
+    mockApi(detail);
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
+    const select = (await screen.findByLabelText("Opción de cálculo")) as HTMLSelectElement;
+    expect(select.value).toBe("engine-iibb-local");
+    expect(within(select).getByRole("option", { name: "IIBB local Tucumán" })).toBeTruthy();
+    expect(within(select).queryByRole("option", { name: "IVA RI por alícuota" })).toBeNull();
+  });
+
+  it("guía a editar el régimen cuando falta la familia de cálculo", async () => {
+    const base = makeDetail(null);
+    const detail = {
+      ...base,
+      versions: [],
+      regime: { ...base.regime, calcFamilyId: null },
+    };
+    mockApi(detail);
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
+    expect(await screen.findByText("Elegí una familia de cálculo")).toBeTruthy();
+    const editLink = screen.getByRole("link", { name: "Editar régimen" });
+    expect(editLink.getAttribute("href")).toBe("/catalogos-fiscales?editRegime=regime-1");
+    expect(screen.queryByLabelText("Opción de cálculo")).toBeNull();
+    const form = within(await screen.findByRole("dialog"));
+    expect((form.getByRole("button", { name: "Crear primera versión" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("marca una vigencia fuera de rango y evita enviar la versión", async () => {
