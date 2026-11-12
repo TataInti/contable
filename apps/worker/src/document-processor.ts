@@ -4,6 +4,8 @@ import { ObjectStorage, BUCKETS, detectMime, sha256Of } from "@contable/storage"
 import { AiClient, AiExtractionHttpError } from "./ai-client.js";
 import { ClamAvClient } from "./clamav-client.js";
 
+const CUSTOMER_DATA_EXTRACTION_DISABLED = "CUSTOMER_DATA_EXTRACTION_DISABLED";
+
 /**
  * Worker de documentos (Fase 4-5).
  * Procesa jobs VALIDATE: descarga de cuarentena, valida magic bytes + hash,
@@ -215,7 +217,7 @@ export class DocumentProcessor {
       const automatedReadingDisabled =
         err instanceof AiExtractionHttpError &&
         err.status === 503 &&
-        err.code === "CUSTOMER_DATA_EXTRACTION_DISABLED";
+        err.code === CUSTOMER_DATA_EXTRACTION_DISABLED;
       const reviewReason = automatedReadingDisabled
         ? "CUSTOMER_DATA_EXTRACTION_DISABLED"
         : err instanceof Error && err.name === "TimeoutError"

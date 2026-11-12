@@ -76,6 +76,19 @@ describe("hash canónico de reglas v2", () => {
     ).toBe(computeRulesHashV2(version));
   });
 
+  it("recalcula el hash v2 existente sin cambios al agregar engineId", () => {
+    const version = versionWithoutBracketsOrRoundings();
+    const storedHash = computeRulesHashV2(version);
+    const migratedVersion = {
+      ...version,
+      engineId: "e1000000-0000-4000-8000-000000000001",
+      rulesHash: storedHash,
+      rulesHashSchemaVersion: 2,
+    };
+
+    expect(computeRulesHashV2(migratedVersion)).toBe(migratedVersion.rulesHash);
+  });
+
   it("agregar o quitar un tramo cambia el SHA", () => {
     const version = versionWithoutBracketsOrRoundings();
     const originalHash = computeRulesHashV2(version);

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
 import {
-  compatibleTaxEnginesForRegime,
   normalizeActivityCode,
   type CatalogEconomicActivity,
 } from "@contable/contracts";
+import type { TaxEngineOption } from "@contable/contracts";
 import { ApiError, api } from "../lib/api";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useClientContext } from "../context/ClientContext";
@@ -74,8 +74,10 @@ interface RulePack {
   origin?: "REFERENCE" | "UI";
   createdByFirmId?: string | null;
   regime: {
+    id: string;
     name: string;
     code: string;
+    calcFamilyId?: string | null;
     isActive: boolean;
     taxType: { name: string; code: string; isActive: boolean };
     jurisdiction: { name: string; code?: string; isActive: boolean };
@@ -176,7 +178,7 @@ export function StudyReglasFiscales() {
   // marcan las filas del borrador cuyo código coincide con el del mensaje.
   const [rowActivityErrors, setRowActivityErrors] = useState<Record<string, string>>({});
   const [newPack, setNewPack] = useState({ code: "", name: "", regimeId: "" });
-  const [engineVersion, setEngineVersion] = useState("");
+  const [engineId, setEngineId] = useState("");
   const [newSource, setNewSource] = useState({
     title: "",
     reference: "",
@@ -211,6 +213,15 @@ export function StudyReglasFiscales() {
     queryFn: () => api.get<RulePackDetail>(`/tax/rule-packs/${selectedPackId}`),
     enabled: Boolean(selectedPackId),
   });
+  const regimeEnginesQuery = useQuery({
+    queryKey: ["tax-regime-engines", detailQuery.data?.regime.id],
+    queryFn: () => {
+      const regimeId = detailQuery.data?.regime.id;
+      if (!regimeId) throw new Error("No se encontró el régimen del paquete.");
+      return api.get<TaxEngineOption[]>(`/tax/regimes/${regimeId}/engines`);
+    },
+    enabled: Boolean(showInitialVersionForm && detailQuery.data?.regime.id && detailQuery.data.regime.calcFamilyId),
+  });
   const credentialQuery = useQuery({
     queryKey: ["tax-credentials", firmId],
     queryFn: () => api.get<Credential[]>("/tax/credentials"),
@@ -244,25 +255,9 @@ export function StudyReglasFiscales() {
   useEffect(() => {
     setSelectedVersionId(null);
   }, [selectedPackId]);
-  const compatibleEngineOptions = useMemo(
-    () =>
-      detailQuery.data?.regime.taxType.code
-        ? compatibleTaxEnginesForRegime({
-            regimeCode: detailQuery.data.regime.code,
-            taxTypeCode: detailQuery.data.regime.taxType.code,
-            jurisdictionCode: detailQuery.data.regime.jurisdiction.code,
-          })
-        : [],
-    [
-      detailQuery.data?.regime.code,
-      detailQuery.data?.regime.taxType.code,
-      detailQuery.data?.regime.jurisdiction.code,
-    ],
-  );
-
   useEffect(() => {
-    setEngineVersion(compatibleEngineOptions[0]?.engineVersion ?? "");
-  }, [compatibleEngineOptions, selectedPackId]);
+    setEngineId(regimeEnginesQuery.data?.[0]?.id ?? "");
+  }, [regimeEnginesQuery.data, selectedPackId]);
 
   // Versión activa del paquete: se muestra junto al borrador para que quede
   // claro qué versión se está editando y cuál sigue aplicando a los cálculos.
@@ -324,7 +319,7 @@ export function StudyReglasFiscales() {
     mutationFn: () =>
       api.post(`/tax/rule-packs/${selectedPackId}/versions`, {
         validFrom,
-        engineVersion,
+        engineId,
         rulesHash: "PENDING_DRAFT",
       }),
     onSuccess: () => {
@@ -877,35 +872,58 @@ export function StudyReglasFiscales() {
             }}
             required
           />
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="first-rule-version-engine">
-              Motor compatible con el régimen
-            </label>
-            <select
-              id="first-rule-version-engine"
-              className="ds-field__input"
-              value={engineVersion}
-              onChange={(event) => setEngineVersion(event.target.value)}
-              required
-            >
-              <option value="">Seleccioná un motor compatible…</option>
-              {compatibleEngineOptions.map((option) => (
-                <option key={option.engineVersion} value={option.engineVersion}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            {compatibleEngineOptions.length === 0 ? (
-              <p className="form-error" role="alert">
-                No hay motores implementados para este régimen. La versión no se puede crear.
-              </p>
-            ) : null}
-          </div>
+          {!detailQuery.data?.regime.calcFamilyId ? (
+            <EmptyState
+              size="compact"
+              role="alert"
+              title="Elegí una familia de cálculo"
+              description="Este régimen necesita una familia para mostrar las opciones de cálculo."
+              action={(
+                <a
+                  className="dense-link"
+                  href={`/catalogos-fiscales?editRegime=${encodeURIComponent(detailQuery.data?.regime.id ?? "")}`}
+                >
+                  Editar régimen
+                </a>
+              )}
+            />
+          ) : regimeEnginesQuery.isLoading ? (
+            <p className="muted-copy" role="status">Buscando opciones de cálculo…</p>
+          ) : regimeEnginesQuery.isError ? (
+            <p className="form-error" role="alert">
+              No pudimos cargar las opciones de cálculo. <Button type="button" variant="ghost" size="sm" onClick={() => void regimeEnginesQuery.refetch()}>Reintentar</Button>
+            </p>
+          ) : regimeEnginesQuery.data?.length ? (
+            <div className="ds-field">
+              <label className="ds-field__label" htmlFor="first-rule-version-engine">Opción de cálculo</label>
+              <select
+                id="first-rule-version-engine"
+                className="ds-field__input"
+                value={engineId}
+                onChange={(event) => setEngineId(event.target.value)}
+                required
+              >
+                <option value="">Seleccioná una opción…</option>
+                {regimeEnginesQuery.data.map((engine) => (
+                  <option key={engine.id} value={engine.id}>{engine.label}</option>
+                ))}
+              </select>
+              {createVersionMutation.error instanceof ApiError ? (
+                <p className="form-error" role="alert">{createVersionMutation.error.message}</p>
+              ) : null}
+            </div>
+          ) : (
+            <EmptyState
+              size="compact"
+              title="Esta familia aún no tiene opciones de cálculo"
+              description="Elegí otra familia para este régimen o consultá con quien administra la configuración del estudio."
+            />
+          )}
           <div className="study-form__actions">
             <Button
               type="submit"
               loading={createVersionMutation.isPending}
-              disabled={!compatibleEngineOptions.some((option) => option.engineVersion === engineVersion)}
+              disabled={!regimeEnginesQuery.data?.some((engine) => engine.id === engineId)}
             >
               Crear primera versión
             </Button>

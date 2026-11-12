@@ -1982,6 +1982,50 @@ model TaxAuthority {
   @@map("tax_authorities")
 }
 
+// --- P2 corte 2a: catálogos de sistema de familia de cálculo y motores ---
+
+/// Familia de cálculo: agrupa motores implementados y declara capacidades.
+/// Catálogo de sistema; el estudio elige por id y no edita sus valores.
+model CalcFamily {
+  id                   String   @id @default(uuid(7))
+  key                  String   @unique
+  label                String
+  isActive             Boolean  @default(true)
+  sortOrder            Int      @default(0)
+  allowsAdvancePayment Boolean  @default(false)
+  closesByJurisdiction Boolean  @default(false)
+  allowedBalanceKinds  String[] @default([])
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  engines  TaxEngine[]
+  taxTypes TaxType[]
+  regimes  TaxRegime[]
+
+  @@index([isActive, sortOrder])
+  @@map("calc_families")
+}
+
+/// Motor implementado. engineKey es la unión inmutable con el código.
+model TaxEngine {
+  id            String   @id @default(uuid(7))
+  engineKey     String   @unique
+  engineVersion String
+  familyId      String
+  label         String
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  family       CalcFamily      @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  ruleVersions TaxRuleVersion[]
+
+  @@index([familyId, isActive, sortOrder])
+  @@index([engineVersion])
+  @@map("tax_engines")
+}
+
 model TaxType {
   id              String        @id @default(uuid(7))
   code            String
@@ -1991,8 +2035,10 @@ model TaxType {
   updatedAt       DateTime      @updatedAt
   origin          CatalogOrigin @default(REFERENCE)
   createdByFirmId String?
+  defaultFamilyId String?
 
   createdByFirm      Firm?                  @relation("TaxTypeCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
+  defaultFamily      CalcFamily?             @relation(fields: [defaultFamilyId], references: [id], onDelete: SetNull)
   regimes            TaxRegime[]
   periods            TaxPeriod[]
   importBatches      ImportBatch[]
@@ -2002,6 +2048,7 @@ model TaxType {
 
   @@unique([code])
   @@index([createdByFirmId])
+  @@index([defaultFamilyId])
   @@map("tax_types")
 }
 
@@ -2016,8 +2063,10 @@ model TaxRegime {
   updatedAt      DateTime @updatedAt
   origin         CatalogOrigin @default(REFERENCE)
   createdByFirmId String?
+  calcFamilyId   String?
 
   taxType        TaxType          @relation(fields: [taxTypeId], references: [id])
+  calcFamily     CalcFamily?      @relation(fields: [calcFamilyId], references: [id], onDelete: SetNull)
   createdByFirm  Firm?            @relation("TaxRegimeCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
   jurisdiction   Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
   authority      TaxAuthority     @relation(fields: [authorityId], references: [id])
@@ -2030,6 +2079,7 @@ model TaxRegime {
   @@unique([code])
   @@index([taxTypeId])
   @@index([jurisdictionId])
+  @@index([calcFamilyId])
   @@map("tax_regimes")
 }
 
@@ -2309,8 +2359,10 @@ model TaxRuleVersion {
   updatedAt     DateTime @updatedAt
   origin        CatalogOrigin @default(REFERENCE)
   createdByFirmId String?
+  engineId      String?
 
   pack      TaxRulePack        @relation(fields: [packId], references: [id], onDelete: Cascade)
+  engine    TaxEngine?         @relation(fields: [engineId], references: [id], onDelete: SetNull)
   createdByFirm Firm? @relation("TaxRuleVersionCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
   approvedBy User?             @relation(fields: [approvedByUserId], references: [id])
   activatedBy User?            @relation("TaxRuleVersionActivatedBy", fields: [activatedByUserId], references: [id], onDelete: SetNull)
@@ -2327,6 +2379,7 @@ model TaxRuleVersion {
 
   @@unique([packId, version])
   @@index([packId, status])
+  @@index([engineId])
   @@map("tax_rule_versions")
 }
 
