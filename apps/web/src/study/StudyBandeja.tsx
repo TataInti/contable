@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { isManualExtractionFieldKey } from "@contable/contracts";
 import { useNavigate } from "react-router-dom";
 import {
   ApiError,
@@ -8,6 +9,7 @@ import {
   uploadToSignedUrl,
   type Document,
   type DocumentExtraction,
+  type ExtractedField,
   type DocumentRequest,
 } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -15,6 +17,7 @@ import { belongsToDocumentQueue, type DocumentQueueFilter } from "./documentQueu
 import { ExtractionFiscalTable } from "./ExtractionFiscalTable";
 import { hasEffectiveFiscalData } from "./extractionReadiness";
 import { ManualExtractionFieldsDialog, type ManualExtractionFieldValue } from "./ManualExtractionFieldsDialog";
+import { ManualExtractionValueControl, normalizeManualExtractionInput } from "./ManualExtractionValueControl";
 import { EXTRACTION_SCALAR_FIELDS, fiscalScalarHasValue } from "./extractionScalarFields";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -244,6 +247,19 @@ export function StudyBandeja() {
         queryKey: ["extraction", firmId, clientId, selectedId],
       }),
   });
+  const persistCorrection = (field: ExtractedField) => {
+    const next = corrections[field.id] ?? "";
+    const original = field.correction ?? field.normalizedValue ?? field.rawValue ?? "";
+    if (!next || next === original) return;
+
+    if (isManualExtractionFieldKey(field.key)) {
+      const normalized = normalizeManualExtractionInput(field.key, next);
+      if (normalized) correct.mutate({ fieldId: field.id, correction: normalized });
+      return;
+    }
+
+    correct.mutate({ fieldId: field.id, correction: next });
+  };
   const addManualFields = useMutation({
     mutationFn: (fields: ManualExtractionFieldValue[]) =>
       api.put<{ status: string; savedCount: number; addedCount: number }>(
@@ -783,25 +799,38 @@ export function StudyBandeja() {
                             .filter((field) => FIELD_LABELS[field.key])
                             .map((field) => (
                               <div className="extraction-field" key={field.id}>
-                                <Field
-                                  id={`extracted-${field.id}`}
-                                  label={FIELD_LABELS[field.key]!}
-                                  value={corrections[field.id] ?? ""}
-                                  hint={`Confianza ${Math.round(field.confidence * 100)}% · ${field.correction ? "corregido manualmente" : "valor extraído"}`}
-                                  onChange={(event) =>
-                                    setCorrections((current) => ({
-                                      ...current,
-                                      [field.id]: event.target.value,
-                                    }))
-                                  }
-                                  onBlur={() => {
-                                    const next = corrections[field.id] ?? "";
-                                    const original =
-                                      field.correction ?? field.normalizedValue ?? field.rawValue ?? "";
-                                    if (next && next !== original)
-                                      correct.mutate({ fieldId: field.id, correction: next });
-                                  }}
-                                />
+                                {isManualExtractionFieldKey(field.key) ? (
+                                  <ManualExtractionValueControl
+                                    fieldKey={field.key}
+                                    id={`extracted-${field.id}`}
+                                    label={FIELD_LABELS[field.key]!}
+                                    value={corrections[field.id] ?? ""}
+                                    hint={`Confianza ${Math.round(field.confidence * 100)}% · ${field.correction ? "corregido manualmente" : "valor extraído"}`}
+                                    layout="field"
+                                    showValidation={
+                                      (corrections[field.id] ?? "") !==
+                                      (field.correction ?? field.normalizedValue ?? field.rawValue ?? "")
+                                    }
+                                    onChange={(value) =>
+                                      setCorrections((current) => ({ ...current, [field.id]: value }))
+                                    }
+                                    onBlur={() => persistCorrection(field)}
+                                  />
+                                ) : (
+                                  <Field
+                                    id={`extracted-${field.id}`}
+                                    label={FIELD_LABELS[field.key]!}
+                                    value={corrections[field.id] ?? ""}
+                                    hint={`Confianza ${Math.round(field.confidence * 100)}% · ${field.correction ? "corregido manualmente" : "valor extraído"}`}
+                                    onChange={(event) =>
+                                      setCorrections((current) => ({
+                                        ...current,
+                                        [field.id]: event.target.value,
+                                      }))
+                                    }
+                                    onBlur={() => persistCorrection(field)}
+                                  />
+                                )}
                                 <span
                                   className={`confidence-mark confidence-mark--${field.confidence >= 0.9 ? "high" : field.confidence >= 0.7 ? "medium" : "low"}`}
                                   aria-hidden="true"

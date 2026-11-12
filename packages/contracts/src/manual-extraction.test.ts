@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  isManualExtractionFieldKey,
   isValidManualExtractionIsoDate,
+  MANUAL_EXTRACTION_FIELD_KEYS,
   manualExtractionFieldError,
   normalizeManualExtractionAmount,
 } from "./manual-extraction.js";
 
 describe("formatos de carga manual", () => {
+  it("reconoce únicamente las 17 claves fiscales tipadas", () => {
+    expect(MANUAL_EXTRACTION_FIELD_KEYS.every(isManualExtractionFieldKey)).toBe(true);
+    expect(isManualExtractionFieldKey("vatRate")).toBe(false);
+    expect(isManualExtractionFieldKey("time")).toBe(false);
+  });
+
   it.each([
     ["1.234,56", "1234.56"],
     ["1234,56", "1234.56"],

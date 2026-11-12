@@ -101,6 +101,44 @@ const extractionFixture = {
 
 const extractionFixtureSnapshot = structuredClone(extractionFixture);
 
+const typedCorrectionValidCases = [
+  { key: "voucherType", label: "Tipo de documento", input: "otro", expected: "otro" },
+  { key: "letter", label: "Letra", input: "B", expected: "B" },
+  { key: "pointOfSale", label: "Punto de venta", input: "00a04", expected: "0004" },
+  { key: "voucherNumber", label: "Número", input: "00A012", expected: "00012" },
+  { key: "issueDate", label: "Fecha", input: "2026-11-12", expected: "2026-11-12" },
+  { key: "issuerTaxId", label: "CUIT emisor", input: "30123456789", expected: "30123456789" },
+  { key: "receiverTaxId", label: "CUIT receptor", input: "30712345678", expected: "30712345678" },
+  { key: "issuerName", label: "Razón social emisor", input: "Proveedor / sucursal 2", expected: "Proveedor / sucursal 2" },
+  { key: "receiverName", label: "Razón social receptor", input: "Cliente, área compras", expected: "Cliente, área compras" },
+  { key: "vatCondition", label: "Condición frente al IVA", input: "EXENTO", expected: "EXENTO" },
+  { key: "netAmount", label: "Neto gravado", input: "1.234,56", expected: "1234.56" },
+  { key: "nonTaxableAmount", label: "No gravado", input: "1.234,56", expected: "1234.56" },
+  { key: "exemptAmount", label: "Exento", input: "1.234,56", expected: "1234.56" },
+  { key: "totalAmount", label: "Total", input: "1.234,56", expected: "1234.56" },
+  { key: "currency", label: "Moneda", input: "USD", expected: "USD" },
+  { key: "cae", label: "CAE", input: "75123456789012", expected: "75123456789012" },
+  { key: "caeExpiration", label: "Vencimiento del CAE", input: "2026-11-12", expected: "2026-11-12" },
+] as const;
+
+const typedCorrectionInvalidCases = [
+  { key: "voucherType", label: "Tipo de documento", input: "Factura" },
+  { key: "letter", label: "Letra", input: "Z" },
+  { key: "pointOfSale", label: "Punto de venta", input: "---" },
+  { key: "voucherNumber", label: "Número", input: "---" },
+  { key: "issueDate", label: "Fecha", input: "2026-02-30" },
+  { key: "issuerTaxId", label: "CUIT emisor", input: "1234567890", error: "El CUIT debe tener exactamente 11 dígitos." },
+  { key: "receiverTaxId", label: "CUIT receptor", input: "123456789012", error: "El CUIT debe tener exactamente 11 dígitos." },
+  { key: "vatCondition", label: "Condición frente al IVA", input: "Responsable inscripto" },
+  { key: "netAmount", label: "Neto gravado", input: "no es un importe", error: "Ingresá un importe, por ejemplo 1.234,56" },
+  { key: "nonTaxableAmount", label: "No gravado", input: "1.234,5,6", error: "Ingresá un importe, por ejemplo 1.234,56" },
+  { key: "exemptAmount", label: "Exento", input: "10,3,5", error: "Ingresá un importe, por ejemplo 1.234,56" },
+  { key: "totalAmount", label: "Total", input: "100 sin formato", error: "Ingresá un importe, por ejemplo 1.234,56" },
+  { key: "currency", label: "Moneda", input: "EUR" },
+  { key: "cae", label: "CAE", input: "1234567890123", error: "El CAE debe tener exactamente 14 dígitos." },
+  { key: "caeExpiration", label: "Vencimiento del CAE", input: "12/11/2026" },
+] as const;
+
 function renderBandeja() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -172,6 +210,92 @@ describe("StudyBandeja — revisión de extracción", () => {
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(
         "/firms/firm-a/clients/client-a/extractions/extraction-a/approve",
+      ),
+    );
+  });
+
+  it.each(typedCorrectionValidCases)(
+    "corrige $key con el mismo control y formato canónico de la carga manual",
+    async ({ key, label, input, expected }) => {
+      Object.assign(extractionFixture, {
+        fields: [{
+          id: `field-${key}`,
+          key,
+          rawValue: "formato anterior",
+          normalizedValue: "formato anterior",
+          correction: null,
+          confidence: 0.9,
+          status: "ACCEPTED",
+          reason: null,
+        }],
+      });
+
+      await openExtraction();
+      const control = screen.getByLabelText(label);
+      fireEvent.change(control, { target: { value: input } });
+      fireEvent.blur(control);
+
+      await waitFor(() =>
+        expect(api.patch).toHaveBeenCalledWith(
+          `/firms/firm-a/clients/client-a/extractions/extraction-a/fields/field-${key}`,
+          { correction: expected, reason: "Corrección manual en bandeja" },
+        ),
+      );
+    },
+  );
+
+  it.each(typedCorrectionInvalidCases)(
+    "no envía una corrección inválida de $key y comunica el formato cuando el control lo admite",
+    async (testCase) => {
+      const { key, label, input } = testCase;
+      const error = "error" in testCase ? testCase.error : undefined;
+      Object.assign(extractionFixture, {
+        fields: [{
+          id: `field-${key}`,
+          key,
+          rawValue: "formato anterior",
+          normalizedValue: "formato anterior",
+          correction: null,
+          confidence: 0.9,
+          status: "ACCEPTED",
+          reason: null,
+        }],
+      });
+
+      await openExtraction();
+      const control = screen.getByLabelText(label);
+      fireEvent.change(control, { target: { value: input } });
+      if (error) expect(await screen.findByText(error)).toBeTruthy();
+      fireEvent.blur(control);
+
+      expect(api.patch).not.toHaveBeenCalled();
+    },
+  );
+
+  it("conserva el control de texto libre para IVA por fila fuera de las 17 claves tipadas", async () => {
+    Object.assign(extractionFixture, {
+      fields: [{
+        id: "field-vat-rate",
+        key: "vatRate",
+        rawValue: "21",
+        normalizedValue: "21",
+        correction: null,
+        confidence: 0.9,
+        status: "ACCEPTED",
+        reason: null,
+      }],
+    });
+
+    await openExtraction();
+    const control = screen.getByLabelText("Alícuota de IVA") as HTMLInputElement;
+    expect(control.type).toBe("text");
+    fireEvent.change(control, { target: { value: "21 por ciento" } });
+    fireEvent.blur(control);
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/firms/firm-a/clients/client-a/extractions/extraction-a/fields/field-vat-rate",
+        { correction: "21 por ciento", reason: "Corrección manual en bandeja" },
       ),
     );
   });

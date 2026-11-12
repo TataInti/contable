@@ -783,6 +783,103 @@ describe("ruta HTTP de rechazo de extracción", () => {
   });
 });
 
+describe("corrección PATCH de campos fiscales", () => {
+  it.each(validManualFields)(
+    "acepta el formato canónico de $key aunque el valor guardado sea legado",
+    async ({ key, value }) => {
+      const fixture = await createExtractionFixture("GENERATED");
+      const field = await createExtractionField(fixture, {
+        key,
+        rawValue: "formato legado",
+        normalizedValue: "formato legado",
+        correction: "corrección antigua en otro formato",
+      });
+      const app = extractionRoutesApp();
+
+      try {
+        const response = await app.inject({
+          method: "PATCH",
+          url: `${manualFieldsUrl(fixture.extractionId)}/${field.id}`,
+          payload: { correction: value },
+        });
+        const saved = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+          tx.extractedField.findUnique({ where: { id: field.id } }),
+        );
+
+        expect(response.statusCode).toBe(200);
+        expect(saved).toMatchObject({ correction: value, status: "CORRECTED" });
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
+  it.each(invalidManualFieldFormats)(
+    "devuelve 400 en español para el formato inválido de $0 y no modifica lo guardado",
+    async (key, value, label, expectedMessage) => {
+      const fixture = await createExtractionFixture("GENERATED");
+      const field = await createExtractionField(fixture, {
+        key,
+        rawValue: "formato legado",
+        normalizedValue: "formato legado",
+        correction: "corrección antigua en otro formato",
+      });
+      const app = extractionRoutesApp();
+
+      try {
+        const response = await app.inject({
+          method: "PATCH",
+          url: `${manualFieldsUrl(fixture.extractionId)}/${field.id}`,
+          payload: { correction: value },
+        });
+        const saved = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+          tx.extractedField.findUnique({ where: { id: field.id } }),
+        );
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toMatchObject({
+          error: {
+            code: "INVALID_CORRECTION",
+            message: `${label}: ${expectedMessage}`,
+          },
+        });
+        expect(saved).toMatchObject({
+          correction: "corrección antigua en otro formato",
+          status: "ACCEPTED",
+        });
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
+  it("mantiene el PATCH libre para una clave fuera de las 17, como IVA por fila", async () => {
+    const fixture = await createExtractionFixture("GENERATED");
+    const field = await createExtractionField(fixture, {
+      key: "vatRate",
+      rawValue: "21",
+      normalizedValue: "21",
+    });
+    const app = extractionRoutesApp();
+
+    try {
+      const response = await app.inject({
+        method: "PATCH",
+        url: `${manualFieldsUrl(fixture.extractionId)}/${field.id}`,
+        payload: { correction: "21 por ciento" },
+      });
+      const saved = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+        tx.extractedField.findUnique({ where: { id: field.id } }),
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(saved).toMatchObject({ correction: "21 por ciento", status: "CORRECTED" });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
 describe("carga manual de campos fiscales", () => {
   it("valida y persiste las 17 claves con formatos canónicos, sin validar contenido fiscal", async () => {
     const fixture = await createExtractionFixture("GENERATED");

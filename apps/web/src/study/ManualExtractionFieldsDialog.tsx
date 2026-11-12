@@ -1,22 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "@contable/design-system";
-import {
-  CLIENT_VAT_CONDITION_LABELS,
-  MANUAL_EXTRACTION_CURRENCIES,
-  MANUAL_EXTRACTION_LETTERS,
-  MANUAL_EXTRACTION_VAT_CONDITIONS,
-  VOUCHER_DOCUMENT_TYPES,
-  isManualExtractionAmountField,
-  manualExtractionFieldError,
-  normalizeManualExtractionAmount,
-} from "@contable/contracts";
 import type { ExtractedField, VoucherData } from "../lib/api";
 import {
   EXTRACTION_SCALAR_FIELDS,
   fiscalScalarHasValue,
   type ManualFiscalFieldKey,
 } from "./extractionScalarFields";
+import {
+  ManualExtractionValueControl,
+  manualExtractionInputError,
+  normalizeManualExtractionInput,
+} from "./ManualExtractionValueControl";
 
 interface DraftRow {
   id: number;
@@ -40,46 +35,12 @@ interface ManualExtractionFieldsDialogProps {
 
 const FOCUSABLE_SELECTOR = "button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href]";
 
-const VOUCHER_TYPE_LABELS: Record<(typeof VOUCHER_DOCUMENT_TYPES)[number], string> = {
-  factura: "Factura",
-  ticket_no_fiscal: "Ticket no fiscal",
-  recibo: "Recibo",
-  nota_credito: "Nota de crédito",
-  nota_debito: "Nota de débito",
-  otro: "Otro",
-  ilegible: "Ilegible",
-};
-
-function selectOptions(key: ManualFiscalFieldKey): Array<{ value: string; label: string }> | null {
-  if (key === "voucherType") {
-    return VOUCHER_DOCUMENT_TYPES.map((value) => ({ value, label: VOUCHER_TYPE_LABELS[value] }));
-  }
-  if (key === "letter") return MANUAL_EXTRACTION_LETTERS.map((value) => ({ value, label: value }));
-  if (key === "currency") return MANUAL_EXTRACTION_CURRENCIES.map((value) => ({ value, label: value }));
-  if (key === "vatCondition") {
-    return MANUAL_EXTRACTION_VAT_CONDITIONS.map((value) => ({
-      value,
-      label: CLIENT_VAT_CONDITION_LABELS[value],
-    }));
-  }
-  return null;
-}
-
 function valueForSubmission(key: ManualFiscalFieldKey, value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  return isManualExtractionAmountField(key) ? normalizeManualExtractionAmount(trimmed) : trimmed;
+  return normalizeManualExtractionInput(key, value);
 }
 
 function inputError(key: ManualFiscalFieldKey | "", value: string): string | null {
-  const trimmed = value.trim();
-  if (!key || !trimmed) return null;
-  if (isManualExtractionAmountField(key)) {
-    return normalizeManualExtractionAmount(trimmed)
-      ? null
-      : "Ingresá un importe, por ejemplo 1.234,56";
-  }
-  return manualExtractionFieldError(key, trimmed);
+  return manualExtractionInputError(key, value);
 }
 
 export function ManualExtractionFieldsDialog({
@@ -268,59 +229,14 @@ export function ManualExtractionFieldsDialog({
                       </select>
                     </td>
                     <td>
-                      <label className="sr-only" htmlFor={`manual-field-value-${row.id}`}>
-                        Valor de la fila {index + 1}
-                      </label>
-                      {(() => {
-                        const options = row.key ? selectOptions(row.key) : null;
-                        const isDate = row.key === "issueDate" || row.key === "caeExpiration";
-                        const isAmount = row.key !== "" && isManualExtractionAmountField(row.key);
-                        const isDigitsOnly = ["pointOfSale", "voucherNumber", "issuerTaxId", "receiverTaxId", "cae"].includes(row.key);
-                        const message = rowErrors.get(row.id);
-                        const errorId = `manual-field-value-error-${row.id}`;
-                        const commonProps = {
-                          id: `manual-field-value-${row.id}`,
-                          "aria-label": `Valor de la fila ${index + 1}`,
-                          "aria-describedby": message ? errorId : undefined,
-                          "aria-invalid": message ? true : undefined,
-                          disabled: isSaving,
-                        };
-
-                        return (
-                          <>
-                            {options ? (
-                              <select
-                                {...commonProps}
-                                value={row.value}
-                                onChange={(event) => updateRow(row.id, { value: event.target.value })}
-                              >
-                                <option value="">Seleccioná una opción</option>
-                                {options.map((option) => (
-                                  <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                              </select>
-                            ) : (
-                              <input
-                                {...commonProps}
-                                type={isDate ? "date" : "text"}
-                                inputMode={isDate ? undefined : isAmount ? "decimal" : isDigitsOnly ? "numeric" : undefined}
-                                value={row.value}
-                                onChange={(event) => {
-                                  const nextValue = isDigitsOnly
-                                    ? event.target.value.replace(/\D/g, "")
-                                    : event.target.value;
-                                  updateRow(row.id, { value: nextValue });
-                                }}
-                              />
-                            )}
-                            {message ? (
-                              <p id={errorId} className="manual-fields-dialog__field-error" role="alert">
-                                {message}
-                              </p>
-                            ) : null}
-                          </>
-                        );
-                      })()}
+                      <ManualExtractionValueControl
+                        fieldKey={row.key}
+                        id={`manual-field-value-${row.id}`}
+                        label={`Valor de la fila ${index + 1}`}
+                        value={row.value}
+                        disabled={isSaving}
+                        onChange={(value) => updateRow(row.id, { value })}
+                      />
                     </td>
                     <td>
                       <Button

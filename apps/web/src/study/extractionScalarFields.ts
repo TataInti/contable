@@ -1,4 +1,5 @@
 import type { ExtractedField, VoucherData } from "../lib/api";
+import type { ManualExtractionFieldKey } from "@contable/contracts";
 
 type ScalarVoucherKey = Exclude<keyof VoucherData, "hora" | "iva" | "percepciones" | "confianza">;
 
@@ -27,7 +28,7 @@ export const EXTRACTION_SCALAR_FIELDS = [
   optional?: boolean;
 }[];
 
-export type ManualFiscalFieldKey = (typeof EXTRACTION_SCALAR_FIELDS)[number]["extractedKey"];
+export type ManualFiscalFieldKey = ManualExtractionFieldKey;
 
 function hasText(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;

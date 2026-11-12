@@ -5,6 +5,7 @@ import { DocumentService } from "./document-service.js";
 import {
   ExtractionError,
   ExtractionService,
+  InvalidCorrectionError,
   MANUAL_EXTRACTION_FIELD_KEYS,
 } from "./extraction-service.js";
 import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
@@ -281,6 +282,14 @@ export function documentRoutes(app: FastifyInstance) {
       await extractionService.correctField(firmId, clientId, extractionId, fieldId, body.correction, body.reason ?? "", userId, tenantContextFromRequest(req));
       return reply.send({ data: { status: "CORRECTED" } });
     } catch (err) {
+      if (err instanceof InvalidCorrectionError) {
+        return reply.status(400).send({
+          error: {
+            code: err.code,
+            message: `${MANUAL_EXTRACTION_FIELD_LABELS[err.fieldKey]}: ${err.message}`,
+          },
+        });
+      }
       if (err instanceof Error && err.message === "EXTRACTION_NOT_FOUND") {
         return reply.status(404).send({ error: { code: "EXTRACTION_NOT_FOUND", message: "Extracción no encontrada" } });
       }

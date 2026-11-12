@@ -33,6 +33,10 @@ export const MANUAL_EXTRACTION_FIELD_KEYS = [
 ] as const;
 export type ManualExtractionFieldKey = (typeof MANUAL_EXTRACTION_FIELD_KEYS)[number];
 
+export function isManualExtractionFieldKey(value: string): value is ManualExtractionFieldKey {
+  return (MANUAL_EXTRACTION_FIELD_KEYS as readonly string[]).includes(value);
+}
+
 export const MANUAL_EXTRACTION_LETTERS = [...voucherLetter.options, "E", "X"] as const;
 export const MANUAL_EXTRACTION_CURRENCIES = BACKED_CURRENCIES;
 export const MANUAL_EXTRACTION_VAT_CONDITIONS = CLIENT_VAT_CONDITIONS;

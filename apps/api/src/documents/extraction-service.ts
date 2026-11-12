@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 import {
+  isManualExtractionFieldKey,
+  manualExtractionFieldError,
   type ApprovedSnapshotData,
   type ApprovedSnapshotField,
   type ApprovedSnapshotSource,
@@ -19,6 +21,15 @@ export class ExtractionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ExtractionError";
+  }
+}
+
+export class InvalidCorrectionError extends Error {
+  readonly code = "INVALID_CORRECTION";
+
+  constructor(readonly fieldKey: ManualExtractionFieldKey, message: string) {
+    super(message);
+    this.name = "InvalidCorrectionError";
   }
 }
 
@@ -163,7 +174,12 @@ export class ExtractionService {
     return this.scoped(ctx, async (tx) => {
       const extraction = await tx.documentExtraction.findFirst({ where: { id: extractionId, firmId, clientId }, include: { fields: true } });
       if (!extraction) throw new Error("EXTRACTION_NOT_FOUND");
-      if (!extraction.fields.some((field) => field.id === fieldId)) throw new Error("FIELD_NOT_FOUND");
+      const field = extraction.fields.find((candidate) => candidate.id === fieldId);
+      if (!field) throw new Error("FIELD_NOT_FOUND");
+      if (isManualExtractionFieldKey(field.key)) {
+        const formatError = manualExtractionFieldError(field.key, correction);
+        if (formatError) throw new InvalidCorrectionError(field.key, formatError);
+      }
       await tx.extractedField.update({ where: { id: fieldId }, data: { correction, reason, status: "CORRECTED" } });
       await tx.documentExtraction.update({ where: { id: extractionId }, data: { status: "NEEDS_REVIEW", reviewedByUserId: userId, reviewedAt: new Date() } });
       await tx.auditEvent.create({ data: { firmId, clientId, userId, actorKind: ctx?.actorKind ?? "USER", action: "document.extraction.corrected", entityType: "DocumentExtraction", entityId: extractionId, after: { fieldId, correction, reason } } });
