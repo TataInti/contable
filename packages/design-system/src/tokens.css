@@ -9,7 +9,7 @@
   --ds-color-surface-pressed: #ebe6dc;
   --ds-color-text: #22211d;
   --ds-color-text-muted: #625f57;
-  --ds-color-text-faint: #756f65;
+  --ds-color-text-faint: #716c62;
   --ds-color-text-disabled: #777268;
   --ds-color-border: #d8d2c7;
   --ds-color-border-subtle: #e7e2d9;
@@ -47,6 +47,7 @@
   --ds-accent-soft: var(--ds-color-primary-soft);
 
   /* Espaciado — escala de 4px */
+  --ds-space-0-5: 2px;
   --ds-space-1: 4px;
   --ds-space-2: 8px;
   --ds-space-3: 12px;
@@ -62,6 +63,8 @@
   /* Tipografía — Source Sans 3 (UI) y Source Serif 4 (headings/reportes) */
   --ds-font-sans: "Source Sans 3", system-ui, -apple-system, sans-serif;
   --ds-font-serif: "Source Serif 4", Georgia, serif;
+  /* Replica el fallback mono que ya consumía el código fiscal. */
+  --ds-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --ds-text-xs: 12px;
   --ds-text-sm: 13px;
   --ds-text-base: 14px;
@@ -74,11 +77,13 @@
   --ds-leading-relaxed: 1.6;
   --ds-font-weight-medium: 600;
   --ds-font-weight-bold: 700;
+  --ds-font-weight-regular: 400;
 
   /* Radios */
   --ds-radius-sm: 3px;
   --ds-radius-md: 5px;
   --ds-radius-lg: 8px;
+  --ds-radius-full: 9999px;
 
   /* Controles y bordes */
   --ds-border-width: 1px;
@@ -109,6 +114,46 @@
   --ds-z-dropdown: 200;
   --ds-z-modal: 300;
   --ds-z-toast: 400;
+}
+
+/* Roles tipográficos del paquete; las pantallas los adoptarán por cortes. */
+.ds-title-page,
+.ds-title-section,
+.ds-title-block {
+  font-family: var(--ds-font-sans);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: var(--ds-leading-tight);
+}
+
+.ds-title-page {
+  font-size: var(--ds-text-2xl);
+}
+
+.ds-title-section {
+  font-size: var(--ds-text-xl);
+}
+
+.ds-title-block {
+  font-size: var(--ds-text-lg);
+}
+
+.ds-text-body {
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-base);
+  font-weight: var(--ds-font-weight-regular);
+  line-height: var(--ds-leading-normal);
+}
+
+.ds-text-help {
+  font-family: var(--ds-font-sans);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-font-weight-regular);
+  line-height: var(--ds-leading-normal);
+}
+
+.ds-text-emphasis {
+  font-weight: var(--ds-font-weight-bold);
 }
 
 /* Movimiento — sólo feedback; respetar la preferencia del sistema. */

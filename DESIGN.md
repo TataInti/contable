@@ -10,6 +10,17 @@ Fuente versionada de uso visual e interacción. Los valores fuente viven en `pac
 4. **Una acción principal por pantalla o panel.** La acción principal se destaca; alternativas, cierre y cancelación usan jerarquía secundaria o ghost.
 5. **Preservar contexto, trazabilidad y reversibilidad.** Las operaciones transaccionales mantienen visible el cliente/período y explican impacto, validación y resultado; una acción de alto impacto requiere confirmación adecuada.
 
+### Decisiones de diseño (cerradas 11-nov)
+
+1. **Paleta y tipografía:** conservar las familias Source Sans 3 (`--ds-font-sans`) y Source Serif 4 (`--ds-font-serif`) y la paleta existente; usar `--ds-color-text-faint: #716c62` para texto auxiliar con contraste AA sobre las superficies donde se aplica. La carga de las familias debe incluir los glifos Latin y Latin-ext.
+2. **Títulos por rol:** aplicar sans para títulos de página (`--ds-text-2xl`), sección (`--ds-text-xl`) y bloque (`--ds-text-lg`), con la escala de peso 400 (`--ds-font-weight-regular`), 600 (`--ds-font-weight-medium`) y 700 (`--ds-font-weight-bold`). Las clases `.ds-title-page`, `.ds-title-section`, `.ds-title-block`, `.ds-text-body`, `.ds-text-help` y `.ds-text-emphasis` quedan disponibles en el paquete; las pantallas las adoptan en cortes posteriores.
+3. **Estados:** en tablas mostrar punto y texto; reservar la píldora para la ficha. Usar cinco tonos con significado fijo: `ok` para resultado correcto/vigente, `aviso` para atención requerida, `peligro` para error o acción de riesgo, `info` para orientación y `neutro` para estado ordinario/inactivo. Los estados usan tokens semánticos, nunca `--ds-color-primary` directamente; el verde de marca se reserva para acción y selección. El valor vigente de `--ds-color-success` coincide con `--ds-color-primary`; su separación visual se coordina con la migración posterior de estados, que queda fuera de F1.
+4. **Composición:** usar caja para elementos que se operan; separar secciones y filas con línea (`--ds-color-border-subtle`); limitar cada pantalla a un único fondo de aviso, con el token semántico del aviso correspondiente (por ejemplo, `--ds-color-warning-subtle`).
+5. **Medidas:** construir separaciones sobre la grilla de 4 px y usar `--ds-space-0-5` (2 px) para el medio paso; `--ds-radius-full` identifica el radio circular. Mantener fila de 32 px y controles de barra de 32 px (`--ds-control-height-sm`), y campos de 40 px (`--ds-control-height-md`).
+6. **Componentes:** mantener las primitivas existentes en `packages/design-system/src` y llevar allí Dense*, `StatusBadge`, drawers y diálogo, con exports desde el paquete. Unificar la tabla, la píldora, los avisos y los botones de texto como primitivas compartidas del mismo paquete. Cada token o estilo nuevo respeta la regla contra literales y el baseline de `packages/design-system/literals-baseline.json`.
+
+Nota de referencia: guía visual de trabajo en `/root/.hermes/workspace/contable/guia-diseno/` (corte del 11-nov); esta guía versionada no depende de esos archivos para build o pruebas.
+
 ## 2. Color
 
 Los siguientes valores se copian de `packages/design-system/src/tokens.css`. En la columna de uso se indica el empleo actual observado; “no usar” limita la función semántica para evitar reutilizaciones ambiguas.
@@ -23,7 +34,7 @@ Los siguientes valores se copian de `packages/design-system/src/tokens.css`. En 
 | `--ds-color-surface-pressed` | `#ebe6dc` | Presión neutral | Fondo de controles activos/pressed | Fondo permanente de panel |
 | `--ds-color-text` | `#22211d` | Texto principal | Cuerpo, títulos y datos | Fondo de estado |
 | `--ds-color-text-muted` | `#625f57` | Texto secundario | Descripciones, labels, metadatos y cabeceras | Mensajes de error o texto deshabilitado |
-| `--ds-color-text-faint` | `#756f65` | Texto auxiliar tenue | Eyebrows, pistas cortas y datos secundarios sobre superficie clara | Texto de lectura larga o texto sobre superficie muted (ver contraste) |
+| `--ds-color-text-faint` | `#716c62` | Texto auxiliar tenue con contraste AA | Eyebrows, pistas cortas y datos secundarios sobre superficies claras y muted | Texto de lectura larga o uso como color de estado |
 | `--ds-color-text-disabled` | `#777268` | Texto deshabilitado | Controles disabled | Contenido activo o texto de ayuda |
 | `--ds-color-border` | `#d8d2c7` | Separador estándar | Bordes de paneles, controles y divisiones | Texto o indicador de estado por sí solo |
 | `--ds-color-border-subtle` | `#e7e2d9` | Separador suave | Líneas internas y filas | Bordes de foco |
@@ -31,7 +42,7 @@ Los siguientes valores se copian de `packages/design-system/src/tokens.css`. En 
 | `--ds-color-control-disabled` | `#ece8df` | Fondo disabled | Controles deshabilitados | Superficies activas |
 | `--ds-color-focus` | `#256247` | Indicador de foco | Outline y borde de foco visible | Decoración sin interacción |
 | `--ds-color-focus-subtle` | `#c9dfd3` | Tono suave de foco | Tono semántico de halo de foco; token declarado, sin consumidor directo observado | Fondo general; el halo actual usa `--ds-shadow-focus` |
-| `--ds-color-primary` | `#256247` | Acción/enlace principal | CTA, enlaces, selección activa y estados positivos | Fondo neutro o texto sobre una superficie oscura sin evaluar contraste |
+| `--ds-color-primary` | `#256247` | Acción/enlace principal | CTA, enlaces y selección activa | Estados; usar el token semántico correspondiente |
 | `--ds-color-primary-hover` | `#1f523c` | Hover primario | Hover de botones primarios | Estado base o confirmación destructive |
 | `--ds-color-primary-active` | `#183f2f` | Presión primaria | Estado active de botones | Fondo de panel persistente |
 | `--ds-color-on-primary` | `#fffdf8` | Contenido sobre primario | Texto e iconos sobre botones/fondos primarios | Texto sobre superficies claras |
@@ -42,7 +53,7 @@ Los siguientes valores se copian de `packages/design-system/src/tokens.css`. En 
 | `--ds-color-on-danger` | `#fffdf8` | Contenido sobre danger | Texto e iconos sobre botones danger | Texto sobre superficie clara |
 | `--ds-color-warning` | `#8a570e` | Advertencia | Etiquetas y texto de alerta de advertencia | Error destructivo o estado exitoso |
 | `--ds-color-warning-subtle` | `#f8ead3` | Fondo de advertencia | Alertas, badges y notas warning | Fondo de página o texto |
-| `--ds-color-success` | `#256247` | Éxito | Texto de confirmación, coherencia y estados correctos | Usarlo como único indicador sin texto/icono |
+| `--ds-color-success` | `#256247` | Token semántico del tono `ok` | Texto de confirmación, coherencia y estados correctos; acompañar con texto o icono | Usarlo como único indicador; su valor actual coincide con el verde de marca y se diferencia en la migración posterior de estados |
 | `--ds-color-info` | `#285d83` | Información | Badge informativo | Acción primaria o advertencia |
 | `--ds-color-info-subtle` | `#e3edf4` | Fondo informativo | Fondo de información | Texto de información |
 | `--ds-color-selected` | `#e2eee7` | Selección | Fila/área seleccionada y selección de texto | Estado hover transitorio |
@@ -69,9 +80,11 @@ Se midieron combinaciones sólidas realmente usadas en la UI (tokens de texto so
 | `--ds-color-text-muted` / `--ds-color-background` | 6,01:1 | Normal / 4,5:1 | Cumple |
 | `--ds-color-text-muted` / `--ds-color-surface` | 6,27:1 | Normal / 4,5:1 | Cumple |
 | `--ds-color-text-muted` / `--ds-color-surface-muted` | 5,50:1 | Normal / 4,5:1 | Cumple |
-| `--ds-color-text-faint` / `--ds-color-background` | 4,69:1 | Normal / 4,5:1 | Cumple |
-| `--ds-color-text-faint` / `--ds-color-surface` | 4,90:1 | Normal / 4,5:1 | Cumple |
-| `--ds-color-text-faint` / `--ds-color-surface-muted` | 4,29:1 | Normal / 4,5:1 | **Bajo el mínimo** |
+| `--ds-color-text-faint` / `--ds-color-background` | 4,92:1 | Normal / 4,5:1 | Cumple |
+| `--ds-color-text-faint` / `--ds-color-surface` | 5,13:1 | Normal / 4,5:1 | Cumple |
+| `--ds-color-text-faint` / `--ds-color-surface-muted` | 4,50:1 | Normal / 4,5:1 | Cumple (4,5017:1 sin redondear) |
+| `--ds-color-text-faint` / `--ds-color-surface-hover` | 4,71:1 | Normal / 4,5:1 | Cumple |
+| `--ds-color-text-faint` / `--ds-color-selected` | 4,38:1 | Normal / 4,5:1 | **Bajo el mínimo en filas muted seleccionadas** |
 | `--ds-color-text-disabled` / `--ds-color-control-disabled` | 3,91:1 | Normal / 4,5:1 | **Bajo el mínimo** |
 | `--ds-color-primary` / `--ds-color-background` | 6,79:1 | Normal / 4,5:1 | Cumple |
 | `--ds-color-primary` / `--ds-color-surface` | 7,08:1 | Normal / 4,5:1 | Cumple |
@@ -87,16 +100,17 @@ Se midieron combinaciones sólidas realmente usadas en la UI (tokens de texto so
 | `--ds-color-success` / `--ds-color-success-subtle` | 6,12:1 | Normal / 4,5:1 | Cumple |
 | `--ds-color-info` / `--ds-color-info-subtle` | 5,93:1 | Normal / 4,5:1 | Cumple |
 
-Los dos pares **bajo el mínimo** quedan registrados sin modificar los tokens ni las pantallas. El contraste de texto disabled se informa frente al umbral general; las excepciones normativas aplicables a controles inactivos requieren evaluación contextual.
+El cálculo WCAG con `--ds-color-text-faint: #716c62` da 4,9206:1 sobre `--ds-color-background`, 5,1342:1 sobre `--ds-color-surface`, 4,5017:1 sobre `--ds-color-surface-muted` y 4,7098:1 sobre `--ds-color-surface-hover`. `DenseTable` permite seleccionar filas muted y usa `--ds-color-selected` de fondo: ese par mide 4,3786:1, por debajo de 4,5:1; `--ds-color-primary-soft` comparte el mismo valor y también mide 4,3786:1 (se usa en el icono de acceso rápido, cuyo contraste no textual supera 3:1). La entrada `Field` sobre su mezcla de superficie mide 5,1311:1. F1 conserva el valor cerrado y no altera estas pantallas; la combinación de fila muted seleccionada queda como brecha explícita para el corte de estados/composición. El contraste de texto disabled se informa frente al umbral general; las excepciones normativas aplicables a controles inactivos requieren evaluación contextual.
 
 ## 3. Tipografía
 
-Las familias reales están declaradas en `packages/design-system/src/tokens.css` y cargadas desde `apps/web/src/styles/fonts.css`: Source Sans 3 para UI y Source Serif 4 para encabezados y cifras destacadas, con las pilas fallback indicadas. `fonts.css` entrega Source Sans 3 en pesos 400/600/700 y Source Serif 4 en 400/600.
+Las familias del sistema son Source Sans 3 para UI y Source Serif 4 para reportes/cifras destacadas, con las pilas fallback declaradas en `packages/design-system/src/tokens.css`. `apps/web/src/styles/fonts.css` conserva sus definiciones de familia y peso; la carga de los subconjuntos Latin y Latin-ext debe cubrir los glifos usados por la interfaz.
 
 | Token | Valor real | Uso observado |
 |---|---|---|
 | `--ds-font-sans` | `"Source Sans 3", system-ui, -apple-system, sans-serif` | Cuerpo en `global.css`; botones, campos, tablas, Dense UI y textos de interfaz |
 | `--ds-font-serif` | `"Source Serif 4", Georgia, serif` | `h1`–`h3` globales, títulos vacíos, marca del shell y cifras destacadas |
+| `--ds-font-mono` | `ui-monospace, SFMono-Regular, Menlo, monospace` | Código fiscal; replica exactamente el fallback previo para conservar su aspecto |
 | `--ds-text-xs` | `12px` | Ayudas y metadatos (`Field.css`, `Dense.css`) |
 | `--ds-text-sm` | `13px` | Labels, botones pequeños, tablas y descripciones densas |
 | `--ds-text-base` | `14px` | Cuerpo, controles y botones estándar |
@@ -109,8 +123,9 @@ Las familias reales están declaradas en `packages/design-system/src/tokens.css`
 | `--ds-leading-relaxed` | `1.6` | Descripciones de estado vacío |
 | `--ds-font-weight-medium` | `600` | Peso medio definido para controles y títulos |
 | `--ds-font-weight-bold` | `700` | Peso bold definido; token sin consumidor directo en los CSS revisados |
+| `--ds-font-weight-regular` | `400` | Peso regular para cuerpo, ayuda y escala de roles tipográficos |
 
-Jerarquía hoy: el shell usa Source Serif 4 para la marca; los `h1` generales heredan Source Serif 4 (`global.css`). Las páginas estándar usan `.study-page__title` de 30–42 px; el encabezado compacto de `StudyCatalogosFiscales` usa `.dense-head h1` a 26 px y hereda serif; el inspector usa 17 px y los títulos de sección suelen usar 20 px. El cuerpo de `global.css` mide 14 px; los campos y botones usan 14 px, las etiquetas y tablas 13 px, las ayudas 12 px y las estadísticas 20 px. Se observan además pesos directos 400, 500, 550, 600, 650, 700 y 750 en la UI; 550/650/750 no pertenecen a los tokens de peso actuales. Los headings globales usan 600.
+Jerarquía observada antes de la migración: el shell usa Source Serif 4 para la marca; los `h1` generales heredan Source Serif 4 (`global.css`). Las páginas estándar usan `.study-page__title` de 30–42 px; el encabezado compacto de `StudyCatalogosFiscales` usa `.dense-head h1` a 26 px; el inspector usa 17 px y los títulos de sección suelen usar 20 px. El cuerpo de `global.css` mide 14 px; los campos y botones usan 14 px, las etiquetas y tablas 13 px, las ayudas 12 px y las estadísticas 20 px. Se observan pesos directos 400, 500, 550, 600, 650, 700 y 750 en la UI; los roles nuevos usan 400/600/700. Las clases tipográficas están definidas en el paquete y no se aplican todavía a pantallas.
 
 ### Valores sueltos fuera de tokens: tamaños
 
@@ -158,6 +173,7 @@ Estos fallback literales no son los colores computados mientras los aliases est�
 | Grupo | Token | Valor real | Uso |
 |---|---|---|---|
 | Espacio | `--ds-space-1` | `4px` | Paso base de 4 px |
+| Espacio | `--ds-space-0-5` | `2px` | Medio paso permitido de la grilla |
 | Espacio | `--ds-space-2` | `8px` | Separación compacta |
 | Espacio | `--ds-space-3` | `12px` | Separación de controles y contenidos densos |
 | Espacio | `--ds-space-4` | `16px` | Padding habitual de formulario/panel |
@@ -171,10 +187,11 @@ Estos fallback literales no son los colores computados mientras los aliases est�
 | Radio | `--ds-radius-sm` | `3px` | Controles compactos |
 | Radio | `--ds-radius-md` | `5px` | Controles y tarjetas estándar |
 | Radio | `--ds-radius-lg` | `8px` | Paneles y contenedores mayores |
+| Radio | `--ds-radius-full` | `9999px` | Píldoras y formas completamente redondeadas |
 | Borde/control | `--ds-border-width` | `1px` | Borde estándar |
 | Borde/control | `--ds-border-width-strong` | `2px` | Borde enfatizado e indicador visual |
-| Borde/control | `--ds-control-height-sm` | `32px` | Altura base small |
-| Borde/control | `--ds-control-height-md` | `40px` | Altura base medium |
+| Borde/control | `--ds-control-height-sm` | `32px` | Controles de barra; coincide con la altura nominal de fila |
+| Borde/control | `--ds-control-height-md` | `40px` | Campos de formulario |
 | Borde/control | `--ds-touch-target` | `44px` | Objetivo mínimo del design system para puntero coarse |
 | Borde/control | `--ds-focus-width` | `2px` | Grosor del foco |
 | Borde/control | `--ds-focus-offset` | `2px` | Separación del foco |
@@ -247,7 +264,19 @@ Las sombras del sistema están tokenizadas; las excepciones observadas son: `box
 
 ## 5. Componentes
 
-Los cinco componentes públicos de `packages/design-system/src` ofrecen estos contratos actuales. Los ejemplos incorrectos ilustran usos que el código compila pero contradicen la intención del componente.
+Los cinco componentes públicos actuales de `packages/design-system/src` son `Button`, `Field`, `MoneyField`, `Table` y `EmptyState`. Los siguientes destinos completan la decisión de componente y se implementan por cortes, no en F1.
+
+### Inventario y destino del paquete
+
+| Componente/patrón | Destino normativo |
+|---|---|
+| `Button`, `Field`, `MoneyField`, `Table`, `EmptyState` | Permanecen como primitivas públicas de `packages/design-system/src` |
+| `DenseHeader`, `DenseTabs`, `DenseToolbar`, `DenseTable`, `DenseSection`, `DenseAlert`, `Inspector`, `StatStrip` | Migrar desde `apps/web/src/ui/Dense.tsx` a `packages/design-system/src` y exportar desde el paquete |
+| `StatusBadge` | Migrar de `apps/web/src/ui/StatusBadge.tsx` a `packages/design-system/src`; exponer el patrón de punto/texto y la píldora de ficha |
+| `ActionDrawer`, `DeletionDrawer`, `ConfirmAction`, `ConfirmDialog` | Migrar desde `apps/web/src/ui/` a `packages/design-system/src` con contratos accesibles compartidos |
+| Tabla, píldora, aviso y botón de texto | Unificar en `Table`/`DenseTable`, `StatusBadge`, `DenseAlert` y la API textual de `Button` (o una primitiva exportada del paquete) |
+
+Los nombres anteriores describen destinos; esta guía no implica que las pantallas ya consuman las versiones del paquete.
 
 ### Button
 
@@ -372,12 +401,12 @@ La carga se representa con estado de carga; este componente comunica ausencia de
 
 ### Composición: sin cajas y alineación
 
-1. Separá los grupos con espacio y alinealos a una grilla común; toda la pantalla comparte el mismo borde izquierdo y el mismo borde derecho.
-2. Usá una línea divisoria fina sólo entre secciones o entre filas de una tabla/lista, nunca alrededor de cada dato.
-3. Reservá bordes y contenedores para campos de entrada, tablas, paneles flotantes, modales y elementos accionables.
+1. Separá los grupos con `--ds-space-0-5` y los tokens de espaciado documentados; alinealos a una grilla común con los mismos bordes izquierdo y derecho.
+2. Usá `--ds-color-border-subtle` como línea divisoria fina entre secciones y filas de tablas/listas, nunca alrededor de cada dato.
+3. Usá caja solo para lo que se opera: campos, controles, tablas/paneles interactivos, popovers y modales; mantené lectura y datos relacionados en espacio y líneas.
 4. Alineá etiquetas y valores por columna y línea base; alineá los números a la derecha con cifras tabulares, sin elementos flotantes ni centrados.
 5. Extendé listas y bloques al ancho de la grilla para que terminen en el mismo borde derecho.
-6. Mostrá cada dato una sola vez por pantalla.
+6. Mostrá cada dato una sola vez por pantalla y un único fondo de aviso por pantalla, con el tono semántico correspondiente.
 
 **Correcto — Catálogos fiscales:** una sola `DenseTabs` con los conteos de las cinco categorías; debajo, una línea breve con propios, referencia y alertas. La barra de filtros, la tabla y el detalle comparten la grilla; los datos del detalle usan columnas etiqueta/valor y los conteos numéricos se alinean a la derecha. Separá filas y secciones con `--ds-color-border-subtle` y espacios de `--ds-space-3`/`--ds-space-4`.
 
@@ -395,7 +424,7 @@ La carga se representa con estado de carga; este componente comunica ausencia de
 
 ### Brechas observadas, sin corrección en este encargo
 
-- `--ds-color-text-faint` sobre `--ds-color-surface-muted` mide 4,29:1, por debajo de 4,5:1 en texto normal; `--ds-color-text-disabled` sobre `--ds-color-control-disabled` mide 3,91:1 frente al umbral general. Ambos pares están identificados en la tabla de contraste.
+- `--ds-color-text-disabled` sobre `--ds-color-control-disabled` mide 3,91:1 frente al umbral general. `--ds-color-text-faint` cumple sobre las superficies generales, muted y hover; la fila muted seleccionada queda en 4,3786:1, según la tabla de contraste y la decisión de conservar el token exacto en F1.
 - En Dense UI varios objetivos interactivos quedan por debajo del objetivo interno de 44 px: `.dense-tab` tiene `min-height: 36px`; `.dense-input` y `.dense-select` miden 30 px; `.dense-toggle` mide 30 px; botones de `.dense-seg` miden 28 px. En el shell, `.study__nav-link` tiene 42 px. El botón móvil de menú sí mide 44 px.
 - `StatStrip` marca visualmente el elemento activo pero sus botones no exponen `aria-pressed`/`aria-current`; el grupo sí tiene `role="group"` y nombre accesible.
 - `Field` relaciona su error mediante `aria-describedby` pero no añade `role="alert"`; por eso el anuncio inmediato recomendado por la guía existente no está garantizado en el componente por sí solo.
@@ -407,3 +436,5 @@ La carga se representa con estado de carga; este componente comunica ausencia de
 - Nombrá por familia, rol y estado con la convención existente: por ejemplo `--ds-color-primary-hover`, `--ds-space-4`, `--ds-text-sm`, `--ds-radius-md` y `--ds-shadow-control`. Usá nombres semánticos para color/estado y escalas para dimensiones; los sufijos de estado deben identificar el estado funcional.
 - Definí el valor en `packages/design-system/src/tokens.css`; reutilizalo desde componentes o pantallas y verificá contraste, foco, teclado y objetivo táctil en el contexto donde se usa.
 - Actualizá `DESIGN.md` en el mismo PR que modifique tokens, familias, componentes o patrones. La prueba `packages/design-system/src/design-md.test.ts` comprueba que cada token citado exista y que todos los tokens de color, tipografía y radio queden documentados.
+- La prueba `packages/design-system/src/design-literals.test.ts` controla por archivo los literales px de `font-size`/`font`, `padding`/`margin`/`gap`, `border-radius` y los colores `#hex`/`rgb()` en CSS y estilos inline TSX de `apps/web/src` y `packages/design-system/src`; excluye `tokens.css`, cero y el ancho de borde de 1 px.
+- Para regenerar `packages/design-system/literals-baseline.json`, ejecutar `node packages/design-system/scripts/design-literals.mjs --write`. El script compara contra la línea base vigente y rechaza cualquier aumento; el baseline solo puede bajar al migrar literales, nunca ampliarse para aceptar nuevos.

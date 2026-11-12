@@ -1325,7 +1325,7 @@ button.dense-stat:hover {
   align-items: center;
   gap: var(--ds-space-2);
   margin: 0;
-  font-size: var(--ds-text-md, 1rem);
+  font-size: var(--ds-text-lg);
 }
 
 .dense-block__title {
@@ -1436,7 +1436,7 @@ button.dense-stat:hover {
 .dense-page--flow .study-panel__heading h2,
 .dense-page--flow .study-page__section-title,
 .dense-page--flow .collection-toolbar h2 {
-  font-size: var(--ds-text-md, 1rem);
+  font-size: var(--ds-text-lg);
 }
 
 .dense-page--flow .ds-table thead th {
@@ -1510,7 +1510,7 @@ button.dense-stat:hover {
 
 .dense-agenda li[data-tone="danger"] .dense-agenda__count,
 .dense-agenda li[data-tone="warn"] .dense-agenda__count {
-  color: var(--ds-color-warning-text, var(--ds-color-warning));
+  color: var(--ds-color-warning);
 }
 
 .dense-agenda__copy {
