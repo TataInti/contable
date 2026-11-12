@@ -264,7 +264,7 @@ Las sombras del sistema están tokenizadas; las excepciones observadas son: `box
 
 ## 5. Componentes
 
-Los componentes públicos de `packages/design-system/src` incluyen `Button`, `Field`, `MoneyField`, `Table`, `EmptyState` y las primitivas Dense. Las pantallas conservan sus imports desde `apps/web/src/ui/Dense.tsx`, que reexporta el contrato del paquete y mantiene localmente los componentes que usan el icono de la aplicación. La hoja pública `@contable/design-system/Dense.css` permanece en el paquete; el adaptador web la carga en el punto anterior de la cascada para conservar el orden visual existente. Un consumidor directo del paquete importa esa subruta junto con las primitivas Dense.
+`packages/design-system/src` es la fuente de los componentes compartidos. Su API pública incluye `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, las primitivas Dense, `StatusBadge`, `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction`, `AsyncState`, `Icon` y `SectionIndex`. Las rutas históricas de `apps/web/src/ui` reexportan los componentes migrados para conservar los imports existentes. La migración conserva sus clases, DOM, comportamiento y carga de CSS. El paquete expone `@contable/design-system/Dense.css`; el adaptador web lo importa antes de sus reglas contextuales para mantener el orden de la cascada.
 
 ### Familia Dense del paquete
 
@@ -297,7 +297,7 @@ Los componentes públicos de `packages/design-system/src` incluyen `Button`, `Fi
 - `Inspector` presenta de forma opcional banner, cierre y pie; `DenseLoading` distingue la espera del estado vacío.
 - `useDenseShortcuts` ignora escritura en campos editables y diálogos abiertos.
 
-`DenseTabs`, `DenseSearch` y `DenseAlert` permanecen en `apps/web/src/ui/Dense.tsx` porque requieren `Icon` de la aplicación. La migración de `Icon` corresponde a F2b; sus clases y estilos continúan en la hoja Dense compartida.
+`DenseTabs`, `DenseSearch` y `DenseAlert` permanecen en el adaptador de web `apps/web/src/ui/Dense.tsx`; consumen el `Icon` compartido del paquete y la hoja Dense publicada.
 
 **Correcto:**
 
@@ -330,11 +330,16 @@ Los componentes públicos de `packages/design-system/src` incluyen `Button`, `Fi
 
 | Componente/patrón | Destino normativo |
 |---|---|
-| `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, familia Dense | Primitivas públicas de `packages/design-system/src` |
-| `DenseTabs`, `DenseSearch`, `DenseAlert` | Se mantienen en web hasta que `Icon` se comparta en F2b |
-| `StatusBadge` | Migrar de `apps/web/src/ui/StatusBadge.tsx` a `packages/design-system/src`; exponer el patrón de punto/texto y la píldora de ficha |
-| `ActionDrawer`, `DeletionDrawer`, `ConfirmAction`, `ConfirmDialog` | Migrar desde `apps/web/src/ui/` a `packages/design-system/src` con contratos accesibles compartidos |
+| `Button`, `Field`, `MoneyField`, `Table`, `EmptyState` | Primitivas públicas de `packages/design-system/src` |
+| Familia Dense del paquete | Primitivas públicas de `packages/design-system/src`; contratos detallados arriba |
+| `DenseTabs`, `DenseSearch`, `DenseAlert` | Permanecen en el adaptador de web y consumen `Icon` compartido del paquete |
+| `StatusBadge` | Público en `packages/design-system/src`; conserva el contrato `status`/`className` y los estilos globales/contextuales existentes en la aplicación |
+| `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction` | Públicos en `packages/design-system/src`; CSS propio de drawers en el paquete |
+| `AsyncState`, `Icon`, `SectionIndex` | Públicos en `packages/design-system/src`; `SectionIndex` conserva las reglas de layout de estudio/portal en sus hojas de aplicación |
+| `DeletionDrawer` | Permanece en `apps/web/src/ui`: consulta y elimina mediante `lib/api` y `@tanstack/react-query`; el CSS y la prueba de integración también permanecen en la app |
 | Tabla, píldora, aviso y botón de texto | Unificar en `Table`/`DenseTable`, `StatusBadge`, `DenseAlert` y la API textual de `Button` (o una primitiva exportada del paquete) |
+
+Los componentes migrados mantienen imports compatibles en las pantallas existentes. Las reglas visuales que dependen del contexto de estudio o portal permanecen en las hojas de estilo de la aplicación.
 
 ### Button
 
@@ -444,6 +449,125 @@ La clave debe ser estable y única por fila. `Table` es una tabla de lectura; pa
 ```
 
 La carga se representa con estado de carga; este componente comunica ausencia de contenido o de coincidencias.
+
+### StatusBadge
+
+- **Propósito:** presentar un estado contable con su etiqueta conocida o un fallback legible.
+- **Props:** `status: string | null | undefined`; `className` opcional. `getStatusBadgeMeta` expone la etiqueta y el tono resuelto; `StatusTone` y `StatusBadgeMeta` son tipos públicos.
+- **Estados:** normaliza espacios, guiones y mayúsculas; los estados conocidos usan su etiqueta/tono configurados y los desconocidos se humanizan como neutros. El DOM conserva `status-badge` y `data-status`; las hojas globales y contextuales de la app mantienen el aspecto vigente.
+- **Correcto:**
+
+```tsx
+<StatusBadge status={row.status} />
+```
+
+- **Incorrecto:**
+
+```tsx
+<span className="status-badge">{row.status}</span>
+```
+
+Usá el componente para conservar la normalización, etiqueta, tono y atributo de estado compartidos.
+
+### ActionDrawer
+
+- **Propósito:** panel lateral accesible para formularios y acciones transaccionales.
+- **Props:** `isOpen`, `onClose`, `title`, `children`; `description`, `eyebrow`, `footer`, `closeLabel` y `size` (`default` o `wide`) son opcionales.
+- **Estados:** cerrado no renderiza DOM; abierto presenta `role="dialog"`, mueve el foco al primer control, limita Tab/Shift+Tab, cierra con Escape, bloquea el scroll del body y restaura el foco previo al cerrar.
+- **Correcto:**
+
+```tsx
+<ActionDrawer isOpen={open} onClose={close} title="Nuevo cliente">
+  <ClientForm />
+</ActionDrawer>
+```
+
+- **Incorrecto:**
+
+```tsx
+<ActionDrawer isOpen={open} title="Nuevo cliente">
+  <ClientForm />
+</ActionDrawer>
+```
+
+Proporcioná siempre `onClose` para el cierre explícito, el scrim y Escape.
+
+### ConfirmAction y ConfirmDialog
+
+- **Propósito:** pedir confirmación in-app antes de ejecutar una acción; `useConfirmAction` administra una solicitud por página y `ConfirmDialog` la presenta.
+- **Props:** `ConfirmAction` recibe `open`, `title`, `confirmLabel`, `onConfirm` y `onCancel`; `description`, `tone` (`default` o `danger`) y `cancelLabel` son opcionales. `ConfirmDialog` recibe el estado `confirm` y un `cancelLabel` opcional.
+- **Estados:** cerrado no renderiza DOM; abierto expone `role="alertdialog"`, enfoca Confirmar, contiene el foco, cierra con Escape y restaura el foco anterior. El tono danger selecciona la variante destructiva del botón.
+- **Correcto:**
+
+```tsx
+const confirm = useConfirmAction();
+<ConfirmDialog confirm={confirm} />
+```
+
+- **Incorrecto:**
+
+```tsx
+<ConfirmAction open title="Dar de baja" confirmLabel="Confirmar" onConfirm={save} />
+```
+
+Incluí `onCancel` y describí la consecuencia de la acción cuando aporte contexto.
+
+### AsyncState
+
+- **Propósito:** representar carga o error de una consulta con una acción de reintento.
+- **Props:** `loading`, `error`, `loadingLabel`, `errorTitle`, `errorDescription`, `onRetry`; `className` es opcional.
+- **Estados:** carga usa `role="status"` y `aria-live="polite"`; error usa `role="alert"` y un `EmptyState` con botón Reintentar; sin carga ni error devuelve `null`.
+- **Correcto:**
+
+```tsx
+<AsyncState loading={query.isLoading} error={query.isError} loadingLabel="Cargando" errorTitle="No se pudo cargar" errorDescription="Reintentá la consulta." onRetry={() => void query.refetch()} />
+```
+
+- **Incorrecto:**
+
+```tsx
+<AsyncState loading={false} error={false} loadingLabel="" errorTitle="Vacío" errorDescription="Sin datos" onRetry={retry} />
+```
+
+Para ausencia de contenido, usá `EmptyState`; `AsyncState` cubre carga y error.
+
+### Icon
+
+- **Propósito:** renderizar un glifo SVG del catálogo `ICON_NAMES`.
+- **Props:** `name: IconName`; `size` (20 por defecto), `strokeWidth` (1.8), `className` y `title` son opcionales.
+- **Estados:** sin `title` es decorativo (`aria-hidden`); con `title` se expone como imagen con nombre accesible.
+- **Correcto:**
+
+```tsx
+<Icon name="alert" /> <span>Revisar la consulta</span>
+```
+
+- **Incorrecto:**
+
+```tsx
+<Icon name="alert" aria-label="Alerta" />
+```
+
+`aria-label` no forma parte de las props; usá `title` para un icono informativo o acompañalo con texto.
+
+### SectionIndex
+
+- **Propósito:** navegar entre secciones relacionadas de la vista actual.
+- **Props:** `items: { id, label, meta? }[]`; `label` opcional nombra el `nav` y por defecto es “Secciones de esta vista”.
+- **Estados:** cada elemento crea un enlace `#id`; los metadatos se muestran cuando existen. Los estilos responsivos de estudio y portal permanecen en sus hojas contextuales.
+- **Correcto:**
+
+```tsx
+<SectionIndex items={[{ id: "profile-data", label: "Datos personales" }]} />
+```
+
+- **Incorrecto:**
+
+```tsx
+<SectionIndex items={[{ id: "missing-target", label: "Datos personales" }]} />
+```
+
+Cada `id` debe coincidir con un destino único de la misma vista.
 
 ## 6. Patrones de pantalla
 

@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { FormEvent } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ActionDrawer } from "./ActionDrawer";
+import { ActionDrawer } from "./ActionDrawer.js";
 
 describe("ActionDrawer", () => {
   afterEach(() => cleanup());
