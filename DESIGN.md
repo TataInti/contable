@@ -264,19 +264,77 @@ Las sombras del sistema están tokenizadas; las excepciones observadas son: `box
 
 ## 5. Componentes
 
-Los cinco componentes públicos actuales de `packages/design-system/src` son `Button`, `Field`, `MoneyField`, `Table` y `EmptyState`. Los siguientes destinos completan la decisión de componente y se implementan por cortes, no en F1.
+Los componentes públicos de `packages/design-system/src` incluyen `Button`, `Field`, `MoneyField`, `Table`, `EmptyState` y las primitivas Dense. Las pantallas conservan sus imports desde `apps/web/src/ui/Dense.tsx`, que reexporta el contrato del paquete y mantiene localmente los componentes que usan el icono de la aplicación. La hoja pública `@contable/design-system/Dense.css` permanece en el paquete; el adaptador web la carga en el punto anterior de la cascada para conservar el orden visual existente. Un consumidor directo del paquete importa esa subruta junto con las primitivas Dense.
+
+### Familia Dense del paquete
+
+| Export | Contrato de props o retorno |
+|---|---|
+| `DenseDensity`, `useDensity` | `DenseDensity` admite `28`, `32` y `40`; `useDensity()` devuelve `[density, setDensity]`, persiste la elección en `contable.dense.rowHeight` y usa `32` como valor inicial o de respaldo. |
+| `normalizeSearch(value)` | Normaliza texto a minúsculas, sin tildes y sin espacios al inicio o al final. |
+| `DensePage` | Requiere `density` y `children`; acepta `flow` (por defecto `false`) y `className`. |
+| `DenseSection` | Requiere `title` y `children`; acepta `id`, `count`, `description` y `actions`. |
+| `DenseHeader` | Requiere `eyebrow`, `title` y `description`; acepta `actions`. |
+| `StatStrip`, `StatItem` | `StatStrip` requiere `items` y `label`. Cada item requiere `key`, `label` y `value`; acepta `detail`, `tone="warn"`, `active` y `onSelect`. Un item seleccionable se representa como botón. |
+| `DenseToolbar` | Agrupa `children` dentro de la barra de herramientas. |
+| `DensitySwitch` | Requiere `value: DenseDensity` y `onChange(next)`. |
+| `DenseWorkspace` | Requiere `panelId` y `children`; acepta `inspector` para habilitar la columna lateral. |
+| `DenseTable`, `DenseColumn<T>` | `DenseTable<T>` requiere `label`, `columns`, `rows` y `rowKey`; acepta `selectedKey`, `onSelect`, `rowClassName`, `empty`, `footer` e `inspectorOpen`. Cada columna requiere `key`, `header` y `render`; acepta `sortValue`, `secondary`, `align="right"`, `width`, `className` y `sticky="right"`. |
+| `ShortcutHint` | Requiere `items`, una lista de pares `[tecla, descripción]`. |
+| `DenseFooter` | Requiere `count` y `noun`; acepta `hint` y `newShortcut` (por defecto `true`). |
+| `DenseLoading` | Requiere `label`; anuncia la carga con `role="status"`. |
+| `Inspector` | Requiere `label`, `title` y `children`; acepta `eyebrow`, `subtitle`, `leading`, `onClose`, `footer` y `banner`. |
+| `InspectorSection` | Requiere `title` y `children`. |
+| `InspectorFacts` | Requiere `items`, una lista de pares `[término, valor]`; omite valores `null`. |
+| `useDenseShortcuts` | Requiere `searchRef`; acepta `onNew` y `onEscape`. `/` enfoca la búsqueda, `N` activa el alta y `Esc` cierra el detalle. |
+
+### Estados y composición Dense
+
+- `StatStrip` expresa los estados `active` y `tone="warn"`; su callback selecciona el item y el grupo tiene nombre accesible.
+- `DensitySwitch` expone la opción elegida con `aria-pressed`; `useDensity` conserva la selección entre visitas.
+- `DenseTable` ordena al activar una cabecera con `sortValue`, alterna ascendente/descendente, oculta columnas `secondary` cuando `inspectorOpen` está activo y comunica selección con `aria-current`. Las filas seleccionables aceptan Enter/Espacio y flechas arriba/abajo.
+- `DenseWorkspace` activa el layout lateral cuando recibe `inspector`; `DensePage` conserva su variante de flujo mediante `flow`.
+- `Inspector` presenta de forma opcional banner, cierre y pie; `DenseLoading` distingue la espera del estado vacío.
+- `useDenseShortcuts` ignora escritura en campos editables y diálogos abiertos.
+
+`DenseTabs`, `DenseSearch` y `DenseAlert` permanecen en `apps/web/src/ui/Dense.tsx` porque requieren `Icon` de la aplicación. La migración de `Icon` corresponde a F2b; sus clases y estilos continúan en la hoja Dense compartida.
+
+**Correcto:**
+
+```tsx
+<DensePage density={32}>
+  <DenseHeader eyebrow="Clientes" title="Cartera" description="Clientes del estudio" />
+  <DenseWorkspace
+    panelId="clientes-panel"
+    inspector={<Inspector label="Detalle del cliente" title="Cliente">Ficha del cliente</Inspector>}
+  >
+    <DenseTable<Cliente>
+      label="Clientes"
+      columns={[{ key: "name", header: "Cliente", render: (client) => client.name }]}
+      rows={clients}
+      rowKey={(client) => client.id}
+    />
+  </DenseWorkspace>
+</DensePage>
+```
+
+**Incorrecto:**
+
+```tsx
+<DenseTable<Cliente> label="Clientes" columns={columns} rows={clients} rowKey={() => "cliente"} />
+```
+
+`rowKey` devuelve una identidad estable y única por fila; `DenseWorkspace` recibe el panel de detalle cuando la pantalla ofrece selección y ficha lateral.
 
 ### Inventario y destino del paquete
 
 | Componente/patrón | Destino normativo |
 |---|---|
-| `Button`, `Field`, `MoneyField`, `Table`, `EmptyState` | Permanecen como primitivas públicas de `packages/design-system/src` |
-| `DenseHeader`, `DenseTabs`, `DenseToolbar`, `DenseTable`, `DenseSection`, `DenseAlert`, `Inspector`, `StatStrip` | Migrar desde `apps/web/src/ui/Dense.tsx` a `packages/design-system/src` y exportar desde el paquete |
+| `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, familia Dense | Primitivas públicas de `packages/design-system/src` |
+| `DenseTabs`, `DenseSearch`, `DenseAlert` | Se mantienen en web hasta que `Icon` se comparta en F2b |
 | `StatusBadge` | Migrar de `apps/web/src/ui/StatusBadge.tsx` a `packages/design-system/src`; exponer el patrón de punto/texto y la píldora de ficha |
 | `ActionDrawer`, `DeletionDrawer`, `ConfirmAction`, `ConfirmDialog` | Migrar desde `apps/web/src/ui/` a `packages/design-system/src` con contratos accesibles compartidos |
 | Tabla, píldora, aviso y botón de texto | Unificar en `Table`/`DenseTable`, `StatusBadge`, `DenseAlert` y la API textual de `Button` (o una primitiva exportada del paquete) |
-
-Los nombres anteriores describen destinos; esta guía no implica que las pantallas ya consuman las versiones del paquete.
 
 ### Button
 
