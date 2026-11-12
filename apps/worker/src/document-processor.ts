@@ -1,7 +1,7 @@
 import { withWorkerTenant } from "./lib/prisma.js";
 import { Prisma } from "@prisma/client";
 import { ObjectStorage, BUCKETS, detectMime, sha256Of } from "@contable/storage";
-import { AiClient } from "./ai-client.js";
+import { AiClient, AiExtractionHttpError } from "./ai-client.js";
 import { ClamAvClient } from "./clamav-client.js";
 
 /**
@@ -209,8 +209,16 @@ export class DocumentProcessor {
         });
       });
     } catch (err) {
-      const reviewReason =
-        err instanceof Error && err.name === "TimeoutError"
+      // La compuerta productiva (EXTRACTION_CUSTOMER_DATA_ENABLED=false) no es
+      // una caída del servicio: conservamos su motivo para que la bandeja
+      // explique que la lectura automática no está activada.
+      const automatedReadingDisabled =
+        err instanceof AiExtractionHttpError &&
+        err.status === 503 &&
+        err.code === "CUSTOMER_DATA_EXTRACTION_DISABLED";
+      const reviewReason = automatedReadingDisabled
+        ? "CUSTOMER_DATA_EXTRACTION_DISABLED"
+        : err instanceof Error && err.name === "TimeoutError"
           ? "AI_SERVICE_TIMEOUT"
           : "AI_SERVICE_UNAVAILABLE";
       console.error(

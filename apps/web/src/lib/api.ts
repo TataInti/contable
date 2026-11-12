@@ -363,6 +363,7 @@ export interface Document {
 export interface ExtractedField {
   id: string;
   key: string;
+  method?: string;
   rawValue?: string | null;
   normalizedValue?: string | null;
   correction?: string | null;

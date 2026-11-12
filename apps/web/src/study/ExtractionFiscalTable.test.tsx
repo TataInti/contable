@@ -7,6 +7,7 @@ import type {
   VoucherData,
 } from "../lib/api";
 import { ExtractionFiscalTable } from "./ExtractionFiscalTable";
+import { AUTOMATED_READING_UNAVAILABLE_MESSAGE } from "./extractionReadiness";
 
 const voucherFixture: VoucherData = {
   tipo_documento: "factura",
@@ -206,6 +207,32 @@ describe("ExtractionFiscalTable", () => {
     expect(rowForField(table, "IVA · alícuota 21%")[2]!.textContent).toBe("leído");
   });
 
+  it.each([
+    "CUSTOMER_DATA_EXTRACTION_DISABLED",
+    "AI_SERVICE_UNAVAILABLE",
+    "MODEL_NOT_CONFIGURED",
+  ])("traduce el motivo %s de lectura no disponible a un mensaje accionable", (reason) => {
+    renderTable({
+      voucher: null,
+      reviewReason: reason,
+      reviewIssues: [{ reason, sourcePath: null }],
+    });
+
+    const documentStatus = screen.getByRole("status", { name: "Estado del documento" });
+    expect(documentStatus.textContent).toBe(
+      `Estado del documento: a revisar · ${AUTOMATED_READING_UNAVAILABLE_MESSAGE}`,
+    );
+    expect(documentStatus.textContent).not.toContain(reason);
+  });
+
+  it("traduce el reviewReason legado de lectura no disponible sin reviewIssues", () => {
+    renderTable({ voucher: null, reviewReason: "AI_SERVICE_UNAVAILABLE" });
+
+    const documentStatus = screen.getByRole("status", { name: "Estado del documento" });
+    expect(documentStatus.textContent).toContain(AUTOMATED_READING_UNAVAILABLE_MESSAGE);
+    expect(documentStatus.textContent).not.toContain("AI_SERVICE_UNAVAILABLE");
+  });
+
   it("mantiene reviewReason legado en el estado del documento sin marcar todas las filas", () => {
     renderTable({ reviewReason: "neto + IVA no cierra con el total" });
     const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
@@ -287,5 +314,40 @@ describe("ExtractionFiscalTable", () => {
     table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
     expect(screen.queryByRole("status", { name: "Estado del documento" })).toBeNull();
     expect(rowForField(table, "Percepción – sin clasificar")[2]!.textContent).toBe("leído");
+  });
+
+  it("muestra la corrección efectiva y distingue los campos cargados a mano", () => {
+    renderTable({
+      voucher: null,
+      fields: [
+        {
+          id: "field-total-corrected",
+          key: "totalAmount",
+          rawValue: "100",
+          normalizedValue: "100",
+          correction: "120 sin formato",
+          method: "EMBEDDED_TEXT",
+          confidence: 0.9,
+          status: "CORRECTED",
+          reason: null,
+        },
+        {
+          id: "field-issuer-manual",
+          key: "issuerTaxId",
+          rawValue: null,
+          normalizedValue: null,
+          correction: "dato cargado",
+          method: "HUMAN",
+          confidence: 0,
+          status: "CORRECTED",
+          reason: null,
+        },
+      ],
+    });
+    const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
+
+    expect(rowForField(table, "Total")[1]!.textContent).toBe("120 sin formato");
+    expect(rowForField(table, "CUIT emisor")[1]!.textContent).toBe("dato cargado");
+    expect(rowForField(table, "CUIT emisor")[2]!.textContent).toBe("cargado a mano");
   });
 });
