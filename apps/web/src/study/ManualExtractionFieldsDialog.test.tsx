@@ -75,6 +75,28 @@ describe("ManualExtractionFieldsDialog", () => {
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
   });
 
+  it("Quitar descarta solo el borrador y envía las filas que quedan", () => {
+    const { onSave } = renderDialog();
+    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 1" }), {
+      target: { value: "totalAmount" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 1" }), {
+      target: { value: "primer dato" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 2" }), {
+      target: { value: "currency" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 2" }), {
+      target: { value: "borrador a quitar" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Quitar fila 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith([{ key: "totalAmount", value: "primer dato" }]);
+  });
+
   it("deshabilita los campos con valor existente y los identifica", () => {
     renderDialog([
       {
