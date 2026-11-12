@@ -289,15 +289,18 @@ export function PortalUpload() {
                   <strong>{file.name}</strong>
                   <small>{formatFileSize(file.size)} · Listo para subir</small>
                 </span>
-                <button
+                <Button
                   className="portal-upload__remove"
                   type="button"
+                  variant="ghost"
+                  size="sm"
+                  iconOnly
                   onClick={removeFile}
                   disabled={uploading}
                   aria-label={`Quitar ${file.name}`}
                 >
                   <Icon name="close" size={18} />
-                </button>
+                </Button>
               </div>
             ) : null}
 
@@ -326,9 +329,9 @@ export function PortalUpload() {
                 Subir documento
               </Button>
               {file && !uploading ? (
-                <button className="portal-upload__cancel" type="button" onClick={removeFile}>
+                <Button type="button" variant="ghost" size="row" onClick={removeFile}>
                   Cancelar
-                </button>
+                </Button>
               ) : null}
             </div>
           </form>

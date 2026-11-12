@@ -386,9 +386,17 @@ export function StudyDashboard() {
               Actualizar
             </Button>
             {clientId ? (
-              <Link className="page-primary-link" to="/bandeja">
+              <Button
+                href="/bandeja"
+                variant="primary"
+                onClick={(event) => {
+                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  event.preventDefault();
+                  navigate(event.currentTarget.pathname);
+                }}
+              >
                 Revisar bandeja
-              </Link>
+              </Button>
             ) : capabilities.has("client.manage") ? (
               <Button size="sm" onClick={() => navigate("/clientes")}>
                 Elegir cliente

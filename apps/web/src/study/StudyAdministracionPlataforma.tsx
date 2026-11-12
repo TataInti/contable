@@ -122,9 +122,16 @@ export function StudyAdministracionPlataforma() {
             <strong>Acción completada</strong>
             <small>{notice}</small>
           </span>
-          <button type="button" aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            aria-label="Cerrar aviso"
+            onClick={() => setNotice(null)}
+          >
             <Icon name="close" size={15} />
-          </button>
+          </Button>
         </div>
       ) : null}
       {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}

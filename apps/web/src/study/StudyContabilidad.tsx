@@ -333,9 +333,16 @@ export function StudyContabilidad() {
             <strong>Acción completada</strong>
             <small>{receipt}</small>
           </span>
-          <button type="button" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            aria-label="Cerrar confirmación"
+            onClick={() => setReceipt(null)}
+          >
             <Icon name="close" size={15} />
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -455,16 +462,18 @@ export function StudyContabilidad() {
             ["trial-balance", "Sumas y saldos"],
           ] as const
         ).map(([id, label]) => (
-          <button
+          <Button
             key={id}
             type="button"
+            variant="ghost"
+            size="row"
             role="tab"
             aria-selected={view === id}
             className={`ledger-tabs__item${view === id ? " ledger-tabs__item--active" : ""}`}
             onClick={() => setView(id)}
           >
             {label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -657,8 +666,11 @@ export function StudyContabilidad() {
                   key: "number",
                   header: "Asiento",
                   render: (entry) => (
-                    <button
-                      className="ledger-entry-link"
+                    <Button
+                      type="button"
+                      variant="text"
+                      size="row"
+                      className="ledger-entry-action"
                       aria-expanded={expandedId === entry.id}
                       onClick={() =>
                         setExpandedId((current) => (current === entry.id ? null : entry.id))
@@ -666,7 +678,7 @@ export function StudyContabilidad() {
                     >
                       #{entry.sequenceNumber ?? "—"}
                       <Icon name="chevron" size={13} />
-                    </button>
+                    </Button>
                   ),
                 },
                 {

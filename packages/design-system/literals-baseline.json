@@ -249,7 +249,7 @@
     },
     "apps/web/src/study/study.css": {
       "fontSize": 17,
-      "spacing": 50,
+      "spacing": 49,
       "radius": 10,
       "color": 11
     },
@@ -495,7 +495,7 @@
     },
     "apps/web/src/ui/GuidedTour.css": {
       "fontSize": 0,
-      "spacing": 8,
+      "spacing": 4,
       "radius": 1,
       "color": 0
     },

@@ -195,9 +195,10 @@ export function PortalReportes() {
                       {(["pdf", "xlsx", "csv"] as const).map((format) => {
                         const key = `${report.id}-${format}`;
                         return (
-                          <button
-                            className="portal-download"
+                          <Button
                             type="button"
+                            variant="text"
+                            size="row"
                             key={format}
                             aria-label={`Descargar ${format.toUpperCase()}`}
                             aria-busy={downloading === key || undefined}
@@ -208,7 +209,7 @@ export function PortalReportes() {
                             <span>
                               {downloading === key ? "Descargando…" : format.toUpperCase()}
                             </span>
-                          </button>
+                          </Button>
                         );
                       })}
                     </div>
