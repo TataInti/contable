@@ -163,13 +163,18 @@ const jurisdictionKindLabel: Record<JurisdictionOption["kind"], string> = {
 };
 
 function ActivityStateBadge({ isActive }: { isActive: boolean }) {
-  return <StatusBadge status={isActive ? "ACTIVE" : "INACTIVE"} />;
+  return (
+    <StatusBadge
+      status={isActive ? "ACTIVE" : "INACTIVE"}
+      label={isActive ? undefined : "Oculto"}
+    />
+  );
 }
 
 function ActiveBadge({ active }: { active: boolean }) {
   return (
     <span className={`status-badge status-badge--${active ? "ok" : "muted"}`}>
-      {active ? "Activo" : "Inactivo"}
+      {active ? "Activo" : "Oculto"}
     </span>
   );
 }
@@ -1793,7 +1798,7 @@ export function StudyCatalogosFiscales() {
         >
           <option value="">Estado: todos</option>
           <option value="active">Activos</option>
-          <option value="inactive">Inactivos</option>
+          <option value="inactive">Ocultos</option>
         </select>
         {tab === "regimes" ? (
           <Button

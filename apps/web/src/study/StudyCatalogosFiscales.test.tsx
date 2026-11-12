@@ -589,10 +589,10 @@ describe("StudyCatalogosFiscales", () => {
     expect(saveButton.getAttribute("form")).toBe("jurisdiction-edit-form");
   });
 
-  it("nombra Inactivos en el filtro de estado", async () => {
+  it("nombra Ocultos en el filtro de estado", async () => {
     renderCatalogs();
     const stateFilter = await screen.findByRole("combobox", { name: "Filtrar por estado" });
-    expect(within(stateFilter).getByRole("option", { name: "Inactivos" }).getAttribute("value"))
+    expect(within(stateFilter).getByRole("option", { name: "Ocultos" }).getAttribute("value"))
       .toBe("inactive");
   });
 
@@ -978,7 +978,7 @@ describe("StudyCatalogosFiscales", () => {
     await openTab(/^Actividades económicas/);
 
     expect(await screen.findByText("Servicios profesionales")).toBeTruthy();
-    expect(screen.getByText("Inactivo")).toBeTruthy();
+    expect(screen.getByText("Oculto")).toBeTruthy();
     fireEvent.click(screen.getByText("Servicios profesionales"));
     await screen.findByRole("complementary", { name: "Detalle de la actividad" });
     expect(screen.queryByRole("button", { name: "Nueva actividad" })).toBeNull();
