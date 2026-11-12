@@ -596,6 +596,60 @@ describe("StudyCatalogosFiscales", () => {
       .toBe("inactive");
   });
 
+  it("distingue el catálogo de actividades vacío de filtros sin coincidencias y permite limpiarlos", async () => {
+    activities.push({
+      id: "activity-filtered",
+      code: "FILTERED",
+      name: "Actividad visible tras limpiar filtros",
+      jurisdictionId: jurisdiction.id,
+      source: null,
+      validFrom: "2026-01-01",
+      validTo: null,
+      isActive: true,
+    });
+    renderCatalogs();
+    await openTab(/^Actividades económicas/);
+
+    const stateFilter = await screen.findByRole("combobox", { name: "Filtrar por estado" }) as HTMLSelectElement;
+    fireEvent.change(stateFilter, { target: { value: "inactive" } });
+    const search = screen.getByRole("searchbox") as HTMLInputElement;
+    fireEvent.change(search, { target: { value: "sin coincidencia" } });
+
+    expect(await screen.findByText("Ninguna actividad coincide con el filtro")).toBeTruthy();
+    expect(screen.queryByText("Todavía no hay actividades económicas")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Quitar filtro" }));
+
+    expect(await screen.findByText("Actividad visible tras limpiar filtros")).toBeTruthy();
+    expect(stateFilter.value).toBe("");
+    expect(search.value).toBe("");
+  });
+
+  it("presenta el origen y el estado de Catálogos con StatusBadge", async () => {
+    authorities.push({
+      id: "authority-owned-badges",
+      code: "OWNED-BADGES",
+      name: "Organismo propio para estados",
+      jurisdictionId: jurisdiction.id,
+      isActive: true,
+      origin: "UI",
+      createdByFirmId: "firm-a",
+      jurisdiction,
+    });
+    renderCatalogs();
+    await openTab(/^Organismos recaudadores/);
+
+    const ownedName = await screen.findByText("Organismo propio para estados");
+    const ownedBadges = Array.from(ownedName.closest("tr")?.querySelectorAll(".status-badge") ?? []) as HTMLElement[];
+    expect(ownedBadges.map((badge) => badge.textContent)).toEqual(["Del estudio", "Activo"]);
+    expect(ownedBadges.map((badge) => badge.getAttribute("data-status"))).toEqual(["INFO", "ACTIVE"]);
+
+    await openTab(/^Tipos de impuesto/);
+    const referenceName = await screen.findByText(taxType.name);
+    const referenceBadges = Array.from(referenceName.closest("tr")?.querySelectorAll(".status-badge") ?? []) as HTMLElement[];
+    expect(referenceBadges.map((badge) => badge.textContent)).toEqual(["Referencia", "Activo"]);
+    expect(referenceBadges.map((badge) => badge.getAttribute("data-status"))).toEqual(["REFERENCE", "ACTIVE"]);
+  });
+
   it("muestra una relación oculta ya asignada como opción deshabilitada", async () => {
     const hiddenTaxType = {
       ...taxType,

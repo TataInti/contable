@@ -33,7 +33,7 @@
 }
 
 .dense-head__title .study-page__eyebrow {
-  margin: 0 0 2px;
+  margin: 0 0 var(--ds-space-0-5);
 }
 
 .dense-head__title h1 {
@@ -57,6 +57,16 @@
   align-items: center;
   gap: var(--ds-space-2);
   margin-left: auto;
+}
+
+.dense-head__actions .ds-button--primary {
+  min-block-size: var(--ds-control-height-md);
+}
+
+@media (pointer: coarse) {
+  .dense-head__actions .ds-button--primary {
+    min-block-size: var(--ds-touch-target);
+  }
 }
 
 /* ───────── Franja de métricas ───────── */
@@ -529,9 +539,17 @@
   max-width: 100%;
   min-inline-size: 0;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--ds-space-2);
   padding-inline: 0;
   text-align: left;
+}
+
+.dense-name-action > .ds-button__content {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--ds-space-2);
 }
 
 .dense-name-action:hover:not(:disabled),

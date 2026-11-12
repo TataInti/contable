@@ -173,18 +173,20 @@ function ActivityStateBadge({ isActive }: { isActive: boolean }) {
 
 function ActiveBadge({ active }: { active: boolean }) {
   return (
-    <span className={`status-badge status-badge--${active ? "ok" : "muted"}`}>
-      {active ? "Activo" : "Oculto"}
-    </span>
+    <StatusBadge
+      status={active ? "ACTIVE" : "INACTIVE"}
+      label={active ? "Activo" : "Oculto"}
+    />
   );
 }
 
 function OriginBadge({ origin }: { origin?: "REFERENCE" | "UI" }) {
   if (!origin) return <span className="muted-copy">—</span>;
   return (
-    <span className={`status-badge status-badge--${origin === "UI" ? "info" : "muted"}`}>
-      {origin === "UI" ? "Del estudio" : "Referencia"}
-    </span>
+    <StatusBadge
+      status={origin === "UI" ? "INFO" : "REFERENCE"}
+      label={origin === "UI" ? "Del estudio" : "Referencia"}
+    />
   );
 }
 
@@ -690,6 +692,7 @@ export function StudyCatalogosFiscales() {
   const canEditSelected = canPropose;
 
   const searchQuery = normalizeSearch(search);
+  const activityFiltersActive = Boolean(searchQuery || jurisdictionFilter || originFilter || stateFilter);
   const textMatch = (...parts: Array<string | null | undefined>) =>
     !searchQuery || normalizeSearch(parts.filter(Boolean).join(" ")).includes(searchQuery);
   const commonMatch = (
@@ -1658,14 +1661,31 @@ export function StudyCatalogosFiscales() {
             <EmptyState
               size="compact"
               title={
-                searchQuery
-                  ? "Ninguna actividad coincide con la búsqueda"
+                activityFiltersActive
+                  ? "Ninguna actividad coincide con el filtro"
                   : "Todavía no hay actividades económicas"
               }
               description={
-                searchQuery
-                  ? "Probá con otro código o nombre."
+                activityFiltersActive
+                  ? "Ajustá los criterios de búsqueda o quitá el filtro."
                   : "Creá una actividad para poder vincularla a clientes y reglas fiscales."
+              }
+              action={
+                activityFiltersActive ? (
+                  <Button
+                    type="button"
+                    variant="text"
+                    size="row"
+                    onClick={() => {
+                      setSearch("");
+                      setJurisdictionFilter("");
+                      setOriginFilter("");
+                      setStateFilter("");
+                    }}
+                  >
+                    Quitar filtro
+                  </Button>
+                ) : undefined
               }
             />
           }

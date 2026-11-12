@@ -560,7 +560,7 @@ export function StudyAdministracion() {
       <>
         {actions.includes("recover-access") ? (
           <Button
-            size="sm"
+            size="row"
             variant={variant}
             loading={
               createAccessRecovery.isPending && createAccessRecovery.variables?.userId === item.userId
@@ -582,7 +582,7 @@ export function StudyAdministracion() {
         ) : null}
         {actions.includes("suspend") ? (
           <Button
-            size="sm"
+            size="row"
             variant={variant}
             className="dense-action--danger"
             loading={
@@ -605,7 +605,7 @@ export function StudyAdministracion() {
         ) : null}
         {actions.includes("reactivate") ? (
           <Button
-            size="sm"
+            size="row"
             variant={variant}
             loading={
               reactivateInternalMember.isPending &&
