@@ -229,6 +229,18 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/ManualExtractionFieldsDialog.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/ManualExtractionFieldsDialog.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/moduleRegistry.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -573,7 +585,7 @@
     },
     "packages/design-system/src/Dense.css": {
       "fontSize": 18,
-      "spacing": 87,
+      "spacing": 83,
       "radius": 2,
       "color": 0
     },

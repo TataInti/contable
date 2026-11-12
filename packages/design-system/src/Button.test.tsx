@@ -43,14 +43,15 @@ describe("Button", () => {
       </>,
     );
 
-    for (const [name, variant] of [
+    const cases: Array<[string, string]> = [
       ["Guardar", "primary"],
       ["Alternativa", "secondary"],
       ["Cancelar", "ghost"],
       ["Eliminar", "danger"],
       ["Reintentar", "text"],
       ["Abrir fila", "primary"],
-    ]) {
+    ];
+    for (const [name, variant] of cases) {
       const button = screen.getByRole("button", { name });
       expect(button).toHaveClass(`ds-button--${variant}`);
     }
