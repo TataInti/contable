@@ -25,6 +25,7 @@ import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
 import { exportReport, type ExportReportResult } from "../reporting/report-export.js";
 import { voucherDocumentKind } from "./workpaper-classification.js";
+import { RULES_HASH_SCHEMA_VERSION_V3 } from "./rules-hash.js";
 
 /**
  * Servicio de liquidaciones fiscales (Puerta 3).
@@ -375,7 +376,8 @@ export class SettlementService {
         );
       }
       const isCmEngine = engineKey === "iibb-cm-art2" || engineKey === "iibb-cm-art2-legacy";
-      const isTypedRuleVersion = activeVersion.rulesHashSchemaVersion === 3;
+      const isTypedRuleVersion =
+        activeVersion.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3;
       const rateRules = await tx.taxRateRule.findMany({
         where: {
           ruleVersionId: activeVersion.id,
@@ -416,13 +418,15 @@ export class SettlementService {
             );
           }
           const needsActivity = engineKey === "iibb-local-tuc" && rule.kind.key === "RATE";
-          const needsJurisdiction =
-            (engineKey === "iibb-cm-art2" || engineKey === "iibb-cm-art2-legacy") &&
-            (rule.kind.key === "RATE" || rule.kind.key === "COEFFICIENT");
+          const isCm03 = engineKey === "iibb-cm-art2" || engineKey === "iibb-cm-art2-legacy";
+          const needsJurisdiction = isCm03 && (
+            (rule.kind.key === "RATE" && !rule.isDefault && !rule.jurisdictionId) ||
+            (rule.kind.key === "COEFFICIENT" && !rule.jurisdictionId)
+          );
           const needsCategory = engineKey === "monotributo" && rule.kind.key === "FEE";
           if (
             (needsActivity && !rule.activityId && !rule.isDefault) ||
-            (needsJurisdiction && !rule.jurisdictionId) ||
+            needsJurisdiction ||
             (needsCategory && !rule.categoryCode) ||
             (rule.isDefault && rule.kind.key !== "RATE")
           ) {

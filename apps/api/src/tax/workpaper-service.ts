@@ -69,6 +69,48 @@ export class WorkpaperError extends Error {
   }
 }
 
+export interface Cm03CoefficientSourceRow {
+  sourceId: string;
+  jurisdiction: string;
+  coefficient: string;
+}
+
+export function cm03CoefficientSourceRowsFromFacts(
+  facts: readonly { rowId: string; sourceType: string; normalized: unknown }[],
+): Cm03CoefficientSourceRow[] {
+  return facts.flatMap((fact) => {
+    if (fact.sourceType !== "CM03_COEFFICIENT") return [];
+    const normalized = (fact.normalized ?? {}) as Record<string, unknown>;
+    const jurisdiction = typeof normalized["jurisdiction"] === "string"
+      ? normalized["jurisdiction"].trim().toUpperCase()
+      : "";
+    const coefficient = normalized["coefficient"];
+    if (!jurisdiction || typeof coefficient !== "string") {
+      throw new WorkpaperError(
+        "INVALID_TRANSITION",
+        `El coeficiente CM03 ${fact.rowId} no tiene jurisdicción o coeficiente resuelto`,
+      );
+    }
+    return [{ sourceId: fact.rowId, jurisdiction, coefficient }];
+  });
+}
+
+export function resolveCm03CoefficientJurisdictionIds(
+  rows: readonly Cm03CoefficientSourceRow[],
+  jurisdictionIdByCode: ReadonlyMap<string, string>,
+): Array<Cm03CoefficientSourceRow & { jurisdictionId: string }> {
+  return rows.map((row) => {
+    const jurisdictionId = jurisdictionIdByCode.get(row.jurisdiction);
+    if (!jurisdictionId) {
+      throw new WorkpaperError(
+        "INVALID_TRANSITION",
+        `La jurisdicción ${row.jurisdiction} del coeficiente CM03 ${row.sourceId} no existe en el catálogo`,
+      );
+    }
+    return { ...row, jurisdictionId };
+  });
+}
+
 export interface WorkpaperCreateInput {
   clientId: string;
   periodStart?: string;
@@ -848,22 +890,7 @@ export class MonthlyWorkpaperService {
             ),
           ];
           const voucherIds = idsFor("FISCAL_VOUCHER");
-          const cm03CoefficientRows = relevantFacts.flatMap((fact) => {
-            if (fact.sourceType !== "CM03_COEFFICIENT") return [];
-            const normalized = (fact.normalized ?? {}) as Record<string, unknown>;
-            const jurisdiction =
-              typeof normalized["jurisdiction"] === "string"
-                ? normalized["jurisdiction"].trim().toUpperCase()
-                : "";
-            const coefficient = normalized["coefficient"];
-            if (!jurisdiction || typeof coefficient !== "string") {
-              throw new WorkpaperError(
-                "INVALID_TRANSITION",
-                `El coeficiente CM03 ${fact.rowId} no tiene jurisdicción o coeficiente resuelto`,
-              );
-            }
-            return [{ sourceId: fact.rowId, jurisdiction, coefficient }];
-          });
+          const cm03CoefficientRows = cm03CoefficientSourceRowsFromFacts(relevantFacts);
           const cm03Jurisdictions = cm03CoefficientRows.length > 0
             ? await tx.jurisdiction.findMany({
                 where: { code: { in: [...new Set(cm03CoefficientRows.map((row) => row.jurisdiction))] } },
@@ -873,16 +900,10 @@ export class MonthlyWorkpaperService {
           const jurisdictionIdByCode = new Map(
             cm03Jurisdictions.map((jurisdiction) => [jurisdiction.code, jurisdiction.id]),
           );
-          const cm03Coefficients = cm03CoefficientRows.map((row) => {
-            const jurisdictionId = jurisdictionIdByCode.get(row.jurisdiction);
-            if (!jurisdictionId) {
-              throw new WorkpaperError(
-                "INVALID_TRANSITION",
-                `La jurisdicción ${row.jurisdiction} del coeficiente CM03 ${row.sourceId} no existe en el catálogo`,
-              );
-            }
-            return { ...row, jurisdictionId };
-          });
+          const cm03Coefficients = resolveCm03CoefficientJurisdictionIds(
+            cm03CoefficientRows,
+            jurisdictionIdByCode,
+          );
           const calculated = await settlementService.calculateWithTransaction(ctx, tx, {
             clientId: wp.clientId,
             taxTypeId: link.obligation.regime.taxTypeId,

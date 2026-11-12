@@ -110,7 +110,8 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
       : rules.get(activity);
     const fallbackRule = typed ? typedDefaultRule : rules.get("DEFAULT");
     const rate = rule?.rate !== undefined ? rule.rate : fallbackRule?.rate;
-    const defaultApplied = typed && rule?.rate === undefined && fallbackRule?.rate !== undefined;
+    const defaultApplied = typed && fallbackRule?.rate !== undefined &&
+      (activity === "" || rule?.rate === undefined);
     if (rate === undefined) {
       const message = `Actividad ${activity} sin alícuota configurada; se omitió`;
       if (strict) blocks.push(message);
