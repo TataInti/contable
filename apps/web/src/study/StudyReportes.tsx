@@ -187,9 +187,16 @@ export function StudyReportes() {
             <strong>Acción completada</strong>
             <small>{receipt}</small>
           </span>
-          <button type="button" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            aria-label="Cerrar confirmación"
+            onClick={() => setReceipt(null)}
+          >
             <Icon name="close" size={15} />
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -307,14 +314,16 @@ export function StudyReportes() {
                 render: (run) => (
                   <div className="table-actions">
                     {(["pdf", "xlsx", "csv"] as const).map((format) => (
-                      <button
-                        className="text-action download-action"
+                      <Button
+                        type="button"
+                        variant="text"
+                        size="row"
                         key={format}
                         disabled={exportRun.isPending}
                         onClick={() => exportRun.mutate({ runId: run.id, format })}
                       >
                         <Icon name="download" size={14} /> {format.toUpperCase()}
-                      </button>
+                      </Button>
                     ))}
                     {run.status === "DRAFT" && capabilities.has("report.publish") ? (
                       <Button

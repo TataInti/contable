@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { Button } from "@contable/design-system";
 import { Icon } from "./Icon";
 import "./GuidedTour.css";
 
@@ -254,14 +255,17 @@ export function GuidedTour({ children, onNavigationRequired }: GuidedTourProps) 
             >
               <div className="guided-tour__header">
                 <span className="guided-tour__eyebrow">{currentStep.eyebrow}</span>
-                <button
+                <Button
                   type="button"
                   className="guided-tour__close"
+                  variant="ghost"
+                  size="row"
+                  iconOnly
                   onClick={() => closeTour("dismissed")}
                   aria-label="Cerrar tour"
                 >
                   <Icon name="close" size={17} />
-                </button>
+                </Button>
               </div>
               <div className="guided-tour__progress" aria-hidden="true">
                 <span style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }} />
@@ -271,27 +275,31 @@ export function GuidedTour({ children, onNavigationRequired }: GuidedTourProps) 
                 <p id="guided-tour-description">{currentStep.description}</p>
               </div>
               <div className="guided-tour__footer">
-                <button
+                <Button
                   type="button"
                   className="guided-tour__skip"
+                  variant="ghost"
+                  size="row"
                   onClick={() => closeTour("dismissed")}
                 >
                   Saltar tour
-                </button>
+                </Button>
                 <div className="guided-tour__actions">
                   {stepIndex > 0 ? (
-                    <button
+                    <Button
                       type="button"
                       className="guided-tour__back"
+                      variant="ghost"
+                      size="row"
                       onClick={() => setStepIndex((index) => index - 1)}
                     >
                       Atrás
-                    </button>
+                    </Button>
                   ) : null}
-                  <button type="button" className="guided-tour__next" onClick={goNext}>
+                  <Button type="button" className="guided-tour__next" variant="primary" size="row" onClick={goNext}>
                     {stepIndex === steps.length - 1 ? "Listo, empezar" : "Siguiente"}
                     {stepIndex < steps.length - 1 ? <Icon name="arrow-right" size={15} /> : null}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>

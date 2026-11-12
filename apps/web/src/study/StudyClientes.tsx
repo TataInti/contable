@@ -1075,6 +1075,9 @@ export function StudyClientes() {
             <span id="client-create-hint" className="client-create__hint" aria-live="polite">
               {createFieldsHint}
             </span>
+            <Button type="button" variant="secondary" onClick={() => setCreating(false)}>
+              Cancelar
+            </Button>
             <Button
               type="submit"
               form="client-create-form"

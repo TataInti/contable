@@ -19,6 +19,14 @@ describe("Button", () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
+  it("conserva aria-busy explícito sin activar el estado de carga", () => {
+    render(<Button aria-busy={true}>Descargar</Button>);
+    const button = screen.getByRole("button", { name: "Descargar" });
+
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button).not.toHaveAttribute("data-loading");
+  });
+
   it("permite anunciar una etiqueta de carga específica", () => {
     render(
       <Button loading loadingLabel="Guardando cambios">

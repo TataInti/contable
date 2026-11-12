@@ -460,8 +460,10 @@ export function StudyResumenCliente() {
                 <ul>
                   {groupSections.map((section) => (
                     <li key={section.id}>
-                      <button
+                      <Button
                         type="button"
+                        variant="text"
+                        size="row"
                         className="client-summary__index-link"
                         aria-current={activeSection === section.id && !search.trim() ? "page" : undefined}
                         onClick={() => {
@@ -470,7 +472,7 @@ export function StudyResumenCliente() {
                         }}
                       >
                         <span>{section.label}</span>
-                      </button>
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -499,8 +501,10 @@ export function StudyResumenCliente() {
                 <ul className="client-summary__search-results">
                   {searchResults.map((result, index) => (
                     <li key={`${result.sectionId}-${result.title}-${index}`}>
-                      <button
+                      <Button
                         type="button"
+                        variant="text"
+                        size="row"
                         onClick={() => {
                           setSearch("");
                           setActiveSection(result.sectionId);
@@ -511,7 +515,7 @@ export function StudyResumenCliente() {
                           <small>{result.detail}</small>
                         </span>
                         <em>{result.sectionLabel}</em>
-                      </button>
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -576,19 +580,19 @@ export function StudyResumenCliente() {
                 <h3>Accesos rápidos</h3>
                 <ul>
                   <li>
-                    <button type="button" onClick={() => navigate("/expediente-mensual")}>
+                    <Button type="button" variant="text" size="row" onClick={() => navigate("/expediente-mensual")}>
                       <strong>Cargar período</strong>
-                    </button>
+                    </Button>
                   </li>
                   <li>
-                    <button type="button" onClick={() => navigate("/configuracion-fiscal")}>
+                    <Button type="button" variant="text" size="row" onClick={() => navigate("/configuracion-fiscal")}>
                       <strong>Materializar obligaciones</strong>
-                    </button>
+                    </Button>
                   </li>
                   <li>
-                    <button type="button" onClick={() => navigate("/configuracion-fiscal")}>
+                    <Button type="button" variant="text" size="row" onClick={() => navigate("/configuracion-fiscal")}>
                       <strong>Nueva versión del perfil</strong>
-                    </button>
+                    </Button>
                   </li>
                 </ul>
               </div>
