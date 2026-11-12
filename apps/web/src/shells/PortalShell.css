@@ -140,6 +140,12 @@
   color: var(--ds-color-text-muted);
 }
 
+.portal__logout .ds-button__content {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
 .portal__logout:disabled {
   cursor: wait;
   opacity: 0.6;

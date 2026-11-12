@@ -89,6 +89,7 @@ export function Button(props: ButtonProps | ButtonLinkProps): ReactElement {
     className,
     iconOnly = false,
     "aria-label": ariaLabel,
+    "aria-busy": ariaBusy,
     ...rest
   } = props as ButtonProps;
   return (
@@ -96,7 +97,7 @@ export function Button(props: ButtonProps | ButtonLinkProps): ReactElement {
       {...rest}
       className={`${buttonClassName(variant, size, className)}${iconOnly ? " ds-button--icon-only" : ""}`}
       disabled={disabled || loading}
-      aria-busy={loading || undefined}
+      aria-busy={loading || ariaBusy || undefined}
       aria-label={loading && loadingLabel ? loadingLabel : ariaLabel}
       data-loading={loading || undefined}
     >

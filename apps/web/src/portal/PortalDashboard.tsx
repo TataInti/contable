@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState } from "@contable/design-system";
-import { Link } from "react-router-dom";
+import { Button, EmptyState } from "@contable/design-system";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon, type IconName } from "../ui/Icon";
@@ -47,6 +47,7 @@ const QUICK_LINKS: {
 
 export function PortalDashboard() {
   const { clientId, capabilities } = useClientContext();
+  const navigate = useNavigate();
   const canUpload = capabilities.has("portal.documents.upload");
   const summary = useQuery({
     queryKey: ["portal-summary", clientId],
@@ -102,15 +103,20 @@ export function PortalDashboard() {
                     ? "Podés cargar documentación nueva cuando la tengas disponible."
                     : "Consultá los reportes y resultados que tu estudio publicó para vos."}
               </p>
-              <Link
-                className="portal-action-link"
-                to={
+              <Button
+                href={
                   summary.data.pendingRequests > 0
                     ? "/portal/pendientes"
                     : canUpload
                       ? "/portal/upload"
                       : "/portal/reportes"
                 }
+                variant="primary"
+                onClick={(event) => {
+                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  event.preventDefault();
+                  navigate(`${event.currentTarget.pathname}${event.currentTarget.search}${event.currentTarget.hash}`);
+                }}
               >
                 <span>
                   {summary.data.pendingRequests > 0
@@ -120,7 +126,7 @@ export function PortalDashboard() {
                       : "Ver reportes"}
                 </span>
                 <Icon name="arrow-right" size={18} />
-              </Link>
+              </Button>
             </div>
 
             <dl className="portal-summary" id="portal-activity-summary" aria-label="Resumen de actividad">

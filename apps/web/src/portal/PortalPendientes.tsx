@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState, Table } from "@contable/design-system";
-import { Link } from "react-router-dom";
+import { Button, EmptyState, Table } from "@contable/design-system";
+import { Link, useNavigate } from "react-router-dom";
 import { api, type DocumentRequest } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
@@ -21,6 +21,7 @@ interface PortalDocumentRequest extends DocumentRequest {
 
 export function PortalPendientes() {
   const { clientId, capabilities } = useClientContext();
+  const navigate = useNavigate();
   const query = useQuery({
     queryKey: ["portal-requests", clientId],
     queryFn: () =>
@@ -49,10 +50,18 @@ export function PortalPendientes() {
         title="Documentación pendiente"
         description="Revisá qué necesita tu estudio y seguí el estado de cada pedido."
         actions={capabilities.has("portal.documents.upload") ? (
-          <Link className="portal-button-link" to="/portal/upload">
+          <Button
+            href="/portal/upload"
+            variant="primary"
+            onClick={(event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              navigate(event.currentTarget.pathname);
+            }}
+          >
             <Icon name="upload" size={18} />
             <span>Cargar un archivo</span>
-          </Link>
+          </Button>
         ) : undefined}
       />
 
@@ -107,9 +116,17 @@ export function PortalPendientes() {
                 </h2>
               </div>
               {pendingItems > 0 && capabilities.has("portal.documents.upload") ? (
-                <Link className="portal-action-link" to={nextUploadUrl}>
+                <Button
+                  href={nextUploadUrl}
+                  variant="primary"
+                  onClick={(event) => {
+                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    navigate(`${event.currentTarget.pathname}${event.currentTarget.search}${event.currentTarget.hash}`);
+                  }}
+                >
                   Aportar archivo <Icon name="arrow-right" size={17} />
-                </Link>
+                </Button>
               ) : null}
             </div>
           </section>

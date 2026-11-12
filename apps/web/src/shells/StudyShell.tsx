@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Button } from "@contable/design-system";
 import { ContextBar } from "./ContextBar";
 import { logout } from "../lib/auth";
 import { useSession } from "../session/SessionContext";
@@ -144,25 +145,32 @@ export function StudyShell() {
 
       <header className="study__mobile-header">
         <Brand compact />
-        <button
+        <Button
           type="button"
           className="study__menu-button"
+          variant="ghost"
+          size="sm"
+          iconOnly
           aria-label={menuOpen ? "Cerrar navegación" : "Abrir navegación"}
           aria-expanded={menuOpen}
           aria-controls="study-navigation"
           onClick={() => setMenuOpen((current) => !current)}
         >
           <Icon name={menuOpen ? "close" : "menu"} size={21} />
-        </button>
+        </Button>
       </header>
 
       {menuOpen ? (
-        <button
+        <Button
           type="button"
           className="study__scrim"
+          variant="ghost"
+          iconOnly
           aria-label="Cerrar navegación"
           onClick={() => setMenuOpen(false)}
-        />
+        >
+          <span aria-hidden="true" />
+        </Button>
       ) : null}
 
       <aside className="study__sidebar" id="study-navigation">
@@ -213,9 +221,10 @@ export function StudyShell() {
               role="group"
               aria-labelledby="study-navigation-settings-label"
             >
-              <button
+              <Button
                 type="button"
                 className="study__nav-toggle"
+                variant="ghost"
                 id="study-navigation-settings-label"
                 aria-expanded={settingsOpen}
                 aria-controls="study-settings-items"
@@ -226,7 +235,7 @@ export function StudyShell() {
                 <span className="study__settings-chevron" aria-hidden="true">
                   ▾
                 </span>
-              </button>
+              </Button>
               <div id="study-settings-items" hidden={!settingsOpen}>
                 {settingsModules.map((item) => (
                   <StudyNavLink item={item} key={item.id} />
@@ -256,9 +265,9 @@ export function StudyShell() {
               </a>
               <GuidedTour onNavigationRequired={openNavigationForTour}>
                 {({ startTour }) => (
-                  <button type="button" className="study__help-action" onClick={startTour}>
+                  <Button type="button" className="study__help-action" variant="ghost" size="row" onClick={startTour}>
                     Recorrer el estudio
-                  </button>
+                  </Button>
                 )}
               </GuidedTour>
             </div>
@@ -283,15 +292,17 @@ export function StudyShell() {
               <strong>{firm?.firmName ?? "Estudio contable"}</strong>
               <small>{ROLE_LABELS[firm?.role ?? ""] ?? firm?.role ?? "Sesión segura"}</small>
             </span>
-            <button
+            <Button
               type="button"
               className="study__logout"
+              variant="ghost"
+              size="row"
               onClick={signOut}
               aria-label="Cerrar sesión"
               title="Cerrar sesión"
             >
               Salir
-            </button>
+            </Button>
           </div>
         </div>
       </aside>

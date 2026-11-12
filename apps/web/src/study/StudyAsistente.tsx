@@ -256,10 +256,10 @@ export function StudyAsistente() {
                   </div>
                   <div className="assistant-suggestions" aria-label="Consultas sugeridas">
                     {SUGGESTIONS.map((suggestion) => (
-                      <button type="button" key={suggestion} onClick={() => setInput(suggestion)}>
+                      <Button type="button" key={suggestion} variant="secondary" onClick={() => setInput(suggestion)}>
                         {suggestion}
                         <Icon name="arrow-right" size={14} />
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>

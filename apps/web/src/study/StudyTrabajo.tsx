@@ -375,9 +375,16 @@ export function StudyTrabajo() {
             <strong>Acción completada</strong>
             <small>{receipt}</small>
           </span>
-          <button type="button" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            aria-label="Cerrar confirmación"
+            onClick={() => setReceipt(null)}
+          >
             <Icon name="close" size={15} />
-          </button>
+          </Button>
         </div>
       ) : null}
       {hasQueryError ? (

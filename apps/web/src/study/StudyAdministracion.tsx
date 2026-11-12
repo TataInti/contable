@@ -1269,9 +1269,16 @@ export function StudyAdministracion() {
             <strong>Acción completada</strong>
             <small>{notice}</small>
           </span>
-          <button type="button" aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            aria-label="Cerrar aviso"
+            onClick={() => setNotice(null)}
+          >
             <Icon name="close" size={15} />
-          </button>
+          </Button>
         </div>
       ) : null}
       {actionError ? (
@@ -1327,9 +1334,10 @@ export function StudyAdministracion() {
               <option value="ACTIVE">Activos</option>
               <option value="SUSPENDED">Suspendidos</option>
             </select>
-            <button
+            <Button
               type="button"
-              className="dense-toggle"
+              variant="secondary"
+              size="row"
               aria-pressed={showRoles}
               onClick={() => {
                 setSelectedUserId(null);
@@ -1337,7 +1345,7 @@ export function StudyAdministracion() {
               }}
             >
               Roles y módulos
-            </button>
+            </Button>
           </>
         ) : null}
         {tab === "portal" ? (

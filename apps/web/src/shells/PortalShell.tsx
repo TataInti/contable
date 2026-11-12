@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Button } from "@contable/design-system";
 import { ContextBar } from "./ContextBar";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
@@ -94,15 +95,18 @@ export function PortalShell() {
           >
             <div className="portal__nav-heading">
               <span>Menú</span>
-              <button
+              <Button
                 ref={closeButtonRef}
                 className="portal__nav-close"
                 type="button"
+                variant="ghost"
+                size="sm"
+                iconOnly
                 onClick={closeMenu}
                 aria-label="Cerrar menú"
               >
                 <Icon name="close" />
-              </button>
+              </Button>
             </div>
             <div className="portal__nav-links">
               {navItems.map((item) => (
@@ -133,38 +137,46 @@ export function PortalShell() {
                   <span>Ir al estudio</span>
                 </NavLink>
               ) : null}
-              <button
+              <Button
                 className="portal__logout"
                 type="button"
+                variant="ghost"
                 onClick={signOut}
                 disabled={signingOut}
               >
                 <Icon name="logout" size={18} />
                 <span>{signingOut ? "Saliendo…" : "Salir"}</span>
-              </button>
+              </Button>
             </div>
           </nav>
 
-          <button
+          <Button
             ref={menuButtonRef}
             className="portal__menu-button"
             type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
             aria-label="Abrir menú"
             aria-controls="portal-navigation"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(true)}
           >
             <Icon name="menu" />
-          </button>
+          </Button>
         </div>
       </header>
       {menuOpen ? (
-        <button
+        <Button
           className="portal__backdrop"
           type="button"
+          variant="ghost"
+          iconOnly
           onClick={closeMenu}
           aria-label="Cerrar menú"
-        />
+        >
+          <span aria-hidden="true" />
+        </Button>
       ) : null}
       <ContextBar />
       <main className="portal__content" id="portal-content">
