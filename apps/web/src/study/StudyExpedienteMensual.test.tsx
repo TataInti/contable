@@ -421,7 +421,7 @@ describe("StudyExpedienteMensual", () => {
     await openSourcesStage();
 
     const sourceTable = (await screen.findAllByRole("table"))[0]!;
-    expect(within(sourceTable).getByText("Waiting inputs")).toBeTruthy();
+    expect(within(sourceTable).getByText("Esperando datos")).toBeTruthy();
     expect(within(sourceTable).getByText("0")).toBeTruthy();
     expect(
       screen.getByText(

@@ -290,9 +290,11 @@ export function StudyOnboardingFiscal() {
                 >
                   <span className="fiscal-steps__marker" aria-hidden="true">{index + 1}</span>
                   <span className="fiscal-steps__label">{item.label}</span>
-                  <span className={`fiscal-steps__status${stepCompletion[item.key] ? " fiscal-steps__status--complete" : ""}`}>
-                    {stepCompletion[item.key] ? "Completo" : "Pendiente"}
-                  </span>
+                  {stepCompletion[item.key] ? (
+                    <StatusBadge status="COMPLETED" />
+                  ) : (
+                    <span className="fiscal-steps__status">Pendiente</span>
+                  )}
                 </Button>
               </li>
             ))}
@@ -373,7 +375,17 @@ export function StudyOnboardingFiscal() {
             <div className="fiscal-client-overview__heading"><h3>Actividades</h3>{canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("actividades")}>Agregar</Button> : null}</div>
             {clientActivitiesQuery.isLoading ? <p className="muted-copy">Cargando actividades…</p> : (clientActivitiesQuery.data?.length ?? 0) === 0 ? <EmptyState size="compact" title="Sin actividades vinculadas" description="Vinculá la actividad económica principal del contribuyente." action={canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("actividades")}>Vincular actividad</Button> : undefined} /> : <Table<ClientActivityLink> rows={clientActivitiesQuery.data ?? []} rowKey={(row) => row.id} columns={[
               { key: "activity", header: "Actividad", render: (row) => <><strong>{row.activity.code}{!row.activity.isActive ? " (oculto)" : ""}</strong><br /><small>{row.activity.name}{!row.activity.isActive ? " (oculto)" : ""} · {row.activity.jurisdiction.name}{!row.activity.jurisdiction.isActive ? " (oculto)" : ""}</small></> },
-              { key: "status", header: "Estado", render: (row) => row.validTo ? "Finalizada" : row.isPrimary ? "Principal" : "Vigente" },
+              {
+                key: "status",
+                header: "Estado",
+                render: (row) => (
+                  <StatusBadge
+                    status={row.validTo ? "FINALIZED" : row.isPrimary ? "INFO" : "ACTIVE"}
+                    label={row.validTo ? "Finalizada" : row.isPrimary ? "Principal" : "Vigente"}
+                    className="status-badge--regular"
+                  />
+                ),
+              },
               { key: "actions", header: "", render: (row) => canWrite && !row.validTo ? <Button size="sm" variant="ghost" loading={endActivity.isPending} onClick={() => confirm.ask({ title: `¿Finalizar ${row.activity.name}?`, description: "La actividad quedará finalizada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Finalizar", tone: "danger", onConfirm: () => endActivity.mutate(row.id) })}>Finalizar</Button> : null },
             ]} />}
           </div>

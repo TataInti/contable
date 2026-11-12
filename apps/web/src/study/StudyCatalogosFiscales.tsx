@@ -12,6 +12,7 @@ import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetai
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
+import { StatusBadge } from "../ui/StatusBadge";
 import {
   DenseAlert,
   DenseHeader,
@@ -162,11 +163,7 @@ const jurisdictionKindLabel: Record<JurisdictionOption["kind"], string> = {
 };
 
 function ActivityStateBadge({ isActive }: { isActive: boolean }) {
-  return (
-    <span className={`study-badge ${isActive ? "study-badge--ok" : "study-badge--muted"}`}>
-      {isActive ? "Activa" : "Oculta"}
-    </span>
-  );
+  return <StatusBadge status={isActive ? "ACTIVE" : "INACTIVE"} />;
 }
 
 function ActiveBadge({ active }: { active: boolean }) {
@@ -1796,7 +1793,7 @@ export function StudyCatalogosFiscales() {
         >
           <option value="">Estado: todos</option>
           <option value="active">Activos</option>
-          <option value="inactive">Ocultos</option>
+          <option value="inactive">Inactivos</option>
         </select>
         {tab === "regimes" ? (
           <Button
