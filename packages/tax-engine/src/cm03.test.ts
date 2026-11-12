@@ -161,4 +161,39 @@ describe("CM03 artículo 2 (AR_IIBB_CM_ART2_V1)", () => {
     expect(a.inputHash).toBe(b.inputHash);
     expect(a.outputHash).toBe(b.outputHash);
   });
+
+  it("resuelve alícuotas y default por jurisdictionId sin usar las etiquetas", () => {
+    const result = calculateCm03({
+      engineVersion: CM03_ENGINE_VERSION,
+      ruleMode: "TYPED",
+      period,
+      facts: [],
+      rules: [
+        {
+          id: "rate-1",
+          concept: "texto renombrable",
+          code: "texto renombrable",
+          kind: "RATE",
+          jurisdictionId: "jurisdiction-1",
+          rate: new Decimal("0.04"),
+          validFrom: "2026-01-01",
+        },
+        {
+          id: "default-1",
+          concept: "otra etiqueta",
+          code: "otra etiqueta",
+          kind: "RATE",
+          isDefault: true,
+          rate: new Decimal("0.05"),
+          validFrom: "2026-01-01",
+        },
+      ],
+      incomeByActivity: { activity: "10000" },
+      coefficients: { "jurisdiction-1": "0.6", "jurisdiction-2": "0.4" },
+    });
+
+    expect(result.subtotals["IMPUESTO_POR_JURISDICCION"]).toBe("440.00");
+    expect(result.lines.find((line) => line.inputs["jurisdiction"] === "jurisdiction-2")?.inputs["defaultRuleApplied"])
+      .toBe("true");
+  });
 });

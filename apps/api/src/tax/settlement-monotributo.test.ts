@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
+import { computeRulesHashV3 } from "./rules-hash.js";
 
 /**
  * Tests de integración Monotributo (Puerta 4, Fase 4.4).
@@ -152,6 +153,42 @@ async function setupActiveRules(fx: Awaited<ReturnType<typeof setupMasters>>) {
   });
 }
 
+async function enableTypedMonotributoRules() {
+  const family = await prisma.calcFamily.findUniqueOrThrow({ where: { key: "MONOTRIBUTO" } });
+  const kind = await prisma.taxRuleKind.findUniqueOrThrow({ where: { key: "FEE" } });
+  const pack = await prisma.taxRulePack.findUniqueOrThrow({ where: { code: "MONO_TEST_V1" } });
+  const version = await prisma.taxRuleVersion.findFirstOrThrow({ where: { packId: pack.id } });
+  await prisma.taxRegime.update({ where: { id: regimeId }, data: { calcFamilyId: family.id } });
+  const rules = await prisma.taxRateRule.findMany({ where: { ruleVersionId: version.id } });
+  for (const [index, rule] of rules.entries()) {
+    const categoryCode = rule.concept.slice("CUOTA_".length);
+    await prisma.taxRateRule.update({
+      where: { id: rule.id },
+      data: {
+        concept: `etiqueta-cuota-${index + 1}`,
+        kindId: kind.id,
+        categoryCode,
+        isDefault: false,
+      },
+    });
+  }
+  const typedVersion = await prisma.taxRuleVersion.findUniqueOrThrow({
+    where: { id: version.id },
+    include: {
+      rateRules: { include: { kind: true } },
+      minimumRules: true,
+      bracketRules: true,
+      dueDateRules: true,
+      roundingRules: true,
+    },
+  });
+  const rulesHash = computeRulesHashV3(typedVersion);
+  await prisma.taxRuleVersion.update({
+    where: { id: version.id },
+    data: { rulesHashSchemaVersion: 3, rulesHash },
+  });
+}
+
 async function setupSettlementContext(fx: Awaited<ReturnType<typeof setupMasters>>) {
   return runAsRuntime(OWNER_MONO, FIRM_MONO, async (tx) => {
     const profile = await tx.taxpayerProfileVersion.create({
@@ -289,6 +326,16 @@ beforeEach(async () => {
 });
 
 describe("Fase 4.4 — Monotributo: cálculo", () => {
+  it("resuelve la cuota por categoryCode aunque el concepto se renombre", async () => {
+    await enableTypedMonotributoRules();
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+
+    expect(totals["CATEGORIA"]).toBe("B");
+    expect(totals["CUOTA_MENSUAL"]).toBe("30000.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("30000.00");
+  });
+
   it("calcula cuota de categoría B: 30000", async () => {
     const result = await settlements.calculate(ctxOwner, calculateParams());
     const s = result.settlement;

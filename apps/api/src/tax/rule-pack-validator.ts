@@ -2,7 +2,10 @@ import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import {
   computeLegacyRulesHashSchemaV1,
   computeRulesHashV2,
+  computeRulesHashV3,
   RULES_HASH_SCHEMA_VERSION_V1,
+  RULES_HASH_SCHEMA_VERSION_V2,
+  RULES_HASH_SCHEMA_VERSION_V3,
 } from "./rules-hash.js";
 
 /**
@@ -19,7 +22,8 @@ import {
 export type RulePackValidationIssue =
   | "NO_ACTIVE_VERSION"
   | "NO_CURRENT_VERSION"
-  | "HASH_MISMATCH";
+  | "HASH_MISMATCH"
+  | "HASH_SCHEMA_UNSUPPORTED";
 
 export interface RulePackValidationResult {
   packId: string;
@@ -43,7 +47,7 @@ export class RulePackValidator {
           versions: {
             orderBy: { version: "desc" },
             include: {
-              rateRules: true,
+              rateRules: { include: { kind: true } },
               minimumRules: true,
               bracketRules: true,
               dueDateRules: true,
@@ -69,10 +73,18 @@ export class RulePackValidator {
         // Hash estable: recalcula sobre las reglas y compara con el persistido.
         let rulesHash: string | null = null;
         if (activeVersion) {
-          rulesHash = activeVersion.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V1
-            ? computeLegacyRulesHashSchemaV1(activeVersion)
-            : computeRulesHashV2(activeVersion);
-          if (rulesHash !== activeVersion.rulesHash) issues.push("HASH_MISMATCH");
+          if (activeVersion.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V1) {
+            rulesHash = computeLegacyRulesHashSchemaV1(activeVersion);
+          } else if (activeVersion.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V2) {
+            rulesHash = computeRulesHashV2(activeVersion);
+          } else if (activeVersion.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3) {
+            rulesHash = computeRulesHashV3(activeVersion);
+          } else {
+            issues.push("HASH_SCHEMA_UNSUPPORTED");
+          }
+          if (rulesHash !== null && rulesHash !== activeVersion.rulesHash) {
+            issues.push("HASH_MISMATCH");
+          }
         }
 
         // Fail-safe: si no hay versión vigente, retira el pack para no calcular con reglas vencidas.

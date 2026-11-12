@@ -70,8 +70,15 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
       ? IIBB_TUC_LEGACY_ENGINE_VERSION
       : IIBB_TUC_ENGINE_VERSION;
   const strict = engineVersion === IIBB_TUC_ENGINE_VERSION;
+  const typed = input.ruleMode === "TYPED";
   const rounding = input.rounding ?? {};
   const rules = new Map(input.rules.map((r) => [r.concept, r]));
+  const typedRulesByActivity = new Map(
+    input.rules
+      .filter((rule) => rule.kind === "RATE" && rule.activityId)
+      .map((rule) => [rule.activityId!, rule]),
+  );
+  const typedDefaultRule = input.rules.find((rule) => rule.kind === "RATE" && rule.isDefault);
   const lines: TaxEngineResult["lines"] = [];
   const warnings: string[] = [];
   const blocks: string[] = [];
@@ -87,6 +94,7 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
     rate: DecimalValue;
     tax: DecimalValue;
     determinedTax: DecimalValue;
+    defaultApplied: boolean;
     minimum?: DecimalValue;
   }> = [];
   let totalBase = dec(0);
@@ -95,8 +103,15 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
   for (const [activity, incomeStr] of activityEntries) {
     const income = dec(incomeStr);
     totalBase = totalBase.plus(income);
-    const rule = rules.get(activity);
-    const rate = rule?.rate !== undefined ? rule.rate : rules.get("DEFAULT")?.rate;
+    const rule = typed
+      ? activity === ""
+        ? typedDefaultRule
+        : typedRulesByActivity.get(activity)
+      : rules.get(activity);
+    const fallbackRule = typed ? typedDefaultRule : rules.get("DEFAULT");
+    const rate = rule?.rate !== undefined ? rule.rate : fallbackRule?.rate;
+    const defaultApplied = typed && fallbackRule?.rate !== undefined &&
+      (activity === "" || rule?.rate === undefined);
     if (rate === undefined) {
       const message = `Actividad ${activity} sin alícuota configurada; se omitió`;
       if (strict) blocks.push(message);
@@ -104,7 +119,7 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
       continue;
     }
     const tax = applyRate(income, rate);
-    const activityMinimum = strict ? rule?.minimum : undefined;
+    const activityMinimum = strict && !typed ? rule?.minimum : undefined;
     const determinedTax =
       activityMinimum !== undefined && income.isPositive() && tax.lessThan(activityMinimum)
         ? activityMinimum
@@ -115,6 +130,7 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
       rate,
       tax,
       determinedTax,
+      defaultApplied,
       ...(activityMinimum !== undefined ? { minimum: activityMinimum } : {}),
     });
   }
@@ -137,7 +153,11 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
   );
 
   // --- Mínimo ---
-  const minimum = input.minimum !== undefined ? input.minimum : rules.get("MINIMO")?.minimum;
+  const minimum = input.minimum !== undefined
+    ? input.minimum
+    : typed
+      ? undefined
+      : rules.get("MINIMO")?.minimum;
   let amountDue: DecimalValue;
   let appliedMinimum = false;
   const amountBeforeGlobalMinimum = strict ? totalAfterActivityMinimums : totalByRate;
@@ -153,7 +173,9 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
     for (const declared of [...(input.declaredParameters ?? [])].sort((left, right) =>
       `${left.activity}:${left.sourceId}`.localeCompare(`${right.activity}:${right.sourceId}`),
     )) {
-      const rule = rules.get(declared.activity) ?? rules.get("DEFAULT");
+      const rule = typed
+        ? typedRulesByActivity.get(declared.activity) ?? typedDefaultRule
+        : rules.get(declared.activity) ?? rules.get("DEFAULT");
       if (declared.rate !== undefined) {
         const sourceRate = dec(declared.rate).div(100);
         if (rule?.rate === undefined || !sourceRate.equals(rule.rate)) {
@@ -229,6 +251,7 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
         base: fmtMoney(line.base),
         rate: line.rate.toString(),
         tax: fmtMoney(line.tax),
+        ...(typed ? { defaultRuleApplied: String(line.defaultApplied) } : {}),
         ...(line.minimum !== undefined ? { minimum: fmtMoney(line.minimum) } : {}),
       },
       result: fmtMoney(line.determinedTax),
@@ -260,8 +283,20 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
   const inputHash = taxHash({
     engineVersion,
     period: input.period,
+    ...(typed ? { ruleMode: "TYPED" } : {}),
     incomeByActivity: input.incomeByActivity,
-    rules: input.rules.map((r) => ({ concept: r.concept, rate: r.rate?.toString(), validFrom: r.validFrom })),
+    rules: input.rules.map((r) => typed
+      ? {
+          kind: r.kind,
+          activityId: r.activityId ?? null,
+          jurisdictionId: r.jurisdictionId ?? null,
+          categoryCode: r.categoryCode ?? null,
+          isDefault: r.isDefault ?? false,
+          rate: r.rate?.toString(),
+          minimum: r.minimum?.toString(),
+          validFrom: r.validFrom,
+        }
+      : { concept: r.concept, rate: r.rate?.toString(), validFrom: r.validFrom }),
     credits: input.credits
       ? {
           withholding: input.credits.withholding.toString(),

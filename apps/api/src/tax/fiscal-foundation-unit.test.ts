@@ -7,7 +7,7 @@ import {
   TaxRuleService,
 } from "./fiscal-foundation-service.js";
 import { createRulePackVersionSchema, fiscalFoundationRoutes } from "./fiscal-foundation-routes.js";
-import { computeLegacyRulesHashSchemaV1, computeRulesHashV2 } from "./rules-hash.js";
+import { computeLegacyRulesHashSchemaV1, computeRulesHashV2, computeRulesHashV3 } from "./rules-hash.js";
 
 type StoredProfile = {
   id: string;
@@ -41,7 +41,13 @@ type TestContext = {
 const mockState = vi.hoisted(() => ({
   profiles: [] as StoredProfile[],
   taxTypes: [] as Array<{ id: string; defaultFamilyId?: string | null }>,
-  calcFamilies: [] as Array<{ id: string; key: string; isActive: boolean; sortOrder: number }>,
+  calcFamilies: [] as Array<{
+    id: string;
+    key: string;
+    isActive: boolean;
+    sortOrder: number;
+    allowedRuleKinds?: Array<{ kindId: string }>;
+  }>,
   taxEngines: [] as Array<{
     id: string;
     engineKey: string;
@@ -294,6 +300,12 @@ function makeTransaction(ctx: TestContext) {
               regime: {
                 code: pack.regimeCode,
                 calcFamilyId: pack.calcFamilyId ?? null,
+                calcFamily: pack.calcFamilyId
+                  ? {
+                      key: mockState.calcFamilies.find((family) => family.id === pack.calcFamilyId)?.key ?? "",
+                      allowedRuleKinds: mockState.calcFamilies.find((family) => family.id === pack.calcFamilyId)?.allowedRuleKinds ?? [],
+                    }
+                  : null,
                 taxType: { code: pack.taxTypeCode },
                 jurisdiction: { code: pack.jurisdictionCode },
               },
@@ -320,7 +332,9 @@ function makeTransaction(ctx: TestContext) {
         return version && pack
           ? {
               ...version,
-              rateRules: mockState.rateRules.filter((rule: Record<string, unknown>) => rule.ruleVersionId === version.id),
+              rateRules: mockState.rateRules
+                .filter((rule: Record<string, unknown>) => rule.ruleVersionId === version.id)
+                .map((rule: Record<string, unknown>) => ({ ...rule, kind: rule.kind ?? null })),
               minimumRules: [],
               bracketRules: [],
               dueDateRules: [],
@@ -328,6 +342,13 @@ function makeTransaction(ctx: TestContext) {
               pack: {
                 regime: {
                   code: pack.regimeCode,
+                  calcFamilyId: pack.calcFamilyId ?? null,
+                  calcFamily: pack.calcFamilyId
+                    ? {
+                        key: mockState.calcFamilies.find((family) => family.id === pack.calcFamilyId)?.key ?? "",
+                        allowedRuleKinds: mockState.calcFamilies.find((family) => family.id === pack.calcFamilyId)?.allowedRuleKinds ?? [],
+                      }
+                    : null,
                   taxType: { code: pack.taxTypeCode },
                   jurisdiction: { code: pack.jurisdictionCode },
                 },
@@ -541,6 +562,91 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
     const activated = await rules.activate(ctxOwner, version.id);
 
     expect(activated).toMatchObject({ status: "ACTIVE", rulesHashSchemaVersion: 1 });
+  });
+
+  it("activa reglas IIBB tipadas con el hash canónico v3", async () => {
+    const version = seedActivatableRuleVersion({ engineVersion: "ar-iibb-tuc-local-v1.1.0" });
+    const pack = mockState.taxRulePacks.find((item) => item.id === version.packId)!;
+    Object.assign(pack, {
+      regimeCode: "IIBB_LOCAL_TUC",
+      taxTypeCode: "IIBB",
+      jurisdictionCode: "AR-T",
+      calcFamilyId: IIBB_FAMILY_ID,
+    });
+    const kindId = "kind-rate";
+    mockState.calcFamilies.find((family) => family.id === IIBB_FAMILY_ID)!.allowedRuleKinds = [
+      { kindId },
+    ];
+    const rule = mockState.rateRules.find((item) => item.ruleVersionId === version.id)!;
+    Object.assign(rule, {
+      kindId,
+      kind: { key: "RATE" },
+      activityId: "activity-1",
+      categoryCode: null,
+      isDefault: false,
+    });
+    version.rulesHashSchemaVersion = 3;
+    version.rulesHash = computeRulesHashV3({
+      engineVersion: version.engineVersion,
+      rateRules: [{
+        concept: "VENTAS",
+        activityCode: null,
+        jurisdictionId: null,
+        kind: { key: "RATE" },
+        activityId: "activity-1",
+        categoryCode: null,
+        isDefault: false,
+        rate: "21.000000",
+        minAmount: null,
+        validFrom: version.validFrom,
+        validTo: null,
+      }],
+      minimumRules: [],
+      bracketRules: [],
+      dueDateRules: [],
+      roundingRules: [],
+    });
+
+    const activated = await rules.activate(ctxOwner, version.id);
+
+    expect(activated).toMatchObject({ status: "ACTIVE", rulesHashSchemaVersion: 3 });
+
+    const unresolved = seedActivatableRuleVersion({ engineVersion: "ar-iibb-tuc-local-v1.1.0" });
+    const unresolvedRule = mockState.rateRules.find(
+      (rule: Record<string, unknown>) => rule.ruleVersionId === unresolved.id,
+    )!;
+    Object.assign(unresolvedRule, {
+      kindId,
+      kind: { key: "RATE" },
+      activityId: null,
+      categoryCode: null,
+      isDefault: false,
+    });
+    unresolved.rulesHashSchemaVersion = 3;
+    unresolved.rulesHash = computeRulesHashV3({
+      engineVersion: unresolved.engineVersion,
+      rateRules: [{
+        concept: "VENTAS",
+        activityCode: null,
+        jurisdictionId: null,
+        kind: { key: "RATE" },
+        activityId: null,
+        categoryCode: null,
+        isDefault: false,
+        rate: "21.000000",
+        minAmount: null,
+        validFrom: unresolved.validFrom,
+        validTo: null,
+      }],
+      minimumRules: [],
+      bracketRules: [],
+      dueDateRules: [],
+      roundingRules: [],
+    });
+    await expect(rules.activate(ctxOwner, unresolved.id)).rejects.toMatchObject({
+      code: "RULE_VERSION_INVALID",
+      message: expect.stringContaining("sujeto requerido"),
+    });
   });
 
   it("rechaza hash inconsistente, vigencia inválida, versión vacía y motor incompatible", async () => {
