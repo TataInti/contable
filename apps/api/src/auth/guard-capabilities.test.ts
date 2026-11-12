@@ -44,6 +44,16 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     );
   });
 
+  it("la carga manual de campos de extracción requiere document.review", () => {
+    const path = "/api/v1/firms/f/clients/c/extractions/e/fields";
+    expect(requiredCapability("PUT", path)).toBe("document.review");
+    expect(capabilitiesForRole("REVIEWER").has("document.review")).toBe(true);
+    const auditor = { capabilities: capabilitiesForRole("AUDITOR_READONLY") } as never;
+    expect(() => assertCapability(auditor, "document.review")).toThrow(
+      expect.objectContaining({ statusCode: 403, code: "CAPABILITY_REQUIRED" }),
+    );
+  });
+
   it("identidad y contactos requieren client.manage, con rechazo 403 para sólo lectura", () => {
     expect(requiredCapability("PATCH", "/api/v1/firms/f/clients/c")).toBe("client.manage");
     for (const [method, path] of [

@@ -2,7 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { createUploadSessionSchema } from "@contable/contracts";
 import { DocumentService } from "./document-service.js";
-import { ExtractionError, ExtractionService } from "./extraction-service.js";
+import {
+  ExtractionError,
+  ExtractionService,
+  MANUAL_EXTRACTION_FIELD_KEYS,
+} from "./extraction-service.js";
 import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
 import { MAX_FILE_SIZE } from "../storage/file-validator.js";
 import { tenantContextFromRequest } from "../auth/tenant.js";
@@ -16,6 +20,22 @@ const completeUploadSchema = z.object({
   sha256: z.string().regex(/^[a-f0-9]{64}$/i),
   objectKey: z.string().min(1).max(500),
 }).strict();
+
+const addManualExtractionFieldsSchema = z.object({
+  fields: z.array(z.object({
+    key: z.enum(MANUAL_EXTRACTION_FIELD_KEYS),
+    value: z.string().trim().min(1).max(5000),
+  }).strict()).min(1).max(MANUAL_EXTRACTION_FIELD_KEYS.length),
+}).strict().superRefine(({ fields }, context) => {
+  const keys = fields.map((field) => field.key);
+  if (new Set(keys).size !== keys.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["fields"],
+      message: "Cada campo se puede cargar una sola vez",
+    });
+  }
+});
 
 /**
  * Rutas de documentos (Fase 4-5).
@@ -145,6 +165,42 @@ export function documentRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "EXTRACTION_NOT_FOUND", message: "Extracción no encontrada" } });
     }
     return reply.send({ data: extraction });
+  });
+
+  // Cargar campos fiscales escalares manualmente en una única transacción.
+  app.put("/api/v1/firms/:firmId/clients/:clientId/extractions/:extractionId/fields", async (req, reply) => {
+    const { firmId, clientId, extractionId } = req.params as {
+      firmId: string;
+      clientId: string;
+      extractionId: string;
+    };
+    const parsed = addManualExtractionFieldsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "INVALID_FIELDS", message: "Revisá los campos cargados e intentá de nuevo" },
+      });
+    }
+    const ctx = tenantContextFromRequest(req);
+
+    try {
+      const result = await extractionService.addManualFields(
+        firmId,
+        clientId,
+        extractionId,
+        parsed.data.fields,
+        ctx.userId,
+        ctx,
+      );
+      return reply.send({ data: result });
+    } catch (err) {
+      if (err instanceof ExtractionError) {
+        return reply.status(409).send({ error: { code: err.code, message: err.message } });
+      }
+      if (err instanceof Error && err.message === "EXTRACTION_NOT_FOUND") {
+        return reply.status(404).send({ error: { code: "EXTRACTION_NOT_FOUND", message: "Extracción no encontrada" } });
+      }
+      throw err;
+    }
   });
 
   // Corregir un campo extraído
