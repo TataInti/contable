@@ -3,6 +3,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   gap: var(--ds-space-2);
   min-inline-size: var(--ds-control-height-md);
   min-block-size: var(--ds-control-height-md);
@@ -32,11 +33,23 @@
   outline-offset: var(--ds-focus-offset);
 }
 
-.ds-button--sm {
+.ds-button--sm,
+.ds-button--row {
   min-inline-size: var(--ds-control-height-sm);
   min-block-size: var(--ds-control-height-sm);
   padding-inline: var(--ds-space-3);
   font-size: var(--ds-text-sm);
+}
+
+.ds-button--icon-only {
+  inline-size: var(--ds-control-height-md);
+  padding-inline: 0;
+  aspect-ratio: 1;
+}
+
+.ds-button--icon-only.ds-button--sm,
+.ds-button--icon-only.ds-button--row {
+  inline-size: var(--ds-control-height-sm);
 }
 
 .ds-button--primary {
@@ -94,6 +107,51 @@
   background-color: var(--ds-color-danger-active);
 }
 
+.ds-button--text,
+.ds-button--link {
+  min-inline-size: auto;
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--ds-color-primary);
+  box-shadow: none;
+}
+
+.ds-button--text {
+  padding-inline: var(--ds-space-2);
+}
+
+.ds-button--link {
+  padding-inline: 0;
+  text-decoration: underline;
+  text-underline-offset: var(--ds-space-0-5);
+}
+
+.ds-button--text:hover:not(:disabled),
+.ds-button--link:hover:not(:disabled) {
+  background-color: var(--ds-color-surface-hover);
+  color: var(--ds-color-primary-hover);
+}
+
+.ds-button--text:active:not(:disabled),
+.ds-button--link:active:not(:disabled) {
+  background-color: var(--ds-color-surface-pressed);
+}
+
+.ds-button--link:hover:not(:disabled) {
+  text-decoration-thickness: var(--ds-border-width-strong);
+}
+
+.ds-button[aria-pressed="true"]:not(:disabled) {
+  background-color: var(--ds-color-selected);
+  border-color: var(--ds-color-primary);
+  color: var(--ds-color-primary);
+  box-shadow: none;
+}
+
+.ds-button[aria-pressed="true"]:hover:not(:disabled) {
+  background-color: var(--ds-color-primary-soft);
+}
+
 .ds-button:disabled:not([data-loading]) {
   color: var(--ds-color-text-disabled);
   background-color: var(--ds-color-control-disabled);
@@ -105,6 +163,13 @@
 .ds-button--ghost:disabled:not([data-loading]) {
   background-color: transparent;
   border-color: transparent;
+}
+
+.ds-button--text:disabled:not([data-loading]),
+.ds-button--link:disabled:not([data-loading]) {
+  background-color: transparent;
+  border-color: transparent;
+  text-decoration: none;
 }
 
 .ds-button[data-loading] {
@@ -133,7 +198,8 @@
 
 @media (pointer: coarse) {
   .ds-button,
-  .ds-button--sm {
+  .ds-button--sm,
+  .ds-button--row {
     min-inline-size: var(--ds-touch-target);
     min-block-size: var(--ds-touch-target);
   }

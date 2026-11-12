@@ -1,3 +1,5 @@
+import { Button } from "./Button.js";
+
 export interface SectionIndexItem {
   id: string;
   label: string;
@@ -19,10 +21,10 @@ export function SectionIndex({
       <span className="section-index__label">Índice</span>
       <div className="section-index__links">
         {items.map((item) => (
-          <a key={item.id} href={`#${item.id}`}>
+          <Button key={item.id} href={`#${item.id}`} variant="link" size="row">
             <span>{item.label}</span>
             {item.meta ? <small>{item.meta}</small> : null}
-          </a>
+          </Button>
         ))}
       </div>
     </nav>

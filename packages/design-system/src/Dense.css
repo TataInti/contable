@@ -83,11 +83,20 @@
   white-space: nowrap;
 }
 
-button.dense-stat {
-  cursor: pointer;
+.dense-stat.ds-button {
+  min-inline-size: 0;
+  min-block-size: auto;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 0;
+  border-right: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  box-shadow: none;
+  text-align: left;
 }
 
-button.dense-stat:hover {
+.dense-stat.ds-button:hover:not(:disabled) {
   background: var(--ds-color-surface-hover);
 }
 
@@ -161,25 +170,17 @@ button.dense-stat:hover {
 
 .dense-tab {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ds-space-1);
-  min-height: calc(var(--ds-control-height-sm) + var(--ds-space-1));
   padding-inline: var(--ds-space-3);
-  border: 0;
-  background: none;
-  color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-base);
-  font-weight: 600;
   white-space: nowrap;
-  cursor: pointer;
 }
 
-.dense-tab:hover {
+.dense-tabs .dense-tab:hover:not(:disabled) {
+  background: transparent;
   color: var(--ds-color-text);
 }
 
 .dense-tab[aria-selected="true"] {
+  background: transparent;
   color: var(--ds-color-primary);
 }
 
@@ -336,25 +337,32 @@ button.dense-stat:hover {
   overflow: hidden;
 }
 
-.dense-seg button {
-  height: 28px;
-  padding: 0 9px;
+.dense-seg .dense-seg__option {
+  min-inline-size: 0;
+  min-block-size: var(--ds-control-height-sm);
+  padding-inline: var(--ds-space-2);
   border: 0;
-  border-right: 1px solid var(--ds-color-border-subtle);
+  border-right: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  border-radius: 0;
   background: none;
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-xs);
-  font-weight: 600;
-  cursor: pointer;
+  font-weight: var(--ds-font-weight-medium);
+  box-shadow: none;
 }
 
-.dense-seg button:last-child {
+.dense-seg .dense-seg__option:last-child {
   border-right: 0;
 }
 
-.dense-seg button[aria-pressed="true"] {
+.dense-seg .dense-seg__option[aria-pressed="true"] {
   background: var(--ds-color-primary-soft);
+  border-color: var(--ds-color-border-subtle);
   color: var(--ds-color-primary);
+}
+
+.dense-seg .dense-seg__option[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--ds-color-primary-soft);
 }
 
 /* ───────── Alertas ───────── */
@@ -516,29 +524,19 @@ button.dense-stat:hover {
   box-shadow: inset 3px 0 0 var(--ds-color-primary);
 }
 
-.dense-name-button {
+.dense-name-action {
   display: inline-flex;
   max-width: 100%;
+  min-inline-size: 0;
   align-items: center;
-  gap: 8px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--ds-radius-sm);
-  background: transparent;
-  color: inherit;
-  font: inherit;
+  gap: var(--ds-space-2);
+  padding-inline: 0;
   text-align: left;
-  cursor: pointer;
 }
 
-.dense-name-button:hover,
-.dense-name-button[aria-current="true"] {
+.dense-name-action:hover:not(:disabled),
+.dense-name-action[aria-current="true"] {
   color: var(--ds-color-primary);
-}
-
-.dense-name-button:focus-visible {
-  outline: 2px solid var(--ds-color-focus);
-  outline-offset: 2px;
 }
 
 .dense-name__text {
@@ -827,21 +825,8 @@ button.dense-stat:hover {
   margin-left: auto;
 }
 
-.dense-text-button {
+.dense-inspector__close {
   flex: none;
-  padding: 3px 8px;
-  border: 0;
-  border-radius: var(--ds-radius-sm);
-  background: transparent;
-  color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-xs);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.dense-text-button:hover {
-  background: var(--ds-color-surface-pressed);
-  color: var(--ds-color-text);
 }
 
 .dense-section {

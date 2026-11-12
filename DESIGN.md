@@ -343,9 +343,21 @@ Los componentes migrados mantienen imports compatibles en las pantallas existent
 
 ### Button
 
-- **Propósito:** acción nativa de botón con altura, foco, estados y carga normalizados.
-- **Props/variantes:** props nativas de `button`; `children`; `variant` (`primary` por defecto, `secondary`, `ghost`, `danger`); `size` (`md` por defecto, `sm`); `loading`; `loadingLabel`.
-- **Estados:** hover/active por variante, `:focus-visible`, disabled y loading. Loading informa `aria-busy`, bloquea el control, muestra spinner y puede reemplazar el nombre accesible.
+- **Propósito:** unificar acciones y enlaces de acción con altura, foco, estados y carga normalizados.
+- **Variantes:**
+
+| Variante | Cuándo usarla |
+|---|---|
+| `primary` | Acción principal de la pantalla o panel; debe haber una sola. |
+| `secondary` | Alternativa visible con contorno, como una acción hermana de la principal. |
+| `ghost` | Cancelar, cerrar o realizar una acción de baja jerarquía sin caja persistente. |
+| `danger` | Acción destructiva o de alto riesgo, normalmente dentro de una confirmación. |
+| `text` | Acción breve en línea, como Reintentar o una acción secundaria de fila. |
+| `link` | Navegación de acción con `href`; mantiene la semántica nativa de enlace. |
+
+- **Tamaños:** `md` mide 40 px y es el tamaño estándar; `row` mide 32 px para filas y barras. `sm` se conserva como alias retrocompatible de `row`.
+- **Props:** admite atributos nativos de `button`; con `href` renderiza un enlace y admite sus atributos nativos. `loading` y `loadingLabel` aplican a botones. `iconOnly` exige `aria-label` en el tipo público.
+- **Estados:** hover/active por variante, `:focus-visible`, disabled y loading. Loading informa `aria-busy`, bloquea el control, muestra spinner y puede reemplazar el nombre accesible. Las variantes `text` y `link` usan tokens del sistema.
 - **Correcto:**
 
 ```tsx
@@ -353,6 +365,9 @@ Los componentes migrados mantienen imports compatibles en las pantallas existent
   Guardar cambios
 </Button>
 <Button type="button" variant="ghost" onClick={cancel}>Cancelar</Button>
+<Button type="button" variant="text" size="row" onClick={retry}>Reintentar</Button>
+<Button href="#contactos" variant="link" size="row">Ver contactos</Button>
+<Button type="button" iconOnly aria-label="Cerrar panel"><span aria-hidden="true">×</span></Button>
 ```
 
 - **Incorrecto:**
@@ -360,9 +375,11 @@ Los componentes migrados mantienen imports compatibles en las pantallas existent
 ```tsx
 <Button>Guardar</Button>
 <Button>Cancelar</Button>
+<button className="custom-danger-button" onClick={remove}>Eliminar</button>
+<Button iconOnly><span aria-hidden="true">×</span></Button>
 ```
 
-Ambos quedan como acción primaria por defecto; asigná una sola primaria y una variante secundaria/ghost para las alternativas.
+Los dos primeros quedan como acción primaria por defecto. Elegí la jerarquía según el efecto y usá `Button` en vez de una familia CSS local; los controles icon-only siempre llevan nombre accesible.
 
 ### Field
 

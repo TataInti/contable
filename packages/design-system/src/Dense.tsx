@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { Button } from "./Button.js";
 
 /**
  * Primitivas de vistas administrativas densas (tabla + detalle lateral).
@@ -164,9 +165,16 @@ export function StatStrip({ items, label }: { items: StatItem[]; label: string }
           .filter(Boolean)
           .join(" ");
         return item.onSelect ? (
-          <button key={item.key} type="button" className={className} onClick={item.onSelect}>
+          <Button
+            key={item.key}
+            type="button"
+            variant="text"
+            size="row"
+            className={className}
+            onClick={item.onSelect}
+          >
             {content}
-          </button>
+          </Button>
         ) : (
           <div key={item.key} className={className}>
             {content}
@@ -191,14 +199,17 @@ export function DensitySwitch({
   return (
     <div className="dense-seg" role="group" aria-label="Densidad de filas">
       {DENSITIES.map((option) => (
-        <button
+        <Button
           key={option.value}
           type="button"
+          variant="text"
+          size="row"
+          className="dense-seg__option"
           aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
         >
           {option.label}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -333,8 +344,10 @@ export function DenseTable<T>({
                       }
                     >
                       {column.sortValue ? (
-                        <button
+                        <Button
                           type="button"
+                          variant="text"
+                          size="row"
                           className="dense-sort"
                           onClick={() => toggleSort(column.key)}
                         >
@@ -342,7 +355,7 @@ export function DenseTable<T>({
                           {direction ? (
                             <span aria-hidden="true">{direction === 1 ? "↑" : "↓"}</span>
                           ) : null}
-                        </button>
+                        </Button>
                       ) : (
                         column.header
                       )}
@@ -487,15 +500,17 @@ export function Inspector({
           {subtitle ? <p className="dense-inspector__sub">{subtitle}</p> : null}
         </div>
         {onClose ? (
-          <button
+          <Button
             type="button"
-            className="dense-text-button"
+            variant="text"
+            size="row"
+            className="dense-inspector__close"
             onClick={onClose}
             aria-label="Cerrar detalle"
             title="Cerrar (Esc)"
           >
             Cerrar
-          </button>
+          </Button>
         ) : null}
       </header>
       {banner ? <div className="dense-inspector__banner">{banner}</div> : null}

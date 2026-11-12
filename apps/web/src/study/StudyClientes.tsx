@@ -586,9 +586,11 @@ export function StudyClientes() {
       className: "client-list__client-column",
       sortValue: (row) => row.legalName.toLocaleLowerCase("es-AR"),
       render: (row) => (
-        <button
+        <Button
           type="button"
-          className="dense-name-button"
+          variant="text"
+          size="row"
+          className="dense-name-action"
           aria-label={row.legalName}
           title={`${row.legalName}${row.tradeName ? ` — ${row.tradeName}` : ""}`}
           aria-current={clientId === row.id ? "true" : undefined}
@@ -606,7 +608,7 @@ export function StudyClientes() {
               </span>
             ) : null}
           </span>
-        </button>
+        </Button>
       ),
     },
     {
@@ -1017,9 +1019,9 @@ export function StudyClientes() {
             <strong>Actualización guardada</strong>
             <small>{notice}</small>
           </span>
-          <button type="button" aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
+          <Button type="button" variant="text" size="row" aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
             Cerrar
-          </button>
+          </Button>
         </div>
       ) : null}
 

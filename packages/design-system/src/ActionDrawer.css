@@ -11,10 +11,22 @@
   position: absolute;
   inset: 0;
   z-index: 0;
+  inline-size: auto;
+  block-size: auto;
+  min-inline-size: 0;
+  min-block-size: 0;
+  aspect-ratio: auto;
+  padding: 0;
   border: 0;
+  border-radius: 0;
   background: color-mix(in srgb, var(--ds-color-text) 26%, transparent);
+  box-shadow: none;
   cursor: pointer;
   animation: drawer-scrim-in 150ms ease-out both;
+}
+
+.action-drawer__scrim.ds-button--ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ds-color-text) 26%, transparent);
 }
 
 .action-drawer__panel {

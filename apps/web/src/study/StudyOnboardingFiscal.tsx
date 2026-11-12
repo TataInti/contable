@@ -280,8 +280,10 @@ export function StudyOnboardingFiscal() {
           <ol className="fiscal-steps__list">
             {FISCAL_STEPS.map((item, index) => (
               <li key={item.key} className="fiscal-steps__item">
-                <button
+                <Button
                   type="button"
+                  variant="text"
+                  size="row"
                   className={`fiscal-steps__button${step === item.key ? " fiscal-steps__button--active" : ""}`}
                   aria-current={step === item.key ? "step" : undefined}
                   onClick={() => openStepForm(item.key)}
@@ -291,7 +293,7 @@ export function StudyOnboardingFiscal() {
                   <span className={`fiscal-steps__status${stepCompletion[item.key] ? " fiscal-steps__status--complete" : ""}`}>
                     {stepCompletion[item.key] ? "Completo" : "Pendiente"}
                   </span>
-                </button>
+                </Button>
               </li>
             ))}
           </ol>
@@ -300,7 +302,7 @@ export function StudyOnboardingFiscal() {
         <div className="fiscal-onboarding-content">
           {failedQueries.length > 0 ? <div className="form-error" role="alert">
             <p><strong>No pudimos cargar {failedQueries.length === 1 ? failedQueries[0]?.label ?? "la información" : "parte de la información"}.</strong> Revisá tu conexión e intentá de nuevo.</p>
-            {failedQueries.map((item) => item.query.isError ? <button key={item.key} type="button" className="fiscal-retry" onClick={() => item.query.refetch()}>Reintentar {item.label}</button> : null)}
+            {failedQueries.map((item) => item.query.isError ? <Button key={item.key} type="button" variant="text" size="row" onClick={() => item.query.refetch()}>Reintentar {item.label}</Button> : null)}
           </div> : null}
 
           <section className="study-panel fiscal-contributor" aria-labelledby="contributor-title">
