@@ -43,7 +43,6 @@
     {"file":"apps/api/src/tax/workpaper-service.ts","rule":"EQ","property":"taxTypeCode","snippetHash":"c291527d832cea5a4cc2bb712397aad7fa0b31ab13202e2f0f7525d2d0cf5205","closesIn":"corte 8 (A4)"},
     {"file":"apps/api/src/tax/workpaper-service.ts","rule":"PREFIX","property":"activityCode","snippetHash":"e2a8af8f2eabed9f1669c77301d3c52822cc61f2241ffc10cdce5eb99a3bd87a","closesIn":"corte 4a-i (C7/C14)"},
     {"file":"apps/web/src/study/StudyAdministracionPlataforma.tsx","rule":"MAP_INDEX","property":"code","snippetHash":"909b47a9e4e664dc4857bbbc7ca7f436dfbe5eca2f7ed96c40f78e4bbaf0f2b3","closesIn":"false positive review: platform permission key, outside fiscal catalogs"},
-    {"file":"apps/web/src/study/StudyCatalogosFiscales.tsx","rule":"EQ","property":"code","snippetHash":"b41354ebe7effe41c62cc0f8b6d7b7fed634c5cb1333507b830ce59039d4df4f","closesIn":"corte 2b"},
     {"file":"apps/web/src/study/StudyClientes.tsx","rule":"EQ","property":"code","snippetHash":"cb4815b86d5fc5d3f8df07d3efec6398980e98c3f4d5a6f58cc1cc3668672376","closesIn":"corte 6"},
     {"file":"apps/web/src/study/StudyExpedienteMensual.tsx","rule":"EQ","property":"code","snippetHash":"10e266f5cf710c194274709c9e99b5e021ba2521025b26f48e51f65de44ab023","closesIn":"corte 8"},
     {"file":"apps/web/src/study/StudyExpedienteMensual.tsx","rule":"EQ","property":"code","snippetHash":"4b068ee5be2117191767c9e3c27ffdb3a1a2482cd2524b86a2da30e1485d672a","closesIn":"corte 8"},

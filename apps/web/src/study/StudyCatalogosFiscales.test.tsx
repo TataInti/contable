@@ -38,10 +38,22 @@ const jurisdiction = {
   origin: "REFERENCE" as const,
   createdByFirmId: null,
 };
+const family = {
+  id: "family-vat",
+  key: "VAT_RI",
+  label: "IVA Responsable Inscripto",
+  isActive: true,
+  sortOrder: 10,
+  allowsAdvancePayment: false,
+  closesByJurisdiction: false,
+  allowedBalanceKinds: ["IVA_TECNICO", "IVA_LIBRE"],
+};
+const calcFamilies = [family];
 const taxType = {
   id: "tax-type-e2e",
   code: "E2E_TEST_TAX",
   name: "Impuesto sintético E2E",
+  defaultFamilyId: family.id,
   isActive: true,
   origin: "REFERENCE" as const,
   createdByFirmId: null,
@@ -100,6 +112,7 @@ function mockApi() {
     }
     if (path === "/tax/jurisdictions" || path === "/tax/jurisdictions?includeInactive=true") return Promise.resolve([...jurisdictions]);
     if (path === "/tax/types" || path === "/tax/types?includeInactive=true") return Promise.resolve([...taxTypes]);
+    if (path === "/tax/calc-families") return Promise.resolve([...calcFamilies]);
     if (path === "/tax/authorities" || path === "/tax/authorities?includeInactive=true") return Promise.resolve([...authorities]);
     if (path === "/tax/regimes" || path === "/tax/regimes?includeInactive=true") return Promise.resolve([...regimes]);
     if (path === "/tax/activities?includeInactive=true") return Promise.resolve([...activities]);
@@ -127,6 +140,7 @@ function mockApi() {
         id: "tax-type-created",
         code: String(body.code ?? ""),
         name: String(body.name ?? ""),
+        defaultFamilyId: body.defaultFamilyId ?? null,
         isActive: true,
         origin: "UI" as const,
         createdByFirmId: "firm-a",
@@ -151,6 +165,7 @@ function mockApi() {
         id: "regime-e2e",
         code: String(body.code ?? ""),
         name: String(body.name ?? ""),
+        calcFamilyId: String(body.calcFamilyId ?? ""),
         isActive: true,
         authority: authorities.find((item) => item.id === body.authorityId),
         jurisdiction,
@@ -258,6 +273,7 @@ describe("StudyCatalogosFiscales", () => {
 
   afterEach(() => {
     cleanup();
+    window.history.replaceState({}, "", "/");
     vi.restoreAllMocks();
   });
 
@@ -285,6 +301,7 @@ describe("StudyCatalogosFiscales", () => {
     fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "E2E_SYN_REGIME" } });
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Régimen sintético E2E" } });
     fireEvent.change(screen.getByLabelText("Impuesto"), { target: { value: taxType.id } });
+    expect((screen.getByLabelText("Familia de cálculo") as HTMLSelectElement).value).toBe(family.id);
     fireEvent.change(screen.getByLabelText("Jurisdicción"), { target: { value: jurisdiction.id } });
     fireEvent.change(screen.getByLabelText("Organismo recaudador"), { target: { value: "authority-e2e" } });
     // La coherencia organismo ↔ jurisdicción se confirma en vivo, antes de enviar.
@@ -295,9 +312,37 @@ describe("StudyCatalogosFiscales", () => {
       code: "E2E_SYN_REGIME",
       name: "Régimen sintético E2E",
       taxTypeId: taxType.id,
+      calcFamilyId: family.id,
       jurisdictionId: jurisdiction.id,
       authorityId: "authority-e2e",
     }));
+  });
+
+  it("abre la edición de un régimen desde el enlace y precarga la familia predeterminada", async () => {
+    const authority = {
+      id: "authority-edit",
+      code: "AUTH-EDIT",
+      name: "Organismo sintético",
+      jurisdictionId: jurisdiction.id,
+      isActive: true,
+      jurisdiction,
+    };
+    regimes.push({
+      id: "regime-pending",
+      code: "REGIME-PENDING",
+      name: "Régimen pendiente",
+      calcFamilyId: null,
+      isActive: true,
+      authority,
+      jurisdiction,
+      taxType,
+    });
+    window.history.replaceState({}, "", "/catalogos-fiscales?editRegime=regime-pending");
+    renderCatalogs();
+
+    const familySelect = await screen.findByLabelText("Familia de cálculo") as HTMLSelectElement;
+    expect(familySelect.value).toBe(family.id);
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeTruthy();
   });
 
   it("expone jurisdicciones e impuestos y los crea desde sus pestañas", async () => {
@@ -337,14 +382,36 @@ describe("StudyCatalogosFiscales", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo tipo de impuesto" }));
     fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "UI-IIBB" } });
     fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Impuesto provincial propio" } });
+    const familySelect = await screen.findByLabelText("Familia por defecto") as HTMLSelectElement;
+    expect(familySelect.required).toBe(false);
+    expect(within(familySelect).getByRole("option", { name: family.label })).toBeTruthy();
+    fireEvent.change(familySelect, { target: { value: family.id } });
     fireEvent.click(screen.getByRole("button", { name: "Crear tipo de impuesto" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/tax/types", {
         code: "UI-IIBB",
         name: "Impuesto provincial propio",
+        defaultFamilyId: family.id,
       }),
     );
     expect(await screen.findByText("Impuesto provincial propio")).toBeTruthy();
+  });
+
+  it("permite crear un tipo de impuesto sin familia por defecto", async () => {
+    renderCatalogs();
+    await openTab(/^Tipos de impuesto/);
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo tipo de impuesto" }));
+    fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "UI-SIN-FAMILIA" } });
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Impuesto sin familia predeterminada" } });
+    expect((await screen.findByLabelText("Familia por defecto") as HTMLSelectElement).value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Crear tipo de impuesto" }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/tax/types", {
+        code: "UI-SIN-FAMILIA",
+        name: "Impuesto sin familia predeterminada",
+      }),
+    );
   });
 
   it("explica qué tipo de impuesto falta para crear un régimen y enlaza a su pestaña", async () => {
@@ -667,7 +734,7 @@ describe("StudyCatalogosFiscales", () => {
     expect(within(detail).getByText(/recauda en Otra jurisdicción/)).toBeTruthy();
   });
 
-  it("muestra junto a los códigos de tipo de impuesto y jurisdicción qué decisión siguen", async () => {
+  it("deja fuera la familia de cálculo de los avisos del código", async () => {
     const tucuman = {
       ...jurisdiction,
       id: "jurisdiction-tuc-warning",
@@ -685,14 +752,14 @@ describe("StudyCatalogosFiscales", () => {
     const jurisdictionDetail = await screen.findByRole("complementary", { name: "Detalle de la jurisdicción" });
     fireEvent.click(within(jurisdictionDetail).getByRole("button", { name: "Editar" }));
     let editDialog = await screen.findByRole("dialog");
-    expect(within(editDialog).getByText("Hoy, el código de la jurisdicción define la familia del motor. Más adelante podrás elegir esa decisión por separado.")).toBeTruthy();
+    expect(within(editDialog).queryByText(/motor|familia del motor/i)).toBeNull();
 
     await openTab(/^Tipos de impuesto/);
     fireEvent.click(await screen.findByText("Ingresos Brutos"));
     const taxTypeDetail = await screen.findByRole("complementary", { name: "Detalle del tipo de impuesto" });
     fireEvent.click(within(taxTypeDetail).getByRole("button", { name: "Editar" }));
     editDialog = await screen.findByRole("dialog");
-    expect(within(editDialog).getByText("Hoy, el código del impuesto define la familia del motor y la fuente de importación. Más adelante podrás elegir cada decisión por separado.")).toBeTruthy();
+    expect(within(editDialog).getByText("El código identifica el tipo de impuesto. La fuente de importación se configura por separado.")).toBeTruthy();
   });
 
   it("muestra junto al código de un régimen de sistema qué decisiones siguen ese código", async () => {
@@ -732,7 +799,8 @@ describe("StudyCatalogosFiscales", () => {
 
     const editDialog = await screen.findByRole("dialog");
     expect(within(editDialog).getByLabelText("Código")).toBeTruthy();
-    expect(within(editDialog).getByText("Hoy, el código del régimen define las excepciones del motor, la fuente de importación y el permiso. Más adelante podrás elegir cada decisión por separado.")).toBeTruthy();
+    expect(within(editDialog).getByText("El código identifica el régimen. La familia de cálculo y la fuente de importación se configuran por separado.")).toBeTruthy();
+    expect(within(editDialog).queryByText(/motor|número de corte/i)).toBeNull();
     expect(within(editDialog).getByRole("button", { name: "Guardar cambios" })).toBeTruthy();
   });
 
