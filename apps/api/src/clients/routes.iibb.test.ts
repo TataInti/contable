@@ -113,8 +113,10 @@ describe("PATCH profile — jurisdicciones IIBB contra catálogo", () => {
   });
 
   it("acepta códigos y nombres del catálogo y guarda canónicos deduplicados", async () => {
+    const tucuman = await prisma.jurisdiction.findUnique({ where: { code: "AR-T" } });
+    if (!tucuman) throw new Error("seed-fase2 no cargado: falta jurisdicción AR-T");
     const res = await patchProfile({
-      iibbJurisdictions: ["Provincia de Tucumán", "tuc", "AR-T"],
+      iibbJurisdictions: [tucuman.name, "tuc", "AR-T"],
     });
     expect(res.statusCode).toBe(200);
     const profile = await prisma.clientProfile.findUniqueOrThrow({ where: { clientId } });

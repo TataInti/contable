@@ -58,13 +58,51 @@ export const taxAuthoritySchema = z.object({
 });
 export type TaxAuthority = z.infer<typeof taxAuthoritySchema>;
 
+export const calcFamilySchema = z.object({
+  id: uuid,
+  key: z.string().min(1).max(80),
+  label: z.string().min(1).max(200),
+  isActive: z.boolean(),
+  sortOrder: z.number().int(),
+  allowsAdvancePayment: z.boolean(),
+  closesByJurisdiction: z.boolean(),
+  allowedBalanceKinds: z.array(z.string()),
+});
+export type CalcFamily = z.infer<typeof calcFamilySchema>;
+
+export const taxEngineSchema = z.object({
+  id: uuid,
+  engineKey: z.string().min(1).max(80),
+  engineVersion: z.string().min(1).max(80),
+  familyId: uuid,
+  familyKey: z.string().min(1).max(80),
+  label: z.string().min(1).max(200),
+});
+export type TaxEngine = z.infer<typeof taxEngineSchema>;
+
 export const taxTypeSchema = z.object({
   id: uuid,
   code: z.string().min(1).max(40),
   name: z.string().min(1).max(160),
+  defaultFamilyId: uuid.nullable().optional(),
   isActive: z.boolean(),
 });
 export type TaxType = z.infer<typeof taxTypeSchema>;
+
+export const createTaxTypeSchema = z.object({
+  code: z.string().min(1).max(40),
+  name: z.string().min(1).max(160),
+  defaultFamilyId: uuid.optional(),
+});
+export type CreateTaxType = z.infer<typeof createTaxTypeSchema>;
+
+export const updateTaxTypeSchema = z.object({
+  code: z.string().min(1).max(40).optional(),
+  name: z.string().min(1).max(160).optional(),
+  defaultFamilyId: uuid.nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+export type UpdateTaxType = z.infer<typeof updateTaxTypeSchema>;
 
 export const taxRegimeSchema = z.object({
   id: uuid,
@@ -73,6 +111,7 @@ export const taxRegimeSchema = z.object({
   taxTypeId: uuid,
   jurisdictionId: uuid,
   authorityId: uuid,
+  calcFamilyId: uuid.nullable().optional(),
   isActive: z.boolean(),
 });
 export type TaxRegime = z.infer<typeof taxRegimeSchema>;
@@ -83,8 +122,20 @@ export const createTaxRegimeSchema = z.object({
   taxTypeId: uuid,
   jurisdictionId: uuid,
   authorityId: uuid,
+  calcFamilyId: uuid.optional(),
 });
 export type CreateTaxRegime = z.infer<typeof createTaxRegimeSchema>;
+
+export const updateTaxRegimeSchema = z.object({
+  code: z.string().min(1).max(40).optional(),
+  name: z.string().min(1).max(160).optional(),
+  taxTypeId: uuid.optional(),
+  jurisdictionId: uuid.optional(),
+  authorityId: uuid.optional(),
+  calcFamilyId: uuid.nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+export type UpdateTaxRegime = z.infer<typeof updateTaxRegimeSchema>;
 
 export const economicActivitySchema = z.object({
   id: uuid,
@@ -270,6 +321,7 @@ export const taxRuleVersionSchema = z.object({
   validFrom: isoDate,
   validTo: isoDate.nullable(),
   rulesHash: z.string().min(1).max(128),
+  engineId: uuid.nullable().optional(),
   engineVersion: z.string().min(1).max(80),
   approvedByUserId: uuid.nullable(),
   approvedAt: z.string().datetime().nullable(),
@@ -283,8 +335,12 @@ export type TaxRuleVersion = z.infer<typeof taxRuleVersionSchema>;
 export const createTaxRuleVersionSchema = z.object({
   validFrom: isoDate,
   validTo: isoDate.optional(),
-  engineVersion: z.string().min(1).max(80),
+  engineId: uuid.optional(),
+  engineVersion: z.string().min(1).max(80).optional(),
   rulesHash: z.string().min(1).max(128),
+}).refine((value) => Boolean(value.engineId || value.engineVersion), {
+  path: ["engineId"],
+  message: "Seleccioná un motor del catálogo",
 });
 export type CreateTaxRuleVersion = z.infer<typeof createTaxRuleVersionSchema>;
 

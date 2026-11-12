@@ -53,10 +53,15 @@ export const createRulePackVersionSchema = z
   .object({
     validFrom: ruleVersionDateSchema,
     validTo: ruleVersionDateSchema.optional(),
-    engineVersion: z.string().min(1).max(80),
+    engineId: z.string().uuid().optional(),
+    engineVersion: z.string().min(1).max(80).optional(),
     rulesHash: z.string().min(1).max(128),
   })
   .strict()
+  .refine((value) => Boolean(value.engineId || value.engineVersion), {
+    path: ["engineId"],
+    message: "Seleccioná un motor del catálogo",
+  })
   .superRefine(validateRuleVersionRange);
 
 const cloneRulePackVersionSchema = z
@@ -98,8 +103,14 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       });
     }
     if (err instanceof FiscalError) {
-      const status = err.code.includes("NOT_FOUND") ? 404 : 409;
-      return reply.status(status).send({ error: { code: err.code, message: err.message } });
+      const status = /NOT_FOUND/.test(err.code) ? 404 : err.path ? 422 : 409;
+      return reply.status(status).send({
+        error: {
+          code: err.code,
+          message: err.message,
+          ...(err.path ? { details: { path: err.path } } : {}),
+        },
+      });
     }
     app.log.error({ err }, "Error interno de la fundación fiscal");
     return reply.status(500).send({
@@ -170,6 +181,15 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/api/v1/tax/calc-families", async (req, reply) => {
+    try {
+      const data = await masters.listCalcFamilies(tenantContextFromRequest(req));
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.get("/api/v1/tax/types", async (req, reply) => {
     const query = z.object({ includeInactive: z.enum(["true", "false"]).optional() }).strict().parse(req.query);
     try {
@@ -185,11 +205,13 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       const body = z.object({
         code: z.string().trim().min(1).max(40),
         name: z.string().trim().min(1).max(160),
+        defaultFamilyId: z.string().uuid().optional(),
         duplicateOfId: z.string().uuid().optional(),
       }).strict().parse(req.body);
       const data = await masters.createTaxType(tenantContextFromRequest(req), {
         code: body.code,
         name: body.name,
+        ...(body.defaultFamilyId !== undefined ? { defaultFamilyId: body.defaultFamilyId } : {}),
         ...(body.duplicateOfId !== undefined ? { duplicateOfId: body.duplicateOfId } : {}),
       });
       return reply.status(201).send({ data });
@@ -205,6 +227,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         .object({
           code: z.string().trim().min(1).max(40).optional(),
           name: z.string().trim().min(1).max(160).optional(),
+          defaultFamilyId: z.string().uuid().nullable().optional(),
           isActive: z.boolean().optional(),
         })
         .strict()
@@ -216,6 +239,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         taxTypeId,
         ...(body.code !== undefined ? { code: body.code } : {}),
         ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.defaultFamilyId !== undefined ? { defaultFamilyId: body.defaultFamilyId } : {}),
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
       });
       return reply.send({ data });
@@ -288,6 +312,16 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/api/v1/tax/regimes/:regimeId/engines", async (req, reply) => {
+    try {
+      const { regimeId } = z.object({ regimeId: z.string().uuid() }).parse(req.params);
+      const data = await masters.listEnginesForRegime(tenantContextFromRequest(req), regimeId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.get("/api/v1/tax/regimes", async (req, reply) => {
     const query = z.object({ includeInactive: z.enum(["true", "false"]).optional() }).strict().parse(req.query);
     try {
@@ -307,6 +341,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
           taxTypeId: z.string().uuid(),
           jurisdictionId: z.string().uuid(),
           authorityId: z.string().uuid(),
+          calcFamilyId: z.string().uuid().optional(),
           duplicateOfId: z.string().uuid().optional(),
         })
         .strict()
@@ -317,6 +352,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         taxTypeId: body.taxTypeId,
         jurisdictionId: body.jurisdictionId,
         authorityId: body.authorityId,
+        ...(body.calcFamilyId !== undefined ? { calcFamilyId: body.calcFamilyId } : {}),
         ...(body.duplicateOfId !== undefined ? { duplicateOfId: body.duplicateOfId } : {}),
       });
       return reply.status(201).send({ data });
@@ -334,6 +370,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         taxTypeId: z.string().uuid().optional(),
         jurisdictionId: z.string().uuid().optional(),
         authorityId: z.string().uuid().optional(),
+        calcFamilyId: z.string().uuid().nullable().optional(),
         isActive: z.boolean().optional(),
       }).strict().refine((value) => Object.values(value).some((field) => field !== undefined), {
         message: "Indicá al menos un campo para actualizar",
@@ -345,6 +382,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         ...(body.taxTypeId !== undefined ? { taxTypeId: body.taxTypeId } : {}),
         ...(body.jurisdictionId !== undefined ? { jurisdictionId: body.jurisdictionId } : {}),
         ...(body.authorityId !== undefined ? { authorityId: body.authorityId } : {}),
+        ...(body.calcFamilyId !== undefined ? { calcFamilyId: body.calcFamilyId } : {}),
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
       });
       return reply.send({ data });
@@ -798,7 +836,14 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     const { packId } = req.params as { packId: string };
     try {
       const body = createRulePackVersionSchema.parse(req.body);
-      const data = await rules.createVersion(ctx, pickDefined({ ...body, packId }) as { packId: string; validFrom: string; validTo?: string; engineVersion: string; rulesHash: string });
+      const data = await rules.createVersion(ctx, pickDefined({ ...body, packId }) as {
+        packId: string;
+        validFrom: string;
+        validTo?: string;
+        engineId?: string;
+        engineVersion?: string;
+        rulesHash: string;
+      });
       return reply.code(201).send({ data });
     } catch (err) {
       return handleError(reply, err);

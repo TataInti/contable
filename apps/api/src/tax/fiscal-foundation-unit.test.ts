@@ -40,7 +40,17 @@ type TestContext = {
 
 const mockState = vi.hoisted(() => ({
   profiles: [] as StoredProfile[],
-  taxTypes: [] as Array<{ id: string }>,
+  taxTypes: [] as Array<{ id: string; defaultFamilyId?: string | null }>,
+  calcFamilies: [] as Array<{ id: string; key: string; isActive: boolean; sortOrder: number }>,
+  taxEngines: [] as Array<{
+    id: string;
+    engineKey: string;
+    engineVersion: string;
+    familyId: string;
+    label: string;
+    isActive: boolean;
+    sortOrder: number;
+  }>,
   jurisdictions: [] as Array<{ id: string }>,
   taxAuthorities: [] as Array<{ id: string; jurisdictionId: string }>,
   taxRegimes: [] as Array<Record<string, unknown>>,
@@ -49,6 +59,7 @@ const mockState = vi.hoisted(() => ({
     regimeCode: string;
     taxTypeCode: string;
     jurisdictionCode: string;
+    calcFamilyId?: string | null;
   }>,
   ruleVersions: [] as Array<{
     id: string;
@@ -58,6 +69,7 @@ const mockState = vi.hoisted(() => ({
     validFrom: Date;
     validTo?: Date | null;
     engineVersion: string;
+    engineId?: string | null;
     rulesHash: string;
     rulesHashSchemaVersion?: number;
     activatedByUserId?: string | null;
@@ -92,6 +104,11 @@ const PROFILE_ID = "33333333-4444-4555-8666-999999999999";
 const TAX_TYPE_ID = "44444444-5555-4666-8777-aaaaaaaaaaaa";
 const JURISDICTION_ID = "55555555-6666-4777-8888-bbbbbbbbbbbb";
 const AUTHORITY_ID = "66666666-7777-4888-8999-cccccccccccc";
+const VAT_FAMILY_ID = "f1000000-0000-4000-8000-000000000001";
+const IIBB_FAMILY_ID = "f1000000-0000-4000-8000-000000000002";
+const VAT_ENGINE_ID = "e1000000-0000-4000-8000-000000000001";
+const IIBB_ENGINE_ID = "e1000000-0000-4000-8000-000000000003";
+const EMPTY_FAMILY_REGIME_ID = "77777777-8888-4999-8000-dddddddddddd";
 
 const ctxOwner: TestContext = {
   userId: OWNER_ID,
@@ -241,6 +258,25 @@ function makeTransaction(ctx: TestContext) {
       findUnique: async ({ where }: { where: { id: string } }) =>
         mockState.taxTypes.find((item) => item.id === where.id) ?? null,
     },
+    calcFamily: {
+      findFirst: async ({ where }: { where: { id: string; isActive?: boolean } }) =>
+        mockState.calcFamilies.find((item) => item.id === where.id &&
+          (where.isActive === undefined || item.isActive === where.isActive)) ?? null,
+      findMany: async ({ where }: { where?: { isActive?: boolean } } = {}) =>
+        mockState.calcFamilies.filter((item) => where?.isActive === undefined || item.isActive === where.isActive),
+    },
+    taxEngine: {
+      findFirst: async ({ where }: { where: { id: string; isActive?: boolean } }) =>
+        mockState.taxEngines.find((item) => item.id === where.id &&
+          (where.isActive === undefined || item.isActive === where.isActive)) ?? null,
+      findMany: async ({ where }: { where: Record<string, unknown> }) =>
+        mockState.taxEngines
+          .filter((item) => Object.entries(where).every(([key, value]) => item[key as keyof typeof item] === value))
+          .map((item) => ({
+            ...item,
+            family: { key: mockState.calcFamilies.find((family) => family.id === item.familyId)?.key ?? "" },
+          })),
+    },
     jurisdiction: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         mockState.jurisdictions.find((item) => item.id === where.id) ?? null,
@@ -257,6 +293,7 @@ function makeTransaction(ctx: TestContext) {
               id: pack.id,
               regime: {
                 code: pack.regimeCode,
+                calcFamilyId: pack.calcFamilyId ?? null,
                 taxType: { code: pack.taxTypeCode },
                 jurisdiction: { code: pack.jurisdictionCode },
               },
@@ -331,14 +368,20 @@ function makeTransaction(ctx: TestContext) {
       },
     },
     taxRegime: {
-      findUnique: async () => {
+      findUnique: async ({ where }: { where: { id: string } }) => {
         mockState.regimeFindUniqueCalls += 1;
-        return null;
+        return mockState.taxRegimes.find((regime) => regime.id === where.id) ?? null;
       },
       create: async ({ data }: { data: Record<string, unknown> }) => {
         if (mockState.regimeCreateError) throw mockState.regimeCreateError;
         const regime = { id: `regime-${++mockState.idCounter}`, ...data };
         mockState.taxRegimes.push(regime);
+        return regime;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        const regime = mockState.taxRegimes.find((item) => item.id === where.id);
+        if (!regime) throw new Error("Missing regime in in-memory transaction");
+        Object.assign(regime, data);
         return regime;
       },
     },
@@ -379,6 +422,8 @@ const rules = new TaxRuleService();
 beforeEach(() => {
   mockState.profiles.length = 0;
   mockState.taxTypes.length = 0;
+  mockState.calcFamilies.length = 0;
+  mockState.taxEngines.length = 0;
   mockState.jurisdictions.length = 0;
   mockState.taxAuthorities.length = 0;
   mockState.taxRegimes.length = 0;
@@ -390,6 +435,48 @@ beforeEach(() => {
   mockState.idCounter = 0;
   mockState.regimeFindUniqueCalls = 0;
   mockState.regimeCreateError = null;
+  mockState.calcFamilies.push(
+    { id: VAT_FAMILY_ID, key: "VAT_RI", isActive: true, sortOrder: 10 },
+    { id: IIBB_FAMILY_ID, key: "IIBB_LOCAL", isActive: true, sortOrder: 20 },
+  );
+  mockState.taxEngines.push(
+    {
+      id: VAT_ENGINE_ID,
+      engineKey: "vat-ri",
+      engineVersion: "ar-vat-ri-v2.1.0",
+      familyId: VAT_FAMILY_ID,
+      label: "IVA RI por alícuota",
+      isActive: true,
+      sortOrder: 10,
+    },
+    {
+      id: "e1000000-0000-4000-8000-000000000002",
+      engineKey: "vat-ri-legacy",
+      engineVersion: "ar-vat-ri-v1.0.0",
+      familyId: VAT_FAMILY_ID,
+      label: "IVA RI legacy",
+      isActive: true,
+      sortOrder: 20,
+    },
+    {
+      id: IIBB_ENGINE_ID,
+      engineKey: "iibb-local-tuc",
+      engineVersion: "ar-iibb-tuc-local-v1.1.0",
+      familyId: IIBB_FAMILY_ID,
+      label: "IIBB local Tucumán",
+      isActive: true,
+      sortOrder: 10,
+    },
+    {
+      id: "e1000000-0000-4000-8000-000000000004",
+      engineKey: "iibb-local-tuc-legacy",
+      engineVersion: "ar-iibb-tuc-local-v1.0.0",
+      familyId: IIBB_FAMILY_ID,
+      label: "IIBB local Tucumán legacy",
+      isActive: true,
+      sortOrder: 20,
+    },
+  );
   mockState.context = ctxOwner;
   mockState.withTenantContext = async (ctx, fn) => {
     const tx = makeTransaction(ctx);
@@ -587,7 +674,7 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
       expect(missingEngine.statusCode).toBe(400);
       expect(missingEngine.json()).toMatchObject({
         error: {
-          details: expect.arrayContaining([expect.objectContaining({ path: ["engineVersion"] })]),
+          details: expect.arrayContaining([expect.objectContaining({ path: ["engineId"] })]),
         },
       });
 
@@ -745,6 +832,71 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
       }),
     ).rejects.toMatchObject({ code: "UNSUPPORTED_TAX_ENGINE_VERSION" });
     expect(mockState.ruleVersions).toHaveLength(0);
+  });
+
+  it("filtra motores por la familia elegida aunque el régimen use un código propio", async () => {
+    mockState.taxRegimes.push({ id: EMPTY_FAMILY_REGIME_ID, calcFamilyId: IIBB_FAMILY_ID });
+    const engines = await masters.listEnginesForRegime(ctxOwner, EMPTY_FAMILY_REGIME_ID);
+
+    expect(engines.map((engine) => engine.engineVersion)).toEqual([
+      "ar-iibb-tuc-local-v1.1.0",
+      "ar-iibb-tuc-local-v1.0.0",
+    ]);
+    expect(engines.every((engine) => engine.familyKey === "IIBB_LOCAL")).toBe(true);
+  });
+
+  it("guía a elegir familia cuando el régimen no tiene una", async () => {
+    mockState.taxRegimes.push({ id: EMPTY_FAMILY_REGIME_ID, calcFamilyId: null });
+    const app = Fastify({ logger: false });
+    fiscalFoundationRoutes(app);
+    await app.ready();
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/v1/tax/regimes/${EMPTY_FAMILY_REGIME_ID}/engines`,
+      });
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toMatchObject({
+        error: {
+          code: "REGIME_FAMILY_REQUIRED",
+          message: "Elegí la familia de cálculo del régimen",
+          details: { path: ["calcFamilyId"] },
+        },
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("guarda el motor por id y rechaza un id de otra familia", async () => {
+    mockState.taxRulePacks.push({
+      id: "pack-iibb-propio",
+      regimeCode: "MI_IIBB_PROPIO",
+      taxTypeCode: "CODIGO_LIBRE",
+      jurisdictionCode: "AR-X",
+      calcFamilyId: IIBB_FAMILY_ID,
+    });
+
+    await expect(rules.createVersion(ctxOwner, {
+      packId: "pack-iibb-propio",
+      validFrom: "2026-01-01",
+      engineId: VAT_ENGINE_ID,
+      rulesHash: "ignored-caller-value",
+    })).rejects.toMatchObject({ code: "ENGINE_FAMILY_MISMATCH", path: ["engineId"] });
+    expect(mockState.ruleVersions).toHaveLength(0);
+
+    const version = await rules.createVersion(ctxOwner, {
+      packId: "pack-iibb-propio",
+      validFrom: "2026-01-01",
+      engineId: IIBB_ENGINE_ID,
+      engineVersion: "texto-no-autoritativo",
+      rulesHash: "ignored-caller-value",
+    });
+    expect(version).toMatchObject({
+      engineId: IIBB_ENGINE_ID,
+      engineVersion: "ar-iibb-tuc-local-v1.1.0",
+      status: "DRAFT",
+    });
   });
 
   it("crea el perfil inicial como versión 1 DRAFT", async () => {

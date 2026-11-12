@@ -1,4 +1,5 @@
 export * from "./core.js";
+export * from "./engine-registry.js";
 export * from "./vat.js";
 export * from "./vat-ri.js";
 export * from "./iibb.js";

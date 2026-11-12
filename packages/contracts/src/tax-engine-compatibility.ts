@@ -1,5 +1,27 @@
-/** Motor implementado y elegible para una versión de reglas fiscales. */
+/** Opción de familia del catálogo de sistema. */
+export interface CalcFamilyOption {
+  id: string;
+  key: string;
+  label: string;
+  isActive: boolean;
+  sortOrder: number;
+  allowsAdvancePayment: boolean;
+  closesByJurisdiction: boolean;
+  allowedBalanceKinds: readonly string[];
+}
+
+/** Motor del catálogo de sistema, asociado por id a una familia. */
 export interface TaxEngineOption {
+  id: string;
+  engineKey: string;
+  engineVersion: string;
+  familyId: string;
+  familyKey: string;
+  label: string;
+}
+
+/** @deprecated Compatibilidad temporal para clientes anteriores al corte 2b. */
+export interface LegacyTaxEngineOption {
   engineVersion: string;
   label: string;
 }
@@ -22,7 +44,7 @@ type TaxEngineFamily =
   | "TEM_SMT"
   | "MONOTRIBUTO";
 
-const IVA_RI_ENGINES: readonly TaxEngineOption[] = [
+const IVA_RI_ENGINES: readonly LegacyTaxEngineOption[] = [
   {
     engineVersion: "ar-vat-ri-v2.1.0",
     label: "IVA RI por alícuota (ar-vat-ri-v2.1.0)",
@@ -33,7 +55,7 @@ const IVA_RI_ENGINES: readonly TaxEngineOption[] = [
   },
 ];
 
-const IIBB_TUC_ENGINES: readonly TaxEngineOption[] = [
+const IIBB_TUC_ENGINES: readonly LegacyTaxEngineOption[] = [
   {
     engineVersion: "ar-iibb-tuc-local-v1.1.0",
     label: "IIBB local Tucumán (ar-iibb-tuc-local-v1.1.0)",
@@ -44,7 +66,7 @@ const IIBB_TUC_ENGINES: readonly TaxEngineOption[] = [
   },
 ];
 
-const CM03_ENGINES: readonly TaxEngineOption[] = [
+const CM03_ENGINES: readonly LegacyTaxEngineOption[] = [
   {
     engineVersion: "ar-iibb-cm-art2-v1.1.0",
     label: "IIBB CM03 artículo 2 (ar-iibb-cm-art2-v1.1.0)",
@@ -55,7 +77,7 @@ const CM03_ENGINES: readonly TaxEngineOption[] = [
   },
 ];
 
-const TEM_SMT_ENGINES: readonly TaxEngineOption[] = [
+const TEM_SMT_ENGINES: readonly LegacyTaxEngineOption[] = [
   {
     engineVersion: "ar-tem-smt-v1.1.0",
     label: "TEM San Miguel de Tucumán (ar-tem-smt-v1.1.0)",
@@ -66,14 +88,14 @@ const TEM_SMT_ENGINES: readonly TaxEngineOption[] = [
   },
 ];
 
-const MONOTRIBUTO_ENGINES: readonly TaxEngineOption[] = [
+const MONOTRIBUTO_ENGINES: readonly LegacyTaxEngineOption[] = [
   {
     engineVersion: "ar-monotributo-v1.0.0",
     label: "Monotributo (ar-monotributo-v1.0.0)",
   },
 ];
 
-const ENGINES_BY_FAMILY: Record<TaxEngineFamily, readonly TaxEngineOption[]> = {
+const ENGINES_BY_FAMILY: Record<TaxEngineFamily, readonly LegacyTaxEngineOption[]> = {
   VAT_RI: IVA_RI_ENGINES,
   IIBB_LOCAL_TUC: IIBB_TUC_ENGINES,
   IIBB_CM03: CM03_ENGINES,
@@ -117,15 +139,15 @@ export function taxEngineFamilyForRegime(scope: TaxRegimeEngineScope): TaxEngine
   }
 }
 
-/** Devuelve sólo motores implementados y compatibles con el régimen indicado. */
+/** @deprecated Usar el endpoint de motores filtrado por calcFamilyId (corte 2b). */
 export function compatibleTaxEnginesForRegime(
   scope: TaxRegimeEngineScope,
-): readonly TaxEngineOption[] {
+): readonly LegacyTaxEngineOption[] {
   const family = taxEngineFamilyForRegime(scope);
   return family ? ENGINES_BY_FAMILY[family] : [];
 }
 
-/** Mensaje accionable para versiones que no tienen un despacho compatible. */
+/** @deprecated Compatibilidad temporal hasta que todos los clientes envíen engineId. */
 export function taxEngineVersionCompatibilityError(
   scope: TaxRegimeEngineScope,
   engineVersion: string,
