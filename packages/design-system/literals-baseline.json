@@ -93,7 +93,7 @@
     },
     "apps/web/src/portal/portal.css": {
       "fontSize": 0,
-      "spacing": 9,
+      "spacing": 8,
       "radius": 0,
       "color": 2
     },
@@ -435,8 +435,8 @@
     },
     "apps/web/src/styles/global.css": {
       "fontSize": 0,
-      "spacing": 3,
-      "radius": 1,
+      "spacing": 0,
+      "radius": 0,
       "color": 0
     },
     "apps/web/src/ui/ActionDrawer.tsx": {
@@ -572,8 +572,8 @@
       "color": 0
     },
     "packages/design-system/src/Dense.css": {
-      "fontSize": 19,
-      "spacing": 88,
+      "fontSize": 18,
+      "spacing": 87,
       "radius": 2,
       "color": 0
     },
@@ -632,6 +632,12 @@
       "color": 0
     },
     "packages/design-system/src/SectionIndex.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/StatusBadge.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,

@@ -280,48 +280,6 @@
   color: var(--ds-color-success);
 }
 
-.portal-page .status-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 2px var(--ds-space-2);
-  border: 1px solid var(--ds-color-border);
-  border-radius: var(--ds-radius-sm);
-  font-size: var(--ds-text-xs);
-  font-weight: 650;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.portal-page .status-badge--ok {
-  border-color: color-mix(in srgb, var(--ds-color-success) 28%, var(--ds-color-border));
-  background-color: var(--ds-color-success-subtle);
-  color: var(--ds-color-success);
-}
-
-.portal-page .status-badge--warn {
-  border-color: color-mix(in srgb, var(--ds-color-warning) 32%, var(--ds-color-border));
-  background-color: color-mix(in srgb, var(--ds-color-warning) 9%, var(--ds-color-surface));
-  color: var(--ds-color-warning);
-}
-
-.portal-page .status-badge--danger {
-  border-color: color-mix(in srgb, var(--ds-color-danger) 30%, var(--ds-color-border));
-  background-color: color-mix(in srgb, var(--ds-color-danger) 7%, var(--ds-color-surface));
-  color: var(--ds-color-danger);
-}
-
-.portal-page .status-badge--info {
-  border-color: color-mix(in srgb, var(--ds-color-info) 30%, var(--ds-color-border));
-  background-color: color-mix(in srgb, var(--ds-color-info) 7%, var(--ds-color-surface));
-  color: var(--ds-color-info);
-}
-
-.portal-page .status-badge--muted {
-  background-color: var(--ds-color-surface-muted);
-  color: var(--ds-color-text-muted);
-}
-
 /* Inicio */
 .portal-dashboard__overview {
   display: grid;

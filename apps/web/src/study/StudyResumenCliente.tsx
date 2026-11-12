@@ -529,7 +529,7 @@ export function StudyResumenCliente() {
                 <div className="client-summary__overview-meta">
                   <span className="client-summary__overview-status">
                     <span>Estado</span>
-                    <StatusBadge status={client.status} />
+                    <StatusBadge status={client.status} variant="pill" />
                   </span>
                   <span className="client-summary__overview-created">
                     Alta en el estudio {formatDate(client.createdAt)}

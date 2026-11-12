@@ -677,13 +677,6 @@ button.dense-stat:hover {
   text-align: center;
 }
 
-/* Badges compactos (reutiliza status-badge) */
-.dense-table .status-badge {
-  min-height: 20px;
-  padding: 0 8px;
-  font-size: 11.5px;
-}
-
 .dense-coherence {
   display: inline-flex;
   align-items: center;
