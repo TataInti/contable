@@ -469,7 +469,7 @@ La carga se representa con estado de carga; este componente comunica ausencia de
 
 ### Estados
 
-En tablas, listas y avisos, un estado usa punto + texto plano; el texto siempre nombra el estado. La píldora (borde y fondo) se reserva para la cabecera de la ficha de un registro y la ficha/Resumen del cliente. El punto comunica el tono y es decorativo (`aria-hidden="true"`); el texto usa `--ds-color-text` y mantiene contraste mínimo de 4,5:1. El tono `ok` usa `--ds-color-success` sólo en el punto, nunca texto verde ni fondo verde en tablas.
+En tablas, listas y avisos, un estado usa punto + texto plano; el texto siempre nombra el estado. La píldora (borde y fondo) se reserva para la cabecera de la ficha de un registro y la ficha/Resumen del cliente. El punto mide 8 px (`--ds-space-2`), queda centrado con el texto y es decorativo (`aria-hidden="true"`); el texto usa `--ds-color-text` y mantiene contraste mínimo de 4,5:1. El tono `ok` usa `--ds-color-success` sólo en el punto, nunca texto verde ni fondo verde en tablas.
 
 | Tono | Uso | Color del punto |
 |---|---|---|
@@ -478,6 +478,22 @@ En tablas, listas y avisos, un estado usa punto + texto plano; el texto siempre 
 | `danger` (peligro) | Fallo, vencimiento o riesgo | `--ds-color-danger` |
 | `info` | En curso o informativo | `--ds-color-info` |
 | `muted` (neutro) | Borrador, inactividad o cierre normal | `--ds-color-text-muted` |
+
+#### Estados del paquete y etiquetas visibles
+
+| Clave | Etiqueta | Tono |
+|---|---|---|
+| `CONFIGURED` | Configurada | `ok` |
+| `RESOLVED` | Resuelto | `ok` |
+| `WAITING_INPUTS` | Esperando datos | `warn` |
+| `READY_TO_CALCULATE` | Listo para calcular | `info` |
+| `PARTIALLY_PAID` | Pago parcial | `warn` |
+| `CHANGES_REQUESTED` | Cambios solicitados | `warn` |
+| `RETIRED` | Retirado | `muted` |
+| `INFO` | Informativo | `info` |
+| `WARNING` | Aviso | `warn` |
+| `BLOCKING` | Bloqueante | `danger` |
+| `FINALIZED` | Finalizado | `muted` |
 
 **Correcto:**
 
@@ -496,7 +512,7 @@ En tablas, listas y avisos, un estado usa punto + texto plano; el texto siempre 
 ### StatusBadge
 
 - **Propósito:** presentar un estado contable con su etiqueta conocida o un fallback legible.
-- **Props:** `status: string | null | undefined`; `className` y `variant` (`plain` por defecto o `pill`) son opcionales. `getStatusBadgeMeta` expone la etiqueta y el tono resuelto; `StatusTone`, `StatusBadgeMeta` y `StatusBadgeVariant` son tipos públicos.
+- **Props:** `status: string | null | undefined`; `className`, `label` y `variant` (`plain` por defecto o `pill`) son opcionales. `label` permite ajustar la etiqueta visible sin alterar la clave ni el tono. `getStatusBadgeMeta` expone la etiqueta y el tono resuelto; `StatusTone`, `StatusBadgeMeta` y `StatusBadgeVariant` son tipos públicos.
 - **Estados:** normaliza espacios, guiones y mayúsculas; los estados conocidos usan su etiqueta/tono configurados y los desconocidos se humanizan como neutros. El DOM conserva `status-badge` y `data-status`, muestra siempre el texto y oculta el punto decorativo con `aria-hidden`.
 - **Correcto:**
 

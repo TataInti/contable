@@ -12,6 +12,7 @@ import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetai
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
+import { StatusBadge } from "../ui/StatusBadge";
 import {
   DenseAlert,
   DenseHeader,
@@ -163,16 +164,17 @@ const jurisdictionKindLabel: Record<JurisdictionOption["kind"], string> = {
 
 function ActivityStateBadge({ isActive }: { isActive: boolean }) {
   return (
-    <span className={`study-badge ${isActive ? "study-badge--ok" : "study-badge--muted"}`}>
-      {isActive ? "Activa" : "Oculta"}
-    </span>
+    <StatusBadge
+      status={isActive ? "ACTIVE" : "INACTIVE"}
+      label={isActive ? undefined : "Oculto"}
+    />
   );
 }
 
 function ActiveBadge({ active }: { active: boolean }) {
   return (
     <span className={`status-badge status-badge--${active ? "ok" : "muted"}`}>
-      {active ? "Activo" : "Inactivo"}
+      {active ? "Activo" : "Oculto"}
     </span>
   );
 }
