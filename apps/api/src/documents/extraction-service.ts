@@ -1,5 +1,12 @@
 import { Prisma } from "@prisma/client";
-import type { ApprovedSnapshotData, ApprovedSnapshotField, ApprovedSnapshotSource } from "@contable/contracts";
+import {
+  isManualExtractionFieldKey,
+  manualExtractionFieldError,
+  type ApprovedSnapshotData,
+  type ApprovedSnapshotField,
+  type ApprovedSnapshotSource,
+  type ManualExtractionFieldKey,
+} from "@contable/contracts";
 import { prisma } from "../lib/prisma.js";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { apiReviewIssues, extractionForApi } from "./extraction-contract.js";
@@ -17,29 +24,18 @@ export class ExtractionError extends Error {
   }
 }
 
+export class InvalidCorrectionError extends Error {
+  readonly code = "INVALID_CORRECTION";
+
+  constructor(readonly fieldKey: ManualExtractionFieldKey, message: string) {
+    super(message);
+    this.name = "InvalidCorrectionError";
+  }
+}
+
 const REVIEWABLE_EXTRACTION_STATUSES: readonly string[] = ["GENERATED", "NEEDS_REVIEW"];
 
-export const MANUAL_EXTRACTION_FIELD_KEYS = [
-  "voucherType",
-  "letter",
-  "pointOfSale",
-  "voucherNumber",
-  "issueDate",
-  "issuerTaxId",
-  "receiverTaxId",
-  "issuerName",
-  "receiverName",
-  "vatCondition",
-  "netAmount",
-  "nonTaxableAmount",
-  "exemptAmount",
-  "totalAmount",
-  "currency",
-  "cae",
-  "caeExpiration",
-] as const;
-
-export type ManualExtractionFieldKey = (typeof MANUAL_EXTRACTION_FIELD_KEYS)[number];
+export { MANUAL_EXTRACTION_FIELD_KEYS } from "@contable/contracts";
 
 export interface ManualExtractionFieldInput {
   key: ManualExtractionFieldKey;
@@ -178,7 +174,12 @@ export class ExtractionService {
     return this.scoped(ctx, async (tx) => {
       const extraction = await tx.documentExtraction.findFirst({ where: { id: extractionId, firmId, clientId }, include: { fields: true } });
       if (!extraction) throw new Error("EXTRACTION_NOT_FOUND");
-      if (!extraction.fields.some((field) => field.id === fieldId)) throw new Error("FIELD_NOT_FOUND");
+      const field = extraction.fields.find((candidate) => candidate.id === fieldId);
+      if (!field) throw new Error("FIELD_NOT_FOUND");
+      if (isManualExtractionFieldKey(field.key)) {
+        const formatError = manualExtractionFieldError(field.key, correction);
+        if (formatError) throw new InvalidCorrectionError(field.key, formatError);
+      }
       await tx.extractedField.update({ where: { id: fieldId }, data: { correction, reason, status: "CORRECTED" } });
       await tx.documentExtraction.update({ where: { id: extractionId }, data: { status: "NEEDS_REVIEW", reviewedByUserId: userId, reviewedAt: new Date() } });
       await tx.auditEvent.create({ data: { firmId, clientId, userId, actorKind: ctx?.actorKind ?? "USER", action: "document.extraction.corrected", entityType: "DocumentExtraction", entityId: extractionId, after: { fieldId, correction, reason } } });

@@ -7,6 +7,7 @@ export * from "./tax-engine-compatibility.js";
 export * from "./tax.js";
 export * from "./journal.js";
 export * from "./documents.js";
+export * from "./manual-extraction.js";
 export * from "./domain.js";
 export * from "./auth.js";
 export * from "./clients.js";

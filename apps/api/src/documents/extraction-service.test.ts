@@ -4,7 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import Fastify from "fastify";
 import { prisma } from "../lib/prisma.js";
 import { ExtractionService } from "./extraction-service.js";
-import { approvedSnapshotDataSchema } from "@contable/contracts";
+import { approvedSnapshotDataSchema, type ManualExtractionFieldKey } from "@contable/contracts";
 import { documentRoutes } from "./routes.js";
 
 /**
@@ -216,6 +216,44 @@ function extractionRoutesApp() {
 function manualFieldsUrl(extractionId: string) {
   return `/api/v1/firms/${FIRM_ALFA}/clients/${EXTRACTION_TEST_CLIENT}/extractions/${extractionId}/fields`;
 }
+
+const validManualFields: Array<{ key: ManualExtractionFieldKey; value: string }> = [
+  { key: "voucherType", value: "factura" },
+  { key: "letter", value: "X" },
+  { key: "pointOfSale", value: "0004" },
+  { key: "voucherNumber", value: "00001234" },
+  { key: "issueDate", value: "0000-02-29" },
+  { key: "issuerTaxId", value: "00000000000" },
+  { key: "receiverTaxId", value: "12345678901" },
+  { key: "issuerName", value: "Proveedor S.A." },
+  { key: "receiverName", value: "Cliente S.R.L." },
+  { key: "vatCondition", value: "RESPONSABLE_INSCRIPTO" },
+  { key: "netAmount", value: "1234.56" },
+  { key: "nonTaxableAmount", value: "0.00" },
+  { key: "exemptAmount", value: "10.00" },
+  { key: "totalAmount", value: "1244.56" },
+  { key: "currency", value: "ARS" },
+  { key: "cae", value: "00000000000000" },
+  { key: "caeExpiration", value: "2026-11-12" },
+];
+
+const invalidManualFieldFormats: Array<[ManualExtractionFieldKey, string, string, string]> = [
+  ["voucherType", "Factura", "Tipo de documento", "Elegí un tipo de documento de la lista."],
+  ["letter", "Z", "Letra", "Elegí una letra de la lista."],
+  ["pointOfSale", "00-04", "Punto de venta", "Ingresá solo dígitos."],
+  ["voucherNumber", "12A34", "Número", "Ingresá solo dígitos."],
+  ["issueDate", "2026-02-30", "Fecha", "Ingresá una fecha válida con formato AAAA-MM-DD."],
+  ["issuerTaxId", "1234567890", "CUIT emisor", "El CUIT debe tener exactamente 11 dígitos."],
+  ["receiverTaxId", "123456789012", "CUIT receptor", "El CUIT debe tener exactamente 11 dígitos."],
+  ["vatCondition", "Responsable inscripto", "Condición frente al IVA", "Elegí una condición frente al IVA de la lista."],
+  ["netAmount", "1.234,56", "Neto gravado", "El importe debe tener punto decimal y dos decimales (por ejemplo, 1234.56)."],
+  ["nonTaxableAmount", "no numérico", "No gravado", "El importe debe tener punto decimal y dos decimales (por ejemplo, 1234.56)."],
+  ["exemptAmount", "10", "Exento", "El importe debe tener punto decimal y dos decimales (por ejemplo, 1234.56)."],
+  ["totalAmount", "100 sin formato", "Total", "El importe debe tener punto decimal y dos decimales (por ejemplo, 1234.56)."],
+  ["currency", "EUR", "Moneda", "Elegí una moneda de la lista."],
+  ["cae", "1234567890123", "CAE", "El CAE debe tener exactamente 14 dígitos."],
+  ["caeExpiration", "12/11/2026", "Vencimiento del CAE", "Ingresá una fecha válida con formato AAAA-MM-DD."],
+];
 
 async function createExtractionField(
   fixture: ExtractionFixture,
@@ -745,7 +783,161 @@ describe("ruta HTTP de rechazo de extracción", () => {
   });
 });
 
+describe("corrección PATCH de campos fiscales", () => {
+  it.each(validManualFields)(
+    "acepta el formato canónico de $key aunque el valor guardado sea legado",
+    async ({ key, value }) => {
+      const fixture = await createExtractionFixture("GENERATED");
+      const field = await createExtractionField(fixture, {
+        key,
+        rawValue: "formato legado",
+        normalizedValue: "formato legado",
+        correction: "corrección antigua en otro formato",
+      });
+      const app = extractionRoutesApp();
+
+      try {
+        const response = await app.inject({
+          method: "PATCH",
+          url: `${manualFieldsUrl(fixture.extractionId)}/${field.id}`,
+          payload: { correction: value },
+        });
+        const saved = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+          tx.extractedField.findUnique({ where: { id: field.id } }),
+        );
+
+        expect(response.statusCode).toBe(200);
+        expect(saved).toMatchObject({ correction: value, status: "CORRECTED" });
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
+  it.each(invalidManualFieldFormats)(
+    "devuelve 400 en español para el formato inválido de $0 y no modifica lo guardado",
+    async (key, value, label, expectedMessage) => {
+      const fixture = await createExtractionFixture("GENERATED");
+      const field = await createExtractionField(fixture, {
+        key,
+        rawValue: "formato legado",
+        normalizedValue: "formato legado",
+        correction: "corrección antigua en otro formato",
+      });
+      const app = extractionRoutesApp();
+
+      try {
+        const response = await app.inject({
+          method: "PATCH",
+          url: `${manualFieldsUrl(fixture.extractionId)}/${field.id}`,
+          payload: { correction: value },
+        });
+        const saved = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+          tx.extractedField.findUnique({ where: { id: field.id } }),
+        );
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toMatchObject({
+          error: {
+            code: "INVALID_CORRECTION",
+            message: `${label}: ${expectedMessage}`,
+          },
+        });
+        expect(saved).toMatchObject({
+          correction: "corrección antigua en otro formato",
+          status: "ACCEPTED",
+        });
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
+  it("mantiene el PATCH libre para una clave fuera de las 17, como IVA por fila", async () => {
+    const fixture = await createExtractionFixture("GENERATED");
+    const field = await createExtractionField(fixture, {
+      key: "vatRate",
+      rawValue: "21",
+      normalizedValue: "21",
+    });
+    const app = extractionRoutesApp();
+
+    try {
+      const response = await app.inject({
+        method: "PATCH",
+        url: `${manualFieldsUrl(fixture.extractionId)}/${field.id}`,
+        payload: { correction: "21 por ciento" },
+      });
+      const saved = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+        tx.extractedField.findUnique({ where: { id: field.id } }),
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(saved).toMatchObject({ correction: "21 por ciento", status: "CORRECTED" });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
 describe("carga manual de campos fiscales", () => {
+  it("valida y persiste las 17 claves con formatos canónicos, sin validar contenido fiscal", async () => {
+    const fixture = await createExtractionFixture("GENERATED");
+    const app = extractionRoutesApp();
+
+    try {
+      const response = await app.inject({
+        method: "PUT",
+        url: manualFieldsUrl(fixture.extractionId),
+        payload: { fields: validManualFields.map((field) => ({ ...field, ...(field.key === "totalAmount" ? { value: "1.00" } : {}) })) },
+      });
+      const saved = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+        tx.extractedField.findMany({ where: { extractionId: fixture.extractionId } }),
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(saved).toHaveLength(17);
+      expect(saved).toEqual(expect.arrayContaining(validManualFields.map(({ key, value }) =>
+        expect.objectContaining({
+          key,
+          correction: key === "totalAmount" ? "1.00" : value,
+          method: "HUMAN",
+        }),
+      )));
+      expect(saved.find((field) => field.key === "issuerTaxId")?.correction).toBe("00000000000");
+      expect(saved.find((field) => field.key === "totalAmount")?.correction).toBe("1.00");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each(invalidManualFieldFormats)(
+    "rechaza con 400 y mensaje en español el formato inválido de %s",
+    async (key, value, label, expectedMessage) => {
+      const fixture = await createExtractionFixture("GENERATED");
+      const app = extractionRoutesApp();
+
+      try {
+        const response = await app.inject({
+          method: "PUT",
+          url: manualFieldsUrl(fixture.extractionId),
+          payload: { fields: [{ key, value }] },
+        });
+        const saved = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+          tx.extractedField.findMany({ where: { extractionId: fixture.extractionId } }),
+        );
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toMatchObject({
+          error: { code: "INVALID_FIELDS", message: `${label}: ${expectedMessage}` },
+        });
+        expect(saved).toHaveLength(0);
+      } finally {
+        await app.close();
+      }
+    },
+  );
+
   it("crea datos HUMAN, deja intacto el original y audita actor, fecha y claves", async () => {
     const fixture = await createExtractionFixture("GENERATED");
     const original = await createExtractionField(fixture, {
@@ -759,7 +951,7 @@ describe("carga manual de campos fiscales", () => {
       const response = await app.inject({
         method: "PUT",
         url: manualFieldsUrl(fixture.extractionId),
-        payload: { fields: [{ key: "totalAmount", value: "importe sin formato" }] },
+        payload: { fields: [{ key: "totalAmount", value: "1234.56" }] },
       });
 
       expect(response.statusCode).toBe(200);
@@ -781,7 +973,7 @@ describe("carga manual de campos fiscales", () => {
         confidence: 0,
         rawValue: null,
         normalizedValue: null,
-        correction: "importe sin formato",
+        correction: "1234.56",
       });
       expect(preservedOriginal).toMatchObject({
         rawValue: "IA-original-20123456789",
@@ -799,11 +991,11 @@ describe("carga manual de campos fiscales", () => {
         after: {
           status: "NEEDS_REVIEW",
           keys: ["totalAmount"],
-          corrections: [{ key: "totalAmount", correction: "importe sin formato" }],
+          corrections: [{ key: "totalAmount", correction: "1234.56" }],
         },
       });
       expect(state.events[0]?.createdAt).toBeInstanceOf(Date);
-      expect(JSON.stringify(state.events[0]?.after)).toContain("importe sin formato");
+      expect(JSON.stringify(state.events[0]?.after)).toContain("1234.56");
     } finally {
       await app.close();
     }
@@ -817,7 +1009,7 @@ describe("carga manual de campos fiscales", () => {
       const response = await app.inject({
         method: "PUT",
         url: manualFieldsUrl(fixture.extractionId),
-        payload: { fields: [{ key: "totalAmount", value: "100" }, { key: "vatRate", value: "21" }] },
+        payload: { fields: [{ key: "totalAmount", value: "100.00" }, { key: "vatRate", value: "21" }] },
       });
       const saved = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
         tx.extractedField.findMany({ where: { extractionId: fixture.extractionId } }),
@@ -864,7 +1056,7 @@ describe("carga manual de campos fiscales", () => {
       const response = await app.inject({
         method: "PUT",
         url: manualFieldsUrl(fixture.extractionId),
-        payload: { fields: [{ key: "totalAmount", value: "100" }] },
+        payload: { fields: [{ key: "totalAmount", value: "100.00" }] },
       });
       expect(response.statusCode).toBe(409);
       expect(response.json()).toMatchObject({ error: { code: "INVALID_TRANSITION" } });
@@ -888,8 +1080,8 @@ describe("carga manual de campos fiscales", () => {
         url: manualFieldsUrl(fixture.extractionId),
         payload: {
           fields: [
-            { key: "voucherType", value: "Factura" },
-            { key: "totalAmount", value: "200" },
+            { key: "voucherType", value: "factura" },
+            { key: "totalAmount", value: "200.00" },
           ],
         },
       });
@@ -919,7 +1111,7 @@ describe("carga manual de campos fiscales", () => {
       const response = await app.inject({
         method: "PUT",
         url: manualFieldsUrl(fixture.extractionId),
-        payload: { fields: [{ key: "totalAmount", value: "carga manual" }] },
+        payload: { fields: [{ key: "totalAmount", value: "1200.00" }] },
       });
       const rows = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
         tx.extractedField.findMany({ where: { extractionId: fixture.extractionId, key: "totalAmount" } }),
@@ -933,7 +1125,7 @@ describe("carga manual de campos fiscales", () => {
         status: "CORRECTED",
         confidence: 0,
         rawValue: null,
-        correction: "carga manual",
+        correction: "1200.00",
       });
     } finally {
       await app.close();
@@ -948,7 +1140,7 @@ describe("carga manual de campos fiscales", () => {
       const send = () => app.inject({
         method: "PUT",
         url: manualFieldsUrl(fixture.extractionId),
-        payload: { fields: [{ key: "totalAmount", value: "100 sin formato" }] },
+        payload: { fields: [{ key: "totalAmount", value: "100.00" }] },
       });
       const first = await send();
       const retry = await send();
@@ -975,7 +1167,7 @@ describe("carga manual de campos fiscales", () => {
     const send = () => app.inject({
       method: "PUT",
       url: manualFieldsUrl(fixture.extractionId),
-      payload: { fields: [{ key: "totalAmount", value: "100" }] },
+      payload: { fields: [{ key: "totalAmount", value: "100.00" }] },
     });
 
     try {

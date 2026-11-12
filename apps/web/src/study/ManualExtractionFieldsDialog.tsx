@@ -7,6 +7,11 @@ import {
   fiscalScalarHasValue,
   type ManualFiscalFieldKey,
 } from "./extractionScalarFields";
+import {
+  ManualExtractionValueControl,
+  manualExtractionInputError,
+  normalizeManualExtractionInput,
+} from "./ManualExtractionValueControl";
 
 interface DraftRow {
   id: number;
@@ -29,6 +34,14 @@ interface ManualExtractionFieldsDialogProps {
 }
 
 const FOCUSABLE_SELECTOR = "button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href]";
+
+function valueForSubmission(key: ManualFiscalFieldKey, value: string): string | null {
+  return normalizeManualExtractionInput(key, value);
+}
+
+function inputError(key: ManualFiscalFieldKey | "", value: string): string | null {
+  return manualExtractionInputError(key, value);
+}
 
 export function ManualExtractionFieldsDialog({
   fields,
@@ -57,13 +70,20 @@ export function ManualExtractionFieldsDialog({
   requestCloseRef.current = requestClose;
   confirmDiscardRef.current = confirmDiscard;
 
+  const rowErrors = useMemo(
+    () => new Map(rows.map((row) => [row.id, inputError(row.key, row.value)])),
+    [rows],
+  );
   const payload = useMemo(
     () => rows.flatMap((row) => {
-      const value = row.value.trim();
-      return row.key && value ? [{ key: row.key, value }] : [];
+      if (!row.key) return [];
+      const value = valueForSubmission(row.key, row.value);
+      return value ? [{ key: row.key, value }] : [];
     }),
     [rows],
   );
+  const hasInvalidValues = rows.some((row) => rowErrors.get(row.id) !== null);
+  const canSave = !isSaving && payload.length > 0 && !hasInvalidValues;
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -131,7 +151,7 @@ export function ManualExtractionFieldsDialog({
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSaving || payload.length === 0) return;
+    if (!canSave) return;
     onSave(payload);
   };
 
@@ -209,16 +229,13 @@ export function ManualExtractionFieldsDialog({
                       </select>
                     </td>
                     <td>
-                      <label className="sr-only" htmlFor={`manual-field-value-${row.id}`}>
-                        Valor de la fila {index + 1}
-                      </label>
-                      <input
+                      <ManualExtractionValueControl
+                        fieldKey={row.key}
                         id={`manual-field-value-${row.id}`}
-                        aria-label={`Valor de la fila ${index + 1}`}
-                        type="text"
+                        label={`Valor de la fila ${index + 1}`}
                         value={row.value}
                         disabled={isSaving}
-                        onChange={(event) => updateRow(row.id, { value: event.target.value })}
+                        onChange={(value) => updateRow(row.id, { value })}
                       />
                     </td>
                     <td>
@@ -278,7 +295,7 @@ export function ManualExtractionFieldsDialog({
             <Button type="button" variant="ghost" disabled={isSaving} onClick={requestClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSaving || payload.length === 0}>
+            <Button type="submit" disabled={!canSave}>
               {isSaving ? "Guardando…" : "Guardar"}
             </Button>
           </footer>
