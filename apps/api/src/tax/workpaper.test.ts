@@ -19,6 +19,9 @@ const REVIEWER_WP = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
 const PREPARER_WP = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1";
 const FIRM_WP = "99999999-9999-4999-8999-999999999998";
 const CLIENT_WP = "99999999-2222-4333-8444-999999999999";
+const OTHER_CLIENT_WP = "99999999-2222-4333-8444-999999999998";
+const OTHER_FIRM_WP = "99999999-9999-4999-8999-999999999997";
+const OTHER_FIRM_CLIENT_WP = "99999999-2222-4333-8444-999999999997";
 const JURISDICTION_WP = "99999999-3333-4333-8444-999999999999";
 const AUTHORITY_WP = "99999999-4444-4333-8444-999999999999";
 let taxTypeId = "99999999-5555-4333-8444-999999999999";
@@ -56,17 +59,36 @@ const ctxOwner = { userId: OWNER_WP, firmId: FIRM_WP, actorKind: "USER" as const
 const ctxReviewer = { userId: REVIEWER_WP, firmId: FIRM_WP, actorKind: "USER" as const };
 const ctxPreparer = { userId: PREPARER_WP, firmId: FIRM_WP, actorKind: "USER" as const };
 
-async function createControlEvidence() {
+async function createControlEvidence(
+  status: "READY" | "REVIEWED" | "EXTRACTED" = "READY",
+  firmId = FIRM_WP,
+  clientId = CLIENT_WP,
+) {
   const document = await prisma.document.create({
     data: {
-      firmId: FIRM_WP,
-      clientId: CLIENT_WP,
+      firmId,
+      clientId,
       category: "AUDIT_SUPPORT",
-      status: "READY",
+      status,
       uploadOrigin: "FIRM",
     },
   });
   return document.id;
+}
+
+async function createBlockingControl(workpaperId: string, code: string) {
+  return runAsRuntime(OWNER_WP, FIRM_WP, (tx) =>
+    tx.taxControlFinding.create({
+      data: {
+        firmId: FIRM_WP,
+        clientId: CLIENT_WP,
+        workpaperId,
+        code,
+        severity: "BLOCKING",
+        status: "OPEN",
+      },
+    }),
+  );
 }
 
 async function resolveGeneratedBlockingControls(workpaperId: string) {
@@ -110,6 +132,27 @@ async function setupMembership() {
   await prisma.$executeRawUnsafe(`
     INSERT INTO clients ("id", "firmId", "legalName", cuit, "updatedAt")
     VALUES ('${CLIENT_WP}', '${FIRM_WP}', 'Cliente WP', '20999999977', now())
+    ON CONFLICT ("id") DO NOTHING
+  `);
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO clients ("id", "firmId", "legalName", cuit, "updatedAt")
+    VALUES ('${OTHER_CLIENT_WP}', '${FIRM_WP}', 'Otro cliente WP', '20999999976', now())
+    ON CONFLICT ("id") DO NOTHING
+  `);
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO firms ("id", "legalName", "displayName", "updatedAt")
+    VALUES ('${OTHER_FIRM_WP}', 'Otro estudio WP', 'Otro estudio WP', now())
+    ON CONFLICT ("id") DO NOTHING
+  `);
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO clients ("id", "firmId", "legalName", cuit, "updatedAt")
+    VALUES (
+      '${OTHER_FIRM_CLIENT_WP}',
+      '${OTHER_FIRM_WP}',
+      'Cliente de otro estudio WP',
+      '20999999975',
+      now()
+    )
     ON CONFLICT ("id") DO NOTHING
   `);
   await prisma.$executeRawUnsafe(`
@@ -570,6 +613,61 @@ describe("F1.1 expediente mensual de liquidación", () => {
     expect(finalized.outputHash).toBeTruthy();
     const detail = await service.get(ctxOwner, wp.id);
     expect(detail?.settlements[0]?.settlement?.status).toBe("FINALIZED");
+  });
+
+  it("acepta evidencia REVIEWED y conserva los controles de estado y pertenencia", async () => {
+    const wp = await service.create(ctxPreparer, {
+      clientId: CLIENT_WP,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+    });
+
+    const reviewedEvidenceId = await createControlEvidence("REVIEWED");
+    const reviewedControl = await createBlockingControl(wp.id, "B9_REVIEWED_EVIDENCE");
+    const reviewed = await service.resolveControl(ctxReviewer, wp.id, reviewedControl.id, {
+      resolution: "Extracción aprobada y documento cotejado",
+      status: "RESOLVED",
+      evidenceDocumentId: reviewedEvidenceId,
+    });
+    expect(reviewed.status).toBe("RESOLVED");
+    expect(reviewed.evidenceDocumentId).toBe(reviewedEvidenceId);
+
+    const readyEvidenceId = await createControlEvidence("READY");
+    const readyControl = await createBlockingControl(wp.id, "B9_READY_EVIDENCE");
+    const ready = await service.resolveControl(ctxReviewer, wp.id, readyControl.id, {
+      resolution: "Documento validado disponible",
+      status: "RESOLVED",
+      evidenceDocumentId: readyEvidenceId,
+    });
+    expect(ready.status).toBe("RESOLVED");
+    expect(ready.evidenceDocumentId).toBe(readyEvidenceId);
+
+    async function expectEvidenceRejected(code: string, evidenceDocumentId: string) {
+      const control = await createBlockingControl(wp.id, code);
+      await expect(
+        service.resolveControl(ctxReviewer, wp.id, control.id, {
+          resolution: "Intento con evidencia fuera del alcance",
+          status: "RESOLVED",
+          evidenceDocumentId,
+        }),
+      ).rejects.toMatchObject({
+        code: "BLOCKING_CONTROLS",
+        message: "La evidencia del control debe pertenecer al cliente y estar lista o revisada",
+      });
+    }
+
+    await expectEvidenceRejected(
+      "B9_EXTRACTED_EVIDENCE",
+      await createControlEvidence("EXTRACTED"),
+    );
+    await expectEvidenceRejected(
+      "B9_OTHER_CLIENT_EVIDENCE",
+      await createControlEvidence("READY", FIRM_WP, OTHER_CLIENT_WP),
+    );
+    await expectEvidenceRejected(
+      "B9_OTHER_FIRM_EVIDENCE",
+      await createControlEvidence("READY", OTHER_FIRM_WP, OTHER_FIRM_CLIENT_WP),
+    );
   });
 
   it("bloquea finalizar con controles bloqueantes abiertos", async () => {

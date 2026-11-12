@@ -1534,13 +1534,13 @@ export class MonthlyWorkpaperService {
             id: input.evidenceDocumentId,
             firmId: ctx.firmId,
             clientId: finding.clientId,
-            status: { in: ["READY", "APPLIED"] },
+            status: { in: ["READY", "APPLIED", "REVIEWED"] },
           },
         });
         if (!evidence) {
           throw new WorkpaperError(
             "BLOCKING_CONTROLS",
-            "La evidencia del control debe pertenecer al cliente y estar lista",
+            "La evidencia del control debe pertenecer al cliente y estar lista o revisada",
           );
         }
       }
