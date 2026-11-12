@@ -3,6 +3,7 @@ import type {
   ButtonHTMLAttributes,
   ReactElement,
   ReactNode,
+  Ref,
 } from "react";
 import "./Button.css";
 
@@ -24,12 +25,12 @@ type ButtonNameProps =
 type NativeButtonProps = Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
   "children" | "className" | "disabled" | "aria-label"
->;
+> & { ref?: Ref<HTMLButtonElement> };
 
 type NativeLinkProps = Omit<
   AnchorHTMLAttributes<HTMLAnchorElement>,
   "children" | "className" | "href" | "aria-label"
->;
+> & { ref?: Ref<HTMLAnchorElement> };
 
 export type ButtonProps = ButtonBaseProps &
   ButtonNameProps &
@@ -64,12 +65,14 @@ export function Button(props: ButtonProps | ButtonLinkProps): ReactElement {
       className,
       iconOnly = false,
       href,
+      ref,
       "aria-label": ariaLabel,
       ...rest
     } = props;
     return (
       <a
         {...rest}
+        ref={ref}
         href={href}
         className={`${buttonClassName(variant, size, className)}${iconOnly ? " ds-button--icon-only" : ""}`}
         aria-label={ariaLabel}
@@ -88,6 +91,7 @@ export function Button(props: ButtonProps | ButtonLinkProps): ReactElement {
     disabled,
     className,
     iconOnly = false,
+    ref,
     "aria-label": ariaLabel,
     "aria-busy": ariaBusy,
     ...rest
@@ -95,6 +99,7 @@ export function Button(props: ButtonProps | ButtonLinkProps): ReactElement {
   return (
     <button
       {...rest}
+      ref={ref}
       className={`${buttonClassName(variant, size, className)}${iconOnly ? " ds-button--icon-only" : ""}`}
       disabled={disabled || loading}
       aria-busy={loading || ariaBusy || undefined}
