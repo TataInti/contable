@@ -10,6 +10,7 @@ import { MAX_FILE_SIZE } from "../storage/file-validator.js";
 import { outboxPublisher } from "../jobs/outbox-publisher.js";
 import { hashPassword } from "../auth/password.js";
 import { exportReport, REPORT_CONTENT_TYPES, type ExportReportResult } from "../reporting/report-export.js";
+import { portalMembershipPatchSchema } from "@contable/contracts";
 
 const portalInvitationSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
@@ -77,6 +78,39 @@ export function portalRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
 
+  app.patch("/api/v1/firms/:firmId/clients/:clientId/portal-memberships/:membershipId", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { membershipId } = req.params as { membershipId: string };
+    const body = portalMembershipPatchSchema.parse(req.body);
+    try {
+      const member = await withTenantContext(ctx, async (tx) => {
+        const rows = await tx.$queryRaw<{
+          id: string; role: string; status: string; revokedAt: Date | null; outcome: string;
+        }[]>`SELECT * FROM app_c5a_update_portal_membership(
+          ${ctx.userId}, ${ctx.firmId}, ${ctx.clientId!}, ${membershipId},
+          ${body.role ?? null}::"PortalRole", ${body.status ?? null}::"MembershipStatus"
+        )`;
+        if (!rows[0]) return null;
+        return tx.portalMembership.findFirst({
+          where: { id: membershipId, firmId: ctx.firmId, clientId: ctx.clientId! },
+          select: {
+            id: true, userId: true, role: true, status: true, acceptedAt: true, revokedAt: true,
+            user: { select: { name: true, emailNormalized: true } },
+          },
+        });
+      });
+      if (!member) {
+        return reply.status(404).send({ error: { code: "PORTAL_MEMBERSHIP_NOT_FOUND", message: "Acceso no encontrado" } });
+      }
+      return reply.send({ data: member });
+    } catch (error) {
+      if (String(error).includes("PORTAL_MEMBERSHIP_NOT_FOUND")) {
+        return reply.status(404).send({ error: { code: "PORTAL_MEMBERSHIP_NOT_FOUND", message: "Acceso no encontrado" } });
+      }
+      throw error;
+    }
+  });
+
   app.post("/api/v1/firms/:firmId/clients/:clientId/portal-invitations", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const body = portalInvitationSchema.parse(req.body);
@@ -142,12 +176,50 @@ export function portalRoutes(app: FastifyInstance) {
   app.post("/api/v1/firms/:firmId/clients/:clientId/portal-memberships/:membershipId/revoke", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { membershipId } = req.params as { membershipId: string };
-    const membership = await withTenantContext(ctx, async (tx) => {
-      const current = await tx.portalMembership.findFirst({ where: { id: membershipId, firmId: ctx.firmId, clientId: ctx.clientId! } });
-      if (!current) throw Object.assign(new Error("Acceso no encontrado"), { statusCode: 404, code: "MEMBERSHIP_NOT_FOUND" });
-      return tx.portalMembership.update({ where: { id: membershipId }, data: { status: "SUSPENDED", revokedAt: new Date() } });
-    });
-    return reply.send({ data: { id: membership.id, status: membership.status } });
+    try {
+      const membership = await withTenantContext(ctx, async (tx) => {
+        const rows = await tx.$queryRaw<{ id: string; status: string }[]>`
+          SELECT id, status
+          FROM app_c5a_update_portal_membership(
+            ${ctx.userId}, ${ctx.firmId}, ${ctx.clientId!}, ${membershipId},
+            NULL::"PortalRole", 'SUSPENDED'::"MembershipStatus"
+          )`;
+        return rows[0] ?? null;
+      });
+      if (!membership) {
+        return reply.status(404).send({ error: { code: "PORTAL_MEMBERSHIP_NOT_FOUND", message: "Acceso no encontrado" } });
+      }
+      return reply.send({ data: { id: membership.id, status: membership.status } });
+    } catch (error) {
+      if (String(error).includes("PORTAL_MEMBERSHIP_NOT_FOUND")) {
+        return reply.status(404).send({ error: { code: "PORTAL_MEMBERSHIP_NOT_FOUND", message: "Acceso no encontrado" } });
+      }
+      throw error;
+    }
+  });
+
+  app.post("/api/v1/firms/:firmId/clients/:clientId/portal-memberships/:membershipId/reactivate", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { membershipId } = req.params as { membershipId: string };
+    try {
+      const rows = await withTenantContext(ctx, (tx) => tx.$queryRaw<{
+        id: string; status: string;
+      }[]>`
+        SELECT id, status
+        FROM app_c5a_update_portal_membership(
+          ${ctx.userId}, ${ctx.firmId}, ${ctx.clientId!}, ${membershipId},
+          NULL::"PortalRole", 'ACTIVE'::"MembershipStatus"
+        )`);
+      if (!rows[0]) {
+        return reply.status(404).send({ error: { code: "PORTAL_MEMBERSHIP_NOT_FOUND", message: "Acceso no encontrado" } });
+      }
+      return reply.send({ data: { id: rows[0].id, status: rows[0].status } });
+    } catch (error) {
+      if (String(error).includes("PORTAL_MEMBERSHIP_NOT_FOUND")) {
+        return reply.status(404).send({ error: { code: "PORTAL_MEMBERSHIP_NOT_FOUND", message: "Acceso no encontrado" } });
+      }
+      throw error;
+    }
   });
 
   app.get("/api/v1/portal/contexts", async (req, reply) => {
