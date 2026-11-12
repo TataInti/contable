@@ -1,8 +1,10 @@
 export type StatusTone = "ok" | "warn" | "danger" | "info" | "muted";
+export type StatusBadgeVariant = "plain" | "pill";
 
 export interface StatusBadgeProps {
   status: string | null | undefined;
   className?: string;
+  variant?: StatusBadgeVariant;
 }
 
 export interface StatusBadgeMeta {
@@ -20,7 +22,6 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   COMPLETED: { label: "Completado", tone: "ok" },
   EXTRACTED: { label: "Extraído", tone: "ok" },
   FILED: { label: "Presentado", tone: "ok" },
-  FINALIZED: { label: "Finalizado", tone: "ok" },
   PAID: { label: "Pagado", tone: "ok" },
   POSTED: { label: "Contabilizado", tone: "ok" },
   PUBLISHED: { label: "Publicado", tone: "ok" },
@@ -42,14 +43,10 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   VALIDATING: { label: "Validando", tone: "warn" },
   WAITING_CLIENT: { label: "Esperando al cliente", tone: "warn" },
 
-  CANCELED: { label: "Cancelado", tone: "danger" },
-  CANCELLED: { label: "Cancelado", tone: "danger" },
   DEAD_LETTER: { label: "Requiere intervención", tone: "danger" },
-  DISABLED: { label: "Deshabilitado", tone: "danger" },
   EXPIRED: { label: "Vencido", tone: "danger" },
   EXTRACTION_FAILED: { label: "Falló la extracción", tone: "danger" },
   FAILED: { label: "Fallido", tone: "danger" },
-  HARD_CLOSED: { label: "Período cerrado", tone: "danger" },
   INFECTED: { label: "Amenaza detectada", tone: "danger" },
   OVERDUE: { label: "Vencido", tone: "danger" },
   REJECTED: { label: "Rechazado", tone: "danger" },
@@ -70,8 +67,13 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   UPLOADED: { label: "Subido", tone: "info" },
 
   ARCHIVED: { label: "Archivado", tone: "muted" },
+  CANCELED: { label: "Cancelado", tone: "muted" },
+  CANCELLED: { label: "Cancelado", tone: "muted" },
   CLOSED: { label: "Cerrado", tone: "muted" },
+  DISABLED: { label: "Deshabilitado", tone: "muted" },
   DRAFT: { label: "Borrador", tone: "muted" },
+  FINALIZED: { label: "Finalizado", tone: "muted" },
+  HARD_CLOSED: { label: "Período cerrado", tone: "muted" },
   INACTIVE: { label: "Inactivo", tone: "muted" },
   NOT_APPLICABLE: { label: "No aplica", tone: "muted" },
   REVERSED: { label: "Revertido", tone: "muted" },
@@ -99,14 +101,23 @@ export function getStatusBadgeMeta(status: string | null | undefined): StatusBad
   return STATUS_BADGE_CONFIG[normalized] ?? { label: humanizeStatus(normalized), tone: "muted" };
 }
 
-export function StatusBadge({ status, className }: StatusBadgeProps) {
+export function StatusBadge({ status, className, variant = "plain" }: StatusBadgeProps) {
   const normalized = normalizeStatus(status);
   const { label, tone } = getStatusBadgeMeta(normalized);
-  const classes = ["status-badge", `status-badge--${tone}`, className].filter(Boolean).join(" ");
+  const classes = [
+    "status-badge",
+    `status-badge--${tone}`,
+    "status-badge--with-dot",
+    `status-badge--${variant}`,
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <span className={classes} data-status={normalized || undefined}>
-      {label}
+      <span className="status-badge__dot" aria-hidden="true" />
+      <span className="status-badge__label">{label}</span>
     </span>
   );
 }
