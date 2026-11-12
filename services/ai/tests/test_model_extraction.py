@@ -370,48 +370,44 @@ def test_null_or_short_cuit_skips_check_digit_rule() -> None:
     assert result.reviewReason is None
 
 
-@pytest.mark.parametrize(
-    ("cae_expiration", "expected_issues"),
-    [
-        (
-            "2026-11-10",
-            [
-                {
-                    "reason": "vencimiento del CAE anterior a la fecha del comprobante",
-                    "sourcePath": "cae_vencimiento",
-                }
-            ],
-        ),
-        ("2026-11-11", []),
-        ("2026-11-12", []),
-    ],
-)
-def test_cae_expiration_review_rule(
-    cae_expiration: str, expected_issues: list[dict[str, str]]
-) -> None:
+def test_cae_expiration_before_issue_date_does_not_trigger_review() -> None:
     payload = _valid_voucher()
-    payload["cae_vencimiento"] = cae_expiration
+    payload["cae_vencimiento"] = "2026-11-10"
     payload["confianza"]["cae_vencimiento"] = 0.9
 
     result = _response_from_payload(payload)
 
-    assert [issue.model_dump() for issue in result.reviewIssues] == expected_issues
+    assert result.reviewIssues == []
+    assert result.reviewReason is None
     assert result.voucher is not None
-    assert result.voucher.cae_vencimiento == cae_expiration
+    assert result.voucher.cae_vencimiento == "2026-11-10"
 
+    # Las otras reglas siguen activas: un CUIT inválido sigue marcando revisión.
+    invalid_cuit_payload = _valid_voucher()
+    invalid_cuit_payload["cae_vencimiento"] = "2026-11-10"
+    invalid_cuit_payload["confianza"]["cae_vencimiento"] = 0.9
+    invalid_cuit_payload["cuit_emisor"] = "20000000010"
+    invalid_cuit_result = _response_from_payload(invalid_cuit_payload)
+    assert [issue.model_dump() for issue in invalid_cuit_result.reviewIssues] == [
+        {
+            "reason": "CUIT con dígito verificador inválido",
+            "sourcePath": "cuit_emisor",
+        }
+    ]
 
-def test_cae_validation_skips_when_one_date_is_missing() -> None:
-    for missing_field in ("fecha", "cae_vencimiento"):
-        payload = _valid_voucher()
-        payload["cae_vencimiento"] = "2026-11-10"
-        payload["confianza"]["cae_vencimiento"] = 0.9
-        payload[missing_field] = None
-        payload["confianza"].pop(missing_field)
-
-        result = _response_from_payload(payload)
-
-        assert result.reviewIssues == []
-        assert result.reviewReason is None
+    # La suma aritmética sigue marcando revisión sin importar el CAE.
+    mismatch_payload = _valid_voucher()
+    mismatch_payload["cae_vencimiento"] = "2026-11-10"
+    mismatch_payload["confianza"]["cae_vencimiento"] = 0.9
+    mismatch_payload["total"] = "122.00"
+    mismatch_payload["no_gravado"] = "0.00"
+    mismatch_payload["exento"] = "0.00"
+    mismatch_payload["percepciones"] = []
+    mismatch_payload["confianza"].update({"no_gravado": 0.8, "exento": 0.8})
+    mismatch_result = _response_from_payload(mismatch_payload)
+    assert [issue.model_dump() for issue in mismatch_result.reviewIssues] == [
+        {"reason": "COMPONENT_SUM_MISMATCH", "sourcePath": None}
+    ]
 
 
 def test_clean_response_has_no_review_reasons() -> None:
