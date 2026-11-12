@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
-import { createUploadSessionSchema } from "@contable/contracts";
+import { createUploadSessionSchema, extractionApprovedSnapshotSchema } from "@contable/contracts";
 import { DocumentService } from "./document-service.js";
 import { ExtractionError, ExtractionService } from "./extraction-service.js";
 import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
@@ -145,6 +145,28 @@ export function documentRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "EXTRACTION_NOT_FOUND", message: "Extracción no encontrada" } });
     }
     return reply.send({ data: extraction });
+  });
+
+  // Leer la foto inmutable creada al aprobar; si no existe, el recurso es 404.
+  app.get("/api/v1/firms/:firmId/clients/:clientId/extractions/:extractionId/approved-snapshot", async (req, reply) => {
+    const { firmId, clientId, extractionId } = req.params as { firmId: string; clientId: string; extractionId: string };
+    const snapshot = await extractionService.getApprovedSnapshot(
+      firmId,
+      clientId,
+      extractionId,
+      tenantContextFromRequest(req),
+    );
+    if (!snapshot) {
+      return reply.status(404).send({
+        error: { code: "APPROVED_SNAPSHOT_NOT_FOUND", message: "Foto de aprobación no encontrada" },
+      });
+    }
+    return reply.send({
+      data: extractionApprovedSnapshotSchema.parse({
+        ...snapshot,
+        approvedAt: snapshot.approvedAt.toISOString(),
+      }),
+    });
   });
 
   // Corregir un campo extraído

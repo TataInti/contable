@@ -1016,6 +1016,27 @@ model ExtractedLineItem {
   @@map("extracted_line_items")
 }
 
+/// Dato final, auditoría y marcas de revisión al aprobar una extracción.
+/// La tabla es append-only; la inmutabilidad se aplica también en PostgreSQL.
+model ExtractionApprovedSnapshot {
+  id            String   @id @default(uuid(7))
+  firmId        String
+  clientId      String
+  documentId    String
+  extractionId  String   @unique
+  approvedBy    String
+  approvedAt    DateTime @default(now())
+  schemaVersion String
+  ocrEngine     String?
+  model         String?
+  provider      String?
+  promptVersion String?
+  data          Json
+
+  @@index([firmId, clientId, documentId, approvedAt])
+  @@map("extraction_approved_snapshots")
+}
+
 // ============================================================
 // Fase 7 — Bancos
 // ============================================================
