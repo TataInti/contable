@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  approvedSnapshotDataSchema,
+  extractionApprovedSnapshotSchema,
   extractionResultSchema,
   voucherARV2Schema,
   voucherARV21Schema,
@@ -112,5 +114,49 @@ describe("contrato voucher-ar-v2.1 sin líneas", () => {
         percepciones: [{ categoria: "Ganancia no catalogada", tipo_texto: null, importe: null }],
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("contrato de foto fija de aprobación", () => {
+  it("valida valores finales, trazabilidad de listas y reviewIssues", () => {
+    const data = approvedSnapshotDataSchema.parse({
+      fields: [
+        {
+          key: "vatRate",
+          value: "21.00",
+          source: "AI",
+          originalValue: null,
+          sourcePath: "iva[0].alicuota",
+          index: 0,
+        },
+        {
+          key: "totalAmount",
+          value: "121000.00",
+          source: "CORRECTED",
+          originalValue: "120000.00",
+          sourcePath: null,
+          index: null,
+        },
+      ],
+      reviewIssues: [{ reason: "percepción no reconocida", sourcePath: "percepciones[0].categoria" }],
+    });
+    const snapshot = extractionApprovedSnapshotSchema.parse({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      firmId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      clientId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      documentId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      extractionId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      approvedBy: "11111111-1111-4111-8111-111111111111",
+      approvedAt: "2026-11-12T00:00:00.000Z",
+      schemaVersion: "voucher-ar-v2.1",
+      ocrEngine: "multimodal-model",
+      model: "synthetic-model",
+      provider: "synthetic-provider",
+      promptVersion: "vision-ar-v6",
+      data,
+    });
+
+    expect(snapshot.data.fields[0]?.sourcePath).toBe("iva[0].alicuota");
+    expect(snapshot.data.reviewIssues).toHaveLength(1);
   });
 });

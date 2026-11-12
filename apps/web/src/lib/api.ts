@@ -422,6 +422,36 @@ export interface ExtractionReviewIssue {
   sourcePath: string | null;
 }
 
+export interface ApprovedSnapshotField {
+  key: string;
+  value: string | null;
+  source: "AI" | "CORRECTED" | "HUMAN";
+  originalValue: string | null;
+  sourcePath: string | null;
+  index: number | null;
+}
+
+export interface ApprovedSnapshotData {
+  fields: ApprovedSnapshotField[];
+  reviewIssues: ExtractionReviewIssue[];
+}
+
+export interface ExtractionApprovedSnapshot {
+  id: string;
+  firmId: string;
+  clientId: string;
+  documentId: string;
+  extractionId: string;
+  approvedBy: string;
+  approvedAt: string;
+  schemaVersion: string;
+  ocrEngine: string | null;
+  model: string | null;
+  provider: string | null;
+  promptVersion: string | null;
+  data: ApprovedSnapshotData;
+}
+
 export interface DocumentExtraction {
   id: string;
   status: string;

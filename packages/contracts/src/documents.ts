@@ -181,3 +181,45 @@ export const voucherSchema = z.object({
   approvedByUserId: uuid.nullable(),
 });
 export type Voucher = z.infer<typeof voucherSchema>;
+
+export const approvedSnapshotSourceSchema = z.enum(["AI", "CORRECTED", "HUMAN"]);
+export type ApprovedSnapshotSource = z.infer<typeof approvedSnapshotSourceSchema>;
+
+export const approvedSnapshotFieldSchema = z
+  .object({
+    key: z.string(),
+    value: z.string().nullable(),
+    source: approvedSnapshotSourceSchema,
+    originalValue: z.string().nullable(),
+    sourcePath: z.string().nullable(),
+    index: z.number().int().nonnegative().nullable(),
+  })
+  .strict();
+export type ApprovedSnapshotField = z.infer<typeof approvedSnapshotFieldSchema>;
+
+export const approvedSnapshotDataSchema = z
+  .object({
+    fields: z.array(approvedSnapshotFieldSchema),
+    reviewIssues: z.array(reviewIssueSchema),
+  })
+  .strict();
+export type ApprovedSnapshotData = z.infer<typeof approvedSnapshotDataSchema>;
+
+export const extractionApprovedSnapshotSchema = z
+  .object({
+    id: uuid,
+    firmId: uuid,
+    clientId: uuid,
+    documentId: uuid,
+    extractionId: uuid,
+    approvedBy: uuid,
+    approvedAt: z.string().datetime(),
+    schemaVersion: z.string().min(1),
+    ocrEngine: z.string().nullable(),
+    model: z.string().nullable(),
+    provider: z.string().nullable(),
+    promptVersion: z.string().nullable(),
+    data: approvedSnapshotDataSchema,
+  })
+  .strict();
+export type ExtractionApprovedSnapshot = z.infer<typeof extractionApprovedSnapshotSchema>;
