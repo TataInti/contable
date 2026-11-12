@@ -3,3 +3,4 @@ export * from "./Field.js";
 export * from "./MoneyField.js";
 export * from "./Table.js";
 export * from "./EmptyState.js";
+export * from "./Dense.js";

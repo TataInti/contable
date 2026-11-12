@@ -331,6 +331,12 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/StudyExpedienteMensual.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/StudyExpedienteMensual.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -409,6 +415,18 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/WorkpaperSourceReviewAction.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/WorkpaperSourceReviewAction.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/styles/fonts.css": {
       "fontSize": 0,
       "spacing": 0,
@@ -481,12 +499,6 @@
       "radius": 0,
       "color": 0
     },
-    "apps/web/src/ui/Dense.css": {
-      "fontSize": 19,
-      "spacing": 88,
-      "radius": 2,
-      "color": 0
-    },
     "apps/web/src/ui/Dense.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -536,6 +548,24 @@
       "color": 0
     },
     "packages/design-system/src/Button.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Dense.css": {
+      "fontSize": 19,
+      "spacing": 88,
+      "radius": 2,
+      "color": 0
+    },
+    "packages/design-system/src/Dense.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Dense.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
