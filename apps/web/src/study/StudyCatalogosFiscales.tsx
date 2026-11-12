@@ -1686,9 +1686,9 @@ export function StudyCatalogosFiscales() {
       {failedQueries.map(({ label, query }) => (
         <div className="form-error" role="alert" key={label}>
           <strong>No pudimos cargar {label}.</strong>{" "}
-          <button type="button" className="fiscal-retry" onClick={() => void query.refetch()}>
+          <Button type="button" variant="text" size="row" onClick={() => void query.refetch()}>
             Reintentar
-          </button>
+          </Button>
         </div>
       ))}
 
@@ -1735,15 +1735,16 @@ export function StudyCatalogosFiscales() {
           <option value="inactive">Ocultos</option>
         </select>
         {tab === "regimes" ? (
-          <button
+          <Button
             type="button"
-            className="dense-toggle"
+            variant="secondary"
+            size="row"
             aria-pressed={alertsOnly}
             onClick={() => setAlertsOnly((current) => !current)}
           >
             <Icon name="alert" size={14} />
             Sólo con alertas
-          </button>
+          </Button>
         ) : null}
         <span className="dense-toolbar__spacer" />
         <DensitySwitch value={density} onChange={setDensity} />
@@ -1965,9 +1966,9 @@ export function StudyCatalogosFiscales() {
             <strong>Actualización registrada</strong>
             <small>{receipt}</small>
           </span>
-          <button type="button" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
+          <Button type="button" variant="text" size="row" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
             Cerrar
-          </button>
+          </Button>
         </div>
       ) : null}
 

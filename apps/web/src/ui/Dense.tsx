@@ -1,4 +1,5 @@
 import type { KeyboardEvent, ReactNode, RefObject } from "react";
+import { Button } from "@contable/design-system";
 import { Icon } from "./Icon";
 import "@contable/design-system/Dense.css";
 
@@ -55,10 +56,12 @@ export function DenseTabs<T extends string>({
   return (
     <div className="dense-tabs" role="tablist" aria-label={label}>
       {tabs.map((tab, index) => (
-        <button
+        <Button
           key={tab.id}
           id={`${idPrefix}-${tab.id}`}
           type="button"
+          variant="text"
+          size="row"
           role="tab"
           aria-selected={active === tab.id}
           aria-controls={`${idPrefix}-panel`}
@@ -77,7 +80,7 @@ export function DenseTabs<T extends string>({
               <Icon name="alert" size={11} /> {tab.warnCount}
             </span>
           ) : null}
-        </button>
+        </Button>
       ))}
     </div>
   );

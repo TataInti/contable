@@ -92,12 +92,16 @@ export function ActionDrawer({
 
   return (
     <div className="action-drawer" aria-live="polite">
-      <button
+      <Button
         className="action-drawer__scrim"
         type="button"
+        variant="ghost"
+        iconOnly
         aria-label={closeLabel}
         onClick={onClose}
-      />
+      >
+        <span aria-hidden="true" />
+      </Button>
       <aside
         ref={panelRef}
         className={`action-drawer__panel action-drawer__panel--${size}`}

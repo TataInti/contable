@@ -2773,28 +2773,26 @@
   align-items: center;
   gap: var(--ds-space-2);
   width: 100%;
-  min-height: 40px;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border: 0;
-  border-radius: var(--ds-radius-md);
-  background: transparent;
+  min-inline-size: 0;
+  min-block-size: var(--ds-control-height-sm);
+  padding-inline: var(--ds-space-3);
+  border-color: transparent;
   color: var(--ds-color-text-muted);
-  font-weight: 600;
+  font-weight: var(--ds-font-weight-medium);
   text-align: left;
-  cursor: pointer;
 }
 
-.fiscal-steps__button:hover {
+.fiscal-steps__button.ds-button--text:hover:not(:disabled) {
   background: var(--ds-color-surface-muted);
   color: var(--ds-color-text);
 }
 
-.fiscal-steps__button:focus-visible {
-  outline: 2px solid var(--ds-color-focus);
-  outline-offset: 2px;
+.fiscal-steps__button--active {
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-primary);
 }
 
-.fiscal-steps__button--active {
+.fiscal-steps__button--active.ds-button--text:hover:not(:disabled) {
   background: var(--ds-color-primary-soft);
   color: var(--ds-color-primary);
 }
@@ -4730,22 +4728,26 @@
   min-width: 0;
 }
 
-.section-index__links a {
+.section-index__links > .ds-button--link {
   display: inline-flex;
   align-items: baseline;
   gap: var(--ds-space-2);
-  min-height: 28px;
+  min-inline-size: 0;
+  min-block-size: var(--ds-control-height-sm);
+  padding-inline: 0;
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-sm);
-  font-weight: 650;
+  font-weight: var(--ds-font-weight-medium);
+  background: transparent;
   text-decoration: none;
 }
 
-.section-index__links a:hover,
-.section-index__links a:focus-visible {
+.section-index__links > .ds-button--link:hover:not(:disabled),
+.section-index__links > .ds-button--link:focus-visible {
+  background: transparent;
   color: var(--ds-color-primary);
   text-decoration: underline;
-  text-underline-offset: 3px;
+  text-underline-offset: var(--ds-space-0-5);
 }
 
 .section-index__links small {
@@ -6083,7 +6085,7 @@
   table-layout: fixed;
 }
 
-.client-list__client-column .dense-name-button {
+.client-list__client-column .dense-name-action {
   width: 100%;
   min-width: 0;
 }
