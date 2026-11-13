@@ -206,7 +206,7 @@ export function StudyLiquidaciones() {
             </Button>
           ) : null}
           <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>
-            Ver expediente
+            Ver legajo
           </Button>
         
           </>
@@ -250,23 +250,6 @@ export function StudyLiquidaciones() {
         />
       ) : null}
 
-      <Notice
-        tone="info"
-        title="Próximo paso"
-        action={
-          canCalculate ? (
-            <Button size="sm" onClick={() => setShowCalculator(true)} disabled={!selectableTaxPeriods.length}>Calcular liquidación</Button>
-          ) : (
-            <Button size="sm" variant="secondary" onClick={() => navigate("/expediente-mensual")}>Abrir expediente</Button>
-          )
-        }
-      >
-        {data.length
-          ? "Revisá la cartera y avanzá la liquidación que requiere la próxima decisión."
-          : canCalculate
-            ? "Calculá una liquidación para un régimen y período fiscal configurados."
-            : "Prepará la evidencia y el expediente antes de iniciar el cálculo."}
-      </Notice>
 
 
 
@@ -395,7 +378,7 @@ export function StudyLiquidaciones() {
       ) : !selectedTaxPeriod ? null : data.length === 0 ? (
         <EmptyState
           title="Todavía no hay liquidaciones"
-          description="Iniciá el cálculo para un régimen configurado o prepará la evidencia desde el expediente mensual."
+          description="Iniciá el cálculo para un régimen configurado o prepará la evidencia desde el legajo."
           action={
             canCalculate ? (
               <Button onClick={() => setShowCalculator(true)} disabled={!selectableTaxPeriods.length}>
@@ -403,7 +386,7 @@ export function StudyLiquidaciones() {
               </Button>
             ) : (
               <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>
-                Abrir expediente
+                Abrir legajo
               </Button>
             )
           }
@@ -448,7 +431,7 @@ export function StudyLiquidaciones() {
               render: (row) => (
                 <span className="study-table__actions">
                   <Button size="sm" variant="ghost" onClick={() => navigate("/expediente-mensual")}>
-                    Expediente
+                    Legajo
                   </Button>
                   {row.status === "CALCULATED" &&
                   capabilities.has("tax.settlements.submit_review") ? (

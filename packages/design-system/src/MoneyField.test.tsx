@@ -23,6 +23,33 @@ describe("MoneyField", () => {
     expect(onChange).toHaveBeenLastCalledWith("1200.01");
   });
 
+  it("admite más decimales y otra unidad para una alícuota", () => {
+    const onChange = vi.fn();
+    render(
+      <MoneyField label="Importe" id="rate" value="" onChange={onChange} prefix="%" maxDecimals={4} />,
+    );
+    const input = getInput();
+
+    typeInto(input, "1,125");
+    expect(input).toHaveValue("1,125");
+    expect(onChange).toHaveBeenLastCalledWith("1.125");
+
+    // Se corta en el máximo pedido, no en dos.
+    typeInto(input, "0,123456");
+    expect(input).toHaveValue("0,1234");
+    expect(onChange).toHaveBeenLastCalledWith("0.1234");
+  });
+
+  it("mantiene dos decimales por defecto para importes", () => {
+    const onChange = vi.fn();
+    render(<MoneyField label="Importe" id="amount" value="" onChange={onChange} />);
+    const input = getInput();
+
+    typeInto(input, "10,129");
+    expect(input).toHaveValue("10,12");
+    expect(onChange).toHaveBeenLastCalledWith("10.12");
+  });
+
   it("acepta punto como separador decimal y lo muestra con coma", () => {
     const onChange = vi.fn();
     render(<MoneyField label="Importe" id="amount" value="" onChange={onChange} />);

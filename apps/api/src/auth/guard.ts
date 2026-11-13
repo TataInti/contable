@@ -156,6 +156,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   {
     match: /\/tax\/rule-versions\//,
     resolve: (m, path) => {
+      // Probar una liquidación no escribe nada: alcanza con poder leer reglas.
+      if (path.endsWith("/simulate")) return "tax.rules.read";
       if (path.endsWith("/approve")) return "tax.rules.approve";
       if (path.endsWith("/activate") || path.endsWith("/submit-review")) return "tax.rules.propose";
       return m === "GET" ? "tax.rules.read" : "tax.rules.propose";

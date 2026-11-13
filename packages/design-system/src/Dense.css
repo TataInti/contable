@@ -80,6 +80,12 @@
   overflow: hidden;
 }
 
+/* La barra de filtros y el aviso ya traen su propio aire; cualquier otro
+   contenido que siga a las métricas necesita separación explícita. */
+.dense-stats:not(:has(+ .dense-toolbar)):not(:has(+ .dense-alert)) {
+  margin-bottom: var(--ds-space-3);
+}
+
 .dense-stat {
   display: flex;
   align-items: baseline;
@@ -394,10 +400,12 @@
   flex: none;
 }
 
-.dense-alert--ok {
-  border-color: color-mix(in srgb, var(--ds-color-success) 25%, var(--ds-color-border));
-  background: var(--ds-color-success-subtle);
-  color: var(--ds-color-success);
+/* Orientación sin urgencia: sin fondo de color, para no competir con el
+   único aviso de la pantalla ni con la acción principal del encabezado. */
+.dense-alert--hint {
+  border-color: var(--ds-color-border-subtle);
+  background: transparent;
+  color: var(--ds-color-text-muted);
 }
 
 .dense-alert__action {

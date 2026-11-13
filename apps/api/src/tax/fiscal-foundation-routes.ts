@@ -15,6 +15,11 @@ import {
   updateEconomicActivitySchema,
 } from "@contable/contracts";
 import { z } from "zod";
+import {
+  RuleSimulationError,
+  RuleSimulationService,
+  type RuleSimulationInput,
+} from "./rule-simulation.js";
 
 /** Con `exactOptionalPropertyTypes`, los opcionales se pasan sólo si están definidos. */
 function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
@@ -87,6 +92,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
   const profiles = new TaxpayerProfileService();
   const periods = new TaxPeriodService();
   const rules = new TaxRuleService();
+  const simulation = new RuleSimulationService();
   const calendar = new TaxCalendarService();
 
   const handleError = (
@@ -1001,6 +1007,33 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       const data = await rules.addSource(ctx, pickDefined({ ...body, ruleVersionId }) as { ruleVersionId: string; authorityId: string; title: string; url?: string; reference?: string; fileChecksum?: string; consultedAt: string });
       return reply.code(201).send({ data });
     } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // Simulador: corre el motor con las reglas de la versión sobre un caso
+  // cargado a mano. No persiste nada.
+  app.post("/api/v1/tax/rule-versions/:ruleVersionId/simulate", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { ruleVersionId } = req.params as { ruleVersionId: string };
+    try {
+      const amount = z.string().regex(/^\d+(\.\d{1,4})?$/);
+      const body = z
+        .object({
+          incomes: z.array(z.object({ ruleId: z.string().uuid(), amount }).strict()).min(1).max(50),
+          withholding: amount.optional(),
+          perception: amount.optional(),
+          collected: amount.optional(),
+          previousCredit: amount.optional(),
+        })
+        .strict()
+        .parse(req.body);
+      const data = await simulation.simulate(ctx, ruleVersionId, pickDefined(body) as RuleSimulationInput);
+      return reply.send({ data });
+    } catch (err) {
+      if (err instanceof RuleSimulationError) {
+        return reply.status(err.httpStatus).send({ error: { code: err.code, message: err.message } });
+      }
       return handleError(reply, err);
     }
   });

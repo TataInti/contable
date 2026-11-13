@@ -302,7 +302,7 @@ export function StudyRentabilidad() {
       />
 
       <Notice
-        tone="success"
+        tone="info"
         action={
           !clientId ? null : !selectedPeriod ? <Button size="sm" variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>Configurar período</Button> : !devengado && capabilities.has("profitability.calculate") ? <Button size="sm" onClick={() => calculateMutation.mutate({ basis: "DEVENGADO" })}>Calcular devengado</Button> : !caja && capabilities.has("profitability.calculate") ? <Button size="sm" onClick={() => calculateMutation.mutate({ basis: "CAJA" })}>Calcular caja</Button> : devengado?.status === "DRAFT" && capabilities.has("profitability.publish") ? <Button size="sm" onClick={() => confirm.ask({ title: "¿Publicar esta versión?", description: "El cliente podrá consultar este resultado en el portal del cliente.", confirmLabel: "Publicar", onConfirm: () => publishMutation.mutate({ basis: "DEVENGADO" }) })}>Publicar devengado</Button> : null
         }

@@ -18,7 +18,6 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { WorkpaperSourceReviewAction } from "./WorkpaperSourceReviewAction";
 import { Icon } from "../ui/Icon";
 import {
-  DenseAlert,
   DenseHeader,
   DensePage,
   StatStrip,
@@ -51,7 +50,7 @@ function WorkpaperActionError({ error }: { error: Error | null | undefined }) {
 }
 
 /**
- * Expediente mensual de liquidación (F1.6, PLAN §4.6).
+ * Legajo de liquidación (F1.6, PLAN §4.6).
  *
  * Vista de trabajo mensual para preparador y revisor: densa, legible y
  * trazable. Usa un stepper persistente (no un wizard que oculte información):
@@ -387,7 +386,7 @@ function calculationDisabledMessage({
   isPending: boolean;
 }): string {
   if (isPending) return "El cálculo está en curso.";
-  if (!canCalculate) return "Tu perfil no tiene permiso para calcular este expediente.";
+  if (!canCalculate) return "Tu perfil no tiene permiso para calcular este legajo.";
 
   const missingSources = sources?.some((source) => source.required && !source.present) ?? false;
   const missingClassifications = (classifications?.pending ?? 0) > 0;
@@ -1238,7 +1237,7 @@ export function StudyExpedienteMensual() {
       <div className="study-page">
         <EmptyState
           title="Elegí un cliente"
-          description="El expediente mensual se organiza dentro de un cliente explícito."
+          description="El legajo se organiza dentro de un cliente explícito."
         />
       </div>
     );
@@ -1280,7 +1279,7 @@ export function StudyExpedienteMensual() {
       ) : null}
       <DenseHeader
         eyebrow="Impuestos"
-        title="Expediente mensual"
+        title="Legajo"
         description="Coordina IVA, IIBB y TEM del período con evidencia trazable."
         actions={
           <>
@@ -1298,7 +1297,7 @@ export function StudyExpedienteMensual() {
             onClick={() => void createMutation.mutate()}
           >
             <Icon name="plus" size={16} />
-            Nuevo expediente
+            Nuevo legajo
           </Button>
           <WorkpaperActionError error={createMutation.error} />
         
@@ -1350,7 +1349,7 @@ export function StudyExpedienteMensual() {
       ) : (
         <EmptyState
           title="Configurá un período fiscal"
-          description="El expediente mensual organiza las obligaciones del mes seleccionado."
+          description="El legajo organiza las obligaciones del mes seleccionado."
           action={
             <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
               Abrir configuración fiscal
@@ -1360,27 +1359,14 @@ export function StudyExpedienteMensual() {
       )}
 
       <StatStrip
-        label="Estado del expediente"
+        label="Estado del legajo"
         items={[
-          { key: "workpapers", label: "Expedientes", value: workpapers.length },
+          { key: "workpapers", label: "Legajos", value: workpapers.length },
           { key: "step", label: "Etapa actual", value: activeStepMeta.title },
           { key: "components", label: "Componentes", value: coverageQuery.data?.components.length ?? "—" },
         ]}
       />
 
-      <DenseAlert
-        tone="ok"
-        action={
-          workpapers.length ? (
-            <Button size="sm" variant="secondary" onClick={goToNextStep} disabled={!nextStep}>Continuar a {nextStep?.title ?? "cierre"}</Button>
-          ) : (
-            <Button size="sm" onClick={() => void createMutation.mutate()} disabled={!selectedTaxPeriod || createMutation.isPending || !capabilities.has("tax.settlements.calculate")}>Nuevo expediente</Button>
-          )
-        }
-      >
-        <strong>Próximo paso:</strong>{" "}
-        {workpapers.length ? `${activeStepMeta.description} Avanzá cuando la evidencia de esta etapa esté completa.` : "Creá el expediente del período para ordenar la evidencia y los controles fiscales."}
-      </DenseAlert>
 
 
       <ActionDrawer
@@ -1867,25 +1853,25 @@ export function StudyExpedienteMensual() {
 
       {listQuery.isLoading ? (
         <div className="study-page__state" role="status">
-          Cargando expedientes…
+          Cargando legajos…
         </div>
       ) : listQuery.isError ? (
         <div className="study-page__state" role="alert">
-          No se pudieron cargar los expedientes. Reintentá en un momento.
+          No se pudieron cargar los legajos. Reintentá en un momento.
         </div>
       ) : !selectedTaxPeriod ? (
         <EmptyState
           title="Elegí un período fiscal"
-          description="Seleccioná un período fiscal para consultar o crear el expediente del mes."
+          description="Seleccioná un período fiscal para consultar o crear el legajo del mes."
         />
       ) : workpapers.length === 0 ? (
         <EmptyState
-          title="Sin expedientes para este período"
-          description="Creá un expediente mensual para coordinar las liquidaciones del período."
+          title="Sin legajos para este período"
+          description="Creá un legajo para coordinar las liquidaciones del período."
           action={
             capabilities.has("tax.settlements.calculate") ? (
               <Button onClick={() => createMutation.mutate()} loading={createMutation.isPending}>
-                Crear expediente
+                Crear legajo
               </Button>
             ) : undefined
           }
@@ -1935,12 +1921,12 @@ export function StudyExpedienteMensual() {
                     <StatusBadge status={wp.status} />
                     {wp.preparedByUserId && wp.reviewedByUserId === wp.preparedByUserId ? (
                       <small className="muted-copy" role="status">
-                        Expediente revisado por la misma persona que lo preparó.
+                        Legajo revisado por la misma persona que lo preparó.
                       </small>
                     ) : null}
                     {wp.preparedByUserId && wp.finalizedByUserId === wp.preparedByUserId ? (
                       <small className="muted-copy" role="status">
-                        Expediente finalizado por la misma persona que lo preparó.
+                        Legajo finalizado por la misma persona que lo preparó.
                       </small>
                     ) : null}
                   </div>
@@ -1951,7 +1937,7 @@ export function StudyExpedienteMensual() {
                   ) : null}
                 </div>
 
-                <div className="workpaper-process" aria-label="Navegación del expediente">
+                <div className="workpaper-process" aria-label="Navegación del legajo">
                   <div className="workpaper-process__current">
                     <span className="workpaper-process__index">
                       Etapa {safeActiveStep + 1} de {WORKPAPER_STEPS.length}
@@ -1980,7 +1966,7 @@ export function StudyExpedienteMensual() {
                   <div
                     className="workpaper-process__menu"
                     role="tablist"
-                    aria-label="Menú completo del expediente"
+                    aria-label="Menú completo del legajo"
                   >
                     {WORKPAPER_STEPS.map((step, index) => (
                       <button
@@ -2166,7 +2152,7 @@ export function StudyExpedienteMensual() {
                         <div>
                           <strong>Cobertura de fuentes</strong>
                           <small>
-                            El expediente declara qué llegó y qué todavía bloquea el cálculo.
+                            El legajo declara qué llegó y qué todavía bloquea el cálculo.
                           </small>
                         </div>
                         <span className="workpaper-stage__actions">
@@ -2244,7 +2230,7 @@ export function StudyExpedienteMensual() {
                           <Table
                             rows={coverageQuery.data?.sources ?? []}
                             rowKey={(source) => source.code}
-                            empty="No hay fuentes definidas para el expediente."
+                            empty="No hay fuentes definidas para el legajo."
                             columns={[
                               {
                                 key: "source",
@@ -2854,7 +2840,7 @@ export function StudyExpedienteMensual() {
                                 </>
                               ) : (
                                 <p className="muted-copy">
-                                  El detalle se genera cuando el expediente se calcula.
+                                  El detalle se genera cuando el legajo se calcula.
                                 </p>
                               )}
                             </article>
@@ -3014,7 +3000,7 @@ export function StudyExpedienteMensual() {
                   ) : safeActiveStep === 4 ? (
                     <div className="workpaper-controls">
                       {wp.controls.length === 0 ? (
-                        <p>No hay controles registrados para este expediente.</p>
+                        <p>No hay controles registrados para este legajo.</p>
                       ) : (
                         wp.controls.map((control) => (
                           <div className="workpaper-control" key={control.id}>
@@ -3192,7 +3178,7 @@ export function StudyExpedienteMensual() {
                       <Button
                         variant="primary"
                         disabled={calculateDisabled}
-                        title={calculateDisabledReason ?? "Calcular el expediente"}
+                        title={calculateDisabledReason ?? "Calcular el legajo"}
                         onClick={() => void calculateMutation.mutate(wp.id)}
                       >
                         Calcular
@@ -3270,7 +3256,7 @@ export function StudyExpedienteMensual() {
                   ) : null}
                   {selfReviewBlocked && ["IN_REVIEW", "REVIEWED"].includes(wp.status) ? (
                     <small className="muted-copy">
-                      Para revisar o finalizar este expediente, el Titular puede habilitar la
+                      Para revisar o finalizar este legajo, el Titular puede habilitar la
                       autorrevisión en Configuración del estudio.
                     </small>
                   ) : null}

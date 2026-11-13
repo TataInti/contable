@@ -293,7 +293,7 @@ export function StudyDashboard() {
       action={
         clientId && capabilities.has("tax.settlements.read") ? (
           <Button onClick={openTaxWorkspace}>
-            {periodId ? "Abrir expediente mensual" : "Configurar período"}
+            {periodId ? "Abrir legajo" : "Configurar período"}
           </Button>
         ) : capabilities.has("client.manage") ? (
           <Button variant="secondary" onClick={() => navigate("/clientes")}>

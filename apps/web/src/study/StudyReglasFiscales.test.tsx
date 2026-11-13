@@ -461,6 +461,35 @@ describe("StudyReglasFiscales — rótulos de versión sin ambigüedad (F4)", ()
     expect(screen.queryByText("Editando borrador")).toBeNull();
     expect(screen.queryByText("Versión activa")).toBeNull();
   });
+
+  it("ofrece Modificar alícuotas junto a las alícuotas de una versión activa y muestra el rechazo del servidor en el panel", async () => {
+    const detail = makeDetail(null);
+    detail.versions = [
+      { ...detail.versions[0]!, id: "version-active", version: 4, status: "ACTIVE", rateRules: [] },
+    ];
+    mockApi(detail);
+    vi.mocked(api.post).mockRejectedValue(
+      new Error("No hay motores fiscales soportados para el régimen."),
+    );
+    renderReglas();
+
+    const ratesSection = (await screen.findByRole("heading", { name: "Alícuotas y porcentajes" }))
+      .closest("section")!;
+    expect(within(ratesSection).getByText(/Esta versión es de sólo lectura/)).toBeTruthy();
+    fireEvent.click(within(ratesSection).getByRole("button", { name: "Modificar alícuotas" }));
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Crear borrador y editar" }));
+
+    // El error se ve dentro del panel abierto, no detrás de él.
+    expect(
+      await within(dialog).findByText("No hay motores fiscales soportados para el régimen."),
+    ).toBeTruthy();
+    expect(vi.mocked(api.post)).toHaveBeenCalledWith(
+      expect.stringContaining("/versions/clone"),
+      expect.objectContaining({ validFrom: expect.any(String) }),
+    );
+  });
 });
 
 describe("StudyReglasFiscales — CTA único y submit deshabilitado explicado (F8)", () => {

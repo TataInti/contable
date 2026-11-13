@@ -4,7 +4,11 @@ import { Field, type FieldProps } from "./Field.js";
 export interface MoneyFieldProps extends Omit<FieldProps, "type" | "value" | "onChange"> {
   value: string;
   onChange: (value: string) => void;
+  /** Decimales admitidos. 2 para importes; una alícuota puede necesitar más. */
+  maxDecimals?: number;
 }
+
+const DEFAULT_MAX_DECIMALS = 2;
 
 const INTEGER = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 0,
@@ -15,12 +19,12 @@ const INTEGER = new Intl.NumberFormat("es-AR", {
  * visible es-AR (ej. "1.234.567,89"). El punto es el separador de miles
  * (puramente visual) y la coma el separador decimal.
  */
-function formatValue(value: string): string {
+function formatValue(value: string, maxDecimals: number): string {
   if (!value) return "";
   const [intPart, fracPart] = value.split(".");
   const formattedInt = INTEGER.format(Number(intPart || "0"));
   if (fracPart !== undefined) {
-    return `${formattedInt},${fracPart.slice(0, 2)}`;
+    return `${formattedInt},${fracPart.slice(0, maxDecimals)}`;
   }
   return formattedInt;
 }
@@ -30,9 +34,10 @@ function formatValue(value: string): string {
  * - El separador de miles (punto) se inserta en la parte entera pero es solo
  *   visual: no forma parte del valor.
  * - El separador decimal es la coma, o el punto que el usuario escribió
- *   explícitamente (detectado como el último punto con ≤ 2 dígitos después).
+ *   explícitamente (detectado como el último punto con a lo sumo `maxDecimals`
+ *   dígitos después).
  */
-function formatInput(raw: string): string {
+function formatInput(raw: string, maxDecimals: number): string {
   const hasComma = raw.includes(",");
   let intText = "";
   let fracText: string | null = null;
@@ -45,7 +50,7 @@ function formatInput(raw: string): string {
     const lastDot = raw.lastIndexOf(".");
     if (lastDot !== -1) {
       const afterDigits = raw.slice(lastDot + 1).replace(/[^\d]/g, "");
-      if (afterDigits.length <= 2) {
+      if (afterDigits.length <= maxDecimals) {
         intText = raw.slice(0, lastDot);
         fracText = afterDigits;
       } else {
@@ -60,7 +65,7 @@ function formatInput(raw: string): string {
   const formattedInt = intDigits ? INTEGER.format(Number(intDigits)) : "";
 
   if (fracText !== null) {
-    return `${formattedInt},${fracText.slice(0, 2)}`;
+    return `${formattedInt},${fracText.slice(0, maxDecimals)}`;
   }
   return formattedInt;
 }
@@ -69,10 +74,10 @@ function formatInput(raw: string): string {
  * Convierte el texto visible del input a un valor normalizado para la API.
  * - El separador de miles (punto) se descarta (es solo visual).
  * - El separador decimal es la coma, o el punto que el usuario escribió
- *   explícitamente (≤ 2 dígitos después).
- * - Se limitan a 2 decimales.
+ *   explícitamente (a lo sumo `maxDecimals` dígitos después).
+ * - Se limitan a `maxDecimals` decimales.
  */
-function parseInput(raw: string): string {
+function parseInput(raw: string, maxDecimals: number): string {
   const hasComma = raw.includes(",");
   let intText = "";
   let fracText: string | null = null;
@@ -85,7 +90,7 @@ function parseInput(raw: string): string {
     const lastDot = raw.lastIndexOf(".");
     if (lastDot !== -1) {
       const afterDigits = raw.slice(lastDot + 1).replace(/[^\d]/g, "");
-      if (afterDigits.length <= 2) {
+      if (afterDigits.length <= maxDecimals) {
         intText = raw.slice(0, lastDot);
         fracText = afterDigits;
       } else {
@@ -99,7 +104,7 @@ function parseInput(raw: string): string {
   const intDigits = intText.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "");
   if (fracText !== null) {
     if (fracText === "") return intDigits || "0";
-    return `${intDigits || "0"}.${fracText.slice(0, 2)}`;
+    return `${intDigits || "0"}.${fracText.slice(0, maxDecimals)}`;
   }
   return intDigits;
 }
@@ -122,23 +127,34 @@ function isDecimalSeparator(key: string): boolean {
   return key === "," || key === ".";
 }
 
-export function MoneyField({ value, onChange, ...rest }: MoneyFieldProps) {
+/**
+ * Campo numérico en formato es-AR. Por defecto muestra el símbolo de pesos;
+ * `prefix` permite otra unidad (por ejemplo "%" para una alícuota) sin perder
+ * el formato ni la normalización del valor.
+ */
+export function MoneyField({
+  value,
+  onChange,
+  prefix = "$",
+  maxDecimals = DEFAULT_MAX_DECIMALS,
+  ...rest
+}: MoneyFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const lastSentRef = useRef<string>(value);
-  const [display, setDisplay] = useState(() => formatValue(value));
+  const [display, setDisplay] = useState(() => formatValue(value, maxDecimals));
 
   useEffect(() => {
     if (value !== lastSentRef.current) {
-      setDisplay(formatValue(value));
+      setDisplay(formatValue(value, maxDecimals));
       lastSentRef.current = value;
     }
-  }, [value]);
+  }, [value, maxDecimals]);
 
   return (
     <Field
       {...rest}
       ref={inputRef}
-      prefix="$"
+      prefix={prefix}
       type="text"
       inputMode="decimal"
       value={display}
@@ -155,8 +171,8 @@ export function MoneyField({ value, onChange, ...rest }: MoneyFieldProps) {
         const selectionStart = el?.selectionStart ?? null;
         const selectionEnd = el?.selectionEnd ?? null;
 
-        const normalized = parseInput(before);
-        const nextDisplay = formatInput(before);
+        const normalized = parseInput(before, maxDecimals);
+        const nextDisplay = formatInput(before, maxDecimals);
         setDisplay(nextDisplay);
         lastSentRef.current = normalized;
         onChange(normalized);

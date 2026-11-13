@@ -122,13 +122,13 @@ export function DenseAlert({
   children,
   action,
 }: {
-  tone?: "warn" | "ok";
+  tone?: "warn" | "hint";
   children: ReactNode;
   action?: ReactNode;
 }) {
   return (
     <div className={`dense-alert dense-alert--${tone}`} role={tone === "warn" ? "status" : undefined}>
-      <Icon name={tone === "warn" ? "alert" : "check"} size={17} />
+      <Icon name={tone === "warn" ? "alert" : "arrow-right"} size={17} />
       <span>{children}</span>
       {action ? <span className="dense-alert__action">{action}</span> : null}
     </div>

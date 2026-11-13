@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Notice, Table } from "@contable/design-system";
 import { api } from "../lib/api";
+import { formatCuit } from "../lib/cuit";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
@@ -339,7 +340,7 @@ export function StudyOnboardingFiscal() {
               <>
                 <dl className="fiscal-contributor__facts">
                   <div><dt>Razón social</dt><dd>{latestProfile.legalName}</dd></div>
-                  <div><dt>CUIT</dt><dd>{latestProfile.cuit}</dd></div>
+                  <div><dt>CUIT</dt><dd>{formatCuit(latestProfile.cuit)}</dd></div>
                   <div><dt>Tipo</dt><dd>{latestProfile.personType === "JURIDICA" ? "Persona jurídica" : "Persona física"}</dd></div>
                   <div><dt>Condición</dt><dd>{CONDITION_LABELS[latestProfile.nationalCondition]}</dd></div>
                   <div><dt>Versión</dt><dd>v{latestProfile.version}</dd></div>

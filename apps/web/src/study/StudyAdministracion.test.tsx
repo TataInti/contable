@@ -171,11 +171,11 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     };
     vi.mocked(api.patch).mockResolvedValue({ allowSelfReview: true } as never);
     renderAdministracion();
-    expect(screen.queryByRole("checkbox", { name: "Permitir autorrevisión de fuentes y expedientes" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "Permitir autorrevisión de fuentes y legajos" })).toBeNull();
     await openControls();
 
     const toggle = (await screen.findByRole("checkbox", {
-      name: "Permitir autorrevisión de fuentes y expedientes",
+      name: "Permitir autorrevisión de fuentes y legajos",
     })) as HTMLInputElement;
     await waitFor(() => expect(toggle.disabled).toBe(false));
     expect(toggle.disabled).toBe(false);
@@ -197,7 +197,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     await openControls();
 
     const toggle = (await screen.findByRole("checkbox", {
-      name: "Permitir autorrevisión de fuentes y expedientes",
+      name: "Permitir autorrevisión de fuentes y legajos",
     })) as HTMLInputElement;
     expect(toggle.disabled).toBe(true);
     expect(screen.getByText("Solo el Titular puede cambiar esta opción.")).toBeTruthy();

@@ -253,6 +253,11 @@
   min-width: 0;
 }
 
+/* Un error del formulario ocupa todo el ancho: no compite con un campo. */
+.study-form > .form-error {
+  grid-column: 1 / -1;
+}
+
 .study-form__actions {
   display: flex;
   grid-column: 1 / -1;
@@ -2707,6 +2712,16 @@
   color: var(--ds-color-text-muted);
   font-weight: var(--ds-font-weight-medium);
   text-align: left;
+}
+
+/* Button envuelve su contenido: la grilla número · nombre · estado se aplica
+   al envoltorio para que los tres elementos no queden pegados. */
+.fiscal-steps__button > .ds-button__content {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ds-space-2);
+  width: 100%;
 }
 
 .fiscal-steps__button.ds-button--text:hover:not(:disabled) {

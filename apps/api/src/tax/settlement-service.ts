@@ -26,6 +26,7 @@ import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
 import { exportReport, type ExportReportResult } from "../reporting/report-export.js";
 import { voucherDocumentKind } from "./workpaper-classification.js";
 import { RULES_HASH_SCHEMA_VERSION_V3 } from "./rules-hash.js";
+import { buildEngineRules, EngineRulesError } from "./engine-rules.js";
 
 /**
  * Servicio de liquidaciones fiscales (Puerta 3).
@@ -63,6 +64,7 @@ export type SettlementErrorCode =
   | "ACTIVITY_RULE_UNRESOLVED"
   | "UNSUPPORTED_ENGINE_VERSION"
   | "PERIOD_NOT_FOUND"
+  | "REGISTRATION_REQUIRED"
   | "OBLIGATION_NOT_FOUND"
   | "BLOCKING_DIFFERENCES"
   | "FINALIZE_REQUIRES_REVIEW"
@@ -132,7 +134,7 @@ const resolvedTaxEngineSelect = {
  * `engineVersion`; un texto que no identifica motor devuelve `null` y la
  * liquidación bloquea con el 409 actual.
  */
-async function resolveTaxEngineForVersion(
+export async function resolveTaxEngineForVersion(
   tx: Tx,
   version: { engineId: string | null; engineVersion: string },
 ): Promise<ResolvedTaxEngine | null> {
@@ -324,6 +326,25 @@ export class SettlementService {
   ) {
       const period = await tx.taxPeriod.findUnique({ where: { id: input.periodId } });
       if (!period) throw new SettlementError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
+
+      // Sólo se liquida a un cliente inscripto en el régimen durante el período:
+      // la inscripción es el vínculo entre la configuración del cliente y el cálculo.
+      const registration = await tx.taxRegistration.findFirst({
+        where: {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          regimeId: input.regimeId,
+          status: "ACTIVE",
+          validFrom: { lte: period.endDate },
+          OR: [{ validTo: null }, { validTo: { gte: period.startDate } }],
+        },
+      });
+      if (!registration) {
+        throw new SettlementError(
+          "REGISTRATION_REQUIRED",
+          "El cliente no está inscripto en este régimen para el período. Registrá la inscripción en su configuración fiscal antes de liquidar",
+        );
+      }
 
       // --- Versión ACTIVE del rule pack del régimen (V-005: se congela) ---
       const pack = await tx.taxRulePack.findFirst({
@@ -663,103 +684,17 @@ export class SettlementService {
       const rateRuleJurisdictionCode = new Map(
         rateRuleJurisdictions.map((jurisdiction) => [jurisdiction.id, jurisdiction.code]),
       );
-      const effectiveRuleConcept = (rule: (typeof rateRules)[number]) => {
-        if (rule.activityCode) return rule.activityCode;
-        if (
-          rule.jurisdictionId &&
-          ["ALICUOTA", "RATE", "JURISDICCION"].includes(rule.concept)
-        ) {
-          return rateRuleJurisdictionCode.get(rule.jurisdictionId) ?? rule.concept;
-        }
-        return rule.concept;
-      };
-      if (!isTypedRuleVersion) {
-        const duplicateRuleConcepts = rateRules
-          .map(effectiveRuleConcept)
-          .filter((concept, index, concepts) => concepts.indexOf(concept) !== index);
-        if (duplicateRuleConcepts.length > 0) {
-          throw new SettlementError(
-            "RULE_VERSION_NOT_FOUND",
-            `La versión normativa tiene reglas efectivas duplicadas para ${[
-              ...new Set(duplicateRuleConcepts),
-            ].join(", ")}`,
-          );
-        }
+      let rules;
+      try {
+        rules = buildEngineRules(rateRules, {
+          isTyped: isTypedRuleVersion,
+          engineKey,
+          jurisdictionCodeById: rateRuleJurisdictionCode,
+        });
+      } catch (err) {
+        if (err instanceof EngineRulesError) throw new SettlementError(err.code, err.message);
+        throw err;
       }
-      const typedRuleSubjects = new Set<string>();
-      const activitySubjectEngine =
-        engineKey === "iibb-local-tuc" || engineKey === "tem-smt" || engineKey === "tem-smt-legacy";
-      const vatSubjectEngine = engineKey === "vat-ri";
-      const rules = rateRules.map((r) => {
-        if (isTypedRuleVersion) {
-          const kind = r.kind!.key;
-          const subject = r.isDefault
-            ? null
-            : kind === "RATE" && activitySubjectEngine
-              ? r.activityId ?? null
-              : vatSubjectEngine && (kind === "RATE" || kind === "SPECIAL_CREDIT")
-                ? r.rate?.toString() ?? null
-                : kind === "RATE" || kind === "COEFFICIENT"
-                  ? r.jurisdictionId ?? null
-                  : kind === "FEE"
-                    ? r.categoryCode ?? null
-                    : null;
-          const hasSubject =
-            kind === "RATE" ||
-            kind === "COEFFICIENT" ||
-            kind === "FEE" ||
-            (vatSubjectEngine && kind === "SPECIAL_CREDIT");
-          if (hasSubject) {
-            const subjectKey = JSON.stringify([kind, subject, r.isDefault]);
-            if (typedRuleSubjects.has(subjectKey)) {
-              throw new SettlementError(
-                "RULE_SUBJECT_UNRESOLVED",
-                `La versión normativa repite el sujeto de la regla ${r.id}`,
-              );
-            }
-            typedRuleSubjects.add(subjectKey);
-          }
-          const storedRate = r.rate !== null ? dec(r.rate.toString()) : undefined;
-          const normalized = storedRate === undefined
-            ? undefined
-            : kind === "RATE" || kind === "SPECIAL_CREDIT"
-              ? storedRate.div(100)
-              : storedRate;
-          return {
-            id: r.id,
-            concept: r.concept,
-            code: r.concept,
-            kind,
-            activityId: r.activityId,
-            jurisdictionId: r.jurisdictionId,
-            categoryCode: r.categoryCode,
-            isDefault: r.isDefault,
-            ...(normalized !== undefined ? { rate: normalized } : {}),
-            ...(r.minAmount !== null ? { minimum: dec(r.minAmount.toString()) } : {}),
-            validFrom: r.validFrom.toISOString().slice(0, 10),
-            ...(r.validTo ? { validTo: r.validTo.toISOString().slice(0, 10) } : {}),
-          };
-        }
-        const concept = effectiveRuleConcept(r);
-        const rate = r.rate !== null ? dec(r.rate.toString()) : undefined;
-        // Compatibilidad v1/v2: sólo los coeficientes CM se guardan como razón 0..1.
-        const normalized =
-          rate !== undefined
-            ? concept.startsWith("COEF_")
-              ? rate
-              : rate.div(100)
-            : undefined;
-        const min = r.minAmount !== null ? dec(r.minAmount.toString()) : undefined;
-        return {
-          id: r.id,
-          concept,
-          code: r.concept,
-          ...(normalized !== undefined ? { rate: normalized } : {}),
-          ...(min !== undefined ? { minimum: min } : {}),
-          validFrom: r.validFrom.toISOString().slice(0, 10),
-          ...(r.validTo ? { validTo: r.validTo.toISOString().slice(0, 10) } : {}),
-        };
-      });
 
       // --- Hechos e inputs ---
       const facts: EngineFact[] = [];

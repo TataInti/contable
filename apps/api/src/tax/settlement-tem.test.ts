@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { IngestionService } from "./ingestion-service.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
 import { computeRulesHashV3 } from "./rules-hash.js";
+import { RuleSimulationService } from "./rule-simulation.js";
 
 /**
  * Tests de integración TEM San Miguel de Tucumán (Puerta 4, Fase 4.2).
@@ -667,5 +668,86 @@ describe("Fase 4.2 — TEM con reglas tipadas", () => {
     expect(typedTotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("3500.00");
     expect(typedTotals["TOTAL_A_INGRESAR"]).toBe("3500.00");
     expect(typed.result.blocks).toHaveLength(0);
+  });
+});
+
+describe("Simulador de liquidación — TEM", () => {
+  const simulation = new RuleSimulationService();
+
+  async function ruleIdFor(versionId: string, concept: string) {
+    const rule = await prisma.taxRateRule.findFirstOrThrow({ where: { ruleVersionId: versionId, concept } });
+    return rule.id;
+  }
+
+  it("da el mismo resultado que la liquidación real para el mismo caso y no guarda nada", async () => {
+    await createApprovedVouchersWithLines();
+    const real = await settlements.calculate(ctxOwner, calculateParams());
+    const realTotals = real.settlement.totals as Record<string, string>;
+    const settlementsBefore = await prisma.taxSettlement.count({ where: { firmId: FIRM_TEM } });
+
+    const simulated = await simulation.simulate(ctxOwner, ruleVersionId, {
+      incomes: [
+        { ruleId: await ruleIdFor(ruleVersionId, "COMERCIO"), amount: "100000" },
+        { ruleId: await ruleIdFor(ruleVersionId, "SERVICIOS"), amount: "50000" },
+      ],
+    });
+
+    expect(simulated.result.subtotals["BASE_TOTAL"]).toBe(realTotals["BASE_TOTAL"]);
+    expect(simulated.result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe(realTotals["IMPUESTO_POR_ACTIVIDAD"]);
+    expect(simulated.result.subtotals["TOTAL_A_INGRESAR"]).toBe(realTotals["TOTAL_A_INGRESAR"]);
+    expect(simulated.result.lines.length).toBeGreaterThan(0);
+    // La versión simulada es la activa: no hay contra qué comparar.
+    expect(simulated.comparison).toBeNull();
+    expect(await prisma.taxSettlement.count({ where: { firmId: FIRM_TEM } })).toBe(settlementsBefore);
+  });
+
+  it("aplica el mínimo y descuenta retenciones en el caso simulado", async () => {
+    const simulated = await simulation.simulate(ctxOwner, ruleVersionId, {
+      incomes: [{ ruleId: await ruleIdFor(ruleVersionId, "COMERCIO"), amount: "10000" }],
+      withholding: "500",
+    });
+    // 10.000 × 2 % = 200 < mínimo 3.000; menos 500 de retenciones.
+    expect(simulated.result.subtotals["TOTAL_A_INGRESAR"]).toBe("2500.00");
+  });
+
+  it("compara un borrador contra la versión activa del paquete", async () => {
+    const active = await prisma.taxRuleVersion.findUniqueOrThrow({ where: { id: ruleVersionId } });
+    const draft = await prisma.taxRuleVersion.create({
+      data: {
+        packId: active.packId,
+        version: 2,
+        status: "DRAFT",
+        validFrom: new Date("2026-01-01"),
+        engineVersion: "ar-tem-smt-v1.1.0",
+        rulesHash: "sha256:tem-test-draft",
+      },
+    });
+    await prisma.taxRateRule.createMany({
+      data: [
+        { ruleVersionId: draft.id, concept: "COMERCIO", rate: new Prisma.Decimal("4"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: draft.id, concept: "SERVICIOS", rate: new Prisma.Decimal("3"), validFrom: new Date("2026-01-01") },
+      ],
+    });
+
+    const simulated = await simulation.simulate(ctxOwner, draft.id, {
+      incomes: [
+        { ruleId: await ruleIdFor(draft.id, "COMERCIO"), amount: "100000" },
+        { ruleId: await ruleIdFor(draft.id, "SERVICIOS"), amount: "50000" },
+      ],
+    });
+
+    expect(simulated.result.version).toBe(2);
+    expect(simulated.result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("5500.00");
+    expect(simulated.comparison?.version).toBe(1);
+    expect(simulated.comparison?.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("3500.00");
+    expect(simulated.unmatchedInComparison).toEqual([]);
+  });
+
+  it("rechaza un ingreso que no apunta a una alícuota de la versión", async () => {
+    await expect(
+      simulation.simulate(ctxOwner, ruleVersionId, {
+        incomes: [{ ruleId: "99999999-9999-4999-8999-999999999999", amount: "1000" }],
+      }),
+    ).rejects.toMatchObject({ code: "SIMULATION_INPUT_INVALID" });
   });
 });

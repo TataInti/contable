@@ -100,10 +100,10 @@ const INTERNAL_ROLE_LABELS: Record<string, string> = {
 };
 
 const INTERNAL_MODULES_BY_ROLE: Record<string, string[]> = {
-  OWNER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Expediente mensual", "Rentabilidad"],
-  ADMIN: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Expediente mensual", "Rentabilidad"],
-  PREPARER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Expediente mensual", "Rentabilidad"],
-  REVIEWER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Expediente mensual", "Rentabilidad"],
+  OWNER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
+  ADMIN: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
+  PREPARER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
+  REVIEWER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
   AUDITOR_READONLY: ["Clientes", "Configuración fiscal", "Liquidaciones", "Rentabilidad"],
 };
 
@@ -1353,10 +1353,10 @@ export function StudyAdministracion() {
         <div className="self-review-setting__heading">
           <p className="study-page__eyebrow">Control interno</p>
           <h2 className="self-review-setting__title" id="self-review-setting-title">
-            Permitir autorrevisión de fuentes y expedientes
+            Permitir autorrevisión de fuentes y legajos
           </h2>
           <p>
-            Permite que quien importó un lote revise su fuente y que quien preparó un expediente
+            Permite que quien importó un lote revise su fuente y que quien preparó un legajo
             lo revise y finalice. La opción reduce el control interno de cuatro ojos; cada
             autorrevisión queda registrada en la auditoría.
           </p>
@@ -1364,7 +1364,7 @@ export function StudyAdministracion() {
         <label className="self-review-setting__toggle">
           <input
             type="checkbox"
-            aria-label="Permitir autorrevisión de fuentes y expedientes"
+            aria-label="Permitir autorrevisión de fuentes y legajos"
             checked={selfReviewSetting.data?.allowSelfReview ?? false}
             disabled={
               !canManageSelfReview ||

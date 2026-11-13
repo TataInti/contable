@@ -173,6 +173,16 @@ async function setupContext(fx: Awaited<ReturnType<typeof setupMasters>>) {
         createdByUserId: OWNER_P5,
       },
     });
+    // Sólo se liquida a un cliente inscripto en el régimen.
+    await tx.taxRegistration.create({
+      data: {
+        firmId: FIRM_P5,
+        clientId: CLIENT_P5,
+        profileVersionId: profile.id,
+        regimeId: fx.ri.id,
+        validFrom: new Date("2026-01-01"),
+      },
+    });
     const period = await tx.taxPeriod.create({
       data: {
         firmId: FIRM_P5,

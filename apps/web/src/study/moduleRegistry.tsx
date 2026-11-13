@@ -153,7 +153,7 @@ export const STUDY_MODULES: readonly StudyModule[] = [
   {
     id: "expediente-mensual",
     path: "/expediente-mensual",
-    label: "Expediente mensual",
+    label: "Legajo",
     icon: "reports",
     navigationGroup: "Ejecución",
     requiredCapability: "tax.settlements.read",

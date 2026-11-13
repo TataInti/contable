@@ -17,7 +17,7 @@ const CHAPTERS = [
   { id: "reglas", label: "Reglas fiscales" },
   { id: "trabajo", label: "Trabajo" },
   { id: "bandeja", label: "Bandeja" },
-  { id: "expediente", label: "Expediente mensual" },
+  { id: "expediente", label: "Legajo" },
   { id: "liquidaciones", label: "Liquidaciones" },
   { id: "portal", label: "Qué ve el cliente" },
   { id: "rentabilidad", label: "Rentabilidad" },
@@ -85,7 +85,7 @@ export function StudyAyuda() {
             corresponda, período en la barra superior.
           </li>
           <li>
-            <strong>Cuatro ojos.</strong> Quien prepara no puede revisar el mismo expediente o
+            <strong>Cuatro ojos.</strong> Quien prepara no puede revisar el mismo legajo o
             liquidación. Titular y administrador pueden hacer las dos cosas, pero no sobre el mismo
             objeto.
           </li>
@@ -134,8 +134,8 @@ export function StudyAyuda() {
           headers={["Campo", "Qué hace"]}
           rows={[
             ["Estudio", "Queda fijo para el equipo del estudio."],
-            ["Cliente", "Define de qué empresa estás hablando. Sin esto no se abre bandeja ni expediente."],
-            ["Período", "Define el mes. Lo piden Expediente, Liquidaciones y Rentabilidad."],
+            ["Cliente", "Define de qué empresa estás hablando. Sin esto no se abre bandeja ni legajo."],
+            ["Período", "Define el mes. Lo piden Legajo, Liquidaciones y Rentabilidad."],
           ]}
         />
         <p>
@@ -155,7 +155,7 @@ export function StudyAyuda() {
             ["Preparación", "Bandeja documental", "Recibir, extraer y revisar archivos."],
             ["Preparación", "Configuración fiscal", "Perfil, regímenes, períodos y obligaciones."],
             ["Ejecución", "Trabajo", "Pedidos al cliente, mensajes y vencimientos."],
-            ["Ejecución", "Expediente mensual", "Circuito del mes."],
+            ["Ejecución", "Legajo", "Circuito del mes."],
             ["Ejecución", "Liquidaciones", "Cartera por impuesto, papeles PDF/CSV, rectificativa."],
             ["Análisis", "Rentabilidad", "Resultado de gestión, aparte de lo fiscal."],
             ["Configuración", "Usuarios y accesos", "Equipo interno e invitaciones al portal."],
@@ -172,7 +172,7 @@ export function StudyAyuda() {
             [
               "Titular / Administrador",
               "Toda la cartera, usuarios, reglas. Puede preparar o revisar.",
-              "No puede ser preparador y revisor del mismo expediente.",
+              "No puede ser preparador y revisor del mismo legajo.",
             ],
             [
               "Preparador",
@@ -200,7 +200,7 @@ export function StudyAyuda() {
           <li>Perfil</li>
           <li>Pedir docs</li>
           <li>Bandeja</li>
-          <li>Expediente</li>
+          <li>Legajo</li>
           <li>Revisión</li>
           <li>Cerrar</li>
           <li>Presentar</li>
@@ -212,11 +212,11 @@ export function StudyAyuda() {
             ["1. Cliente en condiciones", "Clientes + Configuración fiscal", "Perfil activo, regímenes, período y obligaciones."],
             ["2. Pedir lo que falta", "Trabajo", "Pedido enviado, con fecha límite e ítems claros."],
             ["3. Entrar la evidencia", "Bandeja documental", "Cada archivo validado, extraído y aprobado."],
-            ["4. Armar el mes", "Expediente mensual", "Fuentes cubiertas, clasificación hecha, controles resueltos."],
-            ["5. Calcular", "Expediente / Liquidaciones", "Posición calculada, sin diferencias abiertas."],
-            ["6. Cuatro ojos", "Expediente", "Un revisor distinto aprueba."],
-            ["7. Cerrar", "Expediente", "Finalizar. El mes queda congelado."],
-            ["8. Organismo y cobro", "Expediente · Cálculo", "Presentación con acuse y pago registrados."],
+            ["4. Armar el mes", "Legajo", "Fuentes cubiertas, clasificación hecha, controles resueltos."],
+            ["5. Calcular", "Legajo / Liquidaciones", "Posición calculada, sin diferencias abiertas."],
+            ["6. Cuatro ojos", "Legajo", "Un revisor distinto aprueba."],
+            ["7. Cerrar", "Legajo", "Finalizar. El mes queda congelado."],
+            ["8. Organismo y cobro", "Legajo · Cálculo", "Presentación con acuse y pago registrados."],
             ["9. Informar al cliente", "Liquidaciones", "PDF y CSV generados."],
             ["10. Gestión (opcional)", "Rentabilidad", "Devengado y caja; publicar si el cliente debe verlos."],
           ]}
@@ -304,13 +304,13 @@ export function StudyAyuda() {
       </section>
 
       <section className="study-page__section help-section" id="expediente">
-        <h2 className="study-page__section-title">Expediente mensual</h2>
-        <p>Requiere cliente y período. Cabecera: Nuevo expediente, o Crear expediente si está vacío.</p>
+        <h2 className="study-page__section-title">Legajo</h2>
+        <p>Requiere cliente y período. Cabecera: Nuevo legajo, o Crear legajo si está vacío.</p>
         <p>
           Subir Excel importa libros IVA de compras y ventas por separado. Las seis etapas quedan
           siempre visibles. El cálculo no habilita si falta evidencia.
         </p>
-        <ul className="help-flow" aria-label="Seis etapas del expediente">
+        <ul className="help-flow" aria-label="Seis etapas del legajo">
           <li>1 Saldos</li>
           <li>2 Fuentes</li>
           <li>3 Clasificación</li>
@@ -351,7 +351,7 @@ export function StudyAyuda() {
         <HelpTable
           headers={["Botón", "Cuándo"]}
           rows={[
-            ["Ver expediente", "Siempre, para volver a la evidencia."],
+            ["Ver legajo", "Siempre, para volver a la evidencia."],
             ["Calcular liquidación", "Hay régimen, período y documentación aprobada."],
             ["Enviar a revisión", "Estado calculado."],
             ["Revisar", "Estado en revisión."],
@@ -410,7 +410,7 @@ export function StudyAyuda() {
           rows={[
             ["No veo el cliente", "Pedir asignación. No es un error de la pantalla."],
             ["No puedo calcular", "Faltan fuentes revisadas o clasificación. El botón lo dice."],
-            ["No puedo aprobar un expediente que armé yo", "Es correcto: tiene que revisar otra persona."],
+            ["No puedo aprobar un legajo que armé yo", "Es correcto: tiene que revisar otra persona."],
             ["El cliente no ve la liquidación", "¿Está finalizada? ¿Se generaron PDF/CSV? ¿El acceso al portal sigue activo?"],
             ["Hay que corregir un mes cerrado", "Rectificar / Crear rectificativa. No reabrir a mano."],
             ["La lectura del PDF está mal", "Corregir en bandeja antes de aprobar."],

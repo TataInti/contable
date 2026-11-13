@@ -122,6 +122,14 @@ test("ciclo Monotributo de punta a punta (Fase 4.4)", async ({ request, playwrig
     expect([200, 409]).toContain(activatedProfile.status());
   }
 
+  // El cliente se inscribe en el régimen: sin inscripción no hay obligación.
+  const registration = await request.post(
+    `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-registrations`,
+    { headers, data: { profileVersionId: profileId, regimeId, validFrom: "2020-01-01" } },
+  );
+  // 409: ya quedó inscripto en una corrida anterior.
+  expect([201, 409]).toContain(registration.status());
+
   const obligation = await request.post(
     `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-obligations`,
     {

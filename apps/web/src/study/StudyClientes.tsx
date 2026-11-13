@@ -15,6 +15,7 @@ import {
   type ClientEconomicActivityOption,
 } from "@contable/contracts";
 import { ApiError, api, type Client, type ClientContact } from "../lib/api";
+import { formatCuit } from "../lib/cuit";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -41,9 +42,6 @@ import {
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
 
-function formatCuit(cuit: string) {
-  return cuit.length === 11 ? `${cuit.slice(0, 2)}-${cuit.slice(2, 10)}-${cuit.slice(10)}` : cuit;
-}
 
 const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const MONTH_LONG = [

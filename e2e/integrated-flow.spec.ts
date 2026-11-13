@@ -96,8 +96,8 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   await navigateStudy(page, "Liquidaciones");
   await expect(page.getByRole("heading", { name: "Liquidaciones", exact: true })).toBeVisible();
 
-  await navigateStudy(page, "Expediente mensual");
-  await expect(page.getByRole("heading", { name: "Expediente mensual", exact: true })).toBeVisible();
+  await navigateStudy(page, "Legajo");
+  await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
 
   await navigateStudy(page, "Rentabilidad");
   await expect(page.getByRole("heading", { name: "Rentabilidad", exact: true })).toBeVisible();

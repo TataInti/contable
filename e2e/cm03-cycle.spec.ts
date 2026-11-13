@@ -93,6 +93,14 @@ test("ciclo CM03 artículo 2 de punta a punta (Fase 4.3)", async ({ request, pla
   );
   const profileId = await resolveProfileId(request, firmId, clientId, profile.status());
 
+  // El cliente se inscribe en el régimen: sin inscripción no hay obligación.
+  const registration = await request.post(
+    `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-registrations`,
+    { headers, data: { profileVersionId: profileId, regimeId, validFrom: "2020-01-01" } },
+  );
+  // 409: ya quedó inscripto en una corrida anterior.
+  expect([201, 409]).toContain(registration.status());
+
   const obligation = await request.post(
     `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-obligations`,
     {

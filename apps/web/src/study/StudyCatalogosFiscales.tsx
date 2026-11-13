@@ -1203,6 +1203,13 @@ export function StudyCatalogosFiscales() {
                 </>,
               ],
               ["Organismo", `${selectedRegime.authority.name}${!selectedRegime.authority.isActive ? " (oculto)" : ""}`],
+              [
+                "Familia de cálculo",
+                // Sin familia el régimen no tiene motor: no admite reglas nuevas ni cálculo.
+                calcFamilies.find(
+                  (family) => family.id === (selectedRegime.calcFamilyId ?? selectedRegime.taxType.defaultFamilyId),
+                )?.label ?? "Sin asignar: no se puede calcular",
+              ],
               ["Origen", selectedRegime.origin ? <OriginBadge key="origin" origin={selectedRegime.origin} /> : null],
               ["Estado", <ActiveBadge key="state" active={selectedRegime.isActive} />],
             ]}

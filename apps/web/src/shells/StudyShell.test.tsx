@@ -100,7 +100,7 @@ describe("StudyShell", () => {
       "Bandeja documental",
       "Trabajo",
       "Liquidaciones",
-      "Expediente mensual",
+      "Legajo",
       "Rentabilidad",
     ]);
     expect(

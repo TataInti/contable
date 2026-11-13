@@ -344,25 +344,6 @@ export function StudyTrabajo() {
           { key: "obligations", label: "Obligaciones", value: obligationRows.length },
         ]}
       />
-      <Notice
-        tone="success"
-        action={
-          activeRequests.length && capabilities.has("request.manage") ? (
-            <Button size="sm" onClick={() => setShowRequest(true)}>Verificar pedidos</Button>
-          ) : !openCloses.length && capabilities.has("request.manage") ? (
-            <Button size="sm" onClick={() => setShowRequest(true)}>Pedir documentación</Button>
-          ) : capabilities.has("period.soft_close") ? (
-            <Button size="sm" onClick={() => setShowClose(true)} disabled={!periodId || !activeFiscalYear}>Iniciar cierre</Button>
-          ) : undefined
-        }
-      >
-        <strong>Próximo paso:</strong>{" "}
-        {activeRequests.length
-          ? "Revisá los pedidos abiertos y pedí la evidencia que todavía falta."
-          : openCloses.length
-            ? "Continuá el cierre que está en curso para este período."
-            : "Iniciá un pedido documental para reunir la evidencia del período."}
-      </Notice>
 
 
 

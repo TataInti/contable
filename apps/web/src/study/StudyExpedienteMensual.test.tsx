@@ -371,15 +371,19 @@ describe("StudyExpedienteMensual", () => {
     );
     vi.mocked(api.post).mockImplementation(((path: string) => {
       if (path.endsWith("/monthly-tax-workpapers")) {
-        return Promise.reject(new Error("Error anterior al crear el expediente"));
+        return Promise.reject(new Error("Error anterior al crear el legajo"));
       }
       if (path.endsWith("/calculate")) return Promise.reject(validationError);
       return Promise.resolve({});
     }) as never);
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Nuevo expediente" }));
-    expect(await screen.findByText("Error anterior al crear el expediente")).toBeTruthy();
+    // El botón del encabezado aparece deshabilitado hasta que carga el período
+    // fiscal: esperamos a que esté habilitado antes de accionar.
+    const createButton = await screen.findByRole<HTMLButtonElement>("button", { name: "Nuevo legajo" });
+    await waitFor(() => expect(createButton.disabled).toBe(false));
+    fireEvent.click(createButton);
+    expect(await screen.findByText("Error anterior al crear el legajo")).toBeTruthy();
 
     const calculateButton = await screen.findByRole("button", { name: "Calcular" });
     fireEvent.click(calculateButton);
@@ -393,7 +397,7 @@ describe("StudyExpedienteMensual", () => {
     expect(calculateButton.parentElement?.contains(actionError)).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(actionError));
     expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: "smooth", block: "center" });
-    expect(screen.getByText("Error anterior al crear el expediente")).toBeTruthy();
+    expect(screen.getByText("Error anterior al crear el legajo")).toBeTruthy();
   });
 
   it("explica junto a Calcular qué fuentes obligatorias siguen sin revisar", async () => {
