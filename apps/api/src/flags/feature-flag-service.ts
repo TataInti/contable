@@ -15,14 +15,25 @@ export type FeatureFlagCode =
   | "PORTAL"
   | "ASSISTANT"
   | "BI"
-  // G6-10: activación progresiva por régimen fiscal (PLAN §15.1).
-  // El flag TAX habilita el módulo fiscal; los flags TAX_<REGIME_CODE>
-  // permiten activar cada impuesto de forma independiente por firma/cliente.
   | "TAX_RI"
   | "TAX_IIBB_LOCAL_TUC"
   | "TAX_TEM_SMT"
   | "TAX_CM_ART2"
   | "TAX_MONOTRIBUTO";
+
+export const TAX_REGIME_FEATURE_FLAGS = [
+  "TAX_RI",
+  "TAX_IIBB_LOCAL_TUC",
+  "TAX_TEM_SMT",
+  "TAX_CM_ART2",
+  "TAX_MONOTRIBUTO",
+] as const;
+
+export type TaxRegimeFeatureFlagCode = (typeof TAX_REGIME_FEATURE_FLAGS)[number];
+
+export function isTaxRegimeFeatureFlagCode(code: string): code is TaxRegimeFeatureFlagCode {
+  return TAX_REGIME_FEATURE_FLAGS.includes(code as TaxRegimeFeatureFlagCode);
+}
 
 export const FEATURE_FLAGS: FeatureFlagCode[] = [
   "DOCUMENTS",
@@ -33,30 +44,8 @@ export const FEATURE_FLAGS: FeatureFlagCode[] = [
   "PORTAL",
   "ASSISTANT",
   "BI",
-  "TAX_RI",
-  "TAX_IIBB_LOCAL_TUC",
-  "TAX_TEM_SMT",
-  "TAX_CM_ART2",
-  "TAX_MONOTRIBUTO",
+  ...TAX_REGIME_FEATURE_FLAGS,
 ];
-
-/** Mapea un código de régimen fiscal a su flag de activación progresiva. */
-export function taxRegimeFlagCode(regimeCode: string): FeatureFlagCode | null {
-  switch (regimeCode) {
-    case "RI":
-      return "TAX_RI";
-    case "IIBB_LOCAL_TUC":
-      return "TAX_IIBB_LOCAL_TUC";
-    case "TEM_SMT":
-      return "TAX_TEM_SMT";
-    case "CM_ART2":
-      return "TAX_CM_ART2";
-    case "MONOTRIBUTO":
-      return "TAX_MONOTRIBUTO";
-    default:
-      return null;
-  }
-}
 
 export class FeatureFlagService {
   /** Habilita/deshabilita un flag para una firma (o cliente). */

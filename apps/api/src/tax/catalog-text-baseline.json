@@ -2,7 +2,6 @@
   "version": 1,
   "entries": [
     {"file":"apps/api/src/clients/client-repository.ts","rule":"EQ","property":"code","snippetHash":"03907658614da5ac337929d2f119d0cc57e2956d53ec25a21d9223f861b82488","closesIn":"corte 6: revisar vínculo de ficha por id"},
-    {"file":"apps/api/src/flags/feature-flag-service.ts","rule":"SWITCH","property":"regimeCode","snippetHash":"eb61296af292a01929a9561a81d839d96b8a33bac6ed10dd0837c314115329e3","closesIn":"corte 7 (D1)"},
     {"file":"apps/api/src/tax/fiscal-foundation-service.ts","rule":"EQ","property":"code","snippetHash":"fbcb58f6da4fdee624e7f81531ecd7a8bd1e70c3930057105a8bdfb9534945aa","closesIn":"corte 2a"},
     {"file":"apps/api/src/tax/ingestion-routes.ts","rule":"PREFIX","property":"code","snippetHash":"9aaf094d49652064b17ddad18e5b3078f582709c95aa539e47d11e1b5a2a62ba","closesIn":"cortes 0/5"},
     {"file":"apps/api/src/tax/ingestion-service.ts","rule":"EQ","property":"concept","snippetHash":"b2e1b0cb81d546a06d31262c3791a3beca3ac9092dd3a66eef3f3d455ba80ee8","closesIn":"corte 4a-ii"},

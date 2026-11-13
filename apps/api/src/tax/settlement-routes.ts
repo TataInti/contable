@@ -3,7 +3,11 @@ import { z } from "zod";
 import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
 import { FeatureFlagService } from "../flags/feature-flag-service.js";
-import { requireTaxRegimeEnabled, TaxRegimeDisabledError } from "./tax-regime-guard.js";
+import {
+  requireTaxRegimeEnabled,
+  TaxRegimeDisabledError,
+  TaxRegimeModuleRequiredError,
+} from "./tax-regime-guard.js";
 
 /** Con `exactOptionalPropertyTypes`, los opcionales se pasan sólo si están definidos. */
 function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
@@ -39,18 +43,23 @@ export function settlementRoutes(app: FastifyInstance) {
     if (err instanceof TaxRegimeDisabledError) {
       return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } });
     }
+    if (err instanceof TaxRegimeModuleRequiredError) {
+      return reply.status(err.statusCode).send({
+        error: { code: err.code, message: err.message, details: err.details },
+      });
+    }
     throw err;
   };
 
-  /** G6-10: resuelve el código de régimen y verifica su flag de activación.
+  /** Resuelve el módulo del régimen y verifica su flag de activación.
    *  El lookup se hace dentro del contexto RLS: con el rol runtime (RLS
    *  forzado) una consulta fuera de transacción no ve ninguna fila. */
   async function assertRegimeEnabled(ctx: ReturnType<typeof tenantContextFromRequest>, regimeId: string) {
     const regime = await withTenantContext(ctx, (tx) =>
-      tx.taxRegime.findUnique({ where: { id: regimeId } }),
+      tx.taxRegime.findUnique({ where: { id: regimeId }, include: { module: true } }),
     );
     if (!regime) throw new SettlementError("RULE_VERSION_NOT_FOUND", "Régimen fiscal no encontrado");
-    await requireTaxRegimeEnabled(flags, ctx, regime.code);
+    await requireTaxRegimeEnabled(flags, ctx, regime.code, regime.module);
   }
 
   // ------------------------------------------------------------------

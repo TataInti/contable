@@ -1,12 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { requireTaxRegimeEnabled, TaxRegimeDisabledError } from "./tax-regime-guard.js";
-import { taxRegimeFlagCode } from "../flags/feature-flag-service.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  requireTaxRegimeEnabled,
+  TaxRegimeDisabledError,
+  TaxRegimeModuleRequiredError,
+  type TaxRegimeModuleForGuard,
+} from "./tax-regime-guard.js";
 import type { FeatureFlagService } from "../flags/feature-flag-service.js";
-
-/**
- * G6-10: activación progresiva por régimen fiscal.
- * Test de la lógica pura del guard, sin montar sesión HTTP ni DB.
- */
 
 const ctx = {
   userId: "11111111-1111-4111-8111-111111111111",
@@ -14,54 +13,94 @@ const ctx = {
   actorKind: "USER" as const,
 };
 
-function mockFlags(enabled: Record<string, boolean>): Pick<FeatureFlagService, "isEnabled"> {
+function mockFlags(enabled: Record<string, boolean>) {
   return {
-    isEnabled: async (_ctx, code, _clientId) => enabled[code] ?? false,
-  };
+    isEnabled: vi.fn(async (_ctx, code: string) => enabled[code] ?? false),
+  } as unknown as FeatureFlagService & { isEnabled: ReturnType<typeof vi.fn> };
 }
 
-describe("taxRegimeFlagCode (G6-10)", () => {
-  it("mapea cada régimen a su flag", () => {
-    expect(taxRegimeFlagCode("RI")).toBe("TAX_RI");
-    expect(taxRegimeFlagCode("IIBB_LOCAL_TUC")).toBe("TAX_IIBB_LOCAL_TUC");
-    expect(taxRegimeFlagCode("TEM_SMT")).toBe("TAX_TEM_SMT");
-    expect(taxRegimeFlagCode("CM_ART2")).toBe("TAX_CM_ART2");
-    expect(taxRegimeFlagCode("MONOTRIBUTO")).toBe("TAX_MONOTRIBUTO");
-  });
+const iibbModule: TaxRegimeModuleForGuard = {
+  key: "TAX_IIBB_LOCAL_TUC",
+  flagCode: "TAX_IIBB_LOCAL_TUC",
+  isActive: true,
+};
+const alwaysEnabledModule: TaxRegimeModuleForGuard = {
+  key: "ALWAYS_ENABLED",
+  flagCode: null,
+  isActive: true,
+};
 
-  it("devuelve null para régimen sin flag dedicado", () => {
-    expect(taxRegimeFlagCode("DESCONOCIDO")).toBeNull();
-  });
-});
+describe("requireTaxRegimeEnabled", () => {
+  it("usa el módulo elegido aunque se renombre el régimen", async () => {
+    const flags = mockFlags({ TAX: true, TAX_IIBB_LOCAL_TUC: true });
 
-describe("requireTaxRegimeEnabled (G6-10)", () => {
-  it("lanza TaxRegimeDisabledError si TAX está deshabilitado", async () => {
     await expect(
-      requireTaxRegimeEnabled(mockFlags({ TAX: false }) as FeatureFlagService, ctx, "RI"),
+      requireTaxRegimeEnabled(flags, ctx, "CODIGO_RENOMBRADO", iibbModule),
+    ).resolves.toBe(true);
+
+    expect(flags.isEnabled).toHaveBeenNthCalledWith(1, ctx, "TAX", undefined);
+    expect(flags.isEnabled).toHaveBeenNthCalledWith(2, ctx, "TAX_IIBB_LOCAL_TUC", undefined);
+  });
+
+  it("bloquea cuando el flag del módulo elegido está apagado", async () => {
+    await expect(
+      requireTaxRegimeEnabled(
+        mockFlags({ TAX: true, TAX_IIBB_LOCAL_TUC: false }),
+        ctx,
+        "IIBB_LOCAL_TUC",
+        iibbModule,
+      ),
     ).rejects.toBeInstanceOf(TaxRegimeDisabledError);
   });
 
-  it("lanza TaxRegimeDisabledError si el flag del régimen está deshabilitado", async () => {
+  it("siempre habilitado omite el flag particular, no el flag global TAX", async () => {
+    const enabled = mockFlags({ TAX: true });
     await expect(
-      requireTaxRegimeEnabled(mockFlags({ TAX: true, TAX_RI: false }) as FeatureFlagService, ctx, "RI"),
+      requireTaxRegimeEnabled(enabled, ctx, "REGIMEN_LIBRE", alwaysEnabledModule),
+    ).resolves.toBe(true);
+    expect(enabled.isEnabled).toHaveBeenCalledTimes(1);
+
+    const disabled = mockFlags({ TAX: false });
+    await expect(
+      requireTaxRegimeEnabled(disabled, ctx, "REGIMEN_LIBRE", alwaysEnabledModule),
     ).rejects.toBeInstanceOf(TaxRegimeDisabledError);
+    expect(disabled.isEnabled).toHaveBeenCalledTimes(1);
   });
 
-  it("resuelve true cuando TAX y el flag del régimen están habilitados", async () => {
-    await expect(
-      requireTaxRegimeEnabled(mockFlags({ TAX: true, TAX_RI: true }) as FeatureFlagService, ctx, "RI"),
-    ).resolves.toBe(true);
+  it.each([
+    ["null", null],
+    ["undefined", undefined],
+    ["inactivo", { key: "TAX_RI", flagCode: "TAX_RI", isActive: false }],
+    ["flag desconocido", { key: "TAX_RI", flagCode: "TAX_NOT_ALLOWED", isActive: true }],
+    ["ALWAYS_ENABLED con flag", { key: "ALWAYS_ENABLED", flagCode: "TAX_RI", isActive: true }],
+  ] as Array<[string, TaxRegimeModuleForGuard]>)(
+    "falla cerrado con guía si el módulo es %s",
+    async (_label, module) => {
+      await expect(
+        requireTaxRegimeEnabled(mockFlags({ TAX: true, TAX_RI: true }), ctx, "REGIMEN", module),
+      ).rejects.toMatchObject({
+        code: "REGIME_MODULE_REQUIRED",
+        statusCode: 409,
+        message: "Elegí el módulo que habilita este régimen",
+        details: { path: ["moduleId"] },
+      });
+    },
+  );
+
+  it("TaxRegimeModuleRequiredError da una guía y señala moduleId", () => {
+    const error = new TaxRegimeModuleRequiredError();
+    expect(error).toMatchObject({
+      name: "TaxRegimeModuleRequiredError",
+      code: "REGIME_MODULE_REQUIRED",
+      statusCode: 409,
+      message: "Elegí el módulo que habilita este régimen",
+      details: { path: ["moduleId"] },
+    });
   });
 
-  it("permite régimen sin flag dedicado cuando TAX está habilitado", async () => {
-    await expect(
-      requireTaxRegimeEnabled(mockFlags({ TAX: true }) as FeatureFlagService, ctx, "DESCONOCIDO"),
-    ).resolves.toBe(true);
-  });
-
-  it("TaxRegimeDisabledError expone code y statusCode 409", () => {
-    const err = new TaxRegimeDisabledError("RI");
-    expect(err.code).toBe("TAX_REGIME_DISABLED");
-    expect(err.statusCode).toBe(409);
+  it("TaxRegimeDisabledError expone el código y el estado 409", () => {
+    const error = new TaxRegimeDisabledError("RI");
+    expect(error.code).toBe("TAX_REGIME_DISABLED");
+    expect(error.statusCode).toBe(409);
   });
 });
