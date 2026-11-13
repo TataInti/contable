@@ -160,6 +160,14 @@ test("ciclo vertical del legajo (§10)", async ({ request, playwright }) => {
   });
   const profileId = await resolveProfileId(request, base, profile.status());
 
+  // El cliente se inscribe en el régimen: sin inscripción no hay obligación.
+  const registration = await request.post(
+    `${base}/tax-registrations`,
+    { headers, data: { profileVersionId: profileId, regimeId, validFrom: "2020-01-01" } },
+  );
+  // 409: ya quedó inscripto en una corrida anterior.
+  expect([201, 409]).toContain(registration.status());
+
   const obligation = await request.post(`${base}/tax-obligations`, {
     headers,
     data: { profileVersionId: profileId, regimeId, periodId, dueDate: `${runYear + 1}-02-20` },
