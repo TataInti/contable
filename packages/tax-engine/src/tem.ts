@@ -33,6 +33,14 @@ export const TEM_SMT_ENGINE_VERSION = "ar-tem-smt-v1.1.0";
 export interface TemSmtInput extends TaxEngineInput {
   /** Ingresos por actividad (código del nomenclador → neto gravado). */
   incomeByActivity: Record<string, string>;
+  /**
+   * Modo de aplicación del mínimo. El modo vigente suma el mínimo de cada
+   * actividad y después aplica el mínimo global ("SUM_BY_ACTIVITY"). La
+   * hipótesis alternativa de la ordenanza (total de actividades no inferior
+   * al mínimo de mayor rendimiento fiscal) se expresa con "HIGHEST_YIELD".
+   * El valor por defecto conserva el comportamiento existente.
+   */
+  minimumMode?: TemMinimumMode;
   /** Saldos y créditos previos del municipio. */
   balances?: {
     /** Saldo a favor anterior. */
@@ -51,14 +59,24 @@ export interface TemSmtInput extends TaxEngineInput {
   declaredParameters?: readonly LocalTaxDeclaredParameter[];
 }
 
+export type TemMinimumMode = "SUM_BY_ACTIVITY" | "HIGHEST_YIELD";
+
 export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
   const engineVersion =
     input.engineVersion === TEM_SMT_LEGACY_ENGINE_VERSION
       ? TEM_SMT_LEGACY_ENGINE_VERSION
       : TEM_SMT_ENGINE_VERSION;
   const strict = engineVersion === TEM_SMT_ENGINE_VERSION;
+  const typed = input.ruleMode === "TYPED";
+  const minimumMode = input.minimumMode ?? "SUM_BY_ACTIVITY";
   const rounding = input.rounding ?? {};
   const rules = new Map(input.rules.map((r) => [r.concept, r]));
+  const typedRulesByActivity = new Map(
+    input.rules
+      .filter((rule) => rule.kind === "RATE" && rule.activityId)
+      .map((rule) => [rule.activityId!, rule]),
+  );
+  const typedDefaultRule = input.rules.find((rule) => rule.kind === "RATE" && rule.isDefault);
   const lines: TaxEngineResult["lines"] = [];
   const warnings: string[] = [];
   const blocks: string[] = [];
@@ -82,8 +100,13 @@ export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
   for (const [activity, incomeStr] of activityEntries) {
     const income = dec(incomeStr);
     totalBase = totalBase.plus(income);
-    const rule = rules.get(activity);
-    const rate = rule?.rate !== undefined ? rule.rate : rules.get("DEFAULT")?.rate;
+    const rule = typed
+      ? activity === ""
+        ? typedDefaultRule
+        : typedRulesByActivity.get(activity)
+      : rules.get(activity);
+    const fallbackRule = typed ? typedDefaultRule : rules.get("DEFAULT");
+    const rate = rule?.rate !== undefined ? rule.rate : fallbackRule?.rate;
     if (rate === undefined) {
       const message = `Actividad ${activity} sin alícuota configurada; se omitió`;
       if (strict) blocks.push(message);
@@ -92,8 +115,13 @@ export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
     }
     const tax = applyRate(income, rate);
     const activityMinimum = strict ? rule?.minimum : undefined;
+    const appliesActivityMinimum =
+      strict && !typed && minimumMode === "SUM_BY_ACTIVITY";
     const determinedTax =
-      activityMinimum !== undefined && income.isPositive() && tax.lessThan(activityMinimum)
+      appliesActivityMinimum &&
+      activityMinimum !== undefined &&
+      income.isPositive() &&
+      tax.lessThan(activityMinimum)
         ? activityMinimum
         : tax;
     activityLines.push({
@@ -124,12 +152,26 @@ export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
   );
 
   // --- Mínimo ---
-  const minimum = input.minimum !== undefined ? input.minimum : rules.get("MINIMO")?.minimum;
+  const minimum = input.minimum !== undefined
+    ? input.minimum
+    : typed
+      ? undefined
+      : rules.get("MINIMO")?.minimum;
+  const highestYieldMinimum = minimumMode === "HIGHEST_YIELD"
+    ? activityLines.reduce<DecimalValue | undefined>((highest, line) => {
+        if (line.minimum === undefined) return highest;
+        return highest === undefined || line.minimum.greaterThan(highest)
+          ? line.minimum
+          : highest;
+      }, minimum)
+    : minimum;
+  const effectiveMinimum = highestYieldMinimum;
   let amountDue: DecimalValue;
   let appliedMinimum = false;
-  const amountBeforeGlobalMinimum = strict ? totalAfterActivityMinimums : totalByRate;
-  if (minimum !== undefined && amountBeforeGlobalMinimum.lessThan(minimum)) {
-    amountDue = minimum;
+  const amountBeforeGlobalMinimum =
+    strict && minimumMode === "SUM_BY_ACTIVITY" ? totalAfterActivityMinimums : totalByRate;
+  if (effectiveMinimum !== undefined && amountBeforeGlobalMinimum.lessThan(effectiveMinimum)) {
+    amountDue = effectiveMinimum;
     appliedMinimum = true;
   } else {
     amountDue = amountBeforeGlobalMinimum;
@@ -140,7 +182,11 @@ export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
     for (const declared of [...(input.declaredParameters ?? [])].sort((left, right) =>
       `${left.activity}:${left.sourceId}`.localeCompare(`${right.activity}:${right.sourceId}`),
     )) {
-      const rule = rules.get(declared.activity) ?? rules.get("DEFAULT");
+      const rule = typed
+        ? declared.activity === ""
+          ? typedDefaultRule
+          : typedRulesByActivity.get(declared.activity)
+        : rules.get(declared.activity) ?? rules.get("DEFAULT");
       if (declared.rate !== undefined) {
         const sourceRate = dec(declared.rate).div(100);
         if (rule?.rate === undefined || !sourceRate.equals(rule.rate)) {
@@ -178,7 +224,7 @@ export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
     );
   }
   if (appliedMinimum) {
-    subtotals["MINIMO_APLICADO"] = fmtMoney(roundFor(minimum!, "total", rounding.total));
+    subtotals["MINIMO_APLICADO"] = fmtMoney(roundFor(effectiveMinimum!, "total", rounding.total));
   }
   subtotals["RETENCIONES"] = fmtMoney(roundFor(withholding, "retenciones", rounding.retenciones));
   subtotals["PERCEPCIONES"] = fmtMoney(roundFor(perception, "percepciones", rounding.percepciones));
@@ -216,9 +262,12 @@ export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
   if (appliedMinimum) {
     lines.push({
       concept: "MINIMO",
-      formula: `aplicado mínimo ${fmtMoney(minimum!)}`,
-      inputs: { minimum: fmtMoney(minimum!) },
-      result: fmtMoney(minimum!),
+      formula:
+        minimumMode === "HIGHEST_YIELD"
+          ? `aplicado mínimo de mayor rendimiento fiscal ${fmtMoney(effectiveMinimum!)}`
+          : `aplicado mínimo ${fmtMoney(effectiveMinimum!)}`,
+      inputs: { minimum: fmtMoney(effectiveMinimum!) },
+      result: fmtMoney(effectiveMinimum!),
     });
   }
   for (const [concept, value] of [
@@ -238,7 +287,16 @@ export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
     engineVersion,
     period: input.period,
     incomeByActivity: input.incomeByActivity,
-    rules: input.rules.map((r) => ({ concept: r.concept, rate: r.rate?.toString(), validFrom: r.validFrom })),
+    rules: input.rules.map((r) => ({
+      concept: r.concept,
+      rate: r.rate?.toString(),
+      validFrom: r.validFrom,
+      ...(typed
+        ? { kind: r.kind ?? null, activityId: r.activityId ?? null, isDefault: r.isDefault ?? false }
+        : {}),
+    })),
+    ...(typed ? { ruleMode: "TYPED" as const } : {}),
+    ...(minimumMode === "HIGHEST_YIELD" ? { minimumMode } : {}),
     credits: input.credits
       ? {
           withholding: input.credits.withholding.toString(),

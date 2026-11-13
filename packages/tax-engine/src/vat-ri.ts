@@ -41,8 +41,21 @@ export interface VatRiInput {
   missingRateVoucherIds?: string[];
   /** Diferencias entre neto gravado del libro y bases distribuidas por alícuota. */
   bookDifferences?: Array<{ voucherId: string; difference: Decimal }>;
-  /** Reglas: tasa por alícuota (concept = "IVA_21", "IVA_105", "IVA_27"). */
-  rules: Array<{ concept: string; rate?: Decimal; validFrom?: string; validTo?: string }>;
+  /**
+   * Reglas: en modo LEGACY la tasa se busca por concepto ("IVA_21", etc.).
+   * En modo TYPED se busca por tipo RATE y la alícuota numérica (el sujeto de
+   * IVA es la alícuota); la etiqueta `concept` no decide.
+   */
+  rules: Array<{
+    id?: string;
+    concept: string;
+    kind?: string;
+    rate?: Decimal;
+    validFrom?: string;
+    validTo?: string;
+  }>;
+  /** Identifica el contrato tipado de reglas sin cambiar las versiones legacy. */
+  ruleMode?: "LEGACY" | "TYPED";
   /** Crédito Dto. 814 desde F.931 (remuneración neta × tasa). */
   decree814?: {
     netRemuneration: Decimal;
@@ -95,12 +108,20 @@ export function calculateVatRi(input: VatRiInput): TaxEngineResult {
   }
 
   // --- Débito/crédito por alícuota (neto de NC) ---
+  const typed = input.ruleMode === "TYPED";
   const rates: Array<Exclude<VatRiRate, "EXENTO" | "NO_GRAVADO">> = ["21", "10.5", "27"];
   const rateRules = new Map(input.rules.map((r) => [r.concept, r]));
   const ruleConceptByRate: Record<Exclude<VatRiRate, "EXENTO" | "NO_GRAVADO">, string> = {
     "21": "IVA_21",
     "10.5": "IVA_105",
     "27": "IVA_27",
+  };
+  const rateRuleFor = (rate: Exclude<VatRiRate, "EXENTO" | "NO_GRAVADO">) => {
+    if (!typed) return rateRules.get(ruleConceptByRate[rate]);
+    const expected = dec(rate).div(100);
+    return input.rules.find(
+      (rule) => rule.kind === "RATE" && rule.rate !== undefined && rule.rate.equals(expected),
+    );
   };
   type RateTotal = { base: Decimal; tax: Decimal };
   const debitByRate = new Map<VatRiRate, RateTotal>();
@@ -120,10 +141,14 @@ export function calculateVatRi(input: VatRiInput): TaxEngineResult {
       continue;
     }
     const ruleConcept = ruleConceptByRate[c.rate];
-    const rule = rateRules.get(ruleConcept);
+    const rule = rateRuleFor(c.rate);
     if (!rule?.rate) {
       if (!missingRules.has(ruleConcept)) {
-        blocks.push(`Falta la regla activa ${ruleConcept} para calcular IVA`);
+        blocks.push(
+          typed
+            ? `Falta la regla activa de alícuota ${c.rate}% para calcular IVA`
+            : `Falta la regla activa ${ruleConcept} para calcular IVA`,
+        );
         missingRules.add(ruleConcept);
       }
       continue;
@@ -155,7 +180,7 @@ export function calculateVatRi(input: VatRiInput): TaxEngineResult {
     const debit = debitByRate.get(rate);
     const credit = creditByRate.get(rate);
     if (!debit && !credit) continue;
-    const rule = rateRules.get(ruleConceptByRate[rate]);
+    const rule = rateRuleFor(rate);
     if (debit && (!debit.base.isZero() || !debit.tax.isZero())) {
       lines.push({
         concept: `DEBITO_IVA_${rate.replace(".", "")}`,
@@ -210,22 +235,36 @@ export function calculateVatRi(input: VatRiInput): TaxEngineResult {
   }
 
   // --- Crédito Dto. 814 ---
+  // En modo TYPED el crédito especial se identifica por tipo de regla
+  // (SPECIAL_CREDIT), nunca por la etiqueta `concept`; el sujeto es la tasa.
+  const typedSpecialCreditRate = typed
+    ? input.rules.find((rule) => rule.kind === "SPECIAL_CREDIT")?.rate
+    : undefined;
+  const decree814Rate = input.decree814?.rate ?? typedSpecialCreditRate;
   let decree814Credit = dec(0);
   if (input.decree814) {
     if ((input.decree814.runCount ?? 1) !== 1) {
       blocks.push("Dto. 814 requiere una única corrida F.931 revisada para el período");
-    } else if (!input.decree814.rate) {
-      blocks.push("Falta la regla activa DTO_814 para calcular el crédito por contribuciones");
-    } else if (input.decree814.rate.isNegative() || input.decree814.rate.greaterThan(1)) {
-      blocks.push("La tasa DTO_814 debe expresarse como decimal entre 0 y 1");
+    } else if (!decree814Rate) {
+      blocks.push(
+        typed
+          ? "Falta la regla activa de crédito especial para calcular el crédito por contribuciones"
+          : "Falta la regla activa DTO_814 para calcular el crédito por contribuciones",
+      );
+    } else if (decree814Rate.isNegative() || decree814Rate.greaterThan(1)) {
+      blocks.push(
+        typed
+          ? "La tasa del crédito especial debe expresarse como decimal entre 0 y 1"
+          : "La tasa DTO_814 debe expresarse como decimal entre 0 y 1",
+      );
     } else {
-      decree814Credit = applyRate(input.decree814.netRemuneration, input.decree814.rate);
+      decree814Credit = applyRate(input.decree814.netRemuneration, decree814Rate);
       lines.push({
         concept: "CREDITO_DTO_814",
-        formula: `remuneración neta(${fmtMoney(input.decree814.netRemuneration)}) × tasa(${input.decree814.rate})`,
+        formula: `remuneración neta(${fmtMoney(input.decree814.netRemuneration)}) × tasa(${decree814Rate})`,
         inputs: {
           base: fmtMoney(input.decree814.netRemuneration),
-          rate: input.decree814.rate.toString(),
+          rate: decree814Rate.toString(),
         },
         result: fmtMoney(decree814Credit),
       });
@@ -299,11 +338,16 @@ export function calculateVatRi(input: VatRiInput): TaxEngineResult {
     bookDifferences: (input.bookDifferences ?? [])
       .map((item) => ({ voucherId: item.voucherId, difference: item.difference.toString() }))
       .sort((left, right) => left.voucherId.localeCompare(right.voucherId)),
-    rules: input.rules.map((r) => ({ concept: r.concept, rate: r.rate?.toString() ?? null })),
+    rules: input.rules.map((r) => ({
+      concept: r.concept,
+      rate: r.rate?.toString() ?? null,
+      ...(typed ? { kind: r.kind ?? null } : {}),
+    })),
+    ...(typed ? { ruleMode: "TYPED" as const } : {}),
     decree814: input.decree814
       ? {
           netRemuneration: input.decree814.netRemuneration.toString(),
-          rate: input.decree814.rate?.toString() ?? null,
+          rate: decree814Rate?.toString() ?? null,
           runCount: input.decree814.runCount ?? 1,
         }
       : null,

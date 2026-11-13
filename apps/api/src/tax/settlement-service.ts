@@ -378,6 +378,12 @@ export class SettlementService {
       const isCmEngine = engineKey === "iibb-cm-art2" || engineKey === "iibb-cm-art2-legacy";
       const isTypedRuleVersion =
         activeVersion.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3;
+      if (isTypedRuleVersion && engineKey.endsWith("-legacy")) {
+        throw new SettlementError(
+          "RULE_VERSION_NOT_FOUND",
+          `La versión tipada usa el motor legacy "${engineKey}"; se exige un motor con lector tipado`,
+        );
+      }
       const rateRules = await tx.taxRateRule.findMany({
         where: {
           ruleVersionId: activeVersion.id,
@@ -417,24 +423,33 @@ export class SettlementService {
               `El tipo ${rule.kind.key} de la regla ${rule.id} no está permitido por la familia del régimen`,
             );
           }
-          const needsActivity = engineKey === "iibb-local-tuc" && rule.kind.key === "RATE";
+          const isActivitySubjectEngine =
+            engineKey === "iibb-local-tuc" ||
+            engineKey === "tem-smt" ||
+            engineKey === "tem-smt-legacy";
+          const needsActivity = isActivitySubjectEngine && rule.kind.key === "RATE";
           const isCm03 = engineKey === "iibb-cm-art2" || engineKey === "iibb-cm-art2-legacy";
           const needsJurisdiction = isCm03 && (
             (rule.kind.key === "RATE" && !rule.isDefault && !rule.jurisdictionId) ||
             (rule.kind.key === "COEFFICIENT" && !rule.jurisdictionId)
           );
           const needsCategory = engineKey === "monotributo" && rule.kind.key === "FEE";
+          const needsRate = engineKey === "vat-ri" &&
+            (rule.kind.key === "RATE" || rule.kind.key === "SPECIAL_CREDIT");
           if (
             (needsActivity && !rule.activityId && !rule.isDefault) ||
             needsJurisdiction ||
             (needsCategory && !rule.categoryCode) ||
+            (needsRate && rule.rate === null) ||
             (rule.isDefault && rule.kind.key !== "RATE")
           ) {
             throw new SettlementError(
               needsActivity
                 ? "ACTIVITY_RULE_UNRESOLVED"
                 : "RULE_SUBJECT_UNRESOLVED",
-              `La regla ${rule.id} (${rule.kind.key}) no tiene resuelto el sujeto requerido`,
+              needsRate && rule.rate === null
+                ? `La regla ${rule.id} (${rule.kind.key}) no tiene tasa`
+                : `La regla ${rule.id} (${rule.kind.key}) no tiene resuelto el sujeto requerido`,
             );
           }
         }
@@ -484,6 +499,9 @@ export class SettlementService {
               },
             },
           ],
+        },
+        include: {
+          conceptRef: { select: { id: true, key: true, behavior: true } },
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       });
@@ -669,12 +687,14 @@ export class SettlementService {
         }
       }
       const typedRuleSubjects = new Set<string>();
+      const activitySubjectEngine =
+        engineKey === "iibb-local-tuc" || engineKey === "tem-smt" || engineKey === "tem-smt-legacy";
       const rules = rateRules.map((r) => {
         if (isTypedRuleVersion) {
           const kind = r.kind!.key;
           const subject = r.isDefault
             ? null
-            : kind === "RATE" && engineKey === "iibb-local-tuc"
+            : kind === "RATE" && activitySubjectEngine
               ? r.activityId ?? null
               : kind === "RATE" || kind === "COEFFICIENT"
                 ? r.jurisdictionId ?? null
@@ -694,7 +714,7 @@ export class SettlementService {
           const storedRate = r.rate !== null ? dec(r.rate.toString()) : undefined;
           const normalized = storedRate === undefined
             ? undefined
-            : kind === "RATE"
+            : kind === "RATE" || kind === "SPECIAL_CREDIT"
               ? storedRate.div(100)
               : storedRate;
           return {
@@ -916,7 +936,8 @@ export class SettlementService {
         }
       }
       for (const a of adjustments) {
-        if (a.reviewedAt && a.amount.isPositive() && a.concept === "GASTO_GERENCIAL_COMPUTABLE") {
+        const behavior = a.conceptRef?.behavior;
+        if (a.reviewedAt && a.amount.isPositive() && behavior === "PURCHASE_FACT") {
           facts.push({
             id: `adj:${a.id}`,
             direction: "PURCHASE",
@@ -933,6 +954,8 @@ export class SettlementService {
             periodId: a.periodId,
             voucherId: a.voucherId,
             ruleVersionId: a.ruleVersionId,
+            conceptId: a.conceptRef?.id ?? null,
+            conceptKey: a.conceptRef?.key ?? null,
             concept: a.concept,
             amount: a.amount.toString(),
             reason: a.reason,
@@ -1060,9 +1083,10 @@ export class SettlementService {
           voucher.direction === "SALE" &&
           voucher.lines.some((line) => line.activityCode && line.netAmount),
       );
-      const isTypedIibb = isTypedRuleVersion && engineKey === "iibb-local-tuc";
+      const isTypedActivityEngine =
+        isTypedRuleVersion && (engineKey === "iibb-local-tuc" || engineKey === "tem-smt");
       const activitiesByCode = new Map<string, Array<{ id: string; jurisdictionId: string }>>();
-      if (isTypedIibb) {
+      if (isTypedActivityEngine) {
         const activityCodes = [...new Set(vouchers.flatMap((voucher) => {
           const imported = (voucher.importRow?.normalized ?? null) as Record<string, unknown> | null;
           return [
@@ -1116,7 +1140,7 @@ export class SettlementService {
           const declaredMinimum = importedParameters?.["minimum"];
           localTaxDeclaredParameters.push({
             sourceId: v.importRow.id,
-            activity: isTypedIibb ? resolveActivityId(importedActivity) : importedActivity,
+            activity: isTypedActivityEngine ? resolveActivityId(importedActivity) : importedActivity,
             ...(typeof declaredRate === "string" && declaredRate.length > 0
               ? { rate: declaredRate }
               : {}),
@@ -1128,7 +1152,7 @@ export class SettlementService {
         for (const line of v.lines) {
           const activityCode = line.activityCode;
           const legacyActivityCode = activityCode ?? "DEFAULT";
-          const activity = isTypedIibb
+          const activity = isTypedActivityEngine
             ? !activityCode || activityCode.trim().length === 0
               ? ""
               : resolveActivityId(activityCode)
@@ -1162,7 +1186,7 @@ export class SettlementService {
           });
         }
         if (v.lines.length === 0 && !hasExplicitActivityLines && classification?.activityCode) {
-          const activity = isTypedIibb
+          const activity = isTypedActivityEngine
             ? resolveActivityId(classification.activityCode)
             : classification.activityCode;
           const net = v.components
@@ -1216,17 +1240,13 @@ export class SettlementService {
         ? dec(applicableMinimums[0].amount.toString())
         : undefined;
       const ivaRestitution = adjustments
-        .filter((adjustment) => ["IVA_RESTITUCION", "RESTITUCION"].includes(adjustment.concept))
+        .filter((adjustment) => adjustment.conceptRef?.behavior === "IVA_RESTITUTION")
         .reduce((sum, adjustment) => sum.plus(adjustment.amount), new Prisma.Decimal(0));
       const ivaCompensation = adjustments
-        .filter((adjustment) => ["IVA_COMPENSACION", "COMPENSACION"].includes(adjustment.concept))
+        .filter((adjustment) => adjustment.conceptRef?.behavior === "IVA_COMPENSATION")
         .reduce((sum, adjustment) => sum.plus(adjustment.amount), new Prisma.Decimal(0));
       const iibbOtherCredits = adjustments
-        .filter((adjustment) =>
-          ["IIBB_OTRO_CREDITO", "IIBB_OTROS_CREDITOS", "OTRO_CREDITO"].includes(
-            adjustment.concept,
-          ),
-        )
+        .filter((adjustment) => adjustment.conceptRef?.behavior === "IIBB_OTHER_CREDIT")
         .reduce((sum, adjustment) => sum.plus(adjustment.amount), new Prisma.Decimal(0));
 
       // Registro engineKey → calculador. El tipo `Record<TaxEngineKey, ...>`
@@ -1256,6 +1276,7 @@ export class SettlementService {
           period: periodRange,
           facts: facts as TaxFact[],
           rules,
+          ...(isTypedRuleVersion ? { ruleMode: "TYPED" as const } : {}),
           incomeByActivity,
           ...(minimum !== undefined ? { minimum } : {}),
           credits: {
@@ -1470,7 +1491,18 @@ export class SettlementService {
       };
       const calculators: Record<TaxEngineKey, () => Promise<TaxEngineResult>> = {
         "vat-ri": async () => {
-          const decreeRule = rules.find((rule) => rule.concept === "DTO_814");
+          const specialCreditRules = rules.filter(
+            (rule) => "kind" in rule && rule.kind === "SPECIAL_CREDIT",
+          );
+          if (isTypedRuleVersion && specialCreditRules.length > 1) {
+            throw new SettlementError(
+              "RULE_SUBJECT_UNRESOLVED",
+              `La versión normativa tiene ${specialCreditRules.length} reglas de crédito especial; se exige una sola`,
+            );
+          }
+          const decreeRule = isTypedRuleVersion
+            ? specialCreditRules[0]
+            : rules.find((rule) => rule.concept === "DTO_814");
           const netRemuneration = f931Runs.reduce(
             (sum, run) => sum.plus(run.netRemuneration),
             new Prisma.Decimal(0),
@@ -1484,6 +1516,7 @@ export class SettlementService {
               difference: dec(item.difference.toString()),
             })),
             rules,
+            ...(isTypedRuleVersion ? { ruleMode: "TYPED" as const } : {}),
             ...(f931Runs.length > 0
               ? {
                   decree814: {
