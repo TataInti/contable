@@ -24,6 +24,7 @@ export const ICON_NAMES = [
   "message",
   "shield",
   "check",
+  "info",
   "alert",
   "download",
   "plus",
@@ -156,6 +157,12 @@ const ICON_GLYPHS: Record<IconName, ReactNode> = {
     </>
   ),
   check: <path d="m4.5 12.5 4.7 4.7L19.5 7" />,
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 8h.01" />
+    </>
+  ),
   alert: (
     <>
       <path d="M10.3 4.5 2.7 18a2 2 0 0 0 1.8 3h15a2 2 0 0 0 1.8-3L13.7 4.5a2 2 0 0 0-3.4 0Z" />
