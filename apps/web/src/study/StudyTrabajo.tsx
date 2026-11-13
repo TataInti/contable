@@ -445,9 +445,9 @@ export function StudyTrabajo() {
             onChange={(event) => setRequest({ ...request, dueDate: event.target.value })}
           />
           {createRequest.isError ? (
-            <p className="form-error study-inline-form__feedback" role="alert">
+            <Notice tone="error" className="study-inline-form__feedback">
               No se pudo crear el pedido. Revisá los datos e intentá nuevamente.
-            </p>
+            </Notice>
           ) : null}
           <div className="study-inline-form__actions">
             <Button
@@ -491,14 +491,14 @@ export function StudyTrabajo() {
             </small>
           </label>
           {!activeFiscalYear ? (
-            <p className="form-error" role="alert">
+            <Notice tone="error">
               Seleccioná un período contable abierto antes de iniciar el cierre.
-            </p>
+            </Notice>
           ) : null}
           {createClose.isError ? (
-            <p className="form-error" role="alert">
+            <Notice tone="error">
               {createClose.error.message}
-            </p>
+            </Notice>
           ) : null}
           <div className="study-inline-form__actions">
             <Button
@@ -656,9 +656,11 @@ export function StudyTrabajo() {
                 ))}
               </div>
             ) : (
-              <p className="muted-copy">
-                Todavía no hay mensajes. Dejá una instrucción o consulta para el cliente.
-              </p>
+              <EmptyState
+                size="compact"
+                title="Todavía no hay mensajes"
+                description="Dejá una instrucción o consulta para el cliente."
+              />
             )}
             {capabilities.has("message.shared") ? (
               <form
@@ -681,7 +683,7 @@ export function StudyTrabajo() {
                   />
                 </label>
                 {sendMessage.isError ? (
-                  <p className="form-error">{sendMessage.error.message}</p>
+                  <Notice tone="error">{sendMessage.error.message}</Notice>
                 ) : null}
                 <div className="study-inline-form__actions">
                   <Button

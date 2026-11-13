@@ -200,9 +200,9 @@ function MutationError({ error }: { error: unknown }) {
   if (!error || codeConflict(error)) return null;
   if (error instanceof ApiError) return <FieldErrorsFromDetails error={error} />;
   return (
-    <p className="form-error" role="alert">
+    <Notice tone="error">
       {error instanceof Error ? error.message : "Ocurrió un error inesperado."}
-    </p>
+    </Notice>
   );
 }
 
@@ -2013,17 +2013,20 @@ export function StudyCatalogosFiscales() {
             </p>
             {calcFamiliesQuery.isLoading ? <p className="muted-copy">Cargando familias…</p> : null}
             {!calcFamiliesQuery.isLoading && !calcFamiliesQuery.isError && calcFamilies.length === 0 ? (
-              <p className="form-error" role="alert">No hay familias de cálculo disponibles para elegir.</p>
+              <Notice tone="warning">Todavía no hay familias de cálculo disponibles para elegir.</Notice>
             ) : null}
             {calcFamiliesQuery.isError ? (
-              <p className="form-error" role="alert">
-                No pudimos cargar las familias de cálculo. <Button type="button" variant="ghost" size="sm" onClick={() => void calcFamiliesQuery.refetch()}>Reintentar</Button>
-              </p>
+              <Notice
+                tone="error"
+                action={<Button type="button" variant="ghost" size="sm" onClick={() => void calcFamiliesQuery.refetch()}>Reintentar</Button>}
+              >
+                No pudimos cargar las familias de cálculo.
+              </Notice>
             ) : null}
             {apiFieldIssue(editingRegime ? updateRegime.error : createRegime.error, "calcFamilyId") ? (
-              <p className="form-error" role="alert">
+              <Notice tone="error">
                 {apiFieldIssue(editingRegime ? updateRegime.error : createRegime.error, "calcFamilyId")}
-              </p>
+              </Notice>
             ) : null}
           </div>
           <div className="ds-field">
@@ -2604,12 +2607,15 @@ export function StudyCatalogosFiscales() {
             <p className="muted-copy">Esta familia se propone al crear regímenes; cada régimen puede tener otra.</p>
             {calcFamiliesQuery.isLoading ? <p className="muted-copy">Cargando familias…</p> : null}
             {calcFamiliesQuery.isError ? (
-              <p className="form-error" role="alert">
-                No pudimos cargar las familias de cálculo. <Button type="button" variant="ghost" size="sm" onClick={() => void calcFamiliesQuery.refetch()}>Reintentar</Button>
-              </p>
+              <Notice
+                tone="error"
+                action={<Button type="button" variant="ghost" size="sm" onClick={() => void calcFamiliesQuery.refetch()}>Reintentar</Button>}
+              >
+                No pudimos cargar las familias de cálculo.
+              </Notice>
             ) : null}
             {apiFieldIssue(createTaxType.error, "defaultFamilyId") ? (
-              <p className="form-error" role="alert">{apiFieldIssue(createTaxType.error, "defaultFamilyId")}</p>
+              <Notice tone="error">{apiFieldIssue(createTaxType.error, "defaultFamilyId")}</Notice>
             ) : null}
           </div>
           <MutationError error={createTaxType.error} />

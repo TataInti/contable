@@ -265,9 +265,9 @@ export function StudyReportes() {
           </div>
         )}
         {runReport.isError ? (
-          <p className="form-error" role="alert">
+          <Notice tone="error">
             {runReport.error.message}
-          </p>
+          </Notice>
         ) : null}
       </section>
 
@@ -385,9 +385,9 @@ export function StudyReportes() {
       </section>
 
       {exportRun.isError || revoke.isError ? (
-        <p className="form-error" role="alert">
+        <Notice tone="error">
           {(exportRun.error ?? revoke.error)?.message ?? "No se pudo completar la acción."}
-        </p>
+        </Notice>
       ) : null}
 
       {capabilities.has("bi.use") ? (
@@ -421,9 +421,9 @@ export function StudyReportes() {
             </Button>
           </div>
           {executeBi.isError ? (
-            <p className="form-error" role="alert">
+            <Notice tone="error">
               {executeBi.error.message}
-            </p>
+            </Notice>
           ) : null}
           {biResult ? (
             <div className="bi-result" aria-live="polite">

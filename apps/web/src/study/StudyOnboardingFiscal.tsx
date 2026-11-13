@@ -96,7 +96,7 @@ const FISCAL_STEPS: Array<{ key: FiscalStep; label: string }> = [
 function MutationError({ error }: { error: unknown }) {
   if (!error) return null;
   const message = error instanceof Error ? error.message : "Ocurrió un error inesperado.";
-  return <Notice tone="error" className="form-error">{message}</Notice>;
+  return <Notice tone="error">{message}</Notice>;
 }
 
 export function StudyOnboardingFiscal() {

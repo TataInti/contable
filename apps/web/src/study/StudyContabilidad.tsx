@@ -432,9 +432,9 @@ export function StudyContabilidad() {
             required
           />
           {createDraft.isError ? (
-            <p className="form-error study-form__actions" role="alert">
+            <Notice tone="error" className="study-form__actions">
               {createDraft.error.message}
-            </p>
+            </Notice>
           ) : null}
           <div className="study-form__actions">
             <span className="study-page__hint">Debe y haber se generan por el mismo importe.</span>
@@ -619,9 +619,9 @@ export function StudyContabilidad() {
           />
         )}
         {submitDraft.isError ? (
-          <p className="form-error" role="alert">
+          <Notice tone="error">
             {submitDraft.error.message}
-          </p>
+          </Notice>
         ) : null}
       </section>
 
@@ -630,21 +630,24 @@ export function StudyContabilidad() {
           <span className="loading-copy">Preparando el libro…</span>
         </div>
       ) : activeQuery.isError ? (
-        <EmptyState
+        <Notice
+          tone="error"
           title="No se pudo cargar esta vista"
-          description="Revisá el contexto seleccionado o reintentá en unos minutos."
           action={
             <Button variant="secondary" onClick={() => void activeQuery.refetch()}>
               Reintentar
             </Button>
           }
-        />
+        >
+          Revisá el contexto seleccionado o reintentá en unos minutos.
+        </Notice>
       ) : null}
 
       {!activeQuery.isLoading && !activeQuery.isError && view === "journal" ? (
         <section className="ledger-surface" aria-label="Libro diario">
           {journalRows.length === 0 ? (
             <EmptyState
+              kind={search ? "no-results" : "no-data"}
               title={search ? "No hay coincidencias" : "El diario está vacío"}
               description={
                 search

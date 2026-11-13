@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, Notice } from "@contable/design-system";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -182,11 +182,13 @@ export function PortalRentabilidad() {
       ) : query.isLoading ? (
         <PortalLoading label="Cargando rentabilidad…" />
       ) : query.isError ? (
-        <EmptyState
+        <Notice
+          tone="error"
           title="No pudimos cargar la rentabilidad"
-          description="Reintentá en unos minutos."
           action={<PortalRetryButton onRetry={() => void query.refetch()} />}
-        />
+        >
+          Reintentá en unos minutos.
+        </Notice>
       ) : rows.length === 0 ? (
         <EmptyState
           title="Sin rentabilidad publicada"

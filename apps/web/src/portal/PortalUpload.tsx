@@ -375,12 +375,13 @@ export function PortalUpload() {
           {documents.isLoading ? (
             <PortalLoading label="Cargando tus documentos…" />
           ) : documents.isError ? (
-            <EmptyState
-              size="compact"
+            <Notice
               title="No pudimos cargar tus documentos"
-              description="La carga sigue disponible aunque el historial no se muestre ahora."
               action={<PortalRetryButton onRetry={() => void documents.refetch()} />}
-            />
+              tone="error"
+            >
+              La carga sigue disponible aunque el historial no se muestre ahora.
+            </Notice>
           ) : (documents.data ?? []).length === 0 ? (
             <EmptyState
               size="compact"

@@ -18,7 +18,7 @@
 }
 
 .fiscal-catalog-page .dense-form__fields > .dense-form__full,
-.fiscal-catalog-page .dense-form__fields > .form-error,
+.fiscal-catalog-page .dense-form__fields > .ds-notice,
 .fiscal-catalog-page .dense-form__fields > p {
   grid-column: 1 / -1;
 }

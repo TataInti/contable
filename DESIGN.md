@@ -266,6 +266,58 @@ Las sombras del sistema están tokenizadas; las excepciones observadas son: `box
 
 `packages/design-system/src` es la fuente de los componentes compartidos. Su API pública incluye `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, `Notice`, las primitivas Dense, `StatusBadge`, `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction`, `AsyncState`, `Icon` y `SectionIndex`. Las rutas históricas de `apps/web/src/ui` reexportan los componentes migrados para conservar los imports existentes. La migración conserva sus clases, DOM, comportamiento y carga de CSS. El paquete expone `@contable/design-system/Dense.css`; el adaptador web lo importa antes de sus reglas contextuales para mantener el orden de la cascada.
 
+### Avisos y vacíos
+
+`Notice` presenta un único mensaje con iconografía, texto y una acción opcional. El icono o la marca acompaña al tono para que el significado también se distinga sin depender del color. Usá un solo aviso por estado y evitá colocarlo dentro de otra caja de aviso.
+
+| Tono | Cuándo usarlo | Anuncio accesible |
+|---|---|---|
+| `info` | Orientación o contexto que ayuda a continuar. | `role="status"` |
+| `success` | Una acción terminó correctamente y conviene confirmar el resultado. | `role="status"` |
+| `warning` | Hay un dato pendiente de revisar o una condición que permite continuar con atención. | `role="status"` |
+| `error` | Una consulta o acción falló y hace falta informar el siguiente paso. | `role="alert"` |
+
+El título de `Notice` es opcional. Sumá una acción cuando exista un siguiente paso concreto, por ejemplo `Reintentar`; mantené una sola acción primaria. Reservá `role="alert"` para errores; `info`, `success` y `warning` se anuncian como `status` con prioridad `polite`.
+
+`EmptyState` representa una colección sin contenido o una búsqueda sin coincidencias. Usá `kind="no-data"` cuando todavía no hay registros y `kind="no-results"` cuando los filtros o la búsqueda no encuentran elementos. Cada estado presenta un título y una explicación breve de una línea; sumá una única acción primaria cuando haya un paso claro. La carga se comunica con un estado de carga y los fallos con `Notice`, no con un vacío.
+
+**Textos modelo:**
+
+- Info: “El perfil está listo para revisar. Consultá los datos antes de guardar.”
+- Éxito: “Los cambios quedaron guardados. Continuá con la próxima tarea.”
+- Aviso: “Hay datos pendientes de revisar. Abrí el detalle para completar la ficha.”
+- Error: “Reintentá la consulta para volver a cargar la cartera.”
+- Sin datos: “Todavía no hay clientes” / “Creá el primer cliente para empezar.”
+- Sin resultados: “Ningún cliente coincide” / “Ajustá la búsqueda o los filtros para consultar otros clientes.”
+
+**Correcto:**
+
+```tsx
+<Notice
+  tone="warning"
+  title="Hay datos pendientes de revisar"
+  action={<Button onClick={openReview}>Abrir detalle</Button>}
+>
+  Revisá la ficha para continuar con el período.
+</Notice>
+
+<EmptyState
+  kind="no-results"
+  title="Ningún cliente coincide"
+  description="Ajustá la búsqueda o los filtros para consultar otros clientes."
+/>
+```
+
+**Incorrecto:**
+
+```tsx
+<div className="form-error" role="status">Falló la consulta.</div>
+<div className="alert-box"><Notice tone="error">Falló la consulta.</Notice></div>
+<EmptyState title="Sin resultados" />
+```
+
+Usá `Notice` en vez de clases locales de aviso, evitá cajas anidadas y diferenciá `no-data` de `no-results`. Un estado vacío no presenta varias acciones primarias ni sustituye el mensaje de carga o el error de consulta.
+
 ### Familia Dense del paquete
 
 | Export | Contrato de props o retorno |

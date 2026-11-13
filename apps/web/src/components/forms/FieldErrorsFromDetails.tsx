@@ -46,7 +46,7 @@ export function FieldErrorsFromDetails({ error }: { error: ApiError }) {
   const messages = issues.length > 0 ? issues.map(formatIssue) : [error.message];
 
   return (
-    <Notice tone="error" className="form-error">
+    <Notice tone="error">
       {messages.map((message, index) => (
         <span key={`${index}-${message}`}>
           {message}

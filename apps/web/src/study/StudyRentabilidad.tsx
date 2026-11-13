@@ -378,10 +378,10 @@ export function StudyRentabilidad() {
             {renderView(caja, "CAJA")}
           </div>
           {calculateMutation.isError || publishMutation.isError ? (
-            <p className="form-error" role="alert">
+            <Notice tone="error">
               {(calculateMutation.error ?? publishMutation.error)?.message ??
                 "No se pudo completar la acción. Reintentá en unos minutos."}
-            </p>
+            </Notice>
           ) : null}
         </>
       )}

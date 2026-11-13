@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, Notice } from "@contable/design-system";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -275,15 +275,17 @@ export function StudyDashboard() {
   ) : worklistQuery.isLoading ? (
     <DenseLoading label="Cargando cartera…" />
   ) : worklistQuery.isError ? (
-    <EmptyState
+    <Notice
+      tone="error"
       title="No se pudo cargar la cartera fiscal"
-      description="La consulta falló; no interpretamos esta situación como una cartera sin liquidaciones."
       action={
         <Button size="sm" variant="secondary" onClick={() => void worklistQuery.refetch()}>
           Reintentar
         </Button>
       }
-    />
+    >
+      Reintentá para volver a cargar la cartera fiscal.
+    </Notice>
   ) : worklist.length === 0 ? (
     <EmptyState
       title="Sin liquidaciones en curso"
