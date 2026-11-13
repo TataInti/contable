@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { PortalContext } from "../lib/api";
 import { useSession } from "../session/SessionContext";
@@ -153,6 +153,9 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
   );
   const [selection, setSelection] = useState<SelectedContext>(EMPTY_SELECTION);
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
+  // Cliente pedido antes de que la sesión lo conociera (alta de un cliente: la
+  // pantalla lo selecciona y recién después se refresca la lista de contextos).
+  const pendingClientIdRef = useRef<string | null>(null);
 
   const availableFirms = useMemo<AvailableFirm[]>(
     () =>
@@ -170,6 +173,11 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
     [portal, portalContexts, me],
   );
 
+  // Siempre la lista más reciente, también para quien llama desde un cierre viejo
+  // (p. ej. el callback de una mutación que refrescó la sesión).
+  const availableFirmsRef = useRef(availableFirms);
+  availableFirmsRef.current = availableFirms;
+
   useEffect(() => {
     if (status === "loading") return;
     if (status === "unauthenticated") {
@@ -178,7 +186,22 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
       return;
     }
 
-    setSelection(resolveSelection(availableFirms, readStoredContext(storageKey), strategy));
+    const resolved = resolveSelection(availableFirms, readStoredContext(storageKey), strategy);
+    const pendingClientId = pendingClientIdRef.current;
+    const pendingFirm = pendingClientId
+      ? availableFirms.find((item) => item.firmId === resolved.firmId)
+      : undefined;
+    const pendingClient = pendingFirm?.clients.find((item) => item.clientId === pendingClientId);
+    if (pendingFirm && pendingClient) {
+      pendingClientIdRef.current = null;
+      setSelection({
+        firmId: pendingFirm.firmId,
+        clientId: pendingClient.clientId,
+        periodId: strategy.autoSelectPeriod ? pendingClient.periods[0]?.periodId ?? null : null,
+      });
+    } else {
+      setSelection(resolved);
+    }
     setHydratedStorageKey(storageKey);
   }, [availableFirms, status, storageKey, strategy]);
 
@@ -213,8 +236,11 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
 
   const setClientId = useCallback(
     (next: string | null) => {
+      const latestFirms = availableFirmsRef.current;
+      const known = latestFirms.some((firm) => firm.clients.some((client) => client.clientId === next));
+      pendingClientIdRef.current = next && !known ? next : null;
       setSelection((current) => {
-        const firm = availableFirms.find((item) => item.firmId === current.firmId);
+        const firm = latestFirms.find((item) => item.firmId === current.firmId);
         const client = firm?.clients.find((item) => item.clientId === next);
         const periodId = client?.periods.some((item) => item.periodId === current.periodId)
           ? current.periodId
@@ -228,7 +254,7 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
         };
       });
     },
-    [availableFirms, strategy.autoSelectPeriod],
+    [strategy.autoSelectPeriod],
   );
 
   const setPeriodId = useCallback(

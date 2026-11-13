@@ -11,7 +11,7 @@ Entorno del recorrido: app local (`localhost:5173`), usuario demo Titular, base 
 | 1 | Reglas fiscales: ver, crear versión, editar, guardar, eliminar borrador | Recorrido el 13-nov-2026 |
 | 2 | Reglas fiscales: activar una versión y su efecto en liquidaciones | Parcial el 13-nov-2026: se probó el rechazo; falta activar una versión válida y ver su efecto |
 | 3 | Catálogos fiscales: régimen, familia de cálculo, organismo | Recorrido el 13-nov-2026 (regímenes); faltan las otras cuatro pestañas |
-| 4 | Alta de cliente y configuración fiscal (regímenes, actividades, obligaciones) | Parcial el 13-nov-2026: se revisó el formulario de alta y la pantalla de configuración; falta crear un cliente y adherirlo a un régimen |
+| 4 | Alta de cliente y configuración fiscal (regímenes, actividades, obligaciones) | Recorrido el 13-nov-2026 con el e2e `e2e/alta-cliente-ui.spec.ts`: catálogos → reglas → cliente → perfil, inscripción, actividad, período, obligación → cálculo aceptado por el servidor |
 | 5 | Documentos: subir, leer, revisar, aprobar | Pendiente |
 | 6 | Legajo: saldos, fuentes, clasificación, cálculo, controles, cierre | Pendiente |
 | 7 | Liquidación: calcular, enviar a revisión, aprobar, finalizar, rectificar | Pendiente |
@@ -83,6 +83,11 @@ Estado medido en la base local antes de aplicar las reglas (datos de demostraci�
 | 4.4 | El CUIT se mostraba sin guiones en Configuración fiscal y con guiones en Clientes | Comparar ambas pantallas | Cada pantalla formateaba por su cuenta | Corregido: formato compartido |
 | 4.5 | El alta permite dejar todo "Sin especificar" y después el cliente figura con "Ficha incompleta" | Alta de cliente → crear sólo con razón social y CUIT | El formulario no indica qué campos hacen falta para que la ficha quede completa | Pendiente |
 | 4.6 | "Próximo paso" como título de sección | Configuración fiscal → "Flujo guiado" | Mismo patrón que las franjas | Pendiente: va con el rediseño de la ficha del cliente |
+| 4.7 | Los tipos de regla del catálogo no se pueden guardar: "Reglas.0.kindId: Invalid uuid" | Reglas fiscales → borrador → Agregar regla → elegir "Alícuota" → Guardar borrador | La migración sembró los tipos con ids `k1000000-…` (no son UUID) y la ruta de guardado exigía UUID | Corregido en la ruta (acepta el id del catálogo; el servicio valida que exista). **Pendiente:** decidir si se migran los ids a UUID reales; `taxRateRuleSchema` y `createTaxRateRuleSchema` de `packages/contracts` siguen exigiendo UUID para `kindId` |
+| 4.8 | Tras guardar un borrador, "Activar" responde "Guardá los cambios del borrador antes de activarlo" | Guardar un borrador nuevo con una regla y pulsar Activar sin recargar | El servidor reemplaza las filas al guardar (ids nuevos) y la pantalla seguía comparando contra las filas locales | Corregido: al guardar se toma lo guardado como borrador de trabajo |
+| 4.9 | Después de crear un cliente no queda seleccionado: Configuración fiscal pide "Elegí un cliente" | Clientes → Nuevo cliente → Crear | La pantalla llamaba a `setClientId` con la lista de clientes anterior al refresco de la sesión, y el contexto lo descartaba | Corregido en el contexto: usa siempre la lista más reciente y recuerda el cliente pedido hasta que la sesión lo conoce |
+| 4.10 | Al crear el período, el paso guiado salta a Obligaciones pero el panel no se abre | Configuración fiscal → Agregar período → Crear período | El éxito del alta sólo marca el paso y deja el panel cerrado | Pendiente: abrir el panel de obligación con el período recién creado, o decirlo |
+| 4.11 | Los datos de prueba del e2e quedan en la base de desarrollo (cliente, jurisdicción, organismo, régimen, actividad, paquete) | Correr `e2e/alta-cliente-ui.spec.ts` | No hay base de pruebas desechable (ver T.2); los códigos llevan un sufijo único por corrida y el cliente además queda con una liquidación calculada | Pendiente: ligado a T.2 |
 
 ### Tramo 6 · Legajo, etapa Clasificación (revisión de código, sin recorrer en pantalla)
 
