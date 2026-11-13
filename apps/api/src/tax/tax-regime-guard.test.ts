@@ -87,6 +87,17 @@ describe("requireTaxRegimeEnabled", () => {
     },
   );
 
+  it("TaxRegimeModuleRequiredError da una guía y señala moduleId", () => {
+    const error = new TaxRegimeModuleRequiredError();
+    expect(error).toMatchObject({
+      name: "TaxRegimeModuleRequiredError",
+      code: "REGIME_MODULE_REQUIRED",
+      statusCode: 409,
+      message: "Elegí el módulo que habilita este régimen",
+      details: { path: ["moduleId"] },
+    });
+  });
+
   it("TaxRegimeDisabledError expone el código y el estado 409", () => {
     const error = new TaxRegimeDisabledError("RI");
     expect(error.code).toBe("TAX_REGIME_DISABLED");
