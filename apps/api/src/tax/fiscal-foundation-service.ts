@@ -10,7 +10,9 @@ import {
 } from "./rules-hash.js";
 import {
   ACTIVITY_CODE_PATTERN,
+  MONOTRIBUTO_CATEGORY_CODES,
   normalizeActivityCode,
+  taxRuleSubjectFor,
   taxEngineVersionCompatibilityError,
   type TaxRegimeEngineScope,
 } from "@contable/contracts";
@@ -710,6 +712,35 @@ export class FiscalMasterService {
         ...engine,
         familyKey: engineFamily.key,
       }));
+    });
+  }
+
+  async listRuleKindsForRegime(ctx: TenantContext, regimeId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const regime = await tx.taxRegime.findUnique({
+        where: { id: regimeId },
+        select: {
+          id: true,
+          calcFamily: {
+            select: {
+              key: true,
+              isActive: true,
+              allowedRuleKinds: {
+                select: { kind: { select: { id: true, key: true, label: true, isActive: true } } },
+              },
+            },
+          },
+        },
+      });
+      if (!regime) throw new FiscalError("REGIME_NOT_FOUND", "El régimen no existe");
+      const family = regime.calcFamily;
+      if (!family?.isActive) {
+        throw new FiscalError("REGIME_FAMILY_REQUIRED", "Elegí la familia de cálculo del régimen", ["calcFamilyId"]);
+      }
+      return family.allowedRuleKinds
+        .map(({ kind }) => kind)
+        .filter((kind) => kind.isActive)
+        .map(({ id, key, label }) => ({ id, key, label, subject: taxRuleSubjectFor(family.key, key) }));
     });
   }
 
@@ -2110,9 +2141,13 @@ export class TaxRuleService {
     input: {
       ruleVersionId: string;
       rules: Array<{
-        concept: string;
+        concept?: string;
         rate?: string;
         activityCode?: string;
+        kindId?: string;
+        activityId?: string;
+        categoryCode?: string;
+        isDefault?: boolean;
         jurisdictionId?: string;
         minAmount?: string;
         validFrom: string;
@@ -2122,6 +2157,101 @@ export class TaxRuleService {
   ) {
     return withTenantContext(ctx, async (tx) => {
       await this.assertDraft(tx, input.ruleVersionId);
+      const typedInput = input.rules.some((rule) =>
+        rule.kindId !== undefined || rule.activityId !== undefined ||
+        rule.categoryCode !== undefined || rule.isDefault === true,
+      );
+      const version = await tx.taxRuleVersion.findUnique({
+        where: { id: input.ruleVersionId },
+        select: {
+          rulesHashSchemaVersion: true,
+          pack: {
+            select: {
+              regime: {
+                select: {
+                  jurisdictionId: true,
+                  calcFamily: {
+                    select: {
+                      key: true,
+                      allowedRuleKinds: {
+                        select: {
+                          kindId: true,
+                          kind: { select: { id: true, key: true, isActive: true } },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!version) throw new FiscalError("RULE_VERSION_NOT_FOUND", "Versión de regla no encontrada");
+      const typedVersion = typedInput || version.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3;
+      const family = version.pack.regime.calcFamily;
+      const activities = new Map<string, { id: string; code: string; jurisdictionId: string }>();
+      if (typedVersion && input.rules.length > 0 && !family) {
+        throw new FiscalError("RULE_VERSION_INVALID", "Elegí una familia de cálculo para el régimen", ["rules", "0", "kindId"]);
+      }
+      if (typedVersion && family) {
+        for (const [index, rule] of input.rules.entries()) {
+          const fieldError = (field: string, message: string): never => {
+            throw new FiscalError("RULE_VERSION_INVALID", message, ["rules", String(index), field]);
+          };
+          if (!rule.kindId) fieldError("kindId", "Seleccioná un tipo de regla.");
+          const allowed = family.allowedRuleKinds.find(
+            ({ kindId, kind }) => kindId === rule.kindId && kind.isActive,
+          );
+          if (!allowed) {
+            throw new FiscalError("RULE_VERSION_INVALID", "Elegí un tipo de regla disponible para este régimen.", ["rules", String(index), "kindId"]);
+          }
+          const subject = taxRuleSubjectFor(family.key, allowed.kind.key);
+          if (subject === "ACTIVITY_OR_DEFAULT" && !rule.activityId && !rule.isDefault) {
+            fieldError("activityId", "Elegí una actividad o aplicá la regla a todas.");
+          }
+          if (subject === "ACTIVITY_OR_DEFAULT" && rule.activityId && rule.isDefault) {
+            fieldError("activityId", "Elegí una actividad o aplicá la regla a todas.");
+          }
+          if (subject === "JURISDICTION_OR_DEFAULT" && !rule.jurisdictionId && !rule.isDefault) {
+            fieldError("jurisdictionId", "Elegí una jurisdicción o aplicá la regla a todas.");
+          }
+          if (subject === "JURISDICTION" && !rule.jurisdictionId) {
+            fieldError("jurisdictionId", "Elegí una jurisdicción.");
+          }
+          if (subject === "CATEGORY" && !rule.categoryCode) {
+            fieldError("categoryCode", "Elegí una categoría de Monotributo.");
+          }
+          if (subject === "CATEGORY" && rule.categoryCode &&
+              !MONOTRIBUTO_CATEGORY_CODES.includes(rule.categoryCode as (typeof MONOTRIBUTO_CATEGORY_CODES)[number])) {
+            fieldError("categoryCode", "Elegí una categoría entre A y K.");
+          }
+          if (subject !== "CATEGORY" && rule.categoryCode) {
+            fieldError("categoryCode", "La categoría solo se usa en reglas de cuota de Monotributo.");
+          }
+          if (rule.activityId) {
+            const activity = await tx.economicActivity.findUnique({
+              where: { id: rule.activityId },
+              select: { id: true, code: true, jurisdictionId: true },
+            });
+            if (!activity) {
+              throw new FiscalError("RULE_VERSION_INVALID", "La actividad elegida ya no está disponible.", ["rules", String(index), "activityId"]);
+            }
+            if ((subject === "ACTIVITY_OR_DEFAULT" || subject === "ACTIVITY") &&
+                activity.jurisdictionId !== version.pack.regime.jurisdictionId) {
+              fieldError("activityId", "Elegí una actividad de la jurisdicción del régimen.");
+            }
+            activities.set(activity.id, activity);
+          }
+          if (rule.jurisdictionId) {
+            const jurisdiction = await tx.jurisdiction.findUnique({
+              where: { id: rule.jurisdictionId },
+              select: { id: true },
+            });
+            if (!jurisdiction) fieldError("jurisdictionId", "La jurisdicción elegida ya no está disponible.");
+          }
+        }
+      }
       // La validación del catálogo corre ANTES del reemplazo: un lote con un
       // código fantasma no debe destruir las reglas existentes del borrador.
       // Sólo exige existencia (no estado activo): los borradores clonados de
@@ -2140,15 +2270,28 @@ export class TaxRuleService {
         await tx.taxRateRule.createMany({
           data: input.rules.map((rule) => ({
             ruleVersionId: input.ruleVersionId,
-            concept: rule.concept,
+            concept: rule.concept?.trim() ?? "",
             ...(rule.rate ? { rate: new Prisma.Decimal(rule.rate) } : {}),
             // Guarda normalizado (trim + mayúsculas), coherente con el catálogo.
-            ...(rule.activityCode ? { activityCode: normalizeActivityCode(rule.activityCode) } : {}),
+            ...(rule.activityId
+              ? { activityId: rule.activityId, activityCode: activities.get(rule.activityId)?.code ?? null }
+              : rule.activityCode
+                ? { activityCode: normalizeActivityCode(rule.activityCode) }
+                : {}),
+            ...(rule.kindId ? { kindId: rule.kindId } : {}),
+            ...(rule.categoryCode ? { categoryCode: rule.categoryCode } : {}),
+            isDefault: rule.isDefault ?? false,
             ...(rule.jurisdictionId ? { jurisdictionId: rule.jurisdictionId } : {}),
             ...(rule.minAmount ? { minAmount: new Prisma.Decimal(rule.minAmount) } : {}),
             validFrom: new Date(rule.validFrom),
             ...(rule.validTo ? { validTo: new Date(rule.validTo) } : {}),
           })),
+        });
+      }
+      if (typedVersion) {
+        await tx.taxRuleVersion.update({
+          where: { id: input.ruleVersionId },
+          data: { rulesHashSchemaVersion: RULES_HASH_SCHEMA_VERSION_V3 },
         });
       }
       await this.refreshHash(tx, input.ruleVersionId);

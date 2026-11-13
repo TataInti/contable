@@ -344,10 +344,36 @@ export const createTaxRuleVersionSchema = z.object({
 });
 export type CreateTaxRuleVersion = z.infer<typeof createTaxRuleVersionSchema>;
 
+export const MONOTRIBUTO_CATEGORY_CODES = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"] as const;
+export type MonotributoCategoryCode = (typeof MONOTRIBUTO_CATEGORY_CODES)[number];
+
+export type TaxRuleSubject = "NONE" | "ACTIVITY" | "ACTIVITY_OR_DEFAULT" | "JURISDICTION_OR_DEFAULT" | "JURISDICTION" | "CATEGORY";
+
+/** Stable system-catalog keys describe which subject a rule uses. */
+export function taxRuleSubjectFor(familyKey: string, kindKey: string): TaxRuleSubject {
+  if (familyKey === "IIBB_LOCAL" && kindKey === "RATE") return "ACTIVITY_OR_DEFAULT";
+  if ((familyKey === "VAT_RI" || familyKey === "TEM") && kindKey === "RATE") return "ACTIVITY";
+  if (familyKey === "IIBB_CM03" && kindKey === "RATE") return "JURISDICTION_OR_DEFAULT";
+  if (familyKey === "IIBB_CM03" && kindKey === "COEFFICIENT") return "JURISDICTION";
+  if (familyKey === "MONOTRIBUTO" && kindKey === "FEE") return "CATEGORY";
+  return "NONE";
+}
+
+export interface TaxRuleKindOption {
+  id: string;
+  key: string;
+  label: string;
+  subject: TaxRuleSubject;
+}
+
 export const taxRateRuleSchema = z.object({
   id: uuid,
   ruleVersionId: uuid,
-  concept: z.string().min(1).max(80),
+  concept: z.string().max(80),
+  kindId: uuid.nullable().optional(),
+  activityId: uuid.nullable().optional(),
+  categoryCode: z.string().nullable().optional(),
+  isDefault: z.boolean().optional(),
   activityCode: z.string().max(40).nullable(),
   jurisdictionId: uuid.nullable(),
   rate: decimalRate,
@@ -358,7 +384,11 @@ export const taxRateRuleSchema = z.object({
 export type TaxRateRule = z.infer<typeof taxRateRuleSchema>;
 
 export const createTaxRateRuleSchema = z.object({
-  concept: z.string().min(1).max(80),
+  concept: z.string().max(80).optional(),
+  kindId: uuid.optional(),
+  activityId: uuid.optional(),
+  categoryCode: z.enum(MONOTRIBUTO_CATEGORY_CODES).optional(),
+  isDefault: z.boolean().optional(),
   rate: decimalRate,
   activityCode: z.string().max(40).optional(),
   jurisdictionId: uuid.optional(),

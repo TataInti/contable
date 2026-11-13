@@ -120,6 +120,10 @@ function makeDetail(activityCode: string | null) {
           {
             id: "rule-1",
             concept: "Operaciones generales",
+            kindId: "kind-rate-vat",
+            activityId: activityCode === "CM03-02" ? "act-1" : activityCode === "CM03-OLD" ? "act-hidden" : null,
+            categoryCode: null,
+            isDefault: false,
             activityCode,
             jurisdictionId: null,
             rate: "21",
@@ -171,6 +175,9 @@ function mockApi(detail: ReturnType<typeof makeDetail>) {
       }
       return Promise.resolve(detail.regime.calcFamilyId === "family-iibb" ? iibbEngines : vatEngines);
     }
+    if (path === `/tax/regimes/${detail.regime.id}/rule-kinds`) {
+      return Promise.resolve([{ id: "kind-rate-vat", key: "RATE", label: "Alícuota", subject: "ACTIVITY" }]);
+    }
     if (path === "/tax/activities" || path === "/tax/activities?includeInactive=true") return Promise.resolve([...activeActivities, hiddenActivity]);
     if (path === "/tax/regimes") return Promise.resolve([]);
     return Promise.resolve([]);
@@ -218,7 +225,7 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     mockApi(detail);
     renderReglas();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }, { timeout: 5000 }));
     const select = (await screen.findByLabelText("Opción de cálculo")) as HTMLSelectElement;
     expect(select.value).toBe("engine-vat-current");
     expect(within(select).getByRole("option", { name: "IVA RI legacy" })).toBeTruthy();
@@ -313,14 +320,15 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     mockApi(makeDetail(null));
     renderReglas();
 
+    expect((await screen.findByLabelText("Tipo de regla rule-1") as HTMLSelectElement).value).toBe("kind-rate-vat");
     const select = (await screen.findByLabelText("Actividad rule-1")) as HTMLSelectElement;
-    expect(within(select).getByRole("option", { name: "General" })).toBeTruthy();
+    expect(within(select).getByRole("option", { name: "Sin actividad específica" })).toBeTruthy();
     expect(
       within(select).getByRole("option", { name: "CM03-02 · Comercio mayorista" }),
     ).toBeTruthy();
     expect(select.value).toBe("");
 
-    fireEvent.change(select, { target: { value: "CM03-02" } });
+    fireEvent.change(select, { target: { value: "act-1" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
 
     await waitFor(() =>
@@ -328,7 +336,9 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
         rules: [
           expect.objectContaining({
             concept: "Operaciones generales",
+            kindId: "kind-rate-vat",
             rate: "21",
+            activityId: "act-1",
             activityCode: "CM03-02",
             validFrom: "2026-01-01",
           }),
@@ -356,10 +366,55 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     renderReglas();
 
     const select = (await screen.findByLabelText("Actividad rule-1")) as HTMLSelectElement;
-    expect(select.value).toBe("CM03-OLD");
+    expect(select.value).toBe("act-hidden");
     const hiddenOption = within(select).getByRole("option", { name: "CM03-OLD (oculto)" }) as HTMLOptionElement;
     expect(hiddenOption.disabled).toBe(true);
     expect(within(select).getByRole("option", { name: "CM03-02 · Comercio mayorista" })).toBeTruthy();
+  });
+
+  it("ofrece las categorías cerradas A–K y envía el código elegido", async () => {
+    const base = makeDetail(null);
+    const detail = {
+      ...base,
+      regime: { ...base.regime, calcFamilyId: "family-mono" },
+      versions: [{ ...base.versions[0]!, rateRules: [{ ...base.versions[0]!.rateRules[0]!, kindId: "kind-fee", categoryCode: null }] }],
+    };
+    mockApi(detail);
+    const originalGet = vi.mocked(api.get).getMockImplementation();
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path === `/tax/regimes/${detail.regime.id}/rule-kinds`
+        ? Promise.resolve([{ id: "kind-fee", key: "FEE", label: "Cuota", subject: "CATEGORY" }])
+        : originalGet?.(path) ?? Promise.resolve([])) as never);
+    renderReglas();
+
+    const category = (await screen.findByLabelText("Categoría rule-1")) as HTMLSelectElement;
+    expect(within(category).getAllByRole("option")).toHaveLength(12);
+    expect(within(category).getByRole("option", { name: "Categoría K" })).toBeTruthy();
+    fireEvent.change(category, { target: { value: "K" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith(
+      "/tax/rule-versions/version-1/rate-rules",
+      expect.objectContaining({ rules: [expect.objectContaining({ kindId: "kind-fee", categoryCode: "K" })] }),
+    ));
+  });
+
+  it("ubica el error de tipo devuelto por la API junto al desplegable", async () => {
+    mockApi(makeDetail(null));
+    vi.mocked(api.put).mockRejectedValue(new ApiError(
+      "RULE_VERSION_INVALID",
+      "Elegí un tipo de regla disponible para este régimen.",
+      422,
+      null,
+      { details: { path: ["rules", "0", "kindId"], message: "Elegí un tipo de regla disponible para este régimen." } },
+    ));
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Guardar borrador" }));
+    const errors = await screen.findAllByText("Elegí un tipo de regla disponible para este régimen.");
+    const inlineError = errors.find((candidate) => candidate.classList.contains("fiscal-rule-row-error"));
+    expect(inlineError?.getAttribute("role")).toBe("alert");
+    expect(inlineError?.parentElement?.querySelector("select[aria-label='Tipo de regla rule-1']")).toBeTruthy();
   });
 });
 
@@ -433,7 +488,7 @@ describe("StudyReglasFiscales — CTA único y submit deshabilitado explicado (F
   it("explica por qué no se puede guardar un borrador con filas incompletas", async () => {
     const detail = makeDetail(null);
     detail.versions = [
-      { ...detail.versions[0]!, rateRules: [{ ...detail.versions[0]!.rateRules[0]!, concept: "" }] },
+      { ...detail.versions[0]!, rateRules: [{ ...detail.versions[0]!.rateRules[0]!, concept: "", rate: null as unknown as string, minAmount: null }] },
     ];
     mockApi(detail);
     renderReglas();
@@ -442,7 +497,7 @@ describe("StudyReglasFiscales — CTA único y submit deshabilitado explicado (F
       name: "Guardar borrador",
     })) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
-    expect(screen.getByText(/Completá el concepto y la alícuota o el mínimo/)).toBeTruthy();
+    expect(screen.getByText(/Completá la tasa, cuota o importe/)).toBeTruthy();
   });
 
   it("muestra al Titular el borrado del paquete y del borrador creados desde UI", async () => {
@@ -742,5 +797,29 @@ describe("StudyReglasFiscales — estado vacío de paquetes", () => {
     expect(guideBlock).not.toBeNull();
     expect(guideBlock?.parentElement?.classList.contains("fiscal-rules")).toBe(true);
     expect(document.querySelectorAll(".fiscal-rules > .fiscal-rules-guide")).toHaveLength(1);
+  });
+});
+
+describe("StudyReglasFiscales — validación del tipo de regla", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = context();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("señala el tipo en la fila antes de guardar", async () => {
+    mockApi(makeDetail(null));
+    renderReglas();
+
+    fireEvent.change(await screen.findByLabelText("Tipo de regla rule-1"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
+
+    const error = await screen.findByText("Seleccioná un tipo de regla.");
+    expect(error.getAttribute("role")).toBe("alert");
+    expect(api.put).not.toHaveBeenCalled();
   });
 });

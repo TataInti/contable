@@ -3185,7 +3185,7 @@
    la tabla es ancha y el input no debe quedar apretado entre columnas. */
 @media (min-width: 1025px) {
   .fiscal-rule-input--concept {
-    min-width: 18rem;
+    min-width: 16rem;
   }
 }
 
