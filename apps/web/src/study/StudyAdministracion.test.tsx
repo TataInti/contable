@@ -297,7 +297,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(tokens).toMatch(/--ds-touch-target:\s*44px;/);
   });
 
-  it("abre el detalle con la matriz de roles y las acciones del usuario", async () => {
+  it("abre el detalle con la matriz de roles y acciones nombradas por usuario", async () => {
     mockApi(standardsFixture, membersFixture);
     renderAdministracion();
 
@@ -305,8 +305,23 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     const detail = await screen.findByRole("complementary", { name: "Detalle del usuario" });
     expect(within(detail).getByText("revisor@example.com")).toBeTruthy();
     expect(within(detail).getByRole("table", { name: "Módulos habilitados por rol" })).toBeTruthy();
-    expect(within(detail).getByRole("button", { name: "Suspender" })).toBeTruthy();
-    expect(within(detail).getByRole("button", { name: "Recuperar acceso" })).toBeTruthy();
+    expect(within(detail).getByRole("button", { name: "Suspender a Revisor Demo" })).toBeTruthy();
+    expect(within(detail).getByRole("button", { name: "Recuperar acceso de Revisor Demo" })).toBeTruthy();
+    expect(within(detail).getByRole("button", { name: "Editar a Revisor Demo" })).toBeTruthy();
+    expect(within(detail).getByRole("button", { name: "Administrar clientes de Revisor Demo" })).toBeTruthy();
+  });
+
+  it("agrupa las acciones secundarias de cada fila en Más acciones con nombres accesibles", async () => {
+    mockApi(standardsFixture, membersFixture);
+    renderAdministracion();
+
+    const row = await screen.findByRole("row", { name: /Revisor Demo/ });
+    expect(within(row).getByRole("button", { name: "Editar a Revisor Demo" })).toBeTruthy();
+    fireEvent.click(within(row).getByText("Más acciones"));
+
+    expect(within(row).getByRole("button", { name: "Administrar clientes de Revisor Demo" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Suspender a Revisor Demo" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Recuperar acceso de Revisor Demo" })).toBeTruthy();
   });
 
   it("guarda el rol apenas se elige y sin pedir confirmación", async () => {
@@ -387,10 +402,32 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     const row = await screen.findByRole("row", { name: /Revisor Demo/ });
-    fireEvent.click(within(row).getByRole("button", { name: "Suspender" }));
+    fireEvent.click(within(row).getByText("Más acciones"));
+    fireEvent.click(within(row).getByRole("button", { name: "Suspender a Revisor Demo" }));
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/firms/firm-a/members/u2/suspend", {}),
+    );
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("muestra la suspensión del Titular y deja que la API decida", async () => {
+    mockApi(standardsFixture, membersFixture);
+    vi.mocked(api.post).mockRejectedValue(
+      Object.assign(new Error("last admin"), { code: "LAST_ADMIN_REQUIRED" }),
+    );
+    renderAdministracion();
+
+    const row = await screen.findByRole("row", { name: /Owner A/ });
+    fireEvent.click(within(row).getByText("Más acciones"));
+    fireEvent.click(within(row).getByRole("button", { name: "Suspender a Owner A" }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/firms/firm-a/members/u1/suspend", {}),
+    );
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "El estudio debe conservar al menos un titular o administrador activo.",
     );
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
@@ -401,7 +438,8 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     const row = await screen.findByRole("row", { name: /Auditora Suspendida/ });
-    fireEvent.click(within(row).getByRole("button", { name: "Reactivar" }));
+    fireEvent.click(within(row).getByText("Más acciones"));
+    fireEvent.click(within(row).getByRole("button", { name: "Reactivar acceso de Auditora Suspendida" }));
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/firms/firm-a/members/u3/reactivate", {}),
@@ -434,7 +472,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     fireEvent.click(await screen.findByRole("tab", { name: /Accesos del portal/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Suspender" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Suspender acceso de Cliente Portal" }));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(
         "/firms/firm-a/clients/client-a/portal-memberships/portal-a",
@@ -450,7 +488,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     fireEvent.click(await screen.findByRole("tab", { name: /Accesos del portal/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Reactivar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Reactivar acceso de Cliente Portal" }));
 
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(
@@ -481,7 +519,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     );
   });
 
-  it("quita una asignación de cliente de un usuario", async () => {
+  it("quita una asignación con un botón que identifica al cliente y a la persona", async () => {
     mockApi(standardsFixture, membersFixture);
     vi.mocked(api.del).mockResolvedValue({} as never);
     renderAdministracion();
@@ -489,7 +527,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Administrar clientes de Revisor Demo" }),
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Quitar" }));
+    fireEvent.click(await screen.findByRole("button", {
+      name: "Quitar cliente Cliente Alfa de Revisor Demo",
+    }));
 
     await waitFor(() =>
       expect(api.del).toHaveBeenCalledWith(
@@ -553,7 +593,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
       },
     });
 
-    // La línea con email inválido se marca y no se crea.
+    // La línea con correo inválido se marca y no se crea.
     expect(await screen.findByText("Email inválido o faltante.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Crear 2 usuarios/ }));
 

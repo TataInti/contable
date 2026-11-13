@@ -2890,6 +2890,15 @@
   gap: var(--ds-space-2);
 }
 
+.administration-users .dense-row-actions .administration-user-actions {
+  flex: 0 0 auto;
+}
+
+.administration-users .dense-inspector__foot .dense-row-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 @media (pointer: coarse) {
   .administration-users .dense-select--inline {
     height: var(--ds-touch-target);

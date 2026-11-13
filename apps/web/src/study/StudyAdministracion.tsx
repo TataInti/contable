@@ -666,6 +666,7 @@ export function StudyAdministracion() {
           <Button
             size="row"
             variant={variant}
+            aria-label={`Recuperar acceso de ${memberName}`}
             loading={
               createAccessRecovery.isPending && createAccessRecovery.variables?.userId === item.userId
             }
@@ -689,6 +690,7 @@ export function StudyAdministracion() {
             size="row"
             variant={variant}
             className="dense-action--danger"
+            aria-label={`Suspender a ${memberName}`}
             loading={
               suspendInternalMember.isPending && suspendInternalMember.variables === item.userId
             }
@@ -706,6 +708,7 @@ export function StudyAdministracion() {
           <Button
             size="row"
             variant={variant}
+            aria-label={`Reactivar acceso de ${memberName}`}
             loading={
               reactivateInternalMember.isPending &&
               reactivateInternalMember.variables === item.userId
@@ -792,6 +795,7 @@ export function StudyAdministracion() {
     {
       key: "actions",
       header: "Acciones",
+      width: "180px",
       secondary: true,
       align: "right",
       render: (item) => (
@@ -804,15 +808,30 @@ export function StudyAdministracion() {
           >
             Editar
           </Button>
-          <Button
-            size="row"
-            variant="ghost"
-            aria-label={`Administrar clientes de ${item.user?.name ?? "este usuario"}`}
-            onClick={() => setAssigningMember(item)}
-          >
-            Clientes
-          </Button>
-          {memberActionButtons(item, "ghost")}
+          <details className="dense-inspector-actions__menu administration-user-actions">
+            <summary
+              className="dense-inspector-actions__trigger"
+              aria-label={`Más acciones de ${item.user?.name ?? "este usuario"}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              Más acciones
+            </summary>
+            <div
+              className="dense-inspector-actions__items"
+              role="group"
+              aria-label={`Acciones de ${item.user?.name ?? "este usuario"}`}
+            >
+              <Button
+                size="row"
+                variant="ghost"
+                aria-label={`Administrar clientes de ${item.user?.name ?? "este usuario"}`}
+                onClick={() => setAssigningMember(item)}
+              >
+                Clientes
+              </Button>
+              {memberActionButtons(item, "ghost")}
+            </div>
+          </details>
         </span>
       ),
     },
@@ -837,6 +856,7 @@ export function StudyAdministracion() {
             <Button
               size="row"
               variant="secondary"
+              aria-label={`Editar a ${selectedMember.user?.name ?? "este usuario"}`}
               onClick={() => openIdentityEdit(selectedMember)}
             >
               Editar
@@ -844,6 +864,7 @@ export function StudyAdministracion() {
             <Button
               size="row"
               variant="ghost"
+              aria-label={`Administrar clientes de ${selectedMember.user?.name ?? "este usuario"}`}
               onClick={() => setAssigningMember(selectedMember)}
             >
               Clientes
@@ -1003,6 +1024,7 @@ export function StudyAdministracion() {
               size="row"
               variant={row.status === "ACTIVE" ? "ghost" : "secondary"}
               className={row.status === "ACTIVE" ? "dense-action--danger" : undefined}
+              aria-label={`${row.status === "ACTIVE" ? "Suspender" : "Reactivar"} acceso de ${row.name ?? row.email}`}
               loading={row.pending}
               onClick={row.onToggleStatus}
             >
@@ -1014,6 +1036,7 @@ export function StudyAdministracion() {
               size="row"
               variant="ghost"
               className="dense-action--danger"
+              aria-label={`Revocar invitación para ${row.email}`}
               loading={row.pending}
               onClick={row.onRevoke}
             >
