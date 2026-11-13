@@ -7,8 +7,9 @@ import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import { memberActionCopy, memberRecoveryCopy, memberRowActions, roleChangeCopy } from "./member-row-actions.js";
+import { memberRecoveryCopy, memberRowActions } from "./member-row-actions.js";
 import { ActionDrawer } from "../ui/ActionDrawer";
+import { StudyUserAssignments } from "./StudyUserAssignments";
 import {
   DenseHeader,
   DensePage,
@@ -61,6 +62,12 @@ interface InternalMember {
   acceptedAt: string | null;
   user?: { name: string; emailNormalized: string; status: string } | null;
 }
+interface FirmProfile {
+  legalName: string;
+  displayName: string;
+  taxId: string | null;
+  timezone: string;
+}
 interface CreatedInternalUser {
   userId: string;
   email: string;
@@ -108,7 +115,7 @@ const PORTAL_ROLE_LABELS: Record<string, string> = {
   READONLY: "Sólo lectura",
 };
 
-type AdminTab = "internal" | "portal" | "standards";
+type AdminTab = "internal" | "portal" | "standards" | "profile";
 
 interface PortalRow {
   key: string;
@@ -117,7 +124,9 @@ interface PortalRow {
   role: string;
   status: string;
   detail?: string;
+  membership: PortalMembership | null;
   onRevoke: (() => void) | null;
+  onToggleStatus: (() => void) | null;
   pending: boolean;
 }
 
@@ -135,6 +144,20 @@ function initials(name: string | null | undefined): string {
     .map((part) => part.charAt(0))
     .join("")
     .toLocaleUpperCase("es-AR");
+}
+
+function userMutationError(error: unknown, fallback: string): string {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : "";
+  if (code === "LAST_ADMIN_REQUIRED") {
+    return "El estudio debe conservar al menos un titular o administrador activo.";
+  }
+  if (code === "USER_EMAIL_CONFLICT") {
+    return "Ese correo ya está asociado a otra cuenta.";
+  }
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 /** Resumen textual de los módulos internos habilitados para el rol. */
@@ -222,6 +245,15 @@ export function StudyAdministracion() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [tab, setTab] = useState<AdminTab>("internal");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [identityEditing, setIdentityEditing] = useState<InternalMember | null>(null);
+  const [identityName, setIdentityName] = useState("");
+  const [identityEmail, setIdentityEmail] = useState("");
+  const [internalRoleDrafts, setInternalRoleDrafts] = useState<Record<string, string>>({});
+  const [assigningMember, setAssigningMember] = useState<InternalMember | null>(null);
+  const [portalEditing, setPortalEditing] = useState<PortalMembership | null>(null);
+  const [portalRoleDraft, setPortalRoleDraft] = useState("READONLY");
+  const [showProfileForm, setShowProfileForm] = useState(false);
+  const [profileDraft, setProfileDraft] = useState<FirmProfile | null>(null);
   const [showRoles, setShowRoles] = useState(false);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -246,6 +278,11 @@ export function StudyAdministracion() {
   const internalMembers = useQuery({
     queryKey: ["internal-members", firmId],
     queryFn: () => api.get<InternalMember[]>(`/firms/${firmId}/members`),
+    enabled: Boolean(firmId && capabilities.has("firm.users.manage")),
+  });
+  const firmProfile = useQuery({
+    queryKey: ["firm-profile", firmId],
+    queryFn: () => api.get<FirmProfile>(`/firms/${firmId}/profile`),
     enabled: Boolean(firmId && capabilities.has("firm.users.manage")),
   });
   const selfReviewSetting = useQuery({
@@ -288,39 +325,68 @@ export function StudyAdministracion() {
   const updateInternalRole = useMutation({
     mutationFn: ({ userId, role: nextRole }: { userId: string; role: string }) =>
       api.patch(`/firms/${firmId}/members/${userId}`, { role: nextRole }),
-    onSuccess: () => {
+    onSuccess: (_updated, { userId }) => {
       setActionError(null);
-      setNotice("El rol del usuario interno fue actualizado.");
+      setInternalRoleDrafts((current) => {
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      });
+      setNotice("El rol del usuario quedó actualizado.");
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo actualizar el rol."),
+      setActionError(userMutationError(error, "No se pudo actualizar el rol.")),
   });
-  // Ciclo de vida (baja reversible): suspender cierra las sesiones activas del
-  // usuario en el servidor y preserva datos/historial; reactivar exige una
-  // acción explícita del admin. La validación de último OWNER/ADMIN la hace
-  // el backend (app_suspend_internal_member / app_reactivate_internal_member).
-  const suspendInternalMember = useMutation({
-    mutationFn: ({ userId, reason }: { userId: string; reason?: string }) =>
-      api.post(`/firms/${firmId}/members/${userId}/suspend`, reason ? { reason } : {}),
+  const updateMemberIdentity = useMutation({
+    mutationFn: ({ userId, name, email: nextEmail }: { userId: string; name: string; email: string }) =>
+      api.patch(`/firms/${firmId}/users/${userId}`, { name: name.trim(), email: nextEmail.trim() }),
     onSuccess: () => {
       setActionError(null);
-      setNotice("El usuario quedó suspendido: pierde el acceso de inmediato y sus sesiones activas se cerraron. Sus datos e historial se conservan.");
+      setNotice("Los datos del usuario quedaron actualizados.");
+      setIdentityEditing(null);
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo suspender al usuario."),
+      setActionError(userMutationError(error, "No se pudieron actualizar los datos del usuario.")),
+  });
+  const updateFirmProfile = useMutation({
+    mutationFn: (profile: FirmProfile) =>
+      api.patch<FirmProfile>(`/firms/${firmId}/profile`, {
+        legalName: profile.legalName.trim(),
+        displayName: profile.displayName.trim(),
+        taxId: profile.taxId?.trim() || null,
+        timezone: profile.timezone.trim(),
+      }),
+    onSuccess: (updated) => {
+      setActionError(null);
+      setNotice("Los datos del estudio quedaron actualizados.");
+      setShowProfileForm(false);
+      setProfileDraft(null);
+      queryClient.setQueryData(["firm-profile", firmId], updated);
+    },
+    onError: (error) =>
+      setActionError(userMutationError(error, "No se pudieron actualizar los datos del estudio.")),
+  });
+  const suspendInternalMember = useMutation({
+    mutationFn: (userId: string) => api.post(`/firms/${firmId}/members/${userId}/suspend`, {}),
+    onSuccess: () => {
+      setActionError(null);
+      setNotice("El usuario quedó suspendido.");
+      void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
+    },
+    onError: (error) =>
+      setActionError(userMutationError(error, "No se pudo suspender al usuario.")),
   });
   const reactivateInternalMember = useMutation({
-    mutationFn: ({ userId, reason }: { userId: string; reason?: string }) =>
-      api.post(`/firms/${firmId}/members/${userId}/reactivate`, reason ? { reason } : {}),
+    mutationFn: (userId: string) => api.post(`/firms/${firmId}/members/${userId}/reactivate`, {}),
     onSuccess: () => {
       setActionError(null);
-      setNotice("El usuario fue reactivado con su mismo rol. Tendrá que iniciar sesión nuevamente.");
+      setNotice("El usuario fue reactivado.");
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo reactivar al usuario."),
+      setActionError(userMutationError(error, "No se pudo reactivar al usuario.")),
   });
   // Renovación de claves: el admin genera un enlace de un solo uso para que el
   // miembro defina una contraseña nueva. El backend cierra sus sesiones
@@ -356,7 +422,7 @@ export function StudyAdministracion() {
     queryKey: ["portal-memberships", firmId, clientId],
     queryFn: () =>
       api.get<PortalMembership[]>(`/firms/${firmId}/clients/${clientId}/portal-memberships`),
-    enabled: Boolean(firmId && clientId && capabilities.has("firm.manage")),
+    enabled: Boolean(firmId && clientId && capabilities.has("firm.users.manage")),
   });
   const invite = useMutation({
     mutationFn: () =>
@@ -376,16 +442,28 @@ export function StudyAdministracion() {
     onError: (error) =>
       setActionError(error instanceof Error ? error.message : "No se pudo crear la invitación."),
   });
-  const revokeMembership = useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/firms/${firmId}/clients/${clientId}/portal-memberships/${id}/revoke`),
-    onSuccess: () => {
+  const updatePortalMembership = useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: { role?: string; status?: string };
+    }) => api.patch<PortalMembership>(`/firms/${firmId}/clients/${clientId}/portal-memberships/${id}`, patch),
+    onSuccess: (_updated, { id, patch }) => {
       setActionError(null);
-      setNotice("El acceso al portal fue revocado.");
+      if (patch.role !== undefined) {
+        setNotice("El rol del acceso al portal quedó actualizado.");
+        if (portalEditing?.id === id) setPortalEditing(null);
+      } else if (patch.status === "SUSPENDED") {
+        setNotice("El acceso al portal quedó suspendido.");
+      } else {
+        setNotice("El acceso al portal fue reactivado.");
+      }
       void queryClient.invalidateQueries({ queryKey: ["portal-memberships", firmId, clientId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo revocar el acceso."),
+      setActionError(userMutationError(error, "No se pudo actualizar el acceso al portal.")),
   });
   const revokeInvitation = useMutation({
     mutationFn: (id: string) =>
@@ -498,7 +576,7 @@ export function StudyAdministracion() {
     setRecoverySummary(null);
   };
 
-  const activePortalMembershipCount = memberships.data?.filter((item) => !item.revokedAt).length;
+  const activePortalMembershipCount = memberships.data?.filter((item) => item.status === "ACTIVE").length;
   const pendingInvitationCount = invitations.data?.filter(
     (item) =>
       !item.revokedAt &&
@@ -514,6 +592,23 @@ export function StudyAdministracion() {
   const openInviteForm = () => {
     setActionError(null);
     setShowInviteForm(true);
+  };
+  const openIdentityEdit = (item: InternalMember) => {
+    setActionError(null);
+    setIdentityEditing(item);
+    setIdentityName(item.user?.name ?? "");
+    setIdentityEmail(item.user?.emailNormalized ?? "");
+  };
+  const openPortalEdit = (item: PortalMembership) => {
+    setActionError(null);
+    setPortalEditing(item);
+    setPortalRoleDraft(item.role);
+  };
+  const openProfileEdit = () => {
+    if (!firmProfile.data) return;
+    setActionError(null);
+    setProfileDraft(firmProfile.data);
+    setShowProfileForm(true);
   };
 
   if (!capabilities.has("firm.users.manage"))
