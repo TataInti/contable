@@ -2055,6 +2055,23 @@ model TaxEngine {
   @@map("tax_engines")
 }
 
+/// Módulo habilitante asociado a un régimen. Catálogo de sistema, seleccionado por ID.
+model TaxRegimeModule {
+  id        String   @id @default(uuid(7))
+  key       String   @unique
+  label     String
+  flagCode  String?  @unique
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  regimes TaxRegime[]
+
+  @@index([isActive, sortOrder])
+  @@map("tax_regime_modules")
+}
+
 model TaxType {
   id              String        @id @default(uuid(7))
   code            String
@@ -2093,9 +2110,11 @@ model TaxRegime {
   origin         CatalogOrigin @default(REFERENCE)
   createdByFirmId String?
   calcFamilyId   String?
+  moduleId       String?
 
   taxType        TaxType          @relation(fields: [taxTypeId], references: [id])
   calcFamily     CalcFamily?      @relation(fields: [calcFamilyId], references: [id], onDelete: SetNull)
+  module         TaxRegimeModule? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
   createdByFirm  Firm?            @relation("TaxRegimeCreatorFirm", fields: [createdByFirmId], references: [id], onDelete: SetNull)
   jurisdiction   Jurisdiction     @relation(fields: [jurisdictionId], references: [id])
   authority      TaxAuthority     @relation(fields: [authorityId], references: [id])
@@ -2109,6 +2128,7 @@ model TaxRegime {
   @@index([taxTypeId])
   @@index([jurisdictionId])
   @@index([calcFamilyId])
+  @@index([moduleId])
   @@map("tax_regimes")
 }
 

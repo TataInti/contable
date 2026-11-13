@@ -1,5 +1,5 @@
 import type { FeatureFlagService } from "../flags/feature-flag-service.js";
-import { taxRegimeFlagCode } from "../flags/feature-flag-service.js";
+import { isTaxRegimeFeatureFlagCode } from "../flags/feature-flag-service.js";
 import type { TenantContext } from "../auth/tenant.js";
 
 /**
@@ -21,24 +21,49 @@ export class TaxRegimeDisabledError extends Error {
   }
 }
 
+export class TaxRegimeModuleRequiredError extends Error {
+  readonly code = "REGIME_MODULE_REQUIRED" as const;
+  readonly statusCode = 409 as const;
+  readonly details = { path: ["moduleId"] } as const;
+
+  constructor() {
+    super("Elegí el módulo que habilita este régimen");
+    this.name = "TaxRegimeModuleRequiredError";
+  }
+}
+
+export type TaxRegimeModuleForGuard = {
+  key: string;
+  flagCode: string | null;
+  isActive: boolean;
+} | null | undefined;
+
 /**
  * Verifica que el régimen esté habilitado para el contexto.
  * - Si TAX está deshabilitado → lanza TaxRegimeDisabledError.
- * - Si el régimen no tiene flag asociado → se permite (compatibilidad).
- * - Si el flag del régimen está deshabilitado → lanza TaxRegimeDisabledError.
+ * - La selección debe existir y estar activa; el catálogo decide el flag.
+ * - ALWAYS_ENABLED omite solo el flag particular, nunca el flag global TAX.
  */
 export async function requireTaxRegimeEnabled(
   flags: FeatureFlagService,
   ctx: TenantContext,
   regimeCode: string,
+  module: TaxRegimeModuleForGuard,
 ): Promise<boolean> {
   const taxEnabled = await flags.isEnabled(ctx, "TAX", ctx.clientId ?? undefined);
   if (!taxEnabled) throw new TaxRegimeDisabledError(regimeCode);
 
-  const flagCode = taxRegimeFlagCode(regimeCode);
-  if (!flagCode) return true; // régimen sin flag dedicado → se rige por TAX
+  if (!module || module.isActive !== true) throw new TaxRegimeModuleRequiredError();
+  if (module.key === "ALWAYS_ENABLED") {
+    if (module.flagCode !== null) throw new TaxRegimeModuleRequiredError();
+    return true;
+  }
 
-  const enabled = await flags.isEnabled(ctx, flagCode, ctx.clientId ?? undefined);
+  if (!module.flagCode || !isTaxRegimeFeatureFlagCode(module.flagCode)) {
+    throw new TaxRegimeModuleRequiredError();
+  }
+
+  const enabled = await flags.isEnabled(ctx, module.flagCode, ctx.clientId ?? undefined);
   if (!enabled) throw new TaxRegimeDisabledError(regimeCode);
   return true;
 }

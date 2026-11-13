@@ -60,6 +60,14 @@ const mockState = vi.hoisted(() => ({
   jurisdictions: [] as Array<{ id: string }>,
   taxAuthorities: [] as Array<{ id: string; jurisdictionId: string }>,
   taxRegimes: [] as Array<Record<string, unknown>>,
+  taxRegimeModules: [] as Array<{
+    id: string;
+    key: string;
+    label: string;
+    flagCode: string | null;
+    isActive: boolean;
+    sortOrder: number;
+  }>,
   taxRulePacks: [] as Array<{
     id: string;
     regimeCode: string;
@@ -115,6 +123,10 @@ const IIBB_FAMILY_ID = "f1000000-0000-4000-8000-000000000002";
 const VAT_ENGINE_ID = "e1000000-0000-4000-8000-000000000001";
 const IIBB_ENGINE_ID = "e1000000-0000-4000-8000-000000000003";
 const EMPTY_FAMILY_REGIME_ID = "77777777-8888-4999-8000-dddddddddddd";
+
+function nextUuid() {
+  return `00000000-0000-4000-8000-${String(++mockState.idCounter).padStart(12, "0")}`;
+}
 
 const ctxOwner: TestContext = {
   userId: OWNER_ID,
@@ -395,7 +407,7 @@ function makeTransaction(ctx: TestContext) {
       },
       create: async ({ data }: { data: Record<string, unknown> }) => {
         if (mockState.regimeCreateError) throw mockState.regimeCreateError;
-        const regime = { id: `regime-${++mockState.idCounter}`, ...data };
+        const regime = { id: nextUuid(), ...data };
         mockState.taxRegimes.push(regime);
         return regime;
       },
@@ -405,6 +417,17 @@ function makeTransaction(ctx: TestContext) {
         Object.assign(regime, data);
         return regime;
       },
+    },
+    taxRegimeModule: {
+      findFirst: async ({ where }: { where: { id: string; isActive?: boolean } }) =>
+        mockState.taxRegimeModules.find((module) => module.id === where.id &&
+          (where.isActive === undefined || module.isActive === where.isActive)) ?? null,
+      findMany: async ({ where }: { where?: { isActive?: boolean } } = {}) =>
+        mockState.taxRegimeModules
+          .filter((module) => where?.isActive === undefined || module.isActive === where.isActive)
+          .slice()
+          .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
+          .map(({ id, key, label, flagCode, isActive }) => ({ id, key, label, flagCode, isActive })),
     },
   };
 }
@@ -448,6 +471,7 @@ beforeEach(() => {
   mockState.jurisdictions.length = 0;
   mockState.taxAuthorities.length = 0;
   mockState.taxRegimes.length = 0;
+  mockState.taxRegimeModules.length = 0;
   mockState.taxRulePacks.length = 0;
   mockState.ruleVersions.length = 0;
   mockState.rateRules.length = 0;
@@ -1100,6 +1124,100 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
         { profileVersionId: PROFILE_ID, reason: "No autorizado", changes: { legalName: "Intrusión" } },
       ),
     ).rejects.toMatchObject({ code: "PROFILE_NOT_FOUND" });
+  });
+
+  it("lista módulos activos y valida moduleId al crear y editar un régimen", async () => {
+    const ACTIVE_MODULE_ID = "a7000000-0000-4000-8000-000000000001";
+    const INACTIVE_MODULE_ID = "a7000000-0000-4000-8000-000000000002";
+    const MISSING_MODULE_ID = "a7000000-0000-4000-8000-000000000003";
+    mockState.taxTypes.push({ id: TAX_TYPE_ID });
+    mockState.jurisdictions.push({ id: JURISDICTION_ID });
+    mockState.taxAuthorities.push({ id: AUTHORITY_ID, jurisdictionId: JURISDICTION_ID });
+    mockState.taxRegimeModules.push(
+      {
+        id: ACTIVE_MODULE_ID,
+        key: "TAX_RI",
+        label: "IVA Responsable Inscripto",
+        flagCode: "TAX_RI",
+        isActive: true,
+        sortOrder: 10,
+      },
+      {
+        id: INACTIVE_MODULE_ID,
+        key: "ALWAYS_ENABLED",
+        label: "Siempre habilitado",
+        flagCode: null,
+        isActive: false,
+        sortOrder: 20,
+      },
+    );
+
+    const app = Fastify({ logger: false });
+    fiscalFoundationRoutes(app);
+    await app.ready();
+    try {
+      const catalog = await app.inject({ method: "GET", url: "/api/v1/tax/regime-modules" });
+      expect(catalog.statusCode).toBe(200);
+      expect(catalog.json().data).toEqual([{
+        id: ACTIVE_MODULE_ID,
+        key: "TAX_RI",
+        label: "IVA Responsable Inscripto",
+        flagCode: "TAX_RI",
+        isActive: true,
+      }]);
+
+      const basePayload = {
+        name: "Régimen sintético",
+        taxTypeId: TAX_TYPE_ID,
+        jurisdictionId: JURISDICTION_ID,
+        authorityId: AUTHORITY_ID,
+      };
+      const missingModule = await app.inject({
+        method: "POST",
+        url: "/api/v1/tax/regimes",
+        payload: { ...basePayload, code: "REGIME-MODULE-MISSING", moduleId: MISSING_MODULE_ID },
+      });
+      expect(missingModule.statusCode).toBe(404);
+      expect(missingModule.json()).toMatchObject({
+        error: {
+          code: "REGIME_MODULE_NOT_FOUND",
+          details: { path: ["moduleId"] },
+        },
+      });
+
+      const inactiveModule = await app.inject({
+        method: "POST",
+        url: "/api/v1/tax/regimes",
+        payload: { ...basePayload, code: "REGIME-MODULE-INACTIVE", moduleId: INACTIVE_MODULE_ID },
+      });
+      expect(inactiveModule.statusCode).toBe(404);
+      expect(inactiveModule.json().error).toMatchObject({
+        code: "REGIME_MODULE_NOT_FOUND",
+        details: { path: ["moduleId"] },
+      });
+
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/tax/regimes",
+        payload: {
+          ...basePayload,
+          code: "REGIME-MODULE-VALID",
+          moduleId: ACTIVE_MODULE_ID,
+        },
+      });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().data).toMatchObject({ moduleId: ACTIVE_MODULE_ID });
+
+      const updated = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/tax/regimes/${created.json().data.id}`,
+        payload: { moduleId: ACTIVE_MODULE_ID },
+      });
+      expect(updated.statusCode).toBe(200);
+      expect(updated.json().data).toMatchObject({ moduleId: ACTIVE_MODULE_ID });
+    } finally {
+      await app.close();
+    }
   });
 
   it("valida taxTypeId contra impuestos al crear un régimen", async () => {

@@ -55,12 +55,21 @@ interface TaxRegimeRow {
   code: string;
   name: string;
   calcFamilyId?: string | null;
+  moduleId?: string | null;
   isActive: boolean;
   origin?: "REFERENCE" | "UI";
   createdByFirmId?: string | null;
   authority: TaxAuthorityRow;
   jurisdiction: JurisdictionOption;
   taxType: TaxTypeOption;
+}
+
+interface TaxRegimeModuleOption {
+  id: string;
+  key: string;
+  label: string;
+  flagCode: string | null;
+  isActive: boolean;
 }
 
 interface AuthorityForm {
@@ -74,6 +83,7 @@ interface RegimeForm {
   name: string;
   taxTypeId: string;
   calcFamilyId: string;
+  moduleId: string;
   jurisdictionId: string;
   authorityId: string;
 }
@@ -320,6 +330,7 @@ export function StudyCatalogosFiscales() {
     name: "",
     taxTypeId: "",
     calcFamilyId: "",
+    moduleId: "",
     jurisdictionId: "",
     authorityId: "",
   });
@@ -349,6 +360,11 @@ export function StudyCatalogosFiscales() {
     queryFn: () => api.get<CalcFamilyOption[]>("/tax/calc-families"),
     enabled: Boolean(firmId && capabilities.has("tax.rules.read")),
   });
+  const regimeModulesQuery = useQuery({
+    queryKey: ["tax-regime-modules", firmId],
+    queryFn: () => api.get<TaxRegimeModuleOption[]>("/tax/regime-modules"),
+    enabled: Boolean(firmId && capabilities.has("tax.rules.read")),
+  });
   const deepLinkedRegimeId = useRef<string | null>(
     new URLSearchParams(window.location.search).get("editRegime"),
   );
@@ -369,6 +385,7 @@ export function StudyCatalogosFiscales() {
       name: row.name,
       taxTypeId: row.taxType.id,
       calcFamilyId: row.calcFamilyId ?? row.taxType.defaultFamilyId ?? "",
+      moduleId: row.moduleId ?? "",
       jurisdictionId: row.jurisdiction.id,
       authorityId: row.authority.id,
     });
@@ -437,6 +454,7 @@ export function StudyCatalogosFiscales() {
         name: regimeForm.name.trim(),
         taxTypeId: regimeForm.taxTypeId,
         calcFamilyId: regimeForm.calcFamilyId,
+        moduleId: regimeForm.moduleId,
         jurisdictionId: regimeForm.jurisdictionId,
         authorityId: regimeForm.authorityId,
         ...(duplicateOfId ? { duplicateOfId } : {}),
@@ -450,6 +468,7 @@ export function StudyCatalogosFiscales() {
         name: "",
         taxTypeId: "",
         calcFamilyId: "",
+        moduleId: "",
         jurisdictionId: "",
         authorityId: "",
       });
@@ -462,6 +481,7 @@ export function StudyCatalogosFiscales() {
       name: regimeForm.name.trim(),
       taxTypeId: regimeForm.taxTypeId,
       calcFamilyId: regimeForm.calcFamilyId || null,
+      moduleId: regimeForm.moduleId || null,
       jurisdictionId: regimeForm.jurisdictionId,
       authorityId: regimeForm.authorityId,
     }),
@@ -642,6 +662,7 @@ export function StudyCatalogosFiscales() {
   const jurisdictions = jurisdictionsQuery.data ?? [];
   const taxTypes = taxTypesQuery.data ?? [];
   const calcFamilies = calcFamiliesQuery.data ?? [];
+  const regimeModules = regimeModulesQuery.data ?? [];
   const selectableJurisdictions = jurisdictions.filter((row) => row.isActive);
   const selectableTaxTypes = taxTypes.filter((row) => row.isActive);
   const jurisdictionLabel = (jurisdiction: JurisdictionOption) => {
@@ -803,6 +824,7 @@ export function StudyCatalogosFiscales() {
       name: row.name,
       taxTypeId: row.taxType.id,
       calcFamilyId: row.calcFamilyId ?? row.taxType.defaultFamilyId ?? "",
+      moduleId: row.moduleId ?? "",
       jurisdictionId: row.jurisdiction.id,
       authorityId: row.authority.id,
     });
@@ -844,6 +866,7 @@ export function StudyCatalogosFiscales() {
       name: row.name,
       taxTypeId: row.taxType.id,
       calcFamilyId: row.calcFamilyId ?? row.taxType.defaultFamilyId ?? "",
+      moduleId: row.moduleId ?? "",
       jurisdictionId: row.jurisdiction.id,
       authorityId: row.authority.id,
     });
@@ -2027,6 +2050,42 @@ export function StudyCatalogosFiscales() {
             ) : null}
           </div>
           <div className="ds-field">
+            <label className="ds-field__label" htmlFor="regime-module">Módulo</label>
+            <select
+              id="regime-module"
+              className="ds-field__input"
+              value={regimeForm.moduleId}
+              onChange={(event) => setRegimeForm({ ...regimeForm, moduleId: event.target.value })}
+              required
+            >
+              <option value="">Seleccioná un módulo…</option>
+              {selectionOptions<TaxRegimeModuleOption>(regimeModules, regimeForm.moduleId).map((module) => (
+                <option key={module.id} value={module.id} disabled={!module.isActive}>
+                  {module.label}{!module.isActive ? " (oculto)" : ""}
+                </option>
+              ))}
+            </select>
+            <p className="muted-copy">
+              {regimeForm.moduleId
+                ? "El módulo elegido habilita el régimen según sus permisos."
+                : "Elegí el módulo que habilita este régimen."}
+            </p>
+            {regimeModulesQuery.isLoading ? <p className="muted-copy">Cargando módulos…</p> : null}
+            {!regimeModulesQuery.isLoading && !regimeModulesQuery.isError && regimeModules.length === 0 ? (
+              <p className="form-error" role="alert">No hay módulos habilitantes disponibles para elegir.</p>
+            ) : null}
+            {regimeModulesQuery.isError ? (
+              <p className="form-error" role="alert">
+                No pudimos cargar los módulos habilitantes. <Button type="button" variant="ghost" size="sm" onClick={() => void regimeModulesQuery.refetch()}>Reintentar</Button>
+              </p>
+            ) : null}
+            {apiFieldIssue(editingRegime ? updateRegime.error : createRegime.error, "moduleId") ? (
+              <p className="form-error" role="alert">
+                {apiFieldIssue(editingRegime ? updateRegime.error : createRegime.error, "moduleId")}
+              </p>
+            ) : null}
+          </div>
+          <div className="ds-field">
             <label className="ds-field__label" htmlFor="regime-jurisdiction">Jurisdicción</label>
             <select
               id="regime-jurisdiction"
@@ -2081,6 +2140,7 @@ export function StudyCatalogosFiscales() {
                 !regimeForm.name.trim() ||
                 !regimeForm.taxTypeId ||
                 !regimeForm.calcFamilyId ||
+                !regimeForm.moduleId ||
                 !regimeForm.jurisdictionId ||
                 !regimeForm.authorityId
               }

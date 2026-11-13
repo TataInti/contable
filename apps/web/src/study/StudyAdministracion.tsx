@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
@@ -115,7 +115,119 @@ const PORTAL_ROLE_LABELS: Record<string, string> = {
   READONLY: "Sólo lectura",
 };
 
-type AdminTab = "internal" | "portal" | "standards" | "profile";
+type AdminTab = "internal" | "portal" | "standards" | "profile" | "controls";
+
+const ARGENTINA_TIME_ZONES = [
+  "America/Argentina/Buenos_Aires",
+  "America/Argentina/Catamarca",
+  "America/Argentina/Cordoba",
+  "America/Argentina/Jujuy",
+  "America/Argentina/La_Rioja",
+  "America/Argentina/Mendoza",
+  "America/Argentina/Rio_Gallegos",
+  "America/Argentina/Salta",
+  "America/Argentina/San_Juan",
+  "America/Argentina/San_Luis",
+  "America/Argentina/Tucuman",
+  "America/Argentina/Ushuaia",
+];
+
+const TIME_ZONE_GROUP_LABELS: Record<string, string> = {
+  Africa: "África",
+  America: "América",
+  Antarctica: "Antártida",
+  Arctic: "Ártico",
+  Asia: "Asia",
+  Atlantic: "Atlántico",
+  Australia: "Australia",
+  Etc: "Otros",
+  Europe: "Europa",
+  Indian: "Océano Índico",
+  Pacific: "Pacífico",
+  UTC: "UTC",
+};
+
+interface TimeZoneOption {
+  value: string;
+  label: string;
+}
+
+interface TimeZoneGroup {
+  key: string;
+  label: string;
+  options: TimeZoneOption[];
+}
+
+function timeZoneCityName(timeZone: string): string {
+  return timeZone.split("/").at(-1)?.replaceAll("_", " ") ?? timeZone;
+}
+
+const TIME_ZONE_LABEL_CACHE = new Map<string, string>();
+
+function timeZoneLabel(timeZone: string): string {
+  const cached = TIME_ZONE_LABEL_CACHE.get(timeZone);
+  if (cached) return cached;
+  const city = timeZoneCityName(timeZone);
+  try {
+    const offset = new Intl.DateTimeFormat("es-AR", {
+      timeZone,
+      timeZoneName: "shortOffset",
+    })
+      .formatToParts(new Date())
+      .find((part) => part.type === "timeZoneName")?.value;
+    const label = offset ? `${city} (${offset})` : city;
+    TIME_ZONE_LABEL_CACHE.set(timeZone, label);
+    return label;
+  } catch {
+    TIME_ZONE_LABEL_CACHE.set(timeZone, city);
+    return city;
+  }
+}
+
+const SUPPORTED_TIME_ZONES =
+  typeof Intl.supportedValuesOf === "function"
+    ? Intl.supportedValuesOf("timeZone")
+    : ARGENTINA_TIME_ZONES;
+const TIME_ZONE_OPTIONS = Array.from(
+  new Set([...SUPPORTED_TIME_ZONES, "UTC", ...ARGENTINA_TIME_ZONES]),
+).sort((left, right) => timeZoneCityName(left).localeCompare(timeZoneCityName(right), "es-AR"));
+
+function groupTimeZones(currentTimeZone?: string): TimeZoneGroup[] {
+  const zones = currentTimeZone && !TIME_ZONE_OPTIONS.includes(currentTimeZone)
+    ? [...TIME_ZONE_OPTIONS, currentTimeZone]
+    : TIME_ZONE_OPTIONS;
+  const labelCounts = new Map<string, number>();
+  for (const timeZone of zones) {
+    const label = timeZoneLabel(timeZone);
+    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+  }
+  const groups = new Map<string, TimeZoneOption[]>();
+  for (const timeZone of zones) {
+    const key = timeZone.split("/")[0] ?? "UTC";
+    const baseLabel = timeZoneLabel(timeZone);
+    const parts = timeZone.split("/");
+    const qualifier = parts.length > 1 ? parts[parts.length - 2] ?? key : key;
+    const label = (labelCounts.get(baseLabel) ?? 0) > 1
+      ? `${baseLabel} · ${TIME_ZONE_GROUP_LABELS[qualifier] ?? qualifier.replaceAll("_", " ")}`
+      : baseLabel;
+    groups.set(key, [...(groups.get(key) ?? []), { value: timeZone, label }]);
+  }
+  return [...groups.entries()]
+    .map(([key, options]) => ({
+      key,
+      label: TIME_ZONE_GROUP_LABELS[key] ?? key,
+      options,
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label, "es-AR"));
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value.trim());
+}
+
+function batchUserErrorLabel(error: string): string {
+  return error.replace(/\bEmail\b/g, "Correo").replace(/\bemail\b/g, "correo");
+}
 
 interface PortalRow {
   key: string;
@@ -159,20 +271,6 @@ function userMutationError(error: unknown, fallback: string): string {
     return "Ese correo ya está asociado a otra cuenta.";
   }
   return error instanceof Error && error.message ? error.message : fallback;
-}
-
-/** Resumen textual de los módulos internos habilitados para el rol. */
-function ModuleFingerprint({ role }: { role: string }) {
-  const enabled = INTERNAL_MODULES_BY_ROLE[role] ?? [];
-  return (
-    <span
-      className="dense-fp"
-      title={enabled.join(" · ") || "Sin módulos internos"}
-      aria-label={`${enabled.length} de ${INTERNAL_MODULES.length} módulos habilitados`}
-    >
-      <span>{enabled.length} de {INTERNAL_MODULES.length}</span>
-    </span>
-  );
 }
 
 /** Referencia rol × módulo: reemplaza repetir la lista de módulos en cada fila. */
@@ -249,6 +347,7 @@ export function StudyAdministracion() {
   const [identityEditing, setIdentityEditing] = useState<InternalMember | null>(null);
   const [identityName, setIdentityName] = useState("");
   const [identityEmail, setIdentityEmail] = useState("");
+  const [identitySubmitted, setIdentitySubmitted] = useState(false);
   const [internalRoleDrafts, setInternalRoleDrafts] = useState<Record<string, string>>({});
   const [assigningMember, setAssigningMember] = useState<InternalMember | null>(null);
   const [portalEditing, setPortalEditing] = useState<PortalMembership | null>(null);
@@ -264,6 +363,15 @@ export function StudyAdministracion() {
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
   const [density, setDensity] = useDensity();
+  const identityNameError = identitySubmitted && !identityName.trim() ? "Ingresá el nombre" : undefined;
+  const identityEmailError =
+    identitySubmitted && !isValidEmail(identityEmail)
+      ? "Ingresá un correo válido, por ejemplo nombre@estudio.com"
+      : undefined;
+  const profileTimeZoneGroups = useMemo(
+    () => (profileDraft ? groupTimeZones(profileDraft.timezone) : []),
+    [profileDraft?.timezone],
+  );
   const canManageSelfReview = capabilities.has("firm.self_review.manage");
   const searchRef = useRef<HTMLInputElement>(null);
   const newRef = useRef<() => void>(() => undefined);
@@ -583,16 +691,12 @@ export function StudyAdministracion() {
     setRecoverySummary(null);
   };
 
-  const activePortalMembershipCount = memberships.data?.filter(
-    (item) => item.status === "ACTIVE" && !item.revokedAt,
-  ).length;
   const pendingInvitationCount = invitations.data?.filter(
     (item) =>
       !item.revokedAt &&
       !item.acceptedAt &&
       new Date(item.expiresAt) >= new Date(),
   ).length;
-  const activeInternalMemberCount = internalMembers.data?.filter((item) => item.status === "ACTIVE").length;
   const openInternalInviteForm = () => {
     setActionError(null);
     setCreatedInternalUser(null);
@@ -604,6 +708,7 @@ export function StudyAdministracion() {
   };
   const openIdentityEdit = (item: InternalMember) => {
     setActionError(null);
+    setIdentitySubmitted(false);
     setIdentityEditing(item);
     setIdentityName(item.user?.name ?? "");
     setIdentityEmail(item.user?.emailNormalized ?? "");
@@ -635,8 +740,6 @@ export function StudyAdministracion() {
   const suspendedInternalMemberCount = allMembers.filter(
     (item) => effectiveStatus(item) === "SUSPENDED",
   ).length;
-  const ownerCount = allMembers.filter((item) => item.role === "OWNER").length;
-
   const searchQuery = normalizeSearch(search);
   const visibleMembers = allMembers.filter(
     (item) =>
@@ -666,6 +769,7 @@ export function StudyAdministracion() {
           <Button
             size="row"
             variant={variant}
+            aria-label={`Recuperar acceso de ${memberName}`}
             loading={
               createAccessRecovery.isPending && createAccessRecovery.variables?.userId === item.userId
             }
@@ -689,6 +793,7 @@ export function StudyAdministracion() {
             size="row"
             variant={variant}
             className="dense-action--danger"
+            aria-label={`Suspender a ${memberName}`}
             loading={
               suspendInternalMember.isPending && suspendInternalMember.variables === item.userId
             }
@@ -706,6 +811,7 @@ export function StudyAdministracion() {
           <Button
             size="row"
             variant={variant}
+            aria-label={`Reactivar acceso de ${memberName}`}
             loading={
               reactivateInternalMember.isPending &&
               reactivateInternalMember.variables === item.userId
@@ -776,13 +882,6 @@ export function StudyAdministracion() {
       ),
     },
     {
-      key: "modules",
-      header: "Módulos",
-      width: "120px",
-      sortValue: (item) => (INTERNAL_MODULES_BY_ROLE[item.role] ?? []).length,
-      render: (item) => <ModuleFingerprint role={item.role} />,
-    },
-    {
       key: "status",
       header: "Estado",
       width: "120px",
@@ -792,6 +891,7 @@ export function StudyAdministracion() {
     {
       key: "actions",
       header: "Acciones",
+      width: "180px",
       secondary: true,
       align: "right",
       render: (item) => (
@@ -804,15 +904,30 @@ export function StudyAdministracion() {
           >
             Editar
           </Button>
-          <Button
-            size="row"
-            variant="ghost"
-            aria-label={`Administrar clientes de ${item.user?.name ?? "este usuario"}`}
-            onClick={() => setAssigningMember(item)}
-          >
-            Clientes
-          </Button>
-          {memberActionButtons(item, "ghost")}
+          <details className="dense-inspector-actions__menu administration-user-actions">
+            <summary
+              className="dense-inspector-actions__trigger"
+              aria-label={`Más acciones de ${item.user?.name ?? "este usuario"}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              Más acciones
+            </summary>
+            <div
+              className="dense-inspector-actions__items"
+              role="group"
+              aria-label={`Acciones de ${item.user?.name ?? "este usuario"}`}
+            >
+              <Button
+                size="row"
+                variant="ghost"
+                aria-label={`Administrar clientes de ${item.user?.name ?? "este usuario"}`}
+                onClick={() => setAssigningMember(item)}
+              >
+                Clientes
+              </Button>
+              {memberActionButtons(item, "ghost")}
+            </div>
+          </details>
         </span>
       ),
     },
@@ -820,7 +935,6 @@ export function StudyAdministracion() {
 
   let internalInspector: ReactNode = null;
   if (tab === "internal" && selectedMember) {
-    const modules = INTERNAL_MODULES_BY_ROLE[selectedMember.role] ?? [];
     internalInspector = (
       <Inspector
         label="Detalle del usuario"
@@ -837,6 +951,7 @@ export function StudyAdministracion() {
             <Button
               size="row"
               variant="secondary"
+              aria-label={`Editar a ${selectedMember.user?.name ?? "este usuario"}`}
               onClick={() => openIdentityEdit(selectedMember)}
             >
               Editar
@@ -844,6 +959,7 @@ export function StudyAdministracion() {
             <Button
               size="row"
               variant="ghost"
+              aria-label={`Administrar clientes de ${selectedMember.user?.name ?? "este usuario"}`}
               onClick={() => setAssigningMember(selectedMember)}
             >
               Clientes
@@ -857,10 +973,6 @@ export function StudyAdministracion() {
             items={[
               ["Rol", INTERNAL_ROLE_LABELS[selectedMember.role] ?? selectedMember.role],
               ["Estado", <StatusBadge key="status" status={effectiveStatus(selectedMember)} />],
-              [
-                "Módulos",
-                `${modules.length} de ${INTERNAL_MODULES.length} habilitados`,
-              ],
             ]}
           />
         </InspectorSection>
@@ -883,9 +995,9 @@ export function StudyAdministracion() {
         </InspectorSection>
         <InspectorSection title="Reglas">
           <p>
-            El rol es la fuente de verdad del acceso: no se asignan permisos sueltos. La
-            transferencia de titularidad es un cambio de rol. Los módulos habilitados para el estudio
-            se definen en administración general.
+            El acceso depende del rol; no se asignan permisos por separado. La transferencia de
+            titularidad es un cambio de rol. Cada estudio define los módulos disponibles para sus
+            usuarios.
           </p>
         </InspectorSection>
       </Inspector>
@@ -1003,6 +1115,7 @@ export function StudyAdministracion() {
               size="row"
               variant={row.status === "ACTIVE" ? "ghost" : "secondary"}
               className={row.status === "ACTIVE" ? "dense-action--danger" : undefined}
+              aria-label={`${row.status === "ACTIVE" ? "Suspender" : "Reactivar"} acceso de ${row.name ?? row.email}`}
               loading={row.pending}
               onClick={row.onToggleStatus}
             >
@@ -1014,6 +1127,7 @@ export function StudyAdministracion() {
               size="row"
               variant="ghost"
               className="dense-action--danger"
+              aria-label={`Revocar invitación para ${row.email}`}
               loading={row.pending}
               onClick={row.onRevoke}
             >
@@ -1065,11 +1179,8 @@ export function StudyAdministracion() {
     },
   ];
 
-  const footerWith = (count: number, noun: string, hint: string) => (
+  const footerWith = (hint: string) => (
     <>
-      <span>
-        {count} {noun}
-      </span>
       <span>{hint}</span>
       <span className="dense-table-foot__spacer" />
       <ShortcutHint
@@ -1115,11 +1226,7 @@ export function StudyAdministracion() {
           onSelect={setSelectedUserId}
           inspectorOpen={Boolean(internalInspector)}
           rowClassName={(item) => (effectiveStatus(item) === "SUSPENDED" ? "dense-row--muted" : undefined)}
-          footer={footerWith(
-            visibleMembers.length,
-            visibleMembers.length === 1 ? "usuario" : "usuarios",
-            "El titular no puede suspenderse desde la UI. El rol define el acceso a módulos.",
-          )}
+          footer={footerWith("El estudio debe conservar al menos un titular o administrador activo.")}
           empty={
             <EmptyState
               size="compact"
@@ -1131,7 +1238,7 @@ export function StudyAdministracion() {
               description={
                 allMembers.length === 0
                   ? "Creá la primera cuenta del estudio para asignarle un rol."
-                  : "Probá con otro nombre o email, o quitá filtros."
+                  : "Probá con otro nombre o correo, o quitá filtros."
               }
             />
           }
@@ -1178,11 +1285,7 @@ export function StudyAdministracion() {
           rows={portalRows}
           rowKey={(row) => row.key}
           rowClassName={(row) => (row.status === "REVOKED" ? "dense-row--muted" : undefined)}
-          footer={footerWith(
-            portalRows.length,
-            "accesos e invitaciones",
-            "La invitación vence a los siete días y sólo puede usarse con el correo indicado.",
-          )}
+          footer={footerWith("La invitación vence a los siete días y sólo puede usarse con el correo indicado.")}
           empty={
             <EmptyState
               size="compact"
@@ -1207,11 +1310,31 @@ export function StudyAdministracion() {
           }
         />
       ) : firmProfile.data ? (
-        <section className="dense-stack" aria-label="Datos del estudio">
-          <p><strong>Razón social</strong> · {firmProfile.data.legalName}</p>
-          <p><strong>Nombre del estudio</strong> · {firmProfile.data.displayName}</p>
-          <p><strong>CUIT</strong> · {firmProfile.data.taxId || "—"}</p>
-          <p><strong>Zona horaria</strong> · {firmProfile.data.timezone}</p>
+        <section className="administration-profile" aria-label="Datos del estudio">
+          <div className="administration-profile__heading">
+            <h2>Datos del estudio</h2>
+            <Button size="sm" variant="secondary" onClick={openProfileEdit}>
+              Editar datos
+            </Button>
+          </div>
+          <dl className="administration-profile__facts">
+            <div>
+              <dt>Razón social</dt>
+              <dd>{firmProfile.data.legalName || "—"}</dd>
+            </div>
+            <div>
+              <dt>Nombre del estudio</dt>
+              <dd>{firmProfile.data.displayName || "—"}</dd>
+            </div>
+            <div>
+              <dt>CUIT</dt>
+              <dd>{firmProfile.data.taxId || "—"}</dd>
+            </div>
+            <div>
+              <dt>Zona horaria</dt>
+              <dd>{timeZoneLabel(firmProfile.data.timezone)}</dd>
+            </div>
+          </dl>
         </section>
       ) : (
         <EmptyState
@@ -1224,6 +1347,54 @@ export function StudyAdministracion() {
           }
         />
       ));
+  } else if (tab === "controls") {
+    tableBody = (
+      <section className="study-panel self-review-setting" aria-labelledby="self-review-setting-title">
+        <div className="self-review-setting__heading">
+          <p className="study-page__eyebrow">Control interno</p>
+          <h2 className="self-review-setting__title" id="self-review-setting-title">
+            Permitir autorrevisión de fuentes y expedientes
+          </h2>
+          <p>
+            Permite que quien importó un lote revise su fuente y que quien preparó un expediente
+            lo revise y finalice. La opción reduce el control interno de cuatro ojos; cada
+            autorrevisión queda registrada en la auditoría.
+          </p>
+        </div>
+        <label className="self-review-setting__toggle">
+          <input
+            type="checkbox"
+            aria-label="Permitir autorrevisión de fuentes y expedientes"
+            checked={selfReviewSetting.data?.allowSelfReview ?? false}
+            disabled={
+              !canManageSelfReview ||
+              selfReviewSetting.isLoading ||
+              selfReviewSetting.isError ||
+              updateSelfReviewSetting.isPending
+            }
+            onChange={(event) => updateSelfReviewSetting.mutate(event.target.checked)}
+          />
+          <span>{selfReviewSetting.data?.allowSelfReview ? "Activada" : "Desactivada"}</span>
+        </label>
+        {!canManageSelfReview ? (
+          <small className="muted-copy">Solo el Titular puede cambiar esta opción.</small>
+        ) : null}
+        {selfReviewSetting.isError ? (
+          <p className="form-error" role="alert">
+            {selfReviewSetting.error instanceof Error
+              ? selfReviewSetting.error.message
+              : "No se pudo consultar la configuración de autorrevisión."}
+          </p>
+        ) : null}
+        {updateSelfReviewSetting.isError ? (
+          <p className="form-error" role="alert">
+            {updateSelfReviewSetting.error instanceof Error
+              ? updateSelfReviewSetting.error.message
+              : "No se pudo actualizar la configuración de autorrevisión."}
+          </p>
+        ) : null}
+      </section>
+    );
   } else {
     tableBody =
       queryState(accountingStandards.isLoading, "Cargando normas contables…") ??
@@ -1244,11 +1415,7 @@ export function StudyAdministracion() {
           rows={standardsRows}
           rowKey={(item) => item.id}
           rowClassName={(item) => (item.isActive ? undefined : "dense-row--muted")}
-          footer={footerWith(
-            standardsRows.length,
-            standardsRows.length === 1 ? "norma" : "normas",
-            "La ficha de cada cliente elige de acá, sin texto libre. Desactivar no altera a los clientes que ya la tienen.",
-          )}
+          footer={footerWith("La ficha de cada cliente elige de acá, sin texto libre. Desactivar no altera a los clientes que ya la tienen.")}
           empty={
             <EmptyState
               size="compact"
@@ -1276,7 +1443,7 @@ export function StudyAdministracion() {
       if (clientId) openInviteForm();
     } else if (tab === "standards") {
       openStandardForm();
-    } else {
+    } else if (tab === "profile") {
       openProfileEdit();
     }
   };
@@ -1346,114 +1513,60 @@ export function StudyAdministracion() {
     { id: "single", label: "Individual" },
     { id: "batch", label: "En lote" },
   ];
-  const primaryLabel = {
-    internal: "Nuevo usuario",
-    portal: "Invitar al portal",
-    standards: "Nueva norma",
-    profile: "Editar datos",
-  }[tab];
+  const pageDescriptions: Record<AdminTab, string> = {
+    internal: "Administrá las cuentas del estudio, los roles y los clientes asignados.",
+    portal: clientId
+      ? "Accesos del portal del cliente seleccionado. Para cambiar de cliente, volvé a Inicio."
+      : "Elegí un cliente en Inicio para consultar y administrar sus accesos al portal.",
+    standards: "Configurá las normas contables que pueden elegir los clientes del estudio.",
+    profile: "Consultá y actualizá los datos de identificación y la zona horaria del estudio.",
+    controls: "Configurá los controles internos del estudio.",
+  };
+  const pageDescription = pageDescriptions[tab];
+  const adminTabs: DenseTab<AdminTab>[] = [
+    { id: "internal", label: "Usuarios internos", count: internalMembers.data ? allMembers.length : undefined },
+    { id: "portal", label: "Accesos del portal", count: clientId ? portalRows.length : undefined },
+    { id: "standards", label: "Normas contables", count: accountingStandards.data?.length },
+    { id: "profile", label: "Datos del estudio" },
+    ...(capabilities.has("firm.manage") ? [{ id: "controls" as const, label: "Controles" }] : []),
+  ];
 
   return (
     <DensePage density={density} className="administration-users">
       <DenseHeader
         eyebrow="Configuración del estudio"
         title="Usuarios y accesos"
-        description="El rol define qué módulos internos puede usar cada persona. No hay permisos sueltos: cada cambio queda en la auditoría."
+        description={pageDescription}
         actions={
           <>
-            {tab === "profile" ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={!firmProfile.data || firmProfile.isLoading}
-                onClick={openNewForTab}
-              >
-                {primaryLabel}
-              </Button>
-            ) : null}
             {tab === "internal" ? (
-              <Button size="sm" variant="secondary" onClick={openBatchForm}>
-                Alta en lote
+              <>
+                <Button size="sm" variant="secondary" onClick={openBatchForm}>
+                  Alta en lote
+                </Button>
+                <Button size="sm" onClick={openNewForTab}>
+                  <Icon name="plus" size={16} /> Nuevo usuario
+                </Button>
+              </>
+            ) : null}
+            {tab === "portal" && clientId ? (
+              <Button size="sm" onClick={openNewForTab}>
+                <Icon name="plus" size={16} /> Invitar al portal
               </Button>
             ) : null}
-            {tab !== "profile" && (tab !== "portal" || clientId) ? (
+            {tab === "standards" ? (
               <Button size="sm" onClick={openNewForTab}>
-                <Icon name="plus" size={16} /> {primaryLabel}
+                <Icon name="plus" size={16} /> Nueva norma
               </Button>
             ) : null}
           </>
         }
       />
 
-      {capabilities.has("firm.manage") ? (
-        <section className="study-panel self-review-setting" aria-labelledby="self-review-setting-title">
-          <div className="study-panel__heading">
-            <div>
-              <p className="study-page__eyebrow">Control interno</p>
-              <h2 id="self-review-setting-title">Permitir autorrevisión de fuentes y expedientes</h2>
-              <p>
-                Permite que quien importó un lote revise su fuente y que quien preparó un expediente
-                lo revise y finalice. La opción reduce el control interno de cuatro ojos; cada
-                autorrevisión queda registrada en la auditoría.
-              </p>
-            </div>
-          </div>
-          <label className="self-review-setting__toggle">
-            <input
-              type="checkbox"
-              aria-label="Permitir autorrevisión de fuentes y expedientes"
-              checked={selfReviewSetting.data?.allowSelfReview ?? false}
-              disabled={
-                !canManageSelfReview ||
-                selfReviewSetting.isLoading ||
-                selfReviewSetting.isError ||
-                updateSelfReviewSetting.isPending
-              }
-              onChange={(event) => updateSelfReviewSetting.mutate(event.target.checked)}
-            />
-            <span>{selfReviewSetting.data?.allowSelfReview ? "Activada" : "Desactivada"}</span>
-          </label>
-          {!canManageSelfReview ? (
-            <small className="muted-copy">Solo el Titular puede cambiar esta opción.</small>
-          ) : null}
-          {selfReviewSetting.isError ? (
-            <p className="form-error" role="alert">
-              {selfReviewSetting.error instanceof Error
-                ? selfReviewSetting.error.message
-                : "No se pudo consultar la configuración de autorrevisión."}
-            </p>
-          ) : null}
-          {updateSelfReviewSetting.isError ? (
-            <p className="form-error" role="alert">
-              {updateSelfReviewSetting.error instanceof Error
-                ? updateSelfReviewSetting.error.message
-                : "No se pudo actualizar la configuración de autorrevisión."}
-            </p>
-          ) : null}
-        </section>
-      ) : null}
-
       <StatStrip
         label="Resumen de accesos"
         items={[
-          {
-            key: "internal",
-            label: "Usuarios internos",
-            value: internalMembers.data ? allMembers.length : "—",
-            active: tab === "internal",
-            onSelect: () => setTab("internal"),
-          },
-          { key: "active", label: "Activos", value: activeInternalMemberCount ?? "—" },
           { key: "suspended", label: "Suspendidos", value: internalMembers.data ? suspendedInternalMemberCount : "—" },
-          { key: "owners", label: "Titulares", value: internalMembers.data ? ownerCount : "—" },
-          {
-            key: "portal",
-            label: "Accesos del portal",
-            value: activePortalMembershipCount ?? "—",
-            detail: clientId ? undefined : "sin cliente",
-            active: tab === "portal",
-            onSelect: () => setTab("portal"),
-          },
           {
             key: "pending",
             label: "Invitaciones pendientes",
@@ -1496,70 +1609,60 @@ export function StudyAdministracion() {
           setTab(next);
           setSelectedUserId(null);
         }}
-        tabs={[
-          { id: "internal", label: "Usuarios internos", count: internalMembers.data ? allMembers.length : undefined },
-          { id: "portal", label: "Accesos del portal", count: clientId ? portalRows.length : undefined },
-          { id: "standards", label: "Normas contables", count: accountingStandards.data?.length },
-          { id: "profile", label: "Datos del estudio" },
-        ]}
+        tabs={adminTabs}
       />
 
-      <DenseToolbar>
-        <DenseSearch
-          inputRef={searchRef}
-          value={search}
-          onChange={setSearch}
-          placeholder={tab === "standards" ? "Buscar norma…" : "Buscar nombre o email…"}
-        />
-        {tab === "internal" ? (
-          <>
-            <select
-              className="dense-select"
-              aria-label="Filtrar por rol"
-              value={roleFilter}
-              onChange={(event) => setRoleFilter(event.target.value)}
-            >
-              <option value="">Rol: todos</option>
-              {INTERNAL_ROLE_OPTIONS.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <select
-              className="dense-select"
-              aria-label="Filtrar por estado"
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as "" | "ACTIVE" | "SUSPENDED")}
-            >
-              <option value="">Estado: todos</option>
-              <option value="ACTIVE">Activos</option>
-              <option value="SUSPENDED">Suspendidos</option>
-            </select>
-            <Button
-              type="button"
-              variant="secondary"
-              size="row"
-              aria-pressed={showRoles}
-              onClick={() => {
-                setSelectedUserId(null);
-                setShowRoles((current) => !current);
-              }}
-            >
-              Roles y módulos
-            </Button>
-          </>
-        ) : null}
-        {tab === "portal" ? (
-          <span className="dense-toolbar__hint">
-            {clientId
-              ? "Accesos del cliente seleccionado en el contexto superior."
-              : "El acceso al portal siempre se administra dentro de una empresa cliente."}
-          </span>
-        ) : null}
-        <span className="dense-toolbar__spacer" />
-        <DensitySwitch value={density} onChange={setDensity} />
-      </DenseToolbar>
+      {tab !== "profile" && tab !== "controls" ? (
+        <DenseToolbar>
+          <DenseSearch
+            inputRef={searchRef}
+            value={search}
+            onChange={setSearch}
+            placeholder={tab === "standards" ? "Buscar norma…" : "Buscar nombre o correo…"}
+          />
+          {tab === "internal" ? (
+            <>
+              <select
+                className="dense-select"
+                aria-label="Filtrar por rol"
+                value={roleFilter}
+                onChange={(event) => setRoleFilter(event.target.value)}
+              >
+                <option value="">Rol: todos</option>
+                {INTERNAL_ROLE_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="dense-select"
+                aria-label="Filtrar por estado"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as "" | "ACTIVE" | "SUSPENDED")}
+              >
+                <option value="">Estado: todos</option>
+                <option value="ACTIVE">Activos</option>
+                <option value="SUSPENDED">Suspendidos</option>
+              </select>
+              <Button
+                type="button"
+                variant="secondary"
+                size="row"
+                aria-pressed={showRoles}
+                onClick={() => {
+                  setSelectedUserId(null);
+                  setShowRoles((current) => !current);
+                }}
+              >
+                Roles y módulos
+              </Button>
+            </>
+          ) : null}
+          <span className="dense-toolbar__spacer" />
+          <DensitySwitch value={density} onChange={setDensity} />
+        </DenseToolbar>
+      ) : null}
 
       {recoveryLink ? (
         <div className="invitation-link" role="status">
@@ -1660,7 +1763,7 @@ export function StudyAdministracion() {
                 />
                 <Field
                   id="internal-invite-email"
-                  label="Email"
+                  label="Correo"
                   type="email"
                   value={internalEmail}
                   onChange={(event) => setInternalEmail(event.target.value)}
@@ -1699,7 +1802,7 @@ export function StudyAdministracion() {
                 ) : null}
                 {!internalEmail.trim() || !internalName.trim() ? (
                   <p className="form-submit-hint" role="note">
-                    Ingresá nombre y email para poder crear el usuario.
+                    Ingresá nombre y correo para poder crear el usuario.
                   </p>
                 ) : null}
                 <div className="study-form__actions">
@@ -1774,7 +1877,7 @@ export function StudyAdministracion() {
           ) : (
             <div className="dense-stack">
               <label className="ds-field">
-                <span className="ds-field__label">Una persona por línea: nombre, email, rol</span>
+                <span className="ds-field__label">Una persona por línea: nombre, correo, rol</span>
                 <textarea
                   className="ds-field__input dense-textarea"
                   rows={6}
@@ -1792,7 +1895,7 @@ export function StudyAdministracion() {
                     <thead>
                       <tr>
                         <th>Nombre</th>
-                        <th>Email</th>
+                        <th>Correo</th>
                         <th>Rol</th>
                       </tr>
                     </thead>
@@ -1802,7 +1905,9 @@ export function StudyAdministracion() {
                           <td>{line.name || "—"}</td>
                           <td>{line.email || "—"}</td>
                           <td>
-                            {line.error ? line.error : (INTERNAL_ROLE_LABELS[line.role ?? ""] ?? "—")}
+                            {line.error
+                              ? batchUserErrorLabel(line.error)
+                              : (INTERNAL_ROLE_LABELS[line.role ?? ""] ?? "—")}
                           </td>
                         </tr>
                       ))}
@@ -1836,12 +1941,25 @@ export function StudyAdministracion() {
           eyebrow="Usuario del estudio"
           title="Editar usuario"
           description="Actualizá el nombre y el correo de la cuenta."
+          footer={
+            <>
+              <Button type="submit" form="member-edit-form" loading={updateMemberIdentity.isPending}>
+                Guardar cambios
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setIdentityEditing(null)}>
+                Cancelar
+              </Button>
+            </>
+          }
         >
           <form
-            className="study-form study-form--compact"
+            id="member-edit-form"
+            className="study-form study-form--compact administration-user-edit-form"
             noValidate
             onSubmit={(event) => {
               event.preventDefault();
+              setIdentitySubmitted(true);
+              if (!identityName.trim() || !isValidEmail(identityEmail)) return;
               setActionError(null);
               setNotice(null);
               updateMemberIdentity.mutate({
@@ -1856,6 +1974,8 @@ export function StudyAdministracion() {
               label="Nombre"
               value={identityName}
               onChange={(event) => setIdentityName(event.target.value)}
+              error={identityNameError}
+              required
             />
             <Field
               id="member-edit-email"
@@ -1863,18 +1983,12 @@ export function StudyAdministracion() {
               type="email"
               value={identityEmail}
               onChange={(event) => setIdentityEmail(event.target.value)}
+              error={identityEmailError}
+              required
             />
             {updateMemberIdentity.isError && actionError ? (
               <p className="form-error" role="alert">{actionError}</p>
             ) : null}
-            <div className="study-form__actions">
-              <Button type="submit" loading={updateMemberIdentity.isPending}>
-                Guardar cambios
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setIdentityEditing(null)}>
-                Cancelar
-              </Button>
-            </div>
           </form>
         </ActionDrawer>
       ) : null}
@@ -1964,12 +2078,25 @@ export function StudyAdministracion() {
               value={profileDraft.taxId ?? ""}
               onChange={(event) => setProfileDraft({ ...profileDraft, taxId: event.target.value })}
             />
-            <Field
-              id="firm-profile-timezone"
-              label="Zona horaria"
-              value={profileDraft.timezone}
-              onChange={(event) => setProfileDraft({ ...profileDraft, timezone: event.target.value })}
-            />
+            <label className="ds-field">
+              <span className="ds-field__label">Zona horaria</span>
+              <select
+                id="firm-profile-timezone"
+                className="ds-field__input"
+                value={profileDraft.timezone}
+                onChange={(event) => setProfileDraft({ ...profileDraft, timezone: event.target.value })}
+              >
+                {profileTimeZoneGroups.map((group) => (
+                  <optgroup key={group.key} label={group.label}>
+                    {group.options.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
             {updateFirmProfile.isError && actionError ? (
               <p className="form-error" role="alert">{actionError}</p>
             ) : null}
@@ -1998,7 +2125,7 @@ export function StudyAdministracion() {
           onClose={() => setShowInviteForm(false)}
           eyebrow="Acceso del cliente"
           title="Invitar al portal"
-          description="La invitación vence a los siete días y sólo puede usarse con el correo indicado."
+          description="Invitación para el cliente seleccionado. Vence a los siete días y sólo puede usarse con el correo indicado."
         >
           <form
             className="study-form study-form--compact dense-form"
@@ -2011,7 +2138,7 @@ export function StudyAdministracion() {
             <div className="dense-form__full">
               <Field
                 id="portal-invite-email"
-                label="Email"
+                label="Correo"
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}

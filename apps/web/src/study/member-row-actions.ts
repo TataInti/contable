@@ -27,8 +27,8 @@ export function memberRowActions(member: MemberLifecycleState): MemberRowAction[
   if (member.membershipStatus === "ACTIVE") {
     // Recuperar acceso aplica a cualquier miembro activo (también al titular:
     // si lo pierde, sólo otro titular puede emitirle el enlace; el backend lo
-    // verifica). Suspender sigue reservado a no-OWNER.
-    return member.role !== "OWNER" ? ["suspend", "recover-access"] : ["recover-access"];
+    // verifica). La API decide si suspender deja al estudio sin administrador.
+    return ["suspend", "recover-access"];
   }
   return [];
 }

@@ -126,6 +126,38 @@ async function main() {
       create: { code: "MONOTRIBUTO", name: "Monotributo" },
     });
 
+    // Los fixtures fiscales se crean después de las migraciones. El backfill
+    // solo alcanza filas preexistentes, así que cada régimen de demo elige su
+    // módulo explícitamente en este seed.
+    const regimeModuleKeys = [
+      "TAX_RI",
+      "TAX_IIBB_LOCAL_TUC",
+      "TAX_TEM_SMT",
+      "TAX_CM_ART2",
+      "TAX_MONOTRIBUTO",
+    ] as const;
+    const regimeModules = await tx.taxRegimeModule.findMany({
+      where: { key: { in: [...regimeModuleKeys] }, isActive: true },
+      select: { id: true, key: true },
+    });
+    const regimeModuleIdByKey = new Map(
+      regimeModules.map(({ id, key }) => [key, id] as const),
+    );
+    function regimeModuleId(key: (typeof regimeModuleKeys)[number]): string {
+      const id = regimeModuleIdByKey.get(key);
+      if (!id) throw new Error(`Módulo fiscal de sistema no disponible: ${key}`);
+      return id;
+    }
+    async function ensureRegimeModule(
+      regimeId: string,
+      key: (typeof regimeModuleKeys)[number],
+    ) {
+      await tx.taxRegime.updateMany({
+        where: { id: regimeId, moduleId: null },
+        data: { moduleId: regimeModuleId(key) },
+      });
+    }
+
     // Regímenes
     const ri = await tx.taxRegime.upsert({
       where: { code: "RI" },
@@ -136,9 +168,11 @@ async function main() {
         taxTypeId: iva.id,
         jurisdictionId: ar.id,
         authorityId: arca.id,
+        moduleId: regimeModuleId("TAX_RI"),
       },
     });
-    await tx.taxRegime.upsert({
+    await ensureRegimeModule(ri.id, "TAX_RI");
+    const monotributoRegime = await tx.taxRegime.upsert({
       where: { code: "MONOTRIBUTO" },
       update: { taxTypeId: monotributo.id },
       create: {
@@ -147,9 +181,11 @@ async function main() {
         taxTypeId: monotributo.id,
         jurisdictionId: ar.id,
         authorityId: arca.id,
+        moduleId: regimeModuleId("TAX_MONOTRIBUTO"),
       },
     });
-    await tx.taxRegime.upsert({
+    await ensureRegimeModule(monotributoRegime.id, "TAX_MONOTRIBUTO");
+    const iibbLocalRegime = await tx.taxRegime.upsert({
       where: { code: "IIBB_LOCAL_TUC" },
       update: {},
       create: {
@@ -158,9 +194,11 @@ async function main() {
         taxTypeId: iibb.id,
         jurisdictionId: tucuman.id,
         authorityId: arca.id,
+        moduleId: regimeModuleId("TAX_IIBB_LOCAL_TUC"),
       },
     });
-    await tx.taxRegime.upsert({
+    await ensureRegimeModule(iibbLocalRegime.id, "TAX_IIBB_LOCAL_TUC");
+    const cm03Regime = await tx.taxRegime.upsert({
       where: { code: "CM_ART2" },
       update: {},
       create: {
@@ -169,9 +207,11 @@ async function main() {
         taxTypeId: iibb.id,
         jurisdictionId: ar.id,
         authorityId: arca.id,
+        moduleId: regimeModuleId("TAX_CM_ART2"),
       },
     });
-    await tx.taxRegime.upsert({
+    await ensureRegimeModule(cm03Regime.id, "TAX_CM_ART2");
+    const temRegime = await tx.taxRegime.upsert({
       where: { code: "TEM_SMT" },
       update: {},
       create: {
@@ -180,8 +220,10 @@ async function main() {
         taxTypeId: tem.id,
         jurisdictionId: tucuman.id,
         authorityId: arca.id,
+        moduleId: regimeModuleId("TAX_TEM_SMT"),
       },
     });
+    await ensureRegimeModule(temRegime.id, "TAX_TEM_SMT");
 
     // Feriados nacionales 2025-2026 (inamovibles + puente comunes, muestra).
     const feriadosNacionales = [
@@ -248,30 +290,28 @@ async function main() {
     }
 
     // G4: rule packs IIBB local, TEM, CM03 y Monotributo (aprobados y activos).
-    const iibbLocalRegime = await tx.taxRegime.findUnique({ where: { code: "IIBB_LOCAL_TUC" } });
-    const temRegime = await tx.taxRegime.findUnique({ where: { code: "TEM_SMT" } });
-    const cmRegime = await tx.taxRegime.findUnique({ where: { code: "CM_ART2" } });
-    const monoRegime = await tx.taxRegime.findUnique({ where: { code: "MONOTRIBUTO" } });
+    const cmRegime = cm03Regime;
+    const monoRegime = monotributoRegime;
 
     const iibbPack = await tx.taxRulePack.upsert({
       where: { code: "AR_IIBB_TUC_LOCAL_V1" },
       update: {},
-      create: { code: "AR_IIBB_TUC_LOCAL_V1", name: "IIBB Contribuyente Local Tucumán V1", regimeId: iibbLocalRegime!.id },
+      create: { code: "AR_IIBB_TUC_LOCAL_V1", name: "IIBB Contribuyente Local Tucumán V1", regimeId: iibbLocalRegime.id },
     });
     const temPack = await tx.taxRulePack.upsert({
       where: { code: "AR_TEM_SMT_V1" },
       update: {},
-      create: { code: "AR_TEM_SMT_V1", name: "TEM San Miguel de Tucumán V1", regimeId: temRegime!.id },
+      create: { code: "AR_TEM_SMT_V1", name: "TEM San Miguel de Tucumán V1", regimeId: temRegime.id },
     });
     const cmPack = await tx.taxRulePack.upsert({
       where: { code: "AR_IIBB_CM_ART2_V1" },
       update: {},
-      create: { code: "AR_IIBB_CM_ART2_V1", name: "CM03 Artículo 2 V1", regimeId: cmRegime!.id },
+      create: { code: "AR_IIBB_CM_ART2_V1", name: "CM03 Artículo 2 V1", regimeId: cmRegime.id },
     });
     const monoPack = await tx.taxRulePack.upsert({
       where: { code: "AR_MONOTRIBUTO_V1" },
       update: {},
-      create: { code: "AR_MONOTRIBUTO_V1", name: "Monotributo V1", regimeId: monoRegime!.id },
+      create: { code: "AR_MONOTRIBUTO_V1", name: "Monotributo V1", regimeId: monoRegime.id },
     });
 
     async function ensureActivePack(packId: string, engineVersion: string, rulesHash: string) {

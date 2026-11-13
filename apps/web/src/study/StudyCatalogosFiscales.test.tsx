@@ -49,6 +49,22 @@ const family = {
   allowedBalanceKinds: ["IVA_TECNICO", "IVA_LIBRE"],
 };
 const calcFamilies = [family];
+const taxRegimeModules = [
+  {
+    id: "a7000000-0000-4000-8000-000000000001",
+    key: "TAX_RI",
+    label: "IVA Responsable Inscripto",
+    flagCode: "TAX_RI",
+    isActive: true,
+  },
+  {
+    id: "a7000000-0000-4000-8000-000000000006",
+    key: "ALWAYS_ENABLED",
+    label: "Siempre habilitado",
+    flagCode: null,
+    isActive: true,
+  },
+];
 const taxType = {
   id: "tax-type-e2e",
   code: "E2E_TEST_TAX",
@@ -113,6 +129,7 @@ function mockApi() {
     if (path === "/tax/jurisdictions" || path === "/tax/jurisdictions?includeInactive=true") return Promise.resolve([...jurisdictions]);
     if (path === "/tax/types" || path === "/tax/types?includeInactive=true") return Promise.resolve([...taxTypes]);
     if (path === "/tax/calc-families") return Promise.resolve([...calcFamilies]);
+    if (path === "/tax/regime-modules") return Promise.resolve([...taxRegimeModules]);
     if (path === "/tax/authorities" || path === "/tax/authorities?includeInactive=true") return Promise.resolve([...authorities]);
     if (path === "/tax/regimes" || path === "/tax/regimes?includeInactive=true") return Promise.resolve([...regimes]);
     if (path === "/tax/activities?includeInactive=true") return Promise.resolve([...activities]);
@@ -166,6 +183,7 @@ function mockApi() {
         code: String(body.code ?? ""),
         name: String(body.name ?? ""),
         calcFamilyId: String(body.calcFamilyId ?? ""),
+        moduleId: String(body.moduleId ?? ""),
         isActive: true,
         authority: authorities.find((item) => item.id === body.authorityId),
         jurisdiction,
@@ -306,6 +324,10 @@ describe("StudyCatalogosFiscales", () => {
     fireEvent.change(screen.getByLabelText("Organismo recaudador"), { target: { value: "authority-e2e" } });
     // La coherencia organismo ↔ jurisdicción se confirma en vivo, antes de enviar.
     expect(await screen.findByText(/Coherente:/)).toBeTruthy();
+    const moduleSelect = screen.getByLabelText("Módulo") as HTMLSelectElement;
+    expect(moduleSelect.value).toBe("");
+    expect(within(moduleSelect).getByRole("option", { name: "Siempre habilitado" })).toBeTruthy();
+    fireEvent.change(moduleSelect, { target: { value: taxRegimeModules[1]!.id } });
     fireEvent.click(screen.getByRole("button", { name: "Crear régimen" }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/tax/regimes", {
@@ -313,12 +335,13 @@ describe("StudyCatalogosFiscales", () => {
       name: "Régimen sintético E2E",
       taxTypeId: taxType.id,
       calcFamilyId: family.id,
+      moduleId: taxRegimeModules[1]!.id,
       jurisdictionId: jurisdiction.id,
       authorityId: "authority-e2e",
     }));
   });
 
-  it("abre la edición de un régimen desde el enlace y precarga la familia predeterminada", async () => {
+  it("permite resolver desde el enlace un régimen pendiente de módulo", async () => {
     const authority = {
       id: "authority-edit",
       code: "AUTH-EDIT",
@@ -327,11 +350,13 @@ describe("StudyCatalogosFiscales", () => {
       isActive: true,
       jurisdiction,
     };
+    authorities.push(authority);
     regimes.push({
       id: "regime-pending",
       code: "REGIME-PENDING",
       name: "Régimen pendiente",
       calcFamilyId: null,
+      moduleId: null,
       isActive: true,
       authority,
       jurisdiction,
@@ -342,7 +367,19 @@ describe("StudyCatalogosFiscales", () => {
 
     const familySelect = await screen.findByLabelText("Familia de cálculo") as HTMLSelectElement;
     expect(familySelect.value).toBe(family.id);
-    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeTruthy();
+    const moduleSelect = screen.getByLabelText("Módulo") as HTMLSelectElement;
+    expect(moduleSelect.value).toBe("");
+    const save = screen.getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.change(moduleSelect, { target: { value: taxRegimeModules[0]!.id } });
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/tax/regimes/regime-pending",
+        expect.objectContaining({ moduleId: taxRegimeModules[0]!.id }),
+      ),
+    );
   });
 
   it("expone jurisdicciones e impuestos y los crea desde sus pestañas", async () => {
