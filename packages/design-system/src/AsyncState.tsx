@@ -1,5 +1,5 @@
 import { Button } from "./Button.js";
-import { EmptyState } from "./EmptyState.js";
+import { Notice } from "./Notice.js";
 
 export interface AsyncStateProps {
   loading: boolean;
@@ -30,17 +30,18 @@ export function AsyncState({
 
   if (error) {
     return (
-      <EmptyState
+      <Notice
+        tone="error"
         className={`async-state async-state--error ${className}`}
-        role="alert"
         title={errorTitle}
-        description={errorDescription}
         action={
           <Button type="button" variant="secondary" onClick={onRetry}>
             Reintentar
           </Button>
         }
-      />
+      >
+        {errorDescription}
+      </Notice>
     );
   }
 

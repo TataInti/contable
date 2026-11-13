@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, Table } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
-  DenseAlert,
   DenseHeader,
   DensePage,
   StatStrip,
@@ -228,15 +227,17 @@ export function StudyLiquidaciones() {
           Cargando períodos fiscales…
         </div>
       ) : taxPeriodsQuery.isError ? (
-        <EmptyState
+        <Notice
+          tone="error"
           title="No se pudieron cargar los períodos fiscales"
-          description="Reintentá la consulta para volver a cargar los períodos del cliente."
           action={
             <Button variant="secondary" onClick={() => void taxPeriodsQuery.refetch()}>
               Reintentar
             </Button>
           }
-        />
+        >
+          Reintentá la consulta para volver a cargar los períodos del cliente.
+        </Notice>
       ) : selectableTaxPeriods.length === 0 ? (
         <EmptyState
           title="Configurá un período fiscal"
@@ -249,8 +250,9 @@ export function StudyLiquidaciones() {
         />
       ) : null}
 
-      <DenseAlert
-        tone="ok"
+      <Notice
+        tone="info"
+        title="Próximo paso"
         action={
           canCalculate ? (
             <Button size="sm" onClick={() => setShowCalculator(true)} disabled={!selectableTaxPeriods.length}>Calcular liquidación</Button>
@@ -259,13 +261,12 @@ export function StudyLiquidaciones() {
           )
         }
       >
-        <strong>Próximo paso:</strong>{" "}
         {data.length
           ? "Revisá la cartera y avanzá la liquidación que requiere la próxima decisión."
           : canCalculate
             ? "Calculá una liquidación para un régimen y período fiscal configurados."
             : "Prepará la evidencia y el expediente antes de iniciar el cálculo."}
-      </DenseAlert>
+      </Notice>
 
 
 
@@ -348,16 +349,17 @@ export function StudyLiquidaciones() {
       </ActionDrawer>
 
       {receipt ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <Icon name="check" size={19} />
-          <span>
-            <strong>Acción completada</strong>
-            <small>{receipt}</small>
-          </span>
-          <button type="button" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
-            <Icon name="close" size={15} />
-          </button>
-        </div>
+        <Notice
+          tone="success"
+          title="Acción completada"
+          action={
+            <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
+              <Icon name="close" size={15} />
+            </Button>
+          }
+        >
+          {receipt}
+        </Notice>
       ) : null}
 
       <section className="study-page__section" aria-labelledby="settlements-list-title">
@@ -379,15 +381,17 @@ export function StudyLiquidaciones() {
           Cargando liquidaciones…
         </div>
       ) : listQuery.isError ? (
-        <EmptyState
+        <Notice
+          tone="error"
           title="No se pudieron cargar las liquidaciones"
-          description="Reintentá en unos minutos. No interpretamos esta falla como una cartera vacía."
           action={
             <Button variant="secondary" onClick={() => void listQuery.refetch()}>
               Reintentar
             </Button>
           }
-        />
+        >
+          Reintentá en unos minutos para volver a cargar la cartera.
+        </Notice>
       ) : !selectedTaxPeriod ? null : data.length === 0 ? (
         <EmptyState
           title="Todavía no hay liquidaciones"
@@ -495,14 +499,19 @@ export function StudyLiquidaciones() {
           ]}
           rows={data}
           rowKey={(row) => row.id}
-          empty="Sin liquidaciones."
+          empty={
+            <EmptyState
+              size="compact"
+              kind="no-data"
+              title="Todavía no hay liquidaciones"
+              description="Las liquidaciones del período aparecerán acá cuando estén disponibles."
+            />
+          }
         />
       )}
       </section>
       {mutationError ? (
-        <p className="form-error" role="alert">
-          {mutationError.message}
-        </p>
+        <Notice tone="error">{mutationError.message}</Notice>
       ) : null}
     
     </DensePage>

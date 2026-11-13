@@ -3,6 +3,7 @@ export * from "./Field.js";
 export * from "./MoneyField.js";
 export * from "./Table.js";
 export * from "./EmptyState.js";
+export * from "./Notice.js";
 
 // Dense primitives migrated from the web UI.
 export * from "./Dense.js";

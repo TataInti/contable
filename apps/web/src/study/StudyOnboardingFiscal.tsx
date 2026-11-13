@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, Table } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -96,7 +96,7 @@ const FISCAL_STEPS: Array<{ key: FiscalStep; label: string }> = [
 function MutationError({ error }: { error: unknown }) {
   if (!error) return null;
   const message = error instanceof Error ? error.message : "Ocurrió un error inesperado.";
-  return <p className="form-error" role="alert">{message}</p>;
+  return <Notice tone="error">{message}</Notice>;
 }
 
 export function StudyOnboardingFiscal() {
@@ -302,10 +302,29 @@ export function StudyOnboardingFiscal() {
         </nav>
 
         <div className="fiscal-onboarding-content">
-          {failedQueries.length > 0 ? <div className="form-error" role="alert">
-            <p><strong>No pudimos cargar {failedQueries.length === 1 ? failedQueries[0]?.label ?? "la información" : "parte de la información"}.</strong> Revisá tu conexión e intentá de nuevo.</p>
-            {failedQueries.map((item) => item.query.isError ? <Button key={item.key} type="button" variant="text" size="row" onClick={() => item.query.refetch()}>Reintentar {item.label}</Button> : null)}
-          </div> : null}
+          {failedQueries.length > 0 ? (
+            <Notice tone="error">
+              <p>
+                <strong>
+                  No pudimos cargar {failedQueries.length === 1 ? failedQueries[0]?.label ?? "la información" : "parte de la información"}.
+                </strong>{" "}
+                Revisá tu conexión e intentá de nuevo.
+              </p>
+              {failedQueries.map((item) =>
+                item.query.isError ? (
+                  <Button
+                    key={item.key}
+                    type="button"
+                    variant="text"
+                    size="row"
+                    onClick={() => item.query.refetch()}
+                  >
+                    Reintentar {item.label}
+                  </Button>
+                ) : null,
+              )}
+            </Notice>
+          ) : null}
 
           <section className="study-panel fiscal-contributor" aria-labelledby="contributor-title">
             <div className="fiscal-contributor__heading">
@@ -338,10 +357,16 @@ export function StudyOnboardingFiscal() {
                 {submitReview.error || activate.error ? <MutationError error={submitReview.error ?? activate.error} /> : null}
               </>
             ) : (
-              <div className="fiscal-contributor__empty">
-                <p>Todavía no hay un perfil fiscal configurado para este cliente.</p>
-                {!canWrite ? <p className="muted-copy">Tenés acceso de consulta. Pedí permiso de edición para crear el perfil.</p> : null}
-              </div>
+              <EmptyState
+                size="compact"
+                kind="no-data"
+                title="Todavía no hay un perfil fiscal configurado"
+                description={
+                  canWrite
+                    ? "Completá los datos del contribuyente para continuar con la configuración fiscal."
+                    : "Tenés acceso de consulta; solicitá permiso de edición para crear el perfil."
+                }
+              />
             )}
           </section>
 

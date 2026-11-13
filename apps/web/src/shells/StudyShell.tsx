@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Button } from "@contable/design-system";
+import { Button, EmptyState } from "@contable/design-system";
 import { ContextBar } from "./ContextBar";
 import { logout } from "../lib/auth";
 import { useSession } from "../session/SessionContext";
@@ -206,12 +206,13 @@ export function StudyShell() {
             {clientId ? (
               clientModules.map((item) => <StudyNavLink item={item} key={item.id} />)
             ) : (
-              <div className="study__client-empty">
-                <strong>Elegí un cliente</strong>
-                {capabilities.has("client.read") ? (
-                  <NavLink to="/clientes">Elegir cliente</NavLink>
-                ) : null}
-              </div>
+              <EmptyState
+                size="compact"
+                kind="no-data"
+                title="Elegí un cliente"
+                description="Seleccioná un cliente para abrir sus módulos de trabajo."
+                action={capabilities.has("client.read") ? <NavLink to="/clientes">Elegir cliente</NavLink> : undefined}
+              />
             )}
           </div>
 

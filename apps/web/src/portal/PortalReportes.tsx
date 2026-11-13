@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, EmptyState, Table } from "@contable/design-system";
+import { Button, EmptyState, Notice, Table } from "@contable/design-system";
 import { Link } from "react-router-dom";
 import { api, downloadFile, type ReportPublication } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -68,11 +68,13 @@ export function PortalReportes() {
         ) : reports.isLoading ? (
           <PortalLoading label="Cargando reportes…" />
         ) : reports.isError ? (
-          <EmptyState
+          <Notice
+            tone="error"
             title="No pudimos cargar los reportes"
-            description="Reintentá en unos minutos."
             action={<PortalRetryButton onRetry={() => void reports.refetch()} />}
-          />
+          >
+            Reintentá en unos minutos.
+          </Notice>
         ) : publications.length === 0 ? (
           <EmptyState
             title="Todavía no hay reportes publicados"
@@ -134,19 +136,23 @@ export function PortalReportes() {
               </div>
             </div>
             {downloadError ? (
-              <div className="portal-inline-alert portal-inline-alert--error" role="alert">
-                <span>{downloadError}</span>
-                {failedDownload ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => void downloadReport(failedDownload.report, failedDownload.format)}
-                  >
-                    Reintentar {failedDownload.format.toUpperCase()}
-                  </Button>
-                ) : null}
-              </div>
+              <Notice
+                tone="error"
+                action={
+                  failedDownload ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void downloadReport(failedDownload.report, failedDownload.format)}
+                    >
+                      Reintentar {failedDownload.format.toUpperCase()}
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {downloadError}
+              </Notice>
             ) : null}
             <Table<ReportPublication>
               className="portal-data-table portal-data-table--reports"

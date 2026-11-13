@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, Notice } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError, type AssistantTurn } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -232,13 +232,16 @@ export function StudyAsistente() {
       ) : (
         <>
           {conversationsQuery.isError ? (
-            <div className="query-warning" role="status">
-              <Icon name="alert" size={17} />
-              <span>No se pudo recuperar el historial. Podés iniciar una conversación nueva.</span>
-              <Button size="sm" variant="ghost" onClick={() => void conversationsQuery.refetch()}>
-                Reintentar
-              </Button>
-            </div>
+            <Notice
+              tone="warning"
+              action={
+                <Button size="sm" variant="ghost" onClick={() => void conversationsQuery.refetch()}>
+                  Reintentar
+                </Button>
+              }
+            >
+              No se pudo recuperar el historial. Podés iniciar una conversación nueva.
+            </Notice>
           ) : null}
           <section className="assistant-workspace" aria-label="Conversación con el asistente">
             <div className="study-chat" aria-live="polite">
@@ -369,12 +372,12 @@ export function StudyAsistente() {
 
             <div className="assistant-composer">
               {error ? (
-                <p className="form-error" role="alert">
+                <Notice tone="error">
                   {error}{" "}
                   {input
                     ? "Tu consulta quedó restaurada para que puedas reintentar."
                     : "Podés reintentar la acción."}
-                </p>
+                </Notice>
               ) : null}
               <form onSubmit={enviar}>
                 <label className="sr-only" htmlFor="assistant-query">

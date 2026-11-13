@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, Field } from "@contable/design-system";
+import { Button, Field, Notice } from "@contable/design-system";
 import { api, ApiError } from "../lib/api";
 import { Icon } from "../ui/Icon";
 import "./login.css";
@@ -53,9 +53,9 @@ export function AcceptPortalInvitation() {
           de tu empresa.
         </p>
         {!token ? (
-          <div className="login__error" role="alert">
+          <Notice tone="error">
             El enlace de invitación está incompleto.
-          </div>
+          </Notice>
         ) : (
           <form className="login__form" onSubmit={submit}>
             <Field
@@ -87,9 +87,9 @@ export function AcceptPortalInvitation() {
               required
             />
             {error ? (
-              <div className="login__error" role="alert">
+              <Notice tone="error">
                 {error}
-              </div>
+              </Notice>
             ) : null}
             <Button
               type="submit"

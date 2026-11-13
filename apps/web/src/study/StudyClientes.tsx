@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice } from "@contable/design-system";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ARGENTINA_PROVINCES,
@@ -21,7 +21,6 @@ import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer, type DeletionResult } from "../ui/DeletionDrawer";
 import { Icon } from "../ui/Icon";
 import {
-  DenseAlert,
   DenseFooter,
   DenseHeader,
   DenseLoading,
@@ -729,7 +728,8 @@ export function StudyClientes() {
       }
       banner={
         missingProfileFields(selectedClient).length > 0 ? (
-          <DenseAlert
+          <Notice
+            tone="warning"
             action={
               canManage ? (
                 <Button size="sm" variant="secondary" onClick={() => startClientEdit(selectedClient)}>
@@ -739,7 +739,7 @@ export function StudyClientes() {
             }
           >
             Ficha incompleta: falta {missingProfileFields(selectedClient).join(", ")}.
-          </DenseAlert>
+          </Notice>
         ) : undefined
       }
       onClose={() => setSelectedId(null)}
@@ -837,9 +837,9 @@ export function StudyClientes() {
           {contactsQuery.isLoading ? (
             <p role="status">Cargando contactos…</p>
           ) : contactsQuery.isError ? (
-            <p className="form-error" role="alert">
+            <Notice tone="error">
               No se pudieron cargar los contactos. Reintentá.
-            </p>
+            </Notice>
           ) : contactsQuery.data?.length ? (
             <div className="client-contact-list">
               {contactsQuery.data.map((contact) => (
@@ -889,11 +889,11 @@ export function StudyClientes() {
             />
           )}
           {toggleContactState.isError ? (
-            <p className="form-error" role="alert">
+            <Notice tone="error">
               {toggleContactState.error instanceof ApiError
                 ? toggleContactState.error.message
                 : "No se pudo actualizar el contacto. Revisá los datos e intentá nuevamente."}
-            </p>
+            </Notice>
           ) : null}
         </InspectorSection>
         </div>
@@ -904,15 +904,17 @@ export function StudyClientes() {
   const tableBody = query.isLoading ? (
     <DenseLoading label="Cargando la cartera…" />
   ) : query.isError ? (
-    <EmptyState
+    <Notice
+      tone="error"
       title="No se pudieron cargar los clientes"
-      description="Reintentá en unos minutos o comprobá tu conexión."
       action={
         <Button variant="secondary" onClick={() => void query.refetch()}>
           Reintentar
         </Button>
       }
-    />
+    >
+      Reintentá en unos minutos o comprobá tu conexión.
+    </Notice>
   ) : (
     <DenseTable<ClientWithProfile>
       label="Cartera de clientes"
@@ -934,6 +936,7 @@ export function StudyClientes() {
       empty={
         <EmptyState
           size="compact"
+          kind={clients.length === 0 ? "no-data" : "no-results"}
           title={clients.length === 0 ? "Todavía no hay clientes" : "Ningún cliente coincide"}
           description={
             clients.length === 0
@@ -998,31 +1001,36 @@ export function StudyClientes() {
       />
 
       {contactRetry ? (
-        <div className="action-receipt action-receipt--page" role="alert">
-          <span>
-            <strong>Cliente creado</strong>
-            <small>Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.</small>
-          </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            loading={retryContact.isPending}
-            loadingLabel="Reintentando correo"
-            onClick={() => retryContact.mutate(contactRetry)}
-          >
-            Reintentar
-          </Button>
-        </div>
+        <Notice
+          tone="error"
+          className="ds-notice--page"
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={retryContact.isPending}
+              loadingLabel="Reintentando correo"
+              onClick={() => retryContact.mutate(contactRetry)}
+            >
+              Reintentar
+            </Button>
+          }
+        >
+          Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.
+        </Notice>
       ) : notice ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <span>
-            <strong>Actualización guardada</strong>
-            <small>{notice}</small>
-          </span>
-          <Button type="button" variant="text" size="row" aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
-            Cerrar
-          </Button>
-        </div>
+        <Notice
+          tone="success"
+          className="ds-notice--page"
+          title="Actualización guardada"
+          action={
+            <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
+              <Icon name="close" size={15} />
+            </Button>
+          }
+        >
+          {notice}
+        </Notice>
       ) : null}
 
       <DenseToolbar>
@@ -1180,10 +1188,10 @@ export function StudyClientes() {
               })}
             </select>
             {clientActivityCatalog.isLoading ? <small>Cargando catálogo de actividades…</small> : null}
-            {clientActivityCatalog.isError ? (
-              <small className="form-error">No se pudo cargar el catálogo de actividades. Reintentá.</small>
-            ) : null}
           </label>
+          {clientActivityCatalog.isError ? (
+            <Notice tone="error">No se pudo cargar el catálogo de actividades. Reintentá.</Notice>
+          ) : null}
           <label className="ds-field">
             <span className="ds-field__label">Forma jurídica</span>
             <select
@@ -1199,11 +1207,11 @@ export function StudyClientes() {
             </select>
           </label>
           {create.isError ? (
-            <p className="form-error study-inline-form__feedback" role="alert">
+            <Notice tone="error" className="study-inline-form__feedback">
               {create.error instanceof ApiError
                 ? create.error.message
                 : "No se pudo crear el cliente. Revisá los datos y los permisos."}
-            </p>
+            </Notice>
           ) : null}
         </form>
       </ActionDrawer>
@@ -1285,11 +1293,11 @@ export function StudyClientes() {
               {updateIdentity.isError &&
               !(updateIdentity.error instanceof ApiError &&
                 updateIdentity.error.code === "CLIENT_CUIT_CONFLICT") ? (
-                <p className="form-error study-inline-form__feedback" role="alert">
+                <Notice tone="error" className="study-inline-form__feedback">
                   {updateIdentity.error instanceof ApiError
                     ? updateIdentity.error.message
                     : "No se pudo guardar la identidad. Revisá los datos y los permisos."}
-                </p>
+                </Notice>
               ) : null}
             </section>
             <section className="client-edit__section" aria-labelledby="client-edit-fiscal-title">
@@ -1316,13 +1324,12 @@ export function StudyClientes() {
                   </option>
                 ) : null}
               </select>
-              {currencyNotBacked ? (
-                <small className="form-error">
-                  La moneda guardada no está respaldada por el sistema. Elegí{" "}
-                  {BACKED_CURRENCIES.join(" o ")} para guardar la ficha.
-                </small>
-              ) : null}
             </label>
+            {currencyNotBacked ? (
+              <Notice tone="warning">
+                La moneda guardada no está respaldada por el sistema. Elegí {BACKED_CURRENCIES.join(" o ")} para guardar la ficha.
+              </Notice>
+            ) : null}
             <label className="ds-field">
               <span className="ds-field__label">Cierre de ejercicio</span>
               <select
@@ -1429,15 +1436,15 @@ export function StudyClientes() {
                 ) : null}
               </select>
               {clientActivityCatalog.isLoading ? <small>Cargando catálogo de actividades…</small> : null}
-              {clientActivityCatalog.isError ? (
-                <small className="form-error">No se pudo cargar el catálogo de actividades. Reintentá.</small>
-              ) : null}
               {activityIsLegacy || activityIsInactive ? (
                 <small className="study-legacy-note">
                   El valor guardado sigue visible y se conserva si no lo reemplazás.
                 </small>
               ) : null}
             </label>
+            {clientActivityCatalog.isError ? (
+              <Notice tone="error">No se pudo cargar el catálogo de actividades. Reintentá.</Notice>
+            ) : null}
             <label className="ds-field">
               <span className="ds-field__label">Forma jurídica</span>
               <select
@@ -1469,9 +1476,9 @@ export function StudyClientes() {
               {jurisdictionCatalog.isLoading ? (
                 <p>Cargando catálogo de jurisdicciones…</p>
               ) : jurisdictionCatalog.isError ? (
-                <p className="form-error">
+                <Notice tone="error">
                   No se pudo cargar el catálogo de jurisdicciones. Reintentá.
-                </p>
+                </Notice>
               ) : (
                 <div className="study-check-list">
                   {catalogData?.filter((entry) => entry.isActive).map((entry) => (
@@ -1535,13 +1542,12 @@ export function StudyClientes() {
                   <option value={standardValue}>{standardValue} — fuera de catálogo</option>
                 ) : null}
               </select>
-              {standardUnknown ? (
-                <small className="form-error">
-                  La norma contable guardada no está en el catálogo del estudio. Definila en
-                  Administración o elegí una del catálogo para guardar la ficha.
-                </small>
-              ) : null}
             </label>
+            {standardUnknown ? (
+              <Notice tone="warning">
+                La norma contable guardada no está en el catálogo del estudio. Definila en Administración o elegí una del catálogo para guardar la ficha.
+              </Notice>
+            ) : null}
             <Field
               id="client-profile-service-start"
               label="Inicio del servicio"
@@ -1553,11 +1559,11 @@ export function StudyClientes() {
             />
             {updateProfile.isError &&
             !(updateIdentity.isError && updateProfile.error.message === updateIdentity.error.message) ? (
-              <p className="form-error study-inline-form__feedback" role="alert">
+              <Notice tone="error" className="study-inline-form__feedback">
                 {updateProfile.error instanceof ApiError
                   ? updateProfile.error.message
                   : "No se pudo guardar la ficha. Revisá los datos e intentá nuevamente."}
-              </p>
+              </Notice>
             ) : null}
             </section>
           </form>
@@ -1608,11 +1614,11 @@ export function StudyClientes() {
               </select>
             </label>
             {updateStatus.isError ? (
-              <p className="form-error study-inline-form__feedback" role="alert">
+              <Notice tone="error" className="study-inline-form__feedback">
                 {updateStatus.error instanceof ApiError
                   ? updateStatus.error.message
                   : "No se pudo actualizar el estado. Revisá los datos y los permisos."}
-              </p>
+              </Notice>
             ) : null}
           </form>
         ) : null}
@@ -1689,11 +1695,11 @@ export function StudyClientes() {
             <span>Contacto principal</span>
           </label>
           {saveContact.isError ? (
-            <p className="form-error study-inline-form__feedback" role="alert">
+            <Notice tone="error" className="study-inline-form__feedback">
               {saveContact.error instanceof ApiError
                 ? saveContact.error.message
                 : "No se pudo guardar el contacto. Revisá los datos e intentá nuevamente."}
-            </p>
+            </Notice>
           ) : null}
         </form>
       </ActionDrawer>

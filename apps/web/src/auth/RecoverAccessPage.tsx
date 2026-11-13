@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Button, Field } from "@contable/design-system";
+import { Button, Field, Notice } from "@contable/design-system";
 import { api, ApiError } from "../lib/api";
 import { Icon } from "../ui/Icon";
 import "./login.css";
@@ -73,10 +73,10 @@ export function RecoverAccessPage() {
           volver a ingresar al estudio. El enlace sólo puede usarse una vez.
         </p>
         {!token ? (
-          <div className="login__error" role="alert">
+          <Notice tone="error">
             El enlace de recuperación está incompleto. Pedile uno nuevo a quien administra el
             estudio.
-          </div>
+          </Notice>
         ) : (
           <form className="login__form" onSubmit={submit}>
             <Field
@@ -101,9 +101,9 @@ export function RecoverAccessPage() {
               required
             />
             {error ? (
-              <div className="login__error" role="alert">
+              <Notice tone="error">
                 {error}
-              </div>
+              </Notice>
             ) : null}
             <Button type="submit" loading={loading} disabled={!passwordsMatch}>
               Guardar contraseña <Icon name="arrow-right" size={17} />

@@ -204,23 +204,6 @@
   gap: var(--ds-space-2);
 }
 
-.login__error {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--ds-space-2);
-  padding: var(--ds-space-3) var(--ds-space-4);
-  border: 1px solid color-mix(in srgb, var(--ds-color-danger) 32%, var(--ds-color-border));
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-color-danger-subtle);
-  color: var(--ds-color-danger);
-  font-size: var(--ds-text-sm);
-}
-
-.login__error > svg {
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
-
 .login__privacy {
   display: flex;
   align-items: center;

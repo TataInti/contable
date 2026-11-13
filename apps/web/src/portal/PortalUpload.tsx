@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Table } from "@contable/design-system";
+import { Button, EmptyState, Notice, Table } from "@contable/design-system";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError, type Document, uploadToSignedUrl } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -213,16 +213,13 @@ export function PortalUpload() {
           <div className="portal-upload-layout">
           <form className="portal-upload" onSubmit={onSubmit}>
             {requestedBy || requestedItem ? (
-              <div className="portal-inline-alert" role="status">
-                <Icon name="tasks" size={17} />
-                <span>
-                  {requestedItem ? `Estás aportando: ${requestedItem}. ` : "Estás aportando documentación. "}
-                  {requestedBy ? `Pedido: ${requestedBy}. ` : ""}
-                  {requestItemId
-                    ? "Al finalizar, el archivo se asociará a este ítem y quedará disponible para tu estudio."
-                    : "Al finalizar, el archivo quedará disponible para tu estudio dentro de esta empresa."}
-                </span>
-              </div>
+              <Notice tone="info">
+                {requestedItem ? `Estás aportando: ${requestedItem}. ` : "Estás aportando documentación. "}
+                {requestedBy ? `Pedido: ${requestedBy}. ` : ""}
+                {requestItemId
+                  ? "Al finalizar, el archivo se asociará a este ítem y quedará disponible para tu estudio."
+                  : "Al finalizar, el archivo quedará disponible para tu estudio dentro de esta empresa."}
+              </Notice>
             ) : null}
             <div
               className={`portal-dropzone${dragging ? " portal-dropzone--dragging" : ""}${file ? " portal-dropzone--selected" : ""}`}
@@ -305,23 +302,24 @@ export function PortalUpload() {
             ) : null}
 
             {error ? (
-              <p className="portal-inline-alert portal-inline-alert--error" role="alert">
-                <Icon name="alert" size={17} /> {error}
-              </p>
+              <Notice tone="error">{error}</Notice>
             ) : null}
             {done ? (
-              <div className="portal-inline-alert portal-inline-alert--success" role="status">
-                <Icon name="check" size={17} />
-                <span>{done}</span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => inputRef.current?.click()}
-                >
-                  Cargar otro
-                </Button>
-              </div>
+              <Notice
+                tone="success"
+                action={
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => inputRef.current?.click()}
+                  >
+                    Cargar otro
+                  </Button>
+                }
+              >
+                {done}
+              </Notice>
             ) : null}
 
             <div className="portal-page__actions portal-upload__actions">
@@ -377,12 +375,13 @@ export function PortalUpload() {
           {documents.isLoading ? (
             <PortalLoading label="Cargando tus documentos…" />
           ) : documents.isError ? (
-            <EmptyState
-              size="compact"
+            <Notice
               title="No pudimos cargar tus documentos"
-              description="La carga sigue disponible aunque el historial no se muestre ahora."
               action={<PortalRetryButton onRetry={() => void documents.refetch()} />}
-            />
+              tone="error"
+            >
+              La carga sigue disponible aunque el historial no se muestre ahora.
+            </Notice>
           ) : (documents.data ?? []).length === 0 ? (
             <EmptyState
               size="compact"

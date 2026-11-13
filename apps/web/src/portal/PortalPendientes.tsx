@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Button, EmptyState, Table } from "@contable/design-system";
+import { Button, EmptyState, Notice, Table } from "@contable/design-system";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type DocumentRequest } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -73,11 +73,13 @@ export function PortalPendientes() {
       ) : query.isLoading ? (
         <PortalLoading label="Cargando pedidos…" />
       ) : query.isError ? (
-        <EmptyState
+        <Notice
+          tone="error"
           title="No pudimos cargar los pedidos"
-          description="Reintentá en unos minutos."
           action={<PortalRetryButton onRetry={() => void query.refetch()} />}
-        />
+        >
+          Reintentá en unos minutos.
+        </Notice>
       ) : rows.length === 0 ? (
         <EmptyState
           title="Estás al día"

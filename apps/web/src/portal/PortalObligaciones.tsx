@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, EmptyState, Table } from "@contable/design-system";
+import { Button, EmptyState, Notice, Table } from "@contable/design-system";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -73,11 +73,13 @@ export function PortalObligaciones() {
       ) : query.isLoading ? (
         <PortalLoading label="Cargando impuestos y obligaciones…" />
       ) : query.isError ? (
-        <EmptyState
+        <Notice
+          tone="error"
           title="No pudimos cargar los vencimientos"
-          description="Reintentá en unos minutos."
           action={<PortalRetryButton onRetry={() => void query.refetch()} />}
-        />
+        >
+          Reintentá en unos minutos.
+        </Notice>
       ) : rows.length === 0 ? (
         <EmptyState
           title="Sin vencimientos informados"
@@ -212,12 +214,16 @@ function ObligationTimeline({ clientId, obligationId }: { clientId: string; obli
   if (query.isLoading) return <span className="portal-timeline__loading">Cargando…</span>;
   if (query.isError || !query.data) {
     return (
-      <span className="portal-timeline__empty">
-        Sin novedades. {" "}
-        <Button type="button" size="sm" variant="ghost" onClick={() => void query.refetch()}>
-          Reintentar
-        </Button>
-      </span>
+      <Notice
+        tone="error"
+        action={
+          <Button type="button" size="sm" variant="ghost" onClick={() => void query.refetch()}>
+            Reintentar
+          </Button>
+        }
+      >
+        La consulta de novedades encontró un problema.
+      </Notice>
     );
   }
 
@@ -236,7 +242,16 @@ function ObligationTimeline({ clientId, obligationId }: { clientId: string; obli
     ...messages.map((m) => ({ date: m.createdAt, label: "Mensaje del estudio", detail: m.body })),
   ].sort((a, b) => a.date.localeCompare(b.date));
 
-  if (events.length === 0) return <span className="portal-timeline__empty">Sin novedades</span>;
+  if (events.length === 0) {
+    return (
+      <EmptyState
+        size="compact"
+        kind="no-data"
+        title="Sin novedades"
+        description="Las presentaciones, pagos y mensajes del estudio aparecerán acá."
+      />
+    );
+  }
 
   return (
     <details className="portal-timeline" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>

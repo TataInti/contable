@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, Notice } from "@contable/design-system";
 import { Link } from "react-router-dom";
 import { api, type DocumentRequest, type RequestMessage } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -81,11 +81,13 @@ export function PortalMensajes() {
       ) : query.isLoading ? (
         <PortalLoading label="Cargando conversaciones…" />
       ) : query.isError ? (
-        <EmptyState
+        <Notice
+          tone="error"
           title="No pudimos cargar los mensajes"
-          description="Reintentá en unos minutos."
           action={<PortalRetryButton onRetry={() => void query.refetch()} />}
-        />
+        >
+          Reintentá en unos minutos.
+        </Notice>
       ) : threads.length === 0 ? (
         <EmptyState
           title="Todavía no hay conversaciones"
@@ -143,9 +145,12 @@ export function PortalMensajes() {
 
                 <div className="portal-thread__messages" aria-live="polite">
                   {thread.messages.length === 0 ? (
-                    <p className="portal-thread__empty">
-                      Todavía no hay mensajes en esta conversación.
-                    </p>
+                    <EmptyState
+                      size="compact"
+                      kind="no-data"
+                      title="Todavía no hay mensajes"
+                      description="Escribí una respuesta para iniciar la conversación."
+                    />
                   ) : (
                     thread.messages.map((message) => {
                       const ownMessage = Boolean(me?.userId) && message.authorUserId === me?.userId;
@@ -205,21 +210,25 @@ export function PortalMensajes() {
                     </Button>
                   </div>
                   {failedThisThread ? (
-                    <div className="portal-inline-alert portal-inline-alert--error" role="alert">
-                      <span>No pudimos enviar el mensaje. Revisá tu conexión e intentá nuevamente.</span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          const body = draft.trim();
-                          if (body) send.mutate({ threadId: thread.id, body });
-                        }}
-                        disabled={!draft.trim() || send.isPending}
-                      >
-                        Reintentar
-                      </Button>
-                    </div>
+                    <Notice
+                      tone="error"
+                      action={
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const body = draft.trim();
+                            if (body) send.mutate({ threadId: thread.id, body });
+                          }}
+                          disabled={!draft.trim() || send.isPending}
+                        >
+                          Reintentar
+                        </Button>
+                      }
+                    >
+                      No pudimos enviar el mensaje. Revisá tu conexión e intentá nuevamente.
+                    </Notice>
                   ) : null}
                 </form>
               </section>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
@@ -50,11 +50,13 @@ export function PortalPerfil() {
       ) : profile.isLoading ? (
         <PortalLoading label="Cargando tu perfil…" />
       ) : profile.isError ? (
-        <EmptyState
+        <Notice
+          tone="error"
           title="No pudimos cargar tu perfil"
-          description="Reintentá en unos minutos."
           action={<PortalRetryButton onRetry={() => void profile.refetch()} />}
-        />
+        >
+          Reintentá en unos minutos.
+        </Notice>
       ) : profile.data ? (
         <>
         <SectionIndex items={[{ id: "profile-data-title", label: "Datos personales" }]} />
@@ -99,14 +101,14 @@ export function PortalPerfil() {
               readOnly
             />
             {save.isError ? (
-              <p className="portal-inline-alert portal-inline-alert--error" role="alert">
+              <Notice tone="error" >
                 No pudimos guardar los cambios.
-              </p>
+              </Notice>
             ) : null}
             {save.isSuccess ? (
-              <p className="portal-inline-alert portal-inline-alert--success" role="status">
-                <Icon name="check" size={17} /> Cambios guardados.
-              </p>
+              <Notice tone="success">
+                Cambios guardados.
+              </Notice>
             ) : null}
             <div className="portal-page__actions">
               <Button

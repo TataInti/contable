@@ -1,14 +1,13 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, Notice } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import { Icon } from "../ui/Icon";
 import {
-  DenseAlert,
   DenseHeader,
   DensePage,
   StatStrip,
@@ -302,34 +301,36 @@ export function StudyRentabilidad() {
         ]}
       />
 
-      <DenseAlert
-        tone="ok"
+      <Notice
+        tone="success"
         action={
           !clientId ? null : !selectedPeriod ? <Button size="sm" variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>Configurar período</Button> : !devengado && capabilities.has("profitability.calculate") ? <Button size="sm" onClick={() => calculateMutation.mutate({ basis: "DEVENGADO" })}>Calcular devengado</Button> : !caja && capabilities.has("profitability.calculate") ? <Button size="sm" onClick={() => calculateMutation.mutate({ basis: "CAJA" })}>Calcular caja</Button> : devengado?.status === "DRAFT" && capabilities.has("profitability.publish") ? <Button size="sm" onClick={() => confirm.ask({ title: "¿Publicar esta versión?", description: "El cliente podrá consultar este resultado en el portal del cliente.", confirmLabel: "Publicar", onConfirm: () => publishMutation.mutate({ basis: "DEVENGADO" }) })}>Publicar devengado</Button> : null
         }
       >
         <strong>Próximo paso:</strong> {!clientId ? "Seleccioná un cliente para consultar su resultado." : !selectedPeriod ? "Configurá un período fiscal con obligaciones materializadas." : !devengado ? "Calculá primero la rentabilidad devengada del período activo." : !caja ? "Calculá la vista de caja para completar el análisis." : devengado.status === "DRAFT" && capabilities.has("profitability.publish") ? "Publicá la versión devengada cuando esté lista para el cliente." : "Revisá las dos vistas y sus versiones publicadas."}
-      </DenseAlert>
+      </Notice>
 
 
       {receipt ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <Icon name="check" size={19} />
-          <span>
-            <strong>Acción completada</strong>
-            <small>{receipt}</small>
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            aria-label="Cerrar confirmación"
-            onClick={() => setReceipt(null)}
-          >
-            <Icon name="close" size={15} />
-          </Button>
-        </div>
+        <Notice
+          tone="success"
+          className="ds-notice--page"
+          title="Acción completada"
+          action={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              iconOnly
+              aria-label="Cerrar confirmación"
+              onClick={() => setReceipt(null)}
+            >
+              <Icon name="close" size={15} />
+            </Button>
+          }
+        >
+          {receipt}
+        </Notice>
       ) : null}
 
       {!clientId ? (
@@ -342,9 +343,9 @@ export function StudyRentabilidad() {
           Cargando rentabilidad…
         </div>
       ) : periodsQuery.isError || listQuery.isError ? (
-        <EmptyState
+        <Notice
+          tone="error"
           title="No se pudo cargar la rentabilidad"
-          description="Reintentá en unos minutos."
           action={
             <Button
               variant="secondary"
@@ -355,7 +356,9 @@ export function StudyRentabilidad() {
               Reintentar
             </Button>
           }
-        />
+        >
+          Reintentá en unos minutos.
+        </Notice>
       ) : !selectedPeriod ? (
         <EmptyState
           title="Sin período fiscal para calcular"
@@ -375,10 +378,10 @@ export function StudyRentabilidad() {
             {renderView(caja, "CAJA")}
           </div>
           {calculateMutation.isError || publishMutation.isError ? (
-            <p className="form-error" role="alert">
+            <Notice tone="error">
               {(calculateMutation.error ?? publishMutation.error)?.message ??
                 "No se pudo completar la acción. Reintentá en unos minutos."}
-            </p>
+            </Notice>
           ) : null}
         </>
       )}

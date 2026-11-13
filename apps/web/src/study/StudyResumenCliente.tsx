@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, EmptyState, Table } from "@contable/design-system";
+import { Button, EmptyState, Notice, Table } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { CLIENT_VAT_CONDITION_LABELS } from "@contable/contracts";
 import { api, type ClientContact, type ClientSummary } from "../lib/api";
@@ -100,8 +100,16 @@ function SummaryFact({
   );
 }
 
-function SummarySectionEmpty({ title, description }: { title: string; description: string }) {
-  return <EmptyState size="compact" title={title} description={description} />;
+function SummarySectionEmpty({
+  title,
+  description,
+  kind = "no-data",
+}: {
+  title: string;
+  description: string;
+  kind?: "no-data" | "no-results";
+}) {
+  return <EmptyState size="compact" kind={kind} title={title} description={description} />;
 }
 
 type SummarySectionId =
@@ -357,15 +365,17 @@ export function StudyResumenCliente() {
   if (query.isError || !query.data) {
     return (
       <div className="study-page study-route-state">
-        <EmptyState
+        <Notice
+          tone="error"
           title="No se pudo cargar el resumen"
-          description="La ficha consolidada no está disponible en este momento. Podés reintentar sin perder el cliente seleccionado."
           action={
             <Button variant="secondary" onClick={() => void query.refetch()}>
               Reintentar
             </Button>
           }
-        />
+        >
+          Reintentá para volver a cargar la ficha consolidada sin perder el cliente seleccionado.
+        </Notice>
       </div>
     );
   }
@@ -494,6 +504,7 @@ export function StudyResumenCliente() {
               </div>
               {searchResults.length === 0 ? (
                 <SummarySectionEmpty
+                  kind="no-results"
                   title="No encontramos coincidencias"
                   description="Probá con una razón social, CUIT, período, impuesto o estado diferente."
                 />

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, Table } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api, type DocumentRequest, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -9,7 +9,6 @@ import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import {
-  DenseAlert,
   DenseHeader,
   DensePage,
   StatStrip,
@@ -345,8 +344,8 @@ export function StudyTrabajo() {
           { key: "obligations", label: "Obligaciones", value: obligationRows.length },
         ]}
       />
-      <DenseAlert
-        tone="ok"
+      <Notice
+        tone="success"
         action={
           activeRequests.length && capabilities.has("request.manage") ? (
             <Button size="sm" onClick={() => setShowRequest(true)}>Verificar pedidos</Button>
@@ -363,38 +362,37 @@ export function StudyTrabajo() {
           : openCloses.length
             ? "Continuá el cierre que está en curso para este período."
             : "Iniciá un pedido documental para reunir la evidencia del período."}
-      </DenseAlert>
+      </Notice>
 
 
 
 
       {receipt ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <Icon name="check" size={19} />
-          <span>
-            <strong>Acción completada</strong>
-            <small>{receipt}</small>
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            aria-label="Cerrar confirmación"
-            onClick={() => setReceipt(null)}
-          >
-            <Icon name="close" size={15} />
-          </Button>
-        </div>
+        <Notice
+          tone="success"
+          className="ds-notice--page"
+          title="Acción completada"
+          action={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              iconOnly
+              aria-label="Cerrar confirmación"
+              onClick={() => setReceipt(null)}
+            >
+              <Icon name="close" size={15} />
+            </Button>
+          }
+        >
+          {receipt}
+        </Notice>
       ) : null}
       {hasQueryError ? (
-        <div className="query-warning" role="alert">
-          <Icon name="alert" size={18} />
-          <span>
-            <strong>Parte de la información no pudo cargarse.</strong> Podés seguir trabajando con
-            los datos disponibles.
-          </span>
-        </div>
+        <Notice tone="warning">
+          <strong>Parte de la información no pudo cargarse.</strong> Podés seguir trabajando con
+          los datos disponibles.
+        </Notice>
       ) : null}
 
       <ActionDrawer
@@ -447,9 +445,9 @@ export function StudyTrabajo() {
             onChange={(event) => setRequest({ ...request, dueDate: event.target.value })}
           />
           {createRequest.isError ? (
-            <p className="form-error study-inline-form__feedback" role="alert">
+            <Notice tone="error" className="study-inline-form__feedback">
               No se pudo crear el pedido. Revisá los datos e intentá nuevamente.
-            </p>
+            </Notice>
           ) : null}
           <div className="study-inline-form__actions">
             <Button
@@ -493,14 +491,14 @@ export function StudyTrabajo() {
             </small>
           </label>
           {!activeFiscalYear ? (
-            <p className="form-error" role="alert">
+            <Notice tone="error">
               Seleccioná un período contable abierto antes de iniciar el cierre.
-            </p>
+            </Notice>
           ) : null}
           {createClose.isError ? (
-            <p className="form-error" role="alert">
+            <Notice tone="error">
               {createClose.error.message}
-            </p>
+            </Notice>
           ) : null}
           <div className="study-inline-form__actions">
             <Button
@@ -658,9 +656,11 @@ export function StudyTrabajo() {
                 ))}
               </div>
             ) : (
-              <p className="muted-copy">
-                Todavía no hay mensajes. Dejá una instrucción o consulta para el cliente.
-              </p>
+              <EmptyState
+                size="compact"
+                title="Todavía no hay mensajes"
+                description="Dejá una instrucción o consulta para el cliente."
+              />
             )}
             {capabilities.has("message.shared") ? (
               <form
@@ -683,7 +683,7 @@ export function StudyTrabajo() {
                   />
                 </label>
                 {sendMessage.isError ? (
-                  <p className="form-error">{sendMessage.error.message}</p>
+                  <Notice tone="error">{sendMessage.error.message}</Notice>
                 ) : null}
                 <div className="study-inline-form__actions">
                   <Button
