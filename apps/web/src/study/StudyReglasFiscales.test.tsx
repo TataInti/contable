@@ -799,3 +799,27 @@ describe("StudyReglasFiscales — estado vacío de paquetes", () => {
     expect(document.querySelectorAll(".fiscal-rules > .fiscal-rules-guide")).toHaveLength(1);
   });
 });
+
+describe("StudyReglasFiscales — validación del tipo de regla", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    contextMock.current = context();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("señala el tipo en la fila antes de guardar", async () => {
+    mockApi(makeDetail(null));
+    renderReglas();
+
+    fireEvent.change(await screen.findByLabelText("Tipo de regla rule-1"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
+
+    const error = await screen.findByText("Seleccioná un tipo de regla.");
+    expect(error.getAttribute("role")).toBe("alert");
+    expect(api.put).not.toHaveBeenCalled();
+  });
+});

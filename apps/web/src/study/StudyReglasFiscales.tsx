@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
 import {
   MONOTRIBUTO_CATEGORY_CODES,
-  normalizeActivityCode,
   type CatalogEconomicActivity,
   type TaxRuleKindOption,
 } from "@contable/contracts";
@@ -1372,13 +1371,12 @@ export function StudyReglasFiscales() {
                         const kind = (ruleKindsQuery.data ?? []).find((option) => option.id === row.kindId);
                         if (kind?.subject !== "ACTIVITY_OR_DEFAULT" && kind?.subject !== "ACTIVITY") return "—";
                         if (!editable) {
-                          const currentCode = normalizeActivityCode(row.activityCode ?? "");
                           const currentActivity = (activitiesQuery.data ?? []).find(
-                            (activity) => activity.code === currentCode,
+                            (activity) => activity.id === row.activityId,
                           );
-                          return row.activityCode
-                            ? `${row.activityCode}${currentActivity && !currentActivity.isActive ? " (oculto)" : ""}`
-                            : row.isDefault ? "Todas las actividades" : "Sin actividad específica";
+                          return row.activityId
+                            ? `${currentActivity?.code ?? row.activityCode ?? "Actividad"}${currentActivity && !currentActivity.isActive ? " (oculta)" : ""}`
+                            : row.isDefault ? "Todas las actividades" : row.activityCode ?? "Sin actividad específica";
                         }
                         // La opción actual oculta o ajena a la jurisdicción se
                         // conserva como lectura deshabilitada; para elegirla
@@ -1390,13 +1388,13 @@ export function StudyReglasFiscales() {
                             activity.isActive &&
                             (!packJurisdictionId || activity.jurisdictionId === packJurisdictionId),
                         );
-                        const currentCode = normalizeActivityCode(row.activityCode ?? "");
+                        const currentCode = row.activityCode ?? "";
                         const currentActivity = catalogActivities.find(
-                          (activity) => activity.id === row.activityId || activity.code === currentCode,
+                          (activity) => activity.id === row.activityId,
                         );
                         const isLegacyCode =
                           Boolean(row.activityId || currentCode) &&
-                          !options.some((activity) => activity.id === row.activityId || activity.code === currentCode);
+                          !options.some((activity) => activity.id === row.activityId);
                         const rowError = rowFieldErrors[`${row.id}.activityId`];
                         return (
                           <div>
@@ -1569,7 +1567,16 @@ export function StudyReglasFiscales() {
                 {editable ? (
                   <div className="study-page__actions fiscal-rule-actions">
                     <Button
-                      onClick={() => saveMutation.mutate()}
+                      onClick={() => {
+                        const missingKindRows = draftRows.filter((row) => !row.kindId);
+                        if (missingKindRows.length > 0) {
+                          setRowFieldErrors(Object.fromEntries(missingKindRows.map((row) => [
+                            `${row.id}.kindId`, "Seleccioná un tipo de regla.",
+                          ])));
+                          return;
+                        }
+                        saveMutation.mutate();
+                      }}
                       loading={saveMutation.isPending}
                       disabled={draftRows.some(
                         (row) => !row.rate && !row.minAmount,

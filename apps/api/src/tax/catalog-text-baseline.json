@@ -38,7 +38,6 @@
     {"file":"apps/web/src/study/StudyExpedienteMensual.tsx","rule":"EQ","property":"concept","snippetHash":"e1b999a94fa60cee9091fbd27bc0168693c75460b80937cfc3fffaca605d31d4","closesIn":"corte 8"},
     {"file":"apps/web/src/study/StudyExpedienteMensual.tsx","rule":"MAP_INDEX","property":"code","snippetHash":"c9610ded94cf42ccec86ba3e163d3f69e95b75185404d24ae82b8ae64ef94bab","closesIn":"corte 8"},
     {"file":"apps/web/src/study/StudyExpedienteMensual.tsx","rule":"MAP_INDEX","property":"concept","snippetHash":"33ea9db350c40abca3a72c8fd1a334bbfedcdc9ab38f3a6c43f3f2788eebb5c3","closesIn":"corte 8"},
-    {"file":"apps/web/src/study/StudyReglasFiscales.tsx","rule":"EQ","property":"code","snippetHash":"199a7b0915b484e99bf3036c3f56a3616f7eb746c6673f187e002ed1311a5297","closesIn":"corte 4b"},
     {"file":"packages/contracts/src/tax-engine-compatibility.ts","rule":"EQ","property":"regimeCode","snippetHash":"3a70cdd884401878f86120987f20a019c7bc1c689081df169ca8a351657f30b8","closesIn":"corte 2b/3"},
     {"file":"packages/contracts/src/tax-engine-compatibility.ts","rule":"EQ","property":"taxTypeCode","snippetHash":"679cb36bf19ccad1974a21d4a3986fe7ea6f9dfcbeda9bbf4fde45fa82f5f9d8","closesIn":"corte 2b/3"},
     {"file":"packages/contracts/src/tax-engine-compatibility.ts","rule":"SET_HAS","property":"jurisdictionCode","snippetHash":"2cfbe6c338e65e2729b12f4a7e595494e0ef43f8e8cedb9884c5900037f6df53","closesIn":"corte 2b/3"},
