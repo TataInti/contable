@@ -115,8 +115,7 @@ export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
     }
     const tax = applyRate(income, rate);
     const activityMinimum = strict ? rule?.minimum : undefined;
-    const appliesActivityMinimum =
-      strict && !typed && minimumMode === "SUM_BY_ACTIVITY";
+    const appliesActivityMinimum = strict && minimumMode === "SUM_BY_ACTIVITY";
     const determinedTax =
       appliesActivityMinimum &&
       activityMinimum !== undefined &&

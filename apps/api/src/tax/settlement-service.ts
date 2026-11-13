@@ -689,6 +689,7 @@ export class SettlementService {
       const typedRuleSubjects = new Set<string>();
       const activitySubjectEngine =
         engineKey === "iibb-local-tuc" || engineKey === "tem-smt" || engineKey === "tem-smt-legacy";
+      const vatSubjectEngine = engineKey === "vat-ri";
       const rules = rateRules.map((r) => {
         if (isTypedRuleVersion) {
           const kind = r.kind!.key;
@@ -696,12 +697,19 @@ export class SettlementService {
             ? null
             : kind === "RATE" && activitySubjectEngine
               ? r.activityId ?? null
-              : kind === "RATE" || kind === "COEFFICIENT"
-                ? r.jurisdictionId ?? null
-                : kind === "FEE"
-                  ? r.categoryCode ?? null
-                  : null;
-          if (kind === "RATE" || kind === "COEFFICIENT" || kind === "FEE") {
+              : vatSubjectEngine && (kind === "RATE" || kind === "SPECIAL_CREDIT")
+                ? r.rate?.toString() ?? null
+                : kind === "RATE" || kind === "COEFFICIENT"
+                  ? r.jurisdictionId ?? null
+                  : kind === "FEE"
+                    ? r.categoryCode ?? null
+                    : null;
+          const hasSubject =
+            kind === "RATE" ||
+            kind === "COEFFICIENT" ||
+            kind === "FEE" ||
+            (vatSubjectEngine && kind === "SPECIAL_CREDIT");
+          if (hasSubject) {
             const subjectKey = JSON.stringify([kind, subject, r.isDefault]);
             if (typedRuleSubjects.has(subjectKey)) {
               throw new SettlementError(
@@ -727,6 +735,7 @@ export class SettlementService {
             categoryCode: r.categoryCode,
             isDefault: r.isDefault,
             ...(normalized !== undefined ? { rate: normalized } : {}),
+            ...(r.minAmount !== null ? { minimum: dec(r.minAmount.toString()) } : {}),
             validFrom: r.validFrom.toISOString().slice(0, 10),
             ...(r.validTo ? { validTo: r.validTo.toISOString().slice(0, 10) } : {}),
           };
