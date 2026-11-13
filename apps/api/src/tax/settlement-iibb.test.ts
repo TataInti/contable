@@ -625,7 +625,7 @@ describe("Fase 4.1 — IIBB Tucumán local: cálculo", () => {
     expect(totals["TOTAL_A_INGRESAR"]).toBe("4750.00");
   });
 
-  it("aplica otros créditos sólo cuando pertenecen al período", async () => {
+  it("aplica otros créditos por catálogo sólo cuando pertenecen al período", async () => {
     await createApprovedVouchersWithLines();
     const futurePeriod = await prisma.taxPeriod.create({
       data: {
@@ -637,13 +637,17 @@ describe("Fase 4.1 — IIBB Tucumán local: cálculo", () => {
         label: "Febrero 2026",
       },
     });
+    const otherCreditConcept = await prisma.adjustmentConcept.findUniqueOrThrow({
+      where: { key: "IIBB_OTRO_CREDITO" },
+    });
     await prisma.taxAdjustment.createMany({
       data: [
         {
           firmId: FIRM_IIBB,
           clientId: CLIENT_IIBB,
           periodId,
-          concept: "IIBB_OTRO_CREDITO",
+          conceptId: otherCreditConcept.id,
+          concept: "TEXTO_RENOMBRADO_DE_PRUEBA",
           amount: new Prisma.Decimal("300"),
           reason: "Crédito fiscal revisado de enero",
           createdByUserId: OWNER_IIBB,
@@ -653,7 +657,19 @@ describe("Fase 4.1 — IIBB Tucumán local: cálculo", () => {
         {
           firmId: FIRM_IIBB,
           clientId: CLIENT_IIBB,
+          periodId,
+          concept: "CONCEPTO_DESCONOCIDO",
+          amount: new Prisma.Decimal("700"),
+          reason: "Ajuste con texto que no está en el catálogo",
+          createdByUserId: OWNER_IIBB,
+          reviewedByUserId: REVIEWER_IIBB,
+          reviewedAt: new Date("2026-01-31"),
+        },
+        {
+          firmId: FIRM_IIBB,
+          clientId: CLIENT_IIBB,
           periodId: futurePeriod.id,
+          conceptId: otherCreditConcept.id,
           concept: "IIBB_OTRO_CREDITO",
           amount: new Prisma.Decimal("1000"),
           reason: "Crédito fiscal de febrero",
