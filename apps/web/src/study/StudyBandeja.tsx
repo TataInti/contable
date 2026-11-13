@@ -15,7 +15,10 @@ import {
 import { useClientContext } from "../context/ClientContext";
 import { belongsToDocumentQueue, type DocumentQueueFilter } from "./documentQueue";
 import { ExtractionFiscalTable } from "./ExtractionFiscalTable";
-import { hasEffectiveFiscalData } from "./extractionReadiness";
+import {
+  hasEffectiveFiscalData,
+  isAutomatedReadingUnavailableReason,
+} from "./extractionReadiness";
 import { ManualExtractionFieldsDialog, type ManualExtractionFieldValue } from "./ManualExtractionFieldsDialog";
 import { ManualExtractionValueControl, normalizeManualExtractionInput } from "./ManualExtractionValueControl";
 import { EXTRACTION_SCALAR_FIELDS, fiscalScalarHasValue } from "./extractionScalarFields";
@@ -114,6 +117,7 @@ export function StudyBandeja() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reprocessJobId, setReprocessJobId] = useState<string | null>(null);
   const confirm = useConfirmAction();
   const [corrections, setCorrections] = useState<Record<string, string>>({});
   const [showManualFieldsDialog, setShowManualFieldsDialog] = useState(false);
@@ -179,6 +183,29 @@ export function StudyBandeja() {
       EXTRACTION_SCALAR_FIELDS.some(
         (field) => !fiscalScalarHasValue(extraction.data!.voucherData, extraction.data!.fields, field),
       ),
+  );
+  const canReprocessExtraction = Boolean(
+    capabilities.has("document.review") &&
+      detail.data?.status === "EXTRACTED" &&
+      extraction.data &&
+      ["GENERATED", "NEEDS_REVIEW"].includes(extraction.data.status),
+  );
+  const manualFieldCount = (extraction.data?.fields ?? []).filter(
+    (field) => field.method?.toUpperCase() === "HUMAN" || Boolean(field.correction?.trim()),
+  ).length;
+  const reprocessShouldBeHighlighted = Boolean(
+    extraction.data &&
+      (extraction.data.promptVersion === "voucher-ar-v1" ||
+        extraction.data.ocrEngine === "tesseract-ocr" ||
+        !hasEffectiveFiscalData(
+          extraction.data.voucherData,
+          correctableExtractionFields,
+          corrections,
+        ) ||
+        isAutomatedReadingUnavailableReason(extraction.data.reviewReason ?? "") ||
+        (extraction.data.reviewIssues ?? []).some((issue) =>
+          isAutomatedReadingUnavailableReason(issue.reason),
+        )),
   );
 
   useEffect(() => {
@@ -318,6 +345,20 @@ export function StudyBandeja() {
       ]);
     },
   });
+  const reprocess = useMutation({
+    mutationFn: () => {
+      if (!base || !selectedId) throw new Error("Seleccioná un documento para releer.");
+      return api.post<{ status: string; processingJobId: string }>(`${base}/documents/${selectedId}/reprocess`);
+    },
+    onSuccess: async (result) => {
+      setReprocessJobId(result.processingJobId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
+        queryClient.invalidateQueries({ queryKey: ["document", firmId, clientId, selectedId] }),
+        queryClient.invalidateQueries({ queryKey: ["extraction", firmId, clientId, selectedId] }),
+      ]);
+    },
+  });
   // G2-07.5: ver/descargar el archivo subido. La URL firmada se pide al servidor
   // en el momento (reautoriza por RLS) y sólo se expone una vez validada.
   const openFile = useMutation({
@@ -334,6 +375,33 @@ export function StudyBandeja() {
       detail.data?.status === "EXTRACTED" ||
       detail.data?.fileVersions?.[0]?.antivirusStatus === "CLEAN");
   const rejectionReceipt = detail.data ? rejectionReceipts[detail.data.id] : undefined;
+  const activeReprocessJob = detail.data?.processingJobs?.some(
+    (job) => job.type === "REPROCESS" && ["QUEUED", "RUNNING"].includes(job.status),
+  ) ?? false;
+  const trackedReprocessJob = detail.data?.processingJobs?.find((job) => job.id === reprocessJobId);
+  const reprocessIsActive =
+    reprocess.isPending ||
+    activeReprocessJob ||
+    Boolean(reprocessJobId && (!trackedReprocessJob || ["QUEUED", "RUNNING"].includes(trackedReprocessJob.status)));
+  const completedReprocessJobId = detail.data?.processingJobs?.find(
+    (job) => job.id === reprocessJobId && job.type === "REPROCESS" && ["SUCCEEDED", "FAILED", "DEAD_LETTER", "CANCELED"].includes(job.status),
+  )?.id ?? detail.data?.processingJobs?.find(
+    (job) => job.type === "REPROCESS" && ["SUCCEEDED", "FAILED", "DEAD_LETTER", "CANCELED"].includes(job.status),
+  )?.id;
+
+  useEffect(() => {
+    setReprocessJobId(null);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!completedReprocessJobId) return;
+    setReprocessJobId((current) => current === completedReprocessJobId ? null : current);
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
+      queryClient.invalidateQueries({ queryKey: ["document", firmId, clientId, selectedId] }),
+      queryClient.invalidateQueries({ queryKey: ["extraction", firmId, clientId, selectedId] }),
+    ]);
+  }, [completedReprocessJobId, firmId, clientId, selectedId, queryClient]);
 
   const rows = documents.data ?? [];
   const normalizedDocumentSearch = normalizeDocumentSearch(documentSearch.trim());
@@ -751,14 +819,20 @@ export function StudyBandeja() {
                 ) : detail.data?.status !== "EXTRACTED" && detail.data?.status !== "REVIEWED" ? (
                   <div className="processing-state">
                     <div>
-                      <h3>Procesando comprobante</h3>
+                      <h3>{reprocessIsActive ? "Releyendo…" : "Procesando comprobante"}</h3>
                       <p>
-                        La validación y extracción continúan en segundo plano. Esta vista se
-                        actualiza automáticamente.
+                        {reprocessIsActive
+                          ? "La lectura nueva continúa en segundo plano. Esta vista se actualiza automáticamente."
+                          : "La validación y extracción continúan en segundo plano. Esta vista se actualiza automáticamente."}
                       </p>
                       <span className="processing-state__track">
                         <span />
                       </span>
+                      {reprocessIsActive && capabilities.has("document.review") ? (
+                        <Button size="sm" variant="secondary" loading disabled>
+                          Releyendo…
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 ) : extraction.isLoading ? (
@@ -862,6 +936,29 @@ export function StudyBandeja() {
                               Cargar datos a mano
                             </Button>
                           ) : null}
+                          {canReprocessExtraction ? (
+                            <Button
+                              variant={reprocessShouldBeHighlighted ? "primary" : "secondary"}
+                              loading={reprocess.isPending}
+                              disabled={reprocessIsActive}
+                              onClick={() => {
+                                const description = [
+                                  "Se volverá a leer el documento con IA. La lectura anterior y lo que cargaste a mano se conservan en el historial.",
+                                  manualFieldCount > 0
+                                    ? `Tiene ${manualFieldCount} campos cargados o corregidos a mano: no se copian a la lectura nueva; podés volver a cargarlos.`
+                                    : null,
+                                ].filter(Boolean).join(" ");
+                                confirm.ask({
+                                  title: "¿Releer el documento con IA?",
+                                  description,
+                                  confirmLabel: "Releer con IA",
+                                  onConfirm: () => reprocess.mutate(),
+                                });
+                              }}
+                            >
+                              {reprocessIsActive ? "Releyendo…" : "Releer con IA"}
+                            </Button>
+                          ) : null}
                           <Button
                             onClick={() =>
                               confirm.ask({
@@ -889,6 +986,13 @@ export function StudyBandeja() {
                             Rechazar
                           </Button>
                         </div>
+                        {reprocess.isError ? (
+                          <p className="form-error" role="alert">
+                            {reprocess.error instanceof ApiError
+                              ? reprocess.error.message
+                              : "No se pudo releer el documento. Volvé a intentarlo."}
+                          </p>
+                        ) : null}
                       </div>
                     ) : null}
                     {extraction.data.status === "REVIEWED" ? (

@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { StudyBandeja } from "./StudyBandeja";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
+let testQueryClient: QueryClient | null = null;
 
 vi.mock("../context/ClientContext", () => ({
   useClientContext: () => contextMock.current,
@@ -45,11 +46,15 @@ const documentFixture = {
   category: null,
   direction: null,
   fileVersions: [{ originalName: "factura.pdf", mimeType: "application/pdf", bucket: "originals" }],
+  processingJobs: [] as { id: string; type: string; status: string; progress: number }[],
 };
 
 const extractionFixture = {
   id: "extraction-a",
   status: "NEEDS_REVIEW",
+  schemaVersion: "voucher-ar-v2.1",
+  ocrEngine: "multimodal-model",
+  promptVersion: "vision-ar-v6",
   reviewReason: null,
   voucherData: {
     tipo_documento: "factura",
@@ -143,6 +148,7 @@ function renderBandeja() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  testQueryClient = client;
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -158,9 +164,19 @@ async function openExtraction() {
   return screen.findByRole("table", { name: "Datos fiscales extraídos" });
 }
 
+function useServerBackedDocumentMocks() {
+  vi.mocked(api.get).mockImplementation(((path: string) => {
+    if (path.endsWith("/documents")) return Promise.resolve([structuredClone(documentFixture)]);
+    if (path.endsWith("/documents/document-a/extraction")) return Promise.resolve(structuredClone(extractionFixture));
+    if (path.endsWith("/documents/document-a")) return Promise.resolve(structuredClone(documentFixture));
+    return Promise.resolve([]);
+  }) as never);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   documentFixture.status = "EXTRACTED";
+  documentFixture.processingJobs = [];
   Object.assign(extractionFixture, structuredClone(extractionFixtureSnapshot));
   contextMock.current = {
     firmId: "firm-a",
@@ -185,6 +201,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  testQueryClient?.clear();
+  testQueryClient = null;
   vi.restoreAllMocks();
 });
 
@@ -546,5 +564,114 @@ describe("StudyBandeja — revisión de extracción", () => {
     await openExtraction();
 
     expect(screen.queryByRole("button", { name: "Cargar datos a mano" })).toBeNull();
+  });
+
+  it.each(["GENERATED", "NEEDS_REVIEW"] as const)(
+    "muestra Releer con IA cuando la extracción está en %s y tiene el permiso",
+    async (status) => {
+      extractionFixture.status = status;
+      await openExtraction();
+      expect(screen.getByRole("button", { name: "Releer con IA" })).toBeTruthy();
+    },
+  );
+
+  it("no ofrece relectura para una extracción aprobada", async () => {
+    documentFixture.status = "REVIEWED";
+    extractionFixture.status = "REVIEWED";
+    await openExtraction();
+    expect(screen.queryByRole("button", { name: "Releer con IA" })).toBeNull();
+  });
+
+  it("no ofrece relectura para un documento rechazado", async () => {
+    documentFixture.status = "EXTRACTION_FAILED";
+    extractionFixture.status = "FAILED";
+    renderBandeja();
+    fireEvent.click(await screen.findByRole("button", { name: /factura\.pdf/ }));
+    await screen.findByRole("heading", { name: "Procesando comprobante" });
+    expect(screen.queryByRole("button", { name: "Releer con IA" })).toBeNull();
+  });
+
+  it("oculta Releer con IA sin el permiso document.review", async () => {
+    contextMock.current = { ...contextMock.current, capabilities: new Set(["client.read"]) };
+    await openExtraction();
+    expect(screen.queryByRole("button", { name: "Releer con IA" })).toBeNull();
+  });
+
+  it("confirma la relectura, advierte sobre los campos manuales y no envía sus valores", async () => {
+    Object.assign(extractionFixture, {
+      fields: [
+        { ...extractionFixture.fields[0], method: "HUMAN", correction: "20123456780" },
+        { ...extractionFixture.fields[1], method: "VISION", correction: "10:16:00" },
+      ],
+    });
+    vi.mocked(api.post).mockResolvedValue({ status: "QUEUED", processingJobId: "job-reprocess-a" } as never);
+    await openExtraction();
+
+    fireEvent.click(screen.getByRole("button", { name: "Releer con IA" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "¿Releer el documento con IA?" });
+    const description = within(dialog).getByText(/Se volverá a leer el documento con IA\./).textContent ?? "";
+    expect(description).toContain("La lectura anterior y lo que cargaste a mano se conservan en el historial.");
+    expect(description).toContain("Tiene 2 campos cargados o corregidos a mano: no se copian a la lectura nueva; podés volver a cargarlos.");
+    expect(api.post).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Releer con IA" }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/firms/firm-a/clients/client-a/documents/document-a/reprocess"),
+    );
+    expect(vi.mocked(api.post).mock.calls[0]?.length).toBe(1);
+  });
+
+  it("muestra Releyendo mientras corre y recarga la lectura vigente al terminar", async () => {
+    useServerBackedDocumentMocks();
+    vi.mocked(api.post).mockImplementation((async (path: string) => {
+      if (path.endsWith("/reprocess")) {
+        documentFixture.status = "VALIDATING";
+        documentFixture.processingJobs = [{
+          id: "job-reprocess-a",
+          type: "REPROCESS",
+          status: "QUEUED",
+          progress: 0,
+        }];
+        return { status: "QUEUED", processingJobId: "job-reprocess-a" };
+      }
+      return {};
+    }) as never);
+    await openExtraction();
+    fireEvent.click(screen.getByRole("button", { name: "Releer con IA" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "¿Releer el documento con IA?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Releer con IA" }));
+
+    await screen.findByRole("heading", { name: "Releyendo…" });
+    expect((screen.getByRole("button", { name: "Releyendo…" }) as HTMLButtonElement).disabled).toBe(true);
+
+    await act(async () => {
+      documentFixture.status = "EXTRACTED";
+      documentFixture.processingJobs[0]!.status = "SUCCEEDED";
+      extractionFixture.id = "extraction-b";
+      extractionFixture.voucherData = {
+        ...extractionFixture.voucherData,
+        total: "999.00",
+      };
+      await testQueryClient!.invalidateQueries({
+        queryKey: ["document", "firm-a", "client-a", "document-a"],
+      });
+    });
+
+    const table = await screen.findByRole("table", { name: "Datos fiscales extraídos" });
+    await waitFor(() => expect(within(table).getByText("999.00")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Releer con IA" })).toBeTruthy();
+  });
+
+  it.each([
+    { status: 409, code: "REPROCESS_IN_PROGRESS", message: "Ya hay una lectura en curso. Esperá a que termine." },
+    { status: 429, code: "REPROCESS_LIMIT_REACHED", message: "Se alcanzó el máximo de relecturas por hora." },
+  ])("muestra el error $status de la API al releer", async ({ status, code, message }) => {
+    vi.mocked(api.post).mockRejectedValue(new ApiError(code, message, status));
+    await openExtraction();
+    fireEvent.click(screen.getByRole("button", { name: "Releer con IA" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "¿Releer el documento con IA?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Releer con IA" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(message);
   });
 });
