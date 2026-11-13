@@ -97,9 +97,10 @@ export function StudyUserAssignments({
     <ActionDrawer
       isOpen={isOpen}
       onClose={onClose}
+      initialFocus="close"
       eyebrow="Usuarios y accesos"
       title={`Clientes de ${userName}`}
-      description="Consultá y actualizá los clientes asignados a este usuario."
+      description="Los cambios se aplican al momento. Consultá, asigná o quitá clientes de este usuario."
     >
       <div className="dense-stack">
         {notice ? <p role="status">{notice}</p> : null}
@@ -174,6 +175,7 @@ export function StudyUserAssignments({
                         type="button"
                         size="row"
                         variant="ghost"
+                        aria-label={`Quitar cliente ${client.legalName} de ${userName}`}
                         loading={
                           removeAssignment.isPending &&
                           removeAssignment.variables?.id === assignment.id

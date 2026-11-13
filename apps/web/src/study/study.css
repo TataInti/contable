@@ -2890,6 +2890,80 @@
   gap: var(--ds-space-2);
 }
 
+.administration-users .dense-row-actions .administration-user-actions {
+  flex: 0 0 auto;
+}
+
+.administration-users .dense-inspector__foot .dense-row-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.administration-users .administration-user-edit-form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.administration-profile {
+  min-width: 0;
+}
+
+.administration-profile__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  margin-bottom: var(--ds-space-3);
+}
+
+.administration-profile__heading h2 {
+  margin: 0;
+  font-size: var(--ds-text-base);
+}
+
+.administration-profile__facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 var(--ds-space-3);
+  margin: 0;
+  border-top: 1px solid var(--ds-color-border-subtle);
+}
+
+.administration-profile__facts > div {
+  min-width: 0;
+  padding: var(--ds-space-3) var(--ds-space-2);
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+}
+
+.administration-profile__facts dt {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.administration-profile__facts dd {
+  margin: var(--ds-space-1) 0 0;
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-sm);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 960px) {
+  .administration-profile__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .administration-profile__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .administration-profile__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (pointer: coarse) {
   .administration-users .dense-select--inline {
     height: var(--ds-touch-target);
@@ -3558,6 +3632,24 @@
 
 .self-review-setting .study-panel__heading {
   margin-bottom: 0;
+}
+
+.self-review-setting__heading {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.self-review-setting__heading > * {
+  margin: 0;
+}
+
+.self-review-setting__title {
+  font-size: var(--ds-text-base);
+}
+
+.self-review-setting__heading > p:last-child {
+  color: var(--ds-color-text-muted);
+  line-height: 1.45;
 }
 
 .self-review-setting__toggle {

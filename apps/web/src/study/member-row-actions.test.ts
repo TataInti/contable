@@ -3,13 +3,14 @@ import { memberActionCopy, memberRecoveryCopy, memberRowActions, roleChangeCopy 
 
 /**
  * Tests focalizados de UI para el ciclo de vida de usuarios internos
- * (corte F2). El OWNER está protegido: no se ofrece suspensión sobre su
- * cuenta; una membresía suspendida sólo ofrece reactivación explícita.
+ * (corte F2). El servidor protege al último administrador activo; la pantalla
+ * ofrece suspensión para cualquier miembro activo y reactivación explícita.
  */
 
 describe("memberRowActions", () => {
-  it("para el OWNER (protegido) sólo ofrece recuperar acceso, nunca suspender", () => {
+  it("ofrece suspensión y recuperación también para el OWNER activo", () => {
     expect(memberRowActions({ role: "OWNER", membershipStatus: "ACTIVE", userStatus: "ACTIVE" })).toEqual([
+      "suspend",
       "recover-access",
     ]);
   });
