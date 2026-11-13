@@ -246,6 +246,21 @@ async function setupFiscalComponent() {
       label: "2026-01 WP",
     },
   });
+  // Sólo se liquida a un cliente inscripto en el régimen.
+  const registration = await prisma.taxRegistration.findFirst({
+    where: { firmId: FIRM_WP, clientId: CLIENT_WP, regimeId: REGIME_WP },
+  });
+  if (!registration) {
+    await prisma.taxRegistration.create({
+      data: {
+        firmId: FIRM_WP,
+        clientId: CLIENT_WP,
+        profileVersionId: PROFILE_WP,
+        regimeId: REGIME_WP,
+        validFrom: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    });
+  }
   await prisma.taxObligation.upsert({
     where: {
       clientId_regimeId_periodId: {

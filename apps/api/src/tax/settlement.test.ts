@@ -443,6 +443,16 @@ beforeEach(async () => {
 });
 
 describe("G3-1 cobertura y cálculo determinista", () => {
+  it("no liquida a un cliente que no está inscripto en el régimen", async () => {
+    await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      await tx.taxRegistration.deleteMany({ where: { firmId: FIRM_ALFA } });
+    });
+
+    await expect(settlements.calculate(ctxOwner, calculateParams())).rejects.toMatchObject({
+      code: "REGISTRATION_REQUIRED",
+    });
+  });
+
   it("rechaza motor desconocido en despacho y no deriva a IVA legacy", async () => {
     await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
       const pack = await tx.taxRulePack.findUniqueOrThrow({ where: { code: "VAT_SET_V1" } });

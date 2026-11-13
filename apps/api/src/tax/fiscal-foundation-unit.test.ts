@@ -1130,7 +1130,7 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
     const ACTIVE_MODULE_ID = "a7000000-0000-4000-8000-000000000001";
     const INACTIVE_MODULE_ID = "a7000000-0000-4000-8000-000000000002";
     const MISSING_MODULE_ID = "a7000000-0000-4000-8000-000000000003";
-    mockState.taxTypes.push({ id: TAX_TYPE_ID });
+    mockState.taxTypes.push({ id: TAX_TYPE_ID, defaultFamilyId: VAT_FAMILY_ID });
     mockState.jurisdictions.push({ id: JURISDICTION_ID });
     mockState.taxAuthorities.push({ id: AUTHORITY_ID, jurisdictionId: JURISDICTION_ID });
     mockState.taxRegimeModules.push(
@@ -1221,7 +1221,7 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
   });
 
   it("valida taxTypeId contra impuestos al crear un régimen", async () => {
-    mockState.taxTypes.push({ id: TAX_TYPE_ID });
+    mockState.taxTypes.push({ id: TAX_TYPE_ID, defaultFamilyId: VAT_FAMILY_ID });
     mockState.jurisdictions.push({ id: JURISDICTION_ID });
     mockState.taxAuthorities.push({ id: AUTHORITY_ID, jurisdictionId: JURISDICTION_ID });
     const regime = await masters.createRegime(ctxOwner, {
@@ -1243,6 +1243,35 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
         authorityId: AUTHORITY_ID,
       }),
     ).rejects.toMatchObject({ code: "TAX_TYPE_NOT_FOUND" });
+  });
+
+  it("no deja crear ni editar un régimen sin familia de cálculo con motor", async () => {
+    const EMPTY_FAMILY_ID = "f1000000-0000-4000-8000-0000000000ee";
+    mockState.calcFamilies.push({ id: EMPTY_FAMILY_ID, key: "SIN_MOTOR", isActive: true, sortOrder: 90 });
+    mockState.taxTypes.push({ id: TAX_TYPE_ID });
+    mockState.jurisdictions.push({ id: JURISDICTION_ID });
+    mockState.taxAuthorities.push({ id: AUTHORITY_ID, jurisdictionId: JURISDICTION_ID });
+    const base = {
+      name: "Régimen de prueba",
+      taxTypeId: TAX_TYPE_ID,
+      jurisdictionId: JURISDICTION_ID,
+      authorityId: AUTHORITY_ID,
+    };
+
+    // Sin familia (ni propia ni heredada del impuesto): no se crea.
+    await expect(masters.createRegime(ctxOwner, { ...base, code: "SIN-FAMILIA" }))
+      .rejects.toMatchObject({ code: "REGIME_FAMILY_REQUIRED", path: ["calcFamilyId"] });
+    // Con una familia que no tiene motores: tampoco.
+    await expect(masters.createRegime(ctxOwner, { ...base, code: "SIN-MOTOR", calcFamilyId: EMPTY_FAMILY_ID }))
+      .rejects.toMatchObject({ code: "CALC_FAMILY_WITHOUT_ENGINE", path: ["calcFamilyId"] });
+    expect(mockState.taxRegimes).toHaveLength(0);
+
+    const regime = await masters.createRegime(ctxOwner, { ...base, code: "CON-MOTOR", calcFamilyId: VAT_FAMILY_ID });
+    expect(regime).toMatchObject({ calcFamilyId: VAT_FAMILY_ID });
+
+    // Una vez creado, no se le puede quitar la familia.
+    await expect(masters.updateRegime(ctxOwner, { regimeId: regime.id, calcFamilyId: null }))
+      .rejects.toMatchObject({ code: "REGIME_FAMILY_REQUIRED" });
   });
 
   it("rechaza el sujeto faltante desde la ruta y devuelve details.path", async () => {
@@ -1283,7 +1312,7 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
   });
 
   it("sanitiza errores Prisma de las rutas fiscales", async () => {
-    mockState.taxTypes.push({ id: TAX_TYPE_ID });
+    mockState.taxTypes.push({ id: TAX_TYPE_ID, defaultFamilyId: VAT_FAMILY_ID });
     mockState.jurisdictions.push({ id: JURISDICTION_ID });
     mockState.taxAuthorities.push({ id: AUTHORITY_ID, jurisdictionId: JURISDICTION_ID });
     mockState.regimeCreateError = Object.assign(

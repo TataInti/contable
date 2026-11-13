@@ -41,11 +41,13 @@ export type FiscalErrorCode =
   | "CATALOG_CODE_CONFLICT"
   | "REGISTRATION_OVERLAP"
   | "REGISTRATION_NOT_FOUND"
+  | "REGISTRATION_REQUIRED"
   | "ACTIVITY_LINK_NOT_FOUND"
   | "REGIME_NOT_FOUND"
   | "REGIME_MODULE_NOT_FOUND"
   | "CALC_FAMILY_NOT_FOUND"
   | "REGIME_FAMILY_REQUIRED"
+  | "CALC_FAMILY_WITHOUT_ENGINE"
   | "REGIME_CALC_FAMILY_IN_USE"
   | "ENGINE_FAMILY_MISMATCH"
   | "TAX_ENGINE_NOT_FOUND"
@@ -106,6 +108,71 @@ async function requireActiveCalcFamily(
       "CALC_FAMILY_NOT_FOUND",
       "La familia de cálculo seleccionada no existe o está inactiva",
       [path],
+    );
+  }
+  return family;
+}
+
+/**
+ * Invariante de producto: una obligación (y su liquidación) sólo existe para un
+ * cliente inscripto en ese régimen durante el período. La inscripción vive en
+ * la configuración fiscal del cliente; este control enlaza ambos espacios.
+ */
+export async function requireRegistrationForPeriod(
+  tx: Prisma.TransactionClient,
+  input: {
+    firmId: string;
+    clientId: string;
+    regimeId: string;
+    period: { startDate: Date; endDate: Date };
+  },
+) {
+  const registration = await tx.taxRegistration.findFirst({
+    where: {
+      firmId: input.firmId,
+      clientId: input.clientId,
+      regimeId: input.regimeId,
+      status: "ACTIVE",
+      validFrom: { lte: input.period.endDate },
+      OR: [{ validTo: null }, { validTo: { gte: input.period.startDate } }],
+    },
+  });
+  if (!registration) {
+    throw new FiscalError(
+      "REGISTRATION_REQUIRED",
+      "El cliente no está inscripto en este régimen para el período. Registrá la inscripción en su configuración fiscal antes de continuar",
+      ["regimeId"],
+    );
+  }
+  return registration;
+}
+
+/**
+ * Invariante de producto: un régimen existe para poder liquidarse, así que
+ * siempre lleva una familia de cálculo activa que tenga al menos un motor
+ * activo. Régimen y motor son dos caras de lo mismo; sin motor no hay régimen.
+ */
+async function requireCalculableFamily(
+  tx: Prisma.TransactionClient,
+  calcFamilyId: string | null | undefined,
+) {
+  if (!calcFamilyId) {
+    throw new FiscalError(
+      "REGIME_FAMILY_REQUIRED",
+      "Elegí la familia de cálculo del régimen: sin ella no se puede liquidar",
+      ["calcFamilyId"],
+    );
+  }
+  const family = await requireActiveCalcFamily(tx, calcFamilyId);
+  const engines = await tx.taxEngine.findMany({
+    where: { familyId: calcFamilyId, isActive: true },
+    take: 1,
+  });
+  if (engines.length === 0) {
+    throw new FiscalError(
+      "CALC_FAMILY_WITHOUT_ENGINE",
+      `La familia de cálculo "${family.label}" no tiene un motor disponible; elegí otra familia`,
+      ["calcFamilyId"],
     );
   }
   return family;
@@ -772,7 +839,7 @@ export class FiscalMasterService {
       const taxType = await tx.taxType.findUnique({ where: { id: input.taxTypeId } });
       if (!taxType) throw new FiscalError("TAX_TYPE_NOT_FOUND", "Impuesto no encontrado");
       const calcFamilyId = input.calcFamilyId ?? taxType.defaultFamilyId;
-      if (calcFamilyId) await requireActiveCalcFamily(tx, calcFamilyId);
+      await requireCalculableFamily(tx, calcFamilyId);
       if (input.moduleId) await requireActiveTaxRegimeModule(tx, input.moduleId);
       const jurisdiction = await tx.jurisdiction.findUnique({
         where: { id: input.jurisdictionId },
@@ -869,7 +936,10 @@ export class FiscalMasterService {
       if (input.jurisdictionId !== undefined && !(await tx.jurisdiction.findUnique({ where: { id: jurisdictionId } }))) {
         throw new FiscalError("JURISDICTION_NOT_FOUND", "Jurisdicción no encontrada");
       }
-      if (calcFamilyId) await requireActiveCalcFamily(tx, calcFamilyId);
+      // Sólo ocultar un régimen heredado sin familia queda permitido; cualquier
+      // otra edición, o volver a activarlo, exige que sea liquidable.
+      const onlyHiding = !hasEditableFields && input.isActive === false;
+      if (!onlyHiding) await requireCalculableFamily(tx, calcFamilyId);
       if (input.moduleId && moduleId) await requireActiveTaxRegimeModule(tx, moduleId);
       const authority = input.authorityId !== undefined || input.jurisdictionId !== undefined
         ? await tx.taxAuthority.findUnique({ where: { id: authorityId } })
@@ -1708,6 +1778,16 @@ export class TaxPeriodService {
       if (existing) {
         throw new FiscalError("OBLIGATION_EXISTS", "La obligación ya existe para ese régimen y período");
       }
+      const period = await tx.taxPeriod.findFirst({
+        where: { id: input.periodId, firmId: ctx.firmId, clientId: input.clientId },
+      });
+      if (!period) throw new FiscalError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
+      await requireRegistrationForPeriod(tx, {
+        firmId: ctx.firmId,
+        clientId: input.clientId,
+        regimeId: input.regimeId,
+        period,
+      });
       return tx.taxObligation.create({
         data: {
           firmId: ctx.firmId,
@@ -1741,16 +1821,31 @@ export class TaxPeriodService {
 export class TaxRuleService {
   /** Lista rule packs del régimen. */
   async listPacks(ctx: TenantContext) {
-    return withTenantContext(ctx, (tx) =>
-      tx.taxRulePack.findMany({
+    return withTenantContext(ctx, async (tx) => {
+      const packs = await tx.taxRulePack.findMany({
         include: {
           regime: { include: { taxType: true, jurisdiction: true, calcFamily: true } },
           versions: { orderBy: { version: "desc" }, take: 5, include: { engine: true } },
         },
         orderBy: { code: "asc" },
         take: 200,
-      }),
-    );
+      });
+      // El recorte a las 5 versiones más nuevas puede dejar afuera la versión
+      // activa cuando hay varios borradores posteriores. La activa es la que
+      // se usa para liquidar: siempre viaja en el listado.
+      const missingActive = packs
+        .filter((pack) => pack.versions.length >= 5 && !pack.versions.some((version) => version.status === "ACTIVE"))
+        .map((pack) => pack.id);
+      if (missingActive.length === 0) return packs;
+      const activeVersions = await tx.taxRuleVersion.findMany({
+        where: { packId: { in: missingActive }, status: "ACTIVE" },
+        include: { engine: true },
+      });
+      return packs.map((pack) => {
+        const active = activeVersions.filter((version) => version.packId === pack.id);
+        return active.length ? { ...pack, versions: [...pack.versions, ...active] } : pack;
+      });
+    });
   }
 
   /** Detalle completo para administrar una versión sin inferir valores desde la UI. */
@@ -2680,6 +2775,12 @@ export class TaxCalendarService {
     return withTenantContext(ctx, async (tx) => {
       const period = await tx.taxPeriod.findUnique({ where: { id: input.periodId } });
       if (!period) throw new FiscalError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
+      await requireRegistrationForPeriod(tx, {
+        firmId: ctx.firmId,
+        clientId: input.clientId,
+        regimeId: input.regimeId,
+        period,
+      });
 
       const pack = await tx.taxRulePack.findFirst({
         where: { regimeId: input.regimeId },

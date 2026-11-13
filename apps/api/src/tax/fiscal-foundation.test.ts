@@ -325,18 +325,19 @@ describe("G1-02 maestros (integración DB)", () => {
       code: "IMPUESTO-SIN-FAMILIA-P2-F",
       name: "Impuesto sin familia",
     });
-    const noFamilyRegime = await masters.createRegime(ctxOwner, {
+    // Un régimen sin familia de cálculo no llega a existir: sin motor no hay
+    // nada que liquidar.
+    await expect(masters.createRegime(ctxOwner, {
       code: "REGIMEN-SIN-FAMILIA-P2-F",
       name: "Régimen sin familia",
       taxTypeId: noFamilyType.id,
       jurisdictionId: fx.tucuman.id,
       authorityId: dgr.id,
-    });
-    await expect(masters.listEnginesForRegime(ctxOwner, noFamilyRegime.id)).rejects.toMatchObject({
+    })).rejects.toMatchObject({
       code: "REGIME_FAMILY_REQUIRED",
       path: ["calcFamilyId"],
-      message: "Elegí la familia de cálculo del régimen",
     });
+    expect(await prisma.taxRegime.count({ where: { code: "REGIMEN-SIN-FAMILIA-P2-F" } })).toBe(0);
   });
 
   it("los maestros son catálogos compartidos: un no-miembro no los ve (RLS runtime)", async () => {
@@ -476,12 +477,16 @@ describe("G1-04 períodos y obligaciones (integración DB)", () => {
       code: "E2E-SYN-TAX-F",
       name: "Impuesto sintético E2E — sin validez fiscal",
     });
+    const family = await prisma.calcFamily.findFirstOrThrow({
+      where: { isActive: true, engines: { some: { isActive: true } } },
+    });
     const regime = await masters.createRegime(ctxOwner, {
       code: "E2E-SYN-REGIME-F",
       name: "Régimen sintético E2E — sin reglas ni alícuotas",
       taxTypeId: taxType.id,
       jurisdictionId: jurisdiction.id,
       authorityId: authority.id,
+      calcFamilyId: family.id,
     });
     const profile = await profiles.createProfile(ctxOwner, {
       clientId: CLIENT_ALFA,
@@ -557,6 +562,21 @@ describe("G1-04 períodos y obligaciones (integración DB)", () => {
       startDate: "2026-01-01",
       endDate: "2026-01-31",
       label: "Enero 2026",
+    });
+    // Sin inscripción del cliente en el régimen no hay obligación posible.
+    await expect(
+      periods.materializeObligation(ctxOwner, {
+        clientId: CLIENT_ALFA,
+        profileVersionId: profile.id,
+        regimeId: fx.ri.id,
+        periodId: period.id,
+      }),
+    ).rejects.toMatchObject({ code: "REGISTRATION_REQUIRED" });
+    await profiles.addRegistration(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      profileVersionId: profile.id,
+      regimeId: fx.ri.id,
+      validFrom: "2026-01-01",
     });
     const obligation = await periods.materializeObligation(ctxOwner, {
       clientId: CLIENT_ALFA,

@@ -21,6 +21,7 @@ const mockState = vi.hoisted(() => ({
   authorities: [] as Array<Record<string, unknown>>,
   regimes: [] as Array<Record<string, unknown>>,
   obligations: [] as Array<Record<string, unknown>>,
+  registrations: [] as Array<{ clientId: string; regimeId: string }>,
   auditEvents: [] as Array<Record<string, unknown>>,
   idCounter: 0,
   withTenantContext: null as unknown as (
@@ -40,6 +41,7 @@ const CLIENT_ID = "11111111-2222-4333-8444-777777777777";
 const JURISDICTION_ID = "55555555-6666-4777-8888-bbbbbbbbbbbb";
 const OTHER_JURISDICTION_ID = "77777777-8888-4999-8000-dddddddddddd";
 const TAX_TYPE_ID = "44444444-5555-4666-8777-aaaaaaaaaaaa";
+const CALC_FAMILY_ID = "f2000000-0000-4000-8000-000000000001";
 const PROFILE_ID = "33333333-4444-4555-8666-999999999999";
 const PERIOD_ID = "88888888-9999-4000-8111-eeeeeeeeeeee";
 
@@ -67,6 +69,15 @@ function makeTransaction() {
     taxType: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         mockState.taxTypes.find((row) => row.id === where.id) ?? null,
+    },
+    // Todo régimen exige una familia de cálculo activa con al menos un motor.
+    calcFamily: {
+      findFirst: async ({ where }: { where: { id: string } }) =>
+        where.id === CALC_FAMILY_ID ? { id: CALC_FAMILY_ID, key: "E2E_FAMILY", label: "Familia sintética", isActive: true } : null,
+    },
+    taxEngine: {
+      findMany: async ({ where }: { where: { familyId: string } }) =>
+        where.familyId === CALC_FAMILY_ID ? [{ id: "e2e-engine", familyId: CALC_FAMILY_ID, isActive: true }] : [],
     },
     taxAuthority: {
       findUnique: async ({ where }: { where: { id: string } }) =>
@@ -140,6 +151,19 @@ function makeTransaction() {
         return updated;
       },
     },
+    taxPeriod: {
+      findFirst: async ({ where }: { where: { id: string } }) =>
+        where.id === PERIOD_ID
+          ? { id: PERIOD_ID, startDate: new Date("2026-11-01"), endDate: new Date("2026-11-30") }
+          : null,
+    },
+    // Una obligación exige que el cliente esté inscripto en el régimen.
+    taxRegistration: {
+      findFirst: async ({ where }: { where: { clientId: string; regimeId: string } }) =>
+        mockState.registrations.find(
+          (row) => row.clientId === where.clientId && row.regimeId === where.regimeId,
+        ) ?? null,
+    },
     taxObligation: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) =>
         mockState.obligations.find((row) => matches(row, where)) ?? null,
@@ -183,10 +207,12 @@ beforeEach(async () => {
     id: TAX_TYPE_ID,
     code: "E2E_TEST_TAX",
     name: "Impuesto sintético E2E",
+    defaultFamilyId: CALC_FAMILY_ID,
   });
   mockState.authorities.length = 0;
   mockState.regimes.length = 0;
   mockState.obligations.length = 0;
+  mockState.registrations.length = 0;
   mockState.auditEvents.length = 0;
   mockState.idCounter = 0;
   mockState.withTenantContext = async (_ctx, fn) => fn(makeTransaction());
@@ -259,6 +285,17 @@ describe("catálogo fiscal: autoridades, regímenes y obligaciones", () => {
       authority: { id: authority.id },
     });
 
+    // Sin inscripción del cliente en el régimen no se crea la obligación.
+    const withoutRegistration = await app.inject({
+      method: "POST",
+      url: `/api/v1/firms/${FIRM_ID}/clients/${CLIENT_ID}/tax-obligations`,
+      payload: { profileVersionId: PROFILE_ID, regimeId: regime.id, periodId: PERIOD_ID },
+    });
+    expect(withoutRegistration.statusCode).toBe(422);
+    expect(withoutRegistration.json().error.code).toBe("REGISTRATION_REQUIRED");
+    expect(mockState.obligations).toHaveLength(0);
+
+    mockState.registrations.push({ clientId: CLIENT_ID, regimeId: regime.id });
     const obligationResponse = await app.inject({
       method: "POST",
       url: `/api/v1/firms/${FIRM_ID}/clients/${CLIENT_ID}/tax-obligations`,
