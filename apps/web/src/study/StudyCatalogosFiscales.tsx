@@ -15,6 +15,7 @@ import { DeletionDrawer } from "../ui/DeletionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
   DenseHeader,
+  DenseLoading,
   DensePage,
   DenseSearch,
   DensitySwitch,
@@ -946,11 +947,7 @@ export function StudyCatalogosFiscales() {
   );
 
   const loadingFor = (loading: boolean, label: string) =>
-    loading ? (
-      <div className="dense-table-card">
-        <p className="muted-copy dense-empty">{label}</p>
-      </div>
-    ) : null;
+    loading ? <DenseLoading label={label} /> : null;
 
   const deleteButton = (path: string) => (
     <Button
