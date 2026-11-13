@@ -41,6 +41,7 @@ export type FiscalErrorCode =
   | "REGISTRATION_NOT_FOUND"
   | "ACTIVITY_LINK_NOT_FOUND"
   | "REGIME_NOT_FOUND"
+  | "REGIME_MODULE_NOT_FOUND"
   | "CALC_FAMILY_NOT_FOUND"
   | "REGIME_FAMILY_REQUIRED"
   | "REGIME_CALC_FAMILY_IN_USE"
@@ -106,6 +107,22 @@ async function requireActiveCalcFamily(
     );
   }
   return family;
+}
+
+async function requireActiveTaxRegimeModule(
+  tx: Prisma.TransactionClient,
+  moduleId: string,
+  path = "moduleId",
+) {
+  const module = await tx.taxRegimeModule.findFirst({ where: { id: moduleId, isActive: true } });
+  if (!module) {
+    throw new FiscalError(
+      "REGIME_MODULE_NOT_FOUND",
+      "El módulo seleccionado no existe o está inactivo",
+      [path],
+    );
+  }
+  return module;
 }
 
 export function assertTaxEngineVersionCompatible(
@@ -654,6 +671,14 @@ export class FiscalMasterService {
     }));
   }
 
+  async listRegimeModules(ctx: TenantContext) {
+    return withTenantContext(ctx, (tx) => tx.taxRegimeModule.findMany({
+      where: { isActive: true },
+      select: { id: true, key: true, label: true, flagCode: true, isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { key: "asc" }],
+    }));
+  }
+
   async listEnginesForRegime(ctx: TenantContext, regimeId: string) {
     return withTenantContext(ctx, async (tx) => {
       const regime = await tx.taxRegime.findUnique({
@@ -692,7 +717,7 @@ export class FiscalMasterService {
     return withTenantContext(ctx, (tx) =>
       tx.taxRegime.findMany({
         where: includeInactive ? {} : { isActive: true },
-        include: { taxType: true, jurisdiction: true, authority: true, calcFamily: true },
+        include: { taxType: true, jurisdiction: true, authority: true, calcFamily: true, module: true },
         orderBy: { code: "asc" },
         take: 200,
       }),
@@ -708,6 +733,7 @@ export class FiscalMasterService {
       jurisdictionId: string;
       authorityId: string;
       calcFamilyId?: string;
+      moduleId?: string;
       duplicateOfId?: string;
     },
   ) {
@@ -716,6 +742,7 @@ export class FiscalMasterService {
       if (!taxType) throw new FiscalError("TAX_TYPE_NOT_FOUND", "Impuesto no encontrado");
       const calcFamilyId = input.calcFamilyId ?? taxType.defaultFamilyId;
       if (calcFamilyId) await requireActiveCalcFamily(tx, calcFamilyId);
+      if (input.moduleId) await requireActiveTaxRegimeModule(tx, input.moduleId);
       const jurisdiction = await tx.jurisdiction.findUnique({
         where: { id: input.jurisdictionId },
       });
@@ -742,6 +769,7 @@ export class FiscalMasterService {
           jurisdictionId: input.jurisdictionId,
           authorityId: input.authorityId,
           calcFamilyId: calcFamilyId ?? null,
+          moduleId: input.moduleId ?? null,
           origin: "UI",
           createdByFirmId: ctx.firmId,
         },
@@ -753,14 +781,14 @@ export class FiscalMasterService {
         entityType: "TaxRegime",
         entityId: created.id,
         before: input.duplicateOfId
-          ? await tx.taxRegime.findUniqueOrThrow({ where: { id: input.duplicateOfId } }).then((source: { code: string; name: string; taxTypeId: string; jurisdictionId: string; authorityId: string; calcFamilyId: string | null; isActive: boolean }) => ({
+          ? await tx.taxRegime.findUniqueOrThrow({ where: { id: input.duplicateOfId } }).then((source: { code: string; name: string; taxTypeId: string; jurisdictionId: string; authorityId: string; calcFamilyId: string | null; moduleId: string | null; isActive: boolean }) => ({
             code: source.code, name: source.name, taxTypeId: source.taxTypeId, jurisdictionId: source.jurisdictionId,
-            authorityId: source.authorityId, calcFamilyId: source.calcFamilyId, isActive: source.isActive,
+            authorityId: source.authorityId, calcFamilyId: source.calcFamilyId, moduleId: source.moduleId, isActive: source.isActive,
           }))
           : Prisma.JsonNull,
         after: {
           code: created.code, name: created.name, taxTypeId: created.taxTypeId, jurisdictionId: created.jurisdictionId,
-          authorityId: created.authorityId, calcFamilyId: created.calcFamilyId, isActive: created.isActive,
+          authorityId: created.authorityId, calcFamilyId: created.calcFamilyId, moduleId: created.moduleId, isActive: created.isActive,
         },
       });
       return created;
@@ -785,6 +813,7 @@ export class FiscalMasterService {
       jurisdictionId?: string;
       authorityId?: string;
       calcFamilyId?: string | null;
+      moduleId?: string | null;
       isActive?: boolean;
     },
   ) {
@@ -792,7 +821,8 @@ export class FiscalMasterService {
       const row = await tx.taxRegime.findUnique({ where: { id: input.regimeId } });
       if (!row) throw new FiscalError("CATALOG_NOT_FOUND", "El régimen no existe");
       const hasEditableFields = input.code !== undefined || input.name !== undefined || input.taxTypeId !== undefined ||
-        input.jurisdictionId !== undefined || input.authorityId !== undefined || input.calcFamilyId !== undefined;
+        input.jurisdictionId !== undefined || input.authorityId !== undefined || input.calcFamilyId !== undefined ||
+        input.moduleId !== undefined;
       if (!hasEditableFields && input.isActive === row.isActive) {
         throw new FiscalError("CATALOG_STATE_UNCHANGED", input.isActive ? "El régimen ya está activo" : "El régimen ya está oculto");
       }
@@ -800,6 +830,7 @@ export class FiscalMasterService {
       const jurisdictionId = input.jurisdictionId ?? row.jurisdictionId;
       const authorityId = input.authorityId ?? row.authorityId;
       const calcFamilyId = input.calcFamilyId === undefined ? row.calcFamilyId : input.calcFamilyId;
+      const moduleId = input.moduleId === undefined ? row.moduleId : input.moduleId;
       const familyChanged = calcFamilyId !== row.calcFamilyId;
       if (input.taxTypeId !== undefined && !(await tx.taxType.findUnique({ where: { id: taxTypeId } }))) {
         throw new FiscalError("TAX_TYPE_NOT_FOUND", "Impuesto no encontrado");
@@ -808,6 +839,7 @@ export class FiscalMasterService {
         throw new FiscalError("JURISDICTION_NOT_FOUND", "Jurisdicción no encontrada");
       }
       if (calcFamilyId) await requireActiveCalcFamily(tx, calcFamilyId);
+      if (input.moduleId && moduleId) await requireActiveTaxRegimeModule(tx, moduleId);
       const authority = input.authorityId !== undefined || input.jurisdictionId !== undefined
         ? await tx.taxAuthority.findUnique({ where: { id: authorityId } })
         : null;
@@ -850,6 +882,7 @@ export class FiscalMasterService {
           ...(input.jurisdictionId !== undefined ? { jurisdictionId } : {}),
           ...(input.authorityId !== undefined ? { authorityId } : {}),
           ...(input.calcFamilyId !== undefined ? { calcFamilyId: input.calcFamilyId } : {}),
+          ...(input.moduleId !== undefined ? { moduleId: input.moduleId } : {}),
           ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
         },
       });
@@ -861,11 +894,11 @@ export class FiscalMasterService {
         entityId: row.id,
         before: {
           code: row.code, name: row.name, taxTypeId: row.taxTypeId, jurisdictionId: row.jurisdictionId,
-          authorityId: row.authorityId, calcFamilyId: row.calcFamilyId, isActive: row.isActive,
+          authorityId: row.authorityId, calcFamilyId: row.calcFamilyId, moduleId: row.moduleId, isActive: row.isActive,
         },
         after: {
           code: updated.code, name: updated.name, taxTypeId: updated.taxTypeId, jurisdictionId: updated.jurisdictionId,
-          authorityId: updated.authorityId, calcFamilyId: updated.calcFamilyId, isActive: updated.isActive,
+          authorityId: updated.authorityId, calcFamilyId: updated.calcFamilyId, moduleId: updated.moduleId, isActive: updated.isActive,
         },
       });
       return updated;

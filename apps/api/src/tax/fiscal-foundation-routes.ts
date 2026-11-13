@@ -190,6 +190,15 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/api/v1/tax/regime-modules", async (req, reply) => {
+    try {
+      const data = await masters.listRegimeModules(tenantContextFromRequest(req));
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.get("/api/v1/tax/types", async (req, reply) => {
     const query = z.object({ includeInactive: z.enum(["true", "false"]).optional() }).strict().parse(req.query);
     try {
@@ -342,6 +351,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
           jurisdictionId: z.string().uuid(),
           authorityId: z.string().uuid(),
           calcFamilyId: z.string().uuid().optional(),
+          moduleId: z.string().uuid().optional(),
           duplicateOfId: z.string().uuid().optional(),
         })
         .strict()
@@ -353,6 +363,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         jurisdictionId: body.jurisdictionId,
         authorityId: body.authorityId,
         ...(body.calcFamilyId !== undefined ? { calcFamilyId: body.calcFamilyId } : {}),
+        ...(body.moduleId !== undefined ? { moduleId: body.moduleId } : {}),
         ...(body.duplicateOfId !== undefined ? { duplicateOfId: body.duplicateOfId } : {}),
       });
       return reply.status(201).send({ data });
@@ -371,6 +382,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         jurisdictionId: z.string().uuid().optional(),
         authorityId: z.string().uuid().optional(),
         calcFamilyId: z.string().uuid().nullable().optional(),
+        moduleId: z.string().uuid().nullable().optional(),
         isActive: z.boolean().optional(),
       }).strict().refine((value) => Object.values(value).some((field) => field !== undefined), {
         message: "Indicá al menos un campo para actualizar",
@@ -383,6 +395,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         ...(body.jurisdictionId !== undefined ? { jurisdictionId: body.jurisdictionId } : {}),
         ...(body.authorityId !== undefined ? { authorityId: body.authorityId } : {}),
         ...(body.calcFamilyId !== undefined ? { calcFamilyId: body.calcFamilyId } : {}),
+        ...(body.moduleId !== undefined ? { moduleId: body.moduleId } : {}),
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
       });
       return reply.send({ data });
