@@ -46,7 +46,7 @@ const mockState = vi.hoisted(() => ({
     key: string;
     isActive: boolean;
     sortOrder: number;
-    allowedRuleKinds?: Array<{ kindId: string }>;
+    allowedRuleKinds?: Array<{ kindId: string; kind?: { id: string; key: string; isActive: boolean } }>;
   }>,
   taxEngines: [] as Array<{
     id: string;
@@ -1243,6 +1243,43 @@ describe("fundación fiscal: pruebas aisladas sin PostgreSQL", () => {
         authorityId: AUTHORITY_ID,
       }),
     ).rejects.toMatchObject({ code: "TAX_TYPE_NOT_FOUND" });
+  });
+
+  it("rechaza el sujeto faltante desde la ruta y devuelve details.path", async () => {
+    const version = seedActivatableRuleVersion({ engineVersion: "ar-iibb-tuc-local-v1.1.0" });
+    const pack = mockState.taxRulePacks.find((item) => item.id === version.packId)!;
+    Object.assign(pack, {
+      regimeCode: "IIBB_LOCAL_TUC",
+      taxTypeCode: "IIBB",
+      jurisdictionCode: "AR-T",
+      calcFamilyId: IIBB_FAMILY_ID,
+    });
+    const kindId = "88888888-7777-4666-8555-444444444444";
+    mockState.calcFamilies.find((family) => family.id === IIBB_FAMILY_ID)!.allowedRuleKinds = [
+      { kindId, kind: { id: kindId, key: "RATE", isActive: true } },
+    ];
+    const app = Fastify({ logger: false });
+    fiscalFoundationRoutes(app);
+    await app.ready();
+    try {
+      const response = await app.inject({
+        method: "PUT",
+        url: `/api/v1/tax/rule-versions/${version.id}/rate-rules`,
+        payload: {
+          rules: [{ kindId, rate: "21", validFrom: "2026-01-01" }],
+        },
+      });
+      expect(response.statusCode).toBe(422);
+      expect(response.json()).toMatchObject({
+        error: {
+          code: "RULE_VERSION_INVALID",
+          details: { path: ["rules", "0", "activityId"] },
+        },
+      });
+      expect(mockState.rateRules).toHaveLength(1);
+    } finally {
+      await app.close();
+    }
   });
 
   it("sanitiza errores Prisma de las rutas fiscales", async () => {

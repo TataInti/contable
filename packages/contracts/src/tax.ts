@@ -347,11 +347,12 @@ export type CreateTaxRuleVersion = z.infer<typeof createTaxRuleVersionSchema>;
 export const MONOTRIBUTO_CATEGORY_CODES = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"] as const;
 export type MonotributoCategoryCode = (typeof MONOTRIBUTO_CATEGORY_CODES)[number];
 
-export type TaxRuleSubject = "NONE" | "ACTIVITY_OR_DEFAULT" | "JURISDICTION_OR_DEFAULT" | "JURISDICTION" | "CATEGORY";
+export type TaxRuleSubject = "NONE" | "ACTIVITY" | "ACTIVITY_OR_DEFAULT" | "JURISDICTION_OR_DEFAULT" | "JURISDICTION" | "CATEGORY";
 
 /** Stable system-catalog keys describe which subject a rule uses. */
 export function taxRuleSubjectFor(familyKey: string, kindKey: string): TaxRuleSubject {
   if (familyKey === "IIBB_LOCAL" && kindKey === "RATE") return "ACTIVITY_OR_DEFAULT";
+  if ((familyKey === "VAT_RI" || familyKey === "TEM") && kindKey === "RATE") return "ACTIVITY";
   if (familyKey === "IIBB_CM03" && kindKey === "RATE") return "JURISDICTION_OR_DEFAULT";
   if (familyKey === "IIBB_CM03" && kindKey === "COEFFICIENT") return "JURISDICTION";
   if (familyKey === "MONOTRIBUTO" && kindKey === "FEE") return "CATEGORY";

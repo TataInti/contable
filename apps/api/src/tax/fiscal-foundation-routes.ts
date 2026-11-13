@@ -920,7 +920,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
               z
                 .object({
                   concept: z.string().max(80).optional(),
-                  kindId: z.string().uuid().optional(),
+                  kindId: z.string().uuid(),
                   activityId: z.string().uuid().optional(),
                   categoryCode: z.string().max(8).optional(),
                   isDefault: z.boolean().optional(),

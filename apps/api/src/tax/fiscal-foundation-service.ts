@@ -2203,7 +2203,9 @@ export class TaxRuleService {
           const allowed = family.allowedRuleKinds.find(
             ({ kindId, kind }) => kindId === rule.kindId && kind.isActive,
           );
-          if (!allowed) fieldError("kindId", "Elegí un tipo de regla disponible para este régimen.");
+          if (!allowed) {
+            throw new FiscalError("RULE_VERSION_INVALID", "Elegí un tipo de regla disponible para este régimen.", ["rules", String(index), "kindId"]);
+          }
           const subject = taxRuleSubjectFor(family.key, allowed.kind.key);
           if (subject === "ACTIVITY_OR_DEFAULT" && !rule.activityId && !rule.isDefault) {
             fieldError("activityId", "Elegí una actividad o aplicá la regla a todas.");
@@ -2232,8 +2234,11 @@ export class TaxRuleService {
               where: { id: rule.activityId },
               select: { id: true, code: true, jurisdictionId: true },
             });
-            if (!activity) fieldError("activityId", "La actividad elegida ya no está disponible.");
-            if (subject === "ACTIVITY_OR_DEFAULT" && activity.jurisdictionId !== version.pack.regime.jurisdictionId) {
+            if (!activity) {
+              throw new FiscalError("RULE_VERSION_INVALID", "La actividad elegida ya no está disponible.", ["rules", String(index), "activityId"]);
+            }
+            if ((subject === "ACTIVITY_OR_DEFAULT" || subject === "ACTIVITY") &&
+                activity.jurisdictionId !== version.pack.regime.jurisdictionId) {
               fieldError("activityId", "Elegí una actividad de la jurisdicción del régimen.");
             }
             activities.set(activity.id, activity);
@@ -2269,7 +2274,7 @@ export class TaxRuleService {
             ...(rule.rate ? { rate: new Prisma.Decimal(rule.rate) } : {}),
             // Guarda normalizado (trim + mayúsculas), coherente con el catálogo.
             ...(rule.activityId
-              ? { activityId: rule.activityId, activityCode: activities.get(rule.activityId)?.code }
+              ? { activityId: rule.activityId, activityCode: activities.get(rule.activityId)?.code ?? null }
               : rule.activityCode
                 ? { activityCode: normalizeActivityCode(rule.activityCode) }
                 : {}),

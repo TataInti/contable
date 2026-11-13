@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
 import {
+  MONOTRIBUTO_CATEGORY_CODES,
   normalizeActivityCode,
   type CatalogEconomicActivity,
+  type TaxRuleKindOption,
 } from "@contable/contracts";
 import type { TaxEngineOption } from "@contable/contracts";
 import { ApiError, api } from "../lib/api";
@@ -36,6 +38,10 @@ type RuleStatus = "DRAFT" | "IN_REVIEW" | "APPROVED" | "ACTIVE" | "RETIRED";
 interface RuleRow {
   id: string;
   concept: string;
+  kindId?: string | null;
+  activityId?: string | null;
+  categoryCode?: string | null;
+  isDefault?: boolean;
   activityCode: string | null;
   jurisdictionId: string | null;
   rate: string | null;
@@ -106,6 +112,13 @@ interface Credential {
   jurisdiction: { name: string };
 }
 
+interface RuleJurisdictionOption {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+}
+
 const today = new Date().toISOString().slice(0, 10);
 
 function validateRuleVersionDate(value: string): string | null {
@@ -135,6 +148,10 @@ function sameRuleRows(draftRows: RuleRow[], savedRows: RuleRow[]): boolean {
     return Boolean(
       saved &&
       row.concept === saved.concept &&
+      row.kindId === saved.kindId &&
+      row.activityId === saved.activityId &&
+      row.categoryCode === saved.categoryCode &&
+      Boolean(row.isDefault) === Boolean(saved.isDefault) &&
       row.activityCode === saved.activityCode &&
       row.jurisdictionId === saved.jurisdictionId &&
       row.rate === saved.rate &&
@@ -176,7 +193,7 @@ export function StudyReglasFiscales() {
   const [showCloneForm, setShowCloneForm] = useState(false);
   // Errores 409 del servidor por código de actividad (ACTIVITY_CODE_*): se
   // marcan las filas del borrador cuyo código coincide con el del mensaje.
-  const [rowActivityErrors, setRowActivityErrors] = useState<Record<string, string>>({});
+  const [rowFieldErrors, setRowFieldErrors] = useState<Record<string, string>>({});
   const [newPack, setNewPack] = useState({ code: "", name: "", regimeId: "" });
   const [engineId, setEngineId] = useState("");
   const [newSource, setNewSource] = useState({
@@ -239,6 +256,16 @@ export function StudyReglasFiscales() {
     queryFn: () => api.get<CatalogEconomicActivity[]>("/tax/activities?includeInactive=true"),
     enabled: Boolean(firmId && capabilities.has("tax.rules.read")),
   });
+  const jurisdictionsQuery = useQuery({
+    queryKey: ["tax-rule-jurisdictions"],
+    queryFn: () => api.get<RuleJurisdictionOption[]>("/tax/jurisdictions?includeInactive=true"),
+    enabled: Boolean(firmId && capabilities.has("tax.rules.read")),
+  });
+  const ruleKindsQuery = useQuery({
+    queryKey: ["tax-rule-kinds", detailQuery.data?.regime.id],
+    queryFn: () => api.get<TaxRuleKindOption[]>(`/tax/regimes/${detailQuery.data?.regime.id}/rule-kinds`),
+    enabled: Boolean(detailQuery.data?.regime.id && detailQuery.data.regime.calcFamilyId),
+  });
 
   const selectedVersion = useMemo(
     () => {
@@ -292,6 +319,13 @@ export function StudyReglasFiscales() {
     void queryClient.invalidateQueries({ queryKey: ["tax-rule-pack", selectedPackId] });
   };
 
+  const updateDraftRule = (ruleId: string, changes: Partial<RuleRow>) => {
+    setDraftRows((rows) => rows.map((row) => row.id === ruleId ? { ...row, ...changes } : row));
+    setRowFieldErrors((previous) => Object.fromEntries(
+      Object.entries(previous).filter(([key]) => !key.startsWith(`${ruleId}.`)),
+    ));
+  };
+
   const cloneMutation = useMutation({
     mutationFn: () => api.post(`/tax/rule-packs/${selectedPackId}/versions/clone`, { validFrom }),
     onSuccess: () => {
@@ -333,6 +367,10 @@ export function StudyReglasFiscales() {
       api.put(`/tax/rule-versions/${selectedVersion?.id}/rate-rules`, {
         rules: draftRows.map((row) => ({
           concept: row.concept.trim(),
+          ...(row.kindId ? { kindId: row.kindId } : {}),
+          ...(row.activityId ? { activityId: row.activityId } : {}),
+          ...(row.categoryCode ? { categoryCode: row.categoryCode } : {}),
+          isDefault: row.isDefault ?? false,
           ...(row.rate ? { rate: row.rate } : {}),
           ...(row.activityCode ? { activityCode: row.activityCode } : {}),
           ...(row.jurisdictionId ? { jurisdictionId: row.jurisdictionId } : {}),
@@ -343,27 +381,36 @@ export function StudyReglasFiscales() {
       }),
     onSuccess: () => {
       invalidate();
-      setRowActivityErrors({});
+      setRowFieldErrors({});
       setReceipt("Las reglas del borrador quedaron guardadas.");
     },
     onError: (error) => {
-      // Los 409 de validación del catálogo (ACTIVITY_CODE_UNKNOWN/INVALID/
-      // INACTIVE/JURISDICTION_MISMATCH) citan el código entre comillas:
-      // marcamos cada fila del borrador cuyo código coincida.
-      const message = error instanceof Error ? error.message : String(error);
-      const quotedCodes = message.match(/"([A-Z0-9][A-Z0-9._/-]{0,39})"/g) ?? [];
-      if (quotedCodes.length === 0) return;
-      const codes = quotedCodes.map((quoted) => quoted.slice(1, -1));
-      const marked = new Map<string, string>();
-      for (const row of draftRows) {
-        const code = normalizeActivityCode(row.activityCode ?? "");
-        if (code !== "" && codes.includes(code)) {
-          marked.set(row.id, message);
-        }
+      if (!(error instanceof ApiError)) return;
+      const details = error.details;
+      const nested = details?.details;
+      const issues = Array.isArray(nested) ? nested : [];
+      const pathDetails = nested && typeof nested === "object" && !Array.isArray(nested)
+        ? nested as { path?: unknown; message?: unknown }
+        : null;
+      const directPath = Array.isArray(pathDetails?.path)
+        ? pathDetails.path
+        : Array.isArray(details?.path) ? details.path : null;
+      const parsedIssues = [...issues];
+      if (directPath) {
+        parsedIssues.push({
+          path: directPath,
+          message: typeof pathDetails?.message === "string" ? pathDetails.message : error.message,
+        });
       }
-      if (marked.size > 0) {
-        setRowActivityErrors((previous) => ({ ...previous, ...Object.fromEntries(marked) }));
+      const next: Record<string, string> = {};
+      for (const issue of parsedIssues) {
+        if (!issue || typeof issue !== "object" || !Array.isArray(issue.path)) continue;
+        const path = issue.path as Array<string | number>;
+        if (path.length < 3 || !["rules", "rateRules"].includes(String(path[0]))) continue;
+        const row = draftRows[Number(path[1])];
+        if (row && typeof issue.message === "string") next[`${row.id}.${String(path[2])}`] = issue.message;
       }
+      setRowFieldErrors(next);
     },
   });
   const submitMutation = useMutation({
@@ -1234,9 +1281,8 @@ export function StudyReglasFiscales() {
                   <div>
                     <h2 id="rule-rates-title">Alícuotas y porcentajes</h2>
                     <p>
-                      Los valores se expresan en porcentaje; los importes mínimos se guardan en ARS.
-                      La actividad se elige del catálogo del estudio (código · nombre);{" "}
-                      <strong>General</strong> aplica la regla a todas las actividades.
+                      Elegí el tipo y el sujeto desde los catálogos del régimen. Concepto identifica
+                      la regla para el estudio y es opcional.
                     </p>
                   </div>
                   {editable ? (
@@ -1248,6 +1294,10 @@ export function StudyReglasFiscales() {
                           {
                             id: crypto.randomUUID(),
                             concept: "",
+                            kindId: null,
+                            activityId: null,
+                            categoryCode: null,
+                            isDefault: false,
                             activityCode: null,
                             jurisdictionId: null,
                             rate: null,
@@ -1276,24 +1326,51 @@ export function StudyReglasFiscales() {
                             className="fiscal-rule-input fiscal-rule-input--concept"
                             aria-label={`Concepto ${row.id}`}
                             value={row.concept}
-                            onChange={(event) =>
-                              setDraftRows((rows) =>
-                                rows.map((item) =>
-                                  item.id === row.id
-                                    ? { ...item, concept: event.target.value }
-                                    : item,
-                                ),
-                              )
-                            }
+                            placeholder="Etiqueta opcional"
+                            onChange={(event) => updateDraftRule(row.id, { concept: event.target.value })}
                           />
                         ) : (
                           row.concept
                         ),
                     },
                     {
+                      key: "kind",
+                      header: "Tipo de regla",
+                      render: (row) => {
+                        const kinds = ruleKindsQuery.data ?? [];
+                        const currentKind = kinds.find((kind) => kind.id === row.kindId);
+                        if (!editable) return currentKind?.label ?? "Tipo sin resolver";
+                        const error = rowFieldErrors[`${row.id}.kindId`];
+                        return (
+                          <div>
+                            <select
+                              className="fiscal-rule-input fiscal-rule-input--select"
+                              aria-label={`Tipo de regla ${row.id}`}
+                              aria-invalid={Boolean(error)}
+                              value={row.kindId ?? ""}
+                              onChange={(event) => updateDraftRule(row.id, {
+                                kindId: event.target.value || null,
+                                activityId: null,
+                                activityCode: null,
+                                jurisdictionId: null,
+                                categoryCode: null,
+                                isDefault: false,
+                              })}
+                            >
+                              <option value="">Seleccioná un tipo…</option>
+                              {kinds.map((kind) => <option key={kind.id} value={kind.id}>{kind.label}</option>)}
+                            </select>
+                            {error ? <p className="fiscal-rule-row-error" role="alert">{error}</p> : null}
+                          </div>
+                        );
+                      },
+                    },
+                    ...((ruleKindsQuery.data ?? []).some((option) => option.subject === "ACTIVITY" || option.subject === "ACTIVITY_OR_DEFAULT") ? [{
                       key: "activity",
                       header: "Actividad",
-                      render: (row) => {
+                      render: (row: RuleRow) => {
+                        const kind = (ruleKindsQuery.data ?? []).find((option) => option.id === row.kindId);
+                        if (kind?.subject !== "ACTIVITY_OR_DEFAULT" && kind?.subject !== "ACTIVITY") return "—";
                         if (!editable) {
                           const currentCode = normalizeActivityCode(row.activityCode ?? "");
                           const currentActivity = (activitiesQuery.data ?? []).find(
@@ -1301,7 +1378,7 @@ export function StudyReglasFiscales() {
                           );
                           return row.activityCode
                             ? `${row.activityCode}${currentActivity && !currentActivity.isActive ? " (oculto)" : ""}`
-                            : "General";
+                            : row.isDefault ? "Todas las actividades" : "Sin actividad específica";
                         }
                         // La opción actual oculta o ajena a la jurisdicción se
                         // conserva como lectura deshabilitada; para elegirla
@@ -1315,48 +1392,38 @@ export function StudyReglasFiscales() {
                         );
                         const currentCode = normalizeActivityCode(row.activityCode ?? "");
                         const currentActivity = catalogActivities.find(
-                          (activity) => activity.code === currentCode,
+                          (activity) => activity.id === row.activityId || activity.code === currentCode,
                         );
                         const isLegacyCode =
-                          currentCode !== "" &&
-                          !options.some((activity) => activity.code === currentCode);
-                        const rowError = rowActivityErrors[row.id];
+                          Boolean(row.activityId || currentCode) &&
+                          !options.some((activity) => activity.id === row.activityId || activity.code === currentCode);
+                        const rowError = rowFieldErrors[`${row.id}.activityId`];
                         return (
                           <div>
                             <select
                               className="fiscal-rule-input fiscal-rule-input--select"
                               aria-label={`Actividad ${row.id}`}
-                              value={row.activityCode ?? ""}
+                              aria-invalid={Boolean(rowError)}
+                                  value={row.isDefault && kind.subject === "ACTIVITY_OR_DEFAULT" ? "__all__" : row.activityId ?? row.activityCode ?? ""}
                               onChange={(event) => {
                                 const value = event.target.value;
-                                setDraftRows((rows) =>
-                                  rows.map((item) =>
-                                    item.id === row.id
-                                      ? {
-                                          ...item,
-                                          activityCode: value
-                                            ? normalizeActivityCode(value)
-                                            : null,
-                                        }
-                                      : item,
-                                  ),
-                                );
-                                setRowActivityErrors((previous) => {
-                                  if (!(row.id in previous)) return previous;
-                                  const next = { ...previous };
-                                  delete next[row.id];
-                                  return next;
+                                const selected = options.find((activity) => activity.id === value);
+                                updateDraftRule(row.id, {
+                                  activityId: selected?.id ?? null,
+                                  activityCode: selected?.code ?? null,
+                                  isDefault: kind.subject === "ACTIVITY_OR_DEFAULT" && value === "__all__",
                                 });
                               }}
                             >
-                              <option value="">General</option>
+                              <option value="">{kind.subject === "ACTIVITY" ? "Sin actividad específica" : "Seleccioná una actividad…"}</option>
+                              {kind.subject === "ACTIVITY_OR_DEFAULT" ? <option value="__all__">Todas las actividades</option> : null}
                               {options.map((activity) => (
-                                <option key={activity.id} value={activity.code}>
+                                <option key={activity.id} value={activity.id}>
                                   {activity.code} · {activity.name}
                                 </option>
                               ))}
                               {isLegacyCode ? (
-                                <option value={row.activityCode ?? ""} disabled>
+                                <option value={row.activityId ?? row.activityCode ?? ""} disabled>
                                   {currentActivity && !currentActivity.isActive
                                     ? `${row.activityCode} (oculto)`
                                     : `${row.activityCode} — código histórico fuera de la jurisdicción del paquete`}
@@ -1371,7 +1438,66 @@ export function StudyReglasFiscales() {
                           </div>
                         );
                       },
-                    },
+                    }] : []),
+                    ...((ruleKindsQuery.data ?? []).some((option) => option.subject === "JURISDICTION" || option.subject === "JURISDICTION_OR_DEFAULT") ? [{
+                      key: "jurisdiction",
+                      header: "Jurisdicción",
+                      render: (row: RuleRow) => {
+                        const kind = (ruleKindsQuery.data ?? []).find((option) => option.id === row.kindId);
+                        if (kind?.subject !== "JURISDICTION" && kind?.subject !== "JURISDICTION_OR_DEFAULT") return "—";
+                        const options = jurisdictionsQuery.data ?? [];
+                        const error = rowFieldErrors[`${row.id}.jurisdictionId`];
+                        const current = options.find((option) => option.id === row.jurisdictionId);
+                        if (!editable) return current?.name ?? row.jurisdictionId ?? "Sin jurisdicción";
+                        return (
+                          <div>
+                            <select
+                              className="fiscal-rule-input fiscal-rule-input--select"
+                              aria-label={`Jurisdicción ${row.id}`}
+                              aria-invalid={Boolean(error)}
+                              value={row.isDefault && kind.subject === "JURISDICTION_OR_DEFAULT" ? "__all__" : row.jurisdictionId ?? ""}
+                              onChange={(event) => updateDraftRule(row.id, {
+                                jurisdictionId: event.target.value && event.target.value !== "__all__" ? event.target.value : null,
+                                isDefault: event.target.value === "__all__",
+                              })}
+                            >
+                              <option value="">Seleccioná una jurisdicción…</option>
+                              {kind.subject === "JURISDICTION_OR_DEFAULT" ? <option value="__all__">Todas las jurisdicciones</option> : null}
+                              {options.filter((option) => option.isActive).map((option) => (
+                                <option key={option.id} value={option.id}>{option.name}</option>
+                              ))}
+                              {current && !current.isActive ? <option value={current.id} disabled>{current.name} (oculta)</option> : null}
+                            </select>
+                            {error ? <p className="fiscal-rule-row-error" role="alert">{error}</p> : null}
+                          </div>
+                        );
+                      },
+                    }] : []),
+                    ...((ruleKindsQuery.data ?? []).some((option) => option.subject === "CATEGORY") ? [{
+                      key: "category",
+                      header: "Categoría",
+                      render: (row: RuleRow) => {
+                        const kind = (ruleKindsQuery.data ?? []).find((option) => option.id === row.kindId);
+                        if (kind?.subject !== "CATEGORY") return "—";
+                        const error = rowFieldErrors[`${row.id}.categoryCode`];
+                        if (!editable) return row.categoryCode ?? "Sin categoría";
+                        return (
+                          <div>
+                            <select
+                              className="fiscal-rule-input fiscal-rule-input--select"
+                              aria-label={`Categoría ${row.id}`}
+                              aria-invalid={Boolean(error)}
+                              value={row.categoryCode ?? ""}
+                              onChange={(event) => updateDraftRule(row.id, { categoryCode: event.target.value || null })}
+                            >
+                              <option value="">Seleccioná una categoría…</option>
+                              {MONOTRIBUTO_CATEGORY_CODES.map((code) => <option key={code} value={code}>Categoría {code}</option>)}
+                            </select>
+                            {error ? <p className="fiscal-rule-row-error" role="alert">{error}</p> : null}
+                          </div>
+                        );
+                      },
+                    }] : []),
                     {
                       key: "rate",
                       header: "Alícuota",
@@ -1446,17 +1572,16 @@ export function StudyReglasFiscales() {
                       onClick={() => saveMutation.mutate()}
                       loading={saveMutation.isPending}
                       disabled={draftRows.some(
-                        (row) => !row.concept.trim() || (!row.rate && !row.minAmount),
+                        (row) => !row.rate && !row.minAmount,
                       )}
                     >
                       Guardar borrador
                     </Button>
                   </div>
                 ) : null}
-                {editable && draftRows.some((row) => !row.concept.trim() || (!row.rate && !row.minAmount)) ? (
+                {editable && draftRows.some((row) => !row.rate && !row.minAmount) ? (
                   <p className="form-submit-hint" role="note">
-                    Completá el concepto y la alícuota o el mínimo de cada fila para poder guardar
-                    el borrador.
+                    Completá la tasa, cuota o importe de cada fila para guardar el borrador.
                   </p>
                 ) : null}
               </section>
