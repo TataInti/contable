@@ -4,6 +4,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { DocumentReprocessService } from "./reprocess-service.js";
+import { ExtractionService } from "./extraction-service.js";
 import { documentRoutes } from "./routes.js";
 import { outboxPublisher } from "../jobs/outbox-publisher.js";
 import type { TenantContext } from "../auth/tenant.js";
@@ -158,6 +159,38 @@ describe("relectura de documentos", () => {
       await app.close();
       dispatch.mockRestore();
     }
+  });
+
+  it("mantiene bloqueada la corrección de una lectura reemplazada", async () => {
+    const fixture = await createFixture({ includeManualField: true });
+    await prisma.documentExtraction.update({
+      where: { id: fixture.extractionId },
+      data: { status: "SUPERSEDED" },
+    });
+    const field = await prisma.extractedField.findFirstOrThrow({
+      where: { extractionId: fixture.extractionId },
+    });
+    const before = await prisma.documentExtraction.findUniqueOrThrow({
+      where: { id: fixture.extractionId },
+      include: { fields: true },
+    });
+
+    await expect(new ExtractionService().correctField(
+      FIRM_A,
+      CLIENT_A,
+      fixture.extractionId,
+      field.id,
+      "999.99",
+      "Intento de cambio histórico",
+      OWNER_A,
+      context,
+    )).rejects.toMatchObject({ code: "INVALID_TRANSITION" });
+
+    const after = await prisma.documentExtraction.findUniqueOrThrow({
+      where: { id: fixture.extractionId },
+      include: { fields: true },
+    });
+    expect(after).toEqual(before);
   });
 
   it.each([
