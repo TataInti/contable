@@ -1,3 +1,4 @@
+import { Notice } from "@contable/design-system";
 import { ApiError, type ApiErrorValidationIssue } from "../../lib/api";
 
 const FIELD_LABELS: Record<string, string> = {
@@ -45,13 +46,13 @@ export function FieldErrorsFromDetails({ error }: { error: ApiError }) {
   const messages = issues.length > 0 ? issues.map(formatIssue) : [error.message];
 
   return (
-    <p className="form-error" role="alert">
+    <Notice tone="error" className="form-error">
       {messages.map((message, index) => (
         <span key={`${index}-${message}`}>
           {message}
           {index < messages.length - 1 ? <br /> : null}
         </span>
       ))}
-    </p>
+    </Notice>
   );
 }

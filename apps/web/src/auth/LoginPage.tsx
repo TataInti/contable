@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Field } from "@contable/design-system";
+import { Button, Field, Notice } from "@contable/design-system";
 import { useLocation, useNavigate } from "react-router-dom";
 import { login, verifyMfa } from "../lib/auth";
 import { ApiError } from "../lib/api";
@@ -108,9 +108,9 @@ export function LoginPage() {
               : "Ingresá a tu espacio de trabajo con la cuenta asignada por el estudio."}
           </p>
           {notice ? (
-            <p className="form-success" role="status">
+            <Notice tone="success" >
               {notice}
-            </p>
+            </Notice>
           ) : null}
           <form className="login__form" onSubmit={onSubmit} noValidate>
             {challenge ? (
@@ -150,10 +150,7 @@ export function LoginPage() {
               </>
             )}
             {error ? (
-              <div className="login__error" role="alert">
-                <Icon name="alert" size={17} />
-                <span>{error}</span>
-              </div>
+              <Notice tone="error">{error}</Notice>
             ) : null}
             <Button
               type="submit"

@@ -85,16 +85,6 @@ textarea {
   font-size: var(--ds-text-sm);
 }
 
-.form-success {
-  color: var(--ds-color-success);
-  margin: var(--ds-space-3) 0 0;
-  padding: var(--ds-space-3) var(--ds-space-4);
-  border: 1px solid color-mix(in srgb, var(--ds-color-success) 28%, var(--ds-color-border));
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-color-success-subtle);
-  font-size: var(--ds-text-sm);
-}
-
 .table-actions {
   display: flex;
   align-items: center;

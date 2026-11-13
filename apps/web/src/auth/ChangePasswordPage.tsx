@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Button, Field } from "@contable/design-system";
+import { Button, Field, Notice } from "@contable/design-system";
 import { api, ApiError } from "../lib/api";
 import { useSession } from "../session/SessionContext";
 import "./login.css";
@@ -44,7 +44,7 @@ export function ChangePasswordPage() {
           <Field id="current-password" label="Contraseña temporal" type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required />
           <Field id="new-password" label="Nueva contraseña" type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={12} required />
           <Field id="confirm-password" label="Repetir nueva contraseña" type="password" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} minLength={12} required />
-          {error ? <p className="login__error" role="alert">{error}</p> : null}
+          {error ? <Notice tone="error">{error}</Notice> : null}
           <Button type="submit" loading={saving} disabled={currentPassword.length < 8 || newPassword.length < 12 || confirmation.length < 12}>Guardar contraseña</Button>
         </form>
       </div>

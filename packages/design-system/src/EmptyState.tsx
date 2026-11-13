@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { HTMLAttributes, ReactElement } from "react";
 import "./EmptyState.css";
 
 export type EmptyStateSize = "regular" | "compact";
@@ -7,7 +7,7 @@ export type EmptyStateKind = "no-data" | "no-results";
 export interface EmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title: string;
   description?: string;
-  action?: ReactNode;
+  action?: ReactElement;
   size?: EmptyStateSize;
   kind?: EmptyStateKind;
 }

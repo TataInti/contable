@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice } from "@contable/design-system";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ARGENTINA_PROVINCES,
@@ -21,7 +21,6 @@ import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer, type DeletionResult } from "../ui/DeletionDrawer";
 import { Icon } from "../ui/Icon";
 import {
-  DenseAlert,
   DenseFooter,
   DenseHeader,
   DenseLoading,
@@ -729,7 +728,8 @@ export function StudyClientes() {
       }
       banner={
         missingProfileFields(selectedClient).length > 0 ? (
-          <DenseAlert
+          <Notice
+            tone="warning"
             action={
               canManage ? (
                 <Button size="sm" variant="secondary" onClick={() => startClientEdit(selectedClient)}>
@@ -739,7 +739,7 @@ export function StudyClientes() {
             }
           >
             Ficha incompleta: falta {missingProfileFields(selectedClient).join(", ")}.
-          </DenseAlert>
+          </Notice>
         ) : undefined
       }
       onClose={() => setSelectedId(null)}
@@ -904,15 +904,17 @@ export function StudyClientes() {
   const tableBody = query.isLoading ? (
     <DenseLoading label="Cargando la cartera…" />
   ) : query.isError ? (
-    <EmptyState
+    <Notice
+      tone="error"
       title="No se pudieron cargar los clientes"
-      description="Reintentá en unos minutos o comprobá tu conexión."
       action={
         <Button variant="secondary" onClick={() => void query.refetch()}>
           Reintentar
         </Button>
       }
-    />
+    >
+      Reintentá en unos minutos o comprobá tu conexión.
+    </Notice>
   ) : (
     <DenseTable<ClientWithProfile>
       label="Cartera de clientes"
@@ -998,31 +1000,36 @@ export function StudyClientes() {
       />
 
       {contactRetry ? (
-        <div className="action-receipt action-receipt--page" role="alert">
-          <span>
-            <strong>Cliente creado</strong>
-            <small>Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.</small>
-          </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            loading={retryContact.isPending}
-            loadingLabel="Reintentando correo"
-            onClick={() => retryContact.mutate(contactRetry)}
-          >
-            Reintentar
-          </Button>
-        </div>
+        <Notice
+          tone="error"
+          className="ds-notice--page"
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={retryContact.isPending}
+              loadingLabel="Reintentando correo"
+              onClick={() => retryContact.mutate(contactRetry)}
+            >
+              Reintentar
+            </Button>
+          }
+        >
+          Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.
+        </Notice>
       ) : notice ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <span>
-            <strong>Actualización guardada</strong>
-            <small>{notice}</small>
-          </span>
-          <Button type="button" variant="text" size="row" aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
-            Cerrar
-          </Button>
-        </div>
+        <Notice
+          tone="success"
+          className="ds-notice--page"
+          title="Actualización guardada"
+          action={
+            <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
+              <Icon name="close" size={15} />
+            </Button>
+          }
+        >
+          {notice}
+        </Notice>
       ) : null}
 
       <DenseToolbar>

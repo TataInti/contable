@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@contable/design-system";
-import { Icon } from "../ui/Icon";
+import { Button, Notice } from "@contable/design-system";
 
 type DependencyName = "postgres" | "valkey" | "minio" | "ai";
 type DependencyStatus = Partial<Record<DependencyName, boolean>>;
@@ -98,28 +97,24 @@ export function EnvironmentStatusBanner() {
   if (state.ready || (loading && !state.message && !state.dependencies)) return null;
 
   return (
-    <div className="app-banner" role="status" aria-live="polite">
-      <div className="app-banner__copy">
-        <span className="app-banner__icon" aria-hidden="true">
-          <Icon name="alert" size={16} />
-        </span>
-        <span>
-          <strong>Entorno incompleto</strong>
-          <small>
-            {missing.length > 0
-              ? `Faltan ${missing.join(", ")}. Algunas pantallas no van a poder ejecutar acciones reales.`
-              : state.message ?? "No pudimos verificar el entorno de trabajo."}
-          </small>
-        </span>
-      </div>
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        onClick={() => setRefreshTick((value) => value + 1)}
-      >
-        Reintentar
-      </Button>
-    </div>
+    <Notice
+      tone="warning"
+      className="ds-notice--banner"
+      title="Entorno incompleto"
+      action={
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={() => setRefreshTick((value) => value + 1)}
+        >
+          Reintentar
+        </Button>
+      }
+    >
+      {missing.length > 0
+        ? `Faltan ${missing.join(", ")}. Algunas pantallas no van a poder ejecutar acciones reales.`
+        : state.message ?? "No pudimos verificar el entorno de trabajo."}
+    </Notice>
   );
 }

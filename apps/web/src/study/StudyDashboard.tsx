@@ -314,7 +314,14 @@ export function StudyDashboard() {
           newShortcut={false}
         />
       }
-      empty={<EmptyState size="compact" title="Ninguna liquidación coincide con el filtro" />}
+      empty={
+        <EmptyState
+          size="compact"
+          kind="no-results"
+          title="Ninguna liquidación coincide con el filtro"
+          description="Ajustá el filtro para consultar otras liquidaciones."
+        />
+      }
     />
   );
 

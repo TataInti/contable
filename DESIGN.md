@@ -264,7 +264,7 @@ Las sombras del sistema están tokenizadas; las excepciones observadas son: `box
 
 ## 5. Componentes
 
-`packages/design-system/src` es la fuente de los componentes compartidos. Su API pública incluye `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, las primitivas Dense, `StatusBadge`, `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction`, `AsyncState`, `Icon` y `SectionIndex`. Las rutas históricas de `apps/web/src/ui` reexportan los componentes migrados para conservar los imports existentes. La migración conserva sus clases, DOM, comportamiento y carga de CSS. El paquete expone `@contable/design-system/Dense.css`; el adaptador web lo importa antes de sus reglas contextuales para mantener el orden de la cascada.
+`packages/design-system/src` es la fuente de los componentes compartidos. Su API pública incluye `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, `Notice`, las primitivas Dense, `StatusBadge`, `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction`, `AsyncState`, `Icon` y `SectionIndex`. Las rutas históricas de `apps/web/src/ui` reexportan los componentes migrados para conservar los imports existentes. La migración conserva sus clases, DOM, comportamiento y carga de CSS. El paquete expone `@contable/design-system/Dense.css`; el adaptador web lo importa antes de sus reglas contextuales para mantener el orden de la cascada.
 
 ### Familia Dense del paquete
 
@@ -330,14 +330,14 @@ Las sombras del sistema están tokenizadas; las excepciones observadas son: `box
 
 | Componente/patrón | Destino normativo |
 |---|---|
-| `Button`, `Field`, `MoneyField`, `Table`, `EmptyState` | Primitivas públicas de `packages/design-system/src` |
+| `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, `Notice` | Primitivas públicas de `packages/design-system/src` |
 | Familia Dense del paquete | Primitivas públicas de `packages/design-system/src`; contratos detallados arriba |
-| `DenseTabs`, `DenseSearch`, `DenseAlert` | Permanecen en el adaptador de web y consumen `Icon` compartido del paquete |
+| `DenseTabs`, `DenseSearch`, `DenseAlert` | `DenseTabs` y `DenseSearch` permanecen en el adaptador web. `DenseAlert` se conserva para pantallas fuera de este corte; las pantallas migradas usan `Notice`. |
 | `StatusBadge` | Público en `packages/design-system/src`; conserva el contrato `status`/`className` y los estilos globales/contextuales existentes en la aplicación |
 | `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction` | Públicos en `packages/design-system/src`; CSS propio de drawers en el paquete |
 | `AsyncState`, `Icon`, `SectionIndex` | Públicos en `packages/design-system/src`; `SectionIndex` conserva las reglas de layout de estudio/portal en sus hojas de aplicación |
 | `DeletionDrawer` | Permanece en `apps/web/src/ui`: consulta y elimina mediante `lib/api` y `@tanstack/react-query`; el CSS y la prueba de integración también permanecen en la app |
-| Tabla, píldora, aviso y botón de texto | Unificar en `Table`/`DenseTable`, `StatusBadge`, `DenseAlert` y la API textual de `Button` (o una primitiva exportada del paquete) |
+| Tabla, píldora, aviso y botón de texto | Unificar en `Table`/`DenseTable`, `StatusBadge`, `Notice` y la API textual de `Button` |
 
 Los componentes migrados mantienen imports compatibles en las pantallas existentes. Las reglas visuales que dependen del contexto de estudio o portal permanecen en las hojas de estilo de la aplicación.
 
@@ -431,7 +431,7 @@ El valor de estado/API es normalizado (`1234567.89`); el formato local sólo cor
   columns={[{ key: "code", header: "Código", accessor: (row) => row.code }]}
   rows={activities}
   rowKey={(row) => row.id}
-  empty={<EmptyState title="Sin actividades" />}
+  empty={<EmptyState title="Sin actividades" description="Creá una actividad para empezar." />}
 />
 ```
 
@@ -443,10 +443,55 @@ El valor de estado/API es normalizado (`1234567.89`); el formato local sólo cor
 
 La clave debe ser estable y única por fila. `Table` es una tabla de lectura; para filas seleccionables con teclado la pantalla actual usa `DenseTable`.
 
+### Avisos y vacíos
+
+`Notice` presenta un mensaje único con un icono visible, un tono semántico y una acción opcional. El contenido nunca depende sólo del color y un aviso no se anida dentro de otra caja.
+
+| Tono | Cuándo usar | Texto modelo |
+|---|---|---|
+| `info` | Orientación contextual para continuar una tarea | “El archivo se asociará a este pedido y quedará disponible para tu estudio.” |
+| `success` | Confirmación de una acción completada | “Los cambios quedaron guardados y la ficha ya está actualizada.” |
+| `warning` | Atención requerida con continuidad posible | “Revisá el período fiscal para completar el cálculo.” |
+| `error` | Fallo que requiere recuperación explícita | “La consulta de obligaciones encontró un problema. Reintentá para actualizar el período.” |
+
+`error` usa `role="alert"`. `info`, `success` y `warning` usan `role="status"` y `aria-live="polite"`. El componente define estos roles según `tone`; el icono aporta una marca reconocible sin depender del color. `action` presenta como máximo una acción clara.
+
+**Correcto:**
+
+```tsx
+<Notice tone="warning" title="Revisá el período fiscal" action={<Button onClick={openFiscalSetup}>Configurar período</Button>}>
+  Completá la configuración para continuar con el cálculo.
+</Notice>
+```
+
+**Incorrecto:**
+
+```tsx
+<div className="warning-box" style={{ color: "orange" }}>
+  <EmptyState title="Aviso" />
+</div>
+```
+
+El vacío usa `EmptyState` con título, explicación breve y una única acción primaria cuando hay un paso disponible. Indicá `kind="no-data"` cuando todavía no existen registros y `kind="no-results"` cuando los datos existen pero los filtros no encuentran coincidencias. En el segundo caso, la acción ofrece ajustar o limpiar los filtros.
+
+**Correcto:**
+
+```tsx
+<EmptyState kind="no-results" title="Ninguna actividad coincide" description="Ajustá la búsqueda para consultar otras actividades." action={<Button variant="secondary" onClick={clearFilters}>Quitar filtros</Button>} />
+```
+
+**Incorrecto:**
+
+```tsx
+<EmptyState title="Sin resultados" description="Todavía no hay actividades." />
+```
+
+El primer ejemplo identifica que hay datos y propone un ajuste; el segundo confunde una lista filtrada con una lista todavía vacía.
+
 ### EmptyState
 
-- **Propósito:** estado vacío informativo, con acción opcional y tamaño regular/compact.
-- **Props/variantes:** `title` obligatorio, `description`, `action`, `size` (`regular` por defecto o `compact`), atributos nativos de `div`.
+- **Propósito:** indicar qué falta con un título, una explicación breve y una única acción primaria cuando hay un paso disponible; tamaño regular o compacto.
+- **Props/variantes:** `title` obligatorio; `description` comunica una explicación breve; `action` acepta una sola `ReactElement`, `kind` (`no-data` por defecto o `no-results`), `size` (`regular` por defecto o `compact`), atributos nativos de `div`. `data-empty-kind` comunica el motivo sin depender del color.
 - **Estados:** no tiene estados interactivos propios; el visual es decorativo y se oculta del árbol accesible. La acción conserva su semántica a través del control hijo.
 - **Correcto:**
 
@@ -590,7 +635,7 @@ Incluí `onCancel` y describí la consecuencia de la acción cuando aporte conte
 <AsyncState loading={false} error={false} loadingLabel="" errorTitle="Vacío" errorDescription="Sin datos" onRetry={retry} />
 ```
 
-Para ausencia de contenido, usá `EmptyState`; `AsyncState` cubre carga y error.
+Para ausencia de contenido, usá `EmptyState`; `AsyncState` cubre carga y usa `Notice` para el error.
 
 ### Icon
 

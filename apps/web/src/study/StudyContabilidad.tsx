@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, MoneyField, Notice, Table } from "@contable/design-system";
 import { api, type Account, type FiscalYear, type TrialBalance } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -327,23 +327,25 @@ export function StudyContabilidad() {
 
 
       {receipt ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <Icon name="check" size={19} />
-          <span>
-            <strong>Acción completada</strong>
-            <small>{receipt}</small>
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            aria-label="Cerrar confirmación"
-            onClick={() => setReceipt(null)}
-          >
-            <Icon name="close" size={15} />
-          </Button>
-        </div>
+        <Notice
+          tone="success"
+          className="ds-notice--page"
+          title="Acción completada"
+          action={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              iconOnly
+              aria-label="Cerrar confirmación"
+              onClick={() => setReceipt(null)}
+            >
+              <Icon name="close" size={15} />
+            </Button>
+          }
+        >
+          {receipt}
+        </Notice>
       ) : null}
 
       <ActionDrawer

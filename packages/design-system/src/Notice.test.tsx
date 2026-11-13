@@ -16,7 +16,11 @@ describe("Notice", () => {
 
     expect(notice).toHaveClass(`ds-notice--${tone}`);
     expect(notice).toHaveAttribute("role", tone === "error" ? "alert" : "status");
-    expect(notice).toHaveAttribute("aria-live", tone === "error" ? null : "polite");
+    if (tone === "error") {
+      expect(notice).not.toHaveAttribute("aria-live");
+    } else {
+      expect(notice).toHaveAttribute("aria-live", "polite");
+    }
     expect(notice?.querySelector(".ds-notice__icon")).toHaveAttribute("aria-hidden", "true");
   });
 

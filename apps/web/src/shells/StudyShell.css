@@ -177,24 +177,6 @@
   transform: rotate(180deg);
 }
 
-.study__client-empty {
-  display: grid;
-  gap: var(--ds-space-1);
-  padding: var(--ds-space-2);
-  color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-sm);
-}
-
-.study__client-empty strong {
-  color: var(--ds-color-text);
-  font-weight: var(--ds-font-weight-medium);
-}
-
-.study__client-empty a {
-  color: var(--ds-color-primary);
-  font-weight: var(--ds-font-weight-medium);
-}
-
 .study__sidebar-footer {
   flex: 0 0 auto;
   display: grid;

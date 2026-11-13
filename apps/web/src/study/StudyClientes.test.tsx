@@ -702,7 +702,7 @@ describe("StudyClientes — cartera densa", () => {
       name: "Detalle de Beta Dos S.R.L.",
     });
     const alert = detail.querySelector(
-      ".dense-inspector__banner .dense-alert",
+      ".dense-inspector__banner .ds-notice",
     ) as HTMLElement | null;
     expect(alert).not.toBeNull();
     expect(alert?.parentElement?.classList.contains("dense-inspector__banner")).toBe(true);

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, Notice } from "@contable/design-system";
 import { api, type FeatureFlag } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
@@ -116,25 +116,27 @@ export function StudyAdministracionPlataforma() {
 
 
       {notice ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <Icon name="check" size={18} />
-          <span>
-            <strong>Acción completada</strong>
-            <small>{notice}</small>
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            aria-label="Cerrar aviso"
-            onClick={() => setNotice(null)}
-          >
-            <Icon name="close" size={15} />
-          </Button>
-        </div>
+        <Notice
+          tone="success"
+          className="ds-notice--page"
+          title="Acción completada"
+          action={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              iconOnly
+              aria-label="Cerrar aviso"
+              onClick={() => setNotice(null)}
+            >
+              <Icon name="close" size={15} />
+            </Button>
+          }
+        >
+          {notice}
+        </Notice>
       ) : null}
-      {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
+      {actionError ? <Notice tone="error">{actionError}</Notice> : null}
 
 
       <DenseToolbar>
@@ -181,7 +183,13 @@ export function StudyAdministracionPlataforma() {
                 newShortcut={false}
               />
             }
-            empty={<EmptyState size="compact" title="Sin módulos configurados" />}
+            empty={
+              <EmptyState
+                size="compact"
+                title="Sin módulos configurados"
+                description="Habilitá los módulos que el estudio necesita para trabajar."
+              />
+            }
             columns={[
                 {
                   key: "code",

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, Table } from "@contable/design-system";
 import { api, downloadFile, type Account, type ReportRun, type ReportTemplate } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
@@ -181,23 +181,25 @@ export function StudyReportes() {
 
 
       {receipt ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <Icon name="check" size={19} />
-          <span>
-            <strong>Acción completada</strong>
-            <small>{receipt}</small>
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            aria-label="Cerrar confirmación"
-            onClick={() => setReceipt(null)}
-          >
-            <Icon name="close" size={15} />
-          </Button>
-        </div>
+        <Notice
+          tone="success"
+          className="ds-notice--page"
+          title="Acción completada"
+          action={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              iconOnly
+              aria-label="Cerrar confirmación"
+              onClick={() => setReceipt(null)}
+            >
+              <Icon name="close" size={15} />
+            </Button>
+          }
+        >
+          {receipt}
+        </Notice>
       ) : null}
 
       <section className="study-panel" aria-labelledby="generate-report-title">
@@ -208,12 +210,12 @@ export function StudyReportes() {
           </div>
         </div>
         {templates.isError ? (
-          <div className="query-warning" role="alert">
-            <span>No se pudieron cargar las plantillas.</span>
-            <Button size="sm" variant="ghost" onClick={() => void templates.refetch()}>
-              Reintentar
-            </Button>
-          </div>
+          <Notice
+            tone="error"
+            action={<Button size="sm" variant="ghost" onClick={() => void templates.refetch()}>Reintentar</Button>}
+          >
+            No se pudieron cargar las plantillas.
+          </Notice>
         ) : null}
         {(templates.data?.length ?? 0) === 0 && !templates.isLoading ? (
           <EmptyState
@@ -278,14 +280,17 @@ export function StudyReportes() {
             <span className="loading-copy">Cargando ejecuciones…</span>
           </div>
         ) : runs.isError ? (
-          <EmptyState
+          <Notice
+            tone="error"
             title="No se pudo cargar el historial"
             action={
               <Button variant="secondary" onClick={() => void runs.refetch()}>
                 Reintentar
               </Button>
             }
-          />
+          >
+            Reintentá la consulta para actualizar las ejecuciones.
+          </Notice>
         ) : rows.length === 0 ? (
           <EmptyState
             title="Sin ejecuciones"

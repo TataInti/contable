@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice } from "@contable/design-system";
 import {
   ACTIVITY_CODE_PATTERN,
   normalizeActivityCode,
@@ -14,7 +14,6 @@ import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
-  DenseAlert,
   DenseHeader,
   DensePage,
   DenseSearch,
@@ -1167,14 +1166,11 @@ export function StudyCatalogosFiscales() {
               {selectedRegime.authority.code}{!selectedRegime.authority.isActive ? " (oculto)" : ""}
             </span>
           </div>
-          <div className={`dense-note ${mismatch ? "dense-note--warn" : "dense-note--ok"}`}>
-            <Icon name={mismatch ? "alert" : "check"} size={14} />
-            <span>
-              {mismatch
-                ? `${selectedRegime.authority.code} recauda en ${authorityJurisdictionName(selectedRegime)}; el régimen es de ${selectedRegime.jurisdiction.name}. Revisá el organismo.`
-                : "El organismo corresponde a la jurisdicción del régimen."}
-            </span>
-          </div>
+          <Notice tone={mismatch ? "warning" : "success"}>
+            {mismatch
+              ? `${selectedRegime.authority.code} recauda en ${authorityJurisdictionName(selectedRegime)}; el régimen es de ${selectedRegime.jurisdiction.name}. Revisá el organismo.`
+              : "El organismo corresponde a la jurisdicción del régimen."}
+          </Notice>
         </InspectorSection>
         <InspectorSection title="Ficha">
           <InspectorFacts
@@ -1552,6 +1548,7 @@ export function StudyCatalogosFiscales() {
           empty={
             <EmptyState
               size="compact"
+              kind={jurisdictions.length === 0 ? "no-data" : "no-results"}
               title={jurisdictions.length === 0 ? "Todavía no hay jurisdicciones" : "Ninguna jurisdicción coincide con los filtros"}
               description={jurisdictions.length === 0 ? "Creá Nación, provincia y municipio para completar el alcance fiscal del estudio." : "Probá con otro código o nombre, o quitá filtros."}
             />
@@ -1575,6 +1572,7 @@ export function StudyCatalogosFiscales() {
           empty={
             <EmptyState
               size="compact"
+              kind={taxTypes.length === 0 ? "no-data" : "no-results"}
               title={taxTypes.length === 0 ? "Todavía no hay tipos de impuesto" : "Ningún tipo de impuesto coincide con los filtros"}
               description={taxTypes.length === 0 ? "Creá un tipo de impuesto para poder iniciar regímenes fiscales." : "Probá con otro código o nombre, o quitá filtros."}
             />
@@ -1598,6 +1596,7 @@ export function StudyCatalogosFiscales() {
           empty={
             <EmptyState
               size="compact"
+              kind={selectableAuthorities.length === 0 ? "no-data" : "no-results"}
               title={
                 selectableAuthorities.length === 0
                   ? "Todavía no hay organismos recaudadores"
@@ -1629,6 +1628,7 @@ export function StudyCatalogosFiscales() {
           empty={
             <EmptyState
               size="compact"
+              kind={regimes.length === 0 ? "no-data" : "no-results"}
               title={
                 regimes.length === 0
                   ? "Todavía no hay regímenes fiscales"
@@ -1660,6 +1660,7 @@ export function StudyCatalogosFiscales() {
           empty={
             <EmptyState
               size="compact"
+              kind={activityFiltersActive ? "no-results" : "no-data"}
               title={
                 activityFiltersActive
                   ? "Ninguna actividad coincide con el filtro"
@@ -1722,7 +1723,7 @@ export function StudyCatalogosFiscales() {
       </p>
 
       {tab === "regimes" && canPropose && regimePrerequisitesLoaded && !canCreateRegime ? (
-        <DenseAlert>
+        <Notice tone="warning">
           {!jurisdictionsReady ? (
             <p>
               Falta una jurisdicción: creala en{" "}
@@ -1747,7 +1748,7 @@ export function StudyCatalogosFiscales() {
               </a>.
             </p>
           ) : null}
-        </DenseAlert>
+        </Notice>
       ) : null}
 
       <DenseTabs<CatalogTab>
@@ -1770,12 +1771,17 @@ export function StudyCatalogosFiscales() {
       />
 
       {failedQueries.map(({ label, query }) => (
-        <div className="form-error" role="alert" key={label}>
-          <strong>No pudimos cargar {label}.</strong>{" "}
-          <Button type="button" variant="text" size="row" onClick={() => void query.refetch()}>
-            Reintentar
-          </Button>
-        </div>
+        <Notice
+          tone="error"
+          key={label}
+          action={
+            <Button type="button" variant="text" size="row" onClick={() => void query.refetch()}>
+              Reintentar
+            </Button>
+          }
+        >
+          No pudimos cargar {label}.
+        </Notice>
       ))}
 
       <DenseToolbar>
@@ -1837,7 +1843,7 @@ export function StudyCatalogosFiscales() {
       </DenseToolbar>
 
       {tab === "regimes" && mismatchedRegimes.length > 0 ? (
-        <DenseAlert
+        <Notice tone="warning"
           action={
             <Button size="sm" variant="secondary" onClick={() => setAlertsOnly((current) => !current)}>
               {alertsOnly ? "Quitar filtro" : "Filtrar"}
@@ -1854,7 +1860,7 @@ export function StudyCatalogosFiscales() {
               {row.code}
             </span>
           ))}
-        </DenseAlert>
+        </Notice>
       ) : null}
 
       <DenseWorkspace panelId="catalog-tab-panel" inspector={inspector}>
@@ -2059,14 +2065,11 @@ export function StudyCatalogosFiscales() {
             ) : null}
           </div>
           {regimeForm.authorityId && regimeForm.jurisdictionId ? (
-            <div className="dense-note dense-note--ok" role="status">
-              <Icon name="check" size={14} />
-              <span>
-                Coherente:{" "}
-                {matchingAuthorities.find((item) => item.id === regimeForm.authorityId)?.code ?? "el organismo"}{" "}
-                recauda en {jurisdictionName(regimeForm.jurisdictionId)}.
-              </span>
-            </div>
+            <Notice tone="success">
+              Coherente:{" "}
+              {matchingAuthorities.find((item) => item.id === regimeForm.authorityId)?.code ?? "el organismo"}{" "}
+              recauda en {jurisdictionName(regimeForm.jurisdictionId)}.
+            </Notice>
           ) : null}
           <MutationError error={createRegime.error} />
           <div className="study-form__actions">
@@ -2092,15 +2095,18 @@ export function StudyCatalogosFiscales() {
       </ActionDrawer>
 
       {receipt ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <span>
-            <strong>Actualización registrada</strong>
-            <small>{receipt}</small>
-          </span>
-          <Button type="button" variant="text" size="row" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
-            Cerrar
-          </Button>
-        </div>
+        <Notice
+          tone="success"
+          className="ds-notice--page"
+          title="Actualización registrada"
+          action={
+            <Button type="button" variant="text" size="row" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
+              Cerrar
+            </Button>
+          }
+        >
+          {receipt}
+        </Notice>
       ) : null}
 
       <ActionDrawer

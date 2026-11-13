@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, EmptyState, Table } from "@contable/design-system";
+import { Button, EmptyState, Notice, Table } from "@contable/design-system";
 import { Link } from "react-router-dom";
 import { api, downloadFile } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -100,11 +100,13 @@ export function PortalLiquidaciones() {
       ) : query.isLoading ? (
         <PortalLoading label="Cargando liquidaciones…" />
       ) : query.isError ? (
-        <EmptyState
+        <Notice
+          tone="error"
           title="No pudimos cargar las liquidaciones"
-          description="Reintentá en unos minutos."
           action={<PortalRetryButton onRetry={() => void query.refetch()} />}
-        />
+        >
+          Reintentá en unos minutos.
+        </Notice>
       ) : rows.length === 0 ? (
         <EmptyState
           title="Sin liquidaciones publicadas"
@@ -165,19 +167,23 @@ export function PortalLiquidaciones() {
             </div>
           </div>
           {artifactError ? (
-            <div className="portal-inline-alert portal-inline-alert--error" role="alert">
-              <span>{artifactError}</span>
-              {failedArtifact ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => void downloadArtifact(failedArtifact.settlementId, failedArtifact.artifact)}
-                >
-                  Reintentar descarga
-                </Button>
-              ) : null}
-            </div>
+            <Notice
+              tone="error"
+              action={
+                failedArtifact ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void downloadArtifact(failedArtifact.settlementId, failedArtifact.artifact)}
+                  >
+                    Reintentar descarga
+                  </Button>
+                ) : undefined
+              }
+            >
+              {artifactError}
+            </Notice>
           ) : null}
           <Table<PublishedSettlement>
             className="portal-data-table portal-data-table--settlements"

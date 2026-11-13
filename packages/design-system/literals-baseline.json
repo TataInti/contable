@@ -3,7 +3,7 @@
   "files": {
     "apps/web/src/App.css": {
       "fontSize": 2,
-      "spacing": 5,
+      "spacing": 2,
       "radius": 9,
       "color": 0
     },
@@ -27,7 +27,7 @@
     },
     "apps/web/src/auth/login.css": {
       "fontSize": 5,
-      "spacing": 22,
+      "spacing": 21,
       "radius": 5,
       "color": 0
     },
@@ -93,7 +93,7 @@
     },
     "apps/web/src/portal/portal.css": {
       "fontSize": 0,
-      "spacing": 8,
+      "spacing": 7,
       "radius": 0,
       "color": 2
     },
@@ -433,6 +433,12 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/StudyUserAssignments.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/WorkpaperSourceReviewAction.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -613,6 +619,12 @@
       "radius": 0,
       "color": 0
     },
+    "packages/design-system/src/EmptyState.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "packages/design-system/src/EmptyState.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -644,6 +656,24 @@
       "color": 0
     },
     "packages/design-system/src/MoneyField.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Notice.css": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Notice.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Notice.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,

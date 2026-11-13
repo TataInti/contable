@@ -411,7 +411,8 @@
   color: var(--ds-color-success);
 }
 
-.action-receipt--page {
+.action-receipt--page,
+.ds-notice--page {
   margin: calc(var(--ds-space-6) * -1) 0 var(--ds-space-8);
 }
 
@@ -2832,15 +2833,6 @@
   padding: var(--ds-space-2) var(--ds-space-1);
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-sm);
-}
-
-.fiscal-contributor__empty p {
-  margin: var(--ds-space-4) 0 0;
-  color: var(--ds-color-text-muted);
-}
-
-.fiscal-contributor__empty .ds-button {
-  margin-top: var(--ds-space-3);
 }
 
 .fiscal-next-step {
