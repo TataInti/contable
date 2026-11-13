@@ -96,7 +96,7 @@ describe("Páginas con el marco denso", () => {
     ["Rentabilidad", <StudyRentabilidad key="r" />],
     ["Reportes y análisis", <StudyReportes key="re" />],
     ["Contabilidad", <StudyContabilidad key="c" />],
-    ["Expediente mensual", <StudyExpedienteMensual key="e" />],
+    ["Legajo", <StudyExpedienteMensual key="e" />],
   ])("%s mantiene su título y la estructura densa", async (title, element) => {
     renderPage(element);
     expect(await screen.findByRole("heading", { level: 1, name: title })).toBeTruthy();

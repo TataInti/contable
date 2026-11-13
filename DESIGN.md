@@ -385,6 +385,7 @@ Usá `Notice` en vez de clases locales de aviso, evitá cajas anidadas y diferen
 | `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, `Notice` | Primitivas públicas de `packages/design-system/src` |
 | Familia Dense del paquete | Primitivas públicas de `packages/design-system/src`; contratos detallados arriba |
 | `DenseTabs`, `DenseSearch`, `DenseAlert` | `DenseTabs` y `DenseSearch` permanecen en el adaptador web. `DenseAlert` se conserva para pantallas fuera de este corte; las pantallas migradas usan `Notice`. |
+| Orientación y "próximo paso" | El próximo paso de una pantalla es su botón principal del encabezado, no un aviso. Si hace falta orientar, se usa `Notice` con tono `info` o `DenseAlert` con tono `hint` (sin fondo ni color de estado). El tono `success` se reserva para confirmar una acción recién hecha; no se usa para estados permanentes ni para guiar, porque comparte el verde de la marca. Como máximo un aviso con fondo por pantalla |
 | `StatusBadge` | Público en `packages/design-system/src`; conserva el contrato `status`/`className` y los estilos globales/contextuales existentes en la aplicación |
 | `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction` | Públicos en `packages/design-system/src`; CSS propio de drawers en el paquete |
 | `AsyncState`, `Icon`, `SectionIndex` | Públicos en `packages/design-system/src`; `SectionIndex` conserva las reglas de layout de estudio/portal en sus hojas de aplicación |

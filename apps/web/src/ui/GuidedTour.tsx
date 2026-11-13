@@ -43,7 +43,7 @@ const TOUR_STEPS: readonly TourStep[] = [
     eyebrow: "Paso 2 · Estudio",
     title: "Todo el trabajo del estudio, en una sola navegación",
     description:
-      "El bloque Estudio reúne Inicio, Clientes, Bandeja documental, Trabajo, Liquidaciones, Expediente mensual y Rentabilidad. El bloque Del cliente incluye Configuración fiscal. Desde Clientes, el botón «Abrir» lleva al Resumen del cliente.",
+      "El bloque Estudio reúne Inicio, Clientes, Bandeja documental, Trabajo, Liquidaciones, Legajo y Rentabilidad. El bloque Del cliente incluye Configuración fiscal. Desde Clientes, el botón «Abrir» lleva al Resumen del cliente.",
   },
   {
     selector: '[data-tour="nav-preparacion"]',
@@ -57,7 +57,7 @@ const TOUR_STEPS: readonly TourStep[] = [
     eyebrow: "Paso 4 · Trabajo y cierres",
     title: "Organizá las tareas del período",
     description:
-      "Trabajo, Liquidaciones y Expediente mensual concentran los pedidos, las obligaciones y el seguimiento mensual dentro del bloque Estudio.",
+      "Trabajo, Liquidaciones y Legajo concentran los pedidos, las obligaciones y el seguimiento mensual dentro del bloque Estudio.",
   },
   {
     selector: '[data-tour="nav-analisis"]',

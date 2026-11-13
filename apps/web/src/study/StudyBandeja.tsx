@@ -26,7 +26,6 @@ import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import {
-  DenseAlert,
   DenseHeader,
   DensePage,
   DenseSearch,
@@ -492,22 +491,6 @@ export function StudyBandeja() {
           },
         ]}
       />
-      <DenseAlert
-        tone="ok"
-        action={
-          base && pendingRequestItems.length && capabilities.has("document.upload") ? (
-            <Button size="sm" onClick={() => setShowUpload(true)}>Subir documento</Button>
-          ) : base && capabilities.has("request.manage") ? (
-            <Button size="sm" onClick={() => navigate("/trabajo")}>Crear pedido</Button>
-          ) : undefined
-        }
-      >
-        {!base
-          ? "Seleccioná un cliente para revisar su evidencia."
-          : pendingRequestItems.length
-            ? "Hay pedidos documentales pendientes."
-            : "No hay pedidos documentales pendientes."}
-      </DenseAlert>
 
 
 
@@ -1011,7 +994,7 @@ export function StudyBandeja() {
                           <strong>Datos listos para registrar</strong>
                           <small>
                             La creación automática se retiró para conservar el control. La
-                            evidencia queda disponible como respaldo del expediente.
+                            evidencia queda disponible como respaldo del legajo.
                           </small>
                         </span>
                       </div>

@@ -2,11 +2,11 @@ import { createHash, randomUUID as cryptoRandomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 /**
- * E2E vertical del expediente mensual (C, plan piloto fiscal §10).
+ * E2E vertical del legajo (C, plan piloto fiscal §10).
  *
  * Recorrido de punta a punta:
  *   pedido documental (borrador → envío → carga portal → revisión → completado)
- *   → expediente mensual → saldos verificados → fuentes revisadas →
+ *   → legajo → saldos verificados → fuentes revisadas →
  *   cálculo IVA → revisión/finalización maker-checker → presentación → pago →
  *   rectificativa versionada.
  *
@@ -16,7 +16,7 @@ import { expect, test } from "@playwright/test";
 
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://127.0.0.1:3000";
 
-test("ciclo vertical del expediente mensual (§10)", async ({ request, playwright }) => {
+test("ciclo vertical del legajo (§10)", async ({ request, playwright }) => {
   // ---------- Usuarios (estudio + revisor) ----------
   const login = await request.post(`${apiBaseUrl}/api/v1/auth/login`, {
     data: { email: "demo@contable.local", password: "demo1234" },
@@ -125,9 +125,9 @@ test("ciclo vertical del expediente mensual (§10)", async ({ request, playwrigh
   const completed = await requestStatus(request, base, requestId);
   expect(completed).toBe("COMPLETED");
 
-  // ---------- 6. Expediente mensual ----------
+  // ---------- 6. Legajo ----------
   // Período único por corrida: evita colisiones con fixtures de corridas
-  // previas (el expediente es idempotente por cliente+período).
+  // previas (el legajo es idempotente por cliente+período).
   // Año rotativo por segundo dentro del rango de cuatro dígitos. Se reserva
   // 9999 para los vencimientos y presentaciones del año siguiente.
   const firstRunYear = 2100;
@@ -151,7 +151,7 @@ test("ciclo vertical del expediente mensual (§10)", async ({ request, playwrigh
   const profile = await request.post(`${base}/tax-profile-versions`, {
     headers,
     data: {
-      legalName: "Cliente E2E Expediente",
+      legalName: "Cliente E2E Legajo",
       cuit: "20999999999",
       personType: "JURIDICA",
       nationalCondition: "RESPONSABLE_INSCRIPTO",
@@ -217,7 +217,7 @@ test("ciclo vertical del expediente mensual (§10)", async ({ request, playwrigh
 
   // ---------- 8. Fuentes y clasificaciones ----------
   // Importación de libros IVA ventas y compras (ambas fuentes requeridas).
-  // Cada lote se vincula al expediente (workpaperId + sourceCode).
+  // Cada lote se vincula al legajo (workpaperId + sourceCode).
   const importBook = async (
     sourceCode: "ARCA_IVA_SALES" | "ARCA_IVA_PURCHASES",
     direction: "SALE" | "PURCHASE",
@@ -276,7 +276,7 @@ test("ciclo vertical del expediente mensual (§10)", async ({ request, playwrigh
   await importBook("ARCA_IVA_SALES", "SALE", "20111111111");
   await importBook("ARCA_IVA_PURCHASES", "PURCHASE", "20999999999");
 
-  // Revisar fuentes del expediente (coverage → batches → review).
+  // Revisar fuentes del legajo (coverage → batches → review).
   // El review exige maker-checker: lo hace el revisor.
   const coverage = await request.get(`${base}/monthly-tax-workpapers/${workpaperId}/coverage`);
   expect(coverage.status()).toBe(200);
@@ -299,7 +299,7 @@ test("ciclo vertical del expediente mensual (§10)", async ({ request, playwrigh
     }
   }
 
-  // Clasificar los vouchers del expediente (rubro/actividad requeridos).
+  // Clasificar los vouchers del legajo (rubro/actividad requeridos).
   const classifications = await request.get(
     `${base}/monthly-tax-workpapers/${workpaperId}/classifications`,
   );
@@ -558,7 +558,7 @@ test("ciclo vertical del expediente mensual (§10)", async ({ request, playwrigh
     `${base}/monthly-tax-workpapers/${workpaperId}/rectify`,
     { headers },
   );
-  // Idempotente: 409 si la corrida previa ya rectificó este expediente.
+  // Idempotente: 409 si la corrida previa ya rectificó este legajo.
   expect([200, 201, 409]).toContain(rectified.status());
   if (rectified.status() !== 409) {
     const rectBody = (await rectified.json()) as {
@@ -597,7 +597,7 @@ async function requestStatus(
   return found!.status;
 }
 
-/** Estado de un expediente vía listado. */
+/** Estado de un legajo vía listado. */
 async function workpaperStatus(
   request: import("@playwright/test").APIRequestContext,
   base: string,

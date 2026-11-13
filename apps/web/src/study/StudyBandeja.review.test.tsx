@@ -516,7 +516,7 @@ describe("StudyBandeja — revisión de extracción", () => {
         path.endsWith("/documents/document-a/extraction"),
       ).length;
       expect(extractionReadsAfterSave).toBeGreaterThan(extractionReadsBeforeSave);
-      expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText("1234.56")).toBeTruthy();
+      expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText("1.234,56")).toBeTruthy();
       expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText("cargado a mano")).toBeTruthy();
       expect((screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled).toBe(false);
     });
@@ -658,7 +658,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     });
 
     const table = await screen.findByRole("table", { name: "Datos fiscales extraídos" });
-    await waitFor(() => expect(within(table).getByText("999.00")).toBeTruthy());
+    await waitFor(() => expect(within(table).getByText("999,00")).toBeTruthy());
     expect(screen.getByRole("button", { name: "Releer con IA" })).toBeTruthy();
   });
 

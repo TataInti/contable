@@ -31,6 +31,11 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   RESOLVED: { label: "Resuelto", tone: "ok" },
   REVIEWED: { label: "Revisado", tone: "ok" },
   SUCCEEDED: { label: "Completado", tone: "ok" },
+  COMMITTED: { label: "Incorporado", tone: "ok" },
+  DONE: { label: "Hecho", tone: "ok" },
+  VALID: { label: "Válido", tone: "ok" },
+  VALIDATED: { label: "Validado", tone: "ok" },
+  VERIFIED: { label: "Verificado", tone: "ok" },
 
   CHANGES_REQUESTED: { label: "Cambios solicitados", tone: "warn" },
   CLOSING: { label: "En cierre", tone: "warn" },
@@ -49,9 +54,14 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   WAITING_INPUTS: { label: "Esperando datos", tone: "warn" },
   WAITING_CLIENT: { label: "Esperando al cliente", tone: "warn" },
   WARNING: { label: "Aviso", tone: "warn" },
+  COLLECTING_INPUTS: { label: "Reuniendo datos", tone: "warn" },
+  DUPLICATE: { label: "Duplicado", tone: "warn" },
+  PENDING_REVIEW: { label: "Pendiente de revisión", tone: "warn" },
+  PENDING_VERIFICATION: { label: "Pendiente de verificación", tone: "warn" },
 
   BLOCKING: { label: "Bloqueante", tone: "danger" },
   DEAD_LETTER: { label: "Requiere intervención", tone: "danger" },
+  ERROR: { label: "Con error", tone: "danger" },
   EXPIRED: { label: "Vencido", tone: "danger" },
   EXTRACTION_FAILED: { label: "Falló la extracción", tone: "danger" },
   FAILED: { label: "Fallido", tone: "danger" },
@@ -63,6 +73,7 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   WAIVED: { label: "Eximido", tone: "muted" },
 
   CALCULATED: { label: "Calculado", tone: "info" },
+  CALCULATING: { label: "Calculando", tone: "info" },
   GENERATED: { label: "Generado", tone: "info" },
   INFO: { label: "Informativo", tone: "info" },
   IN_PROGRESS: { label: "En proceso", tone: "info" },
@@ -88,6 +99,8 @@ const STATUS_BADGE_CONFIG: Readonly<Record<string, StatusBadgeMeta>> = {
   NOT_APPLICABLE: { label: "No aplica", tone: "muted" },
   REVERSED: { label: "Revertido", tone: "muted" },
   RETIRED: { label: "Retirado", tone: "muted" },
+  SKIPPED: { label: "Omitido", tone: "muted" },
+  VOIDED: { label: "Anulado", tone: "muted" },
   SUPERSEDED: { label: "Reemplazado", tone: "muted" },
 };
 

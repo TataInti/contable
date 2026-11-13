@@ -12,7 +12,8 @@ import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetai
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
-import { StatusBadge } from "../ui/StatusBadge";
+import { RuleSimulator } from "./RuleSimulator";
+import { getStatusBadgeMeta, StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
 import {
   DenseAlert,
@@ -136,7 +137,9 @@ function validateRuleVersionDate(value: string): string | null {
 }
 
 function shortDate(value: string | null) {
-  return value ? new Date(value).toLocaleDateString("es-AR") : "Sin vencimiento";
+  // Las vigencias son fechas calendario guardadas en UTC: se formatean en UTC
+  // para no mostrar el día anterior en husos como el de Argentina (UTC-3).
+  return value ? new Date(value).toLocaleDateString("es-AR", { timeZone: "UTC" }) : "Sin vencimiento";
 }
 
 function sameRuleRows(draftRows: RuleRow[], savedRows: RuleRow[]): boolean {
@@ -166,7 +169,7 @@ export function StudyReglasFiscales() {
   const queryClient = useQueryClient();
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
-  const [ruleTab, setRuleTab] = useState<"rates" | "dueDates" | "sources" | "approval">("rates");
+  const [ruleTab, setRuleTab] = useState<"rates" | "dueDates" | "sources" | "approval" | "simulate">("rates");
   const [packSearch, setPackSearch] = useState("");
   const [packFilter, setPackFilter] = useState<"" | "ACTIVE" | "DRAFT" | "IN_REVIEW">("");
   const [density, setDensity] = useDensity();
@@ -330,7 +333,14 @@ export function StudyReglasFiscales() {
     onSuccess: () => {
       invalidate();
       setShowCloneForm(false);
-      setReceipt("Se creó una nueva versión borrador a partir de la vigente. La versión anterior sigue vigente hasta que se active la nueva.");
+      // El borrador nuevo pasa a ser la versión seleccionada y se lleva al
+      // usuario a las alícuotas, que es lo que vino a modificar.
+      setSelectedVersionId(null);
+      setRuleTab("rates");
+      setReceipt("Se abrió un borrador con las alícuotas vigentes. Editá los valores y guardá; la versión anterior sigue aplicando hasta que actives la nueva.");
+      window.setTimeout(() => {
+        document.getElementById("rule-rates-title")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      }, 0);
     },
   });
   const createPackMutation = useMutation({
@@ -552,11 +562,20 @@ export function StudyReglasFiscales() {
     if (["IN_REVIEW", "APPROVED"].includes(selectedVersion.status) && canActivateSelectedVersion) {
       return { label: "Activar versión", description: "La versión quedará vigente para los próximos cálculos.", onClick: () => requestActivation(selectedVersion) };
     }
-    if (selectedVersion.status !== "DRAFT" && canPropose) {
-      return { label: "Modificar alícuotas", description: "Prepará una nueva versión a partir de esta: modifica alícuotas en un borrador nuevo y la versión vigente sigue aplicando hasta que se active la nueva.", onClick: () => setShowCloneForm(true) };
-    }
     return null;
   })();
+  // Una versión que no es borrador es de sólo lectura: para cambiar valores se
+  // abre un borrador nuevo. La acción se ofrece en la sección de alícuotas,
+  // junto a los datos que el usuario quiere modificar.
+  // Sin familia de cálculo el régimen no tiene motores: la API rechaza
+  // cualquier versión nueva. Se avisa antes, con el camino para resolverlo.
+  const regimeMissingFamily = Boolean(detailQuery.data && !detailQuery.data.regime.calcFamilyId);
+  const canStartNewVersion = Boolean(
+    selectedVersion &&
+      selectedVersion.status !== "DRAFT" &&
+      !["IN_REVIEW", "APPROVED"].includes(selectedVersion.status) &&
+      canPropose,
+  );
 
   const allPacks = packsQuery.data ?? [];
   const packsWith = (status: RuleStatus) =>
@@ -985,7 +1004,7 @@ export function StudyReglasFiscales() {
         onClose={() => setShowCloneForm(false)}
         eyebrow="Reglas fiscales"
         title="Modificar alícuotas"
-        description="Se crea una nueva versión borrador a partir de la vigente para ajustar alícuotas, vencimientos y fuentes. La versión vigente sigue aplicando hasta que el Administrador o Titular active la nueva."
+        description="Primero elegí desde cuándo rigen los nuevos valores. Al continuar se abre un borrador con las alícuotas actuales para que las edites; la versión vigente sigue aplicando hasta que el Administrador o Titular active la nueva."
       >
         <form
           className="study-form study-form--compact fiscal-action-form"
@@ -1018,9 +1037,16 @@ export function StudyReglasFiscales() {
             }}
             required
           />
+          {cloneMutation.error ? (
+            <p className="form-error" role="alert">
+              {cloneMutation.error instanceof Error
+                ? cloneMutation.error.message
+                : "No se pudo crear el borrador."}
+            </p>
+          ) : null}
           <div className="study-form__actions">
             <Button type="submit" loading={cloneMutation.isPending}>
-              <Icon name="plus" size={16} /> Crear nueva versión
+              <Icon name="plus" size={16} /> Crear borrador y editar
             </Button>
             <Button type="button" variant="ghost" onClick={() => setShowCloneForm(false)}>
               Cancelar
@@ -1121,7 +1147,7 @@ export function StudyReglasFiscales() {
           ) : null}
           {selectedPackId && rulesNextAction ? (
             <DenseAlert
-              tone="ok"
+              tone="hint"
               action={<Button size="sm" onClick={rulesNextAction.onClick}>{rulesNextAction.label}</Button>}
             >
               <strong>Próximo paso:</strong> {rulesNextAction.description}
@@ -1211,7 +1237,7 @@ export function StudyReglasFiscales() {
                       >
                         {detailQuery.data.versions.map((version) => (
                           <option key={version.id} value={version.id}>
-                            v{version.version} · {version.status} · {shortDate(version.validFrom)}
+                            v{version.version} · {getStatusBadgeMeta(version.status).label} · {shortDate(version.validFrom)}
                           </option>
                         ))}
                       </select>
@@ -1261,7 +1287,7 @@ export function StudyReglasFiscales() {
                 ) : null}
               </section>
 
-              <DenseTabs<"rates" | "dueDates" | "sources" | "approval">
+              <DenseTabs<"rates" | "dueDates" | "sources" | "approval" | "simulate">
                 label="Secciones de la versión"
                 idPrefix="rule-tab"
                 active={ruleTab}
@@ -1271,6 +1297,7 @@ export function StudyReglasFiscales() {
                   { id: "dueDates", label: "Vencimientos", count: selectedVersion.dueDateRules.length },
                   { id: "sources", label: "Fuentes", count: selectedVersion.sources.length },
                   { id: "approval", label: "Control profesional" },
+                  { id: "simulate", label: "Probar" },
                 ]}
               />
               <div role="tabpanel" id="rule-tab-panel" className="dense-tabpanel">
@@ -1283,6 +1310,18 @@ export function StudyReglasFiscales() {
                       Elegí el tipo y el sujeto desde los catálogos del régimen. Concepto identifica
                       la regla para el estudio y es opcional.
                     </p>
+                    {canStartNewVersion && regimeMissingFamily ? (
+                      <p className="muted-copy">
+                        Este régimen no tiene familia de cálculo, así que no se puede abrir una
+                        versión nueva ni calcular con él. Asignale una familia en Catálogos fiscales.
+                      </p>
+                    ) : canStartNewVersion ? (
+                      <p className="muted-copy">
+                        Esta versión es de sólo lectura porque ya se usa para calcular. Para cambiar
+                        valores se abre un borrador nuevo; la versión actual sigue aplicando hasta
+                        que actives la nueva.
+                      </p>
+                    ) : null}
                   </div>
                   {editable ? (
                     <Button
@@ -1308,6 +1347,23 @@ export function StudyReglasFiscales() {
                       }
                     >
                       <Icon name="plus" size={15} /> Agregar regla
+                    </Button>
+                  ) : canStartNewVersion && regimeMissingFamily ? (
+                    <a
+                      className="dense-link"
+                      href={`/catalogos-fiscales?editRegime=${encodeURIComponent(detailQuery.data?.regime.id ?? "")}`}
+                    >
+                      Asignar familia de cálculo
+                    </a>
+                  ) : canStartNewVersion ? (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        cloneMutation.reset();
+                        setShowCloneForm(true);
+                      }}
+                    >
+                      Modificar alícuotas
                     </Button>
                   ) : null}
                 </div>
@@ -1505,6 +1561,8 @@ export function StudyReglasFiscales() {
                           <MoneyField
                             className="fiscal-rule-input fiscal-rule-input--number"
                             aria-label={`Alícuota ${row.id}`}
+                            prefix="%"
+                            maxDecimals={4}
                             value={row.rate ?? ""}
                             onChange={(value) =>
                               setDraftRows((rows) =>
@@ -1592,6 +1650,16 @@ export function StudyReglasFiscales() {
                   </p>
                 ) : null}
               </section>
+              ) : null}
+              {ruleTab === "simulate" ? (
+                <RuleSimulator
+                  key={selectedVersion.id}
+                  versionId={selectedVersion.id}
+                  versionNumber={selectedVersion.version}
+                  isDraft={selectedVersion.status === "DRAFT"}
+                  hasUnsavedChanges={activationBlockedByUnsavedChanges}
+                  rules={selectedVersion.rateRules}
+                />
               ) : null}
               {ruleTab === "dueDates" ? (
               <section className="study-panel" aria-labelledby="rule-due-dates-title">

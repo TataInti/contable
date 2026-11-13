@@ -35,7 +35,25 @@ const REPEATED_FIELD_GROUPS: Record<string, string> = {
   perceptionText: "Percepciones",
 };
 
+const AMOUNT_KEYS: ReadonlySet<string> = new Set([
+  "netAmount",
+  "nonTaxableAmount",
+  "exemptAmount",
+  "totalAmount",
+]);
+const NORMALIZED_AMOUNT = /^-?\d+(?:\.\d{1,4})?$/;
+const AMOUNT_FORMAT = new Intl.NumberFormat("es-AR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 function displayScalarValue(key: string, value: string | null): string | null {
+  // Los importes llegan normalizados ("29900.00"); se muestran en es-AR
+  // ("29.900,00"). Un texto que no es un importe normalizado se deja tal cual
+  // para no ocultar lo que realmente se leyó o cargó.
+  if (value && AMOUNT_KEYS.has(key) && NORMALIZED_AMOUNT.test(value)) {
+    return AMOUNT_FORMAT.format(Number(value));
+  }
   if (!value || (key !== "issueDate" && key !== "caeExpiration") || !isValidManualExtractionIsoDate(value)) {
     return value;
   }
