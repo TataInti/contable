@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { FormEvent } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionDrawer } from "./ActionDrawer.js";
@@ -40,5 +40,21 @@ describe("ActionDrawer", () => {
 
     fireEvent.click(submit);
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("puede iniciar el foco en Cerrar mientras el contenido se carga", async () => {
+    render(
+      <ActionDrawer
+        isOpen
+        onClose={() => undefined}
+        title="Clientes de Ana"
+        initialFocus="close"
+      >
+        <p role="status">Cargando clientes y asignaciones…</p>
+      </ActionDrawer>,
+    );
+
+    const close = screen.getByRole("button", { name: "Cerrar" });
+    await waitFor(() => expect(document.activeElement).toBe(close));
   });
 });

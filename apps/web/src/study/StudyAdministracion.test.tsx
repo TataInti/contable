@@ -121,6 +121,9 @@ function mockApi(
 const openStandards = async () =>
   fireEvent.click(await screen.findByRole("tab", { name: /Normas contables/ }));
 
+const openControls = async () =>
+  fireEvent.click(await screen.findByRole("tab", { name: "Controles" }));
+
 function renderAdministracion() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -156,7 +159,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     vi.restoreAllMocks();
   });
 
-  it("permite al Titular activar autorrevisión desde la configuración del estudio", async () => {
+  it("permite al Titular activar autorrevisión desde Controles", async () => {
     contextMock.current = {
       ...contextMock.current,
       capabilities: new Set([
@@ -168,6 +171,8 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     };
     vi.mocked(api.patch).mockResolvedValue({ allowSelfReview: true } as never);
     renderAdministracion();
+    expect(screen.queryByRole("checkbox", { name: "Permitir autorrevisión de fuentes y expedientes" })).toBeNull();
+    await openControls();
 
     const toggle = (await screen.findByRole("checkbox", {
       name: "Permitir autorrevisión de fuentes y expedientes",
@@ -183,10 +188,13 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     );
     expect(await screen.findByText("Activada")).toBeTruthy();
     expect(screen.getByText(/reduce el control interno de cuatro ojos/)).toBeTruthy();
+    const studyStyles = readFileSync(resolve(process.cwd(), "src/study/study.css"), "utf8");
+    expect(studyStyles).toMatch(/\.self-review-setting__title\s*\{[^}]*font-size:\s*var\(--ds-text-base\)/);
   });
 
   it("presenta la opción al Administrador como lectura y reserva el cambio al Titular", async () => {
     renderAdministracion();
+    await openControls();
 
     const toggle = (await screen.findByRole("checkbox", {
       name: "Permitir autorrevisión de fuentes y expedientes",
@@ -248,25 +256,33 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(await screen.findAllByRole("button", { name: /Nuevo usuario/ })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: /Nuevo usuario/ }));
 
-    expect(await screen.findByText(/Ingresá nombre y email/)).toBeTruthy();
-    // El submit del drawer queda deshabilitado hasta completar nombre y email.
+    expect(await screen.findByText(/Ingresá nombre y correo/)).toBeTruthy();
+    // El submit del drawer queda deshabilitado hasta completar nombre y correo.
     const submit = screen.getByRole("button", { name: "Crear usuario" }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
   });
 
-  it("lista a los usuarios con su rol, huella de módulos y estado, y filtra por búsqueda", async () => {
+  it("lista usuarios sin repetir el conteo de módulos y filtra por búsqueda", async () => {
     mockApi(standardsFixture, membersFixture);
     renderAdministracion();
 
     expect(await screen.findByText("Owner A")).toBeTruthy();
     expect(screen.getByText("Revisor Demo")).toBeTruthy();
-    // El auditor sólo abre 4 de los 7 módulos internos.
-    expect(screen.getByText("4 de 7")).toBeTruthy();
-    expect(screen.getAllByText("7 de 7").length).toBe(2);
     expect(screen.getByText("Suspendido")).toBeTruthy();
 
     const strip = screen.getByRole("group", { name: "Resumen de accesos" });
-    expect(within(strip).getByText("Titulares")).toBeTruthy();
+    expect(within(strip).getByText("Suspendidos")).toBeTruthy();
+    expect(within(strip).getByText("Invitaciones pendientes")).toBeTruthy();
+    expect(within(strip).queryByText("Usuarios internos")).toBeNull();
+    expect(within(strip).queryByText("Accesos del portal")).toBeNull();
+    expect(screen.getByRole("tab", { name: /Usuarios internos\s*3/ })).toBeTruthy();
+    const table = screen.getByRole("table", { name: "Usuarios internos" });
+    expect(within(table).queryByText("Módulos")).toBeNull();
+    expect(within(table).queryByText(/de 7/)).toBeNull();
+    expect(screen.queryByText("3 usuarios")).toBeNull();
+    expect((document.querySelector(".administration-users")?.textContent ?? "")).not.toMatch(
+      /\bUI\b|fuente de verdad|contexto superior|\bemail\b/i,
+    );
 
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "revisor" } });
     expect(screen.queryByText("Owner A")).toBeNull();
@@ -316,6 +332,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     const row = await screen.findByRole("row", { name: /Revisor Demo/ });
+    const table = screen.getByRole("table", { name: "Usuarios internos" });
+    const actionsHeader = within(table).getByRole("columnheader", { name: "Acciones" }) as HTMLElement;
+    expect(actionsHeader.style.width).toBe("180px");
     expect(within(row).getByRole("button", { name: "Editar a Revisor Demo" })).toBeTruthy();
     fireEvent.click(within(row).getByText("Más acciones"));
 
@@ -324,17 +343,17 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(within(row).getByRole("button", { name: "Recuperar acceso de Revisor Demo" })).toBeTruthy();
   });
 
-  it("guarda el rol apenas se elige y sin pedir confirmación", async () => {
+  it("guarda el cambio a Titular sin pedir confirmación", async () => {
     mockApi(standardsFixture, membersFixture);
     vi.mocked(api.patch).mockResolvedValue({});
     renderAdministracion();
 
     fireEvent.change(await screen.findByLabelText("Rol de Revisor Demo"), {
-      target: { value: "ADMIN" },
+      target: { value: "OWNER" },
     });
 
     await waitFor(() =>
-      expect(vi.mocked(api.patch)).toHaveBeenCalledWith("/firms/firm-a/members/u2", { role: "ADMIN" }),
+      expect(vi.mocked(api.patch)).toHaveBeenCalledWith("/firms/firm-a/members/u2", { role: "OWNER" }),
     );
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
@@ -358,6 +377,37 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
       }),
     );
     expect(await screen.findByText("Los datos del usuario quedaron actualizados.")).toBeTruthy();
+  });
+
+  it("muestra errores por campo y deja Guardar cambios y Cancelar en el pie", async () => {
+    mockApi(standardsFixture, membersFixture);
+    renderAdministracion();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Editar a Revisor Demo" }));
+    const name = (await screen.findByLabelText("Nombre")) as HTMLInputElement;
+    const email = screen.getByLabelText("Correo") as HTMLInputElement;
+    fireEvent.change(name, { target: { value: " " } });
+    fireEvent.change(email, { target: { value: "correo-invalido" } });
+
+    const drawer = screen.getByRole("dialog", { name: "Editar usuario" });
+    const form = drawer.querySelector<HTMLFormElement>("#member-edit-form");
+    const footer = drawer.querySelector<HTMLElement>(".action-drawer__footer");
+    expect(form).toBeTruthy();
+    expect(footer).toBeTruthy();
+    expect(footer?.contains(screen.getByRole("button", { name: "Cancelar" }))).toBe(true);
+    const submit = within(footer as HTMLElement).getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement;
+    expect(submit.form).toBe(form);
+    fireEvent.click(submit);
+
+    expect(await screen.findByText("Ingresá el nombre")).toBeTruthy();
+    expect(await screen.findByText("Ingresá un correo válido, por ejemplo nombre@estudio.com")).toBeTruthy();
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(email.getAttribute("aria-invalid")).toBe("true");
+    expect(api.patch).not.toHaveBeenCalled();
+
+    const studyStyles = readFileSync(resolve(process.cwd(), "src/study/study.css"), "utf8");
+    expect(studyStyles).toMatch(/\.administration-users \.administration-user-edit-form\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+    expect(studyStyles).toMatch(/\.administration-users \.dense-inspector__foot \.dense-row-actions\s*\{[^}]*flex-wrap:\s*wrap/);
   });
 
   it("explica en español cuando el correo ya pertenece a otra cuenta", async () => {
@@ -506,7 +556,11 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Administrar clientes de Revisor Demo" }),
     );
-    const clientSelect = await screen.findByLabelText("Cliente");
+    const drawer = await screen.findByRole("dialog", { name: "Clientes de Revisor Demo" });
+    expect(within(drawer).getByText(/Los cambios se aplican al momento/)).toBeTruthy();
+    const close = within(drawer).getByRole("button", { name: "Cerrar" });
+    await waitFor(() => expect(document.activeElement).toBe(close));
+    const clientSelect = await within(drawer).findByLabelText("Cliente");
     expect(within(clientSelect).getByRole("option", { name: "Cliente Beta" })).toBeTruthy();
     fireEvent.change(clientSelect, { target: { value: "client-b" } });
     fireEvent.click(screen.getByRole("button", { name: "Asignar cliente" }));
@@ -551,6 +605,13 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
 
     fireEvent.click(await screen.findByRole("tab", { name: "Datos del estudio" }));
     expect(await screen.findByText(/Estudio Ejemplo SRL/)).toBeTruthy();
+    expect(screen.getByText("Buenos Aires (GMT-3)")).toBeTruthy();
+    expect(screen.getByText("Consultá y actualizá los datos de identificación y la zona horaria del estudio.")).toBeTruthy();
+    expect(document.querySelectorAll(".administration-profile__facts > div")).toHaveLength(4);
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(document.querySelector(".dense-toolbar")).toBeNull();
+    const studyStyles = readFileSync(resolve(process.cwd(), "src/study/study.css"), "utf8");
+    expect(studyStyles).toMatch(/\.administration-profile__facts\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
     fireEvent.click(await screen.findByRole("button", { name: "Editar datos" }));
     fireEvent.change(await screen.findByLabelText("Razón social"), {
       target: { value: "Estudio Actualizado SRL" },
@@ -559,7 +620,14 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
       target: { value: "Estudio Actualizado" },
     });
     fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "30987654321" } });
-    fireEvent.change(screen.getByLabelText("Zona horaria"), {
+    const timezone = (await screen.findByLabelText("Zona horaria")) as HTMLSelectElement;
+    expect(timezone.value).toBe("America/Argentina/Buenos_Aires");
+    const buenosAires = timezone.querySelector<HTMLOptionElement>(
+      'option[value="America/Argentina/Buenos_Aires"]',
+    );
+    expect(buenosAires?.textContent).toContain("Buenos Aires (GMT-3)");
+    expect(timezone.querySelector('optgroup[label="América"]')).not.toBeNull();
+    fireEvent.change(timezone, {
       target: { value: "America/Argentina/Cordoba" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
@@ -594,7 +662,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     });
 
     // La línea con correo inválido se marca y no se crea.
-    expect(await screen.findByText("Email inválido o faltante.")).toBeTruthy();
+    expect(await screen.findByText("Correo inválido o faltante.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Crear 2 usuarios/ }));
 
     await waitFor(() => expect(vi.mocked(api.post)).toHaveBeenCalledTimes(2));

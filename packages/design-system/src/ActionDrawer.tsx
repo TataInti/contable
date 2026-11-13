@@ -16,6 +16,7 @@ export interface ActionDrawerProps {
   footer?: ReactNode;
   closeLabel?: string;
   size?: "default" | "wide";
+  initialFocus?: "content" | "close";
 }
 
 export function ActionDrawer({
@@ -28,6 +29,7 @@ export function ActionDrawer({
   footer,
   closeLabel = "Cerrar panel",
   size = "default",
+  initialFocus = "content",
 }: ActionDrawerProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -44,9 +46,13 @@ export function ActionDrawer({
     document.body.style.overflow = "hidden";
 
     const focusTimer = window.setTimeout(() => {
+      const preferredFocus =
+        initialFocus === "close"
+          ? panelRef.current?.querySelector<HTMLElement>(".action-drawer__close")
+          : null;
       const content = panelRef.current?.querySelector<HTMLElement>(".action-drawer__content");
       const firstFocusable = content?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-      (firstFocusable ?? panelRef.current)?.focus();
+      (preferredFocus ?? firstFocusable ?? panelRef.current)?.focus();
     }, 0);
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -86,7 +92,7 @@ export function ActionDrawer({
       document.body.style.overflow = previousOverflow;
       previousFocus?.focus();
     };
-  }, [isOpen]);
+  }, [isOpen, initialFocus]);
 
   if (!isOpen) return null;
 
