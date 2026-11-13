@@ -185,17 +185,7 @@
   grid-template-columns: repeat(3, minmax(160px, 1fr));
 }
 
-/* Alta de cliente: alinear las dos columnas y ajustar el drawer al contenido. */
-.action-drawer__panel:has(#client-create-form) {
-  align-self: center;
-  height: auto;
-  max-height: calc(100dvh - var(--ds-space-8));
-}
-
-.action-drawer__panel:has(#client-create-form) .action-drawer__content {
-  flex: 0 1 auto;
-}
-
+/* Alta de cliente: alinear las dos columnas del formulario. */
 .action-drawer__panel:has(#client-create-form) #client-create-form {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
@@ -2888,20 +2878,23 @@
   color: var(--ds-color-text);
 }
 
-/* Usuarios: controles legibles y objetivos de fila de 44 px. */
+/* Usuarios: controles compactos en escritorio y táctiles con puntero coarse. */
 .administration-users .dense-select--inline {
-  height: var(--ds-control-height-md);
-  min-height: var(--ds-control-height-md);
+  height: var(--ds-control-height-sm);
+  min-height: var(--ds-control-height-sm);
   padding-inline: var(--ds-space-2);
-  font-size: var(--ds-text-base);
+  font-size: var(--ds-text-sm);
 }
 
 .administration-users .dense-row-actions {
   gap: var(--ds-space-2);
 }
 
-.administration-users .dense-row-actions .ds-button {
-  min-height: var(--ds-touch-target);
+@media (pointer: coarse) {
+  .administration-users .dense-select--inline {
+    height: var(--ds-touch-target);
+    min-height: var(--ds-touch-target);
+  }
 }
 
 .fiscal-client-overview__periods {
@@ -4741,16 +4734,6 @@
   content: "Cerrar";
 }
 
-.study__logout {
-  min-width: 44px;
-}
-
-.study__logout::after {
-  content: "Salir";
-  font-size: var(--ds-text-xs);
-  font-weight: 650;
-}
-
 @media (max-width: 760px) {
   .section-index {
     align-items: flex-start;
@@ -5992,6 +5975,11 @@
 .dense-table[aria-label="Cartera de clientes"] {
   width: 100%;
   table-layout: fixed;
+}
+
+.dense-row--selected .client-list__cuit-column,
+.dense-row--selected .client-list__vat-column {
+  color: var(--ds-color-text-muted);
 }
 
 .client-list__client-column .dense-name-action {

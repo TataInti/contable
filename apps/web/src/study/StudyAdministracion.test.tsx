@@ -239,7 +239,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(screen.getByText("Revisor Demo")).toBeTruthy();
   });
 
-  it("usa controles de rol estándar y objetivos de 44 px en las acciones de fila", async () => {
+  it("usa controles de rol de 32 px y acciones en variante row", async () => {
     mockApi(standardsFixture, membersFixture);
     renderAdministracion();
 
@@ -251,13 +251,15 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     const rowActions = page.querySelectorAll<HTMLButtonElement>(".dense-row-actions .ds-button");
     expect(rowActions.length).toBeGreaterThan(0);
     expect(Array.from(rowActions).every((action) => action.tagName === "BUTTON")).toBe(true);
+    expect(Array.from(rowActions).every((action) => action.classList.contains("ds-button--row"))).toBe(true);
     expect(page.querySelectorAll(".dense-fp__bars")).toHaveLength(0);
 
     const studyStyles = readFileSync(resolve(process.cwd(), "src/study/study.css"), "utf8");
     const tokens = readFileSync(resolve(process.cwd(), "../../packages/design-system/src/tokens.css"), "utf8");
-    expect(studyStyles).toMatch(/\.administration-users \.dense-select--inline\s*\{[^}]*height:\s*var\(--ds-control-height-md\);[^}]*font-size:\s*var\(--ds-text-base\);/);
-    expect(studyStyles).toMatch(/\.administration-users \.dense-row-actions \.ds-button\s*\{\s*min-height:\s*var\(--ds-touch-target\);\s*\}/);
-    expect(tokens).toMatch(/--ds-control-height-md:\s*40px;/);
+    expect(studyStyles).toMatch(/\.administration-users \.dense-select--inline\s*\{[^}]*height:\s*var\(--ds-control-height-sm\);[^}]*min-height:\s*var\(--ds-control-height-sm\);[^}]*font-size:\s*var\(--ds-text-sm\);/);
+    expect(studyStyles).not.toMatch(/\.administration-users \.dense-row-actions \.ds-button\s*\{[^}]*min-height:\s*var\(--ds-touch-target\);/);
+    expect(studyStyles).toMatch(/@media \(pointer: coarse\)\s*\{[^}]*\.administration-users \.dense-select--inline\s*\{[^}]*height:\s*var\(--ds-touch-target\);/s);
+    expect(tokens).toMatch(/--ds-control-height-sm:\s*32px;/);
     expect(tokens).toMatch(/--ds-touch-target:\s*44px;/);
   });
 

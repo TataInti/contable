@@ -938,5 +938,6 @@ describe("StudyClientes — cartera densa", () => {
     expect(createButton.getAttribute("aria-describedby")).toBe("client-create-hint");
     expect(within(drawer).getByText("Falta completar 2 campos: razón social y CUIT.")).toBeTruthy();
     expect(drawer.querySelector(".action-drawer__footer")?.querySelectorAll("button.ds-button--primary")).toHaveLength(1);
+    expect(within(drawer).getByRole("button", { name: "Cancelar" }).closest(".action-drawer__footer")).toBeTruthy();
   });
 });

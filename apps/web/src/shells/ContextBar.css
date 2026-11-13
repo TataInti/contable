@@ -111,9 +111,10 @@
 }
 
 .ctxbar__input:focus-visible {
-  outline: none;
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: var(--ds-focus-offset);
   background: var(--ds-color-surface-muted);
-  box-shadow: 0 0 0 2px var(--ds-color-selected);
+  box-shadow: none;
 }
 
 .ctxbar__period-state {

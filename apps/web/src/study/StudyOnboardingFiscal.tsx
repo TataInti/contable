@@ -378,13 +378,16 @@ export function StudyOnboardingFiscal() {
               {
                 key: "status",
                 header: "Estado",
-                render: (row) => (
-                  <StatusBadge
-                    status={row.validTo ? "FINALIZED" : row.isPrimary ? "INFO" : "ACTIVE"}
-                    label={row.validTo ? "Finalizada" : row.isPrimary ? "Principal" : "Vigente"}
-                    className="status-badge--regular"
-                  />
-                ),
+                render: (row) =>
+                  !row.validTo && row.isPrimary ? (
+                    <span className="muted-copy">Principal</span>
+                  ) : (
+                    <StatusBadge
+                      status={row.validTo ? "FINALIZED" : "ACTIVE"}
+                      label={row.validTo ? "Finalizada" : "Vigente"}
+                      className="status-badge--regular"
+                    />
+                  ),
               },
               { key: "actions", header: "", render: (row) => canWrite && !row.validTo ? <Button size="sm" variant="ghost" loading={endActivity.isPending} onClick={() => confirm.ask({ title: `¿Finalizar ${row.activity.name}?`, description: "La actividad quedará finalizada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Finalizar", tone: "danger", onConfirm: () => endActivity.mutate(row.id) })}>Finalizar</Button> : null },
             ]} />}

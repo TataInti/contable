@@ -355,7 +355,7 @@ Los componentes migrados mantienen imports compatibles en las pantallas existent
 | `text` | Acción breve en línea, como Reintentar o una acción secundaria de fila. |
 | `link` | Navegación de acción con `href`; mantiene la semántica nativa de enlace. |
 
-- **Tamaños:** `md` mide 40 px y es el tamaño estándar; `row` mide 32 px para filas y barras. `sm` se conserva como alias retrocompatible de `row`.
+- **Tamaños:** `md` mide 40 px y es el tamaño estándar; `row` mide 32 px para filas y barras. `sm` se conserva como alias retrocompatible de `row`. La acción primaria del encabezado de página mide 40 px en todas las pantallas; con puntero coarse conserva el objetivo táctil de 44 px.
 - **Props:** admite atributos nativos de `button`; con `href` renderiza un enlace y admite sus atributos nativos. `loading` y `loadingLabel` aplican a botones. `iconOnly` exige `aria-label` en el tipo público.
 - **Estados:** hover/active por variante, `:focus-visible`, disabled y loading. Loading informa `aria-busy`, bloquea el control, muestra spinner y puede reemplazar el nombre accesible. Las variantes `text` y `link` usan tokens del sistema.
 - **Correcto:**
@@ -479,6 +479,8 @@ En tablas, listas y avisos, un estado usa punto + texto plano; el texto siempre 
 | `info` | En curso o informativo | `--ds-color-info` |
 | `muted` (neutro) | Borrador, inactividad o cierre normal | `--ds-color-text-muted` |
 
+En Configuración fiscal, «Principal» identifica un atributo de la actividad y se presenta como texto neutro, sin punto. «Vigente» y «Finalizada» sí expresan estado y usan `StatusBadge`.
+
 #### Estados del paquete y etiquetas visibles
 
 | Clave | Etiqueta | Tono |
@@ -532,7 +534,7 @@ Usá el componente para conservar la normalización, etiqueta, tono y atributo d
 
 - **Propósito:** panel lateral accesible para formularios y acciones transaccionales.
 - **Props:** `isOpen`, `onClose`, `title`, `children`; `description`, `eyebrow`, `footer`, `closeLabel` y `size` (`default` o `wide`) son opcionales.
-- **Estados:** cerrado no renderiza DOM; abierto presenta `role="dialog"`, mueve el foco al primer control, limita Tab/Shift+Tab, cierra con Escape, bloquea el scroll del body y restaura el foco previo al cerrar.
+- **Estados:** cerrado no renderiza DOM; abierto presenta `role="dialog"`, mueve el foco al primer control, limita Tab/Shift+Tab, cierra con Escape, bloquea el scroll del body y restaura el foco previo al cerrar. El panel estándar ocupa el alto completo de la ventana, desplaza el contenido internamente y conserva el pie visible.
 - **Correcto:**
 
 ```tsx
