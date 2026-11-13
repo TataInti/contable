@@ -945,7 +945,10 @@ export class SettlementService {
         }
       }
       for (const a of adjustments) {
-        const behavior = a.conceptRef?.behavior;
+        // P2 4a-ii: sólo los ajustes con concepto de catálogo son insumos del
+        // cálculo; un texto libre no acredita ni débito y no se arrastra.
+        if (!a.conceptRef) continue;
+        const behavior = a.conceptRef.behavior;
         if (a.reviewedAt && a.amount.isPositive() && behavior === "PURCHASE_FACT") {
           facts.push({
             id: `adj:${a.id}`,
