@@ -151,9 +151,30 @@ export class ExtractionService {
   }
 
   async getLatestForDocument(firmId: string, clientId: string, documentId: string, ctx?: TenantContext) {
-    const extraction = await this.scoped(ctx, (tx) => tx.documentExtraction.findFirst({
-      where: { firmId, clientId, documentId }, orderBy: { createdAt: "desc" }, include: { fields: true, items: true },
-    }));
+    const extraction = await this.scoped(ctx, async (tx) => {
+      const document = await tx.document.findFirst({
+        where: { firmId, clientId, id: documentId },
+        select: { currentExtractionId: true },
+      });
+      if (!document) return null;
+
+      const current = document.currentExtractionId
+        ? await tx.documentExtraction.findFirst({
+            where: {
+              id: document.currentExtractionId,
+              firmId,
+              clientId,
+              documentId,
+            },
+            include: { fields: true, items: true },
+          })
+        : null;
+      return current ?? tx.documentExtraction.findFirst({
+        where: { firmId, clientId, documentId },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        include: { fields: true, items: true },
+      });
+    });
     return extraction ? extractionForApi(extraction) : null;
   }
 
@@ -174,6 +195,9 @@ export class ExtractionService {
     return this.scoped(ctx, async (tx) => {
       const extraction = await tx.documentExtraction.findFirst({ where: { id: extractionId, firmId, clientId }, include: { fields: true } });
       if (!extraction) throw new Error("EXTRACTION_NOT_FOUND");
+      if (extraction.status === "SUPERSEDED") {
+        throw new ExtractionError("No se puede corregir una extracción reemplazada");
+      }
       const field = extraction.fields.find((candidate) => candidate.id === fieldId);
       if (!field) throw new Error("FIELD_NOT_FOUND");
       if (isManualExtractionFieldKey(field.key)) {
@@ -314,6 +338,13 @@ export class ExtractionService {
       if (updated.count !== 1) {
         throw new ExtractionError("El estado de la extracción cambió durante la operación");
       }
+      const documentTransition = await tx.document.updateMany({
+        where: { id: extraction.documentId, firmId, clientId, status: "EXTRACTED" },
+        data: { status: "REVIEWED" },
+      });
+      if (documentTransition.count !== 1) {
+        throw new ExtractionError("El estado del documento cambió durante la operación");
+      }
 
       // Leer todas las filas, sin filtrar por método, para incluir también cargas humanas.
       const fields = await tx.extractedField.findMany({
@@ -337,9 +368,6 @@ export class ExtractionService {
         },
       });
 
-      // La aprobación cierra la revisión del documento: sale de "Para revisar" (EXTRACTED)
-      // y pasa a "Revisados" (REVIEWED) en la bandeja documental.
-      await tx.document.update({ where: { id: extraction.documentId }, data: { status: "REVIEWED" } });
       await tx.auditEvent.create({
         data: {
           firmId,
@@ -370,7 +398,13 @@ export class ExtractionService {
       if (updated.count !== 1) {
         throw new ExtractionError("El estado de la extracción cambió durante la operación");
       }
-      await tx.document.update({ where: { id: extraction.documentId }, data: { status: "EXTRACTION_FAILED" } });
+      const documentTransition = await tx.document.updateMany({
+        where: { id: extraction.documentId, firmId, clientId, status: "EXTRACTED" },
+        data: { status: "EXTRACTION_FAILED" },
+      });
+      if (documentTransition.count !== 1) {
+        throw new ExtractionError("El estado del documento cambió durante la operación");
+      }
       await tx.auditEvent.create({ data: { firmId, clientId, userId, actorKind: ctx?.actorKind ?? "USER", action: "document.extraction.rejected", entityType: "DocumentExtraction", entityId: extractionId, before: { status: extraction.status }, after: { status: "FAILED", reason: reason ?? null } } });
     });
   }

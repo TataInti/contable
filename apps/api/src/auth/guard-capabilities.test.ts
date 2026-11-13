@@ -54,6 +54,17 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     );
   });
 
+  it("releer un documento requiere document.review y devuelve 403 a sólo lectura", () => {
+    const path = "/api/v1/firms/f/clients/c/documents/d/reprocess";
+    expect(requiredCapability("POST", path)).toBe("document.review");
+    expect(requiredCapability("GET", path)).toBeNull();
+    expect(capabilitiesForRole("REVIEWER").has("document.review")).toBe(true);
+    const auditor = { capabilities: capabilitiesForRole("AUDITOR_READONLY") } as never;
+    expect(() => assertCapability(auditor, "document.review")).toThrow(
+      expect.objectContaining({ statusCode: 403, code: "CAPABILITY_REQUIRED" }),
+    );
+  });
+
   it("identidad y contactos requieren client.manage, con rechazo 403 para sólo lectura", () => {
     expect(requiredCapability("PATCH", "/api/v1/firms/f/clients/c")).toBe("client.manage");
     for (const [method, path] of [

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { createUploadSessionSchema, extractionApprovedSnapshotSchema } from "@contable/contracts";
 import { DocumentService } from "./document-service.js";
+import { DocumentReprocessError, DocumentReprocessService } from "./reprocess-service.js";
 import {
   ExtractionError,
   ExtractionService,
@@ -78,6 +79,7 @@ const MANUAL_EXTRACTION_FIELD_LABELS: Record<(typeof MANUAL_EXTRACTION_FIELD_KEY
 export function documentRoutes(app: FastifyInstance) {
   const storage = new ObjectStorage();
   const service = new DocumentService(storage);
+  const reprocessService = new DocumentReprocessService();
   const extractionService = new ExtractionService();
 
   // Crear sesión de upload (G2-07: el body valida requestItemId obligatorio)
@@ -197,6 +199,22 @@ export function documentRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "EXTRACTION_NOT_FOUND", message: "Extracción no encontrada" } });
     }
     return reply.send({ data: extraction });
+  });
+
+  // Solicitar una extracción nueva del archivo ya validado, sin modificar la anterior.
+  app.post("/api/v1/firms/:firmId/clients/:clientId/documents/:documentId/reprocess", async (req, reply) => {
+    const { documentId } = req.params as { firmId: string; clientId: string; documentId: string };
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const result = await reprocessService.request(ctx, documentId);
+      void outboxPublisher.dispatchPending().catch((error) => req.log.error({ error }, "No se pudo despachar el outbox"));
+      return reply.status(202).send({ data: result });
+    } catch (err) {
+      if (err instanceof DocumentReprocessError) {
+        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } });
+      }
+      throw err;
+    }
   });
 
   // Cargar campos fiscales escalares manualmente en una única transacción.
