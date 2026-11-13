@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Notice } from "@contable/design-system";
+import { Button, EmptyState } from "@contable/design-system";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { api, type Client } from "../lib/api";
 
@@ -102,8 +102,12 @@ export function StudyUserAssignments({
       description="Consultá y actualizá los clientes asignados a este usuario."
     >
       <div className="dense-stack">
-        {notice ? <Notice tone="success">{notice}</Notice> : null}
-        {actionError ? <Notice tone="error">{actionError}</Notice> : null}
+        {notice ? <p role="status">{notice}</p> : null}
+        {actionError ? (
+          <p className="form-error" role="alert">
+            {actionError}
+          </p>
+        ) : null}
         {isLoading ? (
           <div className="query-state" role="status">
             <span className="loading-copy">Cargando clientes y asignaciones…</span>

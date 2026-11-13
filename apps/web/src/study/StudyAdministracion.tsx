@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice } from "@contable/design-system";
+import { Button, EmptyState, Field } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -1464,28 +1464,28 @@ export function StudyAdministracion() {
       />
 
       {notice ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Acción completada"
-          action={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              iconOnly
-              aria-label="Cerrar aviso"
-              onClick={() => setNotice(null)}
-            >
-              <Icon name="close" size={15} />
-            </Button>
-          }
-        >
-          {notice}
-        </Notice>
+        <div className="action-receipt action-receipt--page" role="status">
+          <Icon name="check" size={18} />
+          <span>
+            <strong>Acción completada</strong>
+            <small>{notice}</small>
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            aria-label="Cerrar aviso"
+            onClick={() => setNotice(null)}
+          >
+            <Icon name="close" size={15} />
+          </Button>
+        </div>
       ) : null}
       {actionError && !identityEditing && !portalEditing && !showProfileForm ? (
-        <Notice tone="error">{actionError}</Notice>
+        <p className="form-error" role="alert">
+          {actionError}
+        </p>
       ) : null}
 
       <DenseTabs<AdminTab>
