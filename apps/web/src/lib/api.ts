@@ -358,7 +358,14 @@ export interface Document {
     bucket?: string | null;
     antivirusStatus: string;
   }[];
-  processingJobs?: { id: string; status: string; stage?: string | null; progress: number; error?: string | null }[];
+  processingJobs?: {
+    id: string;
+    type?: string;
+    status: string;
+    stage?: string | null;
+    progress: number;
+    error?: string | null;
+  }[];
 }
 
 export interface ExtractedField {
@@ -458,6 +465,8 @@ export interface DocumentExtraction {
   id: string;
   status: string;
   schemaVersion: string;
+  ocrEngine?: string | null;
+  promptVersion?: string | null;
   classification?: string | null;
   confidence?: number | null;
   reviewReason: string | null;

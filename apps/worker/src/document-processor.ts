@@ -18,6 +18,21 @@ export interface DocumentJobPayload {
   fileVersionId: string;
   firmId: string;
   clientId: string;
+  reprocess?: boolean;
+  processingJobId?: string;
+  previousExtractionId?: string;
+}
+
+function processingJobWhere(payload: DocumentJobPayload) {
+  return payload.processingJobId
+    ? {
+        id: payload.processingJobId,
+        firmId: payload.firmId,
+        clientId: payload.clientId,
+        documentId: payload.documentId,
+        type: "REPROCESS",
+      }
+    : { fileVersionId: payload.fileVersionId, type: "VALIDATE" };
 }
 
 export class DocumentProcessor {
@@ -35,6 +50,11 @@ export class DocumentProcessor {
       }),
     );
     if (!fileVersion) throw new Error("FILE_VERSION_NOT_FOUND");
+
+    if (payload.reprocess) {
+      await this.processReprocess(payload, fileVersion);
+      return;
+    }
 
     // Descargar de cuarentena
     const data = await this.storage.get(BUCKETS.quarantine, fileVersion.objectKey);
@@ -93,7 +113,7 @@ export class DocumentProcessor {
         },
       });
       await tx.documentProcessingJob.updateMany({
-        where: { fileVersionId: payload.fileVersionId, type: "VALIDATE" },
+        where: processingJobWhere(payload),
         data: { status: "RUNNING", stage: "VALIDATED", progress: 60 },
       });
     });
@@ -103,7 +123,7 @@ export class DocumentProcessor {
       await withWorkerTenant(payload.firmId, payload.clientId, async (tx) => {
         await tx.document.update({ where: { id: payload.documentId }, data: { status: "READY" } });
         await tx.documentProcessingJob.updateMany({
-          where: { fileVersionId: payload.fileVersionId, type: "VALIDATE" },
+          where: processingJobWhere(payload),
           data: { status: "SUCCEEDED", stage: "DUPLICATE", progress: 100, finishedAt: new Date() },
         });
       });
@@ -117,7 +137,7 @@ export class DocumentProcessor {
       await withWorkerTenant(payload.firmId, payload.clientId, async (tx) => {
         await tx.document.update({ where: { id: payload.documentId }, data: { status: "READY" } });
         await tx.documentProcessingJob.updateMany({
-          where: { fileVersionId: payload.fileVersionId, type: "VALIDATE" },
+          where: processingJobWhere(payload),
           data: { status: "SUCCEEDED", stage: "VALIDATED_NO_EXTRACTION", progress: 100, finishedAt: new Date() },
         });
       });
@@ -128,6 +148,47 @@ export class DocumentProcessor {
     await this.runExtraction(payload, fileVersion, detected);
   }
 
+  private async processReprocess(
+    payload: DocumentJobPayload,
+    fileVersion: {
+      id: string;
+      objectKey: string;
+      sha256: string;
+      sizeBytes: number;
+      mimeType: string;
+      bucket: string;
+      antivirusStatus: string;
+    },
+  ): Promise<void> {
+    if (!payload.processingJobId) throw new Error("REPROCESS_JOB_ID_REQUIRED");
+
+    const started = await withWorkerTenant(payload.firmId, payload.clientId, (tx) =>
+      tx.documentProcessingJob.updateMany({
+        where: {
+          ...processingJobWhere(payload),
+          status: { in: ["QUEUED", "RUNNING"] },
+        },
+        data: { status: "RUNNING", stage: "READING_AI", progress: 10, startedAt: new Date() },
+      }),
+    );
+    if (started.count === 0) return;
+
+    if (fileVersion.bucket !== BUCKETS.originals || fileVersion.antivirusStatus !== "CLEAN") {
+      await withWorkerTenant(payload.firmId, payload.clientId, async (tx) => {
+        await tx.document.update({ where: { id: payload.documentId }, data: { status: "EXTRACTED" } });
+        await tx.documentProcessingJob.updateMany({
+          where: processingJobWhere(payload),
+          data: { status: "FAILED", stage: "FILE_NOT_READY", progress: 100, error: "FILE_NOT_READY", finishedAt: new Date() },
+        });
+      });
+      return;
+    }
+
+    // El archivo ya superó la validación/antivirus al subirse; se vuelve a
+    // solicitar la lectura IA sobre la misma versión promovida a originals.
+    await this.runExtraction(payload, fileVersion, fileVersion.mimeType);
+  }
+
   private async runExtraction(
     payload: DocumentJobPayload,
     fileVersion: { id: string; objectKey: string; sha256: string; sizeBytes: number },
@@ -135,8 +196,9 @@ export class DocumentProcessor {
   ): Promise<void> {
     const runId = crypto.randomUUID();
     const extractionStartedAt = Date.now();
+    let result: Awaited<ReturnType<AiClient["runExtraction"]>>;
     try {
-      const result = await this.ai.runExtraction({
+      result = await this.ai.runExtraction({
         runId,
         firmId: payload.firmId,
         clientId: payload.clientId,
@@ -147,18 +209,21 @@ export class DocumentProcessor {
         sha256: fileVersion.sha256,
         schemaVersion: "voucher-ar-v2.1",
       });
+    } catch (err) {
+      await this.recordUnavailableExtraction(payload, fileVersion, extractionStartedAt, err);
+      return;
+    }
 
-      await withWorkerTenant(payload.firmId, payload.clientId, (tx) => tx.documentExtraction.create({
+    const needsReview = Boolean(result.reviewReason || result.issues.length > 0 || result.reviewIssues.length > 0);
+    await withWorkerTenant(payload.firmId, payload.clientId, async (tx) => {
+      const extraction = await tx.documentExtraction.create({
         data: {
           firmId: payload.firmId,
           clientId: payload.clientId,
           documentId: payload.documentId,
           fileVersionId: fileVersion.id,
           schemaVersion: "voucher-ar-v2.1",
-          status:
-            result.reviewReason || result.issues.length > 0 || result.reviewIssues.length > 0
-              ? "NEEDS_REVIEW"
-              : "GENERATED",
+          status: needsReview ? "NEEDS_REVIEW" : "GENERATED",
           classification: result.voucher?.tipo_documento ?? null,
           confidence: result.classificationConfidence ?? null,
           ocrEngine: result.ocrEngine,
@@ -192,41 +257,54 @@ export class DocumentProcessor {
             }),
           },
         },
-      }));
-
-      await withWorkerTenant(payload.firmId, payload.clientId, async (tx) => {
-        await tx.document.update({ where: { id: payload.documentId }, data: { status: "EXTRACTED" } });
-        await tx.documentProcessingJob.updateMany({
-          where: { fileVersionId: payload.fileVersionId, type: "VALIDATE" },
-          data: {
-            status: "SUCCEEDED",
-            stage:
-              result.reviewReason || result.issues.length > 0 || result.reviewIssues.length > 0
-                ? "NEEDS_REVIEW"
-                : "EXTRACTED",
-            progress: 100,
-            finishedAt: new Date(),
-            error: result.reviewReason ?? null,
-          },
-        });
       });
-    } catch (err) {
-      // La compuerta productiva (EXTRACTION_CUSTOMER_DATA_ENABLED=false) no es
-      // una caída del servicio: conservamos su motivo para que la bandeja
-      // explique que la lectura automática no está activada.
-      const automatedReadingDisabled =
-        err instanceof AiExtractionHttpError &&
-        err.status === 503 &&
-        err.code === CUSTOMER_DATA_EXTRACTION_DISABLED;
-      const reviewReason = automatedReadingDisabled
-        ? "CUSTOMER_DATA_EXTRACTION_DISABLED"
-        : err instanceof Error && err.name === "TimeoutError"
-          ? "AI_SERVICE_TIMEOUT"
-          : "AI_SERVICE_UNAVAILABLE";
-      console.error(
-        `[documents] extracción requiere revisión para ${payload.documentId}: ${reviewReason}`,
-      );
-      await withWorkerTenant(payload.firmId, payload.clientId, (tx) => tx.documentExtraction.create({
+
+      const stage = needsReview ? "NEEDS_REVIEW" : "EXTRACTED";
+      if (payload.reprocess) {
+        await this.finishReprocess(tx, payload, extraction.id, stage, result.reviewReason ?? null);
+        return;
+      }
+
+      await tx.document.update({
+        where: { id: payload.documentId },
+        data: { status: "EXTRACTED", currentExtractionId: extraction.id },
+      });
+      await tx.documentProcessingJob.updateMany({
+        where: processingJobWhere(payload),
+        data: {
+          status: "SUCCEEDED",
+          stage,
+          progress: 100,
+          finishedAt: new Date(),
+          error: result.reviewReason ?? null,
+        },
+      });
+    });
+  }
+
+  private async recordUnavailableExtraction(
+    payload: DocumentJobPayload,
+    fileVersion: { id: string },
+    extractionStartedAt: number,
+    error: unknown,
+  ): Promise<void> {
+    // La compuerta productiva (EXTRACTION_CUSTOMER_DATA_ENABLED=false) no es
+    // una caída del servicio: conservamos su motivo para que la bandeja
+    // explique que la lectura automática no está activada.
+    const automatedReadingDisabled =
+      error instanceof AiExtractionHttpError &&
+      error.status === 503 &&
+      error.code === CUSTOMER_DATA_EXTRACTION_DISABLED;
+    const reviewReason = automatedReadingDisabled
+      ? "CUSTOMER_DATA_EXTRACTION_DISABLED"
+      : error instanceof Error && error.name === "TimeoutError"
+        ? "AI_SERVICE_TIMEOUT"
+        : "AI_SERVICE_UNAVAILABLE";
+    console.error(
+      `[documents] extracción requiere revisión para ${payload.documentId}: ${reviewReason}`,
+    );
+    await withWorkerTenant(payload.firmId, payload.clientId, async (tx) => {
+      const extraction = await tx.documentExtraction.create({
         data: {
           firmId: payload.firmId,
           clientId: payload.clientId,
@@ -240,21 +318,70 @@ export class DocumentProcessor {
           reviewReason,
           reviewIssues: [{ reason: reviewReason, sourcePath: null }],
         },
-      }));
-      await withWorkerTenant(payload.firmId, payload.clientId, (tx) => tx.document.update({
+      });
+
+      if (payload.reprocess) {
+        await this.finishReprocess(tx, payload, extraction.id, "NEEDS_REVIEW", reviewReason);
+        return;
+      }
+
+      await tx.document.update({
         where: { id: payload.documentId },
-        data: { status: "EXTRACTED" },
-      }));
-      await withWorkerTenant(payload.firmId, payload.clientId, (tx) => tx.documentProcessingJob.updateMany({
-        where: { fileVersionId: payload.fileVersionId, type: "VALIDATE" },
+        data: { status: "EXTRACTED", currentExtractionId: extraction.id },
+      });
+      await tx.documentProcessingJob.updateMany({
+        where: processingJobWhere(payload),
         data: {
           status: "SUCCEEDED",
           stage: "NEEDS_REVIEW",
+          progress: 100,
           error: reviewReason,
           finishedAt: new Date(),
         },
-      }));
+      });
+    });
+  }
+
+  private async finishReprocess(
+    tx: Prisma.TransactionClient,
+    payload: DocumentJobPayload,
+    newExtractionId: string,
+    stage: "EXTRACTED" | "NEEDS_REVIEW",
+    error: string | null,
+  ): Promise<void> {
+    if (!payload.previousExtractionId || !payload.processingJobId) {
+      throw new Error("REPROCESS_CONTEXT_REQUIRED");
     }
+
+    const previous = await tx.documentExtraction.updateMany({
+      where: {
+        id: payload.previousExtractionId,
+        firmId: payload.firmId,
+        clientId: payload.clientId,
+        documentId: payload.documentId,
+        status: { in: ["GENERATED", "NEEDS_REVIEW"] },
+      },
+      data: { status: "SUPERSEDED" },
+    });
+    if (previous.count !== 1) throw new Error("PREVIOUS_EXTRACTION_NOT_REVIEWABLE");
+
+    const document = await tx.document.updateMany({
+      where: {
+        id: payload.documentId,
+        firmId: payload.firmId,
+        clientId: payload.clientId,
+        status: "VALIDATING",
+        currentFileVersionId: payload.fileVersionId,
+      },
+      data: { status: "EXTRACTED", currentExtractionId: newExtractionId },
+    });
+    if (document.count !== 1) throw new Error("REPROCESS_DOCUMENT_STATE_CHANGED");
+
+    const job = await tx.documentProcessingJob.updateMany({
+      where: { ...processingJobWhere(payload), status: "RUNNING" },
+      data: { status: "SUCCEEDED", stage, progress: 100, error, finishedAt: new Date() },
+    });
+    if (job.count !== 1) throw new Error("REPROCESS_JOB_STATE_CHANGED");
   }
 
   private async markFailed(payload: DocumentJobPayload, error: string): Promise<void> {
@@ -264,7 +391,7 @@ export class DocumentProcessor {
         data: { status: "FAILED" },
       });
       await tx.documentProcessingJob.updateMany({
-        where: { fileVersionId: payload.fileVersionId, type: "VALIDATE" },
+        where: processingJobWhere(payload),
         data: { status: "FAILED", finishedAt: new Date(), error },
       });
     });

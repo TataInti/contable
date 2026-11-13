@@ -176,3 +176,109 @@ describe("DocumentProcessor con el servicio de IA no disponible", () => {
     expect(created?.reviewIssues).toEqual([{ reason: "AI_SERVICE_UNAVAILABLE", sourcePath: null }]);
   });
 });
+
+describe("DocumentProcessor relectura", () => {
+  const payload = {
+    documentId: "33333333-3333-4333-8333-333333333333",
+    fileVersionId: "44444444-4444-4444-8444-444444444444",
+    firmId: "11111111-1111-4111-8111-111111111111",
+    clientId: "22222222-2222-4222-8222-222222222222",
+    processingJobId: "55555555-5555-4555-8555-555555555555",
+    previousExtractionId: "66666666-6666-4666-8666-666666666666",
+    reprocess: true,
+  };
+
+  async function processReprocess(aiCall: ReturnType<typeof vi.fn>) {
+    const data = Buffer.from("%PDF-1.4 synthetic fixture");
+    const fileVersion = {
+      id: payload.fileVersionId,
+      objectKey: "synthetic/document.pdf",
+      sha256: sha256Of(data),
+      sizeBytes: data.byteLength,
+      mimeType: "application/pdf",
+      bucket: "originals",
+      antivirusStatus: "CLEAN",
+      document: { category: "INVOICE" },
+    };
+    const previous = {
+      id: payload.previousExtractionId,
+      status: "NEEDS_REVIEW",
+      fields: [{ key: "totalAmount", correction: "123.45", method: "HUMAN" }],
+    };
+    const createExtraction = vi.fn().mockResolvedValue({ id: "77777777-7777-4777-8777-777777777777" });
+    const updatePrevious = vi.fn(async ({ data: update }: { data: { status: string } }) => {
+      previous.status = update.status;
+      return { count: 1 };
+    });
+    const updateDocument = vi.fn().mockResolvedValue({ count: 1 });
+    const updateJob = vi.fn().mockResolvedValue({ count: 1 });
+    const fakeTx = {
+      documentFileVersion: { findFirst: vi.fn().mockResolvedValue(fileVersion) },
+      documentExtraction: { create: createExtraction, updateMany: updatePrevious },
+      document: { update: vi.fn().mockResolvedValue({}), updateMany: updateDocument },
+      documentProcessingJob: { updateMany: updateJob },
+      extractedLineItem: { create: vi.fn() },
+    };
+    vi.mocked(withWorkerTenant).mockImplementation(async (_firmId, _clientId, callback) =>
+      callback(fakeTx as unknown as Prisma.TransactionClient),
+    );
+    const storage = { get: vi.fn(), promote: vi.fn() } as unknown as ObjectStorage;
+    const ai = { runExtraction: aiCall } as unknown as AiClient;
+
+    await new DocumentProcessor(storage, ai).process(payload);
+    return { createExtraction, updatePrevious, updateDocument, updateJob, previous, aiCall };
+  }
+
+  it("crea la lectura vigente y conserva los campos manuales de la extracción anterior", async () => {
+    const aiCall = vi.fn().mockResolvedValue(extractionResult);
+    const { createExtraction, updatePrevious, updateDocument, updateJob, previous } = await processReprocess(aiCall);
+
+    expect(aiCall).toHaveBeenCalledOnce();
+    expect(aiCall.mock.calls[0]?.[0]).not.toHaveProperty("previousExtractionId");
+    expect(createExtraction).toHaveBeenCalledOnce();
+    expect(createExtraction.mock.calls[0]?.[0].data).toMatchObject({
+      documentId: payload.documentId,
+      fileVersionId: payload.fileVersionId,
+      status: "GENERATED",
+    });
+    expect(updatePrevious).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: payload.previousExtractionId,
+        status: { in: ["GENERATED", "NEEDS_REVIEW"] },
+      }),
+      data: { status: "SUPERSEDED" },
+    }));
+    expect(previous).toEqual({
+      id: payload.previousExtractionId,
+      status: "SUPERSEDED",
+      fields: [{ key: "totalAmount", correction: "123.45", method: "HUMAN" }],
+    });
+    expect(updateDocument).toHaveBeenCalledWith(expect.objectContaining({
+      data: {
+        status: "EXTRACTED",
+        currentExtractionId: "77777777-7777-4777-8777-777777777777",
+      },
+    }));
+    expect(updateJob).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: payload.processingJobId, status: "RUNNING" }),
+      data: expect.objectContaining({ status: "SUCCEEDED", progress: 100 }),
+    }));
+  });
+
+  it("conserva la lectura no disponible como extracción nueva y deja la anterior consultable", async () => {
+    const aiCall = vi.fn().mockRejectedValue(
+      new AiExtractionHttpError(503, "CUSTOMER_DATA_EXTRACTION_DISABLED"),
+    );
+    const { createExtraction, updatePrevious, previous } = await processReprocess(aiCall);
+
+    expect(createExtraction).toHaveBeenCalledOnce();
+    expect(createExtraction.mock.calls[0]?.[0].data).toMatchObject({
+      status: "NEEDS_REVIEW",
+      reviewReason: "CUSTOMER_DATA_EXTRACTION_DISABLED",
+      reviewIssues: [{ reason: "CUSTOMER_DATA_EXTRACTION_DISABLED", sourcePath: null }],
+    });
+    expect(updatePrevious).toHaveBeenCalledOnce();
+    expect(previous.status).toBe("SUPERSEDED");
+    expect(previous.fields).toEqual([{ key: "totalAmount", correction: "123.45", method: "HUMAN" }]);
+  });
+});

@@ -101,6 +101,7 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/assignments/, resolve: () => "firm.users.manage" },
   { match: /\/document-upload-sessions/, resolve: () => "document.upload" },
   { match: /\/extractions\//, resolve: (m) => (m === "GET" ? "document.prepare" : "document.review") },
+  { match: /\/documents\/[^/]+\/reprocess$/, resolve: (m) => (m === "POST" ? "document.review" : null) },
   { match: /\/documents/, resolve: (m) => (m === "GET" ? "client.read" : "document.upload") },
   { match: /\/journal-entries\/[^/]+\/submit$/, resolve: () => "entry.submit" },
   { match: /\/journal-entries\/[^/]+\/(review|reject)$/, resolve: () => "entry.review" },
