@@ -18,7 +18,8 @@ export type ExpenseErrorCode =
   | "DECISION_REQUIRES_REASON"
   | "DECISION_REQUIRES_REVIEW"
   | "DECISION_LOCKED"
-  | "MAKER_REVIEWER_SAME";
+  | "MAKER_REVIEWER_SAME"
+  | "ADJUSTMENT_CONCEPT_NOT_FOUND";
 
 export class ExpenseError extends Error {
   readonly code: ExpenseErrorCode;
@@ -147,13 +148,25 @@ export class ManagementExpenseService {
       });
 
       // Si FISCAL_COMPUTABLE, se deriva un ajuste fiscal trazable (G2-09).
+      // El comportamiento del ajuste lo define el catálogo de conceptos, no
+      // el texto: acá solo se elige la fila de sistema por su clave estable.
       if (input.treatment === "FISCAL_COMPUTABLE") {
+        const adjustmentConcept = await tx.adjustmentConcept.findUnique({
+          where: { key: "GASTO_GERENCIAL_COMPUTABLE" },
+        });
+        if (!adjustmentConcept) {
+          throw new ExpenseError(
+            "ADJUSTMENT_CONCEPT_NOT_FOUND",
+            "Falta el concepto de ajuste GASTO_GERENCIAL_COMPUTABLE en el catálogo",
+          );
+        }
         await tx.taxAdjustment.create({
           data: {
             firmId: ctx.firmId,
             clientId: expense.clientId,
             ...(input.ruleVersionId ? { ruleVersionId: input.ruleVersionId } : {}),
-            concept: "GASTO_GERENCIAL_COMPUTABLE",
+            conceptId: adjustmentConcept.id,
+            concept: adjustmentConcept.key,
             amount: expense.amount,
             reason: input.reason,
             treatmentDecisionId: decision.id,

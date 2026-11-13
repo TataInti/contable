@@ -175,3 +175,135 @@ describe("TEM San Miguel de Tucumán (AR_TEM_SMT_V1)", () => {
     expect(a.outputHash).toBe(b.outputHash);
   });
 });
+
+/**
+ * P2 4a-ii (C5/C9): en modo TYPED la alícuota se resuelve por `kind` RATE y
+ * `activityId`; la etiqueta `concept` es solo traza. El mínimo por actividad y
+ * los dos modos de mínimo se conservan.
+ */
+describe("TEM San Miguel de Tucumán — reglas tipadas", () => {
+  const typedRules = [
+    {
+      id: "r-comercio",
+      concept: "ALICUOTA_COMERCIO",
+      code: "ALICUOTA_COMERCIO",
+      kind: "RATE",
+      activityId: "act-comercio",
+      isDefault: false,
+      rate: new Decimal("0.02"),
+      minimum: new Decimal("500"),
+      validFrom: "2026-01-01",
+    },
+    {
+      id: "r-default",
+      concept: "ALICUOTA_GENERAL",
+      code: "ALICUOTA_GENERAL",
+      kind: "RATE",
+      activityId: null,
+      isDefault: true,
+      rate: new Decimal("0.03"),
+      validFrom: "2026-01-01",
+    },
+  ];
+
+  it("resuelve la alícuota por activityId aunque la etiqueta sea distinta", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      ruleMode: "TYPED",
+      rules: typedRules,
+      incomeByActivity: { "act-comercio": "100000" },
+    });
+    expect(result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("2000.00");
+    expect(result.subtotals["TOTAL_A_INGRESAR"]).toBe("2000.00");
+    expect(result.blocks).toHaveLength(0);
+  });
+
+  it("aplica el mínimo de la actividad tipada igual que el modo legacy", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      ruleMode: "TYPED",
+      rules: typedRules,
+      incomeByActivity: { "act-comercio": "10000" }, // 200 < mínimo 500
+    });
+    const legacy = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules([{ concept: "act-comercio", rate: "0.02", minimum: "500" }]),
+      incomeByActivity: { "act-comercio": "10000" },
+    });
+    expect(result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("200.00");
+    expect(result.subtotals["IMPUESTO_DETERMINADO"]).toBe("500.00");
+    expect(result.subtotals["TOTAL_A_INGRESAR"]).toBe("500.00");
+    expect(result.subtotals["IMPUESTO_DETERMINADO"]).toBe(
+      legacy.subtotals["IMPUESTO_DETERMINADO"],
+    );
+  });
+
+  it("usa la regla por defecto tipada para ingresos sin actividad", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      ruleMode: "TYPED",
+      rules: typedRules,
+      incomeByActivity: { "": "10000" }, // 3 % por defecto
+    });
+    expect(result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("300.00");
+    expect(result.blocks).toHaveLength(0);
+  });
+
+  it("expresa el mínimo de mayor rendimiento fiscal y conserva la suma por actividad por defecto", () => {
+    const rulesWithMinimums = [
+      {
+        id: "r-transporte",
+        concept: "ALICUOTA_TRANSPORTE",
+        code: "ALICUOTA_TRANSPORTE",
+        kind: "RATE",
+        activityId: "act-transporte",
+        isDefault: false,
+        rate: new Decimal("0.0125"),
+        minimum: new Decimal("700"),
+        validFrom: "2026-01-01",
+      },
+      {
+        id: "r-cana",
+        concept: "ALICUOTA_CANA",
+        code: "ALICUOTA_CANA",
+        kind: "RATE",
+        activityId: "act-cana",
+        isDefault: false,
+        rate: new Decimal("0.0125"),
+        minimum: new Decimal("900"),
+        validFrom: "2026-01-01",
+      },
+    ];
+    const incomeByActivity = { "act-transporte": "10000", "act-cana": "10000" };
+    const byActivity = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      ruleMode: "TYPED",
+      rules: rulesWithMinimums,
+      incomeByActivity,
+    });
+    expect(byActivity.subtotals["IMPUESTO_DETERMINADO"]).toBe("1600.00"); // 700 + 900
+
+    const highest = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      ruleMode: "TYPED",
+      rules: rulesWithMinimums,
+      incomeByActivity,
+      minimumMode: "HIGHEST_YIELD",
+    });
+    expect(highest.subtotals["IMPUESTO_DETERMINADO"]).toBe("900.00"); // mayor mínimo
+    expect(highest.subtotals["MINIMO_APLICADO"]).toBe("900.00");
+    expect(highest.lines.some((line) => line.formula.includes("mayor rendimiento fiscal"))).toBe(true);
+  });
+});

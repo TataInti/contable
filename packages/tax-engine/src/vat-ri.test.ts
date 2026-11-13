@@ -226,3 +226,74 @@ describe("motor IVA RI por componente (F1.3)", () => {
     expect(result.warnings.length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * P2 4a-ii (C6): en modo TYPED la alícuota se resuelve por `kind` RATE y su
+ * valor numérico; la etiqueta `concept` es solo traza. El crédito Dto. 814 es
+ * una regla SPECIAL_CREDIT identificada por catálogo/tipo.
+ */
+describe("motor IVA RI — reglas tipadas", () => {
+  const TYPED_RULES = [
+    { id: "r21", concept: "ALICUOTA_GENERAL", kind: "RATE", rate: dec("0.21"), validFrom: "2026-01-01" },
+    { id: "r105", concept: "ALICUOTA_DIFERENCIAL", kind: "RATE", rate: dec("0.105"), validFrom: "2026-01-01" },
+    { id: "r27", concept: "ALICUOTA_ESPECIAL", kind: "RATE", rate: dec("0.27"), validFrom: "2026-01-01" },
+  ];
+
+  it("calcula igual que el modo legacy con etiquetas distintas", () => {
+    const components = [
+      comp("f1", "SALE", "2026-01-10", "21", "100000.00"),
+      comp("f2", "SALE", "2026-01-11", "10.5", "50000.00"),
+      comp("f3", "PURCHASE", "2026-01-12", "27", "20000.00"),
+    ];
+    const legacy = calculateVatRi({ period: PERIOD, components, rules: RULES });
+    const typed = calculateVatRi({
+      period: PERIOD,
+      components,
+      rules: TYPED_RULES,
+      ruleMode: "TYPED",
+    });
+    expect(typed.subtotals["DEBITO_FISCAL"]).toBe(legacy.subtotals["DEBITO_FISCAL"]);
+    expect(typed.subtotals["CREDITO_FISCAL"]).toBe(legacy.subtotals["CREDITO_FISCAL"]);
+    expect(typed.totalDue).toBe(legacy.totalDue);
+    expect(typed.blocks).toHaveLength(0);
+  });
+
+  it("aplica el crédito especial con cualquier etiqueta, por tipo", () => {
+    const result = calculateVatRi({
+      period: PERIOD,
+      components: [comp("f1", "SALE", "2026-01-10", "21", "100000.00")],
+      rules: [
+        ...TYPED_RULES,
+        { id: "rc", concept: "CREDITO_CONTRIBUCIONES", kind: "SPECIAL_CREDIT", rate: dec("0.065"), validFrom: "2026-01-01" },
+      ],
+      ruleMode: "TYPED",
+      decree814: { netRemuneration: dec("50000.00"), runCount: 1 },
+    });
+    expect(result.subtotals["CREDITO_DTO_814"]).toBe("3250.00");
+    expect(result.lines.some((line) => line.concept === "CREDITO_DTO_814")).toBe(true);
+    expect(result.blocks).toHaveLength(0);
+  });
+
+  it("bloquea si falta la regla del crédito especial", () => {
+    const result = calculateVatRi({
+      period: PERIOD,
+      components: [],
+      rules: TYPED_RULES,
+      ruleMode: "TYPED",
+      decree814: { netRemuneration: dec("50000.00"), runCount: 1 },
+    });
+    expect(result.blocks).toContain(
+      "Falta la regla activa de crédito especial para calcular el crédito por contribuciones",
+    );
+  });
+
+  it("bloquea una alícuota sin regla tipada nombrando la alícuota", () => {
+    const result = calculateVatRi({
+      period: PERIOD,
+      components: [comp("f1", "SALE", "2026-01-10", "27", "10000.00")],
+      rules: TYPED_RULES.filter((rule) => rule.rate.toNumber() !== 0.27),
+      ruleMode: "TYPED",
+    });
+    expect(result.blocks).toContain("Falta la regla activa de alícuota 27% para calcular IVA");
+  });
+});
