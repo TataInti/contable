@@ -331,6 +331,16 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/api/v1/tax/regimes/:regimeId/rule-kinds", async (req, reply) => {
+    try {
+      const { regimeId } = z.object({ regimeId: z.string().uuid() }).parse(req.params);
+      const data = await masters.listRuleKindsForRegime(tenantContextFromRequest(req), regimeId);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.get("/api/v1/tax/regimes", async (req, reply) => {
     const query = z.object({ includeInactive: z.enum(["true", "false"]).optional() }).strict().parse(req.query);
     try {
@@ -909,7 +919,11 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
             .array(
               z
                 .object({
-                  concept: z.string().min(1).max(80),
+                  concept: z.string().max(80).optional(),
+                  kindId: z.string().uuid().optional(),
+                  activityId: z.string().uuid().optional(),
+                  categoryCode: z.string().max(8).optional(),
+                  isDefault: z.boolean().optional(),
                   rate,
                   activityCode: z.string().max(40).optional(),
                   jurisdictionId: z.string().uuid().optional(),
@@ -927,7 +941,11 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       const data = await rules.replaceRateRules(ctx, {
         ruleVersionId,
         rules: body.rules.map((rule) => ({
-          concept: rule.concept,
+          ...(rule.concept !== undefined ? { concept: rule.concept } : {}),
+          ...(rule.kindId ? { kindId: rule.kindId } : {}),
+          ...(rule.activityId ? { activityId: rule.activityId } : {}),
+          ...(rule.categoryCode ? { categoryCode: rule.categoryCode } : {}),
+          ...(rule.isDefault !== undefined ? { isDefault: rule.isDefault } : {}),
           ...(rule.rate ? { rate: rule.rate } : {}),
           ...(rule.activityCode ? { activityCode: rule.activityCode } : {}),
           ...(rule.jurisdictionId ? { jurisdictionId: rule.jurisdictionId } : {}),
