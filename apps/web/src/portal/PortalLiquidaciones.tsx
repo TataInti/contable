@@ -297,7 +297,14 @@ export function PortalLiquidaciones() {
                 },
               },
             ]}
-            empty="Sin liquidaciones publicadas."
+            empty={
+              <EmptyState
+                size="compact"
+                kind="no-data"
+                title="Todavía no hay liquidaciones publicadas"
+                description="Cuando tu estudio publique una liquidación, aparecerá acá."
+              />
+            }
           />
           </section>
         </>

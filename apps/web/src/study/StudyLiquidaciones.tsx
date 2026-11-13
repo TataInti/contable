@@ -499,7 +499,14 @@ export function StudyLiquidaciones() {
           ]}
           rows={data}
           rowKey={(row) => row.id}
-          empty="Sin liquidaciones."
+          empty={
+            <EmptyState
+              size="compact"
+              kind="no-data"
+              title="Todavía no hay liquidaciones"
+              description="Las liquidaciones del período aparecerán acá cuando estén disponibles."
+            />
+          }
         />
       )}
       </section>
