@@ -7,8 +7,9 @@ import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import { memberActionCopy, memberRecoveryCopy, memberRowActions, roleChangeCopy } from "./member-row-actions.js";
+import { memberRecoveryCopy, memberRowActions } from "./member-row-actions.js";
 import { ActionDrawer } from "../ui/ActionDrawer";
+import { StudyUserAssignments } from "./StudyUserAssignments";
 import {
   DenseHeader,
   DensePage,
@@ -61,6 +62,12 @@ interface InternalMember {
   acceptedAt: string | null;
   user?: { name: string; emailNormalized: string; status: string } | null;
 }
+interface FirmProfile {
+  legalName: string;
+  displayName: string;
+  taxId: string | null;
+  timezone: string;
+}
 interface CreatedInternalUser {
   userId: string;
   email: string;
@@ -108,7 +115,7 @@ const PORTAL_ROLE_LABELS: Record<string, string> = {
   READONLY: "Sólo lectura",
 };
 
-type AdminTab = "internal" | "portal" | "standards";
+type AdminTab = "internal" | "portal" | "standards" | "profile";
 
 interface PortalRow {
   key: string;
@@ -117,7 +124,10 @@ interface PortalRow {
   role: string;
   status: string;
   detail?: string;
+  membership: PortalMembership | null;
   onRevoke: (() => void) | null;
+  onToggleStatus: (() => void) | null;
+  onEdit: (() => void) | null;
   pending: boolean;
 }
 
@@ -135,6 +145,20 @@ function initials(name: string | null | undefined): string {
     .map((part) => part.charAt(0))
     .join("")
     .toLocaleUpperCase("es-AR");
+}
+
+function userMutationError(error: unknown, fallback: string): string {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : "";
+  if (code === "LAST_ADMIN_REQUIRED") {
+    return "El estudio debe conservar al menos un titular o administrador activo.";
+  }
+  if (code === "USER_EMAIL_CONFLICT") {
+    return "Ese correo ya está asociado a otra cuenta.";
+  }
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 /** Resumen textual de los módulos internos habilitados para el rol. */
@@ -222,6 +246,15 @@ export function StudyAdministracion() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [tab, setTab] = useState<AdminTab>("internal");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [identityEditing, setIdentityEditing] = useState<InternalMember | null>(null);
+  const [identityName, setIdentityName] = useState("");
+  const [identityEmail, setIdentityEmail] = useState("");
+  const [internalRoleDrafts, setInternalRoleDrafts] = useState<Record<string, string>>({});
+  const [assigningMember, setAssigningMember] = useState<InternalMember | null>(null);
+  const [portalEditing, setPortalEditing] = useState<PortalMembership | null>(null);
+  const [portalRoleDraft, setPortalRoleDraft] = useState("READONLY");
+  const [showProfileForm, setShowProfileForm] = useState(false);
+  const [profileDraft, setProfileDraft] = useState<FirmProfile | null>(null);
   const [showRoles, setShowRoles] = useState(false);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
@@ -246,6 +279,11 @@ export function StudyAdministracion() {
   const internalMembers = useQuery({
     queryKey: ["internal-members", firmId],
     queryFn: () => api.get<InternalMember[]>(`/firms/${firmId}/members`),
+    enabled: Boolean(firmId && capabilities.has("firm.users.manage")),
+  });
+  const firmProfile = useQuery({
+    queryKey: ["firm-profile", firmId],
+    queryFn: () => api.get<FirmProfile>(`/firms/${firmId}/profile`),
     enabled: Boolean(firmId && capabilities.has("firm.users.manage")),
   });
   const selfReviewSetting = useQuery({
@@ -288,39 +326,74 @@ export function StudyAdministracion() {
   const updateInternalRole = useMutation({
     mutationFn: ({ userId, role: nextRole }: { userId: string; role: string }) =>
       api.patch(`/firms/${firmId}/members/${userId}`, { role: nextRole }),
-    onSuccess: () => {
+    onSuccess: (_updated, { userId }) => {
       setActionError(null);
-      setNotice("El rol del usuario interno fue actualizado.");
+      setInternalRoleDrafts((current) => {
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      });
+      setNotice("El rol del usuario quedó actualizado.");
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
-    onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo actualizar el rol."),
+    onError: (error, { userId }) => {
+      setInternalRoleDrafts((current) => {
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      });
+      setActionError(userMutationError(error, "No se pudo actualizar el rol."));
+    },
   });
-  // Ciclo de vida (baja reversible): suspender cierra las sesiones activas del
-  // usuario en el servidor y preserva datos/historial; reactivar exige una
-  // acción explícita del admin. La validación de último OWNER/ADMIN la hace
-  // el backend (app_suspend_internal_member / app_reactivate_internal_member).
-  const suspendInternalMember = useMutation({
-    mutationFn: ({ userId, reason }: { userId: string; reason?: string }) =>
-      api.post(`/firms/${firmId}/members/${userId}/suspend`, reason ? { reason } : {}),
+  const updateMemberIdentity = useMutation({
+    mutationFn: ({ userId, name, email: nextEmail }: { userId: string; name: string; email: string }) =>
+      api.patch(`/firms/${firmId}/users/${userId}`, { name: name.trim(), email: nextEmail.trim() }),
     onSuccess: () => {
       setActionError(null);
-      setNotice("El usuario quedó suspendido: pierde el acceso de inmediato y sus sesiones activas se cerraron. Sus datos e historial se conservan.");
+      setNotice("Los datos del usuario quedaron actualizados.");
+      setIdentityEditing(null);
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo suspender al usuario."),
+      setActionError(userMutationError(error, "No se pudieron actualizar los datos del usuario.")),
+  });
+  const updateFirmProfile = useMutation({
+    mutationFn: (profile: FirmProfile) =>
+      api.patch<FirmProfile>(`/firms/${firmId}/profile`, {
+        legalName: profile.legalName.trim(),
+        displayName: profile.displayName.trim(),
+        taxId: profile.taxId?.trim() || null,
+        timezone: profile.timezone.trim(),
+      }),
+    onSuccess: (updated) => {
+      setActionError(null);
+      setNotice("Los datos del estudio quedaron actualizados.");
+      setShowProfileForm(false);
+      setProfileDraft(null);
+      queryClient.setQueryData(["firm-profile", firmId], updated);
+    },
+    onError: (error) =>
+      setActionError(userMutationError(error, "No se pudieron actualizar los datos del estudio.")),
+  });
+  const suspendInternalMember = useMutation({
+    mutationFn: (userId: string) => api.post(`/firms/${firmId}/members/${userId}/suspend`, {}),
+    onSuccess: () => {
+      setActionError(null);
+      setNotice("El usuario quedó suspendido.");
+      void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
+    },
+    onError: (error) =>
+      setActionError(userMutationError(error, "No se pudo suspender al usuario.")),
   });
   const reactivateInternalMember = useMutation({
-    mutationFn: ({ userId, reason }: { userId: string; reason?: string }) =>
-      api.post(`/firms/${firmId}/members/${userId}/reactivate`, reason ? { reason } : {}),
+    mutationFn: (userId: string) => api.post(`/firms/${firmId}/members/${userId}/reactivate`, {}),
     onSuccess: () => {
       setActionError(null);
-      setNotice("El usuario fue reactivado con su mismo rol. Tendrá que iniciar sesión nuevamente.");
+      setNotice("El usuario fue reactivado.");
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo reactivar al usuario."),
+      setActionError(userMutationError(error, "No se pudo reactivar al usuario.")),
   });
   // Renovación de claves: el admin genera un enlace de un solo uso para que el
   // miembro defina una contraseña nueva. El backend cierra sus sesiones
@@ -356,7 +429,7 @@ export function StudyAdministracion() {
     queryKey: ["portal-memberships", firmId, clientId],
     queryFn: () =>
       api.get<PortalMembership[]>(`/firms/${firmId}/clients/${clientId}/portal-memberships`),
-    enabled: Boolean(firmId && clientId && capabilities.has("firm.manage")),
+    enabled: Boolean(firmId && clientId && capabilities.has("firm.users.manage")),
   });
   const invite = useMutation({
     mutationFn: () =>
@@ -376,16 +449,28 @@ export function StudyAdministracion() {
     onError: (error) =>
       setActionError(error instanceof Error ? error.message : "No se pudo crear la invitación."),
   });
-  const revokeMembership = useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/firms/${firmId}/clients/${clientId}/portal-memberships/${id}/revoke`),
-    onSuccess: () => {
+  const updatePortalMembership = useMutation({
+    mutationFn: ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: { role?: string; status?: string };
+    }) => api.patch<PortalMembership>(`/firms/${firmId}/clients/${clientId}/portal-memberships/${id}`, patch),
+    onSuccess: (_updated, { id, patch }) => {
       setActionError(null);
-      setNotice("El acceso al portal fue revocado.");
+      if (patch.role !== undefined) {
+        setNotice("El rol del acceso al portal quedó actualizado.");
+        if (portalEditing?.id === id) setPortalEditing(null);
+      } else if (patch.status === "SUSPENDED") {
+        setNotice("El acceso al portal quedó suspendido.");
+      } else {
+        setNotice("El acceso al portal fue reactivado.");
+      }
       void queryClient.invalidateQueries({ queryKey: ["portal-memberships", firmId, clientId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo revocar el acceso."),
+      setActionError(userMutationError(error, "No se pudo actualizar el acceso al portal.")),
   });
   const revokeInvitation = useMutation({
     mutationFn: (id: string) =>
@@ -498,7 +583,9 @@ export function StudyAdministracion() {
     setRecoverySummary(null);
   };
 
-  const activePortalMembershipCount = memberships.data?.filter((item) => !item.revokedAt).length;
+  const activePortalMembershipCount = memberships.data?.filter(
+    (item) => item.status === "ACTIVE" && !item.revokedAt,
+  ).length;
   const pendingInvitationCount = invitations.data?.filter(
     (item) =>
       !item.revokedAt &&
@@ -514,6 +601,23 @@ export function StudyAdministracion() {
   const openInviteForm = () => {
     setActionError(null);
     setShowInviteForm(true);
+  };
+  const openIdentityEdit = (item: InternalMember) => {
+    setActionError(null);
+    setIdentityEditing(item);
+    setIdentityName(item.user?.name ?? "");
+    setIdentityEmail(item.user?.emailNormalized ?? "");
+  };
+  const openPortalEdit = (item: PortalMembership) => {
+    setActionError(null);
+    setPortalEditing(item);
+    setPortalRoleDraft(item.role);
+  };
+  const openProfileEdit = () => {
+    if (!firmProfile.data) return;
+    setActionError(null);
+    setProfileDraft(firmProfile.data);
+    setShowProfileForm(true);
   };
 
   if (!capabilities.has("firm.users.manage"))
@@ -580,67 +684,52 @@ export function StudyAdministracion() {
             Recuperar acceso
           </Button>
         ) : null}
-        {actions.includes("suspend") ? (
+        {effectiveStatus(item) === "ACTIVE" ? (
           <Button
             size="row"
             variant={variant}
             className="dense-action--danger"
             loading={
-              suspendInternalMember.isPending && suspendInternalMember.variables?.userId === item.userId
+              suspendInternalMember.isPending && suspendInternalMember.variables === item.userId
             }
             disabled={anyMemberActionPending}
             onClick={() => {
-              const copy = memberActionCopy("suspend", memberName);
-              confirm.ask({
-                title: copy.title,
-                description: copy.description,
-                confirmLabel: copy.confirmLabel,
-                tone: "danger",
-                onConfirm: () => suspendInternalMember.mutate({ userId: item.userId }),
-              });
+              setActionError(null);
+              setNotice(null);
+              suspendInternalMember.mutate(item.userId);
             }}
           >
             Suspender
           </Button>
         ) : null}
-        {actions.includes("reactivate") ? (
+        {effectiveStatus(item) === "SUSPENDED" ? (
           <Button
             size="row"
             variant={variant}
             loading={
               reactivateInternalMember.isPending &&
-              reactivateInternalMember.variables?.userId === item.userId
+              reactivateInternalMember.variables === item.userId
             }
             disabled={anyMemberActionPending}
             onClick={() => {
-              const copy = memberActionCopy("reactivate", memberName);
-              confirm.ask({
-                title: copy.title,
-                description: copy.description,
-                confirmLabel: copy.confirmLabel,
-                tone: "default",
-                onConfirm: () => reactivateInternalMember.mutate({ userId: item.userId }),
-              });
+              setActionError(null);
+              setNotice(null);
+              reactivateInternalMember.mutate(item.userId);
             }}
           >
             Reactivar
           </Button>
         ) : null}
-        {actions.length === 0 ? <small>—</small> : null}
       </>
     );
   };
 
   const changeRole = (item: InternalMember, nextRole: string) => {
     if (nextRole === item.role) return;
-    const copy = roleChangeCopy(item.user?.name ?? "este usuario", item.role, nextRole);
-    confirm.ask({
-      title: copy.title,
-      description: copy.description,
-      confirmLabel: "Cambiar rol",
-      tone: item.role === "OWNER" ? "danger" : "default",
-      onConfirm: () => updateInternalRole.mutate({ userId: item.userId, role: nextRole }),
-    });
+    setActionError(null);
+    setNotice(null);
+    setInternalRoleDrafts((current) => ({ ...current, [item.userId]: nextRole }));
+    updateInternalRole.mutate({ userId: item.userId, role: nextRole });
   };
 
   const internalColumns: DenseColumn<InternalMember>[] = [
@@ -671,7 +760,7 @@ export function StudyAdministracion() {
           <select
             id={`internal-role-${item.userId}`}
             className="dense-select dense-select--inline"
-            value={item.role}
+            value={internalRoleDrafts[item.userId] ?? item.role}
             disabled={
               updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId
             }
@@ -705,7 +794,27 @@ export function StudyAdministracion() {
       header: "Acciones",
       secondary: true,
       align: "right",
-      render: (item) => <span className="dense-row-actions">{memberActionButtons(item, "ghost")}</span>,
+      render: (item) => (
+        <span className="dense-row-actions">
+          <Button
+            size="row"
+            variant="secondary"
+            aria-label={`Editar a ${item.user?.name ?? "este usuario"}`}
+            onClick={() => openIdentityEdit(item)}
+          >
+            Editar
+          </Button>
+          <Button
+            size="row"
+            variant="ghost"
+            aria-label={`Administrar clientes de ${item.user?.name ?? "este usuario"}`}
+            onClick={() => setAssigningMember(item)}
+          >
+            Clientes
+          </Button>
+          {memberActionButtons(item, "ghost")}
+        </span>
+      ),
     },
   ];
 
@@ -723,7 +832,25 @@ export function StudyAdministracion() {
         title={selectedMember.user?.name ?? "Usuario eliminado"}
         subtitle={selectedMember.user?.emailNormalized ?? "—"}
         onClose={() => setSelectedUserId(null)}
-        footer={memberActionButtons(selectedMember, "secondary")}
+        footer={
+          <span className="dense-row-actions">
+            <Button
+              size="row"
+              variant="secondary"
+              onClick={() => openIdentityEdit(selectedMember)}
+            >
+              Editar
+            </Button>
+            <Button
+              size="row"
+              variant="ghost"
+              onClick={() => setAssigningMember(selectedMember)}
+            >
+              Clientes
+            </Button>
+            {memberActionButtons(selectedMember, "secondary")}
+          </span>
+        }
       >
         <InspectorSection title="Acceso">
           <InspectorFacts
@@ -773,18 +900,18 @@ export function StudyAdministracion() {
       email: item.user?.emailNormalized ?? "—",
       role: item.role,
       status: item.revokedAt ? "REVOKED" : item.status,
-      onRevoke: item.revokedAt
-        ? null
-        : () =>
-            confirm.ask({
-              title: `¿Revocar el acceso de ${item.user?.name ?? "este usuario"}?`,
-              description:
-                "Perderá acceso al portal de inmediato. La acción queda registrada en la auditoría.",
-              confirmLabel: "Revocar acceso",
-              tone: "danger",
-              onConfirm: () => revokeMembership.mutate(item.id),
-            }),
-      pending: revokeMembership.isPending && revokeMembership.variables === item.id,
+      membership: item,
+      onRevoke: null,
+      onToggleStatus: () => {
+        setActionError(null);
+        setNotice(null);
+        updatePortalMembership.mutate({
+          id: item.id,
+          patch: { status: item.status === "ACTIVE" && !item.revokedAt ? "SUSPENDED" : "ACTIVE" },
+        });
+      },
+      onEdit: () => openPortalEdit(item),
+      pending: updatePortalMembership.isPending && updatePortalMembership.variables?.id === item.id,
     })),
     ...(invitations.data ?? [])
       .filter((item) => !item.acceptedAt)
@@ -797,6 +924,7 @@ export function StudyAdministracion() {
           role: item.role,
           status: item.revokedAt ? "REVOKED" : isPending ? "PENDING" : "EXPIRED",
           detail: isPending ? `vence ${new Date(item.expiresAt).toLocaleDateString("es-AR")}` : undefined,
+          membership: null,
           onRevoke: isPending
             ? () =>
                 confirm.ask({
@@ -808,6 +936,8 @@ export function StudyAdministracion() {
                   onConfirm: () => revokeInvitation.mutate(item.id),
                 })
             : null,
+          onToggleStatus: null,
+          onEdit: null,
           pending: revokeInvitation.isPending && revokeInvitation.variables === item.id,
         };
       }),
@@ -853,20 +983,45 @@ export function StudyAdministracion() {
     {
       key: "actions",
       header: "Acción",
-      width: "120px",
+      width: "240px",
       align: "right",
-      render: (row) =>
-        row.onRevoke ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="dense-action--danger"
-            loading={row.pending}
-            onClick={row.onRevoke}
-          >
-            Revocar
-          </Button>
-        ) : null,
+      render: (row) => (
+        <span className="dense-row-actions">
+          {row.onEdit ? (
+            <Button
+              size="row"
+              variant="secondary"
+              aria-label={`Editar acceso de ${row.name ?? row.email}`}
+              disabled={row.pending}
+              onClick={row.onEdit}
+            >
+              Editar
+            </Button>
+          ) : null}
+          {row.onToggleStatus ? (
+            <Button
+              size="row"
+              variant={row.status === "ACTIVE" ? "ghost" : "secondary"}
+              className={row.status === "ACTIVE" ? "dense-action--danger" : undefined}
+              loading={row.pending}
+              onClick={row.onToggleStatus}
+            >
+              {row.status === "ACTIVE" ? "Suspender" : "Reactivar"}
+            </Button>
+          ) : null}
+          {row.onRevoke ? (
+            <Button
+              size="row"
+              variant="ghost"
+              className="dense-action--danger"
+              loading={row.pending}
+              onClick={row.onRevoke}
+            >
+              Revocar
+            </Button>
+          ) : null}
+        </span>
+      ),
     },
   ];
 
@@ -1038,6 +1193,37 @@ export function StudyAdministracion() {
         />
       )))
     );
+  } else if (tab === "profile") {
+    tableBody =
+      queryState(firmProfile.isLoading, "Cargando datos del estudio…") ??
+      (firmProfile.isError ? (
+        <EmptyState
+          title="No se pudieron cargar los datos del estudio"
+          description="No asumimos que falten datos mientras la consulta está fallando."
+          action={
+            <Button size="sm" variant="secondary" onClick={() => void firmProfile.refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      ) : firmProfile.data ? (
+        <section className="dense-stack" aria-label="Datos del estudio">
+          <p><strong>Razón social</strong> · {firmProfile.data.legalName}</p>
+          <p><strong>Nombre del estudio</strong> · {firmProfile.data.displayName}</p>
+          <p><strong>CUIT</strong> · {firmProfile.data.taxId || "—"}</p>
+          <p><strong>Zona horaria</strong> · {firmProfile.data.timezone}</p>
+        </section>
+      ) : (
+        <EmptyState
+          title="Datos del estudio no disponibles"
+          description="Reintentá para consultar la información del estudio."
+          action={
+            <Button size="sm" variant="secondary" onClick={() => void firmProfile.refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      ));
   } else {
     tableBody =
       queryState(accountingStandards.isLoading, "Cargando normas contables…") ??
@@ -1088,8 +1274,10 @@ export function StudyAdministracion() {
       openInternalInviteForm();
     } else if (tab === "portal") {
       if (clientId) openInviteForm();
-    } else {
+    } else if (tab === "standards") {
       openStandardForm();
+    } else {
+      openProfileEdit();
     }
   };
   newRef.current = openNewForTab;
@@ -1158,9 +1346,12 @@ export function StudyAdministracion() {
     { id: "single", label: "Individual" },
     { id: "batch", label: "En lote" },
   ];
-  const primaryLabel = { internal: "Nuevo usuario", portal: "Invitar al portal", standards: "Nueva norma" }[
-    tab
-  ];
+  const primaryLabel = {
+    internal: "Nuevo usuario",
+    portal: "Invitar al portal",
+    standards: "Nueva norma",
+    profile: "Editar datos",
+  }[tab];
 
   return (
     <DensePage density={density} className="administration-users">
@@ -1170,12 +1361,22 @@ export function StudyAdministracion() {
         description="El rol define qué módulos internos puede usar cada persona. No hay permisos sueltos: cada cambio queda en la auditoría."
         actions={
           <>
+            {tab === "profile" ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!firmProfile.data || firmProfile.isLoading}
+                onClick={openNewForTab}
+              >
+                {primaryLabel}
+              </Button>
+            ) : null}
             {tab === "internal" ? (
               <Button size="sm" variant="secondary" onClick={openBatchForm}>
                 Alta en lote
               </Button>
             ) : null}
-            {tab !== "portal" || clientId ? (
+            {tab !== "profile" && (tab !== "portal" || clientId) ? (
               <Button size="sm" onClick={openNewForTab}>
                 <Icon name="plus" size={16} /> {primaryLabel}
               </Button>
@@ -1281,7 +1482,7 @@ export function StudyAdministracion() {
           </Button>
         </div>
       ) : null}
-      {actionError ? (
+      {actionError && !identityEditing && !portalEditing && !showProfileForm ? (
         <p className="form-error" role="alert">
           {actionError}
         </p>
@@ -1299,6 +1500,7 @@ export function StudyAdministracion() {
           { id: "internal", label: "Usuarios internos", count: internalMembers.data ? allMembers.length : undefined },
           { id: "portal", label: "Accesos del portal", count: clientId ? portalRows.length : undefined },
           { id: "standards", label: "Normas contables", count: accountingStandards.data?.length },
+          { id: "profile", label: "Datos del estudio" },
         ]}
       />
 
@@ -1627,6 +1829,169 @@ export function StudyAdministracion() {
         </div>
       </ActionDrawer>
 
+      {identityEditing ? (
+        <ActionDrawer
+          isOpen
+          onClose={() => setIdentityEditing(null)}
+          eyebrow="Usuario del estudio"
+          title="Editar usuario"
+          description="Actualizá el nombre y el correo de la cuenta."
+        >
+          <form
+            className="study-form study-form--compact"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              setActionError(null);
+              setNotice(null);
+              updateMemberIdentity.mutate({
+                userId: identityEditing.userId,
+                name: identityName,
+                email: identityEmail,
+              });
+            }}
+          >
+            <Field
+              id="member-edit-name"
+              label="Nombre"
+              value={identityName}
+              onChange={(event) => setIdentityName(event.target.value)}
+            />
+            <Field
+              id="member-edit-email"
+              label="Correo"
+              type="email"
+              value={identityEmail}
+              onChange={(event) => setIdentityEmail(event.target.value)}
+            />
+            {updateMemberIdentity.isError && actionError ? (
+              <p className="form-error" role="alert">{actionError}</p>
+            ) : null}
+            <div className="study-form__actions">
+              <Button type="submit" loading={updateMemberIdentity.isPending}>
+                Guardar cambios
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setIdentityEditing(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </ActionDrawer>
+      ) : null}
+
+      {portalEditing ? (
+        <ActionDrawer
+          isOpen
+          onClose={() => setPortalEditing(null)}
+          eyebrow="Acceso del portal"
+          title="Editar acceso"
+          description={`Cambiar el rol de ${portalEditing.user?.name ?? "esta persona"}.`}
+        >
+          <form
+            className="study-form study-form--compact"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setActionError(null);
+              setNotice(null);
+              updatePortalMembership.mutate({
+                id: portalEditing.id,
+                patch: { role: portalRoleDraft },
+              });
+            }}
+          >
+            <label className="ds-field">
+              <span className="ds-field__label">Rol del portal</span>
+              <select
+                className="ds-field__input"
+                value={portalRoleDraft}
+                onChange={(event) => setPortalRoleDraft(event.target.value)}
+              >
+                {Object.entries(PORTAL_ROLE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            {updatePortalMembership.isError && actionError ? (
+              <p className="form-error" role="alert">{actionError}</p>
+            ) : null}
+            <div className="study-form__actions">
+              <Button type="submit" loading={updatePortalMembership.isPending}>
+                Guardar cambios
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setPortalEditing(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </ActionDrawer>
+      ) : null}
+
+      {showProfileForm && profileDraft ? (
+        <ActionDrawer
+          isOpen
+          onClose={() => {
+            setShowProfileForm(false);
+            setProfileDraft(null);
+          }}
+          eyebrow="Configuración del estudio"
+          title="Editar datos del estudio"
+          description="Actualizá la razón social, el nombre, el CUIT y la zona horaria."
+        >
+          <form
+            className="study-form study-form--compact"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setActionError(null);
+              setNotice(null);
+              updateFirmProfile.mutate(profileDraft);
+            }}
+          >
+            <Field
+              id="firm-profile-legal-name"
+              label="Razón social"
+              value={profileDraft.legalName}
+              onChange={(event) => setProfileDraft({ ...profileDraft, legalName: event.target.value })}
+            />
+            <Field
+              id="firm-profile-display-name"
+              label="Nombre del estudio"
+              value={profileDraft.displayName}
+              onChange={(event) => setProfileDraft({ ...profileDraft, displayName: event.target.value })}
+            />
+            <Field
+              id="firm-profile-tax-id"
+              label="CUIT"
+              value={profileDraft.taxId ?? ""}
+              onChange={(event) => setProfileDraft({ ...profileDraft, taxId: event.target.value })}
+            />
+            <Field
+              id="firm-profile-timezone"
+              label="Zona horaria"
+              value={profileDraft.timezone}
+              onChange={(event) => setProfileDraft({ ...profileDraft, timezone: event.target.value })}
+            />
+            {updateFirmProfile.isError && actionError ? (
+              <p className="form-error" role="alert">{actionError}</p>
+            ) : null}
+            <div className="study-form__actions">
+              <Button type="submit" loading={updateFirmProfile.isPending}>
+                Guardar cambios
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowProfileForm(false);
+                  setProfileDraft(null);
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </ActionDrawer>
+      ) : null}
+
       {clientId ? (
         <ActionDrawer
           isOpen={showInviteForm}
@@ -1680,6 +2045,16 @@ export function StudyAdministracion() {
             </div>
           </form>
         </ActionDrawer>
+      ) : null}
+
+      {firmId && assigningMember ? (
+        <StudyUserAssignments
+          firmId={firmId}
+          userId={assigningMember.userId}
+          userName={assigningMember.user?.name ?? "este usuario"}
+          isOpen
+          onClose={() => setAssigningMember(null)}
+        />
       ) : null}
 
       <ActionDrawer

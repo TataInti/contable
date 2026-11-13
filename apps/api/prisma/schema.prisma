@@ -2971,6 +2971,25 @@ model TaxTreatmentDecision {
 
 // --- G2-09: Ajustes y vínculos de evidencia ---
 
+/// Catálogo de sistema de conceptos de ajuste. `behavior` define cómo entra
+/// el ajuste en la liquidación; el texto `TaxAdjustment.concept` queda como
+/// etiqueta histórica y no decide comportamiento.
+model AdjustmentConcept {
+  id        String   @id @default(uuid(7))
+  key       String   @unique
+  label     String
+  behavior  String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  adjustments TaxAdjustment[]
+
+  @@index([isActive, sortOrder])
+  @@map("adjustment_concepts")
+}
+
 model TaxAdjustment {
   id               String   @id @default(uuid(7))
   firmId           String
@@ -2978,6 +2997,7 @@ model TaxAdjustment {
   periodId         String?
   voucherId        String?
   ruleVersionId    String?
+  conceptId        String?
   concept          String
   amount           Decimal  @db.Decimal(20, 4)
   reason           String
@@ -2992,10 +3012,12 @@ model TaxAdjustment {
   period       TaxPeriod?         @relation(fields: [periodId], references: [id])
   voucher      FiscalVoucher?     @relation(fields: [voucherId], references: [id])
   ruleVersion  TaxRuleVersion?    @relation(fields: [ruleVersionId], references: [id])
+  conceptRef   AdjustmentConcept? @relation(fields: [conceptId], references: [id], onDelete: Restrict)
   decision     TaxTreatmentDecision? @relation(fields: [treatmentDecisionId], references: [id])
   evidenceLinks EvidenceLink[]
 
   @@index([firmId, clientId, periodId])
+  @@index([conceptId])
   @@map("tax_adjustments")
 }
 

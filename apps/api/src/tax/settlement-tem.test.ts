@@ -4,6 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { IngestionService } from "./ingestion-service.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
+import { computeRulesHashV3 } from "./rules-hash.js";
 
 /**
  * Tests de integración TEM San Miguel de Tucumán (Puerta 4, Fase 4.2).
@@ -598,5 +599,73 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: presentación y pago", () => 
     });
     const ob = await prisma.taxObligation.findUnique({ where: { id: obligationId } });
     expect(ob?.status).toBe("PAID");
+  });
+});
+
+/**
+ * P2 4a-ii (C5/C9): con reglas tipadas TEM resuelve la actividad por id y su
+ * mínimo desde la regla. El resultado debe ser el mismo golden que el modo
+ * legacy, con etiquetas de concepto distintas.
+ */
+describe("Fase 4.2 — TEM con reglas tipadas", () => {
+  it("conserva el golden legacy y resuelve actividad/mínimo por catálogo", async () => {
+    await createApprovedVouchersWithLines();
+    const legacy = await settlements.calculate(ctxOwner, calculateParams());
+    const legacyTotals = legacy.settlement.totals as Record<string, string>;
+
+    const family = await prisma.calcFamily.findUniqueOrThrow({ where: { key: "TEM" } });
+    const kind = await prisma.taxRuleKind.findUniqueOrThrow({ where: { key: "RATE" } });
+    const activityByCode = new Map<string, string>();
+    for (const code of ["COMERCIO", "SERVICIOS"]) {
+      const activity = await prisma.economicActivity.upsert({
+        where: { code_jurisdictionId: { code, jurisdictionId } },
+        update: {},
+        create: {
+          code,
+          name: `Actividad ${code}`,
+          jurisdictionId,
+          validFrom: new Date("2020-01-01"),
+        },
+      });
+      activityByCode.set(code, activity.id);
+    }
+    await prisma.taxRegime.update({
+      where: { id: regimeId },
+      data: { calcFamilyId: family.id },
+    });
+    const rules = await prisma.taxRateRule.findMany({ where: { ruleVersionId } });
+    for (const rule of rules) {
+      const isDefault = rule.concept === "DEFAULT";
+      await prisma.taxRateRule.update({
+        where: { id: rule.id },
+        data: {
+          concept: isDefault ? "ALICUOTA_GENERAL" : `ALICUOTA_${rule.concept}`,
+          kindId: kind.id,
+          activityId: isDefault ? null : activityByCode.get(rule.concept) ?? null,
+          isDefault,
+        },
+      });
+    }
+    const version = await prisma.taxRuleVersion.findUniqueOrThrow({
+      where: { id: ruleVersionId },
+      include: {
+        rateRules: { include: { kind: true } },
+        minimumRules: true,
+        bracketRules: true,
+        dueDateRules: true,
+        roundingRules: true,
+      },
+    });
+    await prisma.taxRuleVersion.update({
+      where: { id: ruleVersionId },
+      data: { rulesHashSchemaVersion: 3, rulesHash: computeRulesHashV3(version) },
+    });
+
+    const typed = await settlements.calculate(ctxOwner, calculateParams());
+    const typedTotals = typed.settlement.totals as Record<string, string>;
+    expect(typedTotals).toMatchObject(legacyTotals);
+    expect(typedTotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("3500.00");
+    expect(typedTotals["TOTAL_A_INGRESAR"]).toBe("3500.00");
+    expect(typed.result.blocks).toHaveLength(0);
   });
 });

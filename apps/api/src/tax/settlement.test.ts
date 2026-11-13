@@ -4,6 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { IngestionService } from "./ingestion-service.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
+import { computeRulesHashV3 } from "./rules-hash.js";
 
 /**
  * Tests de integración de liquidaciones fiscales (Puerta 3).
@@ -1452,6 +1453,99 @@ describe("G3-5 presentación, pago y crédito", () => {
         method: "DEBITO",
       }),
     ).rejects.toMatchObject({ code: "SETTLEMENT_IMMUTABLE" });
+  });
+});
+
+/**
+ * P2 4a-ii (C6): la versión tipada resuelve las alícuotas por `kind` RATE y el
+ * crédito Dto. 814 como SPECIAL_CREDIT. La etiqueta del concepto no decide:
+ * acá se renombran todas las reglas y el resultado debe ser el mismo golden.
+ */
+describe("G3-7 — IVA con reglas tipadas", () => {
+  it("aplica el crédito especial por tipo y conserva el golden", async () => {
+    const version = await activateDetailedVatRules();
+    const rateKind = await prisma.taxRuleKind.findUniqueOrThrow({ where: { key: "RATE" } });
+    const specialKind = await prisma.taxRuleKind.findUniqueOrThrow({
+      where: { key: "SPECIAL_CREDIT" },
+    });
+    const rules = await prisma.taxRateRule.findMany({ where: { ruleVersionId: version.id } });
+    for (const rule of rules) {
+      const isSpecial = rule.concept === "DTO_814";
+      await prisma.taxRateRule.update({
+        where: { id: rule.id },
+        data: {
+          kindId: isSpecial ? specialKind.id : rateKind.id,
+          concept: isSpecial
+            ? "CREDITO_CONTRIBUCIONES"
+            : `ALICUOTA_${rule.concept.replace("IVA_", "")}`,
+        },
+      });
+    }
+    const full = await prisma.taxRuleVersion.findUniqueOrThrow({
+      where: { id: version.id },
+      include: {
+        rateRules: { include: { kind: true } },
+        minimumRules: true,
+        bracketRules: true,
+        dueDateRules: true,
+        roundingRules: true,
+      },
+    });
+    await prisma.taxRuleVersion.update({
+      where: { id: version.id },
+      data: { rulesHashSchemaVersion: 3, rulesHash: computeRulesHashV3(full) },
+    });
+
+    const { v1, v2, v3 } = await createApprovedVouchers();
+    const f931 = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.f931Run.create({
+        data: {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_SET,
+          periodId,
+          totalRemuneration: new Prisma.Decimal("60000"),
+          deduction: new Prisma.Decimal("10000"),
+          netRemuneration: new Prisma.Decimal("50000"),
+          status: "REVIEWED",
+          reviewedByUserId: REVIEWER_A,
+          reviewedAt: new Date("2026-01-31"),
+          hash: "sha256:f931-set-typed",
+        },
+      }),
+    );
+    const classifications = [v1, v2, v3].map((voucher) => ({
+      voucherId: voucher.id,
+      documentKind: "INVOICE",
+      activityCode: voucher.direction === "SALE" ? "VENTA_GENERAL" : "COMPRAS",
+      categoryCode: voucher.direction === "PURCHASE" ? "SUPER" : null,
+      rateBuckets: [{
+        rate: "21",
+        base: voucher.direction === "SALE" ? "100000.0000" : "40000.0000",
+        amount: voucher.direction === "SALE" ? "21000.0000" : "8400.0000",
+      }],
+      snapshotHash: `sha256:classification-${voucher.id}`,
+    }));
+
+    const result = await settlements.calculate(ctxOwner, {
+      ...calculateParams(),
+      sourceScope: {
+        voucherIds: [v1.id, v2.id, v3.id],
+        withholdingIds: [],
+        perceptionIds: [],
+        f931RunIds: [f931.id],
+        classifications,
+      },
+    });
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals).toMatchObject({
+      DEBITO_FISCAL: "42000.00",
+      CREDITO_FISCAL: "8400.00",
+      CREDITO_DTO_814: "3250.00",
+      SALDO_TECNICO_A_INGRESAR: "30350.00",
+      TOTAL_A_INGRESAR: "30350.00",
+    });
+    expect(result.result.blocks).toHaveLength(0);
+    expect(result.inputs.some((input) => input.kind === "F931" && input.sourceId === f931.id)).toBe(true);
   });
 });
 
