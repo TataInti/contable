@@ -45,6 +45,33 @@ const standardsFixture = [
   { id: "n1", name: "RTIC", isActive: true },
   { id: "n2", name: "VENCER", isActive: false },
 ];
+const profileFixture = {
+  legalName: "Estudio Ejemplo SRL",
+  displayName: "Estudio Ejemplo",
+  taxId: "30123456789",
+  timezone: "America/Argentina/Buenos_Aires",
+};
+const clientsFixture = [
+  { id: "client-a", legalName: "Cliente Alfa", cuit: "30111111119", status: "ACTIVE" },
+  { id: "client-b", legalName: "Cliente Beta", cuit: "30222222229", status: "ACTIVE" },
+];
+const assignmentFixture = {
+  id: "assignment-a",
+  userId: "u2",
+  clientId: "client-a",
+  capabilities: [],
+  createdAt: "2026-11-01T00:00:00.000Z",
+  assignedBy: "u1",
+};
+const portalMembershipFixture = {
+  id: "portal-a",
+  userId: "portal-user-a",
+  role: "READONLY",
+  status: "ACTIVE",
+  acceptedAt: "2026-11-01T00:00:00.000Z",
+  revokedAt: null,
+  user: { name: "Cliente Portal", emailNormalized: "portal@example.com" },
+};
 
 const membersFixture = [
   {
@@ -73,12 +100,19 @@ const membersFixture = [
   },
 ];
 
-function mockApi(standards = standardsFixture, members: unknown[] = []) {
+function mockApi(
+  standards = standardsFixture,
+  members: unknown[] = [],
+  portalMemberships: unknown[] = [],
+) {
   vi.mocked(api.get).mockImplementation(((path: string) => {
     if (path.includes("/settings/self-review")) return Promise.resolve({ allowSelfReview: false });
     if (path.includes("/accounting-standards")) return Promise.resolve(standards);
+    if (path.endsWith("/profile")) return Promise.resolve(profileFixture);
+    if (path === "/firms/firm-a/clients") return Promise.resolve(clientsFixture);
+    if (path.includes("/assignments")) return Promise.resolve([assignmentFixture]);
     if (path.includes("/portal-invitations")) return Promise.resolve([]);
-    if (path.includes("/portal-memberships")) return Promise.resolve([]);
+    if (path.includes("/portal-memberships")) return Promise.resolve(portalMemberships);
     if (path.includes("/members")) return Promise.resolve(members);
     return Promise.resolve(null);
   }) as never);
@@ -275,7 +309,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(within(detail).getByRole("button", { name: "Recuperar acceso" })).toBeTruthy();
   });
 
-  it("pide confirmación antes de cambiar el rol de un usuario", async () => {
+  it("guarda el rol apenas se elige y sin pedir confirmación", async () => {
     mockApi(standardsFixture, membersFixture);
     vi.mocked(api.patch).mockResolvedValue({});
     renderAdministracion();
@@ -283,12 +317,222 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     fireEvent.change(await screen.findByLabelText("Rol de Revisor Demo"), {
       target: { value: "ADMIN" },
     });
-    expect(vi.mocked(api.patch)).not.toHaveBeenCalled();
-    fireEvent.click(await screen.findByRole("button", { name: "Cambiar rol" }));
 
     await waitFor(() =>
       expect(vi.mocked(api.patch)).toHaveBeenCalledWith("/firms/firm-a/members/u2", { role: "ADMIN" }),
     );
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("edita el nombre y el correo de un usuario del estudio", async () => {
+    mockApi(standardsFixture, membersFixture);
+    vi.mocked(api.patch).mockResolvedValue({});
+    renderAdministracion();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Editar a Revisor Demo" }));
+    fireEvent.change(await screen.findByLabelText("Nombre"), { target: { value: "Revisor Nuevo" } });
+    fireEvent.change(screen.getByLabelText("Correo"), {
+      target: { value: "revisor.nuevo@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith("/firms/firm-a/users/u2", {
+        name: "Revisor Nuevo",
+        email: "revisor.nuevo@example.com",
+      }),
+    );
+    expect(await screen.findByText("Los datos del usuario quedaron actualizados.")).toBeTruthy();
+  });
+
+  it("explica en español cuando el correo ya pertenece a otra cuenta", async () => {
+    mockApi(standardsFixture, membersFixture);
+    vi.mocked(api.patch).mockRejectedValue(
+      Object.assign(new Error("conflict"), { code: "USER_EMAIL_CONFLICT" }),
+    );
+    renderAdministracion();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Editar a Revisor Demo" }));
+    fireEvent.change(await screen.findByLabelText("Correo"), {
+      target: { value: "ocupado@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "Ese correo ya está asociado a otra cuenta.",
+    );
+  });
+
+  it("muestra el mensaje claro de protección del último titular o administrador", async () => {
+    mockApi(standardsFixture, membersFixture);
+    vi.mocked(api.patch).mockRejectedValue(
+      Object.assign(new Error("last admin"), { code: "LAST_ADMIN_REQUIRED" }),
+    );
+    renderAdministracion();
+
+    fireEvent.change(await screen.findByLabelText("Rol de Owner A"), {
+      target: { value: "PREPARER" },
+    });
+
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "El estudio debe conservar al menos un titular o administrador activo.",
+    );
+  });
+
+  it("suspende usuarios internos con una acción directa", async () => {
+    mockApi(standardsFixture, membersFixture);
+    vi.mocked(api.post).mockResolvedValue({} as never);
+    renderAdministracion();
+
+    const row = await screen.findByRole("row", { name: /Revisor Demo/ });
+    fireEvent.click(within(row).getByRole("button", { name: "Suspender" }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/firms/firm-a/members/u2/suspend", {}),
+    );
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("reactiva usuarios internos con una acción directa", async () => {
+    mockApi(standardsFixture, membersFixture);
+    vi.mocked(api.post).mockResolvedValue({} as never);
+    renderAdministracion();
+
+    const row = await screen.findByRole("row", { name: /Auditora Suspendida/ });
+    fireEvent.click(within(row).getByRole("button", { name: "Reactivar" }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/firms/firm-a/members/u3/reactivate", {}),
+    );
+  });
+
+  it("cambia el rol de un acceso del portal desde Editar", async () => {
+    mockApi(standardsFixture, [], [portalMembershipFixture]);
+    vi.mocked(api.patch).mockResolvedValue(portalMembershipFixture as never);
+    renderAdministracion();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /Accesos del portal/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Editar acceso de Cliente Portal" }));
+    fireEvent.change(await screen.findByLabelText("Rol del portal"), {
+      target: { value: "COLLABORATOR" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/firms/firm-a/clients/client-a/portal-memberships/portal-a",
+        { role: "COLLABORATOR" },
+      ),
+    );
+  });
+
+  it("suspende y reactiva accesos del portal sin confirmación", async () => {
+    mockApi(standardsFixture, [], [portalMembershipFixture]);
+    vi.mocked(api.patch).mockResolvedValue(portalMembershipFixture as never);
+    renderAdministracion();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /Accesos del portal/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Suspender" }));
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/firms/firm-a/clients/client-a/portal-memberships/portal-a",
+        { status: "SUSPENDED" },
+      ),
+    );
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("envía la reactivación del acceso del portal", async () => {
+    mockApi(standardsFixture, [], [{ ...portalMembershipFixture, status: "SUSPENDED" }]);
+    vi.mocked(api.patch).mockResolvedValue(portalMembershipFixture as never);
+    renderAdministracion();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /Accesos del portal/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Reactivar" }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(
+        "/firms/firm-a/clients/client-a/portal-memberships/portal-a",
+        { status: "ACTIVE" },
+      ),
+    );
+  });
+
+  it("asigna un cliente de la lista real a un usuario", async () => {
+    mockApi(standardsFixture, membersFixture);
+    vi.mocked(api.post).mockResolvedValue(assignmentFixture as never);
+    renderAdministracion();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Administrar clientes de Revisor Demo" }),
+    );
+    const clientSelect = await screen.findByLabelText("Cliente");
+    expect(within(clientSelect).getByRole("option", { name: "Cliente Beta" })).toBeTruthy();
+    fireEvent.change(clientSelect, { target: { value: "client-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "Asignar cliente" }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith("/firms/firm-a/clients/client-b/assignments", {
+        userId: "u2",
+        clientId: "client-b",
+      }),
+    );
+  });
+
+  it("quita una asignación de cliente de un usuario", async () => {
+    mockApi(standardsFixture, membersFixture);
+    vi.mocked(api.del).mockResolvedValue({} as never);
+    renderAdministracion();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Administrar clientes de Revisor Demo" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Quitar" }));
+
+    await waitFor(() =>
+      expect(api.del).toHaveBeenCalledWith(
+        "/firms/firm-a/clients/client-a/assignments/u2",
+      ),
+    );
+  });
+
+  it("edita y guarda explícitamente los cuatro datos del estudio", async () => {
+    mockApi();
+    vi.mocked(api.patch).mockResolvedValue({
+      ...profileFixture,
+      legalName: "Estudio Actualizado SRL",
+      displayName: "Estudio Actualizado",
+      taxId: "30987654321",
+      timezone: "America/Argentina/Cordoba",
+    } as never);
+    renderAdministracion();
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Datos del estudio" }));
+    expect(await screen.findByText(/Estudio Ejemplo SRL/)).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Editar datos" }));
+    fireEvent.change(await screen.findByLabelText("Razón social"), {
+      target: { value: "Estudio Actualizado SRL" },
+    });
+    fireEvent.change(screen.getByLabelText("Nombre del estudio"), {
+      target: { value: "Estudio Actualizado" },
+    });
+    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "30987654321" } });
+    fireEvent.change(screen.getByLabelText("Zona horaria"), {
+      target: { value: "America/Argentina/Cordoba" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith("/firms/firm-a/profile", {
+        legalName: "Estudio Actualizado SRL",
+        displayName: "Estudio Actualizado",
+        taxId: "30987654321",
+        timezone: "America/Argentina/Cordoba",
+      }),
+    );
+    expect(await screen.findByText(/Estudio Actualizado SRL/)).toBeTruthy();
   });
 
   it("da de alta usuarios en lote, una cuenta por vez, y muestra las contraseñas temporales", async () => {

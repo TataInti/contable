@@ -127,6 +127,7 @@ interface PortalRow {
   membership: PortalMembership | null;
   onRevoke: (() => void) | null;
   onToggleStatus: (() => void) | null;
+  onEdit: (() => void) | null;
   pending: boolean;
 }
 
@@ -335,8 +336,14 @@ export function StudyAdministracion() {
       setNotice("El rol del usuario quedó actualizado.");
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
-    onError: (error) =>
-      setActionError(userMutationError(error, "No se pudo actualizar el rol.")),
+    onError: (error, { userId }) => {
+      setInternalRoleDrafts((current) => {
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      });
+      setActionError(userMutationError(error, "No se pudo actualizar el rol."));
+    },
   });
   const updateMemberIdentity = useMutation({
     mutationFn: ({ userId, name, email: nextEmail }: { userId: string; name: string; email: string }) =>
@@ -576,7 +583,9 @@ export function StudyAdministracion() {
     setRecoverySummary(null);
   };
 
-  const activePortalMembershipCount = memberships.data?.filter((item) => item.status === "ACTIVE").length;
+  const activePortalMembershipCount = memberships.data?.filter(
+    (item) => item.status === "ACTIVE" && !item.revokedAt,
+  ).length;
   const pendingInvitationCount = invitations.data?.filter(
     (item) =>
       !item.revokedAt &&
@@ -675,67 +684,52 @@ export function StudyAdministracion() {
             Recuperar acceso
           </Button>
         ) : null}
-        {actions.includes("suspend") ? (
+        {effectiveStatus(item) === "ACTIVE" ? (
           <Button
             size="row"
             variant={variant}
             className="dense-action--danger"
             loading={
-              suspendInternalMember.isPending && suspendInternalMember.variables?.userId === item.userId
+              suspendInternalMember.isPending && suspendInternalMember.variables === item.userId
             }
             disabled={anyMemberActionPending}
             onClick={() => {
-              const copy = memberActionCopy("suspend", memberName);
-              confirm.ask({
-                title: copy.title,
-                description: copy.description,
-                confirmLabel: copy.confirmLabel,
-                tone: "danger",
-                onConfirm: () => suspendInternalMember.mutate({ userId: item.userId }),
-              });
+              setActionError(null);
+              setNotice(null);
+              suspendInternalMember.mutate(item.userId);
             }}
           >
             Suspender
           </Button>
         ) : null}
-        {actions.includes("reactivate") ? (
+        {effectiveStatus(item) === "SUSPENDED" ? (
           <Button
             size="row"
             variant={variant}
             loading={
               reactivateInternalMember.isPending &&
-              reactivateInternalMember.variables?.userId === item.userId
+              reactivateInternalMember.variables === item.userId
             }
             disabled={anyMemberActionPending}
             onClick={() => {
-              const copy = memberActionCopy("reactivate", memberName);
-              confirm.ask({
-                title: copy.title,
-                description: copy.description,
-                confirmLabel: copy.confirmLabel,
-                tone: "default",
-                onConfirm: () => reactivateInternalMember.mutate({ userId: item.userId }),
-              });
+              setActionError(null);
+              setNotice(null);
+              reactivateInternalMember.mutate(item.userId);
             }}
           >
             Reactivar
           </Button>
         ) : null}
-        {actions.length === 0 ? <small>—</small> : null}
       </>
     );
   };
 
   const changeRole = (item: InternalMember, nextRole: string) => {
     if (nextRole === item.role) return;
-    const copy = roleChangeCopy(item.user?.name ?? "este usuario", item.role, nextRole);
-    confirm.ask({
-      title: copy.title,
-      description: copy.description,
-      confirmLabel: "Cambiar rol",
-      tone: item.role === "OWNER" ? "danger" : "default",
-      onConfirm: () => updateInternalRole.mutate({ userId: item.userId, role: nextRole }),
-    });
+    setActionError(null);
+    setNotice(null);
+    setInternalRoleDrafts((current) => ({ ...current, [item.userId]: nextRole }));
+    updateInternalRole.mutate({ userId: item.userId, role: nextRole });
   };
 
   const internalColumns: DenseColumn<InternalMember>[] = [
@@ -766,7 +760,7 @@ export function StudyAdministracion() {
           <select
             id={`internal-role-${item.userId}`}
             className="dense-select dense-select--inline"
-            value={item.role}
+            value={internalRoleDrafts[item.userId] ?? item.role}
             disabled={
               updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId
             }
@@ -800,7 +794,27 @@ export function StudyAdministracion() {
       header: "Acciones",
       secondary: true,
       align: "right",
-      render: (item) => <span className="dense-row-actions">{memberActionButtons(item, "ghost")}</span>,
+      render: (item) => (
+        <span className="dense-row-actions">
+          <Button
+            size="row"
+            variant="secondary"
+            aria-label={`Editar a ${item.user?.name ?? "este usuario"}`}
+            onClick={() => openIdentityEdit(item)}
+          >
+            Editar
+          </Button>
+          <Button
+            size="row"
+            variant="ghost"
+            aria-label={`Administrar clientes de ${item.user?.name ?? "este usuario"}`}
+            onClick={() => setAssigningMember(item)}
+          >
+            Clientes
+          </Button>
+          {memberActionButtons(item, "ghost")}
+        </span>
+      ),
     },
   ];
 
@@ -818,7 +832,25 @@ export function StudyAdministracion() {
         title={selectedMember.user?.name ?? "Usuario eliminado"}
         subtitle={selectedMember.user?.emailNormalized ?? "—"}
         onClose={() => setSelectedUserId(null)}
-        footer={memberActionButtons(selectedMember, "secondary")}
+        footer={
+          <span className="dense-row-actions">
+            <Button
+              size="row"
+              variant="secondary"
+              onClick={() => openIdentityEdit(selectedMember)}
+            >
+              Editar
+            </Button>
+            <Button
+              size="row"
+              variant="ghost"
+              onClick={() => setAssigningMember(selectedMember)}
+            >
+              Clientes
+            </Button>
+            {memberActionButtons(selectedMember, "secondary")}
+          </span>
+        }
       >
         <InspectorSection title="Acceso">
           <InspectorFacts
@@ -868,18 +900,18 @@ export function StudyAdministracion() {
       email: item.user?.emailNormalized ?? "—",
       role: item.role,
       status: item.revokedAt ? "REVOKED" : item.status,
-      onRevoke: item.revokedAt
-        ? null
-        : () =>
-            confirm.ask({
-              title: `¿Revocar el acceso de ${item.user?.name ?? "este usuario"}?`,
-              description:
-                "Perderá acceso al portal de inmediato. La acción queda registrada en la auditoría.",
-              confirmLabel: "Revocar acceso",
-              tone: "danger",
-              onConfirm: () => revokeMembership.mutate(item.id),
-            }),
-      pending: revokeMembership.isPending && revokeMembership.variables === item.id,
+      membership: item,
+      onRevoke: null,
+      onToggleStatus: () => {
+        setActionError(null);
+        setNotice(null);
+        updatePortalMembership.mutate({
+          id: item.id,
+          patch: { status: item.status === "ACTIVE" && !item.revokedAt ? "SUSPENDED" : "ACTIVE" },
+        });
+      },
+      onEdit: () => openPortalEdit(item),
+      pending: updatePortalMembership.isPending && updatePortalMembership.variables?.id === item.id,
     })),
     ...(invitations.data ?? [])
       .filter((item) => !item.acceptedAt)
@@ -892,6 +924,7 @@ export function StudyAdministracion() {
           role: item.role,
           status: item.revokedAt ? "REVOKED" : isPending ? "PENDING" : "EXPIRED",
           detail: isPending ? `vence ${new Date(item.expiresAt).toLocaleDateString("es-AR")}` : undefined,
+          membership: null,
           onRevoke: isPending
             ? () =>
                 confirm.ask({
@@ -903,6 +936,8 @@ export function StudyAdministracion() {
                   onConfirm: () => revokeInvitation.mutate(item.id),
                 })
             : null,
+          onToggleStatus: null,
+          onEdit: null,
           pending: revokeInvitation.isPending && revokeInvitation.variables === item.id,
         };
       }),
@@ -948,20 +983,45 @@ export function StudyAdministracion() {
     {
       key: "actions",
       header: "Acción",
-      width: "120px",
+      width: "240px",
       align: "right",
-      render: (row) =>
-        row.onRevoke ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="dense-action--danger"
-            loading={row.pending}
-            onClick={row.onRevoke}
-          >
-            Revocar
-          </Button>
-        ) : null,
+      render: (row) => (
+        <span className="dense-row-actions">
+          {row.onEdit ? (
+            <Button
+              size="row"
+              variant="secondary"
+              aria-label={`Editar acceso de ${row.name ?? row.email}`}
+              disabled={row.pending}
+              onClick={row.onEdit}
+            >
+              Editar
+            </Button>
+          ) : null}
+          {row.onToggleStatus ? (
+            <Button
+              size="row"
+              variant={row.status === "ACTIVE" ? "ghost" : "secondary"}
+              className={row.status === "ACTIVE" ? "dense-action--danger" : undefined}
+              loading={row.pending}
+              onClick={row.onToggleStatus}
+            >
+              {row.status === "ACTIVE" ? "Suspender" : "Reactivar"}
+            </Button>
+          ) : null}
+          {row.onRevoke ? (
+            <Button
+              size="row"
+              variant="ghost"
+              className="dense-action--danger"
+              loading={row.pending}
+              onClick={row.onRevoke}
+            >
+              Revocar
+            </Button>
+          ) : null}
+        </span>
+      ),
     },
   ];
 
@@ -1133,6 +1193,37 @@ export function StudyAdministracion() {
         />
       )))
     );
+  } else if (tab === "profile") {
+    tableBody =
+      queryState(firmProfile.isLoading, "Cargando datos del estudio…") ??
+      (firmProfile.isError ? (
+        <EmptyState
+          title="No se pudieron cargar los datos del estudio"
+          description="No asumimos que falten datos mientras la consulta está fallando."
+          action={
+            <Button size="sm" variant="secondary" onClick={() => void firmProfile.refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      ) : firmProfile.data ? (
+        <section className="dense-stack" aria-label="Datos del estudio">
+          <p><strong>Razón social</strong> · {firmProfile.data.legalName}</p>
+          <p><strong>Nombre del estudio</strong> · {firmProfile.data.displayName}</p>
+          <p><strong>CUIT</strong> · {firmProfile.data.taxId || "—"}</p>
+          <p><strong>Zona horaria</strong> · {firmProfile.data.timezone}</p>
+        </section>
+      ) : (
+        <EmptyState
+          title="Datos del estudio no disponibles"
+          description="Reintentá para consultar la información del estudio."
+          action={
+            <Button size="sm" variant="secondary" onClick={() => void firmProfile.refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      ));
   } else {
     tableBody =
       queryState(accountingStandards.isLoading, "Cargando normas contables…") ??
@@ -1183,8 +1274,10 @@ export function StudyAdministracion() {
       openInternalInviteForm();
     } else if (tab === "portal") {
       if (clientId) openInviteForm();
-    } else {
+    } else if (tab === "standards") {
       openStandardForm();
+    } else {
+      openProfileEdit();
     }
   };
   newRef.current = openNewForTab;
@@ -1253,9 +1346,12 @@ export function StudyAdministracion() {
     { id: "single", label: "Individual" },
     { id: "batch", label: "En lote" },
   ];
-  const primaryLabel = { internal: "Nuevo usuario", portal: "Invitar al portal", standards: "Nueva norma" }[
-    tab
-  ];
+  const primaryLabel = {
+    internal: "Nuevo usuario",
+    portal: "Invitar al portal",
+    standards: "Nueva norma",
+    profile: "Editar datos",
+  }[tab];
 
   return (
     <DensePage density={density} className="administration-users">
@@ -1265,12 +1361,22 @@ export function StudyAdministracion() {
         description="El rol define qué módulos internos puede usar cada persona. No hay permisos sueltos: cada cambio queda en la auditoría."
         actions={
           <>
+            {tab === "profile" ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!firmProfile.data || firmProfile.isLoading}
+                onClick={openNewForTab}
+              >
+                {primaryLabel}
+              </Button>
+            ) : null}
             {tab === "internal" ? (
               <Button size="sm" variant="secondary" onClick={openBatchForm}>
                 Alta en lote
               </Button>
             ) : null}
-            {tab !== "portal" || clientId ? (
+            {tab !== "profile" && (tab !== "portal" || clientId) ? (
               <Button size="sm" onClick={openNewForTab}>
                 <Icon name="plus" size={16} /> {primaryLabel}
               </Button>
@@ -1376,7 +1482,7 @@ export function StudyAdministracion() {
           </Button>
         </div>
       ) : null}
-      {actionError ? (
+      {actionError && !identityEditing && !portalEditing && !showProfileForm ? (
         <p className="form-error" role="alert">
           {actionError}
         </p>
@@ -1394,6 +1500,7 @@ export function StudyAdministracion() {
           { id: "internal", label: "Usuarios internos", count: internalMembers.data ? allMembers.length : undefined },
           { id: "portal", label: "Accesos del portal", count: clientId ? portalRows.length : undefined },
           { id: "standards", label: "Normas contables", count: accountingStandards.data?.length },
+          { id: "profile", label: "Datos del estudio" },
         ]}
       />
 
@@ -1722,6 +1829,169 @@ export function StudyAdministracion() {
         </div>
       </ActionDrawer>
 
+      {identityEditing ? (
+        <ActionDrawer
+          isOpen
+          onClose={() => setIdentityEditing(null)}
+          eyebrow="Usuario del estudio"
+          title="Editar usuario"
+          description="Actualizá el nombre y el correo de la cuenta."
+        >
+          <form
+            className="study-form study-form--compact"
+            noValidate
+            onSubmit={(event) => {
+              event.preventDefault();
+              setActionError(null);
+              setNotice(null);
+              updateMemberIdentity.mutate({
+                userId: identityEditing.userId,
+                name: identityName,
+                email: identityEmail,
+              });
+            }}
+          >
+            <Field
+              id="member-edit-name"
+              label="Nombre"
+              value={identityName}
+              onChange={(event) => setIdentityName(event.target.value)}
+            />
+            <Field
+              id="member-edit-email"
+              label="Correo"
+              type="email"
+              value={identityEmail}
+              onChange={(event) => setIdentityEmail(event.target.value)}
+            />
+            {updateMemberIdentity.isError && actionError ? (
+              <p className="form-error" role="alert">{actionError}</p>
+            ) : null}
+            <div className="study-form__actions">
+              <Button type="submit" loading={updateMemberIdentity.isPending}>
+                Guardar cambios
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setIdentityEditing(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </ActionDrawer>
+      ) : null}
+
+      {portalEditing ? (
+        <ActionDrawer
+          isOpen
+          onClose={() => setPortalEditing(null)}
+          eyebrow="Acceso del portal"
+          title="Editar acceso"
+          description={`Cambiar el rol de ${portalEditing.user?.name ?? "esta persona"}.`}
+        >
+          <form
+            className="study-form study-form--compact"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setActionError(null);
+              setNotice(null);
+              updatePortalMembership.mutate({
+                id: portalEditing.id,
+                patch: { role: portalRoleDraft },
+              });
+            }}
+          >
+            <label className="ds-field">
+              <span className="ds-field__label">Rol del portal</span>
+              <select
+                className="ds-field__input"
+                value={portalRoleDraft}
+                onChange={(event) => setPortalRoleDraft(event.target.value)}
+              >
+                {Object.entries(PORTAL_ROLE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            {updatePortalMembership.isError && actionError ? (
+              <p className="form-error" role="alert">{actionError}</p>
+            ) : null}
+            <div className="study-form__actions">
+              <Button type="submit" loading={updatePortalMembership.isPending}>
+                Guardar cambios
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setPortalEditing(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </ActionDrawer>
+      ) : null}
+
+      {showProfileForm && profileDraft ? (
+        <ActionDrawer
+          isOpen
+          onClose={() => {
+            setShowProfileForm(false);
+            setProfileDraft(null);
+          }}
+          eyebrow="Configuración del estudio"
+          title="Editar datos del estudio"
+          description="Actualizá la razón social, el nombre, el CUIT y la zona horaria."
+        >
+          <form
+            className="study-form study-form--compact"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setActionError(null);
+              setNotice(null);
+              updateFirmProfile.mutate(profileDraft);
+            }}
+          >
+            <Field
+              id="firm-profile-legal-name"
+              label="Razón social"
+              value={profileDraft.legalName}
+              onChange={(event) => setProfileDraft({ ...profileDraft, legalName: event.target.value })}
+            />
+            <Field
+              id="firm-profile-display-name"
+              label="Nombre del estudio"
+              value={profileDraft.displayName}
+              onChange={(event) => setProfileDraft({ ...profileDraft, displayName: event.target.value })}
+            />
+            <Field
+              id="firm-profile-tax-id"
+              label="CUIT"
+              value={profileDraft.taxId ?? ""}
+              onChange={(event) => setProfileDraft({ ...profileDraft, taxId: event.target.value })}
+            />
+            <Field
+              id="firm-profile-timezone"
+              label="Zona horaria"
+              value={profileDraft.timezone}
+              onChange={(event) => setProfileDraft({ ...profileDraft, timezone: event.target.value })}
+            />
+            {updateFirmProfile.isError && actionError ? (
+              <p className="form-error" role="alert">{actionError}</p>
+            ) : null}
+            <div className="study-form__actions">
+              <Button type="submit" loading={updateFirmProfile.isPending}>
+                Guardar cambios
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowProfileForm(false);
+                  setProfileDraft(null);
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </ActionDrawer>
+      ) : null}
+
       {clientId ? (
         <ActionDrawer
           isOpen={showInviteForm}
@@ -1775,6 +2045,16 @@ export function StudyAdministracion() {
             </div>
           </form>
         </ActionDrawer>
+      ) : null}
+
+      {firmId && assigningMember ? (
+        <StudyUserAssignments
+          firmId={firmId}
+          userId={assigningMember.userId}
+          userName={assigningMember.user?.name ?? "este usuario"}
+          isOpen
+          onClose={() => setAssigningMember(null)}
+        />
       ) : null}
 
       <ActionDrawer
