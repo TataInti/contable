@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, MoneyField, Table, useNotify } from "@contable/design-system";
+import { Button, ConfirmDialog, EmptyState, Field, MoneyField, Table, useConfirmAction, useNotify } from "@contable/design-system";
 import {
   MONOTRIBUTO_CATEGORY_CODES,
   type CatalogEconomicActivity,
@@ -183,6 +183,7 @@ export function StudyReglasFiscales() {
   const [draftRows, setDraftRows] = useState<RuleRow[]>([]);
   const [draftRowsVersionId, setDraftRowsVersionId] = useState<string | null>(null);
   const notify = useNotify();
+  const confirm = useConfirmAction();
   const [activationError, setActivationError] = useState<Error | null>(null);
   const activationFeedbackRef = useRef<HTMLDivElement | null>(null);
   const [activationTarget, setActivationTarget] = useState<RuleVersion | null>(null);
@@ -302,6 +303,20 @@ export function StudyReglasFiscales() {
   );
   // Los campos de cada regla se nombran por su posición, no por un identificador interno.
   const rowNumber = (row: { id: string }) => draftRows.findIndex((item) => item.id === row.id) + 1;
+  // Primer aviso: explica qué se pierde. El cajón que sigue muestra el impacto real
+  // y pide escribir el nombre, así que borrar un paquete son dos confirmaciones.
+  const requestPackDeletion = () => {
+    if (!firmId || !selectedPackId) return;
+    const path = `/firms/${firmId}/tax/rule-packs/${selectedPackId}`;
+    confirm.ask({
+      title: detailQuery.data ? `¿Eliminar el paquete ${detailQuery.data.name}?` : "¿Eliminar el paquete?",
+      description:
+        "Se borran el paquete y todos sus borradores: alícuotas, vencimientos y fuentes cargadas. No se puede deshacer. En el paso siguiente vas a ver qué se elimina y tenés que escribir el nombre para confirmar.",
+      confirmLabel: "Continuar",
+      tone: "danger",
+      onConfirm: () => setDeletingTarget({ path, kind: "pack" }),
+    });
+  };
   const canDeleteVersion = Boolean(
     firmId &&
     capabilities.has("data.delete") &&
@@ -1142,32 +1157,19 @@ export function StudyReglasFiscales() {
               <strong>Próximo paso:</strong> {rulesNextAction.description}
             </DenseAlert>
           ) : null}
-          {detailQuery.data && canDeletePack ? (
-            <section className="study-panel fiscal-rule-delete" aria-label="Administración del paquete">
-              <div>
-                <h2>Paquete creado desde UI</h2>
-                <p>Revisá sus dependencias antes de confirmar la eliminación definitiva.</p>
-              </div>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => {
-                  if (firmId && selectedPackId) {
-                    setDeletingTarget({
-                      path: `/firms/${firmId}/tax/rule-packs/${selectedPackId}`,
-                      kind: "pack",
-                    });
-                  }
-                }}
-              >
-                Eliminar paquete
-              </Button>
-            </section>
-          ) : null}
           {detailQuery.data && !selectedVersion ? (
             <EmptyState
               title="Este paquete todavía no tiene versión"
               description="Creá un borrador inicial antes de ingresar porcentajes o vencimientos."
+              {...(canDeletePack ? { action: (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={requestPackDeletion}
+                >
+                  Eliminar paquete
+                </Button>
+              ) } : {})}
             />
           ) : null}
           {detailQuery.data && selectedVersion ? (
@@ -1209,6 +1211,15 @@ export function StudyReglasFiscales() {
                         }}
                       >
                         Eliminar borrador v{selectedVersion.version}
+                      </Button>
+                    ) : null}
+                    {canDeletePack ? (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={requestPackDeletion}
+                      >
+                        Eliminar paquete
                       </Button>
                     ) : null}
                   </div>
@@ -1823,6 +1834,7 @@ export function StudyReglasFiscales() {
           </div>
         ) : null}
       </ActionDrawer>
+      <ConfirmDialog confirm={confirm} />
       {deletingTarget ? (
         <DeletionDrawer
           isOpen

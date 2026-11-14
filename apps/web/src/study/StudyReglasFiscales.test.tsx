@@ -541,6 +541,21 @@ describe("StudyReglasFiscales — CTA único y submit deshabilitado explicado (F
 
     expect(await screen.findByRole("button", { name: "Eliminar paquete" })).toBeTruthy();
     expect(await screen.findByRole("button", { name: "Eliminar borrador v1" })).toBeTruthy();
+    // El aviso grande ya no existe: eliminar es una acción más del encabezado.
+    expect(screen.queryByText("Paquete creado desde UI")).toBeNull();
+  });
+
+  it("pide un primer aviso antes de abrir el cajón que elimina el paquete", async () => {
+    const owner = context();
+    owner.capabilities = new Set([...owner.capabilities, "data.delete"]);
+    contextMock.current = owner;
+    mockApi(makeDetail(null));
+    renderReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Eliminar paquete" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/No se puede deshacer/)).toBeTruthy();
+    expect(screen.queryByText("Impacto de la eliminación")).toBeNull();
   });
 
   it("mantiene protegidos los paquetes y versiones de referencia", async () => {

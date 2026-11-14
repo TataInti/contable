@@ -135,12 +135,21 @@ async function createTaxType(page: Page, tax: Tax) {
   await mutating(page, "/tax/types", () => page.getByRole("button", { name: "Crear tipo de impuesto" }).click());
 }
 
-/** Botón "Agregar" del bloque de Configuración vigente que lleva ese título. */
-function addButton(page: Page, heading: string) {
-  return page
+/** Pestaña de Configuración fiscal donde vive cada bloque. */
+const FISCAL_TAB: Record<string, RegExp> = {
+  "Regímenes adheridos": /^Regímenes/,
+  Actividades: /^Actividades/,
+  "Períodos fiscales": /^Períodos y obligaciones/,
+};
+
+/** Abre la pestaña del bloque y toca su botón "Agregar". */
+async function clickAdd(page: Page, heading: string) {
+  await page.getByRole("tab", { name: FISCAL_TAB[heading]! }).click();
+  await page
     .locator(".fiscal-client-overview__heading")
     .filter({ has: page.getByRole("heading", { name: heading, exact: true }) })
-    .getByRole("button", { name: "Agregar" });
+    .getByRole("button", { name: "Agregar" })
+    .click();
 }
 
 async function createAuthority(page: Page, tax: Tax) {
@@ -318,7 +327,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
 
   await test.step("Configuración fiscal: inscripción en los tres regímenes", async () => {
     for (const tax of Object.values(taxes)) {
-      await addButton(page, "Regímenes adheridos").click();
+      await clickAdd(page, "Regímenes adheridos");
       await pickOption(page.locator("#reg-regime"), tax.regime.code);
       await mutating(page, "/tax-registrations", () =>
         page.getByRole("button", { name: "Registrar inscripción", exact: true }).last().click(),
@@ -328,7 +337,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
 
   await test.step("Configuración fiscal: actividades del cliente", async () => {
     for (const tax of Object.values(taxes)) {
-      await addButton(page, "Actividades").click();
+      await clickAdd(page, "Actividades");
       await pickOption(page.locator("#act-activity"), tax.activity.code);
       await mutating(page, "/activities", () =>
         page.getByRole("button", { name: "Vincular actividad", exact: true }).last().click(),
@@ -339,7 +348,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Configuración fiscal: período de marzo 2025 y obligación por impuesto", async () => {
     for (const tax of Object.values(taxes)) {
       const label = periodLabel(tax);
-      await addButton(page, "Períodos fiscales").click();
+      await clickAdd(page, "Períodos fiscales");
       await pickOption(page.locator("#per-tax-type"), tax.taxTypeOption);
       await page.locator("#per-start").fill(data.periodStart);
       await page.locator("#per-end").fill(data.periodEnd);
@@ -354,7 +363,8 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
         page.getByRole("button", { name: "Crear obligación", exact: true }).last().click(),
       );
     }
-    await expect(page.getByRole("navigation", { name: "Pasos del onboarding fiscal" }).getByText("Pendiente")).toHaveCount(0);
+    await page.getByRole("tab", { name: "Resumen", exact: true }).click();
+    await expect(page.getByText("Configuración completa")).toBeVisible();
   });
 
   // ───────────── 4. Comprobante ─────────────
