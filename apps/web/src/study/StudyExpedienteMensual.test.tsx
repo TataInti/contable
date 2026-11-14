@@ -400,6 +400,43 @@ describe("StudyExpedienteMensual", () => {
     expect(screen.getByText("Error anterior al crear el legajo")).toBeTruthy();
   });
 
+  it("no vuelve a ofrecer la presentación de un impuesto ya presentado", async () => {
+    mockPageApi({ status: "FINALIZED" });
+    const base = vi.mocked(api.get).getMockImplementation()!;
+    const position = (obligationId: string, taxName: string, filedAt: string | null) => ({
+      obligationId,
+      status: filedAt ? "FILED" : "READY_TO_FILE",
+      dueDate: "2026-11-20T00:00:00.000Z",
+      filedAt,
+      regime: {
+        id: `regime-${obligationId}`,
+        name: `Régimen ${taxName}`,
+        isActive: true,
+        taxType: { id: `tax-${obligationId}`, name: taxName, isActive: true },
+        jurisdiction: { id: "jurisdiction-a", name: "Tucumán", isActive: true },
+      },
+      settlement: { id: `settlement-${obligationId}`, status: "FINALIZED", version: 1, totals: {} },
+      accrued: "1000",
+      paid: "0",
+      pending: "1000",
+      availableCredit: "0",
+      interest: "0",
+      totalPayable: "1000",
+    });
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.includes("/tax-position")
+        ? Promise.resolve([
+            position("filed", "IVA", "2026-11-10T00:00:00.000Z"),
+            position("open", "Ingresos Brutos", null),
+          ])
+        : base(path)) as never);
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /Cálculo/ }));
+
+    expect(await screen.findByText(/Presentada el/)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Registrar presentación" })).toHaveLength(1);
+  });
+
   it("explica junto a Calcular qué fuentes obligatorias siguen sin revisar", async () => {
     mockPageApi({ status: "COLLECTING_INPUTS", sourcePresent: false });
     renderPage();

@@ -185,7 +185,13 @@ export function firmRoutes(app: FastifyInstance) {
         tx.document.count({ where: { firmId: ctx.firmId, status: "EXTRACTED" } }),
         tx.document.count({ where: { firmId: ctx.firmId, status: { in: ["UPLOADED", "VALIDATING"] } } }),
         tx.documentRequest.count({ where: { firmId: ctx.firmId, status: { not: "COMPLETED" } } }),
-        tx.obligationInstance.count({ where: { firmId: ctx.firmId, status: "PENDING" } }),
+        // Obligaciones fiscales que todavía no se presentaron (las que no aplican no cuentan).
+        tx.taxObligation.count({
+          where: {
+            firmId: ctx.firmId,
+            status: { notIn: ["FILED", "PARTIALLY_PAID", "PAID", "NOT_APPLICABLE"] },
+          },
+        }),
       ]);
       return { clients, documents, extracted, processing, openRequests: requests, pendingObligations: obligations };
     });
