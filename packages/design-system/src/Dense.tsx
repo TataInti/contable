@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
@@ -35,17 +36,46 @@ function readStoredDensity(): DenseDensity {
   return 32;
 }
 
-export function useDensity(): [DenseDensity, (next: DenseDensity) => void] {
-  const [density, setDensity] = useState<DenseDensity>(readStoredDensity);
-  const update = (next: DenseDensity) => {
-    setDensity(next);
-    try {
-      window.localStorage.setItem(DENSITY_STORAGE_KEY, String(next));
-    } catch {
-      // La preferencia es una comodidad: si no se puede guardar, sigue funcionando.
-    }
+/* La densidad es una preferencia de la persona, no de cada pantalla: un solo
+   valor compartido, guardado en el navegador y aplicado a todas las tablas. */
+const densityListeners = new Set<() => void>();
+/** Respaldo en memoria para cuando el navegador no deja guardar. */
+let unsavedDensity: DenseDensity | null = null;
+
+function getDensity(): DenseDensity {
+  return unsavedDensity ?? readStoredDensity();
+}
+
+function applyDensity(value: DenseDensity) {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.setProperty("--ds-row-height", `${value}px`);
+}
+
+function setDensity(next: DenseDensity) {
+  try {
+    window.localStorage.setItem(DENSITY_STORAGE_KEY, String(next));
+    unsavedDensity = null;
+  } catch {
+    // La preferencia es una comodidad: si no se puede guardar, vale por esta visita.
+    unsavedDensity = next;
+  }
+  applyDensity(next);
+  densityListeners.forEach((listener) => listener());
+}
+
+function subscribeDensity(listener: () => void) {
+  densityListeners.add(listener);
+  return () => {
+    densityListeners.delete(listener);
   };
-  return [density, update];
+}
+
+export function useDensity(): [DenseDensity, (next: DenseDensity) => void] {
+  const density = useSyncExternalStore(subscribeDensity, getDensity, () => 32 as DenseDensity);
+  useEffect(() => {
+    applyDensity(density);
+  }, [density]);
+  return [density, setDensity];
 }
 
 export function normalizeSearch(value: string): string {

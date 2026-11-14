@@ -61,6 +61,24 @@ const RULES: Rule[] = [
     },
   },
   {
+    name: "selector de densidad en una pantalla",
+    why: "La densidad de las tablas es una preferencia de la persona: se cambia una sola vez, en el menú de ayuda (StudyShell).",
+    pattern: /<DensitySwitch\b/g,
+    allowed: { "shells/StudyShell.tsx": 1 },
+  },
+  {
+    name: "tabla escrita a mano",
+    why: "Las tablas son Table (lectura) o DenseTable (lista con selección y detalle). No se escribe <table> en una pantalla.",
+    pattern: /<table\b/g,
+    allowed: {
+      // Deuda registrada: grillas de edición que todavía no tienen componente.
+      "study/StudyExpedienteMensual.tsx": 1,
+      "study/StudyAdministracion.tsx": 3,
+      "study/ManualExtractionFieldsDialog.tsx": 1,
+      "study/StudyAyuda.tsx": 1,
+    },
+  },
+  {
     name: "rótulo sobre el título de la pantalla",
     why: "El encabezado de pantalla es DenseHeader: título, una línea de descripción y acciones. Sin rótulo superior.",
     pattern: /<DenseHeader\s+eyebrow=/g,

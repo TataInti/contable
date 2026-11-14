@@ -18,7 +18,6 @@ import {
   DenseLoading,
   DensePage,
   DenseSearch,
-  DensitySwitch,
   DenseTable,
   DenseTabs,
   DenseToolbar,
@@ -310,7 +309,7 @@ export function StudyCatalogosFiscales() {
   const [originFilter, setOriginFilter] = useState<"" | "REFERENCE" | "UI">("");
   const [stateFilter, setStateFilter] = useState<"" | "active" | "inactive">("");
   const [alertsOnly, setAlertsOnly] = useState(false);
-  const [density, setDensity] = useDensity();
+  const [density] = useDensity();
   const searchRef = useRef<HTMLInputElement>(null);
   const createRef = useRef<() => void>(() => undefined);
   useDenseShortcuts({
@@ -1865,7 +1864,6 @@ export function StudyCatalogosFiscales() {
           </Button>
         ) : null}
         <span className="dense-toolbar__spacer" />
-        <DensitySwitch value={density} onChange={setDensity} />
       </DenseToolbar>
 
       {tab === "regimes" && mismatchedRegimes.length > 0 ? (

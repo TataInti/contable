@@ -14,7 +14,6 @@ import {
   DenseHeader,
   DensePage,
   DenseSearch,
-  DensitySwitch,
   DenseTable,
   DenseTabs,
   DenseToolbar,
@@ -362,7 +361,7 @@ export function StudyAdministracion() {
   const [batchText, setBatchText] = useState("");
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
-  const [density, setDensity] = useDensity();
+  const [density] = useDensity();
   const identityNameError = identitySubmitted && !identityName.trim() ? "Ingresá el nombre" : undefined;
   const identityEmailError =
     identitySubmitted && !isValidEmail(identityEmail)
@@ -1636,7 +1635,6 @@ export function StudyAdministracion() {
             </>
           ) : null}
           <span className="dense-toolbar__spacer" />
-          <DensitySwitch value={density} onChange={setDensity} />
         </DenseToolbar>
       ) : null}
 

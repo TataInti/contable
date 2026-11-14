@@ -14,7 +14,6 @@ import {
   DenseTable,
   DenseToolbar,
   DenseWorkspace,
-  DensitySwitch,
   StatStrip,
   normalizeSearch,
   useDenseShortcuts,
@@ -39,7 +38,7 @@ const FEATURE_FLAG_LABELS: Record<string, string> = {
 };
 
 export function StudyAdministracionPlataforma() {
-  const [density, setDensity] = useDensity();
+  const [density] = useDensity();
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState<"" | "on" | "off">("");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -126,8 +125,6 @@ export function StudyAdministracionPlataforma() {
           <option value="on">Habilitados</option>
           <option value="off">Deshabilitados</option>
         </select>
-        <span className="dense-toolbar__spacer" />
-        <DensitySwitch value={density} onChange={setDensity} />
       </DenseToolbar>
 
       {flags.isLoading ? (

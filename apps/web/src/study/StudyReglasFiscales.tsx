@@ -24,7 +24,6 @@ import {
   DenseTable,
   DenseTabs,
   DenseToolbar,
-  DensitySwitch,
   StatStrip,
   useDenseShortcuts,
   useDensity,
@@ -172,7 +171,7 @@ export function StudyReglasFiscales() {
   const [ruleTab, setRuleTab] = useState<"rates" | "dueDates" | "sources" | "approval" | "simulate">("rates");
   const [packSearch, setPackSearch] = useState("");
   const [packFilter, setPackFilter] = useState<"" | "ACTIVE" | "DRAFT" | "IN_REVIEW">("");
-  const [density, setDensity] = useDensity();
+  const [density] = useDensity();
   const searchRef = useRef<HTMLInputElement>(null);
   const [deletingTarget, setDeletingTarget] = useState<{
     path: string;
@@ -1069,7 +1068,6 @@ export function StudyReglasFiscales() {
             </button>
           ) : null}
           <span className="dense-toolbar__spacer" />
-          <DensitySwitch value={density} onChange={setDensity} />
         </DenseToolbar>
       ) : null}
 

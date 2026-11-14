@@ -30,7 +30,6 @@ import {
   DenseTable,
   DenseToolbar,
   DenseWorkspace,
-  DensitySwitch,
   Inspector,
   InspectorFacts,
   InspectorSection,
@@ -154,7 +153,7 @@ export function StudyClientes() {
   const [vatFilter, setVatFilter] = useState("");
   const [onlyIncomplete, setOnlyIncomplete] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [density, setDensity] = useDensity();
+  const [density] = useDensity();
   const searchRef = useRef<HTMLInputElement>(null);
   const [identityForm, setIdentityForm] = useState({
     legalName: "",
@@ -1039,8 +1038,6 @@ export function StudyClientes() {
             </option>
           ))}
         </select>
-        <span className="dense-toolbar__spacer" />
-        <DensitySwitch value={density} onChange={setDensity} />
       </DenseToolbar>
 
       <DenseWorkspace panelId="clients-panel" inspector={inspector}>

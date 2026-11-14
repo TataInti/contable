@@ -274,6 +274,15 @@
   text-decoration: none;
 }
 
+/* Preferencias de la persona: viven acá, una sola vez, no en cada pantalla. */
+.study__help-preference {
+  display: grid;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2) var(--ds-space-2) var(--ds-space-1);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
 .study__portal-link {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
