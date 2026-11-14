@@ -101,3 +101,33 @@
     flex: 1 1 auto;
   }
 }
+
+/* inline: ausencia secundaria dentro de una sección. Texto alineado al inicio, sin bloque visual ni espacio de página. */
+.ds-empty--inline {
+  min-block-size: 0;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-block: var(--ds-space-3);
+  padding-inline: 0;
+  text-align: start;
+}
+
+.ds-empty--inline .ds-empty__visual {
+  display: none;
+}
+
+.ds-empty--inline .ds-empty__title {
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-base);
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.ds-empty--inline .ds-empty__description {
+  max-width: none;
+  font-size: var(--ds-text-sm);
+}
+
+.ds-empty--inline .ds-empty__action {
+  justify-content: flex-start;
+  margin-block-start: var(--ds-space-2);
+}
