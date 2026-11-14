@@ -53,6 +53,19 @@ describe("cobertura total del ROUTE_POLICY (deny-by-default)", () => {
     expect(missing).toEqual([]);
   });
 
+  it("calendarios fiscales: lectura, gestión y publicación con capacidades separadas", () => {
+    const base = "/api/v1/firms/:p/tax-calendars";
+    expect(requiredCapability("GET", base)).toBe("tax.calendars.read");
+    expect(requiredCapability("GET", `${base}/:p/validation`)).toBe("tax.calendars.read");
+    expect(requiredCapability("POST", base)).toBe("tax.calendars.manage");
+    expect(requiredCapability("PATCH", `${base}/:p`)).toBe("tax.calendars.manage");
+    expect(requiredCapability("POST", `${base}/:p/entries`)).toBe("tax.calendars.manage");
+    expect(requiredCapability("POST", `${base}/:p/create-from`)).toBe("tax.calendars.manage");
+    expect(requiredCapability("POST", `${base}/:p/hide`)).toBe("tax.calendars.manage");
+    expect(requiredCapability("POST", `${base}/:p/show`)).toBe("tax.calendars.manage");
+    expect(requiredCapability("POST", `${base}/:p/publish`)).toBe("tax.calendars.publish");
+  });
+
   it("libros fiscales: lectura con tax.vouchers.read y sin escritura (deny-by-default)", () => {
     const base = "/api/v1/firms/:p/clients/:p/fiscal-books";
     expect(requiredCapability("GET", `${base}/summary`)).toBe("tax.vouchers.read");
