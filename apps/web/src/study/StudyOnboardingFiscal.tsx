@@ -271,7 +271,6 @@ export function StudyOnboardingFiscal() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Configuración fiscal"
         title="Configuración fiscal"
         description="Perfil, adhesiones, actividades, períodos y obligaciones. Cada paso persiste y queda auditado."
       />

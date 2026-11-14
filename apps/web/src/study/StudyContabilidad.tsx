@@ -259,7 +259,6 @@ export function StudyContabilidad() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Libros canónicos"
         title="Contabilidad"
         description="Consultá asientos contabilizados, movimientos por cuenta y el balance del período activo."
         actions={
@@ -316,11 +315,6 @@ export function StudyContabilidad() {
             tone: selectedDrafts.length > 0 ? "warn" : undefined,
           },
           { key: "accounts", label: "Cuentas", value: accounts.data?.length ?? "—", detail: `${postingAccounts.length} posteables` },
-          {
-            key: "period",
-            label: "Período",
-            value: activePeriod ? (activePeriod.status === "OPEN" ? "Abierto" : "Cerrado") : "Sin seleccionar",
-          },
         ]}
       />
 

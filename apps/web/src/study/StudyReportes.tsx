@@ -135,7 +135,6 @@ export function StudyReportes() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Información verificable"
         title="Reportes y análisis"
         description="Generá estados desde el mayor canónico, revisalos y publicalos al portal."
         actions={

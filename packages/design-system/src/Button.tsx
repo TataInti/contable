@@ -7,7 +7,18 @@ import type {
 } from "react";
 import "./Button.css";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "text" | "link";
+/**
+ * `danger` es discreto y va en pantallas y filas; `danger-solid` se reserva
+ * para el botón que confirma una acción riesgosa dentro de un diálogo.
+ */
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "danger"
+  | "danger-solid"
+  | "text"
+  | "link";
 export type ButtonSize = "sm" | "md" | "row";
 
 interface ButtonBaseProps {

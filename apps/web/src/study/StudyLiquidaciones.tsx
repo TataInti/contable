@@ -190,7 +190,6 @@ export function StudyLiquidaciones() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Impuestos"
         title="Liquidaciones"
         description="Cada liquidación conserva su versión, las reglas aplicadas y la evidencia del corte de cálculo."
         actions={

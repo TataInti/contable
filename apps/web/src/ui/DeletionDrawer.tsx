@@ -140,7 +140,7 @@ export function DeletionDrawer({ isOpen, path, onClose, onDeleted }: DeletionDra
             <Button type="button" variant="ghost" onClick={close}>Cancelar</Button>
             <Button
               type="button"
-              variant="danger"
+              variant="danger-solid"
               loading={deletion.isPending}
               loadingLabel="Eliminando"
               disabled={!canConfirm}

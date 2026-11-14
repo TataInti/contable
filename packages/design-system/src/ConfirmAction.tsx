@@ -96,7 +96,7 @@ export function ConfirmAction({
         ) : null}
         <footer className="confirm-action__actions">
           <Button variant="ghost" onClick={onCancel}>{cancelLabel}</Button>
-          <Button variant={tone === "danger" ? "danger" : "primary"} onClick={onConfirm}>
+          <Button variant={tone === "danger" ? "danger-solid" : "primary"} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </footer>

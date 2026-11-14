@@ -441,7 +441,6 @@ export function StudyBandeja() {
   return (
     <DensePage density={density} flow className="document-inbox">
       <DenseHeader
-        eyebrow="Ingreso y evidencia"
         title="Bandeja documental"
         description="Cargá comprobantes, validá los datos extraídos y prepará el asiento sin perder la evidencia."
         actions={

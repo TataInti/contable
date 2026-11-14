@@ -255,7 +255,6 @@ export function StudyRentabilidad() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Gerencia"
         title="Rentabilidad"
         description="Devengado y caja se calculan por separado; la gestión sin respaldo fiscal nunca reduce impuestos por defecto."
         actions={
@@ -293,8 +292,6 @@ export function StudyRentabilidad() {
       <StatStrip
         label="Resultado del período"
         items={[
-          { key: "client", label: "Cliente", value: clientId ? "Seleccionado" : "Sin seleccionar" },
-          { key: "period", label: "Período", value: selectedPeriod ? selectedPeriod.label ?? selectedPeriod.startDate.slice(0, 7) : "Pendiente" },
           { key: "accrual", label: "Devengado", value: devengado ? `v${devengado.version}` : "Sin calcular" },
           { key: "cash", label: "Caja", value: caja ? `v${caja.version}` : "Sin calcular" },
         ]}
