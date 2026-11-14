@@ -16,7 +16,10 @@ const ROLE_LABELS: Record<string, string> = {
   READONLY: "Sólo lectura",
 };
 
-export function ContextBar() {
+export function ContextBar({ only }: { only?: "period" } = {}) {
+  // `only="period"`: el estudio ya eligió cliente en el menú lateral; la barra
+  // se reduce al selector de período contable.
+  const periodOnly = only === "period";
   const { firmId, clientId, periodId, setFirmId, setClientId, setPeriodId } = useClientContext();
   const { me, portalContexts } = useSession();
   const portal = useLocation().pathname.startsWith("/portal");
@@ -60,15 +63,17 @@ export function ContextBar() {
       className={`ctxbar${portal ? " ctxbar--portal" : ""}`}
       aria-label="Contexto de trabajo"
     >
+      {periodOnly ? null : (
       <div className="ctxbar__intro">
         <span>
           <strong>{portal ? "Empresa activa" : "Contexto de trabajo"}</strong>
           <small>{ROLE_LABELS[role ?? ""] ?? role ?? "Seleccioná el alcance"}</small>
         </span>
       </div>
+      )}
 
       <div className="ctxbar__selectors">
-        {showFirmSelector ? (
+        {periodOnly ? null : showFirmSelector ? (
           <label className="ctxbar__item">
             <span className="ctxbar__label">Estudio</span>
             <span className="ctxbar__select-wrap">
@@ -93,6 +98,7 @@ export function ContextBar() {
             <span className="ctxbar__static-value">{selectedFirmName ?? "Estudio contable"}</span>
           </div>
         )}
+        {periodOnly ? null : (
         <label className="ctxbar__item">
           <span className="ctxbar__label">Cliente</span>
           <span className="ctxbar__select-wrap">
@@ -116,6 +122,7 @@ export function ContextBar() {
             </select>
           </span>
         </label>
+        )}
         <label className="ctxbar__item ctxbar__item--period">
           <span className="ctxbar__label">Período</span>
           <span className="ctxbar__select-wrap">

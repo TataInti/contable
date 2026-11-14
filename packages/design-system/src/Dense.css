@@ -302,6 +302,8 @@
 
 .dense-search .dense-input {
   width: 260px;
+  /* Deja lugar al icono de búsqueda, que va por delante del texto. */
+  padding-left: var(--ds-space-8);
   padding-right: 30px;
 }
 
