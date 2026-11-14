@@ -164,6 +164,28 @@ Coinciden con el recorrido en local ([relevamiento-alta-y-comprobante.md](releva
 
 No se pudo recorrer en producción: carga de un comprobante en Bandeja, envío a revisión y cierre, presentación, pago y portal del cliente. Los tres primeros dependen de R.1 y R.2; el portal necesita crear una contraseña para un usuario del cliente.
 
+### Cierre en producción · 14-nov-2026, versión `80512cc`
+
+Con las etapas A, B y C desplegadas se retomó el legajo de **Restaurante de Prueba S.R.L.** (marzo 2025) desde la etapa 5 y se llegó hasta la presentación con constancia. Todo desde la interfaz.
+
+| Paso | Resultado |
+|---|---|
+| Resolver los dos controles bloqueantes sólo con la explicación | Hecho, sin documento |
+| Enviar a revisión, aprobar y finalizar (Titular sobre su propio legajo) | Finalizado; queda anotado que revisó y finalizó la misma persona |
+| Inicio: "Falta la constancia de presentación" | Aparecieron las 3 liquidaciones |
+| Posición fiscal del Legajo | Una fila por impuesto |
+| Registrar la presentación de IVA subiendo una constancia (PDF de prueba) | Subida, validada y registrada; IVA quedó "Presentado" y el recordatorio bajó a 2 |
+
+Quedaron a propósito sin presentar Ingresos Brutos y TEM, para que el recordatorio siga visible. No se registraron pagos.
+
+| # | Hallazgo | Gravedad | Estado |
+|---|---|---|---|
+| Q.1 | Una obligación "Presentado" sigue ofreciendo "Registrar presentación" (y una pagada también). | Media | Abierto |
+| Q.2 | Un control ya resuelto sigue diciendo "Bloquea el cierre" y "Pendiente de respaldo". | Menor | Abierto |
+| Q.3 | El cajón de presentación se titula con el régimen ("Responsable Inscripto") en vez de la acción y el impuesto; los tres campos de arriba y el selector de constancia quedan angostos y el texto de ayuda se corta. | Menor | Abierto |
+| Q.4 | Las dos notas de autorrevisión aparecen pegadas, sin espacio entre una y otra. | Menor | Abierto |
+| Q.5 | En Inicio, "Liquidaciones en curso" lista las finalizadas, y "Obligaciones pendientes" marca 0 con dos sin presentar. Los nombres largos de impuesto se cortan en el recordatorio. | Menor | Abierto |
+
 ## Simulador de liquidación ("Probar")
 
 Pestaña **Probar** en Reglas fiscales. Corre el motor real con las reglas guardadas de una versión sobre un caso cargado a mano; no escribe nada. Si la versión es un borrador, compara contra la versión activa del paquete.
