@@ -121,14 +121,19 @@ for (const viewport of [
       expect(medidas.desbordeContenedor).toBeLessThanOrEqual(0);
       expect(medidas.tablaDentro).toBe(true);
 
-      // El texto del encabezado «Terminación de CUIT» no se recorta en la columna angosta.
+      // El encabezado «Terminación de CUIT» no se corta: ni en vertical ni en horizontal.
       const recorteEncabezado = await page.locator("thead th.client-list__ending-column").evaluate((th) => {
         const caja = th.getBoundingClientRect();
         const rango = document.createRange();
         rango.selectNodeContents(th);
-        return rango.getBoundingClientRect().bottom - caja.bottom;
+        const verticalQueSobra = rango.getBoundingClientRect().bottom - caja.bottom;
+        const horizontalQueSobra = Array.from(th.querySelectorAll<HTMLElement>("*"))
+          .concat(th as HTMLElement)
+          .some((elemento) => elemento.scrollWidth > elemento.clientWidth + 1);
+        return { verticalQueSobra, horizontalQueSobra };
       });
-      expect(recorteEncabezado).toBeLessThanOrEqual(1);
+      expect(recorteEncabezado.verticalQueSobra).toBeLessThanOrEqual(1);
+      expect(recorteEncabezado.horizontalQueSobra).toBe(false);
 
       const digitos = page.getByRole("group", { name: "Terminación de CUIT" });
       await digitos.getByRole("button", { name: "9" }).click();

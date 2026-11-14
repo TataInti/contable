@@ -1035,3 +1035,14 @@
   max-height: none;
   overflow: visible;
 }
+
+/* El botón de orden del encabezado ocupa el ancho de la columna y deja que el texto baje de línea. */
+.dense-table thead th.client-list__ending-column .dense-sort {
+  display: block;
+  width: 100%;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  text-align: start;
+  height: auto;
+}
