@@ -115,6 +115,16 @@
 | `tax.rules.approve` | ✓ | ✓ | | | |
 | `tax.rules.activate` | ✓ | ✓ | | | |
 
+### Calendarios fiscales (corte 2a-i)
+
+| Capacidad | OWNER | ADMIN | PREPARER | REVIEWER | AUDITOR_READONLY |
+|---|---|---|---|---|---|
+| `tax.calendars.read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `tax.calendars.manage` | ✓ | ✓ | ✓ | — | — |
+| `tax.calendars.publish` | ✓ | ✓ | — | — | — |
+
+Crear, editar en borrador, validar, versionar («crear a partir de este»), ocultar y mostrar requieren `tax.calendars.manage`. Publicar requiere `tax.calendars.publish`, sin revisor distinto. Las rutas viven bajo `/api/v1/firms/:firmId/tax-calendars`; cada una tiene capacidad declarada en el guard (una ruta sin capacidad responde 404).
+
 ### Comprobantes e ingesta (Puerta 2)
 
 | Capacidad | OWNER | ADMIN | PREPARER | REVIEWER | AUDITOR_READONLY |

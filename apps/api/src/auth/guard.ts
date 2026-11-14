@@ -274,6 +274,15 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/tax-obligations\/.*\/filings$/, resolve: () => "tax.filings.record" },
   { match: /\/tax-obligations\/.*\/payments$/, resolve: () => "tax.payments.record" },
   { match: /\/tax-payments\/.*\/reverse$/, resolve: () => "tax.payments.record" },
+  // Calendarios fiscales del estudio (corte 2a-i): lectura, gestión y publicación separadas.
+  {
+    match: /\/tax-calendars(?:\/|$)/,
+    resolve: (m, path) => {
+      if (m === "GET") return "tax.calendars.read";
+      if (path.endsWith("/publish")) return "tax.calendars.publish";
+      return "tax.calendars.manage";
+    },
+  },
   { match: /\/tax\//, resolve: (m) => (m === "GET" ? "tax.rules.read" : "tax.rules.propose") },
   { match: /\/activities/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
   { match: /\/adjustments\/(exchange-difference|inflation)/, resolve: () => "bank.reconcile" },

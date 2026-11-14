@@ -65,6 +65,11 @@ export type Capability =
   | "tax.management_expenses.read"
   | "tax.management_expenses.write"
   | "tax.management_expenses.approve_treatment"
+  // Calendarios fiscales (corte 2a-i, D-C3): lectura para toda la firma; gestión
+  // para OWNER, ADMIN y PREPARER; publicar solo OWNER y ADMIN.
+  | "tax.calendars.read"
+  | "tax.calendars.manage"
+  | "tax.calendars.publish"
   | "profitability.read"
   | "profitability.calculate"
   | "profitability.publish"

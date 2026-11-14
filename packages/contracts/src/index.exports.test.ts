@@ -18,4 +18,9 @@ describe("índice de contratos: exportaciones de calendarios y libros", () => {
     const { fiscalBookExportQuerySchema } = contracts;
     expect(typeof fiscalBookExportQuerySchema.safeParse).toBe("function");
   });
+  it("exporta los esquemas de calendarios fiscales (corte 2a-i)", () => {
+    expect(contracts).toHaveProperty("createTaxCalendarSchema");
+    expect(contracts).toHaveProperty("taxCalendarEntryInputSchema");
+    expect(contracts).toHaveProperty("taxCalendarListQuerySchema");
+  });
 });

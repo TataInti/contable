@@ -25,7 +25,7 @@
 | **Línea** | Componente de un asiento: cuenta, importe original/funcional, moneda, tipo de cambio, centro de costo, contraparte. |
 | **Posting** | Transición determinista que contabiliza un asiento `REVIEWED` → `POSTED`, asigna secuencia y lo vuelve inmutable. |
 | **Reversión** | Asiento que anula otro contabilizado. El original permanece inmutable; se crea un nuevo asiento. |
-| **Período** | Unidad de tiempo contable (mes) dentro de un ejercicio. Estados: `OPEN`, `SOFT_CLOSED`, `HARD_CLOSED`. |
+| **Período contable** | Unidad de tiempo contable (mes) de la contabilidad del cliente, dentro de un ejercicio. Estados: `OPEN`, `SOFT_CLOSED`, `HARD_CLOSED`. Distinto del período fiscal. |
 | **Ejercicio** | Año fiscal del cliente. Estados: `OPEN`, `CLOSING`, `CLOSED`. |
 | **Cierre** | Transición que bloquea escrituras según nivel (suave/duro). Reabrir exige rol, motivo y auditoría. |
 | **Saldos** | Agregados derivados de líneas `POSTED`. Siempre reconstruibles desde el ledger. |
@@ -41,7 +41,9 @@
 | **Obligación** | Instancia concreta de un impuesto/regla para un cliente y período, con vencimiento, responsable y estado. |
 | **Regla** | Configuración versionada con fuente, vigencia y responsable de validación. |
 | **Terminación de CUIT** | Último dígito del CUIT del cliente. Derivado y no editable; ordena, filtra y agrupa a los clientes para la presentación. |
-| **Vencimiento** | Fecha calculada desde regla, feriados y terminación de CUIT; puede tener override justificado. |
+| **Vencimiento** | Fecha límite de una obligación. Precedencia: valor manual justificado > calendario publicado del organismo y la jurisdicción > regla de vencimiento. Sin fuente, la obligación queda sin fecha y se avisa qué falta. |
+| **Calendario fiscal** | Vencimientos anuales de un organismo y una jurisdicción, con sus celdas por concepto, terminación de CUIT y período de referencia. Se carga en borrador, se valida y se publica. Lo publicado no se edita: se corrige con una versión nueva. |
+| **Período fiscal** | Período de un impuesto o legajo (por ejemplo, IVA de enero 2026). Es distinto del período contable. |
 
 ## Reportes y publicación
 
