@@ -90,7 +90,9 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   await navigateStudy(page, "Legajo");
   await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
 
+  // Rentabilidad necesita período: se elige en la barra de la propia pantalla.
   await navigateStudy(page, "Rentabilidad");
+  await ensureStudyContext(page);
   await expect(page.getByRole("heading", { name: "Rentabilidad", exact: true })).toBeVisible();
 
   // Reportes y análisis (BI) tampoco forma parte de la navegación del estudio.
