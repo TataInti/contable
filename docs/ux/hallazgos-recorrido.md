@@ -129,6 +129,41 @@ Hecho en local con datos y en producción (`e6cfe37`), que está vacía de datos
 
 Confirmado en pantalla: notificación al habilitar y deshabilitar un módulo, confirmación al deshabilitar, cajón de alta de cliente sin rótulo, densidad de filas desde el menú de ayuda, tablas con el mismo aspecto en Clientes, Liquidaciones, Usuarios y Reglas fiscales.
 
+### Recorrido del 14-nov-2026 · producción, cliente de prueba
+
+Hecho en `contable.app360.com.ar` desde la interfaz, sobre la versión `bb1db18` (hoy en `main`). Cliente: **Restaurante de Prueba S.R.L.** (CUIT sintético 30-71000001-4), marzo 2025. Todo lo cargado es de prueba.
+
+**Hasta dónde llegó:** módulos, catálogos, reglas, cliente, configuración fiscal, legajo, importación de cuatro archivos, revisión, clasificación y **cálculo de los tres impuestos**. Quedó en la etapa 5 de 6 (Controles), con dos controles bloqueantes abiertos.
+
+| Impuesto | Resultado en producción |
+|---|---|
+| IVA | $ 38.199,00 (débito $ 43.388,26 − crédito $ 5.189,26) |
+| Ingresos Brutos Tucumán | $ 7.231,38 |
+| TEM San Miguel de Tucumán | $ 1.239,66 |
+
+Coinciden con el recorrido en local ([relevamiento-alta-y-comprobante.md](relevamiento-alta-y-comprobante.md)).
+
+**Lo que quedó cargado en producción:** 6 módulos prendidos (Bandeja documental, Módulo fiscal, Portal del cliente, IVA RI, IIBB Tucumán, TEM); jurisdicción AR-SMT; tipos de impuesto IVA, IIBB y TEM; organismos ARCA, DGR-TUC y SMT-TEM; regímenes RI, IIBB_LOCAL_TUC y TEM_SMT; actividades REST-AR, REST-TUC y REST-SMT; tres paquetes de reglas vigentes (21 % · 3,5 % con mínimo $ 1.500 · 0,6 % con mínimo $ 500); el cliente de prueba con su legajo de marzo 2025.
+
+| # | Hallazgo | Gravedad | Estado |
+|---|---|---|---|
+| R.1 | **El cierre no se puede completar sin inventar un respaldo.** Los controles "Acreditaciones bancarias vs. facturación" y "Caja e imputaciones del período" bloquean y sólo se resuelven eligiendo un documento aprobado en Bandeja. No hay forma de registrar "no aplica" ni de explicar la diferencia con un texto. El primero además muestra "Esperado: $ 663.220,51" sin que se haya cargado ningún dato bancario. | Bloquea el cierre | Corregido (#86): el respaldo es opcional; se exige la explicación. Falta revisar de dónde sale el "Esperado" del control bancario |
+| R.2 | **Registrar la presentación depende del portal del cliente.** El acuse sólo lo puede subir el cliente; el estudio no puede adjuntarlo. Sin eso la obligación no llega a "presentada". | Bloquea el cierre | Corregido (#86, #87): el estudio sube la constancia en "Registrar presentación" y en Inicio se listan las que faltan |
+| R.3 | Controles muestra códigos internos: `BLOCKING`, `INFO`, `SUPERSEDED_OPENING_CREDIT`. Clasificación dice "Gate de cálculo". Cálculo muestra `ar-vat-ri-v2.1.0` y "Regla 01a1daec". | Media | Corregido (#86, #88) |
+| R.4 | En Clasificación aparecen dos filas "R · 0000-00000001 · Venta" con el CUIT del propio cliente: son los resúmenes de Ingresos Brutos y TEM mostrados como si fueran comprobantes. La actividad se escribe a mano como código, sin lista para elegir. Al guardar una fila, la lista se reordena. | Media | Parcial (#88): la actividad se elige de una lista y el origen está en castellano. Siguen los resúmenes de Ingresos Brutos y TEM como filas y el reordenamiento al guardar |
+| R.5 | La tabla "Posición fiscal del período" del Legajo muestra sólo IVA; Ingresos Brutos y TEM se calcularon pero no tienen fila para registrar presentación ni pago desde ahí. | Media | Corregido (#88): una fila por impuesto del mes |
+| R.6 | Configuración fiscal: hay que crear a mano un período por impuesto (tres por mes y por cliente) y después una obligación por período. El régimen no viene elegido aunque sólo haya uno compatible, y el vencimiento es "opcional" aunque la regla ya define el día. Después de crear la obligación, el período sigue ofreciendo "Crear obligación" y no hay lista de obligaciones creadas. | Media: es el paso más largo del alta | Corregido (#85, #88): botón "Abrir mes" y cada período muestra su obligación |
+| R.7 | Configuración fiscal a 1150 px: las tablas "Regímenes adheridos" y "Actividades" quedan en dos columnas angostas, con una palabra por renglón y desplazamiento horizontal; los pasos se cortan ("Perfil f…", "Inscri…"); los datos del contribuyente se cortan hasta activar el perfil. | Media | Corregido (#85): pestañas y tablas a ancho completo |
+| R.8 | El paso "Perfil fiscal" figura "Completado" cuando el perfil todavía está en borrador. | Menor | Corregido (#85): dice "Falta activar" |
+| R.9 | La etiqueta del período se duplica: "IVA · IVA · Marzo 2025". El ejemplo del campo ("IVA · Agosto 2026") invita a escribir el impuesto, que la pantalla ya antepone. | Menor | Corregido (#85) |
+| R.10 | Reglas fiscales: los campos de la fila de alícuota se anuncian con un identificador interno ("Alícuota 2374c16d-…"); la tabla de alícuotas necesita desplazamiento horizontal; la notificación de guardado tapa el botón "Guardar borrador". Al crear un segundo paquete, la versión se abre en la última pestaña usada y no en Alícuotas. | Menor | Parcial (#88): campos nombrados por fila. Siguen el desplazamiento horizontal y la notificación sobre el botón |
+| R.11 | El Titular puede revisar el lote que él mismo importó. Queda anotado ("Revisado por la misma persona que importó"), pero el control de dos personas no lo impide. | Para decidir | Decidido y corregido (#86): sólo Titular y Administrador |
+| R.12 | El menú lateral muestra Resumen, Bandeja, Trabajo, Legajo y el resto aunque el estudio no tenga ningún cliente. | Menor | Sin cambio: las secciones ya están deshabilitadas con su motivo |
+
+**Estado al cierre del 14-nov-2026:** las correcciones están en `main` (#85 a #88) y falta desplegarlas. Con ellas desplegadas se puede retomar el legajo del cliente de prueba desde la etapa 5.
+
+No se pudo recorrer en producción: carga de un comprobante en Bandeja, envío a revisión y cierre, presentación, pago y portal del cliente. Los tres primeros dependen de R.1 y R.2; el portal necesita crear una contraseña para un usuario del cliente.
+
 ## Simulador de liquidación ("Probar")
 
 Pestaña **Probar** en Reglas fiscales. Corre el motor real con las reglas guardadas de una versión sobre un caso cargado a mano; no escribe nada. Si la versión es un borrador, compara contra la versión activa del paquete.
@@ -145,4 +180,4 @@ La traducción de reglas guardadas a reglas del motor vive en `apps/api/src/tax/
 
 ## Pedidos de producto registrados
 
-- El trabajo de una obligación termina cuando el estudio sube el comprobante de la presentación ante el organismo fiscal. Hoy no existe ese paso; queda para diseño y luego código.
+- El trabajo de una obligación termina cuando el estudio sube la constancia de la presentación ante el organismo fiscal. Hecho en #86 y #87: es el único paso obligatorio para registrar la presentación, lo hace el estudio y en Inicio se listan las constancias que faltan.
