@@ -130,6 +130,11 @@ function MutationError({ error }: { error: unknown }) {
 export function StudyOnboardingFiscal() {
   const [density] = useDensity();
   const { firmId, clientId, capabilities } = useClientContext();
+  const clientQuery = useQuery({
+    queryKey: ["clients", firmId, clientId],
+    queryFn: () => api.get<{ cuit: string; cuitEnding: string | null }>(`/firms/${firmId}/clients/${clientId}`),
+    enabled: Boolean(firmId && clientId),
+  });
   const queryClient = useQueryClient();
   const canWrite = capabilities.has("tax.profile.write");
   const [tab, setTab] = useState<FiscalTab>("resumen");
@@ -340,6 +345,18 @@ export function StudyOnboardingFiscal() {
         }
       />
 
+      {clientQuery.data ? (
+        <dl className="fiscal-overview" aria-label="Cliente">
+          <div>
+            <dt>CUIT</dt>
+            <dd className="tabular-copy">{formatCuit(clientQuery.data.cuit)}</dd>
+          </div>
+          <div>
+            <dt>Terminación de CUIT</dt>
+            <dd className="tabular-copy">{clientQuery.data.cuitEnding ?? "Sin CUIT"}</dd>
+          </div>
+        </dl>
+      ) : null}
       {nextRequiredStep ? (
         <nav className="fiscal-progress" aria-label="Pasos del onboarding fiscal">
           <ol className="fiscal-progress__list">
