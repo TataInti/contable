@@ -926,7 +926,9 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
               z
                 .object({
                   concept: z.string().max(80).optional(),
-                  kindId: z.string().uuid().optional(),
+                  // Los tipos de regla del catálogo de sistema se sembraron con ids
+                  // "k1000000-…", que no son UUID RFC; el servicio valida que existan.
+                  kindId: z.string().min(1).max(64).optional(),
                   activityId: z.string().uuid().optional(),
                   categoryCode: z.string().max(8).optional(),
                   isDefault: z.boolean().optional(),

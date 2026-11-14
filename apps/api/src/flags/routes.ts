@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { FeatureFlagService, type FeatureFlagCode } from "./feature-flag-service.js";
+import { FEATURE_FLAGS, FeatureFlagService, type FeatureFlagCode } from "./feature-flag-service.js";
 import { tenantContextFromRequest } from "../auth/tenant.js";
 import { z } from "zod";
 
@@ -14,8 +14,21 @@ export function flagRoutes(app: FastifyInstance) {
 
   // Listar flags de la firma
   app.get("/api/v1/firms/:firmId/feature-flags", async (req, reply) => {
-    const flagsList = await flags.list(tenantCtx(req));
-    return reply.send({ data: flagsList });
+    const ctx = tenantCtx(req);
+    const stored = await flags.list(ctx);
+    // Un estudio nuevo no tiene filas: se completan los módulos conocidos (apagados) para que
+    // la pantalla de módulos pueda habilitarlos. Al habilitar uno, PUT crea la fila.
+    const firmLevel = new Set(stored.filter((flag) => flag.clientId === null).map((flag) => flag.code));
+    const missing = FEATURE_FLAGS.filter((code) => !firmLevel.has(code)).map((code) => ({
+      id: `default:${code}`,
+      firmId: ctx.firmId,
+      clientId: null,
+      code,
+      enabled: false,
+      createdAt: null,
+      updatedAt: null,
+    }));
+    return reply.send({ data: [...stored, ...missing] });
   });
 
   // Consultar un flag

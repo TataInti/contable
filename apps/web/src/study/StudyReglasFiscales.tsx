@@ -386,9 +386,21 @@ export function StudyReglasFiscales() {
           ...(row.validTo ? { validTo: row.validTo.slice(0, 10) } : {}),
         })),
       }),
-    onSuccess: () => {
-      invalidate();
+    onSuccess: async () => {
+      const savedVersionId = selectedVersion?.id;
       setRowFieldErrors({});
+      void queryClient.invalidateQueries({ queryKey: ["tax-rule-packs", firmId] });
+      await queryClient.invalidateQueries({ queryKey: ["tax-rule-pack", selectedPackId] });
+      // El servidor reemplaza las filas al guardar (con ids nuevos): se toma lo
+      // guardado como borrador de trabajo; si no, el borrador quedaría "sin
+      // guardar" y bloquearía la activación.
+      const saved = queryClient
+        .getQueryData<RulePackDetail>(["tax-rule-pack", selectedPackId])
+        ?.versions.find((version) => version.id === savedVersionId);
+      if (saved) {
+        setDraftRows(saved.rateRules);
+        setDraftRowsVersionId(saved.id);
+      }
       notify.success("Las reglas del borrador quedaron guardadas.");
     },
     onError: (error) => {

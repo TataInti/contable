@@ -39,6 +39,18 @@ function comp(
 }
 
 describe("motor IVA RI por componente (F1.3)", () => {
+  it("redondeo de centavos del IVA no bloquea el neto contra bases (ticket real: $ 0,0219)", () => {
+    const base = {
+      period: PERIOD,
+      components: [comp("c1", "SALE", "2026-01-10", "21", "100000")],
+      rules: RULES,
+    };
+    const within = calculateVatRi({ ...base, bookDifferences: [{ voucherId: "v1", difference: dec("0.0219") }] });
+    expect(within.blocks).toEqual([]);
+    const beyond = calculateVatRi({ ...base, bookDifferences: [{ voucherId: "v1", difference: dec("0.06") }] });
+    expect(beyond.blocks.join(" ")).toContain("difiere 0.06");
+  });
+
   it("ventas y compras al 21%: débito − crédito = total", () => {
     const result = calculateVatRi({
       period: PERIOD,
