@@ -104,7 +104,11 @@ export function StudyDashboard() {
       </div>
     );
   const data = query.data;
-  const worklist = worklistQuery.data ?? [];
+  // "En curso" deja afuera lo finalizado y lo reemplazado: lo finalizado sin presentar
+  // ya figura en el recordatorio de constancias.
+  const worklist = (worklistQuery.data ?? []).filter(
+    (item) => item.status !== "FINALIZED" && item.status !== "SUPERSEDED",
+  );
   const atRisk = worklist.filter((item) => item.status === "CHANGES_REQUESTED").length;
   const inReview = worklist.filter((item) => item.status === "IN_REVIEW").length;
   const attentionTotal =
@@ -137,7 +141,7 @@ export function StudyDashboard() {
       to: "/trabajo",
       icon: "calendar",
       label: "Obligaciones pendientes",
-      detail: "Vencimientos por resolver",
+      detail: "Todavía sin presentar",
       count: data?.pendingObligations ?? 0,
       tone: "danger",
     },

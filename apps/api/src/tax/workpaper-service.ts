@@ -2595,6 +2595,7 @@ export class MonthlyWorkpaperService {
           period: true,
           regime: { include: { taxType: true, jurisdiction: true } },
           payments: { where: { status: "PAID" } },
+          filings: { where: { status: "FILED" }, orderBy: { filedAt: "desc" }, take: 1 },
         },
         orderBy: { dueDate: "asc" },
       });
@@ -2651,6 +2652,8 @@ export class MonthlyWorkpaperService {
           status: obligation.status,
           dueDate: obligation.dueDate,
           regime: obligation.regime,
+          // Presentación ya registrada (con su constancia): la pantalla no la vuelve a ofrecer.
+          filedAt: obligation.filings[0]?.filedAt ?? null,
           settlement: settlement
             ? { id: settlement.id, status: settlement.status, version: settlement.version, totals }
             : null,

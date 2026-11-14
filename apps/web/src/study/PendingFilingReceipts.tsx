@@ -59,7 +59,7 @@ export function PendingFilingReceipts({
       key: "tax",
       header: "Impuesto",
       sortValue: (row) => row.taxName,
-      render: (row) => row.taxName,
+      render: (row) => <span title={row.taxName}>{row.taxName}</span>,
     },
     {
       key: "period",

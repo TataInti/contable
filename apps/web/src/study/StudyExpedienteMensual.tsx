@@ -114,6 +114,8 @@ interface TaxPosition {
   obligationId: string;
   status: string;
   dueDate: string | null;
+  /** Fecha de la presentación registrada, si ya existe. */
+  filedAt?: string | null;
   regime: {
     id: string;
     name: string;
@@ -487,6 +489,21 @@ const CONTROL_LABELS: Record<string, string> = {
 function formatMoney(value: string | undefined | null): string {
   const num = Number(value ?? 0);
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(num);
+}
+
+/** Una sola nota cuando quien preparó el legajo también lo revisó o lo finalizó. */
+function selfReviewNote(wp: {
+  preparedByUserId?: string | null;
+  reviewedByUserId?: string | null;
+  finalizedByUserId?: string | null;
+}): string | null {
+  if (!wp.preparedByUserId) return null;
+  const reviewed = wp.reviewedByUserId === wp.preparedByUserId;
+  const finalized = wp.finalizedByUserId === wp.preparedByUserId;
+  if (reviewed && finalized) return "Legajo revisado y finalizado por la misma persona que lo preparó.";
+  if (reviewed) return "Legajo revisado por la misma persona que lo preparó.";
+  if (finalized) return "Legajo finalizado por la misma persona que lo preparó.";
+  return null;
 }
 
 function formatDate(value: string | null): string {
@@ -1745,7 +1762,7 @@ export function StudyExpedienteMensual() {
         onClose={() => setPositionAction(null)}
         title={
           positionAction?.kind === "PAYMENT"
-            ? positionAction.position.regime.name
+            ? `Registrar pago · ${positionAction.position.regime.taxType.name}`
             : "Registrar pago"
         }
         description="El pago se registrará de forma manual y actualizará el saldo pendiente."
@@ -1820,10 +1837,10 @@ export function StudyExpedienteMensual() {
         onClose={() => setPositionAction(null)}
         title={
           positionAction?.kind === "FILING"
-            ? positionAction.position.regime.name
+            ? `Registrar presentación · ${positionAction.position.regime.taxType.name}`
             : "Registrar presentación"
         }
-        description="Conservá la referencia y el respaldo de la presentación manual."
+        description="Cargá los datos de la presentación y adjuntá la constancia que emite el organismo."
         size="wide"
       >
         {positionAction?.kind === "FILING" ? (
@@ -1856,7 +1873,7 @@ export function StudyExpedienteMensual() {
               onChange={(event) => setFilingForm({ ...filingForm, externalId: event.target.value })}
               placeholder="Opcional"
             />
-            <div className="ds-field">
+            <div className="ds-field fiscal-action-form__wide">
               <label className="ds-field__label" htmlFor="tax-filing-evidence">
                 Constancia de presentación
               </label>
@@ -1881,7 +1898,7 @@ export function StudyExpedienteMensual() {
               </small>
             </div>
             {!filingForm.evidenceDocumentId ? (
-              <div className="ds-field">
+              <div className="ds-field fiscal-action-form__wide">
                 <label className="ds-field__label" htmlFor="tax-filing-receipt">
                   Archivo de la constancia
                 </label>
@@ -1986,14 +2003,9 @@ export function StudyExpedienteMensual() {
                       {wp.periodStart.slice(0, 7)} · Revisión {wp.revision}
                     </h2>
                     <StatusBadge status={wp.status} />
-                    {wp.preparedByUserId && wp.reviewedByUserId === wp.preparedByUserId ? (
+                    {selfReviewNote(wp) ? (
                       <small className="muted-copy" role="status">
-                        Legajo revisado por la misma persona que lo preparó.
-                      </small>
-                    ) : null}
-                    {wp.preparedByUserId && wp.finalizedByUserId === wp.preparedByUserId ? (
-                      <small className="muted-copy" role="status">
-                        Legajo finalizado por la misma persona que lo preparó.
+                        {selfReviewNote(wp)}
                       </small>
                     ) : null}
                   </div>
@@ -2993,8 +3005,12 @@ export function StudyExpedienteMensual() {
                                 header: "Acciones",
                                 render: (position) => (
                                   <span className="study-table__actions">
-                                    {position.settlement &&
-                                    capabilities.has("tax.filings.record") ? (
+                                    {position.filedAt ? (
+                                      <span className="muted-copy">
+                                        Presentada el {formatDate(position.filedAt)}
+                                      </span>
+                                    ) : position.settlement?.status === "FINALIZED" &&
+                                      capabilities.has("tax.filings.record") ? (
                                       <Button
                                         size="sm"
                                         variant="ghost"
@@ -3081,7 +3097,9 @@ export function StudyExpedienteMensual() {
                                   Esperado: {formatMoney(control.expected)}
                                   {control.actual !== null
                                     ? ` · Actual: ${formatMoney(control.actual)}`
-                                    : " · Pendiente de respaldo"}
+                                    : control.status === "OPEN"
+                                      ? " · Pendiente de respaldo"
+                                      : ""}
                                   {control.tolerance !== null
                                     ? ` · Tolerancia: ${formatMoney(control.tolerance)}`
                                     : ""}
@@ -3090,7 +3108,11 @@ export function StudyExpedienteMensual() {
                               {control.resolution ? <small>{control.resolution}</small> : null}
                             </span>
                             <StatusBadge status={control.status} />
-                            <span className="muted-copy">{CONTROL_SEVERITY_LABELS[control.severity] ?? control.severity}</span>
+                            <span className="muted-copy">
+                              {control.severity === "BLOCKING" && control.status !== "OPEN"
+                                ? "Bloqueaba el cierre"
+                                : CONTROL_SEVERITY_LABELS[control.severity] ?? control.severity}
+                            </span>
                             {control.status === "OPEN" &&
                             capabilities.has("tax.settlements.review") ? (
                               <span className="workpaper-control__resolution">

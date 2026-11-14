@@ -161,7 +161,8 @@
   gap: var(--ds-space-3);
 }
 
-.study-form.fiscal-action-form > .study-panel__heading {
+.study-form.fiscal-action-form > .study-panel__heading,
+.study-form.fiscal-action-form > .fiscal-action-form__wide {
   grid-column: 1 / -1;
 }
 
