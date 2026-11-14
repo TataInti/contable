@@ -12,23 +12,13 @@ async function navigateStudy(page: Page, label: string) {
   const menu = page.getByRole("button", { name: "Abrir navegación" });
   if (await menu.isVisible()) await menu.click();
   await dismissGuidedTour(page);
-  if (["Usuarios y accesos", "Módulos de estudios", "Reglas fiscales", "Catálogos fiscales"].includes(label)) {
-    const settingsToggle = page.getByRole("button", { name: "Ajustes del estudio", exact: true });
-    if (
-      (await settingsToggle.isVisible()) &&
-      (await settingsToggle.getAttribute("aria-expanded")) === "false"
-    ) {
-      await settingsToggle.click();
-    }
-  }
   await page.getByRole("link", { name: label, exact: true }).click();
 }
 
 async function ensureStudyContext(page: Page) {
-  const contextBar = page.locator("#context-bar");
-  const clientSelect = contextBar.getByRole("combobox", { name: /^Cliente/ });
-  const periodSelect = contextBar.getByRole("combobox", { name: /^Período/ });
-
+  // El cliente se elige en el menú lateral; el período, sólo en las pantallas
+  // que lo necesitan, en la barra superior.
+  const clientSelect = page.getByRole("combobox", { name: "Cliente en el que estás trabajando" });
   if ((await clientSelect.inputValue()) === "") {
     const clientOptions = await clientSelect.locator("option").evaluateAll((options) =>
       options
@@ -38,7 +28,8 @@ async function ensureStudyContext(page: Page) {
     if (clientOptions.length > 0) await clientSelect.selectOption(clientOptions[0]!);
   }
 
-  if ((await periodSelect.inputValue()) === "") {
+  const periodSelect = page.locator("#context-bar").getByRole("combobox", { name: /^Período/ });
+  if ((await periodSelect.count()) > 0 && (await periodSelect.inputValue()) === "") {
     const periodOptions = await periodSelect.locator("option").evaluateAll((options) =>
       options
         .map((option) => option.getAttribute("value") ?? "")
