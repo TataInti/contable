@@ -4814,13 +4814,6 @@
   border-radius: 0;
 }
 
-/* La interfaz queda basada en texto, estado y alineación; no se depende de
-   glifos que pueden variar según el navegador o la fuente disponible. */
-.study svg,
-.portal svg {
-  display: none !important;
-}
-
 .study .ds-empty__visual,
 .portal .ds-empty__visual {
   display: none;
@@ -4829,16 +4822,6 @@
 .study .work-summary__icon,
 .study .ledger-toolbar__icon {
   display: none;
-}
-
-.study__menu-button::after {
-  content: "Menú";
-  font-size: var(--ds-text-xs);
-  font-weight: 700;
-}
-
-.study__menu-button[aria-expanded="true"]::after {
-  content: "Cerrar";
 }
 
 @media (max-width: 760px) {
