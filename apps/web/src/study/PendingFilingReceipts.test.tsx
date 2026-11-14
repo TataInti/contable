@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PendingFilingReceipts, type PendingReceipt } from "./PendingFilingReceipts";
@@ -8,6 +8,7 @@ const apiMock = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock("../lib/api", () => ({ api: apiMock }));
 
 const NOW = new Date("2026-11-14T12:00:00.000Z").getTime();
+const HEADING = /Falta la constancia de presentación/;
 
 function receipt(overrides: Partial<PendingReceipt> = {}): PendingReceipt {
   return {
@@ -41,17 +42,19 @@ describe("constancias de presentación pendientes en Inicio", () => {
   it("no dibuja nada cuando no falta ninguna", async () => {
     apiMock.get.mockResolvedValue([]);
     renderList();
-    await vi.waitFor(() => expect(apiMock.get).toHaveBeenCalled());
-    expect(screen.queryByRole("heading", { name: "Falta la constancia de presentación" })).toBeNull();
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalled());
+    // Espera la respuesta confirmada: mientras consulta, el bloque muestra su carga.
+    await waitFor(() => expect(screen.queryByRole("heading", { name: HEADING })).toBeNull());
   });
 
   it("lista cliente, impuesto, período y días desde que se finalizó, y abre el legajo", async () => {
     apiMock.get.mockResolvedValue([receipt()]);
     const onOpen = renderList();
 
-    expect(await screen.findByRole("heading", { name: "Falta la constancia de presentación" })).toBeTruthy();
+    // Espera los datos: el encabezado también aparece durante la carga.
+    expect(await screen.findByText("Restaurante de Prueba S.R.L.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: HEADING })).toBeTruthy();
     expect(apiMock.get).toHaveBeenCalledWith("/firms/firm-a/portfolio/tax-worklist/pending-receipts");
-    expect(screen.getByText("Restaurante de Prueba S.R.L.")).toBeTruthy();
     expect(screen.getByText("Ingresos Brutos")).toBeTruthy();
     expect(screen.getByText("marzo de 2025")).toBeTruthy();
     expect(screen.getByText("5 días")).toBeTruthy();
@@ -66,5 +69,43 @@ describe("constancias de presentación pendientes en Inicio", () => {
 
     expect(await screen.findByText("Restaurante de Prueba S.R.L.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Abrir legajo" })).toBeNull();
+  });
+
+  it("en carga muestra un indicador discreto y la cifra «pendiente», sin lista ni cero", async () => {
+    apiMock.get.mockReturnValue(new Promise(() => undefined));
+    renderList();
+
+    expect(await screen.findByRole("heading", { name: HEADING })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Consultando constancias pendientes");
+    expect(screen.getByText("pendiente")).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByText("0")).toBeNull();
+  });
+
+  it("con error lo dice junto a su fuente, y Reintentar vuelve a consultar y repinta", async () => {
+    apiMock.get.mockRejectedValueOnce(new Error("sin conexión")).mockResolvedValueOnce([receipt()]);
+    renderList();
+
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText("No se pudo cargar las constancias")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: HEADING })).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(await screen.findByText("Restaurante de Prueba S.R.L.")).toBeTruthy();
+    expect(apiMock.get).toHaveBeenCalledTimes(2);
+  });
+
+  it("con datos muestra la ordenación inicial: la más antigua primero, y el conteo", async () => {
+    apiMock.get.mockResolvedValue([
+      receipt({ settlementId: "s-reciente", clientName: "Cliente Reciente S.A.", finalizedAt: "2026-11-12T12:00:00.000Z" }),
+      receipt({ settlementId: "s-antigua", clientName: "Cliente Antiguo S.A.", finalizedAt: "2026-10-01T12:00:00.000Z" }),
+    ]);
+    renderList();
+
+    const rows = within(await screen.findByRole("table")).getAllByRole("row");
+    expect(rows[1]?.textContent).toContain("Cliente Antiguo S.A.");
+    expect(rows[2]?.textContent).toContain("Cliente Reciente S.A.");
+    expect(screen.getByText("2 constancias pendientes")).toBeTruthy();
   });
 });
