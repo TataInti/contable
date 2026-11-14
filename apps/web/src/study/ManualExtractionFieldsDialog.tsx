@@ -173,7 +173,6 @@ export function ManualExtractionFieldsDialog({
       >
         <header className="manual-fields-dialog__header">
           <div>
-            <p className="study-page__eyebrow">Carga manual</p>
             <h2 id="manual-fields-dialog-title">Cargar datos a mano</h2>
           </div>
           <button

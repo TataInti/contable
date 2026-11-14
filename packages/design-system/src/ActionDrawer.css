@@ -86,20 +86,11 @@
   line-height: 1.08;
 }
 
-.action-drawer__header p:not(.action-drawer__eyebrow) {
+.action-drawer__header p {
   max-width: 54ch;
   margin-top: var(--ds-space-2);
   color: var(--ds-color-text-muted);
   line-height: 1.45;
-}
-
-.action-drawer__eyebrow {
-  margin-bottom: var(--ds-space-2);
-  color: var(--ds-color-primary);
-  font-size: var(--ds-text-xs);
-  font-weight: 750;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
 }
 
 .action-drawer__close {

@@ -499,7 +499,6 @@ export function StudyBandeja() {
           setFile(null);
           setUploadError(null);
         }}
-        eyebrow="Bandeja"
         title="Nuevo documento"
         description="El archivo pasa por validación, antivirus y extracción antes de estar disponible."
         size="wide"
@@ -815,7 +814,6 @@ export function StudyBandeja() {
                   <>
                     <div className="extraction-heading">
                       <div>
-                        <p className="study-page__eyebrow">Datos detectados</p>
                         <h3>Revisá contra el comprobante</h3>
                       </div>
                       <span>
@@ -1011,7 +1009,6 @@ export function StudyBandeja() {
       <ActionDrawer
         isOpen={showRejectDialog}
         onClose={() => setShowRejectDialog(false)}
-        eyebrow="Revisión documental"
         title="¿Rechazar este documento?"
         description="Elegí el motivo del rechazo. La decisión queda registrada y el documento sale de Para revisar."
         footer={

@@ -329,7 +329,6 @@ export function StudyOnboardingFiscal() {
           <section className="study-panel fiscal-contributor" aria-labelledby="contributor-title">
             <div className="fiscal-contributor__heading">
               <div>
-                <p className="study-page__eyebrow">Identidad fiscal</p>
                 <h2 id="contributor-title">Datos del contribuyente</h2>
                 <p>Identidad, condición frente al impuesto y estado de la última versión.</p>
               </div>
@@ -372,7 +371,6 @@ export function StudyOnboardingFiscal() {
 
           <section className="fiscal-next-step" aria-labelledby="next-fiscal-step-title">
             <div>
-              <p className="study-page__eyebrow">Flujo guiado</p>
               <h2 id="next-fiscal-step-title">{nextRequiredStep ? "Próximo paso" : "Configuración completa"}</h2>
               <p>{nextRequiredStep ? `Completá ${nextRequiredStep.label.toLowerCase()} para continuar con la configuración fiscal.` : "El perfil, las adhesiones, las actividades, los períodos y las obligaciones ya están configurados."}</p>
             </div>
@@ -434,7 +432,6 @@ export function StudyOnboardingFiscal() {
       <ActionDrawer
         isOpen={openFormStep === "perfil"}
         onClose={() => setOpenFormStep(null)}
-        eyebrow="Onboarding fiscal"
         title={latestProfile ? "Crear nueva versión del perfil" : "Crear perfil fiscal"}
         description="Completá la identidad y condición fiscal del contribuyente."
         size="wide"
@@ -463,7 +460,6 @@ export function StudyOnboardingFiscal() {
       <ActionDrawer
         isOpen={openFormStep === "inscripcion"}
         onClose={() => setOpenFormStep(null)}
-        eyebrow="Onboarding fiscal"
         title="Registrar inscripción"
         description="Elegí el régimen fiscal aplicable al contribuyente."
       >
@@ -477,7 +473,6 @@ export function StudyOnboardingFiscal() {
       <ActionDrawer
         isOpen={openFormStep === "actividades"}
         onClose={() => setOpenFormStep(null)}
-        eyebrow="Onboarding fiscal"
         title="Vincular actividad económica"
         description="Seleccioná la actividad principal del contribuyente."
       >
@@ -491,7 +486,6 @@ export function StudyOnboardingFiscal() {
       <ActionDrawer
         isOpen={openFormStep === "periodos"}
         onClose={() => setOpenFormStep(null)}
-        eyebrow="Onboarding fiscal"
         title="Crear período fiscal"
         description="Definí las fechas reales antes de materializar obligaciones."
         size="wide"
@@ -509,7 +503,6 @@ export function StudyOnboardingFiscal() {
       <ActionDrawer
         isOpen={openFormStep === "obligaciones"}
         onClose={() => setOpenFormStep(null)}
-        eyebrow="Onboarding fiscal"
         title="Crear obligación"
         description="Vinculá un régimen activo con su período fiscal y vencimiento."
         size="wide"

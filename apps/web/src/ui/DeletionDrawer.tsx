@@ -64,7 +64,6 @@ export function DeletionDrawer({ isOpen, path, onClose, onDeleted }: DeletionDra
     <ActionDrawer
       isOpen={isOpen}
       onClose={close}
-      eyebrow="Eliminación definitiva"
       title={preview?.entity.label ?? "Revisar eliminación"}
       description={preview?.entity.secondary}
       size="wide"

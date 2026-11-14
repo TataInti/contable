@@ -357,7 +357,6 @@ export function StudyTrabajo() {
       <ActionDrawer
         isOpen={showRequest}
         onClose={() => setShowRequest(false)}
-        eyebrow="Cliente"
         title="Nuevo pedido"
         description="Describí exactamente qué necesitás y, si corresponde, cuándo debe entregarse."
       >
@@ -423,7 +422,6 @@ export function StudyTrabajo() {
       <ActionDrawer
         isOpen={showClose}
         onClose={() => setShowClose(false)}
-        eyebrow="Control"
         title="Iniciar cierre del período"
         description="Definí las verificaciones del ciclo. Cada tarea se completa y queda auditada por separado."
       >
@@ -477,7 +475,6 @@ export function StudyTrabajo() {
           setActiveReviewRequestId(null);
           setRejectReason("");
         }}
-        eyebrow="Pedido documental"
         title="Revisión de ítems"
         description={reviewRequest?.title}
       >
@@ -563,7 +560,6 @@ export function StudyTrabajo() {
       <ActionDrawer
         isOpen={Boolean(preview)}
         onClose={() => setPreview(null)}
-        eyebrow="Evidencia"
         title="Documento adjunto"
         description={preview?.originalName ?? "Vista previa de la evidencia asociada al pedido."}
         size="wide"
@@ -598,7 +594,6 @@ export function StudyTrabajo() {
       <ActionDrawer
         isOpen={Boolean(activeConversation)}
         onClose={() => setActiveConversation(null)}
-        eyebrow="Pedido documental"
         title="Conversación"
         description={activeConversation?.title}
       >
@@ -663,7 +658,6 @@ export function StudyTrabajo() {
         <section className="study-panel" id="work-requests-section">
           <div className="study-panel__heading">
             <div>
-              <p className="study-page__eyebrow">Cliente</p>
               <h2>Pedidos documentales</h2>
             </div>
             <span className="section-count">{activeRequests.length}</span>
@@ -784,7 +778,6 @@ export function StudyTrabajo() {
         <section className="study-panel" id="work-closes-section">
           <div className="study-panel__heading">
             <div>
-              <p className="study-page__eyebrow">Control</p>
               <h2>Cierres</h2>
             </div>
             <span className="section-count">{openCloses.length}</span>
@@ -887,7 +880,6 @@ export function StudyTrabajo() {
       <section className="study-page__section" id="work-obligations-section">
         <div className="section-heading">
           <div>
-            <p className="study-page__eyebrow">Agenda fiscal</p>
             <h2>Próximas obligaciones</h2>
           </div>
           <span className="section-count">{obligationRows.length}</span>

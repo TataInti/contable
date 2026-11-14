@@ -98,7 +98,6 @@ export function StudyUserAssignments({
       isOpen={isOpen}
       onClose={onClose}
       initialFocus="close"
-      eyebrow="Usuarios y accesos"
       title={`Clientes de ${userName}`}
       description="Los cambios se aplican al momento. Consultá, asigná o quitá clientes de este usuario."
     >

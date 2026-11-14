@@ -12,6 +12,7 @@ import {
   StatStrip,
   useDensity,
 } from "../ui/Dense";
+import { actionErrorMessage } from "../ui/actionError";
 import "./study.css";
 
 interface BiPlan {
@@ -81,12 +82,14 @@ export function StudyReportes() {
       notify.success("La publicación fue revocada. El reporte ya no está disponible en el portal.");
       void queryClient.invalidateQueries({ queryKey: ["report-runs", firmId, clientId] });
     },
+    onError: (error) => notify.error(actionErrorMessage(error, "No se pudo revocar la publicación.")),
   });
   const exportRun = useMutation({
     mutationFn: ({ runId, format }: { runId: string; format: "pdf" | "xlsx" | "csv" }) =>
       downloadFile(`${base}/report-runs/${runId}/export?format=${format}`),
     onSuccess: (_data, variables) =>
       notify.success(`Se descargó el reporte en ${variables.format.toUpperCase()}.`),
+    onError: (error) => notify.error(actionErrorMessage(error, "No se pudo descargar el reporte.")),
   });
   const createBaseTemplate = useMutation({
     mutationFn: () => {
@@ -361,12 +364,6 @@ export function StudyReportes() {
           />
         )}
       </section>
-
-      {exportRun.isError || revoke.isError ? (
-        <Notice tone="error">
-          {(exportRun.error ?? revoke.error)?.message ?? "No se pudo completar la acción."}
-        </Notice>
-      ) : null}
 
       {capabilities.has("bi.use") ? (
         <section className="study-panel" aria-labelledby="bi-title">

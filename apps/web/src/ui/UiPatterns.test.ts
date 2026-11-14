@@ -30,6 +30,8 @@ interface Rule {
   name: string;
   why: string;
   pattern: RegExp;
+  /** Si está, la regla sólo mira los archivos cuya ruta coincide. */
+  only?: RegExp;
   /** Archivo → cantidad de usos tolerados (deuda registrada). */
   allowed: Record<string, number>;
 }
@@ -79,6 +81,23 @@ const RULES: Rule[] = [
     },
   },
   {
+    name: "rótulo en mayúsculas sobre un título",
+    why: "Pantallas, paneles, cajones y fichas llevan título y, si hace falta, una línea de descripción. Sin rótulo superior.",
+    pattern: /study-page__eyebrow|\beyebrow=/g,
+    // El portal del cliente tiene su propio encabezado; se revisa aparte.
+    only: /^(study|shells|ui)\//,
+    allowed: {
+      // La página de ayuda es un documento con su propia composición.
+      "study/StudyAyuda.tsx": 4,
+    },
+  },
+  {
+    name: "confirmación del navegador",
+    why: "Una acción riesgosa se confirma con ConfirmDialog (useConfirmAction), nunca con window.confirm o alert.",
+    pattern: /window\.(confirm|alert)\(|(?<![.\w])(confirm|alert)\(/g,
+    allowed: {},
+  },
+  {
     name: "rótulo sobre el título de la pantalla",
     why: "El encabezado de pantalla es DenseHeader: título, una línea de descripción y acciones. Sin rótulo superior.",
     pattern: /<DenseHeader\s+eyebrow=/g,
@@ -91,6 +110,7 @@ describe("patrones de interfaz centralizados", () => {
     it(`no reintroduce: ${rule.name}`, () => {
       const found: Record<string, number> = {};
       for (const file of files) {
+        if (rule.only && !rule.only.test(file.path)) continue;
         const count = file.text.match(rule.pattern)?.length ?? 0;
         if (count > 0) found[file.path] = count;
       }

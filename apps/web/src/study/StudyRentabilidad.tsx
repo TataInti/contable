@@ -152,12 +152,11 @@ export function StudyRentabilidad() {
     >
       <div className="profitability-view__header">
         <div>
-          <p className="study-page__eyebrow">{basisLabel(basis)}</p>
           <h3
             id={`profitability-${basis.toLowerCase()}-title`}
             className="profitability-view__title"
           >
-            {basis === "DEVENGADO" ? "Resultado gerencial" : "Flujo neto"}
+            {basis === "DEVENGADO" ? "Resultado gerencial" : "Flujo neto"} · {basisLabel(basis)}
           </h3>
         </div>
         <div className="profitability-view__actions">

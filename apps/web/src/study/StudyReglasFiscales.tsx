@@ -688,7 +688,6 @@ export function StudyReglasFiscales() {
       <ActionDrawer
         isOpen={showPackForm}
         onClose={() => setShowPackForm(false)}
-        eyebrow="Reglas fiscales"
         title="Nuevo paquete de reglas"
         description="Iniciá la configuración para un régimen y luego abrí su primera versión."
         size="wide"
@@ -776,7 +775,6 @@ export function StudyReglasFiscales() {
       <ActionDrawer
         isOpen={showDueDateForm && editable}
         onClose={() => setShowDueDateForm(false)}
-        eyebrow="Vencimientos"
         title="Agregar vencimiento"
         description="Definí la regla usada para calcular fechas de presentación y pago."
       >
@@ -838,7 +836,6 @@ export function StudyReglasFiscales() {
       <ActionDrawer
         isOpen={showSourceForm && editable}
         onClose={() => setShowSourceForm(false)}
-        eyebrow="Fuentes"
         title="Agregar fuente normativa"
         description="Asociá la norma, padrón o resolución que respalda esta versión."
         size="wide"
@@ -895,7 +892,6 @@ export function StudyReglasFiscales() {
       <ActionDrawer
         isOpen={showInitialVersionForm && Boolean(detailQuery.data) && !selectedVersion}
         onClose={() => setShowInitialVersionForm(false)}
-        eyebrow="Reglas fiscales"
         title="Crear primera versión"
         description="Abrí un borrador para cargar alícuotas, vencimientos y las fuentes que respaldan el cálculo."
       >
@@ -995,7 +991,6 @@ export function StudyReglasFiscales() {
       <ActionDrawer
         isOpen={showCloneForm && Boolean(selectedVersion) && selectedVersion?.status !== "DRAFT"}
         onClose={() => setShowCloneForm(false)}
-        eyebrow="Reglas fiscales"
         title="Modificar alícuotas"
         description="Primero elegí desde cuándo rigen los nuevos valores. Al continuar se abre un borrador con las alícuotas actuales para que las edites; la versión vigente sigue aplicando hasta que el Administrador o Titular active la nueva."
       >
@@ -1166,7 +1161,6 @@ export function StudyReglasFiscales() {
               <section className="study-panel fiscal-rule-summary fiscal-rule-context">
                 <div className="study-panel__heading">
                   <div>
-                    <p className="study-page__eyebrow">Paquete seleccionado</p>
                     <p className="fiscal-rule-context__regime">
                       {detailQuery.data.regime.taxType.name}{!detailQuery.data.regime.taxType.isActive ? " (oculto)" : ""} ·{" "}
                       {detailQuery.data.regime.jurisdiction.name}{!detailQuery.data.regime.jurisdiction.isActive ? " (oculto)" : ""}
@@ -1789,7 +1783,6 @@ export function StudyReglasFiscales() {
       <ActionDrawer
         isOpen={Boolean(activationTarget)}
         onClose={() => setActivationTarget(null)}
-        eyebrow="Confirmar activación"
         title={
           activationTarget
             ? `${detailQuery.data?.name ?? "Paquete fiscal"} · versión v${activationTarget.version}`

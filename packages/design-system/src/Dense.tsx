@@ -501,7 +501,6 @@ export function DenseLoading({ label }: { label: string }) {
 /* ───────── Detalle lateral ───────── */
 
 export function Inspector({
-  eyebrow,
   title,
   subtitle,
   leading,
@@ -511,7 +510,6 @@ export function Inspector({
   label,
   banner,
 }: {
-  eyebrow?: string;
   title: ReactNode;
   subtitle?: ReactNode;
   leading?: ReactNode;
@@ -526,7 +524,6 @@ export function Inspector({
       <header className="dense-inspector__head">
         {leading}
         <div>
-          {eyebrow ? <p className="study-page__eyebrow">{eyebrow}</p> : null}
           <h2>{title}</h2>
           {subtitle ? <p className="dense-inspector__sub">{subtitle}</p> : null}
         </div>
