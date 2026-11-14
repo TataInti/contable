@@ -1,25 +1,81 @@
 # Contable — guía del sistema de diseño
 
-Fuente versionada de uso visual e interacción. Los valores fuente viven en `packages/design-system/src/tokens.css`; esta guía describe sus valores reales y cómo se aplican hoy en `apps/web/src`. Si cambia un token o un componente, actualizá esta guía en el mismo PR. La guía UI existente de formularios y paneles sigue siendo la referencia detallada de interacción transaccional: [Guía UI — formularios y paneles emergentes](docs/guia-ui-formularios-paneles.md).
+Fuente versionada de uso visual e interacción. **Foco v1 es el único lenguaje visual de Contable**, en el estudio, en el portal y en las pantallas de acceso. Los valores fuente viven en `packages/design-system/src/tokens.css`; esta guía describe sus valores reales, el contrato de cada familia de componentes y la receta de cada pantalla de `apps/web/src`. Si cambia un token, un componente o una receta, actualizá esta guía en el mismo PR. La guía UI existente de formularios y paneles sigue siendo la referencia detallada de interacción transaccional: [Guía UI — formularios y paneles emergentes](docs/guia-ui-formularios-paneles.md).
+
+Cada pieza de esta guía lleva uno de dos rótulos de estado: **vigente en main** (el código ya lo cumple) o **extensión aprobada, implementación pendiente** (la dirección está aprobada y todavía no existe en el paquete). Una extensión pendiente se usa recién cuando su PR la incorpora y actualiza su rótulo acá.
 
 ## 1. Principios
 
-1. **Resolver el trabajo diario del estudio.** Contable reemplaza planillas Excel de estudios contables: priorizamos lectura rápida de datos fiscales, estados trazables y acciones claras dentro de la vista de trabajo.
-2. **Escritorio primero, como estado actual.** La interfaz densa se organiza para el espacio de escritorio. El alcance de diseño móvil está fuera de alcance por ahora; los breakpoints y comportamientos móviles ya presentes se documentan como comportamiento existente, no como objetivo nuevo.
-3. **Claridad antes que decoración.** Contraste, jerarquía, alineación y estados explican qué dato se consulta y qué efecto tendrá una acción. La ornamentación no compite con contenido operativo.
-4. **Una acción principal por pantalla o panel.** La acción principal se destaca; alternativas, cierre y cancelación usan jerarquía secundaria o ghost.
-5. **Preservar contexto, trazabilidad y reversibilidad.** Las operaciones transaccionales mantienen visible el cliente/período y explican impacto, validación y resultado; una acción de alto impacto requiere confirmación adecuada.
+1. **Resolver el trabajo diario del estudio.** Contable reemplaza planillas Excel de estudios contables: es flexible, guía a la persona y le deja armar sus escenarios. Priorizamos lectura rápida de datos fiscales, estados trazables y acciones claras dentro de la vista de trabajo.
+2. **Foco es el lenguaje único.** Toda pantalla se compone con cuatro rasgos: lectura sobre el lienzo, jerarquía inequívoca, información progresiva y acciones deliberadas. Las cajas delimitan interacciones, no cada dato. La apariencia limpia conserva siempre evidencia, advertencias, permisos y validaciones.
+3. **Escritorio.** La interfaz se diseña y se verifica en escritorio, a 1440×900 y 1280×720. Los breakpoints y comportamientos móviles ya presentes se documentan como comportamiento existente, no como objetivo de diseño.
+4. **Como máximo una acción principal por pantalla o panel activo.** La acción principal se destaca; alternativas, cierre y cancelación usan jerarquía secundaria o ghost. Una pantalla de consulta puede no tener acción principal.
+5. **Preservar contexto, trazabilidad y reversibilidad.** Las operaciones transaccionales mantienen visible el cliente y el período, y explican impacto, validación y resultado; una acción de alto impacto pide confirmación.
+6. **Un solo sistema.** Las pantallas se arman con las familias C01–C09 de la sección 5 y las recetas de la sección 6. El producto tiene un único estilo: no ofrece selector de estilos ni mantiene una segunda biblioteca de componentes.
+
+### Los cuatro rasgos de Foco
+
+| Rasgo | Qué significa | Cómo se aplica |
+|---|---|---|
+| Lectura sobre el lienzo | Los datos se leen directamente sobre `--ds-color-background`, ordenados por espacio y líneas | Secciones separadas por `--ds-color-border-subtle` y la escala de espaciado; la superficie con borde queda para lo que se opera (campos, controles, tablas interactivas, popovers y paneles) |
+| Jerarquía inequívoca | Cada pantalla tiene un título, un orden de lectura y, como máximo, una acción principal | Un `h1` por pantalla, títulos por rol (`--ds-text-2xl`, `--ds-text-xl`, `--ds-text-lg`), números a la derecha con cifras tabulares y un único fondo de aviso por pantalla |
+| Información progresiva | Primero lo necesario para decidir; el detalle se abre por intención | Lista y detalle, pestañas de sección y paneles laterales. El resumen de advertencias y de revisión queda visible; al detalle van los metadatos extensos |
+| Acciones deliberadas | Toda acción dice qué va a pasar y responde una sola vez | Confirmación para lo riesgoso, estado «procesando» que evita el doble envío, resultado por un único canal y éxito recién con la confirmación real |
+
+### Cuatro capas
+
+1. **Tokens:** `packages/design-system/src/tokens.css`. Foco v1 usa la paleta y los tokens existentes.
+2. **Primitivas:** los componentes de `packages/design-system/src`. Son genéricos: reciben datos y capacidades ya resueltos.
+3. **Patrones:** composición de esas primitivas (familias C01–C09). Los adaptadores de `apps/web/src/ui` se conservan cuando ya cumplen una responsabilidad.
+4. **Recetas:** cada pantalla conecta datos, capacidades, contexto y navegación (sección 6). Las consultas, los permisos y las reglas de dominio viven en la pantalla o en su pieza de dominio, por ejemplo `PendingFilingReceipts`.
+
+### Reglas transversales
+
+- El resultado de una acción se comunica por un solo canal: la notificación.
+- Una instrucción ordinaria es texto neutro; el aviso con fondo y el verde quedan para lo que los necesita.
+- Un error local se muestra junto a su fuente y ofrece recuperación.
+- Carga y fallo se muestran como carga y como fallo: un dato sin respuesta se expresa con texto («pendiente», «no disponible»), y el cero y «todo al día» se reservan para una respuesta confirmada.
+- Cambiar de sección o de pestaña conserva el estado de negocio del registro.
+- Importes, porcentajes y cantidades usan cifras tabulares y alineación derecha.
+- Las preferencias compartidas existentes se respetan (por ejemplo, la densidad de filas).
+
+### Reglas globales P1–P5
+
+Esta guía y las reglas globales de diseño y producto de Contable (aprobadas por Inti el 11-nov) dicen lo mismo. Cada PR declara qué principio atiende.
+
+| Principio | Qué pide | Dónde se resuelve en esta guía |
+|---|---|---|
+| **P1 — Todo bloqueo guía** | Si la persona no puede avanzar, la pantalla dice qué falta y ofrece el enlace o botón que lo resuelve. Lo creado queda utilizable o marcado «falta X». Cada cliente y período muestra un único «estado de preparación». «Activo» significa utilizable; lo que está solo adherido o cargado se nombra distinto | C07 (vacío y bloqueo con salida), C08 (aviso con acción), recetas de la sección 6 |
+| **P2 — El comportamiento se elige** | Motor, adaptador, política y variantes de cálculo se seleccionan en un desplegable alimentado por catálogo; el nombre que escribe la persona es solo una etiqueta. Las relaciones se resuelven por id o por atributos fiables | C09 (formularios con parámetros seleccionables); los componentes genéricos reciben opciones, no las deducen |
+| **P3 — Un concepto, un nombre, un lugar** | Un solo nombre en menú, título, botones, ayudas y mensajes, y un solo lugar donde se edita | Glosario de esta sección; C01 (un título por pantalla); «cada dato una sola vez por pantalla» en la sección 6 |
+| **P4 — Los errores hablan** | La API devuelve campo y motivo y un componente común lo muestra junto al campo. El botón de guardar se mantiene habilitado y señala lo que falta; si se deshabilita, el motivo está visible al lado. Los formatos se validan al tipear | C09 (`Field`, `MoneyField`, pie del panel) y «Dónde va cada error» en la sección 5 |
+| **P5 — Piezas compartidas** | Panel lateral, barra de acciones, campo con error, estado vacío o bloqueo, tabla y etiqueta de estado son piezas del sistema; un defecto de una pieza se corrige en la pieza. Tokens `--ds-*` por nombre | Las seis piezas de P5 viven en C09, C01, C09, C07, C04 y C08 respectivamente; C02, C03, C05 y C06 son las familias de composición que las ordenan en la pantalla |
+
+Antes de tocar una validación, un bloqueo o un control se lo clasifica: **integridad** (se conserva y se explica), **secuencia** (se convierte en guía: se guarda incompleto y se marca qué falta) u **opinión del sistema** (se quita). Los cambios de reglas de negocio, permisos o flujos se proponen a Ciro y los decide Inti.
+
+### Glosario vigente (P3)
+
+- **Configuración fiscal**: pantalla del cliente. Es el único título de esa pantalla.
+- **Ajustes del estudio**: grupo de Usuarios, Módulos, Reglas fiscales y Catálogos fiscales. En main el menú todavía lo rotula «Configuración del estudio»; se alinea en el corte que toque el menú.
+- **Ficha del cliente**: su primera sección es el Resumen; un solo «Editar» con secciones; el estado del cliente es una acción aparte.
+- **Ocultar**: reversible, se muestra como acción neutra. **Eliminar**: irreversible, solo Titular.
+- **Crear a partir de este**: copia para una versión nueva; la pantalla lo anuncia como copia.
+- Pendiente de decisión de Inti: nombre y fuente única de «período» (fiscal y contable).
 
 ### Decisiones de diseño (cerradas 11-nov)
 
+Siguen vigentes y Foco las aplica tal como están.
+
 1. **Paleta y tipografía:** conservar las familias Source Sans 3 (`--ds-font-sans`) y Source Serif 4 (`--ds-font-serif`) y la paleta existente; usar `--ds-color-text-faint: #716c62` para texto auxiliar con contraste AA sobre las superficies donde se aplica. La carga de las familias debe incluir los glifos Latin y Latin-ext.
-2. **Títulos por rol:** aplicar sans para títulos de página (`--ds-text-2xl`), sección (`--ds-text-xl`) y bloque (`--ds-text-lg`), con la escala de peso 400 (`--ds-font-weight-regular`), 600 (`--ds-font-weight-medium`) y 700 (`--ds-font-weight-bold`). Las clases `.ds-title-page`, `.ds-title-section`, `.ds-title-block`, `.ds-text-body`, `.ds-text-help` y `.ds-text-emphasis` quedan disponibles en el paquete; las pantallas las adoptan en cortes posteriores.
-3. **Estados:** en tablas mostrar punto y texto; reservar la píldora para la ficha. Usar cinco tonos con significado fijo: `ok` para resultado correcto/vigente, `aviso` para atención requerida, `peligro` para error o acción de riesgo, `info` para orientación y `neutro` para estado ordinario/inactivo. Los estados usan tokens semánticos, nunca `--ds-color-primary` directamente; el verde de marca se reserva para acción y selección. El valor vigente de `--ds-color-success` coincide con `--ds-color-primary`; su separación visual se coordina con la migración posterior de estados, que queda fuera de F1.
+2. **Títulos por rol:** aplicar sans para títulos de página (`--ds-text-2xl`), sección (`--ds-text-xl`) y bloque (`--ds-text-lg`), con la escala de peso 400 (`--ds-font-weight-regular`), 600 (`--ds-font-weight-medium`) y 700 (`--ds-font-weight-bold`). Las clases `.ds-title-page`, `.ds-title-section`, `.ds-title-block`, `.ds-text-body`, `.ds-text-help` y `.ds-text-emphasis` quedan disponibles en el paquete; cada pantalla las adopta en el corte que la migra a Foco.
+3. **Estados:** en tablas mostrar punto y texto; reservar la píldora para la ficha. Usar cinco tonos con significado fijo: `ok` para resultado correcto/vigente, `aviso` para atención requerida, `peligro` para error o acción de riesgo, `info` para orientación y `neutro` para estado ordinario/inactivo. Los estados usan tokens semánticos, nunca `--ds-color-primary` directamente; el verde de marca se reserva para acción y selección. El valor vigente de `--ds-color-success` coincide con `--ds-color-primary`; su separación visual se coordina con la migración posterior de estados.
 4. **Composición:** usar caja para elementos que se operan; separar secciones y filas con línea (`--ds-color-border-subtle`); limitar cada pantalla a un único fondo de aviso, con el token semántico del aviso correspondiente (por ejemplo, `--ds-color-warning-subtle`).
 5. **Medidas:** construir separaciones sobre la grilla de 4 px y usar `--ds-space-0-5` (2 px) para el medio paso; `--ds-radius-full` identifica el radio circular. Mantener fila de 32 px y controles de barra de 32 px (`--ds-control-height-sm`), y campos de 40 px (`--ds-control-height-md`).
 6. **Componentes:** mantener las primitivas existentes en `packages/design-system/src` y llevar allí Dense*, `StatusBadge`, drawers y diálogo, con exports desde el paquete. Unificar la tabla, la píldora, los avisos y los botones de texto como primitivas compartidas del mismo paquete. Cada token o estilo nuevo respeta la regla contra literales y el baseline de `packages/design-system/literals-baseline.json`.
 
-Nota de referencia: guía visual de trabajo en `/root/.hermes/workspace/contable/guia-diseno/` (corte del 11-nov); esta guía versionada no depende de esos archivos para build o pruebas.
+Decisiones cerradas de Inti que acompañan a las anteriores: solo escritorio; errores en línea junto al campo; composición sin cajas y con alineación; todo lleva usuario y los permisos deciden.
+
+Notas de referencia: guía visual de trabajo en `/root/.hermes/workspace/contable/guia-diseno/` (corte del 11-nov) y contrato y galería Foco v1 en `/root/.hermes/workspace/contable/contrato-foco/` (corte del 14-nov). Esta guía versionada no depende de esos archivos para build o pruebas.
 
 ## 2. Color
 
@@ -264,11 +320,374 @@ Las sombras del sistema están tokenizadas; las excepciones observadas son: `box
 
 ## 5. Componentes
 
-`packages/design-system/src` es la fuente de los componentes compartidos. Su API pública incluye `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, `Notice`, las primitivas Dense, `StatusBadge`, `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction`, `AsyncState`, `Icon` y `SectionIndex`. Las rutas históricas de `apps/web/src/ui` reexportan los componentes migrados para conservar los imports existentes. La migración conserva sus clases, DOM, comportamiento y carga de CSS. El paquete expone `@contable/design-system/Dense.css`; el adaptador web lo importa antes de sus reglas contextuales para mantener el orden de la cascada.
+`packages/design-system/src` es la fuente de los componentes compartidos. Su API pública incluye `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, `Notice`, las primitivas Dense, `StatusBadge`, `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction`, `AsyncState`, `Icon`, `SectionIndex`, `Switch`, `ToastProvider` y `useNotify`. Las rutas históricas de `apps/web/src/ui` reexportan los componentes migrados para conservar los imports existentes. El paquete expone `@contable/design-system/Dense.css`; el adaptador web lo importa antes de sus reglas contextuales para mantener el orden de la cascada.
 
-### Avisos y vacíos
+Foco organiza esos componentes en **nueve familias, C01 a C09**. Cada familia tiene un contrato: propósito y límite, entradas, variantes, anatomía, estados, interacción, accesibilidad, tokens y aceptación observable. Los nombres de los componentes existentes se mantienen; Foco los evoluciona con props opcionales. Los componentes son genéricos: los estados de consulta, los permisos y las reglas de dominio los resuelve la pantalla que los usa.
 
-`Notice` presenta un único mensaje con iconografía, texto y una acción opcional. El icono o la marca acompaña al tono para que el significado también se distinga sin depender del color. Usá un solo aviso por estado y evitá colocarlo dentro de otra caja de aviso.
+### Mapa de familias
+
+| Familia | Componentes base | Estado de la base |
+|---|---|---|
+| C01 — Encabezado y acciones | `DenseHeader`, `Button`, `Icon` | Vigente en main |
+| C02 — Secciones de lectura | `DensePage`, `DenseSection` | Vigente en main; `surface` pendiente |
+| C03 — Indicadores con alcance | `StatStrip`, `StatItem` | Vigente en main; `pressed` pendiente |
+| C04 — Tablas y agrupación | `Table`, `DenseTable`, `DenseGroup`, `DenseFooter` | Vigente en main, con `groupBy`; `surface` pendiente |
+| C05 — Filtros y navegación | `DenseToolbar`, `DenseTabs`, `DenseSearch`, `DenseToggleGroup`, `SectionIndex` | Vigente en main |
+| C06 — Lista y detalle | `DenseWorkspace`, `Inspector`, `InspectorSection`, `InspectorFacts` | Vigente en main; `role` configurable pendiente |
+| C07 — Carga, error y vacío | `AsyncState`, `DenseLoading`, `EmptyState` | Vigente en main; `size="inline"` pendiente |
+| C08 — Estado y mensajes | `StatusBadge`, `Notice`, `ToastProvider`/`useNotify` | Vigente en main |
+| C09 — Paneles y confirmación | `ActionDrawer`, `ConfirmAction`/`ConfirmDialog`, `DeletionDrawer`, `Field`, `MoneyField`, `Switch` | Vigente en main |
+
+### Extensiones Foco y su estado
+
+Cada extensión es una prop opcional sobre un componente existente. Mientras su consumidor no migra, cada componente conserva la presentación heredada; las pantallas Foco eligen la variante de forma explícita.
+
+| Base | Pieza | Estado | Condición de compatibilidad |
+|---|---|---|---|
+| `DenseSection` | `surface?: "integrated" \| "outlined"` | Extensión aprobada, implementación pendiente | Adición opcional. `integrated` aplica Foco; `outlined` queda para límites operables justificados. El valor por defecto global se define cuando migraron los consumidores |
+| `DenseTable` | `surface?: "integrated" \| "outlined"` | Extensión aprobada, implementación pendiente | Mismo criterio. Conserva selección, ordenación, `groupBy` y densidad; sigue siendo la misma tabla |
+| `StatItem` | `pressed?: boolean` | Extensión aprobada, implementación pendiente | Para ítems que alternan un filtro. `active` y `onSelect` se mantienen. Un ítem que navega conserva semántica de enlace |
+| `DenseWorkspace` | `role?: "region" \| "tabpanel"` y nombre accesible | Extensión aprobada, implementación pendiente | Los consumidores migran con rol explícito; `tabpanel` requiere su controlador de pestañas. El valor por defecto heredado se cambia con inventario de consumidores |
+| `EmptyState` | `size?: "inline"` (se suma a `regular` y `compact`) | Extensión aprobada, implementación pendiente | Variante mínima para ausencias secundarias. `compact`, `regular`, `no-data` y `no-results` se mantienen |
+| `DenseToggleGroup` | Selección múltiple con `aria-pressed` | Vigente en main (#91) | Se preserva en toda migración visual |
+| `DenseTable` | `groupBy(row)` con encabezado de grupo y conteo | Vigente en main (#91) | Se preserva en toda migración visual |
+| `ActionDrawer` | `initialFocus?: "content" \| "close"` | Vigente en main | Sin cambios |
+| `Notice`, `ToastProvider`, `ActionDrawer` | API actual | Vigente en main | Foco ajusta consumo, composición y pruebas; la API queda igual |
+
+### C01 — Encabezado y acciones
+
+**Base:** `DenseHeader`, `Button`, `Icon`. **Estado:** vigente en main; Foco ajusta la composición.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Dar orientación y jerarquizar la próxima acción. Los indicadores van en C03; el encabezado no los repite |
+| Entradas | `DenseHeader`: `title`, `description?`, `actions?`. `Button` distingue enlace de acción, `loading`, `disabled` e `iconOnly` con nombre accesible |
+| Variantes | `primary`, `secondary`, `ghost`, `text`, `link`, `danger` y `danger-solid`. Es la única familia de botones |
+| Anatomía | Un `h1` (24 px, `--ds-text-2xl`, peso 600), una línea de descripción y las acciones alineadas a la derecha. Como máximo una acción primaria por pantalla o panel activo; una pantalla de consulta puede no tener ninguna. Sin rótulo superior: el menú ya dice dónde se está |
+| Estados | Datos, contenido extenso, restricción de acceso, actualización con datos previos identificados |
+| Interacción | La pantalla decide disponibilidad y destino de cada acción. Capacidades y consultas se resuelven fuera del encabezado |
+| Accesibilidad | Nombre accesible y foco visible en cada acción; `iconOnly` requiere `aria-label`; los enlaces conservan semántica de navegación |
+| Tokens | `--ds-font-sans`, `--ds-text-2xl`, `--ds-control-height-md`, `--ds-space-4`, `--ds-space-6` |
+
+**Aceptación observable:**
+- Un título largo convive con las acciones sin superponerse.
+- «Procesando» evita el envío duplicado.
+- Una pantalla de consulta se muestra sin botón primario.
+
+#### Button
+
+- **Propósito:** unificar acciones y enlaces de acción con altura, foco, estados y carga normalizados.
+- **Variantes:**
+
+| Variante | Cuándo usarla |
+|---|---|
+| `primary` | Acción principal de la pantalla o panel; como máximo una. |
+| `secondary` | Alternativa visible con contorno, como una acción hermana de la principal. |
+| `ghost` | Cancelar, cerrar o realizar una acción de baja jerarquía sin caja persistente. |
+| `danger` | Acción irreversible o de alto riesgo en pantallas, fichas y filas: texto rojo sobre fondo transparente. |
+| `danger-solid` | Botón que confirma el riesgo dentro de un diálogo (`ConfirmDialog`, `DeletionDrawer`). |
+| `text` | Acción breve en línea, como Reintentar o una acción secundaria de fila. |
+| `link` | Navegación de acción con `href`; mantiene la semántica nativa de enlace. |
+
+- **Tamaños:** `md` mide 40 px y es el tamaño estándar; `row` mide 32 px para filas y barras. `sm` se conserva como alias retrocompatible de `row`. La acción primaria del encabezado de página mide 40 px en todas las pantallas; con puntero coarse conserva el objetivo táctil de 44 px.
+- **Props:** admite atributos nativos de `button`; con `href` renderiza un enlace y admite sus atributos nativos. `loading` y `loadingLabel` aplican a botones. `iconOnly` exige `aria-label` en el tipo público.
+- **Estados:** hover/active por variante, `:focus-visible`, disabled y loading. Loading informa `aria-busy`, bloquea el control, muestra spinner y puede reemplazar el nombre accesible. Las variantes `text` y `link` usan tokens del sistema.
+- **Rojo:** se reserva para lo irreversible. «Ocultar» es reversible y se muestra como acción neutra; «Eliminar» usa `danger`.
+- **Correcto:**
+
+```tsx
+<Button type="submit" loading={saving} loadingLabel="Guardando">
+  Guardar cambios
+</Button>
+<Button type="button" variant="ghost" onClick={cancel}>Cancelar</Button>
+<Button type="button" variant="text" size="row" onClick={retry}>Reintentar</Button>
+<Button href="#contactos" variant="link" size="row">Ver contactos</Button>
+<Button type="button" iconOnly aria-label="Cerrar panel"><span aria-hidden="true">×</span></Button>
+```
+
+- **Incorrecto:**
+
+```tsx
+<Button>Guardar</Button>
+<Button>Cancelar</Button>
+<button className="custom-danger-button" onClick={remove}>Eliminar</button>
+<Button iconOnly><span aria-hidden="true">×</span></Button>
+```
+
+Los dos primeros quedan como acción primaria por defecto. Elegí la jerarquía según el efecto y usá `Button` en vez de una familia CSS local; los controles icon-only siempre llevan nombre accesible.
+
+#### Icon
+
+- **Propósito:** renderizar un glifo SVG del catálogo `ICON_NAMES`.
+- **Props:** `name: IconName`; `size` (20 por defecto), `strokeWidth` (1.8), `className` y `title` son opcionales.
+- **Estados:** sin `title` es decorativo (`aria-hidden`); con `title` se expone como imagen con nombre accesible.
+- **Correcto:**
+
+```tsx
+<Icon name="alert" /> <span>Revisar la consulta</span>
+```
+
+- **Incorrecto:**
+
+```tsx
+<Icon name="alert" aria-label="Alerta" />
+```
+
+`aria-label` no forma parte de las props; usá `title` para un icono informativo o acompañalo con texto.
+
+### C02 — Secciones de lectura
+
+**Base:** `DensePage`, `DenseSection`. **Estado:** `DenseSection` con `id`, `title`, `count`, `description` y `actions` vigente en main; `surface` es extensión aprobada, implementación pendiente.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Agrupar contenido con espacio y líneas. La sección ordena la lectura; los datos se leen sobre el lienzo |
+| Entradas | `id?`, `title`, `count?`, `description?`, `actions?`, `children` |
+| Variantes | `surface="integrated"` aplica Foco; `surface="outlined"` queda para límites operables justificados. La migración es explícita, consumidor por consumidor |
+| Anatomía | Título `h2` asociado a la sección, conteo junto al título y contenido sobre el lienzo. La altura se ajusta al contenido |
+| Estados | Datos, carga inicial, vacío confirmado, error local o parcial, actualización con datos previos identificados, contenido extenso |
+| Interacción | Agrupa contenido. La consulta de datos y la interpretación de una lista vacía son de la pantalla |
+| Accesibilidad | `id` estable y `aria-labelledby`; cada título de sección es distinguible por su texto |
+| Tokens | `--ds-color-border-subtle`, `--ds-space-4`, `--ds-space-6`, `--ds-text-xl` |
+
+**Aceptación observable:**
+- Una sección con una sola fila ocupa el alto de esa fila.
+- `count` se muestra con una respuesta confirmada; sin respuesta, el título va sin conteo.
+- Las secciones de una pantalla comparten bordes izquierdo y derecho.
+
+### C03 — Indicadores con alcance
+
+**Base:** `StatStrip`, `StatItem`. **Estado:** vigente en main; `pressed` es extensión aprobada, implementación pendiente.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Resumir datos conocidos y decir su alcance. Cada indicador proviene de una fuente con respuesta; un estado global se muestra cuando todas sus fuentes respondieron |
+| Entradas | `StatStrip`: `items` y `label`. Cada ítem: `key`, `label`, `value`, `detail?`, `tone?`, `active?`, `onSelect?`. La pantalla calcula los valores |
+| Variantes | Lectura, navegación y filtro. `pressed` identifica al ítem que alterna un filtro; el ítem que navega es un enlace |
+| Anatomía | Una línea discreta de cifras bajo el encabezado, valor y etiqueta separados, sin caja ni mayúsculas. Cada dato aparece una sola vez en la pantalla |
+| Estados | Datos, carga inicial, vacío confirmado, error local o parcial, actualización con datos previos identificados, contenido extenso |
+| Interacción | `onSelect` aplica el filtro o navega; las reglas de dominio se calculan en la pantalla. Un filtro seleccionado se puede restablecer |
+| Accesibilidad | `aria-pressed` en los ítems que alternan un filtro; el grupo tiene `role="group"` y nombre. Un valor desconocido se expresa con texto |
+| Tokens | `--ds-color-text`, `--ds-color-text-muted`, `--ds-text-xl`, `--ds-space-2`, `--ds-space-6` |
+
+**Aceptación observable:**
+- En carga, el indicador dice «pendiente».
+- Ante un error, el indicador dice «no disponible».
+- Los alcances fiscal y documental se muestran por separado; sumarlos requiere una definición de producto.
+
+Sólo van cifras de la lista que se ve (cantidades, pendientes); el estudio, el cliente y el período ya están en el menú y en la barra de período. Una cifra que filtra la lista es un botón y queda resaltada mientras el filtro está activo.
+
+### C04 — Tablas y agrupación
+
+**Base:** `Table`, `DenseTable`, `DenseGroup`, `DenseFooter`. **Estado:** vigente en main, incluida la agrupación `groupBy` (#91); `surface` es extensión aprobada, implementación pendiente.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Comparar registros y actuar conservando identidad, orden y acceso a la información |
+| Entradas | `label`, `columns`, `rows`, `rowKey` y las capacidades existentes: selección, orden, `footer`, `inspectorOpen`. `groupBy(row)` devuelve `key`, `label` y `order` |
+| Variantes | `Table` para leer; `DenseTable` para listas con selección, orden y detalle lateral. `surface="integrated"` / `"outlined"` sobre la misma tabla, con la densidad compartida y `groupBy` |
+| Anatomía | Filas separadas por líneas, números a la derecha con cifras tabulares, nombre largo legible. La tabla ocupa el alto de su contenido |
+| Estados | Datos, carga inicial, vacío confirmado, sin coincidencias, error local o parcial, restricción de acceso, actualización con datos previos identificados, contenido extenso |
+| Interacción | Ordenar y seleccionar conservan la identidad de la fila. Agrupar conserva resultados y totales |
+| Accesibilidad | Tabla semántica con `aria-sort`; las flechas saltan los encabezados de grupo y seleccionan filas. Las acciones de fila quedan a la vista |
+| Tokens | `--ds-color-border-subtle`, `--ds-control-height-sm`, `--ds-text-sm`, `--ds-color-selected`, `--ds-table-head-height`, `--ds-row-height` |
+
+**Aceptación observable:**
+- A 1440×900 y 1280×720 la tabla entra en su contenedor y la página no desborda.
+- Una tabla extensa se desplaza de forma deliberada, dentro de su contenedor.
+- Importes y porcentajes quedan alineados a la derecha.
+- «Sin coincidencias» se distingue de «sin registros».
+- Selección y agrupación funcionan juntas.
+
+`Table` y `DenseTable` son dos componentes con un mismo aspecto: comparten encabezado (`--ds-table-head-height`) y alto de fila (`--ds-row-height`). Las pantallas usan estos componentes en lugar de escribir `<table>`; las que quedan están registradas como deuda en `apps/web/src/ui/UiPatterns.test.ts`. La densidad de filas es una preferencia de la persona (`useDensity`: 28, 32 o 40 px), se guarda en el navegador, se aplica a todas las tablas y se cambia en un único lugar, el menú de ayuda del estudio.
+
+#### Table
+
+- **Propósito:** tabla semántica con cabecera, alineación opcional y estado vacío.
+- **Props/variantes:** `columns`, `rows`, `rowKey`, `empty`; cada columna lleva `key`, `header`, `align` (`left`, `right`, `center`), `render` o `accessor`. Conserva atributos nativos de `table`.
+- **Estados:** hover de fila, `focus-within`/selección cuando sus descendientes reciben foco, vacío personalizable; encabezado sticky y contenedor con scroll horizontal.
+- **Correcto:**
+
+```tsx
+<Table
+  columns={[{ key: "code", header: "Código", accessor: (row) => row.code }]}
+  rows={activities}
+  rowKey={(row) => row.id}
+  empty={<EmptyState title="Sin actividades" description="Creá una actividad para empezar." />}
+/>
+```
+
+- **Incorrecto:**
+
+```tsx
+<Table columns={columns} rows={activities} rowKey={() => "same-key"} />
+```
+
+La clave debe ser estable y única por fila. `Table` es una tabla de lectura; para filas seleccionables con teclado la pantalla actual usa `DenseTable`.
+
+### C05 — Filtros y navegación
+
+**Base:** `DenseToolbar`, `DenseTabs`, `DenseSearch`, `DenseToggleGroup`, `SectionIndex`. **Estado:** vigente en main; `DenseToggleGroup` llegó con #91. `DenseTabs` y `DenseSearch` viven en el adaptador web `apps/web/src/ui/Dense.tsx`.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Cambiar lo que se consulta. Una pestaña es una sección de la pantalla; el estado del negocio se expresa con C08 |
+| Entradas | Los contratos actuales. `DenseToggleGroup` recibe `label`, `options` (pares `value` y `label`), `selected` y `onChange(next)`. `DenseTabs` recibe `label`, `tabs`, `active`, `onChange` e `idPrefix?` |
+| Variantes | Filtro simple, selección múltiple y navegación de secciones |
+| Anatomía | Un lugar por criterio, selección visible y acción «Quitar filtros». Agrupar es una opción distinta de filtrar |
+| Estados | Datos, sin coincidencias, contenido extenso |
+| Interacción | Los filtros conservan su lugar en la URL donde ya existe. Cambiar de sección conserva el estado del registro |
+| Accesibilidad | Pestañas con teclado y selección; opciones múltiples con `aria-pressed`. Etiquetas persistentes además del placeholder |
+| Tokens | `--ds-control-height-sm`, `--ds-space-2`, `--ds-space-4`, `--ds-color-primary` |
+
+**Aceptación observable:**
+- «Quitar filtros» devuelve la lista completa.
+- La agrupación sobrevive a la migración de estilo.
+- Cada estado se filtra con un solo control.
+
+#### SectionIndex
+
+- **Propósito:** navegar entre secciones relacionadas de la vista actual.
+- **Props:** `items: { id, label, meta? }[]`; `label` opcional nombra el `nav` y por defecto es “Secciones de esta vista”.
+- **Estados:** cada elemento crea un enlace `#id`; los metadatos se muestran cuando existen. Los estilos responsivos de estudio y portal permanecen en sus hojas contextuales.
+- **Correcto:**
+
+```tsx
+<SectionIndex items={[{ id: "profile-data", label: "Datos personales" }]} />
+```
+
+- **Incorrecto:**
+
+```tsx
+<SectionIndex items={[{ id: "missing-target", label: "Datos personales" }]} />
+```
+
+Cada `id` debe coincidir con un destino único de la misma vista.
+
+### C06 — Lista y detalle
+
+**Base:** `DenseWorkspace`, `Inspector`, `InspectorSection`, `InspectorFacts`. **Estado:** vigente en main con `role="tabpanel"` fijo; el `role` configurable con nombre accesible es extensión aprobada, implementación pendiente.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Consultar un registro en contexto, con la selección a la vista. El detalle ocupa lugar cuando hay un registro elegido |
+| Entradas | `panelId`, `inspector?`, `children`. `Inspector` conserva título, cierre y metadatos |
+| Variantes | Lista sola, o lista y detalle cuando la tarea lo justifica. `role="region"` con nombre cuando la pantalla no tiene pestañas; `role="tabpanel"` con su controlador asociado |
+| Anatomía | Selección identificable; detalle con líneas y metadatos ordenados en columnas etiqueta/valor, sobre un solo nivel de superficie |
+| Estados | Datos, carga inicial, vacío confirmado, error local o parcial, restricción de acceso, contenido extenso |
+| Interacción | El detalle se abre por intención; al cerrarlo, el foco vuelve al origen. Cambiar de cliente limpia el detalle anterior según el flujo vigente |
+| Accesibilidad | `region` con nombre cuando no pertenece a pestañas; `tabpanel` con controlador asociado. Cada rol responde a una función real |
+| Tokens | `--ds-color-selected`, `--ds-color-border-subtle`, `--ds-space-6` |
+
+**Aceptación observable:**
+- Con el detalle abierto, la lista sigue legible.
+- Cerrar el detalle devuelve el foco a la fila de origen.
+- El detalle muestra datos de un solo cliente.
+
+### C07 — Carga, error y vacío
+
+**Base:** `AsyncState`, `DenseLoading`, `EmptyState`. **Estado:** vigente en main; `size="inline"` es extensión aprobada, implementación pendiente.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Distinguir ausencia confirmada, fallo, falta de acceso y datos todavía sin resolver |
+| Entradas | `EmptyState`: `title`, `description?`, `action?`, `size` (`regular` o `compact`) y `kind` (`no-data` o `no-results`). `AsyncState` conserva el reintento |
+| Variantes | `size="inline"` para ausencias secundarias. Un bloque condicional se omite únicamente después de una respuesta exitosa y vacía |
+| Anatomía | Mensaje proporcional al lugar que ocupa. El error queda junto a la fuente afectada |
+| Estados | Datos, carga inicial, vacío confirmado, sin coincidencias, error local o parcial, restricción de acceso, actualización con datos previos identificados |
+| Interacción | Reintentar repite la consulta local y conserva el trabajo del resto de la pantalla. Durante una actualización, los datos anteriores se identifican como tales |
+| Accesibilidad | La carga se anuncia con `role="status"` y mantiene el foco en su lugar; el error recuperable trae su botón; el vacío es contenido ordinario, sin rol de alerta |
+| Tokens | `--ds-text-base`, `--ds-color-text-muted`, `--ds-space-3`, `--ds-color-danger` |
+
+**Aceptación observable:**
+- Un error se muestra como error, con su reintento.
+- «Vacío» y «sin coincidencias» ofrecen salidas distintas.
+- Reintentar una fuente conserva el resto de la pantalla.
+
+Todo vacío o bloqueo guía (P1): dice qué falta y ofrece el enlace o botón que lo resuelve. La carga se comunica con un estado de carga y los fallos con `Notice`; `EmptyState` comunica ausencia.
+
+#### EmptyState
+
+- **Propósito:** indicar qué falta con un título, una explicación breve y una única acción primaria cuando hay un paso disponible; tamaño regular o compacto.
+- **Props/variantes:** `title` obligatorio; `description` comunica una explicación breve; `action` acepta una sola `ReactElement`, `kind` (`no-data` por defecto o `no-results`), `size` (`regular` por defecto o `compact`), atributos nativos de `div`. `data-empty-kind` comunica el motivo sin depender del color.
+- **Estados:** no tiene estados interactivos propios; el visual es decorativo y se oculta del árbol accesible. La acción conserva su semántica a través del control hijo.
+- **Correcto:**
+
+```tsx
+<EmptyState
+  size="compact"
+  title="Todavía no hay actividades"
+  description="Creá una actividad para vincularla a clientes."
+  action={<Button onClick={openCreate}>Crear actividad</Button>}
+/>
+```
+
+- **Incorrecto:**
+
+```tsx
+<EmptyState title="Cargando actividades…" />
+```
+
+La carga se representa con estado de carga; este componente comunica ausencia de contenido o de coincidencias.
+
+El vacío usa `EmptyState` con título, explicación breve y una única acción primaria cuando hay un paso disponible. Indicá `kind="no-data"` cuando todavía no existen registros y `kind="no-results"` cuando los datos existen pero los filtros no encuentran coincidencias. En el segundo caso, la acción ofrece ajustar o limpiar los filtros.
+
+**Correcto:**
+
+```tsx
+<EmptyState kind="no-results" title="Ninguna actividad coincide" description="Ajustá la búsqueda para consultar otras actividades." action={<Button variant="secondary" onClick={clearFilters}>Quitar filtros</Button>} />
+```
+
+**Incorrecto:**
+
+```tsx
+<EmptyState title="Sin resultados" description="Todavía no hay actividades." />
+```
+
+El primer ejemplo identifica que hay datos y propone un ajuste; el segundo confunde una lista filtrada con una lista todavía vacía.
+
+#### AsyncState
+
+- **Propósito:** representar carga o error de una consulta con una acción de reintento.
+- **Props:** `loading`, `error`, `loadingLabel`, `errorTitle`, `errorDescription`, `onRetry`; `className` es opcional.
+- **Estados:** carga usa `role="status"` y `aria-live="polite"`; error usa un `Notice` de tono `error` (`role="alert"`) con botón Reintentar; sin carga ni error devuelve `null`.
+- **Correcto:**
+
+```tsx
+<AsyncState loading={query.isLoading} error={query.isError} loadingLabel="Cargando" errorTitle="No se pudo cargar" errorDescription="Reintentá la consulta." onRetry={() => void query.refetch()} />
+```
+
+- **Incorrecto:**
+
+```tsx
+<AsyncState loading={false} error={false} loadingLabel="" errorTitle="Vacío" errorDescription="Sin datos" onRetry={retry} />
+```
+
+Para ausencia de contenido, usá `EmptyState`; `AsyncState` cubre carga y usa `Notice` para el error.
+
+### C08 — Estado y mensajes
+
+**Base:** `StatusBadge`, `Notice`, `ToastProvider`/`useNotify`. **Estado:** vigente en main; Foco unifica el uso de los tres canales.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Distinguir tres cosas: el estado de un registro (`StatusBadge`), la situación de la pantalla (`Notice`) y el resultado de una acción (notificación) |
+| Entradas | `Notice`: `tone` (`info`, `success`, `warning`, `error`), `title?`, `action?`, `children`. Notificación: `success`, `error`, `info`, con título y duración opcionales, sobre un proveedor único |
+| Variantes | Punto y texto para estados. `Notice` cuando la situación merece un aviso. Notificación para el resultado de una acción; un pendiente persistente es una tarea de la pantalla |
+| Anatomía | La orientación ordinaria es texto neutro. Como máximo un fondo de aviso por pantalla. Cada éxito se comunica una vez |
+| Estados | Datos, error local o parcial, actualización con datos previos identificados |
+| Interacción | El éxito se informa con la confirmación real del servidor. El error de campo permanece junto al campo. Los pendientes siguen visibles hasta resolverse |
+| Accesibilidad | El texto nombra siempre el estado; el color acompaña. Error con `role="alert"` y el resto con anuncio `polite`, una sola vez |
+| Tokens | `--ds-color-success`, `--ds-color-warning`, `--ds-color-danger`, `--ds-color-info`, `--ds-color-warning-subtle` |
+
+**Aceptación observable:**
+- Una constancia pendiente se muestra como tarea en la pantalla.
+- Una advertencia sensible permanece visible.
+- Una instrucción se lee en texto neutro.
+
+#### Notice
+
+`Notice` presenta un mensaje único con un icono visible, un tono semántico y una acción opcional. El contenido nunca depende sólo del color y un aviso no se anida dentro de otra caja.
 
 | Tono | Cuándo usarlo | Anuncio accesible |
 |---|---|---|
@@ -279,9 +698,32 @@ Las sombras del sistema están tokenizadas; las excepciones observadas son: `box
 
 El título de `Notice` es opcional. Sumá una acción cuando exista un siguiente paso concreto, por ejemplo `Reintentar`; mantené una sola acción primaria. Reservá `role="alert"` para errores; `info`, `success` y `warning` se anuncian como `status` con prioridad `polite`.
 
-`EmptyState` representa una colección sin contenido o una búsqueda sin coincidencias. Usá `kind="no-data"` cuando todavía no hay registros y `kind="no-results"` cuando los filtros o la búsqueda no encuentran elementos. Cada estado presenta un título y una explicación breve de una línea; sumá una única acción primaria cuando haya un paso claro. La carga se comunica con un estado de carga y los fallos con `Notice`, no con un vacío.
+| Tono | Cuándo usar | Texto modelo |
+|---|---|---|
+| `info` | Orientación contextual para continuar una tarea | “El archivo se asociará a este pedido y quedará disponible para tu estudio.” |
+| `success` | Confirmación de una acción completada | “Los cambios quedaron guardados y la ficha ya está actualizada.” |
+| `warning` | Atención requerida con continuidad posible | “Revisá el período fiscal para completar el cálculo.” |
+| `error` | Fallo que requiere recuperación explícita | “La consulta de obligaciones encontró un problema. Reintentá para actualizar el período.” |
 
-**Textos modelo:**
+`error` usa `role="alert"`. `info`, `success` y `warning` usan `role="status"` y `aria-live="polite"`. El componente define estos roles según `tone`; el icono aporta una marca reconocible sin depender del color. `action` presenta como máximo una acción clara.
+
+**Correcto:**
+
+```tsx
+<Notice tone="warning" title="Revisá el período fiscal" action={<Button onClick={openFiscalSetup}>Configurar período</Button>}>
+  Completá la configuración para continuar con el cálculo.
+</Notice>
+```
+
+**Incorrecto:**
+
+```tsx
+<div className="warning-box" style={{ color: "orange" }}>
+  <EmptyState title="Aviso" />
+</div>
+```
+
+#### Textos modelo de avisos y vacíos
 
 - Info: “El perfil está listo para revisar. Consultá los datos antes de guardar.”
 - Éxito: “Los cambios quedaron guardados. Continuá con la próxima tarea.”
@@ -318,271 +760,7 @@ El título de `Notice` es opcional. Sumá una acción cuando exista un siguiente
 
 Usá `Notice` en vez de clases locales de aviso, evitá cajas anidadas y diferenciá `no-data` de `no-results`. Un estado vacío no presenta varias acciones primarias ni sustituye el mensaje de carga o el error de consulta.
 
-### Familia Dense del paquete
-
-| Export | Contrato de props o retorno |
-|---|---|
-| `DenseDensity`, `useDensity` | `DenseDensity` admite `28`, `32` y `40`; `useDensity()` devuelve `[density, setDensity]`, persiste la elección en `contable.dense.rowHeight` y usa `32` como valor inicial o de respaldo. |
-| `normalizeSearch(value)` | Normaliza texto a minúsculas, sin tildes y sin espacios al inicio o al final. |
-| `DensePage` | Requiere `density` y `children`; acepta `flow` (por defecto `false`) y `className`. |
-| `DenseSection` | Requiere `title` y `children`; acepta `id`, `count`, `description` y `actions`. |
-| `DenseHeader` | Requiere `eyebrow`, `title` y `description`; acepta `actions`. |
-| `StatStrip`, `StatItem` | `StatStrip` requiere `items` y `label`. Cada item requiere `key`, `label` y `value`; acepta `detail`, `tone="warn"`, `active` y `onSelect`. Un item seleccionable se representa como botón. |
-| `DenseToolbar` | Agrupa `children` dentro de la barra de herramientas. |
-| `DensitySwitch` | Requiere `value: DenseDensity` y `onChange(next)`. |
-| `DenseToggleGroup`, `DenseToggleOption` | Requiere `label`, `options` (pares `value` y `label`), `selected` (valores activos) y `onChange(next)`; cada opción es un botón con `aria-pressed` y `next` sigue el orden de `options`. |
-| `DenseWorkspace` | Requiere `panelId` y `children`; acepta `inspector` para habilitar la columna lateral. |
-| `DenseTable`, `DenseColumn<T>` | `DenseTable<T>` requiere `label`, `columns`, `rows` y `rowKey`; acepta `selectedKey`, `onSelect`, `rowClassName`, `empty`, `footer`, `inspectorOpen` y `groupBy`. `groupBy(row)` devuelve `{ key, label, order }`: agrupa las filas bajo un encabezado con su conteo, ordenado por `order`; el teclado salta los encabezados. Cada columna requiere `key`, `header` y `render`; acepta `sortValue`, `secondary`, `align="right"`, `width`, `className` y `sticky="right"`. |
-| `ShortcutHint` | Requiere `items`, una lista de pares `[tecla, descripción]`. |
-| `DenseFooter` | Requiere `count` y `noun`; acepta `hint` y `newShortcut` (por defecto `true`). |
-| `DenseLoading` | Requiere `label`; anuncia la carga con `role="status"`. |
-| `Inspector` | Requiere `label`, `title` y `children`; acepta `eyebrow`, `subtitle`, `leading`, `onClose`, `footer` y `banner`. |
-| `InspectorSection` | Requiere `title` y `children`. |
-| `InspectorFacts` | Requiere `items`, una lista de pares `[término, valor]`; omite valores `null`. |
-| `useDenseShortcuts` | Requiere `searchRef`; acepta `onNew` y `onEscape`. `/` enfoca la búsqueda, `N` activa el alta y `Esc` cierra el detalle. |
-
-### Estados y composición Dense
-
-- `StatStrip` expresa los estados `active` y `tone="warn"`; su callback selecciona el item y el grupo tiene nombre accesible.
-- `DensitySwitch` expone la opción elegida con `aria-pressed`; `useDensity` conserva la selección entre visitas.
-- `DenseTable` ordena al activar una cabecera con `sortValue`, alterna ascendente/descendente, oculta columnas `secondary` cuando `inspectorOpen` está activo y comunica selección con `aria-current`. Las filas seleccionables aceptan Enter/Espacio y flechas arriba/abajo.
-- `DenseWorkspace` activa el layout lateral cuando recibe `inspector`; `DensePage` conserva su variante de flujo mediante `flow`.
-- `Inspector` presenta de forma opcional banner, cierre y pie; `DenseLoading` distingue la espera del estado vacío.
-- `useDenseShortcuts` ignora escritura en campos editables y diálogos abiertos.
-
-`DenseTabs`, `DenseSearch` y `DenseAlert` permanecen en el adaptador de web `apps/web/src/ui/Dense.tsx`; consumen el `Icon` compartido del paquete y la hoja Dense publicada.
-
-**Correcto:**
-
-```tsx
-<DensePage density={32}>
-  <DenseHeader eyebrow="Clientes" title="Cartera" description="Clientes del estudio" />
-  <DenseWorkspace
-    panelId="clientes-panel"
-    inspector={<Inspector label="Detalle del cliente" title="Cliente">Ficha del cliente</Inspector>}
-  >
-    <DenseTable<Cliente>
-      label="Clientes"
-      columns={[{ key: "name", header: "Cliente", render: (client) => client.name }]}
-      rows={clients}
-      rowKey={(client) => client.id}
-    />
-  </DenseWorkspace>
-</DensePage>
-```
-
-**Incorrecto:**
-
-```tsx
-<DenseTable<Cliente> label="Clientes" columns={columns} rows={clients} rowKey={() => "cliente"} />
-```
-
-`rowKey` devuelve una identidad estable y única por fila; `DenseWorkspace` recibe el panel de detalle cuando la pantalla ofrece selección y ficha lateral.
-
-### Inventario y destino del paquete
-
-| Componente/patrón | Destino normativo |
-|---|---|
-| `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, `Notice` | Primitivas públicas de `packages/design-system/src` |
-| Familia Dense del paquete | Primitivas públicas de `packages/design-system/src`; contratos detallados arriba |
-| `DenseTabs`, `DenseSearch`, `DenseAlert` | `DenseTabs` y `DenseSearch` permanecen en el adaptador web. `DenseAlert` se conserva para pantallas fuera de este corte; las pantallas migradas usan `Notice`. |
-| Orientación y "próximo paso" | El próximo paso de una pantalla es su botón principal del encabezado, no un aviso. Si hace falta orientar, se usa `Notice` con tono `info` o `DenseAlert` con tono `hint` (sin fondo ni color de estado). El tono `success` se reserva para confirmar una acción recién hecha; no se usa para estados permanentes ni para guiar, porque comparte el verde de la marca. Como máximo un aviso con fondo por pantalla |
-| Notificaciones (`ToastProvider`, `useNotify`) | Único canal para decir cómo terminó una acción. `notify.success` se cierra sola a los 5 s; `notify.error` queda hasta cerrarla; `notify.info` para avisos sin resultado. Se monta una vez en la raíz de la app. El tono se lee en el icono: la tarjeta no usa fondo de color. Ninguna pantalla dibuja una cinta de "Acción completada" ni guarda un estado local para el recibo: `apps/web/src/ui/UiPatterns.test.ts` falla si reaparece |
-| Cómo se comunica cada cosa | Acción que salió bien → notificación. Acción que falló → notificación de error; si el error es de un campo o de un formulario abierto, además junto al campo o dentro del panel. Estado que bloquea el trabajo de la pantalla → un `Notice` fijo, como máximo uno. Todo en orden → nada, o texto gris con tilde |
-| Menú del estudio (`StudyShell`) | Dos niveles: **Estudio** (lo de toda la cartera) y **Cliente** (lo del cliente elegido, en el orden del trabajo del mes), más **Configuración del estudio**, siempre a la vista. El cliente se elige una sola vez, con el selector del bloque Cliente; sin cliente, sus secciones se muestran deshabilitadas con el motivo. La barra superior queda sólo para el período contable, en las pantallas que lo necesitan. Cada ítem lleva el icono declarado en `moduleRegistry` |
-| Iconos | Los iconos del paquete (`Icon`) se muestran: acompañan a la etiqueta en el menú y en botones, y pueden ir solos sólo en botones con `aria-label`. No se ocultan con reglas globales |
-| Encabezado de pantalla (`DenseHeader`) | Uno por pantalla: título (24 px, peso 600), una línea de descripción debajo y, a la derecha, las acciones con una sola principal. No lleva rótulo superior: el menú ya dice dónde se está |
-| Resumen de pantalla (`StatStrip`) | Una línea discreta de cifras bajo el encabezado, sin caja ni mayúsculas. Sólo cifras de la lista que se ve (cantidades, pendientes); el estudio, el cliente o el período no van acá porque ya están en el menú y en la barra de período. Una cifra que filtra la lista es un botón y queda resaltada mientras el filtro está activo |
-| Acciones riesgosas (`Button` `danger` / `danger-solid`) | En pantallas, fichas y filas el peligro es discreto: `variant="danger"`, texto rojo sobre fondo transparente. El rojo sólido (`danger-solid`) es exclusivo del botón que confirma dentro de un diálogo (`ConfirmDialog`, `DeletionDrawer`). Nunca hay una columna de botones rojos |
-| Interruptor (`Switch`) | Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con el estado escrito al lado. Apagar algo que afecta a otros pide confirmación. Dentro de un formulario que se envía después va una casilla |
-| Tablas (`Table`, `DenseTable`) | Dos componentes con un mismo aspecto: `Table` para leer y `DenseTable` para listas con selección, orden y detalle lateral. Comparten encabezado (`--ds-table-head-height`) y alto de fila (`--ds-row-height`). No se escribe `<table>` en una pantalla; las cuatro que quedan están registradas como deuda en `UiPatterns.test.ts` |
-| Densidad de filas (`useDensity`) | Preferencia de la persona, no de la pantalla: un solo valor (28, 32 o 40 px) guardado en el navegador y aplicado a todas las tablas. Se cambia en un único lugar, el menú de ayuda del estudio. Ninguna barra de filtros lleva el selector |
-| Dónde va cada error | **Campo inválido**: debajo del campo. **No se pudo guardar un formulario o cajón**: `Notice` de error dentro del mismo formulario, junto a los botones. **No se pudo cargar una lista**: `Notice` de error con botón Reintentar en el lugar de la lista. **Falló una acción de fila o de barra** (enviar, publicar, descargar, activar): `notify.error`, nunca un aviso al pie de la página. `actionErrorMessage` arma el texto |
-| Títulos de paneles, cajones y fichas | Título y, si hace falta, una línea de descripción. `ActionDrawer` e `Inspector` no tienen rótulo superior; los paneles tampoco |
-| Confirmaciones | Toda acción destructiva o que afecta a otros pasa por `ConfirmDialog` (`useConfirmAction`): dice qué va a pasar y el botón nombra la acción. No se usa `window.confirm` |
-| Eliminación definitiva | Borrar algo que arrastra datos (un paquete de reglas, un cliente) no ocupa una caja propia en la pantalla: es una acción chica `variant="danger"` junto al título. Pide dos confirmaciones: primero `ConfirmDialog` explica qué se pierde; después `DeletionDrawer` muestra el impacto y pide escribir el nombre |
-| Ficha con secciones | Una pantalla con varias secciones de un mismo objeto usa `DenseTabs` arriba, con un **Resumen** como pestaña predeterminada, y una tabla a ancho completo por pestaña. No se apilan cajas ni se ponen dos tablas en columnas |
-| Estilos de pantallas (`apps/web/src/study/styles/`) | `study.css` es sólo un índice que importa, en orden, un archivo por área (base, cartera, documentos, operación fiscal, ficha, bandeja…). El orden importa: los posteriores ajustan a los anteriores. Lo que sirve a más de una pantalla va al sistema de diseño, no a estos archivos. Una clase que ya no usa ninguna pantalla se borra junto con el cambio que la dejó sin uso |
-| `StatusBadge` | Público en `packages/design-system/src`; conserva el contrato `status`/`className` y los estilos globales/contextuales existentes en la aplicación |
-| `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction` | Públicos en `packages/design-system/src`; CSS propio de drawers en el paquete |
-| `AsyncState`, `Icon`, `SectionIndex` | Públicos en `packages/design-system/src`; `SectionIndex` conserva las reglas de layout de estudio/portal en sus hojas de aplicación |
-| `DeletionDrawer` | Permanece en `apps/web/src/ui`: consulta y elimina mediante `lib/api` y `@tanstack/react-query`; el CSS y la prueba de integración también permanecen en la app |
-| Tabla, píldora, aviso y botón de texto | Unificar en `Table`/`DenseTable`, `StatusBadge`, `Notice` y la API textual de `Button` |
-
-Los componentes migrados mantienen imports compatibles en las pantallas existentes. Las reglas visuales que dependen del contexto de estudio o portal permanecen en las hojas de estilo de la aplicación.
-
-### Button
-
-- **Propósito:** unificar acciones y enlaces de acción con altura, foco, estados y carga normalizados.
-- **Variantes:**
-
-| Variante | Cuándo usarla |
-|---|---|
-| `primary` | Acción principal de la pantalla o panel; debe haber una sola. |
-| `secondary` | Alternativa visible con contorno, como una acción hermana de la principal. |
-| `ghost` | Cancelar, cerrar o realizar una acción de baja jerarquía sin caja persistente. |
-| `danger` | Acción destructiva o de alto riesgo, normalmente dentro de una confirmación. |
-| `text` | Acción breve en línea, como Reintentar o una acción secundaria de fila. |
-| `link` | Navegación de acción con `href`; mantiene la semántica nativa de enlace. |
-
-- **Tamaños:** `md` mide 40 px y es el tamaño estándar; `row` mide 32 px para filas y barras. `sm` se conserva como alias retrocompatible de `row`. La acción primaria del encabezado de página mide 40 px en todas las pantallas; con puntero coarse conserva el objetivo táctil de 44 px.
-- **Props:** admite atributos nativos de `button`; con `href` renderiza un enlace y admite sus atributos nativos. `loading` y `loadingLabel` aplican a botones. `iconOnly` exige `aria-label` en el tipo público.
-- **Estados:** hover/active por variante, `:focus-visible`, disabled y loading. Loading informa `aria-busy`, bloquea el control, muestra spinner y puede reemplazar el nombre accesible. Las variantes `text` y `link` usan tokens del sistema.
-- **Correcto:**
-
-```tsx
-<Button type="submit" loading={saving} loadingLabel="Guardando">
-  Guardar cambios
-</Button>
-<Button type="button" variant="ghost" onClick={cancel}>Cancelar</Button>
-<Button type="button" variant="text" size="row" onClick={retry}>Reintentar</Button>
-<Button href="#contactos" variant="link" size="row">Ver contactos</Button>
-<Button type="button" iconOnly aria-label="Cerrar panel"><span aria-hidden="true">×</span></Button>
-```
-
-- **Incorrecto:**
-
-```tsx
-<Button>Guardar</Button>
-<Button>Cancelar</Button>
-<button className="custom-danger-button" onClick={remove}>Eliminar</button>
-<Button iconOnly><span aria-hidden="true">×</span></Button>
-```
-
-Los dos primeros quedan como acción primaria por defecto. Elegí la jerarquía según el efecto y usá `Button` en vez de una familia CSS local; los controles icon-only siempre llevan nombre accesible.
-
-### Field
-
-- **Propósito:** input HTML con label, hint, prefijo, error y estados visuales accesibles.
-- **Props/variantes:** atributos nativos de `input`; `label`, `error`, `hint`, `prefix`; `id` explícito o derivado de `name`; forwardRef.
-- **Estados:** hover, foco visible, error (`aria-invalid` y `aria-describedby`), disabled y read-only. El hint se oculta cuando hay error para conservar una sola explicación próxima al campo.
-- **Correcto:**
-
-```tsx
-<Field id="activity-code" label="Código" hint="Ej.: SERV4" value={code} onChange={onCodeChange} />
-```
-
-- **Incorrecto:**
-
-```tsx
-<Field placeholder="Código de actividad" value={code} onChange={onCodeChange} />
-```
-
-El placeholder no reemplaza un label persistente; proporcioná `label` y una asociación de id.
-
-### MoneyField
-
-- **Propósito:** campo monetario argentino que presenta agrupación `es-AR` y conserva un valor decimal normalizado para estado/API.
-- **Props/variantes:** `value: string` normalizado y `onChange(value: string)`; recibe las demás props de `Field` excepto `type`, `value` y `onChange`; aplica prefijo `$` y `inputMode="decimal"`.
-- **Estados:** hereda label, hint, error, foco, disabled y read-only de `Field`; limita a dos decimales y conserva el cursor al reagrupar miles.
-- **Correcto:**
-
-```tsx
-<MoneyField id="amount" label="Importe" value="1234567.89" onChange={setAmount} />
-```
-
-- **Incorrecto:**
-
-```tsx
-<MoneyField id="amount" label="Importe" value="1.234.567,89" onChange={setAmount} />
-```
-
-El valor de estado/API es normalizado (`1234567.89`); el formato local sólo corresponde a la presentación.
-
-### Table
-
-- **Propósito:** tabla semántica con cabecera, alineación opcional y estado vacío.
-- **Props/variantes:** `columns`, `rows`, `rowKey`, `empty`; cada columna lleva `key`, `header`, `align` (`left`, `right`, `center`), `render` o `accessor`. Conserva atributos nativos de `table`.
-- **Estados:** hover de fila, `focus-within`/selección cuando sus descendientes reciben foco, vacío personalizable; encabezado sticky y contenedor con scroll horizontal.
-- **Correcto:**
-
-```tsx
-<Table
-  columns={[{ key: "code", header: "Código", accessor: (row) => row.code }]}
-  rows={activities}
-  rowKey={(row) => row.id}
-  empty={<EmptyState title="Sin actividades" description="Creá una actividad para empezar." />}
-/>
-```
-
-- **Incorrecto:**
-
-```tsx
-<Table columns={columns} rows={activities} rowKey={() => "same-key"} />
-```
-
-La clave debe ser estable y única por fila. `Table` es una tabla de lectura; para filas seleccionables con teclado la pantalla actual usa `DenseTable`.
-
-### Avisos y vacíos
-
-`Notice` presenta un mensaje único con un icono visible, un tono semántico y una acción opcional. El contenido nunca depende sólo del color y un aviso no se anida dentro de otra caja.
-
-| Tono | Cuándo usar | Texto modelo |
-|---|---|---|
-| `info` | Orientación contextual para continuar una tarea | “El archivo se asociará a este pedido y quedará disponible para tu estudio.” |
-| `success` | Confirmación de una acción completada | “Los cambios quedaron guardados y la ficha ya está actualizada.” |
-| `warning` | Atención requerida con continuidad posible | “Revisá el período fiscal para completar el cálculo.” |
-| `error` | Fallo que requiere recuperación explícita | “La consulta de obligaciones encontró un problema. Reintentá para actualizar el período.” |
-
-`error` usa `role="alert"`. `info`, `success` y `warning` usan `role="status"` y `aria-live="polite"`. El componente define estos roles según `tone`; el icono aporta una marca reconocible sin depender del color. `action` presenta como máximo una acción clara.
-
-**Correcto:**
-
-```tsx
-<Notice tone="warning" title="Revisá el período fiscal" action={<Button onClick={openFiscalSetup}>Configurar período</Button>}>
-  Completá la configuración para continuar con el cálculo.
-</Notice>
-```
-
-**Incorrecto:**
-
-```tsx
-<div className="warning-box" style={{ color: "orange" }}>
-  <EmptyState title="Aviso" />
-</div>
-```
-
-El vacío usa `EmptyState` con título, explicación breve y una única acción primaria cuando hay un paso disponible. Indicá `kind="no-data"` cuando todavía no existen registros y `kind="no-results"` cuando los datos existen pero los filtros no encuentran coincidencias. En el segundo caso, la acción ofrece ajustar o limpiar los filtros.
-
-**Correcto:**
-
-```tsx
-<EmptyState kind="no-results" title="Ninguna actividad coincide" description="Ajustá la búsqueda para consultar otras actividades." action={<Button variant="secondary" onClick={clearFilters}>Quitar filtros</Button>} />
-```
-
-**Incorrecto:**
-
-```tsx
-<EmptyState title="Sin resultados" description="Todavía no hay actividades." />
-```
-
-El primer ejemplo identifica que hay datos y propone un ajuste; el segundo confunde una lista filtrada con una lista todavía vacía.
-
-### EmptyState
-
-- **Propósito:** indicar qué falta con un título, una explicación breve y una única acción primaria cuando hay un paso disponible; tamaño regular o compacto.
-- **Props/variantes:** `title` obligatorio; `description` comunica una explicación breve; `action` acepta una sola `ReactElement`, `kind` (`no-data` por defecto o `no-results`), `size` (`regular` por defecto o `compact`), atributos nativos de `div`. `data-empty-kind` comunica el motivo sin depender del color.
-- **Estados:** no tiene estados interactivos propios; el visual es decorativo y se oculta del árbol accesible. La acción conserva su semántica a través del control hijo.
-- **Correcto:**
-
-```tsx
-<EmptyState
-  size="compact"
-  title="Todavía no hay actividades"
-  description="Creá una actividad para vincularla a clientes."
-  action={<Button onClick={openCreate}>Crear actividad</Button>}
-/>
-```
-
-- **Incorrecto:**
-
-```tsx
-<EmptyState title="Cargando actividades…" />
-```
-
-La carga se representa con estado de carga; este componente comunica ausencia de contenido o de coincidencias.
-
-### Estados
+#### Estados
 
 En tablas, listas y avisos, un estado usa punto + texto plano; el texto siempre nombra el estado. La píldora (borde y fondo) se reserva para la cabecera de la ficha de un registro y la ficha/Resumen del cliente. El punto mide 8 px (`--ds-space-2`), queda centrado con el texto y es decorativo (`aria-hidden="true"`); el texto usa `--ds-color-text` y mantiene contraste mínimo de 4,5:1. El tono `ok` usa `--ds-color-success` sólo en el punto, nunca texto verde ni fondo verde en tablas.
 
@@ -611,6 +789,7 @@ En Configuración fiscal, «Principal» identifica un atributo de la actividad y
 | `WARNING` | Aviso | `warn` |
 | `BLOCKING` | Bloqueante | `danger` |
 | `FINALIZED` | Finalizado | `muted` |
+| `SUPERSEDED` | Reemplazado | `muted` |
 
 **Correcto:**
 
@@ -626,7 +805,7 @@ En Configuración fiscal, «Principal» identifica un atributo de la actividad y
 <span className="status-badge">{row.status}</span>
 ```
 
-### StatusBadge
+#### StatusBadge
 
 - **Propósito:** presentar un estado contable con su etiqueta conocida o un fallback legible.
 - **Props:** `status: string | null | undefined`; `className`, `label` y `variant` (`plain` por defecto o `pill`) son opcionales. `label` permite ajustar la etiqueta visible sin alterar la clave ni el tono. `getStatusBadgeMeta` expone la etiqueta y el tono resuelto; `StatusTone`, `StatusBadgeMeta` y `StatusBadgeVariant` son tipos públicos.
@@ -645,10 +824,35 @@ En Configuración fiscal, «Principal» identifica un atributo de la actividad y
 
 Usá el componente para conservar la normalización, etiqueta, tono y atributo de estado compartidos.
 
-### ActionDrawer
+#### Notificaciones (`ToastProvider`, `useNotify`)
+
+Único canal para decir cómo terminó una acción. `notify.success` se cierra sola a los 5 s; `notify.error` queda hasta cerrarla; `notify.info` es para avisos sin resultado. Se monta una vez en la raíz de la app. El tono se lee en el icono: la tarjeta va sin fondo de color. El resultado vive en la notificación; `apps/web/src/ui/UiPatterns.test.ts` verifica que ninguna pantalla dibuje una cinta de «Acción completada» ni guarde un estado local para el recibo.
+
+### C09 — Paneles y confirmación
+
+**Base:** `ActionDrawer`, `ConfirmAction`/`ConfirmDialog`, `DeletionDrawer`, `Field`, `MoneyField`, `Switch`. **Estado:** vigente en main; Foco especifica sus estados.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Editar o ejecutar de forma deliberada, con la vista de lectura intacta detrás |
+| Entradas | `ActionDrawer`: `isOpen`, `onClose`, `title`, `description?`, `children`, `footer?`, `size` (`default` o `wide`), `initialFocus` (`content` o `close`) |
+| Variantes | Formulario, lectura detallada y confirmación separada para alto impacto. `danger-solid` confirma el riesgo |
+| Anatomía | Contexto arriba, contenido desplazable y pie fijo abajo, con el mismo orden de botones en todos los paneles. Etiquetas persistentes y error junto al campo |
+| Estados | Datos, error local o parcial, restricción de acceso, contenido extenso, envío en proceso |
+| Interacción | Escape y Cancelar cierran; el foco queda contenido y se restaura al cerrar. «Procesando» impide el doble envío. Las validaciones fiscales son del dominio y se conservan |
+| Accesibilidad | Diálogo con nombre y descripción, primer foco deliberado y Tab contenido dentro del panel |
+| Tokens | `--ds-control-height-md`, `--ds-color-border-strong`, `--ds-color-focus`, `--ds-space-4`, `--ds-space-6` |
+
+**Aceptación observable:**
+- Con contenido largo, el pie sigue alcanzable.
+- Un error conserva lo que la persona cargó.
+- El botón de guardar se mantiene habilitado y, al intentar, señala lo que falta; si se deshabilita, el motivo está visible al lado (P4).
+- Los parámetros de comportamiento se eligen en un desplegable alimentado por catálogo (P2).
+
+#### ActionDrawer
 
 - **Propósito:** panel lateral accesible para formularios y acciones transaccionales.
-- **Props:** `isOpen`, `onClose`, `title`, `children`; `description`, `eyebrow`, `footer`, `closeLabel` y `size` (`default` o `wide`) son opcionales.
+- **Props:** `isOpen`, `onClose`, `title`, `children`; `description`, `footer`, `closeLabel`, `size` (`default` o `wide`) e `initialFocus` (`content` o `close`) son opcionales. Lleva título y, si hace falta, una línea de descripción, sin rótulo superior.
 - **Estados:** cerrado no renderiza DOM; abierto presenta `role="dialog"`, mueve el foco al primer control, limita Tab/Shift+Tab, cierra con Escape, bloquea el scroll del body y restaura el foco previo al cerrar. El panel estándar ocupa el alto completo de la ventana, desplaza el contenido internamente y conserva el pie visible.
 - **Correcto:**
 
@@ -668,7 +872,7 @@ Usá el componente para conservar la normalización, etiqueta, tono y atributo d
 
 Proporcioná siempre `onClose` para el cierre explícito, el scrim y Escape.
 
-### ConfirmAction y ConfirmDialog
+#### ConfirmAction y ConfirmDialog
 
 - **Propósito:** pedir confirmación in-app antes de ejecutar una acción; `useConfirmAction` administra una solicitud por página y `ConfirmDialog` la presenta.
 - **Props:** `ConfirmAction` recibe `open`, `title`, `confirmLabel`, `onConfirm` y `onCancel`; `description`, `tone` (`default` o `danger`) y `cancelLabel` son opcionales. `ConfirmDialog` recibe el estado `confirm` y un `cancelLabel` opcional.
@@ -688,74 +892,146 @@ const confirm = useConfirmAction();
 
 Incluí `onCancel` y describí la consecuencia de la acción cuando aporte contexto.
 
-### AsyncState
+#### Field
 
-- **Propósito:** representar carga o error de una consulta con una acción de reintento.
-- **Props:** `loading`, `error`, `loadingLabel`, `errorTitle`, `errorDescription`, `onRetry`; `className` es opcional.
-- **Estados:** carga usa `role="status"` y `aria-live="polite"`; error usa `role="alert"` y un `EmptyState` con botón Reintentar; sin carga ni error devuelve `null`.
+- **Propósito:** input HTML con label, hint, prefijo, error y estados visuales accesibles.
+- **Props/variantes:** atributos nativos de `input`; `label`, `error`, `hint`, `prefix`; `id` explícito o derivado de `name`; forwardRef.
+- **Estados:** hover, foco visible, error (`aria-invalid` y `aria-describedby`), disabled y read-only. El hint se oculta cuando hay error para conservar una sola explicación próxima al campo.
 - **Correcto:**
 
 ```tsx
-<AsyncState loading={query.isLoading} error={query.isError} loadingLabel="Cargando" errorTitle="No se pudo cargar" errorDescription="Reintentá la consulta." onRetry={() => void query.refetch()} />
+<Field id="activity-code" label="Código" hint="Ej.: SERV4" value={code} onChange={onCodeChange} />
 ```
 
 - **Incorrecto:**
 
 ```tsx
-<AsyncState loading={false} error={false} loadingLabel="" errorTitle="Vacío" errorDescription="Sin datos" onRetry={retry} />
+<Field placeholder="Código de actividad" value={code} onChange={onCodeChange} />
 ```
 
-Para ausencia de contenido, usá `EmptyState`; `AsyncState` cubre carga y usa `Notice` para el error.
+El placeholder no reemplaza un label persistente; proporcioná `label` y una asociación de id.
 
-### Icon
+#### MoneyField
 
-- **Propósito:** renderizar un glifo SVG del catálogo `ICON_NAMES`.
-- **Props:** `name: IconName`; `size` (20 por defecto), `strokeWidth` (1.8), `className` y `title` son opcionales.
-- **Estados:** sin `title` es decorativo (`aria-hidden`); con `title` se expone como imagen con nombre accesible.
+- **Propósito:** campo monetario argentino que presenta agrupación `es-AR` y conserva un valor decimal normalizado para estado/API.
+- **Props/variantes:** `value: string` normalizado y `onChange(value: string)`; recibe las demás props de `Field` excepto `type`, `value` y `onChange`; aplica prefijo `$` y `inputMode="decimal"`.
+- **Estados:** hereda label, hint, error, foco, disabled y read-only de `Field`; limita a dos decimales y conserva el cursor al reagrupar miles.
 - **Correcto:**
 
 ```tsx
-<Icon name="alert" /> <span>Revisar la consulta</span>
+<MoneyField id="amount" label="Importe" value="1234567.89" onChange={setAmount} />
 ```
 
 - **Incorrecto:**
 
 ```tsx
-<Icon name="alert" aria-label="Alerta" />
+<MoneyField id="amount" label="Importe" value="1.234.567,89" onChange={setAmount} />
 ```
 
-`aria-label` no forma parte de las props; usá `title` para un icono informativo o acompañalo con texto.
+El valor de estado/API es normalizado (`1234567.89`); el formato local sólo corresponde a la presentación.
 
-### SectionIndex
+#### Switch
 
-- **Propósito:** navegar entre secciones relacionadas de la vista actual.
-- **Props:** `items: { id, label, meta? }[]`; `label` opcional nombra el `nav` y por defecto es “Secciones de esta vista”.
-- **Estados:** cada elemento crea un enlace `#id`; los metadatos se muestran cuando existen. Los estilos responsivos de estudio y portal permanecen en sus hojas contextuales.
-- **Correcto:**
+Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con el estado escrito al lado. Recibe `checked`, `onChange(next)` y `label` (nombre accesible); acepta `text` y `busy`. Se expone con `role="switch"` y `aria-checked`; mientras guarda, `busy` bloquea otro clic. Apagar algo que afecta a otros pide confirmación. Dentro de un formulario que se envía después va una casilla.
+
+### Familia Dense del paquete
+
+| Export | Contrato de props o retorno |
+|---|---|
+| `DenseDensity`, `useDensity` | `DenseDensity` admite `28`, `32` y `40`; `useDensity()` devuelve `[density, setDensity]`, persiste la elección en `contable.dense.rowHeight` y usa `32` como valor inicial o de respaldo. |
+| `normalizeSearch(value)` | Normaliza texto a minúsculas, sin tildes y sin espacios al inicio o al final. |
+| `DensePage` | Requiere `density` y `children`; acepta `flow` (por defecto `false`) y `className`. |
+| `DenseSection` | Requiere `title` y `children`; acepta `id`, `count`, `description` y `actions`. |
+| `DenseHeader` | Requiere `title`; acepta `description` y `actions`. |
+| `StatStrip`, `StatItem` | `StatStrip` requiere `items` y `label`. Cada item requiere `key`, `label` y `value`; acepta `detail`, `tone="warn"`, `active` y `onSelect`. Un item seleccionable se representa como botón. |
+| `DenseToolbar` | Agrupa `children` dentro de la barra de herramientas. |
+| `DensitySwitch` | Requiere `value: DenseDensity` y `onChange(next)`. |
+| `DenseToggleGroup`, `DenseToggleOption` | Requiere `label`, `options` (pares `value` y `label`), `selected` (valores activos) y `onChange(next)`; cada opción es un botón con `aria-pressed` y `next` sigue el orden de `options`. |
+| `DenseWorkspace` | Requiere `panelId` y `children`; acepta `inspector` para habilitar la columna lateral. |
+| `DenseTable`, `DenseColumn<T>` | `DenseTable<T>` requiere `label`, `columns`, `rows` y `rowKey`; acepta `selectedKey`, `onSelect`, `rowClassName`, `empty`, `footer`, `inspectorOpen` y `groupBy`. `groupBy(row)` devuelve `{ key, label, order }`: agrupa las filas bajo un encabezado con su conteo, ordenado por `order`; el teclado salta los encabezados. Cada columna requiere `key`, `header` y `render`; acepta `sortValue`, `secondary`, `align="right"`, `width`, `className` y `sticky="right"`. |
+| `ShortcutHint` | Requiere `items`, una lista de pares `[tecla, descripción]`. |
+| `DenseFooter` | Requiere `count` y `noun`; acepta `hint` y `newShortcut` (por defecto `true`). |
+| `DenseLoading` | Requiere `label`; anuncia la carga con `role="status"`. |
+| `Inspector` | Requiere `label`, `title` y `children`; acepta `subtitle`, `leading`, `onClose`, `footer` y `banner`. |
+| `InspectorSection` | Requiere `title` y `children`. |
+| `InspectorFacts` | Requiere `items`, una lista de pares `[término, valor]`; omite valores `null`. |
+| `useDenseShortcuts` | Requiere `searchRef`; acepta `onNew` y `onEscape`. `/` enfoca la búsqueda, `N` activa el alta y `Esc` cierra el detalle. |
+
+### Estados y composición Dense
+
+- `StatStrip` expresa los estados `active` y `tone="warn"`; su callback selecciona el item y el grupo tiene nombre accesible.
+- `DensitySwitch` expone la opción elegida con `aria-pressed`; `useDensity` conserva la selección entre visitas.
+- `DenseTable` ordena al activar una cabecera con `sortValue`, alterna ascendente/descendente, oculta columnas `secondary` cuando `inspectorOpen` está activo y comunica selección con `aria-current`. Las filas seleccionables aceptan Enter/Espacio y flechas arriba/abajo.
+- `DenseWorkspace` activa el layout lateral cuando recibe `inspector`; `DensePage` conserva su variante de flujo mediante `flow`.
+- `Inspector` presenta de forma opcional banner, cierre y pie; `DenseLoading` distingue la espera del estado vacío.
+- `useDenseShortcuts` ignora escritura en campos editables y diálogos abiertos.
+
+`DenseTabs`, `DenseSearch` y `DenseAlert` permanecen en el adaptador de web `apps/web/src/ui/Dense.tsx`; consumen el `Icon` compartido del paquete y la hoja Dense publicada.
+
+**Correcto:**
 
 ```tsx
-<SectionIndex items={[{ id: "profile-data", label: "Datos personales" }]} />
+<DensePage density={32}>
+  <DenseHeader title="Cartera" description="Clientes del estudio" />
+  <DenseWorkspace
+    panelId="clientes-panel"
+    inspector={<Inspector label="Detalle del cliente" title="Cliente">Ficha del cliente</Inspector>}
+  >
+    <DenseTable<Cliente>
+      label="Clientes"
+      columns={[{ key: "name", header: "Cliente", render: (client) => client.name }]}
+      rows={clients}
+      rowKey={(client) => client.id}
+    />
+  </DenseWorkspace>
+</DensePage>
 ```
 
-- **Incorrecto:**
+**Incorrecto:**
 
 ```tsx
-<SectionIndex items={[{ id: "missing-target", label: "Datos personales" }]} />
+<DenseTable<Cliente> label="Clientes" columns={columns} rows={clients} rowKey={() => "cliente"} />
 ```
 
-Cada `id` debe coincidir con un destino único de la misma vista.
+`rowKey` devuelve una identidad estable y única por fila; `DenseWorkspace` recibe el panel de detalle cuando la pantalla ofrece selección y ficha lateral.
+
+### Reglas de uso e inventario del paquete
+
+| Componente/patrón | Destino normativo |
+|---|---|
+| `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, `Notice` | Primitivas públicas de `packages/design-system/src` |
+| Familia Dense del paquete | Primitivas públicas de `packages/design-system/src`; contratos detallados arriba |
+| `DenseTabs`, `DenseSearch`, `DenseAlert` | `DenseTabs` y `DenseSearch` permanecen en el adaptador web. `DenseAlert` se conserva para pantallas fuera de este corte; las pantallas migradas usan `Notice`. |
+| Orientación y "próximo paso" | Cuando la pantalla tiene un próximo paso, es su botón principal del encabezado, no un aviso; una pantalla de consulta puede no tener botón principal. Si hace falta orientar, se usa texto neutro, `Notice` con tono `info` o `DenseAlert` con tono `hint` (sin fondo ni color de estado). El tono `success` se reserva para confirmar una acción recién hecha; no se usa para estados permanentes ni para guiar, porque comparte el verde de la marca. Como máximo un aviso con fondo por pantalla |
+| Notificaciones (`ToastProvider`, `useNotify`) | Único canal para decir cómo terminó una acción. `notify.success` se cierra sola a los 5 s; `notify.error` queda hasta cerrarla; `notify.info` para avisos sin resultado. Se monta una vez en la raíz de la app. El tono se lee en el icono: la tarjeta no usa fondo de color. Ninguna pantalla dibuja una cinta de "Acción completada" ni guarda un estado local para el recibo: `apps/web/src/ui/UiPatterns.test.ts` falla si reaparece |
+| Cómo se comunica cada cosa | Acción que salió bien → notificación. Acción que falló → notificación de error; si el error es de un campo o de un formulario abierto, además junto al campo o dentro del panel. Estado que bloquea el trabajo de la pantalla → un `Notice` fijo, como máximo uno. Todo en orden → nada, o texto gris con tilde |
+| Menú del estudio (`StudyShell`) | Dos niveles: **Estudio** (lo de toda la cartera) y **Cliente** (lo del cliente elegido, en el orden del trabajo del mes), más **Ajustes del estudio** (en main, «Configuración del estudio»), siempre a la vista. El cliente se elige una sola vez, con el selector del bloque Cliente; sin cliente, sus secciones se muestran deshabilitadas con el motivo. La barra superior queda sólo para el período contable, en las pantallas que lo necesitan. Cada ítem lleva el icono declarado en `moduleRegistry` |
+| Iconos | Los iconos del paquete (`Icon`) se muestran: acompañan a la etiqueta en el menú y en botones, y pueden ir solos sólo en botones con `aria-label`. No se ocultan con reglas globales |
+| Encabezado de pantalla (`DenseHeader`) | Uno por pantalla: título (24 px, peso 600), una línea de descripción debajo y, a la derecha, las acciones con una sola principal. No lleva rótulo superior: el menú ya dice dónde se está |
+| Resumen de pantalla (`StatStrip`) | Una línea discreta de cifras bajo el encabezado, sin caja ni mayúsculas. Sólo cifras de la lista que se ve (cantidades, pendientes); el estudio, el cliente o el período no van acá porque ya están en el menú y en la barra de período. Una cifra que filtra la lista es un botón y queda resaltada mientras el filtro está activo |
+| Acciones riesgosas (`Button` `danger` / `danger-solid`) | En pantallas, fichas y filas el peligro es discreto: `variant="danger"`, texto rojo sobre fondo transparente. El rojo sólido (`danger-solid`) es exclusivo del botón que confirma dentro de un diálogo (`ConfirmDialog`, `DeletionDrawer`). Nunca hay una columna de botones rojos |
+| Interruptor (`Switch`) | Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con el estado escrito al lado. Apagar algo que afecta a otros pide confirmación. Dentro de un formulario que se envía después va una casilla |
+| Tablas (`Table`, `DenseTable`) | Dos componentes con un mismo aspecto: `Table` para leer y `DenseTable` para listas con selección, orden y detalle lateral. Comparten encabezado (`--ds-table-head-height`) y alto de fila (`--ds-row-height`). No se escribe `<table>` en una pantalla; las cuatro que quedan están registradas como deuda en `UiPatterns.test.ts` |
+| Densidad de filas (`useDensity`) | Preferencia de la persona, no de la pantalla: un solo valor (28, 32 o 40 px) guardado en el navegador y aplicado a todas las tablas. Se cambia en un único lugar, el menú de ayuda del estudio. Ninguna barra de filtros lleva el selector |
+| Dónde va cada error | **Campo inválido**: debajo del campo. **No se pudo guardar un formulario o cajón**: `Notice` de error dentro del mismo formulario, junto a los botones. **No se pudo cargar una lista**: `Notice` de error con botón Reintentar en el lugar de la lista. **Falló una acción de fila o de barra** (enviar, publicar, descargar, activar): `notify.error`, nunca un aviso al pie de la página. `actionErrorMessage` arma el texto |
+| Títulos de paneles, cajones y fichas | Título y, si hace falta, una línea de descripción. `ActionDrawer` e `Inspector` no tienen rótulo superior; los paneles tampoco |
+| Confirmaciones | Toda acción destructiva o que afecta a otros pasa por `ConfirmDialog` (`useConfirmAction`): dice qué va a pasar y el botón nombra la acción. No se usa `window.confirm` |
+| Eliminación definitiva | Borrar algo que arrastra datos (un paquete de reglas, un cliente) no ocupa una caja propia en la pantalla: es una acción chica `variant="danger"` junto al título. Pide dos confirmaciones: primero `ConfirmDialog` explica qué se pierde; después `DeletionDrawer` muestra el impacto y pide escribir el nombre |
+| Ficha con secciones | Una pantalla con varias secciones de un mismo objeto usa `DenseTabs` arriba, con un **Resumen** como pestaña predeterminada, y una tabla a ancho completo por pestaña. No se apilan cajas ni se ponen dos tablas en columnas |
+| Estilos de pantallas (`apps/web/src/study/styles/`) | `study.css` es sólo un índice que importa, en orden, un archivo por área (base, cartera, documentos, operación fiscal, ficha, bandeja…). El orden importa: los posteriores ajustan a los anteriores. Lo que sirve a más de una pantalla va al sistema de diseño, no a estos archivos. Una clase que ya no usa ninguna pantalla se borra junto con el cambio que la dejó sin uso |
+| `StatusBadge` | Público en `packages/design-system/src`; conserva el contrato `status`/`className` y los estilos globales/contextuales existentes en la aplicación |
+| `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction` | Públicos en `packages/design-system/src`; CSS propio de drawers en el paquete |
+| `AsyncState`, `Icon`, `SectionIndex` | Públicos en `packages/design-system/src`; `SectionIndex` conserva las reglas de layout de estudio/portal en sus hojas de aplicación |
+| `DeletionDrawer` | Permanece en `apps/web/src/ui`: consulta y elimina mediante `lib/api` y `@tanstack/react-query`; el CSS y la prueba de integración también permanecen en la app |
+| Tabla, píldora, aviso y botón de texto | Unificar en `Table`/`DenseTable`, `StatusBadge`, `Notice` y la API textual de `Button` |
+
+Los componentes migrados mantienen imports compatibles en las pantallas existentes. Las reglas visuales que dependen del contexto de estudio o portal permanecen en las hojas de estilo de la aplicación.
 
 ## 6. Patrones de pantalla
 
-`apps/web/src/study/StudyCatalogosFiscales.tsx` es el ejemplo observado de una página densa operativa; sus estilos base están en `study/study.css` y las primitivas densas en `ui/Dense.css`.
+Cada pantalla de Contable sigue una receta. Hay tres recetas con nombre propio —**R01 Inicio**, **R02 Legajo** y **R03 Reglas fiscales**— y una **receta general, RG**, que usan las demás. La tabla «Pantalla → receta» del final de esta sección asigna una receta a cada pantalla del estudio, del portal y de acceso.
 
-- **Encabezado + pestañas + resumen:** `DenseHeader` presenta eyebrow “Administración fiscal”, título, descripción y CTA contextual para crear en la pestaña activa. `DenseTabs` organiza las cinco categorías y muestra sus conteos/alertas en una sola barra; una línea breve resume registros propios, de referencia y alertas.
-- **Filtros:** `DenseToolbar` combina búsqueda por código/nombre, jurisdicción, origen y estado; en regímenes agrega filtro de alertas y ofrece densidad de filas compacta/estándar/cómoda. La búsqueda normaliza tildes/mayúsculas; las reglas de selección y filtros se restablecen al cambiar pestaña.
-- **Tabla + panel de detalle:** `DenseWorkspace` contiene `DenseTable` y `Inspector`. Al seleccionar fila se abre el detalle lateral, oculta columnas secundarias y muestra ficha, relaciones y acciones disponibles. Las filas soportan Enter/Espacio y flechas arriba/abajo; el escritorio conserva scroll interior y el layout de inspector se apila bajo 1100 px.
-- **Estado vacío y carga/error:** cada categoría diferencia “todavía no hay registros” de “ningún registro coincide con filtros” con `EmptyState` compacto. La pantalla conserva placeholders de carga y alertas de consulta con acción de reintento.
-- **Formularios:** altas/ediciones usan `ActionDrawer`, jerarquía eyebrow/título/descripción y campos `Field`; los selects usan `label.ds-field` y `.ds-field__input`, como indica la guía UI. Las acciones de submit muestran loading y cancelación usa ghost. La creación de régimen comunica en vivo la coherencia entre jurisdicción y organismo.
-- **Confirmación destructiva:** la desactivación de una actividad usa un drawer que explica que se conserva historial y vínculos. La eliminación definitiva usa `DeletionDrawer`: primero obtiene un preview de impacto, dependencias y bloqueos; exige coincidencia exacta con el texto esperado; habilita “Eliminar definitivamente” sólo si no hay bloqueos y no está procesando; al terminar revalida consultas y muestra un recibo. Las acciones respetan capacidades y propiedad del registro.
-- **Guía existente:** se conserva como referencia la [guía de formularios y paneles](docs/guia-ui-formularios-paneles.md), que establece `ActionDrawer`, gestión del foco, Escape, cancelación y acciones sticky. El uso actual de `ActionDrawer` en esta pantalla coincide. La guía exige errores con `role="alert"`: `MutationError` y errores de consulta lo proporcionan, mientras el error local que renderiza `Field` sólo queda enlazado con `aria-describedby`; esta diferencia queda registrada para una futura decisión.
+Una receta define la composición y lo que se conserva. Las consultas, los permisos y las reglas de dominio de cada pantalla siguen siendo los del producto: la receta ordena la presentación.
 
 ### Composición: sin cajas y alineación
 
@@ -766,9 +1042,197 @@ Cada `id` debe coincidir con un destino único de la misma vista.
 5. Extendé listas y bloques al ancho de la grilla para que terminen en el mismo borde derecho.
 6. Mostrá cada dato una sola vez por pantalla y un único fondo de aviso por pantalla, con el tono semántico correspondiente.
 
-**Correcto — Catálogos fiscales:** una sola `DenseTabs` con los conteos de las cinco categorías; debajo, una línea breve con propios, referencia y alertas. La barra de filtros, la tabla y el detalle comparten la grilla; los datos del detalle usan columnas etiqueta/valor y los conteos numéricos se alinean a la derecha. Separá filas y secciones con `--ds-color-border-subtle` y espacios de `--ds-space-3`/`--ds-space-4`.
+### RG — Receta general
 
-**Incorrecto — Catálogos fiscales:** repetir los cinco conteos en `StatStrip` y en `DenseTabs`, encerrar cada dato en una tarjeta, centrar cifras o dar a la tabla un ancho distinto del resto de la pantalla.
+**Propósito:** dar a toda pantalla el mismo orden de lectura, de arriba hacia abajo.
+
+**Composición:**
+1. **Encabezado (C01):** un título, una línea de descripción y las acciones, con una sola principal como máximo.
+2. **Indicadores (C03), opcional:** una línea de cifras de la lista que se ve, con su alcance.
+3. **Filtros y navegación (C05), opcional:** pestañas de sección, búsqueda, filtros y agrupación; cada criterio en un solo lugar.
+4. **Contenido:** una de tres disposiciones.
+   - **Lista:** una tabla a ancho completo (C04).
+   - **Lista y detalle:** tabla más detalle lateral que se abre por intención (C04 y C06).
+   - **Secciones:** secciones de lectura apiladas sobre el lienzo, cada una con su tabla o sus datos (C02 y C04). Una ficha con varias secciones de un mismo objeto usa `DenseTabs` arriba, con un **Resumen** como pestaña predeterminada, y una tabla a ancho completo por pestaña.
+5. **Estados (C07 y C08):** cada fuente de datos muestra su propia carga, su vacío y su error con reintento; hay como máximo un aviso con fondo en la pantalla.
+6. **Edición y confirmación (C09):** altas y ediciones en `ActionDrawer`; lo riesgoso pasa por `ConfirmDialog`; la eliminación definitiva suma `DeletionDrawer`.
+
+**Estados que toda pantalla contempla:** carga inicial, datos, vacío confirmado, sin coincidencias (si filtra), error local o parcial, restricción de acceso, actualización con datos previos identificados y contenido extenso.
+
+**Aceptación:** a 1440×900 y 1280×720 la página entra sin desborde horizontal y cada tabla entra en su contenedor; hay un solo `h1`; hay como máximo una acción primaria; todo vacío o bloqueo ofrece su salida (P1); los nombres coinciden con el glosario (P3).
+
+**Formularios:** altas y ediciones usan `ActionDrawer` con título, descripción y campos `Field`; los selects usan `label.ds-field` y `.ds-field__input`, como indica la guía UI. El envío muestra loading y Cancelar usa ghost.
+
+**Confirmación destructiva:** ocultar o desactivar explica qué se conserva (historial y vínculos). La eliminación definitiva pide dos confirmaciones: primero `ConfirmDialog` explica qué se pierde; después `DeletionDrawer` obtiene un preview de impacto, dependencias y bloqueos, pide escribir el nombre y habilita «Eliminar definitivamente» cuando no hay bloqueos, con el motivo a la vista cuando los hay. Las acciones respetan capacidades y propiedad del registro.
+
+**Guía existente:** se conserva como referencia la [guía de formularios y paneles](docs/guia-ui-formularios-paneles.md), que establece `ActionDrawer`, gestión del foco, Escape, cancelación y acciones sticky.
+
+### R01 — Inicio
+
+**Propósito:** mostrar qué hay para resolver en el alcance de quien entra (el estudio en `/`, la empresa del cliente en `/portal`) y llevar a la pantalla donde se resuelve.
+
+**Vigente en main (se conserva):** el recordatorio de constancias de presentación pendientes (#87) y su presentación ajustada (#90); «Liquidaciones en curso» deja afuera las liquidaciones `FINALIZED` y `SUPERSEDED` (#90), porque lo finalizado sin presentar ya figura en el recordatorio de constancias.
+
+**Composición:**
+1. Encabezado C01 con el alcance del estudio y «Actualizar» como acción secundaria.
+2. Indicadores C03 con su alcance.
+3. Pendientes accionables, con los datos necesarios para decidir.
+4. Constancias pendientes y liquidaciones en curso como listas separadas, cada una con su fuente y su conteo.
+5. Otros circuitos y panorama como contenido secundario, sobre el lienzo.
+
+**Constancias, información que se conserva:** cliente, impuesto, período, vencimiento, antigüedad desde la finalización y «Abrir legajo» según capacidad. Se mantiene la ordenación inicial del producto (la más antigua primero) y se anuncia otra ordenación si la persona la cambia.
+
+**Decisión de producto pendiente de Inti (G07):** la prioridad relativa entre correcciones, constancias y vencimientos. Esta guía no la fija: la receta mantiene visibles los tres tipos de trabajo y conserva el orden vigente en main hasta que Inti lo defina. La ubicación en la pantalla es composición, no una regla de riesgo.
+
+| Estado o evento | Respuesta |
+|---|---|
+| Carga inicial | Indicador discreto de carga; las cifras dicen «pendiente» |
+| Datos | Filas accionables, acceso al contexto y campos esenciales |
+| Vacío confirmado | El bloque condicional de constancias se omite, como define #87 |
+| Error de constancias | Error y Reintentar locales; las demás fuentes siguen disponibles |
+| Actualización | «Actualizar» alcanza resumen, liquidaciones en curso y constancias; los datos previos se identifican como tales |
+| Falta de acceso | La pantalla dice que la fuente está restringida para el rol y muestra el resto |
+| Abrir legajo | Conserva el cliente y sigue el flujo del producto para el contexto fiscal |
+| Liquidación finalizada o reemplazada | Figura fuera de «en curso» |
+
+**Compromisos de implementación:** G05 (estados locales de carga y error con reintento en `PendingFilingReceipts`) y G06 («Actualizar» incluye la consulta de constancias). Detalle en la sección 7.
+
+### R02 — Legajo
+
+**Propósito:** consultar un período y continuar sus tareas, distinguiendo pestaña, etapa y estado del expediente.
+
+**Composición:** encabezado C01; contexto de cliente, impuesto, período y revisión; estado en texto (C08); advertencia de autorrevisión visible; secciones con pestañas (C05); tabla (C04); respaldo y metadatos en detalle o panel (C06 y C09).
+
+**Entradas de pantalla:** identificación de contexto, estado, revisión, capacidades, fuentes de saldos y enlaces de respaldo. Los saldos y la posibilidad de cargar o rectificar los resuelve el dominio; la tabla los presenta.
+
+**Variantes:** consulta y edición según los permisos reales de quien entra.
+
+**Interacciones que se conservan:** cambiar período, consultar fuentes y respaldo, importar, rectificar y ver historial cuando el flujo actual los habilita.
+
+**Estados:** carga con el contexto del registro que se está abriendo; restricción con su explicación; vacío de saldos acotado a la sección de saldos; error local; actualización identificada; tabla extensa con acceso al respaldo.
+
+**Aceptación:** pasar de Saldos a Fuentes conserva «Finalizado» como estado; la advertencia de revisión por la misma persona que preparó queda a la vista; el identificador y la evidencia siguen accesibles en el detalle; al cerrar el panel, el foco vuelve al origen.
+
+### R03 — Reglas fiscales
+
+**Propósito:** elegir un paquete, comprender su versión y vigencia, y preparar cambios de forma deliberada.
+
+**Composición:** encabezado C01 con el alta global como acción secundaria; lista y detalle (C06); metadatos; pestañas (C05); tabla (C04); una acción contextual destacada, que es la principal del panel.
+
+**Entradas de pantalla:** paquetes visibles para el rol, versión seleccionada, estado, vigencia, parámetros y capacidades. Alícuotas, revisores y activación son del dominio.
+
+**Variantes:** versión activa de lectura y borrador editable, conforme al producto. La activación directa y la revisión existentes se mantienen como están.
+
+**Interacciones que se conservan:** selección de paquete; consulta de alícuotas, vencimientos, fuentes y control; preparación de una modificación; creación global, permisos y confirmaciones. Preparar un borrador deja intacta la versión vigente.
+
+**Estados:** carga, error local con la lista disponible, restricción, vacío de paquetes, actualización y texto extenso.
+
+**Aceptación:** la versión activa se identifica como de sólo lectura; el paquete seleccionado se ve en la lista; hay una acción contextual principal.
+
+**Catálogos fiscales** usa esta misma receta: una sola `DenseTabs` con los conteos de las cinco categorías; debajo, una línea breve con propios, referencia y alertas. La barra de filtros, la tabla y el detalle comparten la grilla; los datos del detalle usan columnas etiqueta/valor y los conteos numéricos se alinean a la derecha. Cada conteo aparece una vez, las cifras van a la derecha y la tabla tiene el ancho del resto de la pantalla.
+
+### Matriz de información y acciones preservadas
+
+| Receta | Información esencial | Accesos que se conservan |
+|---|---|---|
+| R01 Inicio | Cliente, impuesto, período, vencimiento, antigüedad, estado de liquidación y alcance de cada fuente | Abrir legajo, consultar liquidación, filtrar, actualizar y reintentar |
+| R02 Legajo | Contexto fiscal, revisión, estado, advertencia de autorrevisión, importes, movimientos y evidencia | Cambiar período, navegar secciones, ver respaldo e historial, importar y rectificar según capacidades |
+| R03 Reglas fiscales | Paquete, versión, vigencia, estado, parámetros y condición de lectura | Elegir paquete, consultar secciones, preparar modificación, alta global |
+| RG | La información que la pantalla muestra hoy | Todas las acciones que la pantalla ofrece hoy, según capacidades |
+
+Cada PR de migración incluye su matriz antes/después de información y accesos.
+
+### Pantalla → receta
+
+Cubre todas las pantallas de `apps/web/src` en main: 18 del estudio (`study/`), 9 del portal (`portal/`) y 5 de acceso (4 en `auth/` y «sin acceso», que vive en `App.tsx`), 32 en total. La columna de familias y componentes es la composición destino: los componentes que la pantalla todavía no usa en main se incorporan en su corte. La columna «Corte» es el orden de migración; el corte 0 son las extensiones de primitivas, previo a toda pantalla.
+
+| Nº | Pantalla (ruta) | Archivo | Receta | Familias y componentes Foco (composición destino) | Corte |
+|---:|---|---|---|---|---:|
+| 1 | Inicio (`/`) | `study/StudyDashboard.tsx` | R01 | C01, C02, C03, C04, C06, C07, C08 — `DenseHeader`, `StatStrip`, `DenseSection`, `DenseTable`, `Inspector`, `AsyncState`, `StatusBadge` | 1 |
+| 2 | Legajo (`/expediente-mensual`) | `study/StudyExpedienteMensual.tsx` | R02 | C01, C02, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `StatStrip`, `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` | 2 |
+| 3 | Reglas fiscales (`/reglas-fiscales`) | `study/StudyReglasFiscales.tsx` | R03 | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `DenseTabs`, `DenseTable`, `DenseWorkspace`, `ActionDrawer`, `ConfirmDialog`, `DeletionDrawer` | 3 |
+| 4 | Catálogos fiscales (`/catalogos-fiscales`) | `study/StudyCatalogosFiscales.tsx` | R03 | C01, C04, C05, C06, C07, C08, C09 — `DenseTabs`, `DenseSearch`, `DenseTable`, `Inspector`, `ActionDrawer`, `DeletionDrawer` | 4 |
+| 5 | Clientes (`/clientes`) | `study/StudyClientes.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `StatStrip`, `DenseToggleGroup`, `DenseTable` con `groupBy`, `Inspector`, `ActionDrawer` | 5 |
+| 6 | Usuarios y accesos (`/administracion`) | `study/StudyAdministracion.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseTabs`, `DenseTable`, `Inspector`, `ActionDrawer`, `ConfirmDialog` | 6 |
+| 7 | Módulos de estudios (`/administracion-plataforma`) | `study/StudyAdministracionPlataforma.tsx` | RG, lista | C01, C03, C04, C05, C07, C09 — `StatStrip`, `DenseSearch`, `DenseTable`, `Switch`, `ConfirmDialog` | 6 |
+| 8 | Resumen del cliente (`/resumen-cliente`) | `study/StudyResumenCliente.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08 — `DenseHeader`, `DenseTabs`, `Table`, `EmptyState`, `StatusBadge` | 7 |
+| 9 | Configuración fiscal (`/configuracion-fiscal`) | `study/StudyOnboardingFiscal.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08, C09 — `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `ConfirmDialog` | 7 |
+| 10 | Bandeja documental (`/bandeja`) | `study/StudyBandeja.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `StatStrip`, `DenseSearch`, `Table`, `StatusBadge`, `ActionDrawer`, `ConfirmDialog` | 7 |
+| 11 | Trabajo (`/trabajo`) | `study/StudyTrabajo.tsx` | RG, secciones | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `DenseSection`, `Table`, `StatusBadge`, `ActionDrawer` | 7 |
+| 12 | Liquidaciones (`/liquidaciones`) | `study/StudyLiquidaciones.tsx` | RG, lista | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `Table`, `StatusBadge`, `ActionDrawer` | 7 |
+| 13 | Rentabilidad (`/rentabilidad`) | `study/StudyRentabilidad.tsx` | RG, secciones | C01, C02, C03, C07, C08, C09 — `StatStrip`, `DenseSection`, `StatusBadge`, `ConfirmDialog` | 7 |
+| 14 | Ayuda (`/ayuda`) | `study/StudyAyuda.tsx` | RG, secciones | C01, C02, C05 — `DenseHeader`, `DenseSection`, `SectionIndex` | 9 |
+| 15 | Estados de ruta: módulo no disponible y página no encontrada del estudio y del portal | `study/StudyRouteStates.tsx` | RG, sólo estados | C07 — `EmptyState` con su salida | 9 |
+| 16 | Contabilidad (`/contabilidad`, no liberada) | `study/StudyContabilidad.tsx` | RG, secciones | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` | 10 |
+| 17 | Reportes y análisis (`/reportes`, no liberada) | `study/StudyReportes.tsx` | RG, secciones | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `Table`, `StatusBadge`, `ConfirmDialog` | 10 |
+| 18 | Asistente contable (`/asistente`, no liberada) | `study/StudyAsistente.tsx` | RG, secciones | C01, C02, C07, C08 — `DenseHeader`, `DenseSection`, `EmptyState`, `Notice` | 10 |
+| 19 | Inicio del portal (`/portal`) | `portal/PortalDashboard.tsx` | R01 | C01, C02, C05, C07 — encabezado, secciones «Para resolver» y accesos, `SectionIndex`, `AsyncState` | 8 |
+| 20 | Pendientes (`/portal/pendientes`) | `portal/PortalPendientes.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `StatusBadge`, `EmptyState`, `Notice` | 8 |
+| 21 | Subir documentos (`/portal/upload`) | `portal/PortalUpload.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08, C09 — formulario de carga, `Table`, `StatusBadge`, `Notice` | 8 |
+| 22 | Impuestos (`/portal/impuestos`) | `portal/PortalObligaciones.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `StatusBadge`, `EmptyState` | 8 |
+| 23 | Liquidaciones (`/portal/liquidaciones`) | `portal/PortalLiquidaciones.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `StatusBadge`, `EmptyState` | 8 |
+| 24 | Rentabilidad (`/portal/rentabilidad`) | `portal/PortalRentabilidad.tsx` | RG, secciones | C01, C02, C05, C07, C08 — secciones Devengado y Caja, `EmptyState`, `Notice` | 8 |
+| 25 | Estados y reportes (`/portal/reportes`) | `portal/PortalReportes.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `EmptyState`, `Notice` | 8 |
+| 26 | Mensajes (`/portal/mensajes`) | `portal/PortalMensajes.tsx` | RG, lista y detalle | C01, C02, C05, C06, C07, C08, C09 — conversaciones y respuesta, `EmptyState`, `Notice` | 8 |
+| 27 | Perfil (`/portal/perfil`) | `portal/PortalPerfil.tsx` | RG, secciones | C01, C02, C05, C07, C08, C09 — `Field`, `Notice`, `EmptyState` | 8 |
+| 28 | Ingreso y verificación en dos pasos (`/login`) | `auth/LoginPage.tsx` | RG, formulario en página | C01, C08, C09 — título y descripción, `Field`, `Notice`, `Button` | 11 |
+| 29 | Cambio de contraseña temporal (`/cambiar-contrasena`) | `auth/ChangePasswordPage.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estados de sesión | 11 |
+| 30 | Aceptar invitación al portal (`/aceptar-invitacion`) | `auth/AcceptPortalInvitation.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estado de enlace incompleto | 11 |
+| 31 | Recuperar acceso (`/recuperar-acceso`) | `auth/RecoverAccessPage.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estado de enlace incompleto | 11 |
+| 32 | Sin acceso (`/sin-acceso`), carga de sesión y conexión no disponible | `App.tsx` | RG, sólo estados | C07 — `EmptyState` con su salida, carga | 11 |
+
+**Pantallas de acceso (28 a 32).** Se muestran sin menú ni barra de período, antes de entrar a un espacio de trabajo. Usan RG con estas precisiones, todas con piezas vigentes en main:
+
+- **El formulario es el contenido de la página:** campos `Field` y un solo botón principal. No va en `ActionDrawer`, porque no hay una lista detrás del panel.
+- **Un `h1` y una línea de descripción (C01).** En main estas pantallas llevan un rótulo sobre el título (`login__secure` en Ingreso, Aceptar invitación y Recuperar acceso; `no-workspace__eyebrow` en «sin acceso» y en conexión no disponible) y un título de 30 a 44 px; adoptan la anatomía de C01 en su corte.
+- **Mensajes (C08):** el error del envío va en `Notice` de tono `error` dentro del formulario; el resultado que se informa al volver a `/login` va en `Notice` de tono `success`. Así está en main.
+- **Estados (C07):** enlace incompleto, sesión que se está validando, conexión no disponible y cuenta sin espacio asignado dicen qué pasó y ofrecen su salida (P1).
+- **Lo vigente se preserva:** los pasos del ingreso (incluido el código de seis dígitos), los mínimos de contraseña, las redirecciones y los textos de seguridad son del producto. La receta ordena la presentación.
+
+**Piezas de dominio y de apoyo** (viven dentro de una pantalla y migran con ella):
+
+| Archivo | Pantalla que la usa | Familias Foco |
+|---|---|---|
+| `study/PendingFilingReceipts.tsx` | Inicio | C02, C04, C07 |
+| `study/WorkpaperSourceReviewAction.tsx` | Legajo | C01, C09 |
+| `study/RuleSimulator.tsx` | Reglas fiscales | C04, C08, C09 |
+| `study/StudyUserAssignments.tsx` | Usuarios y accesos | C07, C09 |
+| `study/ExtractionFiscalTable.tsx` | Bandeja documental | C04 |
+| `study/ManualExtractionFieldsDialog.tsx` | Bandeja documental | C04, C09 |
+| `study/ManualExtractionValueControl.tsx` | Bandeja documental | C09 |
+| `portal/PortalUI.tsx` | Las nueve pantallas del portal (`PortalPageHeader`, `PortalLoading`, `PortalRetryButton`) | C01, C07 |
+| `study/moduleRegistry.tsx` | Registro de módulos y rutas del estudio (sin interfaz propia) | — |
+| `environment/EnvironmentStatusBanner.tsx` | Todas las rutas, incluidas las de acceso: aviso «Entorno incompleto» sobre el contenido. Migra en el corte 11 | C08 |
+
+**Resto de `apps/web/src`** (archivos `.tsx` que no son pantalla; no llevan receta ni corte propio):
+
+| Archivo | Qué es | Por qué queda fuera de la tabla de pantallas |
+|---|---|---|
+| `shells/StudyShell.tsx`, `shells/PortalShell.tsx`, `shells/ContextBar.tsx` | Marco de navegación: menú del estudio, barra del portal y barra de período | Rodean a todas las pantallas y no son una de ellas. Los rige la fila «Menú del estudio» de la sección 5. Ningún corte de esta tabla los incluye: el corte que los toque se define en el plan de implementación |
+| `ui/GuidedTour.tsx` | Recorrido guiado del estudio | Lo monta `StudyShell` y va con el marco de navegación |
+| `ui/ActionDrawer.tsx`, `ui/AsyncState.tsx`, `ui/ConfirmAction.tsx`, `ui/DeletionDrawer.tsx`, `ui/Dense.tsx`, `ui/Icon.tsx`, `ui/SectionIndex.tsx`, `ui/StatusBadge.tsx` | Adaptadores web de componentes del paquete | Son primitivas: sus contratos están en las familias C01 a C09 de la sección 5 y sus extensiones van en el corte 0 |
+| `components/forms/FieldErrorsFromDetails.tsx` | Lista de errores por campo que devuelve la API, dentro de un formulario | Pieza de formulario (C09); migra con las pantallas que la usan: Legajo, Reglas fiscales y Catálogos fiscales |
+| `context/ClientContext.tsx`, `session/SessionContext.tsx`, `main.tsx` | Proveedores de cliente y de sesión, y arranque de la app | Sin interfaz propia |
+| `demo/Demo.tsx` | Muestra interna de componentes del paquete | Ningún archivo la importa y no tiene ruta: no es alcanzable desde el sitio |
+
+**Orden de migración:**
+
+| Corte | Qué migra | Condición |
+|---:|---|---|
+| 0 | Extensiones de primitivas: semántica de filtros y de lista-detalle (`pressed`, `role`), superficies (`surface`) y vacío `inline` | Los consumidores actuales conservan su presentación |
+| 1 | Inicio (R01) | Estados independientes por fuente y actualización completa (G05, G06) |
+| 2 | Legajo (R02) | Matriz de accesos antes/después |
+| 3 | Reglas fiscales (R03) | Matriz de accesos antes/después |
+| 4 | Catálogos fiscales | Misma receta R03 |
+| 5 | Clientes | Agrupación y selección por terminación de CUIT intactas (G08) |
+| 6 | Usuarios y accesos; Módulos de estudios | — |
+| 7 | Pantallas del cliente: Resumen del cliente, Configuración fiscal, Bandeja documental, Trabajo, Liquidaciones, Rentabilidad | En el orden del trabajo del mes |
+| 8 | Portal: Inicio del portal primero y luego las otras ocho | `PortalUI.tsx` converge en las familias C01 y C07; el encabezado del portal, que en main lleva rótulo superior, adopta la anatomía de C01 |
+| 9 | Ayuda y estados de ruta | — |
+| 10 | Contabilidad, Reportes y análisis, Asistente contable | Migran antes de liberarse |
+| 11 | Acceso: Ingreso, Cambio de contraseña temporal, Aceptar invitación, Recuperar acceso, «sin acceso» con los estados de sesión, y el aviso de entorno | Los pasos del ingreso, las redirecciones y los textos de seguridad quedan intactos; todo estado ofrece su salida (P1); el encabezado adopta la anatomía de C01 |
+
+Los cortes 1 a 3 siguen el orden del contrato Foco v1 (Inicio; Legajo y Reglas; resto). El orden de los cortes 4 a 11 agrupa pantallas que comparten receta y es un borrador: el plan de implementación define el orden final.
 
 ## 7. Accesibilidad
 
@@ -777,22 +1241,67 @@ Cada `id` debe coincidir con un destino único de la misma vista.
 - Los pares medidos y sus dos resultados **bajo el mínimo** están en la sección 2; el cálculo usa los valores sólidos y la fórmula WCAG indicados.
 - `global.css` define `:focus-visible` con outline de 2 px; `Button` y `Field` añaden tratamientos propios. `Field` vincula label, hint y error por id, y expone `aria-invalid` en error.
 - `ActionDrawer` usa `role="dialog"`, `aria-modal`, nombre/descripción accesibles, mueve foco al primer control, mantiene Tab/Shift+Tab dentro, cierra con Escape, bloquea scroll y restaura foco. El shell ofrece skip-link y nombre de navegación.
-- `DenseTabs` implementa `tablist`/`tab`, estado seleccionado y flechas izquierda/derecha. `DenseTable` ofrece selección por teclado y ordenación con botones nativos. La pantalla anuncia el panel de detalle, búsquedas, filtros y estados de carga/alerta con etiquetas o roles.
+- `DenseTabs` implementa `tablist`/`tab`, estado seleccionado y flechas izquierda/derecha. `DenseTable` ofrece selección por teclado y ordenación con botones nativos; con `groupBy`, las flechas saltan los encabezados de grupo. `DenseToggleGroup` expone cada opción con `aria-pressed`.
 - El design system fija `--ds-touch-target` en 44 px. `Button` llega a esa altura para puntero coarse; `Field` usa 44 px en pantallas estrechas o puntero coarse; las celdas de `Table` crecen a 44 px para puntero coarse.
 
-### Brechas observadas, sin corrección en este encargo
+### Compromisos de implementación Foco (G01–G08)
 
-- `--ds-color-text-disabled` sobre `--ds-color-control-disabled` mide 3,91:1 frente al umbral general. `--ds-color-text-faint` cumple sobre las superficies generales, muted y hover; la fila muted seleccionada queda en 4,3786:1, según la tabla de contraste y la decisión de conservar el token exacto en F1.
+Cada brecha es un compromiso del PR que implementa su pieza. Base de verificación: lectura de código de `origin/main`.
+
+| Nº | Pieza | Situación en main | Compromiso | Tipo |
+|---|---|---|---|---|
+| G01 | `DenseSection`, `DenseTable` | Composición con marcos en los consumidores heredados | `surface="integrated"` opcional y migración explícita, consumidor por consumidor | Extensión aprobada, implementación pendiente |
+| G02 | `StatStrip` | El ítem de filtro marca `active` de forma visual y sus botones no exponen `aria-pressed` | `pressed` comunica la selección en los ítems que alternan un filtro; los que navegan son enlaces | Extensión aprobada, implementación pendiente |
+| G03 | `DenseWorkspace` | `role="tabpanel"` fijo, también en pantallas sin pestañas | `role="region"` con nombre, o `tabpanel` con su controlador | Extensión aprobada, implementación pendiente |
+| G04 | `EmptyState` | Tamaños `regular` y `compact` | `size="inline"` para ausencias secundarias | Extensión aprobada, implementación pendiente |
+| G05 | `PendingFilingReceipts` | Usa `query.data ?? []` y devuelve `null` con cero filas, sin separar carga y error | Estados locales de carga y de error con Reintentar; el bloque se omite únicamente tras una respuesta vacía | Corrección de presentación sobre código verificado |
+| G06 | «Actualizar» de Inicio (`StudyDashboard`) | Refresca resumen y liquidaciones en curso | Incluye la consulta de constancias y dice qué alcanza la actualización | Corrección de presentación sobre código verificado |
+| G07 | Inicio | El orden visual entre circuitos no define una prioridad fiscal | **Decisión de producto pendiente de Inti.** Hasta entonces se conservan a la vista correcciones, constancias y vencimientos, en el orden vigente | Producto pendiente |
+| G08 | `DenseToggleGroup`, `DenseTable.groupBy` | Vigentes en main (#91) | Se preservan en toda migración visual, con sus pruebas | Compatibilidad |
+
+Ninguno de estos compromisos agrega reglas de negocio ni cambia permisos.
+
+### Aceptación de accesibilidad de cada PR
+
+Todo PR que implementa una pieza o migra una pantalla a Foco verifica, sobre los componentes React reales:
+
+- **Zoom al 200 %:** el contenido y las acciones siguen disponibles y legibles a 1440×900 y 1280×720.
+- **Lector de pantalla:** nombres accesibles, roles, estados (`aria-pressed`, `aria-sort`, `aria-current`, `aria-invalid`) y anuncios de carga, error y resultado, cada uno una sola vez.
+- **Teclado:** recorrido completo, foco visible, foco contenido en paneles y diálogos, y foco restaurado al cerrar.
+- **Contraste:** los pares de la sección 2; todo par nuevo se mide y se agrega a esa tabla.
+- **Layout:** sin desborde de página y tabla dentro de su contenedor, con pruebas automáticas en ambos viewports.
+
+La galería del contrato Foco v1 validó composición e interacción sobre HTML de referencia; el zoom, el lector de pantalla y los indicadores no textuales se validan en el PR de implementación.
+
+### Brechas observadas previas, vigentes
+
+- `--ds-color-text-disabled` sobre `--ds-color-control-disabled` mide 3,91:1 frente al umbral general. `--ds-color-text-faint` cumple sobre las superficies generales, muted y hover; la fila muted seleccionada queda en 4,3786:1, según la tabla de contraste y la decisión de conservar el token exacto.
 - En Dense UI varios objetivos interactivos quedan por debajo del objetivo interno de 44 px: `.dense-tab` tiene `min-height: 36px`; `.dense-input` y `.dense-select` miden 30 px; `.dense-toggle` mide 30 px; botones de `.dense-seg` miden 28 px. En el shell, `.study__nav-link` tiene 42 px. El botón móvil de menú sí mide 44 px.
-- `StatStrip` marca visualmente el elemento activo pero sus botones no exponen `aria-pressed`/`aria-current`; el grupo sí tiene `role="group"` y nombre accesible.
-- `Field` relaciona su error mediante `aria-describedby` pero no añade `role="alert"`; por eso el anuncio inmediato recomendado por la guía existente no está garantizado en el componente por sí solo.
-- La tabla genérica `Table` usa semántica nativa, pero no implementa selección/foco de fila ni manejo de flechas; el patrón administrativo de catálogo obtiene ese soporte mediante `DenseTable`.
+- `Field` relaciona su error mediante `aria-describedby` pero no añade `role="alert"`; por eso el anuncio inmediato recomendado por la guía de formularios y paneles no está garantizado en el componente por sí solo.
+- La tabla genérica `Table` usa semántica nativa, pero no implementa selección/foco de fila ni manejo de flechas; las listas con selección obtienen ese soporte mediante `DenseTable`.
 
 ## 8. Cómo extender
 
-- Creá un token cuando un valor represente una decisión semántica compartida por más de un componente/pantalla, un estado reutilizable o una escala que deba mantenerse coherente. Para una excepción local de una sola vista, primero verificá si ya existe un token apropiado; no agregues aliases que dupliquen valores.
+### Migración a Foco por corte
+
+- **Un corte, una pieza.** Cada PR implementa una pieza (una extensión de primitiva o una pantalla de la tabla «Pantalla → receta») y, en el mismo PR, actualiza su sección de `DESIGN.md`: el rótulo pasa de «extensión aprobada, implementación pendiente» a «vigente en main» y la tabla refleja la pantalla migrada.
+- **Cada PR declara su principio.** La descripción dice qué principio (P1–P5) atiende y qué causa de fondo cierra. Un arreglo que vale para una sola pantalla explica por qué no va a la pieza compartida.
+- **Una sola biblioteca.** Foco evoluciona los componentes de `packages/design-system/src` con props opcionales y conserva sus nombres. Lo que sirve a más de una pantalla va al paquete; un defecto de una pieza se corrige en la pieza.
+- **El CSS heredado se retira al final.** Una regla de `apps/web/src/study/styles/` o de `portal.css` se borra en el PR que migra a su último consumidor, junto con el cambio que la deja sin uso. Mientras quede un consumidor, la regla se conserva.
+- **Lo vigente se preserva.** Toda migración conserva la información y los accesos de la pantalla (matriz antes/después), la agrupación y selección por terminación de CUIT (#91) y las reglas de Inicio (#87 y #90).
+- **Un patrón se corrige una vez.** Un hallazgo que se repite en dos pantallas se trata como patrón y se corrige en la pieza compartida.
+- **Producto decide producto.** Cambios de reglas de negocio, permisos o flujos se proponen a Ciro y los decide Inti. Una decisión pendiente (por ejemplo G07) se anota como pendiente en la guía y la pantalla conserva el comportamiento vigente.
+
+### Tokens
+
+- Foco v1 usa los tokens existentes. Creá un token cuando un valor represente una decisión semántica compartida por más de un componente/pantalla, un estado reutilizable o una escala que deba mantenerse coherente. Para una excepción local de una sola vista, primero verificá si ya existe un token apropiado; no agregues aliases que dupliquen valores.
 - Nombrá por familia, rol y estado con la convención existente: por ejemplo `--ds-color-primary-hover`, `--ds-space-4`, `--ds-text-sm`, `--ds-radius-md` y `--ds-shadow-control`. Usá nombres semánticos para color/estado y escalas para dimensiones; los sufijos de estado deben identificar el estado funcional.
 - Definí el valor en `packages/design-system/src/tokens.css`; reutilizalo desde componentes o pantallas y verificá contraste, foco, teclado y objetivo táctil en el contexto donde se usa.
+
+### Pruebas que protegen la guía
+
 - Actualizá `DESIGN.md` en el mismo PR que modifique tokens, familias, componentes o patrones. La prueba `packages/design-system/src/design-md.test.ts` comprueba que cada token citado exista y que todos los tokens de color, tipografía y radio queden documentados.
 - La prueba `packages/design-system/src/design-literals.test.ts` controla por archivo los literales px de `font-size`/`font`, `padding`/`margin`/`gap`, `border-radius` y los colores `#hex`/`rgb()` en CSS y estilos inline TSX de `apps/web/src` y `packages/design-system/src`; excluye `tokens.css`, cero y el ancho de borde de 1 px.
 - Para regenerar `packages/design-system/literals-baseline.json`, ejecutar `node packages/design-system/scripts/design-literals.mjs --write`. El script compara contra la línea base vigente y rechaza cualquier aumento; el baseline solo puede bajar al migrar literales, nunca ampliarse para aceptar nuevos.
+- `apps/web/src/ui/UiPatterns.test.ts` impide que reaparezcan patrones retirados: confirmación o recibo dibujados en la pantalla, botón de peligro sólido fuera de una confirmación, selector de densidad en una pantalla, tabla escrita a mano, rótulo sobre un título y confirmación del navegador.
+- Las medidas de layout (desbordes, anchos, orden de botones, pie del panel) a 1440×900 y 1280×720 se verifican con pruebas automáticas.
