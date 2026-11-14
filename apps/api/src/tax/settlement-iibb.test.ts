@@ -839,6 +839,10 @@ describe("Fase 4.1 — IIBB Tucumán local: presentación y pago", () => {
     await settlements.review(ctxReviewer, settlement.id);
     await settlements.finalize(ctxReviewer, settlement.id);
 
+    // Finalizada y sin presentación: figura entre las constancias que faltan en el estudio.
+    const pendingBefore = await settlements.pendingFilingReceipts(ctxOwner);
+    expect(pendingBefore.map((item) => item.settlementId)).toContain(settlement.id);
+
     const filing = await settlements.recordFiling(ctxOwner, {
       obligationId,
       settlementId: settlement.id,
@@ -848,6 +852,10 @@ describe("Fase 4.1 — IIBB Tucumán local: presentación y pago", () => {
       evidenceDocumentId: await createEvidenceDocument(),
     });
     expect(filing.status).toBe("FILED");
+
+    // Con la presentación registrada (y su constancia) deja de figurar.
+    const pendingAfter = await settlements.pendingFilingReceipts(ctxOwner);
+    expect(pendingAfter.map((item) => item.settlementId)).not.toContain(settlement.id);
 
     await settlements.recordPayment(ctxOwner, {
       obligationId,

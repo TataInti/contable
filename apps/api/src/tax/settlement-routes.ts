@@ -107,6 +107,17 @@ export function settlementRoutes(app: FastifyInstance) {
     }
   });
 
+  // Constancias de presentación que faltan en todo el estudio (recordatorio de Inicio).
+  app.get("/api/v1/firms/:firmId/portfolio/tax-worklist/pending-receipts", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const data = await service.pendingFilingReceipts(ctx);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.get("/api/v1/firms/:firmId/clients/:clientId/tax-settlements/:settlementId/differences", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { settlementId } = req.params as { settlementId: string };

@@ -2539,6 +2539,52 @@ export class SettlementService {
     );
   }
 
+  /**
+   * Liquidaciones finalizadas que todavía no tienen una presentación registrada.
+   * Como la presentación sólo se registra con su constancia, es la lista de
+   * constancias que faltan en todo el estudio, de la más antigua a la más nueva.
+   */
+  async pendingFilingReceipts(ctx: TenantContext) {
+    return withTenantContext(ctx, async (tx) => {
+      const settlements = await tx.taxSettlement.findMany({
+        where: {
+          firmId: ctx.firmId,
+          status: "FINALIZED",
+          filings: { none: { status: "FILED" } },
+        },
+        include: {
+          client: { select: { id: true, legalName: true } },
+          period: true,
+          regime: { include: { taxType: true } },
+        },
+        orderBy: { finalizedAt: "asc" },
+        take: 300,
+      });
+      if (settlements.length === 0) return [];
+      const obligations = await tx.taxObligation.findMany({
+        where: {
+          firmId: ctx.firmId,
+          OR: settlements.map((s) => ({ clientId: s.clientId, regimeId: s.regimeId, periodId: s.periodId })),
+        },
+        select: { clientId: true, regimeId: true, periodId: true, dueDate: true },
+      });
+      const dueDateByKey = new Map(
+        obligations.map((o) => [`${o.clientId}:${o.regimeId}:${o.periodId}`, o.dueDate]),
+      );
+      return settlements.map((s) => ({
+        settlementId: s.id,
+        clientId: s.clientId,
+        clientName: s.client.legalName,
+        taxName: s.regime.taxType.name,
+        regimeName: s.regime.name,
+        periodStart: s.period.startDate,
+        periodEnd: s.period.endDate,
+        finalizedAt: s.finalizedAt,
+        dueDate: dueDateByKey.get(`${s.clientId}:${s.regimeId}:${s.periodId}`) ?? null,
+      }));
+    });
+  }
+
   async listDifferences(ctx: TenantContext, settlementId: string) {
     return withTenantContext(ctx, (tx) =>
       tx.taxDifference.findMany({

@@ -22,6 +22,7 @@ import {
 } from "../ui/Dense";
 import type { IconName } from "../ui/Icon";
 import { AsyncState } from "../ui/AsyncState";
+import { PendingFilingReceipts } from "./PendingFilingReceipts";
 import "./study.css";
 
 interface DashboardSummary {
@@ -474,6 +475,16 @@ export function StudyDashboard() {
           />
 
           <DenseWorkspace panelId="dashboard-panel" inspector={agenda}>
+            {canReadTaxWorklist ? (
+              <PendingFilingReceipts
+                firmId={firmId}
+                canOpen={hasClientAccess}
+                onOpen={(openClientId) => {
+                  setClientId(openClientId);
+                  navigate("/expediente-mensual");
+                }}
+              />
+            ) : null}
             <section className="dense-block" aria-labelledby="risk-portfolio-title">
               <header className="dense-block__head">
                 <div className="dense-block__title">
