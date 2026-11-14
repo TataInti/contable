@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Button } from "@contable/design-system";
+import { Button, DensitySwitch, useDensity } from "@contable/design-system";
 import { ContextBar } from "./ContextBar";
 import { logout } from "../lib/auth";
 import { useSession } from "../session/SessionContext";
@@ -112,6 +112,7 @@ export function StudyShell() {
   const session = useSession();
   const { firmId, clientId, capabilities, setClientId } = useClientContext();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [density, setDensity] = useDensity();
   const firm = session.me?.firms.find((item) => item.firmId === firmId);
   const clients = firm?.clients ?? [];
   const navigationModules = modulesForNavigation(capabilities);
@@ -277,6 +278,10 @@ export function StudyShell() {
                   </Button>
                 )}
               </GuidedTour>
+              <div className="study__help-preference">
+                <span>Filas de las tablas</span>
+                <DensitySwitch value={density} onChange={setDensity} />
+              </div>
             </div>
           </details>
           {session.portalContexts.length > 0 ? (

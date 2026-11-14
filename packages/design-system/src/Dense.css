@@ -492,8 +492,8 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  height: 30px;
-  padding: 0 12px;
+  height: var(--ds-table-head-height);
+  padding: 0 var(--ds-space-3);
   border-bottom: 1px solid var(--ds-color-border-strong);
   background: var(--ds-color-surface-muted);
   color: var(--ds-color-text-muted);

@@ -27,17 +27,20 @@
   z-index: var(--ds-z-sticky);
   background-color: var(--ds-color-surface-muted);
   color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
   font-weight: var(--ds-font-weight-medium);
   text-align: left;
-  padding-block: var(--ds-space-2);
+  block-size: var(--ds-table-head-height);
+  padding-block: 0;
   padding-inline: var(--ds-space-3);
   border-bottom: var(--ds-border-width) solid var(--ds-color-border-strong);
   white-space: nowrap;
 }
 
 .ds-table tbody td {
-  block-size: var(--ds-control-height-md);
-  padding-block: var(--ds-space-2);
+  /* El alto de fila sale de la preferencia de densidad (useDensity). */
+  block-size: var(--ds-row-height);
+  padding-block: var(--ds-space-1);
   padding-inline: var(--ds-space-3);
   border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle);
   vertical-align: middle;
