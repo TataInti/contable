@@ -981,7 +981,6 @@ export function StudyAdministracion() {
     internalInspector = (
       <Inspector
         label="Roles y módulos"
-        eyebrow="Referencia"
         title="Roles y módulos"
         subtitle="Qué módulos internos abre cada rol."
         onClose={() => setShowRoles(false)}
@@ -1346,7 +1345,6 @@ export function StudyAdministracion() {
     tableBody = (
       <section className="study-panel self-review-setting" aria-labelledby="self-review-setting-title">
         <div className="self-review-setting__heading">
-          <p className="study-page__eyebrow">Control interno</p>
           <h2 className="self-review-setting__title" id="self-review-setting-title">
             Permitir autorrevisión de fuentes y legajos
           </h2>
@@ -1677,7 +1675,6 @@ export function StudyAdministracion() {
       <ActionDrawer
         isOpen={showInternalInviteForm}
         onClose={closeInternalDrawer}
-        eyebrow="Acceso interno"
         title="Crear usuarios del estudio"
         description="Se genera una contraseña temporal por cuenta, que se muestra una sola vez. Cada persona deberá cambiarla al ingresar."
         size={createMode === "batch" ? "wide" : "default"}
@@ -1912,7 +1909,6 @@ export function StudyAdministracion() {
         <ActionDrawer
           isOpen
           onClose={() => setIdentityEditing(null)}
-          eyebrow="Usuario del estudio"
           title="Editar usuario"
           description="Actualizá el nombre y el correo de la cuenta."
           footer={
@@ -1970,7 +1966,6 @@ export function StudyAdministracion() {
         <ActionDrawer
           isOpen
           onClose={() => setPortalEditing(null)}
-          eyebrow="Acceso del portal"
           title="Editar acceso"
           description={`Cambiar el rol de ${portalEditing.user?.name ?? "esta persona"}.`}
         >
@@ -2019,7 +2014,6 @@ export function StudyAdministracion() {
             setShowProfileForm(false);
             setProfileDraft(null);
           }}
-          eyebrow="Configuración del estudio"
           title="Editar datos del estudio"
           description="Actualizá la razón social, el nombre, el CUIT y la zona horaria."
         >
@@ -2094,7 +2088,6 @@ export function StudyAdministracion() {
         <ActionDrawer
           isOpen={showInviteForm}
           onClose={() => setShowInviteForm(false)}
-          eyebrow="Acceso del cliente"
           title="Invitar al portal"
           description="Invitación para el cliente seleccionado. Vence a los siete días y sólo puede usarse con el correo indicado."
         >
@@ -2162,7 +2155,6 @@ export function StudyAdministracion() {
           setStandardEditing(null);
           setStandardName("");
         }}
-        eyebrow="Parámetro del estudio"
         title={standardEditing ? "Editar norma contable" : "Nueva norma contable"}
         description="El nombre es el valor que se muestra y se guarda en la ficha de clientes. No se precargan normas: el estudio define las suyas."
       >

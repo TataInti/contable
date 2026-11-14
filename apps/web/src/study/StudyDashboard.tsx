@@ -333,7 +333,6 @@ export function StudyDashboard() {
   const agenda = (
     <Inspector
       label="Mesa de trabajo"
-      eyebrow="Próximos pasos"
       title="Tu mesa de trabajo"
       subtitle={attentionTotal > 0 ? "Priorizado por urgencia" : "Sin pendientes"}
     >

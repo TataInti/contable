@@ -13,6 +13,7 @@ import {
   StatStrip,
   useDensity,
 } from "../ui/Dense";
+import { actionErrorMessage } from "../ui/actionError";
 import "./study.css";
 
 interface TaxSettlement {
@@ -112,6 +113,9 @@ export function StudyLiquidaciones() {
     void queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId] });
   };
 
+  // Una acción que falla se avisa donde se avisa todo: en la notificación.
+  const failed = (error: unknown) =>
+    notify.error(actionErrorMessage(error, "No se pudo completar la acción sobre la liquidación."));
   const calculateMutation = useMutation({
     mutationFn: () =>
       api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/calculate`, {
@@ -127,6 +131,7 @@ export function StudyLiquidaciones() {
       setCalculation((current) => ({ ...current, regimeId: "", cutoff: today }));
       notify.success("La liquidación fue calculada con los comprobantes aprobados al corte indicado.");
     },
+    onError: failed,
   });
   const submitMutation = useMutation({
     mutationFn: (id: string) =>
@@ -135,6 +140,7 @@ export function StudyLiquidaciones() {
       invalidate();
       notify.success("La liquidación fue enviada a revisión.");
     },
+    onError: failed,
   });
   const reviewMutation = useMutation({
     mutationFn: (id: string) =>
@@ -143,6 +149,7 @@ export function StudyLiquidaciones() {
       invalidate();
       notify.success("La liquidación quedó revisada.");
     },
+    onError: failed,
   });
   const finalizeMutation = useMutation({
     mutationFn: (id: string) =>
@@ -151,6 +158,7 @@ export function StudyLiquidaciones() {
       invalidate();
       notify.success("La liquidación fue finalizada y quedó inmutable.");
     },
+    onError: failed,
   });
   const rectifyMutation = useMutation({
     mutationFn: (id: string) =>
@@ -161,12 +169,14 @@ export function StudyLiquidaciones() {
       invalidate();
       notify.success("Se inició una rectificación de la liquidación.");
     },
+    onError: failed,
   });
   const artifactMutation = useMutation({
     mutationFn: ({ id, format }: { id: string; format: "csv" | "pdf" }) =>
       api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/artifacts`, { format }),
     onSuccess: (_, variables) =>
       notify.success(`Se generó el papel de trabajo en ${variables.format.toUpperCase()}.`),
+    onError: failed,
   });
 
   if (!firmId || !clientId) {
@@ -179,14 +189,6 @@ export function StudyLiquidaciones() {
   }
 
   const data = listQuery.data ?? [];
-  const mutationError =
-    calculateMutation.error ??
-    submitMutation.error ??
-    reviewMutation.error ??
-    finalizeMutation.error ??
-    rectifyMutation.error ??
-    artifactMutation.error;
-
   return (
     <DensePage density={density} flow>
       <DenseHeader
@@ -255,7 +257,6 @@ export function StudyLiquidaciones() {
       <ActionDrawer
         isOpen={showCalculator}
         onClose={() => setShowCalculator(false)}
-        eyebrow="Impuestos"
         title="Calcular liquidación"
         description="Elegí el período fiscal y el régimen. El cálculo sólo toma documentación aprobada hasta la fecha de corte."
       >
@@ -334,7 +335,6 @@ export function StudyLiquidaciones() {
       <section className="study-page__section" aria-labelledby="settlements-list-title">
       <div className="study-panel__heading">
         <div>
-          <p className="study-page__eyebrow">Seguimiento</p>
           <h2 id="settlements-list-title">Liquidaciones registradas</h2>
           <p>
             {selectedTaxPeriod
@@ -479,10 +479,6 @@ export function StudyLiquidaciones() {
         />
       )}
       </section>
-      {mutationError ? (
-        <Notice tone="error">{mutationError.message}</Notice>
-      ) : null}
-    
     </DensePage>
   );
 }

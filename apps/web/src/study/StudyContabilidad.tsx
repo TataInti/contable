@@ -12,6 +12,7 @@ import {
   StatStrip,
   useDensity,
 } from "../ui/Dense";
+import { actionErrorMessage } from "../ui/actionError";
 import "./study.css";
 
 interface JournalLine {
@@ -242,6 +243,7 @@ export function StudyContabilidad() {
       notify.success("Asiento enviado a revisión.");
       void queryClient.invalidateQueries({ queryKey: ["journal-entries", firmId, clientId] });
     },
+    onError: (error) => notify.error(actionErrorMessage(error, "No se pudo enviar el asiento a revisión.")),
   });
 
   if (!base)
@@ -324,7 +326,6 @@ export function StudyContabilidad() {
       <ActionDrawer
         isOpen={showDraftForm}
         onClose={() => setShowDraftForm(false)}
-        eyebrow="Maker"
         title="Nuevo asiento manual"
         description="Genera dos líneas balanceadas. Podrás enviarlo a revisión antes de contabilizar."
         size="wide"
@@ -501,7 +502,6 @@ export function StudyContabilidad() {
       <section className="study-panel" aria-labelledby="drafts-title">
         <div className="study-panel__heading">
           <div>
-            <p className="study-page__eyebrow">Maker</p>
             <h2 id="drafts-title">Asientos en preparación</h2>
             <p>
               Los borradores no afectan los libros hasta completar la revisión y contabilización.
@@ -591,11 +591,6 @@ export function StudyContabilidad() {
             ]}
           />
         )}
-        {submitDraft.isError ? (
-          <Notice tone="error">
-            {submitDraft.error.message}
-          </Notice>
-        ) : null}
       </section>
 
       {activeQuery.isLoading ? (

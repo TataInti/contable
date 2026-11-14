@@ -448,6 +448,12 @@ export function StudyClientes() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["client-contacts", firmId, selectedId] });
     },
+    onError: (error) =>
+      notify.error(
+        error instanceof ApiError
+          ? error.message
+          : "No se pudo actualizar el contacto. Revisá los datos e intentá nuevamente.",
+      ),
   });
   const rows = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("es-AR");
@@ -712,7 +718,6 @@ export function StudyClientes() {
   const inspector = selectedClient ? (
     <Inspector
       label={`Detalle de ${selectedClient.legalName}`}
-      eyebrow="Cliente"
       title={selectedClient.legalName}
       subtitle={`CUIT ${formatCuit(selectedClient.cuit)}`}
       leading={
@@ -882,13 +887,6 @@ export function StudyClientes() {
               description="Agregá personas de referencia para este cliente."
             />
           )}
-          {toggleContactState.isError ? (
-            <Notice tone="error">
-              {toggleContactState.error instanceof ApiError
-                ? toggleContactState.error.message
-                : "No se pudo actualizar el contacto. Revisá los datos e intentá nuevamente."}
-            </Notice>
-          ) : null}
         </InspectorSection>
         </div>
       ) : null}
@@ -1047,7 +1045,6 @@ export function StudyClientes() {
       <ActionDrawer
         isOpen={creating}
         onClose={() => setCreating(false)}
-        eyebrow="Cartera"
         title="Alta de cliente"
         description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
         footer={
@@ -1195,7 +1192,6 @@ export function StudyClientes() {
           updateIdentity.reset();
           updateProfile.reset();
         }}
-        eyebrow="Ficha del cliente"
         title="Editar cliente"
         description="Actualizá la identidad y los datos fiscales del cliente."
         size="wide"
@@ -1548,7 +1544,6 @@ export function StudyClientes() {
           setStatusClient(null);
           updateStatus.reset();
         }}
-        eyebrow="Ficha del cliente"
         title="Cambiar estado"
         description="Elegí el estado del cliente."
         footer={
@@ -1599,7 +1594,6 @@ export function StudyClientes() {
       <ActionDrawer
         isOpen={contactEditorOpen}
         onClose={closeContactEditor}
-        eyebrow="Cliente"
         title={editingContact ? "Editar contacto" : "Nuevo contacto"}
         description="Completá los datos de contacto y, si corresponde, marcá el principal."
         footer={

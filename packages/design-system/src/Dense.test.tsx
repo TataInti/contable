@@ -140,7 +140,6 @@ describe("familia Dense", () => {
           inspector={
             <Inspector
               label="Detalle del cliente"
-              eyebrow="Ficha"
               title="Cliente Uno"
               subtitle="Estudio Demo"
               leading={<span>CU</span>}

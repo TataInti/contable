@@ -1352,7 +1352,6 @@ export function StudyExpedienteMensual() {
       <ActionDrawer
         isOpen={showSifereModal}
         onClose={() => setShowSifereModal(false)}
-        eyebrow="Análisis previo"
         title="Subir libros IVA (Excel)"
         description="Subí por separado el libro de compras y el de ventas. El análisis de alícuotas y tributos no depende de que esté completo: lo podés correr con lo que ya tengas."
         size="wide"
@@ -1445,7 +1444,6 @@ export function StudyExpedienteMensual() {
       <ActionDrawer
         isOpen={showOpening}
         onClose={() => setShowOpening(false)}
-        eyebrow="Saldos"
         title="Cargar saldo inicial"
         description="Registrá un saldo a favor o arrastre. Podés adjuntar un respaldo documental o cargarlo manualmente; en ambos casos queda registrado el usuario que lo hizo."
         size="wide"
@@ -1603,7 +1601,6 @@ export function StudyExpedienteMensual() {
       <ActionDrawer
         isOpen={editingLot !== null}
         onClose={() => setEditingLot(null)}
-        eyebrow="Saldos"
         title="Editar saldo"
         description="Actualizá el monto, la referencia o el documento de respaldo del saldo. Cada cambio queda registrado en el log con usuario y fecha."
         size="wide"
@@ -1679,7 +1676,6 @@ export function StudyExpedienteMensual() {
       <ActionDrawer
         isOpen={positionAction?.kind === "PAYMENT"}
         onClose={() => setPositionAction(null)}
-        eyebrow="Pago"
         title={
           positionAction?.kind === "PAYMENT"
             ? positionAction.position.regime.name
@@ -1755,7 +1751,6 @@ export function StudyExpedienteMensual() {
       <ActionDrawer
         isOpen={positionAction?.kind === "FILING"}
         onClose={() => setPositionAction(null)}
-        eyebrow="Presentación"
         title={
           positionAction?.kind === "FILING"
             ? positionAction.position.regime.name

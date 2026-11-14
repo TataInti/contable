@@ -988,7 +988,6 @@ export function StudyCatalogosFiscales() {
     inspector = (
       <Inspector
         label="Detalle de la jurisdicción"
-        eyebrow="Jurisdicción"
         title={selectedJurisdiction.code}
         subtitle={selectedJurisdiction.name}
         onClose={() => setSelectedId(null)}
@@ -1036,7 +1035,6 @@ export function StudyCatalogosFiscales() {
     inspector = (
       <Inspector
         label="Detalle del tipo de impuesto"
-        eyebrow="Tipo de impuesto"
         title={selectedTaxType.code}
         subtitle={selectedTaxType.name}
         onClose={() => setSelectedId(null)}
@@ -1078,7 +1076,6 @@ export function StudyCatalogosFiscales() {
     inspector = (
       <Inspector
         label="Detalle del organismo"
-        eyebrow="Organismo"
         title={selectedAuthority.code}
         subtitle={selectedAuthority.name}
         onClose={() => setSelectedId(null)}
@@ -1140,7 +1137,6 @@ export function StudyCatalogosFiscales() {
     inspector = (
       <Inspector
         label="Detalle del régimen"
-        eyebrow="Régimen"
         title={selectedRegime.code}
         subtitle={selectedRegime.name}
         onClose={() => setSelectedId(null)}
@@ -1222,7 +1218,6 @@ export function StudyCatalogosFiscales() {
     inspector = (
       <Inspector
         label="Detalle de la actividad"
-        eyebrow="Actividad económica"
         title={selectedActivity.code}
         subtitle={selectedActivity.name}
         onClose={() => setSelectedId(null)}
@@ -1894,7 +1889,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={drawer === "authority-create" || drawer === "authority-edit"}
         onClose={() => { setDrawer(null); setEditingAuthority(null); }}
-        eyebrow="Catálogo fiscal del estudio"
         title={drawer === "authority-edit" ? "Editar organismo recaudador" : "Nuevo organismo recaudador"}
         description="La jurisdicción define el alcance en el que puede asignarse este organismo: ARCA recauda en Nación, las DGR en cada provincia y las direcciones de rentas en cada municipio."
       >
@@ -1959,7 +1953,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={drawer === "regime-create" || drawer === "regime-edit"}
         onClose={() => { setDrawer(null); setEditingRegime(null); }}
-        eyebrow="Catálogo fiscal del estudio"
         title={drawer === "regime-edit" ? "Editar régimen" : "Nuevo régimen"}
         description="El organismo recaudador seleccionado debe corresponder a la jurisdicción del régimen."
       >
@@ -2162,7 +2155,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={activityDrawer === "create"}
         onClose={() => setActivityDrawer(null)}
-        eyebrow="Catálogo de actividades"
         title="Nueva actividad económica"
         description="El código se guarda en mayúsculas. Completá sus campos de catálogo y vigencia."
       >
@@ -2284,7 +2276,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={activityDrawer === "edit" && Boolean(editingActivity)}
         onClose={() => setActivityDrawer(null)}
-        eyebrow="Catálogo de actividades"
         title="Editar actividad económica"
         description="Actualizá el código, la jurisdicción, la fuente o la vigencia de la actividad."
       >
@@ -2398,7 +2389,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={activityDrawer === "deactivate" && Boolean(editingActivity)}
         onClose={() => setActivityDrawer(null)}
-        eyebrow="Catálogo de actividades"
         title="Ocultar actividad económica"
         description="El registro, sus vínculos y reglas se conservan. La actividad deja de ofrecerse en los selectores."
       >
@@ -2429,7 +2419,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={masterDrawer === "jurisdiction-create"}
         onClose={() => setMasterDrawer(null)}
-        eyebrow="Catálogo fiscal del estudio"
         title={duplicateJurisdictionSource
           ? `Nueva jurisdicción a partir de ${duplicateJurisdictionSource.code}`
           : "Nueva jurisdicción"}
@@ -2522,7 +2511,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={masterDrawer === "jurisdiction-edit" && Boolean(editingJurisdiction)}
         onClose={() => setMasterDrawer(null)}
-        eyebrow="Catálogo fiscal del estudio"
         title="Editar jurisdicción"
         description="Actualizá el código, el nivel o el nombre."
         footer={
@@ -2610,7 +2598,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={masterDrawer === "tax-type-create"}
         onClose={() => setMasterDrawer(null)}
-        eyebrow="Catálogo fiscal del estudio"
         title="Nuevo tipo de impuesto"
         description="Agregá el impuesto que usa el estudio para definir sus regímenes fiscales."
       >
@@ -2676,7 +2663,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={masterDrawer === "tax-type-edit" && Boolean(editingTaxType)}
         onClose={() => setMasterDrawer(null)}
-        eyebrow="Catálogo fiscal del estudio"
         title="Editar tipo de impuesto"
         description="Actualizá el código o el nombre del tipo de impuesto."
       >
