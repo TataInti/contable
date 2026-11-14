@@ -5,6 +5,7 @@ import "@contable/design-system/Dense.css";
 
 export type { DenseDensity, DenseColumn, StatItem } from "@contable/design-system";
 export {
+  DenseToggleGroup,
   DenseFooter,
   DenseHeader,
   DenseLoading,

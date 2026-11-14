@@ -330,8 +330,9 @@ Usá `Notice` en vez de clases locales de aviso, evitá cajas anidadas y diferen
 | `StatStrip`, `StatItem` | `StatStrip` requiere `items` y `label`. Cada item requiere `key`, `label` y `value`; acepta `detail`, `tone="warn"`, `active` y `onSelect`. Un item seleccionable se representa como botón. |
 | `DenseToolbar` | Agrupa `children` dentro de la barra de herramientas. |
 | `DensitySwitch` | Requiere `value: DenseDensity` y `onChange(next)`. |
+| `DenseToggleGroup`, `DenseToggleOption` | Requiere `label`, `options` (pares `value` y `label`), `selected` (valores activos) y `onChange(next)`; cada opción es un botón con `aria-pressed` y `next` sigue el orden de `options`. |
 | `DenseWorkspace` | Requiere `panelId` y `children`; acepta `inspector` para habilitar la columna lateral. |
-| `DenseTable`, `DenseColumn<T>` | `DenseTable<T>` requiere `label`, `columns`, `rows` y `rowKey`; acepta `selectedKey`, `onSelect`, `rowClassName`, `empty`, `footer` e `inspectorOpen`. Cada columna requiere `key`, `header` y `render`; acepta `sortValue`, `secondary`, `align="right"`, `width`, `className` y `sticky="right"`. |
+| `DenseTable`, `DenseColumn<T>` | `DenseTable<T>` requiere `label`, `columns`, `rows` y `rowKey`; acepta `selectedKey`, `onSelect`, `rowClassName`, `empty`, `footer`, `inspectorOpen` y `groupBy`. `groupBy(row)` devuelve `{ key, label, order }`: agrupa las filas bajo un encabezado con su conteo, ordenado por `order`; el teclado salta los encabezados. Cada columna requiere `key`, `header` y `render`; acepta `sortValue`, `secondary`, `align="right"`, `width`, `className` y `sticky="right"`. |
 | `ShortcutHint` | Requiere `items`, una lista de pares `[tecla, descripción]`. |
 | `DenseFooter` | Requiere `count` y `noun`; acepta `hint` y `newShortcut` (por defecto `true`). |
 | `DenseLoading` | Requiere `label`; anuncia la carga con `role="status"`. |

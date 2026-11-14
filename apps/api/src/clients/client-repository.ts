@@ -12,7 +12,13 @@ import type {
   CreateCostCenter,
   CreateFiscalYear,
 } from "@contable/contracts";
+import { cuitEnding } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+
+/** Agrega la terminación de CUIT: dato derivado del CUIT, no se guarda (supuesto S2). */
+function withCuitEnding<T extends { cuit: string }>(client: T) {
+  return { ...client, cuitEnding: cuitEnding(client.cuit) };
+}
 
 /**
  * Repositorio de clientes y maestros (Fase 3).
@@ -331,21 +337,23 @@ export class ClientRepository {
     });
   }
 
-  /** Lista clientes de una firma. */
+  /** Lista clientes de una firma, con su terminación de CUIT derivada. */
   async list(firmId: string, ctx?: TenantContext) {
-    return this.scoped(ctx, (tx) => tx.client.findMany({
+    const clients = await this.scoped(ctx, (tx) => tx.client.findMany({
       where: { firmId },
       include: { profile: true },
       orderBy: { legalName: "asc" },
     }));
+    return clients.map((client) => withCuitEnding(client));
   }
 
-  /** Obtiene un cliente con su perfil. */
+  /** Obtiene un cliente con su perfil y su terminación de CUIT derivada. */
   async get(firmId: string, clientId: string, ctx?: TenantContext) {
-    return this.scoped(ctx, (tx) => tx.client.findFirst({
+    const client = await this.scoped(ctx, (tx) => tx.client.findFirst({
       where: { firmId, id: clientId },
       include: { profile: true, onboarding: true },
     }));
+    return client ? withCuitEnding(client) : null;
   }
 
   /** Actualiza el perfil contable/fiscal del cliente. */

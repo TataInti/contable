@@ -40,6 +40,7 @@
 | **Liquidación IVA** | Cálculo de posición de IVA (débito, crédito, retenciones, percepciones) desde vouchers y ajustes. Versionada e inmutable al finalizar. |
 | **Obligación** | Instancia concreta de un impuesto/regla para un cliente y período, con vencimiento, responsable y estado. |
 | **Regla** | Configuración versionada con fuente, vigencia y responsable de validación. |
+| **Terminación de CUIT** | Último dígito del CUIT del cliente. Derivado y no editable; ordena, filtra y agrupa a los clientes para la presentación. |
 | **Vencimiento** | Fecha calculada desde regla, feriados y terminación de CUIT; puede tener override justificado. |
 
 ## Reportes y publicación
