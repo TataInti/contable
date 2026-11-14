@@ -1491,3 +1491,11 @@
   padding-block-start: var(--ds-space-4);
   border-block-start: var(--ds-border-width) solid var(--ds-color-border-subtle);
 }
+
+/* integrated: la tabla se lee sobre el lienzo; sus filas se separan con líneas, sin marco ni fondo. */
+.dense-table-card.dense-table-card--integrated {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}

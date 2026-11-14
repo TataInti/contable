@@ -361,6 +361,7 @@ export function DenseTable<T>({
   footer,
   inspectorOpen,
   groupBy,
+  surface,
 }: {
   label: string;
   columns: ReadonlyArray<DenseColumn<T>>;
@@ -374,6 +375,8 @@ export function DenseTable<T>({
   inspectorOpen?: boolean;
   /** Agrupa las filas bajo un encabezado con su conteo. */
   groupBy?: (row: T) => DenseGroup;
+  /** Sin la prop se conserva la presentación actual; `integrated` aplica Foco. */
+  surface?: DenseSurface;
 }) {
   const [sort, setSort] = useState<{ key: string; direction: 1 | -1 } | null>(null);
   const sortedRows = useMemo(() => {
@@ -433,7 +436,7 @@ export function DenseTable<T>({
   };
 
   return (
-    <div className="dense-table-card">
+    <div className={`dense-table-card${surface ? ` dense-table-card--${surface}` : ""}`}>
       <div className="dense-table-scroll">
         {sorted.length === 0 ? (
           (empty ?? <div className="dense-empty">Sin resultados</div>)
