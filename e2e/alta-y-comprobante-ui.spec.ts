@@ -295,7 +295,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.locator("#client-legal-form").selectOption({ index: 1 });
     await page.locator(".action-drawer").getByRole("button", { name: "Crear cliente" }).click();
     await expect(page).toHaveURL(/\/configuracion-fiscal/);
-    await expect(page.locator("#context-bar")).toContainText(data.client.legalName);
+    await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" }).locator("option:checked")).toContainText(data.client.legalName);
   });
 
   await test.step("Configuración fiscal: perfil activo", async () => {
@@ -451,7 +451,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     const reviewer = await reviewerContext.newPage();
     reviewer.setDefaultTimeout(15_000);
     await login(reviewer, "revisor@contable.local", "revisor1234");
-    await pickOption(reviewer.locator("#context-bar").getByRole("combobox", { name: /^Cliente/ }), data.client.legalName);
+    await pickOption(reviewer.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), data.client.legalName);
     await goTo(reviewer, "Legajo");
     await pickOption(reviewer.locator("#monthly-workpaper-tax-period"), periodLabel(taxes.iva));
     await reviewer.getByRole("tab", { name: /Fuentes/ }).first().click();
@@ -552,7 +552,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     const reviewer = await reviewerContext.newPage();
     reviewer.setDefaultTimeout(15_000);
     await login(reviewer, "revisor@contable.local", "revisor1234");
-    await pickOption(reviewer.locator("#context-bar").getByRole("combobox", { name: /^Cliente/ }), data.client.legalName);
+    await pickOption(reviewer.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), data.client.legalName);
     await goTo(reviewer, "Legajo");
     await pickOption(reviewer.locator("#monthly-workpaper-tax-period"), periodLabel(taxes.iva));
     const rcard = reviewer.locator(".workpaper-card").first();

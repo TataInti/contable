@@ -32,7 +32,8 @@ export async function login(page: Page, email = "demo@contable.local", password 
   await page.getByLabel("Contraseña").fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).not.toHaveURL(/\/login/);
-  await expect(page.locator("#context-bar")).toBeVisible();
+  // El cliente se elige en el menú lateral: la barra de contexto ya no está en todas las pantallas.
+  await expect(page.locator("#study-navigation")).toBeVisible();
 }
 
 export async function goTo(page: Page, label: string) {

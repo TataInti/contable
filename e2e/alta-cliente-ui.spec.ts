@@ -157,7 +157,7 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     // Al crearlo, la app lo deja seleccionado y lleva a su configuración fiscal.
     await expect(page).toHaveURL(/\/configuracion-fiscal/);
     await expect(page.getByRole("combobox", { name: /^Cliente/ })).toHaveValue(/.+/);
-    await expect(page.locator("#context-bar")).toContainText(data.client.legalName);
+    await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" }).locator("option:checked")).toContainText(data.client.legalName);
   });
 
   // ───────────────────────── Configuración fiscal ─────────────────────────
