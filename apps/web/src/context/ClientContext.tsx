@@ -153,9 +153,9 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
   );
   const [selection, setSelection] = useState<SelectedContext>(EMPTY_SELECTION);
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
-  // Cliente pedido antes de que la sesión lo conociera (alta de un cliente: la
-  // pantalla lo selecciona y recién después se refresca la lista de contextos).
-  const pendingClientIdRef = useRef<string | null>(null);
+  // Último cliente elegido por la persona. Sirve para clientes que la sesión todavía no conoce
+  // (alta: la pantalla lo selecciona y recién después se refresca la lista de contextos).
+  const chosenClientIdRef = useRef<string | null>(null);
 
   const availableFirms = useMemo<AvailableFirm[]>(
     () =>
@@ -187,17 +187,23 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
     }
 
     const resolved = resolveSelection(availableFirms, readStoredContext(storageKey), strategy);
-    const pendingClientId = pendingClientIdRef.current;
-    const pendingFirm = pendingClientId
+    // La última elección hecha por la persona gana sobre lo guardado: la rehidratación (que corre
+    // después de refrescar la sesión) no debe pisarla, ni siquiera si el cliente es nuevo.
+    const chosenClientId = chosenClientIdRef.current;
+    const chosenFirm = chosenClientId
       ? availableFirms.find((item) => item.firmId === resolved.firmId)
       : undefined;
-    const pendingClient = pendingFirm?.clients.find((item) => item.clientId === pendingClientId);
-    if (pendingFirm && pendingClient) {
-      pendingClientIdRef.current = null;
+    const chosenClient = chosenFirm?.clients.find((item) => item.clientId === chosenClientId);
+    if (chosenFirm && chosenClient) {
       setSelection({
-        firmId: pendingFirm.firmId,
-        clientId: pendingClient.clientId,
-        periodId: strategy.autoSelectPeriod ? pendingClient.periods[0]?.periodId ?? null : null,
+        firmId: chosenFirm.firmId,
+        clientId: chosenClient.clientId,
+        periodId:
+          resolved.clientId === chosenClient.clientId
+            ? resolved.periodId
+            : strategy.autoSelectPeriod
+              ? chosenClient.periods[0]?.periodId ?? null
+              : null,
       });
     } else {
       setSelection(resolved);
@@ -216,6 +222,7 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
 
   const setFirmId = useCallback(
     (next: string | null) => {
+      chosenClientIdRef.current = null;
       const firm = availableFirms.find((item) => item.firmId === next);
       if (!firm) {
         setSelection(EMPTY_SELECTION);
@@ -237,8 +244,7 @@ export function ClientContextProvider({ children }: { children: React.ReactNode 
   const setClientId = useCallback(
     (next: string | null) => {
       const latestFirms = availableFirmsRef.current;
-      const known = latestFirms.some((firm) => firm.clients.some((client) => client.clientId === next));
-      pendingClientIdRef.current = next && !known ? next : null;
+      chosenClientIdRef.current = next;
       setSelection((current) => {
         const firm = latestFirms.find((item) => item.firmId === current.firmId);
         const client = firm?.clients.find((item) => item.clientId === next);

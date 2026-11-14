@@ -1,0 +1,19 @@
+[
+  {
+    "direction": "PURCHASE",
+    "letter": "A",
+    "pointOfSale": "0001",
+    "numberFrom": "1343338",
+    "numberTo": "1343338",
+    "cuit": "30111111002",
+    "issuedOn": "2025-03-16",
+    "net": "24710.74",
+    "hasIva": true,
+    "iva21": "5189.26",
+    "iva105": "0",
+    "iva27": "0",
+    "exempt": "0",
+    "otherTaxes": "0",
+    "currency": "ARS"
+  }
+]

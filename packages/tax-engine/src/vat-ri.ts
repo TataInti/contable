@@ -76,6 +76,9 @@ export interface VatRiInput {
   rounding?: Partial<Record<string, RoundingConfig>>;
 }
 
+/** Diferencia máxima tolerada entre el neto gravado y las bases por alícuota de un comprobante. */
+export const VAT_BOOK_BASE_TOLERANCE = "0.05";
+
 export function calculateVatRi(input: VatRiInput): TaxEngineResult {
   const rounding = input.rounding ?? {};
   const lines: TaxEngineResult["lines"] = [];
@@ -90,7 +93,10 @@ export function calculateVatRi(input: VatRiInput): TaxEngineResult {
     blocks.push(`El comprobante ${voucherId} tiene neto gravado sin alícuota IVA`);
   }
   for (const difference of input.bookDifferences ?? []) {
-    if (difference.difference.abs().greaterThan("0.02")) {
+    // La base por alícuota se deriva del IVA del comprobante (IVA / tasa): medio centavo de redondeo
+    // del IVA se amplifica hasta ~0,048 sobre la base al 10,5 %. Por eso este umbral es el mismo
+    // que la tolerancia de libro del legajo ($ 0,05) y no el de $ 0,02 de IVA contra base × tasa.
+    if (difference.difference.abs().greaterThan(VAT_BOOK_BASE_TOLERANCE)) {
       blocks.push(
         `El comprobante ${difference.voucherId} difiere ${fmtMoney(difference.difference.abs())} entre neto gravado y bases por alícuota`,
       );

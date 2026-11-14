@@ -1,0 +1,4 @@
+[
+  { "direction": "SALE", "letter": "B", "pointOfSale": "0002", "numberFrom": "1", "numberTo": "250", "cuit": "20111111112", "issuedOn": "2025-03-31", "net": "123966.12", "hasIva": true, "iva21": "26032.89", "iva105": "0", "iva27": "0", "exempt": "0", "otherTaxes": "0", "currency": "ARS" },
+  { "direction": "SALE", "letter": "B", "pointOfSale": "0002", "numberFrom": "251", "numberTo": "400", "cuit": "20111111112", "issuedOn": "2025-03-31", "net": "82644.63", "hasIva": true, "iva21": "17355.37", "iva105": "0", "iva27": "0", "exempt": "0", "otherTaxes": "0", "currency": "ARS" }
+]

@@ -323,9 +323,12 @@ export function StudyBandeja() {
   const approve = useMutation({
     mutationFn: () => api.post(`${base}/extractions/${extraction.data!.id}/approve`),
     onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: ["extraction", firmId, clientId, selectedId],
-      }),
+      // El documento pasa a "Revisado": la lista de documentos también se refresca, si no el Legajo
+      // no lo ofrece como respaldo hasta que vence la caché.
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["extraction", firmId, clientId, selectedId] }),
+        queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
+      ]),
   });
   const reject = useMutation({
     mutationFn: ({ extractionId, reason }: { documentId: string; extractionId: string; reason: string }) =>

@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { RUN, SUFFIX, goTo, pickOption, seen, syntheticCuit } from "./helpers/ui";
 
 /**
  * E2E de alta completa desde la interfaz: deja cargado todo lo que hace falta
@@ -18,19 +19,6 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
  * nuevo no tendría motor para calcular.
  */
 
-const RUN = Date.now().toString(36).toUpperCase();
-const SUFFIX = RUN.slice(-6);
-
-// CUIT sintético con dígito verificador válido (prefijo 30: persona jurídica).
-function syntheticCuit(seed: number): string {
-  const base = `30${String(seed % 100_000_000).padStart(8, "0")}`;
-  const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-  const sum = base.split("").reduce((acc, digit, index) => acc + Number(digit) * weights[index]!, 0);
-  const remainder = 11 - (sum % 11);
-  const check = remainder === 11 ? 0 : remainder === 10 ? 9 : remainder;
-  return `${base}${check}`;
-}
-
 const data = {
   jurisdiction: { code: `E2E-N-${SUFFIX}`, name: `Nación E2E ${SUFFIX}` },
   authority: { code: `E2E-A-${SUFFIX}`, name: `Organismo E2E ${SUFFIX}` },
@@ -40,48 +28,14 @@ const data = {
   client: {
     legalName: `Cliente E2E Alta ${SUFFIX} S.A.`,
     tradeName: `E2E Alta ${SUFFIX}`,
-    cuit: syntheticCuit(Number.parseInt(RUN, 36)),
+    cuit: // Distinto del CUIT de los otros e2e: comparten RUN cuando corren en la misma tanda.
+    syntheticCuit(Number.parseInt(RUN, 36) + 1_000),
     fiscalAddress: "Av. Siempre Viva 742, San Miguel de Tucumán",
   },
   validFrom: "2026-01-01",
   period: { start: "2026-10-01", end: "2026-10-31", label: `IVA Octubre 2026 E2E ${SUFFIX}`, dueDate: "2026-11-18" },
   rate: "21",
 };
-
-async function dismissGuidedTour(page: Page) {
-  const skipTour = page.getByRole("button", { name: "Saltar tour", exact: true });
-  if (await skipTour.isVisible().catch(() => false)) await skipTour.click();
-}
-
-async function goTo(page: Page, label: string) {
-  await dismissGuidedTour(page);
-  const menu = page.getByRole("button", { name: "Abrir navegación" });
-  if (await menu.isVisible()) await menu.click();
-  await dismissGuidedTour(page);
-  if (["Usuarios y accesos", "Módulos de estudios", "Reglas fiscales", "Catálogos fiscales"].includes(label)) {
-    const settingsToggle = page.getByRole("button", { name: "Ajustes del estudio", exact: true });
-    if ((await settingsToggle.isVisible()) && (await settingsToggle.getAttribute("aria-expanded")) === "false") {
-      await settingsToggle.click();
-    }
-  }
-  await page.getByRole("link", { name: label, exact: true }).click();
-}
-
-/** Primer texto visible (los <option> ocultos de los selectores también coinciden con getByText). */
-function seen(page: Page, text: string | RegExp) {
-  return page.getByText(text).locator("visible=true").first();
-}
-
-/** Elige la opción de un <select> cuyo texto contiene `text` (las etiquetas llevan códigos extra). */
-async function pickOption(select: Locator, text: string) {
-  const value = await select.locator("option").evaluateAll(
-    (options, wanted) =>
-      options.find((option) => (option.textContent ?? "").includes(wanted as string))?.getAttribute("value") ?? null,
-    text,
-  );
-  expect(value, `opción que contiene «${text}»`).toBeTruthy();
-  await select.selectOption(value!);
-}
 
 test("alta completa de parámetros para procesar un cliente, desde la UI", async ({ page }) => {
   test.setTimeout(240_000);
