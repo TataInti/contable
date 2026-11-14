@@ -308,19 +308,39 @@ export function DenseToggleGroup({
   );
 }
 
-export function DenseWorkspace({
-  inspector,
-  panelId,
-  children,
-}: {
+/**
+ * Rol del espacio de trabajo. `tabpanel` (por defecto) solo es correcto con su
+ * controlador de pestañas; `region` exige nombre accesible.
+ */
+export type DenseWorkspaceRole = "region" | "tabpanel";
+
+type DenseWorkspaceName =
+  | { "aria-label": string; "aria-labelledby"?: undefined }
+  | { "aria-labelledby": string; "aria-label"?: undefined };
+
+/**
+ * Props de DenseWorkspace. Con `role="region"` el nombre accesible es obligatorio
+ * (se comprueba en el tipo, como `iconOnly` en `Button`). Con `tabpanel` (el valor
+ * por defecto) el nombre es opcional y no cambia.
+ */
+export type DenseWorkspaceProps = {
   inspector?: ReactNode;
   panelId: string;
   children: ReactNode;
-}) {
+} & (
+  | ({ role?: "tabpanel" } & Partial<DenseWorkspaceName>)
+  | ({ role: "region" } & DenseWorkspaceName)
+);
+
+export function DenseWorkspace(props: DenseWorkspaceProps) {
+  const { inspector, panelId, children } = props;
+  const role = props.role ?? "tabpanel";
   return (
     <div
       id={panelId}
-      role="tabpanel"
+      role={role}
+      aria-label={props["aria-label"]}
+      aria-labelledby={props["aria-labelledby"]}
       className={`dense-work${inspector ? " dense-work--inspector" : ""}`}
     >
       <div className="dense-work__main">{children}</div>
