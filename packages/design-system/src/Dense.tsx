@@ -189,6 +189,8 @@ export interface StatItem {
   detail?: string;
   tone?: "warn";
   active?: boolean;
+  /** Solo para ítems con onSelect que alternan un filtro: expone aria-pressed. Sin la prop no se expone. */
+  pressed?: boolean;
   onSelect?: () => void;
 }
 
@@ -217,6 +219,7 @@ export function StatStrip({ items, label }: { items: StatItem[]; label: string }
             variant="text"
             size="row"
             className={className}
+            aria-pressed={item.pressed}
             onClick={item.onSelect}
           >
             {content}
