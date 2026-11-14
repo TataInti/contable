@@ -758,6 +758,21 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  // Abre un mes: períodos y obligaciones de todos los regímenes activos del cliente.
+  app.post("/api/v1/firms/:firmId/clients/:clientId/tax-periods/open-month", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const body = z
+        .object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Indicá el mes como AAAA-MM") })
+        .strict()
+        .parse(req.body);
+      const data = await calendar.openMonth(ctx, { clientId: ctx.clientId!, month: body.month });
+      return reply.code(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.get("/api/v1/firms/:firmId/clients/:clientId/tax-obligations", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     try {

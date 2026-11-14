@@ -4,6 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { IngestionService } from "./ingestion-service.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
+import { TaxCalendarService } from "./fiscal-foundation-service.js";
 import { computeRulesHashV3 } from "./rules-hash.js";
 
 /**
@@ -866,5 +867,26 @@ describe("Fase 4.1 — IIBB Tucumán local: presentación y pago", () => {
     });
     const ob = await prisma.taxObligation.findUnique({ where: { id: obligationId } });
     expect(ob?.status).toBe("PAID");
+  });
+});
+
+describe("Abrir mes — períodos y obligaciones de los regímenes del cliente", () => {
+  it("crea lo que falta, saltea lo que ya existe y se puede repetir", async () => {
+    const calendar = new TaxCalendarService();
+
+    // Enero ya tiene período y obligación en la preparación de la prueba.
+    const january = await calendar.openMonth(ctxOwner, { clientId: CLIENT_IIBB, month: "2026-01" });
+    expect(january).toMatchObject({ regimes: 1, periodsCreated: 0, obligationsCreated: 0 });
+
+    const march = await calendar.openMonth(ctxOwner, { clientId: CLIENT_IIBB, month: "2026-03" });
+    expect(march).toMatchObject({ regimes: 1, periodsCreated: 1, obligationsCreated: 1, label: "Marzo 2026" });
+
+    const again = await calendar.openMonth(ctxOwner, { clientId: CLIENT_IIBB, month: "2026-03" });
+    expect(again).toMatchObject({ periodsCreated: 0, obligationsCreated: 0 });
+
+    const obligations = await prisma.taxObligation.findMany({
+      where: { clientId: CLIENT_IIBB, period: { startDate: new Date("2026-03-01") } },
+    });
+    expect(obligations).toHaveLength(1);
   });
 });

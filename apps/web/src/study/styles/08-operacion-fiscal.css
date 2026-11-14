@@ -1283,3 +1283,17 @@
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-sm);
 }
+
+.fiscal-open-month {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ds-space-3);
+}
+
+.fiscal-open-month__field {
+  display: grid;
+  gap: var(--ds-space-1);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}

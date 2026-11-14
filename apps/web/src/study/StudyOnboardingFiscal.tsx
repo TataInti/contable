@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
 import { api } from "../lib/api";
 import { formatCuit } from "../lib/cuit";
 import { useClientContext } from "../context/ClientContext";
@@ -80,6 +80,12 @@ interface ClientActivityLink {
 }
 
 const today = new Date().toISOString().slice(0, 10);
+/** Mes anterior al actual (AAAA-MM): es el que se liquida normalmente. */
+function previousMonth(): string {
+  const now = new Date();
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  return date.toISOString().slice(0, 7);
+}
 const CONDITION_LABELS = {
   RESPONSABLE_INSCRIPTO: "Responsable Inscripto",
   MONOTRIBUTISTA: "Monotributista",
@@ -143,6 +149,8 @@ export function StudyOnboardingFiscal() {
   const [periodForm, setPeriodForm] = useState({ taxTypeId: "", startDate: today, endDate: today, label: "" });
   const [obligationForm, setObligationForm] = useState({ regimeId: "", periodId: "", dueDate: "" });
   const confirm = useConfirmAction();
+  const notify = useNotify();
+  const [monthToOpen, setMonthToOpen] = useState(previousMonth);
 
   const profileQuery = useQuery({
     queryKey: ["tax-profile", firmId, clientId],
@@ -281,9 +289,27 @@ export function StudyOnboardingFiscal() {
     onSuccess: () => { invalidateClientFiscal(); setObligationForm({ regimeId: "", periodId: "", dueDate: "" }); setOpenFormStep(null); },
   });
 
+  // Abre el mes entero: un período y una obligación por cada régimen del cliente,
+  // con el vencimiento que marca la regla. Lo que ya existe no se toca.
+  const openMonth = useMutation({
+    mutationFn: () =>
+      api.post<{ label: string; regimes: number; periodsCreated: number; obligationsCreated: number }>(
+        `/firms/${firmId}/clients/${clientId}/tax-periods/open-month`,
+        { month: monthToOpen },
+      ),
+    onSuccess: (result) => {
+      invalidateClientFiscal();
+      notify.success(
+        result.periodsCreated === 0 && result.obligationsCreated === 0
+          ? `${result.label} ya estaba abierto: no faltaba ningún período ni obligación.`
+          : `${result.label} quedó abierto: ${result.obligationsCreated} ${result.obligationsCreated === 1 ? "obligación creada" : "obligaciones creadas"}.`,
+      );
+    },
+  });
+
   if (!firmId || !clientId) return <EmptyState title="Seleccioná un cliente" description="Elegí un cliente para configurar su perfil fiscal." />;
 
-  const mutationError = createProfile.error ?? submitReview.error ?? activate.error ?? addRegistration.error ?? addActivity.error ?? cancelRegistration.error ?? endActivity.error ?? createPeriod.error ?? createObligation.error;
+  const mutationError = createProfile.error ?? submitReview.error ?? activate.error ?? addRegistration.error ?? addActivity.error ?? cancelRegistration.error ?? endActivity.error ?? createPeriod.error ?? createObligation.error ?? openMonth.error;
   const openStepForm = (nextStep: FiscalStep) => {
     setOpenFormStep(nextStep);
   };
@@ -512,7 +538,30 @@ export function StudyOnboardingFiscal() {
 
         {tab === "periodos" ? (
           <section className="fiscal-section" aria-labelledby="fiscal-periods-title">
-            <div className="fiscal-client-overview__heading"><h3 id="fiscal-periods-title">Períodos fiscales</h3>{canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("periodos")}>Agregar</Button> : null}</div>
+            <div className="fiscal-client-overview__heading"><h3 id="fiscal-periods-title">Períodos fiscales</h3>{canWrite ? <Button size="sm" variant="ghost" onClick={() => openStepForm("periodos")}>Agregar</Button> : null}</div>
+            {canWrite ? (
+              <form
+                className="fiscal-open-month"
+                onSubmit={(event) => { event.preventDefault(); openMonth.mutate(); }}
+              >
+                <label className="fiscal-open-month__field">
+                  <span>Mes a liquidar</span>
+                  <input
+                    className="ds-field__input"
+                    type="month"
+                    value={monthToOpen}
+                    onChange={(event) => setMonthToOpen(event.target.value)}
+                    required
+                  />
+                </label>
+                <Button type="submit" size="sm" variant="secondary" loading={openMonth.isPending} disabled={!monthToOpen}>
+                  Abrir mes
+                </Button>
+                <small className="muted-copy">
+                  Crea el período y la obligación de cada régimen del cliente, con su vencimiento.
+                </small>
+              </form>
+            ) : null}
             {periodsQuery.isLoading ? <p className="muted-copy">Cargando períodos…</p> : (periodsQuery.data?.length ?? 0) === 0 ? <EmptyState size="compact" title="Todavía no hay períodos fiscales" description="Creá el período de cada impuesto para poder abrir su obligación." /> : <Table<TaxPeriod> rows={periodsQuery.data ?? []} rowKey={(row) => row.id} columns={[
               { key: "tax", header: "Impuesto", render: (row) => <strong>{row.taxType.name}{!row.taxType.isActive ? " (oculto)" : ""}</strong> },
               { key: "period", header: "Período", render: (row) => <>{periodName(row)}</> },
