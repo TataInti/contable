@@ -3,7 +3,14 @@ import { Button } from "@contable/design-system";
 import { Icon } from "./Icon";
 import "@contable/design-system/Dense.css";
 
-export type { DenseDensity, DenseColumn, StatItem } from "@contable/design-system";
+export type {
+  DenseDensity,
+  DenseColumn,
+  DenseSurface,
+  DenseWorkspaceProps,
+  DenseWorkspaceRole,
+  StatItem,
+} from "@contable/design-system";
 export {
   DenseToggleGroup,
   DenseFooter,

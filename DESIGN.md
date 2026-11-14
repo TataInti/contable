@@ -329,12 +329,12 @@ Foco organiza esos componentes en **nueve familias, C01 a C09**. Cada familia ti
 | Familia | Componentes base | Estado de la base |
 |---|---|---|
 | C01 — Encabezado y acciones | `DenseHeader`, `Button`, `Icon` | Vigente en main |
-| C02 — Secciones de lectura | `DensePage`, `DenseSection` | Vigente en main; `surface` pendiente |
-| C03 — Indicadores con alcance | `StatStrip`, `StatItem` | Vigente en main; `pressed` pendiente |
-| C04 — Tablas y agrupación | `Table`, `DenseTable`, `DenseGroup`, `DenseFooter` | Vigente en main, con `groupBy`; `surface` pendiente |
+| C02 — Secciones de lectura | `DensePage`, `DenseSection` | Vigente en main, con `surface` |
+| C03 — Indicadores con alcance | `StatStrip`, `StatItem` | Vigente en main, con `pressed` |
+| C04 — Tablas y agrupación | `Table`, `DenseTable`, `DenseGroup`, `DenseFooter` | Vigente en main, con `groupBy` y `surface` |
 | C05 — Filtros y navegación | `DenseToolbar`, `DenseTabs`, `DenseSearch`, `DenseToggleGroup`, `SectionIndex` | Vigente en main |
-| C06 — Lista y detalle | `DenseWorkspace`, `Inspector`, `InspectorSection`, `InspectorFacts` | Vigente en main; `role` configurable pendiente |
-| C07 — Carga, error y vacío | `AsyncState`, `DenseLoading`, `EmptyState` | Vigente en main; `size="inline"` pendiente |
+| C06 — Lista y detalle | `DenseWorkspace`, `Inspector`, `InspectorSection`, `InspectorFacts` | Vigente en main, con `role` y nombre accesible |
+| C07 — Carga, error y vacío | `AsyncState`, `DenseLoading`, `EmptyState` | Vigente en main, con `size="inline"` |
 | C08 — Estado y mensajes | `StatusBadge`, `Notice`, `ToastProvider`/`useNotify` | Vigente en main |
 | C09 — Paneles y confirmación | `ActionDrawer`, `ConfirmAction`/`ConfirmDialog`, `DeletionDrawer`, `Field`, `MoneyField`, `Switch` | Vigente en main |
 
@@ -344,15 +344,24 @@ Cada extensión es una prop opcional sobre un componente existente. Mientras su 
 
 | Base | Pieza | Estado | Condición de compatibilidad |
 |---|---|---|---|
-| `DenseSection` | `surface?: "integrated" \| "outlined"` | Extensión aprobada, implementación pendiente | Adición opcional. `integrated` aplica Foco; `outlined` queda para límites operables justificados. El valor por defecto global se define cuando migraron los consumidores |
-| `DenseTable` | `surface?: "integrated" \| "outlined"` | Extensión aprobada, implementación pendiente | Mismo criterio. Conserva selección, ordenación, `groupBy` y densidad; sigue siendo la misma tabla |
-| `StatItem` | `pressed?: boolean` | Extensión aprobada, implementación pendiente | Para ítems que alternan un filtro. `active` y `onSelect` se mantienen. Un ítem que navega conserva semántica de enlace |
-| `DenseWorkspace` | `role?: "region" \| "tabpanel"` y nombre accesible | Extensión aprobada, implementación pendiente | Los consumidores migran con rol explícito; `tabpanel` requiere su controlador de pestañas. El valor por defecto heredado se cambia con inventario de consumidores |
-| `EmptyState` | `size?: "inline"` (se suma a `regular` y `compact`) | Extensión aprobada, implementación pendiente | Variante mínima para ausencias secundarias. `compact`, `regular`, `no-data` y `no-results` se mantienen |
+| `DenseSection` | `surface?: "integrated" \| "outlined"` | Vigente en main | Adición opcional. `integrated` aplica Foco; `outlined` queda para límites operables justificados. El valor por defecto global se define cuando migraron los consumidores |
+| `DenseTable` | `surface?: "integrated" \| "outlined"` | Vigente en main | Mismo criterio. Conserva selección, ordenación, `groupBy` y densidad; sigue siendo la misma tabla |
+| `StatItem` | `pressed?: boolean` | Vigente en main | Para ítems que alternan un filtro. `active` y `onSelect` se mantienen. Un ítem que navega conserva semántica de enlace |
+| `DenseWorkspace` | `role?: "region" \| "tabpanel"` y nombre accesible | Vigente en main | Los consumidores migran con rol explícito; `tabpanel` requiere su controlador de pestañas. El valor por defecto heredado se cambia con inventario de consumidores |
+| `EmptyState` | `size?: "inline"` (se suma a `regular` y `compact`) | Vigente en main | Variante mínima para ausencias secundarias. `compact`, `regular`, `no-data` y `no-results` se mantienen |
 | `DenseToggleGroup` | Selección múltiple con `aria-pressed` | Vigente en main (#91) | Se preserva en toda migración visual |
 | `DenseTable` | `groupBy(row)` con encabezado de grupo y conteo | Vigente en main (#91) | Se preserva en toda migración visual |
 | `ActionDrawer` | `initialFocus?: "content" \| "close"` | Vigente en main | Sin cambios |
 | `Notice`, `ToastProvider`, `ActionDrawer` | API actual | Vigente en main | Foco ajusta consumo, composición y pruebas; la API queda igual |
+
+#### Uso de las extensiones Foco
+
+Cada extensión es una prop opcional. Sin ella, la pieza conserva su marcado y su semántica actuales. Las pantallas Foco la eligen de forma explícita; el valor por defecto global se decide en un corte posterior, con el inventario de consumidores.
+
+- `DenseSection` y `DenseTable` con `surface`: usá `integrated` para leer sobre el lienzo. La sección se separa con `--ds-color-border-subtle` y la escala de espaciado; la tabla queda sin marco ni fondo y conserva selección, orden, `groupBy` y densidad. Usá `outlined` solo en un límite operable justificado. Uso incorrecto: encerrar en `outlined` datos de solo lectura por costumbre.
+- `StatItem` con `pressed`: usalo en el ítem que alterna un filtro, junto con `onSelect` y `active`, para que `aria-pressed` refleje el filtro. Uso incorrecto: marcar `pressed` en un ítem que navega o en un texto sin `onSelect`.
+- `DenseWorkspace` con `role`: usá `region` con nombre accesible cuando la pantalla no tiene pestañas. Usá `tabpanel` cuando un `DenseTabs` lo controla (su `idPrefix` seguido de `-panel` es el `panelId`). Uso incorrecto: `tabpanel` sin una pestaña que lo controle.
+- `EmptyState` con `size="inline"`: usalo para una ausencia secundaria dentro de una sección, con su `kind`, título, descripción y acción. Uso incorrecto: un vacío de página completa o un estado de carga, que va en `AsyncState`.
 
 ### C01 — Encabezado y acciones
 
@@ -437,7 +446,7 @@ Los dos primeros quedan como acción primaria por defecto. Elegí la jerarquía 
 
 ### C02 — Secciones de lectura
 
-**Base:** `DensePage`, `DenseSection`. **Estado:** `DenseSection` con `id`, `title`, `count`, `description` y `actions` vigente en main; `surface` es extensión aprobada, implementación pendiente.
+**Base:** `DensePage`, `DenseSection`. **Estado:** vigente en main, incluida la prop `surface`.
 
 | Campo | Contrato |
 |---|---|
@@ -457,7 +466,7 @@ Los dos primeros quedan como acción primaria por defecto. Elegí la jerarquía 
 
 ### C03 — Indicadores con alcance
 
-**Base:** `StatStrip`, `StatItem`. **Estado:** vigente en main; `pressed` es extensión aprobada, implementación pendiente.
+**Base:** `StatStrip`, `StatItem`. **Estado:** vigente en main, incluida la prop `pressed`.
 
 | Campo | Contrato |
 |---|---|
@@ -479,7 +488,7 @@ Sólo van cifras de la lista que se ve (cantidades, pendientes); el estudio, el 
 
 ### C04 — Tablas y agrupación
 
-**Base:** `Table`, `DenseTable`, `DenseGroup`, `DenseFooter`. **Estado:** vigente en main, incluida la agrupación `groupBy` (#91); `surface` es extensión aprobada, implementación pendiente.
+**Base:** `Table`, `DenseTable`, `DenseGroup`, `DenseFooter`. **Estado:** vigente en main, incluidas la agrupación `groupBy` (#91) y la prop `surface`.
 
 | Campo | Contrato |
 |---|---|
@@ -566,7 +575,7 @@ Cada `id` debe coincidir con un destino único de la misma vista.
 
 ### C06 — Lista y detalle
 
-**Base:** `DenseWorkspace`, `Inspector`, `InspectorSection`, `InspectorFacts`. **Estado:** vigente en main con `role="tabpanel"` fijo; el `role` configurable con nombre accesible es extensión aprobada, implementación pendiente.
+**Base:** `DenseWorkspace`, `Inspector`, `InspectorSection`, `InspectorFacts`. **Estado:** vigente en main, con `role` configurable y nombre accesible; el valor por defecto sigue siendo `tabpanel`.
 
 | Campo | Contrato |
 |---|---|
@@ -586,12 +595,12 @@ Cada `id` debe coincidir con un destino único de la misma vista.
 
 ### C07 — Carga, error y vacío
 
-**Base:** `AsyncState`, `DenseLoading`, `EmptyState`. **Estado:** vigente en main; `size="inline"` es extensión aprobada, implementación pendiente.
+**Base:** `AsyncState`, `DenseLoading`, `EmptyState`. **Estado:** vigente en main, incluida la variante `size="inline"`.
 
 | Campo | Contrato |
 |---|---|
 | Propósito y límite | Distinguir ausencia confirmada, fallo, falta de acceso y datos todavía sin resolver |
-| Entradas | `EmptyState`: `title`, `description?`, `action?`, `size` (`regular` o `compact`) y `kind` (`no-data` o `no-results`). `AsyncState` conserva el reintento |
+| Entradas | `EmptyState`: `title`, `description?`, `action?`, `size` (`regular`, `compact` o `inline`) y `kind` (`no-data` o `no-results`). `AsyncState` conserva el reintento |
 | Variantes | `size="inline"` para ausencias secundarias. Un bloque condicional se omite únicamente después de una respuesta exitosa y vacía |
 | Anatomía | Mensaje proporcional al lugar que ocupa. El error queda junto a la fuente afectada |
 | Estados | Datos, carga inicial, vacío confirmado, sin coincidencias, error local o parcial, restricción de acceso, actualización con datos previos identificados |
@@ -609,7 +618,7 @@ Todo vacío o bloqueo guía (P1): dice qué falta y ofrece el enlace o botón qu
 #### EmptyState
 
 - **Propósito:** indicar qué falta con un título, una explicación breve y una única acción primaria cuando hay un paso disponible; tamaño regular o compacto.
-- **Props/variantes:** `title` obligatorio; `description` comunica una explicación breve; `action` acepta una sola `ReactElement`, `kind` (`no-data` por defecto o `no-results`), `size` (`regular` por defecto o `compact`), atributos nativos de `div`. `data-empty-kind` comunica el motivo sin depender del color.
+- **Props/variantes:** `title` obligatorio; `description` comunica una explicación breve; `action` acepta una sola `ReactElement`, `kind` (`no-data` por defecto o `no-results`), `size` (`regular` por defecto, `compact` o `inline`), atributos nativos de `div`. `data-empty-kind` comunica el motivo sin depender del color.
 - **Estados:** no tiene estados interactivos propios; el visual es decorativo y se oculta del árbol accesible. La acción conserva su semántica a través del control hijo.
 - **Correcto:**
 
@@ -941,14 +950,14 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 | `DenseDensity`, `useDensity` | `DenseDensity` admite `28`, `32` y `40`; `useDensity()` devuelve `[density, setDensity]`, persiste la elección en `contable.dense.rowHeight` y usa `32` como valor inicial o de respaldo. |
 | `normalizeSearch(value)` | Normaliza texto a minúsculas, sin tildes y sin espacios al inicio o al final. |
 | `DensePage` | Requiere `density` y `children`; acepta `flow` (por defecto `false`) y `className`. |
-| `DenseSection` | Requiere `title` y `children`; acepta `id`, `count`, `description` y `actions`. |
+| `DenseSection` | Requiere `title` y `children`; acepta `id`, `count`, `description`, `actions` y `surface` (`integrated` u `outlined`; sin la prop, la presentación actual). |
 | `DenseHeader` | Requiere `title`; acepta `description` y `actions`. |
-| `StatStrip`, `StatItem` | `StatStrip` requiere `items` y `label`. Cada item requiere `key`, `label` y `value`; acepta `detail`, `tone="warn"`, `active` y `onSelect`. Un item seleccionable se representa como botón. |
+| `StatStrip`, `StatItem` | `StatStrip` requiere `items` y `label`. Cada item requiere `key`, `label` y `value`; acepta `detail`, `tone="warn"`, `active`, `onSelect` y `pressed`. Un item seleccionable se representa como botón; `pressed` expone `aria-pressed` solo en un item que alterna un filtro. |
 | `DenseToolbar` | Agrupa `children` dentro de la barra de herramientas. |
 | `DensitySwitch` | Requiere `value: DenseDensity` y `onChange(next)`. |
 | `DenseToggleGroup`, `DenseToggleOption` | Requiere `label`, `options` (pares `value` y `label`), `selected` (valores activos) y `onChange(next)`; cada opción es un botón con `aria-pressed` y `next` sigue el orden de `options`. |
-| `DenseWorkspace` | Requiere `panelId` y `children`; acepta `inspector` para habilitar la columna lateral. |
-| `DenseTable`, `DenseColumn<T>` | `DenseTable<T>` requiere `label`, `columns`, `rows` y `rowKey`; acepta `selectedKey`, `onSelect`, `rowClassName`, `empty`, `footer`, `inspectorOpen` y `groupBy`. `groupBy(row)` devuelve `{ key, label, order }`: agrupa las filas bajo un encabezado con su conteo, ordenado por `order`; el teclado salta los encabezados. Cada columna requiere `key`, `header` y `render`; acepta `sortValue`, `secondary`, `align="right"`, `width`, `className` y `sticky="right"`. |
+| `DenseWorkspace` | Requiere `panelId` y `children`; acepta `inspector` para habilitar la columna lateral y `role` (`tabpanel` por defecto, o `region`, que exige `aria-label` o `aria-labelledby` en el tipo). |
+| `DenseTable`, `DenseColumn<T>` | `DenseTable<T>` requiere `label`, `columns`, `rows` y `rowKey`; acepta `selectedKey`, `onSelect`, `rowClassName`, `empty`, `footer`, `inspectorOpen`, `groupBy` y `surface` (`integrated` u `outlined`). `groupBy(row)` devuelve `{ key, label, order }`: agrupa las filas bajo un encabezado con su conteo, ordenado por `order`; el teclado salta los encabezados. Cada columna requiere `key`, `header` y `render`; acepta `sortValue`, `secondary`, `align="right"`, `width`, `className` y `sticky="right"`. |
 | `ShortcutHint` | Requiere `items`, una lista de pares `[tecla, descripción]`. |
 | `DenseFooter` | Requiere `count` y `noun`; acepta `hint` y `newShortcut` (por defecto `true`). |
 | `DenseLoading` | Requiere `label`; anuncia la carga con `role="status"`. |
@@ -1250,10 +1259,10 @@ Cada brecha es un compromiso del PR que implementa su pieza. Base de verificaci�
 
 | Nº | Pieza | Situación en main | Compromiso | Tipo |
 |---|---|---|---|---|
-| G01 | `DenseSection`, `DenseTable` | Composición con marcos en los consumidores heredados | `surface="integrated"` opcional y migración explícita, consumidor por consumidor | Extensión aprobada, implementación pendiente |
-| G02 | `StatStrip` | El ítem de filtro marca `active` de forma visual y sus botones no exponen `aria-pressed` | `pressed` comunica la selección en los ítems que alternan un filtro; los que navegan son enlaces | Extensión aprobada, implementación pendiente |
-| G03 | `DenseWorkspace` | `role="tabpanel"` fijo, también en pantallas sin pestañas | `role="region"` con nombre, o `tabpanel` con su controlador | Extensión aprobada, implementación pendiente |
-| G04 | `EmptyState` | Tamaños `regular` y `compact` | `size="inline"` para ausencias secundarias | Extensión aprobada, implementación pendiente |
+| G01 | `DenseSection`, `DenseTable` | Composición con marcos en los consumidores heredados | `surface="integrated"` opcional y migración explícita, consumidor por consumidor | Vigente en main |
+| G02 | `StatStrip` | El ítem de filtro marca `active` de forma visual y sus botones no exponen `aria-pressed` | `pressed` comunica la selección en los ítems que alternan un filtro; los que navegan son enlaces | Vigente en main |
+| G03 | `DenseWorkspace` | `role="tabpanel"` fijo, también en pantallas sin pestañas | `role="region"` con nombre, o `tabpanel` con su controlador | Vigente en main |
+| G04 | `EmptyState` | Tamaños `regular` y `compact` | `size="inline"` para ausencias secundarias | Vigente en main |
 | G05 | `PendingFilingReceipts` | Usa `query.data ?? []` y devuelve `null` con cero filas, sin separar carga y error | Estados locales de carga y de error con Reintentar; el bloque se omite únicamente tras una respuesta vacía | Corrección de presentación sobre código verificado |
 | G06 | «Actualizar» de Inicio (`StudyDashboard`) | Refresca resumen y liquidaciones en curso | Incluye la consulta de constancias y dice qué alcanza la actualización | Corrección de presentación sobre código verificado |
 | G07 | Inicio | El orden visual entre circuitos no define una prioridad fiscal | **Decisión de producto pendiente de Inti.** Hasta entonces se conservan a la vista correcciones, constancias y vencimientos, en el orden vigente | Producto pendiente |

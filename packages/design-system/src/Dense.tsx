@@ -20,6 +20,13 @@ import { Button } from "./Button.js";
 
 export type DenseDensity = 28 | 32 | 40;
 
+/**
+ * Superficie de una sección o una tabla. `integrated` se lee sobre el lienzo;
+ * `outlined` pide la presentación heredada de forma explícita. Sin la prop no
+ * se agrega ningún modificador: el marcado es el de siempre.
+ */
+export type DenseSurface = "integrated" | "outlined";
+
 const DENSITY_STORAGE_KEY = "contable.dense.rowHeight";
 const DENSITIES: ReadonlyArray<{ value: DenseDensity; label: string }> = [
   { value: 28, label: "Compacta" },
@@ -119,6 +126,7 @@ export function DenseSection({
   count,
   description,
   actions,
+  surface,
   children,
 }: {
   id?: string;
@@ -126,11 +134,17 @@ export function DenseSection({
   count?: ReactNode;
   description?: string;
   actions?: ReactNode;
+  /** Sin la prop se conserva la presentación actual; `integrated` aplica Foco. */
+  surface?: DenseSurface;
   children: ReactNode;
 }) {
   const headingId = id ? `${id}-title` : undefined;
   return (
-    <section id={id} className="dense-block" aria-labelledby={headingId}>
+    <section
+      id={id}
+      className={`dense-block${surface ? ` dense-block--${surface}` : ""}`}
+      aria-labelledby={headingId}
+    >
       <header className="dense-block__head">
         <h2 id={headingId}>
           {title}
@@ -175,6 +189,8 @@ export interface StatItem {
   detail?: string;
   tone?: "warn";
   active?: boolean;
+  /** Solo para ítems con onSelect que alternan un filtro: expone aria-pressed. Sin la prop no se expone. */
+  pressed?: boolean;
   onSelect?: () => void;
 }
 
@@ -203,6 +219,7 @@ export function StatStrip({ items, label }: { items: StatItem[]; label: string }
             variant="text"
             size="row"
             className={className}
+            aria-pressed={item.pressed}
             onClick={item.onSelect}
           >
             {content}
@@ -291,19 +308,39 @@ export function DenseToggleGroup({
   );
 }
 
-export function DenseWorkspace({
-  inspector,
-  panelId,
-  children,
-}: {
+/**
+ * Rol del espacio de trabajo. `tabpanel` (por defecto) solo es correcto con su
+ * controlador de pestañas; `region` exige nombre accesible.
+ */
+export type DenseWorkspaceRole = "region" | "tabpanel";
+
+type DenseWorkspaceName =
+  | { "aria-label": string; "aria-labelledby"?: undefined }
+  | { "aria-labelledby": string; "aria-label"?: undefined };
+
+/**
+ * Props de DenseWorkspace. Con `role="region"` el nombre accesible es obligatorio
+ * (se comprueba en el tipo, como `iconOnly` en `Button`). Con `tabpanel` (el valor
+ * por defecto) el nombre es opcional y no cambia.
+ */
+export type DenseWorkspaceProps = {
   inspector?: ReactNode;
   panelId: string;
   children: ReactNode;
-}) {
+} & (
+  | ({ role?: "tabpanel" } & Partial<DenseWorkspaceName>)
+  | ({ role: "region" } & DenseWorkspaceName)
+);
+
+export function DenseWorkspace(props: DenseWorkspaceProps) {
+  const { inspector, panelId, children } = props;
+  const role = props.role ?? "tabpanel";
   return (
     <div
       id={panelId}
-      role="tabpanel"
+      role={role}
+      aria-label={props["aria-label"]}
+      aria-labelledby={props["aria-labelledby"]}
       className={`dense-work${inspector ? " dense-work--inspector" : ""}`}
     >
       <div className="dense-work__main">{children}</div>
@@ -347,6 +384,7 @@ export function DenseTable<T>({
   footer,
   inspectorOpen,
   groupBy,
+  surface,
 }: {
   label: string;
   columns: ReadonlyArray<DenseColumn<T>>;
@@ -360,6 +398,8 @@ export function DenseTable<T>({
   inspectorOpen?: boolean;
   /** Agrupa las filas bajo un encabezado con su conteo. */
   groupBy?: (row: T) => DenseGroup;
+  /** Sin la prop se conserva la presentación actual; `integrated` aplica Foco. */
+  surface?: DenseSurface;
 }) {
   const [sort, setSort] = useState<{ key: string; direction: 1 | -1 } | null>(null);
   const sortedRows = useMemo(() => {
@@ -419,7 +459,7 @@ export function DenseTable<T>({
   };
 
   return (
-    <div className="dense-table-card">
+    <div className={`dense-table-card${surface ? ` dense-table-card--${surface}` : ""}`}>
       <div className="dense-table-scroll">
         {sorted.length === 0 ? (
           (empty ?? <div className="dense-empty">Sin resultados</div>)

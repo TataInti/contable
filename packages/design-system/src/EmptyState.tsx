@@ -1,7 +1,8 @@
 import type { HTMLAttributes, ReactElement } from "react";
 import "./EmptyState.css";
 
-export type EmptyStateSize = "regular" | "compact";
+/** `inline`: ausencia secundaria dentro de una sección, en una línea y sin bloque visual. */
+export type EmptyStateSize = "regular" | "compact" | "inline";
 export type EmptyStateKind = "no-data" | "no-results";
 
 export interface EmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
