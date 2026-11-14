@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readStudyStyles } from "./studyStyles.testutil";
 
 function readSource(path: string) {
   return readFileSync(resolve(process.cwd(), path), "utf8");
@@ -8,7 +9,7 @@ function readSource(path: string) {
 
 const denseStyles = readSource("../../packages/design-system/src/Dense.css");
 const drawerStyles = readSource("../../packages/design-system/src/ActionDrawer.css");
-const studyStyles = readSource("src/study/study.css");
+const studyStyles = readStudyStyles();
 const onboardingSource = readSource("src/study/StudyOnboardingFiscal.tsx");
 
 describe("regresiones visuales F3b-3", () => {

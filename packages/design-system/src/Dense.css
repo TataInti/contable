@@ -261,17 +261,6 @@
   flex: 1;
 }
 
-.dense-toolbar__count {
-  color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.dense-toolbar__hint {
-  color: var(--ds-color-text-faint);
-  font-size: var(--ds-text-xs);
-}
-
 .dense-search {
   position: relative;
   display: flex;
@@ -861,10 +850,6 @@
   border-top: var(--ds-border-width) solid var(--ds-color-border-subtle);
 }
 
-.dense-inspector__foot .dense-push {
-  margin-left: auto;
-}
-
 .dense-inspector__close {
   flex: none;
 }
@@ -994,18 +979,6 @@
   margin-top: 1px;
 }
 
-.dense-note--ok {
-  border-color: color-mix(in srgb, var(--ds-color-success) 22%, transparent);
-  background: var(--ds-color-success-subtle);
-  color: var(--ds-color-success);
-}
-
-.dense-note--warn {
-  border-color: color-mix(in srgb, var(--ds-color-warning) 28%, transparent);
-  background: var(--ds-color-warning-subtle);
-  color: var(--ds-color-warning);
-}
-
 /* ───────── Formularios en ActionDrawer ───────── */
 .study-form.dense-form {
   display: grid;
@@ -1094,12 +1067,6 @@
   font-size: var(--ds-text-sm);
 }
 
-.dense-fp {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
 .dense-fp__bars {
   display: inline-flex;
   gap: 2px;
@@ -1110,11 +1077,6 @@
   height: 12px;
   border-radius: 2px;
   background: var(--ds-color-border-subtle);
-}
-
-.dense-fp__bars i.is-on {
-  background: var(--ds-color-primary);
-  opacity: 0.85;
 }
 
 .dense-row-actions {
@@ -1368,43 +1330,6 @@
   min-width: 0;
 }
 
-.dense-two-col {
-  display: grid;
-  gap: var(--ds-space-4);
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-  align-items: start;
-}
-
-.dense-kv {
-  display: grid;
-  gap: 1px 24px;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  margin: 0;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border: 1px solid var(--ds-color-border);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-color-surface);
-  font-size: var(--ds-text-sm);
-}
-
-.dense-kv > div {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--ds-space-3);
-  padding: 4px 0;
-  border-bottom: 1px solid var(--ds-color-border);
-}
-
-.dense-kv dt {
-  color: var(--ds-color-text-muted);
-}
-
-.dense-kv dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
 /* Resumen del paquete: metadatos en una sola línea. */
 .dense-page .fiscal-rule-summary {
   padding: var(--ds-space-3) var(--ds-space-4);
@@ -1452,8 +1377,7 @@
 }
 
 .dense-page--flow .study-panel__heading h2,
-.dense-page--flow .study-page__section-title,
-.dense-page--flow .collection-toolbar h2 {
+.dense-page--flow .study-page__section-title {
   font-size: var(--ds-text-lg);
 }
 
@@ -1471,10 +1395,6 @@
 .dense-page--flow .ds-table__wrapper {
   max-height: var(--dense-flow-max, 420px);
   overflow: auto;
-}
-
-.dense-page--flow .collection-toolbar {
-  margin-bottom: var(--ds-space-2);
 }
 
 .dense-page--flow .work-columns {

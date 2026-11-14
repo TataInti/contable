@@ -253,11 +253,29 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/RuleSimulator.css": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/RuleSimulator.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/RuleSimulator.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/study.css": {
-      "fontSize": 17,
-      "spacing": 49,
-      "radius": 10,
-      "color": 11
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
     },
     "apps/web/src/study/StudyAdministracion.test.tsx": {
       "fontSize": 0,
@@ -439,6 +457,72 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/styles/01-base.css": {
+      "fontSize": 2,
+      "spacing": 9,
+      "radius": 1,
+      "color": 0
+    },
+    "apps/web/src/study/styles/02-cartera.css": {
+      "fontSize": 0,
+      "spacing": 2,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/styles/03-documentos.css": {
+      "fontSize": 0,
+      "spacing": 7,
+      "radius": 3,
+      "color": 0
+    },
+    "apps/web/src/study/styles/04-trabajo-contabilidad.css": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 1,
+      "color": 0
+    },
+    "apps/web/src/study/styles/05-asistente.css": {
+      "fontSize": 0,
+      "spacing": 6,
+      "radius": 4,
+      "color": 0
+    },
+    "apps/web/src/study/styles/06-reportes-administracion.css": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/styles/07-rentabilidad.css": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 1
+    },
+    "apps/web/src/study/styles/08-operacion-fiscal.css": {
+      "fontSize": 0,
+      "spacing": 3,
+      "radius": 1,
+      "color": 5
+    },
+    "apps/web/src/study/styles/09-ficha-cliente.css": {
+      "fontSize": 0,
+      "spacing": 3,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/styles/10-indice-detalle.css": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/styles/11-bandeja-y-ajustes.css": {
+      "fontSize": 3,
+      "spacing": 4,
+      "radius": 0,
+      "color": 1
+    },
     "apps/web/src/study/WorkpaperSourceReviewAction.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -596,8 +680,8 @@
       "color": 0
     },
     "packages/design-system/src/Dense.css": {
-      "fontSize": 18,
-      "spacing": 82,
+      "fontSize": 16,
+      "spacing": 76,
       "radius": 2,
       "color": 0
     },
@@ -697,6 +781,24 @@
       "radius": 0,
       "color": 0
     },
+    "packages/design-system/src/Switch.css": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Switch.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Switch.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "packages/design-system/src/Table.css": {
       "fontSize": 0,
       "spacing": 0,
@@ -704,6 +806,24 @@
       "color": 0
     },
     "packages/design-system/src/Table.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Toast.css": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Toast.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Toast.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,

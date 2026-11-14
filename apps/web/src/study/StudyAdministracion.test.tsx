@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { api } from "../lib/api";
 import { StudyAdministracion } from "./StudyAdministracion";
+import { readStudyStyles } from "./studyStyles.testutil";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -191,7 +192,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     );
     expect(await screen.findByText("Activada")).toBeTruthy();
     expect(screen.getByText(/reduce el control interno de cuatro ojos/)).toBeTruthy();
-    const studyStyles = readFileSync(resolve(process.cwd(), "src/study/study.css"), "utf8");
+    const studyStyles = readStudyStyles();
     expect(studyStyles).toMatch(/\.self-review-setting__title\s*\{[^}]*font-size:\s*var\(--ds-text-base\)/);
   });
 
@@ -307,7 +308,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(Array.from(rowActions).every((action) => action.classList.contains("ds-button--row"))).toBe(true);
     expect(page.querySelectorAll(".dense-fp__bars")).toHaveLength(0);
 
-    const studyStyles = readFileSync(resolve(process.cwd(), "src/study/study.css"), "utf8");
+    const studyStyles = readStudyStyles();
     const tokens = readFileSync(resolve(process.cwd(), "../../packages/design-system/src/tokens.css"), "utf8");
     expect(studyStyles).toMatch(/\.administration-users \.dense-select--inline\s*\{[^}]*height:\s*var\(--ds-control-height-sm\);[^}]*min-height:\s*var\(--ds-control-height-sm\);[^}]*font-size:\s*var\(--ds-text-sm\);/);
     expect(studyStyles).not.toMatch(/\.administration-users \.dense-row-actions \.ds-button\s*\{[^}]*min-height:\s*var\(--ds-touch-target\);/);
@@ -408,7 +409,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(email.getAttribute("aria-invalid")).toBe("true");
     expect(api.patch).not.toHaveBeenCalled();
 
-    const studyStyles = readFileSync(resolve(process.cwd(), "src/study/study.css"), "utf8");
+    const studyStyles = readStudyStyles();
     expect(studyStyles).toMatch(/\.administration-users \.administration-user-edit-form\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
     expect(studyStyles).toMatch(/\.administration-users \.dense-inspector__foot \.dense-row-actions\s*\{[^}]*flex-wrap:\s*wrap/);
   });
@@ -613,7 +614,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(document.querySelectorAll(".administration-profile__facts > div")).toHaveLength(4);
     expect(screen.queryByRole("searchbox")).toBeNull();
     expect(document.querySelector(".dense-toolbar")).toBeNull();
-    const studyStyles = readFileSync(resolve(process.cwd(), "src/study/study.css"), "utf8");
+    const studyStyles = readStudyStyles();
     expect(studyStyles).toMatch(/\.administration-profile__facts\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
     fireEvent.click(await screen.findByRole("button", { name: "Editar datos" }));
     fireEvent.change(await screen.findByLabelText("Razón social"), {

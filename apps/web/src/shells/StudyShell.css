@@ -537,8 +537,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .study__sidebar,
-  .study__nav-link,
-  .study__nav-chevron {
+  .study__nav-link {
     transition: none;
   }
 }
