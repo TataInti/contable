@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Notice } from "@contable/design-system";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type FiscalYear } from "../lib/api";
@@ -76,6 +76,7 @@ export function StudyDashboard() {
     useClientContext();
   const { me } = useSession();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const canReadDashboard = capabilities.has("client.read");
   const canReadTaxWorklist = capabilities.has("tax.settlements.read");
   const [openingSettlementId, setOpeningSettlementId] = useState<string | null>(null);
@@ -93,6 +94,9 @@ export function StudyDashboard() {
     queryFn: () => api.get<WorklistItem[]>(`/firms/${firmId}/portfolio/tax-worklist`),
     enabled: Boolean(firmId && canReadTaxWorklist),
   });
+  // G06: las constancias las consulta PendingFilingReceipts; se cuentan acá para el estado de «Actualizar».
+  const receiptsFetching = useIsFetching({ queryKey: ["pending-filing-receipts", firmId] }) > 0;
+  const refreshing = query.isFetching || worklistQuery.isFetching || receiptsFetching;
   const firmName = me?.firms.find((firm) => firm.firmId === firmId)?.firmName;
   if (!firmId)
     return (
@@ -104,6 +108,10 @@ export function StudyDashboard() {
       </div>
     );
   const data = query.data;
+  const hasPrevious = data !== undefined || worklistQuery.data !== undefined;
+  // Un dato sin respuesta dice «pendiente» o «no disponible»; el cero queda para una respuesta confirmada.
+  const pendingOr = (value: number | undefined): number | string =>
+    value ?? (query.isError ? "no disponible" : "pendiente");
   // "En curso" deja afuera lo finalizado y lo reemplazado: lo finalizado sin presentar
   // ya figura en el recordatorio de constancias.
   const worklist = (worklistQuery.data ?? []).filter(
@@ -118,15 +126,15 @@ export function StudyDashboard() {
     icon: IconName;
     label: string;
     detail: string;
-    count: number;
+    count: number | string;
     tone: string;
   }[] = [
     {
       to: "/bandeja",
       icon: "inbox",
       label: "Documentos en procesamiento",
-      detail: `${data?.extracted ?? 0} listos para revisar`,
-      count: data?.processing ?? 0,
+      detail: data ? `${data.extracted} listos para revisar` : "Pendiente de consulta",
+      count: pendingOr(data?.processing),
       tone: "info",
     },
     {
@@ -134,7 +142,7 @@ export function StudyDashboard() {
       icon: "message",
       label: "Pedidos documentales abiertos",
       detail: "Seguimiento con clientes",
-      count: data?.openRequests ?? 0,
+      count: pendingOr(data?.openRequests),
       tone: "warn",
     },
     {
@@ -142,7 +150,7 @@ export function StudyDashboard() {
       icon: "calendar",
       label: "Obligaciones pendientes",
       detail: "Todavía sin presentar",
-      count: data?.pendingObligations ?? 0,
+      count: pendingOr(data?.pendingObligations),
       tone: "danger",
     },
   ];
@@ -339,7 +347,7 @@ export function StudyDashboard() {
     <Inspector
       label="Mesa de trabajo"
       title="Tu mesa de trabajo"
-      subtitle={attentionTotal > 0 ? "Priorizado por urgencia" : "Sin pendientes"}
+      subtitle={data ? (attentionTotal > 0 ? "Priorizado por urgencia" : "Sin pendientes") : undefined}
     >
       <ul className="dense-agenda">
         {workItems.map((item) => (
@@ -360,9 +368,9 @@ export function StudyDashboard() {
       <InspectorSection title="Panorama general">
         <InspectorFacts
           items={[
-            ["Clientes activos", data?.clients ?? 0],
-            ["Documentos recibidos", data?.documents ?? 0],
-            ["Con datos extraídos", data?.extracted ?? 0],
+            ["Clientes activos", pendingOr(data?.clients)],
+            ["Documentos recibidos", pendingOr(data?.documents)],
+            ["Con datos extraídos", pendingOr(data?.extracted)],
             ["Tasa de extracción", extractionRate],
           ]}
         />
@@ -384,6 +392,8 @@ export function StudyDashboard() {
               size="sm"
               variant="ghost"
               disabled={!canReadDashboard && !canReadTaxWorklist}
+              loading={refreshing}
+              loadingLabel="Actualizando"
               title={
                 !canReadDashboard && !canReadTaxWorklist
                   ? "Tu rol no tiene datos operativos para actualizar."
@@ -391,7 +401,10 @@ export function StudyDashboard() {
               }
               onClick={() => {
                 if (canReadDashboard) void query.refetch();
-                if (canReadTaxWorklist) void worklistQuery.refetch();
+                if (canReadTaxWorklist) {
+                  void worklistQuery.refetch();
+                  void queryClient.invalidateQueries({ queryKey: ["pending-filing-receipts", firmId] });
+                }
               }}
             >
               Actualizar
@@ -420,6 +433,11 @@ export function StudyDashboard() {
           </>
         }
       />
+      {refreshing && hasPrevious ? (
+        <p className="dense-dim" role="status">
+          Actualizando: se muestran los datos de la última consulta.
+        </p>
+      ) : null}
 
       {!canReadDashboard ? (
         <EmptyState
@@ -436,93 +454,91 @@ export function StudyDashboard() {
           onRetry={() => void query.refetch()}
         />
       ) : (
-        <>
-          <StatStrip
-            label="Resumen de la cartera"
-            items={[
-              {
-                key: "open",
-                label: "Temas abiertos",
-                value: attentionTotal,
-                detail: attentionTotal === 0 ? "La operación está al día" : "en la cartera activa",
-                tone: attentionTotal > 0 ? "warn" : undefined,
-              },
-              {
-                key: "changes",
-                label: "Con correcciones",
-                value: atRisk,
-                detail: "liquidaciones",
-                tone: atRisk > 0 ? "warn" : undefined,
-                active: worklistFilter === "CHANGES_REQUESTED",
-                onSelect: () =>
-                  setWorklistFilter((current) =>
-                    current === "CHANGES_REQUESTED" ? "" : "CHANGES_REQUESTED",
-                  ),
-              },
-              {
-                key: "review",
-                label: "En revisión",
-                value: inReview,
-                detail: "liquidaciones",
-                active: worklistFilter === "IN_REVIEW",
-                onSelect: () =>
-                  setWorklistFilter((current) => (current === "IN_REVIEW" ? "" : "IN_REVIEW")),
-              },
-              { key: "clients", label: "Clientes activos", value: data?.clients ?? 0, onSelect: () => navigate("/clientes") },
-              {
-                key: "documents",
-                label: "Documentos",
-                value: data?.documents ?? 0,
-                detail: `${extractionRate} extraídos`,
-              },
-            ]}
-          />
-
-          <DenseWorkspace panelId="dashboard-panel" inspector={agenda}>
-            {canReadTaxWorklist ? (
-              <PendingFilingReceipts
-                firmId={firmId}
-                canOpen={hasClientAccess}
-                onOpen={(openClientId) => {
-                  setClientId(openClientId);
-                  navigate("/expediente-mensual");
-                }}
-              />
-            ) : null}
-            <section className="dense-block" aria-labelledby="risk-portfolio-title">
-              <header className="dense-block__head">
-                <div className="dense-block__title">
-                  <h2 id="risk-portfolio-title">Liquidaciones en curso</h2>
-                  <span className="dense-count">{worklist.length}</span>
-                </div>
-                <p>
-                  {atRisk} con correcciones pendientes · {inReview} en revisión
-                </p>
-                <div className="dense-block__actions">
-                  <select
-                    className="dense-select"
-                    aria-label="Filtrar por estado"
-                    value={worklistFilter}
-                    onChange={(event) => setWorklistFilter(event.target.value)}
-                  >
-                    {statusOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  {clientId && canReadTaxWorklist ? (
-                    <Link className="dense-link" to="/liquidaciones">
-                      Ver todas
-                    </Link>
-                  ) : null}
-                </div>
-              </header>
-              {worklistBody}
-            </section>
-          </DenseWorkspace>
-        </>
+        <StatStrip
+          label="Resumen de la cartera"
+          items={[
+            {
+              key: "open",
+              label: "Temas abiertos",
+              value: attentionTotal,
+              detail: attentionTotal === 0 ? "La operación está al día" : "en la cartera activa",
+              tone: attentionTotal > 0 ? "warn" : undefined,
+            },
+            {
+              key: "changes",
+              label: "Con correcciones",
+              value: atRisk,
+              detail: "liquidaciones",
+              tone: atRisk > 0 ? "warn" : undefined,
+              active: worklistFilter === "CHANGES_REQUESTED",
+              onSelect: () =>
+                setWorklistFilter((current) =>
+                  current === "CHANGES_REQUESTED" ? "" : "CHANGES_REQUESTED",
+                ),
+            },
+            {
+              key: "review",
+              label: "En revisión",
+              value: inReview,
+              detail: "liquidaciones",
+              active: worklistFilter === "IN_REVIEW",
+              onSelect: () =>
+                setWorklistFilter((current) => (current === "IN_REVIEW" ? "" : "IN_REVIEW")),
+            },
+            { key: "clients", label: "Clientes activos", value: data?.clients ?? 0, onSelect: () => navigate("/clientes") },
+            {
+              key: "documents",
+              label: "Documentos",
+              value: data?.documents ?? 0,
+              detail: `${extractionRate} extraídos`,
+            },
+          ]}
+        />
       )}
+
+      <DenseWorkspace panelId="dashboard-panel" inspector={agenda}>
+        {canReadTaxWorklist ? (
+          <PendingFilingReceipts
+            firmId={firmId}
+            canOpen={hasClientAccess}
+            onOpen={(openClientId) => {
+              setClientId(openClientId);
+              navigate("/expediente-mensual");
+            }}
+          />
+        ) : null}
+        <section className="dense-block" aria-labelledby="risk-portfolio-title">
+          <header className="dense-block__head">
+            <div className="dense-block__title">
+              <h2 id="risk-portfolio-title">Liquidaciones en curso</h2>
+              <span className="dense-count">{worklist.length}</span>
+            </div>
+            <p>
+              {atRisk} con correcciones pendientes · {inReview} en revisión
+            </p>
+            <div className="dense-block__actions">
+              <select
+                className="dense-select"
+                aria-label="Filtrar por estado"
+                value={worklistFilter}
+                onChange={(event) => setWorklistFilter(event.target.value)}
+              >
+                {statusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {clientId && canReadTaxWorklist ? (
+                <Link className="dense-link" to="/liquidaciones">
+                  Ver todas
+                </Link>
+              ) : null}
+            </div>
+          </header>
+          {worklistBody}
+        </section>
+      </DenseWorkspace>
     </DensePage>
   );
 }
