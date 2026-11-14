@@ -180,11 +180,11 @@ Quedaron a propósito sin presentar Ingresos Brutos y TEM, para que el recordato
 
 | # | Hallazgo | Gravedad | Estado |
 |---|---|---|---|
-| Q.1 | Una obligación "Presentado" sigue ofreciendo "Registrar presentación" (y una pagada también). | Media | Abierto |
-| Q.2 | Un control ya resuelto sigue diciendo "Bloquea el cierre" y "Pendiente de respaldo". | Menor | Abierto |
-| Q.3 | El cajón de presentación se titula con el régimen ("Responsable Inscripto") en vez de la acción y el impuesto; los tres campos de arriba y el selector de constancia quedan angostos y el texto de ayuda se corta. | Menor | Abierto |
-| Q.4 | Las dos notas de autorrevisión aparecen pegadas, sin espacio entre una y otra. | Menor | Abierto |
-| Q.5 | En Inicio, "Liquidaciones en curso" lista las finalizadas, y "Obligaciones pendientes" marca 0 con dos sin presentar. Los nombres largos de impuesto se cortan en el recordatorio. | Menor | Abierto |
+| Q.1 | Una obligación "Presentado" sigue ofreciendo "Registrar presentación" (y una pagada también). | Media | Corregido (#90), falta desplegar |
+| Q.2 | Un control ya resuelto sigue diciendo "Bloquea el cierre" y "Pendiente de respaldo". | Menor | Corregido (#90), falta desplegar |
+| Q.3 | El cajón de presentación se titula con el régimen ("Responsable Inscripto") en vez de la acción y el impuesto; los tres campos de arriba y el selector de constancia quedan angostos y el texto de ayuda se corta. | Menor | Corregido (#90), falta desplegar |
+| Q.4 | Las dos notas de autorrevisión aparecen pegadas, sin espacio entre una y otra. | Menor | Corregido (#90), falta desplegar |
+| Q.5 | En Inicio, "Liquidaciones en curso" lista las finalizadas, y "Obligaciones pendientes" marca 0 con dos sin presentar. Los nombres largos de impuesto se cortan en el recordatorio. | Menor | Corregido (#90), falta desplegar |
 
 ## Simulador de liquidación ("Probar")
 
