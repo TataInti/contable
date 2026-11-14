@@ -44,7 +44,6 @@ interface WorklistItem {
   regime?: { code: string; name: string; taxType?: { code: string; name: string } };
 }
 
-const TODAY = new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "long" });
 
 /** Severidad de un estado para priorizar la mesa de trabajo. */
 function riskTone(status: string): "danger" | "warn" | "info" {
@@ -334,7 +333,6 @@ export function StudyDashboard() {
   const agenda = (
     <Inspector
       label="Mesa de trabajo"
-      eyebrow="Próximos pasos"
       title="Tu mesa de trabajo"
       subtitle={attentionTotal > 0 ? "Priorizado por urgencia" : "Sin pendientes"}
     >
@@ -373,7 +371,6 @@ export function StudyDashboard() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow={TODAY.format(new Date())}
         title="Resumen operativo"
         description={`${firmName ? `${firmName} · ` : ""}prioridades reales de la cartera, ordenadas para avanzar.`}
         actions={

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Button, EmptyState, Field, Notice, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -13,6 +13,7 @@ import {
   StatStrip,
   useDensity,
 } from "../ui/Dense";
+import { actionErrorMessage } from "../ui/actionError";
 import "./study.css";
 
 interface TaxSettlement {
@@ -64,7 +65,7 @@ export function StudyLiquidaciones() {
   const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [receipt, setReceipt] = useState<string | null>(null);
+  const notify = useNotify();
   const [showCalculator, setShowCalculator] = useState(false);
   const [calculation, setCalculation] = useState({ periodId: "", regimeId: "", cutoff: today });
   const canCalculate = capabilities.has("tax.settlements.calculate");
@@ -112,6 +113,9 @@ export function StudyLiquidaciones() {
     void queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId] });
   };
 
+  // Una acción que falla se avisa donde se avisa todo: en la notificación.
+  const failed = (error: unknown) =>
+    notify.error(actionErrorMessage(error, "No se pudo completar la acción sobre la liquidación."));
   const calculateMutation = useMutation({
     mutationFn: () =>
       api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/calculate`, {
@@ -125,32 +129,36 @@ export function StudyLiquidaciones() {
       invalidate();
       setShowCalculator(false);
       setCalculation((current) => ({ ...current, regimeId: "", cutoff: today }));
-      setReceipt("La liquidación fue calculada con los comprobantes aprobados al corte indicado.");
+      notify.success("La liquidación fue calculada con los comprobantes aprobados al corte indicado.");
     },
+    onError: failed,
   });
   const submitMutation = useMutation({
     mutationFn: (id: string) =>
       api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/submit-review`),
     onSuccess: () => {
       invalidate();
-      setReceipt("La liquidación fue enviada a revisión.");
+      notify.success("La liquidación fue enviada a revisión.");
     },
+    onError: failed,
   });
   const reviewMutation = useMutation({
     mutationFn: (id: string) =>
       api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/review`),
     onSuccess: () => {
       invalidate();
-      setReceipt("La liquidación quedó revisada.");
+      notify.success("La liquidación quedó revisada.");
     },
+    onError: failed,
   });
   const finalizeMutation = useMutation({
     mutationFn: (id: string) =>
       api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/finalize`),
     onSuccess: () => {
       invalidate();
-      setReceipt("La liquidación fue finalizada y quedó inmutable.");
+      notify.success("La liquidación fue finalizada y quedó inmutable.");
     },
+    onError: failed,
   });
   const rectifyMutation = useMutation({
     mutationFn: (id: string) =>
@@ -159,14 +167,16 @@ export function StudyLiquidaciones() {
       }),
     onSuccess: () => {
       invalidate();
-      setReceipt("Se inició una rectificación de la liquidación.");
+      notify.success("Se inició una rectificación de la liquidación.");
     },
+    onError: failed,
   });
   const artifactMutation = useMutation({
     mutationFn: ({ id, format }: { id: string; format: "csv" | "pdf" }) =>
       api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/artifacts`, { format }),
     onSuccess: (_, variables) =>
-      setReceipt(`Se generó el papel de trabajo en ${variables.format.toUpperCase()}.`),
+      notify.success(`Se generó el papel de trabajo en ${variables.format.toUpperCase()}.`),
+    onError: failed,
   });
 
   if (!firmId || !clientId) {
@@ -179,18 +189,9 @@ export function StudyLiquidaciones() {
   }
 
   const data = listQuery.data ?? [];
-  const mutationError =
-    calculateMutation.error ??
-    submitMutation.error ??
-    reviewMutation.error ??
-    finalizeMutation.error ??
-    rectifyMutation.error ??
-    artifactMutation.error;
-
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Impuestos"
         title="Liquidaciones"
         description="Cada liquidación conserva su versión, las reglas aplicadas y la evidencia del corte de cálculo."
         actions={
@@ -256,7 +257,6 @@ export function StudyLiquidaciones() {
       <ActionDrawer
         isOpen={showCalculator}
         onClose={() => setShowCalculator(false)}
-        eyebrow="Impuestos"
         title="Calcular liquidación"
         description="Elegí el período fiscal y el régimen. El cálculo sólo toma documentación aprobada hasta la fecha de corte."
       >
@@ -331,24 +331,10 @@ export function StudyLiquidaciones() {
         </form>
       </ActionDrawer>
 
-      {receipt ? (
-        <Notice
-          tone="success"
-          title="Acción completada"
-          action={
-            <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
-              <Icon name="close" size={15} />
-            </Button>
-          }
-        >
-          {receipt}
-        </Notice>
-      ) : null}
 
       <section className="study-page__section" aria-labelledby="settlements-list-title">
       <div className="study-panel__heading">
         <div>
-          <p className="study-page__eyebrow">Seguimiento</p>
           <h2 id="settlements-list-title">Liquidaciones registradas</h2>
           <p>
             {selectedTaxPeriod
@@ -493,10 +479,6 @@ export function StudyLiquidaciones() {
         />
       )}
       </section>
-      {mutationError ? (
-        <Notice tone="error">{mutationError.message}</Notice>
-      ) : null}
-    
     </DensePage>
   );
 }

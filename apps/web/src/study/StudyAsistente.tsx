@@ -183,7 +183,6 @@ export function StudyAsistente() {
     <div className="study-page assistant-page">
       <div className="study-page__header">
         <div>
-          <p className="study-page__eyebrow">Consulta con evidencia</p>
           <h1 className="study-page__title">Asistente contable</h1>
           <p className="study-page__subtitle">
             Preguntá sobre el cliente y período activos. Cada cifra debe poder rastrearse a su

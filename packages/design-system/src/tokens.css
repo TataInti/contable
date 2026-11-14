@@ -90,6 +90,10 @@
   --ds-border-width-strong: 2px;
   --ds-control-height-sm: 32px;
   --ds-control-height-md: 40px;
+  /* Tablas: un solo alto de encabezado y un alto de fila que sigue la
+     preferencia de densidad de la persona (28, 32 o 40 px). */
+  --ds-table-head-height: 30px;
+  --ds-row-height: 32px;
   --ds-touch-target: 44px;
   --ds-focus-width: 2px;
   --ds-focus-offset: 2px;

@@ -31,7 +31,7 @@ describe("familia Dense", () => {
   it("compone página, encabezado, sección, barra y espacio de trabajo", () => {
     render(
       <DensePage density={32} flow className="client-page">
-        <DenseHeader eyebrow="Clientes" title="Cartera" description="Clientes del estudio" />
+        <DenseHeader title="Cartera" description="Clientes del estudio" />
         <DenseSection id="summary" title="Resumen" count={2} description="Estado general">
           <DenseToolbar>Filtros</DenseToolbar>
           <DenseWorkspace panelId="clientes-panel">
@@ -140,7 +140,6 @@ describe("familia Dense", () => {
           inspector={
             <Inspector
               label="Detalle del cliente"
-              eyebrow="Ficha"
               title="Cliente Uno"
               subtitle="Estudio Demo"
               leading={<span>CU</span>}

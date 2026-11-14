@@ -1,0 +1,1378 @@
+/* ============================================================
+   Operación fiscal — configuración, expediente y reglas
+   ============================================================ */
+
+/* Stepper lateral del onboarding fiscal */
+.fiscal-onboarding-layout {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.22fr) minmax(0, 0.78fr);
+  gap: var(--ds-space-6);
+  align-items: start;
+}
+
+.fiscal-onboarding-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+}
+
+.fiscal-steps {
+  position: sticky;
+  top: var(--ds-space-4);
+}
+
+.fiscal-steps__list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fiscal-steps__item + .fiscal-steps__item {
+  padding-top: var(--ds-space-1);
+  border-top: var(--ds-border-width) solid var(--ds-color-border-subtle);
+}
+
+.fiscal-steps__button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ds-space-2);
+  width: 100%;
+  min-inline-size: 0;
+  min-block-size: var(--ds-control-height-sm);
+  padding-inline: var(--ds-space-3);
+  border-color: transparent;
+  color: var(--ds-color-text-muted);
+  font-weight: var(--ds-font-weight-medium);
+  text-align: left;
+}
+
+/* Button envuelve su contenido: la grilla número · nombre · estado se aplica
+   al envoltorio para que los tres elementos no queden pegados. */
+.fiscal-steps__button > .ds-button__content {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ds-space-2);
+  width: 100%;
+}
+
+.fiscal-steps__button.ds-button--text:hover:not(:disabled) {
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text);
+}
+
+.fiscal-steps__button--active {
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-primary);
+}
+
+.fiscal-steps__button--active.ds-button--text:hover:not(:disabled) {
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-primary);
+}
+
+.fiscal-steps__marker {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.fiscal-steps__status {
+  color: var(--ds-color-warning);
+  font-size: var(--ds-text-xs);
+  white-space: nowrap;
+}
+
+.fiscal-steps__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fiscal-retry {
+  display: inline-block;
+  margin-top: var(--ds-space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-color-danger);
+  font: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.fiscal-contributor {
+  padding: 0 0 var(--ds-space-4);
+  border: 0;
+  border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  background: transparent;
+}
+
+.fiscal-contributor__heading,
+.fiscal-next-step {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-4);
+}
+
+.fiscal-contributor__heading h2,
+.fiscal-next-step h2 {
+  margin: 0;
+}
+
+.fiscal-contributor__heading p:not(.study-page__eyebrow),
+.fiscal-next-step p:not(.study-page__eyebrow) {
+  margin: var(--ds-space-1) 0 0;
+  color: var(--ds-color-text-muted);
+  line-height: 1.45;
+}
+
+.fiscal-contributor__facts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--ds-space-2);
+  margin: var(--ds-space-4) 0 0;
+}
+
+.fiscal-contributor__facts > div {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.fiscal-contributor__facts dt {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.fiscal-contributor__facts dd {
+  overflow: hidden;
+  margin: var(--ds-space-1) 0 0;
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-sm);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fiscal-contributor__actions {
+  margin-top: var(--ds-space-3);
+}
+
+.fiscal-contributor__history {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin: var(--ds-space-3) 0 0;
+  padding: var(--ds-space-2);
+  border-top: 1px solid var(--ds-color-border-subtle);
+  list-style: none;
+}
+
+.fiscal-contributor__history li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-1);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+}
+
+.fiscal-next-step {
+  padding: 0 0 var(--ds-space-4);
+  border: 0;
+  border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+.fiscal-next-step .ds-button {
+  flex: 0 0 auto;
+}
+
+.fiscal-client-overview {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.fiscal-rules .fiscal-rules-guide {
+  display: block;
+  max-width: min(100%, calc(var(--ds-space-16) * 9));
+  margin: 0 0 var(--ds-space-3);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-base);
+  line-height: var(--ds-leading-normal);
+}
+
+.fiscal-rules .fiscal-rules-guide strong {
+  color: var(--ds-color-text);
+}
+
+/* Usuarios: controles compactos en escritorio y táctiles con puntero coarse. */
+.administration-users .dense-select--inline {
+  height: var(--ds-control-height-sm);
+  min-height: var(--ds-control-height-sm);
+  padding-inline: var(--ds-space-2);
+  font-size: var(--ds-text-sm);
+}
+
+.administration-users .dense-row-actions {
+  gap: var(--ds-space-2);
+}
+
+.administration-users .dense-row-actions .administration-user-actions {
+  flex: 0 0 auto;
+}
+
+.administration-users .dense-inspector__foot .dense-row-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.administration-users .administration-user-edit-form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.administration-profile {
+  min-width: 0;
+}
+
+.administration-profile__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  margin-bottom: var(--ds-space-3);
+}
+
+.administration-profile__heading h2 {
+  margin: 0;
+  font-size: var(--ds-text-base);
+}
+
+.administration-profile__facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 var(--ds-space-3);
+  margin: 0;
+  border-top: 1px solid var(--ds-color-border-subtle);
+}
+
+.administration-profile__facts > div {
+  min-width: 0;
+  padding: var(--ds-space-3) var(--ds-space-2);
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+}
+
+.administration-profile__facts dt {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.administration-profile__facts dd {
+  margin: var(--ds-space-1) 0 0;
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-sm);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 960px) {
+  .administration-profile__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .administration-profile__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .administration-profile__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (pointer: coarse) {
+  .administration-users .dense-select--inline {
+    height: var(--ds-touch-target);
+    min-height: var(--ds-touch-target);
+  }
+}
+
+.fiscal-client-overview__periods {
+  margin-top: var(--ds-space-5);
+  padding-top: var(--ds-space-4);
+  border-top: 1px solid var(--ds-color-border-subtle);
+}
+
+.fiscal-client-overview__columns {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.fiscal-client-overview__columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fiscal-client-overview__columns > div {
+  min-width: 0;
+}
+
+.fiscal-client-overview__heading,
+.workpaper-stage__heading,
+.fiscal-rule-approval,
+.fiscal-rule-approval__actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+}
+
+.fiscal-client-overview__heading {
+  align-items: center;
+  margin-bottom: var(--ds-space-3);
+}
+
+.fiscal-client-overview__heading h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.workpaper-stage__heading small,
+.workpaper-stage__note,
+.fiscal-rule-approval__sources {
+  color: var(--ds-text-muted);
+}
+
+.study-form--compact {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--ds-space-3);
+}
+
+.study-form.fiscal-action-form > .study-panel__heading {
+  grid-column: 1 / -1;
+}
+
+.study-form.fiscal-action-form > .study-form__actions,
+.study-form--compact > .study-form__actions {
+  align-self: end;
+}
+
+.fiscal-rules-detail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+}
+
+.fiscal-rule-summary__meta,
+.workpaper-close-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ds-space-2);
+  margin: 0;
+}
+
+.fiscal-rule-summary__meta > span,
+.workpaper-close-details > div {
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-muted);
+  color: var(--ds-text-muted);
+  font-size: 0.82rem;
+}
+
+.fiscal-rule-summary__meta strong,
+.workpaper-close-details dd {
+  display: block;
+  margin-top: var(--ds-space-1);
+  color: var(--ds-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.fiscal-rule-context {
+  border-color: color-mix(in srgb, var(--ds-color-primary) 20%, var(--ds-color-border));
+}
+
+.fiscal-rule-context__regime {
+  margin: var(--ds-space-1) 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+}
+
+.fiscal-rule-input {
+  width: 100%;
+  min-width: 5.5rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  font: inherit;
+}
+
+.fiscal-rule-input--concept {
+  min-width: 10rem;
+}
+
+/* En escritorio el campo de concepto recibe espacio real para escribir:
+   la tabla es ancha y el input no debe quedar apretado entre columnas. */
+@media (min-width: 1025px) {
+  .fiscal-rule-input--concept {
+    min-width: 16rem;
+  }
+}
+
+.fiscal-rule-input--number {
+  max-width: 7rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fiscal-rule-actions {
+  justify-content: flex-end;
+  margin-top: var(--ds-space-3);
+}
+
+.fiscal-activity-confirm {
+  margin: var(--ds-space-2) 0 var(--ds-space-4);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-left: 3px solid var(--ds-color-warning);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-color-warning-subtle);
+  color: var(--ds-text);
+  line-height: 1.5;
+}
+
+.fiscal-rule-input--select {
+  min-width: 9rem;
+}
+
+.fiscal-rule-row-error {
+  margin-top: var(--ds-space-1);
+  color: var(--ds-color-danger);
+  font-size: var(--ds-text-xs);
+  line-height: 1.35;
+}
+
+.fiscal-rule-approval {
+  align-items: center;
+}
+
+.fiscal-rule-approval h2,
+.fiscal-rule-approval p {
+  margin-top: 0;
+}
+
+.fiscal-rule-approval p {
+  margin-bottom: 0;
+}
+
+.fiscal-rule-approval__actions {
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.fiscal-rule-approval__actions .ds-field__input {
+  min-width: 13rem;
+}
+
+.fiscal-rule-approval__sources {
+  width: 100%;
+  margin-top: var(--ds-space-2) !important;
+  font-size: 0.82rem;
+}
+
+.workpaper-list {
+  display: grid;
+  gap: var(--ds-space-6);
+}
+
+.workpaper-card {
+  overflow: clip;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-color-surface);
+}
+
+.workpaper-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-5) var(--ds-space-6);
+  border-bottom: 1px solid var(--ds-color-border);
+}
+
+.workpaper-card__header h2,
+.workpaper-card__header p {
+  margin: 0;
+}
+
+.workpaper-card__header h2 {
+  font-size: var(--ds-text-xl);
+  line-height: 1.2;
+}
+
+.workpaper-card__header .status-badge {
+  margin-top: var(--ds-space-2);
+}
+
+.workpaper-card__blocking {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--ds-color-warning) 28%, transparent);
+  border-radius: 999px;
+  background: var(--ds-color-warning-subtle);
+  color: var(--ds-color-warning);
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.workpaper-process {
+  position: sticky;
+  top: var(--ds-space-3);
+  z-index: var(--ds-z-sticky);
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-4) var(--ds-space-6);
+  border-bottom: 1px solid var(--ds-color-border);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ds-color-surface) 98%, transparent),
+    color-mix(in srgb, var(--ds-color-background) 72%, var(--ds-color-surface))
+  );
+}
+
+.workpaper-process__current {
+  min-width: 0;
+}
+
+.workpaper-process__index {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--ds-color-primary);
+  font-size: var(--ds-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.095em;
+  text-transform: uppercase;
+}
+
+.workpaper-process__current h3,
+.workpaper-process__current p {
+  margin: 0;
+}
+
+.workpaper-process__current h3 {
+  font-size: var(--ds-text-xl);
+  line-height: 1.15;
+}
+
+.workpaper-process__current p {
+  margin-top: var(--ds-space-1);
+  color: var(--ds-color-text-muted);
+  line-height: 1.45;
+}
+
+.workpaper-process__controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+
+.workpaper-process__menu {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--ds-space-2);
+}
+
+.workpaper-step {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: 38px;
+  padding: var(--ds-space-2);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease-out,
+    background-color 150ms ease-out,
+    color 150ms ease-out;
+}
+
+.workpaper-step:hover {
+  border-color: color-mix(in srgb, var(--ds-color-primary) 28%, var(--ds-color-border));
+  background: var(--ds-color-surface-hover);
+  color: var(--ds-color-text);
+}
+
+.workpaper-step--active {
+  border-color: color-mix(in srgb, var(--ds-color-primary) 42%, var(--ds-color-border));
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-primary);
+}
+
+.workpaper-step__number {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  background: var(--ds-color-surface-muted);
+  color: currentColor;
+  font-size: var(--ds-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.workpaper-step--active .workpaper-step__number {
+  background: var(--ds-color-primary);
+  color: var(--ds-color-on-primary);
+}
+
+.workpaper-card__body {
+  padding: var(--ds-space-5) var(--ds-space-6);
+}
+
+.workpaper-step-footer,
+.workpaper-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4) var(--ds-space-6);
+  border-top: 1px solid var(--ds-color-border);
+}
+
+.workpaper-step-footer {
+  background: var(--ds-color-surface-muted);
+}
+
+.workpaper-step-footer > span {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  font-weight: 650;
+}
+
+.workpaper-card__actions {
+  justify-content: flex-end;
+  background: color-mix(in srgb, var(--ds-color-surface) 72%, var(--ds-color-background));
+}
+
+.workpaper-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+
+.workpaper-stage__heading strong,
+.workpaper-stage__heading small {
+  display: block;
+}
+
+.workpaper-stage__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+
+.workpaper-stage__heading small {
+  margin-top: var(--ds-space-1);
+  font-size: 0.84rem;
+}
+
+.workpaper-stage__note {
+  margin: 0;
+  padding: var(--ds-space-3);
+  border-left: 3px solid var(--ds-accent, #237a57);
+  background: var(--ds-surface-muted);
+  font-size: 0.9rem;
+}
+
+.workpaper-stage__heading--subsection {
+  margin-top: var(--ds-space-3);
+  padding-top: var(--ds-space-4);
+  border-top: 1px solid var(--ds-border);
+}
+
+.opening-credit-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-muted);
+}
+
+.opening-credit-form__actions {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--ds-space-2);
+}
+
+.workpaper-close-details dt {
+  color: var(--ds-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.workpaper-close-details dd {
+  margin-left: 0;
+  overflow-wrap: anywhere;
+}
+
+.workpaper-control > span:first-child {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.workpaper-controls {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.workpaper-control {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-3);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface-muted);
+}
+
+.workpaper-control > span:first-child small {
+  color: var(--ds-text-muted);
+}
+
+.workpaper-control__resolution {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.workpaper-control__resolution input,
+.workpaper-control__resolution select {
+  min-width: 0;
+  flex: 1;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  font: inherit;
+}
+
+.workpaper-source-import {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(16rem, 1.4fr) auto;
+  gap: var(--ds-space-3);
+  align-items: end;
+  padding: var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-muted);
+}
+
+.workpaper-source-import label {
+  display: grid;
+  gap: var(--ds-space-1);
+  color: var(--ds-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.workpaper-source-import select,
+.workpaper-source-import input {
+  min-width: 0;
+  padding: 0.48rem 0.58rem;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  font: inherit;
+}
+
+.workpaper-source-import > small {
+  grid-column: 1 / -1;
+  color: var(--ds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.workpaper-source-batches {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.workpaper-source-review {
+  display: grid;
+  justify-items: start;
+  gap: var(--ds-space-1);
+  min-width: 12rem;
+}
+
+.workpaper-source-review small {
+  max-width: 26rem;
+}
+
+.self-review-setting {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.self-review-setting .study-panel__heading {
+  margin-bottom: 0;
+}
+
+.self-review-setting__heading {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.self-review-setting__heading > * {
+  margin: 0;
+}
+
+.self-review-setting__title {
+  font-size: var(--ds-text-base);
+}
+
+.self-review-setting__heading > p:last-child {
+  color: var(--ds-color-text-muted);
+  line-height: 1.45;
+}
+
+.self-review-setting__toggle {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: var(--ds-space-2);
+  font-weight: 650;
+}
+
+.self-review-setting__toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--ds-color-primary);
+}
+
+.sifere-upload {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ds-space-4);
+}
+
+.sifere-upload__side {
+  display: grid;
+  gap: var(--ds-space-3);
+  align-content: start;
+  padding: var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-muted);
+}
+
+.sifere-upload__side h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.sifere-upload__file {
+  display: grid;
+  gap: var(--ds-space-1);
+  color: var(--ds-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.sifere-upload__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.sifere-upload__file {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.sifere-upload__file input {
+  font: inherit;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sifere-upload__file span {
+  display: block;
+  padding: 0.48rem 0.58rem;
+  border: 1px dashed var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-text-muted);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.sifere-upload__file span:hover {
+  border-color: var(--ds-accent, #237a57);
+  color: var(--ds-text);
+}
+
+.sifere-analysis {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.sifere-analysis__totals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--ds-space-2);
+}
+
+.sifere-analysis__totals span {
+  display: grid;
+  gap: 0.1rem;
+  padding: var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+}
+
+.sifere-analysis__totals small,
+.sifere-analysis__taxes small {
+  color: var(--ds-text-muted);
+  font-size: 0.72rem;
+}
+
+.sifere-analysis__totals strong {
+  font-size: 0.92rem;
+}
+
+.sifere-analysis__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.sifere-analysis__table th,
+.sifere-analysis__table td {
+  padding: 0.32rem 0.4rem;
+  border-bottom: 1px solid var(--ds-border);
+  text-align: left;
+}
+
+.sifere-analysis__table th.num,
+.sifere-analysis__table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sifere-analysis__taxes {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.sifere-analysis__taxes span {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  padding: 0.24rem 0;
+  border-bottom: 1px solid var(--ds-border);
+  font-size: 0.8rem;
+}
+
+.sifere-analysis .muted-copy {
+  font-size: 0.74rem;
+}
+
+.workpaper-source-batches > div {
+  display: flex;
+  gap: var(--ds-space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.workpaper-classification-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ds-space-2);
+}
+
+.workpaper-classification-summary > span {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-height: 4.2rem;
+  align-content: center;
+  padding: var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-muted);
+}
+
+.workpaper-classification-summary strong {
+  font-size: 1.25rem;
+}
+
+.workpaper-classification-summary small {
+  color: var(--ds-text-muted);
+}
+
+.workpaper-classification-fields {
+  display: grid;
+  min-width: 12rem;
+  gap: var(--ds-space-2);
+}
+
+.workpaper-classification-fields select,
+.workpaper-classification-fields input {
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  font: inherit;
+}
+
+.workpaper-allocation-select {
+  min-width: 13rem;
+  max-width: 20rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  font: inherit;
+}
+
+.workpaper-calculation-breakdown,
+.workpaper-calculation {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.workpaper-calculation {
+  padding: var(--ds-space-4);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-muted);
+}
+
+.workpaper-calculation__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+}
+
+.workpaper-calculation__header > span {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.workpaper-calculation__header > span:last-child {
+  justify-items: end;
+}
+
+.workpaper-calculation__header small,
+.workpaper-calculation__source-note {
+  color: var(--ds-text-muted);
+}
+
+.workpaper-calculation__totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--ds-space-2);
+  margin: 0;
+}
+
+.workpaper-calculation__totals > div {
+  display: grid;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+}
+
+.workpaper-calculation__totals > .is-total {
+  border-color: color-mix(in srgb, var(--ds-accent, #237a57) 48%, var(--ds-border));
+  background: color-mix(in srgb, var(--ds-accent, #237a57) 8%, var(--ds-surface));
+}
+
+.workpaper-calculation__totals dt {
+  color: var(--ds-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.workpaper-calculation__totals dd {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.workpaper-calculation__source-note {
+  margin: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-left: 3px solid var(--ds-accent, #237a57);
+  background: var(--ds-surface);
+}
+
+.workpaper-calculation__trace summary {
+  cursor: pointer;
+  color: var(--ds-text-muted);
+  font-weight: 650;
+}
+
+.workpaper-calculation__trace[open] summary {
+  margin-bottom: var(--ds-space-3);
+}
+
+.workpaper-calculation__differences {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.workpaper-calculation__differences p {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+}
+
+.workpaper-credit-movements summary {
+  cursor: pointer;
+  color: var(--ds-text-muted);
+  font-weight: 650;
+}
+
+.workpaper-credit-movements ul {
+  display: grid;
+  gap: var(--ds-space-2);
+  min-width: 14rem;
+  margin: var(--ds-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workpaper-credit-movements li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 var(--ds-space-2);
+  padding-top: var(--ds-space-2);
+  border-top: 1px solid var(--ds-border);
+}
+
+.workpaper-credit-movements li small {
+  grid-column: 1 / -1;
+  color: var(--ds-text-muted);
+}
+
+.workpaper-credit-log {
+  min-width: 14rem;
+  margin: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+}
+
+.workpaper-credit-log summary {
+  cursor: pointer;
+  color: var(--ds-text-muted);
+  font-weight: 650;
+}
+
+.workpaper-credit-log > ul {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: var(--ds-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workpaper-credit-log > ul > li {
+  display: grid;
+  gap: var(--ds-space-1);
+  padding-top: var(--ds-space-2);
+  border-top: 1px solid var(--ds-border);
+}
+
+.workpaper-credit-log__changes {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.workpaper-credit-log__changes strong {
+  color: var(--ds-text);
+}
+
+@media (max-width: 960px) {
+  .fiscal-onboarding-layout,
+  .fiscal-client-overview__columns {
+    grid-template-columns: 1fr;
+  }
+
+  .fiscal-steps {
+    position: static;
+  }
+
+  .fiscal-steps__list {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .fiscal-contributor__facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .opening-credit-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workpaper-source-import {
+    grid-template-columns: 1fr;
+  }
+
+  .sifere-upload {
+    grid-template-columns: 1fr;
+  }
+
+  .sifere-analysis__totals {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .workpaper-process {
+    position: static;
+    grid-template-columns: 1fr;
+  }
+
+  .workpaper-process__controls {
+    justify-content: flex-start;
+  }
+
+  .workpaper-process__menu {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .study-form,
+  .study-form--compact {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .fiscal-rule-summary__meta,
+  .workpaper-close-details,
+  .opening-credit-form,
+  .workpaper-classification-summary,
+  .workpaper-process__menu,
+  .workpaper-control {
+    grid-template-columns: 1fr;
+  }
+
+  .fiscal-contributor__heading,
+  .fiscal-next-step,
+  .fiscal-rule-approval,
+  .workpaper-stage__heading,
+  .workpaper-card__header,
+  .workpaper-calculation__header,
+  .workpaper-step-footer,
+  .workpaper-card__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .fiscal-rule-approval__actions .ds-field__input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .fiscal-contributor__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fiscal-next-step .ds-button {
+    width: 100%;
+  }
+
+  .fiscal-rule-approval__actions,
+  .opening-credit-form__actions,
+  .workpaper-control__resolution,
+  .workpaper-process__controls,
+  .study-form__actions,
+  .study-inline-form__actions {
+    justify-content: stretch;
+  }
+
+  .fiscal-rule-approval__actions .ds-button,
+  .opening-credit-form__actions .ds-button,
+  .workpaper-control__resolution .ds-button,
+  .workpaper-process__controls .ds-button,
+  .workpaper-step-footer .ds-button,
+  .study-form__actions .ds-button,
+  .study-inline-form__actions .ds-button {
+    flex: 1;
+  }
+
+  .workpaper-card__header,
+  .workpaper-process,
+  .workpaper-card__body,
+  .workpaper-step-footer,
+  .workpaper-card__actions {
+    padding-inline: var(--ds-space-4);
+  }
+}

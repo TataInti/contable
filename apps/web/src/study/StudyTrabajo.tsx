@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api, type DocumentRequest, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -64,7 +64,7 @@ export function StudyTrabajo() {
   const [showRequest, setShowRequest] = useState(false);
   const confirm = useConfirmAction();
   const [showClose, setShowClose] = useState(false);
-  const [receipt, setReceipt] = useState<string | null>(null);
+  const notify = useNotify();
   const [request, setRequest] = useState({ title: "", description: "", item: "", dueDate: "" });
   const [closeItems, setCloseItems] = useState(
     "Revisar documentación\nConciliar saldos\nValidar obligaciones\nPreparar cierre",
@@ -114,7 +114,7 @@ export function StudyTrabajo() {
     onSuccess: () => {
       setShowRequest(false);
       setRequest({ title: "", description: "", item: "", dueDate: "" });
-      setReceipt("Pedido creado. Quedó disponible para el seguimiento con el cliente.");
+      notify.success("Pedido creado. Quedó disponible para el seguimiento con el cliente.");
       void queryClient.invalidateQueries({ queryKey: ["document-requests", firmId, clientId] });
     },
   });
@@ -129,7 +129,7 @@ export function StudyTrabajo() {
   const sendRequest = useMutation({
     mutationFn: (requestId: string) => api.post(`${base}/document-requests/${requestId}/send`),
     onSuccess: () => {
-      setReceipt("Pedido enviado al portal del cliente.");
+      notify.success("Pedido enviado al portal del cliente.");
       refreshRequests();
     },
   });
@@ -137,7 +137,7 @@ export function StudyTrabajo() {
     mutationFn: ({ requestId, itemId }: { requestId: string; itemId: string }) =>
       api.post(`${base}/document-requests/${requestId}/items/${itemId}/accept`),
     onSuccess: () => {
-      setReceipt("Ítem aceptado. El estado del pedido se recalculó.");
+      notify.success("Ítem aceptado. El estado del pedido se recalculó.");
       refreshRequests();
     },
   });
@@ -145,7 +145,7 @@ export function StudyTrabajo() {
     mutationFn: ({ requestId, itemId }: { requestId: string; itemId: string }) =>
       api.post(`${base}/document-requests/${requestId}/items/${itemId}/waive`),
     onSuccess: () => {
-      setReceipt("Ítem eximido. El estado del pedido se recalculó.");
+      notify.success("Ítem eximido. El estado del pedido se recalculó.");
       refreshRequests();
     },
   });
@@ -154,7 +154,7 @@ export function StudyTrabajo() {
       api.post(`${base}/document-requests/${requestId}/items/${itemId}/reject`, { reason }),
     onSuccess: () => {
       setRejectReason("");
-      setReceipt("Ítem rechazado y devuelto al cliente con el motivo indicado.");
+      notify.success("Ítem rechazado y devuelto al cliente con el motivo indicado.");
       refreshRequests();
     },
   });
@@ -192,7 +192,7 @@ export function StudyTrabajo() {
     },
     onSuccess: () => {
       setShowClose(false);
-      setReceipt("Cierre iniciado. Las tareas quedan disponibles para control y finalización.");
+      notify.success("Cierre iniciado. Las tareas quedan disponibles para control y finalización.");
       void queryClient.invalidateQueries({ queryKey: ["close-cycles", firmId, clientId] });
     },
   });
@@ -200,14 +200,14 @@ export function StudyTrabajo() {
     mutationFn: ({ cycleId, workItemId }: { cycleId: string; workItemId: string }) =>
       api.post(`${base}/close-cycles/${cycleId}/work-items/${workItemId}/complete`),
     onSuccess: () => {
-      setReceipt("Tarea de cierre completada.");
+      notify.success("Tarea de cierre completada.");
       void queryClient.invalidateQueries({ queryKey: ["close-cycles", firmId, clientId] });
     },
   });
   const finalizeClose = useMutation({
     mutationFn: (cycleId: string) => api.post(`${base}/close-cycles/${cycleId}/finalize`),
     onSuccess: () => {
-      setReceipt("Cierre finalizado. El ciclo quedó registrado para auditoría.");
+      notify.success("Cierre finalizado. El ciclo quedó registrado para auditoría.");
       void queryClient.invalidateQueries({ queryKey: ["close-cycles", firmId, clientId] });
     },
   });
@@ -235,7 +235,7 @@ export function StudyTrabajo() {
     },
     onSuccess: () => {
       setMessageBody("");
-      setReceipt("Mensaje enviado al pedido documental.");
+      notify.success("Mensaje enviado al pedido documental.");
       void queryClient.invalidateQueries({ queryKey: ["document-requests", firmId, clientId] });
     },
   });
@@ -284,7 +284,6 @@ export function StudyTrabajo() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Seguimiento del cliente"
         title="Trabajo"
         description="Revisiones, pedidos, cierres y vencimientos que requieren una decisión."
         actions={
@@ -348,27 +347,6 @@ export function StudyTrabajo() {
 
 
 
-      {receipt ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Acción completada"
-          action={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              iconOnly
-              aria-label="Cerrar confirmación"
-              onClick={() => setReceipt(null)}
-            >
-              <Icon name="close" size={15} />
-            </Button>
-          }
-        >
-          {receipt}
-        </Notice>
-      ) : null}
       {hasQueryError ? (
         <Notice tone="warning">
           <strong>Parte de la información no pudo cargarse.</strong> Podés seguir trabajando con
@@ -379,7 +357,6 @@ export function StudyTrabajo() {
       <ActionDrawer
         isOpen={showRequest}
         onClose={() => setShowRequest(false)}
-        eyebrow="Cliente"
         title="Nuevo pedido"
         description="Describí exactamente qué necesitás y, si corresponde, cuándo debe entregarse."
       >
@@ -445,7 +422,6 @@ export function StudyTrabajo() {
       <ActionDrawer
         isOpen={showClose}
         onClose={() => setShowClose(false)}
-        eyebrow="Control"
         title="Iniciar cierre del período"
         description="Definí las verificaciones del ciclo. Cada tarea se completa y queda auditada por separado."
       >
@@ -499,7 +475,6 @@ export function StudyTrabajo() {
           setActiveReviewRequestId(null);
           setRejectReason("");
         }}
-        eyebrow="Pedido documental"
         title="Revisión de ítems"
         description={reviewRequest?.title}
       >
@@ -585,7 +560,6 @@ export function StudyTrabajo() {
       <ActionDrawer
         isOpen={Boolean(preview)}
         onClose={() => setPreview(null)}
-        eyebrow="Evidencia"
         title="Documento adjunto"
         description={preview?.originalName ?? "Vista previa de la evidencia asociada al pedido."}
         size="wide"
@@ -620,7 +594,6 @@ export function StudyTrabajo() {
       <ActionDrawer
         isOpen={Boolean(activeConversation)}
         onClose={() => setActiveConversation(null)}
-        eyebrow="Pedido documental"
         title="Conversación"
         description={activeConversation?.title}
       >
@@ -685,7 +658,6 @@ export function StudyTrabajo() {
         <section className="study-panel" id="work-requests-section">
           <div className="study-panel__heading">
             <div>
-              <p className="study-page__eyebrow">Cliente</p>
               <h2>Pedidos documentales</h2>
             </div>
             <span className="section-count">{activeRequests.length}</span>
@@ -806,7 +778,6 @@ export function StudyTrabajo() {
         <section className="study-panel" id="work-closes-section">
           <div className="study-panel__heading">
             <div>
-              <p className="study-page__eyebrow">Control</p>
               <h2>Cierres</h2>
             </div>
             <span className="section-count">{openCloses.length}</span>
@@ -909,7 +880,6 @@ export function StudyTrabajo() {
       <section className="study-page__section" id="work-obligations-section">
         <div className="section-heading">
           <div>
-            <p className="study-page__eyebrow">Agenda fiscal</p>
             <h2>Próximas obligaciones</h2>
           </div>
           <span className="section-count">{obligationRows.length}</span>

@@ -27,29 +27,31 @@
 .dense-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--ds-space-2) var(--ds-space-5);
-  margin-bottom: var(--ds-space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-3) var(--ds-space-6);
+  margin-bottom: var(--ds-space-4);
 }
 
-.dense-head__title .study-page__eyebrow {
-  margin: 0 0 var(--ds-space-0-5);
+.dense-head__title {
+  flex: 1 1 320px;
+  min-width: 0;
 }
 
 .dense-head__title h1 {
   margin: 0;
-  font-size: 26px;
-  letter-spacing: -0.01em;
-  line-height: 1.15;
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-2xl);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: var(--ds-leading-tight);
 }
 
 .dense-head__desc {
-  flex: 1 1 320px;
-  max-width: 680px;
-  margin: 0 0 3px;
+  max-width: 720px;
+  margin: var(--ds-space-1) 0 0;
   color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-sm);
-  line-height: 1.4;
+  font-size: var(--ds-text-base);
+  line-height: var(--ds-leading-normal);
 }
 
 .dense-head__actions {
@@ -69,30 +71,32 @@
   }
 }
 
-/* ───────── Franja de métricas ───────── */
+/* ───────── Resumen de la pantalla ─────────
+   Una línea discreta de cifras. Las que filtran la lista se comportan como
+   botones; ninguna va en una caja ni compite con el título. */
 .dense-stats {
   display: flex;
   flex: none;
   flex-wrap: wrap;
-  border: 1px solid var(--ds-color-border);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-color-surface);
-  overflow: hidden;
+  align-items: baseline;
+  gap: var(--ds-space-1) var(--ds-space-5);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
 }
 
 /* La barra de filtros y el aviso ya traen su propio aire; cualquier otro
-   contenido que siga a las métricas necesita separación explícita. */
+   contenido que siga al resumen necesita separación explícita. */
 .dense-stats:not(:has(+ .dense-toolbar)):not(:has(+ .dense-alert)) {
   margin-bottom: var(--ds-space-3);
 }
 
 .dense-stat {
-  display: flex;
+  display: inline-flex;
+  flex-direction: row-reverse;
   align-items: baseline;
-  gap: var(--ds-space-2);
-  padding: var(--ds-space-2) var(--ds-space-3);
+  gap: var(--ds-space-1);
+  padding: 0;
   border: 0;
-  border-right: 1px solid var(--ds-color-border-subtle);
   background: none;
   color: inherit;
   text-align: left;
@@ -101,42 +105,50 @@
 
 .dense-stat.ds-button {
   min-inline-size: 0;
-  min-block-size: auto;
-  padding: var(--ds-space-2) var(--ds-space-3);
+  min-block-size: var(--ds-control-height-sm);
+  padding: 0 var(--ds-space-2);
+  margin-inline: calc(var(--ds-space-2) * -1);
   border: 0;
-  border-right: var(--ds-border-width) solid var(--ds-color-border-subtle);
-  border-radius: 0;
+  border-radius: var(--ds-radius-md);
   background: none;
   color: inherit;
   box-shadow: none;
   text-align: left;
 }
 
+.dense-stat.ds-button > .ds-button__content {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  align-items: baseline;
+  gap: var(--ds-space-1);
+}
+
 .dense-stat.ds-button:hover:not(:disabled) {
   background: var(--ds-color-surface-hover);
 }
 
-.dense-stat--active {
-  box-shadow: inset 0 -2px 0 var(--ds-color-primary);
+.dense-stat--active,
+.dense-stat--active.ds-button {
+  background: var(--ds-color-primary-soft);
+  color: var(--ds-color-text);
 }
 
 .dense-stat__label {
-  color: var(--ds-color-text-faint);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
 }
 
 .dense-stat__value {
-  font-size: var(--ds-text-xl);
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-base);
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  line-height: 1;
+  font-weight: var(--ds-font-weight-medium);
 }
 
+/* El detalle se lee como aclaración entre el valor y la siguiente cifra. */
 .dense-stat__detail {
-  color: var(--ds-color-text-muted);
+  order: -1;
+  color: var(--ds-color-text-faint);
   font-size: var(--ds-text-xs);
 }
 
@@ -249,17 +261,6 @@
   flex: 1;
 }
 
-.dense-toolbar__count {
-  color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.dense-toolbar__hint {
-  color: var(--ds-color-text-faint);
-  font-size: var(--ds-text-xs);
-}
-
 .dense-search {
   position: relative;
   display: flex;
@@ -302,6 +303,8 @@
 
 .dense-search .dense-input {
   width: 260px;
+  /* Deja lugar al icono de búsqueda, que va por delante del texto. */
+  padding-left: var(--ds-space-8);
   padding-right: 30px;
 }
 
@@ -478,8 +481,8 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  height: 30px;
-  padding: 0 12px;
+  height: var(--ds-table-head-height);
+  padding: 0 var(--ds-space-3);
   border-bottom: 1px solid var(--ds-color-border-strong);
   background: var(--ds-color-surface-muted);
   color: var(--ds-color-text-muted);
@@ -847,10 +850,6 @@
   border-top: var(--ds-border-width) solid var(--ds-color-border-subtle);
 }
 
-.dense-inspector__foot .dense-push {
-  margin-left: auto;
-}
-
 .dense-inspector__close {
   flex: none;
 }
@@ -980,18 +979,6 @@
   margin-top: 1px;
 }
 
-.dense-note--ok {
-  border-color: color-mix(in srgb, var(--ds-color-success) 22%, transparent);
-  background: var(--ds-color-success-subtle);
-  color: var(--ds-color-success);
-}
-
-.dense-note--warn {
-  border-color: color-mix(in srgb, var(--ds-color-warning) 28%, transparent);
-  background: var(--ds-color-warning-subtle);
-  color: var(--ds-color-warning);
-}
-
 /* ───────── Formularios en ActionDrawer ───────── */
 .study-form.dense-form {
   display: grid;
@@ -1080,12 +1067,6 @@
   font-size: var(--ds-text-sm);
 }
 
-.dense-fp {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
 .dense-fp__bars {
   display: inline-flex;
   gap: 2px;
@@ -1096,11 +1077,6 @@
   height: 12px;
   border-radius: 2px;
   background: var(--ds-color-border-subtle);
-}
-
-.dense-fp__bars i.is-on {
-  background: var(--ds-color-primary);
-  opacity: 0.85;
 }
 
 .dense-row-actions {
@@ -1354,43 +1330,6 @@
   min-width: 0;
 }
 
-.dense-two-col {
-  display: grid;
-  gap: var(--ds-space-4);
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-  align-items: start;
-}
-
-.dense-kv {
-  display: grid;
-  gap: 1px 24px;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  margin: 0;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border: 1px solid var(--ds-color-border);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-color-surface);
-  font-size: var(--ds-text-sm);
-}
-
-.dense-kv > div {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--ds-space-3);
-  padding: 4px 0;
-  border-bottom: 1px solid var(--ds-color-border);
-}
-
-.dense-kv dt {
-  color: var(--ds-color-text-muted);
-}
-
-.dense-kv dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
 /* Resumen del paquete: metadatos en una sola línea. */
 .dense-page .fiscal-rule-summary {
   padding: var(--ds-space-3) var(--ds-space-4);
@@ -1438,8 +1377,7 @@
 }
 
 .dense-page--flow .study-panel__heading h2,
-.dense-page--flow .study-page__section-title,
-.dense-page--flow .collection-toolbar h2 {
+.dense-page--flow .study-page__section-title {
   font-size: var(--ds-text-lg);
 }
 
@@ -1457,10 +1395,6 @@
 .dense-page--flow .ds-table__wrapper {
   max-height: var(--dense-flow-max, 420px);
   overflow: auto;
-}
-
-.dense-page--flow .collection-toolbar {
-  margin-bottom: var(--ds-space-2);
 }
 
 .dense-page--flow .work-columns {

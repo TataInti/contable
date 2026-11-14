@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field } from "@contable/design-system";
+import { Button, EmptyState, Field, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -14,7 +14,6 @@ import {
   DenseHeader,
   DensePage,
   DenseSearch,
-  DensitySwitch,
   DenseTable,
   DenseTabs,
   DenseToolbar,
@@ -340,7 +339,7 @@ export function StudyAdministracion() {
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
   const [recoveryLink, setRecoveryLink] = useState<string | null>(null);
   const [recoverySummary, setRecoverySummary] = useState<{ memberName: string; expiresAt: string; sessionsRevoked: number } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const notify = useNotify();
   const [actionError, setActionError] = useState<string | null>(null);
   const [tab, setTab] = useState<AdminTab>("internal");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -362,7 +361,7 @@ export function StudyAdministracion() {
   const [batchText, setBatchText] = useState("");
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
-  const [density, setDensity] = useDensity();
+  const [density] = useDensity();
   const identityNameError = identitySubmitted && !identityName.trim() ? "Ingresá el nombre" : undefined;
   const identityEmailError =
     identitySubmitted && !isValidEmail(identityEmail)
@@ -406,7 +405,7 @@ export function StudyAdministracion() {
       }),
     onSuccess: (setting) => {
       setActionError(null);
-      setNotice(
+      notify.success(
         setting.allowSelfReview
           ? "La autorrevisión quedó habilitada para este estudio. Cada uso queda auditado."
           : "La autorrevisión quedó deshabilitada para este estudio.",
@@ -422,7 +421,7 @@ export function StudyAdministracion() {
       }),
     onSuccess: (created) => {
       setActionError(null);
-      setNotice("El usuario fue creado. Entregale la contraseña temporal por un canal seguro.");
+      notify.success("El usuario fue creado. Entregale la contraseña temporal por un canal seguro.");
       setCreatedInternalUser(created);
       setInternalEmail("");
       setInternalName("");
@@ -441,7 +440,7 @@ export function StudyAdministracion() {
         delete next[userId];
         return next;
       });
-      setNotice("El rol del usuario quedó actualizado.");
+      notify.success("El rol del usuario quedó actualizado.");
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error, { userId }) => {
@@ -458,7 +457,7 @@ export function StudyAdministracion() {
       api.patch(`/firms/${firmId}/users/${userId}`, { name: name.trim(), email: nextEmail.trim() }),
     onSuccess: () => {
       setActionError(null);
-      setNotice("Los datos del usuario quedaron actualizados.");
+      notify.success("Los datos del usuario quedaron actualizados.");
       setIdentityEditing(null);
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
@@ -475,7 +474,7 @@ export function StudyAdministracion() {
       }),
     onSuccess: (updated) => {
       setActionError(null);
-      setNotice("Los datos del estudio quedaron actualizados.");
+      notify.success("Los datos del estudio quedaron actualizados.");
       setShowProfileForm(false);
       setProfileDraft(null);
       queryClient.setQueryData(["firm-profile", firmId], updated);
@@ -487,7 +486,7 @@ export function StudyAdministracion() {
     mutationFn: (userId: string) => api.post(`/firms/${firmId}/members/${userId}/suspend`, {}),
     onSuccess: () => {
       setActionError(null);
-      setNotice("El usuario quedó suspendido.");
+      notify.success("El usuario quedó suspendido.");
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error) =>
@@ -497,7 +496,7 @@ export function StudyAdministracion() {
     mutationFn: (userId: string) => api.post(`/firms/${firmId}/members/${userId}/reactivate`, {}),
     onSuccess: () => {
       setActionError(null);
-      setNotice("El usuario fue reactivado.");
+      notify.success("El usuario fue reactivado.");
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error) =>
@@ -568,12 +567,12 @@ export function StudyAdministracion() {
     onSuccess: (_updated, { id, patch }) => {
       setActionError(null);
       if (patch.role !== undefined) {
-        setNotice("El rol del acceso al portal quedó actualizado.");
+        notify.success("El rol del acceso al portal quedó actualizado.");
         if (portalEditing?.id === id) setPortalEditing(null);
       } else if (patch.status === "SUSPENDED") {
-        setNotice("El acceso al portal quedó suspendido.");
+        notify.success("El acceso al portal quedó suspendido.");
       } else {
-        setNotice("El acceso al portal fue reactivado.");
+        notify.success("El acceso al portal fue reactivado.");
       }
       void queryClient.invalidateQueries({ queryKey: ["portal-memberships", firmId, clientId] });
     },
@@ -585,7 +584,7 @@ export function StudyAdministracion() {
       api.post(`/firms/${firmId}/clients/${clientId}/portal-invitations/${id}/revoke`),
     onSuccess: () => {
       setActionError(null);
-      setNotice("La invitación quedó revocada.");
+      notify.success("La invitación quedó revocada.");
       void queryClient.invalidateQueries({ queryKey: ["portal-invitations", firmId, clientId] });
     },
     onError: (error) =>
@@ -612,7 +611,7 @@ export function StudyAdministracion() {
       }),
     onSuccess: (created) => {
       setActionError(null);
-      setNotice(`La norma contable "${created.name}" quedó activa en el catálogo.`);
+      notify.success(`La norma contable "${created.name}" quedó activa en el catálogo.`);
       setStandardName("");
       setShowStandardForm(false);
       invalidateStandards();
@@ -628,7 +627,7 @@ export function StudyAdministracion() {
       }),
     onSuccess: (updated) => {
       setActionError(null);
-      setNotice(`La norma contable "${updated.name}" quedó actualizada.`);
+      notify.success(`La norma contable "${updated.name}" quedó actualizada.`);
       setStandardEditing(null);
       setStandardName("");
       setShowStandardForm(false);
@@ -669,7 +668,7 @@ export function StudyAdministracion() {
     try {
       await navigator.clipboard.writeText(invitationLink);
       setActionError(null);
-      setNotice("El enlace de invitación se copió al portapapeles.");
+      notify.success("El enlace de invitación se copió al portapapeles.");
     } catch {
       setActionError("No se pudo copiar el enlace. Seleccionalo y copialo manualmente.");
     }
@@ -680,7 +679,7 @@ export function StudyAdministracion() {
     try {
       await navigator.clipboard.writeText(recoveryLink);
       setActionError(null);
-      setNotice("El enlace de recuperación se copió al portapapeles.");
+      notify.success("El enlace de recuperación se copió al portapapeles.");
     } catch {
       setActionError("No se pudo copiar el enlace. Seleccionalo y copialo manualmente.");
     }
@@ -800,7 +799,6 @@ export function StudyAdministracion() {
             disabled={anyMemberActionPending}
             onClick={() => {
               setActionError(null);
-              setNotice(null);
               suspendInternalMember.mutate(item.userId);
             }}
           >
@@ -819,7 +817,6 @@ export function StudyAdministracion() {
             disabled={anyMemberActionPending}
             onClick={() => {
               setActionError(null);
-              setNotice(null);
               reactivateInternalMember.mutate(item.userId);
             }}
           >
@@ -833,7 +830,6 @@ export function StudyAdministracion() {
   const changeRole = (item: InternalMember, nextRole: string) => {
     if (nextRole === item.role) return;
     setActionError(null);
-    setNotice(null);
     setInternalRoleDrafts((current) => ({ ...current, [item.userId]: nextRole }));
     updateInternalRole.mutate({ userId: item.userId, role: nextRole });
   };
@@ -985,7 +981,6 @@ export function StudyAdministracion() {
     internalInspector = (
       <Inspector
         label="Roles y módulos"
-        eyebrow="Referencia"
         title="Roles y módulos"
         subtitle="Qué módulos internos abre cada rol."
         onClose={() => setShowRoles(false)}
@@ -1016,7 +1011,6 @@ export function StudyAdministracion() {
       onRevoke: null,
       onToggleStatus: () => {
         setActionError(null);
-        setNotice(null);
         updatePortalMembership.mutate({
           id: item.id,
           patch: { status: item.status === "ACTIVE" && !item.revokedAt ? "SUSPENDED" : "ACTIVE" },
@@ -1351,7 +1345,6 @@ export function StudyAdministracion() {
     tableBody = (
       <section className="study-panel self-review-setting" aria-labelledby="self-review-setting-title">
         <div className="self-review-setting__heading">
-          <p className="study-page__eyebrow">Control interno</p>
           <h2 className="self-review-setting__title" id="self-review-setting-title">
             Permitir autorrevisión de fuentes y legajos
           </h2>
@@ -1486,7 +1479,7 @@ export function StudyAdministracion() {
     setBatchRunning(false);
     setBatchResults(results);
     const okCount = results.filter((item) => item.created).length;
-    setNotice(
+    notify.success(
       `Se crearon ${okCount} de ${results.length} usuarios. Entregá las contraseñas temporales por un canal seguro.`,
     );
     void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
@@ -1534,7 +1527,6 @@ export function StudyAdministracion() {
   return (
     <DensePage density={density} className="administration-users">
       <DenseHeader
-        eyebrow="Configuración del estudio"
         title="Usuarios y accesos"
         description={pageDescription}
         actions={
@@ -1576,25 +1568,6 @@ export function StudyAdministracion() {
         ]}
       />
 
-      {notice ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <Icon name="check" size={18} />
-          <span>
-            <strong>Acción completada</strong>
-            <small>{notice}</small>
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            aria-label="Cerrar aviso"
-            onClick={() => setNotice(null)}
-          >
-            <Icon name="close" size={15} />
-          </Button>
-        </div>
-      ) : null}
       {actionError && !identityEditing && !portalEditing && !showProfileForm ? (
         <p className="form-error" role="alert">
           {actionError}
@@ -1660,7 +1633,6 @@ export function StudyAdministracion() {
             </>
           ) : null}
           <span className="dense-toolbar__spacer" />
-          <DensitySwitch value={density} onChange={setDensity} />
         </DenseToolbar>
       ) : null}
 
@@ -1703,7 +1675,6 @@ export function StudyAdministracion() {
       <ActionDrawer
         isOpen={showInternalInviteForm}
         onClose={closeInternalDrawer}
-        eyebrow="Acceso interno"
         title="Crear usuarios del estudio"
         description="Se genera una contraseña temporal por cuenta, que se muestra una sola vez. Cada persona deberá cambiarla al ingresar."
         size={createMode === "batch" ? "wide" : "default"}
@@ -1938,7 +1909,6 @@ export function StudyAdministracion() {
         <ActionDrawer
           isOpen
           onClose={() => setIdentityEditing(null)}
-          eyebrow="Usuario del estudio"
           title="Editar usuario"
           description="Actualizá el nombre y el correo de la cuenta."
           footer={
@@ -1961,7 +1931,6 @@ export function StudyAdministracion() {
               setIdentitySubmitted(true);
               if (!identityName.trim() || !isValidEmail(identityEmail)) return;
               setActionError(null);
-              setNotice(null);
               updateMemberIdentity.mutate({
                 userId: identityEditing.userId,
                 name: identityName,
@@ -1997,7 +1966,6 @@ export function StudyAdministracion() {
         <ActionDrawer
           isOpen
           onClose={() => setPortalEditing(null)}
-          eyebrow="Acceso del portal"
           title="Editar acceso"
           description={`Cambiar el rol de ${portalEditing.user?.name ?? "esta persona"}.`}
         >
@@ -2006,7 +1974,6 @@ export function StudyAdministracion() {
             onSubmit={(event) => {
               event.preventDefault();
               setActionError(null);
-              setNotice(null);
               updatePortalMembership.mutate({
                 id: portalEditing.id,
                 patch: { role: portalRoleDraft },
@@ -2047,7 +2014,6 @@ export function StudyAdministracion() {
             setShowProfileForm(false);
             setProfileDraft(null);
           }}
-          eyebrow="Configuración del estudio"
           title="Editar datos del estudio"
           description="Actualizá la razón social, el nombre, el CUIT y la zona horaria."
         >
@@ -2056,7 +2022,6 @@ export function StudyAdministracion() {
             onSubmit={(event) => {
               event.preventDefault();
               setActionError(null);
-              setNotice(null);
               updateFirmProfile.mutate(profileDraft);
             }}
           >
@@ -2123,7 +2088,6 @@ export function StudyAdministracion() {
         <ActionDrawer
           isOpen={showInviteForm}
           onClose={() => setShowInviteForm(false)}
-          eyebrow="Acceso del cliente"
           title="Invitar al portal"
           description="Invitación para el cliente seleccionado. Vence a los siete días y sólo puede usarse con el correo indicado."
         >
@@ -2191,7 +2155,6 @@ export function StudyAdministracion() {
           setStandardEditing(null);
           setStandardName("");
         }}
-        eyebrow="Parámetro del estudio"
         title={standardEditing ? "Editar norma contable" : "Nueva norma contable"}
         description="El nombre es el valor que se muestra y se guarda en la ficha de clientes. No se precargan normas: el estudio define las suyas."
       >

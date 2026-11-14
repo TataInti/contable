@@ -11,7 +11,6 @@ export interface ActionDrawerProps {
   onClose: () => void;
   title: string;
   description?: string;
-  eyebrow?: string;
   children: ReactNode;
   footer?: ReactNode;
   closeLabel?: string;
@@ -24,7 +23,6 @@ export function ActionDrawer({
   onClose,
   title,
   description,
-  eyebrow = "Acción",
   children,
   footer,
   closeLabel = "Cerrar panel",
@@ -119,7 +117,6 @@ export function ActionDrawer({
       >
         <header className="action-drawer__header">
           <div>
-            <p className="action-drawer__eyebrow">{eyebrow}</p>
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>

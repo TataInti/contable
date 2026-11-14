@@ -1,0 +1,98 @@
+/* Notificaciones emergentes: una sola región, fija abajo a la derecha. */
+.ds-toast-region {
+  position: fixed;
+  inset-block-end: var(--ds-space-6);
+  inset-inline-end: var(--ds-space-6);
+  z-index: var(--ds-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  inline-size: min(380px, calc(100vw - var(--ds-space-8)));
+  pointer-events: none;
+}
+
+.ds-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-3) var(--ds-space-3) var(--ds-space-3) var(--ds-space-4);
+  border: var(--ds-border-width) solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-color-surface);
+  box-shadow: var(--ds-shadow-float);
+  color: var(--ds-color-text);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-base);
+  line-height: var(--ds-leading-normal);
+  pointer-events: auto;
+  animation: ds-toast-enter var(--ds-duration-normal) var(--ds-ease-out) both;
+}
+
+/* El tono se lee en el icono, no en un fondo de color: el verde de marca
+   queda para acción y selección. */
+.ds-toast__icon {
+  display: inline-flex;
+  flex: none;
+  margin-block-start: var(--ds-space-0-5);
+  color: var(--ds-color-text-muted);
+}
+
+.ds-toast--error {
+  border-color: var(--ds-color-danger);
+}
+
+.ds-toast--error .ds-toast__icon {
+  color: var(--ds-color-danger);
+}
+
+.ds-toast--info .ds-toast__icon {
+  color: var(--ds-color-info);
+}
+
+.ds-toast__content {
+  display: grid;
+  flex: 1;
+  min-inline-size: 0;
+  gap: var(--ds-space-0-5);
+  overflow-wrap: anywhere;
+}
+
+.ds-toast__title {
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.ds-toast__close {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  inline-size: var(--ds-control-height-sm);
+  block-size: var(--ds-control-height-sm);
+  margin: calc(var(--ds-space-1) * -1) 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ds-radius-md);
+  background: transparent;
+  color: var(--ds-color-text-muted);
+  cursor: pointer;
+}
+
+.ds-toast__close:hover {
+  background: var(--ds-color-surface-hover);
+  color: var(--ds-color-text);
+}
+
+.ds-toast__close:focus-visible {
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: var(--ds-focus-offset);
+}
+
+@keyframes ds-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--ds-space-2));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

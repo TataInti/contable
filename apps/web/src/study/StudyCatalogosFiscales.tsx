@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
 import {
   ACTIVITY_CODE_PATTERN,
   normalizeActivityCode,
@@ -18,7 +18,6 @@ import {
   DenseLoading,
   DensePage,
   DenseSearch,
-  DensitySwitch,
   DenseTable,
   DenseTabs,
   DenseToolbar,
@@ -310,7 +309,7 @@ export function StudyCatalogosFiscales() {
   const [originFilter, setOriginFilter] = useState<"" | "REFERENCE" | "UI">("");
   const [stateFilter, setStateFilter] = useState<"" | "active" | "inactive">("");
   const [alertsOnly, setAlertsOnly] = useState(false);
-  const [density, setDensity] = useDensity();
+  const [density] = useDensity();
   const searchRef = useRef<HTMLInputElement>(null);
   const createRef = useRef<() => void>(() => undefined);
   useDenseShortcuts({
@@ -318,7 +317,7 @@ export function StudyCatalogosFiscales() {
     onNew: () => createRef.current(),
     onEscape: () => setSelectedId(null),
   });
-  const [receipt, setReceipt] = useState<string | null>(null);
+  const notify = useNotify();
   const [deletingTarget, setDeletingTarget] = useState<{ path: string } | null>(null);
   const [authorityForm, setAuthorityForm] = useState<AuthorityForm>({
     code: "",
@@ -437,14 +436,14 @@ export function StudyCatalogosFiscales() {
       void queryClient.invalidateQueries({ queryKey: ["tax-authorities", firmId] });
       setEditingAuthority(null);
       setDrawer(null);
-      setReceipt("El organismo quedó actualizado.");
+      notify.success("El organismo quedó actualizado.");
     },
   });
   const toggleAuthority = useMutation({
     mutationFn: (row: TaxAuthorityRow) => api.patch<TaxAuthorityRow>(`/tax/authorities/${row.id}`, { isActive: !row.isActive }),
     onSuccess: (_updated, row) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-authorities", firmId] });
-      setReceipt(row.isActive ? "El organismo quedó oculto." : "El organismo vuelve a mostrarse.");
+      notify.success(row.isActive ? "El organismo quedó oculto." : "El organismo vuelve a mostrarse.");
     },
   });
   const createRegime = useMutation({
@@ -489,14 +488,14 @@ export function StudyCatalogosFiscales() {
       void queryClient.invalidateQueries({ queryKey: ["tax-regimes", firmId] });
       setEditingRegime(null);
       setDrawer(null);
-      setReceipt("El régimen quedó actualizado.");
+      notify.success("El régimen quedó actualizado.");
     },
   });
   const toggleRegime = useMutation({
     mutationFn: (row: TaxRegimeRow) => api.patch<TaxRegimeRow>(`/tax/regimes/${row.id}`, { isActive: !row.isActive }),
     onSuccess: (_updated, row) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-regimes", firmId] });
-      setReceipt(row.isActive ? "El régimen quedó oculto." : "El régimen vuelve a mostrarse.");
+      notify.success(row.isActive ? "El régimen quedó oculto." : "El régimen vuelve a mostrarse.");
     },
   });
   const createJurisdiction = useMutation({
@@ -513,7 +512,7 @@ export function StudyCatalogosFiscales() {
       setJurisdictionForm(emptyJurisdictionForm);
       setDuplicateOfId(null);
       setMasterDrawer(null);
-      setReceipt("La jurisdicción quedó registrada en el catálogo.");
+      notify.success("La jurisdicción quedó registrada en el catálogo.");
     },
   });
   const updateJurisdiction = useMutation({
@@ -528,7 +527,7 @@ export function StudyCatalogosFiscales() {
       void queryClient.invalidateQueries({ queryKey: ["tax-jurisdictions", firmId] });
       setEditingJurisdiction(null);
       setMasterDrawer(null);
-      setReceipt("La jurisdicción quedó actualizada.");
+      notify.success("La jurisdicción quedó actualizada.");
     },
   });
   const toggleJurisdiction = useMutation({
@@ -536,7 +535,7 @@ export function StudyCatalogosFiscales() {
       api.patch<JurisdictionOption>(`/tax/jurisdictions/${row.id}`, { isActive: !row.isActive }),
     onSuccess: (_updated, row) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-jurisdictions", firmId] });
-      setReceipt(row.isActive ? "La jurisdicción quedó oculta." : "La jurisdicción vuelve a mostrarse.");
+      notify.success(row.isActive ? "La jurisdicción quedó oculta." : "La jurisdicción vuelve a mostrarse.");
     },
   });
   const createTaxType = useMutation({
@@ -552,7 +551,7 @@ export function StudyCatalogosFiscales() {
       setTaxTypeForm(emptyTaxTypeForm);
       setDuplicateOfId(null);
       setMasterDrawer(null);
-      setReceipt("El tipo de impuesto quedó registrado en el catálogo.");
+      notify.success("El tipo de impuesto quedó registrado en el catálogo.");
     },
   });
   const updateTaxType = useMutation({
@@ -565,7 +564,7 @@ export function StudyCatalogosFiscales() {
       void queryClient.invalidateQueries({ queryKey: ["tax-types", firmId] });
       setEditingTaxType(null);
       setMasterDrawer(null);
-      setReceipt("El tipo de impuesto quedó actualizado.");
+      notify.success("El tipo de impuesto quedó actualizado.");
     },
   });
   const toggleTaxType = useMutation({
@@ -573,7 +572,7 @@ export function StudyCatalogosFiscales() {
       api.patch<TaxTypeOption>(`/tax/types/${row.id}`, { isActive: !row.isActive }),
     onSuccess: (_updated, row) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-types", firmId] });
-      setReceipt(row.isActive ? "El tipo de impuesto quedó oculto." : "El tipo de impuesto vuelve a mostrarse.");
+      notify.success(row.isActive ? "El tipo de impuesto quedó oculto." : "El tipo de impuesto vuelve a mostrarse.");
     },
   });
 
@@ -593,7 +592,7 @@ export function StudyCatalogosFiscales() {
       setActivityForm(emptyActivityForm);
       setDuplicateOfId(null);
       setActivityDrawer(null);
-      setReceipt("La actividad quedó registrada en el catálogo.");
+      notify.success("La actividad quedó registrada en el catálogo.");
     },
   });
   const updateActivity = useMutation({
@@ -617,9 +616,9 @@ export function StudyCatalogosFiscales() {
         const retainedLabel = retainedReferences > 0
           ? `${retainedReferences} ${retainedReferences === 1 ? "referencia conserva" : "referencias conservan"} el código anterior (${previousCode}).`
           : "No quedan referencias al código anterior.";
-        setReceipt(`Se propagó el cambio de código ${previousCode} → ${updated.code}: ${updatedLabel}. ${retainedLabel}`);
+        notify.success(`Se propagó el cambio de código ${previousCode} → ${updated.code}: ${updatedLabel}. ${retainedLabel}`);
       } else {
-        setReceipt("Los datos de la actividad quedaron actualizados.");
+        notify.success("Los datos de la actividad quedaron actualizados.");
       }
     },
   });
@@ -634,9 +633,9 @@ export function StudyCatalogosFiscales() {
       void queryClient.invalidateQueries({ queryKey: ["tax-activities-catalog", firmId] });
       setActivityDrawer(null);
       if (row.isActive) {
-        setReceipt("La actividad quedó oculta en los selectores. Sus vínculos y reglas siguen asociados al registro.");
+        notify.success("La actividad quedó oculta en los selectores. Sus vínculos y reglas siguen asociados al registro.");
       } else {
-        setReceipt("La actividad vuelve a mostrarse en los selectores.");
+        notify.success("La actividad vuelve a mostrarse en los selectores.");
       }
     },
   });
@@ -989,7 +988,6 @@ export function StudyCatalogosFiscales() {
     inspector = (
       <Inspector
         label="Detalle de la jurisdicción"
-        eyebrow="Jurisdicción"
         title={selectedJurisdiction.code}
         subtitle={selectedJurisdiction.name}
         onClose={() => setSelectedId(null)}
@@ -1037,7 +1035,6 @@ export function StudyCatalogosFiscales() {
     inspector = (
       <Inspector
         label="Detalle del tipo de impuesto"
-        eyebrow="Tipo de impuesto"
         title={selectedTaxType.code}
         subtitle={selectedTaxType.name}
         onClose={() => setSelectedId(null)}
@@ -1079,7 +1076,6 @@ export function StudyCatalogosFiscales() {
     inspector = (
       <Inspector
         label="Detalle del organismo"
-        eyebrow="Organismo"
         title={selectedAuthority.code}
         subtitle={selectedAuthority.name}
         onClose={() => setSelectedId(null)}
@@ -1141,7 +1137,6 @@ export function StudyCatalogosFiscales() {
     inspector = (
       <Inspector
         label="Detalle del régimen"
-        eyebrow="Régimen"
         title={selectedRegime.code}
         subtitle={selectedRegime.name}
         onClose={() => setSelectedId(null)}
@@ -1223,7 +1218,6 @@ export function StudyCatalogosFiscales() {
     inspector = (
       <Inspector
         label="Detalle de la actividad"
-        eyebrow="Actividad económica"
         title={selectedActivity.code}
         subtitle={selectedActivity.name}
         onClose={() => setSelectedId(null)}
@@ -1724,7 +1718,6 @@ export function StudyCatalogosFiscales() {
   return (
     <DensePage density={density} flow className="fiscal-catalog-page">
       <DenseHeader
-        eyebrow="Administración fiscal"
         title="Catálogos fiscales"
         description="Administrá jurisdicciones, tipos de impuesto, organismos recaudadores, regímenes y actividades que organizan la configuración fiscal del estudio."
         actions={
@@ -1866,7 +1859,6 @@ export function StudyCatalogosFiscales() {
           </Button>
         ) : null}
         <span className="dense-toolbar__spacer" />
-        <DensitySwitch value={density} onChange={setDensity} />
       </DenseToolbar>
 
       {tab === "regimes" && mismatchedRegimes.length > 0 ? (
@@ -1897,7 +1889,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={drawer === "authority-create" || drawer === "authority-edit"}
         onClose={() => { setDrawer(null); setEditingAuthority(null); }}
-        eyebrow="Catálogo fiscal del estudio"
         title={drawer === "authority-edit" ? "Editar organismo recaudador" : "Nuevo organismo recaudador"}
         description="La jurisdicción define el alcance en el que puede asignarse este organismo: ARCA recauda en Nación, las DGR en cada provincia y las direcciones de rentas en cada municipio."
       >
@@ -1962,7 +1953,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={drawer === "regime-create" || drawer === "regime-edit"}
         onClose={() => { setDrawer(null); setEditingRegime(null); }}
-        eyebrow="Catálogo fiscal del estudio"
         title={drawer === "regime-edit" ? "Editar régimen" : "Nuevo régimen"}
         description="El organismo recaudador seleccionado debe corresponder a la jurisdicción del régimen."
       >
@@ -2161,25 +2151,10 @@ export function StudyCatalogosFiscales() {
         </form>
       </ActionDrawer>
 
-      {receipt ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Actualización registrada"
-          action={
-            <Button type="button" variant="text" size="row" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
-              Cerrar
-            </Button>
-          }
-        >
-          {receipt}
-        </Notice>
-      ) : null}
 
       <ActionDrawer
         isOpen={activityDrawer === "create"}
         onClose={() => setActivityDrawer(null)}
-        eyebrow="Catálogo de actividades"
         title="Nueva actividad económica"
         description="El código se guarda en mayúsculas. Completá sus campos de catálogo y vigencia."
       >
@@ -2301,7 +2276,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={activityDrawer === "edit" && Boolean(editingActivity)}
         onClose={() => setActivityDrawer(null)}
-        eyebrow="Catálogo de actividades"
         title="Editar actividad económica"
         description="Actualizá el código, la jurisdicción, la fuente o la vigencia de la actividad."
       >
@@ -2415,7 +2389,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={activityDrawer === "deactivate" && Boolean(editingActivity)}
         onClose={() => setActivityDrawer(null)}
-        eyebrow="Catálogo de actividades"
         title="Ocultar actividad económica"
         description="El registro, sus vínculos y reglas se conservan. La actividad deja de ofrecerse en los selectores."
       >
@@ -2446,7 +2419,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={masterDrawer === "jurisdiction-create"}
         onClose={() => setMasterDrawer(null)}
-        eyebrow="Catálogo fiscal del estudio"
         title={duplicateJurisdictionSource
           ? `Nueva jurisdicción a partir de ${duplicateJurisdictionSource.code}`
           : "Nueva jurisdicción"}
@@ -2539,7 +2511,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={masterDrawer === "jurisdiction-edit" && Boolean(editingJurisdiction)}
         onClose={() => setMasterDrawer(null)}
-        eyebrow="Catálogo fiscal del estudio"
         title="Editar jurisdicción"
         description="Actualizá el código, el nivel o el nombre."
         footer={
@@ -2627,7 +2598,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={masterDrawer === "tax-type-create"}
         onClose={() => setMasterDrawer(null)}
-        eyebrow="Catálogo fiscal del estudio"
         title="Nuevo tipo de impuesto"
         description="Agregá el impuesto que usa el estudio para definir sus regímenes fiscales."
       >
@@ -2693,7 +2663,6 @@ export function StudyCatalogosFiscales() {
       <ActionDrawer
         isOpen={masterDrawer === "tax-type-edit" && Boolean(editingTaxType)}
         onClose={() => setMasterDrawer(null)}
-        eyebrow="Catálogo fiscal del estudio"
         title="Editar tipo de impuesto"
         description="Actualizá el código o el nombre del tipo de impuesto."
       >
@@ -2748,7 +2717,7 @@ export function StudyCatalogosFiscales() {
               queryClient.invalidateQueries({ queryKey: ["client-profile-activity-catalog", firmId] }),
               queryClient.invalidateQueries({ queryKey: ["tax-rule-packs", firmId] }),
             ]);
-            setReceipt("El catálogo quedó eliminado y la auditoría del estudio conserva el registro de la acción.");
+            notify.success("El catálogo quedó eliminado y la auditoría del estudio conserva el registro de la acción.");
           }}
         />
       ) : null}

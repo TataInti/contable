@@ -32,18 +32,18 @@ type TourRect = {
 
 const TOUR_STEPS: readonly TourStep[] = [
   {
-    selector: "#context-bar",
-    eyebrow: "Paso 1 · Contexto",
-    title: "Definí el estudio, el cliente y el período",
+    selector: '[data-tour="client-switcher"]',
+    eyebrow: "Paso 1 · Cliente",
+    title: "Elegí el cliente con el que vas a trabajar",
     description:
-      "El contexto activo reúne el estudio, el cliente y el período de trabajo. Cada consulta y cada tarea queda vinculada a esa referencia para mantener el foco en la gestión que estás realizando.",
+      "El cliente se elige acá, una sola vez. Todas las secciones de este bloque muestran su información y cada tarea queda vinculada a él.",
   },
   {
     selector: '[data-tour="nav-general"]',
     eyebrow: "Paso 2 · Estudio",
-    title: "Todo el trabajo del estudio, en una sola navegación",
+    title: "Lo que es de toda la cartera",
     description:
-      "El bloque Estudio reúne Inicio, Clientes, Bandeja documental, Trabajo, Liquidaciones, Legajo y Rentabilidad. El bloque Del cliente incluye Configuración fiscal. Desde Clientes, el botón «Abrir» lleva al Resumen del cliente.",
+      "Inicio muestra las prioridades del estudio y Clientes reúne la cartera completa. Desde Clientes, el botón «Abrir» lleva al Resumen del cliente.",
   },
   {
     selector: '[data-tour="nav-preparacion"]',
@@ -57,7 +57,7 @@ const TOUR_STEPS: readonly TourStep[] = [
     eyebrow: "Paso 4 · Trabajo y cierres",
     title: "Organizá las tareas del período",
     description:
-      "Trabajo, Liquidaciones y Legajo concentran los pedidos, las obligaciones y el seguimiento mensual dentro del bloque Estudio.",
+      "Trabajo, Legajo y Liquidaciones concentran los pedidos, las obligaciones y el seguimiento mensual del cliente elegido.",
   },
   {
     selector: '[data-tour="nav-analisis"]',
@@ -68,10 +68,10 @@ const TOUR_STEPS: readonly TourStep[] = [
   },
   {
     selector: '[data-tour="nav-configuracion"]',
-    eyebrow: "Paso 6 · Ajustes del estudio",
+    eyebrow: "Paso 6 · Configuración del estudio",
     title: "Configurá los recursos del estudio",
     description:
-      "El bloque colapsable agrupa Usuarios y accesos, Módulos de estudios, Reglas fiscales y Catálogos fiscales. Abrilo para gestionar cada opción según las capacidades de tu rol.",
+      "Agrupa Usuarios y accesos, Módulos de estudios, Reglas fiscales y Catálogos fiscales. Se configura pocas veces y vale para todos los clientes.",
   },
   {
     selector: '[data-tour="portal-link"]',

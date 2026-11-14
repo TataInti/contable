@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { ToastProvider } from "@contable/design-system";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
@@ -204,7 +205,9 @@ function renderReglas() {
   });
   return render(
     <QueryClientProvider client={client}>
+      <ToastProvider>
       <StudyReglasFiscales />
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }
@@ -668,7 +671,7 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("confirmar llama al endpoint y muestra el recibo junto a la tarjeta del paquete", async () => {
+  it("confirmar llama al endpoint y avisa con una notificación", async () => {
     mockApi(makeDetail(null));
     vi.mocked(api.post).mockResolvedValue({} as never);
     renderReglas();
@@ -681,14 +684,11 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/tax/rule-versions/version-1/activate"),
     );
-    const packageCard = activateButton.closest("section");
-    expect(packageCard).not.toBeNull();
-    expect(
-      await within(packageCard!).findByText(
-        "La versión v1 quedó activa y disponible para próximos cálculos.",
-      ),
-    ).toBeTruthy();
-    expect(within(packageCard!).getByRole("status")).toBeTruthy();
+    // La confirmación llega como notificación emergente, no dentro de la tarjeta.
+    const toast = await screen.findByText(
+      "La versión v1 quedó activa y disponible para próximos cálculos.",
+    );
+    expect(toast.closest('[role="status"]')).not.toBeNull();
   });
 
   it("oculta Activar cuando falta tax.rules.propose aunque exista la capacidad legacy", async () => {

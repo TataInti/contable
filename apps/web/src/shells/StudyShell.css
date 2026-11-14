@@ -76,27 +76,7 @@
   margin-top: var(--ds-space-3);
 }
 
-.study__scope-line {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--ds-space-2);
-  padding: var(--ds-space-1) var(--ds-space-2) var(--ds-space-2);
-  color: var(--ds-color-text-faint);
-  font-size: var(--ds-text-xs);
-  font-weight: var(--ds-font-weight-bold);
-  text-transform: uppercase;
-}
 
-.study__scope-line strong {
-  overflow: hidden;
-  color: var(--ds-color-text);
-  font-size: var(--ds-text-sm);
-  font-weight: var(--ds-font-weight-medium);
-  text-overflow: ellipsis;
-  text-transform: none;
-  white-space: nowrap;
-}
 
 .study__nav-label {
   margin: 0 0 var(--ds-space-1);
@@ -124,6 +104,64 @@
     background-color var(--ds-duration-fast) ease-out;
 }
 
+.study__nav-link {
+  gap: var(--ds-space-2);
+}
+
+.study__nav-link svg {
+  flex: none;
+  color: var(--ds-color-text-faint);
+}
+
+.study__nav-link--active svg {
+  color: var(--ds-color-primary);
+}
+
+/* Sin cliente elegido: la sección se ve pero no navega. */
+.study__nav-link--disabled {
+  color: var(--ds-color-text-disabled);
+  cursor: not-allowed;
+}
+
+.study__nav-link--disabled:hover {
+  background: transparent;
+  color: var(--ds-color-text-disabled);
+}
+
+/* Selector de cliente: el contexto se elige acá, una sola vez. */
+.study__client-switcher {
+  display: block;
+  margin: 0 0 var(--ds-space-2);
+  padding: 0 var(--ds-space-2);
+}
+
+.study__client-switcher-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.study__client-select {
+  width: 100%;
+  min-height: var(--ds-control-height-md);
+  padding: 0 var(--ds-space-3);
+  border: var(--ds-border-width) solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-base);
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.study__client-select:focus-visible {
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: var(--ds-focus-offset);
+}
+
 .study__nav-link:hover {
   background: var(--ds-color-surface-hover);
   color: var(--ds-color-text);
@@ -137,45 +175,10 @@
   font-weight: var(--ds-font-weight-medium);
 }
 
-.study__nav-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: calc(var(--ds-control-height-sm) + var(--ds-space-1));
-  padding: 0 var(--ds-space-2);
-  border: 0;
-  border-radius: var(--ds-radius-md);
-  background: transparent;
-  color: var(--ds-color-text-muted);
-  font-family: var(--ds-font-sans);
-  font-size: var(--ds-text-xs);
-  font-weight: var(--ds-font-weight-bold);
-  text-align: left;
-  text-transform: uppercase;
-  cursor: pointer;
-}
 
-.study__nav-toggle .ds-button__content {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-}
 
-.study__nav-toggle:hover {
-  background: var(--ds-color-surface-hover);
-  color: var(--ds-color-text);
-}
 
-.study__settings-chevron {
-  color: var(--ds-color-text-muted);
-  transition: transform var(--ds-duration-fast) ease-out;
-}
 
-.study__nav-toggle[aria-expanded="true"] .study__settings-chevron {
-  transform: rotate(180deg);
-}
 
 .study__sidebar-footer {
   flex: 0 0 auto;
@@ -269,6 +272,15 @@
   background: var(--ds-color-surface-hover);
   color: var(--ds-color-text);
   text-decoration: none;
+}
+
+/* Preferencias de la persona: viven acá, una sola vez, no en cada pantalla. */
+.study__help-preference {
+  display: grid;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2) var(--ds-space-2) var(--ds-space-1);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
 }
 
 .study__portal-link {
@@ -525,8 +537,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .study__sidebar,
-  .study__nav-link,
-  .study__nav-chevron {
+  .study__nav-link {
     transition: none;
   }
 }

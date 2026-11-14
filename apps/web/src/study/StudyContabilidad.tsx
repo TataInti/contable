@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, MoneyField, Notice, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, MoneyField, Notice, Table, useNotify } from "@contable/design-system";
 import { api, type Account, type FiscalYear, type TrialBalance } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -12,6 +12,7 @@ import {
   StatStrip,
   useDensity,
 } from "../ui/Dense";
+import { actionErrorMessage } from "../ui/actionError";
 import "./study.css";
 
 interface JournalLine {
@@ -74,7 +75,7 @@ export function StudyContabilidad() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showDraftForm, setShowDraftForm] = useState(false);
-  const [receipt, setReceipt] = useState<string | null>(null);
+  const notify = useNotify();
   const [draft, setDraft] = useState({
     entryDate: "",
     description: "",
@@ -221,7 +222,7 @@ export function StudyContabilidad() {
     },
     onSuccess: () => {
       setShowDraftForm(false);
-      setReceipt("Borrador creado y balanceado. Enviálo a revisión cuando esté listo.");
+      notify.success("Borrador creado y balanceado. Enviálo a revisión cuando esté listo.");
       setDraft((current) => ({
         ...current,
         description: "",
@@ -239,9 +240,10 @@ export function StudyContabilidad() {
   const submitDraft = useMutation({
     mutationFn: (entryId: string) => api.post(`${base}/journal-entries/${entryId}/submit`),
     onSuccess: () => {
-      setReceipt("Asiento enviado a revisión.");
+      notify.success("Asiento enviado a revisión.");
       void queryClient.invalidateQueries({ queryKey: ["journal-entries", firmId, clientId] });
     },
+    onError: (error) => notify.error(actionErrorMessage(error, "No se pudo enviar el asiento a revisión.")),
   });
 
   if (!base)
@@ -259,7 +261,6 @@ export function StudyContabilidad() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Libros canónicos"
         title="Contabilidad"
         description="Consultá asientos contabilizados, movimientos por cuenta y el balance del período activo."
         actions={
@@ -316,42 +317,15 @@ export function StudyContabilidad() {
             tone: selectedDrafts.length > 0 ? "warn" : undefined,
           },
           { key: "accounts", label: "Cuentas", value: accounts.data?.length ?? "—", detail: `${postingAccounts.length} posteables` },
-          {
-            key: "period",
-            label: "Período",
-            value: activePeriod ? (activePeriod.status === "OPEN" ? "Abierto" : "Cerrado") : "Sin seleccionar",
-          },
         ]}
       />
 
 
 
-      {receipt ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Acción completada"
-          action={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              iconOnly
-              aria-label="Cerrar confirmación"
-              onClick={() => setReceipt(null)}
-            >
-              <Icon name="close" size={15} />
-            </Button>
-          }
-        >
-          {receipt}
-        </Notice>
-      ) : null}
 
       <ActionDrawer
         isOpen={showDraftForm}
         onClose={() => setShowDraftForm(false)}
-        eyebrow="Maker"
         title="Nuevo asiento manual"
         description="Genera dos líneas balanceadas. Podrás enviarlo a revisión antes de contabilizar."
         size="wide"
@@ -528,7 +502,6 @@ export function StudyContabilidad() {
       <section className="study-panel" aria-labelledby="drafts-title">
         <div className="study-panel__heading">
           <div>
-            <p className="study-page__eyebrow">Maker</p>
             <h2 id="drafts-title">Asientos en preparación</h2>
             <p>
               Los borradores no afectan los libros hasta completar la revisión y contabilización.
@@ -618,11 +591,6 @@ export function StudyContabilidad() {
             ]}
           />
         )}
-        {submitDraft.isError ? (
-          <Notice tone="error">
-            {submitDraft.error.message}
-          </Notice>
-        ) : null}
       </section>
 
       {activeQuery.isLoading ? (

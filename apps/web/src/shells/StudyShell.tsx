@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, DensitySwitch, useDensity } from "@contable/design-system";
 import { ContextBar } from "./ContextBar";
 import { logout } from "../lib/auth";
 import { useSession } from "../session/SessionContext";
@@ -29,36 +29,24 @@ const NAV_ITEM_TOUR_IDS: Partial<Record<StudyModule["id"], string>> = {
   rentabilidad: "nav-analisis",
 };
 
-const STUDY_NAVIGATION_IDS = [
-  "inicio",
-  "clientes",
+// Dos niveles: lo que es de toda la cartera y lo que pertenece al cliente
+// elegido. Dentro del cliente, el orden sigue el trabajo del mes.
+const STUDY_NAVIGATION_IDS = ["inicio", "clientes"] as const;
+const CLIENT_NAVIGATION_IDS = [
+  "resumen-cliente",
   "bandeja",
   "trabajo",
-  "liquidaciones",
   "expediente-mensual",
+  "liquidaciones",
   "rentabilidad",
+  "configuracion-fiscal",
 ] as const;
-const CLIENT_NAVIGATION_IDS = ["configuracion-fiscal"] as const;
 const STUDY_SETTINGS_NAVIGATION_IDS = [
   "usuarios",
   "administracion-plataforma",
   "reglas-fiscales",
   "catalogos-fiscales",
 ] as const;
-const STUDY_SETTINGS_PATHS = new Set([
-  "/administracion",
-  "/administracion-plataforma",
-  "/reglas-fiscales",
-  "/catalogos-fiscales",
-]);
-
-const CLIENT_INDEPENDENT_SECTIONS = new Set([
-  "/catalogos-fiscales",
-  "/reglas-fiscales",
-  "/administracion",
-  "/administracion-plataforma",
-]);
-
 function modulesInOrder(modules: readonly StudyModule[], ids: readonly string[]) {
   const modulesById = new Map(modules.map((module) => [module.id, module]));
   return ids.flatMap((id) => {
@@ -81,7 +69,27 @@ function Brand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function StudyNavLink({ item }: { item: StudyModule }) {
+const NAV_LABEL_OVERRIDES: Partial<Record<StudyModule["id"], string>> = {
+  "resumen-cliente": "Resumen",
+};
+
+function StudyNavLink({ item, disabledReason }: { item: StudyModule; disabledReason?: string }) {
+  const label = NAV_LABEL_OVERRIDES[item.id] ?? item.label;
+  if (disabledReason) {
+    // Sin cliente elegido el ítem se ve, para mostrar el recorrido completo,
+    // pero no navega: explica qué falta.
+    return (
+      <span
+        className="study__nav-link study__nav-link--disabled"
+        aria-disabled="true"
+        title={disabledReason}
+        data-tour={NAV_ITEM_TOUR_IDS[item.id]}
+      >
+        <Icon name={item.icon} size={17} />
+        <span>{label}</span>
+      </span>
+    );
+  }
   return (
     <NavLink
       key={item.id}
@@ -92,7 +100,8 @@ function StudyNavLink({ item }: { item: StudyModule }) {
         `study__nav-link${isActive ? " study__nav-link--active" : ""}`
       }
     >
-      <span>{item.label}</span>
+      <Icon name={item.icon} size={17} />
+      <span>{label}</span>
     </NavLink>
   );
 }
@@ -101,22 +110,24 @@ export function StudyShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const session = useSession();
-  const { firmId, clientId, capabilities } = useClientContext();
+  const { firmId, clientId, capabilities, setClientId } = useClientContext();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(() =>
-    STUDY_SETTINGS_PATHS.has(location.pathname),
-  );
+  const [density, setDensity] = useDensity();
   const firm = session.me?.firms.find((item) => item.firmId === firmId);
-  const selectedClient = firm?.clients.find((item) => item.clientId === clientId);
+  const clients = firm?.clients ?? [];
   const navigationModules = modulesForNavigation(capabilities);
   const studyModules = modulesInOrder(navigationModules, STUDY_NAVIGATION_IDS);
   const clientModules = modulesInOrder(navigationModules, CLIENT_NAVIGATION_IDS);
   const settingsModules = modulesInOrder(navigationModules, STUDY_SETTINGS_NAVIGATION_IDS);
   const navRef = useRef<HTMLElement | null>(null);
+  // La barra superior queda sólo para elegir el período contable, en las
+  // pantallas que lo necesitan. El cliente se elige en el menú.
+  const needsPeriod = navigationModules.some(
+    (module) => module.path === location.pathname && module.requirements.period === true,
+  );
 
   useEffect(() => {
     setMenuOpen(false);
-    if (STUDY_SETTINGS_PATHS.has(location.pathname)) setSettingsOpen(true);
   }, [location.pathname]);
 
   // En escritorio el menú puede superar la altura del viewport: al navegar,
@@ -127,7 +138,7 @@ export function StudyShell() {
       ".study__nav-link--active",
     );
     activeLink?.scrollIntoView?.({ block: "nearest" });
-  }, [location.pathname, settingsOpen]);
+  }, [location.pathname]);
 
   const openNavigationForTour = useCallback(() => {
     if (window.matchMedia?.("(max-width: 1024px)").matches) {
@@ -176,11 +187,6 @@ export function StudyShell() {
       <aside className="study__sidebar" id="study-navigation">
         <Brand />
         <nav className="study__nav" aria-label="Navegación del estudio" ref={navRef}>
-          <div className="study__scope-line">
-            <span>En contexto</span>
-            <strong>{selectedClient?.clientName ?? "Sin elegir"}</strong>
-          </div>
-
           <div
             className="study__nav-group"
             role="group"
@@ -201,19 +207,33 @@ export function StudyShell() {
             aria-labelledby="study-navigation-client-label"
           >
             <p className="study__nav-label" id="study-navigation-client-label">
-              Del cliente
+              Cliente
             </p>
-            {clientId ? (
-              clientModules.map((item) => <StudyNavLink item={item} key={item.id} />)
-            ) : (
-              <EmptyState
-                size="compact"
-                kind="no-data"
-                title="Elegí un cliente"
-                description="Seleccioná un cliente para abrir sus módulos de trabajo."
-                action={capabilities.has("client.read") ? <NavLink to="/clientes">Elegir cliente</NavLink> : undefined}
+            <label className="study__client-switcher" data-tour="client-switcher">
+              <span className="study__client-switcher-label">Cliente en el que estás trabajando</span>
+              <select
+                className="study__client-select"
+                value={clientId ?? ""}
+                disabled={clients.length === 0}
+                onChange={(event) => setClientId(event.target.value || null)}
+              >
+                <option value="">
+                  {clients.length === 0 ? "Sin clientes todavía" : "Elegí un cliente…"}
+                </option>
+                {clients.map((client) => (
+                  <option key={client.clientId} value={client.clientId}>
+                    {client.clientName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {clientModules.map((item) => (
+              <StudyNavLink
+                item={item}
+                key={item.id}
+                {...(clientId ? {} : { disabledReason: "Elegí un cliente para abrir esta sección" })}
               />
-            )}
+            ))}
           </div>
 
           {settingsModules.length > 0 ? (
@@ -221,27 +241,14 @@ export function StudyShell() {
               className="study__nav-group"
               role="group"
               aria-labelledby="study-navigation-settings-label"
+              data-tour="nav-configuracion"
             >
-              <Button
-                type="button"
-                className="study__nav-toggle"
-                variant="ghost"
-                id="study-navigation-settings-label"
-                aria-expanded={settingsOpen}
-                aria-controls="study-settings-items"
-                data-tour="nav-configuracion"
-                onClick={() => setSettingsOpen((current) => !current)}
-              >
-                <span>Ajustes del estudio</span>
-                <span className="study__settings-chevron" aria-hidden="true">
-                  ▾
-                </span>
-              </Button>
-              <div id="study-settings-items" hidden={!settingsOpen}>
-                {settingsModules.map((item) => (
-                  <StudyNavLink item={item} key={item.id} />
-                ))}
-              </div>
+              <p className="study__nav-label" id="study-navigation-settings-label">
+                Configuración del estudio
+              </p>
+              {settingsModules.map((item) => (
+                <StudyNavLink item={item} key={item.id} />
+              ))}
             </div>
           ) : null}
         </nav>
@@ -271,6 +278,10 @@ export function StudyShell() {
                   </Button>
                 )}
               </GuidedTour>
+              <div className="study__help-preference">
+                <span>Filas de las tablas</span>
+                <DensitySwitch value={density} onChange={setDensity} />
+              </div>
             </div>
           </details>
           {session.portalContexts.length > 0 ? (
@@ -309,7 +320,7 @@ export function StudyShell() {
       </aside>
 
       <div className="study__main">
-        {CLIENT_INDEPENDENT_SECTIONS.has(location.pathname) ? null : <ContextBar />}
+        {needsPeriod ? <ContextBar only="period" /> : null}
         <main className="study__content" id="main-content">
           <Outlet />
         </main>

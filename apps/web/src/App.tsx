@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
-import { Button } from "@contable/design-system";
+import { Button, ToastProvider } from "@contable/design-system";
 import { ClientContextProvider } from "./context/ClientContext";
 import { SessionProvider, useSession } from "./session/SessionContext";
 import { StudyShell } from "./shells/StudyShell";
@@ -227,11 +227,13 @@ function AppRoutes() {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <SessionProvider>
-          <AppRoutes />
-        </SessionProvider>
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <SessionProvider>
+            <AppRoutes />
+          </SessionProvider>
+        </BrowserRouter>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

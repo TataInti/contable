@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, Table, useNotify } from "@contable/design-system";
 import { isManualExtractionFieldKey } from "@contable/contracts";
 import { useNavigate } from "react-router-dom";
 import {
@@ -130,7 +130,7 @@ export function StudyBandeja() {
   const [uploadRequestItemId, setUploadRequestItemId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadDone, setUploadDone] = useState(false);
+  const notify = useNotify();
   const [dragging, setDragging] = useState(false);
   const [documentSearch, setDocumentSearch] = useState("");
   const [documentFilter, setDocumentFilter] = useState<DocumentQueueFilter>("ALL");
@@ -221,7 +221,6 @@ export function StudyBandeja() {
 
   const chooseFile = (selected: File | null) => {
     const error = validateFile(selected);
-    setUploadDone(false);
     setUploadError(error);
     setFile(error ? null : selected);
   };
@@ -251,7 +250,7 @@ export function StudyBandeja() {
       );
     },
     onSuccess: (document) => {
-      setUploadDone(true);
+      notify.success("Documento recibido. Ya ingresó al circuito de validación y procesamiento.");
       setFile(null);
       setSelectedId(document.documentId);
       void Promise.all([
@@ -445,7 +444,6 @@ export function StudyBandeja() {
   return (
     <DensePage density={density} flow className="document-inbox">
       <DenseHeader
-        eyebrow="Ingreso y evidencia"
         title="Bandeja documental"
         description="Cargá comprobantes, validá los datos extraídos y prepará el asiento sin perder la evidencia."
         actions={
@@ -463,7 +461,6 @@ export function StudyBandeja() {
             <Button
               onClick={() => {
                 setShowUpload((value) => !value);
-                setUploadDone(false);
                 setUploadError(null);
               }}
               variant={showUpload ? "secondary" : "primary"}
@@ -505,7 +502,6 @@ export function StudyBandeja() {
           setFile(null);
           setUploadError(null);
         }}
-        eyebrow="Bandeja"
         title="Nuevo documento"
         description="El archivo pasa por validación, antivirus y extracción antes de estar disponible."
         size="wide"
@@ -593,14 +589,6 @@ export function StudyBandeja() {
               <p className="form-error" role="alert">
                 {uploadError}
               </p>
-            ) : null}
-            {uploadDone ? (
-              <div className="action-receipt" role="status">
-                <span>
-                  <strong>Documento recibido</strong>
-                  <small>Ya ingresó al circuito de validación y procesamiento.</small>
-                </span>
-              </div>
             ) : null}
             <div className="upload-panel__actions">
               <Button
@@ -829,7 +817,6 @@ export function StudyBandeja() {
                   <>
                     <div className="extraction-heading">
                       <div>
-                        <p className="study-page__eyebrow">Datos detectados</p>
                         <h3>Revisá contra el comprobante</h3>
                       </div>
                       <span>
@@ -1025,7 +1012,6 @@ export function StudyBandeja() {
       <ActionDrawer
         isOpen={showRejectDialog}
         onClose={() => setShowRejectDialog(false)}
-        eyebrow="Revisión documental"
         title="¿Rechazar este documento?"
         description="Elegí el motivo del rechazo. La decisión queda registrada y el documento sale de Para revisar."
         footer={

@@ -1,14 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import {
-  Button,
-  EmptyState,
-  Field,
-  getStatusBadgeMeta,
-  MoneyField,
-  Table,
-} from "@contable/design-system";
+import { Button, EmptyState, Field, getStatusBadgeMeta, MoneyField, Table, useNotify } from "@contable/design-system";
 import { ApiError, api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
@@ -688,7 +681,7 @@ export function StudyExpedienteMensual() {
     sales: SifereAnalysis | null;
     purchases: SifereAnalysis | null;
   }>({ sales: null, purchases: null });
-  const [sifereReceipt, setSifereReceipt] = useState<string | null>(null);
+  const notify = useNotify();
 
   const taxPeriodsQuery = useQuery({
     queryKey: ["tax-periods", firmId, clientId],
@@ -881,7 +874,7 @@ export function StudyExpedienteMensual() {
       setShowSifereModal(false);
       setSifereFiles({ sales: null, purchases: null });
       setSifereAnalysis({ sales: null, purchases: null });
-      setSifereReceipt(
+      notify.success(
         `Se importaron ${data.batch.committed} comprobante(s) de ${data.analysis.direction === "SALE" ? "ventas" : "compras"} (${data.analysis.sheetName}). Quedaron asociados al cliente y al período activo.`,
       );
       void queryClient.invalidateQueries({
@@ -1265,20 +1258,7 @@ export function StudyExpedienteMensual() {
 
   return (
     <DensePage density={density} flow>
-      {sifereReceipt ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <span>{sifereReceipt}</span>
-          <button
-            type="button"
-            aria-label="Descartar aviso"
-            onClick={() => setSifereReceipt(null)}
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
       <DenseHeader
-        eyebrow="Impuestos"
         title="Legajo"
         description="Coordina IVA, IIBB y TEM del período con evidencia trazable."
         actions={
@@ -1372,7 +1352,6 @@ export function StudyExpedienteMensual() {
       <ActionDrawer
         isOpen={showSifereModal}
         onClose={() => setShowSifereModal(false)}
-        eyebrow="Análisis previo"
         title="Subir libros IVA (Excel)"
         description="Subí por separado el libro de compras y el de ventas. El análisis de alícuotas y tributos no depende de que esté completo: lo podés correr con lo que ya tengas."
         size="wide"
@@ -1465,7 +1444,6 @@ export function StudyExpedienteMensual() {
       <ActionDrawer
         isOpen={showOpening}
         onClose={() => setShowOpening(false)}
-        eyebrow="Saldos"
         title="Cargar saldo inicial"
         description="Registrá un saldo a favor o arrastre. Podés adjuntar un respaldo documental o cargarlo manualmente; en ambos casos queda registrado el usuario que lo hizo."
         size="wide"
@@ -1623,7 +1601,6 @@ export function StudyExpedienteMensual() {
       <ActionDrawer
         isOpen={editingLot !== null}
         onClose={() => setEditingLot(null)}
-        eyebrow="Saldos"
         title="Editar saldo"
         description="Actualizá el monto, la referencia o el documento de respaldo del saldo. Cada cambio queda registrado en el log con usuario y fecha."
         size="wide"
@@ -1699,7 +1676,6 @@ export function StudyExpedienteMensual() {
       <ActionDrawer
         isOpen={positionAction?.kind === "PAYMENT"}
         onClose={() => setPositionAction(null)}
-        eyebrow="Pago"
         title={
           positionAction?.kind === "PAYMENT"
             ? positionAction.position.regime.name
@@ -1775,7 +1751,6 @@ export function StudyExpedienteMensual() {
       <ActionDrawer
         isOpen={positionAction?.kind === "FILING"}
         onClose={() => setPositionAction(null)}
-        eyebrow="Presentación"
         title={
           positionAction?.kind === "FILING"
             ? positionAction.position.regime.name

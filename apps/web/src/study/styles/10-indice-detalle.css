@@ -1,0 +1,125 @@
+/* ============================================================
+   Patrón general de navegación: índice + detalle estable
+   ============================================================ */
+
+.section-index {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-space-5);
+  margin: 0 0 var(--ds-space-8);
+  padding: var(--ds-space-3) 0;
+  border-top: 1px solid var(--ds-color-border);
+  border-bottom: 1px solid var(--ds-color-border);
+}
+
+.section-index__label {
+  flex: 0 0 auto;
+  color: var(--ds-color-text-faint);
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.section-index__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-4);
+  min-width: 0;
+}
+
+.section-index__links > .ds-button--link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+  min-block-size: var(--ds-control-height-sm);
+  padding-inline: 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  background: transparent;
+  text-decoration: none;
+}
+
+.section-index__links > .ds-button--link:hover:not(:disabled),
+.section-index__links > .ds-button--link:focus-visible {
+  background: transparent;
+  color: var(--ds-color-primary);
+  text-decoration: underline;
+  text-underline-offset: var(--ds-space-0-5);
+}
+
+.section-index__links small {
+  color: var(--ds-color-text-faint);
+  font-size: var(--ds-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Todas las pantallas de operación comparten una sola columna de lectura.
+   El resumen orienta y el detalle queda alineado debajo, sin mosaicos que
+   crezcan a ritmos distintos. */
+.study-page:not(.client-summary):not(.document-inbox) .study-panel,
+.study-page:not(.client-summary):not(.document-inbox) .study-page__section {
+  margin-bottom: 0;
+  padding: clamp(var(--ds-space-5), 2.4vw, var(--ds-space-8)) 0;
+  border: 0;
+  border-top: 1px solid var(--ds-color-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.study-page:not(.client-summary):not(.document-inbox) .study-page__section:last-child,
+.study-page:not(.client-summary):not(.document-inbox) .study-panel:last-child {
+  border-bottom: 1px solid var(--ds-color-border);
+}
+
+.study-page:not(.client-summary):not(.document-inbox) .fiscal-next-step {
+  margin-bottom: 0;
+  padding: var(--ds-space-5) 0;
+  border: 0;
+  border-top: 1px solid var(--ds-color-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.study-page:not(.client-summary):not(.document-inbox) .study-columns.work-columns,
+.study-page:not(.client-summary):not(.document-inbox) .fiscal-client-overview__columns,
+.study-page:not(.client-summary):not(.document-inbox) .profitability-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.study-page:not(.client-summary):not(.document-inbox) .study-columns.work-columns > *,
+.study-page:not(.client-summary):not(.document-inbox) .fiscal-client-overview__columns > *,
+.study-page:not(.client-summary):not(.document-inbox) .profitability-grid > * {
+  min-width: 0;
+}
+
+.study-page:not(.client-summary):not(.document-inbox) .ds-table__wrapper {
+  border-radius: 0;
+}
+
+.study .ds-empty__visual,
+.portal .ds-empty__visual {
+  display: none;
+}
+
+.study .ledger-toolbar__icon {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .section-index {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--ds-space-2);
+  }
+
+  .section-index__links {
+    width: 100%;
+    gap: var(--ds-space-2) var(--ds-space-4);
+  }
+}

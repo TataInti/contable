@@ -1,12 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, EmptyState, Notice } from "@contable/design-system";
+import { Button, EmptyState, Notice, useNotify } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import { Icon } from "../ui/Icon";
 import {
   DenseHeader,
   DensePage,
@@ -68,7 +67,7 @@ export function StudyRentabilidad() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [receipt, setReceipt] = useState<string | null>(null);
+  const notify = useNotify();
   const confirm = useConfirmAction();
 
   const periodsQuery = useQuery({
@@ -126,7 +125,7 @@ export function StudyRentabilidad() {
       }),
     onSuccess: () => {
       invalidate();
-      setReceipt("La rentabilidad fue calculada para el período activo.");
+      notify.success("La rentabilidad fue calculada para el período activo.");
     },
   });
 
@@ -138,7 +137,7 @@ export function StudyRentabilidad() {
       }),
     onSuccess: () => {
       invalidate();
-      setReceipt("La versión fue publicada y ya está disponible en el portal del cliente.");
+      notify.success("La versión fue publicada y ya está disponible en el portal del cliente.");
     },
   });
 
@@ -153,12 +152,11 @@ export function StudyRentabilidad() {
     >
       <div className="profitability-view__header">
         <div>
-          <p className="study-page__eyebrow">{basisLabel(basis)}</p>
           <h3
             id={`profitability-${basis.toLowerCase()}-title`}
             className="profitability-view__title"
           >
-            {basis === "DEVENGADO" ? "Resultado gerencial" : "Flujo neto"}
+            {basis === "DEVENGADO" ? "Resultado gerencial" : "Flujo neto"} · {basisLabel(basis)}
           </h3>
         </div>
         <div className="profitability-view__actions">
@@ -256,7 +254,6 @@ export function StudyRentabilidad() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Gerencia"
         title="Rentabilidad"
         description="Devengado y caja se calculan por separado; la gestión sin respaldo fiscal nunca reduce impuestos por defecto."
         actions={
@@ -294,8 +291,6 @@ export function StudyRentabilidad() {
       <StatStrip
         label="Resultado del período"
         items={[
-          { key: "client", label: "Cliente", value: clientId ? "Seleccionado" : "Sin seleccionar" },
-          { key: "period", label: "Período", value: selectedPeriod ? selectedPeriod.label ?? selectedPeriod.startDate.slice(0, 7) : "Pendiente" },
           { key: "accrual", label: "Devengado", value: devengado ? `v${devengado.version}` : "Sin calcular" },
           { key: "cash", label: "Caja", value: caja ? `v${caja.version}` : "Sin calcular" },
         ]}
@@ -311,27 +306,6 @@ export function StudyRentabilidad() {
       </Notice>
 
 
-      {receipt ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Acción completada"
-          action={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              iconOnly
-              aria-label="Cerrar confirmación"
-              onClick={() => setReceipt(null)}
-            >
-              <Icon name="close" size={15} />
-            </Button>
-          }
-        >
-          {receipt}
-        </Notice>
-      ) : null}
 
       {!clientId ? (
         <EmptyState

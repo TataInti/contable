@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ARGENTINA_PROVINCES,
@@ -30,7 +30,6 @@ import {
   DenseTable,
   DenseToolbar,
   DenseWorkspace,
-  DensitySwitch,
   Inspector,
   InspectorFacts,
   InspectorSection,
@@ -154,7 +153,7 @@ export function StudyClientes() {
   const [vatFilter, setVatFilter] = useState("");
   const [onlyIncomplete, setOnlyIncomplete] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [density, setDensity] = useDensity();
+  const [density] = useDensity();
   const searchRef = useRef<HTMLInputElement>(null);
   const [identityForm, setIdentityForm] = useState({
     legalName: "",
@@ -195,7 +194,7 @@ export function StudyClientes() {
     legalForm: "",
     serviceStartDate: "",
   }));
-  const [notice, setNotice] = useState<string | null>(null);
+  const notify = useNotify();
   const [contactRetry, setContactRetry] = useState<ContactRetryTarget | null>(null);
   const query = useQuery({
     queryKey: ["clients", firmId],
@@ -345,7 +344,6 @@ export function StudyClientes() {
         activity: "",
         legalForm: "",
       });
-      setNotice(null);
       if (!contactFailed) navigate("/configuracion-fiscal");
     },
   });
@@ -415,7 +413,7 @@ export function StudyClientes() {
     onSuccess: async (client) => {
       await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
       setStatusClient(null);
-      setNotice(`El estado de ${client.legalName} se actualizó.`);
+      notify.success(`El estado de ${client.legalName} se actualizó.`);
     },
   });
   const saveContact = useMutation({
@@ -450,6 +448,12 @@ export function StudyClientes() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["client-contacts", firmId, selectedId] });
     },
+    onError: (error) =>
+      notify.error(
+        error instanceof ApiError
+          ? error.message
+          : "No se pudo actualizar el contacto. Revisá los datos e intentá nuevamente.",
+      ),
   });
   const rows = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("es-AR");
@@ -480,7 +484,6 @@ export function StudyClientes() {
 
   const startClientEdit = (client: ClientWithProfile) => {
     setCreating(false);
-    setNotice(null);
     updateIdentity.reset();
     updateProfile.reset();
     setEditingClient(client);
@@ -510,7 +513,7 @@ export function StudyClientes() {
     await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
     if (results.every((result) => result.status === "fulfilled")) {
       setEditingClient(null);
-      setNotice(`La ficha de ${clientName} quedó actualizada.`);
+      notify.success(`La ficha de ${clientName} quedó actualizada.`);
     }
   };
 
@@ -538,7 +541,6 @@ export function StudyClientes() {
   const incompleteCount = clients.filter((client) => missingProfileFields(client).length > 0).length;
   const activeCount = clients.filter((client) => client.status === "ACTIVE").length;
   const selectedClient = selectedId ? (clients.find((client) => client.id === selectedId) ?? null) : null;
-  const currentClient = clientId ? (clients.find((client) => client.id === clientId) ?? null) : null;
   const canManage = capabilities.has("client.manage");
   const inspectorOpen = Boolean(selectedClient);
   const missingCreateFields = [
@@ -716,7 +718,6 @@ export function StudyClientes() {
   const inspector = selectedClient ? (
     <Inspector
       label={`Detalle de ${selectedClient.legalName}`}
-      eyebrow="Cliente"
       title={selectedClient.legalName}
       subtitle={`CUIT ${formatCuit(selectedClient.cuit)}`}
       leading={
@@ -886,13 +887,6 @@ export function StudyClientes() {
               description="Agregá personas de referencia para este cliente."
             />
           )}
-          {toggleContactState.isError ? (
-            <Notice tone="error">
-              {toggleContactState.error instanceof ApiError
-                ? toggleContactState.error.message
-                : "No se pudo actualizar el contacto. Revisá los datos e intentá nuevamente."}
-            </Notice>
-          ) : null}
         </InspectorSection>
         </div>
       ) : null}
@@ -956,7 +950,6 @@ export function StudyClientes() {
   return (
     <DensePage density={density}>
       <DenseHeader
-        eyebrow="Cartera del estudio"
         title="Clientes"
         description="Elegí el contexto de trabajo o incorporá una nueva empresa."
         actions={
@@ -989,12 +982,6 @@ export function StudyClientes() {
             active: onlyIncomplete,
             onSelect: () => setOnlyIncomplete((current) => !current),
           },
-          {
-            key: "context",
-            label: "Contexto actual",
-            value: currentClient ? currentClient.legalName : "Sin seleccionar",
-            detail: currentClient ? formatCuit(currentClient.cuit) : "Abrí un cliente para trabajar",
-          },
         ]}
       />
 
@@ -1015,19 +1002,6 @@ export function StudyClientes() {
           }
         >
           Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.
-        </Notice>
-      ) : notice ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Actualización guardada"
-          action={
-            <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
-              <Icon name="close" size={15} />
-            </Button>
-          }
-        >
-          {notice}
         </Notice>
       ) : null}
 
@@ -1062,8 +1036,6 @@ export function StudyClientes() {
             </option>
           ))}
         </select>
-        <span className="dense-toolbar__spacer" />
-        <DensitySwitch value={density} onChange={setDensity} />
       </DenseToolbar>
 
       <DenseWorkspace panelId="clients-panel" inspector={inspector}>
@@ -1073,7 +1045,6 @@ export function StudyClientes() {
       <ActionDrawer
         isOpen={creating}
         onClose={() => setCreating(false)}
-        eyebrow="Cartera"
         title="Alta de cliente"
         description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
         footer={
@@ -1221,7 +1192,6 @@ export function StudyClientes() {
           updateIdentity.reset();
           updateProfile.reset();
         }}
-        eyebrow="Ficha del cliente"
         title="Editar cliente"
         description="Actualizá la identidad y los datos fiscales del cliente."
         size="wide"
@@ -1574,7 +1544,6 @@ export function StudyClientes() {
           setStatusClient(null);
           updateStatus.reset();
         }}
-        eyebrow="Ficha del cliente"
         title="Cambiar estado"
         description="Elegí el estado del cliente."
         footer={
@@ -1625,7 +1594,6 @@ export function StudyClientes() {
       <ActionDrawer
         isOpen={contactEditorOpen}
         onClose={closeContactEditor}
-        eyebrow="Cliente"
         title={editingContact ? "Editar contacto" : "Nuevo contacto"}
         description="Completá los datos de contacto y, si corresponde, marcá el principal."
         footer={
@@ -1713,7 +1681,7 @@ export function StudyClientes() {
               queryClient.invalidateQueries({ queryKey: ["clients", firmId] }),
               session.refresh(),
             ]);
-            setNotice(
+            notify.success(
               result.storage?.failed
                 ? `El cliente se eliminó; ${result.storage.failed} archivo(s) requieren limpieza posterior.`
                 : "El cliente y sus registros dependientes se eliminaron.",

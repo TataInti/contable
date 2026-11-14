@@ -405,7 +405,6 @@ export function StudyResumenCliente() {
   return (
     <DensePage density={density} flow className="client-summary">
       <DenseHeader
-        eyebrow="Ficha consolidada"
         title="Resumen del cliente"
         description={`${client.legalName}${client.tradeName ? ` · ${client.tradeName}` : ""} · CUIT ${client.cuit}`}
         actions={
@@ -460,7 +459,6 @@ export function StudyResumenCliente() {
         </label>
         <nav className="client-summary__section-index" aria-label="Secciones internas del cliente">
           <div className="client-summary__index-heading">
-            <p className="study-page__eyebrow">Índice de la ficha</p>
           </div>
           {sectionGroups.map((group) => {
             const groupSections = sections.filter((section) => section.group === group);
@@ -496,7 +494,6 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="client-summary-search-results-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Resultados de búsqueda</p>
                   <h2 id="client-summary-search-results-title">Coincidencias para “{search.trim()}”</h2>
                   <p>Seleccioná un resultado para abrir su sección y continuar desde ahí.</p>
                 </div>
@@ -614,7 +611,6 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="accounting-periods-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Calendario contable</p>
                   <h2 id="accounting-periods-title">Períodos contables</h2>
                   <p>Cada ejercicio con el detalle de sus períodos y estado de cierre.</p>
                 </div>
@@ -663,7 +659,6 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="tax-periods-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Calendario fiscal</p>
                   <h2 id="tax-periods-title">Períodos fiscales</h2>
                   <p>Períodos disponibles para asociar saldos, presentaciones y obligaciones.</p>
                 </div>
@@ -709,7 +704,6 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="obligations-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Seguimiento fiscal</p>
                   <h2 id="obligations-title">Obligaciones materializadas</h2>
                   <p>Régimen, período, vencimiento y estado de cada obligación del cliente.</p>
                 </div>
@@ -767,7 +761,6 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="base-config-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Configuración base</p>
                   <h2 id="base-config-title">Ficha contable</h2>
                   <p>Parámetros generales que sostienen el trabajo del cliente.</p>
                 </div>
@@ -824,7 +817,6 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="tax-profile-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Situación fiscal</p>
                   <h2 id="tax-profile-title">Perfil del contribuyente</h2>
                   <p>Versión vigente y trazabilidad de sus cambios.</p>
                 </div>
@@ -866,7 +858,6 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="registrations-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Inscripciones</p>
                   <h2 id="registrations-title">Regímenes adheridos</h2>
                   <p>Inscripciones fiscales y su vigencia.</p>
                 </div>
@@ -900,7 +891,6 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="activities-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Actividad económica</p>
                   <h2 id="activities-title">Actividades registradas</h2>
                   <p>{activeActivities} vigentes · la principal aparece primero.</p>
                 </div>
@@ -938,7 +928,6 @@ export function StudyResumenCliente() {
             <section className="client-summary__detail-section" aria-labelledby="catalogs-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <p className="study-page__eyebrow">Maestros</p>
                   <h2 id="catalogs-title">Catálogos del cliente</h2>
                   <p>Volumen configurado para sostener la operación.</p>
                 </div>
