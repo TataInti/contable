@@ -1471,3 +1471,15 @@
 .dense-link:hover {
   text-decoration: underline;
 }
+
+/* ───────── Agrupación de tablas ───────── */
+.dense-group-row th {
+  padding-block: var(--ds-space-2);
+  padding-inline: var(--ds-space-3);
+  border-block-start: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-font-weight-medium);
+  text-align: start;
+}

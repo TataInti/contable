@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -246,6 +247,50 @@ export function DensitySwitch({
   );
 }
 
+export interface DenseToggleOption {
+  value: string;
+  label: string;
+}
+
+/** Botones de selección múltiple: `selected` lista los valores activos y cada botón expone `aria-pressed`. */
+export function DenseToggleGroup({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: ReadonlyArray<DenseToggleOption>;
+  selected: ReadonlyArray<string>;
+  onChange: (next: string[]) => void;
+}) {
+  const toggle = (value: string) => {
+    const active = selected.includes(value);
+    onChange(
+      options
+        .map((option) => option.value)
+        .filter((candidate) => (candidate === value ? !active : selected.includes(candidate))),
+    );
+  };
+  return (
+    <div className="dense-seg" role="group" aria-label={label}>
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          type="button"
+          variant="text"
+          size="row"
+          className="dense-seg__option"
+          aria-pressed={selected.includes(option.value)}
+          onClick={() => toggle(option.value)}
+        >
+          {option.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 export function DenseWorkspace({
   inspector,
   panelId,
@@ -283,6 +328,13 @@ export interface DenseColumn<T> {
   sticky?: "right";
 }
 
+/** Grupo de filas: `key` identifica el grupo, `label` es su encabezado y `order` fija su posición. */
+export interface DenseGroup {
+  key: string;
+  label: string;
+  order: number;
+}
+
 export function DenseTable<T>({
   label,
   columns,
@@ -294,6 +346,7 @@ export function DenseTable<T>({
   empty,
   footer,
   inspectorOpen,
+  groupBy,
 }: {
   label: string;
   columns: ReadonlyArray<DenseColumn<T>>;
@@ -305,9 +358,11 @@ export function DenseTable<T>({
   empty?: ReactNode;
   footer?: ReactNode;
   inspectorOpen?: boolean;
+  /** Agrupa las filas bajo un encabezado con su conteo. */
+  groupBy?: (row: T) => DenseGroup;
 }) {
   const [sort, setSort] = useState<{ key: string; direction: 1 | -1 } | null>(null);
-  const sorted = useMemo(() => {
+  const sortedRows = useMemo(() => {
     const column = sort ? columns.find((item) => item.key === sort.key) : undefined;
     if (!sort || !column?.sortValue) return rows;
     const value = column.sortValue;
@@ -318,6 +373,21 @@ export function DenseTable<T>({
       return order * sort.direction;
     });
   }, [rows, columns, sort]);
+  const sorted = useMemo(() => {
+    if (!groupBy) return sortedRows;
+    // Orden estable: dentro de cada grupo se conserva el orden de la columna elegida.
+    return [...sortedRows].sort((a, b) => groupBy(a).order - groupBy(b).order);
+  }, [sortedRows, groupBy]);
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (groupBy) {
+      for (const row of sorted) {
+        const key = groupBy(row).key;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [sorted, groupBy]);
 
   const visibleColumns = inspectorOpen ? columns.filter((column) => !column.secondary) : columns;
 
@@ -333,10 +403,14 @@ export function DenseTable<T>({
       onSelect(key);
     } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      const sibling =
+      let sibling: Element | null =
         event.key === "ArrowDown"
           ? event.currentTarget.nextElementSibling
           : event.currentTarget.previousElementSibling;
+      // Las filas de grupo no tienen clave: el cursor las saltea.
+      while (sibling instanceof HTMLElement && !sibling.dataset.rowKey) {
+        sibling = event.key === "ArrowDown" ? sibling.nextElementSibling : sibling.previousElementSibling;
+      }
       if (sibling instanceof HTMLElement && sibling.dataset.rowKey) {
         sibling.focus();
         onSelect(sibling.dataset.rowKey);
@@ -396,10 +470,20 @@ export function DenseTable<T>({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((row) => {
+              {sorted.map((row, index) => {
                 const key = rowKey(row);
                 const selected = selectedKey === key;
+                const group = groupBy?.(row);
+                const previousKey = index > 0 && groupBy ? groupBy(sorted[index - 1] as T).key : null;
                 return (
+                  <Fragment key={key}>
+                  {group && group.key !== previousKey ? (
+                    <tr className="dense-group-row">
+                      <th scope="rowgroup" colSpan={visibleColumns.length}>
+                        {group.label} <span className="dense-count">{groupCounts.get(group.key) ?? 0}</span>
+                      </th>
+                    </tr>
+                  ) : null}
                   <tr
                     key={key}
                     data-row-key={key}
@@ -434,6 +518,7 @@ export function DenseTable<T>({
                       </td>
                     ))}
                   </tr>
+                  </Fragment>
                 );
               })}
             </tbody>

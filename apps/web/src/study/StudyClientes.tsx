@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ARGENTINA_PROVINCES,
   BACKED_CURRENCIES,
@@ -28,6 +28,7 @@ import {
   DensePage,
   DenseSearch,
   DenseTable,
+  DenseToggleGroup,
   DenseToolbar,
   DenseWorkspace,
   Inspector,
@@ -94,6 +95,8 @@ interface AccountingStandardCatalogEntry {
 }
 
 interface ClientWithProfile extends Client {
+  /** Terminación de CUIT derivada por la API; null cuando el cliente no tiene CUIT. */
+  cuitEnding?: string | null;
   tradeName?: string | null;
   profile?: ClientProfile | null;
 }
@@ -141,6 +144,21 @@ function profileFormFrom(client: ClientWithProfile): ClientProfileForm {
   };
 }
 
+/** Dígitos de terminación de CUIT, en el orden en que se muestran y se filtran. */
+const CUIT_ENDINGS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+/** Lee el filtro de la URL (?terminacion=0,9): solo dígitos válidos, siempre en orden. */
+function parseEndingFilter(value: string | null): string[] {
+  const picked = (value ?? "").split(",");
+  return CUIT_ENDINGS.filter((digit) => picked.includes(digit));
+}
+
+/** Grupo de la tabla: un encabezado por dígito y «Sin CUIT» al final. */
+function endingGroup(row: ClientWithProfile) {
+  if (row.cuitEnding == null) return { key: "sin-cuit", label: "Sin CUIT", order: 10 };
+  return { key: row.cuitEnding, label: `Terminación de CUIT ${row.cuitEnding}`, order: Number(row.cuitEnding) };
+}
+
 export function StudyClientes() {
   const { firmId, clientId, capabilities, setClientId } = useClientContext();
   const session = useSession();
@@ -152,6 +170,28 @@ export function StudyClientes() {
   const [statusFilter, setStatusFilter] = useState("");
   const [vatFilter, setVatFilter] = useState("");
   const [onlyIncomplete, setOnlyIncomplete] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const endingParam = searchParams.get("terminacion");
+  const endingFilter = useMemo(() => parseEndingFilter(endingParam), [endingParam]);
+  const grouped = searchParams.get("agrupar") === "terminacion";
+  const hasActiveFilters =
+    search.trim() !== "" || statusFilter !== "" || vatFilter !== "" || onlyIncomplete || endingFilter.length > 0;
+  const updateUrl = (change: (params: URLSearchParams) => void) => {
+    const next = new URLSearchParams(searchParams);
+    change(next);
+    setSearchParams(next, { replace: true });
+  };
+  const setEndingFilter = (digits: string[]) =>
+    updateUrl((params) => (digits.length > 0 ? params.set("terminacion", digits.join(",")) : params.delete("terminacion")));
+  const setGrouping = (on: boolean) =>
+    updateUrl((params) => (on ? params.set("agrupar", "terminacion") : params.delete("agrupar")));
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("");
+    setVatFilter("");
+    setOnlyIncomplete(false);
+    setEndingFilter([]);
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [density] = useDensity();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -463,6 +503,7 @@ export function StudyClientes() {
       if (statusFilter === "INACTIVE" && client.status === "ACTIVE") return false;
       if (vatFilter && client.profile?.vatCondition !== vatFilter) return false;
       if (onlyIncomplete && profileGaps(client).length === 0) return false;
+      if (endingFilter.length > 0 && (client.cuitEnding == null || !endingFilter.includes(client.cuitEnding))) return false;
       if (!needle) return true;
       return (
         client.legalName.toLocaleLowerCase("es-AR").includes(needle) ||
@@ -470,7 +511,7 @@ export function StudyClientes() {
         (digits !== "" && client.cuit.includes(digits))
       );
     });
-  }, [query.data, search, statusFilter, vatFilter, onlyIncomplete]);
+  }, [query.data, search, statusFilter, vatFilter, onlyIncomplete, endingFilter]);
 
   const openClientWorkspace = (id: string) => {
     setClientId(id);
@@ -581,7 +622,7 @@ export function StudyClientes() {
     {
       key: "legalName",
       header: "Cliente",
-      width: inspectorOpen ? "28%" : "24%",
+      width: inspectorOpen ? "24%" : "20%",
       className: "client-list__client-column",
       sortValue: (row) => row.legalName.toLocaleLowerCase("es-AR"),
       render: (row) => (
@@ -619,9 +660,22 @@ export function StudyClientes() {
       render: (row) => <span className="tabular-copy">{formatCuit(row.cuit)}</span>,
     },
     {
+      key: "cuitEnding",
+      header: "Terminación de CUIT",
+      width: "8%",
+      className: "client-list__ending-column",
+      sortValue: (row) => (row.cuitEnding == null ? 10 : Number(row.cuitEnding)),
+      render: (row) =>
+        row.cuitEnding == null ? (
+          <span className="dense-dim">Sin CUIT</span>
+        ) : (
+          <span className="tabular-copy">{row.cuitEnding}</span>
+        ),
+    },
+    {
       key: "vat",
       header: "Condición IVA",
-      width: inspectorOpen ? "12%" : "13%",
+      width: inspectorOpen ? "12%" : "10%",
       className: "client-list__vat-column",
       sortValue: (row) => vatLabel(row.profile?.vatCondition),
       render: (row) => vatLabel(row.profile?.vatCondition) || <span className="dense-dim">—</span>,
@@ -687,7 +741,7 @@ export function StudyClientes() {
     {
       key: "status",
       header: "Estado",
-      width: inspectorOpen ? "26%" : "17%",
+      width: inspectorOpen ? "22%" : "17%",
       className: "client-list__status-column",
       sortValue: (row) => row.status,
       render: (row) => <StatusBadge status={row.status} />,
@@ -910,6 +964,7 @@ export function StudyClientes() {
   ) : (
     <DenseTable<ClientWithProfile>
       label="Cartera de clientes"
+      groupBy={grouped ? endingGroup : undefined}
       columns={columns}
       rows={rows}
       rowKey={(row) => row.id}
@@ -939,6 +994,10 @@ export function StudyClientes() {
             clients.length === 0 && canManage ? (
               <Button size="sm" onClick={openNew}>
                 Crear cliente
+              </Button>
+            ) : clients.length > 0 && hasActiveFilters ? (
+              <Button size="sm" variant="secondary" onClick={clearFilters}>
+                Quitar filtros
               </Button>
             ) : undefined
           }
@@ -1036,6 +1095,19 @@ export function StudyClientes() {
             </option>
           ))}
         </select>
+        <span className="dense-dim">Terminación de CUIT</span>
+        <DenseToggleGroup
+          label="Terminación de CUIT"
+          options={CUIT_ENDINGS.map((digit) => ({ value: digit, label: digit }))}
+          selected={endingFilter}
+          onChange={setEndingFilter}
+        />
+        <DenseToggleGroup
+          label="Agrupación de la lista"
+          options={[{ value: "terminacion", label: "Agrupar por terminación" }]}
+          selected={grouped ? ["terminacion"] : []}
+          onChange={(next) => setGrouping(next.includes("terminacion"))}
+        />
       </DenseToolbar>
 
       <DenseWorkspace panelId="clients-panel" inspector={inspector}>
