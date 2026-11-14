@@ -90,15 +90,19 @@ export function documentRoutes(app: FastifyInstance) {
     const userId = ctx.userId;
 
     // G2-07: valida que el ítem existe y pertenece al cliente antes de crear la sesión.
-    const item = await service.getRequestItem(ctx, body.requestItemId);
-    if (!item || item.clientId !== clientId) {
-      return reply.status(404).send({ error: { code: "REQUEST_ITEM_NOT_FOUND", message: "Ítem de pedido no encontrado" } });
+    // Una constancia de presentación (ACUSE) la sube el estudio sin pedido.
+    if (body.requestItemId) {
+      const item = await service.getRequestItem(ctx, body.requestItemId);
+      if (!item || item.clientId !== clientId) {
+        return reply.status(404).send({ error: { code: "REQUEST_ITEM_NOT_FOUND", message: "Ítem de pedido no encontrado" } });
+      }
     }
 
     const session = await service.createUploadSession(firmId, clientId, userId, {
       ...(body.expectedMime !== undefined ? { expectedMime: body.expectedMime } : {}),
       ...(body.maxFiles !== undefined ? { maxFiles: body.maxFiles } : {}),
-      requestItemId: body.requestItemId,
+      ...(body.requestItemId ? { requestItemId: body.requestItemId } : {}),
+      ...(body.category ? { category: body.category } : {}),
     }, ctx);
 
     // Generar URL firmada de subida directa a cuarentena

@@ -1349,8 +1349,9 @@ export function StudyAdministracion() {
             Permitir autorrevisión de fuentes y legajos
           </h2>
           <p>
-            Permite que quien importó un lote revise su fuente y que quien preparó un legajo
-            lo revise y finalice. La opción reduce el control interno de cuatro ojos; cada
+            Permite que el Titular y los Administradores revisen los lotes que importaron y
+            revisen y finalicen los legajos que prepararon. Los demás roles siempre necesitan
+            a otra persona. La opción reduce el control interno de cuatro ojos; cada
             autorrevisión queda registrada en la auditoría.
           </p>
         </div>

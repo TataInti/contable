@@ -126,12 +126,21 @@ export class MonthlyWorkpaperService {
     "CHANGES_REQUESTED",
   ] as const;
 
-  private async selfReviewEnabled(tx: Prisma.TransactionClient, firmId: string) {
+  /**
+   * Revisar lo que uno mismo cargó sólo vale para Titular y Administrador, y sólo si
+   * el estudio lo tiene habilitado. El resto de los roles necesita a otra persona.
+   */
+  private async selfReviewEnabled(tx: Prisma.TransactionClient, firmId: string, userId: string) {
     const firm = await tx.firm.findUnique({
       where: { id: firmId },
       select: { allowSelfReview: true },
     });
-    return firm?.allowSelfReview === true;
+    if (firm?.allowSelfReview !== true) return false;
+    const membership = await tx.firmMembership.findUnique({
+      where: { firmId_userId: { firmId, userId } },
+      select: { role: true, status: true },
+    });
+    return membership?.status === "ACTIVE" && (membership.role === "OWNER" || membership.role === "ADMIN");
   }
 
   private async auditSelfReview(
@@ -736,16 +745,11 @@ export class MonthlyWorkpaperService {
       const sources = await this.sourceCoverage(tx, wp, obligations);
       const classifications = await classificationCoverage(tx, wp.id);
       const allocations = await workpaperAllocationCoverage(tx, wp.id);
-      const firm = await tx.firm.findUnique({
-        where: { id: ctx.firmId },
-        select: { allowSelfReview: true },
-      });
-
       return {
         workpaperId,
         periodStart: wp.periodStart,
         periodEnd: wp.periodEnd,
-        allowSelfReview: firm?.allowSelfReview === true,
+        allowSelfReview: await this.selfReviewEnabled(tx, ctx.firmId, ctx.userId),
         components,
         sources,
         classifications: {
@@ -1077,7 +1081,7 @@ export class MonthlyWorkpaperService {
         );
       }
       const isSelfReview = link.importBatch.createdByUserId === ctx.userId;
-      if (isSelfReview && !(await this.selfReviewEnabled(tx, ctx.firmId))) {
+      if (isSelfReview && !(await this.selfReviewEnabled(tx, ctx.firmId, ctx.userId))) {
         throw new WorkpaperError(
           "MAKER_CHECKER_VIOLATION",
           "Quien importó el lote no puede revisar su propia fuente",
@@ -1561,13 +1565,9 @@ export class MonthlyWorkpaperService {
       if (finding.status !== "OPEN") {
         throw new WorkpaperError("INVALID_TRANSITION", "El control ya fue resuelto");
       }
-      if (finding.severity === "BLOCKING") {
-        if (!input.evidenceDocumentId) {
-          throw new WorkpaperError(
-            "BLOCKING_CONTROLS",
-            "Resolver o eximir un control bloqueante exige documentación de respaldo",
-          );
-        }
+      // El respaldo documental es opcional: lo que se exige es la explicación escrita
+      // (la valida la ruta). Si se adjunta un documento, debe ser del cliente y estar listo.
+      if (input.evidenceDocumentId) {
         const evidence = await tx.document.findFirst({
           where: {
             id: input.evidenceDocumentId,
@@ -1685,7 +1685,7 @@ export class MonthlyWorkpaperService {
       // Maker-checker stays active unless the OWNER explicitly enabled this
       // audited option for the study.
       const isSelfReview = wp.preparedByUserId === ctx.userId;
-      const allowSelfReview = isSelfReview && (await this.selfReviewEnabled(tx, ctx.firmId));
+      const allowSelfReview = isSelfReview && (await this.selfReviewEnabled(tx, ctx.firmId, ctx.userId));
       if (isSelfReview && !allowSelfReview) {
         throw new WorkpaperError(
           "MAKER_CHECKER_VIOLATION",
@@ -1778,7 +1778,7 @@ export class MonthlyWorkpaperService {
         throw new WorkpaperError("INVALID_TRANSITION", `No se puede finalizar desde ${wp.status}`);
       }
       const isSelfReview = wp.preparedByUserId === ctx.userId;
-      const allowSelfReview = isSelfReview && (await this.selfReviewEnabled(tx, ctx.firmId));
+      const allowSelfReview = isSelfReview && (await this.selfReviewEnabled(tx, ctx.firmId, ctx.userId));
       if (isSelfReview && !allowSelfReview) {
         throw new WorkpaperError(
           "MAKER_CHECKER_VIOLATION",

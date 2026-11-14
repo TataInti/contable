@@ -562,10 +562,18 @@ describe("F1.2 evidencia del expediente mensual", () => {
     await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
       tx.firm.update({ where: { id: FIRM_ALFA }, data: { allowSelfReview: true } }),
     );
+    // Con la opción activa, un preparador sigue sin poder revisar lo que importó:
+    // la autorrevisión es sólo para Titular y Administrador.
     const enabledCoverage = await workpapers.coverage(ctxPreparer, workpaper.id);
-    expect(enabledCoverage.allowSelfReview).toBe(true);
-    const selfReviewed = await workpapers.reviewSource(ctxPreparer, workpaper.id, selfReviewLink!.id);
-    expect(selfReviewed.reviewedByUserId).toBe(PREPARER_A);
+    expect(enabledCoverage.allowSelfReview).toBe(false);
+    await expect(
+      workpapers.reviewSource(ctxPreparer, workpaper.id, selfReviewLink!.id),
+    ).rejects.toMatchObject({ code: "MAKER_CHECKER_VIOLATION" });
+    const ownerCoverage = await workpapers.coverage(ctxOwner, workpaper.id);
+    expect(ownerCoverage.allowSelfReview).toBe(true);
+
+    const reviewedByOther = await workpapers.reviewSource(ctxReviewer, workpaper.id, selfReviewLink!.id);
+    expect(reviewedByOther.reviewedByUserId).toBe(REVIEWER_A);
     const selfReviewAudit = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
       tx.auditEvent.findMany({
         where: {
@@ -573,12 +581,10 @@ describe("F1.2 evidencia del expediente mensual", () => {
           action: "SELF_REVIEW",
           entityType: "WorkpaperImportBatch",
           entityId: selfReviewLink!.id,
-          userId: PREPARER_A,
         },
       }),
     );
-    expect(selfReviewAudit).toHaveLength(1);
-    expect(selfReviewAudit[0]?.createdAt).toBeInstanceOf(Date);
+    expect(selfReviewAudit).toHaveLength(0);
 
     await expect(workpapers.calculate(ctxPreparer, workpaper.id)).rejects.toMatchObject({
       code: "SOURCE_NOT_REVIEWED",

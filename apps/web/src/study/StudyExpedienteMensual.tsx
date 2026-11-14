@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button, EmptyState, Field, getStatusBadgeMeta, MoneyField, Table, useNotify } from "@contable/design-system";
 import { ApiError, api, type Client } from "../lib/api";
+import { RECEIPT_ACCEPT, uploadFilingReceipt, waitForReceiptReady } from "./filingReceipt";
 import { useClientContext } from "../context/ClientContext";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useSession } from "../session/SessionContext";
@@ -463,7 +464,20 @@ const WORKPAPER_STEPS = [
   },
 ] as const;
 
+const CLASSIFICATION_ORIGIN_LABELS: Record<string, string> = {
+  MANUAL: "Elegida a mano",
+  VOUCHER_LINE: "Tomada del archivo importado",
+  SUPPLIER_MASTER: "Tomada del proveedor",
+};
+
+const CONTROL_SEVERITY_LABELS: Record<string, string> = {
+  BLOCKING: "Bloquea el cierre",
+  WARNING: "Advertencia",
+  INFO: "Informativo",
+};
+
 const CONTROL_LABELS: Record<string, string> = {
+  SUPERSEDED_OPENING_CREDIT: "Saldos de presentaciones reemplazadas",
   BOOK_RATE_RECONCILIATION: "Diferencias de libro por alícuota",
   PORTAL_IVA_RECONCILIATION: "Conciliación con Portal IVA",
   BANK_CREDIT_RECONCILIATION: "Acreditaciones bancarias vs. facturación",
@@ -666,6 +680,7 @@ export function StudyExpedienteMensual() {
     externalId: "",
     evidenceDocumentId: "",
   });
+  const [filingReceipt, setFilingReceipt] = useState<File | null>(null);
   const [sourceCode, setSourceCode] = useState("");
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [classificationDrafts, setClassificationDrafts] = useState<
@@ -788,15 +803,32 @@ export function StudyExpedienteMensual() {
     queryFn: () => api.get<CreditLot[]>(`/firms/${firmId}/clients/${clientId}/tax-credit-ledger`),
     enabled: Boolean(firmId && clientId),
   });
+  // El legajo es por mes y hay un período fiscal por impuesto: la posición reúne
+  // todos los períodos del mismo mes, para que cada impuesto tenga su fila.
+  const monthTaxPeriodIds = selectedTaxPeriod
+    ? (taxPeriodsQuery.data ?? [])
+        .filter(
+          (taxPeriod) =>
+            taxPeriod.startDate.slice(0, 10) === selectedTaxPeriod.startDate.slice(0, 10) &&
+            taxPeriod.endDate.slice(0, 10) === selectedTaxPeriod.endDate.slice(0, 10),
+        )
+        .map((taxPeriod) => taxPeriod.id)
+        .sort()
+    : [];
   const positionQuery = useQuery({
-    queryKey: ["tax-position", firmId, clientId, selectedTaxPeriod?.id],
-    queryFn: () => {
+    queryKey: ["tax-position", firmId, clientId, monthTaxPeriodIds.join(",")],
+    queryFn: async () => {
       if (!selectedTaxPeriod) throw new Error("Seleccioná un período fiscal");
-      return api.get<TaxPosition[]>(
-        `/firms/${firmId}/clients/${clientId}/tax-position?periodId=${encodeURIComponent(selectedTaxPeriod.id)}`,
+      const positions = await Promise.all(
+        monthTaxPeriodIds.map((periodId) =>
+          api.get<TaxPosition[]>(
+            `/firms/${firmId}/clients/${clientId}/tax-position?periodId=${encodeURIComponent(periodId)}`,
+          ),
+        ),
       );
+      return positions.flat();
     },
-    enabled: Boolean(firmId && clientId && selectedTaxPeriod),
+    enabled: Boolean(firmId && clientId && selectedTaxPeriod && monthTaxPeriodIds.length > 0),
   });
   const taxTypesQuery = useQuery({
     queryKey: ["tax-types"],
@@ -808,6 +840,25 @@ export function StudyExpedienteMensual() {
     queryFn: () => api.get<TaxRegime[]>("/tax/regimes"),
     enabled: Boolean(firmId),
   });
+  // Actividades vigentes del cliente: la clasificación se elige de esta lista, no se escribe.
+  const clientActivitiesQuery = useQuery({
+    queryKey: ["client-tax-activities", firmId, clientId],
+    queryFn: () =>
+      api.get<Array<{ validTo: string | null; activity: { code: string; name: string } }>>(
+        `/firms/${firmId}/clients/${clientId}/activities`,
+      ),
+    enabled: Boolean(firmId && clientId),
+  });
+  const activityOptions = (currentCode: string) => {
+    const options = (clientActivitiesQuery.data ?? [])
+      .filter((link) => !link.validTo)
+      .map((link) => ({ code: link.activity.code, name: link.activity.name }));
+    // Un código ya guardado que no está entre las vigentes se conserva como opción.
+    if (currentCode && !options.some((option) => option.code === currentCode)) {
+      options.unshift({ code: currentCode, name: "" });
+    }
+    return options;
+  };
   const documentsQuery = useQuery({
     queryKey: ["documents", firmId, clientId],
     queryFn: () => api.get<EvidenceDocument[]>(`/firms/${firmId}/clients/${clientId}/documents`),
@@ -1147,20 +1198,32 @@ export function StudyExpedienteMensual() {
     },
   });
   const recordFilingMutation = useMutation({
-    mutationFn: () =>
-      api.post(
-        `/firms/${firmId}/clients/${clientId}/tax-obligations/${positionAction?.position.obligationId}/filings`,
+    mutationFn: async () => {
+      const base = `/firms/${firmId}/clients/${clientId}`;
+      // La constancia es obligatoria: se elige una ya subida o se sube en este mismo paso.
+      let evidenceDocumentId = filingForm.evidenceDocumentId;
+      if (!evidenceDocumentId) {
+        if (!filingReceipt) throw new Error("Adjuntá la constancia de presentación.");
+        evidenceDocumentId = await uploadFilingReceipt(base, filingReceipt);
+        setFilingForm((form) => ({ ...form, evidenceDocumentId }));
+        setFilingReceipt(null);
+        await queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] });
+        await waitForReceiptReady(base, evidenceDocumentId);
+      }
+      return api.post(
+        `${base}/tax-obligations/${positionAction?.position.obligationId}/filings`,
         {
           settlementId: positionAction?.position.settlement?.id,
           filedAt: filingForm.filedAt,
           amountFiled: filingForm.amountFiled,
           ...(filingForm.externalId.trim() ? { externalId: filingForm.externalId.trim() } : {}),
-          ...(filingForm.evidenceDocumentId
-            ? { evidenceDocumentId: filingForm.evidenceDocumentId }
-            : {}),
+          evidenceDocumentId,
         },
-      ),
+      );
+    },
     onSuccess: () => {
+      notify.success("Presentación registrada con su constancia.");
+      setFilingReceipt(null);
       setPositionAction(null);
       setFilingForm({
         amountFiled: "",
@@ -1244,6 +1307,10 @@ export function StudyExpedienteMensual() {
     (taxPeriod) => taxPeriod.taxType.isActive && (!opening.taxTypeId || taxPeriod.taxTypeId === opening.taxTypeId),
   );
   const safeActiveStep = Math.min(Math.max(activeStep, 0), WORKPAPER_STEPS.length - 1);
+  // Constancias ya subidas (por el estudio o por el cliente desde el portal) y listas para usar.
+  const filingReceiptDocuments = (documentsQuery.data ?? []).filter(
+    (document) => document.category === "ACUSE" && ["READY", "APPLIED"].includes(document.status),
+  );
   const eligibleEvidenceDocuments = (documentsQuery.data ?? []).filter((document) =>
     ["READY", "APPLIED", "REVIEWED"].includes(document.status),
   );
@@ -1791,7 +1858,7 @@ export function StudyExpedienteMensual() {
             />
             <div className="ds-field">
               <label className="ds-field__label" htmlFor="tax-filing-evidence">
-                Documento de respaldo
+                Constancia de presentación
               </label>
               <select
                 id="tax-filing-evidence"
@@ -1801,19 +1868,44 @@ export function StudyExpedienteMensual() {
                   setFilingForm({ ...filingForm, evidenceDocumentId: event.target.value })
                 }
               >
-                <option value="">Sin adjuntar por ahora</option>
-                {documentsQuery.data?.map((document) => (
+                <option value="">Subir una constancia nueva</option>
+                {filingReceiptDocuments.map((document) => (
                   <option key={document.id} value={document.id}>
-                    {document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento"}
+                    {document.fileVersions?.[0]?.originalName ?? "Constancia"} ·{" "}
+                    {getStatusBadgeMeta(document.status).label}
                   </option>
                 ))}
               </select>
+              <small className="ds-field__hint">
+                Es el comprobante que emite el organismo. Sin constancia la presentación no queda registrada.
+              </small>
             </div>
+            {!filingForm.evidenceDocumentId ? (
+              <div className="ds-field">
+                <label className="ds-field__label" htmlFor="tax-filing-receipt">
+                  Archivo de la constancia
+                </label>
+                <input
+                  id="tax-filing-receipt"
+                  className="ds-field__input"
+                  type="file"
+                  accept={RECEIPT_ACCEPT}
+                  required
+                  onChange={(event) => setFilingReceipt(event.target.files?.[0] ?? null)}
+                />
+                <small className="ds-field__hint">PDF o imagen.</small>
+              </div>
+            ) : null}
             <div className="study-form__actions">
               <Button
                 type="submit"
                 loading={recordFilingMutation.isPending}
-                disabled={!positionAction.position.settlement || !filingForm.amountFiled}
+                loadingLabel="Subiendo y validando la constancia"
+                disabled={
+                  !positionAction.position.settlement ||
+                  !filingForm.amountFiled ||
+                  (!filingForm.evidenceDocumentId && !filingReceipt)
+                }
               >
                 Registrar presentación
               </Button>
@@ -2382,7 +2474,7 @@ export function StudyExpedienteMensual() {
                               <StatusBadge
                                 status={classificationQuery.data?.ready ? "READY" : "WAITING_INPUTS"}
                               />
-                              <small>Gate de cálculo</small>
+                              <small>Listo para calcular</small>
                             </span>
                           </div>
                           <Table<WorkpaperClassification>
@@ -2448,7 +2540,7 @@ export function StudyExpedienteMensual() {
                                         <small> · {classification.activityCode}</small>
                                       ) : null}
                                       <br />
-                                      <small>{classification.origin ?? "Clasificación guardada"}</small>
+                                      <small>{CLASSIFICATION_ORIGIN_LABELS[classification.origin ?? ""] ?? "Clasificación guardada"}</small>
                                     </>
                                   ) : (
                                     <div className="workpaper-classification-fields">
@@ -2471,13 +2563,8 @@ export function StudyExpedienteMensual() {
                                           <option value="TRANSPORTE">TRANSPORTE</option>
                                         </select>
                                       ) : null}
-                                      <input
-                                        aria-label="Código de actividad"
-                                        placeholder={
-                                          classification.direction === "SALE"
-                                            ? "Actividad obligatoria"
-                                            : "Actividad (opcional)"
-                                        }
+                                      <select
+                                        aria-label="Actividad"
                                         value={draft.activityCode}
                                         onChange={(event) =>
                                           setClassificationDrafts((current) => ({
@@ -2488,7 +2575,18 @@ export function StudyExpedienteMensual() {
                                             },
                                           }))
                                         }
-                                      />
+                                      >
+                                        <option value="">
+                                          {classification.direction === "SALE"
+                                            ? "Elegí la actividad…"
+                                            : "Sin actividad (opcional)"}
+                                        </option>
+                                        {activityOptions(draft.activityCode).map((activity) => (
+                                          <option key={activity.code} value={activity.code}>
+                                            {activity.name ? `${activity.code} · ${activity.name}` : activity.code}
+                                          </option>
+                                        ))}
+                                      </select>
                                     </div>
                                   );
                                 },
@@ -2735,10 +2833,6 @@ export function StudyExpedienteMensual() {
                                 {component.settlement ? (
                                   <span>
                                     <StatusBadge status={component.settlement.status} />
-                                    <small>{component.settlement.engineVersion}</small>
-                                    <small title={component.settlement.rulesHash}>
-                                      Regla {component.settlement.ruleVersionId?.slice(0, 8) ?? "histórica"}
-                                    </small>
                                   </span>
                                 ) : (
                                   <StatusBadge status="PENDING" />
@@ -2996,14 +3090,14 @@ export function StudyExpedienteMensual() {
                               {control.resolution ? <small>{control.resolution}</small> : null}
                             </span>
                             <StatusBadge status={control.status} />
-                            <span>{control.severity}</span>
+                            <span className="muted-copy">{CONTROL_SEVERITY_LABELS[control.severity] ?? control.severity}</span>
                             {control.status === "OPEN" &&
                             capabilities.has("tax.settlements.review") ? (
                               <span className="workpaper-control__resolution">
                                 <input
                                   aria-label={`Resolución ${control.code}`}
                                   value={controlResolutions[control.id] ?? ""}
-                                  placeholder="Explicá la resolución…"
+                                  placeholder="Explicá cómo se resolvió…"
                                   onChange={(event) =>
                                     setControlResolutions((values) => ({
                                       ...values,
@@ -3023,7 +3117,7 @@ export function StudyExpedienteMensual() {
                                         }))
                                       }
                                     >
-                                      <option value="">Seleccionar evidencia…</option>
+                                      <option value="">Sin documento de respaldo</option>
                                       {eligibleEvidenceDocuments.map((document) => (
                                         <option key={document.id} value={document.id}>
                                           {document.fileVersions?.[0]?.originalName ??
@@ -3036,19 +3130,15 @@ export function StudyExpedienteMensual() {
                                     {documentsQuery.isSuccess &&
                                     eligibleEvidenceDocuments.length === 0 ? (
                                       <small className="muted-copy">
-                                        No hay documentos elegibles. Aprobá la extracción en Bandeja para usar el
-                                        documento como respaldo.
+                                        El respaldo es opcional. Para adjuntar uno, aprobá la extracción del
+                                        documento en Bandeja.
                                       </small>
                                     ) : null}
                                   </>
                                 ) : null}
                                 <Button
                                   size="sm"
-                                  disabled={
-                                    !controlResolutions[control.id]?.trim() ||
-                                    (control.severity === "BLOCKING" &&
-                                      !controlEvidence[control.id])
-                                  }
+                                  disabled={!controlResolutions[control.id]?.trim()}
                                   loading={resolveControlMutation.isPending}
                                   onClick={() =>
                                     resolveControlMutation.mutate({

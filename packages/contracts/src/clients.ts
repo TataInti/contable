@@ -160,7 +160,14 @@ export const createUploadSessionSchema = z
     maxFiles: z.number().int().positive().max(10).optional(),
     // G2-07: el ítem de pedido al que responde el documento. Obligatorio para
     // que cada archivo quede ligado al ítem correcto del pedido documental.
-    requestItemId: z.string().uuid(),
+    requestItemId: z.string().uuid().optional(),
+    // La constancia de una presentación la sube el estudio y no responde a
+    // ningún pedido: es el único caso sin requestItemId.
+    category: z.literal("ACUSE").optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => value.requestItemId !== undefined || value.category === "ACUSE", {
+    message: "El archivo debe corresponder a un ítem de pedido",
+    path: ["requestItemId"],
+  });
 export type CreateUploadSession = z.infer<typeof createUploadSessionSchema>;
