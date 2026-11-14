@@ -19,8 +19,10 @@ import {
   type BookVoucher,
 } from "./fiscal-books-core.js";
 
+/** El estado HTTP viaja con el error: la ruta no decide por el texto del código (P2). */
 export class FiscalBooksError extends Error {
   constructor(
+    readonly status: 400 | 404,
     readonly code: "CLIENT_NOT_FOUND" | "PERIOD_NOT_FOUND",
     message: string,
     readonly field?: string,
@@ -58,12 +60,12 @@ function isoDay(value: Date): string {
  */
 async function loadBookData(tx: Tx, firmId: string, clientId: string, periodId: string) {
   const client = await tx.client.findFirst({ where: { id: clientId, firmId }, select: { legalName: true } });
-  if (!client) throw new FiscalBooksError("CLIENT_NOT_FOUND", "Cliente no encontrado");
+  if (!client) throw new FiscalBooksError(404, "CLIENT_NOT_FOUND", "Cliente no encontrado");
   const period = await tx.taxPeriod.findFirst({
     where: { id: periodId, firmId, clientId },
     select: { id: true, label: true, startDate: true, endDate: true },
   });
-  if (!period) throw new FiscalBooksError("PERIOD_NOT_FOUND", "Período fiscal no encontrado", "periodId");
+  if (!period) throw new FiscalBooksError(404, "PERIOD_NOT_FOUND", "Período fiscal no encontrado", "periodId");
 
   const vouchers: BookVoucher[] = await tx.fiscalVoucher.findMany({
     where: { firmId, clientId, issuedOn: { gte: period.startDate, lte: period.endDate } },

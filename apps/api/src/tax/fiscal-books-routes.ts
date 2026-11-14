@@ -13,8 +13,7 @@ export function fiscalBooksRoutes(app: FastifyInstance) {
 
   const handleError = (reply: FastifyReply, err: unknown) => {
     if (err instanceof FiscalBooksError) {
-      const status = err.code.endsWith("NOT_FOUND") ? 404 : 400;
-      return reply.status(status).send({
+      return reply.status(err.status).send({
         error: { code: err.code, message: err.message, ...(err.field ? { field: err.field } : {}) },
       });
     }
