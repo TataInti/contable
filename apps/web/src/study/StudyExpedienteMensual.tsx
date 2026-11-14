@@ -10,6 +10,7 @@ import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { WorkpaperSourceReviewAction } from "./WorkpaperSourceReviewAction";
+import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
 import { Icon } from "../ui/Icon";
 import {
   DenseHeader,
@@ -1355,6 +1356,14 @@ export function StudyExpedienteMensual() {
             <Icon name="upload" size={16} />
             Subir Excel
           </Button>
+          <FiscalBooksExportAction
+            periodId={selectedTaxPeriod?.id ?? null}
+            periodLabel={
+              selectedTaxPeriod
+                ? `${selectedTaxPeriod.taxType.name} · ${fiscalTaxPeriodLabel(selectedTaxPeriod)}`
+                : null
+            }
+          />
           <Button
             variant="primary"
             disabled={!selectedTaxPeriod || createMutation.isPending || !capabilities.has("tax.settlements.calculate")}
