@@ -5,10 +5,6 @@
 }
 
 /* G2-07.5: texto atenuado para estados transitorios en tablas de documentos. */
-.portal-file-pending {
-  color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-sm);
-}
 
 .portal-page__header {
   display: flex;
