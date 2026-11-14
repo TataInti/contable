@@ -221,6 +221,8 @@ async function createRulePack(page: Page, tax: Tax) {
 }
 
 test("alta de impuestos, motores y cliente, y carga y revisión de un comprobante real", async ({ page, browser }) => {
+  // Necesita el stack completo y un administrador de plataforma: sólo corre contra un entorno externo.
+  test.skip(process.env.E2E_EXTERNAL !== "1", "Requiere el stack completo (E2E_EXTERNAL=1)");
   test.setTimeout(480_000);
   page.setDefaultTimeout(15_000);
 
