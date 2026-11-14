@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { buildPortalInvitationLink } from "../lib/portalInvitationLink";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -546,9 +547,7 @@ export function StudyAdministracion() {
       }),
     onSuccess: (created) => {
       setActionError(null);
-      setInvitationLink(
-        `${window.location.origin}/aceptar-invitacion?token=${encodeURIComponent(created.invitationToken)}`,
-      );
+      setInvitationLink(buildPortalInvitationLink(window.location.origin, created.invitationToken));
       setEmail("");
       setShowInviteForm(false);
       void queryClient.invalidateQueries({ queryKey: ["portal-invitations", firmId, clientId] });
