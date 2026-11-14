@@ -28,15 +28,7 @@ function handleError(app: FastifyInstance, reply: FastifyReply, err: unknown) {
     });
   }
   if (err instanceof TaxCalendarError) {
-    const status =
-      err.code === "CALENDAR_NOT_FOUND" || err.code === "CALENDAR_ENTRY_NOT_FOUND"
-        ? 404
-        : err.code === "CALENDAR_VALIDATION_FAILED"
-          ? 422
-          : err.path
-            ? 422
-            : 409;
-    return reply.status(status).send({
+    return reply.status(err.httpStatus).send({
       error: {
         code: err.code,
         message: err.message,

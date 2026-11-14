@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
+import { TaxCalendarRegistryService } from "./tax-calendar-service.js";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
@@ -6,6 +7,9 @@ import { IngestionService } from "./ingestion-service.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
 import { TaxCalendarService } from "./fiscal-foundation-service.js";
 import { computeRulesHashV3 } from "./rules-hash.js";
+import Fastify from "fastify";
+import { fiscalFoundationRoutes } from "./fiscal-foundation-routes.js";
+import { taxCalendarRoutes } from "./tax-calendar-routes.js";
 
 /**
  * Tests de integración IIBB Tucumán local (Puerta 4, Fase 4.1).
@@ -381,6 +385,8 @@ async function cleanupIIBB() {
     await tx.$executeRawUnsafe(`DELETE FROM perception_certificates WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_registrations WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_obligations WHERE "clientId" = '${CLIENT_IIBB}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE "firmId" = '${FIRM_IIBB}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM tax_calendars WHERE "firmId" = '${FIRM_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_periods WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`DELETE FROM taxpayer_profile_versions WHERE "clientId" = '${CLIENT_IIBB}'`);
     await tx.$executeRawUnsafe(`
@@ -888,5 +894,169 @@ describe("Abrir mes — períodos y obligaciones de los regímenes del cliente",
       where: { clientId: CLIENT_IIBB, period: { startDate: new Date("2026-03-01") } },
     });
     expect(obligations).toHaveLength(1);
+  });
+
+  it("con calendario publicado toma la fecha del calendario; sin celda avisa (P1) y no inventa fecha", async () => {
+    const calendar = new TaxCalendarService();
+    const registry = new TaxCalendarRegistryService();
+    const registration = await prisma.taxRegistration.findFirstOrThrow({
+      where: { clientId: CLIENT_IIBB, status: "ACTIVE" },
+      include: { regime: true },
+    });
+    const { regime } = registration;
+
+    // Calendario 2026 del mismo organismo y jurisdicción, con una sola celda para junio.
+    const draft = await registry.create(ctxOwner, {
+      taxAuthorityId: regime.authorityId,
+      jurisdictionId: regime.jurisdictionId,
+      year: 2026,
+      title: "Calendario IIBB de prueba",
+    });
+    const withEntry = await registry.addEntry(ctxOwner, draft.id, {
+      conceptLabel: "Ingresos Brutos — anticipo de prueba",
+      groupingKind: "ALL",
+      regimeId: regime.id,
+      referencePeriodStart: "2026-06-01",
+      referencePeriodEnd: "2026-06-30",
+      referenceLabel: "Anticipo jun-26 (prueba)",
+      dueDate: "2026-07-20",
+    });
+    const entryId = withEntry.entries[0]!.id;
+    const published = await registry.publish(ctxOwner, draft.id);
+    expect(published.calendar.status).toBe("PUBLISHED");
+
+    const june = await calendar.openMonth(ctxOwner, { clientId: CLIENT_IIBB, month: "2026-06" });
+    expect(june).toMatchObject({ regimes: 1, obligationsCreated: 1, calendarNotices: [] });
+    const juneObligation = await prisma.taxObligation.findFirstOrThrow({
+      where: { clientId: CLIENT_IIBB, regimeId: regime.id, period: { startDate: new Date("2026-06-01T00:00:00.000Z") } },
+    });
+    expect(juneObligation).toMatchObject({ dueDateSource: "CALENDAR", dueDateEntryId: entryId });
+    expect(juneObligation.dueDate?.toISOString().slice(0, 10)).toBe("2026-07-20");
+    expect(juneObligation.calculatedDueDate?.toISOString().slice(0, 10)).toBe("2026-07-20");
+
+    // Julio: el calendario existe pero no tiene celda: se avisa (P1) y la fecha sigue por regla.
+    const july = await calendar.openMonth(ctxOwner, { clientId: CLIENT_IIBB, month: "2026-07" });
+    expect(july.obligationsCreated).toBe(1);
+    expect(july.calendarNotices).toEqual([expect.stringContaining("no tiene una celda para")]);
+    const julyObligation = await prisma.taxObligation.findFirstOrThrow({
+      where: { clientId: CLIENT_IIBB, regimeId: regime.id, period: { startDate: new Date("2026-07-01T00:00:00.000Z") } },
+    });
+    expect(julyObligation.dueDate).toBeNull();
+    expect(julyObligation.dueDateEntryId).toBeNull();
+    expect(julyObligation.dueDateSource).not.toBe("CALENDAR");
+  });
+
+  it("E2E de API: crear calendario, cargar celda, validar, publicar y ver el vencimiento en la obligación nueva", async () => {
+    const { regime } = await prisma.taxRegistration.findFirstOrThrow({
+      where: { clientId: CLIENT_IIBB, status: "ACTIVE" },
+      include: { regime: true },
+    });
+    const app = Fastify({ logger: false });
+    app.addHook("preHandler", async (req) => {
+      Object.assign(req, { userId: OWNER_IIBB, firmId: FIRM_IIBB, clientId: CLIENT_IIBB, actorKind: "USER" });
+    });
+    fiscalFoundationRoutes(app);
+    taxCalendarRoutes(app);
+    await app.ready();
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: `/api/v1/firms/${FIRM_IIBB}/tax-calendars`,
+        payload: { taxAuthorityId: regime.authorityId, jurisdictionId: regime.jurisdictionId, year: 2026, title: "Calendario E2E de prueba" },
+      });
+      expect(created.statusCode).toBe(201);
+      const calendarId = created.json().data.id as string;
+
+      const added = await app.inject({
+        method: "POST",
+        url: `/api/v1/firms/${FIRM_IIBB}/tax-calendars/${calendarId}/entries`,
+        payload: {
+          conceptLabel: "Ingresos Brutos — anticipo E2E (prueba)",
+          groupingKind: "ALL",
+          regimeId: regime.id,
+          referencePeriodStart: "2026-06-01",
+          referencePeriodEnd: "2026-06-30",
+          referenceLabel: "Anticipo jun-26 (E2E)",
+          dueDate: "2026-07-20",
+        },
+      });
+      expect(added.statusCode).toBe(201);
+
+      const validation = await app.inject({ method: "GET", url: `/api/v1/firms/${FIRM_IIBB}/tax-calendars/${calendarId}/validation` });
+      expect(validation.json().data.canPublish).toBe(true);
+      const published = await app.inject({ method: "POST", url: `/api/v1/firms/${FIRM_IIBB}/tax-calendars/${calendarId}/publish` });
+      expect(published.statusCode).toBe(200);
+
+      const opened = await app.inject({
+        method: "POST",
+        url: `/api/v1/firms/${FIRM_IIBB}/clients/${CLIENT_IIBB}/tax-periods/open-month`,
+        payload: { month: "2026-06" },
+      });
+      expect(opened.statusCode).toBe(201);
+      expect(opened.json().data).toMatchObject({ obligationsCreated: 1, calendarNotices: [] });
+
+      const list = await app.inject({ method: "GET", url: `/api/v1/firms/${FIRM_IIBB}/clients/${CLIENT_IIBB}/tax-obligations` });
+      expect(list.statusCode).toBe(200);
+      const rows = list.json().data as Array<{ regimeId: string; dueDate: string; dueDateSource: string; period: { startDate: string } }>;
+      const obligation = rows.find((row) => row.regimeId === regime.id && row.period.startDate.startsWith("2026-06-01"));
+      expect(obligation).toMatchObject({ dueDateSource: "CALENDAR" });
+      expect(obligation?.dueDate.slice(0, 10)).toBe("2026-07-20");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("un valor manual conserva su fecha: publicar una versión nueva o abrir el mes no la recalcula (D-C2, D-C4, D-C5)", async () => {
+    const calendar = new TaxCalendarService();
+    const registry = new TaxCalendarRegistryService();
+    const { regime } = await prisma.taxRegistration.findFirstOrThrow({
+      where: { clientId: CLIENT_IIBB, status: "ACTIVE" },
+      include: { regime: true },
+    });
+    const draft = await registry.create(ctxOwner, {
+      taxAuthorityId: regime.authorityId,
+      jurisdictionId: regime.jurisdictionId,
+      year: 2026,
+      title: "Calendario con valor manual (prueba)",
+    });
+    await registry.addEntry(ctxOwner, draft.id, {
+      conceptLabel: "Ingresos Brutos — anticipo manual (prueba)",
+      groupingKind: "ALL",
+      regimeId: regime.id,
+      referencePeriodStart: "2026-06-01",
+      referencePeriodEnd: "2026-06-30",
+      referenceLabel: "Anticipo jun-26 (manual)",
+      dueDate: "2026-07-20",
+    });
+    const first = await registry.publish(ctxOwner, draft.id);
+    await calendar.openMonth(ctxOwner, { clientId: CLIENT_IIBB, month: "2026-06" });
+    const obligation = await prisma.taxObligation.findFirstOrThrow({
+      where: { clientId: CLIENT_IIBB, regimeId: regime.id, period: { startDate: new Date("2026-06-01T00:00:00.000Z") } },
+    });
+    // Valor manual por obligación con razón (D-C5): la fecha manual reemplaza la del calendario.
+    await prisma.taxObligation.update({
+      where: { id: obligation.id },
+      data: {
+        dueDate: new Date("2026-07-25T00:00:00.000Z"),
+        dueDateSource: "MANUAL",
+        dueDateEntryId: null,
+        dueDateOverrideReason: "Prórroga de prueba (dato sintético)",
+        dueDateOverriddenByUserId: OWNER_IIBB,
+        dueDateOverriddenAt: new Date(),
+      },
+    });
+    // Nueva versión con otra fecha, publicada: no recalcula la obligación existente (D-C4).
+    const v2 = await registry.createFrom(ctxOwner, first.calendar.id);
+    await prisma.taxCalendarEntry.updateMany({
+      where: { calendarId: v2.id },
+      data: { dueDate: new Date("2026-07-22T00:00:00.000Z") },
+    });
+    await registry.publish(ctxOwner, v2.id);
+    const again = await calendar.openMonth(ctxOwner, { clientId: CLIENT_IIBB, month: "2026-06" });
+    expect(again.obligationsCreated).toBe(0);
+
+    const kept = await prisma.taxObligation.findUniqueOrThrow({ where: { id: obligation.id } });
+    expect(kept.dueDate?.toISOString().slice(0, 10)).toBe("2026-07-25");
+    expect(kept).toMatchObject({ dueDateSource: "MANUAL", dueDateOverrideReason: "Prórroga de prueba (dato sintético)" });
   });
 });

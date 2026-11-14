@@ -3,6 +3,7 @@ import {
   canonicalRulePackPayload,
   computeRulesHashV2,
   computeRulesHashV3,
+  canonicalRulePackPayloadV3,
   hashCanonicalRulePackPayload,
   type RulePackForHash,
 } from "./rules-hash.js";
@@ -199,4 +200,20 @@ describe("hash canónico de reglas v2", () => {
 
     expect(computeRulesHashV3(reversed)).toBe(computeRulesHashV3(first));
   });
+
+  it("invariancia v3 (calendarios 2a-i): el golden de una versión fija no cambia y las tablas nuevas no entran en el payload", () => {
+    const version = versionWithoutBracketsOrRoundings();
+    const rule = {
+      ...version.rateRules![0]!,
+      kindKey: "RATE",
+      activityId: "activity-1",
+      categoryCode: null,
+      isDefault: false,
+    };
+    const typed = { ...version, rateRules: [rule] };
+    const hash = computeRulesHashV3(typed);
+    expect(hash).toBe("7c19c1fa2e761f19b7ee1067dcdcd07c37e2e9403021651ffc85639d5ee5eadb");
+    expect(JSON.stringify(canonicalRulePackPayloadV3(typed))).not.toMatch(/calendar/i);
+  });
+
 });

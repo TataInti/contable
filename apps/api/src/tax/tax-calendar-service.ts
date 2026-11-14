@@ -9,6 +9,7 @@ import {
   type UpdateTaxCalendarInput,
 } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import { isPrismaUniqueViolation } from "../lib/prisma-errors.js";
 
 /**
  * Calendarios fiscales del estudio (corte 2a-i).
@@ -34,19 +35,33 @@ export type TaxCalendarErrorCode =
   | "CALENDAR_VALIDATION_FAILED"
   | "CALENDAR_VERSION_CONFLICT";
 
+/** Estado HTTP de cada error: 404 no existe; 422 el contenido no cumple; 409 el estado no admite la acción. */
+const CALENDAR_ERROR_HTTP_STATUS: Readonly<Record<TaxCalendarErrorCode, number>> = {
+  CALENDAR_NOT_FOUND: 404,
+  CALENDAR_ENTRY_NOT_FOUND: 404,
+  CALENDAR_REFERENCE_NOT_FOUND: 422,
+  CALENDAR_VALIDATION_FAILED: 422,
+  CALENDAR_NOT_DRAFT: 409,
+  CALENDAR_NOT_PUBLISHED: 409,
+  CALENDAR_NOT_HIDDEN: 409,
+  CALENDAR_VERSION_CONFLICT: 409,
+};
+
 export class TaxCalendarError extends Error {
   readonly code: TaxCalendarErrorCode;
+  readonly httpStatus: number;
   readonly path: string[] | undefined;
   readonly problems: CalendarProblem[] | undefined;
 
   constructor(
-    code: TaxCalendarErrorCode,
+    kind: TaxCalendarErrorCode,
     message: string,
     options: { path?: string[]; problems?: CalendarProblem[] } = {},
   ) {
     super(message);
     this.name = "TaxCalendarError";
-    this.code = code;
+    this.code = kind;
+    this.httpStatus = CALENDAR_ERROR_HTTP_STATUS[kind];
     this.path = options.path;
     this.problems = options.problems;
   }
@@ -69,10 +84,6 @@ const optionalUtcDay = (iso: string | null | undefined): Date | null => (iso ? u
 
 function notFound(): TaxCalendarError {
   return new TaxCalendarError("CALENDAR_NOT_FOUND", "El calendario no existe en este estudio");
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  return Boolean(err && typeof err === "object" && "code" in err && (err as { code?: unknown }).code === "P2002");
 }
 
 function snapshot(calendar: {
@@ -342,7 +353,7 @@ export class TaxCalendarRegistryService {
         return created;
       });
     } catch (err) {
-      if (isUniqueViolation(err)) {
+      if (isPrismaUniqueViolation(err)) {
         throw new TaxCalendarError("CALENDAR_VERSION_CONFLICT", "Otro cambio tomó esa versión. Volvé a intentarlo.");
       }
       throw err;
@@ -461,7 +472,7 @@ export class TaxCalendarRegistryService {
       await recordAudit(tx, ctx, "tax_calendar.published", calendarId, snapshot(calendar), snapshot(published));
       return { calendar: published, hiddenCalendarId: previous?.id ?? null };
     }).catch((err: unknown) => {
-      if (isUniqueViolation(err)) {
+      if (isPrismaUniqueViolation(err)) {
         throw new TaxCalendarError(
           "CALENDAR_VERSION_CONFLICT",
           "Otra versión de este calendario se publicó al mismo tiempo. Actualizá y volvé a intentarlo.",
@@ -581,7 +592,7 @@ export class TaxCalendarRegistryService {
       await recordAudit(tx, ctx, "tax_calendar.shown", calendarId, snapshot(current), snapshot(shown));
       return { calendar: shown, hiddenCalendarId: visible?.id ?? null };
     }).catch((err: unknown) => {
-      if (isUniqueViolation(err)) {
+      if (isPrismaUniqueViolation(err)) {
         throw new TaxCalendarError(
           "CALENDAR_VERSION_CONFLICT",
           "Otra versión se mostró al mismo tiempo. Actualizá y volvé a intentarlo.",

@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { calculateDueDate } from "@contable/tax-engine";
+import { calculateDueDate, resolveDueDate } from "@contable/tax-engine";
 import {
   computeLegacyRulesHashSchemaV1,
   computeRulesHashV2,
@@ -17,6 +17,8 @@ import {
   type TaxRegimeEngineScope,
 } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+
+const calendarIsoDay = (date: Date): string => date.toISOString().slice(0, 10);
 
 /**
  * Servicio de fundación fiscal (Puerta 1).
@@ -1796,6 +1798,7 @@ export class TaxPeriodService {
           regimeId: input.regimeId,
           periodId: input.periodId,
           ...(input.dueDate ? { dueDate: new Date(input.dueDate) } : {}),
+          dueDateSource: "MANUAL",
           materializedBy: ctx.userId,
         },
       });
@@ -2844,14 +2847,16 @@ export class TaxCalendarService {
     });
 
     let obligationsCreated = 0;
+    const calendarNotices = new Set<string>();
     for (const step of plan.steps) {
       if (step.hasObligation) continue;
-      await this.materializeObligationWithDueDate(ctx, {
+      const { calendarNotice } = await this.materializeWithDueDate(ctx, {
         clientId: input.clientId,
         profileVersionId: plan.profileVersionId,
         regimeId: step.regimeId,
         periodId: step.periodId,
       });
+      if (calendarNotice) calendarNotices.add(calendarNotice);
       obligationsCreated += 1;
     }
     return {
@@ -2860,6 +2865,7 @@ export class TaxCalendarService {
       regimes: plan.steps.length,
       periodsCreated: plan.steps.filter((step) => step.periodCreated).length,
       obligationsCreated,
+      calendarNotices: [...calendarNotices],
     };
   }
 
@@ -2869,6 +2875,21 @@ export class TaxCalendarService {
    * activo de ese régimen. El ajuste por feriado es determinista.
    */
   async materializeObligationWithDueDate(
+    ctx: TenantContext,
+    input: { clientId: string; profileVersionId: string; regimeId: string; periodId: string },
+  ) {
+    const { obligation } = await this.materializeWithDueDate(ctx, input);
+    return obligation;
+  }
+
+  /**
+   * Materializa la obligación con la precedencia D-C2: calendario publicado del
+   * organismo y la jurisdicción > regla de vencimiento > sin fecha. Sin calendario
+   * publicado el resultado es el de siempre (la regla o la falta de regla). Si el
+   * calendario falta o no tiene la celda, devuelve el aviso de P1 para que la
+   * pantalla guíe la carga.
+   */
+  async materializeWithDueDate(
     ctx: TenantContext,
     input: { clientId: string; profileVersionId: string; regimeId: string; periodId: string },
   ) {
@@ -2882,6 +2903,94 @@ export class TaxCalendarService {
         period,
       });
 
+      const client = await tx.client.findUnique({ where: { id: input.clientId } });
+      const cuitEnding = client?.cuit.slice(-1);
+
+      let calendarNotice: string | null = null;
+      const regime = client
+        ? await tx.taxRegime.findUnique({
+            where: { id: input.regimeId },
+            include: { authority: { select: { name: true } } },
+          })
+        : null;
+      if (client && regime) {
+        const periodYear = period.startDate.getUTCFullYear();
+        const calendars = await tx.taxCalendar.findMany({
+          where: {
+            firmId: ctx.firmId,
+            status: "PUBLISHED",
+            taxAuthorityId: regime.authorityId,
+            jurisdictionId: regime.jurisdictionId,
+            year: { in: [periodYear, periodYear + 1] },
+          },
+          include: {
+            entries: {
+              where: { referencePeriodStart: period.startDate, referencePeriodEnd: period.endDate },
+              select: {
+                id: true,
+                regimeId: true,
+                taxTypeId: true,
+                groupingKind: true,
+                endingDigits: true,
+                referencePeriodStart: true,
+                referencePeriodEnd: true,
+                dueDate: true,
+              },
+            },
+          },
+        });
+        const resolution = resolveDueDate({
+          cuit: client.cuit,
+          regime: {
+            id: regime.id,
+            name: regime.name,
+            taxTypeId: regime.taxTypeId,
+            jurisdictionId: regime.jurisdictionId,
+            authorityId: regime.authorityId,
+            authorityName: regime.authority.name,
+          },
+          period: { startDate: calendarIsoDay(period.startDate), endDate: calendarIsoDay(period.endDate) },
+          calendars: calendars.map((calendar) => ({
+            id: calendar.id,
+            status: calendar.status,
+            taxAuthorityId: calendar.taxAuthorityId,
+            jurisdictionId: calendar.jurisdictionId,
+            year: calendar.year,
+            entries: calendar.entries.map((entry) => ({
+              id: entry.id,
+              regimeId: entry.regimeId,
+              taxTypeId: entry.taxTypeId,
+              groupingKind: entry.groupingKind,
+              endingDigits: entry.endingDigits,
+              referencePeriodStart: entry.referencePeriodStart ? calendarIsoDay(entry.referencePeriodStart) : null,
+              referencePeriodEnd: entry.referencePeriodEnd ? calendarIsoDay(entry.referencePeriodEnd) : null,
+              dueDate: calendarIsoDay(entry.dueDate),
+            })),
+          })),
+        });
+        if (resolution.source === "CALENDAR") {
+          const dueDate = new Date(`${resolution.dueDate}T00:00:00.000Z`);
+          const obligation = await tx.taxObligation.create({
+            data: {
+              firmId: ctx.firmId,
+              clientId: input.clientId,
+              profileVersionId: input.profileVersionId,
+              regimeId: input.regimeId,
+              periodId: input.periodId,
+              dueDate,
+              calculatedDueDate: dueDate,
+              dueDateSource: "CALENDAR",
+              dueDateEntryId: resolution.entryId,
+              status: "READY_TO_CALCULATE",
+              materializedBy: ctx.userId,
+            },
+          });
+          return { obligation, calendarNotice: null };
+        }
+        if (resolution.source === null) calendarNotice = resolution.message;
+      }
+
+      // 2) Regla de vencimiento (camino de siempre).
       const pack = await tx.taxRulePack.findFirst({
         where: { regimeId: input.regimeId },
       });
@@ -2902,8 +3011,6 @@ export class TaxCalendarService {
         );
       }
 
-      const client = await tx.client.findUnique({ where: { id: input.clientId } });
-      const cuitEnding = client?.cuit.slice(-1);
       const dueRules = await tx.dueDateRule.findMany({
         where: {
           ruleVersionId: activeVersion.id,
@@ -2917,7 +3024,7 @@ export class TaxCalendarService {
         dueRules.find((rule) => !rule.cuitEnding);
       if (!dueRule) {
         // Sin regla de vencimiento: obligación sin fecha (PENDING).
-        return tx.taxObligation.create({
+        const obligation = await tx.taxObligation.create({
           data: {
             firmId: ctx.firmId,
             clientId: input.clientId,
@@ -2927,6 +3034,7 @@ export class TaxCalendarService {
             materializedBy: ctx.userId,
           },
         });
+        return { obligation, calendarNotice };
       }
 
       const holidays = await tx.holiday.findMany({
@@ -2953,7 +3061,7 @@ export class TaxCalendarService {
         cuitEnding,
       );
 
-      return tx.taxObligation.create({
+      const obligation = await tx.taxObligation.create({
         data: {
           firmId: ctx.firmId,
           clientId: input.clientId,
@@ -2961,10 +3069,13 @@ export class TaxCalendarService {
           regimeId: input.regimeId,
           periodId: input.periodId,
           dueDate: new Date(result.dueDate),
+          calculatedDueDate: new Date(result.dueDate),
+          dueDateSource: "RULE",
           status: "READY_TO_CALCULATE",
           materializedBy: ctx.userId,
         },
       });
+      return { obligation, calendarNotice };
     });
   }
 
