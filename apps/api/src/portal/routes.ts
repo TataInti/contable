@@ -126,16 +126,8 @@ export function portalRoutes(app: FastifyInstance) {
         expiresAt,
         invitedByUserId: ctx.userId,
       } });
-      // G0-06: creación de eventos vía SECURITY DEFINER (el runtime no
-      // tiene INSERT directo en outbox_events).
-      await tx.$executeRaw`SELECT app_create_outbox(
-        ${ctx.firmId}::text,
-        ${ctx.clientId!}::text,
-        'notifications'::text,
-        'PORTAL_INVITATION_CREATED'::text,
-        ${created.id}::text,
-        ${JSON.stringify({ invitationId: created.id, email: body.email, token, expiresAt: expiresAt.toISOString() })}::jsonb
-      )`;
+      // La invitación no emite evento de outbox: no tiene consumidor (la cola
+      // `notifications` exige userId) y el token no se copia fuera de esta respuesta.
       await tx.auditEvent.create({ data: {
         firmId: ctx.firmId, clientId: ctx.clientId!, userId: ctx.userId, actorKind: "USER",
         action: "portal.invitation.created", entityType: "PortalInvitation", entityId: created.id,
@@ -143,14 +135,14 @@ export function portalRoutes(app: FastifyInstance) {
       } });
       return created;
     });
-    void outboxPublisher.dispatchPending().catch((error) => req.log.error({ error }, "No se pudo despachar la invitación"));
     return reply.status(201).send({
       data: {
         id: invitation.id,
         email: invitation.emailNormalized,
         role: invitation.role,
         expiresAt,
-        // Se devuelve una única vez para desarrollo/onboarding manual; no se persiste en claro.
+        // Se devuelve una única vez, sólo en esta respuesta, para el alta manual del estudio.
+        // En la base se guarda únicamente su hash (portal_invitations.tokenHash).
         invitationToken: token,
       },
     });
