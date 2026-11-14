@@ -622,7 +622,7 @@ export function StudyClientes() {
     {
       key: "legalName",
       header: "Cliente",
-      width: inspectorOpen ? "24%" : "20%",
+      width: inspectorOpen ? "24%" : "18%",
       className: "client-list__client-column",
       sortValue: (row) => row.legalName.toLocaleLowerCase("es-AR"),
       render: (row) => (
@@ -662,7 +662,7 @@ export function StudyClientes() {
     {
       key: "cuitEnding",
       header: "Terminación de CUIT",
-      width: "8%",
+      width: "10%",
       className: "client-list__ending-column",
       sortValue: (row) => (row.cuitEnding == null ? 10 : Number(row.cuitEnding)),
       render: (row) =>
