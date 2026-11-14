@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { ToastProvider } from "@contable/design-system";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -96,10 +97,12 @@ function renderClientes() {
   });
   return render(
     <QueryClientProvider client={client}>
+      <ToastProvider>
       <MemoryRouter>
         <StudyClientes />
         <LocationProbe />
       </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ARGENTINA_PROVINCES,
@@ -195,7 +195,7 @@ export function StudyClientes() {
     legalForm: "",
     serviceStartDate: "",
   }));
-  const [notice, setNotice] = useState<string | null>(null);
+  const notify = useNotify();
   const [contactRetry, setContactRetry] = useState<ContactRetryTarget | null>(null);
   const query = useQuery({
     queryKey: ["clients", firmId],
@@ -345,7 +345,6 @@ export function StudyClientes() {
         activity: "",
         legalForm: "",
       });
-      setNotice(null);
       if (!contactFailed) navigate("/configuracion-fiscal");
     },
   });
@@ -415,7 +414,7 @@ export function StudyClientes() {
     onSuccess: async (client) => {
       await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
       setStatusClient(null);
-      setNotice(`El estado de ${client.legalName} se actualizó.`);
+      notify.success(`El estado de ${client.legalName} se actualizó.`);
     },
   });
   const saveContact = useMutation({
@@ -480,7 +479,6 @@ export function StudyClientes() {
 
   const startClientEdit = (client: ClientWithProfile) => {
     setCreating(false);
-    setNotice(null);
     updateIdentity.reset();
     updateProfile.reset();
     setEditingClient(client);
@@ -510,7 +508,7 @@ export function StudyClientes() {
     await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
     if (results.every((result) => result.status === "fulfilled")) {
       setEditingClient(null);
-      setNotice(`La ficha de ${clientName} quedó actualizada.`);
+      notify.success(`La ficha de ${clientName} quedó actualizada.`);
     }
   };
 
@@ -1015,19 +1013,6 @@ export function StudyClientes() {
           }
         >
           Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.
-        </Notice>
-      ) : notice ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Actualización guardada"
-          action={
-            <Button type="button" variant="ghost" size="sm" iconOnly aria-label="Cerrar aviso" onClick={() => setNotice(null)}>
-              <Icon name="close" size={15} />
-            </Button>
-          }
-        >
-          {notice}
         </Notice>
       ) : null}
 
@@ -1713,7 +1698,7 @@ export function StudyClientes() {
               queryClient.invalidateQueries({ queryKey: ["clients", firmId] }),
               session.refresh(),
             ]);
-            setNotice(
+            notify.success(
               result.storage?.failed
                 ? `El cliente se eliminó; ${result.storage.failed} archivo(s) requieren limpieza posterior.`
                 : "El cliente y sus registros dependientes se eliminaron.",

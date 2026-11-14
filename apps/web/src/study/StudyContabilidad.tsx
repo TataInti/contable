@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, MoneyField, Notice, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, MoneyField, Notice, Table, useNotify } from "@contable/design-system";
 import { api, type Account, type FiscalYear, type TrialBalance } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -74,7 +74,7 @@ export function StudyContabilidad() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showDraftForm, setShowDraftForm] = useState(false);
-  const [receipt, setReceipt] = useState<string | null>(null);
+  const notify = useNotify();
   const [draft, setDraft] = useState({
     entryDate: "",
     description: "",
@@ -221,7 +221,7 @@ export function StudyContabilidad() {
     },
     onSuccess: () => {
       setShowDraftForm(false);
-      setReceipt("Borrador creado y balanceado. Enviálo a revisión cuando esté listo.");
+      notify.success("Borrador creado y balanceado. Enviálo a revisión cuando esté listo.");
       setDraft((current) => ({
         ...current,
         description: "",
@@ -239,7 +239,7 @@ export function StudyContabilidad() {
   const submitDraft = useMutation({
     mutationFn: (entryId: string) => api.post(`${base}/journal-entries/${entryId}/submit`),
     onSuccess: () => {
-      setReceipt("Asiento enviado a revisión.");
+      notify.success("Asiento enviado a revisión.");
       void queryClient.invalidateQueries({ queryKey: ["journal-entries", firmId, clientId] });
     },
   });
@@ -326,27 +326,6 @@ export function StudyContabilidad() {
 
 
 
-      {receipt ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Acción completada"
-          action={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              iconOnly
-              aria-label="Cerrar confirmación"
-              onClick={() => setReceipt(null)}
-            >
-              <Icon name="close" size={15} />
-            </Button>
-          }
-        >
-          {receipt}
-        </Notice>
-      ) : null}
 
       <ActionDrawer
         isOpen={showDraftForm}

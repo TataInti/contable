@@ -1,10 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, useNotify } from "@contable/design-system";
 import { api, type FeatureFlag } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
-import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import {
@@ -50,8 +49,7 @@ export function StudyAdministracionPlataforma() {
   const session = useSession();
   const queryClient = useQueryClient();
   const confirm = useConfirmAction();
-  const [notice, setNotice] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const notify = useNotify();
   const firm = session.me?.firms.find((item) => item.firmId === firmId);
   const flags = useQuery({
     queryKey: ["flags", firmId],
@@ -72,12 +70,11 @@ export function StudyAdministracionPlataforma() {
     mutationFn: (flag: FeatureFlag) =>
       api.put(`/firms/${firmId}/feature-flags/${flag.code}`, { enabled: !flag.enabled }),
     onSuccess: (_result, flag) => {
-      setActionError(null);
-      setNotice(`${FEATURE_FLAG_LABELS[flag.code] ?? flag.code} quedó ${flag.enabled ? "deshabilitado" : "habilitado"}.`);
+      notify.success(`${FEATURE_FLAG_LABELS[flag.code] ?? flag.code} quedó ${flag.enabled ? "deshabilitado" : "habilitado"}.`);
       void queryClient.invalidateQueries({ queryKey: ["flags", firmId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo actualizar el módulo."),
+      notify.error(error instanceof Error ? error.message : "No se pudo actualizar el módulo."),
   });
 
   if (!capabilities.has("platform.modules.manage")) {
@@ -115,26 +112,6 @@ export function StudyAdministracionPlataforma() {
       />
 
 
-      {notice ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <Icon name="check" size={18} />
-          <span>
-            <strong>Acción completada</strong>
-            <small>{notice}</small>
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            aria-label="Cerrar aviso"
-            onClick={() => setNotice(null)}
-          >
-            <Icon name="close" size={15} />
-          </Button>
-        </div>
-      ) : null}
-      {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
 
 
       <DenseToolbar>
