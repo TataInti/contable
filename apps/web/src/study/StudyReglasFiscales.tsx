@@ -300,6 +300,8 @@ export function StudyReglasFiscales() {
     detailQuery.data.status === "DRAFT" &&
     detailQuery.data.versions.every((version) => version.status === "DRAFT"),
   );
+  // Los campos de cada regla se nombran por su posición, no por un identificador interno.
+  const rowNumber = (row: { id: string }) => draftRows.findIndex((item) => item.id === row.id) + 1;
   const canDeleteVersion = Boolean(
     firmId &&
     capabilities.has("data.delete") &&
@@ -1356,7 +1358,7 @@ export function StudyReglasFiscales() {
                         editable ? (
                           <input
                             className="fiscal-rule-input fiscal-rule-input--concept"
-                            aria-label={`Concepto ${row.id}`}
+                            aria-label={`Concepto de la fila ${rowNumber(row)}`}
                             value={row.concept}
                             placeholder="Etiqueta opcional"
                             onChange={(event) => updateDraftRule(row.id, { concept: event.target.value })}
@@ -1377,7 +1379,7 @@ export function StudyReglasFiscales() {
                           <div>
                             <select
                               className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Tipo de regla ${row.id}`}
+                              aria-label={`Tipo de regla de la fila ${rowNumber(row)}`}
                               aria-invalid={Boolean(error)}
                               value={row.kindId ?? ""}
                               onChange={(event) => updateDraftRule(row.id, {
@@ -1433,7 +1435,7 @@ export function StudyReglasFiscales() {
                           <div>
                             <select
                               className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Actividad ${row.id}`}
+                              aria-label={`Actividad de la fila ${rowNumber(row)}`}
                               aria-invalid={Boolean(rowError)}
                                   value={row.isDefault && kind.subject === "ACTIVITY_OR_DEFAULT" ? "__all__" : row.activityId ?? row.activityCode ?? ""}
                               onChange={(event) => {
@@ -1484,7 +1486,7 @@ export function StudyReglasFiscales() {
                           <div>
                             <select
                               className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Jurisdicción ${row.id}`}
+                              aria-label={`Jurisdicción de la fila ${rowNumber(row)}`}
                               aria-invalid={Boolean(error)}
                               value={row.isDefault && kind.subject === "JURISDICTION_OR_DEFAULT" ? "__all__" : row.jurisdictionId ?? ""}
                               onChange={(event) => updateDraftRule(row.id, {
@@ -1516,7 +1518,7 @@ export function StudyReglasFiscales() {
                           <div>
                             <select
                               className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Categoría ${row.id}`}
+                              aria-label={`Categoría de la fila ${rowNumber(row)}`}
                               aria-invalid={Boolean(error)}
                               value={row.categoryCode ?? ""}
                               onChange={(event) => updateDraftRule(row.id, { categoryCode: event.target.value || null })}
@@ -1537,7 +1539,7 @@ export function StudyReglasFiscales() {
                         editable ? (
                           <MoneyField
                             className="fiscal-rule-input fiscal-rule-input--number"
-                            aria-label={`Alícuota ${row.id}`}
+                            aria-label={`Alícuota de la fila ${rowNumber(row)}`}
                             prefix="%"
                             maxDecimals={4}
                             value={row.rate ?? ""}
@@ -1565,7 +1567,7 @@ export function StudyReglasFiscales() {
                         editable ? (
                           <MoneyField
                             className="fiscal-rule-input fiscal-rule-input--number"
-                            aria-label={`Mínimo ${row.id}`}
+                            aria-label={`Mínimo de la fila ${rowNumber(row)}`}
                             value={row.minAmount ?? ""}
                             onChange={(value) =>
                               setDraftRows((rows) =>

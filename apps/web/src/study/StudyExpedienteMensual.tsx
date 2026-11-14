@@ -2432,7 +2432,7 @@ export function StudyExpedienteMensual() {
                               <StatusBadge
                                 status={classificationQuery.data?.ready ? "READY" : "WAITING_INPUTS"}
                               />
-                              <small>Gate de cálculo</small>
+                              <small>Listo para calcular</small>
                             </span>
                           </div>
                           <Table<WorkpaperClassification>
@@ -2785,10 +2785,6 @@ export function StudyExpedienteMensual() {
                                 {component.settlement ? (
                                   <span>
                                     <StatusBadge status={component.settlement.status} />
-                                    <small>{component.settlement.engineVersion}</small>
-                                    <small title={component.settlement.rulesHash}>
-                                      Regla {component.settlement.ruleVersionId?.slice(0, 8) ?? "histórica"}
-                                    </small>
                                   </span>
                                 ) : (
                                   <StatusBadge status="PENDING" />
