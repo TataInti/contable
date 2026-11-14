@@ -330,6 +330,22 @@ erDiagram
 
 ---
 
+### 6b. Calendarios fiscales (corte 2a-i)
+
+Migración `20261115000000_tax_calendars`: aditiva, escrita a mano y sin sentencias destructivas. Prisma no modela el índice parcial `tax_calendars_one_published_key` ni las FK compuestas `(firmId, id)`: `prisma migrate dev` propondría quitarlos. Por eso este corte no usa `migrate dev`.
+
+| Tabla | Contenido | Restricciones |
+|---|---|---|
+| `tax_calendar_sources` | Fuente del calendario (PDF u otra imagen). El binario va al almacenamiento de objetos. | `sha256` único por estudio. |
+| `tax_calendars` | Calendario de un organismo, una jurisdicción y un año, con versión y estado `DRAFT`, `PUBLISHED` o `HIDDEN`. | Versión única por (estudio, organismo, jurisdicción, año, versión). Índice parcial: a lo sumo una `PUBLISHED` por (estudio, organismo, jurisdicción, año). `supersedesId` apunta a la versión de la que sale. |
+| `tax_calendar_entries` | Celda: concepto, régimen o tipo de impuesto, agrupación (`ENDING_DIGITS` o `ALL`), terminaciones, período de referencia, fecha completa, ajuste, revisión y origen. | Terminaciones solo con dígitos cuando la agrupación es por terminación. Período de referencia con desde ≤ hasta. |
+
+Cambios en `tax_obligations`: `calculatedDueDate`; `dueDateSource` (`CALENDAR`, `RULE` o `MANUAL`, con default `MANUAL`: las filas previas quedan así por el default, aunque su fecha venga de una regla); `dueDateEntryId`; `dueDateOverrideReason`, `dueDateOverriddenByUserId` y `dueDateOverriddenAt`; índice `(firmId, dueDate)`.
+
+Seguridad: RLS forzado en las tres tablas nuevas, con políticas por firma (miembro activo y fila de la firma de la sesión; el portal no escribe). No hay política ni grant de borrado: lo publicado se oculta, no se quita. El rol de runtime tiene lectura, alta y edición.
+
+Rollback: aditivo y compatible con el código anterior. Se revierten las imágenes; la base no se restaura.
+
 ## 7. Fiscal — vouchers, certificados y gastos
 
 Tablas: `fiscal_vouchers`, `fiscal_voucher_lines`, `fiscal_components`, `withholding_certificates`, `perception_certificates`, `management_expenses`, `expense_evidence`, `tax_treatment_decisions`, `tax_adjustments`.
@@ -701,3 +717,28 @@ Generadas desde `information_schema` (se omitió `_prisma_migrations`, que no ti
 | `vat_liquidations` | `reviewedByUserId` | `users` | `id` |
 | `vat_rules` | `clientId` | `clients` | `id` |
 | `withholding_certificates` | `clientId` | `clients` | `id` |
+
+
+## Apéndice B — Foreign keys del corte 2a-i (calendarios)
+
+Fuente: `apps/api/prisma/migrations/20261115000000_tax_calendars/migration.sql`. Todas usan `ON UPDATE CASCADE` y no declaran `ON DELETE` (queda `NO ACTION`: no hay borrado en cascada). Las FK compuestas `(firmId, <columna>)` → `(firmId, id)` existen solo en las tablas con firma (calendarios, fuentes, celdas y la celda de origen de la obligación), con el mismo patrón que G1; las FK a usuarios y a catálogos globales son simples.
+
+| Tabla | Columna | Referencia | Compuesta |
+|---|---|---|---|
+| `tax_calendar_sources` | `firmId` | `firms` | No |
+| `tax_calendar_sources` | `uploadedByUserId` | `users` | No |
+| `tax_calendars` | `firmId` | `firms` | No |
+| `tax_calendars` | `taxAuthorityId` | `tax_authorities` | No |
+| `tax_calendars` | `jurisdictionId` | `jurisdictions` | No |
+| `tax_calendars` | `sourceId` | `tax_calendar_sources` | Sí (firmId, sourceId) |
+| `tax_calendars` | `supersedesId` | `tax_calendars` | Sí (firmId, supersedesId) |
+| `tax_calendars` | `createdByUserId` | `users` | No |
+| `tax_calendars` | `publishedByUserId` | `users` | No |
+| `tax_calendars` | `hiddenByUserId` | `users` | No |
+| `tax_calendar_entries` | `firmId` | `firms` | No |
+| `tax_calendar_entries` | `calendarId` | `tax_calendars` | Sí (firmId, calendarId) |
+| `tax_calendar_entries` | `taxTypeId` | `tax_types` | No |
+| `tax_calendar_entries` | `regimeId` | `tax_regimes` | No |
+| `tax_calendar_entries` | `reviewedByUserId` | `users` | No |
+| `tax_obligations` | `dueDateEntryId` | `tax_calendar_entries` | Sí (firmId, dueDateEntryId) |
+| `tax_obligations` | `dueDateOverriddenByUserId` | `users` | No |
