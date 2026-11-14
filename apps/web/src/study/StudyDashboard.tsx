@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Notice } from "@contable/design-system";
+import { Button, EmptyState } from "@contable/design-system";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -9,18 +9,15 @@ import { StatusBadge } from "../ui/StatusBadge";
 import {
   DenseFooter,
   DenseHeader,
-  DenseLoading,
   DensePage,
+  DenseSection,
   DenseTable,
   DenseWorkspace,
-  Inspector,
   InspectorFacts,
-  InspectorSection,
   StatStrip,
   useDensity,
   type DenseColumn,
 } from "../ui/Dense";
-import type { IconName } from "../ui/Icon";
 import { AsyncState } from "../ui/AsyncState";
 import { PendingFilingReceipts } from "./PendingFilingReceipts";
 import "./study.css";
@@ -109,9 +106,12 @@ export function StudyDashboard() {
     );
   const data = query.data;
   const hasPrevious = data !== undefined || worklistQuery.data !== undefined;
-  // Un dato sin respuesta dice «pendiente» o «no disponible»; el cero queda para una respuesta confirmada.
-  const pendingOr = (value: number | undefined): number | string =>
-    value ?? (query.isError ? "no disponible" : "pendiente");
+  // Cada fuente dice su estado: restringida para el rol, en carga, sin respuesta o con cifras confirmadas.
+  // El cero queda para una respuesta confirmada.
+  const summaryValue = (value: number | undefined): number | string =>
+    !canReadDashboard ? "restringido" : (value ?? (query.isError ? "no disponible" : "pendiente"));
+  const worklistValue = (value: number | undefined): number | string =>
+    !canReadTaxWorklist ? "restringido" : (value ?? (worklistQuery.isError ? "no disponible" : "pendiente"));
   // "En curso" deja afuera lo finalizado y lo reemplazado: lo finalizado sin presentar
   // ya figura en el recordatorio de constancias.
   const worklist = (worklistQuery.data ?? []).filter(
@@ -121,37 +121,34 @@ export function StudyDashboard() {
   const inReview = worklist.filter((item) => item.status === "IN_REVIEW").length;
   const attentionTotal =
     (data?.processing ?? 0) + (data?.openRequests ?? 0) + (data?.pendingObligations ?? 0);
-  const workItems: {
-    to: string;
-    icon: IconName;
-    label: string;
-    detail: string;
-    count: number | string;
-    tone: string;
-  }[] = [
+  const summaryNote = !canReadDashboard
+    ? "Tu rol no permite consultar el resumen del estudio."
+    : data
+      ? null
+      : query.isError
+        ? "Sin respuesta del resumen: reintentá con el aviso de arriba."
+        : "Consultando el resumen…";
+  const worklistNote = !canReadTaxWorklist
+    ? "Tu rol no permite consultar liquidaciones de la firma."
+    : worklistQuery.data
+      ? `${atRisk} con correcciones pendientes · ${inReview} en revisión. Excluye las finalizadas y las reemplazadas.`
+      : worklistQuery.isError
+        ? "Sin respuesta de la cartera fiscal: reintentá con el aviso de la lista."
+        : "Cifras pendientes hasta que responda la cartera fiscal.";
+  const documentWork: { to: string; label: string; detail: string; count: number; tone: string }[] = [
     {
       to: "/bandeja",
-      icon: "inbox",
       label: "Documentos en procesamiento",
-      detail: data ? `${data.extracted} listos para revisar` : "Pendiente de consulta",
-      count: pendingOr(data?.processing),
+      detail: `${data?.extracted ?? 0} listos para revisar`,
+      count: data?.processing ?? 0,
       tone: "info",
     },
     {
       to: "/trabajo",
-      icon: "message",
       label: "Pedidos documentales abiertos",
       detail: "Seguimiento con clientes",
-      count: pendingOr(data?.openRequests),
+      count: data?.openRequests ?? 0,
       tone: "warn",
-    },
-    {
-      to: "/trabajo",
-      icon: "calendar",
-      label: "Obligaciones pendientes",
-      detail: "Todavía sin presentar",
-      count: pendingOr(data?.pendingObligations),
-      tone: "danger",
     },
   ];
 
@@ -280,31 +277,27 @@ export function StudyDashboard() {
 
   const worklistBody = !canReadTaxWorklist ? (
     <EmptyState
-      size="compact"
+      size="inline"
       title="Cartera fiscal restringida"
       description="Tu rol no permite consultar liquidaciones de la firma."
     />
-  ) : worklistQuery.isLoading ? (
-    <DenseLoading label="Cargando cartera…" />
-  ) : worklistQuery.isError ? (
-    <Notice
-      tone="error"
-      title="No se pudo cargar la cartera fiscal"
-      action={
-        <Button size="sm" variant="secondary" onClick={() => void worklistQuery.refetch()}>
-          Reintentar
-        </Button>
-      }
-    >
-      Reintentá para volver a cargar la cartera fiscal.
-    </Notice>
+  ) : worklistQuery.isError || worklistQuery.isLoading ? (
+    <AsyncState
+      loading={worklistQuery.isLoading}
+      error={worklistQuery.isError}
+      loadingLabel="Cargando cartera…"
+      errorTitle="No se pudo cargar la cartera fiscal"
+      errorDescription="Reintentá para volver a cargar la cartera fiscal."
+      onRetry={() => void worklistQuery.refetch()}
+    />
   ) : worklist.length === 0 ? (
     <EmptyState
+      size="inline"
       title="Sin liquidaciones en curso"
       description="Cuando se calcule una liquidación, aparecerá acá priorizada por riesgo."
       action={
         clientId && capabilities.has("tax.settlements.read") ? (
-          <Button onClick={openTaxWorkspace}>
+          <Button variant="secondary" onClick={openTaxWorkspace}>
             {periodId ? "Abrir legajo" : "Configurar período"}
           </Button>
         ) : capabilities.has("client.manage") ? (
@@ -320,6 +313,7 @@ export function StudyDashboard() {
       columns={worklistColumns}
       rows={visibleWorklist}
       rowKey={(item) => item.id}
+      surface="integrated"
       footer={
         <DenseFooter
           count={visibleWorklist.length}
@@ -343,44 +337,6 @@ export function StudyDashboard() {
     ? `${Math.round(((data.extracted ?? 0) / data.documents) * 100)}%`
     : "—";
 
-  const agenda = (
-    <Inspector
-      label="Mesa de trabajo"
-      title="Tu mesa de trabajo"
-      subtitle={data ? (attentionTotal > 0 ? "Priorizado por urgencia" : "Sin pendientes") : undefined}
-    >
-      <ul className="dense-agenda">
-        {workItems.map((item) => (
-          <li key={item.label} data-tone={item.tone}>
-            <Link to={clientId ? item.to : "/clientes"} className="dense-agenda__link">
-              <span className="dense-agenda__count">{item.count}</span>
-              <span className="dense-agenda__copy">
-                <strong>{item.label}</strong>
-                <small>{item.detail}</small>
-              </span>
-              <span className="dense-dim" aria-hidden="true">
-                Abrir
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-      <InspectorSection title="Panorama general">
-        <InspectorFacts
-          items={[
-            ["Clientes activos", pendingOr(data?.clients)],
-            ["Documentos recibidos", pendingOr(data?.documents)],
-            ["Con datos extraídos", pendingOr(data?.extracted)],
-            ["Tasa de extracción", extractionRate],
-          ]}
-        />
-        <Link className="dense-link" to="/clientes">
-          Ver clientes
-        </Link>
-      </InspectorSection>
-    </Inspector>
-  );
-
   return (
     <DensePage density={density} flow>
       <DenseHeader
@@ -390,7 +346,7 @@ export function StudyDashboard() {
           <>
             <Button
               size="sm"
-              variant="ghost"
+              variant="secondary"
               disabled={!canReadDashboard && !canReadTaxWorklist}
               loading={refreshing}
               loadingLabel="Actualizando"
@@ -439,64 +395,73 @@ export function StudyDashboard() {
         </p>
       ) : null}
 
-      {!canReadDashboard ? (
+      {!canReadDashboard && !canReadTaxWorklist ? (
         <EmptyState
-          title="Resumen no disponible para tu rol"
-          description="Podés seguir trabajando en los módulos a los que tenés acceso desde la navegación lateral."
-        />
-      ) : query.isLoading || query.isError ? (
-        <AsyncState
-          loading={query.isLoading}
-          error={query.isError}
-          loadingLabel="Organizando el resumen…"
-          errorTitle="No se pudo cargar el resumen"
-          errorDescription="La información del estudio no está disponible en este momento."
-          onRetry={() => void query.refetch()}
+          size="inline"
+          title="Indicadores restringidos para tu rol"
+          description="Tu rol no permite consultar el resumen ni las liquidaciones de la firma."
         />
       ) : (
-        <StatStrip
-          label="Resumen de la cartera"
-          items={[
-            {
-              key: "open",
-              label: "Temas abiertos",
-              value: attentionTotal,
-              detail: attentionTotal === 0 ? "La operación está al día" : "en la cartera activa",
-              tone: attentionTotal > 0 ? "warn" : undefined,
-            },
-            {
-              key: "changes",
-              label: "Con correcciones",
-              value: atRisk,
-              detail: "liquidaciones",
-              tone: atRisk > 0 ? "warn" : undefined,
-              active: worklistFilter === "CHANGES_REQUESTED",
-              onSelect: () =>
-                setWorklistFilter((current) =>
-                  current === "CHANGES_REQUESTED" ? "" : "CHANGES_REQUESTED",
-                ),
-            },
-            {
-              key: "review",
-              label: "En revisión",
-              value: inReview,
-              detail: "liquidaciones",
-              active: worklistFilter === "IN_REVIEW",
-              onSelect: () =>
-                setWorklistFilter((current) => (current === "IN_REVIEW" ? "" : "IN_REVIEW")),
-            },
-            { key: "clients", label: "Clientes activos", value: data?.clients ?? 0, onSelect: () => navigate("/clientes") },
-            {
-              key: "documents",
-              label: "Documentos",
-              value: data?.documents ?? 0,
-              detail: `${extractionRate} extraídos`,
-            },
-          ]}
-        />
+        <>
+          <StatStrip
+            label="Resumen de la cartera"
+            items={[
+              {
+                key: "open",
+                label: "Temas abiertos",
+                value: summaryValue(data ? attentionTotal : undefined),
+                detail: data ? (attentionTotal === 0 ? "La operación está al día" : "en la cartera activa") : undefined,
+                tone: attentionTotal > 0 ? "warn" : undefined,
+              },
+              {
+                key: "changes",
+                label: "Con correcciones",
+                value: worklistValue(worklistQuery.data ? atRisk : undefined),
+                detail: worklistQuery.data ? "liquidaciones" : undefined,
+                tone: atRisk > 0 ? "warn" : undefined,
+                active: worklistFilter === "CHANGES_REQUESTED",
+                pressed: worklistFilter === "CHANGES_REQUESTED",
+                onSelect: canReadTaxWorklist
+                  ? () => setWorklistFilter((current) => (current === "CHANGES_REQUESTED" ? "" : "CHANGES_REQUESTED"))
+                  : undefined,
+              },
+              {
+                key: "review",
+                label: "En revisión",
+                value: worklistValue(worklistQuery.data ? inReview : undefined),
+                detail: worklistQuery.data ? "liquidaciones" : undefined,
+                active: worklistFilter === "IN_REVIEW",
+                pressed: worklistFilter === "IN_REVIEW",
+                onSelect: canReadTaxWorklist
+                  ? () => setWorklistFilter((current) => (current === "IN_REVIEW" ? "" : "IN_REVIEW"))
+                  : undefined,
+              },
+              {
+                key: "clients",
+                label: "Clientes activos",
+                value: summaryValue(data?.clients),
+                onSelect: () => navigate("/clientes"),
+              },
+              {
+                key: "documents",
+                label: "Documentos",
+                value: summaryValue(data?.documents),
+                detail: data ? `${extractionRate} extraídos` : undefined,
+              },
+            ]}
+          />
+          <AsyncState
+            loading={query.isLoading}
+            error={query.isError}
+            loadingLabel="Organizando el resumen…"
+            errorTitle="No se pudo cargar el resumen"
+            errorDescription="La información del estudio no está disponible en este momento."
+            onRetry={() => void query.refetch()}
+          />
+        </>
       )}
 
-      <DenseWorkspace panelId="dashboard-panel" inspector={agenda}>
+      <DenseWorkspace panelId="dashboard-panel" role="region" aria-label="Trabajo del estudio">
         {canReadTaxWorklist ? (
           <PendingFilingReceipts
             firmId={firmId}
@@ -506,17 +471,24 @@ export function StudyDashboard() {
               navigate("/expediente-mensual");
             }}
           />
-        ) : null}
-        <section className="dense-block" aria-labelledby="risk-portfolio-title">
-          <header className="dense-block__head">
-            <div className="dense-block__title">
-              <h2 id="risk-portfolio-title">Liquidaciones en curso</h2>
-              <span className="dense-count">{worklist.length}</span>
-            </div>
-            <p>
-              {atRisk} con correcciones pendientes · {inReview} en revisión
-            </p>
-            <div className="dense-block__actions">
+        ) : (
+          <DenseSection id="pending-receipts" title="Falta la constancia de presentación" surface="integrated">
+            <EmptyState
+              size="inline"
+              title="Constancias restringidas para tu rol"
+              description="Tu rol no permite consultar las constancias de presentación de la firma."
+            />
+          </DenseSection>
+        )}
+
+        <DenseSection
+          id="risk-portfolio"
+          title="Liquidaciones en curso"
+          count={worklistQuery.data ? worklist.length : undefined}
+          description={worklistNote}
+          surface="integrated"
+          actions={
+            <>
               <select
                 className="dense-select"
                 aria-label="Filtrar por estado"
@@ -534,10 +506,73 @@ export function StudyDashboard() {
                   Ver todas
                 </Link>
               ) : null}
-            </div>
-          </header>
+            </>
+          }
+        >
           {worklistBody}
-        </section>
+        </DenseSection>
+
+        <DenseSection
+          id="obligations"
+          title="Obligaciones pendientes"
+          count={data ? data.pendingObligations : undefined}
+          description="Todavía sin presentar."
+          surface="integrated"
+          actions={
+            <Link className="dense-link" to={clientId ? "/trabajo" : "/clientes"}>
+              Abrir obligaciones
+            </Link>
+          }
+        >
+          {summaryNote ? <p className="dense-dim">{summaryNote}</p> : null}
+        </DenseSection>
+
+        <DenseSection id="other-circuits" title="Otros circuitos" surface="integrated">
+          {summaryNote ? (
+            <p className="dense-dim">{summaryNote}</p>
+          ) : (
+            <ul className="dense-agenda">
+              {documentWork.map((item) => (
+                <li key={item.label} data-tone={item.tone}>
+                  <Link to={clientId ? item.to : "/clientes"} className="dense-agenda__link">
+                    <span className="dense-agenda__count">{item.count}</span>
+                    <span className="dense-agenda__copy">
+                      <strong>{item.label}</strong>
+                      <small>{item.detail}</small>
+                    </span>
+                    <span className="dense-dim" aria-hidden="true">
+                      Abrir
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DenseSection>
+
+        <DenseSection
+          id="overview"
+          title="Panorama general"
+          surface="integrated"
+          actions={
+            <Link className="dense-link" to="/clientes">
+              Ver clientes
+            </Link>
+          }
+        >
+          {summaryNote ? (
+            <p className="dense-dim">{summaryNote}</p>
+          ) : (
+            <InspectorFacts
+              items={[
+                ["Clientes activos", data?.clients ?? 0],
+                ["Documentos recibidos", data?.documents ?? 0],
+                ["Con datos extraídos", data?.extracted ?? 0],
+                ["Tasa de extracción", extractionRate],
+              ]}
+            />
+          )}
+        </DenseSection>
       </DenseWorkspace>
     </DensePage>
   );

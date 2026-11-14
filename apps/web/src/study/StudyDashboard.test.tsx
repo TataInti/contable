@@ -86,6 +86,8 @@ function renderDashboard(capabilities: string[]) {
 
 const worklistTable = () => screen.findByRole("table", { name: "Liquidaciones en curso" });
 const receiptsTable = () => screen.findByRole("table", { name: "Constancias de presentación pendientes" });
+// «Actualizar» cambia su nombre a «Actualizando» mientras alguna fuente consulta: se espera el nombre en reposo.
+const actualizar = () => screen.findByRole("button", { name: "Actualizar" });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -98,10 +100,11 @@ describe("Inicio: «Actualizar» refresca las fuentes que la persona puede leer 
     renderDashboard(["client.read", "tax.settlements.read"]);
     expect(await worklistTable()).toBeTruthy();
     expect(await receiptsTable()).toBeTruthy();
+    const button = await actualizar();
 
     apiMock.get.mockClear();
     apiMock.get.mockImplementation(() => new Promise(() => undefined));
-    fireEvent.click(screen.getByRole("button", { name: "Actualizar" }));
+    fireEvent.click(button);
 
     await waitFor(() => expect(apiMock.get).toHaveBeenCalledTimes(3));
     expect(apiMock.get).toHaveBeenCalledWith("/firms/firm-a/dashboard");
@@ -116,10 +119,10 @@ describe("Inicio: «Actualizar» refresca las fuentes que la persona puede leer 
 
   it("con capacidad parcial actualiza solo el resumen que la persona puede leer", async () => {
     renderDashboard(["client.read"]);
-    expect(await screen.findByText("Temas abiertos")).toBeTruthy();
+    const button = await actualizar();
 
     apiMock.get.mockClear();
-    fireEvent.click(screen.getByRole("button", { name: "Actualizar" }));
+    fireEvent.click(button);
     await waitFor(() => expect(apiMock.get).toHaveBeenCalledWith("/firms/firm-a/dashboard"));
     expect(apiMock.get.mock.calls.map(([path]) => path)).toEqual(["/firms/firm-a/dashboard"]);
   });
@@ -138,11 +141,52 @@ describe("Inicio: «Actualizar» refresca las fuentes que la persona puede leer 
   it("mientras actualiza identifica los datos previos y los deja visibles", async () => {
     renderDashboard(["client.read", "tax.settlements.read"]);
     await worklistTable();
+    const button = await actualizar();
 
     apiMock.get.mockImplementation(() => new Promise(() => undefined));
-    fireEvent.click(screen.getByRole("button", { name: "Actualizar" }));
+    fireEvent.click(button);
 
     expect(await screen.findByText(/Actualizando: se muestran los datos de la última consulta/)).toBeTruthy();
     expect(screen.getByRole("table", { name: "Liquidaciones en curso" })).toBeTruthy();
+  });
+});
+
+describe("Inicio: composición R01", () => {
+  it("un solo h1 y como máximo una acción primaria", async () => {
+    renderDashboard(["client.read", "tax.settlements.read"]);
+    await worklistTable();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(document.querySelectorAll(".ds-button--primary")).toHaveLength(1);
+  });
+
+  it("el contenedor principal es una región con nombre y Actualizar es acción secundaria", async () => {
+    renderDashboard(["client.read", "tax.settlements.read"]);
+    await worklistTable();
+    expect(screen.getByRole("region", { name: "Trabajo del estudio" })).toBeTruthy();
+    expect((await actualizar()).className).toContain("ds-button--secondary");
+  });
+
+  it("las cifras sin respuesta dicen «pendiente», nunca cero", async () => {
+    apiMock.get.mockImplementation(() => new Promise(() => undefined));
+    renderDashboard(["client.read", "tax.settlements.read"]);
+    expect(await screen.findByText("Temas abiertos")).toBeTruthy();
+    expect(screen.getAllByText("pendiente").length).toBeGreaterThan(0);
+    expect(screen.queryByText("0")).toBeNull();
+  });
+
+  it("sin acceso al resumen, la fuente dice que está restringida y muestra el resto", async () => {
+    renderDashboard(["tax.settlements.read"]);
+    expect(await worklistTable()).toBeTruthy();
+    expect(await receiptsTable()).toBeTruthy();
+    expect(screen.getAllByText("restringido").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Resumen no disponible para tu rol")).toBeNull();
+  });
+
+  it("Otros circuitos y Panorama general son secciones del lienzo, sin panel lateral", async () => {
+    renderDashboard(["client.read", "tax.settlements.read"]);
+    await worklistTable();
+    expect(await screen.findByRole("heading", { name: "Otros circuitos" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Panorama general" })).toBeTruthy();
+    expect(screen.queryByRole("complementary")).toBeNull();
   });
 });
