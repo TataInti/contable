@@ -255,10 +255,12 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     for (const code of ["DOCUMENTS", "TAX", "TAX_RI", "TAX_IIBB_LOCAL_TUC", "TAX_TEM_SMT"]) {
       const row = page.locator("tr", { hasText: new RegExp(`${code}(?![_A-Z]{2})`) });
       await expect(row).toHaveCount(1);
-      if (await row.getByRole("button", { name: "Habilitar", exact: true }).count()) {
-        await mutating(page, `/feature-flags/${code}`, () => row.getByRole("button", { name: "Habilitar", exact: true }).click());
+      // Cada módulo se prende con su interruptor.
+      const toggle = row.getByRole("switch");
+      if ((await toggle.getAttribute("aria-checked")) !== "true") {
+        await mutating(page, `/feature-flags/${code}`, () => toggle.click());
       }
-      await expect(row.getByRole("button", { name: "Deshabilitar", exact: true })).toBeVisible();
+      await expect(toggle).toHaveAttribute("aria-checked", "true");
     }
   });
 
