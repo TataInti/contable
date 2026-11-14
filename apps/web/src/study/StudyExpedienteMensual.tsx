@@ -797,15 +797,32 @@ export function StudyExpedienteMensual() {
     queryFn: () => api.get<CreditLot[]>(`/firms/${firmId}/clients/${clientId}/tax-credit-ledger`),
     enabled: Boolean(firmId && clientId),
   });
+  // El legajo es por mes y hay un período fiscal por impuesto: la posición reúne
+  // todos los períodos del mismo mes, para que cada impuesto tenga su fila.
+  const monthTaxPeriodIds = selectedTaxPeriod
+    ? (taxPeriodsQuery.data ?? [])
+        .filter(
+          (taxPeriod) =>
+            taxPeriod.startDate.slice(0, 10) === selectedTaxPeriod.startDate.slice(0, 10) &&
+            taxPeriod.endDate.slice(0, 10) === selectedTaxPeriod.endDate.slice(0, 10),
+        )
+        .map((taxPeriod) => taxPeriod.id)
+        .sort()
+    : [];
   const positionQuery = useQuery({
-    queryKey: ["tax-position", firmId, clientId, selectedTaxPeriod?.id],
-    queryFn: () => {
+    queryKey: ["tax-position", firmId, clientId, monthTaxPeriodIds.join(",")],
+    queryFn: async () => {
       if (!selectedTaxPeriod) throw new Error("Seleccioná un período fiscal");
-      return api.get<TaxPosition[]>(
-        `/firms/${firmId}/clients/${clientId}/tax-position?periodId=${encodeURIComponent(selectedTaxPeriod.id)}`,
+      const positions = await Promise.all(
+        monthTaxPeriodIds.map((periodId) =>
+          api.get<TaxPosition[]>(
+            `/firms/${firmId}/clients/${clientId}/tax-position?periodId=${encodeURIComponent(periodId)}`,
+          ),
+        ),
       );
+      return positions.flat();
     },
-    enabled: Boolean(firmId && clientId && selectedTaxPeriod),
+    enabled: Boolean(firmId && clientId && selectedTaxPeriod && monthTaxPeriodIds.length > 0),
   });
   const taxTypesQuery = useQuery({
     queryKey: ["tax-types"],
