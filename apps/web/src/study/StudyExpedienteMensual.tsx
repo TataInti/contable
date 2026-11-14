@@ -464,6 +464,12 @@ const WORKPAPER_STEPS = [
   },
 ] as const;
 
+const CLASSIFICATION_ORIGIN_LABELS: Record<string, string> = {
+  MANUAL: "Elegida a mano",
+  VOUCHER_LINE: "Tomada del archivo importado",
+  SUPPLIER_MASTER: "Tomada del proveedor",
+};
+
 const CONTROL_SEVERITY_LABELS: Record<string, string> = {
   BLOCKING: "Bloquea el cierre",
   WARNING: "Advertencia",
@@ -797,15 +803,32 @@ export function StudyExpedienteMensual() {
     queryFn: () => api.get<CreditLot[]>(`/firms/${firmId}/clients/${clientId}/tax-credit-ledger`),
     enabled: Boolean(firmId && clientId),
   });
+  // El legajo es por mes y hay un período fiscal por impuesto: la posición reúne
+  // todos los períodos del mismo mes, para que cada impuesto tenga su fila.
+  const monthTaxPeriodIds = selectedTaxPeriod
+    ? (taxPeriodsQuery.data ?? [])
+        .filter(
+          (taxPeriod) =>
+            taxPeriod.startDate.slice(0, 10) === selectedTaxPeriod.startDate.slice(0, 10) &&
+            taxPeriod.endDate.slice(0, 10) === selectedTaxPeriod.endDate.slice(0, 10),
+        )
+        .map((taxPeriod) => taxPeriod.id)
+        .sort()
+    : [];
   const positionQuery = useQuery({
-    queryKey: ["tax-position", firmId, clientId, selectedTaxPeriod?.id],
-    queryFn: () => {
+    queryKey: ["tax-position", firmId, clientId, monthTaxPeriodIds.join(",")],
+    queryFn: async () => {
       if (!selectedTaxPeriod) throw new Error("Seleccioná un período fiscal");
-      return api.get<TaxPosition[]>(
-        `/firms/${firmId}/clients/${clientId}/tax-position?periodId=${encodeURIComponent(selectedTaxPeriod.id)}`,
+      const positions = await Promise.all(
+        monthTaxPeriodIds.map((periodId) =>
+          api.get<TaxPosition[]>(
+            `/firms/${firmId}/clients/${clientId}/tax-position?periodId=${encodeURIComponent(periodId)}`,
+          ),
+        ),
       );
+      return positions.flat();
     },
-    enabled: Boolean(firmId && clientId && selectedTaxPeriod),
+    enabled: Boolean(firmId && clientId && selectedTaxPeriod && monthTaxPeriodIds.length > 0),
   });
   const taxTypesQuery = useQuery({
     queryKey: ["tax-types"],
@@ -817,6 +840,25 @@ export function StudyExpedienteMensual() {
     queryFn: () => api.get<TaxRegime[]>("/tax/regimes"),
     enabled: Boolean(firmId),
   });
+  // Actividades vigentes del cliente: la clasificación se elige de esta lista, no se escribe.
+  const clientActivitiesQuery = useQuery({
+    queryKey: ["client-tax-activities", firmId, clientId],
+    queryFn: () =>
+      api.get<Array<{ validTo: string | null; activity: { code: string; name: string } }>>(
+        `/firms/${firmId}/clients/${clientId}/activities`,
+      ),
+    enabled: Boolean(firmId && clientId),
+  });
+  const activityOptions = (currentCode: string) => {
+    const options = (clientActivitiesQuery.data ?? [])
+      .filter((link) => !link.validTo)
+      .map((link) => ({ code: link.activity.code, name: link.activity.name }));
+    // Un código ya guardado que no está entre las vigentes se conserva como opción.
+    if (currentCode && !options.some((option) => option.code === currentCode)) {
+      options.unshift({ code: currentCode, name: "" });
+    }
+    return options;
+  };
   const documentsQuery = useQuery({
     queryKey: ["documents", firmId, clientId],
     queryFn: () => api.get<EvidenceDocument[]>(`/firms/${firmId}/clients/${clientId}/documents`),
@@ -2432,7 +2474,7 @@ export function StudyExpedienteMensual() {
                               <StatusBadge
                                 status={classificationQuery.data?.ready ? "READY" : "WAITING_INPUTS"}
                               />
-                              <small>Gate de cálculo</small>
+                              <small>Listo para calcular</small>
                             </span>
                           </div>
                           <Table<WorkpaperClassification>
@@ -2498,7 +2540,7 @@ export function StudyExpedienteMensual() {
                                         <small> · {classification.activityCode}</small>
                                       ) : null}
                                       <br />
-                                      <small>{classification.origin ?? "Clasificación guardada"}</small>
+                                      <small>{CLASSIFICATION_ORIGIN_LABELS[classification.origin ?? ""] ?? "Clasificación guardada"}</small>
                                     </>
                                   ) : (
                                     <div className="workpaper-classification-fields">
@@ -2521,13 +2563,8 @@ export function StudyExpedienteMensual() {
                                           <option value="TRANSPORTE">TRANSPORTE</option>
                                         </select>
                                       ) : null}
-                                      <input
-                                        aria-label="Código de actividad"
-                                        placeholder={
-                                          classification.direction === "SALE"
-                                            ? "Actividad obligatoria"
-                                            : "Actividad (opcional)"
-                                        }
+                                      <select
+                                        aria-label="Actividad"
                                         value={draft.activityCode}
                                         onChange={(event) =>
                                           setClassificationDrafts((current) => ({
@@ -2538,7 +2575,18 @@ export function StudyExpedienteMensual() {
                                             },
                                           }))
                                         }
-                                      />
+                                      >
+                                        <option value="">
+                                          {classification.direction === "SALE"
+                                            ? "Elegí la actividad…"
+                                            : "Sin actividad (opcional)"}
+                                        </option>
+                                        {activityOptions(draft.activityCode).map((activity) => (
+                                          <option key={activity.code} value={activity.code}>
+                                            {activity.name ? `${activity.code} · ${activity.name}` : activity.code}
+                                          </option>
+                                        ))}
+                                      </select>
                                     </div>
                                   );
                                 },
@@ -2785,10 +2833,6 @@ export function StudyExpedienteMensual() {
                                 {component.settlement ? (
                                   <span>
                                     <StatusBadge status={component.settlement.status} />
-                                    <small>{component.settlement.engineVersion}</small>
-                                    <small title={component.settlement.rulesHash}>
-                                      Regla {component.settlement.ruleVersionId?.slice(0, 8) ?? "histórica"}
-                                    </small>
                                   </span>
                                 ) : (
                                   <StatusBadge status="PENDING" />

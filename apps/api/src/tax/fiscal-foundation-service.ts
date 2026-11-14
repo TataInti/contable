@@ -2764,6 +2764,106 @@ export class TaxRuleService {
 
 export class TaxCalendarService {
   /**
+   * Abre un mes para el cliente: por cada régimen en el que está inscripto crea el
+   * período del impuesto y su obligación, con el vencimiento que marca la regla.
+   * Lo que ya existe se saltea, así que se puede repetir sin duplicar nada.
+   */
+  async openMonth(ctx: TenantContext, input: { clientId: string; month: string }) {
+    const [year, monthNumber] = input.month.split("-").map(Number) as [number, number];
+    const startDate = new Date(Date.UTC(year, monthNumber - 1, 1));
+    const endDate = new Date(Date.UTC(year, monthNumber, 0));
+    const label = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric", timeZone: "UTC" })
+      .format(startDate)
+      .replace(" de ", " ")
+      .replace(/^./, (letter) => letter.toUpperCase());
+
+    const plan = await withTenantContext(ctx, async (tx) => {
+      const profile = await tx.taxpayerProfileVersion.findFirst({
+        where: { firmId: ctx.firmId, clientId: input.clientId, status: "ACTIVE" },
+        orderBy: { version: "desc" },
+      });
+      if (!profile) {
+        throw new FiscalError("PROFILE_NOT_FOUND", "El cliente no tiene un perfil fiscal activo");
+      }
+      const registrations = await tx.taxRegistration.findMany({
+        where: {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          status: "ACTIVE",
+          validFrom: { lte: endDate },
+          OR: [{ validTo: null }, { validTo: { gte: startDate } }],
+        },
+        include: { regime: { select: { id: true, name: true, taxTypeId: true } } },
+      });
+      if (registrations.length === 0) {
+        throw new FiscalError(
+          "REGISTRATION_REQUIRED",
+          "El cliente no está inscripto en ningún régimen para ese mes. Registrá la inscripción antes de abrir el mes",
+        );
+      }
+      const steps: Array<{ regimeId: string; regimeName: string; periodId: string; periodCreated: boolean; hasObligation: boolean }> = [];
+      for (const registration of registrations) {
+        const { regime } = registration;
+        let period = await tx.taxPeriod.findFirst({
+          where: { firmId: ctx.firmId, clientId: input.clientId, taxTypeId: regime.taxTypeId, startDate, endDate },
+        });
+        const periodCreated = !period;
+        if (!period) {
+          const overlap = await tx.taxPeriod.findFirst({
+            where: {
+              firmId: ctx.firmId,
+              clientId: input.clientId,
+              taxTypeId: regime.taxTypeId,
+              startDate: { lte: endDate },
+              endDate: { gte: startDate },
+            },
+          });
+          if (overlap) {
+            throw new FiscalError(
+              "PERIOD_OVERLAP",
+              `Ya hay un período de ${regime.name} que se superpone con ese mes y no coincide con sus fechas`,
+            );
+          }
+          period = await tx.taxPeriod.create({
+            data: { firmId: ctx.firmId, clientId: input.clientId, taxTypeId: regime.taxTypeId, startDate, endDate, label },
+          });
+        }
+        const obligation = await tx.taxObligation.findFirst({
+          where: { firmId: ctx.firmId, clientId: input.clientId, regimeId: regime.id, periodId: period.id },
+          select: { id: true },
+        });
+        steps.push({
+          regimeId: regime.id,
+          regimeName: regime.name,
+          periodId: period.id,
+          periodCreated,
+          hasObligation: Boolean(obligation),
+        });
+      }
+      return { profileVersionId: profile.id, steps };
+    });
+
+    let obligationsCreated = 0;
+    for (const step of plan.steps) {
+      if (step.hasObligation) continue;
+      await this.materializeObligationWithDueDate(ctx, {
+        clientId: input.clientId,
+        profileVersionId: plan.profileVersionId,
+        regimeId: step.regimeId,
+        periodId: step.periodId,
+      });
+      obligationsCreated += 1;
+    }
+    return {
+      month: input.month,
+      label,
+      regimes: plan.steps.length,
+      periodsCreated: plan.steps.filter((step) => step.periodCreated).length,
+      obligationsCreated,
+    };
+  }
+
+  /**
    * Genera la obligación materializada (TaxObligation) para un cliente/
    * régimen/período usando la regla de vencimiento vigente del rule pack
    * activo de ese régimen. El ajuste por feriado es determinista.

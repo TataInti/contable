@@ -497,12 +497,12 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
         // Las dos ventas del libro llevan la actividad del restaurante; la compra (el ticket) lleva rubro y actividad.
         for (const sale of ["B · 0002-00000001", "B · 0002-00000251"]) {
           const row = page.locator("tr", { hasText: sale });
-          await row.getByLabel("Código de actividad").fill(taxes.iva.activity.code);
+          await pickOption(row.getByLabel("Actividad", { exact: true }), taxes.iva.activity.code);
           await mutating(page, "/classifications", () => row.getByRole("button", { name: "Guardar" }).click());
         }
         const purchase = page.locator("tr", { hasText: "A · 0001-01343338" });
         await pickOption(purchase.getByLabel("Rubro del proveedor"), "SUPER");
-        await purchase.getByLabel("Código de actividad").fill(taxes.iva.activity.code);
+        await pickOption(purchase.getByLabel("Actividad", { exact: true }), taxes.iva.activity.code);
         await mutating(page, "/classifications", () => purchase.getByRole("button", { name: "Guardar" }).click());
         await page.getByRole("button", { name: /Actualizar clasificación/ }).click();
         await page.waitForTimeout(1500);

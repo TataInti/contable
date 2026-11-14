@@ -323,8 +323,8 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     mockApi(makeDetail(null));
     renderReglas();
 
-    expect((await screen.findByLabelText("Tipo de regla rule-1") as HTMLSelectElement).value).toBe("kind-rate-vat");
-    const select = (await screen.findByLabelText("Actividad rule-1")) as HTMLSelectElement;
+    expect((await screen.findByLabelText("Tipo de regla de la fila 1") as HTMLSelectElement).value).toBe("kind-rate-vat");
+    const select = (await screen.findByLabelText("Actividad de la fila 1")) as HTMLSelectElement;
     expect(within(select).getByRole("option", { name: "Sin actividad específica" })).toBeTruthy();
     expect(
       within(select).getByRole("option", { name: "CM03-02 · Comercio mayorista" }),
@@ -354,7 +354,7 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     mockApi(makeDetail(null));
     renderReglas();
 
-    const select = (await screen.findByLabelText("Actividad rule-1")) as HTMLSelectElement;
+    const select = (await screen.findByLabelText("Actividad de la fila 1")) as HTMLSelectElement;
     // El paquete es de jur-ar: SERV4 (jur-ba) no debe ofrecerse.
     expect(
       within(select).getByRole("option", { name: "CM03-02 · Comercio mayorista" }),
@@ -368,7 +368,7 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     mockApi(makeDetail("CM03-OLD"));
     renderReglas();
 
-    const select = (await screen.findByLabelText("Actividad rule-1")) as HTMLSelectElement;
+    const select = (await screen.findByLabelText("Actividad de la fila 1")) as HTMLSelectElement;
     expect(select.value).toBe("act-hidden");
     const hiddenOption = within(select).getByRole("option", { name: "CM03-OLD (oculto)" }) as HTMLOptionElement;
     expect(hiddenOption.disabled).toBe(true);
@@ -390,7 +390,7 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
         : originalGet?.(path) ?? Promise.resolve([])) as never);
     renderReglas();
 
-    const category = (await screen.findByLabelText("Categoría rule-1")) as HTMLSelectElement;
+    const category = (await screen.findByLabelText("Categoría de la fila 1")) as HTMLSelectElement;
     expect(within(category).getAllByRole("option")).toHaveLength(12);
     expect(within(category).getByRole("option", { name: "Categoría K" })).toBeTruthy();
     fireEvent.change(category, { target: { value: "K" } });
@@ -417,7 +417,7 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     const errors = await screen.findAllByText("Elegí un tipo de regla disponible para este régimen.");
     const inlineError = errors.find((candidate) => candidate.classList.contains("fiscal-rule-row-error"));
     expect(inlineError?.getAttribute("role")).toBe("alert");
-    expect(inlineError?.parentElement?.querySelector("select[aria-label='Tipo de regla rule-1']")).toBeTruthy();
+    expect(inlineError?.parentElement?.querySelector("select[aria-label='Tipo de regla de la fila 1']")).toBeTruthy();
   });
 });
 
@@ -722,7 +722,7 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     mockApi(makeDetail(null));
     renderReglas();
 
-    fireEvent.change(await screen.findByLabelText("Concepto rule-1"), {
+    fireEvent.change(await screen.findByLabelText("Concepto de la fila 1"), {
       target: { value: "Operaciones modificadas" },
     });
     const activateButton = (await screen.findByRole("button", { name: /^Activar$/ })) as HTMLButtonElement;
@@ -792,7 +792,7 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     vi.mocked(api.post).mockRejectedValue(new Error("Error actual de activación"));
     renderReglas();
 
-    const concept = await screen.findByLabelText("Concepto rule-1");
+    const concept = await screen.findByLabelText("Concepto de la fila 1");
     fireEvent.change(concept, { target: { value: "Cambio temporal" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
     expect(await screen.findByText("Error viejo de guardado")).toBeTruthy();
@@ -859,7 +859,7 @@ describe("StudyReglasFiscales — validación del tipo de regla", () => {
     mockApi(makeDetail(null));
     renderReglas();
 
-    fireEvent.change(await screen.findByLabelText("Tipo de regla rule-1"), { target: { value: "" } });
+    fireEvent.change(await screen.findByLabelText("Tipo de regla de la fila 1"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
 
     const error = await screen.findByText("Seleccioná un tipo de regla.");
