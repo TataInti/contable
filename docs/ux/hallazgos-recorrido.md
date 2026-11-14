@@ -102,6 +102,20 @@ Estado medido en la base local antes de aplicar las reglas (datos de demostraci�
 | T.2 | Las pruebas de integración escriben en la base de desarrollo | Correr `npm test` en `apps/api` con el `.env` local | No hay una base de pruebas separada; quedan regímenes, clientes y borradores de prueba mezclados con los datos de demostración | Pendiente: base de pruebas desechable. Cada corrida completa deja un borrador en el paquete IIBB Tucumán que no se puede borrar (sus liquidaciones de prueba quedan finalizadas e inmutables) |
 | T.3 | Los rechazos nuevos del servidor no están verificados en pantalla | Intentar crear una obligación o liquidar a un cliente sin inscripción | Falta recorrerlo en la interfaz y, si hace falta, ofrecer el enlace a la inscripción | Pendiente |
 
+### Recorrido del 14-nov-2026 · plataforma de interfaz (PR #76 a #81)
+
+Hecho en local con datos y en producción (`e6cfe37`), que está vacía de datos de prueba.
+
+| # | Hallazgo | Gravedad | Estado |
+|---|---|---|---|
+| P.1 | **Producción: el estudio no tiene ningún módulo y la pantalla no deja habilitar ninguno.** Módulos de estudios lista sólo los módulos que ya tienen fila guardada; el estudio de producción no tiene ninguna (`feature-flags` devuelve una lista vacía), así que la pantalla dice "Sin módulos configurados" y no hay forma de prender el módulo fiscal desde la interfaz. Sin ese módulo el servidor rechaza obligaciones y liquidaciones. | Bloquea el flujo en producción | Abierto. Hay un arreglo sin subir en otra sesión (`apps/api/src/flags/routes.ts`: el listado completa los módulos conocidos, apagados) |
+| P.2 | Con un cliente abierto en Resumen, el menú resalta "Clientes" además de "Resumen". | Menor | Abierto, visto una sola vez |
+| P.3 | Rentabilidad y otras pantallas que piden período muestran "Elegí un período" con el selector arriba; el período ya no se elige por adelantado. Funciona, pero es un paso más al entrar. | Menor | Para decidir: recordar el último período por cliente |
+| P.4 | Liquidaciones conserva contador y descripción larga en el encabezado del panel; el resto del panel sigue con texto de más. | Menor | Abierto |
+| P.5 | La prueba `settlement-tem.test.ts` (V-004) falló una vez en CI por un bloqueo de base de datos y pasó en las corridas siguientes. | Prueba inestable | Abierto |
+
+Confirmado en pantalla: notificación al habilitar y deshabilitar un módulo, confirmación al deshabilitar, cajón de alta de cliente sin rótulo, densidad de filas desde el menú de ayuda, tablas con el mismo aspecto en Clientes, Liquidaciones, Usuarios y Reglas fiscales.
+
 ## Simulador de liquidación ("Probar")
 
 Pestaña **Probar** en Reglas fiscales. Corre el motor real con las reglas guardadas de una versión sobre un caso cargado a mano; no escribe nada. Si la versión es un borrador, compara contra la versión activa del paquete.
