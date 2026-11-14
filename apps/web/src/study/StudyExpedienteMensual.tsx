@@ -1,14 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import {
-  Button,
-  EmptyState,
-  Field,
-  getStatusBadgeMeta,
-  MoneyField,
-  Table,
-} from "@contable/design-system";
+import { Button, EmptyState, Field, getStatusBadgeMeta, MoneyField, Table, useNotify } from "@contable/design-system";
 import { ApiError, api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
@@ -688,7 +681,7 @@ export function StudyExpedienteMensual() {
     sales: SifereAnalysis | null;
     purchases: SifereAnalysis | null;
   }>({ sales: null, purchases: null });
-  const [sifereReceipt, setSifereReceipt] = useState<string | null>(null);
+  const notify = useNotify();
 
   const taxPeriodsQuery = useQuery({
     queryKey: ["tax-periods", firmId, clientId],
@@ -881,7 +874,7 @@ export function StudyExpedienteMensual() {
       setShowSifereModal(false);
       setSifereFiles({ sales: null, purchases: null });
       setSifereAnalysis({ sales: null, purchases: null });
-      setSifereReceipt(
+      notify.success(
         `Se importaron ${data.batch.committed} comprobante(s) de ${data.analysis.direction === "SALE" ? "ventas" : "compras"} (${data.analysis.sheetName}). Quedaron asociados al cliente y al período activo.`,
       );
       void queryClient.invalidateQueries({
@@ -1265,18 +1258,6 @@ export function StudyExpedienteMensual() {
 
   return (
     <DensePage density={density} flow>
-      {sifereReceipt ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <span>{sifereReceipt}</span>
-          <button
-            type="button"
-            aria-label="Descartar aviso"
-            onClick={() => setSifereReceipt(null)}
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
       <DenseHeader
         eyebrow="Impuestos"
         title="Legajo"

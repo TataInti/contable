@@ -1,12 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, EmptyState, Notice } from "@contable/design-system";
+import { Button, EmptyState, Notice, useNotify } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import { Icon } from "../ui/Icon";
 import {
   DenseHeader,
   DensePage,
@@ -68,7 +67,7 @@ export function StudyRentabilidad() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [receipt, setReceipt] = useState<string | null>(null);
+  const notify = useNotify();
   const confirm = useConfirmAction();
 
   const periodsQuery = useQuery({
@@ -126,7 +125,7 @@ export function StudyRentabilidad() {
       }),
     onSuccess: () => {
       invalidate();
-      setReceipt("La rentabilidad fue calculada para el período activo.");
+      notify.success("La rentabilidad fue calculada para el período activo.");
     },
   });
 
@@ -138,7 +137,7 @@ export function StudyRentabilidad() {
       }),
     onSuccess: () => {
       invalidate();
-      setReceipt("La versión fue publicada y ya está disponible en el portal del cliente.");
+      notify.success("La versión fue publicada y ya está disponible en el portal del cliente.");
     },
   });
 
@@ -311,27 +310,6 @@ export function StudyRentabilidad() {
       </Notice>
 
 
-      {receipt ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Acción completada"
-          action={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              iconOnly
-              aria-label="Cerrar confirmación"
-              onClick={() => setReceipt(null)}
-            >
-              <Icon name="close" size={15} />
-            </Button>
-          }
-        >
-          {receipt}
-        </Notice>
-      ) : null}
 
       {!clientId ? (
         <EmptyState

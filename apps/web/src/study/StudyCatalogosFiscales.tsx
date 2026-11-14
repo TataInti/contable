@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
 import {
   ACTIVITY_CODE_PATTERN,
   normalizeActivityCode,
@@ -318,7 +318,7 @@ export function StudyCatalogosFiscales() {
     onNew: () => createRef.current(),
     onEscape: () => setSelectedId(null),
   });
-  const [receipt, setReceipt] = useState<string | null>(null);
+  const notify = useNotify();
   const [deletingTarget, setDeletingTarget] = useState<{ path: string } | null>(null);
   const [authorityForm, setAuthorityForm] = useState<AuthorityForm>({
     code: "",
@@ -437,14 +437,14 @@ export function StudyCatalogosFiscales() {
       void queryClient.invalidateQueries({ queryKey: ["tax-authorities", firmId] });
       setEditingAuthority(null);
       setDrawer(null);
-      setReceipt("El organismo quedó actualizado.");
+      notify.success("El organismo quedó actualizado.");
     },
   });
   const toggleAuthority = useMutation({
     mutationFn: (row: TaxAuthorityRow) => api.patch<TaxAuthorityRow>(`/tax/authorities/${row.id}`, { isActive: !row.isActive }),
     onSuccess: (_updated, row) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-authorities", firmId] });
-      setReceipt(row.isActive ? "El organismo quedó oculto." : "El organismo vuelve a mostrarse.");
+      notify.success(row.isActive ? "El organismo quedó oculto." : "El organismo vuelve a mostrarse.");
     },
   });
   const createRegime = useMutation({
@@ -489,14 +489,14 @@ export function StudyCatalogosFiscales() {
       void queryClient.invalidateQueries({ queryKey: ["tax-regimes", firmId] });
       setEditingRegime(null);
       setDrawer(null);
-      setReceipt("El régimen quedó actualizado.");
+      notify.success("El régimen quedó actualizado.");
     },
   });
   const toggleRegime = useMutation({
     mutationFn: (row: TaxRegimeRow) => api.patch<TaxRegimeRow>(`/tax/regimes/${row.id}`, { isActive: !row.isActive }),
     onSuccess: (_updated, row) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-regimes", firmId] });
-      setReceipt(row.isActive ? "El régimen quedó oculto." : "El régimen vuelve a mostrarse.");
+      notify.success(row.isActive ? "El régimen quedó oculto." : "El régimen vuelve a mostrarse.");
     },
   });
   const createJurisdiction = useMutation({
@@ -513,7 +513,7 @@ export function StudyCatalogosFiscales() {
       setJurisdictionForm(emptyJurisdictionForm);
       setDuplicateOfId(null);
       setMasterDrawer(null);
-      setReceipt("La jurisdicción quedó registrada en el catálogo.");
+      notify.success("La jurisdicción quedó registrada en el catálogo.");
     },
   });
   const updateJurisdiction = useMutation({
@@ -528,7 +528,7 @@ export function StudyCatalogosFiscales() {
       void queryClient.invalidateQueries({ queryKey: ["tax-jurisdictions", firmId] });
       setEditingJurisdiction(null);
       setMasterDrawer(null);
-      setReceipt("La jurisdicción quedó actualizada.");
+      notify.success("La jurisdicción quedó actualizada.");
     },
   });
   const toggleJurisdiction = useMutation({
@@ -536,7 +536,7 @@ export function StudyCatalogosFiscales() {
       api.patch<JurisdictionOption>(`/tax/jurisdictions/${row.id}`, { isActive: !row.isActive }),
     onSuccess: (_updated, row) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-jurisdictions", firmId] });
-      setReceipt(row.isActive ? "La jurisdicción quedó oculta." : "La jurisdicción vuelve a mostrarse.");
+      notify.success(row.isActive ? "La jurisdicción quedó oculta." : "La jurisdicción vuelve a mostrarse.");
     },
   });
   const createTaxType = useMutation({
@@ -552,7 +552,7 @@ export function StudyCatalogosFiscales() {
       setTaxTypeForm(emptyTaxTypeForm);
       setDuplicateOfId(null);
       setMasterDrawer(null);
-      setReceipt("El tipo de impuesto quedó registrado en el catálogo.");
+      notify.success("El tipo de impuesto quedó registrado en el catálogo.");
     },
   });
   const updateTaxType = useMutation({
@@ -565,7 +565,7 @@ export function StudyCatalogosFiscales() {
       void queryClient.invalidateQueries({ queryKey: ["tax-types", firmId] });
       setEditingTaxType(null);
       setMasterDrawer(null);
-      setReceipt("El tipo de impuesto quedó actualizado.");
+      notify.success("El tipo de impuesto quedó actualizado.");
     },
   });
   const toggleTaxType = useMutation({
@@ -573,7 +573,7 @@ export function StudyCatalogosFiscales() {
       api.patch<TaxTypeOption>(`/tax/types/${row.id}`, { isActive: !row.isActive }),
     onSuccess: (_updated, row) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-types", firmId] });
-      setReceipt(row.isActive ? "El tipo de impuesto quedó oculto." : "El tipo de impuesto vuelve a mostrarse.");
+      notify.success(row.isActive ? "El tipo de impuesto quedó oculto." : "El tipo de impuesto vuelve a mostrarse.");
     },
   });
 
@@ -593,7 +593,7 @@ export function StudyCatalogosFiscales() {
       setActivityForm(emptyActivityForm);
       setDuplicateOfId(null);
       setActivityDrawer(null);
-      setReceipt("La actividad quedó registrada en el catálogo.");
+      notify.success("La actividad quedó registrada en el catálogo.");
     },
   });
   const updateActivity = useMutation({
@@ -617,9 +617,9 @@ export function StudyCatalogosFiscales() {
         const retainedLabel = retainedReferences > 0
           ? `${retainedReferences} ${retainedReferences === 1 ? "referencia conserva" : "referencias conservan"} el código anterior (${previousCode}).`
           : "No quedan referencias al código anterior.";
-        setReceipt(`Se propagó el cambio de código ${previousCode} → ${updated.code}: ${updatedLabel}. ${retainedLabel}`);
+        notify.success(`Se propagó el cambio de código ${previousCode} → ${updated.code}: ${updatedLabel}. ${retainedLabel}`);
       } else {
-        setReceipt("Los datos de la actividad quedaron actualizados.");
+        notify.success("Los datos de la actividad quedaron actualizados.");
       }
     },
   });
@@ -634,9 +634,9 @@ export function StudyCatalogosFiscales() {
       void queryClient.invalidateQueries({ queryKey: ["tax-activities-catalog", firmId] });
       setActivityDrawer(null);
       if (row.isActive) {
-        setReceipt("La actividad quedó oculta en los selectores. Sus vínculos y reglas siguen asociados al registro.");
+        notify.success("La actividad quedó oculta en los selectores. Sus vínculos y reglas siguen asociados al registro.");
       } else {
-        setReceipt("La actividad vuelve a mostrarse en los selectores.");
+        notify.success("La actividad vuelve a mostrarse en los selectores.");
       }
     },
   });
@@ -2161,20 +2161,6 @@ export function StudyCatalogosFiscales() {
         </form>
       </ActionDrawer>
 
-      {receipt ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Actualización registrada"
-          action={
-            <Button type="button" variant="text" size="row" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
-              Cerrar
-            </Button>
-          }
-        >
-          {receipt}
-        </Notice>
-      ) : null}
 
       <ActionDrawer
         isOpen={activityDrawer === "create"}
@@ -2748,7 +2734,7 @@ export function StudyCatalogosFiscales() {
               queryClient.invalidateQueries({ queryKey: ["client-profile-activity-catalog", firmId] }),
               queryClient.invalidateQueries({ queryKey: ["tax-rule-packs", firmId] }),
             ]);
-            setReceipt("El catálogo quedó eliminado y la auditoría del estudio conserva el registro de la acción.");
+            notify.success("El catálogo quedó eliminado y la auditoría del estudio conserva el registro de la acción.");
           }}
         />
       ) : null}

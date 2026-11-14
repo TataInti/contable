@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
 import { api, downloadFile, type Account, type ReportRun, type ReportTemplate } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
@@ -39,7 +39,7 @@ export function StudyReportes() {
   const [cutoff, setCutoff] = useState(() => new Date().toISOString().slice(0, 10));
   const [biQuestion, setBiQuestion] = useState("¿Cuál es el resultado neto del período?");
   const [biResult, setBiResult] = useState<BiExecution | null>(null);
-  const [receipt, setReceipt] = useState<string | null>(null);
+  const notify = useNotify();
 
   const base = firmId && clientId ? `/firms/${firmId}/clients/${clientId}` : null;
   const templates = useQuery({
@@ -63,14 +63,14 @@ export function StudyReportes() {
     mutationFn: () =>
       api.post<ReportRun>(`${base}/report-runs`, { templateId: selectedTemplateId, cutoff }),
     onSuccess: () => {
-      setReceipt("El reporte fue generado y quedó en borrador para revisión.");
+      notify.success("El reporte fue generado y quedó en borrador para revisión.");
       void queryClient.invalidateQueries({ queryKey: ["report-runs", firmId, clientId] });
     },
   });
   const publish = useMutation({
     mutationFn: (runId: string) => api.post(`${base}/report-runs/${runId}/publish`),
     onSuccess: () => {
-      setReceipt("Reporte publicado. El cliente ya puede ver esta versión en su portal.");
+      notify.success("Reporte publicado. El cliente ya puede ver esta versión en su portal.");
       void queryClient.invalidateQueries({ queryKey: ["report-runs", firmId, clientId] });
     },
   });
@@ -78,7 +78,7 @@ export function StudyReportes() {
     mutationFn: (publicationId: string) =>
       api.post(`${base}/report-publications/${publicationId}/revoke`),
     onSuccess: () => {
-      setReceipt("La publicación fue revocada. El reporte ya no está disponible en el portal.");
+      notify.success("La publicación fue revocada. El reporte ya no está disponible en el portal.");
       void queryClient.invalidateQueries({ queryKey: ["report-runs", firmId, clientId] });
     },
   });
@@ -86,7 +86,7 @@ export function StudyReportes() {
     mutationFn: ({ runId, format }: { runId: string; format: "pdf" | "xlsx" | "csv" }) =>
       downloadFile(`${base}/report-runs/${runId}/export?format=${format}`),
     onSuccess: (_data, variables) =>
-      setReceipt(`Se descargó el reporte en ${variables.format.toUpperCase()}.`),
+      notify.success(`Se descargó el reporte en ${variables.format.toUpperCase()}.`),
   });
   const createBaseTemplate = useMutation({
     mutationFn: () => {
@@ -107,7 +107,7 @@ export function StudyReportes() {
     },
     onSuccess: (created) => {
       setTemplateId(created.id);
-      setReceipt("Plantilla base creada con las cuentas disponibles del cliente.");
+      notify.success("Plantilla base creada con las cuentas disponibles del cliente.");
       void queryClient.invalidateQueries({ queryKey: ["report-templates", firmId, clientId] });
     },
   });
@@ -180,27 +180,6 @@ export function StudyReportes() {
 
 
 
-      {receipt ? (
-        <Notice
-          tone="success"
-          className="ds-notice--page"
-          title="Acción completada"
-          action={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              iconOnly
-              aria-label="Cerrar confirmación"
-              onClick={() => setReceipt(null)}
-            >
-              <Icon name="close" size={15} />
-            </Button>
-          }
-        >
-          {receipt}
-        </Notice>
-      ) : null}
 
       <section className="study-panel" aria-labelledby="generate-report-title">
         <div className="study-panel__heading">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, MoneyField, Table } from "@contable/design-system";
+import { Button, EmptyState, Field, MoneyField, Table, useNotify } from "@contable/design-system";
 import {
   MONOTRIBUTO_CATEGORY_CODES,
   type CatalogEconomicActivity,
@@ -183,8 +183,7 @@ export function StudyReglasFiscales() {
   const [credentialId, setCredentialId] = useState("");
   const [draftRows, setDraftRows] = useState<RuleRow[]>([]);
   const [draftRowsVersionId, setDraftRowsVersionId] = useState<string | null>(null);
-  const [receipt, setReceipt] = useState<string | null>(null);
-  const [activationReceipt, setActivationReceipt] = useState<{ versionId: string; message: string } | null>(null);
+  const notify = useNotify();
   const [activationError, setActivationError] = useState<Error | null>(null);
   const activationFeedbackRef = useRef<HTMLDivElement | null>(null);
   const [activationTarget, setActivationTarget] = useState<RuleVersion | null>(null);
@@ -337,7 +336,7 @@ export function StudyReglasFiscales() {
       // usuario a las alícuotas, que es lo que vino a modificar.
       setSelectedVersionId(null);
       setRuleTab("rates");
-      setReceipt("Se abrió un borrador con las alícuotas vigentes. Editá los valores y guardá; la versión anterior sigue aplicando hasta que actives la nueva.");
+      notify.success("Se abrió un borrador con las alícuotas vigentes. Editá los valores y guardá; la versión anterior sigue aplicando hasta que actives la nueva.");
       window.setTimeout(() => {
         document.getElementById("rule-rates-title")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
       }, 0);
@@ -355,7 +354,7 @@ export function StudyReglasFiscales() {
       setSelectedPackId(pack.id);
       setNewPack({ code: "", name: "", regimeId: "" });
       setShowPackForm(false);
-      setReceipt("El paquete quedó creado. Ahora podés iniciar su primera versión.");
+      notify.success("El paquete quedó creado. Ahora podés iniciar su primera versión.");
     },
   });
   const createVersionMutation = useMutation({
@@ -368,7 +367,7 @@ export function StudyReglasFiscales() {
     onSuccess: () => {
       invalidate();
       setShowInitialVersionForm(false);
-      setReceipt("La primera versión quedó abierta como borrador.");
+      notify.success("La primera versión quedó abierta como borrador.");
     },
   });
   const saveMutation = useMutation({
@@ -391,7 +390,7 @@ export function StudyReglasFiscales() {
     onSuccess: () => {
       invalidate();
       setRowFieldErrors({});
-      setReceipt("Las reglas del borrador quedaron guardadas.");
+      notify.success("Las reglas del borrador quedaron guardadas.");
     },
     onError: (error) => {
       if (!(error instanceof ApiError)) return;
@@ -426,7 +425,7 @@ export function StudyReglasFiscales() {
     mutationFn: () => api.post(`/tax/rule-versions/${selectedVersion?.id}/submit-review`),
     onSuccess: () => {
       invalidate();
-      setReceipt("La versión fue enviada a revisión.");
+      notify.success("La versión fue enviada a revisión.");
     },
   });
   const approveMutation = useMutation({
@@ -434,7 +433,7 @@ export function StudyReglasFiscales() {
       api.post(`/tax/rule-versions/${selectedVersion?.id}/approve`, { credentialId }),
     onSuccess: () => {
       invalidate();
-      setReceipt("La versión fue aprobada con matrícula profesional.");
+      notify.success("La versión fue aprobada con matrícula profesional.");
     },
   });
   const activateMutation = useMutation({
@@ -443,8 +442,7 @@ export function StudyReglasFiscales() {
       invalidate();
       const activatedVersion = detailQuery.data?.versions.find((version) => version.id === ruleVersionId);
       const message = `La versión v${activatedVersion?.version ?? ""} quedó activa y disponible para próximos cálculos.`;
-      setReceipt(message);
-      setActivationReceipt({ versionId: ruleVersionId, message });
+      notify.success(message);
     },
     onError: (error) => {
       setActivationError(error instanceof Error ? error : new Error(String(error)));
@@ -463,7 +461,7 @@ export function StudyReglasFiscales() {
       invalidate();
       setNewSource({ title: "", reference: "", url: "", consultedAt: today });
       setShowSourceForm(false);
-      setReceipt("La fuente normativa quedó asociada al borrador.");
+      notify.success("La fuente normativa quedó asociada al borrador.");
     },
   });
   const addDueDateMutation = useMutation({
@@ -479,7 +477,7 @@ export function StudyReglasFiscales() {
       invalidate();
       setNewDueDate({ frequency: "MENSUAL", dueDay: "", cuitEnding: "", validFrom: today });
       setShowDueDateForm(false);
-      setReceipt("El vencimiento quedó agregado al borrador.");
+      notify.success("El vencimiento quedó agregado al borrador.");
     },
   });
 
@@ -528,14 +526,11 @@ export function StudyReglasFiscales() {
     const versionId = activationTarget.id;
     setActivationTarget(null);
     setActivationError(null);
-    setActivationReceipt(null);
-    setReceipt(null);
     resetOtherMutationErrors();
     activateMutation.reset();
     activateMutation.mutate(versionId);
   };
   const requestActivation = (version: RuleVersion) => {
-    setActivationReceipt(null);
     if (activationBlockedByUnsavedChanges) {
       setActivationError(new Error("Guardá los cambios del borrador antes de activarlo."));
       return;
@@ -1059,18 +1054,6 @@ export function StudyReglasFiscales() {
         </form>
       </ActionDrawer>
 
-      {receipt ? (
-        <div className="action-receipt action-receipt--page" role="status">
-          <Icon name="check" size={19} />
-          <span>
-            <strong>Actualización registrada</strong>
-            <small>{receipt}</small>
-          </span>
-          <button type="button" aria-label="Cerrar confirmación" onClick={() => setReceipt(null)}>
-            <Icon name="close" size={15} />
-          </button>
-        </div>
-      ) : null}
 
       {!isEmptyPackList ? (
         <DenseToolbar>
@@ -1274,15 +1257,6 @@ export function StudyReglasFiscales() {
                         {activationError.message}
                       </p>
                     )}
-                  </div>
-                ) : null}
-                {activationReceipt?.versionId === selectedVersion.id ? (
-                  <div className="action-receipt" role="status">
-                    <Icon name="check" size={19} />
-                    <span>
-                      <strong>Activación registrada</strong>
-                      <small>{activationReceipt.message}</small>
-                    </span>
                   </div>
                 ) : null}
               </section>
@@ -1857,7 +1831,7 @@ export function StudyReglasFiscales() {
               queryClient.invalidateQueries({ queryKey: ["tax-rule-packs", firmId] }),
               queryClient.invalidateQueries({ queryKey: ["tax-rule-pack", selectedPackId] }),
             ]);
-            setReceipt(
+            notify.success(
               kind === "pack"
                 ? "El paquete y su parametría quedaron eliminados y auditados."
                 : "La versión borrador y su parametría quedaron eliminadas y auditadas.",

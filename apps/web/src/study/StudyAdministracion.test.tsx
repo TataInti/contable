@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { ToastProvider } from "@contable/design-system";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -130,9 +131,11 @@ function renderAdministracion() {
   });
   return render(
     <QueryClientProvider client={client}>
+      <ToastProvider>
       <MemoryRouter>
         <StudyAdministracion />
       </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }
