@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button, EmptyState, Field, getStatusBadgeMeta, MoneyField, Table, useNotify } from "@contable/design-system";
 import { ApiError, api, type Client } from "../lib/api";
+import { RECEIPT_ACCEPT, uploadFilingReceipt, waitForReceiptReady } from "./filingReceipt";
 import { useClientContext } from "../context/ClientContext";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useSession } from "../session/SessionContext";
@@ -463,7 +464,14 @@ const WORKPAPER_STEPS = [
   },
 ] as const;
 
+const CONTROL_SEVERITY_LABELS: Record<string, string> = {
+  BLOCKING: "Bloquea el cierre",
+  WARNING: "Advertencia",
+  INFO: "Informativo",
+};
+
 const CONTROL_LABELS: Record<string, string> = {
+  SUPERSEDED_OPENING_CREDIT: "Saldos de presentaciones reemplazadas",
   BOOK_RATE_RECONCILIATION: "Diferencias de libro por alícuota",
   PORTAL_IVA_RECONCILIATION: "Conciliación con Portal IVA",
   BANK_CREDIT_RECONCILIATION: "Acreditaciones bancarias vs. facturación",
@@ -666,6 +674,7 @@ export function StudyExpedienteMensual() {
     externalId: "",
     evidenceDocumentId: "",
   });
+  const [filingReceipt, setFilingReceipt] = useState<File | null>(null);
   const [sourceCode, setSourceCode] = useState("");
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [classificationDrafts, setClassificationDrafts] = useState<
@@ -1147,20 +1156,32 @@ export function StudyExpedienteMensual() {
     },
   });
   const recordFilingMutation = useMutation({
-    mutationFn: () =>
-      api.post(
-        `/firms/${firmId}/clients/${clientId}/tax-obligations/${positionAction?.position.obligationId}/filings`,
+    mutationFn: async () => {
+      const base = `/firms/${firmId}/clients/${clientId}`;
+      // La constancia es obligatoria: se elige una ya subida o se sube en este mismo paso.
+      let evidenceDocumentId = filingForm.evidenceDocumentId;
+      if (!evidenceDocumentId) {
+        if (!filingReceipt) throw new Error("Adjuntá la constancia de presentación.");
+        evidenceDocumentId = await uploadFilingReceipt(base, filingReceipt);
+        setFilingForm((form) => ({ ...form, evidenceDocumentId }));
+        setFilingReceipt(null);
+        await queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] });
+        await waitForReceiptReady(base, evidenceDocumentId);
+      }
+      return api.post(
+        `${base}/tax-obligations/${positionAction?.position.obligationId}/filings`,
         {
           settlementId: positionAction?.position.settlement?.id,
           filedAt: filingForm.filedAt,
           amountFiled: filingForm.amountFiled,
           ...(filingForm.externalId.trim() ? { externalId: filingForm.externalId.trim() } : {}),
-          ...(filingForm.evidenceDocumentId
-            ? { evidenceDocumentId: filingForm.evidenceDocumentId }
-            : {}),
+          evidenceDocumentId,
         },
-      ),
+      );
+    },
     onSuccess: () => {
+      notify.success("Presentación registrada con su constancia.");
+      setFilingReceipt(null);
       setPositionAction(null);
       setFilingForm({
         amountFiled: "",
@@ -1244,6 +1265,10 @@ export function StudyExpedienteMensual() {
     (taxPeriod) => taxPeriod.taxType.isActive && (!opening.taxTypeId || taxPeriod.taxTypeId === opening.taxTypeId),
   );
   const safeActiveStep = Math.min(Math.max(activeStep, 0), WORKPAPER_STEPS.length - 1);
+  // Constancias ya subidas (por el estudio o por el cliente desde el portal) y listas para usar.
+  const filingReceiptDocuments = (documentsQuery.data ?? []).filter(
+    (document) => document.category === "ACUSE" && ["READY", "APPLIED"].includes(document.status),
+  );
   const eligibleEvidenceDocuments = (documentsQuery.data ?? []).filter((document) =>
     ["READY", "APPLIED", "REVIEWED"].includes(document.status),
   );
@@ -1791,7 +1816,7 @@ export function StudyExpedienteMensual() {
             />
             <div className="ds-field">
               <label className="ds-field__label" htmlFor="tax-filing-evidence">
-                Documento de respaldo
+                Constancia de presentación
               </label>
               <select
                 id="tax-filing-evidence"
@@ -1801,19 +1826,44 @@ export function StudyExpedienteMensual() {
                   setFilingForm({ ...filingForm, evidenceDocumentId: event.target.value })
                 }
               >
-                <option value="">Sin adjuntar por ahora</option>
-                {documentsQuery.data?.map((document) => (
+                <option value="">Subir una constancia nueva</option>
+                {filingReceiptDocuments.map((document) => (
                   <option key={document.id} value={document.id}>
-                    {document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento"}
+                    {document.fileVersions?.[0]?.originalName ?? "Constancia"} ·{" "}
+                    {getStatusBadgeMeta(document.status).label}
                   </option>
                 ))}
               </select>
+              <small className="ds-field__hint">
+                Es el comprobante que emite el organismo. Sin constancia la presentación no queda registrada.
+              </small>
             </div>
+            {!filingForm.evidenceDocumentId ? (
+              <div className="ds-field">
+                <label className="ds-field__label" htmlFor="tax-filing-receipt">
+                  Archivo de la constancia
+                </label>
+                <input
+                  id="tax-filing-receipt"
+                  className="ds-field__input"
+                  type="file"
+                  accept={RECEIPT_ACCEPT}
+                  required
+                  onChange={(event) => setFilingReceipt(event.target.files?.[0] ?? null)}
+                />
+                <small className="ds-field__hint">PDF o imagen.</small>
+              </div>
+            ) : null}
             <div className="study-form__actions">
               <Button
                 type="submit"
                 loading={recordFilingMutation.isPending}
-                disabled={!positionAction.position.settlement || !filingForm.amountFiled}
+                loadingLabel="Subiendo y validando la constancia"
+                disabled={
+                  !positionAction.position.settlement ||
+                  !filingForm.amountFiled ||
+                  (!filingForm.evidenceDocumentId && !filingReceipt)
+                }
               >
                 Registrar presentación
               </Button>
@@ -2996,14 +3046,14 @@ export function StudyExpedienteMensual() {
                               {control.resolution ? <small>{control.resolution}</small> : null}
                             </span>
                             <StatusBadge status={control.status} />
-                            <span>{control.severity}</span>
+                            <span className="muted-copy">{CONTROL_SEVERITY_LABELS[control.severity] ?? control.severity}</span>
                             {control.status === "OPEN" &&
                             capabilities.has("tax.settlements.review") ? (
                               <span className="workpaper-control__resolution">
                                 <input
                                   aria-label={`Resolución ${control.code}`}
                                   value={controlResolutions[control.id] ?? ""}
-                                  placeholder="Explicá la resolución…"
+                                  placeholder="Explicá cómo se resolvió…"
                                   onChange={(event) =>
                                     setControlResolutions((values) => ({
                                       ...values,
@@ -3023,7 +3073,7 @@ export function StudyExpedienteMensual() {
                                         }))
                                       }
                                     >
-                                      <option value="">Seleccionar evidencia…</option>
+                                      <option value="">Sin documento de respaldo</option>
                                       {eligibleEvidenceDocuments.map((document) => (
                                         <option key={document.id} value={document.id}>
                                           {document.fileVersions?.[0]?.originalName ??
@@ -3036,19 +3086,15 @@ export function StudyExpedienteMensual() {
                                     {documentsQuery.isSuccess &&
                                     eligibleEvidenceDocuments.length === 0 ? (
                                       <small className="muted-copy">
-                                        No hay documentos elegibles. Aprobá la extracción en Bandeja para usar el
-                                        documento como respaldo.
+                                        El respaldo es opcional. Para adjuntar uno, aprobá la extracción del
+                                        documento en Bandeja.
                                       </small>
                                     ) : null}
                                   </>
                                 ) : null}
                                 <Button
                                   size="sm"
-                                  disabled={
-                                    !controlResolutions[control.id]?.trim() ||
-                                    (control.severity === "BLOCKING" &&
-                                      !controlEvidence[control.id])
-                                  }
+                                  disabled={!controlResolutions[control.id]?.trim()}
                                   loading={resolveControlMutation.isPending}
                                   onClick={() =>
                                     resolveControlMutation.mutate({

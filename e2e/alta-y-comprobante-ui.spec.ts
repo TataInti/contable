@@ -628,11 +628,9 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await drawer.getByLabel("Importe presentado").fill("38199.00");
     await drawer.getByLabel("Fecha de presentación").fill("2025-04-17");
     await drawer.getByLabel("Identificador externo").fill(`E2E-VEP-${SUFFIX}`);
-    // El servidor exige un documento de respaldo de categoría ACUSE aunque la pantalla ofrece "Sin adjuntar
-    // por ahora". Se usa el que subió el cliente desde el portal (el más reciente, primero de la lista).
-    const evidence = drawer.getByLabel("Documento de respaldo");
-    await expect.poll(async () => (await evidence.locator("option").count()), { timeout: 30_000 }).toBeGreaterThan(2);
-    await evidence.selectOption({ index: 1 }); // la lista va de más reciente a más antigua: el acuse es el primero
+    // La constancia la sube el estudio en este mismo paso: se valida (antivirus) y recién
+    // entonces se registra la presentación.
+    await drawer.getByLabel("Archivo de la constancia").setInputFiles(fixture);
     await mutating(page, "/filings", () => drawer.getByRole("button", { name: "Registrar presentación" }).click());
     await card.getByRole("button", { name: "Registrar pago" }).first().click();
     await drawer.getByLabel("Importe", { exact: true }).fill("38199.00");

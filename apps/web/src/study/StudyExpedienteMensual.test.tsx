@@ -351,7 +351,7 @@ describe("StudyExpedienteMensual", () => {
       name: "Evidencia BOOK_RATE_RECONCILIATION",
     });
     const explanation = await screen.findByText(
-      "No hay documentos elegibles. Aprobá la extracción en Bandeja para usar el documento como respaldo.",
+      "El respaldo es opcional. Para adjuntar uno, aprobá la extracción del documento en Bandeja.",
     );
     expect(evidence.parentElement?.contains(explanation)).toBe(true);
     expect(within(evidence).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();

@@ -570,6 +570,24 @@ describe("F1.1 expediente mensual de liquidación", () => {
     });
   });
 
+  it("con la opción activa, un rol que no es Titular ni Administrador sigue sin poder autorrevisar", async () => {
+    const wp = await service.create(ctxPreparer, {
+      clientId: CLIENT_WP,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+    });
+    await service.calculate(ctxPreparer, wp.id);
+    await resolveGeneratedBlockingControls(wp.id);
+    await service.submitReview(ctxPreparer, wp.id);
+    await runAsRuntime(OWNER_WP, FIRM_WP, (tx) =>
+      tx.firm.update({ where: { id: FIRM_WP }, data: { allowSelfReview: true } }),
+    );
+
+    await expect(service.review(ctxPreparer, wp.id, { approved: true })).rejects.toMatchObject({
+      code: "MAKER_CHECKER_VIOLATION",
+    });
+  });
+
   it("permite autorrevisar y finalizar con opción activa, y audita cada entidad", async () => {
     const wp = await service.create(ctxOwner, {
       clientId: CLIENT_WP,
@@ -656,6 +674,15 @@ describe("F1.1 expediente mensual de liquidación", () => {
     });
     expect(ready.status).toBe("RESOLVED");
     expect(ready.evidenceDocumentId).toBe(readyEvidenceId);
+
+    // El respaldo es opcional: alcanza con la explicación escrita.
+    const noEvidenceControl = await createBlockingControl(wp.id, "B9_NO_EVIDENCE");
+    const withoutEvidence = await service.resolveControl(ctxReviewer, wp.id, noEvidenceControl.id, {
+      resolution: "El cliente no opera con cuentas bancarias en este período",
+      status: "RESOLVED",
+    });
+    expect(withoutEvidence.status).toBe("RESOLVED");
+    expect(withoutEvidence.evidenceDocumentId).toBeNull();
 
     async function expectEvidenceRejected(code: string, evidenceDocumentId: string) {
       const control = await createBlockingControl(wp.id, code);
