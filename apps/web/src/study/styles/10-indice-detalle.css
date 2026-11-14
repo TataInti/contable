@@ -75,25 +75,13 @@
   border-bottom: 1px solid var(--ds-color-border);
 }
 
-.study-page:not(.client-summary):not(.document-inbox) .fiscal-next-step {
-  margin-bottom: 0;
-  padding: var(--ds-space-5) 0;
-  border: 0;
-  border-top: 1px solid var(--ds-color-border);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
 .study-page:not(.client-summary):not(.document-inbox) .study-columns.work-columns,
-.study-page:not(.client-summary):not(.document-inbox) .fiscal-client-overview__columns,
 .study-page:not(.client-summary):not(.document-inbox) .profitability-grid {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
 }
 
 .study-page:not(.client-summary):not(.document-inbox) .study-columns.work-columns > *,
-.study-page:not(.client-summary):not(.document-inbox) .fiscal-client-overview__columns > *,
 .study-page:not(.client-summary):not(.document-inbox) .profitability-grid > * {
   min-width: 0;
 }
