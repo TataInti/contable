@@ -20,6 +20,13 @@ import { Button } from "./Button.js";
 
 export type DenseDensity = 28 | 32 | 40;
 
+/**
+ * Superficie de una sección o una tabla. `integrated` se lee sobre el lienzo;
+ * `outlined` pide la presentación heredada de forma explícita. Sin la prop no
+ * se agrega ningún modificador: el marcado es el de siempre.
+ */
+export type DenseSurface = "integrated" | "outlined";
+
 const DENSITY_STORAGE_KEY = "contable.dense.rowHeight";
 const DENSITIES: ReadonlyArray<{ value: DenseDensity; label: string }> = [
   { value: 28, label: "Compacta" },
@@ -119,6 +126,7 @@ export function DenseSection({
   count,
   description,
   actions,
+  surface,
   children,
 }: {
   id?: string;
@@ -126,11 +134,17 @@ export function DenseSection({
   count?: ReactNode;
   description?: string;
   actions?: ReactNode;
+  /** Sin la prop se conserva la presentación actual; `integrated` aplica Foco. */
+  surface?: DenseSurface;
   children: ReactNode;
 }) {
   const headingId = id ? `${id}-title` : undefined;
   return (
-    <section id={id} className="dense-block" aria-labelledby={headingId}>
+    <section
+      id={id}
+      className={`dense-block${surface ? ` dense-block--${surface}` : ""}`}
+      aria-labelledby={headingId}
+    >
       <header className="dense-block__head">
         <h2 id={headingId}>
           {title}
