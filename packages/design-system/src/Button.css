@@ -94,16 +94,34 @@
   background-color: var(--ds-color-surface-pressed);
 }
 
+/* Peligro discreto: es el que va en pantallas, fichas y filas. El texto dice
+   que la acción es riesgosa sin competir con la acción principal. */
 .ds-button--danger {
+  background-color: transparent;
+  border-color: color-mix(in srgb, var(--ds-color-danger) 40%, var(--ds-color-border));
+  color: var(--ds-color-danger);
+}
+
+.ds-button--danger:hover:not(:disabled) {
+  background-color: var(--ds-color-danger-subtle);
+}
+
+.ds-button--danger:active:not(:disabled) {
+  background-color: var(--ds-color-danger-subtle);
+  border-color: var(--ds-color-danger);
+}
+
+/* Peligro sólido: sólo el botón que confirma dentro de un diálogo. */
+.ds-button--danger-solid {
   background-color: var(--ds-color-danger);
   color: var(--ds-color-on-danger);
 }
 
-.ds-button--danger:hover:not(:disabled) {
+.ds-button--danger-solid:hover:not(:disabled) {
   background-color: var(--ds-color-danger-hover);
 }
 
-.ds-button--danger:active:not(:disabled) {
+.ds-button--danger-solid:active:not(:disabled) {
   background-color: var(--ds-color-danger-active);
 }
 

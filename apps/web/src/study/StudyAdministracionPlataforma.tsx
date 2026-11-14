@@ -1,10 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Switch, useNotify } from "@contable/design-system";
 import { api, type FeatureFlag } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
-import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import {
   DenseFooter,
@@ -91,15 +90,13 @@ export function StudyAdministracionPlataforma() {
   return (
     <DensePage density={density}>
       <DenseHeader
-        eyebrow="Administración general"
         title="Módulos de estudios"
-        description="Habilitá o deshabilitá módulos para el estudio seleccionado. El acceso de cada persona dentro del estudio se define aparte mediante su rol."
+        description={`Lo que ${firm?.firmName ?? "el estudio"} tiene disponible. El acceso de cada persona se define aparte, con su rol.`}
       />
 
       <StatStrip
         label="Resumen de módulos"
         items={[
-          { key: "firm", label: "Estudio", value: firm?.firmName ?? "Sin estudio seleccionado" },
           { key: "modules", label: "Módulos", value: allFlags.length },
           { key: "on", label: "Habilitados", value: allFlags.filter((flag) => flag.enabled).length },
           {
@@ -110,9 +107,6 @@ export function StudyAdministracionPlataforma() {
           },
         ]}
       />
-
-
-
 
       <DenseToolbar>
         <DenseSearch
@@ -167,34 +161,31 @@ export function StudyAdministracionPlataforma() {
                 },
                 {
                   key: "enabled",
-                  header: "Estado",
-                  render: (flag) => <StatusBadge status={flag.enabled ? "ACTIVE" : "DISABLED"} />,
-                },
-                {
-                  key: "action",
-                  header: "Acción",
-                  render: (flag) => (
-                    <Button
-                      size="sm"
-                      variant={flag.enabled ? "danger" : "secondary"}
-                      loading={updateFlag.isPending && updateFlag.variables?.id === flag.id}
-                      onClick={() => {
-                        if (!flag.enabled) {
-                          updateFlag.mutate(flag);
-                          return;
-                        }
-                        confirm.ask({
-                          title: `¿Deshabilitar ${FEATURE_FLAG_LABELS[flag.code] ?? flag.code}?`,
-                          description: "El módulo dejará de estar disponible para este estudio hasta que lo vuelvas a habilitar.",
-                          confirmLabel: "Deshabilitar",
-                          tone: "danger",
-                          onConfirm: () => updateFlag.mutate(flag),
-                        });
-                      }}
-                    >
-                      {flag.enabled ? "Deshabilitar" : "Habilitar"}
-                    </Button>
-                  ),
+                  header: "Disponible",
+                  render: (flag) => {
+                    const name = FEATURE_FLAG_LABELS[flag.code] ?? flag.code;
+                    return (
+                      <Switch
+                        checked={flag.enabled}
+                        label={name}
+                        text={flag.enabled ? "Habilitado" : "Deshabilitado"}
+                        busy={updateFlag.isPending && updateFlag.variables?.id === flag.id}
+                        onChange={(next) => {
+                          if (next) {
+                            updateFlag.mutate(flag);
+                            return;
+                          }
+                          confirm.ask({
+                            title: `¿Deshabilitar ${name}?`,
+                            description: "El módulo dejará de estar disponible para este estudio hasta que lo vuelvas a habilitar.",
+                            confirmLabel: "Deshabilitar",
+                            tone: "danger",
+                            onConfirm: () => updateFlag.mutate(flag),
+                          });
+                        }}
+                      />
+                    );
+                  },
                 },
               ]}
           />

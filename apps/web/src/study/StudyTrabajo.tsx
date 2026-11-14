@@ -284,7 +284,6 @@ export function StudyTrabajo() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Seguimiento del cliente"
         title="Trabajo"
         description="Revisiones, pedidos, cierres y vencimientos que requieren una decisión."
         actions={

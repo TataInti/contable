@@ -639,7 +639,6 @@ export function StudyReglasFiscales() {
   return (
     <DensePage density={density} flow className="fiscal-rules">
       <DenseHeader
-        eyebrow="Configuración del estudio"
         title="Reglas fiscales"
         description="Alícuotas, mínimos y porcentajes normativos con vigencia; activación directa por Administrador o Titular."
         actions={

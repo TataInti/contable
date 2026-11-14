@@ -405,7 +405,6 @@ export function StudyResumenCliente() {
   return (
     <DensePage density={density} flow className="client-summary">
       <DenseHeader
-        eyebrow="Ficha consolidada"
         title="Resumen del cliente"
         description={`${client.legalName}${client.tradeName ? ` · ${client.tradeName}` : ""} · CUIT ${client.cuit}`}
         actions={

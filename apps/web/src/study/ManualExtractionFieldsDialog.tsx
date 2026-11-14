@@ -284,7 +284,7 @@ export function ManualExtractionFieldsDialog({
                 >
                   Seguir editando
                 </Button>
-                <Button type="button" variant="danger" onClick={onClose}>
+                <Button type="button" variant="danger-solid" onClick={onClose}>
                   Descartar
                 </Button>
               </div>

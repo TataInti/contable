@@ -1530,7 +1530,6 @@ export function StudyAdministracion() {
   return (
     <DensePage density={density} className="administration-users">
       <DenseHeader
-        eyebrow="Configuración del estudio"
         title="Usuarios y accesos"
         description={pageDescription}
         actions={

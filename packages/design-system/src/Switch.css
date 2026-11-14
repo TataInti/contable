@@ -1,0 +1,67 @@
+.ds-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-block-size: var(--ds-control-height-sm);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-color-text-muted);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-sm);
+  cursor: pointer;
+}
+
+.ds-switch__track {
+  position: relative;
+  flex: none;
+  inline-size: 34px;
+  block-size: 20px;
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-color-border-strong);
+  transition: background-color var(--ds-duration-fast) var(--ds-ease-out);
+}
+
+.ds-switch__thumb {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-color-surface);
+  transition: transform var(--ds-duration-fast) var(--ds-ease-out);
+}
+
+.ds-switch--on {
+  color: var(--ds-color-text);
+}
+
+.ds-switch--on .ds-switch__track {
+  background: var(--ds-color-primary);
+}
+
+.ds-switch--on .ds-switch__thumb {
+  transform: translateX(14px);
+}
+
+.ds-switch:focus-visible {
+  outline: none;
+}
+
+.ds-switch:focus-visible .ds-switch__track {
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.ds-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-switch__track,
+  .ds-switch__thumb {
+    transition: none;
+  }
+}

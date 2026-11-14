@@ -536,7 +536,6 @@ export function StudyClientes() {
   const incompleteCount = clients.filter((client) => missingProfileFields(client).length > 0).length;
   const activeCount = clients.filter((client) => client.status === "ACTIVE").length;
   const selectedClient = selectedId ? (clients.find((client) => client.id === selectedId) ?? null) : null;
-  const currentClient = clientId ? (clients.find((client) => client.id === clientId) ?? null) : null;
   const canManage = capabilities.has("client.manage");
   const inspectorOpen = Boolean(selectedClient);
   const missingCreateFields = [
@@ -954,7 +953,6 @@ export function StudyClientes() {
   return (
     <DensePage density={density}>
       <DenseHeader
-        eyebrow="Cartera del estudio"
         title="Clientes"
         description="Elegí el contexto de trabajo o incorporá una nueva empresa."
         actions={
@@ -986,12 +984,6 @@ export function StudyClientes() {
             tone: incompleteCount > 0 ? "warn" : undefined,
             active: onlyIncomplete,
             onSelect: () => setOnlyIncomplete((current) => !current),
-          },
-          {
-            key: "context",
-            label: "Contexto actual",
-            value: currentClient ? currentClient.legalName : "Sin seleccionar",
-            detail: currentClient ? formatCuit(currentClient.cuit) : "Abrí un cliente para trabajar",
           },
         ]}
       />

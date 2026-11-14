@@ -113,24 +113,25 @@ export function DenseSection({
   );
 }
 
+/**
+ * Encabezado único de una pantalla: título, una línea de descripción y, a la
+ * derecha, las acciones (una sola principal). No lleva rótulo superior.
+ */
 export function DenseHeader({
-  eyebrow,
   title,
   description,
   actions,
 }: {
-  eyebrow: string;
   title: string;
-  description: string;
+  description?: string;
   actions?: ReactNode;
 }) {
   return (
     <header className="dense-head">
       <div className="dense-head__title">
-        <p className="study-page__eyebrow">{eyebrow}</p>
         <h1>{title}</h1>
+        {description ? <p className="dense-head__desc">{description}</p> : null}
       </div>
-      <p className="dense-head__desc">{description}</p>
       {actions ? <div className="dense-head__actions">{actions}</div> : null}
     </header>
   );

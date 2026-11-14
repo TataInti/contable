@@ -1259,7 +1259,6 @@ export function StudyExpedienteMensual() {
   return (
     <DensePage density={density} flow>
       <DenseHeader
-        eyebrow="Impuestos"
         title="Legajo"
         description="Coordina IVA, IIBB y TEM del período con evidencia trazable."
         actions={

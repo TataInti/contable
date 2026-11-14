@@ -1724,7 +1724,6 @@ export function StudyCatalogosFiscales() {
   return (
     <DensePage density={density} flow className="fiscal-catalog-page">
       <DenseHeader
-        eyebrow="Administración fiscal"
         title="Catálogos fiscales"
         description="Administrá jurisdicciones, tipos de impuesto, organismos recaudadores, regímenes y actividades que organizan la configuración fiscal del estudio."
         actions={

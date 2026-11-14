@@ -50,6 +50,22 @@ const RULES: Rule[] = [
       "study/StudyBandeja.tsx": 3,
     },
   },
+  {
+    name: "botón de peligro sólido fuera de una confirmación",
+    why: "En pantallas y filas va variant=\"danger\" (discreto). El sólido es sólo el botón que confirma dentro de un diálogo: usá ConfirmDialog.",
+    pattern: /variant="danger-solid"/g,
+    allowed: {
+      // Diálogos propios que confirman una acción destructiva.
+      "ui/DeletionDrawer.tsx": 1,
+      "study/ManualExtractionFieldsDialog.tsx": 1,
+    },
+  },
+  {
+    name: "rótulo sobre el título de la pantalla",
+    why: "El encabezado de pantalla es DenseHeader: título, una línea de descripción y acciones. Sin rótulo superior.",
+    pattern: /<DenseHeader\s+eyebrow=/g,
+    allowed: {},
+  },
 ];
 
 describe("patrones de interfaz centralizados", () => {
