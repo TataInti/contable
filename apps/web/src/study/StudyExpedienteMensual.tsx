@@ -464,6 +464,12 @@ const WORKPAPER_STEPS = [
   },
 ] as const;
 
+const CLASSIFICATION_ORIGIN_LABELS: Record<string, string> = {
+  MANUAL: "Elegida a mano",
+  VOUCHER_LINE: "Tomada del archivo importado",
+  SUPPLIER_MASTER: "Tomada del proveedor",
+};
+
 const CONTROL_SEVERITY_LABELS: Record<string, string> = {
   BLOCKING: "Bloquea el cierre",
   WARNING: "Advertencia",
@@ -834,6 +840,25 @@ export function StudyExpedienteMensual() {
     queryFn: () => api.get<TaxRegime[]>("/tax/regimes"),
     enabled: Boolean(firmId),
   });
+  // Actividades vigentes del cliente: la clasificación se elige de esta lista, no se escribe.
+  const clientActivitiesQuery = useQuery({
+    queryKey: ["client-tax-activities", firmId, clientId],
+    queryFn: () =>
+      api.get<Array<{ validTo: string | null; activity: { code: string; name: string } }>>(
+        `/firms/${firmId}/clients/${clientId}/activities`,
+      ),
+    enabled: Boolean(firmId && clientId),
+  });
+  const activityOptions = (currentCode: string) => {
+    const options = (clientActivitiesQuery.data ?? [])
+      .filter((link) => !link.validTo)
+      .map((link) => ({ code: link.activity.code, name: link.activity.name }));
+    // Un código ya guardado que no está entre las vigentes se conserva como opción.
+    if (currentCode && !options.some((option) => option.code === currentCode)) {
+      options.unshift({ code: currentCode, name: "" });
+    }
+    return options;
+  };
   const documentsQuery = useQuery({
     queryKey: ["documents", firmId, clientId],
     queryFn: () => api.get<EvidenceDocument[]>(`/firms/${firmId}/clients/${clientId}/documents`),
@@ -2515,7 +2540,7 @@ export function StudyExpedienteMensual() {
                                         <small> · {classification.activityCode}</small>
                                       ) : null}
                                       <br />
-                                      <small>{classification.origin ?? "Clasificación guardada"}</small>
+                                      <small>{CLASSIFICATION_ORIGIN_LABELS[classification.origin ?? ""] ?? "Clasificación guardada"}</small>
                                     </>
                                   ) : (
                                     <div className="workpaper-classification-fields">
@@ -2538,13 +2563,8 @@ export function StudyExpedienteMensual() {
                                           <option value="TRANSPORTE">TRANSPORTE</option>
                                         </select>
                                       ) : null}
-                                      <input
-                                        aria-label="Código de actividad"
-                                        placeholder={
-                                          classification.direction === "SALE"
-                                            ? "Actividad obligatoria"
-                                            : "Actividad (opcional)"
-                                        }
+                                      <select
+                                        aria-label="Actividad"
                                         value={draft.activityCode}
                                         onChange={(event) =>
                                           setClassificationDrafts((current) => ({
@@ -2555,7 +2575,18 @@ export function StudyExpedienteMensual() {
                                             },
                                           }))
                                         }
-                                      />
+                                      >
+                                        <option value="">
+                                          {classification.direction === "SALE"
+                                            ? "Elegí la actividad…"
+                                            : "Sin actividad (opcional)"}
+                                        </option>
+                                        {activityOptions(draft.activityCode).map((activity) => (
+                                          <option key={activity.code} value={activity.code}>
+                                            {activity.name ? `${activity.code} · ${activity.name}` : activity.code}
+                                          </option>
+                                        ))}
+                                      </select>
                                     </div>
                                   );
                                 },
