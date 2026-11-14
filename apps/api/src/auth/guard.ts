@@ -204,6 +204,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
     },
   },
   { match: /\/withholdings|\/perceptions/, resolve: (m) => (m === "GET" ? "tax.vouchers.read" : "tax.vouchers.prepare") },
+  // Libros de compras y ventas (corte 7a): solo lectura, con la capacidad de comprobantes.
+  { match: /\/fiscal-books(?:\/|$)/, resolve: (m) => (m === "GET" ? "tax.vouchers.read" : null) },
   {
     match: /\/management-expenses/,
     resolve: (m, path) => {

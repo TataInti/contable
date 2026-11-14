@@ -1,0 +1,21 @@
+import { describe, expect, it } from "vitest";
+import * as contracts from "./index.js";
+
+// Protege las dos líneas de exportación que el índice reúne desde cortes
+// distintos: cuit-ending.js (terminación de CUIT, calendarios) y
+// fiscal-books.js (libros de compras y ventas, corte 7a). Si un merge futuro
+// pierde una de ellas, esta prueba falla en CI.
+describe("índice de contratos: exportaciones de calendarios y libros", () => {
+  it("exporta cuitEnding y devuelve la terminación con guiones", () => {
+    expect(contracts).toHaveProperty("cuitEnding");
+    expect(contracts.cuitEnding("20-12345678-9")).toBe("9");
+  });
+
+  it("exporta FISCAL_BOOK_COLUMNS y fiscalBookExportQuerySchema", () => {
+    expect(contracts).toHaveProperty("FISCAL_BOOK_COLUMNS");
+    expect(contracts).toHaveProperty("fiscalBookExportQuerySchema");
+    expect(contracts.FISCAL_BOOK_COLUMNS.length).toBeGreaterThan(0);
+    const { fiscalBookExportQuerySchema } = contracts;
+    expect(typeof fiscalBookExportQuerySchema.safeParse).toBe("function");
+  });
+});

@@ -16,3 +16,4 @@ export * from "./accounting-standards.js";
 export * from "./economic-activities.js";
 export * from "./users.js";
 export * from "./cuit-ending.js";
+export * from "./fiscal-books.js";

@@ -52,4 +52,11 @@ describe("cobertura total del ROUTE_POLICY (deny-by-default)", () => {
     }
     expect(missing).toEqual([]);
   });
+
+  it("libros fiscales: lectura con tax.vouchers.read y sin escritura (deny-by-default)", () => {
+    const base = "/api/v1/firms/:p/clients/:p/fiscal-books";
+    expect(requiredCapability("GET", `${base}/summary`)).toBe("tax.vouchers.read");
+    expect(requiredCapability("GET", `${base}/export`)).toBe("tax.vouchers.read");
+    expect(requiredCapability("POST", `${base}/export`)).toBeNull();
+  });
 });
