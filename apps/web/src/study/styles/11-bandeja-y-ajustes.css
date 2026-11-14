@@ -1031,4 +1031,7 @@
 /* Terminación de CUIT: el encabezado puede ocupar dos líneas en la columna angosta. */
 .dense-table thead th.client-list__ending-column {
   white-space: normal;
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }

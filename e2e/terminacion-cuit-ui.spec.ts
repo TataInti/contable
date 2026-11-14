@@ -121,6 +121,15 @@ for (const viewport of [
       expect(medidas.desbordeContenedor).toBeLessThanOrEqual(0);
       expect(medidas.tablaDentro).toBe(true);
 
+      // El texto del encabezado «Terminación de CUIT» no se recorta en la columna angosta.
+      const recorteEncabezado = await page.locator("thead th.client-list__ending-column").evaluate((th) => {
+        const caja = th.getBoundingClientRect();
+        const rango = document.createRange();
+        rango.selectNodeContents(th);
+        return rango.getBoundingClientRect().bottom - caja.bottom;
+      });
+      expect(recorteEncabezado).toBeLessThanOrEqual(1);
+
       const digitos = page.getByRole("group", { name: "Terminación de CUIT" });
       await digitos.getByRole("button", { name: "9" }).click();
       await expect(page).toHaveURL(/terminacion=9/);
