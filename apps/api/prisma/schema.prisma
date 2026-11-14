@@ -63,6 +63,12 @@ model User {
   incomesCreated         ManagementIncome[]    @relation("incomeCreatedBy")
   incomesReviewed        ManagementIncome[]    @relation("incomeReviewedBy")
 
+  taxCalendarSourcesUploaded TaxCalendarSource[] @relation("TaxCalendarSourceUploader")
+  taxCalendarsCreated        TaxCalendar[]       @relation("TaxCalendarCreator")
+  taxCalendarsPublished      TaxCalendar[]       @relation("TaxCalendarPublisher")
+  taxCalendarsHidden         TaxCalendar[]       @relation("TaxCalendarHider")
+  taxCalendarEntriesReviewed TaxCalendarEntry[]  @relation("TaxCalendarEntryReviewer")
+  taxObligationsOverridden   TaxObligation[]     @relation("TaxObligationOverrider")
   @@map("users")
 }
 
@@ -142,6 +148,9 @@ model Firm {
   createdTaxRulePacks TaxRulePack[] @relation("TaxRulePackCreatorFirm")
   createdTaxRuleVersions TaxRuleVersion[] @relation("TaxRuleVersionCreatorFirm")
 
+  taxCalendarSources TaxCalendarSource[]
+  taxCalendars       TaxCalendar[]
+  taxCalendarEntries TaxCalendarEntry[]
   @@map("firms")
 }
 
@@ -1948,6 +1957,7 @@ model Jurisdiction {
   credentials   ProfessionalCredential[]
   settlements   TaxSettlement[]
 
+  taxCalendars TaxCalendar[]
   @@unique([code])
   @@index([parentId])
   @@index([createdByFirmId])
@@ -1977,6 +1987,7 @@ model TaxAuthority {
   sources      NormativeSource[]
   credentials  ProfessionalCredential[]
 
+  taxCalendars TaxCalendar[]
   @@unique([code])
   @@index([jurisdictionId])
   @@map("tax_authorities")
@@ -2092,6 +2103,7 @@ model TaxType {
   creditLedgerEntries TaxCreditLedgerEntry[]
   importAdapters     ImportAdapter[]
 
+  taxCalendarEntries TaxCalendarEntry[]
   @@unique([code])
   @@index([createdByFirmId])
   @@index([defaultFamilyId])
@@ -2124,6 +2136,7 @@ model TaxRegime {
   rulePacks      TaxRulePack[]
   settlements    TaxSettlement[]
 
+  taxCalendarEntries TaxCalendarEntry[]
   @@unique([code])
   @@index([taxTypeId])
   @@index([jurisdictionId])
@@ -2341,6 +2354,15 @@ model TaxObligation {
   inputAllocations TaxInputAllocation[]
   documentRequests DocumentRequest[]
 
+  calculatedDueDate         DateTime?
+  dueDateSource             TaxDueDateSource @default(MANUAL)
+  dueDateEntryId            String?
+  dueDateOverrideReason     String?
+  dueDateOverriddenByUserId String?
+  dueDateOverriddenAt       DateTime?
+  dueDateEntry              TaxCalendarEntry? @relation("TaxObligationDueDateEntry", fields: [dueDateEntryId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  dueDateOverriddenBy       User?             @relation("TaxObligationOverrider", fields: [dueDateOverriddenByUserId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  @@index([firmId, dueDate], map: "tax_obligations_firmId_dueDate_idx")
   @@unique([clientId, regimeId, periodId])
   @@index([firmId, clientId, status])
   @@index([periodId])
@@ -3724,4 +3746,140 @@ model TaxCreditMovement {
 
   @@index([firmId, clientId, lotId])
   @@map("tax_credit_movements")
+}
+
+// --- Calendarios fiscales (corte 2a-i) ---
+// Pertenecen al estudio (firmId). Cada relación tiene además una FK compuesta
+// (firmId, id) en la migración 20261115000000_tax_calendars, como en G1.
+// El índice único parcial tax_calendars_one_published_key existe solo en SQL:
+// Prisma no lo modela, así que `migrate dev` lo propondría quitar. Por eso
+// este corte no usa migrate dev.
+
+enum TaxCalendarStatus {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+}
+
+enum TaxCalendarGrouping {
+  ENDING_DIGITS
+  ALL
+  ZONE
+}
+
+enum TaxCalendarEntryReview {
+  PROPOSED
+  REVIEWED
+  FLAGGED
+}
+
+enum TaxCalendarAdjustment {
+  NONE
+  HOLIDAY
+  WEEKEND
+  NOTE
+}
+
+enum TaxDueDateSource {
+  CALENDAR
+  RULE
+  MANUAL
+}
+
+model TaxCalendarSource {
+  id               String   @id @default(uuid(7))
+  firmId           String
+  storageKey       String
+  sha256           String
+  byteSize         Int
+  mimeType         String
+  originalName     String?
+  pageCount        Int?
+  hasTextLayer     Boolean?
+  uploadedByUserId String?
+  createdAt        DateTime @default(now())
+
+  firm       Firm           @relation(fields: [firmId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  uploadedBy User?          @relation("TaxCalendarSourceUploader", fields: [uploadedByUserId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  calendars  TaxCalendar[]
+
+  @@unique([firmId, id])
+  @@unique([firmId, sha256])
+  @@map("tax_calendar_sources")
+}
+
+model TaxCalendar {
+  id                String            @id @default(uuid(7))
+  firmId            String
+  taxAuthorityId    String
+  jurisdictionId    String
+  year              Int
+  title             String
+  version           Int               @default(1)
+  status            TaxCalendarStatus @default(DRAFT)
+  sourceId          String?
+  supersedesId      String?
+  createdByUserId   String
+  publishedByUserId String?
+  publishedAt       DateTime?
+  hiddenByUserId    String?
+  hiddenAt          DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  firm         Firm               @relation(fields: [firmId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  taxAuthority TaxAuthority       @relation(fields: [taxAuthorityId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  jurisdiction Jurisdiction       @relation(fields: [jurisdictionId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  source       TaxCalendarSource? @relation(fields: [sourceId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  supersedes   TaxCalendar?       @relation("TaxCalendarVersions", fields: [supersedesId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  supersededBy TaxCalendar[]      @relation("TaxCalendarVersions")
+  createdBy    User               @relation("TaxCalendarCreator", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  publishedBy  User?              @relation("TaxCalendarPublisher", fields: [publishedByUserId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  hiddenBy     User?              @relation("TaxCalendarHider", fields: [hiddenByUserId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  entries      TaxCalendarEntry[]
+
+  @@unique([firmId, id])
+  @@unique([firmId, taxAuthorityId, jurisdictionId, year, version], map: "tax_calendars_version_key")
+  @@index([firmId, taxAuthorityId, jurisdictionId, year], map: "tax_calendars_scope_idx")
+  @@map("tax_calendars")
+}
+
+model TaxCalendarEntry {
+  id                   String                 @id @default(uuid(7))
+  firmId               String
+  calendarId           String
+  conceptLabel         String
+  taxTypeId            String?
+  regimeId             String?
+  groupingKind         TaxCalendarGrouping
+  endingDigits         String?
+  zoneCode             String?
+  referencePeriodStart DateTime?
+  referencePeriodEnd   DateTime?
+  referenceLabel       String?
+  dueDate              DateTime
+  dueDateRaw           String?
+  adjustment           TaxCalendarAdjustment @default(NONE)
+  noteRef              String?
+  noteText             String?
+  sourcePage           Int?
+  sourceBox            Json?
+  reviewState          TaxCalendarEntryReview?
+  reviewedByUserId     String?
+  reviewedAt           DateTime?
+  extraction           Json?
+  sortOrder            Int                    @default(0)
+  createdAt            DateTime               @default(now())
+
+  firm        Firm           @relation(fields: [firmId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  calendar    TaxCalendar    @relation(fields: [calendarId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  taxType     TaxType?       @relation(fields: [taxTypeId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  regime      TaxRegime?     @relation(fields: [regimeId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  reviewedBy  User?          @relation("TaxCalendarEntryReviewer", fields: [reviewedByUserId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+  obligations TaxObligation[] @relation("TaxObligationDueDateEntry")
+
+  @@unique([firmId, id])
+  @@index([firmId, calendarId], map: "tax_calendar_entries_scope_idx")
+  @@index([firmId, regimeId, dueDate], map: "tax_calendar_entries_regime_due_idx")
+  @@map("tax_calendar_entries")
 }
