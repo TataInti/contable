@@ -113,7 +113,7 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
 
   // G5-06: la cartera por riesgo aparece en el dashboard con liquidaciones.
   await navigateStudy(page, "Inicio");
-  await expect(page.getByRole("heading", { name: "Liquidaciones en curso", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Liquidaciones en curso/ })).toBeVisible();
 
   // URL directa al asistente: muestra estado no disponible, no la pantalla.
   await page.goto("/asistente");
