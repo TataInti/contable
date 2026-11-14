@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Field, Notice } from "@contable/design-system";
 import { api, ApiError } from "../lib/api";
 import { Icon } from "../ui/Icon";
 import "./login.css";
 
 export function AcceptPortalInvitation() {
-  const [params] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
-  const token = params.get("token") ?? "";
+  // El fragmento no viaja en HTTP ni aparece en el access log del servidor.
+  const token = new URLSearchParams(location.hash.slice(1)).get("token") ?? "";
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -54,7 +55,8 @@ export function AcceptPortalInvitation() {
         </p>
         {!token ? (
           <Notice tone="error">
-            El enlace de invitación está incompleto.
+            El enlace de invitación está incompleto. Pedile uno nuevo a quien administra el
+            estudio.
           </Notice>
         ) : (
           <form className="login__form" onSubmit={submit}>
