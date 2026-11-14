@@ -125,9 +125,9 @@ export interface TableColumn {
 export type TableCell = string | number | Date | null;
 
 export interface TableTotals {
-  /** Va en la primera columna. */
+  /** Va en la primera columna que no tiene total (la primera, si todas lo tienen). */
   label: string;
-  /** Un valor por columna. values[0] se ignora porque ahí va la etiqueta. */
+  /** values[i] es el total de la columna i; null deja la celda vacía. */
   values: TableCell[];
 }
 
@@ -208,6 +208,15 @@ function csvText(value: TableCell, column: TableColumn): string {
   return column.kind === "integer" ? text : trimDecimals(text, 2);
 }
 
+/** Columna de la etiqueta de totales: la primera sin total (la primera, si todas lo tienen). */
+function labelColumnIndex(count: number, totals: TableTotals): number {
+  for (let index = 0; index < count; index += 1) {
+    const value = totals.values[index] ?? null;
+    if (value === null || value === "") return index;
+  }
+  return 0;
+}
+
 function sheetXml(columns: readonly TableColumn[], rows: readonly TableCell[][], totals?: TableTotals): string {
   const lines: string[] = [];
   const header = columns.map(
@@ -224,9 +233,10 @@ function sheetXml(columns: readonly TableColumn[], rows: readonly TableCell[][],
   });
   if (totals) {
     const number = rows.length + 2;
+    const labelIndex = labelColumnIndex(columns.length, totals);
     const cells = columns.map((column, index) => {
       const ref = `${columnLetters(index)}${number}`;
-      if (index === 0) {
+      if (index === labelIndex) {
         return `<c r="${ref}" s="${TABLE_TOTAL_LABEL_STYLE}" t="inlineStr"><is><t>${xml(totals.label)}</t></is></c>`;
       }
       const value = totals.values[index] ?? null;
@@ -280,7 +290,8 @@ export function tableCsv(
   ];
   const totals = options.totals;
   if (totals) {
-    lines.push(columns.map((column, index) => (index === 0 ? totals.label : csvText(totals.values[index] ?? null, column))));
+    const labelIndex = labelColumnIndex(columns.length, totals);
+    lines.push(columns.map((column, index) => (index === labelIndex ? totals.label : csvText(totals.values[index] ?? null, column))));
   }
   const text = lines.map((line) => line.map(csvCell).join(",")).join("\r\n");
   return Buffer.from(`\uFEFF${text}`, "utf8");
