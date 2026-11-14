@@ -92,6 +92,12 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
 
   // Rentabilidad necesita período: se elige en la barra de la propia pantalla.
   await navigateStudy(page, "Rentabilidad");
+  // Los períodos del cliente llegan después de abrir la pantalla.
+  const periodOptions = page
+    .locator("#context-bar")
+    .getByRole("combobox", { name: /^Período/ })
+    .locator("option");
+  await expect.poll(() => periodOptions.count()).toBeGreaterThan(1);
   await ensureStudyContext(page);
   await expect(page.getByRole("heading", { name: "Rentabilidad", exact: true })).toBeVisible();
 
