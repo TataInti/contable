@@ -7,6 +7,7 @@ import { calculationLabel } from "../etiquetas";
 import { formatDate, formatMoney } from "../formato";
 import type { PositionAction, TaxPosition, WorkpaperCalculationComponent } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
+import { pluralizar } from "../textos";
 
 export interface EtapaCalculoProps {
   capabilities: ReadonlySet<string>;
@@ -124,7 +125,14 @@ export function EtapaCalculo({
                       </p>
                     ) : null}
                     <details className="workpaper-calculation__trace">
-                      <summary>Ver {component.settlement.lines.length} línea(s) de cálculo</summary>
+                      <summary>
+                        Ver{" "}
+                        {pluralizar(
+                          component.settlement.lines.length,
+                          "línea de cálculo",
+                          "líneas de cálculo",
+                        )}
+                      </summary>
                       <Table<(typeof component.settlement.lines)[number]>
                         rows={component.settlement.lines}
                         rowKey={(line) => line.id}

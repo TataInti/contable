@@ -180,7 +180,7 @@ describe("Legajo · etapa Fuentes (K10)", () => {
     renderLegajo();
     await importarLoteDemo();
     expect(
-      await screen.findByText(/El lote quedó validado con 2 fila\(s\) observadas/),
+      await screen.findByText(/El lote quedó validado con 2 filas observadas/),
     ).toBeInTheDocument();
     expect(llamadasA("/commit")).toHaveLength(0);
   });

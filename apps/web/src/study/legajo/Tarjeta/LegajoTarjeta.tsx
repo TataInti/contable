@@ -6,6 +6,7 @@ import { StatusBadge } from "../../../ui/StatusBadge";
 import { WORKPAPER_STEPS } from "../etiquetas";
 import { selfReviewNote } from "../formato";
 import type { Workpaper } from "../tipos";
+import { pluralizar } from "../textos";
 
 interface LegajoTarjetaProps {
   wp: Workpaper;
@@ -48,7 +49,7 @@ export function LegajoTarjeta({
         </div>
         {bloqueantes.length > 0 ? (
           <span className="workpaper-card__blocking">
-            {bloqueantes.length} control(es) bloqueante(s)
+            {pluralizar(bloqueantes.length, "control bloqueante", "controles bloqueantes")}
           </span>
         ) : null}
       </div>

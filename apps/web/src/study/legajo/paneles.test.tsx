@@ -208,7 +208,7 @@ describe("Legajo · libros IVA (K4)", () => {
       ),
     );
     expect(
-      await screen.findByText(/Se importaron 2 comprobante\(s\) de ventas \(Demo ventas\)/),
+      await screen.findByText(/Se importaron 2 comprobantes de ventas \(Demo ventas\)/),
     ).toBeInTheDocument();
   });
 

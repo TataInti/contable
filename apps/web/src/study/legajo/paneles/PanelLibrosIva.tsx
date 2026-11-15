@@ -8,6 +8,7 @@ import { importarLoteFuente, ladoDeLibroIva } from "../loteFuente";
 import { SifereAnalysisPanel } from "../SifereAnalysisPanel";
 import type { SifereAnalysis, WorkpaperSource } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
+import { pluralizar } from "../textos";
 
 type Lado = "SALE" | "PURCHASE";
 
@@ -107,7 +108,7 @@ export function PanelLibrosIva({
     onSuccess: (data) => {
       limpiarPanel();
       notify.success(
-        `Se importaron ${data.batch.committed} comprobante(s) de ${data.analysis.direction === "SALE" ? "ventas" : "compras"} (${data.analysis.sheetName}). Quedaron asociados al cliente y al período activo.`,
+        `${data.batch.committed === 1 ? "Se importó" : "Se importaron"} ${pluralizar(data.batch.committed, "comprobante", "comprobantes")} de ${data.analysis.direction === "SALE" ? "ventas" : "compras"} (${data.analysis.sheetName}). ${data.batch.committed === 1 ? "Quedó asociado" : "Quedaron asociados"} al cliente y al período activo.`,
       );
       invalidarCobertura();
     },

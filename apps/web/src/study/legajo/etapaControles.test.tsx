@@ -666,6 +666,7 @@ describe("Legajo · Controles: motivo, lugar de las acciones y diálogo de Eximi
     await abrirEtapa(/Controles/);
     const contador = document.querySelector<HTMLElement>(".workpaper-card__blocking");
     expect(contador).not.toBeNull();
+    expect(contador!).toHaveTextContent("2 controles bloqueantes");
     expect(contador!.getAttribute("role")).toBeNull();
     expect(contador!.closest("[role='alert']")).toBeNull();
     expect(
@@ -691,5 +692,17 @@ describe("Legajo · Controles: motivo, lugar de las acciones y diálogo de Eximi
     expect(cuerpo.textContent).toContain("«Conciliación con Portal IVA»");
     expect(cuerpo.textContent).toContain("«Diferencia menor aceptada»");
     expect(cuerpo.textContent).not.toMatch(/deshac|revers|revert/i);
+  });
+});
+
+describe("Legajo · Controles: plural del contador de bloqueantes (Foco 2.7b)", () => {
+  it("con un solo control bloqueante abierto el contador dice «1 control bloqueante»", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({ controles: [bloqueante()] });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+    expect(document.querySelector(".workpaper-card__blocking")).toHaveTextContent(
+      /^1 control bloqueante$/,
+    );
   });
 });
