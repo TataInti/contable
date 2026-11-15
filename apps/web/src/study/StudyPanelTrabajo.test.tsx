@@ -8,7 +8,7 @@ import type { ClientContextValue } from "../context/ClientContext";
 import { StudyPanelTrabajo } from "./StudyPanelTrabajo";
 
 // Datos sintéticos rotulados: no son clientes ni obligaciones reales.
-const apiMock = vi.hoisted(() => ({ get: vi.fn() }));
+const apiMock = vi.hoisted(() => ({ get: vi.fn(), getEnvelope: vi.fn() }));
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 const sessionMock = vi.hoisted(() => ({ me: null as unknown }));
 
@@ -131,7 +131,8 @@ function renderPanel(ruta = "/panel-trabajo") {
 }
 
 const ubicacion = () => screen.getByTestId("ubicacion").textContent ?? "";
-const rutasPedidas = (): string[] => apiMock.get.mock.calls.map((llamada) => String(llamada[0]));
+const rutasPedidas = (): string[] =>
+  apiMock.getEnvelope.mock.calls.map((llamada) => String(llamada[0]));
 const ultimaRuta = () => rutasPedidas()[rutasPedidas().length - 1] ?? "";
 const valorIndicador = (etiqueta: string) =>
   screen
@@ -141,6 +142,7 @@ const tablaPanel = () => screen.findByRole("table", { name: "Panel de trabajo" }
 
 beforeEach(() => {
   apiMock.get.mockReset();
+  apiMock.getEnvelope.mockReset();
   sessionMock.me = {
     userId: USUARIO,
     firms: [
@@ -148,7 +150,7 @@ beforeEach(() => {
     ],
   };
   contextMock.current = contexto();
-  apiMock.get.mockResolvedValue(respuesta([fila()]));
+  apiMock.getEnvelope.mockResolvedValue(respuesta([fila()]));
 });
 
 afterEach(() => cleanup());
@@ -187,14 +189,14 @@ describe("Panel de trabajo: pantalla", () => {
   });
 
   it("muestra la carga mientras llega la respuesta, con los indicadores en «pendiente»", () => {
-    apiMock.get.mockReturnValue(new Promise(() => {}));
+    apiMock.getEnvelope.mockReturnValue(new Promise(() => {}));
     renderPanel();
     expect(screen.getByText("Cargando el panel de trabajo…")).toBeTruthy();
     expect(valorIndicador("Vencidas")).toBe("pendiente");
   });
 
   it("muestra el error de la API con «Reintentar» y recupera los datos", async () => {
-    apiMock.get.mockRejectedValueOnce({
+    apiMock.getEnvelope.mockRejectedValueOnce({
       code: "INTERNAL",
       message: "Falló la lectura del panel",
       status: 500,
@@ -207,7 +209,7 @@ describe("Panel de trabajo: pantalla", () => {
   });
 
   it("ante el tope de 5.000 obligaciones muestra el mensaje de la API y la acción de acotar", async () => {
-    apiMock.get.mockRejectedValueOnce({
+    apiMock.getEnvelope.mockRejectedValueOnce({
       code: "TAX_PANEL_TOO_MANY_OBLIGATIONS",
       message:
         "Hay más de 5.000 obligaciones con estos filtros: acotá el rango de vencimiento o el responsable",
@@ -221,7 +223,7 @@ describe("Panel de trabajo: pantalla", () => {
   });
 
   it("vacío confirmado con salida a la configuración (P1)", async () => {
-    apiMock.get.mockResolvedValue(respuesta([]));
+    apiMock.getEnvelope.mockResolvedValue(respuesta([]));
     renderPanel();
     expect(await screen.findByText("No hay obligaciones para mostrar")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Configurar obligaciones" }));
@@ -229,7 +231,7 @@ describe("Panel de trabajo: pantalla", () => {
   });
 
   it("sin coincidencias con filtros activos ofrece quitarlos", async () => {
-    apiMock.get.mockResolvedValue(respuesta([]));
+    apiMock.getEnvelope.mockResolvedValue(respuesta([]));
     renderPanel("/panel-trabajo?responsable=todos&estado=DJ_PENDIENTE");
     expect(await screen.findByText("Ninguna obligación coincide con los filtros")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Quitar filtros" }).length).toBeGreaterThan(1);
@@ -239,7 +241,7 @@ describe("Panel de trabajo: pantalla", () => {
     contextMock.current = contexto({ capabilities: new Set() });
     renderPanel();
     expect(await screen.findByText("Sin acceso al panel de trabajo")).toBeTruthy();
-    expect(apiMock.get).not.toHaveBeenCalled();
+    expect(apiMock.getEnvelope).not.toHaveBeenCalled();
     expect(screen.getAllByText("restringido")).toHaveLength(4);
   });
 
@@ -249,7 +251,7 @@ describe("Panel de trabajo: pantalla", () => {
   });
 
   it("muestra los nombres que llegan y, sin ninguno visible, la cantidad de responsables", async () => {
-    apiMock.get.mockResolvedValue(
+    apiMock.getEnvelope.mockResolvedValue(
       respuesta([
         fila({
           obligationId: "a",
@@ -275,7 +277,7 @@ describe("Panel de trabajo: pantalla", () => {
   });
 
   it("cuenta vencidas, vencen esta semana, sin legajo y DJ pendientes sobre las filas filtradas", async () => {
-    apiMock.get.mockResolvedValue(
+    apiMock.getEnvelope.mockResolvedValue(
       respuesta([
         fila({ obligationId: "a", daysUntilDue: -2, djState: "DJ_PENDIENTE" }),
         fila({ obligationId: "b", daysUntilDue: 3, djState: "SIN_LEGAJO" }),
@@ -292,24 +294,20 @@ describe("Panel de trabajo: pantalla", () => {
   });
 
   it("«Abrir cliente» con período contable elige el período y va al Legajo", async () => {
-    apiMock.get.mockImplementation(async (ruta: string) =>
-      ruta.includes("/fiscal-years")
-        ? [
-            {
-              id: "ejercicio-demo",
-              label: "2026",
-              periods: [
-                {
-                  id: "contable-oct",
-                  startDate: "2026-10-01",
-                  endDate: "2026-10-31",
-                  status: "OPEN",
-                },
-              ],
-            },
-          ]
-        : respuesta([fila()]),
-    );
+    apiMock.get.mockResolvedValue([
+      {
+        id: "ejercicio-demo",
+        label: "2026",
+        periods: [
+          {
+            id: "contable-oct",
+            startDate: "2026-10-01",
+            endDate: "2026-10-31",
+            status: "OPEN",
+          },
+        ],
+      },
+    ]);
     const contextoPrueba = contexto();
     contextMock.current = contextoPrueba;
     renderPanel();
@@ -320,9 +318,7 @@ describe("Panel de trabajo: pantalla", () => {
   });
 
   it("«Abrir cliente» sin período contable va al Resumen del cliente", async () => {
-    apiMock.get.mockImplementation(async (ruta: string) =>
-      ruta.includes("/fiscal-years") ? [] : respuesta([fila()]),
-    );
+    apiMock.get.mockResolvedValue([]);
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: `Abrir cliente ${CLIENTE}` }));
     await waitFor(() => expect(ubicacion()).toBe("/resumen-cliente"));
@@ -335,7 +331,7 @@ describe("Panel de trabajo: pantalla", () => {
         { firmId: FIRMA, firmName: "Estudio Demo", role: "OWNER", capabilities: [], clients: [] },
       ],
     };
-    apiMock.get.mockImplementation(async (ruta: string) =>
+    apiMock.getEnvelope.mockImplementation(async (ruta: string) =>
       ruta.includes("responsable=me") ? respuesta([]) : respuesta([fila()]),
     );
     renderPanel();
@@ -349,7 +345,7 @@ describe("Panel de trabajo: pantalla", () => {
   });
 
   it("«Cargar más» pide la página siguiente y el pie cuenta filas de obligaciones", async () => {
-    apiMock.get.mockImplementation(async (ruta: string) =>
+    apiMock.getEnvelope.mockImplementation(async (ruta: string) =>
       ruta.includes("offset=1")
         ? respuesta([fila({ obligationId: "b", clientName: "Cliente Demo 2" })], {
             total: 2,

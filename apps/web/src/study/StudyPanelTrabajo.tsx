@@ -78,7 +78,7 @@ export function StudyPanelTrabajo() {
   const consulta = useInfiniteQuery({
     queryKey: ["panel-trabajo", firmId, escribirFiltros(filtros).toString()],
     queryFn: ({ pageParam }) =>
-      api.get<TaxPanelResponse>(
+      api.getEnvelope<TaxPanelResponse>(
         rutaObligaciones(firmId ?? "", filtros, { offset: pageParam, limit: PANEL_PAGE_SIZE }),
       ),
     initialPageParam: 0,
