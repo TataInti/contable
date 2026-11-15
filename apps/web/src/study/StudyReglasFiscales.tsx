@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, ConfirmDialog, EmptyState, MoneyField, Table, useConfirmAction, useNotify } from "@contable/design-system";
+import { Button, ConfirmDialog, EmptyState, useConfirmAction, useNotify } from "@contable/design-system";
 import {
-  MONOTRIBUTO_CATEGORY_CODES,
   type CatalogEconomicActivity,
   type TaxRuleKindOption,
 } from "@contable/contracts";
@@ -22,7 +21,7 @@ import type {
   RuleStatus,
   RuleVersion,
 } from "./reglas/tipos";
-import { sameRuleRows, shortDate, today } from "./reglas/utilidades";
+import { sameRuleRows, today } from "./reglas/utilidades";
 import { ListaPaquetes } from "./reglas/ListaPaquetes";
 import { PanelNuevoPaquete } from "./reglas/paneles/PanelNuevoPaquete";
 import { PanelVencimiento } from "./reglas/paneles/PanelVencimiento";
@@ -30,7 +29,11 @@ import { PanelFuente } from "./reglas/paneles/PanelFuente";
 import { PanelPrimeraVersion } from "./reglas/paneles/PanelPrimeraVersion";
 import { PanelModificarAlicuotas } from "./reglas/paneles/PanelModificarAlicuotas";
 import { ConfirmarActivacion } from "./reglas/ConfirmarActivacion";
-import { getStatusBadgeMeta, StatusBadge } from "../ui/StatusBadge";
+import { TabVencimientos } from "./reglas/TabVencimientos";
+import { TabFuentes } from "./reglas/TabFuentes";
+import { TabControlProfesional } from "./reglas/TabControlProfesional";
+import { ResumenVersion } from "./reglas/ResumenVersion";
+import { AlicuotasEditor } from "./reglas/AlicuotasEditor";
 import { Icon } from "../ui/Icon";
 import {
   DenseAlert,
@@ -181,8 +184,6 @@ export function StudyReglasFiscales() {
     detailQuery.data.status === "DRAFT" &&
     detailQuery.data.versions.every((version) => version.status === "DRAFT"),
   );
-  // Los campos de cada regla se nombran por su posición, no por un identificador interno.
-  const rowNumber = (row: { id: string }) => draftRows.findIndex((item) => item.id === row.id) + 1;
   // Primer aviso: explica qué se pierde. El cajón que sigue muestra el impacto real
   // y pide escribir el nombre, así que borrar un paquete son dos confirmaciones.
   const requestPackDeletion = () => {
@@ -216,12 +217,6 @@ export function StudyReglasFiscales() {
     void queryClient.invalidateQueries({ queryKey: ["tax-rule-pack", selectedPackId] });
   };
 
-  const updateDraftRule = (ruleId: string, changes: Partial<RuleRow>) => {
-    setDraftRows((rows) => rows.map((row) => row.id === ruleId ? { ...row, ...changes } : row));
-    setRowFieldErrors((previous) => Object.fromEntries(
-      Object.entries(previous).filter(([key]) => !key.startsWith(`${ruleId}.`)),
-    ));
-  };
 
   const cloneMutation = useMutation({
     mutationFn: () => api.post(`/tax/rule-packs/${selectedPackId}/versions/clone`, { validFrom }),
@@ -647,108 +642,22 @@ export function StudyReglasFiscales() {
           ) : null}
           {detailQuery.data && selectedVersion ? (
             <>
-              <section className="study-panel fiscal-rule-summary fiscal-rule-context">
-                <div className="study-panel__heading">
-                  <div>
-                    <p className="fiscal-rule-context__regime">
-                      {detailQuery.data.regime.taxType.name}{!detailQuery.data.regime.taxType.isActive ? " (oculto)" : ""} ·{" "}
-                      {detailQuery.data.regime.jurisdiction.name}{!detailQuery.data.regime.jurisdiction.isActive ? " (oculto)" : ""}
-                    </p>
-                    <h2>{detailQuery.data.name}</h2>
-                    <p>
-                      {detailQuery.data.code} · Régimen {detailQuery.data.regime.name}{!detailQuery.data.regime.isActive ? " (oculto)" : ""} · Organismo recaudador {detailQuery.data.regime.authority.name}{!detailQuery.data.regime.authority.isActive ? " (oculto)" : ""}
-                    </p>
-                  </div>
-                  <div className="table-actions">
-                    <StatusBadge status={selectedVersion.status} />
-                    {canActivateSelectedVersion ? (
-                      <Button
-                        size="sm"
-                        loading={activateMutation.isPending}
-                        onClick={() => requestActivation(selectedVersion)}
-                      >
-                        Activar
-                      </Button>
-                    ) : null}
-                    {canDeleteVersion ? (
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => {
-                          if (firmId) {
-                            setDeletingTarget({
-                              path: `/firms/${firmId}/tax/rule-versions/${selectedVersion.id}`,
-                              kind: "version",
-                            });
-                          }
-                        }}
-                      >
-                        Eliminar borrador v{selectedVersion.version}
-                      </Button>
-                    ) : null}
-                    {canDeletePack ? (
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={requestPackDeletion}
-                      >
-                        Eliminar paquete
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="fiscal-rule-summary__meta">
-                  {detailQuery.data.versions.length > 1 ? (
-                    <label className="ds-field">
-                      <span className="ds-field__label">Versión del paquete</span>
-                      <select
-                        className="ds-field__input"
-                        aria-label="Versión del paquete"
-                        value={selectedVersion.id}
-                        onChange={(event) => setSelectedVersionId(event.target.value)}
-                      >
-                        {detailQuery.data.versions.map((version) => (
-                          <option key={version.id} value={version.id}>
-                            v{version.version} · {getStatusBadgeMeta(version.status).label} · {shortDate(version.validFrom)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  <span>
-                    Régimen <strong>{detailQuery.data.regime.name}</strong>
-                  </span>
-                  <span>
-                    {selectedVersion.status === "DRAFT" ? "Editando borrador" : "Versión"}{" "}
-                    <strong>v{selectedVersion.version}</strong>
-                  </span>
-                  {selectedVersion.status === "DRAFT" && activeVersion ? (
-                    <span>
-                      Versión activa <strong>v{activeVersion.version}</strong>
-                    </span>
-                  ) : null}
-                  <span>
-                    Vigencia{" "}
-                    <strong>
-                      {shortDate(selectedVersion.validFrom)} — {shortDate(selectedVersion.validTo)}
-                    </strong>
-                  </span>
-                  <span>
-                    Motor <strong>{selectedVersion.engineVersion}</strong>
-                  </span>
-                </div>
-                {activationError ? (
-                  <div ref={activationFeedbackRef} className="activation-feedback" tabIndex={-1}>
-                    {activationError instanceof ApiError ? (
-                      <FieldErrorsFromDetails error={activationError} />
-                    ) : (
-                      <p className="form-error" role="alert">
-                        {activationError.message}
-                      </p>
-                    )}
-                  </div>
-                ) : null}
-              </section>
+              <ResumenVersion
+                detail={detailQuery.data}
+                selectedVersion={selectedVersion}
+                canActivateSelectedVersion={canActivateSelectedVersion}
+                activateMutation={activateMutation}
+                requestActivation={requestActivation}
+                canDeleteVersion={canDeleteVersion}
+                canDeletePack={canDeletePack}
+                firmId={firmId}
+                setDeletingTarget={setDeletingTarget}
+                requestPackDeletion={requestPackDeletion}
+                setSelectedVersionId={setSelectedVersionId}
+                activeVersion={activeVersion}
+                activationError={activationError}
+                activationFeedbackRef={activationFeedbackRef}
+              />
 
               <DenseTabs<"rates" | "dueDates" | "sources" | "approval" | "simulate">
                 label="Secciones de la versión"
@@ -765,354 +674,24 @@ export function StudyReglasFiscales() {
               />
               <div role="tabpanel" id="rule-tab-panel" className="dense-tabpanel">
               {ruleTab === "rates" ? (
-              <section className="study-panel" aria-labelledby="rule-rates-title">
-                <div className="study-panel__heading">
-                  <div>
-                    <h2 id="rule-rates-title">Alícuotas y porcentajes</h2>
-                    <p>
-                      Elegí el tipo y el sujeto desde los catálogos del régimen. Concepto identifica
-                      la regla para el estudio y es opcional.
-                    </p>
-                    {canStartNewVersion && regimeMissingFamily ? (
-                      <p className="muted-copy">
-                        Este régimen no tiene familia de cálculo, así que no se puede abrir una
-                        versión nueva ni calcular con él. Asignale una familia en Catálogos fiscales.
-                      </p>
-                    ) : canStartNewVersion ? (
-                      <p className="muted-copy">
-                        Esta versión es de sólo lectura porque ya se usa para calcular. Para cambiar
-                        valores se abre un borrador nuevo; la versión actual sigue aplicando hasta
-                        que actives la nueva.
-                      </p>
-                    ) : null}
-                  </div>
-                  {editable ? (
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        setDraftRows((rows) => [
-                          ...rows,
-                          {
-                            id: crypto.randomUUID(),
-                            concept: "",
-                            kindId: null,
-                            activityId: null,
-                            categoryCode: null,
-                            isDefault: false,
-                            activityCode: null,
-                            jurisdictionId: null,
-                            rate: null,
-                            minAmount: null,
-                            validFrom,
-                            validTo: null,
-                          },
-                        ])
-                      }
-                    >
-                      <Icon name="plus" size={15} /> Agregar regla
-                    </Button>
-                  ) : canStartNewVersion && regimeMissingFamily ? (
-                    <a
-                      className="dense-link"
-                      href={`/catalogos-fiscales?editRegime=${encodeURIComponent(detailQuery.data?.regime.id ?? "")}`}
-                    >
-                      Asignar familia de cálculo
-                    </a>
-                  ) : canStartNewVersion ? (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        cloneMutation.reset();
-                        setShowCloneForm(true);
-                      }}
-                    >
-                      Modificar alícuotas
-                    </Button>
-                  ) : null}
-                </div>
-                <Table<RuleRow>
-                  rows={editable ? draftRows : selectedVersion.rateRules}
-                  rowKey={(row) => row.id}
-                  empty="Esta versión no tiene alícuotas configuradas."
-                  columns={[
-                    {
-                      key: "concept",
-                      header: "Concepto",
-                      render: (row) =>
-                        editable ? (
-                          <input
-                            className="fiscal-rule-input fiscal-rule-input--concept"
-                            aria-label={`Concepto de la fila ${rowNumber(row)}`}
-                            value={row.concept}
-                            placeholder="Etiqueta opcional"
-                            onChange={(event) => updateDraftRule(row.id, { concept: event.target.value })}
-                          />
-                        ) : (
-                          row.concept
-                        ),
-                    },
-                    {
-                      key: "kind",
-                      header: "Tipo de regla",
-                      render: (row) => {
-                        const kinds = ruleKindsQuery.data ?? [];
-                        const currentKind = kinds.find((kind) => kind.id === row.kindId);
-                        if (!editable) return currentKind?.label ?? "Tipo sin resolver";
-                        const error = rowFieldErrors[`${row.id}.kindId`];
-                        return (
-                          <div>
-                            <select
-                              className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Tipo de regla de la fila ${rowNumber(row)}`}
-                              aria-invalid={Boolean(error)}
-                              value={row.kindId ?? ""}
-                              onChange={(event) => updateDraftRule(row.id, {
-                                kindId: event.target.value || null,
-                                activityId: null,
-                                activityCode: null,
-                                jurisdictionId: null,
-                                categoryCode: null,
-                                isDefault: false,
-                              })}
-                            >
-                              <option value="">Seleccioná un tipo…</option>
-                              {kinds.map((kind) => <option key={kind.id} value={kind.id}>{kind.label}</option>)}
-                            </select>
-                            {error ? <p className="fiscal-rule-row-error" role="alert">{error}</p> : null}
-                          </div>
-                        );
-                      },
-                    },
-                    ...((ruleKindsQuery.data ?? []).some((option) => option.subject === "ACTIVITY" || option.subject === "ACTIVITY_OR_DEFAULT") ? [{
-                      key: "activity",
-                      header: "Actividad",
-                      render: (row: RuleRow) => {
-                        const kind = (ruleKindsQuery.data ?? []).find((option) => option.id === row.kindId);
-                        if (kind?.subject !== "ACTIVITY_OR_DEFAULT" && kind?.subject !== "ACTIVITY") return "—";
-                        if (!editable) {
-                          const currentActivity = (activitiesQuery.data ?? []).find(
-                            (activity) => activity.id === row.activityId,
-                          );
-                          return row.activityId
-                            ? `${currentActivity?.code ?? row.activityCode ?? "Actividad"}${currentActivity && !currentActivity.isActive ? " (oculta)" : ""}`
-                            : row.isDefault ? "Todas las actividades" : row.activityCode ?? "Sin actividad específica";
-                        }
-                        // La opción actual oculta o ajena a la jurisdicción se
-                        // conserva como lectura deshabilitada; para elegirla
-                        // nuevamente hay que mostrarla en el catálogo.
-                        const packJurisdictionId = detailQuery.data?.regime.jurisdiction.id;
-                        const catalogActivities = activitiesQuery.data ?? [];
-                        const options = catalogActivities.filter(
-                          (activity) =>
-                            activity.isActive &&
-                            (!packJurisdictionId || activity.jurisdictionId === packJurisdictionId),
-                        );
-                        const currentCode = row.activityCode ?? "";
-                        const currentActivity = catalogActivities.find(
-                          (activity) => activity.id === row.activityId,
-                        );
-                        const isLegacyCode =
-                          Boolean(row.activityId || currentCode) &&
-                          !options.some((activity) => activity.id === row.activityId);
-                        const rowError = rowFieldErrors[`${row.id}.activityId`];
-                        return (
-                          <div>
-                            <select
-                              className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Actividad de la fila ${rowNumber(row)}`}
-                              aria-invalid={Boolean(rowError)}
-                                  value={row.isDefault && kind.subject === "ACTIVITY_OR_DEFAULT" ? "__all__" : row.activityId ?? row.activityCode ?? ""}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                const selected = options.find((activity) => activity.id === value);
-                                updateDraftRule(row.id, {
-                                  activityId: selected?.id ?? null,
-                                  activityCode: selected?.code ?? null,
-                                  isDefault: kind.subject === "ACTIVITY_OR_DEFAULT" && value === "__all__",
-                                });
-                              }}
-                            >
-                              <option value="">{kind.subject === "ACTIVITY" ? "Sin actividad específica" : "Seleccioná una actividad…"}</option>
-                              {kind.subject === "ACTIVITY_OR_DEFAULT" ? <option value="__all__">Todas las actividades</option> : null}
-                              {options.map((activity) => (
-                                <option key={activity.id} value={activity.id}>
-                                  {activity.code} · {activity.name}
-                                </option>
-                              ))}
-                              {isLegacyCode ? (
-                                <option value={row.activityId ?? row.activityCode ?? ""} disabled>
-                                  {currentActivity && !currentActivity.isActive
-                                    ? `${row.activityCode} (oculto)`
-                                    : `${row.activityCode} — código histórico fuera de la jurisdicción del paquete`}
-                                </option>
-                              ) : null}
-                            </select>
-                            {rowError ? (
-                              <p className="fiscal-rule-row-error" role="alert">
-                                {rowError}
-                              </p>
-                            ) : null}
-                          </div>
-                        );
-                      },
-                    }] : []),
-                    ...((ruleKindsQuery.data ?? []).some((option) => option.subject === "JURISDICTION" || option.subject === "JURISDICTION_OR_DEFAULT") ? [{
-                      key: "jurisdiction",
-                      header: "Jurisdicción",
-                      render: (row: RuleRow) => {
-                        const kind = (ruleKindsQuery.data ?? []).find((option) => option.id === row.kindId);
-                        if (kind?.subject !== "JURISDICTION" && kind?.subject !== "JURISDICTION_OR_DEFAULT") return "—";
-                        const options = jurisdictionsQuery.data ?? [];
-                        const error = rowFieldErrors[`${row.id}.jurisdictionId`];
-                        const current = options.find((option) => option.id === row.jurisdictionId);
-                        if (!editable) return current?.name ?? row.jurisdictionId ?? "Sin jurisdicción";
-                        return (
-                          <div>
-                            <select
-                              className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Jurisdicción de la fila ${rowNumber(row)}`}
-                              aria-invalid={Boolean(error)}
-                              value={row.isDefault && kind.subject === "JURISDICTION_OR_DEFAULT" ? "__all__" : row.jurisdictionId ?? ""}
-                              onChange={(event) => updateDraftRule(row.id, {
-                                jurisdictionId: event.target.value && event.target.value !== "__all__" ? event.target.value : null,
-                                isDefault: event.target.value === "__all__",
-                              })}
-                            >
-                              <option value="">Seleccioná una jurisdicción…</option>
-                              {kind.subject === "JURISDICTION_OR_DEFAULT" ? <option value="__all__">Todas las jurisdicciones</option> : null}
-                              {options.filter((option) => option.isActive).map((option) => (
-                                <option key={option.id} value={option.id}>{option.name}</option>
-                              ))}
-                              {current && !current.isActive ? <option value={current.id} disabled>{current.name} (oculta)</option> : null}
-                            </select>
-                            {error ? <p className="fiscal-rule-row-error" role="alert">{error}</p> : null}
-                          </div>
-                        );
-                      },
-                    }] : []),
-                    ...((ruleKindsQuery.data ?? []).some((option) => option.subject === "CATEGORY") ? [{
-                      key: "category",
-                      header: "Categoría",
-                      render: (row: RuleRow) => {
-                        const kind = (ruleKindsQuery.data ?? []).find((option) => option.id === row.kindId);
-                        if (kind?.subject !== "CATEGORY") return "—";
-                        const error = rowFieldErrors[`${row.id}.categoryCode`];
-                        if (!editable) return row.categoryCode ?? "Sin categoría";
-                        return (
-                          <div>
-                            <select
-                              className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Categoría de la fila ${rowNumber(row)}`}
-                              aria-invalid={Boolean(error)}
-                              value={row.categoryCode ?? ""}
-                              onChange={(event) => updateDraftRule(row.id, { categoryCode: event.target.value || null })}
-                            >
-                              <option value="">Seleccioná una categoría…</option>
-                              {MONOTRIBUTO_CATEGORY_CODES.map((code) => <option key={code} value={code}>Categoría {code}</option>)}
-                            </select>
-                            {error ? <p className="fiscal-rule-row-error" role="alert">{error}</p> : null}
-                          </div>
-                        );
-                      },
-                    }] : []),
-                    {
-                      key: "rate",
-                      header: "Alícuota",
-                      align: "right",
-                      render: (row) =>
-                        editable ? (
-                          <MoneyField
-                            className="fiscal-rule-input fiscal-rule-input--number"
-                            aria-label={`Alícuota de la fila ${rowNumber(row)}`}
-                            prefix="%"
-                            maxDecimals={4}
-                            value={row.rate ?? ""}
-                            onChange={(value) =>
-                              setDraftRows((rows) =>
-                                rows.map((item) =>
-                                  item.id === row.id
-                                    ? { ...item, rate: value || null }
-                                    : item,
-                                ),
-                              )
-                            }
-                          />
-                        ) : row.rate ? (
-                          `${row.rate}%`
-                        ) : (
-                          "—"
-                        ),
-                    },
-                    {
-                      key: "minimum",
-                      header: "Mínimo",
-                      align: "right",
-                      render: (row) =>
-                        editable ? (
-                          <MoneyField
-                            className="fiscal-rule-input fiscal-rule-input--number"
-                            aria-label={`Mínimo de la fila ${rowNumber(row)}`}
-                            value={row.minAmount ?? ""}
-                            onChange={(value) =>
-                              setDraftRows((rows) =>
-                                rows.map((item) =>
-                                  item.id === row.id
-                                    ? { ...item, minAmount: value || null }
-                                    : item,
-                                ),
-                              )
-                            }
-                          />
-                        ) : (
-                          (row.minAmount ?? "—")
-                        ),
-                    },
-                    {
-                      key: "actions",
-                      header: "",
-                      render: (row) =>
-                        editable ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              setDraftRows((rows) => rows.filter((item) => item.id !== row.id))
-                            }
-                          >
-                            Quitar
-                          </Button>
-                        ) : null,
-                    },
-                  ]}
-                />
-                {editable ? (
-                  <div className="study-page__actions fiscal-rule-actions">
-                    <Button
-                      onClick={() => {
-                        const missingKindRows = draftRows.filter((row) => !row.kindId);
-                        if (missingKindRows.length > 0) {
-                          setRowFieldErrors(Object.fromEntries(missingKindRows.map((row) => [
-                            `${row.id}.kindId`, "Seleccioná un tipo de regla.",
-                          ])));
-                          return;
-                        }
-                        saveMutation.mutate();
-                      }}
-                      loading={saveMutation.isPending}
-                      disabled={draftRows.some(
-                        (row) => !row.rate && !row.minAmount,
-                      )}
-                    >
-                      Guardar borrador
-                    </Button>
-                  </div>
-                ) : null}
-                {editable && draftRows.some((row) => !row.rate && !row.minAmount) ? (
-                  <p className="form-submit-hint" role="note">
-                    Completá la tasa, cuota o importe de cada fila para guardar el borrador.
-                  </p>
-                ) : null}
-              </section>
+              <AlicuotasEditor
+                editable={editable}
+                canStartNewVersion={canStartNewVersion}
+                regimeMissingFamily={regimeMissingFamily}
+                detailQuery={detailQuery}
+                selectedVersion={selectedVersion}
+                validFrom={validFrom}
+                setShowCloneForm={setShowCloneForm}
+                cloneMutation={cloneMutation}
+                draftRows={draftRows}
+                setDraftRows={setDraftRows}
+                rowFieldErrors={rowFieldErrors}
+                setRowFieldErrors={setRowFieldErrors}
+                ruleKindsQuery={ruleKindsQuery}
+                activitiesQuery={activitiesQuery}
+                jurisdictionsQuery={jurisdictionsQuery}
+                saveMutation={saveMutation}
+              />
               ) : null}
               {ruleTab === "simulate" ? (
                 <RuleSimulator
@@ -1125,145 +704,32 @@ export function StudyReglasFiscales() {
                 />
               ) : null}
               {ruleTab === "dueDates" ? (
-              <section className="study-panel" aria-labelledby="rule-due-dates-title">
-                <div className="study-panel__heading">
-                  <div>
-                    <h2 id="rule-due-dates-title">Vencimientos</h2>
-                    <p>Reglas usadas para calcular fechas de presentación y pago.</p>
-                  </div>
-                  {editable ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setShowDueDateForm((visible) => !visible)}
-                    >
-                      {showDueDateForm ? "Cancelar" : "Agregar vencimiento"}
-                    </Button>
-                  ) : null}
-                </div>
-                <Table<RuleVersion["dueDateRules"][number]>
-                  rows={selectedVersion.dueDateRules}
-                  rowKey={(row) => row.id}
-                  empty="No hay vencimientos cargados para esta versión."
-                  columns={[
-                    {
-                      key: "frequency",
-                      header: "Frecuencia",
-                      render: (row) => row.frequency ?? "—",
-                    },
-                    { key: "dueDay", header: "Día", render: (row) => String(row.dueDay) },
-                    {
-                      key: "cuitEnding",
-                      header: "CUIT",
-                      render: (row) => row.cuitEnding ?? "Todas",
-                    },
-                    {
-                      key: "validFrom",
-                      header: "Vigencia",
-                      render: (row) => `${shortDate(row.validFrom)} — ${shortDate(row.validTo)}`,
-                    },
-                  ]}
-                />
-              </section>
+              <TabVencimientos
+                editable={editable}
+                showDueDateForm={showDueDateForm}
+                setShowDueDateForm={setShowDueDateForm}
+                selectedVersion={selectedVersion}
+              />
               ) : null}
               {ruleTab === "sources" ? (
-              <section className="study-panel" aria-labelledby="rule-sources-title">
-                <div className="study-panel__heading">
-                  <div>
-                    <h2 id="rule-sources-title">Fuentes normativas</h2>
-                    <p>Resoluciones, padrones o normas que respaldan esta versión.</p>
-                  </div>
-                  {editable ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setShowSourceForm((visible) => !visible)}
-                    >
-                      {showSourceForm ? "Cancelar" : "Agregar fuente"}
-                    </Button>
-                  ) : null}
-                </div>
-                <Table<RuleVersion["sources"][number]>
-                  rows={selectedVersion.sources}
-                  rowKey={(row) => row.id}
-                  empty="No hay fuentes normativas asociadas a esta versión."
-                  columns={[
-                    { key: "title", header: "Fuente", render: (row) => row.title },
-                    {
-                      key: "reference",
-                      header: "Referencia",
-                      render: (row) => row.reference ?? "—",
-                    },
-                    {
-                      key: "consultedAt",
-                      header: "Consultada",
-                      render: (row) => shortDate(row.consultedAt),
-                    },
-                  ]}
-                />
-              </section>
+              <TabFuentes
+                editable={editable}
+                showSourceForm={showSourceForm}
+                setShowSourceForm={setShowSourceForm}
+                selectedVersion={selectedVersion}
+              />
               ) : null}
               {ruleTab === "approval" ? (
-              <section id="rule-approval" className="study-panel fiscal-rule-approval">
-                <div>
-                  <h2>Flujo de revisión anterior</h2>
-                  <p>
-                    La activación directa es el recorrido principal. Las versiones históricas pueden
-                    conservar revisión profesional; las versiones activas siguen siendo inmutables.
-                  </p>
-                </div>
-                <div className="fiscal-rule-approval__actions">
-                  {selectedVersion.status === "DRAFT" && canPropose ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => submitMutation.mutate()}
-                      loading={submitMutation.isPending}
-                    >
-                      Enviar a revisión (flujo anterior)
-                    </Button>
-                  ) : null}
-                  {selectedVersion.status === "IN_REVIEW" &&
-                  capabilities.has("tax.rules.approve") ? (
-                    <>
-                      <select
-                        className="ds-field__input"
-                        aria-label="Matrícula para aprobar"
-                        value={credentialId}
-                        onChange={(event) => setCredentialId(event.target.value)}
-                      >
-                        <option value="">Seleccioná matrícula…</option>
-                        {credentialQuery.data?.map((credential) => (
-                          <option key={credential.id} value={credential.id}>
-                            {credential.registrationNumber} · {credential.jurisdiction.name}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        disabled={!credentialId}
-                        loading={approveMutation.isPending}
-                        onClick={() => approveMutation.mutate()}
-                      >
-                        Aprobar
-                      </Button>
-                      {!credentialId ? (
-                        <p className="form-submit-hint" role="note">
-                          Seleccioná la matrícula profesional para habilitar la aprobación.
-                        </p>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
-                {selectedVersion.sources.length > 0 ? (
-                  <p className="fiscal-rule-approval__sources">
-                    Fuentes:{" "}
-                    {selectedVersion.sources
-                      .map((source) => source.reference || source.title)
-                      .join(" · ")}
-                  </p>
-                ) : (
-                  <p className="fiscal-rule-approval__sources">Sin fuente normativa cargada.</p>
-                )}
-              </section>
+              <TabControlProfesional
+                selectedVersion={selectedVersion}
+                canPropose={canPropose}
+                submitMutation={submitMutation}
+                capabilities={capabilities}
+                credentialId={credentialId}
+                setCredentialId={setCredentialId}
+                credentialQuery={credentialQuery}
+                approveMutation={approveMutation}
+              />
               ) : null}
               </div>
             </>
