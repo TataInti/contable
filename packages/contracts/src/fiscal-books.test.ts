@@ -76,6 +76,16 @@ describe("libros fiscales: parámetros de la solicitud", () => {
     ).toBe(false);
   });
 
+  it("omitir columns trae todas; enviarlo vacío se rechaza con su motivo", () => {
+    const omitted = fiscalBookExportQuerySchema.parse({ periodId: PERIOD_ID, book: "purchases" });
+    expect(omitted.columns).toEqual(FISCAL_BOOK_COLUMNS.map((column) => column.key));
+
+    const empty = fiscalBookExportQuerySchema.safeParse({ periodId: PERIOD_ID, book: "purchases", columns: "" });
+    expect(empty.success).toBe(false);
+    expect(empty.success ? undefined : empty.error.issues[0]?.path).toEqual(["columns"]);
+    expect(empty.success ? undefined : empty.error.issues[0]?.message).toBe("columns: indicá al menos una columna");
+  });
+
   it("valida el período y el formato con su campo", () => {
     const badPeriod = fiscalBookSummaryQuerySchema.safeParse({ periodId: "abc" });
     expect(badPeriod.success).toBe(false);
