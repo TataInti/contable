@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { SifereAnalysisPanel } from "../StudyExpedienteMensual";
+import { SifereAnalysisPanel } from "./SifereAnalysisPanel";
 
 // Análisis ficticio «Demo» de un libro de ventas: dos alícuotas y un tributo.
 type Analisis = Parameters<typeof SifereAnalysisPanel>[0]["analysis"];
