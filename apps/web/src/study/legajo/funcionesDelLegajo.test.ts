@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { calculationDisabledMessage } from "./etiquetas";
 import {
-  calculationDisabledMessage,
   formatMoney,
   hashSourceFile,
   parseSourceFile,
