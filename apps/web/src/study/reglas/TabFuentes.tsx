@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Button, Table } from "@contable/design-system";
 import { DenseSection } from "../../ui/Dense";
-import { shortDate } from "./utilidades";
+import { formatearFecha } from "../../lib/formatoFechas";
 import type { RuleVersion } from "./tipos";
 
 interface TabFuentesProps {
@@ -45,7 +45,7 @@ export function TabFuentes({
           {
             key: "consultedAt",
             header: "Consultada",
-            render: (row) => shortDate(row.consultedAt),
+            render: (row) => formatearFecha(row.consultedAt, "Sin vencimiento"),
           },
         ]}
       />

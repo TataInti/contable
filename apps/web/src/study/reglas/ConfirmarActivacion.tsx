@@ -3,7 +3,7 @@ import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button } from "@contable/design-system";
 import { ActionDrawer, ActionDrawerFooter } from "../../ui/ActionDrawer";
 import type { RulePackDetail, RuleVersion } from "./tipos";
-import { shortDate } from "./utilidades";
+import { formatearRango } from "../../lib/formatoFechas";
 
 interface ConfirmarActivacionProps {
   activationTarget: RuleVersion | null;
@@ -50,7 +50,7 @@ export function ConfirmarActivacion({
       >
         {activationTarget ? (
           <div>
-            <p>Vigencia: {shortDate(activationTarget.validFrom)} — {shortDate(activationTarget.validTo)}</p>
+            <p>Vigencia: {formatearRango(activationTarget.validFrom, activationTarget.validTo)}</p>
             {activeVersion ? (
               <p role="note">Al activar esta versión, la versión vigente quedará retirada</p>
             ) : null}

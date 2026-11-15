@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { sameRuleRows, shortDate, validateRuleVersionDate } from "./utilidades";
+import { sameRuleRows, validateRuleVersionDate } from "./utilidades";
+import { formatearFecha } from "../../lib/formatoFechas";
 
 // Datos sintéticos rotulados «Demo»; no son datos de clientes.
 type FilaDemo = Parameters<typeof sameRuleRows>[0][number];
@@ -53,22 +54,22 @@ describe("validateRuleVersionDate (K1, Demo)", () => {
   });
 });
 
-describe("shortDate (K1, Demo)", () => {
+describe("formatearFecha en vigencias (K1, Demo)", () => {
   it("sin fecha muestra «Sin vencimiento»", () => {
-    expect(shortDate(null)).toBe("Sin vencimiento");
-    expect(shortDate("")).toBe("Sin vencimiento");
+    expect(formatearFecha(null, "Sin vencimiento")).toBe("Sin vencimiento");
+    expect(formatearFecha("", "Sin vencimiento")).toBe("Sin vencimiento");
   });
 
   it("formatea la fecha calendario en es-AR", () => {
-    expect(shortDate("2026-11-15")).toBe("15/11/2026");
-    expect(shortDate("2026-11-15T00:00:00.000Z")).toBe("15/11/2026");
+    expect(formatearFecha("2026-11-15")).toBe("15/11/2026");
+    expect(formatearFecha("2026-11-15T00:00:00.000Z")).toBe("15/11/2026");
   });
 
   it("no corre el día al formatear en el huso de Argentina (UTC-3)", () => {
     const zonaPrevia = process.env.TZ;
     process.env.TZ = "America/Argentina/Buenos_Aires";
     try {
-      expect(shortDate("2026-11-15")).toBe("15/11/2026");
+      expect(formatearFecha("2026-11-15")).toBe("15/11/2026");
     } finally {
       if (zonaPrevia === undefined) delete process.env.TZ;
       else process.env.TZ = zonaPrevia;

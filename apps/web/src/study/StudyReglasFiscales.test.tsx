@@ -659,7 +659,7 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
       }),
     ).toBeTruthy();
     const validity = within(confirmation).getByText(/Vigencia:/);
-    expect(validity.textContent).toContain("—");
+    expect(validity.textContent).toContain("Desde 01/01/2026");
     expect(api.post).not.toHaveBeenCalled();
     expect(within(confirmation).queryByText(/Al activar esta versión/)).toBeNull();
   });

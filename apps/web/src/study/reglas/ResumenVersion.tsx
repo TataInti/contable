@@ -5,7 +5,7 @@ import { DenseSection } from "../../ui/Dense";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { ErrorAccion } from "./Errores";
 import type { RulePackDetail, RuleVersion } from "./tipos";
-import { shortDate } from "./utilidades";
+import { formatearFecha, formatearRango } from "../../lib/formatoFechas";
 
 interface ResumenVersionProps {
   detail: RulePackDetail;
@@ -182,7 +182,7 @@ export function ResumenVersion({
                 >
                   {detail.versions.map((version) => (
                     <option key={version.id} value={version.id}>
-                      v{version.version} · {shortDate(version.validFrom)}
+                      v{version.version} · {formatearFecha(version.validFrom)}
                     </option>
                   ))}
                 </select>
@@ -200,7 +200,7 @@ export function ResumenVersion({
             <span>
               Vigencia{" "}
               <strong>
-                {shortDate(selectedVersion.validFrom)} — {shortDate(selectedVersion.validTo)}
+                {formatearRango(selectedVersion.validFrom, selectedVersion.validTo)}
               </strong>
             </span>
             <span>

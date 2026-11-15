@@ -18,12 +18,6 @@ export function validateRuleVersionDate(value: string): string | null {
   return null;
 }
 
-export function shortDate(value: string | null) {
-  // Las vigencias son fechas calendario guardadas en UTC: se formatean en UTC
-  // para no mostrar el día anterior en husos como el de Argentina (UTC-3).
-  return value ? new Date(value).toLocaleDateString("es-AR", { timeZone: "UTC" }) : "Sin vencimiento";
-}
-
 export function sameRuleRows(draftRows: RuleRow[], savedRows: RuleRow[]): boolean {
   if (draftRows.length !== savedRows.length) return false;
   const savedById = new Map(savedRows.map((row) => [row.id, row]));
