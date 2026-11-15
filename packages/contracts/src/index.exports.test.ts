@@ -24,6 +24,12 @@ describe("índice de contratos: exportaciones de calendarios y libros", () => {
     expect(contracts).toHaveProperty("taxCalendarListQuerySchema");
   });
 
+  it("exporta el esquema y las columnas de la importación de calendarios (corte 2b-1)", () => {
+    expect(contracts).toHaveProperty("importTaxCalendarEntriesSchema");
+    expect(contracts).toHaveProperty("TAX_CALENDAR_IMPORT_COLUMNS");
+    expect(contracts.TAX_CALENDAR_IMPORT_COLUMNS).toContain("verificado_en_imagen");
+  });
+
   it("exporta DUE_DATE_FREQUENCIES y dueDateFrequencySchema (lista de vencimientos, D-R3-A)", () => {
     expect(contracts.DUE_DATE_FREQUENCIES).toEqual(["MONTHLY", "QUARTERLY", "ANNUAL", "ONCE"]);
     expect(contracts.dueDateFrequencySchema.safeParse("MENSUAL").success).toBe(false);

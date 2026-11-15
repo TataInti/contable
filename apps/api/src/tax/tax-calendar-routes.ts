@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import {
   createTaxCalendarSchema,
+  importTaxCalendarEntriesSchema,
   taxCalendarEntryInputSchema,
   taxCalendarEntryPatchSchema,
   taxCalendarListQuerySchema,
@@ -16,6 +17,9 @@ import { TaxCalendarError, TaxCalendarRegistryService } from "./tax-calendar-ser
  */
 
 const calendars = new TaxCalendarRegistryService();
+
+/** El CSV pesa hasta 1 MB; en JSON las comillas y los saltos se escapan y el cuerpo puede crecer. El tope de 1 MB lo aplica el servicio. */
+const IMPORT_BODY_LIMIT = 4 * 1024 * 1024;
 
 function handleError(app: FastifyInstance, reply: FastifyReply, err: unknown) {
   if (err instanceof z.ZodError) {
@@ -101,6 +105,22 @@ export function taxCalendarRoutes(app: FastifyInstance) {
       return handleError(app, reply, err);
     }
   });
+
+  app.post(
+    "/api/v1/firms/:firmId/tax-calendars/:calendarId/entries/import",
+    { bodyLimit: IMPORT_BODY_LIMIT },
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      try {
+        const { calendarId } = req.params as { calendarId: string };
+        const body = importTaxCalendarEntriesSchema.parse(req.body);
+        const data = await calendars.importEntries(ctx, calendarId, body);
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(app, reply, err);
+      }
+    },
+  );
 
   app.patch("/api/v1/firms/:firmId/tax-calendars/:calendarId/entries/:entryId", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);

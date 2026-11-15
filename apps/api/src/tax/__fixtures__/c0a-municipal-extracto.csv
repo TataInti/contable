@@ -1,0 +1,11 @@
+calendario,bloque,concepto,periodo_referencia,criterio_agrupacion,digitos,fecha_completa,nota,origen_celda,confianza,verificado_en_imagen
+municipal-2026,T.E.M.,T.E.M. — Tributo Económico Municipal,2025-12,terminación de CUIT,0-1,2026-01-19,posición 12°/2025 (período) en columna ENERO,pág.1 · bloque T.E.M. · fila 0-1 · col.ENERO (12°/2025) · recorte,alta,si
+municipal-2026,T.E.M.,T.E.M. — Tributo Económico Municipal,2026-01,terminación de CUIT,2-3,2026-02-19,posición 1° (período) en columna FEBRERO,pág.1 · bloque T.E.M. · fila 2-3 · col.FEBRERO (1°) · recorte,alta,si
+municipal-2026,CISCA (CEMENTERIOS),CISCA Conservación — pago semestral,1° semestre,todos,todos,2026-06-30,1° S; sin terminación de CUIT,pág.1 · bloque CISCA · col.JUNIO (1° S) · recorte,alta,si
+municipal-2026,CISCA (CEMENTERIOS),CISCA Conservación — pago semestral,2° semestre,todos,todos,2026-11-30,2° S; sin terminación de CUIT,pág.1 · bloque CISCA · col.NOVIEMBRE (2° S) · recorte,alta,si
+municipal-2026,CISCA (CEMENTERIOS),CISCA Conservación — pago anual,anual 2026,todos,todos,2026-06-30,pago anual en la misma celda que el 1° semestre,pág.1 · bloque CISCA · fila PAGO ANUAL · col.JUNIO · recorte,alta,si
+municipal-2026,CSI (PROPIEDADES),CSI Propiedades — anticipo,2025-12,todos,todos,2026-01-12,"anticipo 12°/2025; ""Todas las Zonas"", sin terminación de CUIT",pág.1 · bloque CSI · col.ENERO (12°/2025) · recorte,alta,si
+municipal-2026,T.E.M.,T.E.M. — Tributo Económico Municipal,2026-04,terminación de CUIT,6-7,2026-05-21,posición 4° (período) en columna MAYO,pág.1 · bloque T.E.M. · fila 6-7 · col.MAYO (4°) · recorte,alta,si
+municipal-2026,T.E.M.,T.E.M. — Tributo Económico Municipal,2026-11,terminación de CUIT,8-9,2026-12-28,posición 11° (período) en columna DICIEMBRE,pág.1 · bloque T.E.M. · fila 8-9 · col.DICIEMBRE (11°) · recorte,alta,si
+municipal-2026,T.E.M.,T.E.M. — Tributo Económico Municipal,2026-03,terminación de CUIT,4-5,2026-04-22,posición 3° (período) en columna ABRIL,pág.1 · bloque T.E.M. · fila 4-5 · col.ABRIL (3°) · recorte,alta,si
+municipal-2026,T.E.M.,T.E.M. — Tributo Económico Municipal,2026-06,terminación de CUIT,0-1,2026-07-20,posición 6° (período) en columna JULIO,pág.1 · bloque T.E.M. · fila 0-1 · col.JULIO (6°) · recorte,alta,si
