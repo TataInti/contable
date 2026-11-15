@@ -41,15 +41,34 @@ export function PanelPago({ posicion, onCerrar, firmId, clientId }: PanelPagoPro
       });
     },
   });
+  // Motivo visible junto al botón deshabilitado (P1).
+  const motivoRegistrar = !paymentForm.amount ? "Indicá el importe del pago." : null;
   return (
     <ActionDrawer
       isOpen
       onClose={onCerrar}
       title={`Registrar pago · ${posicion.regime.taxType.name}`}
       description="El pago se registrará de forma manual y actualizará el saldo pendiente."
+      footer={
+        <>
+          <Button
+            type="submit"
+            form="legajo-pago"
+            loading={recordPaymentMutation.isPending}
+            disabled={motivoRegistrar !== null}
+          >
+            Registrar pago
+          </Button>
+          <Button type="button" variant="ghost" onClick={onCerrar}>
+            Cancelar
+          </Button>
+          {motivoRegistrar ? <span className="muted-copy">{motivoRegistrar}</span> : null}
+        </>
+      }
     >
       <form
-        className="study-form study-form--compact fiscal-action-form"
+        id="legajo-pago"
+        className="study-form"
         onSubmit={(event) => {
           event.preventDefault();
           recordPaymentMutation.mutate();
@@ -93,18 +112,6 @@ export function PanelPago({ posicion, onCerrar, firmId, clientId }: PanelPagoPro
           onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })}
           placeholder="Opcional"
         />
-        <div className="study-form__actions">
-          <Button
-            type="submit"
-            loading={recordPaymentMutation.isPending}
-            disabled={!paymentForm.amount}
-          >
-            Registrar pago
-          </Button>
-          <Button type="button" variant="ghost" onClick={onCerrar}>
-            Cancelar
-          </Button>
-        </div>
         <WorkpaperActionError error={recordPaymentMutation.error} />
       </form>
     </ActionDrawer>

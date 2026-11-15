@@ -66,6 +66,14 @@ export function PanelPresentacion({
   const filingReceiptDocuments = (documentos ?? []).filter(
     (document) => document.category === "ACUSE" && ["READY", "APPLIED"].includes(document.status),
   );
+  // Motivo visible junto al botón deshabilitado (P1).
+  const motivoRegistrar = !posicion.settlement
+    ? "Falta la liquidación finalizada del período."
+    : !filingForm.amountFiled
+      ? "Indicá el importe presentado."
+      : !filingForm.evidenceDocumentId && !filingReceipt
+        ? "Adjuntá la constancia de presentación."
+        : null;
   return (
     <ActionDrawer
       isOpen
@@ -73,9 +81,27 @@ export function PanelPresentacion({
       title={`Registrar presentación · ${posicion.regime.taxType.name}`}
       description="Cargá los datos de la presentación y adjuntá la constancia que emite el organismo."
       size="wide"
+      footer={
+        <>
+          <Button
+            type="submit"
+            form="legajo-presentacion"
+            loading={recordFilingMutation.isPending}
+            loadingLabel="Subiendo y validando la constancia"
+            disabled={motivoRegistrar !== null}
+          >
+            Registrar presentación
+          </Button>
+          <Button type="button" variant="ghost" onClick={onCerrar}>
+            Cancelar
+          </Button>
+          {motivoRegistrar ? <span className="muted-copy">{motivoRegistrar}</span> : null}
+        </>
+      }
     >
       <form
-        className="study-form study-form--compact fiscal-action-form"
+        id="legajo-presentacion"
+        className="study-form"
         onSubmit={(event) => {
           event.preventDefault();
           recordFilingMutation.mutate();
@@ -103,7 +129,7 @@ export function PanelPresentacion({
           onChange={(event) => setFilingForm({ ...filingForm, externalId: event.target.value })}
           placeholder="Opcional"
         />
-        <div className="ds-field fiscal-action-form__wide">
+        <div className="ds-field">
           <label className="ds-field__label" htmlFor="tax-filing-evidence">
             Constancia de presentación
           </label>
@@ -129,38 +155,16 @@ export function PanelPresentacion({
           </small>
         </div>
         {!filingForm.evidenceDocumentId ? (
-          <div className="ds-field fiscal-action-form__wide">
-            <label className="ds-field__label" htmlFor="tax-filing-receipt">
-              Archivo de la constancia
-            </label>
-            <input
-              id="tax-filing-receipt"
-              className="ds-field__input"
-              type="file"
-              accept={RECEIPT_ACCEPT}
-              required
-              onChange={(event) => setFilingReceipt(event.target.files?.[0] ?? null)}
-            />
-            <small className="ds-field__hint">PDF o imagen.</small>
-          </div>
+          <Field
+            label="Archivo de la constancia"
+            id="tax-filing-receipt"
+            type="file"
+            accept={RECEIPT_ACCEPT}
+            hint="PDF o imagen."
+            required
+            onChange={(event) => setFilingReceipt(event.target.files?.[0] ?? null)}
+          />
         ) : null}
-        <div className="study-form__actions">
-          <Button
-            type="submit"
-            loading={recordFilingMutation.isPending}
-            loadingLabel="Subiendo y validando la constancia"
-            disabled={
-              !posicion.settlement ||
-              !filingForm.amountFiled ||
-              (!filingForm.evidenceDocumentId && !filingReceipt)
-            }
-          >
-            Registrar presentación
-          </Button>
-          <Button type="button" variant="ghost" onClick={onCerrar}>
-            Cancelar
-          </Button>
-        </div>
         <WorkpaperActionError error={recordFilingMutation.error} />
       </form>
     </ActionDrawer>

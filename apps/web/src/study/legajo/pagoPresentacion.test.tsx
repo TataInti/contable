@@ -339,3 +339,49 @@ describe("Legajo · registrar presentación (K7)", () => {
     expect(screen.queryByRole("button", { name: "Registrar presentación" })).toBeNull();
   });
 });
+
+describe("Legajo · pago y presentación, accesibilidad mínima (Foco 2.2b)", () => {
+  it("el cajón de pago tiene una sola acción primaria y explica por qué Registrar pago está deshabilitado", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    await abrirCalculo();
+    const dialogo = await abrirPago();
+    expect(dialogo.querySelectorAll(".ds-button--primary")).toHaveLength(1);
+    fireEvent.change(within(dialogo).getByLabelText("Importe"), { target: { value: "" } });
+    expect(within(dialogo).getByRole("button", { name: "Registrar pago" })).toBeDisabled();
+    expect(within(dialogo).getByText("Indicá el importe del pago.")).toBeInTheDocument();
+  });
+
+  it("el cajón de presentación tiene una sola acción primaria y explica que falta la constancia", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    await abrirCalculo();
+    const dialogo = await abrirPresentacion();
+    expect(dialogo.querySelectorAll(".ds-button--primary")).toHaveLength(1);
+    expect(within(dialogo).getByText("Adjuntá la constancia de presentación.")).toBeInTheDocument();
+  });
+
+  it("al cerrar el cajón de pago, el foco vuelve al botón que lo abrió", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    await abrirCalculo();
+    const origen = await screen.findByRole("button", { name: "Registrar pago" });
+    origen.focus();
+    fireEvent.click(origen);
+    const dialogo = await screen.findByRole("dialog", { name: /^Registrar pago/ });
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(document.activeElement).toBe(origen));
+  });
+
+  it("al cerrar el cajón de presentación, el foco vuelve al botón que lo abrió", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    await abrirCalculo();
+    const origen = await screen.findByRole("button", { name: "Registrar presentación" });
+    origen.focus();
+    fireEvent.click(origen);
+    const dialogo = await screen.findByRole("dialog", { name: /^Registrar presentación/ });
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(document.activeElement).toBe(origen));
+  });
+});
