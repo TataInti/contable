@@ -1104,7 +1104,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 | Abrir legajo | Conserva el cliente y sigue el flujo del producto para el contexto fiscal |
 | Liquidación finalizada o reemplazada | Figura fuera de «en curso» |
 
-**Compromisos de implementación:** G05 (estados locales de carga y error con reintento en `PendingFilingReceipts`) y G06 («Actualizar» incluye la consulta de constancias). Detalle en la sección 7.
+**Estado: migrada** (Foco 1, corte 1). Lo vigente tras la migración: encabezado con «Actualizar» como acción secundaria y «Revisar bandeja» como única primaria; cifras con «pendiente», «no disponible» o «restringido» en lugar de cero; constancias y liquidaciones en listas separadas, con sus estados propios, y obligaciones pendientes a continuación, en el orden de main; otros circuitos y panorama como secciones secundarias del lienzo, sin panel lateral; región de trabajo con nombre accesible. **Cumple G03** (para esta pantalla), **G05** y **G06** (sección 7). G07 sigue pendiente de Inti.
 
 ### R02 — Legajo
 
@@ -1157,7 +1157,7 @@ Cubre todas las pantallas de `apps/web/src` en main: 18 del estudio (`study/`), 
 
 | Nº | Pantalla (ruta) | Archivo | Receta | Familias y componentes Foco (composición destino) | Corte |
 |---:|---|---|---|---|---:|
-| 1 | Inicio (`/`) | `study/StudyDashboard.tsx` | R01 | C01, C02, C03, C04, C06, C07, C08 — `DenseHeader`, `StatStrip`, `DenseSection`, `DenseTable`, `Inspector`, `AsyncState`, `StatusBadge` | 1 |
+| 1 | Inicio (`/`) | `study/StudyDashboard.tsx` | R01 | C01, C02, C03, C04, C07, C08 — `DenseHeader`, `StatStrip`, `DenseSection`, `DenseTable`, `DenseWorkspace`, `InspectorFacts`, `AsyncState`, `EmptyState`, `StatusBadge` (migrada) | 1 (migrada) |
 | 2 | Legajo (`/expediente-mensual`) | `study/StudyExpedienteMensual.tsx` | R02 | C01, C02, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `StatStrip`, `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` | 2 |
 | 3 | Reglas fiscales (`/reglas-fiscales`) | `study/StudyReglasFiscales.tsx` | R03 | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `DenseTabs`, `DenseTable`, `DenseWorkspace`, `ActionDrawer`, `ConfirmDialog`, `DeletionDrawer` | 3 |
 | 4 | Catálogos fiscales (`/catalogos-fiscales`) | `study/StudyCatalogosFiscales.tsx` | R03 | C01, C04, C05, C06, C07, C08, C09 — `DenseTabs`, `DenseSearch`, `DenseTable`, `Inspector`, `ActionDrawer`, `DeletionDrawer` | 4 |
@@ -1261,10 +1261,10 @@ Cada brecha es un compromiso del PR que implementa su pieza. Base de verificaci�
 |---|---|---|---|---|
 | G01 | `DenseSection`, `DenseTable` | Composición con marcos en los consumidores heredados | `surface="integrated"` opcional y migración explícita, consumidor por consumidor | Vigente en main |
 | G02 | `StatStrip` | El ítem de filtro marca `active` de forma visual y sus botones no exponen `aria-pressed` | `pressed` comunica la selección en los ítems que alternan un filtro; los que navegan son enlaces | Vigente en main |
-| G03 | `DenseWorkspace` | `role="tabpanel"` fijo, también en pantallas sin pestañas | `role="region"` con nombre, o `tabpanel` con su controlador | Vigente en main |
+| G03 | `DenseWorkspace` | `role="tabpanel"` fijo, también en pantallas sin pestañas | `role="region"` con nombre, o `tabpanel` con su controlador | Vigente en main; cumplido en Inicio (Foco 1, corte 1) |
 | G04 | `EmptyState` | Tamaños `regular` y `compact` | `size="inline"` para ausencias secundarias | Vigente en main |
-| G05 | `PendingFilingReceipts` | Usa `query.data ?? []` y devuelve `null` con cero filas, sin separar carga y error | Estados locales de carga y de error con Reintentar; el bloque se omite únicamente tras una respuesta vacía | Corrección de presentación sobre código verificado |
-| G06 | «Actualizar» de Inicio (`StudyDashboard`) | Refresca resumen y liquidaciones en curso | Incluye la consulta de constancias y dice qué alcanza la actualización | Corrección de presentación sobre código verificado |
+| G05 | `PendingFilingReceipts` | Usa `query.data ?? []` y devuelve `null` con cero filas, sin separar carga y error | Estados locales de carga y de error con Reintentar; el bloque se omite únicamente tras una respuesta vacía | Cumplido en Inicio (Foco 1, corte 1) |
+| G06 | «Actualizar» de Inicio (`StudyDashboard`) | Refresca resumen y liquidaciones en curso | Incluye la consulta de constancias y dice qué alcanza la actualización | Cumplido en Inicio (Foco 1, corte 1) |
 | G07 | Inicio | El orden visual entre circuitos no define una prioridad fiscal | **Decisión de producto pendiente de Inti.** Hasta entonces se conservan a la vista correcciones, constancias y vencimientos, en el orden vigente | Producto pendiente |
 | G08 | `DenseToggleGroup`, `DenseTable.groupBy` | Vigentes en main (#91) | Se preservan en toda migración visual, con sus pruebas | Compatibilidad |
 

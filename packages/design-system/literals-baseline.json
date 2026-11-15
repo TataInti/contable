@@ -13,6 +13,12 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/auth/AcceptPortalInvitation.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/auth/AcceptPortalInvitation.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -253,6 +259,18 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/PendingFilingReceipts.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/PendingFilingReceipts.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/RuleSimulator.css": {
       "fontSize": 0,
       "spacing": 0,
@@ -343,6 +361,12 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/StudyClientes.terminacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/StudyClientes.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -356,6 +380,12 @@
       "color": 0
     },
     "apps/web/src/study/StudyContabilidad.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/StudyDashboard.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -685,6 +715,12 @@
       "radius": 2,
       "color": 0
     },
+    "packages/design-system/src/Dense.grouping.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "packages/design-system/src/Dense.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -722,6 +758,48 @@
       "color": 1
     },
     "packages/design-system/src/Field.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Foco0.empty.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Foco0.fixtures.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Foco0.markup.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Foco0.pressed.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Foco0.section.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Foco0.table.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "packages/design-system/src/Foco0.workspace.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,

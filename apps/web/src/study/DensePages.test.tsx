@@ -160,6 +160,8 @@ describe("Páginas con el marco denso", () => {
     fireEvent.click(screen.getByRole("button", { name: /Con correcciones/ }));
     expect(within(screen.getByRole("table")).queryByText("Ingresos Brutos")).toBeNull();
     expect(within(screen.getByRole("table")).getByText("IVA")).toBeTruthy();
-    expect(screen.getByRole("complementary", { name: "Mesa de trabajo" })).toBeTruthy();
+    // Composición R01: la mesa de trabajo sale del panel lateral y pasa a la región de trabajo.
+    expect(screen.getByRole("region", { name: "Trabajo del estudio" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Otros circuitos" })).toBeTruthy();
   });
 });
