@@ -191,7 +191,7 @@ async function createActivity(page: Page, activity: Tax["activity"]) {
 /** Paquete de reglas completo: alícuota, vencimiento y fuente normativa, y activación. */
 async function createRulePack(page: Page, tax: Tax) {
   if (await exists(page, "rule-packs", tax.pack.code)) return;
-  await page.getByRole("button", { name: /^Crear paquete$|^Nuevo paquete|^Cerrar alta/ }).first().click();
+  await page.getByRole("button", { name: /^Nuevo paquete|^Cerrar alta/ }).first().click();
   await page.locator("#new-rule-pack-code").fill(tax.pack.code);
   await page.locator("#new-rule-pack-name").fill(tax.pack.name);
   await pickOption(page.locator("#new-rule-pack-regime"), tax.regime.name);

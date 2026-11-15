@@ -112,7 +112,7 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await goTo(page, "Reglas fiscales");
     await expect(page.getByRole("heading", { name: "Reglas fiscales", exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: /^Crear paquete$|^Nuevo paquete$/ }).click();
+    await page.getByRole("button", { name: /^Nuevo paquete$/ }).click();
     await page.locator("#new-rule-pack-code").fill(data.pack.code);
     await page.locator("#new-rule-pack-name").fill(data.pack.name);
     await pickOption(page.locator("#new-rule-pack-regime"), data.regime.name);

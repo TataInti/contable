@@ -198,7 +198,7 @@ describe("Lista de paquetes de reglas (K2, Demo)", () => {
     expect(within(tabla).getByText("Monotributo")).toBeTruthy();
     expect(within(tabla).getByText("Borrador v2 · Vigente v4")).toBeTruthy();
     expect(within(tabla).getByText("En revisión v1")).toBeTruthy();
-    expect(within(tabla).getByText("Sin versión activa")).toBeTruthy();
+    expect(within(tabla).getByText("Sin versión vigente")).toBeTruthy();
     expect(screen.getByText("3 paquetes")).toBeTruthy();
     expect(screen.getByText("Elegí un paquete para ver sus versiones y reglas.")).toBeTruthy();
   });

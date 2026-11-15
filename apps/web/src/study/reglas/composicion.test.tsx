@@ -88,11 +88,11 @@ describe("una sola acción primaria visible por estado (D-R3-1)", () => {
     vi.restoreAllMocks();
   });
 
-  it("sin paquetes, la primaria es «Crear paquete»", async () => {
+  it("sin paquetes, la primaria es «Nuevo paquete»", async () => {
     mockDemoApi(makeDemoDetail(), { [LISTA]: () => Promise.resolve([]) });
     renderDemoReglas();
     await screen.findByText("Todavía no hay paquetes de reglas");
-    expect(primarios()).toEqual(["Crear paquete"]);
+    expect(primarios()).toEqual(["Nuevo paquete"]);
   });
 
   it("paquete sin versión: la primaria es «Crear primera versión»", async () => {
@@ -118,13 +118,13 @@ describe("una sola acción primaria visible por estado (D-R3-1)", () => {
   });
 
   it(
-    "versión vigente: a lo sumo una primaria, y «Modificar alícuotas» no es primaria",
+    "versión vigente: a lo sumo una primaria, y «Crear a partir de este» no es primaria",
     async () => {
       mockDemoApi(paqueteConVersiones({ id: "version-vigente", version: 4, status: "ACTIVE" }));
       renderDemoReglas();
       await resumen();
       expect(primarios().length).toBeLessThanOrEqual(1);
-      expect(esPrimario("Modificar alícuotas")).toBe(false);
+      expect(esPrimario("Crear a partir de este")).toBe(false);
     },
   );
 

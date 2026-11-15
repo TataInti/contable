@@ -47,7 +47,7 @@ export function PanelModificarAlicuotas({
       <ActionDrawer
         isOpen={showCloneForm && Boolean(selectedVersion) && selectedVersion?.status !== "DRAFT"}
         onClose={() => setShowCloneForm(false)}
-        title="Modificar alícuotas"
+        title="Crear a partir de este"
         description="Primero elegí desde cuándo rigen los nuevos valores. Al continuar se abre un borrador con las alícuotas actuales para que las edites; la versión vigente sigue aplicando hasta que el Administrador o Titular active la nueva."
       >
         <form
@@ -104,7 +104,7 @@ export function PanelModificarAlicuotas({
             </Button>
           </div>
           <p className="muted-copy">
-            La versión vigente no se modifica: sigue activa hasta que el Administrador o Titular
+            La versión vigente no se modifica: sigue vigente hasta que el Administrador o Titular
             active esta nueva versión.
           </p>
         </form>

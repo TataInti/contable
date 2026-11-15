@@ -61,7 +61,7 @@ export function ListaPaquetes({
       review ? `En revisión v${review.version}` : null,
       active ? `Vigente v${active.version}` : null,
     ].filter(Boolean);
-    return parts.length > 0 ? parts.join(" · ") : "Sin versión activa";
+    return parts.length > 0 ? parts.join(" · ") : "Sin versión vigente";
   };
   const packColumns: DenseColumn<RulePack>[] = [
     {
