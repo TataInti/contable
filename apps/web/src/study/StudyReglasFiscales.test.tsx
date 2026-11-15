@@ -793,7 +793,7 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     expect(alert.textContent).toContain("La vigencia se superpone.");
   });
 
-  it("limpia el error viejo de otra mutación para mostrar el error de activación actual", async () => {
+  it("cada error queda junto a su acción: el de activar en el resumen y el de guardar junto a «Guardar borrador» (7d-7)", async () => {
     mockApi(makeDetail(null));
     vi.mocked(api.put).mockRejectedValue(new Error("Error viejo de guardado"));
     vi.mocked(api.post).mockRejectedValue(new Error("Error actual de activación"));
@@ -813,7 +813,10 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     const packageCard = activateButton.closest("section");
     expect(packageCard).not.toBeNull();
     expect(await within(packageCard!).findByText("Error actual de activación")).toBeTruthy();
-    expect(screen.queryByText("Error viejo de guardado")).toBeNull();
+    expect(within(packageCard!).queryByText("Error viejo de guardado")).toBeNull();
+    expect(
+      within(screen.getByRole("heading", { name: "Alícuotas y porcentajes" }).closest("section")!).getByText("Error viejo de guardado"),
+    ).toBeTruthy();
   });
 });
 

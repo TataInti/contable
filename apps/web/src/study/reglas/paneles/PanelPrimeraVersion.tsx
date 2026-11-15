@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, EmptyState, Field } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
-import { ApiError } from "../../../lib/api";
+import { ErrorAccion, ErrorConsulta } from "../Errores";
 import type { TaxEngineOption } from "@contable/contracts";
 import type { RulePackDetail, RuleVersion } from "../tipos";
 import { validateRuleVersionDate } from "../utilidades";
@@ -36,6 +36,17 @@ export function PanelPrimeraVersion({
   engineId,
   setEngineId,
 }: PanelPrimeraVersionProps) {
+  const motivoCrear = !detailQuery.data?.regime.calcFamilyId
+    ? "Asigná una familia de cálculo al régimen para crear la versión."
+    : regimeEnginesQuery.isLoading
+      ? "Esperá a que carguen las opciones de cálculo para crear la versión."
+      : regimeEnginesQuery.isError
+        ? "Reintentá la consulta de opciones de cálculo para crear la versión."
+        : !regimeEnginesQuery.data?.length
+          ? "Sin opciones de cálculo no se puede crear la versión."
+          : !engineId
+            ? "Elegí una opción de cálculo para crear la versión."
+            : null;
   return (
     <>
       <ActionDrawer
@@ -93,9 +104,11 @@ export function PanelPrimeraVersion({
           ) : regimeEnginesQuery.isLoading ? (
             <p className="muted-copy" role="status">Buscando opciones de cálculo…</p>
           ) : regimeEnginesQuery.isError ? (
-            <p className="form-error" role="alert">
-              No pudimos cargar las opciones de cálculo. <Button type="button" variant="ghost" size="sm" onClick={() => void regimeEnginesQuery.refetch()}>Reintentar</Button>
-            </p>
+            <ErrorConsulta
+              titulo="No pudimos cargar las opciones de cálculo"
+              descripcion="Reintentá la consulta para elegir la opción de cálculo."
+              onRetry={() => void regimeEnginesQuery.refetch()}
+            />
           ) : regimeEnginesQuery.data?.length ? (
             <div className="ds-field">
               <label className="ds-field__label" htmlFor="first-rule-version-engine">Opción de cálculo</label>
@@ -111,17 +124,20 @@ export function PanelPrimeraVersion({
                   <option key={engine.id} value={engine.id}>{engine.label}</option>
                 ))}
               </select>
-              {createVersionMutation.error instanceof ApiError ? (
-                <p className="form-error" role="alert">{createVersionMutation.error.message}</p>
-              ) : null}
             </div>
           ) : (
             <EmptyState
               size="compact"
               title="Esta familia aún no tiene opciones de cálculo"
-              description="Elegí otra familia para este régimen o consultá con quien administra la configuración del estudio."
+              description="Elegí otra familia para este régimen en Editar régimen, o consultá con quien administra el estudio."
+              action={
+                <a className="dense-link" href={`/catalogos-fiscales?editRegime=${encodeURIComponent(detailQuery.data?.regime.id ?? "")}`}>
+                  Editar régimen
+                </a>
+              }
             />
           )}
+          {createVersionMutation.error ? <ErrorAccion error={createVersionMutation.error} /> : null}
           <div className="study-form__actions">
             <Button
               type="submit"
@@ -134,6 +150,11 @@ export function PanelPrimeraVersion({
               Cancelar
             </Button>
           </div>
+          {motivoCrear ? (
+            <p className="form-submit-hint" role="note">
+              {motivoCrear}
+            </p>
+          ) : null}
         </form>
       </ActionDrawer>
     </>

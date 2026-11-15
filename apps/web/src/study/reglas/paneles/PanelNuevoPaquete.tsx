@@ -3,6 +3,7 @@ import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, Field } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import type { RulePack, RuleRegimeOption } from "../tipos";
+import { ErrorAccion, ErrorConsulta } from "../Errores";
 
 type NuevoPaquete = { code: string; name: string; regimeId: string };
 
@@ -74,12 +75,11 @@ export function PanelNuevoPaquete({
               ))}
             </select>
             {regimesQuery.isError ? (
-              <p className="form-error" role="alert">
-                No pudimos consultar los regímenes.{" "}
-                <button type="button" className="fiscal-retry" onClick={() => void regimesQuery.refetch()}>
-                  Reintentar
-                </button>
-              </p>
+              <ErrorConsulta
+                titulo="No pudimos consultar los regímenes"
+                descripcion="Reintentá la consulta para elegir el régimen del paquete."
+                onRetry={() => void regimesQuery.refetch()}
+              />
             ) : regimesQuery.isSuccess && regimesQuery.data.length === 0 ? (
               <p className="form-submit-hint" role="note">
                 Todavía no hay regímenes. Creá uno en{" "}
@@ -92,6 +92,7 @@ export function PanelNuevoPaquete({
               </p>
             ) : null}
           </div>
+          {createPackMutation.error ? <ErrorAccion error={createPackMutation.error} /> : null}
           <div className="study-form__actions">
             <Button
               type="submit"

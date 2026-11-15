@@ -1,8 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { Button } from "@contable/design-system";
-import { FieldErrorsFromDetails } from "../../components/forms/FieldErrorsFromDetails";
-import { ApiError } from "../../lib/api";
+import { ErrorAccion } from "./Errores";
 import { getStatusBadgeMeta, StatusBadge } from "../../ui/StatusBadge";
 import type { RulePackDetail, RuleVersion } from "./tipos";
 import { shortDate } from "./utilidades";
@@ -134,13 +133,7 @@ export function ResumenVersion({
                 </div>
                 {activationError ? (
                   <div ref={activationFeedbackRef} className="activation-feedback" tabIndex={-1}>
-                    {activationError instanceof ApiError ? (
-                      <FieldErrorsFromDetails error={activationError} />
-                    ) : (
-                      <p className="form-error" role="alert">
-                        {activationError.message}
-                      </p>
-                    )}
+                    <ErrorAccion error={activationError} />
                   </div>
                 ) : null}
               </section>

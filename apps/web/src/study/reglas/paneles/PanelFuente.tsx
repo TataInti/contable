@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { Button, Field } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ErrorAccion } from "../Errores";
 
 type NuevaFuente = { title: string; reference: string; url: string; consultedAt: string };
 
@@ -22,6 +23,7 @@ export function PanelFuente({
   setNewSource,
   addSourceMutation,
 }: PanelFuenteProps) {
+  const sinTitulo = !newSource.title.trim();
   return (
     <>
       <ActionDrawer
@@ -68,15 +70,17 @@ export function PanelFuente({
             onChange={(event) => setNewSource({ ...newSource, consultedAt: event.target.value })}
             required
           />
+          {addSourceMutation.error ? <ErrorAccion error={addSourceMutation.error} /> : null}
           <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={addSourceMutation.isPending}
-              disabled={!newSource.title.trim()}
-            >
+            <Button type="submit" loading={addSourceMutation.isPending} disabled={sinTitulo}>
               Guardar fuente
             </Button>
           </div>
+          {sinTitulo ? (
+            <p className="form-submit-hint" role="note">
+              Ingresá el título de la fuente para guardarla.
+            </p>
+          ) : null}
         </form>
       </ActionDrawer>
     </>

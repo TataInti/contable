@@ -225,13 +225,14 @@ describe("Lista de paquetes de reglas (K2, Demo)", () => {
     expect(nombresVisibles()).toHaveLength(3);
   });
 
-  it("sin coincidencias muestra «Ningún paquete coincide.» (hoy; D-R3-9 lo cambia en el corte 3.2)", async () => {
+  it("sin coincidencias muestra «Ningún paquete coincide» y ofrece Quitar filtros (D-R3-9, corte 3.2a)", async () => {
     mockApi(() => Promise.resolve(paquetesDemo));
     renderPantalla();
     await tablaPaquetes();
     buscar("zzz-sin-coincidencias");
     expect(nombresVisibles()).toEqual([]);
-    expect(screen.getByText("Ningún paquete coincide.")).toBeTruthy();
+    expect(screen.getByText("Ningún paquete coincide")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Quitar filtros" })).toBeTruthy();
   });
 
   it("la banda filtra por versión vigente, borrador o en revisión, y el mismo filtro se quita al volver a pulsarlo", async () => {
@@ -288,18 +289,19 @@ describe("Lista de paquetes de reglas (K2, Demo)", () => {
     expect(screen.queryByRole("table", { name: "Paquetes de reglas disponibles" })).toBeNull();
   });
 
-  it("si la consulta de paquetes falla, hoy muestra «Ningún paquete coincide.» y ninguna fila (7d-1)", async () => {
+  it("si la consulta de paquetes falla, muestra el error y ninguna fila (7d-1; corte 3.2a)", async () => {
     mockApi(() => Promise.reject(new ApiError("DEMO_FALLA", "Falla simulada de la lista Demo", 503)));
     renderPantalla();
-    expect(await screen.findByText("Ningún paquete coincide.")).toBeTruthy();
+    expect(await screen.findByText("No se pudo cargar la lista de paquetes")).toBeTruthy();
+    expect(screen.queryByText(/Ningún paquete coincide/)).toBeNull();
     expect(document.querySelectorAll("tr[data-row-key]")).toHaveLength(0);
   });
 
-  it.fails("si la consulta de paquetes falla, muestra un error con Reintentar y no «Ningún paquete coincide.» (7d-1; lo corrige el corte 3.2)", async () => {
+  it("si la consulta de paquetes falla, muestra un error con Reintentar y no «Ningún paquete coincide» (7d-1)", async () => {
     mockApi(() => Promise.reject(new ApiError("DEMO_FALLA", "Falla simulada de la lista Demo", 503)));
     renderPantalla();
     await waitFor(() => expect(screen.queryByText("Cargando reglas…")).toBeNull());
-    expect(screen.queryByText("Ningún paquete coincide.")).toBeNull();
+    expect(screen.queryByText(/Ningún paquete coincide/)).toBeNull();
     expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy();
   });
 });
