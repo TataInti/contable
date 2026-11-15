@@ -110,7 +110,7 @@ export function EtapaControles({
                       <AsyncState
                         loading={false}
                         error
-                        errorTitle="No se pudo leer los documentos de respaldo"
+                        errorTitle="No se pudieron leer los documentos de respaldo"
                         errorDescription="Reintentá la lectura. Mientras tanto, el control puede resolverse sin respaldo."
                         onRetry={() => void documentsQuery.refetch()}
                         loadingLabel={CARGA_DOCUMENTOS}

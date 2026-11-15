@@ -454,7 +454,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     await abrirEtapa(/Controles/);
 
     expect(
-      await screen.findByText("No se pudo leer los documentos de respaldo"),
+      await screen.findByText("No se pudieron leer los documentos de respaldo"),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" }),
