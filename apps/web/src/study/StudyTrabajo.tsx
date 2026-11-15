@@ -1,15 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Notice, Table, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Notice, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
-import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import { DenseHeader, DensePage, StatStrip, useDensity } from "../ui/Dense";
 import "./study.css";
-import { formatearFecha } from "../lib/formatoFechas";
 import type { CloseCycle, EvidencePreview, Obligation, RequestThread, WorkDocumentRequest } from "./trabajo/tipos";
 import { filasDeObligaciones } from "./trabajo/obligaciones";
 import { CajonNuevoPedido } from "./trabajo/CajonNuevoPedido";
@@ -17,6 +15,9 @@ import { CajonIniciarCierre } from "./trabajo/CajonIniciarCierre";
 import { CajonRevision } from "./trabajo/CajonRevision";
 import { CajonEvidencia } from "./trabajo/CajonEvidencia";
 import { CajonConversacion } from "./trabajo/CajonConversacion";
+import { SeccionPedidos } from "./trabajo/SeccionPedidos";
+import { SeccionCierres } from "./trabajo/SeccionCierres";
+import { SeccionObligaciones } from "./trabajo/SeccionObligaciones";
 
 export function StudyTrabajo() {
   const [density] = useDensity();
@@ -342,273 +343,34 @@ export function StudyTrabajo() {
       />
 
       <div className="study-columns work-columns">
-        <section className="study-panel" id="work-requests-section">
-          <div className="study-panel__heading">
-            <div>
-              <h2>Pedidos documentales</h2>
-            </div>
-            <span className="section-count">{activeRequests.length}</span>
-          </div>
-          {requests.isLoading ? (
-            <div className="query-state query-state--compact">
-              <span className="loading-copy">Cargando pedidos…</span>
-            </div>
-          ) : activeRequests.length ? (
-            <Table
-              rows={activeRequests}
-              rowKey={(row) => row.id}
-              columns={[
-                {
-                  key: "title",
-                  header: "Pedido",
-                  render: (row) => (
-                    <div className="table-primary">
-                      <strong>{row.title}</strong>
-                      <small>
-                        {
-                          row.items.filter(
-                            (item) => item.status !== "ACCEPTED" && item.status !== "WAIVED",
-                          ).length
-                        }{" "}
-                        ítems pendientes
-                      </small>
-                    </div>
-                  ),
-                },
-                {
-                  key: "status",
-                  header: "Estado",
-                  render: (row) => <StatusBadge status={row.status} />,
-                },
-                {
-                  key: "evidence",
-                  header: "Evidencia",
-                  align: "right",
-                  render: (row) => {
-                    const attached = row.items.find((item) => item.status === "ATTACHED");
-                    return attached ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        loading={previewEvidence.isPending}
-                        onClick={() => previewEvidence.mutate(attached.id)}
-                      >
-                        <Icon name="file" size={15} /> Ver
-                      </Button>
-                    ) : (
-                      <span className="muted-copy">—</span>
-                    );
-                  },
-                },
-                {
-                  key: "conversation",
-                  header: "Conversación",
-                  align: "right",
-                  render: (row) =>
-                    capabilities.has("message.shared") ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        loading={openConversation.isPending}
-                        onClick={() => openConversation.mutate(row)}
-                      >
-                        <Icon name="message" size={15} /> Mensaje
-                      </Button>
-                    ) : (
-                      <span className="muted-copy">—</span>
-                    ),
-                },
-                {
-                  key: "actions",
-                  header: "Acciones",
-                  align: "right",
-                  render: (row) => (
-                    <div className="table-actions">
-                      {row.status === "DRAFT" && capabilities.has("request.manage") ? (
-                        <Button
-                          size="sm"
-                          loading={sendRequest.isPending}
-                          onClick={() => sendRequest.mutate(row.id)}
-                        >
-                          Enviar pedido
-                        </Button>
-                      ) : null}
-                      {capabilities.has("request.manage") ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setActiveReviewRequestId(row.id)}
-                        >
-                          Revisar
-                        </Button>
-                      ) : null}
-                    </div>
-                  ),
-                },
-              ]}
-            />
-          ) : (
-            <EmptyState
-              size="compact"
-              title="Sin pedidos abiertos"
-              description="El cliente no tiene documentación pendiente."
-              action={
-                capabilities.has("request.manage") ? (
-                  <Button size="sm" variant="secondary" onClick={() => setShowRequest(true)}>
-                    Crear pedido
-                  </Button>
-                ) : undefined
-              }
-            />
-          )}
-        </section>
-        <section className="study-panel" id="work-closes-section">
-          <div className="study-panel__heading">
-            <div>
-              <h2>Cierres</h2>
-            </div>
-            <span className="section-count">{openCloses.length}</span>
-          </div>
-          {closes.isLoading ? (
-            <div className="query-state query-state--compact">
-              <span className="loading-copy">Cargando cierres…</span>
-            </div>
-          ) : openCloses.length ? (
-            <Table
-              rows={openCloses}
-              rowKey={(row) => row.id}
-              columns={[
-                {
-                  key: "status",
-                  header: "Estado",
-                  render: (row) => <StatusBadge status={row.status} />,
-                },
-                {
-                  key: "progress",
-                  header: "Avance",
-                  render: (row) => {
-                    const done = row.workItems.filter((item) => item.status === "DONE").length;
-                    return (
-                      <div className="progress-cell">
-                        <progress
-                          value={done}
-                          max={Math.max(row.workItems.length, 1)}
-                          aria-label={`${done} de ${row.workItems.length} tareas completas`}
-                        />
-                        <small>
-                          {done} de {row.workItems.length}
-                        </small>
-                      </div>
-                    );
-                  },
-                },
-                {
-                  key: "actions",
-                  header: "Acciones",
-                  align: "right",
-                  render: (row) => {
-                    const next = row.workItems.find((item) => item.status !== "DONE");
-                    const ready = row.workItems.length > 0 && !next;
-                    if (!capabilities.has("period.soft_close"))
-                      return <span className="muted-copy">—</span>;
-                    return (
-                      <div className="table-actions">
-                        {next ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            loading={completeCloseItem.isPending}
-                            onClick={() =>
-                              completeCloseItem.mutate({ cycleId: row.id, workItemId: next.id })
-                            }
-                          >
-                            Completar: {next.title}
-                          </Button>
-                        ) : ready ? (
-                          <Button
-                            size="sm"
-                            loading={finalizeClose.isPending}
-                            onClick={() =>
-                              confirm.ask({
-                                title: "¿Finalizar este cierre?",
-                                description:
-                                  "El ciclo quedará bloqueado para auditoría y no podrá volver a un estado anterior.",
-                                confirmLabel: "Finalizar cierre",
-                                onConfirm: () => finalizeClose.mutate(row.id),
-                              })
-                            }
-                          >
-                            Finalizar cierre
-                          </Button>
-                        ) : null}
-                      </div>
-                    );
-                  },
-                },
-              ]}
-            />
-          ) : (
-            <EmptyState
-              size="compact"
-              title="Sin ciclos de cierre"
-              description="Cuando se abra un cierre vas a ver su avance acá."
-              action={
-                capabilities.has("period.soft_close") && activeFiscalYear ? (
-                  <Button size="sm" variant="secondary" onClick={() => setShowClose(true)}>
-                    Iniciar cierre
-                  </Button>
-                ) : undefined
-              }
-            />
-          )}
-        </section>
+        <SeccionPedidos
+          requests={requests}
+          activeRequests={activeRequests}
+          capabilities={capabilities}
+          previewEvidence={previewEvidence}
+          openConversation={openConversation}
+          sendRequest={sendRequest}
+          setActiveReviewRequestId={setActiveReviewRequestId}
+          setShowRequest={setShowRequest}
+        />
+        <SeccionCierres
+          closes={closes}
+          openCloses={openCloses}
+          capabilities={capabilities}
+          completeCloseItem={completeCloseItem}
+          finalizeClose={finalizeClose}
+          confirm={confirm}
+          activeFiscalYear={activeFiscalYear}
+          setShowClose={setShowClose}
+        />
       </div>
 
-      <section className="study-page__section" id="work-obligations-section">
-        <div className="section-heading">
-          <div>
-            <h2>Próximas obligaciones</h2>
-          </div>
-          <span className="section-count">{obligationRows.length}</span>
-        </div>
-        {obligations.isLoading ? (
-          <div className="query-state">
-            <span className="loading-copy">Cargando obligaciones…</span>
-          </div>
-        ) : obligationRows.length ? (
-          <Table
-            rows={obligationRows}
-            rowKey={(row) => row.id}
-            columns={[
-              { key: "name", header: "Obligación", render: (row) => <strong>{row.name}</strong> },
-              { key: "period", header: "Período", render: (row) => row.periodLabel },
-              { key: "due", header: "Vence", render: (row) => formatearFecha(row.dueDate) },
-              {
-                key: "status",
-                header: "Estado",
-                render: (row) => <StatusBadge status={row.status} />,
-              },
-            ]}
-          />
-        ) : (
-          <EmptyState
-            size="compact"
-            title="Sin obligaciones materializadas"
-            description="No hay vencimientos configurados para este contexto."
-            action={
-              capabilities.has("tax.profile.write") ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => navigate("/configuracion-fiscal")}
-                >
-                  Configurar obligaciones
-                </Button>
-              ) : undefined
-            }
-          />
-        )}
-      </section>
+      <SeccionObligaciones
+        obligations={obligations}
+        obligationRows={obligationRows}
+        capabilities={capabilities}
+        navigate={navigate}
+      />
       <ConfirmDialog confirm={confirm} />
     </DensePage>
   );
