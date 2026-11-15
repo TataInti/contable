@@ -5,11 +5,14 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { TaxCalendarError, TaxCalendarRegistryService } from "./tax-calendar-service.js";
 import { taxCalendarRoutes } from "./tax-calendar-routes.js";
+import { assertCapability, requiredCapability } from "../auth/guard.js";
+import { capabilitiesForRole } from "@contable/permissions";
 
 /**
  * Calendarios fiscales contra PostgreSQL desechable (corte 2a-i): flujo de
- * versiones, cobertura al publicar, índice parcial, RLS por firma, grants sin
- * borrado y rutas. Las pruebas de RLS usan el rol de runtime, como las demás.
+ * versiones, cobertura al publicar, índice parcial, RLS por firma, grants (el
+ * borrado solo alcanza a celdas de borradores, corte 2a-ii-a) y rutas. Las pruebas
+ * de RLS usan el rol de runtime, como las demás.
  */
 
 const OWNER = "c1a10000-0000-4000-8000-000000000001";
@@ -235,7 +238,7 @@ describe("calendarios: RLS, grants y rol de runtime", () => {
     expect(ajena).toBe(0);
   });
 
-  it("el runtime no tiene permiso de borrado sobre las tablas de calendarios", async () => {
+  it("el runtime no tiene permiso de borrado sobre tax_calendars", async () => {
     const draft = await newDraft(2026);
     await expect(
       runAsRuntime(OWNER, FIRM, (tx) => tx.$executeRawUnsafe(`DELETE FROM tax_calendars WHERE id = '${draft.id}'`)),
@@ -280,6 +283,84 @@ describe("calendarios: RLS, grants y rol de runtime", () => {
     ).rejects.toThrow(/permission denied|permiso/i);
   });
 
+});
+
+describe("calendarios: baja de celdas en borrador (corte 2a-ii-a): grant y RLS", () => {
+  async function primeraCelda(calendarId: string): Promise<string> {
+    const { entries } = await service.get(ctx, calendarId);
+    const primera = entries[0];
+    if (!primera) throw new Error("el calendario de prueba no tiene celdas");
+    return primera.id;
+  }
+
+  /** v1 queda oculta al publicar v2; v2 queda publicada; un borrador de 2027 conserva sus celdas. */
+  async function escenarioBaja() {
+    const v1 = await newDraft(2026, "Calendario 2026 v1");
+    await fillDraft(v1.id, COBERTURA_COMPLETA);
+    await service.publish(ctx, v1.id);
+    const v2 = await service.createFrom(ctx, v1.id);
+    await service.publish(ctx, v2.id);
+    const borrador = await newDraft(2027, "Calendario 2027");
+    await fillDraft(borrador.id, COBERTURA_COMPLETA);
+    return {
+      celdaOculta: await primeraCelda(v1.id),
+      celdaPublicada: await primeraCelda(v2.id),
+      celdaBorrador: await primeraCelda(borrador.id),
+    };
+  }
+
+  it("el runtime tiene borrado solo sobre tax_calendar_entries", async () => {
+    const filas = await prisma.$queryRawUnsafe<{ tabla: string; borrado: boolean }[]>(
+      `SELECT t.tabla, has_table_privilege('contable_runtime', t.tabla, 'DELETE') AS borrado
+       FROM (VALUES ('tax_calendar_sources'), ('tax_calendars'), ('tax_calendar_entries')) AS t(tabla)`,
+    );
+    expect(Object.fromEntries(filas.map((fila) => [fila.tabla, fila.borrado]))).toEqual({
+      tax_calendar_entries: true,
+      tax_calendar_sources: false,
+      tax_calendars: false,
+    });
+  });
+
+  it("RLS: un DELETE directo con el rol de runtime no borra celdas publicadas, ocultas ni de otra firma; sí las de un borrador propio", async () => {
+    const { celdaOculta, celdaPublicada, celdaBorrador } = await escenarioBaja();
+
+    const enPublicado = await runAsRuntime(OWNER, FIRM, (tx) =>
+      tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE id = '${celdaPublicada}'`),
+    );
+    expect(enPublicado).toBe(0);
+    const enOculto = await runAsRuntime(OWNER, FIRM, (tx) =>
+      tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE id = '${celdaOculta}'`),
+    );
+    expect(enOculto).toBe(0);
+    const deOtraFirma = await runAsRuntime(OTHER_OWNER, OTHER_FIRM, (tx) =>
+      tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE id = '${celdaBorrador}'`),
+    );
+    expect(deOtraFirma).toBe(0);
+    const sobrevivientes = await prisma.taxCalendarEntry.count({
+      where: { id: { in: [celdaPublicada, celdaOculta, celdaBorrador] } },
+    });
+    expect(sobrevivientes).toBe(3);
+
+    const enBorrador = await runAsRuntime(OWNER, FIRM, (tx) =>
+      tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE id = '${celdaBorrador}'`),
+    );
+    expect(enBorrador).toBe(1);
+    expect(await prisma.taxCalendarEntry.count({ where: { id: celdaBorrador } })).toBe(0);
+  });
+
+  it("RLS: el portal no borra celdas, ni siquiera de un borrador de la firma", async () => {
+    const borrador = await newDraft(2027);
+    await fillDraft(borrador.id, COBERTURA_COMPLETA);
+    const celda = await primeraCelda(borrador.id);
+    const borradas = await runAsRuntime(
+      OWNER,
+      FIRM,
+      (tx) => tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE id = '${celda}'`),
+      "PORTAL",
+    );
+    expect(borradas).toBe(0);
+    expect(await prisma.taxCalendarEntry.count({ where: { id: celda } })).toBe(1);
+  });
 });
 
 describe("calendarios: rutas de la API", () => {
@@ -382,6 +463,197 @@ describe("calendarios: rutas de la API", () => {
       expect(res.json().error.code).toBe("CALENDAR_NOT_FOUND");
     } finally {
       await app.close();
+    }
+  });
+});
+
+describe("calendarios: baja de celdas en borrador (corte 2a-ii-a): servicio y rutas", () => {
+  const DUPLICADA = row("01", "2026-01-24");
+  const MENSAJE_NO_BORRADOR = "Este calendario está publicado (u oculto): para corregirlo, creá una versión nueva a partir de este.";
+
+  async function celdaCon(calendarId: string, dueDate: string): Promise<string> {
+    const celda = await prisma.taxCalendarEntry.findFirst({
+      where: { calendarId, dueDate: new Date(`${dueDate}T00:00:00.000Z`) },
+      select: { id: true },
+    });
+    if (!celda) throw new Error(`no hay celda con vencimiento ${dueDate}`);
+    return celda.id;
+  }
+
+  /** v1 queda oculta al publicar v2; v2 queda publicada. Ambas con cobertura completa. */
+  async function publicadaYOculta() {
+    const v1 = await newDraft(2026);
+    await fillDraft(v1.id, COBERTURA_COMPLETA);
+    await service.publish(ctx, v1.id);
+    const v2 = await service.createFrom(ctx, v1.id);
+    await service.publish(ctx, v2.id);
+    return { oculta: v1.id, publicada: v2.id };
+  }
+
+  function appComo(userId: string, firmId: string) {
+    const app = Fastify({ logger: false });
+    app.addHook("preHandler", async (req) => {
+      Object.assign(req, { userId, firmId });
+    });
+    taxCalendarRoutes(app);
+    return app;
+  }
+
+  it("quita una celda de un borrador: la cobertura cambia, queda auditoría con la celda anterior y el calendario se publica", async () => {
+    const draft = await newDraft(2026);
+    await fillDraft(draft.id, COBERTURA_COMPLETA);
+    await service.addEntry(ctx, draft.id, DUPLICADA);
+    const extra = await celdaCon(draft.id, "2026-01-24");
+    expect((await service.validate(ctx, draft.id)).canPublish).toBe(false);
+
+    await service.removeEntry(ctx, draft.id, extra);
+    expect(await prisma.taxCalendarEntry.count({ where: { id: extra } })).toBe(0);
+    expect((await service.validate(ctx, draft.id)).canPublish).toBe(true);
+    const { calendar } = await service.publish(ctx, draft.id);
+    expect(calendar).toMatchObject({ status: "PUBLISHED" });
+
+    const auditoria = await prisma.auditEvent.findMany({
+      where: { firmId: FIRM, action: "tax_calendar.entry_removed", entityId: draft.id },
+    });
+    expect(auditoria).toHaveLength(1);
+    expect(auditoria[0]).toMatchObject({
+      userId: OWNER,
+      before: expect.objectContaining({ id: extra, endingDigits: "01", dueDate: "2026-01-24" }),
+      after: null,
+    });
+  });
+
+  it("no quita celdas de un calendario publicado ni oculto: responde 409 y dice qué hacer; la celda sigue", async () => {
+    const { oculta, publicada } = await publicadaYOculta();
+    const celdaPublicada = await celdaCon(publicada, "2026-01-19");
+    const celdaOculta = await celdaCon(oculta, "2026-01-19");
+
+    await expect(service.removeEntry(ctx, publicada, celdaPublicada)).rejects.toMatchObject({
+      code: "CALENDAR_NOT_DRAFT",
+      httpStatus: 409,
+      message: MENSAJE_NO_BORRADOR,
+      path: ["status"],
+    });
+    await expect(service.removeEntry(ctx, oculta, celdaOculta)).rejects.toMatchObject({
+      code: "CALENDAR_NOT_DRAFT",
+      httpStatus: 409,
+      message: MENSAJE_NO_BORRADOR,
+      path: ["status"],
+    });
+    expect(await prisma.taxCalendarEntry.count({ where: { id: { in: [celdaPublicada, celdaOculta] } } })).toBe(2);
+  });
+
+  it("una celda de otro calendario o de otro estudio responde 404 y no se borra", async () => {
+    const a = await newDraft(2026);
+    await fillDraft(a.id, COBERTURA_COMPLETA);
+    const b = await newDraft(2027);
+    await fillDraft(b.id, COBERTURA_COMPLETA);
+    const celdaDeA = await celdaCon(a.id, "2026-01-19");
+    const celdaDeB = await celdaCon(b.id, "2026-01-19");
+
+    await expect(service.removeEntry(ctx, a.id, celdaDeB)).rejects.toMatchObject({
+      code: "CALENDAR_ENTRY_NOT_FOUND",
+      httpStatus: 404,
+    });
+    const otroEstudio = { userId: OTHER_OWNER, firmId: OTHER_FIRM, actorKind: "USER" as const };
+    await expect(service.removeEntry(otroEstudio, a.id, celdaDeA)).rejects.toMatchObject({
+      code: "CALENDAR_NOT_FOUND",
+      httpStatus: 404,
+    });
+    expect(await prisma.taxCalendarEntry.count({ where: { id: { in: [celdaDeA, celdaDeB] } } })).toBe(2);
+  });
+
+  it("DELETE responde 204 y la celda sale del borrador; validación y publicación funcionan después", async () => {
+    const draft = await newDraft(2026);
+    await fillDraft(draft.id, COBERTURA_COMPLETA);
+    await service.addEntry(ctx, draft.id, DUPLICADA);
+    const extra = await celdaCon(draft.id, "2026-01-24");
+    const app = appComo(OWNER, FIRM);
+    await app.ready();
+    try {
+      const base = `/api/v1/firms/${FIRM}/tax-calendars/${draft.id}`;
+      expect((await app.inject({ method: "GET", url: `${base}/validation` })).json().data.canPublish).toBe(false);
+
+      const borrada = await app.inject({ method: "DELETE", url: `${base}/entries/${extra}` });
+      expect(borrada.statusCode).toBe(204);
+      expect(borrada.body).toBe("");
+      expect(await prisma.taxCalendarEntry.count({ where: { id: extra } })).toBe(0);
+
+      expect((await app.inject({ method: "GET", url: `${base}/validation` })).json().data.canPublish).toBe(true);
+      const publicado = await app.inject({ method: "POST", url: `${base}/publish` });
+      expect(publicado.statusCode).toBe(200);
+      expect(publicado.json().data.calendar.status).toBe("PUBLISHED");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("DELETE sobre un calendario publicado responde 409 con código, mensaje y campo; la celda sigue", async () => {
+    const { publicada } = await publicadaYOculta();
+    const celda = await celdaCon(publicada, "2026-01-19");
+    const app = appComo(OWNER, FIRM);
+    await app.ready();
+    try {
+      const res = await app.inject({
+        method: "DELETE",
+        url: `/api/v1/firms/${FIRM}/tax-calendars/${publicada}/entries/${celda}`,
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error).toEqual({
+        code: "CALENDAR_NOT_DRAFT",
+        message: MENSAJE_NO_BORRADOR,
+        details: { path: ["status"] },
+      });
+      expect(await prisma.taxCalendarEntry.count({ where: { id: celda } })).toBe(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("DELETE desde otra firma responde 404 de calendario; con una celda de otro calendario, 404 de celda", async () => {
+    const a = await newDraft(2026);
+    await fillDraft(a.id, COBERTURA_COMPLETA);
+    const b = await newDraft(2027);
+    await fillDraft(b.id, COBERTURA_COMPLETA);
+    const celdaDeA = await celdaCon(a.id, "2026-01-19");
+    const celdaDeB = await celdaCon(b.id, "2026-01-19");
+    const ajena = appComo(OTHER_OWNER, OTHER_FIRM);
+    const propia = appComo(OWNER, FIRM);
+    await ajena.ready();
+    await propia.ready();
+    try {
+      const otraFirma = await ajena.inject({
+        method: "DELETE",
+        url: `/api/v1/firms/${OTHER_FIRM}/tax-calendars/${a.id}/entries/${celdaDeA}`,
+      });
+      expect(otraFirma.statusCode).toBe(404);
+      expect(otraFirma.json().error.code).toBe("CALENDAR_NOT_FOUND");
+
+      const otroCalendario = await propia.inject({
+        method: "DELETE",
+        url: `/api/v1/firms/${FIRM}/tax-calendars/${a.id}/entries/${celdaDeB}`,
+      });
+      expect(otroCalendario.statusCode).toBe(404);
+      expect(otroCalendario.json().error.code).toBe("CALENDAR_ENTRY_NOT_FOUND");
+      expect(await prisma.taxCalendarEntry.count({ where: { id: { in: [celdaDeA, celdaDeB] } } })).toBe(2);
+    } finally {
+      await ajena.close();
+      await propia.close();
+    }
+  });
+});
+
+describe("calendarios: baja de celdas: capacidad por rol (tax.calendars.manage)", () => {
+  it("quitar una celda exige tax.calendars.manage: OWNER, ADMIN y PREPARER pasan; REVIEWER y AUDITOR_READONLY reciben 403", () => {
+    expect(requiredCapability("DELETE", "/api/v1/firms/:p/tax-calendars/:p/entries/:p")).toBe("tax.calendars.manage");
+    for (const role of ["OWNER", "ADMIN", "PREPARER"] as const) {
+      expect(() => assertCapability({ capabilities: capabilitiesForRole(role) } as never, "tax.calendars.manage"), role).not.toThrow();
+    }
+    for (const role of ["REVIEWER", "AUDITOR_READONLY"] as const) {
+      expect(
+        () => assertCapability({ capabilities: capabilitiesForRole(role) } as never, "tax.calendars.manage"),
+        role,
+      ).toThrow(expect.objectContaining({ statusCode: 403, code: "CAPABILITY_REQUIRED" }));
     }
   });
 });

@@ -123,7 +123,7 @@
 | `tax.calendars.manage` | ✓ | ✓ | ✓ | — | — |
 | `tax.calendars.publish` | ✓ | ✓ | — | — | — |
 
-Crear, editar en borrador, validar, versionar («crear a partir de este»), ocultar y mostrar requieren `tax.calendars.manage`. Publicar requiere `tax.calendars.publish`, sin revisor distinto. Las rutas viven bajo `/api/v1/firms/:firmId/tax-calendars`; cada una tiene capacidad declarada en el guard (una ruta sin capacidad responde 404).
+Crear, editar en borrador, dar de baja una celda de un borrador, validar, versionar («crear a partir de este»), ocultar y mostrar requieren `tax.calendars.manage`. La baja solo se acepta en borradores: sobre una versión publicada u oculta responde 409 y la corrección es una versión nueva. Publicar requiere `tax.calendars.publish`, sin revisor distinto. Las rutas viven bajo `/api/v1/firms/:firmId/tax-calendars`; cada una tiene capacidad declarada en el guard (una ruta sin capacidad responde 404).
 
 ### Comprobantes e ingesta (Puerta 2)
 
