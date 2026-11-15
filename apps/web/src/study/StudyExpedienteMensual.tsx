@@ -10,7 +10,6 @@ import { WorkpaperSourceReviewAction } from "./WorkpaperSourceReviewAction";
 import { Icon } from "../ui/Icon";
 import {
   DensePage,
-  StatStrip,
   useDensity,
 } from "../ui/Dense";
 import type {
@@ -31,7 +30,6 @@ import type {
   WorkpaperSource,
 } from "./legajo/tipos";
 import {
-  fiscalTaxPeriodLabel,
   fiscalTaxPeriodSelectionKey,
   readFiscalTaxPeriodSelection,
   writeFiscalTaxPeriodSelection,
@@ -44,7 +42,7 @@ import {
   calculationDisabledMessage,
   calculationLabel,
 } from "./legajo/etiquetas";
-import { formatDate, formatDateTime, formatMoney, selfReviewNote } from "./legajo/formato";
+import { formatDate, formatDateTime, formatMoney } from "./legajo/formato";
 import { hashSourceFile, parseSourceFile } from "./legajo/archivoFuente";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
 import { CabeceraLegajo } from "./legajo/paneles/CabeceraLegajo";
@@ -53,6 +51,10 @@ import { PanelLibrosIva } from "./legajo/paneles/PanelLibrosIva";
 import { PanelSaldoInicial } from "./legajo/paneles/PanelSaldoInicial";
 import { PanelPago } from "./legajo/paneles/PanelPago";
 import { PanelPresentacion } from "./legajo/paneles/PanelPresentacion";
+import { BandaEstado } from "./legajo/BandaEstado";
+import { ListaLegajos } from "./legajo/ListaLegajos";
+import { SelectorPeriodo } from "./legajo/SelectorPeriodo";
+import { LegajoTarjeta } from "./legajo/Tarjeta/LegajoTarjeta";
 import "./study.css";
 
 
@@ -532,275 +534,19 @@ export function StudyExpedienteMensual() {
     ["READY", "APPLIED", "REVIEWED"].includes(document.status),
   );
   const activeStepMeta = WORKPAPER_STEPS[safeActiveStep]!;
-  const previousStep = WORKPAPER_STEPS[safeActiveStep - 1];
-  const nextStep = WORKPAPER_STEPS[safeActiveStep + 1];
   const goToStep = (index: number) =>
     setActiveStep(Math.min(Math.max(index, 0), WORKPAPER_STEPS.length - 1));
-  const goToPreviousStep = () => setActiveStep((value) => Math.max(value - 1, 0));
-  const goToNextStep = () =>
-    setActiveStep((value) => Math.min(value + 1, WORKPAPER_STEPS.length - 1));
 
-  return (
-    <DensePage density={density} flow>
-      <CabeceraLegajo
-        capabilities={capabilities}
-        selectedTaxPeriod={selectedTaxPeriod}
-        creandoLegajo={createMutation.isPending}
-        cargandoPeriodos={taxPeriodsQuery.isLoading}
-        errorCreacion={createMutation.error}
-        onSubirLibros={() => setShowSifereModal(true)}
-        onNuevoLegajo={() => void createMutation.mutate()}
-      />
-
-      {taxPeriodsQuery.isLoading ? (
-        <div className="study-state" role="status">
-          Cargando períodos fiscales…
-        </div>
-      ) : taxPeriodsQuery.isError ? (
-        <EmptyState
-          title="No se pudieron cargar los períodos fiscales"
-          description="Reintentá la consulta para volver a cargar los períodos del cliente."
-          action={
-            <Button variant="secondary" onClick={() => void taxPeriodsQuery.refetch()}>
-              Reintentar
-            </Button>
-          }
-        />
-      ) : selectableTaxPeriods.length ? (
-        <section className="study-page__section" aria-label="Período fiscal">
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="monthly-workpaper-tax-period">
-              Período fiscal
-            </label>
-            <select
-              id="monthly-workpaper-tax-period"
-              className="ds-field__input"
-              value={selectedTaxPeriodId}
-              onChange={(event) => {
-                const id = event.target.value;
-                setTaxPeriodSelection({ key: taxPeriodStorageKey, id });
-                if (taxPeriodStorageKey) {
-                  writeFiscalTaxPeriodSelection(taxPeriodStorageKey, id);
-                }
-              }}
-            >
-              <option value="">Seleccioná un período fiscal…</option>
-              {selectableTaxPeriods.map((taxPeriod) => (
-                <option key={taxPeriod.id} value={taxPeriod.id}>
-                  {taxPeriod.taxType.name} · {fiscalTaxPeriodLabel(taxPeriod)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </section>
-      ) : (
-        <EmptyState
-          title="Configurá un período fiscal"
-          description="El legajo organiza las obligaciones del mes seleccionado."
-          action={
-            <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
-              Abrir configuración fiscal
-            </Button>
-          }
-        />
-      )}
-
-      <StatStrip
-        label="Estado del legajo"
-        items={[
-          { key: "workpapers", label: "Legajos", value: workpapers.length },
-          { key: "step", label: "Etapa actual", value: activeStepMeta.title },
-          { key: "components", label: "Componentes", value: coverageQuery.data?.components.length ?? "—" },
-        ]}
-      />
-
-
-
-      <PanelLibrosIva
-        abierto={showSifereModal}
-        onCerrar={() => setShowSifereModal(false)}
-        firmId={firmId}
-        clientId={clientId}
-        activeWorkpaperId={activeWorkpaperId}
-        fuentes={coverageQuery.data?.sources}
-        cuitCliente={clientQuery.data?.cuit}
-      />
-
-      <PanelSaldoInicial
-        abierto={showOpening}
-        onCerrar={() => setShowOpening(false)}
-        firmId={firmId}
-        clientId={clientId}
-        tiposImpuesto={taxTypesQuery.data}
-        regimenes={regimesQuery.data}
-        periodosFiscales={taxPeriodsQuery.data}
-        documentos={documentsQuery.data}
-      />
-
-      <PanelEditarSaldo
-        editingLot={editingLot}
-        onCerrar={() => setEditingLot(null)}
-        editForm={editForm}
-        setEditForm={setEditForm}
-        firmId={firmId}
-        clientId={clientId}
-        documentos={documentsQuery.data}
-      />
-
-      {positionAction?.kind === "PAYMENT" ? (
-        <PanelPago
-          posicion={positionAction.position}
-          onCerrar={() => setPositionAction(null)}
-          firmId={firmId}
-          clientId={clientId}
-        />
-      ) : null}
-
-      {positionAction?.kind === "FILING" ? (
-        <PanelPresentacion
-          posicion={positionAction.position}
-          onCerrar={() => setPositionAction(null)}
-          firmId={firmId}
-          clientId={clientId}
-          documentos={documentsQuery.data}
-        />
-      ) : null}
-
-      {listQuery.isLoading ? (
-        <div className="study-page__state" role="status">
-          Cargando legajos…
-        </div>
-      ) : listQuery.isError ? (
-        <div className="study-page__state" role="alert">
-          No se pudieron cargar los legajos. Reintentá en un momento.
-        </div>
-      ) : !selectedTaxPeriod ? (
-        <EmptyState
-          title="Elegí un período fiscal"
-          description="Seleccioná un período fiscal para consultar o crear el legajo del mes."
-        />
-      ) : workpapers.length === 0 ? (
-        <EmptyState
-          title="Sin legajos para este período"
-          description="Creá un legajo para coordinar las liquidaciones del período."
-          action={
-            capabilities.has("tax.settlements.calculate") ? (
-              <Button onClick={() => createMutation.mutate()} loading={createMutation.isPending}>
-                Crear legajo
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <div className="workpaper-list">
-          {workpapers.map((wp) => {
-            const blocking = wp.controls.filter(
-              (c) => c.severity === "BLOCKING" && c.status === "OPEN",
-            );
-            const canEditSources = [
-              "DRAFT",
-              "COLLECTING_INPUTS",
-              "READY_TO_CALCULATE",
-              "CHANGES_REQUESTED",
-            ].includes(wp.status);
-            const canCalculate = capabilities.has("tax.settlements.calculate");
-            const calculateDisabled =
-              calculateMutation.isPending ||
-              wp.status !== "READY_TO_CALCULATE" ||
-              !canCalculate;
-            const calculateDisabledReason = calculateDisabled
-              ? calculationDisabledMessage({
-                  status: wp.status,
-                  sources: coverageQuery.data?.sources,
-                  classifications: classificationQuery.data,
-                  allocations: allocationQuery.data,
-                  canCalculate,
-                  isPending: calculateMutation.isPending,
-                })
-              : null;
-            const selfReviewBlocked = Boolean(
-              currentUserId &&
-              wp.preparedByUserId === currentUserId &&
-              coverageQuery.data &&
-              !coverageQuery.data.allowSelfReview &&
-              ((wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review")) ||
-                (wp.status === "REVIEWED" && capabilities.has("tax.settlements.finalize"))),
-            );
-            return (
-              <article className="workpaper-card" key={wp.id}>
-                <div className="workpaper-card__header">
-                  <div>
-                    <h2>
-                      {wp.periodStart.slice(0, 7)} · Revisión {wp.revision}
-                    </h2>
-                    <StatusBadge status={wp.status} />
-                    {selfReviewNote(wp) ? (
-                      <small className="muted-copy" role="status">
-                        {selfReviewNote(wp)}
-                      </small>
-                    ) : null}
-                  </div>
-                  {blocking.length > 0 ? (
-                    <span className="workpaper-card__blocking" role="alert">
-                      {blocking.length} control(es) bloqueante(s)
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="workpaper-process" aria-label="Navegación del legajo">
-                  <div className="workpaper-process__current">
-                    <span className="workpaper-process__index">
-                      Etapa {safeActiveStep + 1} de {WORKPAPER_STEPS.length}
-                    </span>
-                    <h3>{activeStepMeta.title}</h3>
-                    <p>{activeStepMeta.description}</p>
-                  </div>
-                  <div className="workpaper-process__controls">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={!previousStep}
-                      onClick={goToPreviousStep}
-                    >
-                      {previousStep ? `Anterior: ${previousStep.title}` : "Anterior"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={!nextStep}
-                      onClick={goToNextStep}
-                    >
-                      {nextStep ? `Siguiente: ${nextStep.title}` : "Siguiente"}
-                    </Button>
-                  </div>
-                  <div
-                    className="workpaper-process__menu"
-                    role="tablist"
-                    aria-label="Menú completo del legajo"
-                  >
-                    {WORKPAPER_STEPS.map((step, index) => (
-                      <button
-                        key={step.title}
-                        type="button"
-                        role="tab"
-                        aria-selected={safeActiveStep === index}
-                        aria-controls={`workpaper-${wp.id}-stage`}
-                        className={`workpaper-step${safeActiveStep === index ? " workpaper-step--active" : ""}`}
-                        onClick={() => goToStep(index)}
-                      >
-                        <span className="workpaper-step__number">{index + 1}</span>
-                        <span>{step.title}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div
-                  className="workpaper-card__body"
-                  id={`workpaper-${wp.id}-stage`}
-                  role="tabpanel"
-                  aria-live="polite"
-                >
+  const renderEtapa = (wp: Workpaper, safeActiveStep: number) => {
+    const canEditSources = [
+      "DRAFT",
+      "COLLECTING_INPUTS",
+      "READY_TO_CALCULATE",
+      "CHANGES_REQUESTED",
+    ].includes(wp.status);
+    const blocking = wp.controls.filter((c) => c.severity === "BLOCKING" && c.status === "OPEN");
+    return (
+      <>
                   {safeActiveStep === 0 ? (
                     <div className="workpaper-stage">
                       <div className="workpaper-stage__heading">
@@ -1958,27 +1704,129 @@ export function StudyExpedienteMensual() {
                       </dl>
                     </div>
                   )}
-                </div>
+      </>
+    );
+  };
 
-                <div className="workpaper-step-footer" aria-label="Cambio de etapa">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={!previousStep}
-                    onClick={goToPreviousStep}
-                  >
-                    {previousStep ? `Volver a ${previousStep.title}` : "Inicio del proceso"}
-                  </Button>
-                  <span>
-                    {activeStepMeta.title} · {safeActiveStep + 1}/{WORKPAPER_STEPS.length}
-                  </span>
-                  <Button size="sm" variant="secondary" disabled={!nextStep} onClick={goToNextStep}>
-                    {nextStep ? `Ir a ${nextStep.title}` : "Última etapa"}
-                    {nextStep ? <Icon name="arrow-right" size={14} /> : null}
-                  </Button>
-                </div>
+  return (
+    <DensePage density={density} flow>
+      <CabeceraLegajo
+        capabilities={capabilities}
+        selectedTaxPeriod={selectedTaxPeriod}
+        creandoLegajo={createMutation.isPending}
+        cargandoPeriodos={taxPeriodsQuery.isLoading}
+        errorCreacion={createMutation.error}
+        onSubirLibros={() => setShowSifereModal(true)}
+        onNuevoLegajo={() => void createMutation.mutate()}
+      />
 
-                <div className="workpaper-card__actions">
+      <SelectorPeriodo
+        cargando={taxPeriodsQuery.isLoading}
+        error={taxPeriodsQuery.isError}
+        onReintentar={() => void taxPeriodsQuery.refetch()}
+        periodos={selectableTaxPeriods}
+        valor={selectedTaxPeriodId}
+        onCambiar={(id) => {
+          setTaxPeriodSelection({ key: taxPeriodStorageKey, id });
+          if (taxPeriodStorageKey) {
+            writeFiscalTaxPeriodSelection(taxPeriodStorageKey, id);
+          }
+        }}
+        onConfigurar={() => navigate("/configuracion-fiscal")}
+      />
+
+      <BandaEstado
+        legajos={workpapers.length}
+        etapa={activeStepMeta.title}
+        componentes={coverageQuery.data?.components.length ?? "—"}
+      />
+
+
+
+      <PanelLibrosIva
+        abierto={showSifereModal}
+        onCerrar={() => setShowSifereModal(false)}
+        firmId={firmId}
+        clientId={clientId}
+        activeWorkpaperId={activeWorkpaperId}
+        fuentes={coverageQuery.data?.sources}
+        cuitCliente={clientQuery.data?.cuit}
+      />
+
+      <PanelSaldoInicial
+        abierto={showOpening}
+        onCerrar={() => setShowOpening(false)}
+        firmId={firmId}
+        clientId={clientId}
+        tiposImpuesto={taxTypesQuery.data}
+        regimenes={regimesQuery.data}
+        periodosFiscales={taxPeriodsQuery.data}
+        documentos={documentsQuery.data}
+      />
+
+      <PanelEditarSaldo
+        editingLot={editingLot}
+        onCerrar={() => setEditingLot(null)}
+        editForm={editForm}
+        setEditForm={setEditForm}
+        firmId={firmId}
+        clientId={clientId}
+        documentos={documentsQuery.data}
+      />
+
+      {positionAction?.kind === "PAYMENT" ? (
+        <PanelPago
+          posicion={positionAction.position}
+          onCerrar={() => setPositionAction(null)}
+          firmId={firmId}
+          clientId={clientId}
+        />
+      ) : null}
+
+      {positionAction?.kind === "FILING" ? (
+        <PanelPresentacion
+          posicion={positionAction.position}
+          onCerrar={() => setPositionAction(null)}
+          firmId={firmId}
+          clientId={clientId}
+          documentos={documentsQuery.data}
+        />
+      ) : null}
+
+      <ListaLegajos
+        cargando={listQuery.isLoading}
+        error={listQuery.isError}
+        sinPeriodo={!selectedTaxPeriod}
+        legajos={workpapers}
+        puedeCrear={capabilities.has("tax.settlements.calculate")}
+        creando={createMutation.isPending}
+        onCrear={() => createMutation.mutate()}
+        renderLegajo={(wp) => {
+            const canCalculate = capabilities.has("tax.settlements.calculate");
+            const calculateDisabled =
+              calculateMutation.isPending ||
+              wp.status !== "READY_TO_CALCULATE" ||
+              !canCalculate;
+            const calculateDisabledReason = calculateDisabled
+              ? calculationDisabledMessage({
+                  status: wp.status,
+                  sources: coverageQuery.data?.sources,
+                  classifications: classificationQuery.data,
+                  allocations: allocationQuery.data,
+                  canCalculate,
+                  isPending: calculateMutation.isPending,
+                })
+              : null;
+            const selfReviewBlocked = Boolean(
+              currentUserId &&
+              wp.preparedByUserId === currentUserId &&
+              coverageQuery.data &&
+              !coverageQuery.data.allowSelfReview &&
+              ((wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review")) ||
+                (wp.status === "REVIEWED" && capabilities.has("tax.settlements.finalize"))),
+            );
+          const acciones = (
+            <>
                   {["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE"].includes(wp.status) ? (
                     <>
                       <Button
@@ -2098,13 +1946,21 @@ export function StudyExpedienteMensual() {
                       error={rectifyMutation.variables === wp.id ? rectifyMutation.error : null}
                     />
                   ) : null}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    
+            </>
+          );
+          return (
+            <LegajoTarjeta
+              key={wp.id}
+              wp={wp}
+              etapaActiva={safeActiveStep}
+              onCambiarEtapa={goToStep}
+              acciones={acciones}
+            >
+              {renderEtapa(wp, safeActiveStep)}
+            </LegajoTarjeta>
+          );
+        }}
+      />
     </DensePage>
   );
 }
