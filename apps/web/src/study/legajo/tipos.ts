@@ -284,3 +284,16 @@ export interface WorkpaperCalculationComponent {
   } | null;
 }
 export type PositionAction = { kind: "PAYMENT" | "FILING"; position: TaxPosition } | null;
+
+export interface CoberturaLegajo {
+  components: Array<{
+    obligationId: string;
+    regimeCode: string;
+    taxTypeCode: string;
+    required: boolean;
+    linked: boolean;
+    settlementStatus: string | null;
+  }>;
+  sources: WorkpaperSource[];
+  allowSelfReview: boolean;
+}
