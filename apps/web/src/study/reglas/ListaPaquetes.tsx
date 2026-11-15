@@ -1,4 +1,4 @@
-import { useMemo, type RefObject } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { AsyncState, Button, EmptyState } from "@contable/design-system";
 import { DenseFooter, DenseSearch, DenseTable, DenseToolbar, normalizeSearch, type DenseColumn } from "../../ui/Dense";
 import type { RulePack } from "./tipos";
@@ -51,6 +51,39 @@ export function ListaPaquetes({
     onSearchChange("");
     onClearFilter();
   };
+
+  // Filas que entran completas en la tabla con su tope de alto. Si la última queda cortada, el pie
+  // dice «N de M» en lugar de contar todos como visibles (P3, P4).
+  const listaRef = useRef<HTMLDivElement>(null);
+  const [visibles, setVisibles] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const scroll = listaRef.current?.querySelector<HTMLElement>(".dense-table-scroll");
+    if (!scroll) {
+      setVisibles(null);
+      return;
+    }
+    const medir = () => {
+      const cabecera =
+        scroll.querySelector("thead")?.getBoundingClientRect().bottom ?? scroll.getBoundingClientRect().top;
+      const fondo = scroll.getBoundingClientRect().bottom;
+      const completas = Array.from(scroll.querySelectorAll<HTMLElement>("tbody tr")).filter((fila) => {
+        const caja = fila.getBoundingClientRect();
+        return caja.top >= cabecera - 1 && caja.bottom <= fondo + 1;
+      }).length;
+      setVisibles(completas);
+    };
+    medir();
+    scroll.addEventListener("scroll", medir, { passive: true });
+    window.addEventListener("resize", medir);
+    return () => {
+      scroll.removeEventListener("scroll", medir);
+      window.removeEventListener("resize", medir);
+    };
+  }, [visiblePacks]);
+  const contador =
+    visibles !== null && visibles < visiblePacks.length
+      ? `${visibles} de ${visiblePacks.length}`
+      : visiblePacks.length;
 
   const versionsLabel = (pack: RulePack) => {
     const active = pack.versions.find((version) => version.status === "ACTIVE");
@@ -132,7 +165,7 @@ export function ListaPaquetes({
           description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
         />
       ) : (
-        <div className="dense-packs">
+        <div className="dense-packs" ref={listaRef}>
           <DenseTable<RulePack>
             label="Paquetes de reglas disponibles"
             columns={packColumns}
@@ -144,9 +177,9 @@ export function ListaPaquetes({
             }}
             footer={
               <DenseFooter
-                count={visiblePacks.length}
+                count={contador}
                 noun={visiblePacks.length === 1 ? "paquete" : "paquetes"}
-                hint="Elegí un paquete para ver sus versiones y reglas."
+                hint={selectedPackId ? undefined : "Elegí un paquete para ver sus versiones y reglas."}
                 newShortcut={canPropose}
               />
             }

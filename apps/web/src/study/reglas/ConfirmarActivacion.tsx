@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button } from "@contable/design-system";
-import { ActionDrawer } from "../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../ui/ActionDrawer";
 import type { RulePackDetail, RuleVersion } from "./tipos";
 import { shortDate } from "./utilidades";
 
@@ -34,14 +34,18 @@ export function ConfirmarActivacion({
         }
         description="Revisá el paquete y la vigencia antes de activar esta versión."
         footer={
-          <div className="study-form__actions">
-            <Button type="button" loading={activateMutation.isPending} onClick={confirmActivation}>
-              Activar versión
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setActivationTarget(null)}>
-              Cancelar
-            </Button>
-          </div>
+          <ActionDrawerFooter
+            primary={
+              <Button
+                type="button"
+                loading={activateMutation.isPending}
+                onClick={confirmActivation}
+              >
+                Activar versión
+              </Button>
+            }
+            onCancel={() => setActivationTarget(null)}
+          />
         }
       >
         {activationTarget ? (

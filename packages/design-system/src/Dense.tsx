@@ -592,7 +592,7 @@ export function DenseFooter({
   hint,
   newShortcut = true,
 }: {
-  count: number;
+  count: number | string;
   noun: string;
   hint?: string;
   newShortcut?: boolean;

@@ -3,7 +3,7 @@ import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import type { TaxEngineOption } from "@contable/contracts";
 import { Button, Field } from "@contable/design-system";
 import { Icon } from "../../../ui/Icon";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ErrorAccion } from "../Errores";
 import { SelectorMotor } from "../SelectorMotor";
 import type { RuleVersion } from "../tipos";
@@ -23,6 +23,7 @@ interface PanelModificarAlicuotasProps {
   regimeEnginesQuery: UseQueryResult<TaxEngineOption[], Error>;
   engineId: string;
   setEngineId: (engineId: string) => void;
+  motorOrigen: string | null;
   avisoMotor: string | null;
 }
 
@@ -40,8 +41,19 @@ export function PanelModificarAlicuotas({
   regimeEnginesQuery,
   engineId,
   setEngineId,
+  motorOrigen,
   avisoMotor,
 }: PanelModificarAlicuotasProps) {
+  const footerClon = (
+    <ActionDrawerFooter
+      primary={
+        <Button type="submit" form="rule-clone-form" loading={cloneMutation.isPending}>
+          <Icon name="plus" size={16} /> Crear borrador y editar
+        </Button>
+      }
+      onCancel={() => setShowCloneForm(false)}
+    />
+  );
   return (
     <>
       <ActionDrawer
@@ -49,8 +61,10 @@ export function PanelModificarAlicuotas({
         onClose={() => setShowCloneForm(false)}
         title="Crear a partir de este"
         description="Primero elegí desde cuándo rigen los nuevos valores. Al continuar se abre un borrador con las alícuotas actuales para que las edites; la versión vigente sigue aplicando hasta que el Administrador o Titular active la nueva."
+        footer={footerClon}
       >
         <form
+          id="rule-clone-form"
           className="study-form study-form--compact fiscal-action-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -86,6 +100,7 @@ export function PanelModificarAlicuotas({
             regimeId={regimeId}
             familiaDefinida={familiaDefinida}
             enginesQuery={regimeEnginesQuery}
+            actualId={motorOrigen}
             value={engineId}
             onChange={setEngineId}
           />
@@ -95,14 +110,6 @@ export function PanelModificarAlicuotas({
             </p>
           ) : null}
           {cloneMutation.error ? <ErrorAccion error={cloneMutation.error} /> : null}
-          <div className="study-form__actions">
-            <Button type="submit" loading={cloneMutation.isPending}>
-              <Icon name="plus" size={16} /> Crear borrador y editar
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setShowCloneForm(false)}>
-              Cancelar
-            </Button>
-          </div>
           <p className="muted-copy">
             La versión vigente no se modifica: sigue vigente hasta que el Administrador o Titular
             active esta nueva versión.

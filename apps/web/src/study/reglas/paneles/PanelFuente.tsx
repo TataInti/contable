@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { Button, Field } from "@contable/design-system";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ErrorAccion } from "../Errores";
 
 type NuevaFuente = { title: string; reference: string; url: string; consultedAt: string };
@@ -24,6 +24,22 @@ export function PanelFuente({
   addSourceMutation,
 }: PanelFuenteProps) {
   const sinTitulo = !newSource.title.trim();
+  const footerFuente = (
+    <ActionDrawerFooter
+      primary={
+        <Button
+          type="submit"
+          form="rule-source-form"
+          loading={addSourceMutation.isPending}
+          disabled={sinTitulo}
+        >
+          Guardar fuente
+        </Button>
+      }
+      hint={sinTitulo ? "Ingresá el título de la fuente para guardarla." : null}
+      onCancel={() => setShowSourceForm(false)}
+    />
+  );
   return (
     <>
       <ActionDrawer
@@ -32,8 +48,10 @@ export function PanelFuente({
         title="Agregar fuente normativa"
         description="Asociá la norma, padrón o resolución que respalda esta versión."
         size="wide"
+        footer={footerFuente}
       >
         <form
+          id="rule-source-form"
           className="study-form fiscal-action-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -71,16 +89,6 @@ export function PanelFuente({
             required
           />
           {addSourceMutation.error ? <ErrorAccion error={addSourceMutation.error} /> : null}
-          <div className="study-form__actions">
-            <Button type="submit" loading={addSourceMutation.isPending} disabled={sinTitulo}>
-              Guardar fuente
-            </Button>
-          </div>
-          {sinTitulo ? (
-            <p className="form-submit-hint" role="note">
-              Ingresá el título de la fuente para guardarla.
-            </p>
-          ) : null}
         </form>
       </ActionDrawer>
     </>

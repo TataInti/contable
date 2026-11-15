@@ -253,3 +253,121 @@ describe("Reglas fiscales — cajones de versión (K5)", () => {
     expect(api.post).toHaveBeenCalledWith("/tax/rule-packs/pack-1/versions/clone", { validFrom: "2027-03-01" });
   });
 });
+
+describe("Reglas fiscales — pie de los cajones (Foco 2.7a)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    contextMock.current = demoContext();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  // Pie fijo del cajón: «Cancelar» a la izquierda, la acción principal a la derecha y el motivo junto a ella.
+  function expectPieDelCajon(dialog: HTMLElement, principal: string, motivo: RegExp | null) {
+    const footer = dialog.querySelector<HTMLElement>(".action-drawer__footer");
+    expect(footer).not.toBeNull();
+    const cancelar = within(footer!).getByRole("button", { name: "Cancelar" });
+    const accion = within(footer!).getByRole("button", { name: principal });
+    expect(cancelar.compareDocumentPosition(accion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(dialog.querySelector(".action-drawer__content")?.contains(accion)).toBe(false);
+    if (motivo) {
+      expect(within(footer!).getByText(motivo).parentElement).toBe(accion.parentElement);
+    }
+  }
+
+  it("Nuevo paquete: pie fijo con Cancelar a la izquierda y el motivo junto a «Crear paquete»", async () => {
+    mockDemoApi(makeDemoDetail(), { "/tax/regimes": () => Promise.resolve(demoRegimes) });
+    renderDemoReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo paquete" }));
+    const dialog = await screen.findByRole("dialog");
+    expectPieDelCajon(dialog, "Crear paquete", /Completá código, nombre y régimen/);
+
+    fireEvent.change(within(dialog).getByLabelText("Código"), { target: { value: "DEMO" } });
+    fireEvent.change(within(dialog).getByLabelText("Nombre"), { target: { value: "Demo" } });
+    fireEvent.change(within(dialog).getByLabelText("Régimen"), { target: { value: "regime-1" } });
+    expectPieDelCajon(dialog, "Crear paquete", null);
+    expect(within(dialog).queryByText(/Completá código, nombre y régimen/)).toBeNull();
+  });
+
+  it("Agregar vencimiento y Agregar fuente llevan «Cancelar» y su motivo junto al botón", async () => {
+    mockDemoApi(makeDemoDetail());
+    renderDemoReglas();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /Vencimientos/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Agregar vencimiento" }));
+    let dialog = await screen.findByRole("dialog");
+    expectPieDelCajon(dialog, "Guardar vencimiento", /Ingresá un día del mes entre 1 y 31/);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Agregar fuente" }));
+    dialog = await screen.findByRole("dialog");
+    expectPieDelCajon(dialog, "Guardar fuente", /Ingresá el título de la fuente/);
+  });
+
+  it("Crear primera versión sin familia: el aviso va arriba a todo el ancho y «Vigencia desde» debajo", async () => {
+    const base = makeDemoDetail();
+    mockDemoApi({ ...base, versions: [], regime: { ...base.regime, calcFamilyId: null } });
+    renderDemoReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
+    const dialog = await screen.findByRole("dialog");
+    const aviso = await within(dialog).findByText("Elegí una familia de cálculo");
+    const vigencia = within(dialog).getByLabelText("Vigencia desde");
+    expect(aviso.compareDocumentPosition(vigencia) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(aviso.closest(".selector-motor-aviso")).not.toBeNull();
+    expectPieDelCajon(dialog, "Crear primera versión", /Asigná una familia de cálculo/);
+  });
+
+  it("Crear a partir de este: «Cancelar» a la izquierda y la acción principal a la derecha", async () => {
+    const detail = makeDemoDetail();
+    detail.versions = [makeDemoVersion({ id: "version-1", status: "ACTIVE" })];
+    mockDemoApi(detail);
+    renderDemoReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear a partir de este" }));
+    const dialog = await screen.findByRole("dialog");
+    expectPieDelCajon(dialog, "Crear borrador y editar", null);
+  });
+});
+
+describe("Reglas fiscales — opción de cálculo al copiar (Foco 2.7a)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    contextMock.current = demoContext();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("preselecciona la opción de origen sin rótulo y, al elegir otra, dice con qué calcula la nueva versión", async () => {
+    const detail = makeDemoDetail();
+    detail.versions = [makeDemoVersion({ id: "version-1", status: "ACTIVE" })];
+    mockDemoApi(detail);
+    renderDemoReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear a partir de este" }));
+    const dialog = await screen.findByRole("dialog");
+    const select = (await within(dialog).findByLabelText("Opción de cálculo")) as HTMLSelectElement;
+    expect(select.value).toBe("engine-demo-current");
+    expect(within(select).getByRole("option", { name: "Demo · IVA RI vigente" })).toBeTruthy();
+    for (const option of within(select).getAllByRole("option")) {
+      expect(option.textContent).not.toContain("(actual)");
+    }
+    expect(within(dialog).queryByText(/La nueva versión va a calcular con/)).toBeNull();
+
+    fireEvent.change(select, { target: { value: "engine-demo-legacy" } });
+    expect(
+      within(dialog).getByText(
+        "La nueva versión va a calcular con Demo · IVA RI anterior en lugar de Demo · IVA RI vigente.",
+      ),
+    ).toBeTruthy();
+  });
+});

@@ -1,2 +1,2 @@
-export { ActionDrawer } from "@contable/design-system";
+export { ActionDrawer, ActionDrawerFooter } from "@contable/design-system";
 export type { ActionDrawerProps } from "@contable/design-system";

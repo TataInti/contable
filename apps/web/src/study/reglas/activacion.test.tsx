@@ -102,4 +102,17 @@ describe("Reglas fiscales — activación (K9)", () => {
     expect(within(dialog).getByText(/Vigencia:/)).toBeTruthy();
     expect(within(dialog).queryByText(/Al activar esta versión/)).toBeNull();
   });
+  it("el cajón de activar tiene «Cancelar» a la izquierda y «Activar versión» a la derecha", async () => {
+    const detail = makeDemoDetail();
+    detail.versions = [makeDemoVersion({ status: "APPROVED" })];
+    mockDemoApi(detail);
+    renderDemoReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
+    const dialog = await screen.findByRole("dialog");
+    const cancelar = within(dialog).getByRole("button", { name: "Cancelar" });
+    const confirmar = within(dialog).getByRole("button", { name: "Activar versión" });
+    const posicion = cancelar.compareDocumentPosition(confirmar);
+    expect(posicion & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

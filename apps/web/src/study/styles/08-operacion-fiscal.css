@@ -148,6 +148,11 @@
   gap: var(--ds-space-3);
 }
 
+/* Un aviso del selector de opción de cálculo (sin familia, sin opciones) ocupa el ancho del cajón. */
+.study-form > .selector-motor-aviso {
+  grid-column: 1 / -1;
+}
+
 .study-form.fiscal-action-form > .study-panel__heading,
 .study-form.fiscal-action-form > .study-form__actions,
 .study-form--compact > .study-form__actions {
@@ -1046,4 +1051,10 @@
   gap: var(--ds-space-1);
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-xs);
+}
+
+/* Lista de paquetes: el código y el régimen van en su propio renglón, debajo del nombre. */
+.dense-packs .dense-name__text > small {
+  display: block;
+  margin-top: var(--ds-space-1);
 }

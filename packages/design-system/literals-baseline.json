@@ -565,6 +565,12 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/reglas/lista-paquetes-alto.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/reglas/ListaPaquetes.test.tsx": {
       "fontSize": 0,
       "spacing": 0,

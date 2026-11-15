@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, Field } from "@contable/design-system";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import type { RulePack, RuleRegimeOption } from "../tipos";
 import { ErrorAccion, ErrorConsulta } from "../Errores";
 
@@ -24,6 +24,27 @@ export function PanelNuevoPaquete({
   createPackMutation,
   regimesQuery,
 }: PanelNuevoPaqueteProps) {
+  // El motivo del botón deshabilitado va junto a la acción, en el pie fijo del cajón (P4, P5).
+  const motivoCrear =
+    !newPack.code.trim() || !newPack.name.trim() || !newPack.regimeId
+      ? "Completá código, nombre y régimen para poder crear el paquete."
+      : null;
+  const footerNuevo = (
+    <ActionDrawerFooter
+      primary={
+        <Button
+          type="submit"
+          form="new-rule-pack-form"
+          loading={createPackMutation.isPending}
+          disabled={motivoCrear !== null}
+        >
+          Crear paquete
+        </Button>
+      }
+      hint={motivoCrear}
+      onCancel={() => setShowPackForm(false)}
+    />
+  );
   return (
     <>
       <ActionDrawer
@@ -32,8 +53,10 @@ export function PanelNuevoPaquete({
         title="Nuevo paquete de reglas"
         description="Iniciá la configuración para un régimen y luego abrí su primera versión."
         size="wide"
+        footer={footerNuevo}
       >
         <form
+          id="new-rule-pack-form"
           className="study-form fiscal-action-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -93,23 +116,6 @@ export function PanelNuevoPaquete({
             ) : null}
           </div>
           {createPackMutation.error ? <ErrorAccion error={createPackMutation.error} /> : null}
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={createPackMutation.isPending}
-              disabled={!newPack.code.trim() || !newPack.name.trim() || !newPack.regimeId}
-            >
-              Crear paquete
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setShowPackForm(false)}>
-              Cancelar
-            </Button>
-          </div>
-          {!newPack.code.trim() || !newPack.name.trim() || !newPack.regimeId ? (
-            <p className="form-submit-hint" role="note">
-              Completá código, nombre y régimen para poder crear el paquete.
-            </p>
-          ) : null}
         </form>
       </ActionDrawer>
     </>
