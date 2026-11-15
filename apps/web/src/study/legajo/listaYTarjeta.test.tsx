@@ -131,7 +131,7 @@ describe("Legajo · lista de legajos y tarjeta (K8)", () => {
     renderPage();
 
     expect(
-      await screen.findByRole("heading", { level: 2, name: "2026-10 · Revisión 1" }),
+      await screen.findByRole("heading", { level: 2, name: "octubre de 2026 · Revisión 1" }),
     ).toBeTruthy();
     expect(document.querySelector('[data-status="COLLECTING_INPUTS"]')).not.toBeNull();
 

@@ -3,7 +3,7 @@ import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState } from "@contable/design-system";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type FiscalYear } from "../lib/api";
-import { formatearRango } from "../lib/formatoFechas";
+import { formatearPeriodo } from "../lib/formatoFechas";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -140,17 +140,20 @@ export function StudyDashboard() {
       : worklistQuery.isError
         ? "Sin respuesta de la cartera fiscal: reintentá con el aviso de la lista."
         : "Cifras pendientes hasta que responda la cartera fiscal.";
-  const documentWork: { to: string; label: string; detail: string; count: number; tone: string }[] = [
+  const documentosExtraidos = data?.extracted ?? 0;
+  const documentWork: { to: string; label: string; singular: string; detail: string; count: number; tone: string }[] = [
     {
       to: "/bandeja",
       label: "Documentos en procesamiento",
-      detail: `${data?.extracted ?? 0} listos para revisar`,
+      singular: "Documento en procesamiento",
+      detail: `${documentosExtraidos} ${documentosExtraidos === 1 ? "listo" : "listos"} para revisar`,
       count: data?.processing ?? 0,
       tone: "info",
     },
     {
       to: "/trabajo",
       label: "Pedidos documentales abiertos",
+      singular: "Pedido documental abierto",
       detail: "Seguimiento con clientes",
       count: data?.openRequests ?? 0,
       tone: "warn",
@@ -238,7 +241,7 @@ export function StudyDashboard() {
       sortValue: (item) => item.period?.startDate ?? item.cutoff,
       render: (item) => (
         <span className="tabular-copy">
-          {formatearRango(item.period?.startDate ?? item.cutoff, item.period?.endDate)}
+          {formatearPeriodo(item.period?.startDate ?? item.cutoff, item.period?.endDate)}
         </span>
       ),
     },
@@ -269,7 +272,8 @@ export function StudyDashboard() {
         hasClientAccess(item.clientId) ? (
           <Button
             size="sm"
-            variant="ghost"
+            variant="link"
+            className="dense-link"
             loading={openingSettlementId === item.id}
             loadingLabel="Abriendo liquidación"
             aria-label={`Abrir liquidación de ${item.regime?.taxType?.name ?? item.regime?.name ?? "Impuesto"}, versión ${item.version}`}
@@ -450,7 +454,7 @@ export function StudyDashboard() {
               },
               {
                 key: "documents",
-                label: "Documentos",
+                label: data?.documents === 1 ? "Documento" : "Documentos",
                 value: summaryValue(data?.documents),
                 detail: data ? `${extractionRate} extraídos` : undefined,
               },
@@ -540,19 +544,21 @@ export function StudyDashboard() {
             <ul className="dense-agenda dense-agenda--con-accion">
               {documentWork.map((item) => {
                 const destino = clientId ? item.to : "/clientes";
+                const etiqueta = item.count === 1 ? item.singular : item.label;
                 return (
                   <li key={item.label} data-tone={item.tone}>
                     <Link to={destino} className="dense-agenda__link">
                       <span className="dense-agenda__count">{item.count}</span>
                       <span className="dense-agenda__copy">
-                        <strong>{item.label}</strong>
+                        <strong>{etiqueta}</strong>
                         <small>{item.detail}</small>
                       </span>
                     </Link>
                     <Button
-                      variant="ghost"
+                      variant="link"
+                      className="dense-link"
                       size="sm"
-                      aria-label={`Abrir ${item.label}`}
+                      aria-label={`Abrir ${etiqueta}`}
                       onClick={() => navigate(destino)}
                     >
                       Abrir

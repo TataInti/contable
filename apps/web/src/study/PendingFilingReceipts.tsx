@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@contable/design-system";
 import { api } from "../lib/api";
-import { formatearFecha, formatearMes } from "../lib/formatoFechas";
+import { formatearFecha, formatearPeriodo } from "../lib/formatoFechas";
 import { AsyncState } from "../ui/AsyncState";
 import { DenseFooter, DenseSection, DenseTable, type DenseColumn } from "../ui/Dense";
 
@@ -80,7 +80,7 @@ export function PendingFilingReceipts({
       key: "period",
       header: "Período",
       sortValue: (row) => row.periodStart,
-      render: (row) => formatearMes(row.periodStart),
+      render: (row) => formatearPeriodo(row.periodStart, row.periodEnd),
     },
     {
       key: "due",
@@ -108,7 +108,8 @@ export function PendingFilingReceipts({
         canOpen(row.clientId) ? (
           <Button
             size="sm"
-            variant="ghost"
+            variant="link"
+            className="dense-link"
             aria-label={`Abrir legajo de ${row.clientName}`}
             onClick={() => onOpen(row.clientId)}
           >

@@ -521,7 +521,7 @@ describe("celdas", () => {
     expect(within(table).getByText("4 a 6")).toBeTruthy();
     expect(within(table).getByText("7 a 9")).toBeTruthy();
     expect(within(table).getByText("0 a 1")).toBeTruthy();
-    expect(within(table).getByText("Anticipo Ene-26 (01/01/2026 al 31/01/2026)")).toBeTruthy();
+    expect(within(table).getByText("Anticipo Ene-26 (enero de 2026)")).toBeTruthy();
     expect(table.querySelectorAll("tr.dense-group-row").length).toBe(2);
   });
 
