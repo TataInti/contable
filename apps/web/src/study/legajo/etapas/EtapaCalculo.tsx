@@ -4,7 +4,7 @@ import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { calculationLabel } from "../etiquetas";
-import { formatMoney } from "../formato";
+import { esPedidoDeCambios, formatMoney } from "../formato";
 import { formatearFecha } from "../../../lib/formatoFechas";
 import type { PositionAction, TaxPosition, WorkpaperCalculationComponent } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
@@ -160,16 +160,18 @@ export function EtapaCalculo({
                         ]}
                       />
                     </details>
-                    {component.settlement.differences.length > 0 ? (
+                    {component.settlement.differences.some((d) => !esPedidoDeCambios(d)) ? (
                       <div className="workpaper-calculation__differences">
-                        {component.settlement.differences.map((difference) => (
-                          <p key={difference.id}>
-                            <StatusBadge status={difference.severity} />
-                            <span>
-                              <strong>{difference.code}</strong> · {difference.message}
-                            </span>
-                          </p>
-                        ))}
+                        {component.settlement.differences
+                          .filter((difference) => !esPedidoDeCambios(difference))
+                          .map((difference) => (
+                            <p key={difference.id}>
+                              <StatusBadge status={difference.severity} />
+                              <span>
+                                <strong>{difference.code}</strong> · {difference.message}
+                              </span>
+                            </p>
+                          ))}
                       </div>
                     ) : null}
                   </>

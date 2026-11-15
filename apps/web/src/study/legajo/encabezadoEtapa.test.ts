@@ -21,6 +21,11 @@ describe("encabezado de etapa del Legajo (Foco 2.8)", () => {
     expect(regla(".workpaper-process__nav")).toMatch(/justify-items:\s*end/);
   });
 
+  it("en revisión, Solicitar cambios y Aprobar revisión van en una misma fila (Foco 2.10)", () => {
+    expect(regla(".workpaper-process__decision")).toMatch(/display:\s*flex/);
+    expect(regla(".workpaper-process__decision")).toMatch(/flex-wrap:\s*wrap/);
+  });
+
   it("las columnas de dos cajones se alinean por arriba", () => {
     expect(regla(".study-form.study-form--alinear-arriba")).toMatch(/align-items:\s*start/);
   });

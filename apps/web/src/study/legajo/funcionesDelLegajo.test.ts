@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { calculationDisabledMessage } from "./etiquetas";
-import { formatMoney, selfReviewNote } from "./formato";
+import { formatMoney, mensajesDePedidoDeCambios, selfReviewNote } from "./formato";
 import { hashSourceFile, parseSourceFile } from "./archivoFuente";
 
 // Datos sintéticos rotulados «Demo»: nombres, usuarios y cifras inventados, sin datos de clientes.
@@ -233,5 +233,34 @@ describe("hashSourceFile (huella del archivo)", () => {
     await expect(hashSourceFile("abc")).resolves.toBe(
       "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
     );
+  });
+});
+
+describe("mensajesDePedidoDeCambios (pedido de cambios del revisor, Foco 2.10)", () => {
+  it("devuelve solo los mensajes con código CHANGES_REQUESTED, en orden", () => {
+    const componentes = [
+      {
+        settlement: {
+          differences: [
+            { id: "d1", severity: "INFO", status: "OPEN", code: "OTRO", message: "No cuenta." },
+            { id: "d2", severity: "WARNING", status: "OPEN", code: "CHANGES_REQUESTED", message: "Primero." },
+          ],
+        },
+      },
+      { settlement: null },
+      {
+        settlement: {
+          differences: [
+            { id: "d3", severity: "WARNING", status: "OPEN", code: "CHANGES_REQUESTED", message: "Segundo." },
+          ],
+        },
+      },
+    ] as unknown as Parameters<typeof mensajesDePedidoDeCambios>[0];
+    expect(mensajesDePedidoDeCambios(componentes)).toEqual(["Primero.", "Segundo."]);
+  });
+
+  it("sin componentes o sin pedidos devuelve una lista vacía", () => {
+    expect(mensajesDePedidoDeCambios(undefined)).toEqual([]);
+    expect(mensajesDePedidoDeCambios([])).toEqual([]);
   });
 });

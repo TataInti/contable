@@ -36,6 +36,7 @@ import {
   calculationDisabledMessage,
 } from "./legajo/etiquetas";
 import { importarLoteFuente } from "./legajo/loteFuente";
+import { mensajesDePedidoDeCambios } from "./legajo/formato";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
 import { CabeceraLegajo } from "./legajo/paneles/CabeceraLegajo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
@@ -781,13 +782,22 @@ export function StudyExpedienteMensual() {
                 </>
               ) : null}
               {wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review") ? (
-                <Button
-                  variant="primary"
-                  disabled={reviewMutation.isPending || selfReviewBlocked}
-                  onClick={() => reviewMutation.mutate({ id: wp.id, approved: true })}
-                >
-                  Aprobar revisión
-                </Button>
+                <span className="workpaper-process__decision">
+                  <Button
+                    variant="secondary"
+                    disabled={reviewMutation.isPending || selfReviewBlocked}
+                    onClick={() => reviewMutation.mutate({ id: wp.id, approved: false })}
+                  >
+                    Solicitar cambios
+                  </Button>
+                  <Button
+                    variant="primary"
+                    disabled={reviewMutation.isPending || selfReviewBlocked}
+                    onClick={() => reviewMutation.mutate({ id: wp.id, approved: true })}
+                  >
+                    Aprobar revisión
+                  </Button>
+                </span>
               ) : null}
               {wp.status === "REVIEWED" ? (
                 <Button
@@ -829,8 +839,8 @@ export function StudyExpedienteMensual() {
             </>
           );
           // Foco 2.9: la barra de acciones secundarias se dibuja solo con un botón o un error que mostrar.
+          // Foco 2.10: en revisión, «Solicitar cambios» va en la línea de la etapa; la barra queda solo con un error.
           const hayAccionesSecundarias =
-            (wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review")) ||
             (wp.status === "IN_REVIEW" &&
               reviewMutation.variables?.id === wp.id &&
               Boolean(reviewMutation.error)) ||
@@ -840,17 +850,6 @@ export function StudyExpedienteMensual() {
               Boolean(rectifyMutation.error));
           const acciones = (
             <>
-              {wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review") ? (
-                <span className="study-table__actions">
-                  <Button
-                    variant="secondary"
-                    disabled={reviewMutation.isPending || selfReviewBlocked}
-                    onClick={() => reviewMutation.mutate({ id: wp.id, approved: false })}
-                  >
-                    Solicitar cambios
-                  </Button>
-                </span>
-              ) : null}
               {wp.status === "IN_REVIEW" ? (
                 <WorkpaperActionError
                   error={reviewMutation.variables?.id === wp.id ? reviewMutation.error : null}
@@ -887,6 +886,9 @@ export function StudyExpedienteMensual() {
               etapaActiva={safeActiveStep}
               onCambiarEtapa={goToStep}
               accionPrincipal={accionPrincipal}
+              pedidosDeCambios={
+                wp.id === activeWorkpaperId ? mensajesDePedidoDeCambios(calculationQuery.data) : []
+              }
               acciones={hayAccionesSecundarias ? acciones : null}
             >
               {renderEtapa(wp, safeActiveStep)}
