@@ -5,20 +5,15 @@ import {
   ACTIVITY_CODE_PATTERN,
   normalizeActivityCode,
   type CalcFamilyOption,
-  type EconomicActivityCodeChange,
 } from "@contable/contracts";
-import { ApiError, api, type FiscalJurisdiction, type FiscalTaxType } from "../lib/api";
-import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
+import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
-import { StatusBadge } from "../ui/StatusBadge";
 import {
   DenseHeader,
-  DenseLoading,
   DensePage,
   DenseSearch,
-  DenseTable,
   DenseTabs,
   DenseToolbar,
   DenseWorkspace,
@@ -29,199 +24,41 @@ import {
   normalizeSearch,
   useDenseShortcuts,
   useDensity,
-  type DenseColumn,
 } from "../ui/Dense";
 import { Icon } from "../ui/Icon";
+import { ActivityStateBadge, ActiveBadge, OriginBadge, MutationError } from "./catalogos/piezas";
+import {
+  emptyActivityForm,
+  emptyJurisdictionForm,
+  emptyTaxTypeForm,
+  validityLabel,
+  jurisdictionKindLabel,
+  isOwnedUiRecord,
+  apiFieldIssue,
+  codeConflict,
+  suggestedCode,
+  selectionOptions,
+} from "./catalogos/utilidades";
+import type {
+  JurisdictionOption,
+  TaxTypeOption,
+  TaxAuthorityRow,
+  TaxRegimeRow,
+  TaxRegimeModuleOption,
+  AuthorityForm,
+  RegimeForm,
+  JurisdictionForm,
+  TaxTypeForm,
+  CatalogActivityRow,
+  ActivityForm,
+  CatalogUsage,
+  CatalogTab,
+  MasterDrawer,
+  CatalogDrawer,
+} from "./catalogos/tipos";
+import { TablaCatalogo, type VistaPestana } from "./catalogos/TablaCatalogo";
 import "./study.css";
 import "./StudyCatalogosFiscales.css";
-import { formatearRango } from "../lib/formatoFechas";
-
-type JurisdictionOption = FiscalJurisdiction;
-type TaxTypeOption = FiscalTaxType;
-
-interface TaxAuthorityRow {
-  id: string;
-  code: string;
-  name: string;
-  jurisdictionId: string;
-  isActive: boolean;
-  origin?: "REFERENCE" | "UI";
-  createdByFirmId?: string | null;
-  jurisdiction: JurisdictionOption;
-}
-
-interface TaxRegimeRow {
-  id: string;
-  code: string;
-  name: string;
-  calcFamilyId?: string | null;
-  moduleId?: string | null;
-  isActive: boolean;
-  origin?: "REFERENCE" | "UI";
-  createdByFirmId?: string | null;
-  authority: TaxAuthorityRow;
-  jurisdiction: JurisdictionOption;
-  taxType: TaxTypeOption;
-}
-
-interface TaxRegimeModuleOption {
-  id: string;
-  key: string;
-  label: string;
-  flagCode: string | null;
-  isActive: boolean;
-}
-
-interface AuthorityForm {
-  code: string;
-  name: string;
-  jurisdictionId: string;
-}
-
-interface RegimeForm {
-  code: string;
-  name: string;
-  taxTypeId: string;
-  calcFamilyId: string;
-  moduleId: string;
-  jurisdictionId: string;
-  authorityId: string;
-}
-
-interface JurisdictionForm {
-  code: string;
-  name: string;
-  kind: JurisdictionOption["kind"];
-  parentId: string;
-}
-
-interface TaxTypeForm {
-  code: string;
-  name: string;
-  defaultFamilyId: string;
-}
-
-interface CatalogActivityRow {
-  id: string;
-  code: string;
-  name: string;
-  jurisdictionId: string;
-  source: string | null;
-  validFrom: string;
-  validTo: string | null;
-  isActive: boolean;
-  origin?: "REFERENCE" | "UI";
-  createdByFirmId?: string | null;
-  activeClientLinks?: number;
-  codeChange?: EconomicActivityCodeChange | null;
-}
-
-interface ActivityForm {
-  code: string;
-  name: string;
-  jurisdictionId: string;
-  source: string;
-  validFrom: string;
-  validTo: string;
-}
-
-interface CatalogUsage {
-  entityId: string;
-  used: boolean;
-  count: number;
-  places: Array<{ label: string; count: number }>;
-}
-
-const today = new Date().toISOString().slice(0, 10);
-
-const emptyActivityForm: ActivityForm = {
-  code: "",
-  name: "",
-  jurisdictionId: "",
-  source: "",
-  validFrom: today,
-  validTo: "",
-};
-
-const emptyJurisdictionForm: JurisdictionForm = {
-  code: "",
-  name: "",
-  kind: "NATIONAL",
-  parentId: "",
-};
-
-const emptyTaxTypeForm: TaxTypeForm = { code: "", name: "", defaultFamilyId: "" };
-
-function validityLabel(validFrom: string, validTo: string | null) {
-  return formatearRango(validFrom, validTo);
-}
-
-type CatalogTab = "jurisdictions" | "taxTypes" | "authorities" | "regimes" | "activities";
-type MasterDrawer = "jurisdiction-create" | "jurisdiction-edit" | "tax-type-create" | "tax-type-edit";
-type CatalogDrawer = "authority-create" | "authority-edit" | "regime-create" | "regime-edit";
-
-const jurisdictionKindLabel: Record<JurisdictionOption["kind"], string> = {
-  NATIONAL: "Nación",
-  PROVINCIAL: "Provincia",
-  MUNICIPAL: "Municipio",
-};
-
-function ActivityStateBadge({ isActive }: { isActive: boolean }) {
-  return (
-    <StatusBadge
-      status={isActive ? "ACTIVE" : "INACTIVE"}
-      label={isActive ? undefined : "Oculto"}
-    />
-  );
-}
-
-function ActiveBadge({ active }: { active: boolean }) {
-  return (
-    <StatusBadge
-      status={active ? "ACTIVE" : "INACTIVE"}
-      label={active ? "Activo" : "Oculto"}
-    />
-  );
-}
-
-function OriginBadge({ origin }: { origin?: "REFERENCE" | "UI" }) {
-  if (!origin) return <span className="muted-copy">—</span>;
-  return (
-    <StatusBadge
-      status={origin === "UI" ? "INFO" : "REFERENCE"}
-      label={origin === "UI" ? "Del estudio" : "Referencia"}
-    />
-  );
-}
-
-function isOwnedUiRecord(
-  row: { origin?: string; createdByFirmId?: string | null },
-  firmId: string,
-): boolean {
-  return row.origin === "UI" && row.createdByFirmId === firmId;
-}
-
-function MutationError({ error }: { error: unknown }) {
-  if (!error || codeConflict(error)) return null;
-  if (error instanceof ApiError) return <FieldErrorsFromDetails error={error} />;
-  return (
-    <Notice tone="error">
-      {error instanceof Error ? error.message : "Ocurrió un error inesperado."}
-    </Notice>
-  );
-}
-
-function apiFieldIssue(error: unknown, field: string): string | undefined {
-  if (!(error instanceof ApiError)) return undefined;
-  const details = error.details?.details;
-  if (!Array.isArray(details)) return undefined;
-  const issue = details.find((candidate) => {
-    if (typeof candidate !== "object" || candidate === null) return false;
-    const path = (candidate as { path?: unknown }).path;
-    return Array.isArray(path) && path.some((part) => part === field);
-  }) as { message?: unknown } | undefined;
-  return typeof issue?.message === "string" ? issue.message : undefined;
-}
 
 function InspectorActions({
   onEdit,
@@ -256,28 +93,6 @@ function InspectorActions({
       ) : null}
     </div>
   );
-}
-
-const CATALOG_CODE_CONFLICT = "CATALOG_CODE_CONFLICT";
-
-function codeConflict(error: unknown): string | undefined {
-  return error instanceof ApiError && error.code === CATALOG_CODE_CONFLICT ? error.message : undefined;
-}
-
-function suggestedCode(current: string, usedCodes: string[], maxLength = 40): string {
-  const normalized = new Set(usedCodes.map((code) => code.toLocaleUpperCase("es-AR")));
-  for (let suffix = 2; suffix < 10_000; suffix += 1) {
-    const tail = `-${suffix}`;
-    const candidate = `${current.slice(0, maxLength - tail.length)}${tail}`;
-    if (!normalized.has(candidate.toLocaleUpperCase("es-AR"))) return candidate;
-  }
-  return current.slice(0, maxLength);
-}
-
-function selectionOptions<T extends { id: string; isActive: boolean }>(rows: T[], selectedId?: string) {
-  const activeRows = rows.filter((row) => row.isActive);
-  const selectedHidden = rows.find((row) => row.id === selectedId && !row.isActive);
-  return selectedHidden ? [...activeRows, selectedHidden] : activeRows;
 }
 
 export function StudyCatalogosFiscales() {
@@ -963,9 +778,6 @@ export function StudyCatalogosFiscales() {
     </>
   );
 
-  const loadingFor = (loading: boolean, label: string) =>
-    loading ? <DenseLoading label={label} /> : null;
-
   const deleteButton = (path: string) => (
     <Button
       size="sm"
@@ -1277,438 +1089,52 @@ export function StudyCatalogosFiscales() {
     );
   }
 
-  const authorityColumns: DenseColumn<TaxAuthorityRow>[] = [
-    {
-      key: "code",
-      header: "Código",
-      sortValue: (row) => row.code,
-      render: (row) => <span className="dense-code">{row.code}</span>,
-    },
-    {
-      key: "name",
-      header: "Organismo",
-      sortValue: (row) => row.name,
-      render: (row) => <span title={row.name}>{row.name}</span>,
-    },
-    {
-      key: "jurisdiction",
-      header: "Jurisdicción",
-      sortValue: (row) => row.jurisdiction.name,
-      render: (row) => (
-        <span className="dense-cell-inline">
-          {row.jurisdiction.name}
-          <span className="dense-chip dense-chip--hide-narrow">{row.jurisdiction.code}</span>
-        </span>
-      ),
-    },
-    {
-      key: "regimes",
-      header: "Regímenes",
-      align: "right",
-      sortValue: (row) => regimesByAuthority(row.id).length,
-      render: (row) => regimesByAuthority(row.id).length || "—",
-    },
-    {
-      key: "origin",
-      header: "Origen",
-      secondary: true,
-      sortValue: (row) => row.origin ?? "",
-      render: (row) => <OriginBadge origin={row.origin} />,
-    },
-    {
-      key: "state",
-      header: "Estado",
-      secondary: true,
-      sortValue: (row) => row.isActive,
-      render: (row) => <ActiveBadge active={row.isActive} />,
-    },
-  ];
 
-  const regimeColumns: DenseColumn<TaxRegimeRow>[] = [
-    {
-      key: "code",
-      header: "Código",
-      sortValue: (row) => row.code,
-      render: (row) => <span className="dense-code">{row.code}</span>,
-    },
-    {
-      key: "name",
-      header: "Régimen",
-      sortValue: (row) => row.name,
-      render: (row) => <span title={row.name}>{row.name}</span>,
-    },
-    {
-      key: "taxType",
-      header: "Impuesto",
-      secondary: true,
-      sortValue: (row) => row.taxType.name,
-      render: (row) => (
-        <span className="dense-cell-inline" title={`${row.taxType.name} (${row.taxType.code})`}>
-          {row.taxType.name}
-          <span className="dense-chip">{row.taxType.code}</span>
-        </span>
-      ),
-    },
-    {
-      key: "jurisdiction",
-      header: "Jurisdicción",
-      sortValue: (row) => row.jurisdiction.name,
-      render: (row) => (
-        <span className="dense-cell-inline">
-          {row.jurisdiction.name}
-          <span className="dense-chip dense-chip--hide-narrow">{row.jurisdiction.code}</span>
-        </span>
-      ),
-    },
-    {
-      key: "authority",
-      header: "Organismo",
-      sortValue: (row) => row.authority.code,
-      render: (row) => (
-        <span className="dense-chip" title={row.authority.name}>
-          {row.authority.code}
-        </span>
-      ),
-    },
-    {
-      key: "coherence",
-      header: "Coherencia",
-      sortValue: (row) => (regimeMismatch(row) ? 0 : 1),
-      render: (row) =>
-        regimeMismatch(row) ? (
-          <span
-            className="dense-coherence dense-coherence--bad"
-            title={`${row.authority.code} recauda en ${authorityJurisdictionName(row)}, no en ${row.jurisdiction.name}`}
-          >
-            <Icon name="alert" size={14} />
-            Revisar
-          </span>
-        ) : (
-          <span className="dense-coherence dense-coherence--ok">
-            <Icon name="check" size={14} />
-            OK
-          </span>
-        ),
-    },
-    {
-      key: "origin",
-      header: "Origen",
-      secondary: true,
-      sortValue: (row) => row.origin ?? "",
-      render: (row) => <OriginBadge origin={row.origin} />,
-    },
-    {
-      key: "state",
-      header: "Estado",
-      secondary: true,
-      sortValue: (row) => row.isActive,
-      render: (row) => <ActiveBadge active={row.isActive} />,
-    },
-  ];
 
-  const activityColumns: DenseColumn<CatalogActivityRow>[] = [
-    {
-      key: "code",
-      header: "Código",
-      sortValue: (row) => row.code,
-      render: (row) => (
-        <span className="dense-code" title={row.code}>
-          {row.code}
-        </span>
-      ),
-    },
-    {
-      key: "name",
-      header: "Actividad",
-      sortValue: (row) => row.name,
-      render: (row) => <span title={row.name}>{row.name}</span>,
-    },
-    {
-      key: "jurisdiction",
-      header: "Jurisdicción",
-      sortValue: (row) => jurisdictionName(row.jurisdictionId),
-      render: (row) => {
-        const jurisdiction = jurisdictions.find((item) => item.id === row.jurisdictionId);
-        return (
-          <span className="dense-activity-jurisdiction" title={jurisdictionName(row.jurisdictionId)}>
-            <span>{jurisdiction?.name ?? "—"}</span>
-            {jurisdiction ? (
-              <small>
-                {jurisdictionKindLabel[jurisdiction.kind]} · {jurisdiction.code}
-                {!jurisdiction.isActive ? " (oculta)" : ""}
-              </small>
-            ) : null}
-          </span>
-        );
-      },
-    },
-    {
-      key: "source",
-      header: "Fuente",
-      sortValue: (row) => row.source ?? "",
-      render: (row) => <span title={row.source ?? undefined}>{row.source ?? "—"}</span>,
-    },
-    {
-      key: "validity",
-      header: "Vigencia",
-      sortValue: (row) => row.validFrom,
-      render: (row) => validityLabel(row.validFrom, row.validTo),
-    },
-    {
-      key: "origin",
-      header: "Origen",
-      secondary: true,
-      sortValue: (row) => row.origin ?? "",
-      render: (row) => <OriginBadge origin={row.origin} />,
-    },
-    {
-      key: "state",
-      header: "Estado",
-      secondary: true,
-      sortValue: (row) => row.isActive,
-      render: (row) => <ActivityStateBadge isActive={row.isActive} />,
-    },
-  ];
 
   const jurisdictionParentLabel = (jurisdiction: JurisdictionOption) => {
     const parent = jurisdictions.find((row) => row.id === jurisdiction.parentId) ?? jurisdiction.parent;
     const hidden = parent && "isActive" in parent && !parent.isActive;
     return parent ? `${parent.name}${hidden ? " (oculto)" : ""}` : "—";
   };
-  const jurisdictionColumns: DenseColumn<JurisdictionOption>[] = [
-    {
-      key: "code",
-      header: "Código",
-      sortValue: (row) => row.code,
-      render: (row) => <span className="dense-code">{row.code}</span>,
-    },
-    {
-      key: "name",
-      header: "Jurisdicción",
-      sortValue: (row) => row.name,
-      render: (row) => <span title={row.name}>{row.name}</span>,
-    },
-    {
-      key: "kind",
-      header: "Nivel",
-      sortValue: (row) => jurisdictionKindLabel[row.kind],
-      render: (row) => jurisdictionKindLabel[row.kind],
-    },
-    {
-      key: "parent",
-      header: "Padre",
-      sortValue: jurisdictionParentLabel,
-      render: jurisdictionParentLabel,
-    },
-    {
-      key: "origin",
-      header: "Origen",
-      secondary: true,
-      sortValue: (row) => row.origin ?? "",
-      render: (row) => <OriginBadge origin={row.origin} />,
-    },
-    {
-      key: "state",
-      header: "Estado",
-      secondary: true,
-      sortValue: (row) => row.isActive,
-      render: (row) => <ActiveBadge active={row.isActive} />,
-    },
-  ];
-  const taxTypeColumns: DenseColumn<TaxTypeOption>[] = [
-    {
-      key: "code",
-      header: "Código",
-      sortValue: (row) => row.code,
-      render: (row) => <span className="dense-code">{row.code}</span>,
-    },
-    {
-      key: "name",
-      header: "Tipo de impuesto",
-      sortValue: (row) => row.name,
-      render: (row) => <span title={row.name}>{row.name}</span>,
-    },
-    {
-      key: "origin",
-      header: "Origen",
-      secondary: true,
-      sortValue: (row) => row.origin ?? "",
-      render: (row) => <OriginBadge origin={row.origin} />,
-    },
-    {
-      key: "state",
-      header: "Estado",
-      secondary: true,
-      sortValue: (row) => row.isActive,
-      render: (row) => <ActiveBadge active={row.isActive} />,
-    },
-  ];
 
   const select = (key: string | null) => setSelectedId(key);
+  const limpiarFiltrosActividades = () => {
+    setSearch("");
+    setJurisdictionFilter("");
+    setOriginFilter("");
+    setStateFilter("");
+  };
+  const vistaTabla: VistaPestana =
+    tab === "jurisdictions"
+      ? { tab, cargando: jurisdictionsQuery.isLoading, error: jurisdictionsQuery.isError, filas: visibleJurisdictions, sinRegistros: jurisdictions.length === 0 }
+      : tab === "taxTypes"
+        ? { tab, cargando: taxTypesQuery.isLoading, error: taxTypesQuery.isError, filas: visibleTaxTypes, sinRegistros: taxTypes.length === 0 }
+        : tab === "authorities"
+          ? { tab, cargando: authoritiesQuery.isLoading, error: authoritiesQuery.isError, filas: visibleAuthorities, sinRegistros: selectableAuthorities.length === 0 }
+          : tab === "regimes"
+            ? { tab, cargando: regimesQuery.isLoading, error: regimesQuery.isError, filas: visibleRegimes, sinRegistros: regimes.length === 0 }
+            : { tab: "activities", cargando: activitiesQuery.isLoading, error: activitiesQuery.isError, filas: visibleActivities, filtrosActivos: activityFiltersActive };
+  const tableBody = (
+    <TablaCatalogo
+      {...vistaTabla}
+      selectedId={selectedId}
+      inspectorOpen={inspectorOpen}
+      originKnown={originKnown}
+      select={select}
+      tableFooter={tableFooter}
+      onLimpiarFiltros={limpiarFiltrosActividades}
+      dependencias={{
+        jurisdictions,
+        jurisdictionName,
+        jurisdictionParentLabel,
+        regimesByAuthority,
+        regimeMismatch,
+        authorityJurisdictionName,
+      }}
+    />
+  );
 
-  let tableBody: ReactNode;
-  if (tab === "jurisdictions") {
-    tableBody =
-      loadingFor(jurisdictionsQuery.isLoading, "Cargando jurisdicciones…") ??
-      (jurisdictionsQuery.isError ? null : (
-        <DenseTable<JurisdictionOption>
-          label="Jurisdicciones"
-          columns={jurisdictionColumns}
-          rows={visibleJurisdictions}
-          rowKey={(row) => row.id}
-          selectedKey={selectedId}
-          onSelect={select}
-          inspectorOpen={inspectorOpen}
-          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
-          footer={tableFooter}
-          empty={
-            <EmptyState
-              size="compact"
-              kind={jurisdictions.length === 0 ? "no-data" : "no-results"}
-              title={jurisdictions.length === 0 ? "Todavía no hay jurisdicciones" : "Ninguna jurisdicción coincide con los filtros"}
-              description={jurisdictions.length === 0 ? "Creá Nación, provincia y municipio para completar el alcance fiscal del estudio." : "Probá con otro código o nombre, o quitá filtros."}
-            />
-          }
-        />
-      ));
-  } else if (tab === "taxTypes") {
-    tableBody =
-      loadingFor(taxTypesQuery.isLoading, "Cargando tipos de impuesto…") ??
-      (taxTypesQuery.isError ? null : (
-        <DenseTable<TaxTypeOption>
-          label="Tipos de impuesto"
-          columns={taxTypeColumns}
-          rows={visibleTaxTypes}
-          rowKey={(row) => row.id}
-          selectedKey={selectedId}
-          onSelect={select}
-          inspectorOpen={inspectorOpen}
-          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
-          footer={tableFooter}
-          empty={
-            <EmptyState
-              size="compact"
-              kind={taxTypes.length === 0 ? "no-data" : "no-results"}
-              title={taxTypes.length === 0 ? "Todavía no hay tipos de impuesto" : "Ningún tipo de impuesto coincide con los filtros"}
-              description={taxTypes.length === 0 ? "Creá un tipo de impuesto para poder iniciar regímenes fiscales." : "Probá con otro código o nombre, o quitá filtros."}
-            />
-          }
-        />
-      ));
-  } else if (tab === "authorities") {
-    tableBody =
-      loadingFor(authoritiesQuery.isLoading, "Cargando organismos recaudadores…") ??
-      (authoritiesQuery.isError ? null : (
-        <DenseTable<TaxAuthorityRow>
-          label="Organismos recaudadores"
-          columns={authorityColumns.filter((column) => originKnown || column.key !== "origin")}
-          rows={visibleAuthorities}
-          rowKey={(row) => row.id}
-          selectedKey={selectedId}
-          onSelect={select}
-          inspectorOpen={inspectorOpen}
-          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
-          footer={tableFooter}
-          empty={
-            <EmptyState
-              size="compact"
-              kind={selectableAuthorities.length === 0 ? "no-data" : "no-results"}
-              title={
-                selectableAuthorities.length === 0
-                  ? "Todavía no hay organismos recaudadores"
-                  : "Ningún organismo coincide con los filtros"
-              }
-              description={
-                selectableAuthorities.length === 0
-                  ? "Creá un organismo asociado a una jurisdicción para poder registrar regímenes."
-                  : "Probá con otro código o nombre, o quitá filtros."
-              }
-            />
-          }
-        />
-      ));
-  } else if (tab === "regimes") {
-    tableBody =
-      loadingFor(regimesQuery.isLoading, "Cargando regímenes…") ??
-      (regimesQuery.isError ? null : (
-        <DenseTable<TaxRegimeRow>
-          label="Regímenes"
-          columns={regimeColumns.filter((column) => originKnown || column.key !== "origin")}
-          rows={visibleRegimes}
-          rowKey={(row) => row.id}
-          selectedKey={selectedId}
-          onSelect={select}
-          inspectorOpen={inspectorOpen}
-          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
-          footer={tableFooter}
-          empty={
-            <EmptyState
-              size="compact"
-              kind={regimes.length === 0 ? "no-data" : "no-results"}
-              title={
-                regimes.length === 0
-                  ? "Todavía no hay regímenes fiscales"
-                  : "Ningún régimen coincide con los filtros"
-              }
-              description={
-                regimes.length === 0
-                  ? "Definí un régimen con un organismo recaudador y jurisdicción verificados."
-                  : "Probá con otro código o nombre, o quitá filtros."
-              }
-            />
-          }
-        />
-      ));
-  } else {
-    tableBody =
-      loadingFor(activitiesQuery.isLoading, "Cargando actividades económicas…") ??
-      (activitiesQuery.isError ? null : (
-        <DenseTable<CatalogActivityRow>
-          label="Actividades económicas"
-          columns={activityColumns.filter((column) => originKnown || column.key !== "origin")}
-          rows={visibleActivities}
-          rowKey={(row) => row.id}
-          selectedKey={selectedId}
-          onSelect={select}
-          inspectorOpen={inspectorOpen}
-          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
-          footer={tableFooter}
-          empty={
-            <EmptyState
-              size="compact"
-              kind={activityFiltersActive ? "no-results" : "no-data"}
-              title={
-                activityFiltersActive
-                  ? "Ninguna actividad coincide con el filtro"
-                  : "Todavía no hay actividades económicas"
-              }
-              description={
-                activityFiltersActive
-                  ? "Ajustá los criterios de búsqueda o quitá el filtro."
-                  : "Creá una actividad para poder vincularla a clientes y reglas fiscales."
-              }
-              action={
-                activityFiltersActive ? (
-                  <Button
-                    type="button"
-                    variant="text"
-                    size="row"
-                    onClick={() => {
-                      setSearch("");
-                      setJurisdictionFilter("");
-                      setOriginFilter("");
-                      setStateFilter("");
-                    }}
-                  >
-                    Quitar filtro
-                  </Button>
-                ) : undefined
-              }
-            />
-          }
-        />
-      ));
-  }
 
   return (
     <DensePage density={density} flow className="fiscal-catalog-page">
