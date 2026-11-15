@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Notice, Table, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
-import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
@@ -13,6 +12,11 @@ import "./study.css";
 import { formatearFecha } from "../lib/formatoFechas";
 import type { CloseCycle, EvidencePreview, Obligation, RequestThread, WorkDocumentRequest } from "./trabajo/tipos";
 import { filasDeObligaciones } from "./trabajo/obligaciones";
+import { CajonNuevoPedido } from "./trabajo/CajonNuevoPedido";
+import { CajonIniciarCierre } from "./trabajo/CajonIniciarCierre";
+import { CajonRevision } from "./trabajo/CajonRevision";
+import { CajonEvidencia } from "./trabajo/CajonEvidencia";
+import { CajonConversacion } from "./trabajo/CajonConversacion";
 
 export function StudyTrabajo() {
   const [density] = useDensity();
@@ -296,305 +300,46 @@ export function StudyTrabajo() {
         </Notice>
       ) : null}
 
-      <ActionDrawer
-        isOpen={showRequest}
-        onClose={() => setShowRequest(false)}
-        title="Nuevo pedido"
-        description="Describí exactamente qué necesitás y, si corresponde, cuándo debe entregarse."
-      >
-        <form
-          className="study-inline-form study-inline-form--request"
-          onSubmit={(event) => {
-            event.preventDefault();
-            createRequest.mutate();
-          }}
-        >
-          <Field
-            id="request-title"
-            label="Asunto"
-            value={request.title}
-            onChange={(event) => setRequest({ ...request, title: event.target.value })}
-            maxLength={200}
-            required
-          />
-          <Field
-            id="request-item"
-            label="Documento solicitado"
-            value={request.item}
-            onChange={(event) => setRequest({ ...request, item: event.target.value })}
-            maxLength={500}
-            required
-          />
-          <label className="ds-field" htmlFor="request-description">
-            <span className="ds-field__label">Instrucciones para el cliente</span>
-            <textarea
-              id="request-description"
-              className="study-textarea"
-              rows={2}
-              value={request.description}
-              onChange={(event) => setRequest({ ...request, description: event.target.value })}
-              maxLength={4000}
-              placeholder="Indicá el período, formato o detalle que necesitás."
-            />
-          </label>
-          <Field
-            id="request-due"
-            label="Fecha límite"
-            type="date"
-            value={request.dueDate}
-            onChange={(event) => setRequest({ ...request, dueDate: event.target.value })}
-          />
-          {createRequest.isError ? (
-            <Notice tone="error" className="study-inline-form__feedback">
-              No se pudo crear el pedido. Revisá los datos e intentá nuevamente.
-            </Notice>
-          ) : null}
-          <div className="study-inline-form__actions">
-            <Button
-              type="submit"
-              loading={createRequest.isPending}
-              disabled={!request.title.trim() || !request.item.trim()}
-            >
-              Crear pedido
-            </Button>
-          </div>
-        </form>
-      </ActionDrawer>
+      <CajonNuevoPedido
+        showRequest={showRequest}
+        setShowRequest={setShowRequest}
+        request={request}
+        setRequest={setRequest}
+        createRequest={createRequest}
+      />
 
-      <ActionDrawer
-        isOpen={showClose}
-        onClose={() => setShowClose(false)}
-        title="Iniciar cierre del período"
-        description="Definí las verificaciones del ciclo. Cada tarea se completa y queda auditada por separado."
-      >
-        <form
-          className="study-page__form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            createClose.mutate();
-          }}
-        >
-          <label className="ds-field" htmlFor="close-items">
-            <span className="ds-field__label">Tareas de cierre</span>
-            <textarea
-              id="close-items"
-              className="study-textarea"
-              rows={5}
-              value={closeItems}
-              onChange={(event) => setCloseItems(event.target.value)}
-              placeholder="Una tarea por línea"
-              required
-            />
-            <small className="study-page__hint">
-              Se crearán {closeItems.split("\n").filter((item) => item.trim()).length} tareas.
-            </small>
-          </label>
-          {!activeFiscalYear ? (
-            <Notice tone="error">
-              Seleccioná un período contable abierto antes de iniciar el cierre.
-            </Notice>
-          ) : null}
-          {createClose.isError ? (
-            <Notice tone="error">
-              {createClose.error.message}
-            </Notice>
-          ) : null}
-          <div className="study-inline-form__actions">
-            <Button
-              type="submit"
-              loading={createClose.isPending}
-              disabled={!activeFiscalYear || !periodId}
-            >
-              Crear ciclo de cierre
-            </Button>
-          </div>
-        </form>
-      </ActionDrawer>
+      <CajonIniciarCierre
+        showClose={showClose}
+        setShowClose={setShowClose}
+        closeItems={closeItems}
+        setCloseItems={setCloseItems}
+        activeFiscalYear={activeFiscalYear}
+        periodId={periodId}
+        createClose={createClose}
+      />
 
-      <ActionDrawer
-        isOpen={Boolean(reviewRequest)}
-        onClose={() => {
-          setActiveReviewRequestId(null);
-          setRejectReason("");
-        }}
-        title="Revisión de ítems"
-        description={reviewRequest?.title}
-      >
-        {reviewRequest ? (
-          <div className="study-page__form">
-            <p className="study-page__hint">
-              Estado del pedido: <strong>{reviewRequest.status}</strong>. La completitud se deriva
-              de los ítems aceptados o eximidos.
-            </p>
-            <div className="request-review-list">
-              {reviewRequest.items.map((item) => {
-                const canResolve = item.status === "ATTACHED";
-                return (
-                  <div key={item.id} className="request-review-list__item">
-                    <div>
-                      <strong>{item.description}</strong>
-                      <small>
-                        {item.required ? "Requerido" : "Opcional"} · {item.status}
-                      </small>
-                    </div>
-                    {canResolve && capabilities.has("request.manage") ? (
-                      <div className="table-actions">
-                        <Button
-                          size="sm"
-                          loading={acceptItem.isPending}
-                          onClick={() => acceptItem.mutate({ requestId: reviewRequest.id, itemId: item.id })}
-                        >
-                          Aceptar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          loading={waiveItem.isPending}
-                          onClick={() => waiveItem.mutate({ requestId: reviewRequest.id, itemId: item.id })}
-                        >
-                          Eximir
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          loading={rejectItem.isPending}
-                          disabled={!rejectReason.trim()}
-                          onClick={() =>
-                            rejectItem.mutate({
-                              requestId: reviewRequest.id,
-                              itemId: item.id,
-                              reason: rejectReason.trim(),
-                            })
-                          }
-                        >
-                          Rechazar
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-            {reviewRequest.items.some((item) => item.status === "ATTACHED") &&
-            capabilities.has("request.manage") ? (
-              <>
-                <label className="ds-field" htmlFor="request-reject-reason">
-                  <span className="ds-field__label">Motivo de rechazo</span>
-                  <textarea
-                    id="request-reject-reason"
-                    className="study-textarea"
-                    rows={2}
-                    value={rejectReason}
-                    onChange={(event) => setRejectReason(event.target.value)}
-                    placeholder="Indicá qué debe corregir el cliente."
-                  />
-                </label>
-                <p className="study-page__hint">
-                  Para rechazar un ítem, elegí el motivo y usá la acción correspondiente en la
-                  fila.
-                </p>
-              </>
-            ) : null}
-          </div>
-        ) : null}
-      </ActionDrawer>
+      <CajonRevision
+        reviewRequest={reviewRequest}
+        setActiveReviewRequestId={setActiveReviewRequestId}
+        rejectReason={rejectReason}
+        setRejectReason={setRejectReason}
+        capabilities={capabilities}
+        acceptItem={acceptItem}
+        waiveItem={waiveItem}
+        rejectItem={rejectItem}
+      />
 
-      <ActionDrawer
-        isOpen={Boolean(preview)}
-        onClose={() => setPreview(null)}
-        title="Documento adjunto"
-        description={preview?.originalName ?? "Vista previa de la evidencia asociada al pedido."}
-        size="wide"
-      >
-        {preview ? (
-          <div className="evidence-preview">
-            {preview.mimeType === "application/pdf" ? (
-              <iframe
-                src={preview.url}
-                title="Vista previa del documento"
-                className="evidence-preview__frame"
-              />
-            ) : (
-              <img
-                src={preview.url}
-                alt="Vista previa del documento"
-                className="evidence-preview__image"
-              />
-            )}
-            <a
-              className="evidence-preview__link"
-              href={preview.url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Abrir en pestaña nueva
-            </a>
-          </div>
-        ) : null}
-      </ActionDrawer>
+      <CajonEvidencia preview={preview} setPreview={setPreview} />
 
-      <ActionDrawer
-        isOpen={Boolean(activeConversation)}
-        onClose={() => setActiveConversation(null)}
-        title="Conversación"
-        description={activeConversation?.title}
-      >
-        {activeConversation ? (
-          <>
-            {conversationThread?.messages.length ? (
-              <div className="request-message-list" aria-live="polite">
-                {conversationThread.messages.map((message) => (
-                  <div key={message.id} className="request-message-list__item">
-                    <strong>{message.visibility === "SHARED" ? "Compartido" : "Interno"}</strong>
-                    <p>{message.body}</p>
-                    <small>{formatearFecha(message.createdAt)}</small>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                size="compact"
-                title="Todavía no hay mensajes"
-                description="Dejá una instrucción o consulta para el cliente."
-              />
-            )}
-            {capabilities.has("message.shared") ? (
-              <form
-                className="study-page__form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  sendMessage.mutate();
-                }}
-              >
-                <label className="ds-field" htmlFor="request-message">
-                  <span className="ds-field__label">Mensaje compartido</span>
-                  <textarea
-                    id="request-message"
-                    className="study-textarea"
-                    rows={3}
-                    value={messageBody}
-                    onChange={(event) => setMessageBody(event.target.value)}
-                    maxLength={5000}
-                    placeholder="Escribí una instrucción clara para el cliente."
-                  />
-                </label>
-                {sendMessage.isError ? (
-                  <Notice tone="error">{sendMessage.error.message}</Notice>
-                ) : null}
-                <div className="study-inline-form__actions">
-                  <Button
-                    type="submit"
-                    loading={sendMessage.isPending}
-                    disabled={!messageBody.trim()}
-                  >
-                    Enviar mensaje
-                  </Button>
-                </div>
-              </form>
-            ) : null}
-          </>
-        ) : null}
-      </ActionDrawer>
+      <CajonConversacion
+        activeConversation={activeConversation}
+        setActiveConversation={setActiveConversation}
+        conversationThread={conversationThread}
+        capabilities={capabilities}
+        messageBody={messageBody}
+        setMessageBody={setMessageBody}
+        sendMessage={sendMessage}
+      />
 
       <div className="study-columns work-columns">
         <section className="study-panel" id="work-requests-section">
