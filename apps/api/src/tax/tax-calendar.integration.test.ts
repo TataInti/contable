@@ -5,6 +5,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { TaxCalendarError, TaxCalendarRegistryService } from "./tax-calendar-service.js";
 import { taxCalendarRoutes } from "./tax-calendar-routes.js";
+import { assertCapability, requiredCapability } from "../auth/guard.js";
+import { capabilitiesForRole } from "@contable/permissions";
 
 /**
  * Calendarios fiscales contra PostgreSQL desechable (corte 2a-i): flujo de
@@ -636,6 +638,21 @@ describe("calendarios: baja de celdas en borrador (corte 2a-ii-a): servicio y ru
     } finally {
       await ajena.close();
       await propia.close();
+    }
+  });
+});
+
+describe("calendarios: baja de celdas: capacidad por rol (tax.calendars.manage)", () => {
+  it("quitar una celda exige tax.calendars.manage: OWNER, ADMIN y PREPARER pasan; REVIEWER y AUDITOR_READONLY reciben 403", () => {
+    expect(requiredCapability("DELETE", "/api/v1/firms/:p/tax-calendars/:p/entries/:p")).toBe("tax.calendars.manage");
+    for (const role of ["OWNER", "ADMIN", "PREPARER"] as const) {
+      expect(() => assertCapability({ capabilities: capabilitiesForRole(role) } as never, "tax.calendars.manage"), role).not.toThrow();
+    }
+    for (const role of ["REVIEWER", "AUDITOR_READONLY"] as const) {
+      expect(
+        () => assertCapability({ capabilities: capabilitiesForRole(role) } as never, "tax.calendars.manage"),
+        role,
+      ).toThrow(expect.objectContaining({ statusCode: 403, code: "CAPABILITY_REQUIRED" }));
     }
   });
 });

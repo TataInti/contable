@@ -274,6 +274,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/tax-obligations\/.*\/filings$/, resolve: () => "tax.filings.record" },
   { match: /\/tax-obligations\/.*\/payments$/, resolve: () => "tax.payments.record" },
   { match: /\/tax-payments\/.*\/reverse$/, resolve: () => "tax.payments.record" },
+  // Celdas de calendarios fiscales (corte 2a-ii-a): quitar una celda usa la misma capacidad que crearla y editarla.
+  { match: /\/tax-calendars\/[^/]+\/entries\/[^/]+$/, resolve: (m) => (m === "GET" ? "tax.calendars.read" : "tax.calendars.manage") },
   // Calendarios fiscales del estudio (corte 2a-i): lectura, gestión y publicación separadas.
   {
     match: /\/tax-calendars(?:\/|$)/,

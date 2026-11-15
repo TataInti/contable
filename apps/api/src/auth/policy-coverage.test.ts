@@ -64,6 +64,7 @@ describe("cobertura total del ROUTE_POLICY (deny-by-default)", () => {
     expect(requiredCapability("POST", `${base}/:p/hide`)).toBe("tax.calendars.manage");
     expect(requiredCapability("POST", `${base}/:p/show`)).toBe("tax.calendars.manage");
     expect(requiredCapability("POST", `${base}/:p/publish`)).toBe("tax.calendars.publish");
+    expect(requiredCapability("DELETE", `${base}/:p/entries/:p`)).toBe("tax.calendars.manage");
   });
 
   it("libros fiscales: lectura con tax.vouchers.read y sin escritura (deny-by-default)", () => {
