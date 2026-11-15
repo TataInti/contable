@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, Field } from "@contable/design-system";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ErrorAccion } from "../Errores";
 import { SelectorMotor } from "../SelectorMotor";
 import type { TaxEngineOption } from "@contable/contracts";
@@ -48,6 +48,33 @@ export function PanelPrimeraVersion({
           : !engineId
             ? "Elegí una opción de cálculo para crear la versión."
             : null;
+  const familiaDefinida = Boolean(detailQuery.data?.regime.calcFamilyId);
+  const selector = (
+    <SelectorMotor
+      id="first-rule-version-engine"
+      regimeId={detailQuery.data?.regime.id ?? ""}
+      familiaDefinida={familiaDefinida}
+      enginesQuery={regimeEnginesQuery}
+      value={engineId}
+      onChange={setEngineId}
+    />
+  );
+  const footerPrimeraVersion = (
+    <ActionDrawerFooter
+      primary={
+        <Button
+          type="submit"
+          form="first-rule-version-form"
+          loading={createVersionMutation.isPending}
+          disabled={!regimeEnginesQuery.data?.some((engine) => engine.id === engineId)}
+        >
+          Crear primera versión
+        </Button>
+      }
+      hint={motivoCrear}
+      onCancel={() => setShowInitialVersionForm(false)}
+    />
+  );
   return (
     <>
       <ActionDrawer
@@ -55,8 +82,10 @@ export function PanelPrimeraVersion({
         onClose={() => setShowInitialVersionForm(false)}
         title="Crear primera versión"
         description="Abrí un borrador para cargar alícuotas, vencimientos y las fuentes que respaldan el cálculo."
+        footer={footerPrimeraVersion}
       >
         <form
+          id="first-rule-version-form"
           className="study-form study-form--compact fiscal-action-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -66,6 +95,7 @@ export function PanelPrimeraVersion({
             createVersionMutation.mutate();
           }}
         >
+          {familiaDefinida ? null : selector}
           <Field
             label="Vigencia desde"
             id="first-rule-version-valid-from"
@@ -87,32 +117,8 @@ export function PanelPrimeraVersion({
             }}
             required
           />
-          <SelectorMotor
-            id="first-rule-version-engine"
-            regimeId={detailQuery.data?.regime.id ?? ""}
-            familiaDefinida={Boolean(detailQuery.data?.regime.calcFamilyId)}
-            enginesQuery={regimeEnginesQuery}
-            value={engineId}
-            onChange={setEngineId}
-          />
+          {familiaDefinida ? selector : null}
           {createVersionMutation.error ? <ErrorAccion error={createVersionMutation.error} /> : null}
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={createVersionMutation.isPending}
-              disabled={!regimeEnginesQuery.data?.some((engine) => engine.id === engineId)}
-            >
-              Crear primera versión
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setShowInitialVersionForm(false)}>
-              Cancelar
-            </Button>
-          </div>
-          {motivoCrear ? (
-            <p className="form-submit-hint" role="note">
-              {motivoCrear}
-            </p>
-          ) : null}
         </form>
       </ActionDrawer>
     </>

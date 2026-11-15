@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { FormEvent } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ActionDrawer } from "./ActionDrawer.js";
+import { ActionDrawer, ActionDrawerFooter } from "./ActionDrawer.js";
 
 describe("ActionDrawer", () => {
   afterEach(() => cleanup());
@@ -56,5 +56,42 @@ describe("ActionDrawer", () => {
 
     const close = screen.getByRole("button", { name: "Cerrar" });
     await waitFor(() => expect(document.activeElement).toBe(close));
+  });
+
+  it("el pie pone «Cancelar» a la izquierda, el motivo junto a la acción principal y fuera del contenido", () => {
+    const onCancel = vi.fn();
+    render(
+      <ActionDrawer
+        isOpen
+        onClose={() => undefined}
+        title="Nuevo paquete"
+        footer={
+          <ActionDrawerFooter
+            primary={
+              <button type="submit" form="pack-form" disabled>
+                Crear paquete
+              </button>
+            }
+            hint="Completá el código para crear el paquete."
+            onCancel={onCancel}
+          />
+        }
+      >
+        <form id="pack-form" />
+      </ActionDrawer>,
+    );
+
+    const cancel = screen.getByRole("button", { name: "Cancelar" });
+    const submit = screen.getByRole("button", { name: "Crear paquete" });
+    const hint = screen.getByText("Completá el código para crear el paquete.");
+    const footer = document.querySelector(".action-drawer__footer") as HTMLElement;
+
+    expect(cancel.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hint.parentElement).toBe(submit.parentElement);
+    expect(footer.contains(cancel) && footer.contains(submit)).toBe(true);
+    expect(document.querySelector(".action-drawer__content")?.contains(cancel)).toBe(false);
+
+    fireEvent.click(cancel);
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

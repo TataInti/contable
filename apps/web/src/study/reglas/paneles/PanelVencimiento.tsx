@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { Button, Field } from "@contable/design-system";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ErrorAccion } from "../Errores";
 import { esFrecuencia, OPCIONES_FRECUENCIA, type DueDateFrequency } from "../frecuencias";
 
@@ -30,6 +30,17 @@ export function PanelVencimiento({
   addDueDateMutation,
 }: PanelVencimientoProps) {
   const sinDia = !newDueDate.dueDay || Number(newDueDate.dueDay) < 1 || Number(newDueDate.dueDay) > 31;
+  const footerVencimiento = (
+    <ActionDrawerFooter
+      primary={
+        <Button type="submit" form="rule-due-date-form" loading={addDueDateMutation.isPending} disabled={sinDia}>
+          Guardar vencimiento
+        </Button>
+      }
+      hint={sinDia ? "Ingresá un día del mes entre 1 y 31 para guardar el vencimiento." : null}
+      onCancel={() => setShowDueDateForm(false)}
+    />
+  );
   return (
     <>
       <ActionDrawer
@@ -37,8 +48,10 @@ export function PanelVencimiento({
         onClose={() => setShowDueDateForm(false)}
         title="Agregar vencimiento"
         description="Definí la regla usada para calcular fechas de presentación y pago."
+        footer={footerVencimiento}
       >
         <form
+          id="rule-due-date-form"
           className="study-form study-form--compact fiscal-action-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -93,16 +106,6 @@ export function PanelVencimiento({
             required
           />
           {addDueDateMutation.error ? <ErrorAccion error={addDueDateMutation.error} /> : null}
-          <div className="study-form__actions">
-            <Button type="submit" loading={addDueDateMutation.isPending} disabled={sinDia}>
-              Guardar vencimiento
-            </Button>
-          </div>
-          {sinDia ? (
-            <p className="form-submit-hint" role="note">
-              Ingresá un día del mes entre 1 y 31 para guardar el vencimiento.
-            </p>
-          ) : null}
         </form>
       </ActionDrawer>
     </>

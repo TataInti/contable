@@ -148,6 +148,11 @@
   gap: var(--ds-space-3);
 }
 
+/* Un aviso del selector de opción de cálculo (sin familia, sin opciones) ocupa el ancho del cajón. */
+.study-form > .selector-motor-aviso {
+  grid-column: 1 / -1;
+}
+
 .study-form.fiscal-action-form > .study-panel__heading,
 .study-form.fiscal-action-form > .study-form__actions,
 .study-form--compact > .study-form__actions {

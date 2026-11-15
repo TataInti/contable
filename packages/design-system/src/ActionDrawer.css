@@ -119,6 +119,33 @@
   background: color-mix(in srgb, var(--ds-color-surface) 94%, var(--ds-color-background));
 }
 
+.action-drawer__actions {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+
+.action-drawer__primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ds-space-2) var(--ds-space-3);
+  margin-inline-start: auto;
+}
+
+.action-drawer__hint {
+  max-width: 44ch;
+  margin: 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  line-height: 1.45;
+  text-align: end;
+}
+
 .action-drawer__content > :first-child {
   margin-top: 0;
 }

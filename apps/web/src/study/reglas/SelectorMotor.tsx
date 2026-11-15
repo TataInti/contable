@@ -31,39 +31,47 @@ export function SelectorMotor({
   );
   if (!familiaDefinida) {
     return (
-      <EmptyState
-        size="compact"
-        role="alert"
-        title="Elegí una familia de cálculo"
-        description="Este régimen necesita una familia para mostrar las opciones de cálculo."
-        action={editarRegimen}
-      />
+      <div className="selector-motor-aviso">
+        <EmptyState
+          size="compact"
+          role="alert"
+          title="Elegí una familia de cálculo"
+          description="Este régimen necesita una familia para mostrar las opciones de cálculo."
+          action={editarRegimen}
+        />
+      </div>
     );
   }
   if (enginesQuery.isLoading) {
     return (
-      <p className="muted-copy" role="status">
-        Buscando opciones de cálculo…
-      </p>
+      <div className="selector-motor-aviso">
+        <p className="muted-copy" role="status">
+          Buscando opciones de cálculo…
+        </p>
+      </div>
     );
   }
   if (enginesQuery.isError) {
     return (
-      <ErrorConsulta
-        titulo="No pudimos cargar las opciones de cálculo"
-        descripcion="Reintentá la consulta para elegir la opción de cálculo."
-        onRetry={() => void enginesQuery.refetch()}
-      />
+      <div className="selector-motor-aviso">
+        <ErrorConsulta
+          titulo="No pudimos cargar las opciones de cálculo"
+          descripcion="Reintentá la consulta para elegir la opción de cálculo."
+          onRetry={() => void enginesQuery.refetch()}
+        />
+      </div>
     );
   }
   if (!enginesQuery.data?.length) {
     return (
-      <EmptyState
-        size="compact"
-        title="Esta familia aún no tiene opciones de cálculo"
-        description="Elegí otra familia para este régimen en Editar régimen, o consultá con quien administra el estudio."
-        action={editarRegimen}
-      />
+      <div className="selector-motor-aviso">
+        <EmptyState
+          size="compact"
+          title="Esta familia aún no tiene opciones de cálculo"
+          description="Elegí otra familia para este régimen en Editar régimen, o consultá con quien administra el estudio."
+          action={editarRegimen}
+        />
+      </div>
     );
   }
   return (

@@ -137,3 +137,39 @@ export function ActionDrawer({
     </div>
   );
 }
+
+export interface ActionDrawerFooterProps {
+  /** Acción principal (un botón). Va a la derecha, junto a su motivo. */
+  primary: ReactNode;
+  /** Motivo visible mientras la acción principal está deshabilitada. */
+  hint?: string | null;
+  onCancel: () => void;
+  cancelLabel?: string;
+}
+
+/**
+ * Pie de un ActionDrawer (va en su prop `footer`): «Cancelar» (ghost) a la izquierda y, a la
+ * derecha, el motivo del botón deshabilitado junto a la acción principal.
+ */
+export function ActionDrawerFooter({
+  primary,
+  hint,
+  onCancel,
+  cancelLabel = "Cancelar",
+}: ActionDrawerFooterProps) {
+  return (
+    <div className="action-drawer__actions">
+      <Button type="button" variant="ghost" onClick={onCancel}>
+        {cancelLabel}
+      </Button>
+      <div className="action-drawer__primary">
+        {hint ? (
+          <p className="action-drawer__hint" role="note">
+            {hint}
+          </p>
+        ) : null}
+        {primary}
+      </div>
+    </div>
+  );
+}

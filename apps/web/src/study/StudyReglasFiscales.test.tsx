@@ -236,9 +236,9 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     expect(api.get).toHaveBeenCalledWith("/tax/regimes/regime-1/engines");
 
     fireEvent.change(select, { target: { value: "engine-vat-legacy" } });
-    const form = select.closest("form");
-    expect(form).not.toBeNull();
-    fireEvent.click(within(form!).getByRole("button", { name: "Crear primera versión" }));
+    // El envío vive en el pie fijo del cajón (fuera del formulario, por form=): se busca en el cajón.
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Crear primera versión" }));
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/tax/rule-packs/pack-1/versions", {

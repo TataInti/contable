@@ -379,3 +379,19 @@ describe("Legajo · accesibilidad mínima de cabecera y paneles", () => {
     await waitFor(() => expect(document.activeElement).toBe(origen));
   });
 });
+
+describe("Legajo · pie del cajón de saldo inicial (Foco 2.7a)", () => {
+  it("«Cancelar» queda a la izquierda de «Registrar saldo», en el pie fijo y fuera del contenido", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    const dialogo = await abrirSaldoInicial();
+    const pie = dialogo.querySelector<HTMLElement>(".action-drawer__footer");
+    expect(pie).not.toBeNull();
+    const cancelar = within(pie!).getByRole("button", { name: "Cancelar" });
+    const registrar = within(pie!).getByRole("button", { name: "Registrar saldo" });
+    expect(
+      cancelar.compareDocumentPosition(registrar) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(dialogo.querySelector(".action-drawer__content")?.contains(registrar)).toBe(false);
+  });
+});

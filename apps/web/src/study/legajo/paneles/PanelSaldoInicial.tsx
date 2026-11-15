@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, MoneyField } from "@contable/design-system";
 import { api } from "../../../lib/api";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import type { EvidenceDocument, FiscalTaxPeriod, TaxRegime, TaxType } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
 
@@ -88,20 +88,20 @@ export function PanelSaldoInicial({
       description="Registrá un saldo a favor o arrastre. Podés adjuntar un respaldo documental o cargarlo manualmente; en ambos casos queda registrado el usuario que lo hizo."
       size="wide"
       footer={
-        <>
-          <Button
-            type="submit"
-            form="legajo-saldo-inicial"
-            loading={openingMutation.isPending}
-            disabled={motivoRegistrar !== null}
-          >
-            Registrar saldo
-          </Button>
-          <Button type="button" variant="ghost" onClick={onCerrar}>
-            Cancelar
-          </Button>
-          {motivoRegistrar ? <span className="muted-copy">{motivoRegistrar}</span> : null}
-        </>
+        <ActionDrawerFooter
+          primary={
+            <Button
+              type="submit"
+              form="legajo-saldo-inicial"
+              loading={openingMutation.isPending}
+              disabled={motivoRegistrar !== null}
+            >
+              Registrar saldo
+            </Button>
+          }
+          hint={motivoRegistrar}
+          onCancel={onCerrar}
+        />
       }
     >
       <form
