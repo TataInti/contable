@@ -643,6 +643,7 @@ export function StudyReglasFiscales() {
             errorTitle={tituloErrorDetalle}
             errorDescription="Reintentá la consulta. La lista de paquetes sigue disponible."
             onRetry={() => void detailQuery.refetch()}
+            className="reglas-detalle-error"
           />
           {!selectedPackId && allPacks.length > 0 ? (
             <EmptyState

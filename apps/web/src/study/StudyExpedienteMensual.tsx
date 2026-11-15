@@ -828,6 +828,16 @@ export function StudyExpedienteMensual() {
               ) : null}
             </>
           );
+          // Foco 2.9: la barra de acciones secundarias se dibuja solo con un botón o un error que mostrar.
+          const hayAccionesSecundarias =
+            (wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review")) ||
+            (wp.status === "IN_REVIEW" &&
+              reviewMutation.variables?.id === wp.id &&
+              Boolean(reviewMutation.error)) ||
+            (wp.status === "FINALIZED" && capabilities.has("tax.settlements.rectify")) ||
+            (wp.status === "FINALIZED" &&
+              rectifyMutation.variables === wp.id &&
+              Boolean(rectifyMutation.error));
           const acciones = (
             <>
               {wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review") ? (
@@ -877,7 +887,7 @@ export function StudyExpedienteMensual() {
               etapaActiva={safeActiveStep}
               onCambiarEtapa={goToStep}
               accionPrincipal={accionPrincipal}
-              acciones={acciones}
+              acciones={hayAccionesSecundarias ? acciones : null}
             >
               {renderEtapa(wp, safeActiveStep)}
             </LegajoTarjeta>

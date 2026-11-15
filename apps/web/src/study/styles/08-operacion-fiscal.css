@@ -345,6 +345,12 @@
   text-align: end;
 }
 
+/* Foco 2.9 (49 b): el motivo de la acción de la etapa ocupa como máximo 60 caracteres (dos renglones; el texto no
+   cambia) y no queda pegado a la bajada de la etapa. */
+.workpaper-process__accion > .muted-copy {
+  max-width: 60ch;
+}
+
 .workpaper-process__index {
   display: block;
   margin-bottom: 2px;
@@ -399,6 +405,12 @@
 .workpaper-card__actions {
   justify-content: flex-end;
   background: color-mix(in srgb, var(--ds-color-surface) 72%, var(--ds-color-background));
+}
+
+/* Foco 2.9 (46): en el cajón «Registrar presentación» la separación entre renglones baja de 16 a 8 px, para que
+   «Identificador externo (opcional)» entre entero a 1280×720. Solo ese formulario. */
+.study-form.study-form--presentacion {
+  row-gap: var(--ds-space-2);
 }
 
 .workpaper-stage {
@@ -1075,6 +1087,36 @@
 }
 
 /* Foco 2.8: relleno vertical de las filas de la lista de paquetes (nombre y código en dos renglones). */
+/* Foco 2.9 (43): la lista de paquetes entra con sus siete filas de 45 px antes de cortar; Dense fija 340 px.
+   Tope local de esta lista: encabezado + 7 filas de 48 px (espacio 12). */
+.dense-packs--tope-siete-filas {
+  --dense-flow-max: calc(var(--ds-table-head-height) + 7 * var(--ds-space-12));
+}
+
+/* Foco 2.9 (44): «Reintentar» del error de detalle de Reglas va en la línea del título del aviso, para quedar
+   a la vista a 1280×720 debajo de la lista. Solo ese aviso (clase en AsyncState); la pieza no cambia. */
+.reglas-detalle-error .ds-notice__content {
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--ds-space-3);
+  align-items: center;
+}
+
+.reglas-detalle-error .ds-notice__title {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.reglas-detalle-error .ds-notice__action {
+  grid-column: 2;
+  grid-row: 1;
+  margin-block-start: 0;
+}
+
+.reglas-detalle-error .ds-notice__message {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
 .dense-packs .dense-table tbody td {
   height: auto;
   padding-block: var(--ds-space-1);

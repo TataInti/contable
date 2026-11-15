@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -147,7 +147,9 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
     const { container } = renderLegajos([legajoDemo("IN_REVIEW")]);
     const acciones = await accionesDeLaTarjeta(container);
 
-    expect(within(acciones).queryAllByRole("button")).toHaveLength(0);
+    // Foco 2.9: sin acción de revisión ni error, la barra no se dibuja.
+    expect(acciones).toBeNull();
+    expect(screen.queryByRole("button", { name: "Solicitar cambios" })).toBeNull();
   });
 
   it("sin tax.settlements.finalize deja Finalizar deshabilitado", async () => {
@@ -173,7 +175,9 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
     const { container } = renderLegajos([legajoDemo("FINALIZED")]);
     const acciones = await accionesDeLaTarjeta(container);
 
-    expect(within(acciones).queryByRole("button", { name: "Crear rectificativa" })).toBeNull();
+    // Foco 2.9: sin rectificativa ni error, la barra no se dibuja.
+    expect(acciones).toBeNull();
+    expect(screen.queryByRole("button", { name: "Crear rectificativa" })).toBeNull();
   });
 
   it("la autorrevisión bloquea Aprobar revisión y muestra su texto", async () => {
@@ -268,16 +272,30 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
   });
 });
 
+describe("Legajo · barra de acciones sin contenido (Foco 2.9)", () => {
+  it.each(["DRAFT", "CALCULATED", "REVIEWED"])(
+    "en %s, sin acciones secundarias, no dibuja la barra de acciones",
+    async (estado) => {
+      contexto(TODAS);
+      const { container } = renderLegajos([legajoDemo(estado)]);
+      await accionesDeLaTarjeta(container);
+
+      expect(container.querySelector(".workpaper-card__actions")).toBeNull();
+      expect(container.querySelector(".workpaper-step-footer")).not.toBeNull();
+    },
+  );
+});
+
 describe("Legajo · acciones de estado antes de la barra de etapas (Foco 2.7b)", () => {
   it("las acciones de estado van antes de la barra de etapas, para verse sin desplazar", async () => {
     contexto(TODAS);
-    const { container } = renderLegajos([legajoDemo("CALCULATED")]);
+    const { container } = renderLegajos([legajoDemo("IN_REVIEW")]);
     const acciones = await accionesDeLaTarjeta(container);
     const barra = container.querySelector<HTMLElement>(".workpaper-step-footer");
     expect(barra).not.toBeNull();
     expect(
       acciones.compareDocumentPosition(barra!) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Enviar a revisión" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Solicitar cambios" })).toBeTruthy();
   });
 });

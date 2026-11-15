@@ -100,6 +100,26 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+describe("Inicio: el participio concuerda con la cantidad de documentos (Foco 2.9)", () => {
+  it("con un documento dice «100% extraído»", async () => {
+    apiMock.get.mockImplementation((path: string) =>
+      path.endsWith("/dashboard")
+        ? Promise.resolve({ ...SUMMARY, documents: 1, extracted: 1 })
+        : answer(path),
+    );
+    renderDashboard(["client.read", "tax.settlements.read"]);
+
+    expect(await screen.findByText("100% extraído")).toBeTruthy();
+    expect(screen.queryByText("100% extraídos")).toBeNull();
+  });
+
+  it("con varios documentos dice «extraídos»", async () => {
+    renderDashboard(["client.read", "tax.settlements.read"]);
+
+    expect(await screen.findByText("40% extraídos")).toBeTruthy();
+  });
+});
+
 describe("Inicio: «Actualizar» refresca las fuentes que la persona puede leer (G06)", () => {
   it("consulta resumen, liquidaciones y acuses, y mientras corre queda procesando sin doble envío", async () => {
     renderDashboard(["client.read", "tax.settlements.read"]);
