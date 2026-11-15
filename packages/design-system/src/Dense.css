@@ -1386,9 +1386,16 @@
   background: var(--ds-color-surface);
 }
 
+.dense-agenda--con-accion li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding-inline-end: var(--ds-space-3);
+}
+
 .dense-agenda__link {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
   gap: var(--ds-space-3);
   padding: var(--ds-space-2) var(--ds-space-3);
@@ -1428,6 +1435,7 @@
   font-size: var(--ds-text-sm);
   font-weight: 600;
   text-decoration: none;
+  padding-block: var(--ds-space-2);
 }
 
 .dense-link:hover {

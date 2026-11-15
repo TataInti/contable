@@ -1054,7 +1054,8 @@
 }
 
 /* Lista de paquetes: el código y el régimen van en su propio renglón, debajo del nombre. */
-.dense-packs .dense-name__text > small {
+.dense-packs .dense-name__text > small,
+.dense-worklist .dense-name__text > small {
   display: block;
   margin-top: var(--ds-space-1);
 }

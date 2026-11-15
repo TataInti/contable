@@ -5,6 +5,9 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { StudyDashboard } from "./StudyDashboard";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { readStudyStyles } from "./studyStyles.testutil";
 
 // Datos sintéticos rotulados: no son clientes ni liquidaciones reales.
 const apiMock = vi.hoisted(() => ({ get: vi.fn() }));
@@ -240,5 +243,27 @@ describe("Inicio: composición R01", () => {
     const documentosSinCliente = await screen.findByRole("link", { name: /Documentos en procesamiento/ });
     expect(documentosSinCliente.getAttribute("href")).toBe("/clientes");
     expect(screen.getByRole("link", { name: /Pedidos documentales abiertos/ }).getAttribute("href")).toBe("/clientes");
+  });
+  it("las acciones de fila de Inicio usan un solo tratamiento (ghost) con nombre completo", async () => {
+    renderDashboard(["client.read", "tax.settlements.read"]);
+    await worklistTable();
+    const liquidaciones = screen.getAllByRole("button", { name: /^Abrir liquidación de IVA, versión / });
+    expect(liquidaciones.length).toBeGreaterThan(0);
+    for (const accion of liquidaciones) expect(accion.className).toContain("ds-button--ghost");
+    for (const circuito of ["Documentos en procesamiento", "Pedidos documentales abiertos"]) {
+      const accion = screen.getByRole("button", { name: `Abrir ${circuito}` });
+      expect(accion.className).toContain("ds-button--ghost");
+    }
+  });
+
+  it("nombre y dato secundario van en renglones separados, con la regla que usa Reglas (2.7a)", () => {
+    expect(readStudyStyles()).toMatch(
+      /\.dense-packs \.dense-name__text > small,\s*\.dense-worklist \.dense-name__text > small\s*\{[^}]*display:\s*block;/,
+    );
+  });
+
+  it("los enlaces sueltos de Inicio tienen relleno vertical de objetivo, no tamaño de letra", () => {
+    const denseStyles = readFileSync(resolve(process.cwd(), "../../packages/design-system/src/Dense.css"), "utf8");
+    expect(denseStyles).toMatch(/\.dense-link\s*\{[^}]*padding-block:\s*var\(--ds-space-2\);/s);
   });
 });

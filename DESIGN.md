@@ -1116,6 +1116,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Estado: migrada** (Foco 1, corte 1). Lo vigente tras la migración: encabezado con «Actualizar» como acción secundaria y «Revisar bandeja» como única primaria; cifras con «pendiente», «no disponible» o «restringido» en lugar de cero; acuses y liquidaciones en listas separadas, con sus estados propios, y obligaciones pendientes a continuación, en el orden de main; otros circuitos y panorama como secciones secundarias del lienzo, sin panel lateral; región de trabajo con nombre accesible. **Cumple G03** (para esta pantalla), **G05** y **G06** (sección 7). G07 sigue pendiente de Inti.
 
+**Estado (Foco 2.7c):** cada acción de fila de Inicio es un botón `ghost` con nombre completo: «Abrir liquidación de <impuesto>, versión N», «Abrir legajo de <cliente>» y «Abrir <circuito>» en Otros circuitos, con un solo tratamiento. El dato secundario de «Impuesto» va en renglón propio (la misma regla de Reglas, Foco 2.7a). «Abrir obligaciones» y «Ver clientes» tienen relleno vertical de objetivo.
+
 ### R02 — Legajo
 
 **Propósito:** consultar un período y continuar sus tareas, distinguiendo pestaña, etapa y estado del legajo.
