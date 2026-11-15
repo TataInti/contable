@@ -1,6 +1,6 @@
 # Pruebas inestables: causas, arreglos y cómo detectar una nueva
 
-Este documento registra las tres inestabilidades del CI de Contable de noviembre de 2026, su causa de fondo y el arreglo aplicado, y qué buscar en el log cuando aparezca una nueva. La regla es corregir la causa: no hay reintentos automáticos (`retries` de Playwright o de Vitest) y no se omiten, borran ni debilitan pruebas o aserciones.
+Este documento registra las cuatro inestabilidades del CI de Contable de noviembre de 2026, su causa de fondo y el arreglo aplicado, y qué buscar en el log cuando aparezca una nueva. La regla es corregir la causa: no hay reintentos automáticos (`retries` de Playwright o de Vitest) y no se omiten, borran ni debilitan pruebas o aserciones.
 
 ## 1. Deadlock de PostgreSQL (`40P01`) en pruebas de liquidación
 
@@ -31,6 +31,16 @@ Causa: la prueba tomaba los textos con `findAllByText` y buscaba en esa lista el
 Arreglo: la prueba espera con `waitFor` al elemento con la clase `fiscal-rule-row-error`. Las aserciones de `role="alert"` y de la posición junto al desplegable no cambiaron.
 
 Cómo detectar una nueva: buscar `expected undefined to be` en el log de `apps/web`. Si la falla aparece de forma intermitente, revisar si el elemento buscado llega en un render posterior y si la prueba espera esa condición o solo el primer texto que coincide.
+
+## 4. Dirección leída antes de que la navegación se aplique en StudyCalendariosFiscales
+
+Síntoma: `AssertionError: expected '' to be '?calendario=c0000000-0000-4000-8000-0…'` en `apps/web/src/study/StudyCalendariosFiscales.test.tsx:428`, en la prueba «al crear, abre la ficha de la versión nueva y avisa por el canal de notificaciones». Runs: 43684965498 (rama del PR #116) y 43705143330, intento 1 (main, `2afa613`); el reintento de los jobs fallidos la pasó sin cambios. Localmente se reproduce con el CPU cargado: una corrida suelta falló igual y el bucle de 40 corridas dejó constancia del mismo mensaje.
+
+Causa: el alta avisa y navega en el mismo `onSuccess`, pero son dos actualizaciones de estado distintas. El aviso es estado urgente de `ToastProvider`; la ubicación de `MemoryRouter` se aplica dentro de `React.startTransition` (react-router 7, `dist/development/chunk-62JRHF6Z.mjs:6976`), o sea en un render de menor prioridad. `findByText` resuelve apenas el aviso está en el DOM, antes de que React confirme el render de la transición, y la lectura síncrona de `lastSearch` (el sensor `LocationProbe`) todavía ve la dirección anterior: `''`. Con el CPU cargado la transición se posterga unos milisegundos y la ventana se abre. La prueba «crear una versión a partir de este lo anuncia como copia y abre la copia» tenía el mismo patrón en la línea 483 (`notify.success` → `refresh()` → `onOpen`), aunque todavía no había caído en el CI.
+
+Arreglo: las dos pruebas esperan la dirección con `await waitFor(() => expect(lastSearch).toBe(...))`. La aserción es la misma —el valor esperado no cambió—, solo deja de leerse antes de tiempo. No se tocó el componente: que el aviso preceda a la navegación es una decisión de la pantalla, no un defecto. Las lecturas de `lastSearch` que siguen a un `fireEvent` (líneas 359, 368 y 370) quedaron como estaban: el evento corre dentro de `act`, que aplica la actualización —incluidas las transiciones— antes de devolver.
+
+Cómo detectar una nueva: buscar `expected '' to be` junto a `lastSearch`, `useLocation()` o `window.location` en pruebas de `apps/web`. Si la lectura de la dirección sigue a un `findByText` de un aviso, o a cualquier acción que navega y termina en una promesa, tiene que ir dentro de `waitFor`: el aviso y la navegación son dos renders distintos. Si la lectura sigue a un `fireEvent` sin espera intermedia, no hace falta.
 
 ## Reglas que se mantienen
 
