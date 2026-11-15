@@ -12,7 +12,8 @@ export const TAX_CALENDAR_ENTRY_ADJUSTMENTS = ["NONE", "HOLIDAY", "WEEKEND", "NO
 
 export type TaxCalendarStatusValue = (typeof TAX_CALENDAR_STATUSES)[number];
 
-function isRealIsoDate(value: string): boolean {
+/** Una fecha AAAA-MM-DD que existe en el calendario (2026-02-30 no existe). */
+export function isRealIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [y, m, d] = value.split("-").map(Number) as [number, number, number];
   const date = new Date(Date.UTC(y, m - 1, d));
@@ -117,3 +118,72 @@ export type UpdateTaxCalendarInput = z.infer<typeof updateTaxCalendarSchema>;
 export type TaxCalendarEntryInput = z.infer<typeof taxCalendarEntryInputSchema>;
 export type TaxCalendarEntryPatch = z.infer<typeof taxCalendarEntryPatchSchema>;
 export type TaxCalendarListQuery = z.infer<typeof taxCalendarListQuerySchema>;
+
+/**
+ * Importación de celdas desde un CSV (corte 2b-1). El archivo tiene las 11 columnas
+ * de los CSV verificados contra los PDF y se lee por encabezado (en cualquier orden).
+ */
+export const TAX_CALENDAR_IMPORT_COLUMNS = [
+  "calendario",
+  "bloque",
+  "concepto",
+  "periodo_referencia",
+  "criterio_agrupacion",
+  "digitos",
+  "fecha_completa",
+  "nota",
+  "origen_celda",
+  "confianza",
+  "verificado_en_imagen",
+] as const;
+
+/** Columnas sin las que no se puede crear una celda: si falta alguna, el archivo no se importa. */
+export const TAX_CALENDAR_IMPORT_REQUIRED_COLUMNS = [
+  "concepto",
+  "criterio_agrupacion",
+  "digitos",
+  "fecha_completa",
+  "periodo_referencia",
+] as const;
+
+/** Tope del contenido del archivo (texto UTF-8) y de filas de datos por importación. */
+export const TAX_CALENDAR_IMPORT_MAX_BYTES = 1024 * 1024;
+export const TAX_CALENDAR_IMPORT_MAX_ROWS = 2000;
+
+/** Cuerpo de la importación: con dryRun true valida y no escribe nada. */
+export const importTaxCalendarEntriesSchema = z
+  .object({
+    csv: z.string({ message: "Falta el contenido del archivo (csv)" }),
+    dryRun: z.boolean({
+      message: "Indicá si es una prueba (dryRun: true) o una importación real (dryRun: false)",
+    }),
+  })
+  .strict();
+
+export type ImportTaxCalendarEntriesInput = z.infer<typeof importTaxCalendarEntriesSchema>;
+
+/** Fila que no se importa. `fila` es el número de la hoja (el encabezado es la 1); `columna` null si afecta a toda la fila. */
+export interface TaxCalendarImportRejection {
+  fila: number;
+  columna: string | null;
+  motivo: string;
+  valorRecibido: string | null;
+}
+
+/** Aviso sobre una fila que sí se importa (por ejemplo, queda como dudosa). */
+export interface TaxCalendarImportNotice {
+  fila: number;
+  motivo: string;
+}
+
+/** Informe de una importación: el mismo en prueba y en importación real. */
+export interface TaxCalendarEntriesImportReport {
+  dryRun: boolean;
+  totalFilas: number;
+  validas: number;
+  importadas: number;
+  rechazadas: TaxCalendarImportRejection[];
+  avisos: TaxCalendarImportNotice[];
+  columnasIgnoradas: string[];
+  encabezadosFaltantes: string[];
+}
