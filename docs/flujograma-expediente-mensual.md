@@ -10,27 +10,26 @@
 
 Al entrar a `/expediente-mensual` con un cliente y período activos, la pantalla muestra:
 
-- **Botón "Subir Excel"** (cabecera): abre el modal para importar los libros IVA (ventas/compras) desde Excel. Disponible con capacidad `tax.vouchers.prepare`.
-- **Botón "Nuevo expediente"** (cabecera): crea el expediente mensual del período. Disponible con `tax.settlements.calculate`.
-- Si **no hay expedientes** para el período, se muestra un estado vacío con el botón **"Crear expediente"**.
+- La importación de los libros IVA ya no está en la cabecera: se hace desde la fila de IVA ventas o IVA compras en la etapa **Fuentes** (ver §3).
+- **Nuevo legajo** (cabecera): crea el legajo del período fiscal elegido. Requiere `tax.settlements.calculate` y un período fiscal; si falta alguno, el botón queda deshabilitado y la pantalla dice por qué.
+- Si **no hay legajos** para el período, se muestra «Sin legajos para este período» con el botón **Crear legajo** (solo si el perfil puede crear legajos).
 
 > El expediente nace en estado `DRAFT`. A partir de ahí se recorre el stepper.
 
 ```mermaid
 flowchart TD
     A[Entrar a /expediente-mensual<br/>cliente + período activos] --> B{¿Hay expediente?}
-    B -- No --> C[Estado vacío<br/>Botón: Crear expediente]
+    B -- No --> C[Estado vacío<br/>Botón: Crear legajo]
     B -- Sí --> D[Card del expediente<br/>badge de estado + stepper 6 etapas]
     C --> D
-    D --> E[Botón cabecera: Subir Excel<br/>modal libros IVA]
-    D --> F[Botón cabecera: Nuevo expediente]
+    D --> F[Botón cabecera: Nuevo legajo]
 ```
 
 ---
 
 ## 1. Las 6 etapas del stepper
 
-El stepper persistente tiene 6 etapas. Cada una tiene un **menú de pestañas** (clic directo) y botones **Anterior / Siguiente** para moverse en orden.
+El stepper persistente tiene 6 etapas. Cada una se abre desde el **menú de pestañas** (clic directo), y el pie de la tarjeta, con **Volver a <etapa>** e **Ir a <etapa>**, la mueve en orden.
 
 | # | Etapa | Descripción |
 |---|---|---|
@@ -46,7 +45,7 @@ flowchart LR
     S1[Saldos] --> S2[Fuentes] --> S3[Clasificación] --> S4[Cálculo] --> S5[Controles] --> S6[Cierre]
 ```
 
-> **Navegación común a todas las etapas:** menú de pestañas (1–6), botón **"Anterior: <etapa>"**, botón **"Siguiente: <etapa>"**, y en el pie **"Volver a <etapa>"** / **"Ir a <etapa>"**.
+> **Navegación común a todas las etapas:** menú de pestañas (1–6) y, en el pie de la tarjeta, **«Volver a <etapa>»** / **«Ir a <etapa>»**. En la primera y en la última etapa esos botones quedan deshabilitados, con **«Inicio del proceso»** y **«Última etapa»**.
 
 ---
 
@@ -59,7 +58,7 @@ flowchart TD
     A[Etapa 1 · Saldos] --> B[Tabla de saldos a favor<br/>original · disponible · movimientos · respaldo]
     B --> C[Botón: Actualizar]
     B --> D[Botón: Cargar saldo inicial<br/>requiere tax.settlements.calculate]
-    D --> E[Modal: Cargar saldo inicial]
+    D --> E[Panel lateral: Cargar saldo inicial]
     E --> E1[Impuesto]
     E --> E2[Período fiscal]
     E --> E3[Régimen opcional]
@@ -97,6 +96,7 @@ flowchart TD
     A --> G[Tabla de componentes<br/>obligaciones vinculadas]
     A --> H[Botón: Actualizar]
     A --> I[Botón: Ir a bandeja]
+    A --> J[Fila IVA ventas o compras: Importar libro<br/>panel Importar libros IVA]
 ```
 
 **Acciones y botones:**
@@ -106,6 +106,7 @@ flowchart TD
 | Elegir fuente y archivo | Selector + input file | `tax.vouchers.prepare` y expediente editable |
 | Importar el lote | **Importar lote** | Fuente + archivo seleccionados |
 | Revisar un lote commiteado | **Revisar** | `tax.vouchers.review` |
+| Importar un libro IVA (ventas o compras) | **Importar libro** (fila de IVA en la tabla de fuentes) | Deshabilitado con su motivo visible cuando no se puede importar |
 | Refrescar cobertura | **Actualizar** | Siempre |
 | Ir a la bandeja de trabajo | **Ir a bandeja** | — |
 
@@ -126,7 +127,7 @@ flowchart TD
     A --> F[Subsección: Imputación de retenciones y percepciones]
     F --> G[Selector de jurisdicción]
     G --> H[Botón: Reimputar]
-    A --> I[Botón: Actualizar clasificación]
+    A --> I[Botón: Actualizar<br/>refresca clasificación e imputaciones]
     A --> J[Botón: Ver configuración fiscal]
 ```
 
@@ -136,7 +137,7 @@ flowchart TD
 |---|---|---|
 | Clasificar un comprobante | **Guardar** / **Actualizar** | `tax.vouchers.prepare` |
 | Reimputar un certificado | **Reimputar** | `tax.vouchers.prepare` |
-| Refrescar clasificación | **Actualizar clasificación** | Siempre |
+| Refrescar clasificación e imputaciones | **Actualizar** (uno por etapa) | Siempre |
 | Ir a configuración fiscal | **Ver configuración fiscal** | — |
 
 > El cálculo queda bloqueado mientras exista una compra sin rubro o una venta sin actividad (`WAITING_INPUTS`).
@@ -150,21 +151,19 @@ flowchart TD
 ```mermaid
 flowchart TD
     A[Etapa 4 · Cálculo] --> B[Determinación y trazabilidad<br/>totales · fórmulas · versión de reglas]
-    B --> C[Botón: Actualizar cálculo]
+    B --> C[Botón: Actualizar<br/>refresca posición y determinación]
     A --> D[Tabla de posición fiscal<br/>devengado · pagado · pendiente · total a pagar]
     D --> E[Botón: Registrar presentación]
     D --> F[Botón: Calcular mora]
     D --> G[Botón: Registrar pago]
-    A --> H[Botón: Actualizar posición]
 ```
 
 **Acciones y botones:**
 
 | Acción | Botón | Condición / capacidad |
 |---|---|---|
-| Refrescar determinación | **Actualizar cálculo** | Siempre |
-| Refrescar posición | **Actualizar posición** | Siempre |
-| Registrar presentación | **Registrar presentación** | `tax.filings.record` y liquidación presente |
+| Refrescar posición y determinación | **Actualizar** (uno por etapa) | Siempre |
+| Registrar presentación | **Registrar presentación** | `tax.filings.record` y liquidación FINALIZED; no aparece si el período ya está presentado |
 | Calcular intereses por mora | **Calcular mora** | Pendiente > 0, vencido, liquidación FINALIZED, `tax.payments.record` |
 | Registrar pago | **Registrar pago** | Total a pagar > 0, `tax.payments.record` |
 
@@ -180,15 +179,15 @@ flowchart TD
     B --> C[Input: explicá la resolución]
     C --> D[Select: evidencia<br/>solo para BLOCKING]
     D --> E[Botón: Resolver]
-    C --> F[Botón: Eximir<br/>solo no-BLOCKING]
+    C --> F[Botón: Eximir<br/>solo no-BLOCKING, pide confirmación]
 ```
 
 **Acciones y botones:**
 
 | Acción | Botón | Condición / capacidad |
 |---|---|---|
-| Resolver un control | **Resolver** | `tax.settlements.review`, resolución escrita (+ evidencia si BLOCKING) |
-| Eximir un control | **Eximir** | `tax.settlements.review`, solo no-BLOCKING |
+| Resolver un control | **Resolver** | `tax.settlements.review` y resolución escrita; en BLOCKING, el respaldo es opcional |
+| Eximir un control | **Eximir** | `tax.settlements.review`, solo no-BLOCKING, con motivo escrito; pide confirmación («Eximir el control») |
 
 > Un control **BLOCKING** abierto impide finalizar el expediente (se muestra el contador "N control(es) bloqueante(s)" en la cabecera de la card).
 
@@ -201,14 +200,14 @@ flowchart TD
 ```mermaid
 flowchart TD
     A[Etapa 6 · Cierre] --> B[Detalle: hash de entrada / hash de salida / controles bloqueantes]
-    B --> C[Botón: Finalizar<br/>requiere tax.settlements.finalize]
+    B --> C[Botón: Finalizar, en el pie de la tarjeta<br/>requiere tax.settlements.finalize y confirmación]
 ```
 
 **Acciones y botones:**
 
 | Acción | Botón | Condición / capacidad |
 |---|---|---|
-| Finalizar el expediente | **Finalizar** | `tax.settlements.finalize`, sin controles BLOCKING abiertos |
+| Finalizar el legajo | **Finalizar** (pie de la tarjeta, con confirmación «Finalizar el legajo») | `tax.settlements.finalize`, con la revisión en `REVIEWED` y sin controles BLOCKING abiertos |
 
 ---
 
@@ -218,12 +217,14 @@ Independientemente de la etapa activa, el pie de la card muestra el botón corre
 
 | Estado del expediente | Botón | Capacidad |
 |---|---|---|
-| `DRAFT` / `COLLECTING_INPUTS` / `READY_TO_CALCULATE` | **Calcular** | `tax.settlements.calculate` (solo si `READY_TO_CALCULATE`) |
+| `DRAFT` / `COLLECTING_INPUTS` / `READY_TO_CALCULATE` | **Calcular** | `tax.settlements.calculate`; se habilita en `READY_TO_CALCULATE` y, si no, muestra el motivo |
 | `CHANGES_REQUESTED` | **Recalcular** | `tax.settlements.calculate` |
 | `CALCULATED` | **Enviar a revisión** | `tax.settlements.submit_review` |
-| `IN_REVIEW` | **Aprobar revisión** / **Solicitar cambios** | `tax.settlements.review` |
-| `REVIEWED` | **Finalizar** | `tax.settlements.finalize` |
-| `FINALIZED` | **Crear rectificativa** | `tax.settlements.rectify` |
+| `IN_REVIEW` | **Aprobar revisión** / **Solicitar cambios** | `tax.settlements.review`; quien preparó el legajo no puede revisarlo, salvo autorrevisión habilitada por el Titular |
+| `REVIEWED` | **Finalizar** (con confirmación) | `tax.settlements.finalize` |
+| `FINALIZED` | **Crear rectificativa** (con confirmación) | `tax.settlements.rectify` |
+
+> Una revisión reemplazada por una rectificativa se muestra como resumen de solo lectura, sin etapas ni acciones.
 
 ```mermaid
 flowchart LR
@@ -243,7 +244,7 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    INICIO[Crear expediente] --> E1[Saldos<br/>cargar saldo inicial]
+    INICIO[Crear legajo] --> E1[Saldos<br/>cargar saldo inicial]
     E1 --> E2[Fuentes<br/>importar y revisar lotes]
     E2 --> E3[Clasificación<br/>rubros, actividades, imputaciones]
     E3 --> E4[Cálculo<br/>revisar posición, pagos, presentaciones]
