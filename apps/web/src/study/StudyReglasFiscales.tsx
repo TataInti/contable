@@ -13,6 +13,17 @@ import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
 import { RuleSimulator } from "./RuleSimulator";
+import type {
+  Credential,
+  RuleJurisdictionOption,
+  RulePack,
+  RulePackDetail,
+  RuleRegimeOption,
+  RuleRow,
+  RuleStatus,
+  RuleVersion,
+} from "./reglas/tipos";
+import { sameRuleRows, shortDate, today, validateRuleVersionDate } from "./reglas/utilidades";
 import { getStatusBadgeMeta, StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
 import {
@@ -31,137 +42,6 @@ import {
   type DenseColumn,
 } from "../ui/Dense";
 import "./study.css";
-
-type RuleStatus = "DRAFT" | "IN_REVIEW" | "APPROVED" | "ACTIVE" | "RETIRED";
-
-interface RuleRow {
-  id: string;
-  concept: string;
-  kindId?: string | null;
-  activityId?: string | null;
-  categoryCode?: string | null;
-  isDefault?: boolean;
-  activityCode: string | null;
-  jurisdictionId: string | null;
-  rate: string | null;
-  minAmount: string | null;
-  validFrom: string;
-  validTo: string | null;
-}
-
-interface RuleVersion {
-  id: string;
-  version: number;
-  status: RuleStatus;
-  origin?: "REFERENCE" | "UI";
-  createdByFirmId?: string | null;
-  validFrom: string;
-  validTo: string | null;
-  engineVersion: string;
-  rulesHash: string;
-  rateRules: RuleRow[];
-  dueDateRules: Array<{
-    id: string;
-    frequency: string | null;
-    dueDay: number;
-    cuitEnding: string | null;
-    validFrom: string;
-    validTo: string | null;
-  }>;
-  sources: Array<{ id: string; title: string; reference: string | null; consultedAt: string }>;
-}
-
-interface RulePack {
-  id: string;
-  code: string;
-  name: string;
-  status: RuleStatus;
-  origin?: "REFERENCE" | "UI";
-  createdByFirmId?: string | null;
-  regime: {
-    id: string;
-    name: string;
-    code: string;
-    calcFamilyId?: string | null;
-    isActive: boolean;
-    taxType: { name: string; code: string; isActive: boolean };
-    jurisdiction: { name: string; code?: string; isActive: boolean };
-  };
-  versions: RuleVersion[];
-}
-
-interface RulePackDetail extends RulePack {
-  regime: RulePack["regime"] & {
-    jurisdiction: { id: string; name: string; code: string };
-    authority: { id: string; name: string; isActive: boolean };
-  };
-}
-
-interface RuleRegimeOption {
-  id: string;
-  code: string;
-  name: string;
-  taxType: { name: string };
-  jurisdiction: { name: string };
-}
-
-interface Credential {
-  id: string;
-  registrationNumber: string;
-  jurisdiction: { name: string };
-}
-
-interface RuleJurisdictionOption {
-  id: string;
-  code: string;
-  name: string;
-  isActive: boolean;
-}
-
-const today = new Date().toISOString().slice(0, 10);
-
-export function validateRuleVersionDate(value: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return "La fecha debe tener formato AAAA-MM-DD y un año entre 1900 y 2100.";
-  }
-  const year = Number(value.slice(0, 4));
-  if (year < 1900 || year > 2100) return "El año debe estar entre 1900 y 2100.";
-  const month = Number(value.slice(5, 7));
-  const day = Number(value.slice(8, 10));
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-    return "Ingresá una fecha válida.";
-  }
-  return null;
-}
-
-export function shortDate(value: string | null) {
-  // Las vigencias son fechas calendario guardadas en UTC: se formatean en UTC
-  // para no mostrar el día anterior en husos como el de Argentina (UTC-3).
-  return value ? new Date(value).toLocaleDateString("es-AR", { timeZone: "UTC" }) : "Sin vencimiento";
-}
-
-export function sameRuleRows(draftRows: RuleRow[], savedRows: RuleRow[]): boolean {
-  if (draftRows.length !== savedRows.length) return false;
-  const savedById = new Map(savedRows.map((row) => [row.id, row]));
-  return draftRows.every((row) => {
-    const saved = savedById.get(row.id);
-    return Boolean(
-      saved &&
-      row.concept === saved.concept &&
-      row.kindId === saved.kindId &&
-      row.activityId === saved.activityId &&
-      row.categoryCode === saved.categoryCode &&
-      Boolean(row.isDefault) === Boolean(saved.isDefault) &&
-      row.activityCode === saved.activityCode &&
-      row.jurisdictionId === saved.jurisdictionId &&
-      row.rate === saved.rate &&
-      row.minAmount === saved.minAmount &&
-      row.validFrom.slice(0, 10) === saved.validFrom.slice(0, 10) &&
-      (row.validTo?.slice(0, 10) ?? null) === (saved.validTo?.slice(0, 10) ?? null),
-    );
-  });
-}
 
 export function StudyReglasFiscales() {
   const { firmId, capabilities } = useClientContext();

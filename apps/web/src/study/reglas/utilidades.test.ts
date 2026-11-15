@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-// Bloque 1 (pruebas antes de mover): las tres funciones viven todavía en la pantalla.
-// Solo en este commit se exportan desde StudyReglasFiscales.tsx; el bloque 2 las importa desde ./utilidades.
-import { sameRuleRows, shortDate, validateRuleVersionDate } from "../StudyReglasFiscales";
+import { sameRuleRows, shortDate, validateRuleVersionDate } from "./utilidades";
 
 // Datos sintéticos rotulados «Demo»; no son datos de clientes.
 type FilaDemo = Parameters<typeof sameRuleRows>[0][number];
