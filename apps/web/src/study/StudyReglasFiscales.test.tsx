@@ -414,10 +414,17 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     renderReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: "Guardar borrador" }));
-    const errors = await screen.findAllByText("Elegí un tipo de regla disponible para este régimen.");
-    const inlineError = errors.find((candidate) => candidate.classList.contains("fiscal-rule-row-error"));
-    expect(inlineError?.getAttribute("role")).toBe("alert");
-    expect(inlineError?.parentElement?.querySelector("select[aria-label='Tipo de regla de la fila 1']")).toBeTruthy();
+    // findAllByText resuelve con el primer elemento que coincide con el texto, y el error de la fila
+    // puede llegar en un render posterior. Se espera la condición que importa: el error junto a la fila 1.
+    const inlineError = await waitFor(() => {
+      const found = screen
+        .getAllByText("Elegí un tipo de regla disponible para este régimen.")
+        .find((candidate) => candidate.classList.contains("fiscal-rule-row-error"));
+      if (!found) throw new Error("todavía no está el error junto a la fila 1");
+      return found;
+    });
+    expect(inlineError.getAttribute("role")).toBe("alert");
+    expect(inlineError.parentElement?.querySelector("select[aria-label='Tipo de regla de la fila 1']")).toBeTruthy();
   });
 });
 

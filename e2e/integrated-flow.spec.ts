@@ -47,8 +47,22 @@ async function loginPortal(page: Page) {
   await expect(page).toHaveURL(/\/portal$/);
 }
 
+// El tour guiado se abre 650 ms después de montar el estudio mientras su marca no exista en el
+// almacenamiento local. Esta prueba recorre el estudio por el menú y no necesita el tour: la marca
+// se deja con el mismo valor que escribe «Saltar tour». Así el popover no intercepta los clics de
+// navegación; antes, dismissGuidedTour miraba una sola vez si el popover estaba visible y el
+// popover llegaba después del chequeo.
+async function markGuidedTourSeen(page: Page) {
+  await page.addInitScript(() => {
+    if (window.localStorage.getItem("contable-study-navigation-tour-v1") === null) {
+      window.localStorage.setItem("contable-study-navigation-tour-v1", "dismissed");
+    }
+  });
+}
+
 test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, request }) => {
   test.setTimeout(60_000);
+  await markGuidedTourSeen(page);
   const publicResponse = await request.get(
     `${apiBaseUrl}/api/v1/firms/dddddddd-dddd-4ddd-8ddd-ddddddddd001/clients`,
   );
