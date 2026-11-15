@@ -585,6 +585,9 @@ export function StudyClientes() {
           }
         >
           Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.
+          {retryContact.isError ? (
+            <p>No se pudo registrar el correo. Reintentá o agregalo desde Contactos.</p>
+          ) : null}
         </Notice>
       ) : null}
 

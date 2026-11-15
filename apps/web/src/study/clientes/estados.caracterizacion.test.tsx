@@ -79,24 +79,26 @@ describe("StudyClientes — estados y errores (K6)", () => {
     cleanup();
   });
 
-  it("si falla la consulta de contactos, el aviso no ofrece «Reintentar» (vigente: defecto 7d-1)", async () => {
-    // vigente: defecto 7d-1 (cambia en este corte)
+  it("si falla la consulta de contactos, el aviso ofrece «Reintentar» y repite la consulta", async () => {
     respuestaContactos = () => Promise.reject(new Error("Sin conexión"));
     renderConRutas("/clientes", <StudyClientes />);
     const detalle = await seleccionarCliente(CUIT_ALFA, ALFA);
 
     expect(await within(detalle).findByText("No se pudieron cargar los contactos. Reintentá.")).toBeTruthy();
-    expect(within(detalle).queryByRole("button", { name: "Reintentar" })).toBeNull();
+    fireEvent.click(within(detalle).getByRole("button", { name: "Reintentar" }));
+    await waitFor(() =>
+      expect(vi.mocked(api.get).mock.calls.filter(([path]) => String(path).endsWith("/contacts"))).toHaveLength(2),
+    );
   });
 
-  it("mientras cargan los contactos el contador dice «0 contactos» (vigente: defecto 7d-5)", async () => {
-    // vigente: defecto 7d-5 (cambia en este corte)
+  it("mientras cargan los contactos el contador dice «pendiente», no «0 contactos»", async () => {
     respuestaContactos = () => new Promise(() => {});
     renderConRutas("/clientes", <StudyClientes />);
     const detalle = await seleccionarCliente(CUIT_ALFA, ALFA);
 
     expect(await within(detalle).findByText("Cargando contactos…")).toBeTruthy();
-    expect(detalle.querySelector(".client-contacts__toolbar")?.textContent).toContain("0 contactos");
+    expect(detalle.querySelector(".client-contacts__toolbar")?.textContent).toContain("pendiente");
+    expect(detalle.querySelector(".client-contacts__toolbar")?.textContent).not.toContain("0 contactos");
   });
 
   it("si falla el catálogo de jurisdicciones, la sección no ofrece «Reintentar» (vigente: defecto 7d-2)", async () => {
@@ -154,8 +156,7 @@ describe("StudyClientes — estados y errores (K6)", () => {
     expect(within(cajon).queryByRole("button", { name: "Reintentar" })).toBeNull();
   });
 
-  it("si falla el reintento del correo, el aviso queda igual y sin mensaje nuevo (vigente: defecto 7d-3)", async () => {
-    // vigente: defecto 7d-3 (cambia en este corte)
+  it("si falla el reintento del correo, el aviso lo dice y ofrece volver a intentarlo", async () => {
     vi.mocked(api.post).mockImplementation(((path: string) =>
       path.endsWith("/contacts")
         ? Promise.reject(new Error("La respuesta se perdió"))
@@ -168,7 +169,6 @@ describe("StudyClientes — estados y errores (K6)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
 
     const aviso = await screen.findByRole("alert");
-    const textoInicial = aviso.textContent;
     expect(within(aviso).getByText("Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.")).toBeTruthy();
 
     fireEvent.click(within(aviso).getByRole("button", { name: "Reintentar" }));
@@ -177,8 +177,10 @@ describe("StudyClientes — estados y errores (K6)", () => {
         vi.mocked(api.post).mock.calls.filter(([path]) => String(path).endsWith("/contacts")),
       ).toHaveLength(2),
     );
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(screen.getByRole("alert").textContent).toBe(textoInicial);
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain(
+        "No se pudo registrar el correo. Reintentá o agregalo desde Contactos.",
+      ),
+    );
   });
 });
