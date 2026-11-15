@@ -49,9 +49,16 @@ describe("índice de contratos: exportaciones de calendarios y libros", () => {
       totalAPagar: "1500.50",
     };
     expect(contracts.taxFilingDeclarationBodySchema.safeParse(body).success).toBe(true);
-    expect(contracts.taxFilingDeclarationBodySchema.safeParse({ ...body, totalAPagar: "-1" }).success).toBe(false);
-    expect(contracts.taxFilingDeclarationBodySchema.safeParse({ ...body, totalAPagar: "1.00001" }).success).toBe(false);
-    expect(contracts.taxFilingDeclarationBodySchema.safeParse({ ...body, extra: 1 }).success).toBe(false);
+    expect(
+      contracts.taxFilingDeclarationBodySchema.safeParse({ ...body, totalAPagar: "-1" }).success,
+    ).toBe(false);
+    expect(
+      contracts.taxFilingDeclarationBodySchema.safeParse({ ...body, totalAPagar: "1.00001" })
+        .success,
+    ).toBe(false);
+    expect(contracts.taxFilingDeclarationBodySchema.safeParse({ ...body, extra: 1 }).success).toBe(
+      false,
+    );
     expect(contracts.FILING_DECLARATION_DOCUMENT_CATEGORY).toBe("DECLARACION_JURADA");
   });
 });

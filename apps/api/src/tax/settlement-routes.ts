@@ -44,7 +44,9 @@ export function settlementRoutes(app: FastifyInstance) {
       return reply.status(status).send({ error: { code: err.code, message: err.message } });
     }
     if (err instanceof FilingDeclarationError) {
-      return reply.status(err.httpStatus).send({ error: { code: err.code, message: err.message, details: { path: err.path } } });
+      return reply.status(err.httpStatus).send({
+        error: { code: err.code, message: err.message, details: { path: err.path } },
+      });
     }
     if (err instanceof TaxRegimeDisabledError) {
       return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } });
@@ -350,13 +352,23 @@ export function settlementRoutes(app: FastifyInstance) {
       return reply.status(400).send({
         error: {
           code: "VALIDATION_ERROR",
-          message: body.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; "),
-          details: body.error.issues.map(({ path, message }) => ({ path: path.join("."), message })),
+          message: body.error.issues
+            .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+            .join("; "),
+          details: body.error.issues.map(({ path, message }) => ({
+            path: path.join("."),
+            message,
+          })),
         },
       });
     }
     try {
-      const data = await declarations.recordDeclaration(ctx, { clientId, obligationId, filingId, ...body.data });
+      const data = await declarations.recordDeclaration(ctx, {
+        clientId,
+        obligationId,
+        filingId,
+        ...body.data,
+      });
       return reply.status(200).send({ data });
     } catch (err) {
       return handleError(reply, err);
