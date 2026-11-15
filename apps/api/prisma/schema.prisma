@@ -823,7 +823,8 @@ model Document {
   fiscalVouchers FiscalVoucher[]
   expenseEvidence ExpenseEvidence[]
   evidenceLinks  EvidenceLink[]
-  taxFilings     TaxFiling[]
+  taxFilings     TaxFiling[]              @relation("TaxFilingEvidence")
+  taxFilingDeclarations TaxFiling[]      @relation("TaxFilingDeclaration")
 
   @@index([firmId, clientId, status])
   @@index([firmId, clientId, createdAt])
@@ -3279,13 +3280,21 @@ model TaxFiling {
   amountFiled       Decimal  @db.Decimal(20, 4)
   status            TaxFilingStatus @default(PENDING)
   evidenceDocumentId String?
+  declarationDocumentId    String?
+  impuestoDeterminado      Decimal?  @db.Decimal(20, 4)
+  saldoFavorTecnico        Decimal?  @db.Decimal(20, 4)
+  saldoLibreDisponibilidad Decimal?  @db.Decimal(20, 4)
+  totalAPagar              Decimal?  @db.Decimal(20, 4)
+  declaredByUserId         String?
+  declaredAt               DateTime? @db.Timestamp(3)
   createdByUserId   String
   createdAt         DateTime @default(now())
 
   client     Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
   obligation TaxObligation  @relation(fields: [obligationId], references: [id])
   settlement TaxSettlement? @relation(fields: [settlementId], references: [id])
-  evidence   Document?      @relation(fields: [evidenceDocumentId], references: [id])
+  evidence    Document?     @relation("TaxFilingEvidence", fields: [evidenceDocumentId], references: [id])
+  declaration Document?     @relation("TaxFilingDeclaration", fields: [declarationDocumentId], references: [id], onDelete: NoAction, onUpdate: Cascade)
 
   @@index([firmId, clientId, obligationId])
   @@map("tax_filings")
