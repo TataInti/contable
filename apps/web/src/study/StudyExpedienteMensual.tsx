@@ -1,19 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button, EmptyState, Field, getStatusBadgeMeta, MoneyField, Table, useNotify } from "@contable/design-system";
-import { ApiError, api, type Client } from "../lib/api";
+import { api, type Client } from "../lib/api";
 import { RECEIPT_ACCEPT, uploadFilingReceipt, waitForReceiptReady } from "./filingReceipt";
 import { useClientContext } from "../context/ClientContext";
-import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useSession } from "../session/SessionContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { WorkpaperSourceReviewAction } from "./WorkpaperSourceReviewAction";
-import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
 import { Icon } from "../ui/Icon";
 import {
-  DenseHeader,
   DensePage,
   StatStrip,
   useDensity,
@@ -25,7 +22,6 @@ import type {
   EvidenceDocument,
   FiscalTaxPeriod,
   PositionAction,
-  SifereAnalysis,
   TaxJurisdiction,
   TaxPosition,
   TaxRegime,
@@ -51,33 +47,14 @@ import {
   calculationLabel,
 } from "./legajo/etiquetas";
 import { formatDate, formatDateTime, formatMoney, selfReviewNote } from "./legajo/formato";
-import { fileToBase64, fileToHash, hashSourceFile, parseSourceFile } from "./legajo/archivoFuente";
-import { SifereAnalysisPanel } from "./legajo/SifereAnalysisPanel";
+import { hashSourceFile, parseSourceFile } from "./legajo/archivoFuente";
+import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
+import { CabeceraLegajo } from "./legajo/paneles/CabeceraLegajo";
+import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
+import { PanelLibrosIva } from "./legajo/paneles/PanelLibrosIva";
+import { PanelSaldoInicial } from "./legajo/paneles/PanelSaldoInicial";
 import "./study.css";
 
-function WorkpaperActionError({ error }: { error: Error | null | undefined }) {
-  const errorRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!error || !errorRef.current) return;
-    errorRef.current.focus({ preventScroll: true });
-    errorRef.current.scrollIntoView?.({ behavior: "smooth", block: "center" });
-  }, [error]);
-
-  if (!error) return null;
-
-  return (
-    <div className="workpaper-action-error" ref={errorRef} tabIndex={-1}>
-      {error instanceof ApiError ? (
-        <FieldErrorsFromDetails error={error} />
-      ) : (
-        <p className="form-error" role="alert">
-          {error.message || "No se pudo completar la acción."}
-        </p>
-      )}
-    </div>
-  );
-}
 
 /**
  * Legajo de liquidación (F1.6, PLAN §4.6).
@@ -105,15 +82,6 @@ export function StudyExpedienteMensual() {
     taxPeriodSelection.key === taxPeriodStorageKey ? taxPeriodSelection.id : "";
   const [activeStep, setActiveStep] = useState(0);
   const [showOpening, setShowOpening] = useState(false);
-  const [opening, setOpening] = useState({
-    taxTypeId: "",
-    taxPeriodId: "",
-    regimeId: "",
-    jurisdictionId: "",
-    kind: "SALDO_A_FAVOR",
-    amount: "",
-    evidenceDocumentId: "",
-  });
   const [editingLot, setEditingLot] = useState<CreditLot | null>(null);
   const [editForm, setEditForm] = useState({
     reference: "",
@@ -143,14 +111,6 @@ export function StudyExpedienteMensual() {
   >({});
   const [allocationDrafts, setAllocationDrafts] = useState<Record<string, string>>({});
   const [showSifereModal, setShowSifereModal] = useState(false);
-  const [sifereFiles, setSifereFiles] = useState<{
-    sales: File | null;
-    purchases: File | null;
-  }>({ sales: null, purchases: null });
-  const [sifereAnalysis, setSifereAnalysis] = useState<{
-    sales: SifereAnalysis | null;
-    purchases: SifereAnalysis | null;
-  }>({ sales: null, purchases: null });
   const notify = useNotify();
 
   const taxPeriodsQuery = useQuery({
@@ -333,62 +293,6 @@ export function StudyExpedienteMensual() {
     },
   });
 
-  const analyzeSifereMutation = useMutation({
-    mutationFn: async ({ direction, file }: { direction: "SALE" | "PURCHASE"; file: File }) => {
-      const base64 = await fileToBase64(file);
-      return api.post<SifereAnalysis>(
-        `/firms/${firmId}/clients/${clientId}/sifere/analyze`,
-        { direction, base64 },
-      );
-    },
-    onSuccess: (data, variables) => {
-      setSifereAnalysis((current) => ({
-        ...current,
-        [variables.direction === "SALE" ? "sales" : "purchases"]: data,
-      }));
-    },
-  });
-
-  const importSifereMutation = useMutation({
-    mutationFn: async ({ direction, file }: { direction: "SALE" | "PURCHASE"; file: File }) => {
-      const source = coverageQuery.data?.sources.find((item) =>
-        direction === "SALE" ? item.code === "ARCA_IVA_SALES" : item.code === "ARCA_IVA_PURCHASES",
-      );
-      if (!source?.taxTypeId || !source?.periodId || !clientQuery.data) {
-        throw new Error("La fuente no tiene una obligación fiscal materializada");
-      }
-      const base64 = await fileToBase64(file);
-      const fileHash = await fileToHash(file);
-      return api.post<{
-        analysis: SifereAnalysis;
-        batch: { id: string; status: string; committed: number; duplicates: number };
-      }>(
-        `/firms/${firmId}/clients/${clientId}/sifere/import`,
-        {
-          direction,
-          base64,
-          fileName: file.name,
-          fileHash,
-          taxTypeId: source.taxTypeId,
-          periodId: source.periodId,
-          clientCuit: clientQuery.data.cuit,
-          ...(activeWorkpaperId ? { workpaperId: activeWorkpaperId } : {}),
-        },
-      );
-    },
-    onSuccess: (data) => {
-      setShowSifereModal(false);
-      setSifereFiles({ sales: null, purchases: null });
-      setSifereAnalysis({ sales: null, purchases: null });
-      notify.success(
-        `Se importaron ${data.batch.committed} comprobante(s) de ${data.analysis.direction === "SALE" ? "ventas" : "compras"} (${data.analysis.sheetName}). Quedaron asociados al cliente y al período activo.`,
-      );
-      void queryClient.invalidateQueries({
-        queryKey: ["monthly-workpaper-coverage", firmId, clientId],
-      });
-      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
-    },
-  });
 
   const calculateMutation = useMutation({
     mutationFn: (id: string) =>
@@ -692,56 +596,7 @@ export function StudyExpedienteMensual() {
     },
   });
 
-  const openingMutation = useMutation({
-    mutationFn: () =>
-      api.post(`/firms/${firmId}/clients/${clientId}/tax-credit-ledger/opening`, {
-        taxTypeId: opening.taxTypeId,
-        ...(opening.regimeId ? { regimeId: opening.regimeId } : {}),
-        ...(opening.jurisdictionId ? { jurisdictionId: opening.jurisdictionId } : {}),
-        periodId: opening.taxPeriodId,
-        kind: opening.kind,
-        amount: opening.amount,
-        ...(opening.evidenceDocumentId ? { evidenceDocumentId: opening.evidenceDocumentId } : {}),
-      }),
-    onSuccess: () => {
-      setShowOpening(false);
-      setOpening({
-        taxTypeId: "",
-        taxPeriodId: "",
-        regimeId: "",
-        jurisdictionId: "",
-        kind: "SALDO_A_FAVOR",
-        amount: "",
-        evidenceDocumentId: "",
-      });
-      void queryClient.invalidateQueries({ queryKey: ["tax-credit-ledger", firmId, clientId] });
-      void queryClient.invalidateQueries({
-        queryKey: ["tax-position", firmId, clientId],
-      });
-    },
-  });
 
-  const editLotMutation = useMutation({
-    mutationFn: () => {
-      if (!editingLot) throw new Error("No hay registro seleccionado");
-      const payload: Record<string, unknown> = {
-        reference: editForm.reference || null,
-        evidenceDocumentId: editForm.evidenceDocumentId || null,
-      };
-      if (editForm.originalAmount) {
-        payload.originalAmount = editForm.originalAmount;
-      }
-      return api.patch(
-        `/firms/${firmId}/clients/${clientId}/tax-credit-ledger/${editingLot.id}`,
-        payload,
-      );
-    },
-    onSuccess: () => {
-      setEditingLot(null);
-      setEditForm({ reference: "", evidenceDocumentId: "", originalAmount: "" });
-      void queryClient.invalidateQueries({ queryKey: ["tax-credit-ledger", firmId, clientId] });
-    },
-  });
 
   if (!firmId || !clientId) {
     return (
@@ -755,12 +610,6 @@ export function StudyExpedienteMensual() {
   }
 
   const workpapers = listQuery.data ?? [];
-  const openingRegimes = (regimesQuery.data ?? []).filter(
-    (regime) => regime.isActive && (!opening.taxTypeId || regime.taxTypeId === opening.taxTypeId),
-  );
-  const openingTaxPeriods = (taxPeriodsQuery.data ?? []).filter(
-    (taxPeriod) => taxPeriod.taxType.isActive && (!opening.taxTypeId || taxPeriod.taxTypeId === opening.taxTypeId),
-  );
   const safeActiveStep = Math.min(Math.max(activeStep, 0), WORKPAPER_STEPS.length - 1);
   // Constancias ya subidas (por el estudio o por el cliente desde el portal) y listas para usar.
   const filingReceiptDocuments = (documentsQuery.data ?? []).filter(
@@ -780,39 +629,14 @@ export function StudyExpedienteMensual() {
 
   return (
     <DensePage density={density} flow>
-      <DenseHeader
-        title="Legajo"
-        description="Coordina IVA, IIBB y TEM del período con evidencia trazable."
-        actions={
-          <>
-          <Button
-            variant="secondary"
-            disabled={!capabilities.has("tax.vouchers.prepare")}
-            onClick={() => setShowSifereModal(true)}
-          >
-            <Icon name="upload" size={16} />
-            Subir Excel
-          </Button>
-          <FiscalBooksExportAction
-            periodId={selectedTaxPeriod?.id ?? null}
-            periodLabel={
-              selectedTaxPeriod
-                ? `${selectedTaxPeriod.taxType.name} · ${fiscalTaxPeriodLabel(selectedTaxPeriod)}`
-                : null
-            }
-          />
-          <Button
-            variant="primary"
-            disabled={!selectedTaxPeriod || createMutation.isPending || !capabilities.has("tax.settlements.calculate")}
-            onClick={() => void createMutation.mutate()}
-          >
-            <Icon name="plus" size={16} />
-            Nuevo legajo
-          </Button>
-          <WorkpaperActionError error={createMutation.error} />
-        
-          </>
-        }
+      <CabeceraLegajo
+        capabilities={capabilities}
+        selectedTaxPeriod={selectedTaxPeriod}
+        creandoLegajo={createMutation.isPending}
+        cargandoPeriodos={taxPeriodsQuery.isLoading}
+        errorCreacion={createMutation.error}
+        onSubirLibros={() => setShowSifereModal(true)}
+        onNuevoLegajo={() => void createMutation.mutate()}
       />
 
       {taxPeriodsQuery.isLoading ? (
@@ -879,329 +703,36 @@ export function StudyExpedienteMensual() {
 
 
 
-      <ActionDrawer
-        isOpen={showSifereModal}
-        onClose={() => setShowSifereModal(false)}
-        title="Subir libros IVA (Excel)"
-        description="Subí por separado el libro de compras y el de ventas. El análisis de alícuotas y tributos no depende de que esté completo: lo podés correr con lo que ya tengas."
-        size="wide"
-      >
-        <div className="sifere-upload">
-          {(["SALE", "PURCHASE"] as const).map((direction) => {
-            const file = direction === "SALE" ? sifereFiles.sales : sifereFiles.purchases;
-            const analysis = direction === "SALE" ? sifereAnalysis.sales : sifereAnalysis.purchases;
-            const isAnalyzing = analyzeSifereMutation.isPending && analyzeSifereMutation.variables?.direction === direction;
-            const isImporting = importSifereMutation.isPending && importSifereMutation.variables?.direction === direction;
-            return (
-              <section className="sifere-upload__side" key={direction}>
-                <h3>{direction === "SALE" ? "Ventas" : "Compras"}</h3>
-                <div className="sifere-upload__actions">
-                  <a
-                    className="ds-button ds-button--sm ds-button--ghost"
-                    href={`/api/v1/firms/${firmId}/clients/${clientId}/sifere/template?direction=${direction}`}
-                    download
-                  >
-                    Modelo .xlsx
-                  </a>
-                  <label className="sifere-upload__file">
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                      onChange={(event) => {
-                        const selected = event.target.files?.[0] ?? null;
-                        setSifereFiles((current) => ({
-                          ...current,
-                          [direction === "SALE" ? "sales" : "purchases"]: selected,
-                        }));
-                        setSifereAnalysis((current) => ({
-                          ...current,
-                          [direction === "SALE" ? "sales" : "purchases"]: null,
-                        }));
-                      }}
-                    />
-                    <span>{file ? file.name : "Elegí el .xlsx del libro"}</span>
-                  </label>
-                </div>
-                <div className="sifere-upload__actions">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={!file || isAnalyzing}
-                    loading={isAnalyzing}
-                    onClick={() => {
-                      if (file) {
-                        analyzeSifereMutation.mutate({ direction, file });
-                      }
-                    }}
-                  >
-                    Analizar alícuotas
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    disabled={!file || !analysis || isImporting || !activeWorkpaperId}
-                    loading={isImporting}
-                    onClick={() => {
-                      if (file) {
-                        importSifereMutation.mutate({ direction, file });
-                      }
-                    }}
-                  >
-                    Importar
-                  </Button>
-                </div>
-                <WorkpaperActionError
-                  error={
-                    analyzeSifereMutation.variables?.direction === direction
-                      ? analyzeSifereMutation.error
-                      : null
-                  }
-                />
-                <WorkpaperActionError
-                  error={
-                    importSifereMutation.variables?.direction === direction
-                      ? importSifereMutation.error
-                      : null
-                  }
-                />
-                {analysis ? <SifereAnalysisPanel analysis={analysis} /> : null}
-              </section>
-            );
-          })}
-        </div>
-      </ActionDrawer>
+      <PanelLibrosIva
+        abierto={showSifereModal}
+        onCerrar={() => setShowSifereModal(false)}
+        firmId={firmId}
+        clientId={clientId}
+        activeWorkpaperId={activeWorkpaperId}
+        fuentes={coverageQuery.data?.sources}
+        cuitCliente={clientQuery.data?.cuit}
+      />
 
-      <ActionDrawer
-        isOpen={showOpening}
-        onClose={() => setShowOpening(false)}
-        title="Cargar saldo inicial"
-        description="Registrá un saldo a favor o arrastre. Podés adjuntar un respaldo documental o cargarlo manualmente; en ambos casos queda registrado el usuario que lo hizo."
-        size="wide"
-      >
-        <form
-          className="opening-credit-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            openingMutation.mutate();
-          }}
-        >
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="opening-tax-type">
-              Impuesto
-            </label>
-            <select
-              id="opening-tax-type"
-              className="ds-field__input"
-              value={opening.taxTypeId}
-              onChange={(event) =>
-                setOpening((value) => ({
-                  ...value,
-                  taxTypeId: event.target.value,
-                  taxPeriodId: "",
-                  regimeId: "",
-                  jurisdictionId: "",
-                  kind:
-                    event.target.value &&
-                    taxTypesQuery.data?.find((type) => type.id === event.target.value)?.code ===
-                      "IVA"
-                      ? "IVA_LIBRE"
-                      : "SALDO_A_FAVOR",
-                }))
-              }
-              required
-            >
-              <option value="">Seleccioná…</option>
-              {(taxTypesQuery.data ?? []).filter((type) => type.isActive).map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="opening-tax-period">
-              Período fiscal
-            </label>
-            <select
-              id="opening-tax-period"
-              className="ds-field__input"
-              value={opening.taxPeriodId}
-              onChange={(event) =>
-                setOpening((value) => ({ ...value, taxPeriodId: event.target.value }))
-              }
-              required
-              disabled={!opening.taxTypeId}
-            >
-              <option value="">Seleccioná…</option>
-              {openingTaxPeriods.map((taxPeriod) => (
-                <option key={taxPeriod.id} value={taxPeriod.id}>
-                  {taxPeriod.label ??
-                    `${taxPeriod.startDate.slice(0, 10)} a ${taxPeriod.endDate.slice(0, 10)}`}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="opening-regime">
-              Régimen
-            </label>
-            <select
-              id="opening-regime"
-              className="ds-field__input"
-              value={opening.regimeId}
-              onChange={(event) => {
-                const regime = openingRegimes.find((item) => item.id === event.target.value);
-                setOpening((value) => ({
-                  ...value,
-                  regimeId: event.target.value,
-                  jurisdictionId: regime?.jurisdictionId ?? "",
-                }));
-              }}
-            >
-              <option value="">Sin régimen específico</option>
-              {openingRegimes.map((regime) => (
-                <option key={regime.id} value={regime.id}>
-                  {regime.name} · {regime.jurisdiction.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="opening-kind">
-              Naturaleza
-            </label>
-            <select
-              id="opening-kind"
-              className="ds-field__input"
-              value={opening.kind}
-              onChange={(event) => setOpening((value) => ({ ...value, kind: event.target.value }))}
-            >
-              <option value="SALDO_A_FAVOR">Saldo a favor</option>
-              {taxTypesQuery.data?.find((type) => type.id === opening.taxTypeId)?.code === "IVA" ? (
-                <>
-                  <option value="IVA_TECNICO">IVA · saldo técnico</option>
-                  <option value="IVA_LIBRE">IVA · libre disponibilidad</option>
-                </>
-              ) : null}
-            </select>
-          </div>
-          <MoneyField
-            label="Importe"
-            id="opening-amount"
-            value={opening.amount}
-            onChange={(value) => setOpening((state) => ({ ...state, amount: value }))}
-            required
-          />
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="opening-evidence">
-              Documento de respaldo
-            </label>
-            <select
-              id="opening-evidence"
-              className="ds-field__input"
-              value={opening.evidenceDocumentId}
-              onChange={(event) =>
-                setOpening((value) => ({ ...value, evidenceDocumentId: event.target.value }))
-              }
-            >
-              <option value="">Sin documento (carga manual)</option>
-              {documentsQuery.data?.map((document) => (
-                <option key={document.id} value={document.id}>
-                  {document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento"}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="opening-credit-form__actions">
-            <Button
-              type="submit"
-              loading={openingMutation.isPending}
-              disabled={!opening.taxTypeId || !opening.taxPeriodId || !opening.amount}
-            >
-              Registrar saldo
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setShowOpening(false)}>
-              Cancelar
-            </Button>
-          </div>
-          <WorkpaperActionError error={openingMutation.error} />
-        </form>
-      </ActionDrawer>
+      <PanelSaldoInicial
+        abierto={showOpening}
+        onCerrar={() => setShowOpening(false)}
+        firmId={firmId}
+        clientId={clientId}
+        tiposImpuesto={taxTypesQuery.data}
+        regimenes={regimesQuery.data}
+        periodosFiscales={taxPeriodsQuery.data}
+        documentos={documentsQuery.data}
+      />
 
-      <ActionDrawer
-        isOpen={editingLot !== null}
-        onClose={() => setEditingLot(null)}
-        title="Editar saldo"
-        description="Actualizá el monto, la referencia o el documento de respaldo del saldo. Cada cambio queda registrado en el log con usuario y fecha."
-        size="wide"
-      >
-        {editingLot ? (
-          <form
-            className="opening-credit-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              editLotMutation.mutate();
-            }}
-          >
-            <div className="ds-field">
-              <label className="ds-field__label">Saldo</label>
-              <p className="muted-copy">
-                <strong>{editingLot.kind.replaceAll("_", " ")}</strong> ·{" "}
-                {formatMoney(editingLot.originalAmount)}
-              </p>
-            </div>
-            <Field
-              label="Monto original"
-              id="edit-lot-amount"
-              type="number"
-              step="0.01"
-              value={editForm.originalAmount}
-              onChange={(event) =>
-                setEditForm((form) => ({ ...form, originalAmount: event.target.value }))
-              }
-              placeholder="0,00"
-            />
-            <Field
-              label="Referencia"
-              id="edit-lot-reference"
-              value={editForm.reference}
-              onChange={(event) =>
-                setEditForm((form) => ({ ...form, reference: event.target.value }))
-              }
-              placeholder="Opcional"
-            />
-            <div className="ds-field">
-              <label className="ds-field__label" htmlFor="edit-lot-evidence">
-                Documento de respaldo
-              </label>
-              <select
-                id="edit-lot-evidence"
-                className="ds-field__input"
-                value={editForm.evidenceDocumentId}
-                onChange={(event) =>
-                  setEditForm((form) => ({ ...form, evidenceDocumentId: event.target.value }))
-                }
-              >
-                <option value="">Sin documento (carga manual)</option>
-                {documentsQuery.data?.map((document) => (
-                  <option key={document.id} value={document.id}>
-                    {document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento"}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <WorkpaperActionError error={editLotMutation.error} />
-            <div className="opening-credit-form__actions">
-              <Button type="submit" loading={editLotMutation.isPending}>
-                Guardar cambios
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setEditingLot(null)}>
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        ) : null}
-      </ActionDrawer>
+      <PanelEditarSaldo
+        editingLot={editingLot}
+        onCerrar={() => setEditingLot(null)}
+        editForm={editForm}
+        setEditForm={setEditForm}
+        firmId={firmId}
+        clientId={clientId}
+        documentos={documentsQuery.data}
+      />
 
       <ActionDrawer
         isOpen={positionAction?.kind === "PAYMENT"}

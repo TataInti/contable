@@ -1,54 +1,67 @@
+import { Table } from "@contable/design-system";
+import { StatStrip } from "../../ui/Dense";
 import { formatMoney } from "./formato";
 import type { SifereAnalysis } from "./tipos";
 
 export function SifereAnalysisPanel({ analysis }: { analysis: SifereAnalysis }) {
   return (
-    <div className="sifere-analysis">
-      <div className="sifere-analysis__totals">
-        <span>
-          <strong>{formatMoney(analysis.totals.importeTotal)}</strong>
-          <small>Importe total</small>
-        </span>
-        <span>
-          <strong>{formatMoney(analysis.totals.netoGravado)}</strong>
-          <small>Neto gravado</small>
-        </span>
-        <span>
-          <strong>{formatMoney(analysis.totals.iva)}</strong>
-          <small>IVA</small>
-        </span>
-      </div>
+    <div>
+      <StatStrip
+        label="Totales del libro"
+        items={[
+          {
+            key: "importeTotal",
+            label: "Importe total",
+            value: formatMoney(analysis.totals.importeTotal),
+          },
+          {
+            key: "netoGravado",
+            label: "Neto gravado",
+            value: formatMoney(analysis.totals.netoGravado),
+          },
+          { key: "iva", label: "IVA", value: formatMoney(analysis.totals.iva) },
+        ]}
+      />
       {analysis.rates.length > 0 ? (
-        <table className="sifere-analysis__table">
-          <thead>
-            <tr>
-              <th>Alícuota</th>
-              <th className="num">Base</th>
-              <th className="num">IVA</th>
-              <th className="num">Comp.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {analysis.rates.map((rate) => (
-              <tr key={rate.rate}>
-                <td>{rate.label}</td>
-                <td className="num">{formatMoney(rate.net)}</td>
-                <td className="num">{formatMoney(rate.tax)}</td>
-                <td className="num">{rate.count}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Table
+          aria-label="Alícuotas del libro"
+          columns={[
+            { key: "alicuota", header: "Alícuota", accessor: (rate) => rate.label },
+            {
+              key: "base",
+              header: "Base",
+              align: "right",
+              accessor: (rate) => formatMoney(rate.net),
+            },
+            {
+              key: "iva",
+              header: "IVA",
+              align: "right",
+              accessor: (rate) => formatMoney(rate.tax),
+            },
+            {
+              key: "comprobantes",
+              header: "Comp.",
+              align: "right",
+              accessor: (rate) => rate.count,
+            },
+          ]}
+          rows={analysis.rates}
+          rowKey={(rate) => rate.rate}
+        />
       ) : null}
       {analysis.taxes.length > 0 ? (
-        <div className="sifere-analysis__taxes">
+        <>
           <small>Tributos asociados</small>
-          {analysis.taxes.map((tax) => (
-            <span key={tax.code}>
-              {tax.label} · <strong>{formatMoney(tax.amount)}</strong>
-            </span>
-          ))}
-        </div>
+          <StatStrip
+            label="Tributos asociados"
+            items={analysis.taxes.map((tax) => ({
+              key: tax.code,
+              label: tax.label,
+              value: formatMoney(tax.amount),
+            }))}
+          />
+        </>
       ) : null}
       <small className="muted-copy">
         {analysis.detailRows} comprobantes · {analysis.validRows} válidos

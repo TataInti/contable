@@ -525,22 +525,6 @@
   border-top: 1px solid var(--ds-border);
 }
 
-.opening-credit-form {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-4);
-  border: 1px solid var(--ds-border);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-muted);
-}
-
-.opening-credit-form__actions {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--ds-space-2);
-}
-
 .workpaper-close-details dt {
   color: var(--ds-text-muted);
   font-size: 0.72rem;
@@ -689,140 +673,6 @@
   width: 1.1rem;
   height: 1.1rem;
   accent-color: var(--ds-color-primary);
-}
-
-.sifere-upload {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--ds-space-4);
-}
-
-.sifere-upload__side {
-  display: grid;
-  gap: var(--ds-space-3);
-  align-content: start;
-  padding: var(--ds-space-3);
-  border: 1px solid var(--ds-border);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-muted);
-}
-
-.sifere-upload__side h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 650;
-}
-
-.sifere-upload__file {
-  display: grid;
-  gap: var(--ds-space-1);
-  color: var(--ds-text-muted);
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.sifere-upload__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--ds-space-2);
-}
-
-.sifere-upload__file {
-  flex: 1;
-  min-width: 12rem;
-}
-
-.sifere-upload__file input {
-  font: inherit;
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-.sifere-upload__file span {
-  display: block;
-  padding: 0.48rem 0.58rem;
-  border: 1px dashed var(--ds-border);
-  border-radius: var(--ds-radius-sm);
-  color: var(--ds-text-muted);
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-
-.sifere-upload__file span:hover {
-  border-color: var(--ds-accent, #237a57);
-  color: var(--ds-text);
-}
-
-.sifere-analysis {
-  display: grid;
-  gap: var(--ds-space-2);
-}
-
-.sifere-analysis__totals {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--ds-space-2);
-}
-
-.sifere-analysis__totals span {
-  display: grid;
-  gap: 0.1rem;
-  padding: var(--ds-space-2);
-  border-radius: var(--ds-radius-sm);
-  background: var(--ds-surface);
-}
-
-.sifere-analysis__totals small,
-.sifere-analysis__taxes small {
-  color: var(--ds-text-muted);
-  font-size: 0.72rem;
-}
-
-.sifere-analysis__totals strong {
-  font-size: 0.92rem;
-}
-
-.sifere-analysis__table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-}
-
-.sifere-analysis__table th,
-.sifere-analysis__table td {
-  padding: 0.32rem 0.4rem;
-  border-bottom: 1px solid var(--ds-border);
-  text-align: left;
-}
-
-.sifere-analysis__table th.num,
-.sifere-analysis__table td.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.sifere-analysis__taxes {
-  display: grid;
-  gap: var(--ds-space-1);
-}
-
-.sifere-analysis__taxes span {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--ds-space-2);
-  padding: 0.24rem 0;
-  border-bottom: 1px solid var(--ds-border);
-  font-size: 0.8rem;
-}
-
-.sifere-analysis .muted-copy {
-  font-size: 0.74rem;
 }
 
 .workpaper-source-batches > div {
@@ -1060,20 +910,8 @@
 
 @media (max-width: 960px) {
 
-  .opening-credit-form {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .workpaper-source-import {
     grid-template-columns: 1fr;
-  }
-
-  .sifere-upload {
-    grid-template-columns: 1fr;
-  }
-
-  .sifere-analysis__totals {
-    grid-template-columns: repeat(3, 1fr);
   }
 
   .workpaper-process {
@@ -1100,7 +938,6 @@
 @media (max-width: 640px) {
   .fiscal-rule-summary__meta,
   .workpaper-close-details,
-  .opening-credit-form,
   .workpaper-classification-summary,
   .workpaper-process__menu,
   .workpaper-control {
@@ -1123,7 +960,6 @@
   }
 
   .fiscal-rule-approval__actions,
-  .opening-credit-form__actions,
   .workpaper-control__resolution,
   .workpaper-process__controls,
   .study-form__actions,
@@ -1132,7 +968,6 @@
   }
 
   .fiscal-rule-approval__actions .ds-button,
-  .opening-credit-form__actions .ds-button,
   .workpaper-control__resolution .ds-button,
   .workpaper-process__controls .ds-button,
   .workpaper-step-footer .ds-button,
