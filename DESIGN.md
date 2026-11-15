@@ -837,7 +837,7 @@ Usá el componente para conservar la normalización, etiqueta, tono y atributo d
 
 #### Notificaciones (`ToastProvider`, `useNotify`)
 
-Único canal para decir cómo terminó una acción. `notify.success` se cierra sola a los 5 s; `notify.error` queda hasta cerrarla; `notify.info` es para avisos sin resultado. Se monta una vez en la raíz de la app. El tono se lee en el icono: la tarjeta va sin fondo de color. El resultado vive en la notificación; `apps/web/src/ui/UiPatterns.test.ts` verifica que ninguna pantalla dibuje una cinta de «Acción completada» ni guarde un estado local para el recibo.
+Canal para decir cómo terminó una acción, salvo el error de una acción de fila, que va junto a su botón. `notify.success` se cierra sola a los 5 s; `notify.error` queda hasta cerrarla; `notify.info` es para avisos sin resultado. Se monta una vez en la raíz de la app. El tono se lee en el icono: la tarjeta va sin fondo de color. El resultado vive en la notificación; `apps/web/src/ui/UiPatterns.test.ts` verifica que ninguna pantalla dibuje una cinta de «Acción completada» ni guarde un estado local para el recibo.
 
 ### C09 — Paneles y confirmación
 
@@ -1014,7 +1014,7 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 | Familia Dense del paquete | Primitivas públicas de `packages/design-system/src`; contratos detallados arriba |
 | `DenseTabs`, `DenseSearch`, `DenseAlert` | `DenseTabs` y `DenseSearch` permanecen en el adaptador web. `DenseAlert` se conserva para pantallas fuera de este corte; las pantallas migradas usan `Notice`. |
 | Orientación y "próximo paso" | Cuando la pantalla tiene un próximo paso, es su botón principal del encabezado, no un aviso; una pantalla de consulta puede no tener botón principal. Si hace falta orientar, se usa texto neutro, `Notice` con tono `info` o `DenseAlert` con tono `hint` (sin fondo ni color de estado). El tono `success` se reserva para confirmar una acción recién hecha; no se usa para estados permanentes ni para guiar, porque comparte el verde de la marca. Como máximo un aviso con fondo por pantalla |
-| Notificaciones (`ToastProvider`, `useNotify`) | Único canal para decir cómo terminó una acción. `notify.success` se cierra sola a los 5 s; `notify.error` queda hasta cerrarla; `notify.info` para avisos sin resultado. Se monta una vez en la raíz de la app. El tono se lee en el icono: la tarjeta no usa fondo de color. Ninguna pantalla dibuja una cinta de "Acción completada" ni guarda un estado local para el recibo: `apps/web/src/ui/UiPatterns.test.ts` falla si reaparece |
+| Notificaciones (`ToastProvider`, `useNotify`) | Canal para decir cómo terminó una acción, salvo el error de una acción de fila, que va junto a su botón. `notify.success` se cierra sola a los 5 s; `notify.error` queda hasta cerrarla; `notify.info` para avisos sin resultado. Se monta una vez en la raíz de la app. El tono se lee en el icono: la tarjeta no usa fondo de color. Ninguna pantalla dibuja una cinta de "Acción completada" ni guarda un estado local para el recibo: `apps/web/src/ui/UiPatterns.test.ts` falla si reaparece |
 | Cómo se comunica cada cosa | Acción que salió bien → notificación. Acción que falló → notificación de error; si el error es de un campo o de un formulario abierto, además junto al campo o dentro del panel. Estado que bloquea el trabajo de la pantalla → un `Notice` fijo, como máximo uno. Todo en orden → nada, o texto gris con tilde |
 | Menú del estudio (`StudyShell`) | Dos niveles: **Estudio** (lo de toda la cartera) y **Cliente** (lo del cliente elegido, en el orden del trabajo del mes), más **Ajustes del estudio** (en main, «Configuración del estudio»), siempre a la vista. El cliente se elige una sola vez, con el selector del bloque Cliente; sin cliente, sus secciones se muestran deshabilitadas con el motivo. La barra superior queda sólo para el período contable, en las pantallas que lo necesitan. Cada ítem lleva el icono declarado en `moduleRegistry` |
 | Iconos | Los iconos del paquete (`Icon`) se muestran: acompañan a la etiqueta en el menú y en botones, y pueden ir solos sólo en botones con `aria-label`. No se ocultan con reglas globales |
@@ -1024,7 +1024,7 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 | Interruptor (`Switch`) | Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con el estado escrito al lado. Apagar algo que afecta a otros pide confirmación. Dentro de un formulario que se envía después va una casilla |
 | Tablas (`Table`, `DenseTable`) | Dos componentes con un mismo aspecto: `Table` para leer y `DenseTable` para listas con selección, orden y detalle lateral. Comparten encabezado (`--ds-table-head-height`) y alto de fila (`--ds-row-height`). No se escribe `<table>` en una pantalla; las cuatro que quedan están registradas como deuda en `UiPatterns.test.ts` |
 | Densidad de filas (`useDensity`) | Preferencia de la persona, no de la pantalla: un solo valor (28, 32 o 40 px) guardado en el navegador y aplicado a todas las tablas. Se cambia en un único lugar, el menú de ayuda del estudio. Ninguna barra de filtros lleva el selector |
-| Dónde va cada error | **Campo inválido**: debajo del campo. **No se pudo guardar un formulario o cajón**: `Notice` de error dentro del mismo formulario, junto a los botones. **No se pudo cargar una lista**: `Notice` de error con botón Reintentar en el lugar de la lista. **Falló una acción de fila o de barra** (enviar, publicar, descargar, activar): `notify.error`, nunca un aviso al pie de la página. `actionErrorMessage` arma el texto |
+| Dónde va cada error | **Campo inválido**: debajo del campo. **No se pudo guardar un formulario o cajón**: `Notice` de error dentro del mismo formulario, junto a los botones. **No se pudo cargar una lista**: `Notice` de error con botón Reintentar en el lugar de la lista. **Falló una acción de fila**: el error va junto al botón que la disparó. **Falló una acción de barra** (enviar, publicar, descargar, activar): `notify.error`, nunca un aviso al pie de la página. `actionErrorMessage` arma el texto |
 | Títulos de paneles, cajones y fichas | Título y, si hace falta, una línea de descripción. `ActionDrawer` e `Inspector` no tienen rótulo superior; los paneles tampoco |
 | Confirmaciones | Toda acción destructiva o que afecta a otros pasa por `ConfirmDialog` (`useConfirmAction`): dice qué va a pasar y el botón nombra la acción. No se usa `window.confirm` |
 | Eliminación definitiva | Borrar algo que arrastra datos (un paquete de reglas, un cliente) no ocupa una caja propia en la pantalla: es una acción chica `variant="danger"` junto al título. Pide dos confirmaciones: primero `ConfirmDialog` explica qué se pierde; después `DeletionDrawer` muestra el impacto y pide escribir el nombre |
@@ -1124,6 +1124,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Aceptación:** pasar de Saldos a Fuentes conserva «Finalizado» como estado; la advertencia de revisión por la misma persona que preparó queda a la vista; el identificador y la evidencia siguen accesibles en el detalle; al cerrar el panel, el foco vuelve al origen.
 
+**Estado: migrada** (Foco 2, cortes 2.1 a 2.3d; el retiro del CSS sin consumidores queda en 2.4). Lo vigente tras la migración: encabezado con «Nuevo legajo» como acción secundaria; cada revisión se lee en una tarjeta con sus etapas; las etapas con consultas muestran el error con «Reintentar»; una sola acción primaria por tarjeta, la de su estado; «Finalizar», «Crear rectificativa» y «Eximir» piden confirmación; una revisión reemplazada se lee como resumen de solo lectura. Desvío frente a «sin cajas»: la tarjeta del legajo conserva su borde de contenedor; las etapas no llevan caja propia.
+
 ### R03 — Reglas fiscales
 
 **Propósito:** elegir un paquete, comprender su versión y vigencia, y preparar cambios de forma deliberada.
@@ -1139,6 +1141,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 **Estados:** carga, error local con la lista disponible, restricción, vacío de paquetes, actualización y texto extenso.
 
 **Aceptación:** la versión activa se identifica como de sólo lectura; el paquete seleccionado se ve en la lista; hay una acción contextual principal.
+
+**Estado: migrada** (Foco 3, cortes 3.1a a 3.2c-2; el retiro del CSS sin consumidores queda en 3.3). Lo vigente tras la migración: «Nuevo paquete» como acción secundaria, y «Crear paquete» como primaria solo cuando no hay paquetes; una sola acción primaria por panel; el error de una consulta va junto al dato afectado, con «Reintentar» (`reglas/Errores.tsx`); el resumen de la versión va sin caja. Desvío frente a «sin cajas»: Alícuotas y Control profesional conservan la caja `study-panel`; queda pendiente y este corte no la cambia.
 
 **Catálogos fiscales** usa esta misma receta: una sola `DenseTabs` con los conteos de las cinco categorías; debajo, una línea breve con propios, referencia y alertas. La barra de filtros, la tabla y el detalle comparten la grilla; los datos del detalle usan columnas etiqueta/valor y los conteos numéricos se alinean a la derecha. Cada conteo aparece una vez, las cifras van a la derecha y la tabla tiene el ancho del resto de la pantalla.
 
@@ -1161,8 +1165,8 @@ Cubre todas las pantallas de `apps/web/src` en main: 18 del estudio (`study/`), 
 | Nº | Pantalla (ruta) | Archivo | Receta | Familias y componentes Foco (composición destino) | Corte |
 |---:|---|---|---|---|---:|
 | 1 | Inicio (`/`) | `study/StudyDashboard.tsx` | R01 | C01, C02, C03, C04, C07, C08 — `DenseHeader`, `StatStrip`, `DenseSection`, `DenseTable`, `DenseWorkspace`, `InspectorFacts`, `AsyncState`, `EmptyState`, `StatusBadge` (migrada) | 1 (migrada) |
-| 2 | Legajo (`/expediente-mensual`) | `study/StudyExpedienteMensual.tsx` | R02 | C01, C02, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `StatStrip`, `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` | 2 |
-| 3 | Reglas fiscales (`/reglas-fiscales`) | `study/StudyReglasFiscales.tsx` | R03 | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `DenseTabs`, `DenseTable`, `DenseWorkspace`, `ActionDrawer`, `ConfirmDialog`, `DeletionDrawer` | 3 |
+| 2 | Legajo (`/expediente-mensual`) | `study/StudyExpedienteMensual.tsx` | R02 | C01, C02, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `StatStrip`, `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` | 2 (migrada) |
+| 3 | Reglas fiscales (`/reglas-fiscales`) | `study/StudyReglasFiscales.tsx` | R03 | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `DenseTabs`, `DenseTable`, `DenseWorkspace`, `ActionDrawer`, `ConfirmDialog`, `DeletionDrawer` | 3 (migrada) |
 | 4 | Catálogos fiscales (`/catalogos-fiscales`) | `study/StudyCatalogosFiscales.tsx` | R03 | C01, C04, C05, C06, C07, C08, C09 — `DenseTabs`, `DenseSearch`, `DenseTable`, `Inspector`, `ActionDrawer`, `DeletionDrawer` | 4 |
 | 5 | Clientes (`/clientes`) | `study/StudyClientes.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `StatStrip`, `DenseToggleGroup`, `DenseTable` con `groupBy`, `Inspector`, `ActionDrawer` | 5 |
 | 6 | Usuarios y accesos (`/administracion`) | `study/StudyAdministracion.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseTabs`, `DenseTable`, `Inspector`, `ActionDrawer`, `ConfirmDialog` | 6 |
@@ -1289,7 +1293,7 @@ La galería del contrato Foco v1 validó composición e interacción sobre HTML 
 ### Brechas observadas previas, vigentes
 
 - `--ds-color-text-disabled` sobre `--ds-color-control-disabled` mide 3,91:1 frente al umbral general. `--ds-color-text-faint` cumple sobre las superficies generales, muted y hover; la fila muted seleccionada queda en 4,3786:1, según la tabla de contraste y la decisión de conservar el token exacto.
-- En Dense UI varios objetivos interactivos quedan por debajo del objetivo interno de 44 px: `.dense-tab` tiene `min-height: 36px`; `.dense-input` y `.dense-select` miden 30 px; `.dense-toggle` mide 30 px; botones de `.dense-seg` miden 28 px. En el shell, `.study__nav-link` tiene 42 px. El botón móvil de menú sí mide 44 px.
+- En Dense UI varios objetivos interactivos quedan por debajo del objetivo interno de 44 px: `.dense-tab` tiene `min-height: 36px`; `.dense-input` y `.dense-select` miden 30 px; botones de `.dense-seg` miden 28 px. En el shell, `.study__nav-link` tiene 42 px. El botón móvil de menú sí mide 44 px.
 - `Field` relaciona su error mediante `aria-describedby` pero no añade `role="alert"`; por eso el anuncio inmediato recomendado por la guía de formularios y paneles no está garantizado en el componente por sí solo.
 - La tabla genérica `Table` usa semántica nativa, pero no implementa selección/foco de fila ni manejo de flechas; las listas con selección obtienen ese soporte mediante `DenseTable`.
 
