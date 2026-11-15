@@ -1,0 +1,94 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ClientContextValue } from "../../context/ClientContext";
+import { api } from "../../lib/api";
+import { StudyClientes } from "../StudyClientes";
+import {
+  CLIENTES_SINTETICOS,
+  SESION_AUTENTICADA,
+  contextoDePrueba,
+  renderConRutas,
+  respuestaApi,
+  seleccionarCliente,
+} from "./clientes.testutil";
+
+const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
+
+vi.mock("../../context/ClientContext", () => ({
+  useClientContext: () => contextMock.current,
+}));
+
+interface MockSession {
+  status: "loading" | "authenticated" | "unauthenticated";
+  me: null;
+  portalContexts: never[];
+  error: null;
+  refresh: () => Promise<void>;
+}
+
+const sessionMock = vi.hoisted(() => ({ current: null as unknown as MockSession }));
+
+vi.mock("../../session/SessionContext", () => ({
+  useSession: () => sessionMock.current,
+}));
+
+vi.mock("../../lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/api")>();
+  return {
+    ...actual,
+    api: {
+      get: vi.fn(),
+      post: vi.fn(),
+      patch: vi.fn(),
+      put: vi.fn(),
+      del: vi.fn(),
+      postWithHeaders: vi.fn(),
+    } as unknown as typeof actual.api,
+  };
+});
+
+const CUIT_ALFA = "20-00000006-0";
+const ALFA = "Sintético Alfa S.A.";
+const CUIT_BETA = "20-00000000-1";
+const BETA = "Sintético Beta S.R.L.";
+
+// Caracterización K7 (Foco 5.2): semántica G02 y G03 de la banda y del espacio de trabajo.
+// Afirma el comportamiento VIGENTE de origin/main (5cdd0cf), defecto 7d-7; se reemplaza al corregir.
+
+describe("StudyClientes — semántica de la banda y del espacio de trabajo (K7)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    contextMock.current = contextoDePrueba(["client.read", "client.manage"]);
+    sessionMock.current = SESION_AUTENTICADA;
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      respuestaApi(path, CLIENTES_SINTETICOS)) as never);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("las cifras que filtran la lista no exponen aria-pressed (vigente: defecto 7d-7)", async () => {
+    // vigente: defecto 7d-7 (cambia en este corte)
+    renderConRutas("/clientes", <StudyClientes />);
+    await screen.findByRole("table", { name: "Cartera de clientes" });
+    const banda = screen.getByRole("group", { name: "Resumen de la cartera" });
+
+    const activos = within(banda).getByRole("button", { name: /Activos/ });
+    const incompleta = within(banda).getByRole("button", { name: /Ficha incompleta/ });
+    expect(activos.hasAttribute("aria-pressed")).toBe(false);
+    expect(incompleta.hasAttribute("aria-pressed")).toBe(false);
+  });
+
+  it("el espacio de trabajo es un tabpanel sin pestañas y sin nombre accesible (vigente: defecto 7d-7)", async () => {
+    // vigente: defecto 7d-7 (cambia en este corte)
+    renderConRutas("/clientes", <StudyClientes />);
+    await screen.findByRole("table", { name: "Cartera de clientes" });
+    const espacio = document.getElementById("clients-panel");
+
+    expect(espacio?.getAttribute("role")).toBe("tabpanel");
+    expect(espacio?.hasAttribute("aria-label")).toBe(false);
+    expect(espacio?.hasAttribute("aria-labelledby")).toBe(false);
+  });
+});
