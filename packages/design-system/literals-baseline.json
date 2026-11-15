@@ -289,7 +289,31 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/legajo/etapaCalculo.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/etapaClasificacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/legajo/etapaFuentes.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/etapas/EtapaCalculo.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/etapas/EtapaClasificacion.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
