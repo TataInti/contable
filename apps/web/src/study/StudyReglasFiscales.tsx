@@ -13,155 +13,30 @@ import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
 import { RuleSimulator } from "./RuleSimulator";
+import type {
+  Credential,
+  RuleJurisdictionOption,
+  RulePack,
+  RulePackDetail,
+  RuleRegimeOption,
+  RuleRow,
+  RuleStatus,
+  RuleVersion,
+} from "./reglas/tipos";
+import { sameRuleRows, shortDate, today, validateRuleVersionDate } from "./reglas/utilidades";
+import { ListaPaquetes } from "./reglas/ListaPaquetes";
 import { getStatusBadgeMeta, StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
 import {
   DenseAlert,
-  DenseFooter,
   DenseHeader,
   DensePage,
-  DenseSearch,
-  DenseTable,
   DenseTabs,
-  DenseToolbar,
   StatStrip,
   useDenseShortcuts,
   useDensity,
-  normalizeSearch,
-  type DenseColumn,
 } from "../ui/Dense";
 import "./study.css";
-
-type RuleStatus = "DRAFT" | "IN_REVIEW" | "APPROVED" | "ACTIVE" | "RETIRED";
-
-interface RuleRow {
-  id: string;
-  concept: string;
-  kindId?: string | null;
-  activityId?: string | null;
-  categoryCode?: string | null;
-  isDefault?: boolean;
-  activityCode: string | null;
-  jurisdictionId: string | null;
-  rate: string | null;
-  minAmount: string | null;
-  validFrom: string;
-  validTo: string | null;
-}
-
-interface RuleVersion {
-  id: string;
-  version: number;
-  status: RuleStatus;
-  origin?: "REFERENCE" | "UI";
-  createdByFirmId?: string | null;
-  validFrom: string;
-  validTo: string | null;
-  engineVersion: string;
-  rulesHash: string;
-  rateRules: RuleRow[];
-  dueDateRules: Array<{
-    id: string;
-    frequency: string | null;
-    dueDay: number;
-    cuitEnding: string | null;
-    validFrom: string;
-    validTo: string | null;
-  }>;
-  sources: Array<{ id: string; title: string; reference: string | null; consultedAt: string }>;
-}
-
-interface RulePack {
-  id: string;
-  code: string;
-  name: string;
-  status: RuleStatus;
-  origin?: "REFERENCE" | "UI";
-  createdByFirmId?: string | null;
-  regime: {
-    id: string;
-    name: string;
-    code: string;
-    calcFamilyId?: string | null;
-    isActive: boolean;
-    taxType: { name: string; code: string; isActive: boolean };
-    jurisdiction: { name: string; code?: string; isActive: boolean };
-  };
-  versions: RuleVersion[];
-}
-
-interface RulePackDetail extends RulePack {
-  regime: RulePack["regime"] & {
-    jurisdiction: { id: string; name: string; code: string };
-    authority: { id: string; name: string; isActive: boolean };
-  };
-}
-
-interface RuleRegimeOption {
-  id: string;
-  code: string;
-  name: string;
-  taxType: { name: string };
-  jurisdiction: { name: string };
-}
-
-interface Credential {
-  id: string;
-  registrationNumber: string;
-  jurisdiction: { name: string };
-}
-
-interface RuleJurisdictionOption {
-  id: string;
-  code: string;
-  name: string;
-  isActive: boolean;
-}
-
-const today = new Date().toISOString().slice(0, 10);
-
-function validateRuleVersionDate(value: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return "La fecha debe tener formato AAAA-MM-DD y un año entre 1900 y 2100.";
-  }
-  const year = Number(value.slice(0, 4));
-  if (year < 1900 || year > 2100) return "El año debe estar entre 1900 y 2100.";
-  const month = Number(value.slice(5, 7));
-  const day = Number(value.slice(8, 10));
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-    return "Ingresá una fecha válida.";
-  }
-  return null;
-}
-
-function shortDate(value: string | null) {
-  // Las vigencias son fechas calendario guardadas en UTC: se formatean en UTC
-  // para no mostrar el día anterior en husos como el de Argentina (UTC-3).
-  return value ? new Date(value).toLocaleDateString("es-AR", { timeZone: "UTC" }) : "Sin vencimiento";
-}
-
-function sameRuleRows(draftRows: RuleRow[], savedRows: RuleRow[]): boolean {
-  if (draftRows.length !== savedRows.length) return false;
-  const savedById = new Map(savedRows.map((row) => [row.id, row]));
-  return draftRows.every((row) => {
-    const saved = savedById.get(row.id);
-    return Boolean(
-      saved &&
-      row.concept === saved.concept &&
-      row.kindId === saved.kindId &&
-      row.activityId === saved.activityId &&
-      row.categoryCode === saved.categoryCode &&
-      Boolean(row.isDefault) === Boolean(saved.isDefault) &&
-      row.activityCode === saved.activityCode &&
-      row.jurisdictionId === saved.jurisdictionId &&
-      row.rate === saved.rate &&
-      row.minAmount === saved.minAmount &&
-      row.validFrom.slice(0, 10) === saved.validFrom.slice(0, 10) &&
-      (row.validTo?.slice(0, 10) ?? null) === (saved.validTo?.slice(0, 10) ?? null),
-    );
-  });
-}
 
 export function StudyReglasFiscales() {
   const { firmId, capabilities } = useClientContext();
@@ -603,16 +478,6 @@ export function StudyReglasFiscales() {
   const allPacks = packsQuery.data ?? [];
   const packsWith = (status: RuleStatus) =>
     allPacks.filter((pack) => pack.versions.some((version) => version.status === status)).length;
-  const visiblePacks = useMemo(() => {
-    const needle = normalizeSearch(packSearch);
-    return allPacks.filter((pack) => {
-      if (packFilter && !pack.versions.some((version) => version.status === packFilter)) return false;
-      if (!needle) return true;
-      return normalizeSearch(
-        `${pack.name} ${pack.code} ${pack.regime.taxType.name} ${pack.regime.jurisdiction.name}`,
-      ).includes(needle);
-    });
-  }, [allPacks, packFilter, packSearch]);
   const isEmptyPackList = packsQuery.isSuccess && allPacks.length === 0;
   const newPackRef = useRef<() => void>(() => undefined);
   newPackRef.current = () => setShowPackForm(true);
@@ -620,49 +485,6 @@ export function StudyReglasFiscales() {
     searchRef,
     onNew: canPropose ? () => newPackRef.current() : undefined,
   });
-  const versionsLabel = (pack: RulePack) => {
-    const active = pack.versions.find((version) => version.status === "ACTIVE");
-    const draft = pack.versions.find((version) => version.status === "DRAFT");
-    const review = pack.versions.find((version) => version.status === "IN_REVIEW");
-    const parts = [
-      draft ? `Borrador v${draft.version}` : null,
-      review ? `En revisión v${review.version}` : null,
-      active ? `Vigente v${active.version}` : null,
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(" · ") : "Sin versión activa";
-  };
-  const packColumns: DenseColumn<RulePack>[] = [
-    {
-      key: "name",
-      header: "Paquete",
-      sortValue: (pack) => pack.name.toLocaleLowerCase("es-AR"),
-      render: (pack) => (
-        <span className="dense-name">
-          <span className="dense-name__text">
-            <strong>{pack.name}</strong>
-            <small>{pack.code} · {pack.regime.name}{!pack.regime.isActive ? " (oculto)" : ""}</small>
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: "tax",
-      header: "Impuesto",
-      sortValue: (pack) => pack.regime.taxType.name,
-      render: (pack) => `${pack.regime.taxType.name}${!pack.regime.taxType.isActive ? " (oculto)" : ""}`,
-    },
-    {
-      key: "jurisdiction",
-      header: "Jurisdicción",
-      sortValue: (pack) => pack.regime.jurisdiction.name,
-      render: (pack) => `${pack.regime.jurisdiction.name}${!pack.regime.jurisdiction.isActive ? " (oculto)" : ""}`,
-    },
-    {
-      key: "versions",
-      header: "Versiones",
-      render: (pack) => <span>{versionsLabel(pack)}</span>,
-    },
-  ];
 
   return (
     <DensePage density={density} flow className="fiscal-rules">
@@ -1077,64 +899,19 @@ export function StudyReglasFiscales() {
       </ActionDrawer>
 
 
-      {!isEmptyPackList ? (
-        <DenseToolbar>
-          <DenseSearch
-            inputRef={searchRef}
-            value={packSearch}
-            onChange={setPackSearch}
-            placeholder="Buscar paquete, impuesto o jurisdicción…"
-            label="Buscar paquetes"
-          />
-          {packFilter ? (
-            <button type="button" className="dense-toggle" aria-pressed onClick={() => setPackFilter("")}>
-              Filtro activo · quitar
-            </button>
-          ) : null}
-          <span className="dense-toolbar__spacer" />
-        </DenseToolbar>
-      ) : null}
-
-      {packsQuery.isLoading ? (
-        <div className="dense-table-card">
-          <div className="query-state" role="status">
-            <span className="loading-copy">Cargando reglas…</span>
-          </div>
-        </div>
-      ) : isEmptyPackList ? (
-        <EmptyState
-          size="compact"
-          className="fiscal-rules-empty"
-          title="Todavía no hay paquetes de reglas"
-          description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
-        />
-      ) : (
-        <div className="dense-packs">
-          <DenseTable<RulePack>
-            label="Paquetes de reglas disponibles"
-            columns={packColumns}
-            rows={visiblePacks}
-            rowKey={(pack) => pack.id}
-            selectedKey={selectedPackId}
-            onSelect={(key) => {
-              if (key) setSelectedPackId(key);
-            }}
-            footer={
-              <DenseFooter
-                count={visiblePacks.length}
-                noun={visiblePacks.length === 1 ? "paquete" : "paquetes"}
-                hint="Elegí un paquete para ver sus versiones y reglas."
-                newShortcut={canPropose}
-              />
-            }
-            empty={
-              <p className="muted-copy">
-                Ningún paquete coincide.
-              </p>
-            }
-          />
-        </div>
-      )}
+      <ListaPaquetes
+        packs={allPacks}
+        isLoading={packsQuery.isLoading}
+        isEmpty={isEmptyPackList}
+        search={packSearch}
+        onSearchChange={setPackSearch}
+        searchRef={searchRef}
+        filter={packFilter}
+        onClearFilter={() => setPackFilter("")}
+        selectedPackId={selectedPackId}
+        onSelectPack={setSelectedPackId}
+        canPropose={canPropose}
+      />
 
       <div className="fiscal-rules-detail dense-detail">
           {detailQuery.isLoading ? (
