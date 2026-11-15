@@ -1,12 +1,12 @@
-# Flujograma del Expediente Mensual — Acciones y botones por etapa
+# Flujograma del Legajo — Acciones y botones por etapa
 
-> **Propósito:** explicar, de forma visual y paso a paso, el flujo de trabajo de la interfaz web al entrar al **Expediente mensual** (`/expediente-mensual`). Describe las **6 etapas** del stepper persistente, las **acciones** disponibles en cada una y los **botones** que las disparan, para que preparador y revisor entiendan qué hacer y en qué orden.
+> **Propósito:** explicar, de forma visual y paso a paso, el flujo de trabajo de la interfaz web al entrar al **Legajo** (`/expediente-mensual`). Describe las **6 etapas** del stepper persistente, las **acciones** disponibles en cada una y los **botones** que las disparan, para que preparador y revisor entiendan qué hacer y en qué orden.
 >
-> La vista usa un **stepper persistente** (no un wizard que oculta información): las 6 etapas están siempre visibles y se puede saltar entre ellas libremente. El estado del expediente (badge) y los controles bloqueantes determinan qué botones están habilitados.
+> La vista usa un **stepper persistente** (no un wizard que oculta información): las 6 etapas están siempre visibles y se puede saltar entre ellas libremente. El estado del legajo (badge) y los controles bloqueantes determinan qué botones están habilitados.
 
 ---
 
-## 0. Antes de empezar: crear el expediente
+## 0. Antes de empezar: crear el legajo
 
 Al entrar a `/expediente-mensual` con un cliente y período activos, la pantalla muestra:
 
@@ -14,13 +14,13 @@ Al entrar a `/expediente-mensual` con un cliente y período activos, la pantalla
 - **Nuevo legajo** (cabecera): crea el legajo del período fiscal elegido. Requiere `tax.settlements.calculate` y un período fiscal; si falta alguno, el botón queda deshabilitado y la pantalla dice por qué.
 - Si **no hay legajos** para el período, se muestra «Sin legajos para este período» con el botón **Crear legajo** (solo si el perfil puede crear legajos).
 
-> El expediente nace en estado `DRAFT`. A partir de ahí se recorre el stepper.
+> El legajo nace en estado `DRAFT`. A partir de ahí se recorre el stepper.
 
 ```mermaid
 flowchart TD
-    A[Entrar a /expediente-mensual<br/>cliente + período activos] --> B{¿Hay expediente?}
+    A[Entrar a /expediente-mensual<br/>cliente + período activos] --> B{¿Hay legajo?}
     B -- No --> C[Estado vacío<br/>Botón: Crear legajo]
-    B -- Sí --> D[Card del expediente<br/>badge de estado + stepper 6 etapas]
+    B -- Sí --> D[Card del legajo<br/>badge de estado + stepper 6 etapas]
     C --> D
     D --> F[Botón cabecera: Nuevo legajo]
 ```
@@ -103,7 +103,7 @@ flowchart TD
 
 | Acción | Botón | Condición / capacidad |
 |---|---|---|
-| Elegir fuente y archivo | Selector + input file | `tax.vouchers.prepare` y expediente editable |
+| Elegir fuente y archivo | Selector + input file | `tax.vouchers.prepare` y legajo editable |
 | Importar el lote | **Importar lote** | Fuente + archivo seleccionados |
 | Revisar un lote commiteado | **Revisar** | `tax.vouchers.review` |
 | Importar un libro IVA (ventas o compras) | **Importar libro** (fila de IVA en la tabla de fuentes) | Deshabilitado con su motivo visible cuando no se puede importar |
@@ -189,13 +189,13 @@ flowchart TD
 | Resolver un control | **Resolver** | `tax.settlements.review` y resolución escrita; en BLOCKING, el respaldo es opcional |
 | Eximir un control | **Eximir** | `tax.settlements.review`, solo no-BLOCKING, con motivo escrito; pide confirmación («Eximir el control») |
 
-> Un control **BLOCKING** abierto impide finalizar el expediente (se muestra el contador "N control(es) bloqueante(s)" en la cabecera de la card).
+> Un control **BLOCKING** abierto impide finalizar el legajo (se muestra el contador "N control(es) bloqueante(s)" en la cabecera de la card).
 
 ---
 
 ## 7. Etapa 6 — Cierre
 
-**Objetivo:** revisar hashes y finalizar el expediente para arrastrar saldos al siguiente período.
+**Objetivo:** revisar hashes y finalizar el legajo para arrastrar saldos al siguiente período.
 
 ```mermaid
 flowchart TD
@@ -211,11 +211,11 @@ flowchart TD
 
 ---
 
-## 8. Acciones globales del expediente (pie de la card)
+## 8. Acciones globales del legajo (pie de la card)
 
-Independientemente de la etapa activa, el pie de la card muestra el botón correspondiente al **estado** del expediente:
+Independientemente de la etapa activa, el pie de la card muestra el botón correspondiente al **estado** del legajo:
 
-| Estado del expediente | Botón | Capacidad |
+| Estado del legajo | Botón | Capacidad |
 |---|---|---|
 | `DRAFT` / `COLLECTING_INPUTS` / `READY_TO_CALCULATE` | **Calcular** | `tax.settlements.calculate`; se habilita en `READY_TO_CALCULATE` y, si no, muestra el motivo |
 | `CHANGES_REQUESTED` | **Recalcular** | `tax.settlements.calculate` |
@@ -250,7 +250,7 @@ flowchart TD
     E3 --> E4[Cálculo<br/>revisar posición, pagos, presentaciones]
     E4 --> E5[Controles<br/>resolver / eximir hallazgos]
     E5 --> E6[Cierre<br/>finalizar y arrastrar]
-    E6 --> FIN[Expediente FINALIZED<br/>rectificativa si hace falta]
+    E6 --> FIN[Legajo FINALIZED<br/>rectificativa si hace falta]
 ```
 
 > **Consejo de uso:** el orden natural es 1 → 6, pero el stepper permite saltar. El sistema **bloquea el cálculo** (botón "Calcular" deshabilitado) hasta que las fuentes obligatorias estén presentes y las clasificaciones estén completas, y **bloquea la finalización** mientras existan controles BLOCKING abiertos.
