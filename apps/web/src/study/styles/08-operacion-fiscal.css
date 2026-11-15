@@ -1175,3 +1175,45 @@
 .calendario-ficha__datos .dense-facts > div {
   grid-template-columns: calc(var(--ds-control-height-md) * 4) minmax(0, 1fr);
 }
+
+/* Calendarios 2b-2 — Importar celdas: formato, acciones del cajón e informe de la prueba. */
+.importar-celdas {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.importar-celdas__formato p {
+  margin: 0;
+}
+
+.importar-celdas__formato p + p {
+  margin-top: var(--ds-space-1);
+}
+
+.importar-celdas__probar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.importar-informe {
+  display: grid;
+  gap: var(--ds-space-3);
+  margin-top: var(--ds-space-4);
+}
+
+.importar-informe__titulo,
+.importar-informe__seccion h4 {
+  margin: 0;
+}
+
+.importar-informe__lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.importar-informe__lista li + li {
+  margin-top: var(--ds-space-1);
+}
