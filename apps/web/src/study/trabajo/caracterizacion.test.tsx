@@ -513,3 +513,439 @@ describe("K7 · inicio de cierre", () => {
     expect(await within(dialogo).findByText("Demo: falla al crear el ciclo")).toBeTruthy();
   });
 });
+
+function cierresDemo() {
+  return [
+    {
+      id: "close-1",
+      status: "IN_PROGRESS",
+      workItems: [
+        { id: "wi-1", title: "Demo: Revisar documentación", status: "DONE" },
+        { id: "wi-2", title: "Demo: Conciliar saldos", status: "DONE" },
+        { id: "wi-3", title: "Demo: Validar obligaciones", status: "PENDING" },
+      ],
+    },
+    { id: "close-2", status: "IN_PROGRESS", workItems: [] },
+    {
+      id: "close-3",
+      status: "FINALIZED",
+      workItems: [{ id: "wi-4", title: "Demo: Preparar cierre", status: "DONE" }],
+    },
+  ];
+}
+
+describe("K8 · cierres", () => {
+  it("muestra estado, avance N de M y «Completar» con la primera tarea no hecha, sin confirmación", async () => {
+    responderApi({ cierres: cierresDemo() });
+    renderTrabajo();
+    const cierres = seccion("work-closes-section");
+    const completar = await cierres.findByRole("button", {
+      name: "Completar: Demo: Validar obligaciones",
+    });
+    expect(cierres.getByLabelText("2 de 3 tareas completas")).toBeTruthy();
+    expect(cierres.getAllByText("En proceso")).toHaveLength(2);
+    expect(document.querySelector("#work-closes-section .section-count")?.textContent).toBe("2");
+    fireEvent.click(completar);
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        `${BASE}/close-cycles/close-1/work-items/wi-3/complete`,
+      ),
+    );
+    // vigente: cambia con D7C-1 (pregunta anexa: «Completar» no pide confirmación)
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("un ciclo sin tareas no tiene acción ni mensaje", async () => {
+    responderApi({ cierres: cierresDemo() });
+    renderTrabajo();
+    const progreso = await seccion("work-closes-section").findByLabelText("0 de 0 tareas completas");
+    const acciones = progreso.closest("tr")?.querySelector(".table-actions");
+    // vigente: cambia con D7C-12 (un ciclo sin tareas queda sin acción ni explicación)
+    expect(acciones?.querySelector("button")).toBeNull();
+  });
+
+  it("«Finalizar cierre» aparece con todas las tareas hechas y pide confirmación con su texto", async () => {
+    responderApi({
+      cierres: [
+        {
+          id: "close-4",
+          status: "IN_PROGRESS",
+          workItems: [{ id: "wi-5", title: "Demo: Preparar cierre", status: "DONE" }],
+        },
+      ],
+    });
+    renderTrabajo();
+    fireEvent.click(
+      await seccion("work-closes-section").findByRole("button", { name: "Finalizar cierre" }),
+    );
+    const dialogo = await screen.findByRole("alertdialog");
+    expect(within(dialogo).getByText("¿Finalizar este cierre?")).toBeTruthy();
+    expect(
+      within(dialogo).getByText(
+        "El ciclo quedará bloqueado para auditoría y no podrá volver a un estado anterior.",
+      ),
+    ).toBeTruthy();
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Finalizar cierre" }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(`${BASE}/close-cycles/close-4/finalize`),
+    );
+  });
+
+  it("sin period.soft_close, la columna de acciones muestra «—»", async () => {
+    usarContexto(["client.read"]);
+    responderApi({ cierres: cierresDemo() });
+    renderTrabajo();
+    const progreso = await seccion("work-closes-section").findByLabelText("2 de 3 tareas completas");
+    const fila = progreso.closest("tr") as HTMLElement;
+    expect(within(fila).getByText("—")).toBeTruthy();
+    expect(within(fila).queryByRole("button")).toBeNull();
+  });
+
+  it("sin ciclos abiertos muestra «Sin ciclos de cierre» con «Iniciar cierre» que abre el cajón", async () => {
+    responderApi({ cierres: [{ id: "close-3", status: "FINALIZED", workItems: [] }] });
+    renderTrabajo();
+    expect(await seccion("work-closes-section").findByText("Sin ciclos de cierre")).toBeTruthy();
+    await waitFor(() =>
+      expect(
+        seccion("work-closes-section").getByRole("button", { name: "Iniciar cierre" }),
+      ).toBeTruthy(),
+    );
+    fireEvent.click(seccion("work-closes-section").getByRole("button", { name: "Iniciar cierre" }));
+    expect(screen.getByRole("dialog", { name: "Iniciar cierre del período" })).toBeTruthy();
+  });
+});
+
+describe("K9 · próximas obligaciones", () => {
+  it("muestra impuesto · jurisdicción, período, vencimiento y estado solo del período contable", async () => {
+    responderApi({
+      obligaciones: [OBLIGACION_OCTUBRE_PENDIENTE, OBLIGACION_OCTUBRE_PRESENTADA, OBLIGACION_NOVIEMBRE],
+    });
+    renderTrabajo();
+    const obligaciones = seccion("work-obligations-section");
+    const filaConVencimiento = (
+      await obligaciones.findByText("IVA · Demo: Nacional")
+    ).closest("tr") as HTMLElement;
+    expect(within(filaConVencimiento).getByText("Demo: octubre 2026")).toBeTruthy();
+    expect(within(filaConVencimiento).getByText("20/10/2026")).toBeTruthy();
+    expect(within(filaConVencimiento).getByText("Pendiente")).toBeTruthy();
+    const filaSinVencimiento = obligaciones
+      .getByText("Ingresos Brutos · Demo: Tucumán")
+      .closest("tr") as HTMLElement;
+    expect(within(filaSinVencimiento).getByText("01/10/2026 al 31/10/2026")).toBeTruthy();
+    // vigente: cambia con D7C-3 (sin vencimiento, la celda muestra el fin del período)
+    expect(within(filaSinVencimiento).getByText("31/10/2026")).toBeTruthy();
+    expect(within(filaSinVencimiento).getByText("Presentado")).toBeTruthy();
+    // vigente: cambia con D7C-5 (el título dice «Próximas» y la lista trae todos los estados)
+    expect(screen.getByRole("heading", { level: 2, name: "Próximas obligaciones" })).toBeTruthy();
+    expect(document.querySelector("#work-obligations-section .section-count")?.textContent).toBe(
+      "2",
+    );
+  });
+
+  it("sin período contable seleccionado, lista todas las obligaciones del cliente", async () => {
+    usarContexto(CAPACIDADES_TODAS, "period-z");
+    responderApi({
+      obligaciones: [OBLIGACION_OCTUBRE_PENDIENTE, OBLIGACION_OCTUBRE_PRESENTADA, OBLIGACION_NOVIEMBRE],
+    });
+    renderTrabajo();
+    await waitFor(() =>
+      expect(
+        document.querySelector("#work-obligations-section .section-count")?.textContent,
+      ).toBe("3"),
+    );
+  });
+
+  it("sin obligaciones, «Configurar obligaciones» navega a la configuración fiscal", async () => {
+    responderApi({ obligaciones: [] });
+    renderTrabajo();
+    expect(
+      await seccion("work-obligations-section").findByText("Sin obligaciones materializadas"),
+    ).toBeTruthy();
+    fireEvent.click(
+      seccion("work-obligations-section").getByRole("button", { name: "Configurar obligaciones" }),
+    );
+    expect(navegar).toHaveBeenCalledWith("/configuracion-fiscal");
+  });
+});
+
+describe("K10 · revisión de ítems", () => {
+  const pedidoConAdjuntos = () => [
+    pedido({
+      id: "request-1",
+      title: "Demo: Extractos bancarios",
+      status: "DRAFT",
+      items: [
+        { id: "item-1", description: "Demo: extracto de octubre", required: true, status: "ATTACHED" },
+        { id: "item-2", description: "Demo: comprobante de pago", required: false, status: "ATTACHED" },
+        { id: "item-4", description: "Demo: resumen aceptado", required: true, status: "ACCEPTED" },
+      ],
+    }),
+  ];
+
+  async function abrirRevision() {
+    const fila = await filaDePedido("Demo: Extractos bancarios");
+    fireEvent.click(fila.getByRole("button", { name: "Revisar" }));
+    return screen.getByRole("dialog", { name: "Revisión de ítems" });
+  }
+
+  it("muestra el estado crudo del pedido y de cada ítem; los botones solo en ítems adjuntados", async () => {
+    responderApi({ pedidos: pedidoConAdjuntos() });
+    renderTrabajo();
+    const dialogo = await abrirRevision();
+    // vigente: cambia con D7C-13 (el estado del pedido se muestra crudo)
+    expect(dialogo.querySelector(".study-page__hint strong")?.textContent).toBe("DRAFT");
+    const items = dialogo.querySelectorAll<HTMLElement>(".request-review-list__item");
+    expect(items.length).toBe(3);
+    // vigente: cambia con D7C-13 (el estado de cada ítem se muestra crudo)
+    expect(items[0]?.querySelector("small")?.textContent).toBe("Requerido · ATTACHED");
+    expect(items[2]?.querySelector("small")?.textContent).toBe("Requerido · ACCEPTED");
+    expect(within(items[0] as HTMLElement).getByRole("button", { name: "Aceptar" })).toBeTruthy();
+    expect(within(items[0] as HTMLElement).getByRole("button", { name: "Eximir" })).toBeTruthy();
+    const rechazar = within(items[0] as HTMLElement).getByRole("button", { name: "Rechazar" });
+    expect((rechazar as HTMLButtonElement).disabled).toBe(true);
+    expect(within(items[2] as HTMLElement).queryByRole("button")).toBeNull();
+  });
+
+  it("el motivo de rechazo es uno solo para todos los ítems y «Rechazar» lo envía con el ítem", async () => {
+    responderApi({ pedidos: pedidoConAdjuntos() });
+    renderTrabajo();
+    const dialogo = await abrirRevision();
+    fireEvent.change(dialogo.querySelector("#request-reject-reason") as HTMLTextAreaElement, {
+      target: { value: "Demo: falta el anverso" },
+    });
+    const items = dialogo.querySelectorAll<HTMLElement>(".request-review-list__item");
+    fireEvent.click(within(items[1] as HTMLElement).getByRole("button", { name: "Rechazar" }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        `${BASE}/document-requests/request-1/items/item-2/reject`,
+        { reason: "Demo: falta el anverso" },
+      ),
+    );
+    expect(
+      await screen.findByText("Ítem rechazado y devuelto al cliente con el motivo indicado."),
+    ).toBeTruthy();
+  });
+
+  it("«Aceptar» y «Eximir» actúan sobre su ítem y no piden confirmación", async () => {
+    responderApi({ pedidos: pedidoConAdjuntos() });
+    renderTrabajo();
+    const dialogo = await abrirRevision();
+    const primero = dialogo.querySelectorAll<HTMLElement>(".request-review-list__item")[0];
+    fireEvent.click(within(primero as HTMLElement).getByRole("button", { name: "Aceptar" }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        `${BASE}/document-requests/request-1/items/item-1/accept`,
+      ),
+    );
+    const segundo = dialogo.querySelectorAll<HTMLElement>(".request-review-list__item")[1];
+    fireEvent.click(within(segundo as HTMLElement).getByRole("button", { name: "Eximir" }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        `${BASE}/document-requests/request-1/items/item-2/waive`,
+      ),
+    );
+    // vigente: cambia con D7C-1 (Eximir no pide confirmación)
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+});
+
+describe("K11 · documento adjunto", () => {
+  const VISTA_PDF = {
+    url: "https://example.test/demo/extracto.pdf",
+    mimeType: "application/pdf",
+    originalName: "Demo-extracto.pdf",
+  };
+  const VISTA_PNG = {
+    url: "https://example.test/demo/comprobante.png",
+    mimeType: "image/png",
+    originalName: "Demo-comprobante.png",
+  };
+
+  function responderVistaPrevia(vista: unknown) {
+    vi.mocked(api.get).mockImplementation(((ruta: string) => {
+      if (ruta === `${BASE}/document-request-items/item-1/preview`) return Promise.resolve(vista);
+      if (ruta === `${BASE}/document-requests`) return Promise.resolve(pedidosDemo());
+      return Promise.resolve(ruta === `${BASE}/fiscal-years` ? ANIOS_DEMO : []);
+    }) as never);
+  }
+
+  async function verAdjunto() {
+    const fila = await filaDePedido("Demo: Extractos bancarios");
+    fireEvent.click(fila.getByRole("button", { name: "Ver" }));
+  }
+
+  it("un PDF se muestra en un iframe con enlace de pestaña nueva", async () => {
+    responderVistaPrevia(VISTA_PDF);
+    renderTrabajo();
+    await verAdjunto();
+    const dialogo = await screen.findByRole("dialog", { name: "Documento adjunto" });
+    expect(within(dialogo).getByText("Demo-extracto.pdf")).toBeTruthy();
+    expect(dialogo.querySelector("iframe.evidence-preview__frame")?.getAttribute("src")).toBe(
+      VISTA_PDF.url,
+    );
+    expect(dialogo.querySelector("img")).toBeNull();
+    const enlace = dialogo.querySelector("a.evidence-preview__link");
+    expect(enlace?.getAttribute("href")).toBe(VISTA_PDF.url);
+    expect(enlace?.getAttribute("target")).toBe("_blank");
+    expect(enlace?.getAttribute("rel")).toBe("noreferrer");
+  });
+
+  it("una imagen se muestra en un img, sin iframe", async () => {
+    responderVistaPrevia(VISTA_PNG);
+    renderTrabajo();
+    await verAdjunto();
+    const dialogo = await screen.findByRole("dialog", { name: "Documento adjunto" });
+    expect(dialogo.querySelector("img.evidence-preview__image")?.getAttribute("src")).toBe(
+      VISTA_PNG.url,
+    );
+    expect(dialogo.querySelector("iframe")).toBeNull();
+  });
+
+  it("si la vista previa falla, no abre el cajón ni muestra el error", async () => {
+    vi.mocked(api.get).mockImplementation(((ruta: string) => {
+      if (ruta === `${BASE}/document-request-items/item-1/preview`) {
+        return Promise.reject(new Error("Demo: falla de vista previa"));
+      }
+      if (ruta === `${BASE}/document-requests`) return Promise.resolve(pedidosDemo());
+      return Promise.resolve(ruta === `${BASE}/fiscal-years` ? ANIOS_DEMO : []);
+    }) as never);
+    renderTrabajo();
+    await verAdjunto();
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith(`${BASE}/document-request-items/item-1/preview`),
+    );
+    // vigente: cambia en 7c.3 (T-10, sin decisión: la vista previa no muestra su error)
+    expect(screen.queryByRole("dialog", { name: "Documento adjunto" })).toBeNull();
+    expect(screen.queryByText("Demo: falla de vista previa")).toBeNull();
+  });
+});
+
+describe("K12 · conversación", () => {
+  const pedidosConHilos = () => [
+    pedido({
+      id: "request-1",
+      title: "Demo: Extractos bancarios",
+      status: "DRAFT",
+      items: [],
+      threads: [{ id: "thread-1", visibility: "SHARED", messages: [] }],
+    }),
+    pedido({
+      id: "request-2",
+      title: "Demo: Certificados de retención",
+      status: "SENT",
+      items: [],
+      threads: [
+        {
+          id: "thread-2",
+          visibility: "SHARED",
+          messages: [
+            {
+              id: "msg-1",
+              authorUserId: "user-a",
+              body: "Demo: por favor subir el extracto",
+              visibility: "SHARED",
+              createdAt: "2026-10-15T14:30:00Z",
+            },
+            {
+              id: "msg-2",
+              authorUserId: "user-b",
+              body: "Demo: nota interna",
+              visibility: "INTERNAL",
+              createdAt: "2026-10-15T15:00:00Z",
+            },
+          ],
+        },
+      ],
+    }),
+    pedido({ id: "request-3", title: "Demo: Pedido sin hilo", status: "SENT", items: [] }),
+  ];
+
+  async function abrirMensaje(titulo: string) {
+    const fila = await filaDePedido(titulo);
+    fireEvent.click(fila.getByRole("button", { name: "Mensaje" }));
+    return screen.findByRole("dialog", { name: "Conversación" });
+  }
+
+  it("con hilo compartido sin mensajes muestra el vacío y el formulario, sin crear hilo", async () => {
+    responderApi({ pedidos: pedidosConHilos() });
+    renderTrabajo();
+    const dialogo = await abrirMensaje("Demo: Extractos bancarios");
+    expect(within(dialogo).getByText("Todavía no hay mensajes")).toBeTruthy();
+    expect(dialogo.querySelector("#request-message")).not.toBeNull();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it("sin hilo compartido, «Mensaje» crea el hilo y abre la conversación", async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ id: "thread-3", visibility: "SHARED", messages: [] });
+    responderApi({ pedidos: pedidosConHilos() });
+    renderTrabajo();
+    await abrirMensaje("Demo: Pedido sin hilo");
+    expect(api.post).toHaveBeenCalledWith(`${BASE}/document-requests/request-3/threads`, {
+      visibility: "SHARED",
+    });
+  });
+
+  it("muestra cada mensaje como Compartido o Interno, con su cuerpo y solo la fecha", async () => {
+    responderApi({ pedidos: pedidosConHilos() });
+    renderTrabajo();
+    const dialogo = await abrirMensaje("Demo: Certificados de retención");
+    expect(within(dialogo).getByText("Compartido")).toBeTruthy();
+    expect(within(dialogo).getByText("Interno")).toBeTruthy();
+    expect(within(dialogo).getByText("Demo: por favor subir el extracto")).toBeTruthy();
+    // vigente: cambia en 7c.3 (T-9, sin decisión: hoy la fecha se muestra sin hora)
+    expect(dialogo.querySelector(".request-message-list__item small")?.textContent).toBe(
+      "15/10/2026",
+    );
+  });
+
+  it("«Enviar mensaje» envía el texto compartido y lo limpia", async () => {
+    responderApi({ pedidos: pedidosConHilos() });
+    renderTrabajo();
+    const dialogo = await abrirMensaje("Demo: Extractos bancarios");
+    const enviar = within(dialogo).getByRole("button", { name: "Enviar mensaje" });
+    expect((enviar as HTMLButtonElement).disabled).toBe(true);
+    const texto = dialogo.querySelector("#request-message") as HTMLTextAreaElement;
+    fireEvent.change(texto, { target: { value: "Demo: enviar el extracto" } });
+    expect((enviar as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(enviar);
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(`${BASE}/threads/thread-1/messages`, {
+        body: "Demo: enviar el extracto",
+        visibility: "SHARED",
+      }),
+    );
+    expect(await screen.findByText("Mensaje enviado al pedido documental.")).toBeTruthy();
+  });
+
+  it("si la API rechaza el mensaje, muestra su texto dentro de la conversación", async () => {
+    vi.mocked(api.post).mockRejectedValue(new Error("Demo: falla al enviar"));
+    responderApi({ pedidos: pedidosConHilos() });
+    renderTrabajo();
+    const dialogo = await abrirMensaje("Demo: Extractos bancarios");
+    fireEvent.change(dialogo.querySelector("#request-message") as HTMLTextAreaElement, {
+      target: { value: "Demo: enviar el extracto" },
+    });
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Enviar mensaje" }));
+    expect(await within(dialogo).findByText("Demo: falla al enviar")).toBeTruthy();
+  });
+});
+
+describe("K13 · actualizar", () => {
+  it("«Actualizar» vuelve a consultar tres fuentes, sin los años fiscales, y no muestra estado", async () => {
+    responderApi({ pedidos: pedidosDemo() });
+    renderTrabajo();
+    await filaDePedido("Demo: Extractos bancarios");
+    vi.mocked(api.get).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar" }));
+    // vigente: cambia con D7C-18 (hoy no se muestra «Actualizando…»)
+    expect(screen.queryByText(/Actualizando/)).toBeNull();
+    await waitFor(() => expect(vi.mocked(api.get).mock.calls.length).toBe(3));
+    // vigente: cambia con D7C-18 (tres consultas; los años fiscales no se vuelven a pedir)
+    const rutas = vi.mocked(api.get).mock.calls.map((llamada) => llamada[0]).sort();
+    expect(rutas).toEqual([
+      `${BASE}/close-cycles`,
+      `${BASE}/document-requests`,
+      `${BASE}/tax-obligations`,
+    ]);
+  });
+});
