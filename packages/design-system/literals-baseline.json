@@ -301,6 +301,12 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/legajo/etapaControles.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/legajo/etapaFuentes.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -313,7 +319,19 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/legajo/etapas/EtapaCierre.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/legajo/etapas/EtapaClasificacion.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/etapas/EtapaControles.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -500,6 +518,12 @@
       "color": 0
     },
     "apps/web/src/study/reglas/cajones.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/composicion.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,

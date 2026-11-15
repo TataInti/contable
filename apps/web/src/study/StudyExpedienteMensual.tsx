@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Button, EmptyState, getStatusBadgeMeta } from "@contable/design-system";
+import { Button, EmptyState } from "@contable/design-system";
 import { api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
-import { StatusBadge } from "../ui/StatusBadge";
 import {
   DensePage,
   useDensity,
@@ -33,12 +32,9 @@ import {
   writeFiscalTaxPeriodSelection,
 } from "./legajo/periodoFiscal";
 import {
-  CONTROL_LABELS,
-  CONTROL_SEVERITY_LABELS,
   WORKPAPER_STEPS,
   calculationDisabledMessage,
 } from "./legajo/etiquetas";
-import { formatMoney } from "./legajo/formato";
 import { importarLoteFuente } from "./legajo/loteFuente";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
 import { CabeceraLegajo } from "./legajo/paneles/CabeceraLegajo";
@@ -56,6 +52,8 @@ import { EtapaFuentes } from "./legajo/etapas/EtapaFuentes";
 import { EtapaSaldos } from "./legajo/etapas/EtapaSaldos";
 import { EtapaCalculo } from "./legajo/etapas/EtapaCalculo";
 import { EtapaClasificacion } from "./legajo/etapas/EtapaClasificacion";
+import { EtapaControles } from "./legajo/etapas/EtapaControles";
+import { EtapaCierre } from "./legajo/etapas/EtapaCierre";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import "./study.css";
 
@@ -517,9 +515,6 @@ export function StudyExpedienteMensual() {
     Math.max(vigente ? (etapaPorLegajo[vigente.id] ?? 0) : 0, 0),
     WORKPAPER_STEPS.length - 1,
   );
-  const eligibleEvidenceDocuments = (documentsQuery.data ?? []).filter((document) =>
-    ["READY", "APPLIED", "REVIEWED"].includes(document.status),
-  );
   const goToStep = (index: number) => {
     if (!vigente) return;
     setEtapaPorLegajo((values) => ({
@@ -530,7 +525,6 @@ export function StudyExpedienteMensual() {
 
   const renderEtapa = (wp: Workpaper, safeActiveStep: number) => {
     const canEditSources = ESTADOS_EDITABLES_FUENTES.includes(wp.status);
-    const blocking = wp.controls.filter((c) => c.severity === "BLOCKING" && c.status === "OPEN");
     return (
       <>
                   {safeActiveStep === 0 ? (
@@ -581,161 +575,19 @@ export function StudyExpedienteMensual() {
                       setPositionAction={setPositionAction}
                     />
                   ) : safeActiveStep === 4 ? (
-                    <div className="workpaper-controls">
-                      {wp.controls.length === 0 ? (
-                        <p>No hay controles registrados para este legajo.</p>
-                      ) : (
-                        wp.controls.map((control) => (
-                          <div className="workpaper-control" key={control.id}>
-                            <span>
-                              <strong>{CONTROL_LABELS[control.code] ?? control.code}</strong>
-                              {control.message ? <small>{control.message}</small> : null}
-                              {control.expected !== null ? (
-                                <small>
-                                  Esperado: {formatMoney(control.expected)}
-                                  {control.actual !== null
-                                    ? ` · Actual: ${formatMoney(control.actual)}`
-                                    : control.status === "OPEN"
-                                      ? " · Pendiente de respaldo"
-                                      : ""}
-                                  {control.tolerance !== null
-                                    ? ` · Tolerancia: ${formatMoney(control.tolerance)}`
-                                    : ""}
-                                </small>
-                              ) : null}
-                              {control.resolution ? <small>{control.resolution}</small> : null}
-                            </span>
-                            <StatusBadge status={control.status} />
-                            <span className="muted-copy">
-                              {control.severity === "BLOCKING" && control.status !== "OPEN"
-                                ? "Bloqueaba el cierre"
-                                : CONTROL_SEVERITY_LABELS[control.severity] ?? control.severity}
-                            </span>
-                            {control.status === "OPEN" &&
-                            capabilities.has("tax.settlements.review") ? (
-                              <span className="workpaper-control__resolution">
-                                <input
-                                  aria-label={`Resolución ${control.code}`}
-                                  value={controlResolutions[control.id] ?? ""}
-                                  placeholder="Explicá cómo se resolvió…"
-                                  onChange={(event) =>
-                                    setControlResolutions((values) => ({
-                                      ...values,
-                                      [control.id]: event.target.value,
-                                    }))
-                                  }
-                                />
-                                {control.severity === "BLOCKING" ? (
-                                  <>
-                                    <select
-                                      aria-label={`Evidencia ${control.code}`}
-                                      value={controlEvidence[control.id] ?? ""}
-                                      onChange={(event) =>
-                                        setControlEvidence((values) => ({
-                                          ...values,
-                                          [control.id]: event.target.value,
-                                        }))
-                                      }
-                                    >
-                                      <option value="">Sin documento de respaldo</option>
-                                      {eligibleEvidenceDocuments.map((document) => (
-                                        <option key={document.id} value={document.id}>
-                                          {document.fileVersions?.[0]?.originalName ??
-                                            document.category ??
-                                            "Documento"}{" "}
-                                          · {getStatusBadgeMeta(document.status).label}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    {documentsQuery.isSuccess &&
-                                    eligibleEvidenceDocuments.length === 0 ? (
-                                      <small className="muted-copy">
-                                        El respaldo es opcional. Para adjuntar uno, aprobá la extracción del
-                                        documento en Bandeja.
-                                      </small>
-                                    ) : null}
-                                  </>
-                                ) : null}
-                                <Button
-                                  size="sm"
-                                  disabled={!controlResolutions[control.id]?.trim()}
-                                  loading={resolveControlMutation.isPending}
-                                  onClick={() =>
-                                    resolveControlMutation.mutate({
-                                      workpaperId: wp.id,
-                                      findingId: control.id,
-                                      status: "RESOLVED",
-                                      ...(controlEvidence[control.id]
-                                        ? { evidenceDocumentId: controlEvidence[control.id] }
-                                        : {}),
-                                    })
-                                  }
-                                >
-                                  Resolver
-                                </Button>
-                                {control.severity !== "BLOCKING" ? (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={!controlResolutions[control.id]?.trim()}
-                                    onClick={() =>
-                                      resolveControlMutation.mutate({
-                                        workpaperId: wp.id,
-                                        findingId: control.id,
-                                        status: "WAIVED",
-                                      })
-                                    }
-                                  >
-                                    Eximir
-                                  </Button>
-                                ) : null}
-                                <WorkpaperActionError
-                                  error={
-                                    resolveControlMutation.variables?.findingId === control.id
-                                      ? resolveControlMutation.error
-                                      : null
-                                  }
-                                />
-                              </span>
-                            ) : null}
-                          </div>
-                        ))
-                      )}
-                    </div>
+                    <EtapaControles
+                      capabilities={capabilities}
+                      wp={wp}
+                      controlResolutions={controlResolutions}
+                      setControlResolutions={setControlResolutions}
+                      controlEvidence={controlEvidence}
+                      setControlEvidence={setControlEvidence}
+                      documentsQuery={documentsQuery}
+                      resolveControlMutation={resolveControlMutation}
+                      confirmar={confirmar}
+                    />
                   ) : (
-                    <div className="workpaper-stage">
-                      <div className="workpaper-stage__heading">
-                        <div>
-                          <strong>Cierre y arrastre</strong>
-                          <small>
-                            Finalizar congela los hashes y genera los saldos de cierre para el
-                            siguiente período.
-                          </small>
-                        </div>
-                      </div>
-                      <dl className="workpaper-close-details">
-                        <div>
-                          <dt>Hash de entrada</dt>
-                          <dd>
-                            {wp.inputHash
-                              ? `${wp.inputHash.slice(0, 16)}…`
-                              : "Se genera al calcular"}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Hash de salida</dt>
-                          <dd>
-                            {wp.outputHash
-                              ? `${wp.outputHash.slice(0, 16)}…`
-                              : "Se genera al finalizar"}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Controles bloqueantes</dt>
-                          <dd>{blocking.length}</dd>
-                        </div>
-                      </dl>
-                    </div>
+                    <EtapaCierre wp={wp} />
                   )}
       </>
     );
