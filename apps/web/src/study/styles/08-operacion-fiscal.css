@@ -162,10 +162,6 @@
 }
 
 .study-form.fiscal-action-form > .study-panel__heading,
-.study-form.fiscal-action-form > .fiscal-action-form__wide {
-  grid-column: 1 / -1;
-}
-
 .study-form.fiscal-action-form > .study-form__actions,
 .study-form--compact > .study-form__actions {
   align-self: end;
