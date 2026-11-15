@@ -34,6 +34,7 @@ import {
   useDensity,
 } from "../ui/Dense";
 import "./study.css";
+import { formatearFechaHora } from "../lib/formatoFechas";
 
 interface UploadSession {
   sessionId: string;
@@ -708,7 +709,7 @@ export function StudyBandeja() {
                         <span>
                           <strong>{documentFileName(row)}</strong>
                           <small>
-                            {new Intl.DateTimeFormat("es-AR").format(new Date(row.createdAt))}
+                            {formatearFechaHora(row.createdAt)}
                           </small>
                         </span>
                       </button>
@@ -761,9 +762,7 @@ export function StudyBandeja() {
                     <p>
                       Ingresó{" "}
                       {detail.data?.createdAt
-                        ? new Intl.DateTimeFormat("es-AR", { dateStyle: "long" }).format(
-                            new Date(detail.data.createdAt),
-                          )
+                        ? formatearFechaHora(detail.data.createdAt)
                         : "recientemente"}
                     </p>
                   </div>

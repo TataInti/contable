@@ -14,6 +14,7 @@ import {
 } from "../ui/Dense";
 import { actionErrorMessage } from "../ui/actionError";
 import "./study.css";
+import { formatearFecha } from "../lib/formatoFechas";
 
 interface JournalLine {
   accountId: string;
@@ -60,7 +61,6 @@ const MONEY = new Intl.NumberFormat("es-AR", {
   currency: "ARS",
   maximumFractionDigits: 2,
 });
-const DATE = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 
 function money(value: string | number | undefined) {
   return MONEY.format(Number(value ?? 0));
@@ -544,7 +544,7 @@ export function StudyContabilidad() {
               {
                 key: "date",
                 header: "Fecha",
-                render: (entry) => DATE.format(new Date(entry.entryDate)),
+                render: (entry) => formatearFecha(entry.entryDate),
               },
               {
                 key: "description",
@@ -657,7 +657,7 @@ export function StudyContabilidad() {
                 {
                   key: "date",
                   header: "Fecha",
-                  render: (entry) => DATE.format(new Date(entry.entryDate)),
+                  render: (entry) => formatearFecha(entry.entryDate),
                 },
                 {
                   key: "description",

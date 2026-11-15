@@ -32,6 +32,7 @@ import {
 } from "../ui/Dense";
 import { credentialsCsv, parseBatchUsers, type BatchUserLine } from "./batch-users.js";
 import "./study.css";
+import { formatearFechaHora } from "../lib/formatoFechas";
 
 interface PortalInvitation {
   id: string;
@@ -516,7 +517,7 @@ export function StudyAdministracion() {
         internalMembers.data?.find((item) => item.userId === userId)?.user?.name ?? "el usuario";
       setRecoverySummary({
         memberName,
-        expiresAt: new Date(created.expiresAt).toLocaleString("es-AR"),
+        expiresAt: formatearFechaHora(created.expiresAt),
         sessionsRevoked: created.sessionsRevoked,
       });
       setRecoveryLink(
@@ -1028,7 +1029,7 @@ export function StudyAdministracion() {
           email: item.emailNormalized,
           role: item.role,
           status: item.revokedAt ? "REVOKED" : isPending ? "PENDING" : "EXPIRED",
-          detail: isPending ? `vence ${new Date(item.expiresAt).toLocaleDateString("es-AR")}` : undefined,
+          detail: isPending ? `vence ${formatearFechaHora(item.expiresAt)}` : undefined,
           membership: null,
           onRevoke: isPending
             ? () =>
@@ -1640,7 +1641,7 @@ export function StudyAdministracion() {
         <div className="invitation-link" role="status">
           <p>
             Enlace de recuperación para <strong>{recoverySummary?.memberName}</strong>. Copialo
-            ahora: se muestra una sola vez y vence el {recoverySummary?.expiresAt}.
+            ahora: se muestra una sola vez y vence el {formatearFechaHora(recoverySummary?.expiresAt)}.
             {recoverySummary && recoverySummary.sessionsRevoked > 0
               ? ` Se cerraron ${recoverySummary.sessionsRevoked} sesión(es) activa(s) del usuario.`
               : " El usuario no tenía sesiones activas abiertas."}{" "}
