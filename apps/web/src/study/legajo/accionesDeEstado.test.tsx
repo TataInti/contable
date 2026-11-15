@@ -95,6 +95,15 @@ async function accionesDeLaTarjeta(container: HTMLElement) {
   return container.querySelector(".workpaper-card__actions") as HTMLElement;
 }
 
+/** Botones de acción de la tarjeta: la primaria va en el encabezado de la etapa y las secundarias, en la barra (Foco 2.8). */
+function botonesDeAcciones(container: HTMLElement): HTMLButtonElement[] {
+  return [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      ".workpaper-process__accion button, .workpaper-card__actions button",
+    ),
+  ];
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   sessionStorage.clear();
@@ -126,14 +135,10 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
   it.each(estados)("en %s muestra solo las acciones de su etapa", async (estado, esperadas) => {
     contexto(TODAS);
     const { container } = renderLegajos([legajoDemo(estado)]);
-    const acciones = await accionesDeLaTarjeta(container);
+    await accionesDeLaTarjeta(container);
 
     await waitFor(() =>
-      expect(
-        within(acciones)
-          .getAllByRole("button")
-          .map((b) => b.textContent),
-      ).toEqual(esperadas),
+      expect(botonesDeAcciones(container).map((b) => b.textContent)).toEqual(esperadas),
     );
   });
 
@@ -156,13 +161,11 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
   it("sin tax.settlements.calculate explica junto a Calcular por qué no se puede", async () => {
     contexto(TODAS.filter((c) => c !== "tax.settlements.calculate"));
     const { container } = renderLegajos([legajoDemo("DRAFT")]);
-    const acciones = await accionesDeLaTarjeta(container);
+    await accionesDeLaTarjeta(container);
 
-    const boton = within(acciones).getByRole("button", { name: "Calcular" }) as HTMLButtonElement;
+    const boton = screen.getByRole("button", { name: "Calcular" }) as HTMLButtonElement;
     expect(boton.disabled).toBe(true);
-    expect(
-      within(acciones).getByText("Tu perfil no tiene permiso para calcular este legajo."),
-    ).toBeTruthy();
+    expect(screen.getByText("Tu perfil no tiene permiso para calcular este legajo.")).toBeTruthy();
   });
 
   it("sin tax.settlements.rectify no ofrece Crear rectificativa", async () => {
