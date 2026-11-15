@@ -4,7 +4,7 @@ import type { CatalogEconomicActivity, TaxRuleKindOption } from "@contable/contr
 import { MONOTRIBUTO_CATEGORY_CODES } from "@contable/contracts";
 import { Button, MoneyField, Table } from "@contable/design-system";
 import { Icon } from "../../ui/Icon";
-import { ErrorConsulta } from "./Errores";
+import { ErrorAccion, ErrorConsulta } from "./Errores";
 import type { RuleJurisdictionOption, RulePackDetail, RuleRow, RuleVersion } from "./tipos";
 
 interface AlicuotasEditorProps {
@@ -24,6 +24,7 @@ interface AlicuotasEditorProps {
   activitiesQuery: UseQueryResult<CatalogEconomicActivity[], Error>;
   jurisdictionsQuery: UseQueryResult<RuleJurisdictionOption[], Error>;
   saveMutation: UseMutationResult<unknown, Error, void>;
+  canPropose: boolean;
 }
 
 export function AlicuotasEditor({
@@ -43,6 +44,7 @@ export function AlicuotasEditor({
   activitiesQuery,
   jurisdictionsQuery,
   saveMutation,
+  canPropose,
 }: AlicuotasEditorProps) {
   // Las columnas de actividad y jurisdicción dependen de los tipos de regla que devuelve el catálogo.
   const subjetosTipo = new Set((ruleKindsQuery.data ?? []).map((option) => option.subject));
@@ -145,6 +147,9 @@ export function AlicuotasEditor({
                     descripcion="Sin ese catálogo no se puede elegir la jurisdicción de la regla."
                     onRetry={() => void jurisdictionsQuery.refetch()}
                   />
+                ) : null}
+                {!editable && selectedVersion.status === "DRAFT" && !canPropose ? (
+                  <p className="muted-copy">Este borrador es de solo lectura: tu permiso no incluye proponer cambios.</p>
                 ) : null}
                 <Table<RuleRow>
                   rows={editable ? draftRows : selectedVersion.rateRules}
@@ -430,6 +435,9 @@ export function AlicuotasEditor({
                   <p className="form-submit-hint" role="note">
                     Completá la tasa, cuota o importe de cada fila para guardar el borrador.
                   </p>
+                ) : null}
+                {editable && saveMutation.error && Object.keys(rowFieldErrors).length === 0 ? (
+                  <ErrorAccion error={saveMutation.error} />
                 ) : null}
               </section>
     </>

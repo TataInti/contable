@@ -3,6 +3,7 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import { Button, Field } from "@contable/design-system";
 import { Icon } from "../../../ui/Icon";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ErrorAccion } from "../Errores";
 import type { RuleVersion } from "../tipos";
 import { validateRuleVersionDate } from "../utilidades";
 
@@ -66,13 +67,7 @@ export function PanelModificarAlicuotas({
             }}
             required
           />
-          {cloneMutation.error ? (
-            <p className="form-error" role="alert">
-              {cloneMutation.error instanceof Error
-                ? cloneMutation.error.message
-                : "No se pudo crear el borrador."}
-            </p>
-          ) : null}
+          {cloneMutation.error ? <ErrorAccion error={cloneMutation.error} /> : null}
           <div className="study-form__actions">
             <Button type="submit" loading={cloneMutation.isPending}>
               <Icon name="plus" size={16} /> Crear borrador y editar

@@ -286,25 +286,22 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     vi.restoreAllMocks();
   });
 
-  it.fails(
-    "un error de guardar el borrador aparece junto a «Guardar borrador», no al pie (7d-7)",
-    async () => {
-      mockDemoApi(makeDemoDetail());
-      vi.mocked(api.put).mockRejectedValue(new Error("Error de guardado Demo"));
-      renderDemoReglas();
-      fireEvent.change(await screen.findByLabelText("Concepto de la fila 1"), {
-        target: { value: "Cambio Demo" },
-      });
-      fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
-      const alicuotas = await seccion("Alícuotas y porcentajes");
-      expect(await within(alicuotas).findByText("Error de guardado Demo")).toBeTruthy();
-      expect(
-        document.querySelector(".fiscal-rules > .form-error, .fiscal-rules > [role='alert']"),
-      ).toBeNull();
-    },
-  );
+  it("un error de guardar el borrador aparece junto a «Guardar borrador», no al pie (7d-7)", async () => {
+    mockDemoApi(makeDemoDetail());
+    vi.mocked(api.put).mockRejectedValue(new Error("Error de guardado Demo"));
+    renderDemoReglas();
+    fireEvent.change(await screen.findByLabelText("Concepto de la fila 1"), {
+      target: { value: "Cambio Demo" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
+    const alicuotas = await seccion("Alícuotas y porcentajes");
+    expect(await within(alicuotas).findByText("Error de guardado Demo")).toBeTruthy();
+    expect(
+      document.querySelector(".fiscal-rules > .form-error, .fiscal-rules > [role='alert']"),
+    ).toBeNull();
+  });
 
-  it.fails("un error de activar aparece una sola vez, junto al resumen (7d-5)", async () => {
+  it("un error de activar aparece una sola vez, junto al resumen (7d-5)", async () => {
     mockDemoApi(makeDemoDetail());
     vi.mocked(api.post).mockRejectedValue(new Error("Error de activación Demo"));
     renderDemoReglas();
@@ -316,92 +313,77 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     expect(screen.getAllByText("Error de activación Demo")).toHaveLength(1);
   });
 
-  it.fails(
-    "un error de crear la primera versión aparece dentro del cajón, una sola vez (7d-5)",
-    async () => {
-      mockDemoApi({ ...makeDemoDetail(), versions: [] });
-      vi.mocked(api.post).mockRejectedValue(new Error("Error de versión Demo"));
-      renderDemoReglas();
-      fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
-      const dialog = await screen.findByRole("dialog");
-      const enviar = (await within(dialog).findByRole("button", {
-        name: "Crear primera versión",
-      })) as HTMLButtonElement;
-      await waitFor(() => expect(enviar.disabled).toBe(false));
-      fireEvent.click(enviar);
-      expect(await within(dialog).findByText("Error de versión Demo")).toBeTruthy();
-      expect(screen.getAllByText("Error de versión Demo")).toHaveLength(1);
-    },
-  );
+  it("un error de crear la primera versión aparece dentro del cajón, una sola vez (7d-5)", async () => {
+    mockDemoApi({ ...makeDemoDetail(), versions: [] });
+    vi.mocked(api.post).mockRejectedValue(new Error("Error de versión Demo"));
+    renderDemoReglas();
+    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
+    const dialog = await screen.findByRole("dialog");
+    const enviar = (await within(dialog).findByRole("button", {
+      name: "Crear primera versión",
+    })) as HTMLButtonElement;
+    await waitFor(() => expect(enviar.disabled).toBe(false));
+    fireEvent.click(enviar);
+    expect(await within(dialog).findByText("Error de versión Demo")).toBeTruthy();
+    expect(screen.getAllByText("Error de versión Demo")).toHaveLength(1);
+  });
 
-  it.fails(
-    "un error de crear el paquete aparece dentro del cajón «Nuevo paquete de reglas» (7d-5)",
-    async () => {
-      mockDemoApi(makeDemoDetail(), { [REGIMENES]: () => Promise.resolve(demoRegimes) });
-      vi.mocked(api.post).mockRejectedValue(new Error("Error de paquete Demo"));
-      renderDemoReglas();
-      fireEvent.click(await screen.findByRole("button", { name: "Nuevo paquete" }));
-      const dialog = await screen.findByRole("dialog");
-      fireEvent.change(within(dialog).getByLabelText("Código"), {
-        target: { value: "DEMO-NUEVO" },
-      });
-      fireEvent.change(within(dialog).getByLabelText("Nombre"), {
-        target: { value: "Demo nuevo" },
-      });
-      fireEvent.change(within(dialog).getByLabelText("Régimen"), { target: { value: "regime-1" } });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Crear paquete" }));
-      expect(await within(dialog).findByText("Error de paquete Demo")).toBeTruthy();
-    },
-  );
+  it("un error de crear el paquete aparece dentro del cajón «Nuevo paquete de reglas» (7d-5)", async () => {
+    mockDemoApi(makeDemoDetail(), { [REGIMENES]: () => Promise.resolve(demoRegimes) });
+    vi.mocked(api.post).mockRejectedValue(new Error("Error de paquete Demo"));
+    renderDemoReglas();
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo paquete" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Código"), {
+      target: { value: "DEMO-NUEVO" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Nombre"), {
+      target: { value: "Demo nuevo" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Régimen"), { target: { value: "regime-1" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Crear paquete" }));
+    expect(await within(dialog).findByText("Error de paquete Demo")).toBeTruthy();
+  });
 
-  it.fails(
-    "un error de agregar el vencimiento aparece dentro del cajón, junto a «Guardar vencimiento» (7d-5)",
-    async () => {
-      mockDemoApi(makeDemoDetail());
-      vi.mocked(api.post).mockRejectedValue(new Error("Error de vencimiento Demo"));
-      renderDemoReglas();
-      fireEvent.click(await pestana(/Vencimientos/));
-      fireEvent.click(await screen.findByRole("button", { name: "Agregar vencimiento" }));
-      const dialog = await screen.findByRole("dialog");
-      fireEvent.change(within(dialog).getByLabelText("Día del mes"), { target: { value: "20" } });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Guardar vencimiento" }));
-      expect(await within(dialog).findByText("Error de vencimiento Demo")).toBeTruthy();
-    },
-  );
+  it("un error de agregar el vencimiento aparece dentro del cajón, junto a «Guardar vencimiento» (7d-5)", async () => {
+    mockDemoApi(makeDemoDetail());
+    vi.mocked(api.post).mockRejectedValue(new Error("Error de vencimiento Demo"));
+    renderDemoReglas();
+    fireEvent.click(await pestana(/Vencimientos/));
+    fireEvent.click(await screen.findByRole("button", { name: "Agregar vencimiento" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Día del mes"), { target: { value: "20" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar vencimiento" }));
+    expect(await within(dialog).findByText("Error de vencimiento Demo")).toBeTruthy();
+  });
 
-  it.fails(
-    "un error de agregar la fuente aparece dentro del cajón, junto a «Guardar fuente» (7d-5)",
-    async () => {
-      mockDemoApi(makeDemoDetail());
-      vi.mocked(api.post).mockRejectedValue(new Error("Error de fuente Demo"));
-      renderDemoReglas();
-      fireEvent.click(await pestana(/Fuentes/));
-      fireEvent.click(await screen.findByRole("button", { name: "Agregar fuente" }));
-      const dialog = await screen.findByRole("dialog");
-      fireEvent.change(within(dialog).getByLabelText("Título"), {
-        target: { value: "Fuente Demo" },
-      });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Guardar fuente" }));
-      expect(await within(dialog).findByText("Error de fuente Demo")).toBeTruthy();
-    },
-  );
+  it("un error de agregar la fuente aparece dentro del cajón, junto a «Guardar fuente» (7d-5)", async () => {
+    mockDemoApi(makeDemoDetail());
+    vi.mocked(api.post).mockRejectedValue(new Error("Error de fuente Demo"));
+    renderDemoReglas();
+    fireEvent.click(await pestana(/Fuentes/));
+    fireEvent.click(await screen.findByRole("button", { name: "Agregar fuente" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Título"), {
+      target: { value: "Fuente Demo" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Guardar fuente" }));
+    expect(await within(dialog).findByText("Error de fuente Demo")).toBeTruthy();
+  });
 
-  it.fails(
-    "un error de enviar a revisión aparece en Control profesional, junto a su botón (7d-5)",
-    async () => {
-      mockDemoApi(makeDemoDetail());
-      vi.mocked(api.post).mockRejectedValue(new Error("Error de revisión Demo"));
-      renderDemoReglas();
-      fireEvent.click(await pestana(/Control profesional/));
-      fireEvent.click(
-        await screen.findByRole("button", { name: "Enviar a revisión (flujo anterior)" }),
-      );
-      const panel = await seccion("Flujo de revisión anterior");
-      expect(await within(panel).findByText("Error de revisión Demo")).toBeTruthy();
-    },
-  );
+  it("un error de enviar a revisión aparece en Control profesional, junto a su botón (7d-5)", async () => {
+    mockDemoApi(makeDemoDetail());
+    vi.mocked(api.post).mockRejectedValue(new Error("Error de revisión Demo"));
+    renderDemoReglas();
+    fireEvent.click(await pestana(/Control profesional/));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Enviar a revisión (flujo anterior)" }),
+    );
+    const panel = await seccion("Flujo de revisión anterior");
+    expect(await within(panel).findByText("Error de revisión Demo")).toBeTruthy();
+  });
 
-  it.fails("un error de aprobar aparece junto a «Aprobar» (7d-5)", async () => {
+  it("un error de aprobar aparece junto a «Aprobar» (7d-5)", async () => {
     conCapacidades("tax.rules.read", "tax.rules.propose", "tax.rules.approve");
     mockDemoApi(conVersionEnRevision(), { [MATRICULAS]: () => Promise.resolve(demoCredentials) });
     vi.mocked(api.post).mockRejectedValue(new Error("Error de aprobación Demo"));
@@ -415,22 +397,19 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     expect(await within(panel).findByText("Error de aprobación Demo")).toBeTruthy();
   });
 
-  it.fails(
-    "un error de «Modificar alícuotas» aparece una sola vez, dentro del cajón (7d-5)",
-    async () => {
-      const detail = makeDemoDetail();
-      detail.versions = [makeDemoVersion({ id: "version-active", version: 4, status: "ACTIVE" })];
-      mockDemoApi(detail);
-      vi.mocked(api.post).mockRejectedValue(new Error("Error de clon Demo"));
-      renderDemoReglas();
-      const alicuotas = await seccion("Alícuotas y porcentajes");
-      fireEvent.click(within(alicuotas).getByRole("button", { name: "Modificar alícuotas" }));
-      const dialog = await screen.findByRole("dialog");
-      fireEvent.click(within(dialog).getByRole("button", { name: "Crear borrador y editar" }));
-      expect(await within(dialog).findByText("Error de clon Demo")).toBeTruthy();
-      expect(screen.getAllByText("Error de clon Demo")).toHaveLength(1);
-    },
-  );
+  it("un error de «Modificar alícuotas» aparece una sola vez, dentro del cajón (7d-5)", async () => {
+    const detail = makeDemoDetail();
+    detail.versions = [makeDemoVersion({ id: "version-active", version: 4, status: "ACTIVE" })];
+    mockDemoApi(detail);
+    vi.mocked(api.post).mockRejectedValue(new Error("Error de clon Demo"));
+    renderDemoReglas();
+    const alicuotas = await seccion("Alícuotas y porcentajes");
+    fireEvent.click(within(alicuotas).getByRole("button", { name: "Modificar alícuotas" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Crear borrador y editar" }));
+    expect(await within(dialog).findByText("Error de clon Demo")).toBeTruthy();
+    expect(screen.getAllByText("Error de clon Demo")).toHaveLength(1);
+  });
 });
 
 describe("Reglas fiscales — bloqueos que dicen el motivo (P1, 7d-9, 7d-11, 7d-12)", () => {
@@ -444,7 +423,7 @@ describe("Reglas fiscales — bloqueos que dicen el motivo (P1, 7d-9, 7d-11, 7d-
     vi.restoreAllMocks();
   });
 
-  it.fails("«Guardar vencimiento» deshabilitado dice el motivo al lado (7d-11)", async () => {
+  it("«Guardar vencimiento» deshabilitado dice el motivo al lado (7d-11)", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     fireEvent.click(await pestana(/Vencimientos/));
@@ -457,7 +436,7 @@ describe("Reglas fiscales — bloqueos que dicen el motivo (P1, 7d-9, 7d-11, 7d-
     expect(within(dialog).getByText(/Ingresá un día del mes entre 1 y 31/)).toBeTruthy();
   });
 
-  it.fails("«Guardar fuente» deshabilitado dice el motivo al lado (7d-11)", async () => {
+  it("«Guardar fuente» deshabilitado dice el motivo al lado (7d-11)", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     fireEvent.click(await pestana(/Fuentes/));
@@ -470,44 +449,35 @@ describe("Reglas fiscales — bloqueos que dicen el motivo (P1, 7d-9, 7d-11, 7d-
     expect(within(dialog).getByText(/Ingresá el título de la fuente/)).toBeTruthy();
   });
 
-  it.fails(
-    "«Crear primera versión» sin opciones de cálculo enlaza a Editar régimen y dice por qué (7d-9, 7d-11)",
-    async () => {
-      mockDemoApi({ ...makeDemoDetail(), versions: [] }, { [MOTORES]: () => Promise.resolve([]) });
-      renderDemoReglas();
-      fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
-      const dialog = await screen.findByRole("dialog");
-      expect(
-        within(dialog).getByRole("link", { name: "Editar régimen" }).getAttribute("href"),
-      ).toBe("/catalogos-fiscales?editRegime=regime-1");
-      expect(
-        within(dialog).getByText(/Sin opciones de cálculo no se puede crear la versión/),
-      ).toBeTruthy();
-    },
-  );
+  it("«Crear primera versión» sin opciones de cálculo enlaza a Editar régimen y dice por qué (7d-9, 7d-11)", async () => {
+    mockDemoApi({ ...makeDemoDetail(), versions: [] }, { [MOTORES]: () => Promise.resolve([]) });
+    renderDemoReglas();
+    fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      (await within(dialog).findByRole("link", { name: "Editar régimen" })).getAttribute("href"),
+    ).toBe("/catalogos-fiscales?editRegime=regime-1");
+    expect(
+      await within(dialog).findByText(/Sin opciones de cálculo no se puede crear la versión/),
+    ).toBeTruthy();
+  });
 
-  it.fails(
-    "la versión en revisión sin permiso de aprobar dice por qué no hay acción (7d-9)",
-    async () => {
-      mockDemoApi(conVersionEnRevision());
-      renderDemoReglas();
-      fireEvent.click(await pestana(/Control profesional/));
-      expect(await screen.findByText(/Solo quien tiene permiso para aprobar/)).toBeTruthy();
-    },
-  );
+  it("la versión en revisión sin permiso de aprobar dice por qué no hay acción (7d-9)", async () => {
+    mockDemoApi(conVersionEnRevision());
+    renderDemoReglas();
+    fireEvent.click(await pestana(/Control profesional/));
+    expect(await screen.findByText(/Solo quien tiene permiso para aprobar/)).toBeTruthy();
+  });
 
-  it.fails(
-    "sin matrículas cargadas, Control profesional dice qué falta y quién lo administra (7d-9)",
-    async () => {
-      conCapacidades("tax.rules.read", "tax.rules.propose", "tax.rules.approve");
-      mockDemoApi(conVersionEnRevision());
-      renderDemoReglas();
-      fireEvent.click(await pestana(/Control profesional/));
-      expect(await screen.findByText(/No hay matrículas profesionales cargadas/)).toBeTruthy();
-    },
-  );
+  it("sin matrículas cargadas, Control profesional dice qué falta y quién lo administra (7d-9)", async () => {
+    conCapacidades("tax.rules.read", "tax.rules.propose", "tax.rules.approve");
+    mockDemoApi(conVersionEnRevision());
+    renderDemoReglas();
+    fireEvent.click(await pestana(/Control profesional/));
+    expect(await screen.findByText(/No hay matrículas profesionales cargadas/)).toBeTruthy();
+  });
 
-  it.fails("un borrador de solo lectura sin permiso de proponer lo dice (7d-12)", async () => {
+  it("un borrador de solo lectura sin permiso de proponer lo dice (7d-12)", async () => {
     conCapacidades("tax.rules.read");
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();

@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button } from "@contable/design-system";
 import type { Credential, RuleVersion } from "./tipos";
-import { ErrorConsulta } from "./Errores";
+import { ErrorAccion, ErrorConsulta } from "./Errores";
 
 interface TabControlProfesionalProps {
   selectedVersion: RuleVersion;
@@ -45,6 +45,7 @@ export function TabControlProfesional({
                       Enviar a revisión (flujo anterior)
                     </Button>
                   ) : null}
+                  {submitMutation.error ? <ErrorAccion error={submitMutation.error} /> : null}
                   {selectedVersion.status === "IN_REVIEW" &&
                   capabilities.has("tax.rules.approve") ? (
                     <>
@@ -54,6 +55,8 @@ export function TabControlProfesional({
                           descripcion="Sin ese catálogo no se puede elegir la matrícula para aprobar."
                           onRetry={() => void credentialQuery.refetch()}
                         />
+                      ) : credentialQuery.data?.length === 0 ? (
+                        <p className="muted-copy">No hay matrículas profesionales cargadas para la firma. Quien administra el estudio las carga; sin una no se puede aprobar esta versión.</p>
                       ) : (
                       <select
                         className="ds-field__input"
@@ -76,12 +79,16 @@ export function TabControlProfesional({
                       >
                         Aprobar
                       </Button>
-                      {!credentialId && !credentialQuery.isError ? (
+                      {!credentialId && credentialQuery.data?.length ? (
                         <p className="form-submit-hint" role="note">
                           Seleccioná la matrícula profesional para habilitar la aprobación.
                         </p>
                       ) : null}
+                      {approveMutation.error ? <ErrorAccion error={approveMutation.error} /> : null}
                     </>
+                  ) : null}
+                  {selectedVersion.status === "IN_REVIEW" && !capabilities.has("tax.rules.approve") ? (
+                    <p className="muted-copy">Esta versión está en revisión. Solo quien tiene permiso para aprobar reglas puede aprobarla.</p>
                   ) : null}
                 </div>
                 {selectedVersion.sources.length > 0 ? (

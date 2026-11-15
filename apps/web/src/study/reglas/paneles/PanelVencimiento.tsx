@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { Button, Field } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ErrorAccion } from "../Errores";
 
 type NuevoVencimiento = { frequency: string; dueDay: string; cuitEnding: string; validFrom: string };
 
@@ -22,6 +23,7 @@ export function PanelVencimiento({
   setNewDueDate,
   addDueDateMutation,
 }: PanelVencimientoProps) {
+  const sinDia = !newDueDate.dueDay || Number(newDueDate.dueDay) < 1 || Number(newDueDate.dueDay) > 31;
   return (
     <>
       <ActionDrawer
@@ -69,19 +71,17 @@ export function PanelVencimiento({
             onChange={(event) => setNewDueDate({ ...newDueDate, validFrom: event.target.value })}
             required
           />
+          {addDueDateMutation.error ? <ErrorAccion error={addDueDateMutation.error} /> : null}
           <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={addDueDateMutation.isPending}
-              disabled={
-                !newDueDate.dueDay ||
-                Number(newDueDate.dueDay) < 1 ||
-                Number(newDueDate.dueDay) > 31
-              }
-            >
+            <Button type="submit" loading={addDueDateMutation.isPending} disabled={sinDia}>
               Guardar vencimiento
             </Button>
           </div>
+          {sinDia ? (
+            <p className="form-submit-hint" role="note">
+              Ingresá un día del mes entre 1 y 31 para guardar el vencimiento.
+            </p>
+          ) : null}
         </form>
       </ActionDrawer>
     </>

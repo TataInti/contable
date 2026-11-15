@@ -7,7 +7,6 @@ import {
 } from "@contable/contracts";
 import type { TaxEngineOption } from "@contable/contracts";
 import { ApiError, api } from "../lib/api";
-import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useClientContext } from "../context/ClientContext";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
 import { RuleSimulator } from "./RuleSimulator";
@@ -394,16 +393,6 @@ export function StudyReglasFiscales() {
   }
 
   const editable = selectedVersion?.status === "DRAFT" && capabilities.has("tax.rules.propose");
-  const mutationError =
-    cloneMutation.error ??
-    createPackMutation.error ??
-    createVersionMutation.error ??
-    saveMutation.error ??
-    submitMutation.error ??
-    approveMutation.error ??
-    activateMutation.error ??
-    addSourceMutation.error ??
-    addDueDateMutation.error;
   const canPropose = capabilities.has("tax.rules.propose");
   const canActivateSelectedVersion = Boolean(
     selectedVersion &&
@@ -414,22 +403,11 @@ export function StudyReglasFiscales() {
     selectedVersion?.status === "DRAFT" &&
     (draftRowsVersionId !== selectedVersion.id || !sameRuleRows(draftRows, selectedVersion.rateRules)),
   );
-  const resetOtherMutationErrors = () => {
-    cloneMutation.reset();
-    createPackMutation.reset();
-    createVersionMutation.reset();
-    saveMutation.reset();
-    submitMutation.reset();
-    approveMutation.reset();
-    addSourceMutation.reset();
-    addDueDateMutation.reset();
-  };
   const confirmActivation = () => {
     if (!activationTarget) return;
     const versionId = activationTarget.id;
     setActivationTarget(null);
     setActivationError(null);
-    resetOtherMutationErrors();
     activateMutation.reset();
     activateMutation.mutate(versionId);
   };
@@ -686,6 +664,7 @@ export function StudyReglasFiscales() {
                 editable={editable}
                 canStartNewVersion={canStartNewVersion}
                 regimeMissingFamily={regimeMissingFamily}
+                canPropose={canPropose}
                 detailQuery={detailQuery}
                 selectedVersion={selectedVersion}
                 validFrom={validFrom}
@@ -743,15 +722,6 @@ export function StudyReglasFiscales() {
             </>
           ) : null}
       </div>
-      {mutationError ? (
-        mutationError instanceof ApiError ? (
-          <FieldErrorsFromDetails error={mutationError} />
-        ) : (
-          <p className="form-error" role="alert">
-            {mutationError.message}
-          </p>
-        )
-      ) : null}
       <ConfirmarActivacion
         activationTarget={activationTarget}
         setActivationTarget={setActivationTarget}
