@@ -50,6 +50,10 @@ export function CalendarioFiscalImportDrawer({
   const notify = useNotify();
   const queryClient = useQueryClient();
   const entradaArchivo = useRef<HTMLInputElement>(null);
+  const probarBoton = useRef<HTMLButtonElement>(null);
+  const salidaArchivo = useRef<HTMLButtonElement>(null);
+  const salidaReintentar = useRef<HTMLButtonElement>(null);
+  const salidaFicha = useRef<HTMLButtonElement>(null);
   const lecturaActual = useRef(0);
   const [archivo, setArchivo] = useState<{ nombre: string; bytes: number } | null>(null);
   const [texto, setTexto] = useState<string | null>(null);
@@ -150,9 +154,31 @@ export function CalendarioFiscalImportDrawer({
   const motivoDePrueba = motivoProbar(estado);
   const motivoDeImportar = motivoImportar(estado);
 
+  // Tras un error, el foco va a la primera salida que ofrece la pantalla (P1). Se mueve solo si
+  // quedó en el cuerpo, en «Probar sin guardar» (que se deshabilita mientras corre la prueba) o en
+  // el campo de archivo; si la persona lo llevó a otro control, no se lo quita. Se reevalúa al
+  // elegir cada archivo, así que un error repetido con el mismo texto también mueve el foco.
+  useEffect(() => {
+    const salida = archivoError
+      ? salidaArchivo.current
+      : errorServidor?.tipo === "reintentar"
+        ? salidaReintentar.current
+        : errorServidor?.tipo === "borrador"
+          ? salidaFicha.current
+          : null;
+    const activo = document.activeElement;
+    const sinFoco =
+      activo === null ||
+      activo === document.body ||
+      activo === probarBoton.current ||
+      activo === entradaArchivo.current;
+    if (salida && sinFoco) salida.focus();
+  }, [archivo, archivoError, errorServidor]);
+
   const accionDelError =
     errorServidor?.tipo === "reintentar" ? (
       <Button
+        ref={salidaReintentar}
         type="button"
         variant="secondary"
         loading={enviar.isPending}
@@ -161,7 +187,7 @@ export function CalendarioFiscalImportDrawer({
         Reintentar
       </Button>
     ) : errorServidor?.tipo === "borrador" ? (
-      <Button type="button" variant="secondary" onClick={onClose}>
+      <Button ref={salidaFicha} type="button" variant="secondary" onClick={onClose}>
         Volver a la ficha
       </Button>
     ) : undefined;
@@ -221,7 +247,7 @@ export function CalendarioFiscalImportDrawer({
           <Notice
             tone="error"
             action={
-              <Button type="button" variant="secondary" onClick={elegirOtro}>
+              <Button ref={salidaArchivo} type="button" variant="secondary" onClick={elegirOtro}>
                 Elegir otro archivo
               </Button>
             }
@@ -236,6 +262,7 @@ export function CalendarioFiscalImportDrawer({
         ) : null}
         <div className="importar-celdas__probar">
           <Button
+            ref={probarBoton}
             type="button"
             variant="secondary"
             disabled={motivoDePrueba !== null || enviar.isPending}

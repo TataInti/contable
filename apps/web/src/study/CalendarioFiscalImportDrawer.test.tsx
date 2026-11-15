@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ToastProvider } from "@contable/design-system";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -306,18 +306,90 @@ describe("cajón «Importar celdas desde un archivo»", () => {
     expect(llamadasAScroll).toContain(informe);
   });
 
-  it("si la prueba falla, el cajón no mueve el foco: no llama a focus()", async () => {
+  it("5xx: tras el error el foco va a «Reintentar»", async () => {
     post.mockRejectedValueOnce(new ApiError("INTERNAL_ERROR", "Ocurrió un error interno", 500));
     const dialog = await abrirCajon();
     elegir(dialog, archivoCsv());
     await esperarProbar(dialog);
     const probar = within(dialog).getByRole("button", { name: "Probar sin guardar" });
     probar.focus();
-    const focus = vi.spyOn(HTMLElement.prototype, "focus");
     fireEvent.click(probar);
+    const alerta = await within(dialog).findByRole("alert");
+    const reintentar = within(alerta).getByRole("button", { name: "Reintentar" });
+    await waitFor(() => expect(document.activeElement).toBe(reintentar));
+  });
+
+  it("columnas faltantes: tras el 422 el foco va a «Elegir otro archivo»", async () => {
+    post.mockRejectedValueOnce(
+      new ApiError(
+        "CALENDAR_VALIDATION_FAILED",
+        "Faltan columnas obligatorias en el encabezado: fecha_completa. Revisá la primera fila del archivo.",
+        422,
+      ),
+    );
+    const dialog = await abrirCajon();
+    elegir(dialog, archivoCsv());
+    await esperarProbar(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
+    const alerta = await within(dialog).findByRole("alert");
+    const elegirOtro = within(alerta).getByRole("button", { name: "Elegir otro archivo" });
+    await waitFor(() => expect(document.activeElement).toBe(elegirOtro));
+  });
+
+  it("archivo de más de 1 MB: al elegirlo el foco va a «Elegir otro archivo»", async () => {
+    const dialog = await abrirCajon();
+    const grande = new File([new Uint8Array(1024 * 1024 + 1)], "grande.csv", { type: "text/csv" });
+    elegir(dialog, grande);
+    const alerta = await within(dialog).findByRole("alert");
+    const elegirOtro = within(alerta).getByRole("button", { name: "Elegir otro archivo" });
+    await waitFor(() => expect(document.activeElement).toBe(elegirOtro));
+  });
+
+  it("archivo vacío: al elegirlo el foco va a «Elegir otro archivo»", async () => {
+    const dialog = await abrirCajon();
+    elegir(dialog, archivoCsv("   \n", "vacio.csv"));
+    const alerta = await within(dialog).findByRole("alert");
+    const elegirOtro = within(alerta).getByRole("button", { name: "Elegir otro archivo" });
+    await waitFor(() => expect(document.activeElement).toBe(elegirOtro));
+  });
+
+  it("409: tras el error el foco va a «Volver a la ficha»", async () => {
+    post.mockRejectedValueOnce(
+      new ApiError(
+        "CALENDAR_NOT_DRAFT",
+        "El calendario ya no está en borrador: se publicó otra versión.",
+        409,
+      ),
+    );
+    const dialog = await abrirCajon();
+    elegir(dialog, archivoCsv());
+    await esperarProbar(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
+    const alerta = await within(dialog).findByRole("alert");
+    const volver = within(alerta).getByRole("button", { name: "Volver a la ficha" });
+    await waitFor(() => expect(document.activeElement).toBe(volver));
+  });
+
+  it("si la persona llevó el foco a «Cancelar» durante la prueba, el error no se lo quita", async () => {
+    let rechazar: (motivo: unknown) => void = () => {};
+    post.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rechazar = reject;
+      }),
+    );
+    const dialog = await abrirCajon();
+    elegir(dialog, archivoCsv());
+    await esperarProbar(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    const cancelar = within(dialog).getByRole("button", { name: "Cancelar" });
+    cancelar.focus();
+    await act(async () => {
+      rechazar(new ApiError("INTERNAL_ERROR", "Ocurrió un error interno", 500));
+    });
     await within(dialog).findByRole("alert");
-    expect(focus).not.toHaveBeenCalled();
-    focus.mockRestore();
+    await act(() => new Promise<void>((resolver) => setTimeout(resolver, 0)));
+    expect(document.activeElement).toBe(cancelar);
   });
 
   it("las listas largas del informe son regiones desplazables con nombre accesible", async () => {
