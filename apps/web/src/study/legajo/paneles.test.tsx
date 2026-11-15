@@ -106,6 +106,15 @@ async function abrirLibrosIva() {
   return screen.findByRole("dialog", { name: "Subir libros IVA (Excel)" });
 }
 
+// La cobertura (fuentes) llega después de la lista de legajos y el botón Importar depende de ella.
+async function esperarCoberturaDemo() {
+  await waitFor(() =>
+    expect(
+      screen.getByRole("group", { name: "Estado del legajo", hidden: true }),
+    ).toHaveTextContent(/Componentes\s*0/),
+  );
+}
+
 function seccionLibro(dialogo: HTMLElement, titulo: "Ventas" | "Compras"): HTMLElement {
   return within(dialogo).getByRole("heading", { name: titulo }).closest("section") as HTMLElement;
 }
@@ -188,6 +197,7 @@ describe("Legajo · libros IVA (K4)", () => {
       direction: "SALE",
       base64: expect.any(String),
     });
+    await esperarCoberturaDemo();
     fireEvent.click(within(ventas).getByRole("button", { name: "Importar" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(
@@ -223,6 +233,7 @@ describe("Legajo · libros IVA (K4)", () => {
     await waitFor(() =>
       expect(within(ventas).getByRole("button", { name: "Importar" })).toBeEnabled(),
     );
+    await esperarCoberturaDemo();
     fireEvent.click(within(ventas).getByRole("button", { name: "Importar" }));
     expect(await within(ventas).findByRole("alert")).toHaveTextContent(
       "El libro no tiene columnas de IVA.",
