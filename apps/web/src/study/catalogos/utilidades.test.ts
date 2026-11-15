@@ -8,7 +8,7 @@ import {
   selectionOptions,
   suggestedCode,
   validityLabel,
-} from "../StudyCatalogosFiscales";
+} from "./utilidades";
 
 describe("utilidades de Catálogos fiscales", () => {
   it("validityLabel muestra la vigencia en el formato único y «—» sin fechas", () => {

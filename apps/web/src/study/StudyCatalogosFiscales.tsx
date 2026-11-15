@@ -5,14 +5,11 @@ import {
   ACTIVITY_CODE_PATTERN,
   normalizeActivityCode,
   type CalcFamilyOption,
-  type EconomicActivityCodeChange,
 } from "@contable/contracts";
-import { ApiError, api, type FiscalJurisdiction, type FiscalTaxType } from "../lib/api";
-import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
+import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
-import { StatusBadge } from "../ui/StatusBadge";
 import {
   DenseHeader,
   DenseLoading,
@@ -32,196 +29,38 @@ import {
   type DenseColumn,
 } from "../ui/Dense";
 import { Icon } from "../ui/Icon";
+import { ActivityStateBadge, ActiveBadge, OriginBadge, MutationError } from "./catalogos/piezas";
+import {
+  emptyActivityForm,
+  emptyJurisdictionForm,
+  emptyTaxTypeForm,
+  validityLabel,
+  jurisdictionKindLabel,
+  isOwnedUiRecord,
+  apiFieldIssue,
+  codeConflict,
+  suggestedCode,
+  selectionOptions,
+} from "./catalogos/utilidades";
+import type {
+  JurisdictionOption,
+  TaxTypeOption,
+  TaxAuthorityRow,
+  TaxRegimeRow,
+  TaxRegimeModuleOption,
+  AuthorityForm,
+  RegimeForm,
+  JurisdictionForm,
+  TaxTypeForm,
+  CatalogActivityRow,
+  ActivityForm,
+  CatalogUsage,
+  CatalogTab,
+  MasterDrawer,
+  CatalogDrawer,
+} from "./catalogos/tipos";
 import "./study.css";
 import "./StudyCatalogosFiscales.css";
-import { formatearRango } from "../lib/formatoFechas";
-
-type JurisdictionOption = FiscalJurisdiction;
-type TaxTypeOption = FiscalTaxType;
-
-interface TaxAuthorityRow {
-  id: string;
-  code: string;
-  name: string;
-  jurisdictionId: string;
-  isActive: boolean;
-  origin?: "REFERENCE" | "UI";
-  createdByFirmId?: string | null;
-  jurisdiction: JurisdictionOption;
-}
-
-interface TaxRegimeRow {
-  id: string;
-  code: string;
-  name: string;
-  calcFamilyId?: string | null;
-  moduleId?: string | null;
-  isActive: boolean;
-  origin?: "REFERENCE" | "UI";
-  createdByFirmId?: string | null;
-  authority: TaxAuthorityRow;
-  jurisdiction: JurisdictionOption;
-  taxType: TaxTypeOption;
-}
-
-interface TaxRegimeModuleOption {
-  id: string;
-  key: string;
-  label: string;
-  flagCode: string | null;
-  isActive: boolean;
-}
-
-interface AuthorityForm {
-  code: string;
-  name: string;
-  jurisdictionId: string;
-}
-
-interface RegimeForm {
-  code: string;
-  name: string;
-  taxTypeId: string;
-  calcFamilyId: string;
-  moduleId: string;
-  jurisdictionId: string;
-  authorityId: string;
-}
-
-interface JurisdictionForm {
-  code: string;
-  name: string;
-  kind: JurisdictionOption["kind"];
-  parentId: string;
-}
-
-interface TaxTypeForm {
-  code: string;
-  name: string;
-  defaultFamilyId: string;
-}
-
-interface CatalogActivityRow {
-  id: string;
-  code: string;
-  name: string;
-  jurisdictionId: string;
-  source: string | null;
-  validFrom: string;
-  validTo: string | null;
-  isActive: boolean;
-  origin?: "REFERENCE" | "UI";
-  createdByFirmId?: string | null;
-  activeClientLinks?: number;
-  codeChange?: EconomicActivityCodeChange | null;
-}
-
-interface ActivityForm {
-  code: string;
-  name: string;
-  jurisdictionId: string;
-  source: string;
-  validFrom: string;
-  validTo: string;
-}
-
-interface CatalogUsage {
-  entityId: string;
-  used: boolean;
-  count: number;
-  places: Array<{ label: string; count: number }>;
-}
-
-const today = new Date().toISOString().slice(0, 10);
-
-const emptyActivityForm: ActivityForm = {
-  code: "",
-  name: "",
-  jurisdictionId: "",
-  source: "",
-  validFrom: today,
-  validTo: "",
-};
-
-const emptyJurisdictionForm: JurisdictionForm = {
-  code: "",
-  name: "",
-  kind: "NATIONAL",
-  parentId: "",
-};
-
-const emptyTaxTypeForm: TaxTypeForm = { code: "", name: "", defaultFamilyId: "" };
-
-export function validityLabel(validFrom: string, validTo: string | null) {
-  return formatearRango(validFrom, validTo);
-}
-
-type CatalogTab = "jurisdictions" | "taxTypes" | "authorities" | "regimes" | "activities";
-type MasterDrawer = "jurisdiction-create" | "jurisdiction-edit" | "tax-type-create" | "tax-type-edit";
-type CatalogDrawer = "authority-create" | "authority-edit" | "regime-create" | "regime-edit";
-
-const jurisdictionKindLabel: Record<JurisdictionOption["kind"], string> = {
-  NATIONAL: "Nación",
-  PROVINCIAL: "Provincia",
-  MUNICIPAL: "Municipio",
-};
-
-function ActivityStateBadge({ isActive }: { isActive: boolean }) {
-  return (
-    <StatusBadge
-      status={isActive ? "ACTIVE" : "INACTIVE"}
-      label={isActive ? undefined : "Oculto"}
-    />
-  );
-}
-
-function ActiveBadge({ active }: { active: boolean }) {
-  return (
-    <StatusBadge
-      status={active ? "ACTIVE" : "INACTIVE"}
-      label={active ? "Activo" : "Oculto"}
-    />
-  );
-}
-
-function OriginBadge({ origin }: { origin?: "REFERENCE" | "UI" }) {
-  if (!origin) return <span className="muted-copy">—</span>;
-  return (
-    <StatusBadge
-      status={origin === "UI" ? "INFO" : "REFERENCE"}
-      label={origin === "UI" ? "Del estudio" : "Referencia"}
-    />
-  );
-}
-
-export function isOwnedUiRecord(
-  row: { origin?: string; createdByFirmId?: string | null },
-  firmId: string,
-): boolean {
-  return row.origin === "UI" && row.createdByFirmId === firmId;
-}
-
-function MutationError({ error }: { error: unknown }) {
-  if (!error || codeConflict(error)) return null;
-  if (error instanceof ApiError) return <FieldErrorsFromDetails error={error} />;
-  return (
-    <Notice tone="error">
-      {error instanceof Error ? error.message : "Ocurrió un error inesperado."}
-    </Notice>
-  );
-}
-
-export function apiFieldIssue(error: unknown, field: string): string | undefined {
-  if (!(error instanceof ApiError)) return undefined;
-  const details = error.details?.details;
-  if (!Array.isArray(details)) return undefined;
-  const issue = details.find((candidate) => {
-    if (typeof candidate !== "object" || candidate === null) return false;
-    const path = (candidate as { path?: unknown }).path;
-    return Array.isArray(path) && path.some((part) => part === field);
-  }) as { message?: unknown } | undefined;
-  return typeof issue?.message === "string" ? issue.message : undefined;
-}
 
 function InspectorActions({
   onEdit,
@@ -256,28 +95,6 @@ function InspectorActions({
       ) : null}
     </div>
   );
-}
-
-const CATALOG_CODE_CONFLICT = "CATALOG_CODE_CONFLICT";
-
-export function codeConflict(error: unknown): string | undefined {
-  return error instanceof ApiError && error.code === CATALOG_CODE_CONFLICT ? error.message : undefined;
-}
-
-export function suggestedCode(current: string, usedCodes: string[], maxLength = 40): string {
-  const normalized = new Set(usedCodes.map((code) => code.toLocaleUpperCase("es-AR")));
-  for (let suffix = 2; suffix < 10_000; suffix += 1) {
-    const tail = `-${suffix}`;
-    const candidate = `${current.slice(0, maxLength - tail.length)}${tail}`;
-    if (!normalized.has(candidate.toLocaleUpperCase("es-AR"))) return candidate;
-  }
-  return current.slice(0, maxLength);
-}
-
-export function selectionOptions<T extends { id: string; isActive: boolean }>(rows: T[], selectedId?: string) {
-  const activeRows = rows.filter((row) => row.isActive);
-  const selectedHidden = rows.find((row) => row.id === selectedId && !row.isActive);
-  return selectedHidden ? [...activeRows, selectedHidden] : activeRows;
 }
 
 export function StudyCatalogosFiscales() {
