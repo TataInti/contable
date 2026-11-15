@@ -261,7 +261,7 @@ export function EtapaCalculo({
               },
               {
                 key: "credit",
-                header: "A favor",
+                header: "Disponible",
                 align: "right",
                 render: (position) => formatMoney(position.availableCredit),
               },
