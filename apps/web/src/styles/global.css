@@ -224,10 +224,6 @@ textarea {
   min-block-size: 180px;
 }
 
-.async-state--error {
-  min-block-size: 220px;
-}
-
 @keyframes app-spin {
   to {
     transform: rotate(360deg);
