@@ -367,7 +367,7 @@ interface WorkpaperCalculationComponent {
 }
 type PositionAction = { kind: "PAYMENT" | "FILING"; position: TaxPosition } | null;
 
-function calculationDisabledMessage({
+export function calculationDisabledMessage({
   status,
   sources,
   classifications,
@@ -487,13 +487,13 @@ const CONTROL_LABELS: Record<string, string> = {
   CASH_ALLOCATION_RECONCILIATION: "Caja e imputaciones del período",
 };
 
-function formatMoney(value: string | undefined | null): string {
+export function formatMoney(value: string | undefined | null): string {
   const num = Number(value ?? 0);
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(num);
 }
 
 /** Una sola nota cuando quien preparó el legajo también lo revisó o lo finalizó. */
-function selfReviewNote(wp: {
+export function selfReviewNote(wp: {
   preparedByUserId?: string | null;
   reviewedByUserId?: string | null;
   finalizedByUserId?: string | null;
@@ -520,7 +520,7 @@ function formatDateTime(value: string): string {
   }).format(new Date(value));
 }
 
-function SifereAnalysisPanel({ analysis }: { analysis: SifereAnalysis }) {
+export function SifereAnalysisPanel({ analysis }: { analysis: SifereAnalysis }) {
   return (
     <div className="sifere-analysis">
       <div className="sifere-analysis__totals">
@@ -601,7 +601,7 @@ function parseDelimitedRow(line: string, delimiter: string): string[] {
   return cells;
 }
 
-function parseSourceFile(fileName: string, content: string): Record<string, unknown>[] {
+export function parseSourceFile(fileName: string, content: string): Record<string, unknown>[] {
   if (fileName.toLowerCase().endsWith(".json")) {
     const parsed = JSON.parse(content) as unknown;
     if (!Array.isArray(parsed) || parsed.some((row) => !row || typeof row !== "object")) {
@@ -628,7 +628,7 @@ function parseSourceFile(fileName: string, content: string): Record<string, unkn
   });
 }
 
-async function hashSourceFile(content: string): Promise<string> {
+export async function hashSourceFile(content: string): Promise<string> {
   const bytes = new TextEncoder().encode(content);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
