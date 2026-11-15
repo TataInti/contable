@@ -24,6 +24,7 @@ const fiscalScanPaths = [
   "packages/contracts/src/tax-engine-compatibility.ts",
   "packages/tax-engine/src",
   "apps/web/src/study/StudyExpedienteMensual.tsx",
+  "apps/web/src/study/legajo",
   "apps/web/src/study/StudyReglasFiscales.tsx",
 ];
 const sensitiveNames = [
@@ -95,19 +96,21 @@ function collectFiles(directory: string): string[] {
   });
 }
 
-function scanFile(absolute: string): Finding[] {
-  const text = readFileSync(absolute, "utf8");
-  const source = ts.createSourceFile(
+type CatalogContainers = { sets: Set<string>; maps: Set<string> };
+
+function parseSource(absolute: string): ts.SourceFile {
+  return ts.createSourceFile(
     absolute,
-    text,
+    readFileSync(absolute, "utf8"),
     ts.ScriptTarget.Latest,
     true,
     absolute.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
-  const file = relative(root, absolute).replaceAll("\\", "/");
-  const sets = new Set<string>();
-  const maps = new Set<string>();
+}
 
+// Un catálogo puede declararse en un archivo y consultarse en otro (el Legajo importa sus etiquetas).
+function declareCatalogContainers(source: ts.SourceFile, containers: CatalogContainers) {
+  const { sets, maps } = containers;
   function collectCatalogContainers(node: ts.Node) {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       const initializer = unwrapped(node.initializer);
@@ -130,6 +133,12 @@ function scanFile(absolute: string): Finding[] {
     ts.forEachChild(node, collectCatalogContainers);
   }
   collectCatalogContainers(source);
+}
+
+function scanFile(absolute: string, containers: CatalogContainers): Finding[] {
+  const source = parseSource(absolute);
+  const file = relative(root, absolute).replaceAll("\\", "/");
+  const { sets, maps } = containers;
 
   const findings: Finding[] = [];
   function report(node: ts.Node, rule: Rule, expression: ts.Expression) {
@@ -178,12 +187,14 @@ function findingKey(entry: Omit<Finding, "line">): string {
 }
 
 function scanRepository(): Finding[] {
-  return fiscalScanPaths
-    .flatMap((path) => {
-      const absolute = resolve(root, path);
-      return statSync(absolute).isDirectory() ? collectFiles(absolute) : [absolute];
-    })
-    .flatMap(scanFile);
+  const files = fiscalScanPaths.flatMap((path) => {
+    const absolute = resolve(root, path);
+    return statSync(absolute).isDirectory() ? collectFiles(absolute) : [absolute];
+  });
+  // Primero se reúnen los catálogos de todos los archivos; después se escanea cada uno.
+  const containers: CatalogContainers = { sets: new Set<string>(), maps: new Set<string>() };
+  for (const absolute of files) declareCatalogContainers(parseSource(absolute), containers);
+  return files.flatMap((absolute) => scanFile(absolute, containers));
 }
 
 describe("decisiones fiscales no dependen del texto del catálogo", () => {

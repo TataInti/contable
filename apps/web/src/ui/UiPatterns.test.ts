@@ -74,7 +74,7 @@ const RULES: Rule[] = [
     pattern: /<table\b/g,
     allowed: {
       // Deuda registrada: grillas de edición que todavía no tienen componente.
-      "study/StudyExpedienteMensual.tsx": 1,
+      "study/legajo/SifereAnalysisPanel.tsx": 1,
       "study/StudyAdministracion.tsx": 3,
       "study/ManualExtractionFieldsDialog.tsx": 1,
       "study/StudyAyuda.tsx": 1,
