@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button, EmptyState, getStatusBadgeMeta, Table } from "@contable/design-system";
@@ -55,6 +55,8 @@ import { BandaEstado } from "./legajo/BandaEstado";
 import { ListaLegajos } from "./legajo/ListaLegajos";
 import { SelectorPeriodo } from "./legajo/SelectorPeriodo";
 import { LegajoTarjeta } from "./legajo/Tarjeta/LegajoTarjeta";
+import { ResumenRevision } from "./legajo/Tarjeta/ResumenRevision";
+import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import "./study.css";
 
 
@@ -82,7 +84,7 @@ export function StudyExpedienteMensual() {
   }>({ key: null, id: "" });
   const selectedTaxPeriodId =
     taxPeriodSelection.key === taxPeriodStorageKey ? taxPeriodSelection.id : "";
-  const [activeStep, setActiveStep] = useState(0);
+  const [etapaPorLegajo, setEtapaPorLegajo] = useState<Record<string, number>>({});
   const [showOpening, setShowOpening] = useState(false);
   const [editingLot, setEditingLot] = useState<CreditLot | null>(null);
   const [editForm, setEditForm] = useState({
@@ -100,6 +102,16 @@ export function StudyExpedienteMensual() {
   >({});
   const [allocationDrafts, setAllocationDrafts] = useState<Record<string, string>>({});
   const [showSifereModal, setShowSifereModal] = useState(false);
+  const confirmacion = useConfirmAction();
+  const { ask: pedirConfirmacion, request: solicitudConfirmacion } = confirmacion;
+  const cerrarConfirmacion = useCallback(() => pedirConfirmacion(null), [pedirConfirmacion]);
+  // Cierre estable: si cambia en cada render, ConfirmAction devuelve el foco y suelta Escape.
+  const confirmacionEstable = useMemo(
+    () => ({ request: solicitudConfirmacion, ask: pedirConfirmacion, close: cerrarConfirmacion }),
+    [solicitudConfirmacion, pedirConfirmacion, cerrarConfirmacion],
+  );
+  const confirmar = (solicitud: { title: string; description: string; confirmLabel: string; onConfirm: () => void }) =>
+    pedirConfirmacion({ ...solicitud, tone: "default" });
 
   const taxPeriodsQuery = useQuery({
     queryKey: ["tax-periods", firmId, clientId],
@@ -529,13 +541,22 @@ export function StudyExpedienteMensual() {
   }
 
   const workpapers = listQuery.data ?? [];
-  const safeActiveStep = Math.min(Math.max(activeStep, 0), WORKPAPER_STEPS.length - 1);
+  // Las etapas son de la revisión vigente (la primera de la lista) y cada legajo guarda su etapa.
+  const vigente = workpapers[0];
+  const safeActiveStep = Math.min(
+    Math.max(vigente ? (etapaPorLegajo[vigente.id] ?? 0) : 0, 0),
+    WORKPAPER_STEPS.length - 1,
+  );
   const eligibleEvidenceDocuments = (documentsQuery.data ?? []).filter((document) =>
     ["READY", "APPLIED", "REVIEWED"].includes(document.status),
   );
-  const activeStepMeta = WORKPAPER_STEPS[safeActiveStep]!;
-  const goToStep = (index: number) =>
-    setActiveStep(Math.min(Math.max(index, 0), WORKPAPER_STEPS.length - 1));
+  const goToStep = (index: number) => {
+    if (!vigente) return;
+    setEtapaPorLegajo((values) => ({
+      ...values,
+      [vigente.id]: Math.min(Math.max(index, 0), WORKPAPER_STEPS.length - 1),
+    }));
+  };
 
   const renderEtapa = (wp: Workpaper, safeActiveStep: number) => {
     const canEditSources = [
@@ -1736,9 +1757,8 @@ export function StudyExpedienteMensual() {
       />
 
       <BandaEstado
-        legajos={workpapers.length}
-        etapa={activeStepMeta.title}
-        componentes={coverageQuery.data?.components.length ?? "—"}
+        legajos={listQuery.isError ? "no disponible" : listQuery.data ? workpapers.length : listQuery.isLoading || taxPeriodsQuery.isLoading ? "pendiente" : "—"}
+        componentes={coverageQuery.isError ? "no disponible" : coverageQuery.data ? coverageQuery.data.components.length : coverageQuery.isLoading ? "pendiente" : "—"}
       />
 
 
@@ -1793,15 +1813,21 @@ export function StudyExpedienteMensual() {
         />
       ) : null}
 
+      <ConfirmDialog confirm={confirmacionEstable} />
       <ListaLegajos
         cargando={listQuery.isLoading}
         error={listQuery.isError}
+        onReintentar={() => void listQuery.refetch()}
+        exito={listQuery.isSuccess}
         sinPeriodo={!selectedTaxPeriod}
         legajos={workpapers}
         puedeCrear={capabilities.has("tax.settlements.calculate")}
         creando={createMutation.isPending}
         onCrear={() => createMutation.mutate()}
-        renderLegajo={(wp) => {
+        renderLegajo={(wp, indice) => {
+          if (indice > 0 && vigente) {
+            return <ResumenRevision key={wp.id} wp={wp} vigente={vigente} />;
+          }
             const canCalculate = capabilities.has("tax.settlements.calculate");
             const calculateDisabled =
               calculateMutation.isPending ||
@@ -1859,6 +1885,9 @@ export function StudyExpedienteMensual() {
                       >
                         Recalcular
                       </Button>
+                      {!capabilities.has("tax.settlements.calculate") ? (
+                        <small className="muted-copy" role="status">Tu perfil no tiene permiso para recalcular este legajo.</small>
+                      ) : null}
                       <WorkpaperActionError
                         error={calculateMutation.variables === wp.id ? calculateMutation.error : null}
                       />
@@ -1876,6 +1905,9 @@ export function StudyExpedienteMensual() {
                       >
                         Enviar a revisión
                       </Button>
+                      {!capabilities.has("tax.settlements.submit_review") ? (
+                        <small className="muted-copy" role="status">Tu perfil no tiene permiso para enviar este legajo a revisión.</small>
+                      ) : null}
                       <WorkpaperActionError
                         error={submitMutation.variables === wp.id ? submitMutation.error : null}
                       />
@@ -1922,10 +1954,20 @@ export function StudyExpedienteMensual() {
                         !capabilities.has("tax.settlements.finalize") ||
                         selfReviewBlocked
                       }
-                      onClick={() => void finalizeMutation.mutate(wp.id)}
+                      onClick={() =>
+                        confirmar({
+                          title: "Finalizar el legajo",
+                          description: "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",
+                          confirmLabel: "Sí, finalizar",
+                          onConfirm: () => finalizeMutation.mutate(wp.id),
+                        })
+                      }
                     >
                       Finalizar
                     </Button>
+                  ) : null}
+                  {wp.status === "REVIEWED" && !capabilities.has("tax.settlements.finalize") ? (
+                    <small className="muted-copy" role="status">Tu perfil no tiene permiso para finalizar este legajo.</small>
                   ) : null}
                   {wp.status === "REVIEWED" ? (
                     <WorkpaperActionError
@@ -1936,7 +1978,14 @@ export function StudyExpedienteMensual() {
                     <Button
                       variant="secondary"
                       disabled={rectifyMutation.isPending}
-                      onClick={() => rectifyMutation.mutate(wp.id)}
+                      onClick={() =>
+                        confirmar({
+                          title: "Crear rectificativa",
+                          description: "Abre una revisión nueva del período. La revisión actual queda finalizada y sin cambios.",
+                          confirmLabel: "Sí, crear rectificativa",
+                          onConfirm: () => rectifyMutation.mutate(wp.id),
+                        })
+                      }
                     >
                       Crear rectificativa
                     </Button>

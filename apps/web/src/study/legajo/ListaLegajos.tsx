@@ -1,22 +1,27 @@
 import type { ReactNode } from "react";
-import { Button, EmptyState } from "@contable/design-system";
+import { AsyncState, Button, EmptyState } from "@contable/design-system";
 import type { Workpaper } from "./tipos";
 
 interface ListaLegajosProps {
   cargando: boolean;
   error: boolean;
+  onReintentar: () => void;
+  /** La consulta respondió bien: solo entonces «sin legajos» es un vacío confirmado (C07). */
+  exito: boolean;
   sinPeriodo: boolean;
   legajos: Workpaper[];
   puedeCrear: boolean;
   creando: boolean;
   onCrear: () => void;
-  renderLegajo: (wp: Workpaper) => ReactNode;
+  renderLegajo: (wp: Workpaper, indice: number) => ReactNode;
 }
 
-/** Lista de legajos del período: carga, error, sin período, sin legajos con Crear legajo, y tarjetas (K8). */
+/** Lista de legajos del período: carga anunciada, error con Reintentar, vacío confirmado y tarjetas (K8, C07). */
 export function ListaLegajos({
   cargando,
   error,
+  onReintentar,
+  exito,
   sinPeriodo,
   legajos,
   puedeCrear,
@@ -24,18 +29,16 @@ export function ListaLegajos({
   onCrear,
   renderLegajo,
 }: ListaLegajosProps) {
-  if (cargando) {
+  if (cargando || error) {
     return (
-      <div className="study-page__state" role="status">
-        Cargando legajos…
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="study-page__state" role="alert">
-        No se pudieron cargar los legajos. Reintentá en un momento.
-      </div>
+      <AsyncState
+        loading={cargando}
+        error={error}
+        loadingLabel="Cargando legajos…"
+        errorTitle="No se pudieron cargar los legajos"
+        errorDescription="Reintentá en un momento."
+        onRetry={onReintentar}
+      />
     );
   }
   if (sinPeriodo) {
@@ -47,6 +50,7 @@ export function ListaLegajos({
     );
   }
   if (legajos.length === 0) {
+    if (!exito) return null;
     return (
       <EmptyState
         title="Sin legajos para este período"
@@ -61,5 +65,7 @@ export function ListaLegajos({
       />
     );
   }
-  return <div className="workpaper-list">{legajos.map((wp) => renderLegajo(wp))}</div>;
+  return (
+    <div className="workpaper-list">{legajos.map((wp, indice) => renderLegajo(wp, indice))}</div>
+  );
 }

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Button } from "@contable/design-system";
+import { DenseTabs } from "../../../ui/Dense";
 import { Icon } from "../../../ui/Icon";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { WORKPAPER_STEPS } from "../etiquetas";
@@ -16,7 +17,7 @@ interface LegajoTarjetaProps {
   children: ReactNode;
 }
 
-/** Tarjeta de un legajo: encabezado, estado, navegación de etapas, pie y acciones de estado (R02). */
+/** Tarjeta de la revisión vigente: encabezado, estado, etapas con DenseTabs (C05), un solo pie y acciones (R02). */
 export function LegajoTarjeta({
   wp,
   etapaActiva,
@@ -29,6 +30,7 @@ export function LegajoTarjeta({
   const anterior = WORKPAPER_STEPS[etapaActiva - 1];
   const siguiente = WORKPAPER_STEPS[etapaActiva + 1];
   const nota = selfReviewNote(wp);
+  const idPrefix = `workpaper-${wp.id}`;
 
   return (
     <article className="workpaper-card">
@@ -59,50 +61,20 @@ export function LegajoTarjeta({
           <h3>{etapa.title}</h3>
           <p>{etapa.description}</p>
         </div>
-        <div className="workpaper-process__controls">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!anterior}
-            onClick={() => onCambiarEtapa(etapaActiva - 1)}
-          >
-            {anterior ? `Anterior: ${anterior.title}` : "Anterior"}
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!siguiente}
-            onClick={() => onCambiarEtapa(etapaActiva + 1)}
-          >
-            {siguiente ? `Siguiente: ${siguiente.title}` : "Siguiente"}
-          </Button>
-        </div>
-        <div
-          className="workpaper-process__menu"
-          role="tablist"
-          aria-label="Menú completo del legajo"
-        >
-          {WORKPAPER_STEPS.map((step, index) => (
-            <button
-              key={step.title}
-              type="button"
-              role="tab"
-              aria-selected={etapaActiva === index}
-              aria-controls={`workpaper-${wp.id}-stage`}
-              className={`workpaper-step${etapaActiva === index ? " workpaper-step--active" : ""}`}
-              onClick={() => onCambiarEtapa(index)}
-            >
-              <span className="workpaper-step__number">{index + 1}</span>
-              <span>{step.title}</span>
-            </button>
-          ))}
-        </div>
+        <DenseTabs
+          label="Menú completo del legajo"
+          idPrefix={idPrefix}
+          tabs={WORKPAPER_STEPS.map((step, index) => ({ id: String(index), label: step.title }))}
+          active={String(etapaActiva)}
+          onChange={(id) => onCambiarEtapa(Number(id))}
+        />
       </div>
 
       <div
         className="workpaper-card__body"
-        id={`workpaper-${wp.id}-stage`}
+        id={`${idPrefix}-panel`}
         role="tabpanel"
+        aria-labelledby={`${idPrefix}-${etapaActiva}`}
         aria-live="polite"
       >
         {children}

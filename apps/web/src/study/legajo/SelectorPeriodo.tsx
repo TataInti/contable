@@ -1,4 +1,4 @@
-import { Button, EmptyState } from "@contable/design-system";
+import { AsyncState, Button, EmptyState } from "@contable/design-system";
 import { fiscalTaxPeriodLabel } from "./periodoFiscal";
 import type { FiscalTaxPeriod } from "./tipos";
 
@@ -12,7 +12,7 @@ interface SelectorPeriodoProps {
   onConfigurar: () => void;
 }
 
-/** Período fiscal del Legajo: carga, error con Reintentar, selector o pedido de configurar un período (K15). */
+/** Período fiscal del Legajo: carga y error con Reintentar (C07), selector o pedido de configurar un período (K15). */
 export function SelectorPeriodo({
   cargando,
   error,
@@ -22,23 +22,15 @@ export function SelectorPeriodo({
   onCambiar,
   onConfigurar,
 }: SelectorPeriodoProps) {
-  if (cargando) {
+  if (cargando || error) {
     return (
-      <div className="study-state" role="status">
-        Cargando períodos fiscales…
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <EmptyState
-        title="No se pudieron cargar los períodos fiscales"
-        description="Reintentá la consulta para volver a cargar los períodos del cliente."
-        action={
-          <Button variant="secondary" onClick={onReintentar}>
-            Reintentar
-          </Button>
-        }
+      <AsyncState
+        loading={cargando}
+        error={error}
+        loadingLabel="Cargando períodos fiscales…"
+        errorTitle="No se pudieron cargar los períodos fiscales"
+        errorDescription="Reintentá la consulta para volver a cargar los períodos del cliente."
+        onRetry={onReintentar}
       />
     );
   }
