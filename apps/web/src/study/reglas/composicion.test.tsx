@@ -102,14 +102,14 @@ describe("una sola acción primaria visible por estado (D-R3-1)", () => {
     expect(primarios()).toEqual(["Crear primera versión"]);
   });
 
-  it.fails("borrador sin cambios: la primaria es «Activar»", async () => {
+  it("borrador sin cambios: la primaria es «Activar»", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     await resumen();
     expect(primarios()).toEqual(["Activar"]);
   });
 
-  it.fails("borrador con cambios: la primaria es «Guardar borrador»", async () => {
+  it("borrador con cambios: la primaria es «Guardar borrador»", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     await resumen();
@@ -117,7 +117,7 @@ describe("una sola acción primaria visible por estado (D-R3-1)", () => {
     expect(primarios()).toEqual(["Guardar borrador"]);
   });
 
-  it.fails(
+  it(
     "versión vigente: a lo sumo una primaria, y «Modificar alícuotas» no es primaria",
     async () => {
       mockDemoApi(paqueteConVersiones({ id: "version-vigente", version: 4, status: "ACTIVE" }));
@@ -142,7 +142,7 @@ describe("una sola acción primaria visible por estado (D-R3-1)", () => {
     expect(esPrimario("Guardar borrador")).toBe(false);
   });
 
-  it.fails("«Nuevo paquete» y «Agregar regla» son secundarias", async () => {
+  it("«Nuevo paquete» y «Agregar regla» son secundarias", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     await resumen();
@@ -150,7 +150,7 @@ describe("una sola acción primaria visible por estado (D-R3-1)", () => {
     expect(esPrimario("Agregar regla")).toBe(false);
   });
 
-  it.fails("«Probar» no es primaria en la pestaña Probar", async () => {
+  it("«Probar» no es primaria en la pestaña Probar", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     await resumen();
@@ -158,7 +158,7 @@ describe("una sola acción primaria visible por estado (D-R3-1)", () => {
     expect(esPrimario("Probar")).toBe(false);
   });
 
-  it.fails("«Aprobar» no es primaria en Control profesional", async () => {
+  it("«Aprobar» no es primaria en Control profesional", async () => {
     mockDemoApi(paqueteConVersiones({ id: "version-revision", version: 2, status: "IN_REVIEW" }), {
       [CREDENCIALES]: () => Promise.resolve(demoCredentials),
     });
@@ -289,7 +289,7 @@ describe("composición sin cajas en lectura, y caja en el editor (D-R3-7)", () =
     expect(seccion.classList.contains("study-panel")).toBe(false);
   });
 
-  it.fails("la sección Vencimientos no va en caja", async () => {
+  it("la sección Vencimientos no va en caja", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     await resumen();
@@ -298,7 +298,7 @@ describe("composición sin cajas en lectura, y caja en el editor (D-R3-7)", () =
     expect(titulo.closest("section")?.classList.contains("study-panel")).toBe(false);
   });
 
-  it.fails("la sección Fuentes no va en caja", async () => {
+  it("la sección Fuentes no va en caja", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     await resumen();

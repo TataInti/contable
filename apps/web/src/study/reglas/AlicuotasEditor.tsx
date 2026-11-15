@@ -82,7 +82,7 @@ export function AlicuotasEditor({
                     ) : null}
                   </div>
                   {editable ? (
-                    <Button
+                    <Button variant="secondary"
                       size="sm"
                       onClick={() =>
                         setDraftRows((rows) => [
@@ -114,7 +114,7 @@ export function AlicuotasEditor({
                       Asignar familia de cálculo
                     </a>
                   ) : canStartNewVersion ? (
-                    <Button
+                    <Button variant="secondary"
                       size="sm"
                       onClick={() => {
                         cloneMutation.reset();

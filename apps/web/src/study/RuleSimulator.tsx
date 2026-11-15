@@ -188,7 +188,7 @@ export function RuleSimulator({
             />
           </fieldset>
           <div className="study-form__actions">
-            <Button type="submit" disabled={!hasIncome} loading={simulation.isPending}>
+            <Button type="submit" variant="secondary" disabled={!hasIncome} loading={simulation.isPending}>
               Probar
             </Button>
             {!hasIncome ? (
