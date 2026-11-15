@@ -217,6 +217,24 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/CalendarioFiscalCeldaDrawer.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/CalendarioFiscalFicha.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/CalendarioFiscalSelect.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/DensePages.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -230,6 +248,72 @@
       "color": 0
     },
     "apps/web/src/study/ExtractionFiscalTable.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/FiscalBooksExportAction.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/FiscalBooksExportAction.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/cabecera.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/paneles.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/paneles/CabeceraLegajo.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/paneles/PanelEditarSaldo.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/paneles/PanelLibrosIva.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/paneles/PanelSaldoInicial.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/SifereAnalysisPanel.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/SifereAnalysisPanel.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/WorkpaperActionError.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -338,6 +422,18 @@
       "color": 0
     },
     "apps/web/src/study/StudyBandeja.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/StudyCalendariosFiscales.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/StudyCalendariosFiscales.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -533,7 +629,7 @@
       "fontSize": 0,
       "spacing": 3,
       "radius": 1,
-      "color": 5
+      "color": 4
     },
     "apps/web/src/study/styles/09-ficha-cliente.css": {
       "fontSize": 0,

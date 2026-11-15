@@ -36,13 +36,15 @@ afterEach(() => cleanup());
 describe("SifereAnalysisPanel (análisis de libro IVA)", () => {
   it("muestra importe total, neto gravado e IVA, en ese orden", () => {
     const { container } = render(<SifereAnalysisPanel analysis={analisisDemo} />);
-    const totales = Array.from(container.querySelectorAll(".sifere-analysis__totals > span"));
-    expect(totales.map((item) => texto(item.querySelector("small")))).toEqual([
+    const totales = Array.from(
+      container.querySelectorAll('[aria-label="Totales del libro"] .dense-stat'),
+    );
+    expect(totales.map((item) => texto(item.querySelector(".dense-stat__label")))).toEqual([
       "Importe total",
       "Neto gravado",
       "IVA",
     ]);
-    expect(totales.map((item) => texto(item.querySelector("strong")))).toEqual([
+    expect(totales.map((item) => texto(item.querySelector(".dense-stat__value")))).toEqual([
       "$ 121.000,00",
       "$ 100.000,00",
       "$ 21.000,00",
@@ -68,12 +70,18 @@ describe("SifereAnalysisPanel (análisis de libro IVA)", () => {
 
   it("lista los tributos asociados con su importe", () => {
     const { container } = render(<SifereAnalysisPanel analysis={analisisDemo} />);
-    expect(texto(container.querySelector(".sifere-analysis__taxes > small"))).toBe(
+    expect(Array.from(container.querySelectorAll("small")).map(texto)).toContain(
       "Tributos asociados",
     );
-    expect(
-      Array.from(container.querySelectorAll(".sifere-analysis__taxes > span")).map(texto),
-    ).toEqual(["Percepción Demo · $ 1.500,00"]);
+    const impuestos = Array.from(
+      container.querySelectorAll('[aria-label="Tributos asociados"] .dense-stat'),
+    );
+    expect(impuestos.map((item) => texto(item.querySelector(".dense-stat__label")))).toEqual([
+      "Percepción Demo",
+    ]);
+    expect(impuestos.map((item) => texto(item.querySelector(".dense-stat__value")))).toEqual([
+      "$ 1.500,00",
+    ]);
   });
 
   it("cuenta comprobantes y válidos, sin observaciones si no hay errores", () => {
@@ -95,6 +103,6 @@ describe("SifereAnalysisPanel (análisis de libro IVA)", () => {
       <SifereAnalysisPanel analysis={{ ...analisisDemo, rates: [], taxes: [] }} />,
     );
     expect(container.querySelector("table")).toBeNull();
-    expect(container.querySelector(".sifere-analysis__taxes")).toBeNull();
+    expect(container.querySelector('[aria-label="Tributos asociados"]')).toBeNull();
   });
 });
