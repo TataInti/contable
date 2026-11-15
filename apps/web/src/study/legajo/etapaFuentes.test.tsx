@@ -204,3 +204,21 @@ describe("Legajo · etapa Fuentes (K10)", () => {
     expect(await screen.findByText(/La cobertura cuenta solo lotes revisados/)).toBeInTheDocument();
   });
 });
+
+describe("Legajo · etapa Fuentes: un solo anuncio por carga (Foco 2.7b)", () => {
+  it("la carga inicial de la cobertura se anuncia una sola vez y el botón no dice «Actualizando…»", async () => {
+    fijarContexto(PERMISOS_FUENTES);
+    const rutas = rutasDemo({ fuentes: [...fuentesDemo, fuenteRetencionesDemo] });
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.endsWith("/coverage") ? new Promise(() => {}) : rutas(path)) as never);
+    renderLegajo();
+    fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
+    expect(await screen.findByText("Verificando cobertura…")).toBeInTheDocument();
+    const anuncios = screen
+      .getAllByRole("status")
+      .filter((nodo) => nodo.textContent?.includes("Verificando cobertura"));
+    expect(anuncios).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Actualizando…" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Actualizar" })).toBeDisabled();
+  });
+});

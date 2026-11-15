@@ -53,10 +53,9 @@ const LEGAJO = `/firms/${FIRMA_DEMO}/clients/${CLIENTE_DEMO}/monthly-tax-workpap
 const PERMISOS_REVISION = ["client.read", "tax.settlements.review"];
 const HASH_ENTRADA = `a1b2c3d4e5f60718${"0".repeat(48)}`;
 const HASH_SALIDA = `ffeeddccbbaa9988${"1".repeat(48)}`;
-const MOTIVO_RESOLVER = "Escribí la resolución para resolver el control.";
-const MOTIVO_EXIMIR = "Escribí el motivo para eximir el control.";
+const MOTIVO_ACCIONES = "Falta escribir el motivo o cómo se resolvió.";
 const CONFIRMACION_EXIMIR =
-  "Vas a eximir este control con el motivo escrito. Quedará registrado como eximido.";
+  "Vas a eximir el control «Conciliación con Portal IVA» con el motivo «Diferencia menor aceptada». Quedará registrado como eximido.";
 
 type Control = Workpaper["controls"][number];
 
@@ -349,16 +348,16 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
-    expect(await screen.findAllByText(MOTIVO_RESOLVER)).toHaveLength(2);
-    expect(screen.getAllByText(MOTIVO_EXIMIR)).toHaveLength(1);
+    expect(await screen.findAllByText(MOTIVO_ACCIONES)).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Eximir" })).toHaveLength(1);
     fireEvent.change(
       screen.getByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }),
       {
         target: { value: "Diferencia menor" },
       },
     );
-    expect(screen.getAllByText(MOTIVO_RESOLVER)).toHaveLength(1);
-    expect(screen.queryByText(MOTIVO_EXIMIR)).toBeNull();
+    expect(screen.getAllByText(MOTIVO_ACCIONES)).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Eximir" })).toBeEnabled();
   });
 
   it("el error de Resolver aparece junto a su botón y toma el foco", async () => {
@@ -481,7 +480,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect((screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled).toBe(
       true,
     );
-    expect(screen.getByText(MOTIVO_RESOLVER)).toBeInTheDocument();
+    expect(screen.getByText(MOTIVO_ACCIONES)).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), {
       target: { value: "Conciliado sin respaldo" },
@@ -489,7 +488,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect((screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled).toBe(
       false,
     );
-    expect(screen.queryByText(MOTIVO_RESOLVER)).toBeNull();
+    expect(screen.queryByText(MOTIVO_ACCIONES)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
 
     await waitFor(() => expect(llamadasResolve()).toHaveLength(1));
@@ -623,5 +622,74 @@ describe("Legajo · etapa Cierre (K13)", () => {
     expect(valor("Hash de entrada")).toBe("Se genera al calcular");
     expect(valor("Hash de salida")).toBe("Se genera al finalizar");
     expect(valor("Controles bloqueantes")).toBe("0");
+  });
+});
+
+describe("Legajo · Controles: motivo, lugar de las acciones y diálogo de Eximir (Foco 2.7b)", () => {
+  it("la ayuda del campo vale para las dos acciones y Resolver y Eximir mantienen su lugar con el campo vacío y lleno", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({ controles: [advertencia()] });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+    const campo = await screen.findByRole("textbox", {
+      name: "Resolución PORTAL_IVA_RECONCILIATION",
+    });
+    expect(campo).toHaveAttribute("placeholder", "Escribí el motivo o cómo se resolvió.");
+    const grupo = campo
+      .closest(".workpaper-control")!
+      .querySelector<HTMLElement>(".workpaper-control__acciones")!;
+    const nombres = () =>
+      within(grupo)
+        .getAllByRole("button")
+        .map((boton) => boton.textContent);
+    expect(nombres()).toEqual(["Resolver", "Eximir"]);
+    const motivo = within(grupo).getByRole("note");
+    expect(motivo).toHaveTextContent(MOTIVO_ACCIONES);
+    expect(within(grupo).getByRole("button", { name: "Eximir" })).toHaveAttribute(
+      "aria-describedby",
+      motivo.id,
+    );
+    fireEvent.change(campo, { target: { value: "Diferencia menor" } });
+    expect(nombres()).toEqual(["Resolver", "Eximir"]);
+    expect(within(grupo).queryByRole("note")).toBeNull();
+  });
+
+  it("el contador de controles bloqueantes no es una región de alerta", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({
+      controles: [
+        bloqueante(),
+        bloqueante({ id: "control-c", code: "CASH_ALLOCATION_RECONCILIATION" }),
+      ],
+    });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+    const contador = document.querySelector<HTMLElement>(".workpaper-card__blocking");
+    expect(contador).not.toBeNull();
+    expect(contador!.getAttribute("role")).toBeNull();
+    expect(contador!.closest("[role='alert']")).toBeNull();
+    expect(
+      screen
+        .queryAllByRole("alert")
+        .filter((alerta) => /bloqueante/.test(alerta.textContent ?? "")),
+    ).toHaveLength(0);
+  });
+
+  it("el diálogo de Eximir nombra el control, cita el motivo escrito y no afirma si se puede deshacer", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({ controles: [advertencia()] });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }),
+      {
+        target: { value: "Diferencia menor aceptada" },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Eximir" }));
+    const cuerpo = await screen.findByText(CONFIRMACION_EXIMIR);
+    expect(cuerpo.textContent).toContain("«Conciliación con Portal IVA»");
+    expect(cuerpo.textContent).toContain("«Diferencia menor aceptada»");
+    expect(cuerpo.textContent).not.toMatch(/deshac|revers|revert/i);
   });
 });

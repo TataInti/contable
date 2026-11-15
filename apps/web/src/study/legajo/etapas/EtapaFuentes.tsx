@@ -58,7 +58,7 @@ export function EtapaFuentes({
             disabled={coverageQuery.isFetching}
             onClick={() => void coverageQuery.refetch()}
           >
-            {coverageQuery.isFetching ? "Actualizando…" : "Actualizar"}
+            {coverageQuery.isFetching && coverageQuery.isSuccess ? "Actualizando…" : "Actualizar"}
           </Button>
           <Button size="sm" variant="secondary" onClick={() => navigate("/bandeja")}>
             Ir a bandeja
@@ -232,7 +232,7 @@ export function EtapaFuentes({
             ]}
           />
           {fuentes.some((source) => source.required && !source.present && source.count === 0) ? (
-            <p className="workpaper-stage__note" role="status">
+            <p className="workpaper-stage__note">
               La cobertura cuenta solo lotes revisados. Los lotes pendientes de revisión mantienen
               el conteo en 0 registros.
             </p>

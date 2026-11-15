@@ -84,11 +84,13 @@ export function EtapaControles({
         <EmptyState size="inline" title="No hay controles registrados para este legajo." />
       ) : (
         wp.controls.map((control) => {
+          const nombre = CONTROL_LABELS[control.code] ?? control.code;
           const resolucion = controlResolutions[control.id]?.trim() ?? "";
+          const motivoId = `${control.id}-motivo`;
           return (
             <div className="workpaper-control" key={control.id}>
               <span>
-                <strong>{CONTROL_LABELS[control.code] ?? control.code}</strong>
+                <strong>{nombre}</strong>
                 {control.message ? <small>{control.message}</small> : null}
                 {control.expected !== null ? (
                   <small>
@@ -121,7 +123,7 @@ export function EtapaControles({
                   <input
                     aria-label={`Resolución ${control.code}`}
                     value={controlResolutions[control.id] ?? ""}
-                    placeholder="Explicá cómo se resolvió…"
+                    placeholder="Escribí el motivo o cómo se resolvió."
                     onChange={(event) =>
                       setControlResolutions((values) => ({
                         ...values,
@@ -157,6 +159,7 @@ export function EtapaControles({
                       variant="secondary"
                       disabled={!resolucion}
                       loading={resolveControlMutation.isPending}
+                      aria-describedby={resolucion ? undefined : motivoId}
                       onClick={() =>
                         resolveControlMutation.mutate({
                           workpaperId: wp.id,
@@ -170,40 +173,33 @@ export function EtapaControles({
                     >
                       Resolver
                     </Button>
-                    {!resolucion ? (
-                      <small className="form-submit-hint" role="note">
-                        Escribí la resolución para resolver el control.
-                      </small>
-                    ) : null}
                     {control.severity !== "BLOCKING" ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={!resolucion}
-                          onClick={() =>
-                            confirmar({
-                              title: "Eximir el control",
-                              description:
-                                "Vas a eximir este control con el motivo escrito. Quedará registrado como eximido.",
-                              confirmLabel: "Sí, eximir",
-                              onConfirm: () =>
-                                resolveControlMutation.mutate({
-                                  workpaperId: wp.id,
-                                  findingId: control.id,
-                                  status: "WAIVED",
-                                }),
-                            })
-                          }
-                        >
-                          Eximir
-                        </Button>
-                        {!resolucion ? (
-                          <small className="form-submit-hint" role="note">
-                            Escribí el motivo para eximir el control.
-                          </small>
-                        ) : null}
-                      </>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!resolucion}
+                        aria-describedby={resolucion ? undefined : motivoId}
+                        onClick={() =>
+                          confirmar({
+                            title: "Eximir el control",
+                            description: `Vas a eximir el control «${nombre}» con el motivo «${resolucion}». Quedará registrado como eximido.`,
+                            confirmLabel: "Sí, eximir",
+                            onConfirm: () =>
+                              resolveControlMutation.mutate({
+                                workpaperId: wp.id,
+                                findingId: control.id,
+                                status: "WAIVED",
+                              }),
+                          })
+                        }
+                      >
+                        Eximir
+                      </Button>
+                    ) : null}
+                    {!resolucion ? (
+                      <small id={motivoId} className="form-submit-hint" role="note">
+                        Falta escribir el motivo o cómo se resolvió.
+                      </small>
                     ) : null}
                   </span>
                   <WorkpaperActionError

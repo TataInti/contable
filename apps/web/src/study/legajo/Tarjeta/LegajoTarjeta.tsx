@@ -47,7 +47,7 @@ export function LegajoTarjeta({
           ) : null}
         </div>
         {bloqueantes.length > 0 ? (
-          <span className="workpaper-card__blocking" role="alert">
+          <span className="workpaper-card__blocking">
             {bloqueantes.length} control(es) bloqueante(s)
           </span>
         ) : null}
@@ -80,6 +80,9 @@ export function LegajoTarjeta({
         {children}
       </div>
 
+      {/* Las acciones de estado van antes de la barra de etapas: se ven sin desplazar a 1280×720. */}
+      <div className="workpaper-card__actions">{acciones}</div>
+
       <div className="workpaper-step-footer" aria-label="Cambio de etapa">
         <Button
           size="sm"
@@ -102,8 +105,6 @@ export function LegajoTarjeta({
           {siguiente ? <Icon name="arrow-right" size={14} /> : null}
         </Button>
       </div>
-
-      <div className="workpaper-card__actions">{acciones}</div>
     </article>
   );
 }
