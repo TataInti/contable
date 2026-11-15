@@ -268,9 +268,10 @@ export function StudyDashboard() {
         hasClientAccess(item.clientId) ? (
           <Button
             size="sm"
-            variant="secondary"
+            variant="ghost"
             loading={openingSettlementId === item.id}
             loadingLabel="Abriendo liquidación"
+            aria-label={`Abrir liquidación de ${item.regime?.taxType?.name ?? item.regime?.name ?? "Impuesto"}, versión ${item.version}`}
             onClick={() => void openSettlement(item)}
           >
             Abrir
@@ -513,7 +514,7 @@ export function StudyDashboard() {
             </>
           }
         >
-          {worklistBody}
+          <div className="dense-worklist">{worklistBody}</div>
         </DenseSection>
 
         <DenseSection
@@ -535,21 +536,29 @@ export function StudyDashboard() {
           {summaryNote ? (
             <p className="dense-dim">{summaryNote}</p>
           ) : (
-            <ul className="dense-agenda">
-              {documentWork.map((item) => (
-                <li key={item.label} data-tone={item.tone}>
-                  <Link to={clientId ? item.to : "/clientes"} className="dense-agenda__link">
-                    <span className="dense-agenda__count">{item.count}</span>
-                    <span className="dense-agenda__copy">
-                      <strong>{item.label}</strong>
-                      <small>{item.detail}</small>
-                    </span>
-                    <span className="dense-dim" aria-hidden="true">
+            <ul className="dense-agenda dense-agenda--con-accion">
+              {documentWork.map((item) => {
+                const destino = clientId ? item.to : "/clientes";
+                return (
+                  <li key={item.label} data-tone={item.tone}>
+                    <Link to={destino} className="dense-agenda__link">
+                      <span className="dense-agenda__count">{item.count}</span>
+                      <span className="dense-agenda__copy">
+                        <strong>{item.label}</strong>
+                        <small>{item.detail}</small>
+                      </span>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Abrir ${item.label}`}
+                      onClick={() => navigate(destino)}
+                    >
                       Abrir
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                    </Button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </DenseSection>

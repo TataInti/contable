@@ -207,7 +207,7 @@ export function CalendarioFiscalFicha({
   const publishable = Boolean(report && report.canPublish && isDraft);
   const publishReason = report
     ? errors.length > 0
-      ? `No se puede publicar: faltan ${errors.length} ${errors.length === 1 ? "problema" : "problemas"} por resolver. Primero: ${firstError?.message ?? ""}`
+      ? `No se puede publicar: ${errors.length === 1 ? "falta 1 problema" : `faltan ${errors.length} problemas`} por resolver`
       : ""
     : validation.isError
       ? "No se pudo revisar el informe de validación: reintentá en su sección."
@@ -341,27 +341,29 @@ export function CalendarioFiscalFicha({
       <DenseWorkspace panelId="calendario-tab-panel">
         {tab === "resumen" ? (
           <>
-            <InspectorFacts
-              items={[
-                ["Organismo", calendar.taxAuthority.name],
-                ["Jurisdicción", calendar.jurisdiction.name],
-                ["Año", String(calendar.year)],
-                ["Título", calendar.title],
-                ["Versión", String(calendar.version)],
-                ["Estado", <StatusBadge status={calendar.status} label={statusLabel(calendar.status)} />],
-                ["Celdas", String(calendar.entries.length)],
-                [
-                  "Creada a partir de",
-                  calendar.supersedesId ? (sourceVersion ? `versión ${sourceVersion}` : "otra versión") : null,
-                ],
-                [
-                  "Publicada",
-                  calendar.publishedAt ? `${dayOf(calendar.publishedAt) ?? ""} · ${who(calendar.publishedByUserId) ?? ""}` : null,
-                ],
-                ["Ocultada", calendar.hiddenAt ? `${dayOf(calendar.hiddenAt) ?? ""} · ${who(calendar.hiddenByUserId) ?? ""}` : null],
-                ["Última modificación", dayOf(calendar.updatedAt)],
-              ]}
-            />
+            <div className="calendario-ficha__datos">
+              <InspectorFacts
+                items={[
+                  ["Organismo", calendar.taxAuthority.name],
+                  ["Jurisdicción", calendar.jurisdiction.name],
+                  ["Año", String(calendar.year)],
+                  ["Título", calendar.title],
+                  ["Versión", String(calendar.version)],
+                  ["Estado", <StatusBadge status={calendar.status} label={statusLabel(calendar.status)} />],
+                  ["Celdas", String(calendar.entries.length)],
+                  [
+                    "Creada a partir de",
+                    calendar.supersedesId ? (sourceVersion ? `versión ${sourceVersion}` : "otra versión") : null,
+                  ],
+                  [
+                    "Publicada",
+                    calendar.publishedAt ? `${dayOf(calendar.publishedAt) ?? ""} · ${who(calendar.publishedByUserId) ?? ""}` : null,
+                  ],
+                  ["Ocultada", calendar.hiddenAt ? `${dayOf(calendar.hiddenAt) ?? ""} · ${who(calendar.hiddenByUserId) ?? ""}` : null],
+                  ["Última modificación", dayOf(calendar.updatedAt)],
+                ]}
+              />
+            </div>
             <DenseToolbar>
               {isDraft && canPublish ? (
                 <>
@@ -375,7 +377,7 @@ export function CalendarioFiscalFicha({
                     Publicar
                   </Button>
                   {publishReason ? <span id="publicar-motivo">{publishReason}</span> : null}
-                  {firstError && firstTarget ? (
+                  {errors.length > 1 && firstError && firstTarget ? (
                     <Button type="button" variant="text" size="row" onClick={() => goToEntry(firstTarget.entryId)}>
                       Ir al primer problema
                     </Button>
@@ -417,7 +419,7 @@ export function CalendarioFiscalFicha({
                 <p>Sin problemas: la cobertura de 0 a 9 está completa en cada concepto y período.</p>
               ) : null}
               {report && problems.length > 0 ? (
-                <ul>
+                <ul className="calendario-problemas">
                   {problems.map((problem: ValidationProblem, index) => {
                     const target = problemTarget(problem, calendar.entries);
                     return (
@@ -426,7 +428,7 @@ export function CalendarioFiscalFicha({
                         <span>{problem.message}</span>{" "}
                         {target ? (
                           <Button type="button" variant="text" size="row" onClick={() => goToEntry(target.entryId)}>
-                            Ir a la celda
+                            {errors.length === 1 && problem.severity === "ERROR" ? "Ir al problema" : "Ir a la celda"}
                           </Button>
                         ) : canEditCells ? (
                           <Button type="button" variant="text" size="row" onClick={() => setCellDrawer({ entry: null })}>

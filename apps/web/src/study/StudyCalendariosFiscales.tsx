@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { AsyncState, Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
 import { useClientContext } from "../context/ClientContext";
 import { api } from "../lib/api";
-import { ActionDrawer } from "../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
   DenseHeader,
@@ -44,14 +44,25 @@ import {
   type JurisdictionOption,
 } from "./calendariosFiscalesHooks";
 
-const DESCRIPTION = "Carga, revisa y publica los vencimientos de cada organismo y jurisdicción.";
+const DESCRIPTION = "Cargá, revisá y publicá los vencimientos de cada organismo y jurisdicción.";
 const READ_ONLY_DESCRIPTION =
   "Tu rol consulta los calendarios. Cargarlos y corregirlos lo hacen el Titular, el Administrador y el Preparador.";
 
-const STATUS_OPTIONS = STATUS_FILTERS.map((item) => ({ value: item.value, label: item.label }));
+// «Todos» no es un filtro: es la opción que aparece pulsada cuando no hay estado elegido.
+const TODOS_FILTER = "todos";
+const STATUS_OPTIONS = [
+  { value: TODOS_FILTER, label: "Todos" },
+  ...STATUS_FILTERS.map((item) => ({ value: item.value, label: item.label })),
+];
 
 function isStatusFilterValue(value: string): value is StatusFilterValue {
   return STATUS_FILTERS.some((item) => item.value === value);
+}
+
+/** Elegir «Todos» limpia la selección; los estados se suman o se quitan de a uno (selección múltiple). */
+function statusesFromGroup(next: readonly string[], shown: readonly string[]): StatusFilterValue[] {
+  const eligioTodos = next.includes(TODOS_FILTER) && !shown.includes(TODOS_FILTER);
+  return eligioTodos ? [] : next.filter(isStatusFilterValue);
 }
 
 /**
@@ -77,6 +88,7 @@ export function StudyCalendariosFiscales() {
     [list.data, filters.statuses],
   );
   const hasFilters = hasCalendarFilters(filters);
+  const statusSelection: readonly string[] = filters.statuses.length === 0 ? [TODOS_FILTER] : filters.statuses;
 
   const openCalendar = (id: string) =>
     setSearchParams((previous) => {
@@ -228,8 +240,8 @@ export function StudyCalendariosFiscales() {
             <DenseToggleGroup
               label="Estado"
               options={STATUS_OPTIONS}
-              selected={filters.statuses}
-              onChange={(next) => updateFilters({ ...filters, statuses: next.filter(isStatusFilterValue) })}
+              selected={statusSelection}
+              onChange={(next) => updateFilters({ ...filters, statuses: statusesFromGroup(next, statusSelection) })}
             />
             {hasFilters ? (
               <Button type="button" variant="text" size="row" onClick={clearFilters}>
@@ -290,6 +302,7 @@ export function StudyCalendariosFiscales() {
               label="Calendarios fiscales"
               surface="integrated"
               columns={columns}
+              sortHint
               rows={rows}
               rowKey={(row) => row.id}
               selectedKey={null}
@@ -340,40 +353,54 @@ function NuevoCalendarioDrawer({
   jurisdictions: UseQueryResult<JurisdictionOption[]>;
   onCreated: (id: string) => void;
 }) {
+  // El panel se monta solo mientras está abierto: cada apertura empieza en blanco.
   if (!isOpen) return null;
   return (
-    <ActionDrawer
-      isOpen
+    <NuevoCalendarioPanel
       onClose={onClose}
-      title="Nuevo calendario"
-      description="Un calendario por organismo, jurisdicción y año. Empieza en borrador: cargá sus celdas y publicalo cuando la cobertura esté completa."
-      footer={
-        <>
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="nuevo-calendario-form" variant="primary">
-            Crear calendario
-          </Button>
-        </>
-      }
-    >
-      <NuevoCalendarioForm
-        firmId={firmId}
-        authorities={authorities}
-        jurisdictions={jurisdictions}
-        onCreated={onCreated}
-      />
-    </ActionDrawer>
+      firmId={firmId}
+      authorities={authorities}
+      jurisdictions={jurisdictions}
+      onCreated={onCreated}
+    />
   );
 }
 
-function NuevoCalendarioForm({
+const EMPTY_FIELD_LABELS: ReadonlyArray<readonly [keyof CalendarForm, string]> = [
+  ["taxAuthorityId", "organismo"],
+  ["jurisdictionId", "jurisdicción"],
+  ["year", "año"],
+  ["title", "título"],
+];
+
+const INVALID_FIELD_LABELS: Record<(typeof NEW_FIELD_ORDER)[number], string> = {
+  taxAuthorityId: "el organismo",
+  jurisdictionId: "la jurisdicción",
+  year: "el año",
+  title: "el título",
+};
+
+function listaCon(items: readonly string[]): string {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
+}
+
+/** Motivo junto a «Crear calendario» mientras no se puede enviar: qué falta, o qué corregir. */
+function motivoDeAlta(form: CalendarForm, issues: Record<string, string>): string | null {
+  const vacios = EMPTY_FIELD_LABELS.filter(([key]) => form[key].trim() === "").map(([, label]) => label);
+  if (vacios.length > 0) return `Completá ${listaCon(vacios)}.`;
+  const primero = NEW_FIELD_ORDER.find((key) => issues[key] !== undefined);
+  return primero !== undefined ? `Revisá ${INVALID_FIELD_LABELS[primero]}.` : null;
+}
+
+function NuevoCalendarioPanel({
+  onClose,
   firmId,
   authorities,
   jurisdictions,
   onCreated,
 }: {
+  onClose: () => void;
   firmId: string | null;
   authorities: UseQueryResult<AuthorityOption[]>;
   jurisdictions: UseQueryResult<JurisdictionOption[]>;
@@ -387,6 +414,7 @@ function NuevoCalendarioForm({
   const [serverFields, setServerFields] = useState<Record<string, string>>({});
   const [serverNotice, setServerNotice] = useState<string | null>(null);
   const issues = calendarIssues(form);
+  const motivo = motivoDeAlta(form, issues);
 
   const errorFor = (key: string): string | undefined =>
     (submitted || touched[key] ? issues[key] : undefined) ?? serverFields[key];
@@ -424,67 +452,92 @@ function NuevoCalendarioForm({
   };
 
   return (
-    <form id="nuevo-calendario-form" noValidate onSubmit={onSubmit}>
-      {serverNotice ? <Notice tone="error">{serverNotice}</Notice> : null}
-      {authorities.isError ? (
-        <AsyncState
-          loading={false}
-          error
-          loadingLabel="Cargando organismos"
-          errorTitle="No se pudieron cargar los organismos"
-          errorDescription="Reintentá para elegir el organismo del calendario."
-          onRetry={() => void authorities.refetch()}
+    <ActionDrawer
+      isOpen
+      onClose={onClose}
+      title="Nuevo calendario"
+      description="Un calendario por organismo, jurisdicción y año. Empieza en borrador: cargá sus celdas y publicalo cuando la cobertura esté completa."
+      footer={
+        <ActionDrawerFooter
+          primary={
+            <Button
+              type="submit"
+              form="nuevo-calendario-form"
+              variant="primary"
+              loading={create.isPending}
+              disabled={motivo !== null}
+            >
+              Crear calendario
+            </Button>
+          }
+          hint={motivo}
+          onCancel={onClose}
         />
-      ) : null}
-      <CalendarioFiscalSelect
-        id={NEW_FIELD_IDS.taxAuthorityId ?? "cal-organismo"}
-        label="Organismo"
-        value={form.taxAuthorityId}
-        placeholder="Elegí el organismo"
-        options={(authorities.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
-        onChange={(value) => change("taxAuthorityId", value)}
-        error={errorFor("taxAuthorityId")}
-      />
-      {jurisdictions.isError ? (
-        <AsyncState
-          loading={false}
-          error
-          loadingLabel="Cargando jurisdicciones"
-          errorTitle="No se pudieron cargar las jurisdicciones"
-          errorDescription="Reintentá para elegir la jurisdicción del calendario."
-          onRetry={() => void jurisdictions.refetch()}
+      }
+    >
+      <form id="nuevo-calendario-form" className="study-form" noValidate onSubmit={onSubmit}>
+        {serverNotice ? <Notice tone="error">{serverNotice}</Notice> : null}
+        {authorities.isError ? (
+          <AsyncState
+            loading={false}
+            error
+            loadingLabel="Cargando organismos"
+            errorTitle="No se pudieron cargar los organismos"
+            errorDescription="Reintentá para elegir el organismo del calendario."
+            onRetry={() => void authorities.refetch()}
+          />
+        ) : null}
+        <CalendarioFiscalSelect
+          id={NEW_FIELD_IDS.taxAuthorityId ?? "cal-organismo"}
+          label="Organismo"
+          value={form.taxAuthorityId}
+          placeholder="Elegí el organismo"
+          options={(authorities.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
+          onChange={(value) => change("taxAuthorityId", value)}
+          error={errorFor("taxAuthorityId")}
         />
-      ) : null}
-      <CalendarioFiscalSelect
-        id={NEW_FIELD_IDS.jurisdictionId ?? "cal-jurisdiccion"}
-        label="Jurisdicción"
-        value={form.jurisdictionId}
-        placeholder="Elegí la jurisdicción"
-        options={(jurisdictions.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
-        onChange={(value) => change("jurisdictionId", value)}
-        error={errorFor("jurisdictionId")}
-      />
-      <Field
-        id={NEW_FIELD_IDS.year ?? "cal-anio"}
-        name="year"
-        label="Año"
-        hint="Entre 2000 y 2100."
-        inputMode="numeric"
-        value={form.year}
-        onChange={(event) => change("year", event.target.value)}
-        onBlur={() => setTouched((current) => ({ ...current, year: true }))}
-        error={errorFor("year")}
-      />
-      <Field
-        id={NEW_FIELD_IDS.title ?? "cal-titulo"}
-        name="title"
-        label="Título"
-        hint="Cómo se llama en el PDF, por ejemplo «Calendario nacional 2026»."
-        value={form.title}
-        onChange={(event) => change("title", event.target.value)}
-        onBlur={() => setTouched((current) => ({ ...current, title: true }))}
-        error={errorFor("title")}
-      />
-    </form>
+        {jurisdictions.isError ? (
+          <AsyncState
+            loading={false}
+            error
+            loadingLabel="Cargando jurisdicciones"
+            errorTitle="No se pudieron cargar las jurisdicciones"
+            errorDescription="Reintentá para elegir la jurisdicción del calendario."
+            onRetry={() => void jurisdictions.refetch()}
+          />
+        ) : null}
+        <CalendarioFiscalSelect
+          id={NEW_FIELD_IDS.jurisdictionId ?? "cal-jurisdiccion"}
+          label="Jurisdicción"
+          value={form.jurisdictionId}
+          placeholder="Elegí la jurisdicción"
+          options={(jurisdictions.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
+          onChange={(value) => change("jurisdictionId", value)}
+          error={errorFor("jurisdictionId")}
+        />
+        <Field
+          id={NEW_FIELD_IDS.year ?? "cal-anio"}
+          name="year"
+          label="Año"
+          className="calendario-anio"
+          hint="Entre 2000 y 2100."
+          inputMode="numeric"
+          value={form.year}
+          onChange={(event) => change("year", event.target.value)}
+          onBlur={() => setTouched((current) => ({ ...current, year: true }))}
+          error={errorFor("year")}
+        />
+        <Field
+          id={NEW_FIELD_IDS.title ?? "cal-titulo"}
+          name="title"
+          label="Título"
+          hint="Cómo se llama en el PDF, por ejemplo «Calendario nacional 2026»."
+          value={form.title}
+          onChange={(event) => change("title", event.target.value)}
+          onBlur={() => setTouched((current) => ({ ...current, title: true }))}
+          error={errorFor("title")}
+        />
+      </form>
+    </ActionDrawer>
   );
 }

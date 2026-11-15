@@ -107,7 +107,12 @@ export function PendingFilingReceipts({
       align: "right",
       render: (row) =>
         canOpen(row.clientId) ? (
-          <Button size="sm" variant="ghost" onClick={() => onOpen(row.clientId)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={`Abrir legajo de ${row.clientName}`}
+            onClick={() => onOpen(row.clientId)}
+          >
             Abrir legajo
           </Button>
         ) : null,

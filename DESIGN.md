@@ -1116,6 +1116,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Estado: migrada** (Foco 1, corte 1). Lo vigente tras la migración: encabezado con «Actualizar» como acción secundaria y «Revisar bandeja» como única primaria; cifras con «pendiente», «no disponible» o «restringido» en lugar de cero; acuses y liquidaciones en listas separadas, con sus estados propios, y obligaciones pendientes a continuación, en el orden de main; otros circuitos y panorama como secciones secundarias del lienzo, sin panel lateral; región de trabajo con nombre accesible. **Cumple G03** (para esta pantalla), **G05** y **G06** (sección 7). G07 sigue pendiente de Inti.
 
+**Estado (Foco 2.7c):** cada acción de fila de Inicio es un botón `ghost` con nombre completo: «Abrir liquidación de <impuesto>, versión N», «Abrir legajo de <cliente>» y «Abrir <circuito>» en Otros circuitos, con un solo tratamiento. El dato secundario de «Impuesto» va en renglón propio (la misma regla de Reglas, Foco 2.7a). «Abrir obligaciones» y «Ver clientes» tienen relleno vertical de objetivo.
+
 ### R02 — Legajo
 
 **Propósito:** consultar un período y continuar sus tareas, distinguiendo pestaña, etapa y estado del legajo.
@@ -1165,6 +1167,8 @@ Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFoote
 | R03 Reglas fiscales | Paquete, versión, vigencia, estado, parámetros y condición de lectura | Elegir paquete, consultar secciones, preparar modificación, alta global |
 | R03 Calendarios fiscales | Organismo, jurisdicción, año, versión, estado, celdas (concepto, grupo de terminaciones, período, vencimiento, ajuste y revisión), validación de cobertura, versiones y quién las publicó u ocultó | Crear calendario, agregar, editar y quitar celdas en borrador, crear versión a partir de este, publicar, ocultar y mostrar. Solo lectura sin `tax.calendars.manage`; publicar solo con `tax.calendars.publish` |
 | RG | La información que la pantalla muestra hoy | Todas las acciones que la pantalla ofrece hoy, según capacidades |
+
+**Estado (Foco 2.7c), Calendarios fiscales:** el alta usa el pie `ActionDrawerFooter` («Cancelar» a la izquierda y «Crear calendario» a la derecha) y muestra el motivo junto al botón mientras no se puede crear. La ficha en borrador concuerda en singular y plural y, con un solo problema, ofrece un único enlace («Ir al problema»). La lista muestra el estado elegido en «Estado», con «Todos» para volver a la lista completa (selección múltiple), y el encabezado «Año» muestra su indicador de orden (`sortHint` de `DenseTable`). El subtítulo usa voseo.
 
 Cada PR de migración incluye su matriz antes/después de información y accesos.
 

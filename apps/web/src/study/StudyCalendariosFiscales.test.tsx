@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readStudyStyles } from "./studyStyles.testutil";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ToastProvider } from "@contable/design-system";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -447,10 +448,13 @@ describe("ficha del calendario", () => {
     renderAt(ficha(CAL_DRAFT));
     const publish = await screen.findByRole("button", { name: "Publicar" });
     expect((publish as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/No se puede publicar: faltan 1 problema por resolver/)).toBeTruthy();
+    expect(screen.getByText(/No se puede publicar: falta 1 problema por resolver/)).toBeTruthy();
     expect(screen.getAllByText(new RegExp(`${IB} \\(Anticipo Ene-26\\): faltan los dígitos 2 a 9`)).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Ir al primer problema" }));
+    // Con un solo problema hay un solo enlace: «Ir al problema», en el informe.
+    expect(screen.getAllByRole("button", { name: "Ir al problema" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Ir al primer problema" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ir al problema" }));
     expect(screen.getByRole("tab", { name: /^Celdas/ }).getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement?.getAttribute("data-row-key")).toBe(ENTRY_IB);
   });
@@ -632,5 +636,74 @@ describe("permisos y estados", () => {
     const publish = await screen.findByRole("button", { name: "Publicar" });
     await vi.waitFor(() => expect((publish as HTMLButtonElement).disabled).toBe(false));
     expect(document.querySelectorAll(".ds-button--primary").length).toBe(1);
+  });
+});
+
+describe("pulido de Calendarios fiscales (Foco 2.7c)", () => {
+  it("el subtítulo usa el voseo del resto de la aplicación", async () => {
+    setCapabilities(CAP_MANAGE);
+    renderAt(listUrl);
+    expect(
+      await screen.findByText("Cargá, revisá y publicá los vencimientos de cada organismo y jurisdicción."),
+    ).toBeTruthy();
+  });
+
+  it("el grupo de estado muestra el elegido y «Todos» vuelve a la lista completa", async () => {
+    setCapabilities(CAP_READ);
+    renderAt(`${listUrl}?estado=publicado`);
+    await screen.findByRole("table", { name: "Calendarios fiscales" });
+    expect(screen.getByRole("button", { name: "Publicado" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Todos" }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Todos" }));
+    expect(lastSearch).not.toContain("estado=");
+  });
+
+  it("sin estado elegido, «Todos» aparece pulsado", async () => {
+    setCapabilities(CAP_READ);
+    renderAt(listUrl);
+    await screen.findByRole("table", { name: "Calendarios fiscales" });
+    expect(screen.getByRole("button", { name: "Todos" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("«Crear calendario» queda deshabilitado con el motivo al lado hasta completar los campos", async () => {
+    setCapabilities(CAP_MANAGE);
+    renderAt(listUrl);
+    fireEvent.click((await screen.findAllByRole("button", { name: "Nuevo calendario" }))[0]!);
+    const dialog = await screen.findByRole("dialog", { name: "Nuevo calendario" });
+    const crear = within(dialog).getByRole("button", { name: "Crear calendario" }) as HTMLButtonElement;
+    expect(crear.disabled).toBe(true);
+    expect(within(dialog).getByRole("note").textContent).toBe("Completá organismo, jurisdicción, año y título.");
+    fireEvent.change(within(dialog).getByLabelText("Organismo"), { target: { value: AUTH } });
+    fireEvent.change(within(dialog).getByLabelText("Jurisdicción"), { target: { value: JUR } });
+    fireEvent.change(within(dialog).getByLabelText("Año"), { target: { value: "1999" } });
+    fireEvent.change(within(dialog).getByLabelText("Título"), { target: { value: "Calendario sintético 2026" } });
+    expect(within(dialog).getByRole("note").textContent).toBe("Revisá el año.");
+    fireEvent.change(within(dialog).getByLabelText("Año"), { target: { value: "2026" } });
+    expect(crear.disabled).toBe(false);
+    expect(within(dialog).queryByRole("note")).toBeNull();
+  });
+
+  it("con dos problemas el motivo va en plural y la barra ofrece «Ir al primer problema»", async () => {
+    setCapabilities(CAP_PUBLISH);
+    validationOverride[CAL_DRAFT] = {
+      calendarId: CAL_DRAFT,
+      status: "DRAFT",
+      entries: 4,
+      canPublish: false,
+      problems: [
+        ...DRAFT_PROBLEMS,
+        { field: "entries[0].endingDigits", message: "Falta la terminación 0 de IVA", severity: "ERROR" },
+      ],
+    };
+    renderAt(ficha(CAL_DRAFT));
+    expect(await screen.findByText("No se puede publicar: faltan 2 problemas por resolver")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Ir al primer problema" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Ir a la celda" })).toHaveLength(2);
+  });
+
+  it("Año tiene ancho corto y la lista de problemas no lleva viñeta (estilos con tokens)", () => {
+    const estilos = readStudyStyles();
+    expect(estilos).toMatch(/\.study-form \.calendario-anio\s*\{[^}]*max-width:\s*calc\(var\(--ds-control-height-md\) \* 2\);/);
+    expect(estilos).toMatch(/\.calendario-problemas\s*\{[^}]*list-style:\s*none;/);
   });
 });

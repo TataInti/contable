@@ -59,7 +59,7 @@ describe("acuses de presentación pendientes en Inicio", () => {
     expect(screen.getByText("marzo de 2025")).toBeTruthy();
     expect(screen.getByText("5 días")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Abrir legajo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Abrir legajo de Restaurante de Prueba S.R.L." }));
     expect(onOpen).toHaveBeenCalledWith("client-1");
   });
 
@@ -68,7 +68,7 @@ describe("acuses de presentación pendientes en Inicio", () => {
     renderList(vi.fn(), () => false);
 
     expect(await screen.findByText("Restaurante de Prueba S.R.L.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Abrir legajo" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Abrir legajo de Restaurante de Prueba S.R.L." })).toBeNull();
   });
 
   it("en carga muestra un indicador discreto y la cifra «pendiente», sin lista ni cero", async () => {
