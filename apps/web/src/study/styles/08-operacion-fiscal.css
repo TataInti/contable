@@ -388,71 +388,6 @@
   line-height: 1.45;
 }
 
-.workpaper-process__controls {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: var(--ds-space-2);
-}
-
-.workpaper-process__menu {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--ds-space-2);
-}
-
-.workpaper-step {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-  min-height: 38px;
-  padding: var(--ds-space-2);
-  border: 1px solid var(--ds-color-border);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-color-surface);
-  color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-sm);
-  font-weight: 650;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 150ms ease-out,
-    background-color 150ms ease-out,
-    color 150ms ease-out;
-}
-
-.workpaper-step:hover {
-  border-color: color-mix(in srgb, var(--ds-color-primary) 28%, var(--ds-color-border));
-  background: var(--ds-color-surface-hover);
-  color: var(--ds-color-text);
-}
-
-.workpaper-step--active {
-  border-color: color-mix(in srgb, var(--ds-color-primary) 42%, var(--ds-color-border));
-  background: var(--ds-color-primary-soft);
-  color: var(--ds-color-primary);
-}
-
-.workpaper-step__number {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  border-radius: 50%;
-  background: var(--ds-color-surface-muted);
-  color: currentColor;
-  font-size: var(--ds-text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.workpaper-step--active .workpaper-step__number {
-  background: var(--ds-color-primary);
-  color: var(--ds-color-on-primary);
-}
-
 .workpaper-card__body {
   padding: var(--ds-space-5) var(--ds-space-6);
 }
@@ -914,14 +849,6 @@
     position: static;
     grid-template-columns: 1fr;
   }
-
-  .workpaper-process__controls {
-    justify-content: flex-start;
-  }
-
-  .workpaper-process__menu {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 860px) {
@@ -935,7 +862,6 @@
   .fiscal-rule-summary__meta,
   .workpaper-close-details,
   .workpaper-classification-summary,
-  .workpaper-process__menu,
   .workpaper-control {
     grid-template-columns: 1fr;
   }
@@ -957,7 +883,6 @@
 
   .fiscal-rule-approval__actions,
   .workpaper-control__resolution,
-  .workpaper-process__controls,
   .study-form__actions,
   .study-inline-form__actions {
     justify-content: stretch;
@@ -965,7 +890,6 @@
 
   .fiscal-rule-approval__actions .ds-button,
   .workpaper-control__resolution .ds-button,
-  .workpaper-process__controls .ds-button,
   .workpaper-step-footer .ds-button,
   .study-form__actions .ds-button,
   .study-inline-form__actions .ds-button {

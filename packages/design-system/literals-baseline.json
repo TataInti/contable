@@ -265,7 +265,37 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/legajo/accesibilidadLegajo.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/accionesDeEstado.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/BandaEstado.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/legajo/cabecera.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/ListaLegajos.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/listaYTarjeta.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -319,6 +349,24 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/legajo/periodoFiscalPantalla.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/revisionesDelPeriodo.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/SelectorPeriodo.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/legajo/SifereAnalysisPanel.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -326,6 +374,18 @@
       "color": 0
     },
     "apps/web/src/study/legajo/SifereAnalysisPanel.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/Tarjeta/LegajoTarjeta.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/Tarjeta/ResumenRevision.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -373,6 +433,30 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/reglas/activacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/cajones.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/ConfirmarActivacion.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/datosDemoReglas.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/reglas/ListaPaquetes.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -380,6 +464,42 @@
       "color": 0
     },
     "apps/web/src/study/reglas/ListaPaquetes.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/paneles/PanelFuente.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/paneles/PanelModificarAlicuotas.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/paneles/PanelNuevoPaquete.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/paneles/PanelPrimeraVersion.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/paneles/PanelVencimiento.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/permisos.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,

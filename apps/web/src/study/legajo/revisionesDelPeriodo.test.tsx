@@ -100,13 +100,13 @@ afterEach(() => {
 describe("Legajo · dos revisiones del mismo período (K16)", () => {
   // Defecto de D6a: hoy cada tarjeta dibuja etapas y comparte una sola etapa activa.
   // Estas pruebas fijan el estado actual con it.fails; el corte las pasa a aserción.
-  it.fails("la revisión anterior no tiene pestañas de etapa", async () => {
+  it("la revisión anterior no tiene pestañas de etapa", async () => {
     renderPage();
     await screen.findByRole("heading", { level: 2, name: /Revisión 2/ });
     expect(screen.getAllByRole("tablist")).toHaveLength(1);
   });
 
-  it.fails("cambiar de etapa en la revisión vigente no cambia la anterior", async () => {
+  it("cambiar de etapa en la revisión vigente no cambia la anterior", async () => {
     renderPage();
     const pestanas = await screen.findAllByRole("tab", { name: /Fuentes/ });
     fireEvent.click(pestanas[0]!);
@@ -116,7 +116,7 @@ describe("Legajo · dos revisiones del mismo período (K16)", () => {
     expect(within(anterior).queryAllByRole("tab")).toHaveLength(0);
   });
 
-  it.fails("la revisión anterior muestra su estado y la que la reemplaza", async () => {
+  it("la revisión anterior muestra su estado y la que la reemplaza", async () => {
     renderPage();
     expect(
       await screen.findByText("Revisión 1 · Finalizado · reemplazada por la revisión 2"),

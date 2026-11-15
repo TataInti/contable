@@ -243,6 +243,7 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
     renderLegajos([legajoDemo("REVIEWED")]);
 
     fireEvent.click(await screen.findByRole("button", { name: "Finalizar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sí, finalizar" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(
         expect.stringContaining("/monthly-tax-workpapers/wp-a/finalize"),
@@ -255,6 +256,7 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
     renderLegajos([legajoDemo("FINALIZED")]);
 
     fireEvent.click(await screen.findByRole("button", { name: "Crear rectificativa" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sí, crear rectificativa" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(
         expect.stringContaining("/monthly-tax-workpapers/wp-a/rectify"),
