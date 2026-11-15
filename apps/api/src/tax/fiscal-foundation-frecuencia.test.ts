@@ -44,19 +44,25 @@ describe("frecuencia de vencimientos en la API (D-R3-A)", () => {
     vi.restoreAllMocks();
   });
 
-  it.each(["MONTHLY", "QUARTERLY", "ANNUAL", "ONCE"])("acepta %s y lo pasa al servicio", async (frequency) => {
-    const { response, servicio } = await altaDeVencimiento({ frequency });
-    expect(response.statusCode).toBe(201);
-    expect(servicio).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ frequency }));
-  });
+  it.each(["MONTHLY", "QUARTERLY", "ANNUAL", "ONCE"])(
+    "acepta %s y lo pasa al servicio",
+    async (frequency) => {
+      const { response, servicio } = await altaDeVencimiento({ frequency });
+      expect(response.statusCode).toBe(201);
+      expect(servicio).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ frequency }),
+      );
+    },
+  );
 
   it("sin frecuencia la alta sigue respondiendo 201", async () => {
     const { response } = await altaDeVencimiento({});
     expect(response.statusCode).toBe(201);
   });
 
-  // Lista cerrada: «MENSUAL» no es un alias de MONTHLY; hoy la API lo guarda tal cual.
-  it.fails("rechaza MENSUAL con 400 y no llega al servicio", async () => {
+  // Lista cerrada: «MENSUAL» no es un alias de MONTHLY.
+  it("rechaza MENSUAL con 400 y no llega al servicio", async () => {
     const { response, servicio } = await altaDeVencimiento({ frequency: "MENSUAL" });
     expect(response.statusCode).toBe(400);
     expect(servicio).not.toHaveBeenCalled();

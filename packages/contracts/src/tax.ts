@@ -398,10 +398,21 @@ export const createTaxRateRuleSchema = z.object({
 });
 export type CreateTaxRateRule = z.infer<typeof createTaxRateRuleSchema>;
 
+/**
+ * Lista cerrada de frecuencias de vencimiento (D-R3-A): fuente única para la API y la web.
+ * El motor (packages/tax-engine) tiene su propia unión; una prueba en apps/api/src/tax fija que coinciden.
+ */
+export const DUE_DATE_FREQUENCIES = ["MONTHLY", "QUARTERLY", "ANNUAL", "ONCE"] as const;
+export type DueDateFrequency = (typeof DUE_DATE_FREQUENCIES)[number];
+export const dueDateFrequencySchema = z.enum(DUE_DATE_FREQUENCIES, {
+  message: `No es una frecuencia válida. Valores aceptados: ${DUE_DATE_FREQUENCIES.join(", ")}.`,
+});
+
 export const dueDateRuleSchema = z.object({
   id: uuid,
   ruleVersionId: uuid,
   jurisdictionId: uuid,
+  // Filas guardadas antes de la lista pueden traer otro texto: se devuelven tal cual (no se corrigen en silencio).
   frequency: z.string().default("MONTHLY"),
   dueDay: z.number().int().min(1).max(31),
   monthOffset: z.number().int().min(0).max(24).default(1),
@@ -413,7 +424,7 @@ export type DueDateRule = z.infer<typeof dueDateRuleSchema>;
 
 export const createDueDateRuleSchema = z.object({
   jurisdictionId: uuid,
-  frequency: z.string().max(40).optional(),
+  frequency: dueDateFrequencySchema.optional(),
   dueDay: z.number().int().min(1).max(31),
   monthOffset: z.number().int().min(0).max(24).optional(),
   cuitEnding: z.string().max(4).optional(),

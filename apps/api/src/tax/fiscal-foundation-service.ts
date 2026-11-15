@@ -14,6 +14,7 @@ import {
   normalizeActivityCode,
   taxRuleSubjectFor,
   taxEngineVersionCompatibilityError,
+  type DueDateFrequency,
   type TaxRegimeEngineScope,
 } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
@@ -2406,7 +2407,7 @@ export class TaxRuleService {
     input: {
       ruleVersionId: string;
       jurisdictionId: string;
-      frequency?: string;
+      frequency?: DueDateFrequency;
       dueDay: number;
       monthOffset?: number;
       cuitEnding?: string;
@@ -3044,7 +3045,6 @@ export class TaxCalendarService {
       const result = calculateDueDate(
         {
           id: dueRule.id,
-          frequency: (dueRule.frequency ?? "MONTHLY") as "MONTHLY" | "QUARTERLY" | "ANNUAL" | "ONCE",
           dueDay: dueRule.dueDay,
           monthOffset: dueRule.monthOffset,
           ...(dueRule.cuitEnding ? { cuitEnding: dueRule.cuitEnding } : {}),

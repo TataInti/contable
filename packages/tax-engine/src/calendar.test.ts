@@ -72,12 +72,16 @@ describe("calendario fiscal (G1-10)", () => {
   it("calculateDueDate no lee la frecuencia: la misma regla da la misma fecha con cualquier valor", () => {
     const period = { startDate: "2026-01-01", endDate: "2026-01-31" };
     const regla = { id: "r1", dueDay: 20, monthOffset: 1, validFrom: "2026-01-01" };
-    expect(calculateDueDate({ ...regla, frequency: "MONTHLY" }, period, []).dueDate).toBe("2026-02-20");
-    expect(calculateDueDate({ ...regla, frequency: "MENSUAL" as never }, period, []).dueDate).toBe("2026-02-20");
+    expect(calculateDueDate({ ...regla, frequency: "MONTHLY" }, period, []).dueDate).toBe(
+      "2026-02-20",
+    );
+    expect(calculateDueDate({ ...regla, frequency: "MENSUAL" as never }, period, []).dueDate).toBe(
+      "2026-02-20",
+    );
   });
 
   // Lista cerrada (D-R3-A): un valor fuera de la unión debe fallar, no contar 12 meses.
-  it.fails("periodsForRange rechaza MENSUAL en vez de contar 12 meses", () => {
+  it("periodsForRange rechaza MENSUAL en vez de contar 12 meses", () => {
     expect(() => periodsForRange("MENSUAL" as never, "2026-01", "2026-03")).toThrow(/no válida/);
   });
 });

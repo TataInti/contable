@@ -6,10 +6,13 @@
  * argumentos.
  */
 
+/** Frecuencias del motor: la misma lista que DUE_DATE_FREQUENCIES de packages/contracts (prueba en apps/api/src/tax). */
+export type DueDateFrequency = "MONTHLY" | "QUARTERLY" | "ANNUAL" | "ONCE";
+
 export interface DueDateRuleInput {
   id: string;
-  /** Frecuencia: MONTHLY, QUARTERLY, ANNUAL, ONCE. */
-  frequency: "MONTHLY" | "QUARTERLY" | "ANNUAL" | "ONCE";
+  /** Frecuencia. calculateDueDate no la lee; periodsForRange sí, y falla ante un valor fuera de la lista. */
+  frequency?: DueDateFrequency;
   /** Día del vencimiento (1-31). */
   dueDay: number;
   /** Meses posteriores al cierre del período. Mensuales: normalmente 1. */
@@ -119,11 +122,27 @@ export function calculateDueDate(
   };
 }
 
+/** Meses entre períodos. Un valor fuera de la lista falla: no se cuenta como anual (D-R3-A). */
+function stepMonths(frequency: DueDateFrequency): number {
+  switch (frequency) {
+    case "MONTHLY":
+      return 1;
+    case "QUARTERLY":
+      return 3;
+    case "ANNUAL":
+      return 12;
+    case "ONCE":
+      return 0; // ONCE devuelve un único período antes de llegar aquí.
+    default:
+      throw new Error(`Frecuencia de vencimiento no válida: ${String(frequency)}`);
+  }
+}
+
 /**
  * Genera la secuencia de períodos para una frecuencia.
  */
 export function periodsForRange(
-  frequency: "MONTHLY" | "QUARTERLY" | "ANNUAL" | "ONCE",
+  frequency: DueDateFrequency,
   start: string,
   end: string,
 ): Array<{ startDate: string; endDate: string }> {
@@ -135,7 +154,7 @@ export function periodsForRange(
     return out;
   }
 
-  const step = frequency === "MONTHLY" ? 1 : frequency === "QUARTERLY" ? 3 : 12;
+  const step = stepMonths(frequency);
   let y = sy;
   let m = sm;
   while (true) {
