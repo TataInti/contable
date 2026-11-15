@@ -684,28 +684,21 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     expect(result?.issues).toEqual([]);
   });
 
+  // Catálogo del sistema: se escribe con el cliente owner (el rol runtime no tiene permiso sobre tax_engines).
   async function crearMotorDePrueba(
     familia: { key: string } | { notKey: string },
     engineKey: string,
     engineVersion: string,
     activo = true,
   ) {
-    return runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
-      const found = await tx.calcFamily.findFirst({
-        where: "notKey" in familia ? { key: { not: familia.notKey } } : { key: familia.key },
-      });
-      if (!found) throw new Error("Falta una familia de cálculo sembrada por la migración");
-      return tx.taxEngine.upsert({
-        where: { engineKey },
-        update: { isActive: activo, engineVersion, familyId: found.id },
-        create: {
-          engineKey,
-          engineVersion,
-          familyId: found.id,
-          label: `Demo · ${engineVersion}`,
-          isActive: activo,
-        },
-      });
+    const found = await prisma.calcFamily.findFirst({
+      where: "notKey" in familia ? { key: { not: familia.notKey } } : { key: familia.key },
+    });
+    if (!found) throw new Error("Falta una familia de cálculo sembrada por la migración");
+    return prisma.taxEngine.upsert({
+      where: { engineKey },
+      update: { isActive: activo, engineVersion, familyId: found.id },
+      create: { engineKey, engineVersion, familyId: found.id, label: `Demo · ${engineVersion}`, isActive: activo },
     });
   }
 
