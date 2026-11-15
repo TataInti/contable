@@ -235,7 +235,7 @@ describe("calendarios: RLS, grants y rol de runtime", () => {
     expect(ajena).toBe(0);
   });
 
-  it("el runtime no tiene permiso de borrado sobre las tablas de calendarios", async () => {
+  it("el runtime no tiene permiso de borrado sobre tax_calendars", async () => {
     const draft = await newDraft(2026);
     await expect(
       runAsRuntime(OWNER, FIRM, (tx) => tx.$executeRawUnsafe(`DELETE FROM tax_calendars WHERE id = '${draft.id}'`)),
@@ -280,6 +280,84 @@ describe("calendarios: RLS, grants y rol de runtime", () => {
     ).rejects.toThrow(/permission denied|permiso/i);
   });
 
+});
+
+describe("calendarios: baja de celdas en borrador (corte 2a-ii-a): grant y RLS", () => {
+  async function primeraCelda(calendarId: string): Promise<string> {
+    const { entries } = await service.get(ctx, calendarId);
+    const primera = entries[0];
+    if (!primera) throw new Error("el calendario de prueba no tiene celdas");
+    return primera.id;
+  }
+
+  /** v1 queda oculta al publicar v2; v2 queda publicada; un borrador de 2027 conserva sus celdas. */
+  async function escenarioBaja() {
+    const v1 = await newDraft(2026, "Calendario 2026 v1");
+    await fillDraft(v1.id, COBERTURA_COMPLETA);
+    await service.publish(ctx, v1.id);
+    const v2 = await service.createFrom(ctx, v1.id);
+    await service.publish(ctx, v2.id);
+    const borrador = await newDraft(2027, "Calendario 2027");
+    await fillDraft(borrador.id, COBERTURA_COMPLETA);
+    return {
+      celdaOculta: await primeraCelda(v1.id),
+      celdaPublicada: await primeraCelda(v2.id),
+      celdaBorrador: await primeraCelda(borrador.id),
+    };
+  }
+
+  it("el runtime tiene borrado solo sobre tax_calendar_entries", async () => {
+    const filas = await prisma.$queryRawUnsafe<{ tabla: string; borrado: boolean }[]>(
+      `SELECT t.tabla, has_table_privilege('contable_runtime', t.tabla, 'DELETE') AS borrado
+       FROM (VALUES ('tax_calendar_sources'), ('tax_calendars'), ('tax_calendar_entries')) AS t(tabla)`,
+    );
+    expect(Object.fromEntries(filas.map((fila) => [fila.tabla, fila.borrado]))).toEqual({
+      tax_calendar_entries: true,
+      tax_calendar_sources: false,
+      tax_calendars: false,
+    });
+  });
+
+  it("RLS: un DELETE directo con el rol de runtime no borra celdas publicadas, ocultas ni de otra firma; sí las de un borrador propio", async () => {
+    const { celdaOculta, celdaPublicada, celdaBorrador } = await escenarioBaja();
+
+    const enPublicado = await runAsRuntime(OWNER, FIRM, (tx) =>
+      tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE id = '${celdaPublicada}'`),
+    );
+    expect(enPublicado).toBe(0);
+    const enOculto = await runAsRuntime(OWNER, FIRM, (tx) =>
+      tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE id = '${celdaOculta}'`),
+    );
+    expect(enOculto).toBe(0);
+    const deOtraFirma = await runAsRuntime(OTHER_OWNER, OTHER_FIRM, (tx) =>
+      tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE id = '${celdaBorrador}'`),
+    );
+    expect(deOtraFirma).toBe(0);
+    const sobrevivientes = await prisma.taxCalendarEntry.count({
+      where: { id: { in: [celdaPublicada, celdaOculta, celdaBorrador] } },
+    });
+    expect(sobrevivientes).toBe(3);
+
+    const enBorrador = await runAsRuntime(OWNER, FIRM, (tx) =>
+      tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE id = '${celdaBorrador}'`),
+    );
+    expect(enBorrador).toBe(1);
+    expect(await prisma.taxCalendarEntry.count({ where: { id: celdaBorrador } })).toBe(0);
+  });
+
+  it("RLS: el portal no borra celdas, ni siquiera de un borrador de la firma", async () => {
+    const borrador = await newDraft(2027);
+    await fillDraft(borrador.id, COBERTURA_COMPLETA);
+    const celda = await primeraCelda(borrador.id);
+    const borradas = await runAsRuntime(
+      OWNER,
+      FIRM,
+      (tx) => tx.$executeRawUnsafe(`DELETE FROM tax_calendar_entries WHERE id = '${celda}'`),
+      "PORTAL",
+    );
+    expect(borradas).toBe(0);
+    expect(await prisma.taxCalendarEntry.count({ where: { id: celda } })).toBe(1);
+  });
 });
 
 describe("calendarios: rutas de la API", () => {
