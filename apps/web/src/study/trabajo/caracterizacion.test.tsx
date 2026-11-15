@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -260,5 +260,256 @@ describe("K2 · banda de cifras", () => {
     expect(estadistica("Pedidos abiertos").valor).toBe("0");
     expect(estadistica("Cierres en curso").valor).toBe("0");
     expect(estadistica("Obligaciones").valor).toBe("0");
+  });
+});
+
+function pedido(datos: Record<string, unknown>) {
+  return { id: "request-1", title: "Demo: Extractos bancarios", status: "DRAFT", items: [], ...datos };
+}
+
+function pedidosDemo() {
+  return [
+    pedido({
+      id: "request-1",
+      title: "Demo: Extractos bancarios",
+      status: "DRAFT",
+      items: [
+        { id: "item-1", description: "Demo: extracto de octubre", required: true, status: "ATTACHED" },
+        { id: "item-2", description: "Demo: comprobante de pago", required: true, status: "PENDING" },
+        { id: "item-4", description: "Demo: resumen aceptado", required: true, status: "ACCEPTED" },
+      ],
+    }),
+    pedido({
+      id: "request-2",
+      title: "Demo: Certificados de retención",
+      status: "SENT",
+      items: [{ id: "item-3", description: "Demo: certificado", required: false, status: "PENDING" }],
+    }),
+  ];
+}
+
+function seccion(id: string) {
+  const elemento = document.getElementById(id);
+  if (!elemento) throw new Error(`Falta la sección #${id}`);
+  return within(elemento);
+}
+
+async function filaDePedido(titulo: string) {
+  const celda = await seccion("work-requests-section").findByText(titulo);
+  const fila = celda.closest("tr");
+  if (!fila) throw new Error(`No hay fila para «${titulo}»`);
+  return within(fila);
+}
+
+async function abrirIniciarCierre() {
+  const boton = await screen.findByRole("button", { name: "Iniciar cierre" });
+  await waitFor(() => expect((boton as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(boton);
+  return screen.getByRole("dialog", { name: "Iniciar cierre del período" });
+}
+
+describe("K3 · pedidos documentales", () => {
+  it("lista cada pedido con sus ítems pendientes, su estado y las acciones de la capacidad", async () => {
+    responderApi({ pedidos: pedidosDemo() });
+    renderTrabajo();
+    const borrador = await filaDePedido("Demo: Extractos bancarios");
+    expect(borrador.getByText("2 ítems pendientes")).toBeTruthy();
+    expect(borrador.getByText("Borrador")).toBeTruthy();
+    expect(borrador.getByRole("button", { name: "Ver" })).toBeTruthy();
+    expect(borrador.getByRole("button", { name: "Mensaje" })).toBeTruthy();
+    expect(borrador.getByRole("button", { name: "Enviar pedido" })).toBeTruthy();
+    expect(borrador.getByRole("button", { name: "Revisar" })).toBeTruthy();
+    const enviado = await filaDePedido("Demo: Certificados de retención");
+    expect(enviado.getByText("Enviado")).toBeTruthy();
+    expect(enviado.queryByRole("button", { name: "Ver" })).toBeNull();
+    expect(enviado.queryByRole("button", { name: "Enviar pedido" })).toBeNull();
+    expect(enviado.getByRole("button", { name: "Revisar" })).toBeTruthy();
+    expect(document.querySelector("#work-requests-section .section-count")?.textContent).toBe("2");
+  });
+
+  it("sin request.manage ni message.shared, la fila no ofrece Enviar, Revisar ni Mensaje", async () => {
+    usarContexto(["client.read"]);
+    responderApi({ pedidos: pedidosDemo() });
+    renderTrabajo();
+    const fila = await filaDePedido("Demo: Extractos bancarios");
+    expect(fila.queryByRole("button", { name: "Mensaje" })).toBeNull();
+    expect(fila.queryByRole("button", { name: "Enviar pedido" })).toBeNull();
+    expect(fila.queryByRole("button", { name: "Revisar" })).toBeNull();
+    expect(fila.getByRole("button", { name: "Ver" })).toBeTruthy();
+  });
+
+  it("«Enviar pedido» envía el pedido al portal sin pedir confirmación", async () => {
+    responderApi({ pedidos: pedidosDemo() });
+    renderTrabajo();
+    const fila = await filaDePedido("Demo: Extractos bancarios");
+    fireEvent.click(fila.getByRole("button", { name: "Enviar pedido" }));
+    expect(await screen.findByText("Pedido enviado al portal del cliente.")).toBeTruthy();
+    expect(api.post).toHaveBeenCalledWith(`${BASE}/document-requests/request-1/send`);
+    // vigente: cambia con D7C-1 (hoy el envío no pide confirmación)
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+});
+
+describe("K4 · pedidos cancelados", () => {
+  it("un pedido CANCELLED cuenta como abierto y aparece en la lista", async () => {
+    responderApi({
+      pedidos: [pedido({ id: "request-3", title: "Demo: Pedido cancelado", status: "CANCELLED" })],
+    });
+    renderTrabajo();
+    const fila = await filaDePedido("Demo: Pedido cancelado");
+    // vigente: cambia con D7C-4 (hoy el pedido cancelado cuenta como abierto y se lista)
+    await waitFor(() => expect(estadistica("Pedidos abiertos").valor).toBe("1"));
+    expect(fila.getByText("Cancelado")).toBeTruthy();
+  });
+});
+
+describe("K5 · error de una consulta", () => {
+  it("si falla la de pedidos, la sección muestra «Sin pedidos abiertos» y el aviso sin Reintentar", async () => {
+    vi.mocked(api.get).mockImplementation(((ruta: string) => {
+      if (ruta === `${BASE}/document-requests`) {
+        return Promise.reject(new Error("Demo: falla de pedidos"));
+      }
+      return Promise.resolve(ruta === `${BASE}/fiscal-years` ? ANIOS_DEMO : []);
+    }) as never);
+    renderTrabajo();
+    // vigente: cambia con D7C-16 (un aviso genérico en lugar de un error por sección)
+    expect(await screen.findByText("Parte de la información no pudo cargarse.")).toBeTruthy();
+    // vigente: cambia con D7C-16 (el error de pedidos se ve como vacío)
+    expect(seccion("work-requests-section").getByText("Sin pedidos abiertos")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
+  });
+
+  it("si falla la de obligaciones, su sección también se ve como vacía", async () => {
+    vi.mocked(api.get).mockImplementation(((ruta: string) => {
+      if (ruta === `${BASE}/tax-obligations`) {
+        return Promise.reject(new Error("Demo: falla de obligaciones"));
+      }
+      return Promise.resolve(ruta === `${BASE}/fiscal-years` ? ANIOS_DEMO : []);
+    }) as never);
+    renderTrabajo();
+    // vigente: cambia con D7C-16 (el error de obligaciones se ve como vacío)
+    expect(
+      await seccion("work-obligations-section").findByText("Sin obligaciones materializadas"),
+    ).toBeTruthy();
+  });
+});
+
+describe("K6 · alta de pedido", () => {
+  async function abrirNuevoPedido() {
+    fireEvent.click(await screen.findByRole("button", { name: "Pedir documentación" }));
+    return screen.getByRole("dialog", { name: "Nuevo pedido" });
+  }
+
+  it("crea el pedido con sus campos, notifica, cierra el cajón y lo deja vacío", async () => {
+    renderTrabajo();
+    await abrirNuevoPedido();
+    const dialogo = screen.getByRole("dialog", { name: "Nuevo pedido" });
+    const crear = within(dialogo).getByRole("button", { name: "Crear pedido" }) as HTMLButtonElement;
+    expect(crear.disabled).toBe(true);
+    fireEvent.change(document.getElementById("request-title") as HTMLInputElement, {
+      target: { value: "Demo: Extractos bancarios" },
+    });
+    fireEvent.change(document.getElementById("request-item") as HTMLInputElement, {
+      target: { value: "Demo: extracto de octubre" },
+    });
+    fireEvent.change(document.getElementById("request-description") as HTMLTextAreaElement, {
+      target: { value: "Demo: período de octubre" },
+    });
+    fireEvent.change(document.getElementById("request-due") as HTMLInputElement, {
+      target: { value: "2026-11-30" },
+    });
+    expect(crear.disabled).toBe(false);
+    fireEvent.click(crear);
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(`${BASE}/document-requests`, {
+        title: "Demo: Extractos bancarios",
+        description: "Demo: período de octubre",
+        dueDate: "2026-11-30",
+        items: [{ description: "Demo: extracto de octubre", required: true }],
+      }),
+    );
+    expect(
+      await screen.findByText("Pedido creado. Quedó disponible para el seguimiento con el cliente."),
+    ).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Nuevo pedido" })).toBeNull());
+    await abrirNuevoPedido();
+    expect((document.getElementById("request-title") as HTMLInputElement).value).toBe("");
+  });
+
+  it("si la API rechaza el alta, muestra el texto fijo de error y deja el cajón abierto", async () => {
+    vi.mocked(api.post).mockRejectedValue(new Error("Demo: rechazo de la API"));
+    renderTrabajo();
+    await abrirNuevoPedido();
+    fireEvent.change(document.getElementById("request-title") as HTMLInputElement, {
+      target: { value: "Demo: Extractos" },
+    });
+    fireEvent.change(document.getElementById("request-item") as HTMLInputElement, {
+      target: { value: "Demo: extracto" },
+    });
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Nuevo pedido" })).getByRole("button", {
+        name: "Crear pedido",
+      }),
+    );
+    // vigente: cambia en 7c.3 (T-7, sin decisión: el error se muestra junto al campo)
+    expect(
+      await screen.findByText("No se pudo crear el pedido. Revisá los datos e intentá nuevamente."),
+    ).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Nuevo pedido" })).toBeTruthy();
+  });
+});
+
+describe("K7 · inicio de cierre", () => {
+  it("abre el cajón con cuatro tareas, cuenta las no vacías y crea el ciclo con códigos CIERRE_n", async () => {
+    renderTrabajo();
+    const dialogo = await abrirIniciarCierre();
+    const tareas = dialogo.querySelector("#close-items") as HTMLTextAreaElement;
+    expect(tareas.value).toBe(
+      "Revisar documentación\nConciliar saldos\nValidar obligaciones\nPreparar cierre",
+    );
+    expect(within(dialogo).getByText("Se crearán 4 tareas.")).toBeTruthy();
+    fireEvent.change(tareas, { target: { value: "Demo: tarea uno\n\nDemo: tarea dos" } });
+    expect(within(dialogo).getByText("Se crearán 2 tareas.")).toBeTruthy();
+    fireEvent.change(tareas, {
+      target: {
+        value: "Revisar documentación\nConciliar saldos\nValidar obligaciones\nPreparar cierre",
+      },
+    });
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Crear ciclo de cierre" }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(`${BASE}/close-cycles`, {
+        fiscalYearId: "fy-a",
+        periodId: "period-a",
+        items: [
+          { code: "CIERRE_1_Revisar_documentacion", title: "Revisar documentación" },
+          { code: "CIERRE_2_Conciliar_saldos", title: "Conciliar saldos" },
+          { code: "CIERRE_3_Validar_obligaciones", title: "Validar obligaciones" },
+          { code: "CIERRE_4_Preparar_cierre", title: "Preparar cierre" },
+        ],
+      }),
+    );
+    expect(
+      await screen.findByText(
+        "Cierre iniciado. Las tareas quedan disponibles para control y finalización.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("sin período contable abierto, «Iniciar cierre» queda deshabilitado con el motivo en title", async () => {
+    responderApi({ anios: [] });
+    renderTrabajo();
+    const boton = await screen.findByRole("button", { name: "Iniciar cierre" });
+    // vigente: cambia en 7c.3 (el motivo no se ve en pantalla; sin decisión)
+    expect(boton.getAttribute("title")).toBe("Seleccioná un período contable para abrir el cierre");
+    expect((boton as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("si la API rechaza el ciclo, muestra su mensaje crudo dentro del cajón", async () => {
+    vi.mocked(api.post).mockRejectedValue(new Error("Demo: falla al crear el ciclo"));
+    renderTrabajo();
+    const dialogo = await abrirIniciarCierre();
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Crear ciclo de cierre" }));
+    // vigente: cambia en 7c.3 (T-7, sin decisión: el texto crudo de la API)
+    expect(await within(dialogo).findByText("Demo: falla al crear el ciclo")).toBeTruthy();
   });
 });
