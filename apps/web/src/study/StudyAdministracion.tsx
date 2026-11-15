@@ -11,53 +11,18 @@ import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import { memberRecoveryCopy, memberRowActions } from "./member-row-actions.js";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { StudyUserAssignments } from "./StudyUserAssignments";
-import {
-  DenseHeader,
-  DensePage,
-  DenseSearch,
-  DenseTable,
-  DenseTabs,
-  DenseToolbar,
-  DenseWorkspace,
-  Inspector,
-  InspectorFacts,
-  InspectorSection,
-  ShortcutHint,
-  StatStrip,
-  normalizeSearch,
-  useDenseShortcuts,
-  useDensity,
-  type DenseColumn,
-  type DenseTab,
-} from "../ui/Dense";
+import { DenseHeader, DensePage, DenseSearch, DenseTabs, DenseToolbar, DenseWorkspace, Inspector, InspectorFacts, InspectorSection, StatStrip, normalizeSearch, useDenseShortcuts, useDensity, type DenseTab } from "../ui/Dense";
 import { credentialsCsv, parseBatchUsers } from "./batch-users.js";
 import "./study.css";
 import { formatearFechaHora } from "../lib/formatoFechas";
-import {
-  type AccountingStandardRow,
-  type AdminTab,
-  type BatchResult,
-  type CreatedAccessRecovery,
-  type CreatedInternalUser,
-  type CreatedInvitation,
-  type FirmProfile,
-  type InternalMember,
-  type PortalInvitation,
-  type PortalMembership,
-  type PortalRow,
-  INTERNAL_MODULES,
-  INTERNAL_MODULES_BY_ROLE,
-  INTERNAL_ROLE_LABELS,
-  INTERNAL_ROLE_OPTIONS,
-  PORTAL_ROLE_LABELS,
-} from "./administracion/tipos";
-import { groupTimeZones, timeZoneLabel } from "./administracion/zonasHorarias";
-import {
-  batchUserErrorLabel,
-  initials,
-  isValidEmail,
-  userMutationError,
-} from "./administracion/utilidades";
+import { type AccountingStandardRow, type AdminTab, type BatchResult, type CreatedAccessRecovery, type CreatedInternalUser, type CreatedInvitation, type FirmProfile, type InternalMember, type PortalInvitation, type PortalMembership, INTERNAL_MODULES, INTERNAL_MODULES_BY_ROLE, INTERNAL_ROLE_LABELS, INTERNAL_ROLE_OPTIONS, PORTAL_ROLE_LABELS } from "./administracion/tipos";
+import { groupTimeZones } from "./administracion/zonasHorarias";
+import { batchUserErrorLabel, initials, isValidEmail, userMutationError } from "./administracion/utilidades";
+import { PanelControles } from "./administracion/tablas/PanelControles";
+import { PanelDatosEstudio } from "./administracion/tablas/PanelDatosEstudio";
+import { TablaAccesosPortal, filasDelPortal } from "./administracion/tablas/TablaAccesosPortal";
+import { TablaNormasContables } from "./administracion/tablas/TablaNormasContables";
+import { TablaUsuariosInternos } from "./administracion/tablas/TablaUsuariosInternos";
 
 /** Referencia rol × módulo: reemplaza repetir la lista de módulos en cada fila. */
 function RoleMatrix({ highlight }: { highlight: string | null }) {
@@ -619,101 +584,6 @@ export function StudyAdministracion() {
     updateInternalRole.mutate({ userId: item.userId, role: nextRole });
   };
 
-  const internalColumns: DenseColumn<InternalMember>[] = [
-    {
-      key: "person",
-      header: "Persona",
-      sortValue: (item) => item.user?.name ?? "",
-      render: (item) => (
-        <span className="dense-person">
-          <span className="dense-avatar" aria-hidden="true">
-            {initials(item.user?.name)}
-          </span>
-          <strong>{item.user?.name ?? "Usuario eliminado"}</strong>
-          <span className="dense-person__email">{item.user?.emailNormalized ?? "—"}</span>
-        </span>
-      ),
-    },
-    {
-      key: "role",
-      header: "Rol",
-      width: "190px",
-      sortValue: (item) => INTERNAL_ROLE_LABELS[item.role] ?? item.role,
-      render: (item) => (
-        <>
-          <label className="sr-only" htmlFor={`internal-role-${item.userId}`}>
-            Rol de {item.user?.name ?? "usuario eliminado"}
-          </label>
-          <select
-            id={`internal-role-${item.userId}`}
-            className="dense-select dense-select--inline"
-            value={internalRoleDrafts[item.userId] ?? item.role}
-            disabled={
-              updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId
-            }
-            onChange={(event) => changeRole(item, event.target.value)}
-          >
-            {INTERNAL_ROLE_OPTIONS.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </>
-      ),
-    },
-    {
-      key: "status",
-      header: "Estado",
-      width: "120px",
-      sortValue: (item) => effectiveStatus(item),
-      render: (item) => <StatusBadge status={effectiveStatus(item)} />,
-    },
-    {
-      key: "actions",
-      header: "Acciones",
-      width: "180px",
-      secondary: true,
-      align: "right",
-      render: (item) => (
-        <span className="dense-row-actions">
-          <Button
-            size="row"
-            variant="secondary"
-            aria-label={`Editar a ${item.user?.name ?? "este usuario"}`}
-            onClick={() => openIdentityEdit(item)}
-          >
-            Editar
-          </Button>
-          <details className="dense-inspector-actions__menu administration-user-actions">
-            <summary
-              className="dense-inspector-actions__trigger"
-              aria-label={`Más acciones de ${item.user?.name ?? "este usuario"}`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              Más acciones
-            </summary>
-            <div
-              className="dense-inspector-actions__items"
-              role="group"
-              aria-label={`Acciones de ${item.user?.name ?? "este usuario"}`}
-            >
-              <Button
-                size="row"
-                variant="ghost"
-                aria-label={`Administrar clientes de ${item.user?.name ?? "este usuario"}`}
-                onClick={() => setAssigningMember(item)}
-              >
-                Clientes
-              </Button>
-              {memberActionButtons(item, "ghost")}
-            </div>
-          </details>
-        </span>
-      ),
-    },
-  ];
-
   let internalInspector: ReactNode = null;
   if (tab === "internal" && selectedMember) {
     internalInspector = (
@@ -784,193 +654,16 @@ export function StudyAdministracion() {
     );
   }
 
-  // Accesos del portal: miembros activos e invitaciones en una sola tabla.
-  const portalRows: PortalRow[] = [
-    ...(memberships.data ?? []).map<PortalRow>((item) => ({
-      key: `membership-${item.id}`,
-      name: item.user?.name ?? "Usuario eliminado",
-      email: item.user?.emailNormalized ?? "—",
-      role: item.role,
-      status: item.revokedAt ? "REVOKED" : item.status,
-      membership: item,
-      onRevoke: null,
-      onToggleStatus: () => {
-        setActionError(null);
-        updatePortalMembership.mutate({
-          id: item.id,
-          patch: { status: item.status === "ACTIVE" && !item.revokedAt ? "SUSPENDED" : "ACTIVE" },
-        });
-      },
-      onEdit: () => openPortalEdit(item),
-      pending: updatePortalMembership.isPending && updatePortalMembership.variables?.id === item.id,
-    })),
-    ...(invitations.data ?? [])
-      .filter((item) => !item.acceptedAt)
-      .map<PortalRow>((item) => {
-        const isPending = !item.revokedAt && new Date(item.expiresAt) >= new Date();
-        return {
-          key: `invitation-${item.id}`,
-          name: null,
-          email: item.emailNormalized,
-          role: item.role,
-          status: item.revokedAt ? "REVOKED" : isPending ? "PENDING" : "EXPIRED",
-          detail: isPending ? `vence ${formatearFechaHora(item.expiresAt)}` : undefined,
-          membership: null,
-          onRevoke: isPending
-            ? () =>
-                confirm.ask({
-                  title: `¿Revocar la invitación para ${item.emailNormalized}?`,
-                  description:
-                    "El enlace dejará de funcionar y la persona no podrá aceptar la invitación.",
-                  confirmLabel: "Revocar invitación",
-                  tone: "danger",
-                  onConfirm: () => revokeInvitation.mutate(item.id),
-                })
-            : null,
-          onToggleStatus: null,
-          onEdit: null,
-          pending: revokeInvitation.isPending && revokeInvitation.variables === item.id,
-        };
-      }),
-  ].filter(
-    (row) =>
-      !searchQuery || normalizeSearch(`${row.name ?? ""} ${row.email}`).includes(searchQuery),
-  );
-
-  const portalColumns: DenseColumn<PortalRow>[] = [
-    {
-      key: "person",
-      header: "Persona",
-      sortValue: (row) => row.name ?? row.email,
-      render: (row) => (
-        <span className="dense-person">
-          <span className="dense-avatar" aria-hidden="true">
-            {initials(row.name)}
-          </span>
-          {row.name ? <strong>{row.name}</strong> : null}
-          <span className="dense-person__email">{row.email}</span>
-        </span>
-      ),
-    },
-    {
-      key: "role",
-      header: "Rol",
-      width: "140px",
-      sortValue: (row) => PORTAL_ROLE_LABELS[row.role] ?? row.role,
-      render: (row) => PORTAL_ROLE_LABELS[row.role] ?? row.role,
-    },
-    {
-      key: "status",
-      header: "Estado",
-      width: "260px",
-      sortValue: (row) => row.status,
-      render: (row) => (
-        <span className="dense-cell-inline">
-          <StatusBadge status={row.status} />
-          {row.detail ? <small className="muted-copy">{row.detail}</small> : null}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: "Acción",
-      width: "240px",
-      align: "right",
-      render: (row) => (
-        <span className="dense-row-actions">
-          {row.onEdit ? (
-            <Button
-              size="row"
-              variant="secondary"
-              aria-label={`Editar acceso de ${row.name ?? row.email}`}
-              disabled={row.pending}
-              onClick={row.onEdit}
-            >
-              Editar
-            </Button>
-          ) : null}
-          {row.onToggleStatus ? (
-            <Button
-              size="row"
-              variant={row.status === "ACTIVE" ? "ghost" : "secondary"}
-              className={row.status === "ACTIVE" ? "dense-action--danger" : undefined}
-              aria-label={`${row.status === "ACTIVE" ? "Suspender" : "Reactivar"} acceso de ${row.name ?? row.email}`}
-              loading={row.pending}
-              onClick={row.onToggleStatus}
-            >
-              {row.status === "ACTIVE" ? "Suspender" : "Reactivar"}
-            </Button>
-          ) : null}
-          {row.onRevoke ? (
-            <Button
-              size="row"
-              variant="ghost"
-              className="dense-action--danger"
-              aria-label={`Revocar invitación para ${row.email}`}
-              loading={row.pending}
-              onClick={row.onRevoke}
-            >
-              Revocar
-            </Button>
-          ) : null}
-        </span>
-      ),
-    },
-  ];
-
-  const standardsRows = (accountingStandards.data ?? []).filter(
-    (item) => !searchQuery || normalizeSearch(item.name).includes(searchQuery),
-  );
-  const standardColumns: DenseColumn<AccountingStandardRow>[] = [
-    {
-      key: "name",
-      header: "Norma",
-      sortValue: (item) => item.name,
-      render: (item) => <span className="dense-code">{item.name}</span>,
-    },
-    {
-      key: "status",
-      header: "Estado",
-      width: "140px",
-      sortValue: (item) => item.isActive,
-      render: (item) => <StatusBadge status={item.isActive ? "ACTIVE" : "INACTIVE"} />,
-    },
-    {
-      key: "action",
-      header: "Acción",
-      width: "220px",
-      align: "right",
-      render: (item) => (
-        <span className="dense-row-actions">
-          <Button size="sm" variant="secondary" onClick={() => openStandardEdit(item)}>
-            Editar
-          </Button>
-          <Button
-            size="sm"
-            variant={item.isActive ? "ghost" : "secondary"}
-            loading={updateStandard.isPending && updateStandard.variables?.id === item.id}
-            onClick={() => toggleStandard(item)}
-          >
-            {item.isActive ? "Desactivar" : "Reactivar"}
-          </Button>
-        </span>
-      ),
-    },
-  ];
-
-  const footerWith = (hint: string) => (
-    <>
-      <span>{hint}</span>
-      <span className="dense-table-foot__spacer" />
-      <ShortcutHint
-        items={[
-          ["/", "buscar"],
-          ["N", "nuevo"],
-          ["Esc", "cerrar"],
-        ]}
-      />
-    </>
-  );
+  const portalRows = filasDelPortal({
+    memberships,
+    invitations,
+    searchQuery,
+    updatePortalMembership,
+    openPortalEdit,
+    setActionError,
+    confirm,
+    revokeInvitation,
+  });
 
   const queryState = (loading: boolean, label: string) =>
     loading ? (
@@ -996,31 +689,19 @@ export function StudyAdministracion() {
           }
         />
       ) : (
-        <DenseTable<InternalMember>
-          label="Usuarios internos"
-          columns={internalColumns}
-          rows={visibleMembers}
-          rowKey={(item) => item.userId}
-          selectedKey={selectedUserId}
-          onSelect={setSelectedUserId}
-          inspectorOpen={Boolean(internalInspector)}
-          rowClassName={(item) => (effectiveStatus(item) === "SUSPENDED" ? "dense-row--muted" : undefined)}
-          footer={footerWith("El estudio debe conservar al menos un titular o administrador activo.")}
-          empty={
-            <EmptyState
-              size="compact"
-              title={
-                allMembers.length === 0
-                  ? "Todavía no hay usuarios internos"
-                  : "Ningún usuario coincide con los filtros"
-              }
-              description={
-                allMembers.length === 0
-                  ? "Creá la primera cuenta del estudio para asignarle un rol."
-                  : "Probá con otro nombre o correo, o quitá filtros."
-              }
-            />
-          }
+        <TablaUsuariosInternos
+          allMembers={allMembers}
+          visibleMembers={visibleMembers}
+          selectedUserId={selectedUserId}
+          setSelectedUserId={setSelectedUserId}
+          internalInspector={internalInspector}
+          internalRoleDrafts={internalRoleDrafts}
+          updateInternalRole={updateInternalRole}
+          changeRole={changeRole}
+          openIdentityEdit={openIdentityEdit}
+          setAssigningMember={setAssigningMember}
+          memberActionButtons={memberActionButtons}
+          effectiveStatus={effectiveStatus}
         />
       ));
   } else if (tab === "portal") {
@@ -1058,21 +739,7 @@ export function StudyAdministracion() {
           }
         />
       ) : (
-        <DenseTable<PortalRow>
-          label="Accesos del portal"
-          columns={portalColumns}
-          rows={portalRows}
-          rowKey={(row) => row.key}
-          rowClassName={(row) => (row.status === "REVOKED" ? "dense-row--muted" : undefined)}
-          footer={footerWith("La invitación vence a los siete días y sólo puede usarse con el correo indicado.")}
-          empty={
-            <EmptyState
-              size="compact"
-              title="Todavía nadie tiene acceso"
-              description="Usá “Invitar al portal” para habilitar a una persona del cliente."
-            />
-          }
-        />
+        <TablaAccesosPortal portalRows={portalRows} />
       )))
     );
   } else if (tab === "profile") {
@@ -1089,32 +756,7 @@ export function StudyAdministracion() {
           }
         />
       ) : firmProfile.data ? (
-        <section className="administration-profile" aria-label="Datos del estudio">
-          <div className="administration-profile__heading">
-            <h2>Datos del estudio</h2>
-            <Button size="sm" variant="secondary" onClick={openProfileEdit}>
-              Editar datos
-            </Button>
-          </div>
-          <dl className="administration-profile__facts">
-            <div>
-              <dt>Razón social</dt>
-              <dd>{firmProfile.data.legalName || "—"}</dd>
-            </div>
-            <div>
-              <dt>Nombre del estudio</dt>
-              <dd>{firmProfile.data.displayName || "—"}</dd>
-            </div>
-            <div>
-              <dt>CUIT</dt>
-              <dd>{firmProfile.data.taxId || "—"}</dd>
-            </div>
-            <div>
-              <dt>Zona horaria</dt>
-              <dd>{timeZoneLabel(firmProfile.data.timezone)}</dd>
-            </div>
-          </dl>
-        </section>
+        <PanelDatosEstudio firmProfile={{ data: firmProfile.data }} openProfileEdit={openProfileEdit} />
       ) : (
         <EmptyState
           title="Datos del estudio no disponibles"
@@ -1128,51 +770,11 @@ export function StudyAdministracion() {
       ));
   } else if (tab === "controls") {
     tableBody = (
-      <section className="study-panel self-review-setting" aria-labelledby="self-review-setting-title">
-        <div className="self-review-setting__heading">
-          <h2 className="self-review-setting__title" id="self-review-setting-title">
-            Permitir autorrevisión de fuentes y legajos
-          </h2>
-          <p>
-            Permite que el Titular y los Administradores revisen los lotes que importaron y
-            revisen y finalicen los legajos que prepararon. Los demás roles siempre necesitan
-            a otra persona. La opción reduce el control interno de cuatro ojos; cada
-            autorrevisión queda registrada en la auditoría.
-          </p>
-        </div>
-        <label className="self-review-setting__toggle">
-          <input
-            type="checkbox"
-            aria-label="Permitir autorrevisión de fuentes y legajos"
-            checked={selfReviewSetting.data?.allowSelfReview ?? false}
-            disabled={
-              !canManageSelfReview ||
-              selfReviewSetting.isLoading ||
-              selfReviewSetting.isError ||
-              updateSelfReviewSetting.isPending
-            }
-            onChange={(event) => updateSelfReviewSetting.mutate(event.target.checked)}
-          />
-          <span>{selfReviewSetting.data?.allowSelfReview ? "Activada" : "Desactivada"}</span>
-        </label>
-        {!canManageSelfReview ? (
-          <small className="muted-copy">Solo el Titular puede cambiar esta opción.</small>
-        ) : null}
-        {selfReviewSetting.isError ? (
-          <p className="form-error" role="alert">
-            {selfReviewSetting.error instanceof Error
-              ? selfReviewSetting.error.message
-              : "No se pudo consultar la configuración de autorrevisión."}
-          </p>
-        ) : null}
-        {updateSelfReviewSetting.isError ? (
-          <p className="form-error" role="alert">
-            {updateSelfReviewSetting.error instanceof Error
-              ? updateSelfReviewSetting.error.message
-              : "No se pudo actualizar la configuración de autorrevisión."}
-          </p>
-        ) : null}
-      </section>
+      <PanelControles
+        selfReviewSetting={selfReviewSetting}
+        updateSelfReviewSetting={updateSelfReviewSetting}
+        canManageSelfReview={canManageSelfReview}
+      />
     );
   } else {
     tableBody =
@@ -1188,28 +790,12 @@ export function StudyAdministracion() {
           }
         />
       ) : (
-        <DenseTable<AccountingStandardRow>
-          label="Normas contables"
-          columns={standardColumns}
-          rows={standardsRows}
-          rowKey={(item) => item.id}
-          rowClassName={(item) => (item.isActive ? undefined : "dense-row--muted")}
-          footer={footerWith("La ficha de cada cliente elige de acá, sin texto libre. Desactivar no altera a los clientes que ya la tienen.")}
-          empty={
-            <EmptyState
-              size="compact"
-              title={
-                (accountingStandards.data?.length ?? 0) === 0
-                  ? "Todavía no hay normas contables"
-                  : "Ninguna norma coincide con la búsqueda"
-              }
-              description={
-                (accountingStandards.data?.length ?? 0) === 0
-                  ? "Creá las normas que usa el estudio para poder seleccionarlas en la ficha de clientes."
-                  : "Probá con otro nombre."
-              }
-            />
-          }
+        <TablaNormasContables
+          accountingStandards={accountingStandards}
+          searchQuery={searchQuery}
+          openStandardEdit={openStandardEdit}
+          updateStandard={updateStandard}
+          toggleStandard={toggleStandard}
         />
       ));
   }
