@@ -28,4 +28,10 @@ describe("índice de contratos: exportaciones de calendarios y libros", () => {
     expect(contracts.DUE_DATE_FREQUENCIES).toEqual(["MONTHLY", "QUARTERLY", "ANNUAL", "ONCE"]);
     expect(contracts.dueDateFrequencySchema.safeParse("MENSUAL").success).toBe(false);
   });
+
+  it("exporta el contrato del panel de trabajo (corte 4a): estados y consulta", () => {
+    expect(contracts.TAX_PANEL_DJ_STATES).toContain("PRESENTADO");
+    expect(contracts).toHaveProperty("taxPanelQuerySchema");
+    expect(contracts.taxPanelQuerySchema.parse({}).limit).toBe(50);
+  });
 });
