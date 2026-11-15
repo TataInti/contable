@@ -584,6 +584,7 @@ export function StudyExpedienteMensual() {
                       setControlEvidence={setControlEvidence}
                       documentsQuery={documentsQuery}
                       resolveControlMutation={resolveControlMutation}
+                      confirmar={confirmar}
                     />
                   ) : (
                     <EtapaCierre wp={wp} />

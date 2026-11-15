@@ -53,6 +53,10 @@ const LEGAJO = `/firms/${FIRMA_DEMO}/clients/${CLIENTE_DEMO}/monthly-tax-workpap
 const PERMISOS_REVISION = ["client.read", "tax.settlements.review"];
 const HASH_ENTRADA = `a1b2c3d4e5f60718${"0".repeat(48)}`;
 const HASH_SALIDA = `ffeeddccbbaa9988${"1".repeat(48)}`;
+const MOTIVO_RESOLVER = "Escribí la resolución para resolver el control.";
+const MOTIVO_EXIMIR = "Escribí el motivo para eximir el control.";
+const CONFIRMACION_EXIMIR =
+  "Vas a eximir este control con el motivo escrito. Quedará registrado como eximido.";
 
 type Control = Workpaper["controls"][number];
 
@@ -253,9 +257,12 @@ describe("Legajo · etapa Controles (K13)", () => {
         target: { value: "Conciliado con el libro IVA Demo" },
       },
     );
-    fireEvent.change(screen.getByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" }), {
-      target: { value: "doc-listo" },
-    });
+    fireEvent.change(
+      await screen.findByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" }),
+      {
+        target: { value: "doc-listo" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
 
     await waitFor(() => expect(llamadasResolve()).toHaveLength(1));
@@ -290,7 +297,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     ]);
   });
 
-  it("Eximir de un control no bloqueante envía WAIVED con el motivo y sin respaldo", async () => {
+  it("Eximir de un control no bloqueante envía WAIVED con el motivo, y solo tras confirmar", async () => {
     fijarContexto(PERMISOS_REVISION);
     fijarRespuestas({ controles: [advertencia()] });
     renderLegajo();
@@ -303,12 +310,55 @@ describe("Legajo · etapa Controles (K13)", () => {
       },
     );
     fireEvent.click(screen.getByRole("button", { name: "Eximir" }));
+    expect(await screen.findByText(CONFIRMACION_EXIMIR)).toBeInTheDocument();
+    expect(llamadasResolve()).toHaveLength(0);
 
+    fireEvent.click(screen.getByRole("button", { name: "Sí, eximir" }));
     await waitFor(() => expect(llamadasResolve()).toHaveLength(1));
     expect(llamadasResolve()[0]).toStrictEqual([
       `${LEGAJO}/controls/control-b/resolve`,
       { resolution: "Diferencia menor aceptada", status: "WAIVED" },
     ]);
+  });
+
+  it("Eximir pide confirmación y, al cancelar, devuelve el foco a Eximir sin llamar a la API", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({ controles: [advertencia()] });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }),
+      {
+        target: { value: "Diferencia menor aceptada" },
+      },
+    );
+    const eximir = screen.getByRole("button", { name: "Eximir" });
+    eximir.focus();
+    fireEvent.click(eximir);
+    expect(await screen.findByText(CONFIRMACION_EXIMIR)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(document.activeElement).toBe(eximir));
+    expect(llamadasResolve()).toHaveLength(0);
+  });
+
+  it("Resolver y Eximir explican por qué están deshabilitados y dejan de hacerlo al escribir", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({ controles: [bloqueante(), advertencia()] });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+
+    expect(await screen.findAllByText(MOTIVO_RESOLVER)).toHaveLength(2);
+    expect(screen.getAllByText(MOTIVO_EXIMIR)).toHaveLength(1);
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }),
+      {
+        target: { value: "Diferencia menor" },
+      },
+    );
+    expect(screen.getAllByText(MOTIVO_RESOLVER)).toHaveLength(1);
+    expect(screen.queryByText(MOTIVO_EXIMIR)).toBeNull();
   });
 
   it("el error de Resolver aparece junto a su botón y toma el foco", async () => {
@@ -333,7 +383,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect(document.activeElement).toBe(alerta.parentElement);
   });
 
-  it("sin tax.settlements.review no ofrece Resolver, Eximir ni campos de resolución", async () => {
+  it("sin tax.settlements.review no ofrece Resolver, Eximir ni campos de resolución, y lo explica", async () => {
     fijarContexto(["client.read"]);
     fijarRespuestas({ controles: [bloqueante(), advertencia()] });
     renderLegajo();
@@ -344,6 +394,9 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect(screen.queryByRole("button", { name: "Eximir" })).toBeNull();
     expect(screen.queryByRole("textbox", { name: /^Resolución/ })).toBeNull();
     expect(screen.queryByRole("combobox", { name: /^Evidencia/ })).toBeNull();
+    expect(
+      screen.getAllByText("Tu perfil no puede resolver controles de este legajo."),
+    ).toHaveLength(2);
   });
 
   it("un control que ya no está OPEN no ofrece acciones aunque el perfil pueda revisar", async () => {
@@ -379,6 +432,53 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect(await screen.findByText("Diferencias de libro por alícuota")).toBeInTheDocument();
     expect(screen.getByText("Bloquea el cierre")).toBeInTheDocument();
     expect(screen.getByText(/Pendiente de respaldo/)).toBeInTheDocument();
+  });
+
+  it("la carga de los documentos de respaldo se anuncia con role status", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    const wp = { ...legajoDemo("REVIEWED"), controls: [bloqueante()] } as Workpaper;
+    const rutas = rutasDemo({ legajos: [wp], documentos: DOCUMENTOS_DEMO });
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.endsWith("/documents") ? new Promise(() => {}) : rutas(path)) as never);
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+
+    const carga = await screen.findByText("Cargando documentos de respaldo…");
+    expect(carga.closest("[role='status']")).not.toBeNull();
+  });
+
+  it("un error al leer los documentos de respaldo se ve junto al control, y Reintentar lo vuelve a leer", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({ controles: [bloqueante()], documentosFallan: true });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+
+    expect(
+      await screen.findByText("No se pudo leer los documentos de respaldo"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" }),
+    ).toBeNull();
+
+    fijarRespuestas({ controles: [bloqueante()] });
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(
+      await screen.findByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" }),
+    ).toBeInTheDocument();
+  });
+
+  it("la etapa no tiene acciones primarias: la única primaria visible es la de la tarjeta", async () => {
+    fijarContexto([...PERMISOS_REVISION, "tax.settlements.finalize"]);
+    fijarRespuestas({ controles: [bloqueante(), advertencia()] });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+
+    await screen.findByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" });
+    const tarjeta = document.querySelector<HTMLElement>(".workpaper-card");
+    expect(tarjeta).not.toBeNull();
+    expect(tarjeta!.querySelectorAll(".workpaper-card__body .ds-button--primary")).toHaveLength(0);
+    expect(tarjeta!.querySelectorAll(".ds-button--primary")).toHaveLength(1);
+    expect(within(tarjeta!).getByRole("button", { name: "Finalizar" })).toBeInTheDocument();
   });
 });
 
@@ -423,18 +523,4 @@ describe("Legajo · etapa Cierre (K13)", () => {
     expect(valor("Hash de salida")).toBe("Se genera al finalizar");
     expect(valor("Controles bloqueantes")).toBe("0");
   });
-});
-
-describe("Legajo · defectos de la etapa Controles (fijados con it.fails)", () => {
-  it.fails(
-    "un error al leer los documentos de respaldo se muestra, no como una lista vacía",
-    async () => {
-      fijarContexto(PERMISOS_REVISION);
-      fijarRespuestas({ controles: [bloqueante()], documentosFallan: true });
-      renderLegajo();
-      await abrirEtapa(/Controles/);
-
-      expect(await screen.findByText(/No se pudo leer los documentos/)).toBeInTheDocument();
-    },
-  );
 });
