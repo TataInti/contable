@@ -53,3 +53,18 @@ export interface ClientProfileForm {
   legalForm: string;
   serviceStartDate: string;
 }
+
+export function profileFormFrom(client: ClientWithProfile): ClientProfileForm {
+  const profile = client.profile;
+  return {
+    functionalCurrency: profile?.functionalCurrency ?? "ARS",
+    accountingStandard: profile?.accountingStandard ?? "",
+    fiscalYearEndMonth: String(profile?.fiscalYearEndMonth ?? 12),
+    vatCondition: profile?.vatCondition ?? "",
+    iibbJurisdictions: null,
+    province: profile?.province ?? "",
+    activity: profile?.activity ?? "",
+    legalForm: profile?.legalForm ?? "",
+    serviceStartDate: profile?.serviceStartDate?.slice(0, 10) ?? "",
+  };
+}

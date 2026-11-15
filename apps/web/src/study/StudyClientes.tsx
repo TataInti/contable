@@ -54,6 +54,8 @@ import {
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
 import { formatearFecha } from "../lib/formatoFechas";
+import { MONTH_LONG, MONTH_SHORT, profileGaps, vatLabel } from "./clientes/etiquetas";
+import { profileFormFrom } from "./clientes/tipos";
 import type {
   AccountingStandardCatalogEntry,
   ClientContactForm,
@@ -64,53 +66,6 @@ import type {
 } from "./clientes/tipos";
 import { CUIT_ENDINGS, endingGroup, parseEndingFilter } from "./clientes/terminacion";
 
-
-const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-const MONTH_LONG = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
-];
-
-function vatLabel(value: string | null | undefined): string {
-  if (!value) return "";
-  return (CLIENT_VAT_CONDITION_LABELS as Record<string, string>)[value] ?? value;
-}
-
-/** Datos de la ficha que todavía no se completaron (alimenta la métrica y el aviso). */
-function profileGaps(client: { profile?: ClientProfile | null }): string[] {
-  const profile = client.profile;
-  const gaps: string[] = [];
-  if (!profile?.vatCondition) gaps.push("condición IVA");
-  if (!profile?.province) gaps.push("provincia");
-  if (!profile?.activity) gaps.push("actividad");
-  if (!profile?.accountingStandard) gaps.push("norma contable");
-  return gaps;
-}
-
-function profileFormFrom(client: ClientWithProfile): ClientProfileForm {
-  const profile = client.profile;
-  return {
-    functionalCurrency: profile?.functionalCurrency ?? "ARS",
-    accountingStandard: profile?.accountingStandard ?? "",
-    fiscalYearEndMonth: String(profile?.fiscalYearEndMonth ?? 12),
-    vatCondition: profile?.vatCondition ?? "",
-    iibbJurisdictions: null,
-    province: profile?.province ?? "",
-    activity: profile?.activity ?? "",
-    legalForm: profile?.legalForm ?? "",
-    serviceStartDate: profile?.serviceStartDate?.slice(0, 10) ?? "",
-  };
-}
 
 export function StudyClientes() {
   const { firmId, clientId, capabilities, setClientId } = useClientContext();
