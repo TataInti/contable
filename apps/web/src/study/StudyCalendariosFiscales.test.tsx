@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ToastProvider } from "@contable/design-system";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -425,7 +425,7 @@ describe("alta de calendario", () => {
     fireEvent.change(within(dialog).getByLabelText("Título"), { target: { value: "Calendario sintético 2026" } });
     fireEvent.submit(document.getElementById("nuevo-calendario-form")!);
     expect(await screen.findByText("Calendario creado: versión 1 en borrador.")).toBeTruthy();
-    expect(lastSearch).toBe(`?calendario=${CAL_NEW}`);
+    await waitFor(() => expect(lastSearch).toBe(`?calendario=${CAL_NEW}`));
   });
 });
 
@@ -480,7 +480,7 @@ describe("ficha del calendario", () => {
         "Copia creada: versión 4 en borrador, a partir de la versión 2. Corregila y publicala cuando esté lista.",
       ),
     ).toBeTruthy();
-    expect(lastSearch).toBe(`?calendario=${CAL_NEW}`);
+    await waitFor(() => expect(lastSearch).toBe(`?calendario=${CAL_NEW}`));
   });
 
   it("ocultar y mostrar: el aviso de mostrar informa la versión que dejó de estar visible", async () => {
