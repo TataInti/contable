@@ -31,7 +31,7 @@ const NAV_ITEM_TOUR_IDS: Partial<Record<StudyModule["id"], string>> = {
 
 // Dos niveles: lo que es de toda la cartera y lo que pertenece al cliente
 // elegido. Dentro del cliente, el orden sigue el trabajo del mes.
-const STUDY_NAVIGATION_IDS = ["inicio", "clientes"] as const;
+const STUDY_NAVIGATION_IDS = ["inicio", "clientes", "panel-trabajo"] as const;
 const CLIENT_NAVIGATION_IDS = [
   "resumen-cliente",
   "bandeja",
