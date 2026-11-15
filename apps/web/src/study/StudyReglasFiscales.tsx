@@ -24,22 +24,17 @@ import type {
   RuleVersion,
 } from "./reglas/tipos";
 import { sameRuleRows, shortDate, today, validateRuleVersionDate } from "./reglas/utilidades";
+import { ListaPaquetes } from "./reglas/ListaPaquetes";
 import { getStatusBadgeMeta, StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
 import {
   DenseAlert,
-  DenseFooter,
   DenseHeader,
   DensePage,
-  DenseSearch,
-  DenseTable,
   DenseTabs,
-  DenseToolbar,
   StatStrip,
   useDenseShortcuts,
   useDensity,
-  normalizeSearch,
-  type DenseColumn,
 } from "../ui/Dense";
 import "./study.css";
 
@@ -483,16 +478,6 @@ export function StudyReglasFiscales() {
   const allPacks = packsQuery.data ?? [];
   const packsWith = (status: RuleStatus) =>
     allPacks.filter((pack) => pack.versions.some((version) => version.status === status)).length;
-  const visiblePacks = useMemo(() => {
-    const needle = normalizeSearch(packSearch);
-    return allPacks.filter((pack) => {
-      if (packFilter && !pack.versions.some((version) => version.status === packFilter)) return false;
-      if (!needle) return true;
-      return normalizeSearch(
-        `${pack.name} ${pack.code} ${pack.regime.taxType.name} ${pack.regime.jurisdiction.name}`,
-      ).includes(needle);
-    });
-  }, [allPacks, packFilter, packSearch]);
   const isEmptyPackList = packsQuery.isSuccess && allPacks.length === 0;
   const newPackRef = useRef<() => void>(() => undefined);
   newPackRef.current = () => setShowPackForm(true);
@@ -500,49 +485,6 @@ export function StudyReglasFiscales() {
     searchRef,
     onNew: canPropose ? () => newPackRef.current() : undefined,
   });
-  const versionsLabel = (pack: RulePack) => {
-    const active = pack.versions.find((version) => version.status === "ACTIVE");
-    const draft = pack.versions.find((version) => version.status === "DRAFT");
-    const review = pack.versions.find((version) => version.status === "IN_REVIEW");
-    const parts = [
-      draft ? `Borrador v${draft.version}` : null,
-      review ? `En revisión v${review.version}` : null,
-      active ? `Vigente v${active.version}` : null,
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(" · ") : "Sin versión activa";
-  };
-  const packColumns: DenseColumn<RulePack>[] = [
-    {
-      key: "name",
-      header: "Paquete",
-      sortValue: (pack) => pack.name.toLocaleLowerCase("es-AR"),
-      render: (pack) => (
-        <span className="dense-name">
-          <span className="dense-name__text">
-            <strong>{pack.name}</strong>
-            <small>{pack.code} · {pack.regime.name}{!pack.regime.isActive ? " (oculto)" : ""}</small>
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: "tax",
-      header: "Impuesto",
-      sortValue: (pack) => pack.regime.taxType.name,
-      render: (pack) => `${pack.regime.taxType.name}${!pack.regime.taxType.isActive ? " (oculto)" : ""}`,
-    },
-    {
-      key: "jurisdiction",
-      header: "Jurisdicción",
-      sortValue: (pack) => pack.regime.jurisdiction.name,
-      render: (pack) => `${pack.regime.jurisdiction.name}${!pack.regime.jurisdiction.isActive ? " (oculto)" : ""}`,
-    },
-    {
-      key: "versions",
-      header: "Versiones",
-      render: (pack) => <span>{versionsLabel(pack)}</span>,
-    },
-  ];
 
   return (
     <DensePage density={density} flow className="fiscal-rules">
@@ -957,64 +899,19 @@ export function StudyReglasFiscales() {
       </ActionDrawer>
 
 
-      {!isEmptyPackList ? (
-        <DenseToolbar>
-          <DenseSearch
-            inputRef={searchRef}
-            value={packSearch}
-            onChange={setPackSearch}
-            placeholder="Buscar paquete, impuesto o jurisdicción…"
-            label="Buscar paquetes"
-          />
-          {packFilter ? (
-            <button type="button" className="dense-toggle" aria-pressed onClick={() => setPackFilter("")}>
-              Filtro activo · quitar
-            </button>
-          ) : null}
-          <span className="dense-toolbar__spacer" />
-        </DenseToolbar>
-      ) : null}
-
-      {packsQuery.isLoading ? (
-        <div className="dense-table-card">
-          <div className="query-state" role="status">
-            <span className="loading-copy">Cargando reglas…</span>
-          </div>
-        </div>
-      ) : isEmptyPackList ? (
-        <EmptyState
-          size="compact"
-          className="fiscal-rules-empty"
-          title="Todavía no hay paquetes de reglas"
-          description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
-        />
-      ) : (
-        <div className="dense-packs">
-          <DenseTable<RulePack>
-            label="Paquetes de reglas disponibles"
-            columns={packColumns}
-            rows={visiblePacks}
-            rowKey={(pack) => pack.id}
-            selectedKey={selectedPackId}
-            onSelect={(key) => {
-              if (key) setSelectedPackId(key);
-            }}
-            footer={
-              <DenseFooter
-                count={visiblePacks.length}
-                noun={visiblePacks.length === 1 ? "paquete" : "paquetes"}
-                hint="Elegí un paquete para ver sus versiones y reglas."
-                newShortcut={canPropose}
-              />
-            }
-            empty={
-              <p className="muted-copy">
-                Ningún paquete coincide.
-              </p>
-            }
-          />
-        </div>
-      )}
+      <ListaPaquetes
+        packs={allPacks}
+        isLoading={packsQuery.isLoading}
+        isEmpty={isEmptyPackList}
+        search={packSearch}
+        onSearchChange={setPackSearch}
+        searchRef={searchRef}
+        filter={packFilter}
+        onClearFilter={() => setPackFilter("")}
+        selectedPackId={selectedPackId}
+        onSelectPack={setSelectedPackId}
+        canPropose={canPropose}
+      />
 
       <div className="fiscal-rules-detail dense-detail">
           {detailQuery.isLoading ? (
