@@ -152,7 +152,7 @@ const emptyJurisdictionForm: JurisdictionForm = {
 
 const emptyTaxTypeForm: TaxTypeForm = { code: "", name: "", defaultFamilyId: "" };
 
-function validityLabel(validFrom: string, validTo: string | null) {
+export function validityLabel(validFrom: string, validTo: string | null) {
   return formatearRango(validFrom, validTo);
 }
 
@@ -194,7 +194,7 @@ function OriginBadge({ origin }: { origin?: "REFERENCE" | "UI" }) {
   );
 }
 
-function isOwnedUiRecord(
+export function isOwnedUiRecord(
   row: { origin?: string; createdByFirmId?: string | null },
   firmId: string,
 ): boolean {
@@ -211,7 +211,7 @@ function MutationError({ error }: { error: unknown }) {
   );
 }
 
-function apiFieldIssue(error: unknown, field: string): string | undefined {
+export function apiFieldIssue(error: unknown, field: string): string | undefined {
   if (!(error instanceof ApiError)) return undefined;
   const details = error.details?.details;
   if (!Array.isArray(details)) return undefined;
@@ -260,11 +260,11 @@ function InspectorActions({
 
 const CATALOG_CODE_CONFLICT = "CATALOG_CODE_CONFLICT";
 
-function codeConflict(error: unknown): string | undefined {
+export function codeConflict(error: unknown): string | undefined {
   return error instanceof ApiError && error.code === CATALOG_CODE_CONFLICT ? error.message : undefined;
 }
 
-function suggestedCode(current: string, usedCodes: string[], maxLength = 40): string {
+export function suggestedCode(current: string, usedCodes: string[], maxLength = 40): string {
   const normalized = new Set(usedCodes.map((code) => code.toLocaleUpperCase("es-AR")));
   for (let suffix = 2; suffix < 10_000; suffix += 1) {
     const tail = `-${suffix}`;
@@ -274,7 +274,7 @@ function suggestedCode(current: string, usedCodes: string[], maxLength = 40): st
   return current.slice(0, maxLength);
 }
 
-function selectionOptions<T extends { id: string; isActive: boolean }>(rows: T[], selectedId?: string) {
+export function selectionOptions<T extends { id: string; isActive: boolean }>(rows: T[], selectedId?: string) {
   const activeRows = rows.filter((row) => row.isActive);
   const selectedHidden = rows.find((row) => row.id === selectedId && !row.isActive);
   return selectedHidden ? [...activeRows, selectedHidden] : activeRows;
