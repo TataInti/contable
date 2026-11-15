@@ -41,7 +41,7 @@ import {
   calculationLabel,
 } from "./legajo/etiquetas";
 import { formatDate, formatMoney } from "./legajo/formato";
-import { hashSourceFile, parseSourceFile } from "./legajo/archivoFuente";
+import { importarLoteFuente } from "./legajo/loteFuente";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
 import { CabeceraLegajo } from "./legajo/paneles/CabeceraLegajo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
@@ -68,6 +68,14 @@ import "./study.css";
  *   saldos → fuentes → clasificación → cálculo → controles → cierre.
  * Cada total permite drill-down hasta la evidencia fuente.
  */
+
+// Estados en los que el legajo admite cambios de fuentes (importar lotes o libros, revisar).
+const ESTADOS_EDITABLES_FUENTES = [
+  "DRAFT",
+  "COLLECTING_INPUTS",
+  "READY_TO_CALCULATE",
+  "CHANGES_REQUESTED",
+];
 
 export function StudyExpedienteMensual() {
   const [density] = useDensity();
@@ -101,7 +109,8 @@ export function StudyExpedienteMensual() {
     Record<string, { categoryCode: string; activityCode: string }>
   >({});
   const [allocationDrafts, setAllocationDrafts] = useState<Record<string, string>>({});
-  const [showSifereModal, setShowSifereModal] = useState(false);
+  // Panel de libros IVA: lado de la fila desde la que se abrió (null = cerrado).
+  const [libroIvaAbierto, setLibroIvaAbierto] = useState<"SALE" | "PURCHASE" | null>(null);
   const confirmacion = useConfirmAction();
   const { ask: pedirConfirmacion, request: solicitudConfirmacion } = confirmacion;
   const cerrarConfirmacion = useCallback(() => pedirConfirmacion(null), [pedirConfirmacion]);
@@ -160,6 +169,13 @@ export function StudyExpedienteMensual() {
   });
 
   const activeWorkpaperId = listQuery.data?.[0]?.id;
+  // Importar un libro IVA exige el permiso y un legajo editable; el motivo se muestra junto a la acción.
+  const legajoDelPeriodo = listQuery.data?.[0];
+  const motivoImportarLibro = !capabilities.has("tax.vouchers.prepare")
+    ? "Tu rol no puede importar libros IVA."
+    : !legajoDelPeriodo || !ESTADOS_EDITABLES_FUENTES.includes(legajoDelPeriodo.status)
+      ? "El legajo no admite cambios de fuentes en su estado actual."
+      : null;
   const coverageQuery = useQuery({
     queryKey: ["monthly-workpaper-coverage", firmId, clientId, activeWorkpaperId],
     queryFn: () =>
@@ -305,49 +321,14 @@ export function StudyExpedienteMensual() {
       if (!source || !sourceFile || !activeWorkpaperId || !clientQuery.data) {
         throw new Error("Seleccioná una fuente y un archivo antes de importar");
       }
-      if (!source.taxTypeId || !source.periodId) {
-        throw new Error("La fuente no tiene una obligación fiscal materializada");
-      }
-
-      const content = await sourceFile.text();
-      const rows = parseSourceFile(sourceFile.name, content);
-      if (rows.length > 20_000) throw new Error("El lote supera el máximo de 20.000 filas");
-      const fileHash = await hashSourceFile(content);
-      const batch = await api.post<{
-        id: string;
-        status: string;
-        errorRows: number;
-      }>(`/firms/${firmId}/clients/${clientId}/import-batches`, {
-        origin: source.origin,
-        taxTypeId: source.taxTypeId,
-        periodId: source.periodId,
-        adapterVersion: source.adapterVersion,
-        fileName: sourceFile.name,
-        fileHash,
+      await importarLoteFuente({
+        firmId,
+        clientId,
+        source,
+        file: sourceFile,
         workpaperId: activeWorkpaperId,
-        sourceCode: source.code,
+        clientCuit: clientQuery.data.cuit,
       });
-
-      let status = batch.status;
-      let errorRows = batch.errorRows;
-      if (status === "UPLOADED") {
-        const validation = await api.post<{ totals: { errorRows: number } }>(
-          `/firms/${firmId}/clients/${clientId}/import-batches/${batch.id}/validate`,
-          { rows },
-        );
-        status = "VALIDATED";
-        errorRows = validation.totals.errorRows;
-      }
-      if (errorRows > 0) {
-        throw new Error(
-          `El lote quedó validado con ${errorRows} fila(s) observadas. Corregí el archivo antes de reimportar.`,
-        );
-      }
-      if (status === "VALIDATED") {
-        await api.post(`/firms/${firmId}/clients/${clientId}/import-batches/${batch.id}/commit`, {
-          clientCuit: clientQuery.data.cuit,
-        });
-      }
     },
     onSuccess: () => {
       setSourceFile(null);
@@ -548,12 +529,7 @@ export function StudyExpedienteMensual() {
   };
 
   const renderEtapa = (wp: Workpaper, safeActiveStep: number) => {
-    const canEditSources = [
-      "DRAFT",
-      "COLLECTING_INPUTS",
-      "READY_TO_CALCULATE",
-      "CHANGES_REQUESTED",
-    ].includes(wp.status);
+    const canEditSources = ESTADOS_EDITABLES_FUENTES.includes(wp.status);
     const blocking = wp.controls.filter((c) => c.severity === "BLOCKING" && c.status === "OPEN");
     return (
       <>
@@ -571,6 +547,8 @@ export function StudyExpedienteMensual() {
                       capabilities={capabilities}
                       canEditSources={canEditSources}
                       currentUserId={currentUserId}
+                      motivoImportarLibro={motivoImportarLibro}
+                      onAbrirLibroIva={setLibroIvaAbierto}
                       sourceCode={sourceCode}
                       setSourceCode={setSourceCode}
                       sourceFile={sourceFile}
@@ -1375,7 +1353,6 @@ export function StudyExpedienteMensual() {
         creandoLegajo={createMutation.isPending}
         cargandoPeriodos={taxPeriodsQuery.isLoading}
         errorCreacion={createMutation.error}
-        onSubirLibros={() => setShowSifereModal(true)}
         onNuevoLegajo={() => void createMutation.mutate()}
       />
 
@@ -1402,13 +1379,15 @@ export function StudyExpedienteMensual() {
 
 
       <PanelLibrosIva
-        abierto={showSifereModal}
-        onCerrar={() => setShowSifereModal(false)}
+        abierto={libroIvaAbierto !== null}
+        ladoInicial={libroIvaAbierto}
+        onCerrar={() => setLibroIvaAbierto(null)}
         firmId={firmId}
         clientId={clientId}
         activeWorkpaperId={activeWorkpaperId}
         fuentes={coverageQuery.data?.sources}
         cuitCliente={clientQuery.data?.cuit}
+        motivoBloqueo={motivoImportarLibro}
       />
 
       <PanelSaldoInicial

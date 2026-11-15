@@ -131,9 +131,8 @@ describe("Legajo · etapa Saldos (K9)", () => {
     expect(await screen.findByRole("dialog", { name: "Cargar saldo inicial" })).toBeInTheDocument();
   });
 
-  // Defecto de hoy: si la consulta de saldos falla, la tabla muestra «No hay saldos…» como si
-  // no hubiera saldos. Se fija con it.fails; cuando la etapa muestre el error, pasa a aserción.
-  it.fails("un error al leer los saldos se muestra con Reintentar, no como vacío", async () => {
+  // Un error al leer los saldos muestra Reintentar; la etapa no lo presenta como vacío.
+  it("un error al leer los saldos se muestra con Reintentar, no como vacío", async () => {
     const rutas = rutasDemo({ saldos: [saldoDemo, saldoCargaManualDemo] });
     vi.mocked(api.get).mockImplementation(((path: string) =>
       path.endsWith("/tax-credit-ledger")
