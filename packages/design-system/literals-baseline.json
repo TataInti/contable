@@ -559,6 +559,12 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/reglas/frecuencia-vencimientos.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/reglas/ListaPaquetes.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -566,6 +572,12 @@
       "color": 0
     },
     "apps/web/src/study/reglas/ListaPaquetes.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/motor-clon.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -608,6 +620,12 @@
       "color": 0
     },
     "apps/web/src/study/reglas/ResumenVersion.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/SelectorMotor.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -1089,7 +1107,7 @@
     },
     "packages/design-system/src/Dense.css": {
       "fontSize": 16,
-      "spacing": 76,
+      "spacing": 73,
       "radius": 2,
       "color": 0
     },
