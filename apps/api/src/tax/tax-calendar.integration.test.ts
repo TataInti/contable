@@ -10,8 +10,9 @@ import { capabilitiesForRole } from "@contable/permissions";
 
 /**
  * Calendarios fiscales contra PostgreSQL desechable (corte 2a-i): flujo de
- * versiones, cobertura al publicar, índice parcial, RLS por firma, grants sin
- * borrado y rutas. Las pruebas de RLS usan el rol de runtime, como las demás.
+ * versiones, cobertura al publicar, índice parcial, RLS por firma, grants (el
+ * borrado solo alcanza a celdas de borradores, corte 2a-ii-a) y rutas. Las pruebas
+ * de RLS usan el rol de runtime, como las demás.
  */
 
 const OWNER = "c1a10000-0000-4000-8000-000000000001";
