@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, useNotify } from "@contable/design-system";
+import { Button, EmptyState, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { buildPortalInvitationLink } from "../lib/portalInvitationLink";
@@ -9,13 +9,12 @@ import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import { memberRecoveryCopy, memberRowActions } from "./member-row-actions.js";
-import { ActionDrawer } from "../ui/ActionDrawer";
 import { StudyUserAssignments } from "./StudyUserAssignments";
 import { DenseHeader, DensePage, DenseSearch, DenseTabs, DenseToolbar, DenseWorkspace, Inspector, InspectorFacts, InspectorSection, StatStrip, normalizeSearch, useDenseShortcuts, useDensity, type DenseTab } from "../ui/Dense";
 import { credentialsCsv, parseBatchUsers } from "./batch-users.js";
 import "./study.css";
 import { formatearFechaHora } from "../lib/formatoFechas";
-import { type AccountingStandardRow, type AdminTab, type BatchResult, type CreatedAccessRecovery, type CreatedInternalUser, type CreatedInvitation, type FirmProfile, type InternalMember, type PortalInvitation, type PortalMembership, INTERNAL_MODULES, INTERNAL_MODULES_BY_ROLE, INTERNAL_ROLE_LABELS, INTERNAL_ROLE_OPTIONS, PORTAL_ROLE_LABELS } from "./administracion/tipos";
+import { type AccountingStandardRow, type AdminTab, type BatchResult, type CreatedAccessRecovery, type CreatedInternalUser, type CreatedInvitation, type FirmProfile, type InternalMember, type PortalInvitation, type PortalMembership, INTERNAL_MODULES, INTERNAL_MODULES_BY_ROLE, INTERNAL_ROLE_LABELS, INTERNAL_ROLE_OPTIONS } from "./administracion/tipos";
 import { groupTimeZones } from "./administracion/zonasHorarias";
 import { batchUserErrorLabel, initials, isValidEmail, userMutationError } from "./administracion/utilidades";
 import { PanelControles } from "./administracion/tablas/PanelControles";
@@ -23,6 +22,12 @@ import { PanelDatosEstudio } from "./administracion/tablas/PanelDatosEstudio";
 import { TablaAccesosPortal, filasDelPortal } from "./administracion/tablas/TablaAccesosPortal";
 import { TablaNormasContables } from "./administracion/tablas/TablaNormasContables";
 import { TablaUsuariosInternos } from "./administracion/tablas/TablaUsuariosInternos";
+import { PanelAltaUsuarios } from "./administracion/paneles/PanelAltaUsuarios";
+import { PanelEditarAcceso } from "./administracion/paneles/PanelEditarAcceso";
+import { PanelEditarDatosEstudio } from "./administracion/paneles/PanelDatosEstudio";
+import { PanelEditarUsuario } from "./administracion/paneles/PanelEditarUsuario";
+import { PanelInvitarPortal } from "./administracion/paneles/PanelInvitarPortal";
+import { PanelNorma } from "./administracion/paneles/PanelNorma";
 
 /** Referencia rol × módulo: reemplaza repetir la lista de módulos en cada fila. */
 function RoleMatrix({ highlight }: { highlight: string | null }) {
@@ -896,6 +901,58 @@ export function StudyAdministracion() {
     ...(capabilities.has("firm.manage") ? [{ id: "controls" as const, label: "Controles" }] : []),
   ];
 
+  const tablaResultadoLote = batchResults ? (
+    <table aria-label="Resultado del alta en lote">
+      <thead>
+        <tr>
+          <th>Persona</th>
+          <th>Rol</th>
+          <th>Resultado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {batchResults.map((item) => (
+          <tr key={item.line.line} className={item.error ? "is-bad" : undefined}>
+            <td>
+              <strong>{item.line.name}</strong> <span className="muted-copy">{item.line.email}</span>
+            </td>
+            <td>{INTERNAL_ROLE_LABELS[item.line.role ?? ""] ?? "—"}</td>
+            <td>
+              {item.created ? (
+                <code>{item.created.temporaryPassword}</code>
+              ) : (
+                (item.error ?? "Error")
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : null;
+  const tablaVistaPreviaLote = batchLines.length > 0 ? (
+    <table aria-label="Vista previa del alta en lote">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Correo</th>
+          <th>Rol</th>
+        </tr>
+      </thead>
+      <tbody>
+        {batchLines.map((line) => (
+          <tr key={line.line} className={line.error ? "is-bad" : undefined}>
+            <td>{line.name || "—"}</td>
+            <td>{line.email || "—"}</td>
+            <td>
+              {line.error
+                ? batchUserErrorLabel(line.error)
+                : (INTERNAL_ROLE_LABELS[line.role ?? ""] ?? "—")}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : null;
   return (
     <DensePage density={density} className="administration-users">
       <DenseHeader
@@ -1044,470 +1101,88 @@ export function StudyAdministracion() {
         {tableBody}
       </DenseWorkspace>
 
-      <ActionDrawer
-        isOpen={showInternalInviteForm}
-        onClose={closeInternalDrawer}
-        title="Crear usuarios del estudio"
-        description="Se genera una contraseña temporal por cuenta, que se muestra una sola vez. Cada persona deberá cambiarla al ingresar."
-        size={createMode === "batch" ? "wide" : "default"}
-      >
-        <DenseTabs<"single" | "batch">
-          label="Modo de alta"
-          idPrefix="create-user-mode"
-          tabs={createTabs}
-          active={createMode}
-          onChange={setCreateMode}
-        />
-        <div className="dense-drawer-body">
-          {createMode === "single" ? (
-            createdInternalUser ? (
-              <div className="study-form study-form--compact" role="status">
-                <p>
-                  Cuenta creada para <strong>{createdInternalUser.email}</strong>.
-                </p>
-                <Field
-                  id="internal-temporary-password"
-                  label="Contraseña temporal"
-                  type="text"
-                  readOnly
-                  value={createdInternalUser.temporaryPassword}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void navigator.clipboard.writeText(createdInternalUser.temporaryPassword)}
-                >
-                  Copiar contraseña
-                </Button>
-                <div className="study-form__actions">
-                  <Button type="button" onClick={closeInternalDrawer}>
-                    Terminar
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={() => setCreatedInternalUser(null)}>
-                    Crear otro
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <form
-                className="study-form study-form--compact dense-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  setActionError(null);
-                  inviteInternal.mutate();
-                }}
-              >
-                <Field
-                  id="internal-invite-name"
-                  label="Nombre"
-                  value={internalName}
-                  onChange={(event) => setInternalName(event.target.value)}
-                  required
-                />
-                <Field
-                  id="internal-invite-email"
-                  label="Correo"
-                  type="email"
-                  value={internalEmail}
-                  onChange={(event) => setInternalEmail(event.target.value)}
-                  required
-                />
-                <fieldset className="dense-roles dense-form__full">
-                  <legend className="ds-field__label">Rol interno</legend>
-                  {INTERNAL_ROLE_OPTIONS.map(([value, label]) => (
-                    <label
-                      key={value}
-                      className={`dense-role${internalRole === value ? " dense-role--on" : ""}`}
-                    >
-                      <input
-                        type="radio"
-                        name="internal-role"
-                        value={value}
-                        checked={internalRole === value}
-                        onChange={() => setInternalRole(value)}
-                      />
-                      <span>
-                        <strong>{label}</strong>{" "}
-                        <small>
-                          · {(INTERNAL_MODULES_BY_ROLE[value] ?? []).length} de {INTERNAL_MODULES.length} módulos
-                        </small>
-                      </span>
-                    </label>
-                  ))}
-                  <small className="muted-copy">
-                    {(INTERNAL_MODULES_BY_ROLE[internalRole] ?? []).join(" · ")}
-                  </small>
-                </fieldset>
-                {inviteInternal.isError && actionError ? (
-                  <p className="form-error" role="alert">
-                    {actionError}
-                  </p>
-                ) : null}
-                {!internalEmail.trim() || !internalName.trim() ? (
-                  <p className="form-submit-hint" role="note">
-                    Ingresá nombre y correo para poder crear el usuario.
-                  </p>
-                ) : null}
-                <div className="study-form__actions">
-                  <Button
-                    type="submit"
-                    loading={inviteInternal.isPending}
-                    disabled={!internalEmail.trim() || !internalName.trim()}
-                  >
-                    <Icon name="plus" size={17} /> Crear usuario
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={closeInternalDrawer}>
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            )
-          ) : batchResults ? (
-            <div className="dense-stack" role="status">
-              <p>
-                Se crearon <strong>{batchResults.filter((item) => item.created).length}</strong> de{" "}
-                {batchResults.length} usuarios. Las contraseñas temporales se muestran una sola vez:
-                descargalas ahora.
-              </p>
-              <div className="dense-batch-preview">
-                <table aria-label="Resultado del alta en lote">
-                  <thead>
-                    <tr>
-                      <th>Persona</th>
-                      <th>Rol</th>
-                      <th>Resultado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {batchResults.map((item) => (
-                      <tr key={item.line.line} className={item.error ? "is-bad" : undefined}>
-                        <td>
-                          <strong>{item.line.name}</strong> <span className="muted-copy">{item.line.email}</span>
-                        </td>
-                        <td>{INTERNAL_ROLE_LABELS[item.line.role ?? ""] ?? "—"}</td>
-                        <td>
-                          {item.created ? (
-                            <code>{item.created.temporaryPassword}</code>
-                          ) : (
-                            (item.error ?? "Error")
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="study-form__actions">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={downloadBatchCredentials}
-                  disabled={!batchResults.some((item) => item.created)}
-                >
-                  Descargar CSV
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setBatchText("");
-                    closeInternalDrawer();
-                  }}
-                >
-                  Terminar
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="dense-stack">
-              <label className="ds-field">
-                <span className="ds-field__label">Una persona por línea: nombre, correo, rol</span>
-                <textarea
-                  className="ds-field__input dense-textarea"
-                  rows={6}
-                  value={batchText}
-                  onChange={(event) => setBatchText(event.target.value)}
-                  placeholder={"Lucía Fernández, lucia@estudio.com, Preparador\nMartín Acosta, martin@estudio.com, Revisor"}
-                />
-                <span className="ds-field__hint">
-                  Si falta el rol se asigna Preparador. Podés cambiarlo después desde la tabla.
-                </span>
-              </label>
-              {batchLines.length > 0 ? (
-                <div className="dense-batch-preview">
-                  <table aria-label="Vista previa del alta en lote">
-                    <thead>
-                      <tr>
-                        <th>Nombre</th>
-                        <th>Correo</th>
-                        <th>Rol</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {batchLines.map((line) => (
-                        <tr key={line.line} className={line.error ? "is-bad" : undefined}>
-                          <td>{line.name || "—"}</td>
-                          <td>{line.email || "—"}</td>
-                          <td>
-                            {line.error
-                              ? batchUserErrorLabel(line.error)
-                              : (INTERNAL_ROLE_LABELS[line.role ?? ""] ?? "—")}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-              <div className="study-form__actions">
-                <Button
-                  type="button"
-                  loading={batchRunning}
-                  disabled={validBatchLines.length === 0}
-                  onClick={() => void runBatch()}
-                >
-                  <Icon name="plus" size={17} /> Crear {validBatchLines.length}{" "}
-                  {validBatchLines.length === 1 ? "usuario" : "usuarios"}
-                </Button>
-                <Button type="button" variant="ghost" onClick={closeInternalDrawer}>
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </ActionDrawer>
+      <PanelAltaUsuarios
+        showInternalInviteForm={showInternalInviteForm}
+        closeInternalDrawer={closeInternalDrawer}
+        createMode={createMode}
+        setCreateMode={setCreateMode}
+        createTabs={createTabs}
+        createdInternalUser={createdInternalUser}
+        setCreatedInternalUser={setCreatedInternalUser}
+        internalName={internalName}
+        setInternalName={setInternalName}
+        internalEmail={internalEmail}
+        setInternalEmail={setInternalEmail}
+        internalRole={internalRole}
+        setInternalRole={setInternalRole}
+        inviteInternal={inviteInternal}
+        actionError={actionError}
+        setActionError={setActionError}
+        batchResults={batchResults}
+        batchText={batchText}
+        setBatchText={setBatchText}
+        batchLines={batchLines}
+        validBatchLines={validBatchLines}
+        batchRunning={batchRunning}
+        runBatch={runBatch}
+        downloadBatchCredentials={downloadBatchCredentials}
+        tablaResultadoLote={tablaResultadoLote}
+        tablaVistaPreviaLote={tablaVistaPreviaLote}
+      />
 
       {identityEditing ? (
-        <ActionDrawer
-          isOpen
-          onClose={() => setIdentityEditing(null)}
-          title="Editar usuario"
-          description="Actualizá el nombre y el correo de la cuenta."
-          footer={
-            <>
-              <Button type="submit" form="member-edit-form" loading={updateMemberIdentity.isPending}>
-                Guardar cambios
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setIdentityEditing(null)}>
-                Cancelar
-              </Button>
-            </>
-          }
-        >
-          <form
-            id="member-edit-form"
-            className="study-form study-form--compact administration-user-edit-form"
-            noValidate
-            onSubmit={(event) => {
-              event.preventDefault();
-              setIdentitySubmitted(true);
-              if (!identityName.trim() || !isValidEmail(identityEmail)) return;
-              setActionError(null);
-              updateMemberIdentity.mutate({
-                userId: identityEditing.userId,
-                name: identityName,
-                email: identityEmail,
-              });
-            }}
-          >
-            <Field
-              id="member-edit-name"
-              label="Nombre"
-              value={identityName}
-              onChange={(event) => setIdentityName(event.target.value)}
-              error={identityNameError}
-              required
-            />
-            <Field
-              id="member-edit-email"
-              label="Correo"
-              type="email"
-              value={identityEmail}
-              onChange={(event) => setIdentityEmail(event.target.value)}
-              error={identityEmailError}
-              required
-            />
-            {updateMemberIdentity.isError && actionError ? (
-              <p className="form-error" role="alert">{actionError}</p>
-            ) : null}
-          </form>
-        </ActionDrawer>
+        <PanelEditarUsuario
+          identityEditing={identityEditing}
+          setIdentityEditing={setIdentityEditing}
+          identityName={identityName}
+          setIdentityName={setIdentityName}
+          identityEmail={identityEmail}
+          setIdentityEmail={setIdentityEmail}
+          setIdentitySubmitted={setIdentitySubmitted}
+          identityNameError={identityNameError}
+          identityEmailError={identityEmailError}
+          updateMemberIdentity={updateMemberIdentity}
+          actionError={actionError}
+          setActionError={setActionError}
+        />
       ) : null}
 
       {portalEditing ? (
-        <ActionDrawer
-          isOpen
-          onClose={() => setPortalEditing(null)}
-          title="Editar acceso"
-          description={`Cambiar el rol de ${portalEditing.user?.name ?? "esta persona"}.`}
-        >
-          <form
-            className="study-form study-form--compact"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setActionError(null);
-              updatePortalMembership.mutate({
-                id: portalEditing.id,
-                patch: { role: portalRoleDraft },
-              });
-            }}
-          >
-            <label className="ds-field">
-              <span className="ds-field__label">Rol del portal</span>
-              <select
-                className="ds-field__input"
-                value={portalRoleDraft}
-                onChange={(event) => setPortalRoleDraft(event.target.value)}
-              >
-                {Object.entries(PORTAL_ROLE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </label>
-            {updatePortalMembership.isError && actionError ? (
-              <p className="form-error" role="alert">{actionError}</p>
-            ) : null}
-            <div className="study-form__actions">
-              <Button type="submit" loading={updatePortalMembership.isPending}>
-                Guardar cambios
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setPortalEditing(null)}>
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        </ActionDrawer>
+        <PanelEditarAcceso
+          portalEditing={portalEditing}
+          setPortalEditing={setPortalEditing}
+          portalRoleDraft={portalRoleDraft}
+          setPortalRoleDraft={setPortalRoleDraft}
+          updatePortalMembership={updatePortalMembership}
+          actionError={actionError}
+          setActionError={setActionError}
+        />
       ) : null}
 
       {showProfileForm && profileDraft ? (
-        <ActionDrawer
-          isOpen
-          onClose={() => {
-            setShowProfileForm(false);
-            setProfileDraft(null);
-          }}
-          title="Editar datos del estudio"
-          description="Actualizá la razón social, el nombre, el CUIT y la zona horaria."
-        >
-          <form
-            className="study-form study-form--compact"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setActionError(null);
-              updateFirmProfile.mutate(profileDraft);
-            }}
-          >
-            <Field
-              id="firm-profile-legal-name"
-              label="Razón social"
-              value={profileDraft.legalName}
-              onChange={(event) => setProfileDraft({ ...profileDraft, legalName: event.target.value })}
-            />
-            <Field
-              id="firm-profile-display-name"
-              label="Nombre del estudio"
-              value={profileDraft.displayName}
-              onChange={(event) => setProfileDraft({ ...profileDraft, displayName: event.target.value })}
-            />
-            <Field
-              id="firm-profile-tax-id"
-              label="CUIT"
-              value={profileDraft.taxId ?? ""}
-              onChange={(event) => setProfileDraft({ ...profileDraft, taxId: event.target.value })}
-            />
-            <label className="ds-field">
-              <span className="ds-field__label">Zona horaria</span>
-              <select
-                id="firm-profile-timezone"
-                className="ds-field__input"
-                value={profileDraft.timezone}
-                onChange={(event) => setProfileDraft({ ...profileDraft, timezone: event.target.value })}
-              >
-                {profileTimeZoneGroups.map((group) => (
-                  <optgroup key={group.key} label={group.label}>
-                    {group.options.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-            {updateFirmProfile.isError && actionError ? (
-              <p className="form-error" role="alert">{actionError}</p>
-            ) : null}
-            <div className="study-form__actions">
-              <Button type="submit" loading={updateFirmProfile.isPending}>
-                Guardar cambios
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setShowProfileForm(false);
-                  setProfileDraft(null);
-                }}
-              >
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        </ActionDrawer>
+        <PanelEditarDatosEstudio
+          setShowProfileForm={setShowProfileForm}
+          profileDraft={profileDraft}
+          setProfileDraft={setProfileDraft}
+          profileTimeZoneGroups={profileTimeZoneGroups}
+          updateFirmProfile={updateFirmProfile}
+          actionError={actionError}
+          setActionError={setActionError}
+        />
       ) : null}
 
       {clientId ? (
-        <ActionDrawer
-          isOpen={showInviteForm}
-          onClose={() => setShowInviteForm(false)}
-          title="Invitar al portal"
-          description="Invitación para el cliente seleccionado. Vence a los siete días y sólo puede usarse con el correo indicado."
-        >
-          <form
-            className="study-form study-form--compact dense-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setActionError(null);
-              invite.mutate();
-            }}
-          >
-            <div className="dense-form__full">
-              <Field
-                id="portal-invite-email"
-                label="Correo"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-            </div>
-            <label className="ds-field dense-form__full">
-              <span className="ds-field__label">Rol</span>
-              <select
-                className="ds-field__input"
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-              >
-                <option value="OWNER">Titular</option>
-                <option value="COLLABORATOR">Colaborador</option>
-                <option value="READONLY">Sólo lectura</option>
-              </select>
-            </label>
-            {invite.isError && actionError ? (
-              <p className="form-error" role="alert">
-                {actionError}
-              </p>
-            ) : null}
-            <div className="study-form__actions">
-              <Button type="submit" loading={invite.isPending} disabled={!email.trim()}>
-                <Icon name="plus" size={17} /> Enviar invitación
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setShowInviteForm(false)}>
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        </ActionDrawer>
+        <PanelInvitarPortal
+          showInviteForm={showInviteForm}
+          setShowInviteForm={setShowInviteForm}
+          email={email}
+          setEmail={setEmail}
+          role={role}
+          setRole={setRole}
+          invite={invite}
+          actionError={actionError}
+          setActionError={setActionError}
+        />
       ) : null}
 
       {firmId && assigningMember ? (
@@ -1520,63 +1195,18 @@ export function StudyAdministracion() {
         />
       ) : null}
 
-      <ActionDrawer
-        isOpen={showStandardForm}
-        onClose={() => {
-          setShowStandardForm(false);
-          setStandardEditing(null);
-          setStandardName("");
-        }}
-        title={standardEditing ? "Editar norma contable" : "Nueva norma contable"}
-        description="El nombre es el valor que se muestra y se guarda en la ficha de clientes. No se precargan normas: el estudio define las suyas."
-      >
-        <form
-          className="study-form study-form--compact"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setActionError(null);
-            if (standardEditing)
-              updateStandard.mutate({ id: standardEditing.id, name: standardName.trim() });
-            else createStandard.mutate();
-          }}
-        >
-          <Field
-            id="accounting-standard-name"
-            label="Nombre de la norma"
-            value={standardName}
-            onChange={(event) => setStandardName(event.target.value)}
-            maxLength={100}
-            required
-          />
-          {createStandard.isError || updateStandard.isError ? (
-            actionError ? (
-              <p className="form-error" role="alert">
-                {actionError}
-              </p>
-            ) : null
-          ) : null}
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={createStandard.isPending || updateStandard.isPending}
-              disabled={!standardName.trim()}
-            >
-              {standardEditing ? "Guardar cambios" : "Crear norma"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setShowStandardForm(false);
-                setStandardEditing(null);
-                setStandardName("");
-              }}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </form>
-      </ActionDrawer>
+      <PanelNorma
+        showStandardForm={showStandardForm}
+        setShowStandardForm={setShowStandardForm}
+        standardEditing={standardEditing}
+        setStandardEditing={setStandardEditing}
+        standardName={standardName}
+        setStandardName={setStandardName}
+        createStandard={createStandard}
+        updateStandard={updateStandard}
+        actionError={actionError}
+        setActionError={setActionError}
+      />
       <ConfirmDialog confirm={confirm} />
     </DensePage>
   );
