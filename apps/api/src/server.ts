@@ -17,6 +17,7 @@ import { taxCalendarRoutes } from "./tax/tax-calendar-routes.js";
 import { fiscalDeletionRoutes } from "./tax/fiscal-deletion-routes.js";
 import { ingestionRoutes } from "./tax/ingestion-routes.js";
 import { settlementRoutes } from "./tax/settlement-routes.js";
+import { taxPanelRoutes } from "./tax/tax-panel-routes.js";
 import { workpaperRoutes } from "./tax/workpaper-routes.js";
 import { profitabilityRoutes } from "./tax/profitability-routes.js";
 import { reportingRoutes } from "./reporting/routes.js";
@@ -140,6 +141,7 @@ export async function buildServer(overrides?: Partial<HealthChecks>): Promise<Fa
   fiscalDeletionRoutes(app);
   ingestionRoutes(app);
   settlementRoutes(app);
+  taxPanelRoutes(app);
   workpaperRoutes(app);
   profitabilityRoutes(app);
   reportingRoutes(app);
