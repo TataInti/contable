@@ -62,10 +62,10 @@ function answer(path: string): Promise<unknown> {
   return Promise.resolve([]);
 }
 
-function renderDashboard(capabilities: string[]) {
+function renderDashboard(capabilities: string[], clientId: string | null = "client-a") {
   contextMock.current = {
     firmId: "firm-a",
-    clientId: "client-a",
+    clientId,
     periodId: "period-a",
     isReady: true,
     capabilities: new Set(capabilities),
@@ -88,6 +88,8 @@ const worklistTable = () => screen.findByRole("table", { name: "Liquidaciones en
 const receiptsTable = () => screen.findByRole("table", { name: "Constancias de presentación pendientes" });
 // «Actualizar» cambia su nombre a «Actualizando» mientras alguna fuente consulta: se espera el nombre en reposo.
 const actualizar = () => screen.findByRole("button", { name: "Actualizar" });
+// Salida que ofrece toda fuente restringida (P1); el texto coincide con StudyDashboard.tsx.
+const SALIDA = "Podés seguir trabajando en los módulos a los que tenés acceso desde la navegación lateral.";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -196,6 +198,16 @@ describe("Inicio: composición R01", () => {
     expect(await receiptsTable()).toBeTruthy();
     expect(screen.getAllByText("restringido").length).toBeGreaterThan(0);
     expect(screen.queryByText("Resumen no disponible para tu rol")).toBeNull();
+    expect(screen.getAllByText("Tu rol no permite consultar el resumen del estudio. " + SALIDA).length).toBeGreaterThan(0);
+  });
+
+  it("sin ninguna fuente, el bloque y cada fuente restringida dicen qué no ven y ofrecen la salida (P1)", async () => {
+    renderDashboard([]);
+    expect(await screen.findByText("Indicadores restringidos para tu rol")).toBeTruthy();
+    expect(screen.getByText("Tu rol no permite consultar el resumen ni las liquidaciones de la firma. " + SALIDA)).toBeTruthy();
+    expect(screen.getByText("Tu rol no permite consultar liquidaciones de la firma. " + SALIDA)).toBeTruthy();
+    expect(screen.getByText("Tu rol no permite consultar las constancias de presentación de la firma. " + SALIDA)).toBeTruthy();
+    expect(screen.queryByText("Resumen no disponible para tu rol")).toBeNull();
   });
 
   it("Otros circuitos y Panorama general son secciones del lienzo, sin panel lateral", async () => {
@@ -206,9 +218,27 @@ describe("Inicio: composición R01", () => {
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 
-  it("el enlace de obligaciones lleva a Trabajo, como en main", async () => {
+  it("«Abrir obligaciones» con cliente elegido lleva a Trabajo", async () => {
     renderDashboard(["client.read", "tax.settlements.read"]);
     await worklistTable();
     expect(screen.getByRole("link", { name: "Abrir obligaciones" }).getAttribute("href")).toBe("/trabajo");
+  });
+
+  it("«Abrir obligaciones» sin cliente elegido lleva a Clientes para elegir uno", async () => {
+    renderDashboard(["client.read", "tax.settlements.read"], null);
+    await worklistTable();
+    expect(screen.getByRole("link", { name: "Abrir obligaciones" }).getAttribute("href")).toBe("/clientes");
+  });
+
+  it("documentos y pedidos conservan su regla: con cliente, Bandeja y Trabajo; sin cliente, Clientes", async () => {
+    renderDashboard(["client.read", "tax.settlements.read"]);
+    const documentos = await screen.findByRole("link", { name: /Documentos en procesamiento/ });
+    expect(documentos.getAttribute("href")).toBe("/bandeja");
+    expect(screen.getByRole("link", { name: /Pedidos documentales abiertos/ }).getAttribute("href")).toBe("/trabajo");
+    cleanup();
+    renderDashboard(["client.read", "tax.settlements.read"], null);
+    const documentosSinCliente = await screen.findByRole("link", { name: /Documentos en procesamiento/ });
+    expect(documentosSinCliente.getAttribute("href")).toBe("/clientes");
+    expect(screen.getByRole("link", { name: /Pedidos documentales abiertos/ }).getAttribute("href")).toBe("/clientes");
   });
 });

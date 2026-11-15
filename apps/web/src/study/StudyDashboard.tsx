@@ -68,6 +68,10 @@ const STATUS_LABELS: Record<string, string> = {
   SUPERSEDED: "Rectificada",
 };
 
+// Salida que acompaña a toda fuente restringida (P1): dice qué puede seguir haciendo la persona.
+const SALIDA_RESTRINGIDA =
+  "Podés seguir trabajando en los módulos a los que tenés acceso desde la navegación lateral.";
+
 export function StudyDashboard() {
   const { firmId, clientId, periodId, capabilities, hasClientAccess, setClientId, setPeriodId } =
     useClientContext();
@@ -122,7 +126,7 @@ export function StudyDashboard() {
   const attentionTotal =
     (data?.processing ?? 0) + (data?.openRequests ?? 0) + (data?.pendingObligations ?? 0);
   const summaryNote = !canReadDashboard
-    ? "Tu rol no permite consultar el resumen del estudio."
+    ? `Tu rol no permite consultar el resumen del estudio. ${SALIDA_RESTRINGIDA}`
     : data
       ? null
       : query.isError
@@ -279,7 +283,7 @@ export function StudyDashboard() {
     <EmptyState
       size="inline"
       title="Cartera fiscal restringida"
-      description="Tu rol no permite consultar liquidaciones de la firma."
+      description={`Tu rol no permite consultar liquidaciones de la firma. ${SALIDA_RESTRINGIDA}`}
     />
   ) : worklistQuery.isError || worklistQuery.isLoading ? (
     <AsyncState
@@ -399,7 +403,7 @@ export function StudyDashboard() {
         <EmptyState
           size="inline"
           title="Indicadores restringidos para tu rol"
-          description="Tu rol no permite consultar el resumen ni las liquidaciones de la firma."
+          description={`Tu rol no permite consultar el resumen ni las liquidaciones de la firma. ${SALIDA_RESTRINGIDA}`}
         />
       ) : (
         <>
@@ -476,7 +480,7 @@ export function StudyDashboard() {
             <EmptyState
               size="inline"
               title="Constancias restringidas para tu rol"
-              description="Tu rol no permite consultar las constancias de presentación de la firma."
+              description={`Tu rol no permite consultar las constancias de presentación de la firma. ${SALIDA_RESTRINGIDA}`}
             />
           </DenseSection>
         )}
@@ -519,7 +523,7 @@ export function StudyDashboard() {
           description="Todavía sin presentar."
           surface="integrated"
           actions={
-            <Link className="dense-link" to="/trabajo">
+            <Link className="dense-link" to={clientId ? "/trabajo" : "/clientes"}>
               Abrir obligaciones
             </Link>
           }
