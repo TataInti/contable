@@ -1,12 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Table, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Field, Table } from "@contable/design-system";
 import { isManualExtractionFieldKey } from "@contable/contracts";
-import { useNavigate } from "react-router-dom";
 import {
   ApiError,
   api,
-  uploadToSignedUrl,
   type Document,
   type DocumentExtraction,
   type ExtractedField,
@@ -35,17 +33,9 @@ import {
 } from "../ui/Dense";
 import "./study.css";
 import { formatearFechaHora } from "../lib/formatoFechas";
-import { documentFileName, documentTypeLabel, fileSize, validateFile, normalizeDocumentSearch } from "./bandeja/utilidades";
+import { documentFileName, documentTypeLabel, normalizeDocumentSearch } from "./bandeja/utilidades";
+import { CargarDocumento, type CargarDocumentoHandle } from "./bandeja/CargarDocumento";
 
-interface UploadSession {
-  sessionId: string;
-  presignedUrl: string;
-  objectKey: string;
-}
-interface UploadComplete {
-  documentId: string;
-  status: string;
-}
 
 const FIELD_LABELS: Record<string, string> = {
   voucherType: "Tipo de documento",
@@ -83,7 +73,6 @@ export function StudyBandeja() {
   const [density] = useDensity();
   const { firmId, clientId, capabilities } = useClientContext();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reprocessJobId, setReprocessJobId] = useState<string | null>(null);
   const confirm = useConfirmAction();
@@ -96,11 +85,7 @@ export function StudyBandeja() {
   const [rejectionNote, setRejectionNote] = useState("");
   const [rejectionReceipts, setRejectionReceipts] = useState<Record<string, string>>({});
   const [showUpload, setShowUpload] = useState(false);
-  const [uploadRequestItemId, setUploadRequestItemId] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const notify = useNotify();
-  const [dragging, setDragging] = useState(false);
+  const cargaRef = useRef<CargarDocumentoHandle>(null);
   const [documentSearch, setDocumentSearch] = useState("");
   const [documentFilter, setDocumentFilter] = useState<DocumentQueueFilter>("ALL");
   const base = firmId && clientId ? `/firms/${firmId}/clients/${clientId}` : null;
@@ -188,48 +173,6 @@ export function StudyBandeja() {
       );
   }, [extraction.data]);
 
-  const chooseFile = (selected: File | null) => {
-    const error = validateFile(selected);
-    setUploadError(error);
-    setFile(error ? null : selected);
-  };
-
-  const upload = useMutation({
-    mutationFn: async () => {
-      if (!file || !base) throw new Error("Falta seleccionar un archivo");
-      if (!uploadRequestItemId) throw new Error("Elegí el pedido al que corresponde el archivo");
-      const session = await api.post<UploadSession>(`${base}/document-upload-sessions`, {
-        expectedMime: file.type || undefined,
-        requestItemId: uploadRequestItemId,
-      });
-      await uploadToSignedUrl(session.presignedUrl, file);
-      const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-      const sha256 = [...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
-      return api.post<UploadComplete>(
-        `${base}/document-upload-sessions/${session.sessionId}/complete`,
-        {
-          originalName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-          sha256,
-          objectKey: session.objectKey,
-        },
-      );
-    },
-    onSuccess: (document) => {
-      notify.success("Documento recibido. Ya ingresó al circuito de validación y procesamiento.");
-      setFile(null);
-      setSelectedId(document.documentId);
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
-        queryClient.invalidateQueries({ queryKey: ["document-requests", firmId, clientId] }),
-      ]);
-    },
-    onError: (error) =>
-      setUploadError(error instanceof ApiError ? error.message : "No se pudo subir el documento."),
-  });
   const correct = useMutation({
     mutationFn: ({ fieldId, correction }: { fieldId: string; correction: string }) =>
       api.patch(`${base}/extractions/${extraction.data!.id}/fields/${fieldId}`, {
@@ -430,7 +373,7 @@ export function StudyBandeja() {
             <Button
               onClick={() => {
                 setShowUpload((value) => !value);
-                setUploadError(null);
+                cargaRef.current?.limpiarError();
               }}
               variant={showUpload ? "secondary" : "primary"}
             >
@@ -464,125 +407,18 @@ export function StudyBandeja() {
 
 
 
-      <ActionDrawer
+      <CargarDocumento
+        ref={cargaRef}
         isOpen={showUpload && Boolean(base)}
-        onClose={() => {
-          setShowUpload(false);
-          setFile(null);
-          setUploadError(null);
-        }}
-        title="Nuevo documento"
-        description="El archivo pasa por validación, antivirus y extracción antes de estar disponible."
-        size="wide"
-      >
-        <p className="secure-note upload-panel__secure-note">Carga segura</p>
-        {requests.isLoading ? (
-          <div className="query-state query-state--compact" role="status">
-            <span className="loading-copy">Buscando pedidos abiertos…</span>
-          </div>
-        ) : requests.isError ? (
-          <EmptyState
-            size="compact"
-            title="No se pudieron cargar los pedidos"
-            description="Reintentá antes de asociar un documento a la evidencia solicitada."
-            action={
-              <Button size="sm" variant="secondary" onClick={() => void requests.refetch()}>
-                Reintentar
-              </Button>
-            }
-          />
-        ) : pendingRequestItems.length === 0 ? (
-          <EmptyState
-            size="compact"
-            title="Primero creá un pedido documental"
-            description="Cada carga queda vinculada a un ítem solicitado para preservar la trazabilidad."
-            action={
-              capabilities.has("request.manage") ? (
-                <Button size="sm" onClick={() => navigate("/trabajo")}>
-                  Ir a pedidos
-                </Button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              upload.mutate();
-            }}
-          >
-            <label className="ds-field" htmlFor="upload-request-item">
-              <span className="ds-field__label">Corresponde a</span>
-              <select
-                id="upload-request-item"
-                className="ctxbar__input"
-                value={uploadRequestItemId}
-                onChange={(event) => setUploadRequestItemId(event.target.value)}
-                required
-              >
-                <option value="">Elegí el ítem solicitado</option>
-                {pendingRequestItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.requestTitle} · {item.description}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label
-              className={`upload-dropzone${dragging ? " upload-dropzone--dragging" : ""}`}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                setDragging(false);
-                chooseFile(event.dataTransfer.files[0] ?? null);
-              }}
-            >
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
-                onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
-              />
-              <span>
-                <strong>
-                  {file ? file.name : "Arrastrá un archivo o elegilo desde tu equipo"}
-                </strong>
-                <small>{file ? fileSize(file.size) : "PDF, JPG, PNG o WebP · máximo 25 MB"}</small>
-              </span>
-              <span className="upload-dropzone__action">Elegir archivo</span>
-            </label>
-            {uploadError ? (
-              <p className="form-error" role="alert">
-                {uploadError}
-              </p>
-            ) : null}
-            <div className="upload-panel__actions">
-              <Button
-                type="submit"
-                loading={upload.isPending}
-                loadingLabel="Subiendo documento"
-                disabled={!file || !uploadRequestItemId}
-              >
-                Subir y procesar
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setShowUpload(false);
-                  setFile(null);
-                  setUploadError(null);
-                }}
-              >
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        )}
-      </ActionDrawer>
+        base={base}
+        capabilities={capabilities}
+        pendingRequestItems={pendingRequestItems}
+        requestsLoading={requests.isLoading}
+        requestsError={requests.isError}
+        onRetryRequests={() => void requests.refetch()}
+        onClose={() => setShowUpload(false)}
+        onUploaded={setSelectedId}
+      />
 
       {!base ? (
         <EmptyState
