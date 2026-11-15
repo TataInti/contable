@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -622,6 +622,14 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
   beforeEach(async () => {
     await setupMembership();
     await cleanupFiscal();
+  });
+
+  // Los motores de prueba del clon quedan inactivos: el arranque de la API compara los motores activos con el registro del código.
+  afterEach(async () => {
+    await prisma.taxEngine.updateMany({
+      where: { engineKey: { startsWith: "TEST-" }, isActive: true },
+      data: { isActive: false },
+    });
   });
 
   it("crea versiones v2, clona tramos y comparte el SHA con el validador", async () => {
