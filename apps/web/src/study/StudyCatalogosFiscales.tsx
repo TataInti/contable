@@ -26,7 +26,6 @@ import {
   normalizeSearch,
   useDenseShortcuts,
   useDensity,
-  type DenseColumn,
 } from "../ui/Dense";
 import { Icon } from "../ui/Icon";
 import { ActivityStateBadge, ActiveBadge, OriginBadge, MutationError } from "./catalogos/piezas";
@@ -59,6 +58,13 @@ import type {
   MasterDrawer,
   CatalogDrawer,
 } from "./catalogos/tipos";
+import {
+  columnasOrganismos,
+  columnasRegimenes,
+  columnasActividades,
+  columnasJurisdicciones,
+  columnasTiposImpuesto,
+} from "./catalogos/columnas";
 import "./study.css";
 import "./StudyCatalogosFiscales.css";
 
@@ -1094,272 +1100,19 @@ export function StudyCatalogosFiscales() {
     );
   }
 
-  const authorityColumns: DenseColumn<TaxAuthorityRow>[] = [
-    {
-      key: "code",
-      header: "Código",
-      sortValue: (row) => row.code,
-      render: (row) => <span className="dense-code">{row.code}</span>,
-    },
-    {
-      key: "name",
-      header: "Organismo",
-      sortValue: (row) => row.name,
-      render: (row) => <span title={row.name}>{row.name}</span>,
-    },
-    {
-      key: "jurisdiction",
-      header: "Jurisdicción",
-      sortValue: (row) => row.jurisdiction.name,
-      render: (row) => (
-        <span className="dense-cell-inline">
-          {row.jurisdiction.name}
-          <span className="dense-chip dense-chip--hide-narrow">{row.jurisdiction.code}</span>
-        </span>
-      ),
-    },
-    {
-      key: "regimes",
-      header: "Regímenes",
-      align: "right",
-      sortValue: (row) => regimesByAuthority(row.id).length,
-      render: (row) => regimesByAuthority(row.id).length || "—",
-    },
-    {
-      key: "origin",
-      header: "Origen",
-      secondary: true,
-      sortValue: (row) => row.origin ?? "",
-      render: (row) => <OriginBadge origin={row.origin} />,
-    },
-    {
-      key: "state",
-      header: "Estado",
-      secondary: true,
-      sortValue: (row) => row.isActive,
-      render: (row) => <ActiveBadge active={row.isActive} />,
-    },
-  ];
+  const authorityColumns = columnasOrganismos({ regimesByAuthority });
 
-  const regimeColumns: DenseColumn<TaxRegimeRow>[] = [
-    {
-      key: "code",
-      header: "Código",
-      sortValue: (row) => row.code,
-      render: (row) => <span className="dense-code">{row.code}</span>,
-    },
-    {
-      key: "name",
-      header: "Régimen",
-      sortValue: (row) => row.name,
-      render: (row) => <span title={row.name}>{row.name}</span>,
-    },
-    {
-      key: "taxType",
-      header: "Impuesto",
-      secondary: true,
-      sortValue: (row) => row.taxType.name,
-      render: (row) => (
-        <span className="dense-cell-inline" title={`${row.taxType.name} (${row.taxType.code})`}>
-          {row.taxType.name}
-          <span className="dense-chip">{row.taxType.code}</span>
-        </span>
-      ),
-    },
-    {
-      key: "jurisdiction",
-      header: "Jurisdicción",
-      sortValue: (row) => row.jurisdiction.name,
-      render: (row) => (
-        <span className="dense-cell-inline">
-          {row.jurisdiction.name}
-          <span className="dense-chip dense-chip--hide-narrow">{row.jurisdiction.code}</span>
-        </span>
-      ),
-    },
-    {
-      key: "authority",
-      header: "Organismo",
-      sortValue: (row) => row.authority.code,
-      render: (row) => (
-        <span className="dense-chip" title={row.authority.name}>
-          {row.authority.code}
-        </span>
-      ),
-    },
-    {
-      key: "coherence",
-      header: "Coherencia",
-      sortValue: (row) => (regimeMismatch(row) ? 0 : 1),
-      render: (row) =>
-        regimeMismatch(row) ? (
-          <span
-            className="dense-coherence dense-coherence--bad"
-            title={`${row.authority.code} recauda en ${authorityJurisdictionName(row)}, no en ${row.jurisdiction.name}`}
-          >
-            <Icon name="alert" size={14} />
-            Revisar
-          </span>
-        ) : (
-          <span className="dense-coherence dense-coherence--ok">
-            <Icon name="check" size={14} />
-            OK
-          </span>
-        ),
-    },
-    {
-      key: "origin",
-      header: "Origen",
-      secondary: true,
-      sortValue: (row) => row.origin ?? "",
-      render: (row) => <OriginBadge origin={row.origin} />,
-    },
-    {
-      key: "state",
-      header: "Estado",
-      secondary: true,
-      sortValue: (row) => row.isActive,
-      render: (row) => <ActiveBadge active={row.isActive} />,
-    },
-  ];
+  const regimeColumns = columnasRegimenes({ regimeMismatch, authorityJurisdictionName });
 
-  const activityColumns: DenseColumn<CatalogActivityRow>[] = [
-    {
-      key: "code",
-      header: "Código",
-      sortValue: (row) => row.code,
-      render: (row) => (
-        <span className="dense-code" title={row.code}>
-          {row.code}
-        </span>
-      ),
-    },
-    {
-      key: "name",
-      header: "Actividad",
-      sortValue: (row) => row.name,
-      render: (row) => <span title={row.name}>{row.name}</span>,
-    },
-    {
-      key: "jurisdiction",
-      header: "Jurisdicción",
-      sortValue: (row) => jurisdictionName(row.jurisdictionId),
-      render: (row) => {
-        const jurisdiction = jurisdictions.find((item) => item.id === row.jurisdictionId);
-        return (
-          <span className="dense-activity-jurisdiction" title={jurisdictionName(row.jurisdictionId)}>
-            <span>{jurisdiction?.name ?? "—"}</span>
-            {jurisdiction ? (
-              <small>
-                {jurisdictionKindLabel[jurisdiction.kind]} · {jurisdiction.code}
-                {!jurisdiction.isActive ? " (oculta)" : ""}
-              </small>
-            ) : null}
-          </span>
-        );
-      },
-    },
-    {
-      key: "source",
-      header: "Fuente",
-      sortValue: (row) => row.source ?? "",
-      render: (row) => <span title={row.source ?? undefined}>{row.source ?? "—"}</span>,
-    },
-    {
-      key: "validity",
-      header: "Vigencia",
-      sortValue: (row) => row.validFrom,
-      render: (row) => validityLabel(row.validFrom, row.validTo),
-    },
-    {
-      key: "origin",
-      header: "Origen",
-      secondary: true,
-      sortValue: (row) => row.origin ?? "",
-      render: (row) => <OriginBadge origin={row.origin} />,
-    },
-    {
-      key: "state",
-      header: "Estado",
-      secondary: true,
-      sortValue: (row) => row.isActive,
-      render: (row) => <ActivityStateBadge isActive={row.isActive} />,
-    },
-  ];
+  const activityColumns = columnasActividades({ jurisdictions, jurisdictionName });
 
   const jurisdictionParentLabel = (jurisdiction: JurisdictionOption) => {
     const parent = jurisdictions.find((row) => row.id === jurisdiction.parentId) ?? jurisdiction.parent;
     const hidden = parent && "isActive" in parent && !parent.isActive;
     return parent ? `${parent.name}${hidden ? " (oculto)" : ""}` : "—";
   };
-  const jurisdictionColumns: DenseColumn<JurisdictionOption>[] = [
-    {
-      key: "code",
-      header: "Código",
-      sortValue: (row) => row.code,
-      render: (row) => <span className="dense-code">{row.code}</span>,
-    },
-    {
-      key: "name",
-      header: "Jurisdicción",
-      sortValue: (row) => row.name,
-      render: (row) => <span title={row.name}>{row.name}</span>,
-    },
-    {
-      key: "kind",
-      header: "Nivel",
-      sortValue: (row) => jurisdictionKindLabel[row.kind],
-      render: (row) => jurisdictionKindLabel[row.kind],
-    },
-    {
-      key: "parent",
-      header: "Padre",
-      sortValue: jurisdictionParentLabel,
-      render: jurisdictionParentLabel,
-    },
-    {
-      key: "origin",
-      header: "Origen",
-      secondary: true,
-      sortValue: (row) => row.origin ?? "",
-      render: (row) => <OriginBadge origin={row.origin} />,
-    },
-    {
-      key: "state",
-      header: "Estado",
-      secondary: true,
-      sortValue: (row) => row.isActive,
-      render: (row) => <ActiveBadge active={row.isActive} />,
-    },
-  ];
-  const taxTypeColumns: DenseColumn<TaxTypeOption>[] = [
-    {
-      key: "code",
-      header: "Código",
-      sortValue: (row) => row.code,
-      render: (row) => <span className="dense-code">{row.code}</span>,
-    },
-    {
-      key: "name",
-      header: "Tipo de impuesto",
-      sortValue: (row) => row.name,
-      render: (row) => <span title={row.name}>{row.name}</span>,
-    },
-    {
-      key: "origin",
-      header: "Origen",
-      secondary: true,
-      sortValue: (row) => row.origin ?? "",
-      render: (row) => <OriginBadge origin={row.origin} />,
-    },
-    {
-      key: "state",
-      header: "Estado",
-      secondary: true,
-      sortValue: (row) => row.isActive,
-      render: (row) => <ActiveBadge active={row.isActive} />,
-    },
-  ];
+  const jurisdictionColumns = columnasJurisdicciones({ jurisdictionParentLabel });
+  const taxTypeColumns = columnasTiposImpuesto();
 
   const select = (key: string | null) => setSelectedId(key);
 
