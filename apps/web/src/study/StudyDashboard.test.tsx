@@ -85,7 +85,7 @@ function renderDashboard(capabilities: string[], clientId: string | null = "clie
 }
 
 const worklistTable = () => screen.findByRole("table", { name: "Liquidaciones en curso" });
-const receiptsTable = () => screen.findByRole("table", { name: "Constancias de presentación pendientes" });
+const receiptsTable = () => screen.findByRole("table", { name: "Acuses de presentación pendientes" });
 // «Actualizar» cambia su nombre a «Actualizando» mientras alguna fuente consulta: se espera el nombre en reposo.
 const actualizar = () => screen.findByRole("button", { name: "Actualizar" });
 // Salida que ofrece toda fuente restringida (P1); el texto coincide con StudyDashboard.tsx.
@@ -98,7 +98,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Inicio: «Actualizar» refresca las fuentes que la persona puede leer (G06)", () => {
-  it("consulta resumen, liquidaciones y constancias, y mientras corre queda procesando sin doble envío", async () => {
+  it("consulta resumen, liquidaciones y acuses, y mientras corre queda procesando sin doble envío", async () => {
     renderDashboard(["client.read", "tax.settlements.read"]);
     expect(await worklistTable()).toBeTruthy();
     expect(await receiptsTable()).toBeTruthy();
@@ -206,7 +206,7 @@ describe("Inicio: composición R01", () => {
     expect(await screen.findByText("Indicadores restringidos para tu rol")).toBeTruthy();
     expect(screen.getByText("Tu rol no permite consultar el resumen ni las liquidaciones de la firma. " + SALIDA)).toBeTruthy();
     expect(screen.getByText("Tu rol no permite consultar liquidaciones de la firma. " + SALIDA)).toBeTruthy();
-    expect(screen.getByText("Tu rol no permite consultar las constancias de presentación de la firma. " + SALIDA)).toBeTruthy();
+    expect(screen.getByText("Tu rol no permite consultar los acuses de presentación de la firma. " + SALIDA)).toBeTruthy();
     expect(screen.queryByText("Resumen no disponible para tu rol")).toBeNull();
   });
 

@@ -40,8 +40,8 @@ function oldestFirst(rows: PendingReceipt[]): PendingReceipt[] {
   return [...rows].sort((a, b) => finished(a) - finished(b));
 }
 
-const LOADING_LABEL = "Consultando constancias pendientes…";
-const ERROR_TITLE = "No se pudo cargar las constancias";
+const LOADING_LABEL = "Consultando acuses pendientes…";
+const ERROR_TITLE = "No se pudo cargar los acuses";
 const ERROR_DESCRIPTION = "Reintentá para volver a consultarlas. Las demás fuentes de Inicio siguen disponibles.";
 
 export function PendingFilingReceipts({
@@ -117,9 +117,9 @@ export function PendingFilingReceipts({
   const section = (count: ReactNode, body: ReactNode) => (
     <DenseSection
       id="pending-receipts"
-      title="Falta la constancia de presentación"
+      title="Falta el acuse de presentación"
       count={count}
-      description="Liquidaciones finalizadas sin la presentación registrada con su constancia."
+      description="Liquidaciones finalizadas sin la presentación registrada con su acuse."
       surface="integrated"
     >
       {body}
@@ -155,7 +155,7 @@ export function PendingFilingReceipts({
   return section(
     rows.length,
     <DenseTable<PendingReceipt>
-      label="Constancias de presentación pendientes"
+      label="Acuses de presentación pendientes"
       columns={columns}
       rows={rows}
       rowKey={(row) => row.settlementId}
@@ -163,7 +163,7 @@ export function PendingFilingReceipts({
       footer={
         <DenseFooter
           count={rows.length}
-          noun={rows.length === 1 ? "constancia pendiente" : "constancias pendientes"}
+          noun={rows.length === 1 ? "acuse pendiente" : "acuses pendientes"}
           hint="La más antigua primero. Registrá la presentación desde el Legajo del cliente."
           newShortcut={false}
         />

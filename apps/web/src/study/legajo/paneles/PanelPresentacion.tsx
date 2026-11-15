@@ -38,7 +38,7 @@ export function PanelPresentacion({
       // La constancia es obligatoria: se elige una ya subida o se sube en este mismo paso.
       let evidenceDocumentId = filingForm.evidenceDocumentId;
       if (!evidenceDocumentId) {
-        if (!filingReceipt) throw new Error("Adjuntá la constancia de presentación.");
+        if (!filingReceipt) throw new Error("Adjuntá el acuse de presentación.");
         evidenceDocumentId = await uploadFilingReceipt(base, filingReceipt);
         setFilingForm((form) => ({ ...form, evidenceDocumentId }));
         setFilingReceipt(null);
@@ -54,7 +54,7 @@ export function PanelPresentacion({
       });
     },
     onSuccess: () => {
-      notify.success("Presentación registrada con su constancia.");
+      notify.success("Presentación registrada con su acuse.");
       setFilingReceipt(null);
       onCerrar();
       void queryClient.invalidateQueries({
@@ -72,14 +72,14 @@ export function PanelPresentacion({
     : !filingForm.amountFiled
       ? "Indicá el importe presentado."
       : !filingForm.evidenceDocumentId && !filingReceipt
-        ? "Adjuntá la constancia de presentación."
+        ? "Adjuntá el acuse de presentación."
         : null;
   return (
     <ActionDrawer
       isOpen
       onClose={onCerrar}
       title={`Registrar presentación · ${posicion.regime.taxType.name}`}
-      description="Cargá los datos de la presentación y adjuntá la constancia que emite el organismo."
+      description="Cargá los datos de la presentación y adjuntá el acuse que emite el organismo."
       size="wide"
       footer={
         <>
@@ -87,7 +87,7 @@ export function PanelPresentacion({
             type="submit"
             form="legajo-presentacion"
             loading={recordFilingMutation.isPending}
-            loadingLabel="Subiendo y validando la constancia"
+            loadingLabel="Subiendo y validando el acuse"
             disabled={motivoRegistrar !== null}
           >
             Registrar presentación
@@ -131,7 +131,7 @@ export function PanelPresentacion({
         />
         <div className="ds-field">
           <label className="ds-field__label" htmlFor="tax-filing-evidence">
-            Constancia de presentación
+            Acuse de presentación
           </label>
           <select
             id="tax-filing-evidence"
@@ -141,22 +141,22 @@ export function PanelPresentacion({
               setFilingForm({ ...filingForm, evidenceDocumentId: event.target.value })
             }
           >
-            <option value="">Subir una constancia nueva</option>
+            <option value="">Subir un acuse nuevo</option>
             {filingReceiptDocuments.map((document) => (
               <option key={document.id} value={document.id}>
-                {document.fileVersions?.[0]?.originalName ?? "Constancia"} ·{" "}
+                {document.fileVersions?.[0]?.originalName ?? "Acuse"} ·{" "}
                 {getStatusBadgeMeta(document.status).label}
               </option>
             ))}
           </select>
           <small className="ds-field__hint">
-            Es el comprobante que emite el organismo. Sin constancia la presentación no queda
+            Es el comprobante que emite el organismo. Sin acuse la presentación no queda
             registrada.
           </small>
         </div>
         {!filingForm.evidenceDocumentId ? (
           <Field
-            label="Archivo de la constancia"
+            label="Archivo del acuse"
             id="tax-filing-receipt"
             type="file"
             accept={RECEIPT_ACCEPT}

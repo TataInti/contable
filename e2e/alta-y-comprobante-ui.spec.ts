@@ -641,7 +641,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await drawer.getByLabel("Identificador externo").fill(`E2E-VEP-${SUFFIX}`);
     // La constancia la sube el estudio en este mismo paso: se valida (antivirus) y recién
     // entonces se registra la presentación.
-    await drawer.getByLabel("Archivo de la constancia").setInputFiles(fixture);
+    await drawer.getByLabel("Archivo del acuse").setInputFiles(fixture);
     await mutating(page, "/filings", () => drawer.getByRole("button", { name: "Registrar presentación" }).click());
     await card.getByRole("button", { name: "Registrar pago" }).first().click();
     await drawer.getByLabel("Importe", { exact: true }).fill("38199.00");

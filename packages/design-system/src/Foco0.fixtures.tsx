@@ -68,11 +68,11 @@ export const FOCO0_CASES: Record<string, () => ReactElement> = {
   // Como PendingFilingReceipts.tsx: tabla sin selección ni grupos, con pie.
   "dense-table-plana": () => (
     <DenseTable<FixtureRow>
-      label="Constancias pendientes"
+      label="Acuses pendientes"
       columns={columns}
       rows={rows}
       rowKey={(row) => row.id}
-      footer={<DenseFooter count={rows.length} noun="constancias" newShortcut={false} />}
+      footer={<DenseFooter count={rows.length} noun="acuses" newShortcut={false} />}
     />
   ),
   // Como StudyClientes.tsx: agrupada, con selección, detalle abierto, pie y vacío compacto.

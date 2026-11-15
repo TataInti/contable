@@ -61,11 +61,11 @@ export async function waitForReceiptReady(
     const status = documents.find((document) => document.id === documentId)?.status;
     if (status && READY_STATUSES.includes(status)) return;
     if (status && FAILED_STATUSES.includes(status)) {
-      throw new Error("La constancia no pasó la validación del archivo. Probá con otro archivo.");
+      throw new Error("El acuse no pasó la validación del archivo. Probá con otro archivo.");
     }
     if (Date.now() >= deadline) {
       throw new Error(
-        "La constancia ya quedó subida pero sigue en validación. Esperá un momento, elegila de la lista y registrá la presentación.",
+        "El acuse ya quedó subido pero sigue en validación. Esperá un momento, elegilo de la lista y registrá la presentación.",
       );
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
