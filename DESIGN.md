@@ -1124,7 +1124,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Aceptación:** pasar de Saldos a Fuentes conserva «Finalizado» como estado; la advertencia de revisión por la misma persona que preparó queda a la vista; el identificador y la evidencia siguen accesibles en el detalle; al cerrar el panel, el foco vuelve al origen.
 
-**Estado: migrada** (Foco 2, cortes 2.1 a 2.3d; el retiro del CSS sin consumidores queda en 2.4). Lo vigente tras la migración: encabezado con «Nuevo legajo» como acción secundaria; cada revisión se lee en una tarjeta con sus etapas; las etapas con consultas muestran el error con «Reintentar»; una sola acción primaria por tarjeta, la de su estado; «Finalizar», «Crear rectificativa» y «Eximir» piden confirmación; una revisión reemplazada se lee como resumen de solo lectura. Desvío frente a «sin cajas»: la tarjeta del legajo conserva su borde de contenedor; las etapas no llevan caja propia.
+**Estado: migrada** (Foco 2). Lo vigente tras la migración: encabezado con «Nuevo legajo» como acción secundaria; cada revisión se lee en una tarjeta con sus etapas; las etapas con consultas muestran el error con «Reintentar»; una sola acción primaria por tarjeta, la de su estado; «Finalizar», «Crear rectificativa» y «Eximir» piden confirmación; una revisión reemplazada se lee como resumen de solo lectura. Desvíos declarados: la tarjeta del legajo conserva su borde de contenedor (las etapas no llevan caja propia), y las reglas de composición propias del Legajo (`workpaper-*`) siguen vigentes porque el marcado las usa; retirarlas exige rehacer ese marcado con piezas del sistema y queda como trabajo posterior.
 
 ### R03 — Reglas fiscales
 
@@ -1142,7 +1142,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Aceptación:** la versión activa se identifica como de sólo lectura; el paquete seleccionado se ve en la lista; hay una acción contextual principal.
 
-**Estado: migrada** (Foco 3, cortes 3.1a a 3.2c-2; el retiro del CSS sin consumidores queda en 3.3). Lo vigente tras la migración: «Nuevo paquete» como acción secundaria, y «Crear paquete» como primaria solo cuando no hay paquetes; una sola acción primaria por panel; el error de una consulta va junto al dato afectado, con «Reintentar» (`reglas/Errores.tsx`); el resumen de la versión va sin caja. Desvío frente a «sin cajas»: Alícuotas y Control profesional conservan la caja `study-panel`; queda pendiente y este corte no la cambia.
+**Estado: migrada** (Foco 3). Lo vigente tras la migración: «Nuevo paquete» como acción secundaria, y «Crear paquete» como primaria solo cuando no hay paquetes; una sola acción primaria por panel; el error de una consulta va junto al dato afectado, con «Reintentar» (`reglas/Errores.tsx`); el resumen de la versión va sin caja. Desvíos declarados: Alícuotas y Control profesional conservan la caja `study-panel`, y las reglas `fiscal-rule-*` que el marcado usa siguen vigentes; la caja y esas reglas quedan como trabajo posterior.
 
 **Catálogos fiscales** usa esta misma receta: una sola `DenseTabs` con los conteos de las cinco categorías; debajo, una línea breve con propios, referencia y alertas. La barra de filtros, la tabla y el detalle comparten la grilla; los datos del detalle usan columnas etiqueta/valor y los conteos numéricos se alinean a la derecha. Cada conteo aparece una vez, las cifras van a la derecha y la tabla tiene el ancho del resto de la pantalla.
 
