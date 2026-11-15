@@ -70,6 +70,17 @@ export function ResumenVersion({
     selectedVersion && canActivateSelectedVersion && !bloqueadaPorCambios,
   );
 
+  // Orientación del próximo paso: son los textos vigentes del aviso «Próximo paso», que sale del
+  // detalle y queda como línea de ayuda del encabezado (C01, D-R3-2).
+  const ayuda = !selectedVersion
+    ? canPropose
+      ? "Abrí un borrador para cargar alícuotas, vencimientos y fuentes."
+      : null
+    : editable
+      ? "Revisá las reglas y guardá los cambios; después podés activar directamente esta versión."
+      : canActivateSelectedVersion
+        ? "La versión quedará vigente para los próximos cálculos."
+        : null;
   const acciones = selectedVersion ? (
     <>
       {editable && guardarIncompleto ? (
@@ -148,6 +159,7 @@ export function ResumenVersion({
       description={descripcion}
       actions={acciones}
     >
+      {ayuda ? <p>{ayuda}</p> : null}
       {selectedVersion ? (
         <>
           <p>
