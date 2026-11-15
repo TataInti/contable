@@ -1135,6 +1135,12 @@
       "radius": 0,
       "color": 0
     },
+    "packages/design-system/src/DenseTable.sort.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "packages/design-system/src/EmptyState.css": {
       "fontSize": 0,
       "spacing": 0,

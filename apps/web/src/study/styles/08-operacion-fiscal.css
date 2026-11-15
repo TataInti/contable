@@ -1059,3 +1059,18 @@
   display: block;
   margin-top: var(--ds-space-1);
 }
+
+/* Foco 2.7c — Calendarios fiscales: Año con ancho corto, lista de problemas sin viñeta y etiquetas de la ficha. */
+.study-form .calendario-anio {
+  max-width: calc(var(--ds-control-height-md) * 2);
+}
+
+.calendario-problemas {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calendario-ficha__datos .dense-facts > div {
+  grid-template-columns: calc(var(--ds-control-height-md) * 4) minmax(0, 1fr);
+}

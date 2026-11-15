@@ -1168,6 +1168,8 @@ Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFoote
 | R03 Calendarios fiscales | Organismo, jurisdicción, año, versión, estado, celdas (concepto, grupo de terminaciones, período, vencimiento, ajuste y revisión), validación de cobertura, versiones y quién las publicó u ocultó | Crear calendario, agregar, editar y quitar celdas en borrador, crear versión a partir de este, publicar, ocultar y mostrar. Solo lectura sin `tax.calendars.manage`; publicar solo con `tax.calendars.publish` |
 | RG | La información que la pantalla muestra hoy | Todas las acciones que la pantalla ofrece hoy, según capacidades |
 
+**Estado (Foco 2.7c), Calendarios fiscales:** el alta usa el pie `ActionDrawerFooter` («Cancelar» a la izquierda y «Crear calendario» a la derecha) y muestra el motivo junto al botón mientras no se puede crear. La ficha en borrador concuerda en singular y plural y, con un solo problema, ofrece un único enlace («Ir al problema»). La lista muestra el estado elegido en «Estado», con «Todos» para volver a la lista completa (selección múltiple), y el encabezado «Año» muestra su indicador de orden (`sortHint` de `DenseTable`). El subtítulo usa voseo.
+
 Cada PR de migración incluye su matriz antes/después de información y accesos.
 
 ### Pantalla → receta

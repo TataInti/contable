@@ -472,6 +472,8 @@
 
 .dense-sort {
   display: inline-flex;
+  align-items: center;
+  height: 100%;
   gap: 4px;
   padding: 0;
   border: 0;
@@ -483,6 +485,10 @@
 
 .dense-sort:hover {
   color: var(--ds-color-text);
+}
+
+.dense-sort__pista {
+  color: var(--ds-color-text-muted);
 }
 
 .dense-table tbody td {

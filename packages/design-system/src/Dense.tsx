@@ -385,9 +385,12 @@ export function DenseTable<T>({
   inspectorOpen,
   groupBy,
   surface,
+  sortHint,
 }: {
   label: string;
   columns: ReadonlyArray<DenseColumn<T>>;
+  /** Muestra ↕ en las columnas ordenables que no tienen orden. Sin esta prop, el marcado no cambia. */
+  sortHint?: boolean;
   rows: ReadonlyArray<T>;
   rowKey: (row: T) => string;
   selectedKey?: string | null;
@@ -499,6 +502,8 @@ export function DenseTable<T>({
                           {column.header}
                           {direction ? (
                             <span aria-hidden="true">{direction === 1 ? "↑" : "↓"}</span>
+                          ) : sortHint ? (
+                            <span aria-hidden="true" className="dense-sort__pista">↕</span>
                           ) : null}
                         </Button>
                       ) : (
