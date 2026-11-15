@@ -260,6 +260,21 @@ export const STUDY_MODULES: readonly StudyModule[] = [
       })),
     ),
   },
+  {
+    id: "calendarios-fiscales",
+    path: "/calendarios-fiscales",
+    label: "Calendarios fiscales",
+    icon: "calendar",
+    navigationGroup: "Configuración",
+    requiredCapability: "tax.calendars.read",
+    requirements: { firm: true },
+    status: "released",
+    component: lazy(() =>
+      import("./StudyCalendariosFiscales").then((module) => ({
+        default: module.StudyCalendariosFiscales,
+      })),
+    ),
+  },
 ] as const;
 
 export function modulesForNavigation(capabilities: ReadonlySet<string>): readonly StudyModule[] {

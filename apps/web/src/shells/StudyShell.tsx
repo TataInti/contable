@@ -46,6 +46,7 @@ const STUDY_SETTINGS_NAVIGATION_IDS = [
   "administracion-plataforma",
   "reglas-fiscales",
   "catalogos-fiscales",
+  "calendarios-fiscales",
 ] as const;
 function modulesInOrder(modules: readonly StudyModule[], ids: readonly string[]) {
   const modulesById = new Map(modules.map((module) => [module.id, module]));

@@ -60,6 +60,8 @@ Antes de tocar una validación, un bloqueo o un control se lo clasifica: **integ
 - **Ficha del cliente**: su primera sección es el Resumen; un solo «Editar» con secciones; el estado del cliente es una acción aparte.
 - **Ocultar**: reversible, se muestra como acción neutra. **Eliminar**: irreversible, solo Titular.
 - **Crear a partir de este**: copia para una versión nueva; la pantalla lo anuncia como copia.
+- **Calendario fiscal**: vencimientos anuales de un organismo y una jurisdicción, con sus celdas por concepto, terminación de CUIT y período de referencia. Se carga en borrador, se valida y se publica; lo publicado no se edita: se corrige con una versión nueva.
+- **Vencimiento**: fecha límite de una obligación. Precedencia: valor manual justificado > calendario publicado del organismo y la jurisdicción > regla de vencimiento. Sin fuente, la obligación queda sin fecha y se avisa qué falta.
 - Pendiente de decisión de Inti: nombre y fuente única de «período» (fiscal y contable).
 
 ### Decisiones de diseño (cerradas 11-nov)
@@ -1147,6 +1149,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 | R01 Inicio | Cliente, impuesto, período, vencimiento, antigüedad, estado de liquidación y alcance de cada fuente | Abrir legajo, consultar liquidación, filtrar, actualizar y reintentar |
 | R02 Legajo | Contexto fiscal, revisión, estado, advertencia de autorrevisión, importes, movimientos y evidencia | Cambiar período, navegar secciones, ver respaldo e historial, importar y rectificar según capacidades; **Exportar libros** (encabezado, acción secundaria; la ve quien tiene `tax.vouchers.read`): descarga el libro de compras o de ventas del período activo en xlsx o csv, con resumen previo de incluidos y excluidos por motivo |
 | R03 Reglas fiscales | Paquete, versión, vigencia, estado, parámetros y condición de lectura | Elegir paquete, consultar secciones, preparar modificación, alta global |
+| R03 Calendarios fiscales | Organismo, jurisdicción, año, versión, estado, celdas (concepto, grupo de terminaciones, período, vencimiento, ajuste y revisión), validación de cobertura, versiones y quién las publicó u ocultó | Crear calendario, agregar, editar y quitar celdas en borrador, crear versión a partir de este, publicar, ocultar y mostrar. Solo lectura sin `tax.calendars.manage`; publicar solo con `tax.calendars.publish` |
 | RG | La información que la pantalla muestra hoy | Todas las acciones que la pantalla ofrece hoy, según capacidades |
 
 Cada PR de migración incluye su matriz antes/después de información y accesos.
@@ -1189,6 +1192,7 @@ Cubre todas las pantallas de `apps/web/src` en main: 18 del estudio (`study/`), 
 | 30 | Aceptar invitación al portal (`/aceptar-invitacion`) | `auth/AcceptPortalInvitation.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estado de enlace incompleto | 11 |
 | 31 | Recuperar acceso (`/recuperar-acceso`) | `auth/RecoverAccessPage.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estado de enlace incompleto | 11 |
 | 32 | Sin acceso (`/sin-acceso`), carga de sesión y conexión no disponible | `App.tsx` | RG, sólo estados | C07 — `EmptyState` con su salida, carga | 11 |
+| 33 | Calendarios fiscales (`/calendarios-fiscales`) | `study/StudyCalendariosFiscales.tsx` | R03 | C01, C02, C04, C05, C07, C08, C09 — `DensePage`, `DenseHeader`, `DenseToolbar`, `DenseTabs`, `DenseSection` (`surface="integrated"`), `DenseTable` con `groupBy`, `DenseToggleGroup`, `InspectorFacts`, `ActionDrawer`, `ConfirmDialog`, `Field`, `StatusBadge`, `AsyncState`, `EmptyState`, `useNotify` | nace en Foco |
 
 **Pantallas de acceso (28 a 32).** Se muestran sin menú ni barra de período, antes de entrar a un espacio de trabajo. Usan RG con estas precisiones, todas con piezas vigentes en main:
 
