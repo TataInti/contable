@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, ConfirmDialog, EmptyState, Table, useConfirmAction, useNotify } from "@contable/design-system";
+import { Button, ConfirmDialog, EmptyState, useConfirmAction, useNotify } from "@contable/design-system";
 import {
   type CatalogEconomicActivity,
   type TaxRuleKindOption,
@@ -21,7 +21,7 @@ import type {
   RuleStatus,
   RuleVersion,
 } from "./reglas/tipos";
-import { sameRuleRows, shortDate, today } from "./reglas/utilidades";
+import { sameRuleRows, today } from "./reglas/utilidades";
 import { ListaPaquetes } from "./reglas/ListaPaquetes";
 import { PanelNuevoPaquete } from "./reglas/paneles/PanelNuevoPaquete";
 import { PanelVencimiento } from "./reglas/paneles/PanelVencimiento";
@@ -29,6 +29,9 @@ import { PanelFuente } from "./reglas/paneles/PanelFuente";
 import { PanelPrimeraVersion } from "./reglas/paneles/PanelPrimeraVersion";
 import { PanelModificarAlicuotas } from "./reglas/paneles/PanelModificarAlicuotas";
 import { ConfirmarActivacion } from "./reglas/ConfirmarActivacion";
+import { TabVencimientos } from "./reglas/TabVencimientos";
+import { TabFuentes } from "./reglas/TabFuentes";
+import { TabControlProfesional } from "./reglas/TabControlProfesional";
 import { ResumenVersion } from "./reglas/ResumenVersion";
 import { AlicuotasEditor } from "./reglas/AlicuotasEditor";
 import { Icon } from "../ui/Icon";
@@ -701,145 +704,32 @@ export function StudyReglasFiscales() {
                 />
               ) : null}
               {ruleTab === "dueDates" ? (
-              <section className="study-panel" aria-labelledby="rule-due-dates-title">
-                <div className="study-panel__heading">
-                  <div>
-                    <h2 id="rule-due-dates-title">Vencimientos</h2>
-                    <p>Reglas usadas para calcular fechas de presentación y pago.</p>
-                  </div>
-                  {editable ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setShowDueDateForm((visible) => !visible)}
-                    >
-                      {showDueDateForm ? "Cancelar" : "Agregar vencimiento"}
-                    </Button>
-                  ) : null}
-                </div>
-                <Table<RuleVersion["dueDateRules"][number]>
-                  rows={selectedVersion.dueDateRules}
-                  rowKey={(row) => row.id}
-                  empty="No hay vencimientos cargados para esta versión."
-                  columns={[
-                    {
-                      key: "frequency",
-                      header: "Frecuencia",
-                      render: (row) => row.frequency ?? "—",
-                    },
-                    { key: "dueDay", header: "Día", render: (row) => String(row.dueDay) },
-                    {
-                      key: "cuitEnding",
-                      header: "CUIT",
-                      render: (row) => row.cuitEnding ?? "Todas",
-                    },
-                    {
-                      key: "validFrom",
-                      header: "Vigencia",
-                      render: (row) => `${shortDate(row.validFrom)} — ${shortDate(row.validTo)}`,
-                    },
-                  ]}
-                />
-              </section>
+              <TabVencimientos
+                editable={editable}
+                showDueDateForm={showDueDateForm}
+                setShowDueDateForm={setShowDueDateForm}
+                selectedVersion={selectedVersion}
+              />
               ) : null}
               {ruleTab === "sources" ? (
-              <section className="study-panel" aria-labelledby="rule-sources-title">
-                <div className="study-panel__heading">
-                  <div>
-                    <h2 id="rule-sources-title">Fuentes normativas</h2>
-                    <p>Resoluciones, padrones o normas que respaldan esta versión.</p>
-                  </div>
-                  {editable ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setShowSourceForm((visible) => !visible)}
-                    >
-                      {showSourceForm ? "Cancelar" : "Agregar fuente"}
-                    </Button>
-                  ) : null}
-                </div>
-                <Table<RuleVersion["sources"][number]>
-                  rows={selectedVersion.sources}
-                  rowKey={(row) => row.id}
-                  empty="No hay fuentes normativas asociadas a esta versión."
-                  columns={[
-                    { key: "title", header: "Fuente", render: (row) => row.title },
-                    {
-                      key: "reference",
-                      header: "Referencia",
-                      render: (row) => row.reference ?? "—",
-                    },
-                    {
-                      key: "consultedAt",
-                      header: "Consultada",
-                      render: (row) => shortDate(row.consultedAt),
-                    },
-                  ]}
-                />
-              </section>
+              <TabFuentes
+                editable={editable}
+                showSourceForm={showSourceForm}
+                setShowSourceForm={setShowSourceForm}
+                selectedVersion={selectedVersion}
+              />
               ) : null}
               {ruleTab === "approval" ? (
-              <section id="rule-approval" className="study-panel fiscal-rule-approval">
-                <div>
-                  <h2>Flujo de revisión anterior</h2>
-                  <p>
-                    La activación directa es el recorrido principal. Las versiones históricas pueden
-                    conservar revisión profesional; las versiones activas siguen siendo inmutables.
-                  </p>
-                </div>
-                <div className="fiscal-rule-approval__actions">
-                  {selectedVersion.status === "DRAFT" && canPropose ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => submitMutation.mutate()}
-                      loading={submitMutation.isPending}
-                    >
-                      Enviar a revisión (flujo anterior)
-                    </Button>
-                  ) : null}
-                  {selectedVersion.status === "IN_REVIEW" &&
-                  capabilities.has("tax.rules.approve") ? (
-                    <>
-                      <select
-                        className="ds-field__input"
-                        aria-label="Matrícula para aprobar"
-                        value={credentialId}
-                        onChange={(event) => setCredentialId(event.target.value)}
-                      >
-                        <option value="">Seleccioná matrícula…</option>
-                        {credentialQuery.data?.map((credential) => (
-                          <option key={credential.id} value={credential.id}>
-                            {credential.registrationNumber} · {credential.jurisdiction.name}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        disabled={!credentialId}
-                        loading={approveMutation.isPending}
-                        onClick={() => approveMutation.mutate()}
-                      >
-                        Aprobar
-                      </Button>
-                      {!credentialId ? (
-                        <p className="form-submit-hint" role="note">
-                          Seleccioná la matrícula profesional para habilitar la aprobación.
-                        </p>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
-                {selectedVersion.sources.length > 0 ? (
-                  <p className="fiscal-rule-approval__sources">
-                    Fuentes:{" "}
-                    {selectedVersion.sources
-                      .map((source) => source.reference || source.title)
-                      .join(" · ")}
-                  </p>
-                ) : (
-                  <p className="fiscal-rule-approval__sources">Sin fuente normativa cargada.</p>
-                )}
-              </section>
+              <TabControlProfesional
+                selectedVersion={selectedVersion}
+                canPropose={canPropose}
+                submitMutation={submitMutation}
+                capabilities={capabilities}
+                credentialId={credentialId}
+                setCredentialId={setCredentialId}
+                credentialQuery={credentialQuery}
+                approveMutation={approveMutation}
+              />
               ) : null}
               </div>
             </>
