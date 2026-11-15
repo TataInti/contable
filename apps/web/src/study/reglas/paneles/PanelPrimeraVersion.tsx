@@ -1,8 +1,9 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, EmptyState, Field } from "@contable/design-system";
+import { Button, Field } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
-import { ErrorAccion, ErrorConsulta } from "../Errores";
+import { ErrorAccion } from "../Errores";
+import { SelectorMotor } from "../SelectorMotor";
 import type { TaxEngineOption } from "@contable/contracts";
 import type { RulePackDetail, RuleVersion } from "../tipos";
 import { validateRuleVersionDate } from "../utilidades";
@@ -86,57 +87,14 @@ export function PanelPrimeraVersion({
             }}
             required
           />
-          {!detailQuery.data?.regime.calcFamilyId ? (
-            <EmptyState
-              size="compact"
-              role="alert"
-              title="Elegí una familia de cálculo"
-              description="Este régimen necesita una familia para mostrar las opciones de cálculo."
-              action={(
-                <a
-                  className="dense-link"
-                  href={`/catalogos-fiscales?editRegime=${encodeURIComponent(detailQuery.data?.regime.id ?? "")}`}
-                >
-                  Editar régimen
-                </a>
-              )}
-            />
-          ) : regimeEnginesQuery.isLoading ? (
-            <p className="muted-copy" role="status">Buscando opciones de cálculo…</p>
-          ) : regimeEnginesQuery.isError ? (
-            <ErrorConsulta
-              titulo="No pudimos cargar las opciones de cálculo"
-              descripcion="Reintentá la consulta para elegir la opción de cálculo."
-              onRetry={() => void regimeEnginesQuery.refetch()}
-            />
-          ) : regimeEnginesQuery.data?.length ? (
-            <div className="ds-field">
-              <label className="ds-field__label" htmlFor="first-rule-version-engine">Opción de cálculo</label>
-              <select
-                id="first-rule-version-engine"
-                className="ds-field__input"
-                value={engineId}
-                onChange={(event) => setEngineId(event.target.value)}
-                required
-              >
-                <option value="">Seleccioná una opción…</option>
-                {regimeEnginesQuery.data.map((engine) => (
-                  <option key={engine.id} value={engine.id}>{engine.label}</option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <EmptyState
-              size="compact"
-              title="Esta familia aún no tiene opciones de cálculo"
-              description="Elegí otra familia para este régimen en Editar régimen, o consultá con quien administra el estudio."
-              action={
-                <a className="dense-link" href={`/catalogos-fiscales?editRegime=${encodeURIComponent(detailQuery.data?.regime.id ?? "")}`}>
-                  Editar régimen
-                </a>
-              }
-            />
-          )}
+          <SelectorMotor
+            id="first-rule-version-engine"
+            regimeId={detailQuery.data?.regime.id ?? ""}
+            familiaDefinida={Boolean(detailQuery.data?.regime.calcFamilyId)}
+            enginesQuery={regimeEnginesQuery}
+            value={engineId}
+            onChange={setEngineId}
+          />
           {createVersionMutation.error ? <ErrorAccion error={createVersionMutation.error} /> : null}
           <div className="study-form__actions">
             <Button

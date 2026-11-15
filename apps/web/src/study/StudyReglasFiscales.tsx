@@ -20,7 +20,7 @@ import type {
   RuleStatus,
   RuleVersion,
 } from "./reglas/tipos";
-import { sameRuleRows, today } from "./reglas/utilidades";
+import { motorDeOrigen, sameRuleRows, today } from "./reglas/utilidades";
 import { ListaPaquetes } from "./reglas/ListaPaquetes";
 import { PanelNuevoPaquete } from "./reglas/paneles/PanelNuevoPaquete";
 import { PanelVencimiento } from "./reglas/paneles/PanelVencimiento";
@@ -79,6 +79,8 @@ export function StudyReglasFiscales() {
   const [rowFieldErrors, setRowFieldErrors] = useState<Record<string, string>>({});
   const [newPack, setNewPack] = useState({ code: "", name: "", regimeId: "" });
   const [engineId, setEngineId] = useState("");
+  // Motor elegido para la copia; null = sigue al motor de la versión de origen (D-R3-E).
+  const [cloneEngineChoice, setCloneEngineChoice] = useState<string | null>(null);
   const [newSource, setNewSource] = useState({
     title: "",
     reference: "",
@@ -120,8 +122,23 @@ export function StudyReglasFiscales() {
       if (!regimeId) throw new Error("No se encontró el régimen del paquete.");
       return api.get<TaxEngineOption[]>(`/tax/regimes/${regimeId}/engines`);
     },
-    enabled: Boolean(showInitialVersionForm && detailQuery.data?.regime.id && detailQuery.data.regime.calcFamilyId),
+    enabled: Boolean(
+      (showInitialVersionForm || showCloneForm) &&
+      detailQuery.data?.regime.id &&
+      detailQuery.data.regime.calcFamilyId,
+    ),
   });
+  // La última versión del paquete es la que copia el clon (así lo hace la API).
+  const ultimaVersion = detailQuery.data?.versions.reduce<RuleVersion | undefined>(
+    (mayor, version) => (!mayor || version.version > mayor.version ? version : mayor),
+    undefined,
+  );
+  const motorOrigen = motorDeOrigen(ultimaVersion, regimeEnginesQuery.data);
+  const cloneEngineId = cloneEngineChoice ?? motorOrigen ?? "";
+  const avisoMotorClon =
+    ultimaVersion && regimeEnginesQuery.isSuccess && !motorOrigen
+      ? "No pudimos identificar el motor de la versión de origen. Si no elegís una opción de cálculo, la copia conserva el motor de origen."
+      : null;
   const credentialQuery = useQuery({
     queryKey: ["tax-credentials", firmId],
     queryFn: () => api.get<Credential[]>("/tax/credentials"),
@@ -168,6 +185,9 @@ export function StudyReglasFiscales() {
   useEffect(() => {
     setEngineId(regimeEnginesQuery.data?.[0]?.id ?? "");
   }, [regimeEnginesQuery.data, selectedPackId]);
+  useEffect(() => {
+    if (!showCloneForm) setCloneEngineChoice(null);
+  }, [showCloneForm, selectedPackId]);
 
   // Versión activa del paquete: se muestra junto al borrador para que quede
   // claro qué versión se está editando y cuál sigue aplicando a los cálculos.
@@ -218,10 +238,18 @@ export function StudyReglasFiscales() {
 
 
   const cloneMutation = useMutation({
-    mutationFn: () => api.post(`/tax/rule-packs/${selectedPackId}/versions/clone`, { validFrom }),
+    mutationFn: () =>
+      api.post(`/tax/rule-packs/${selectedPackId}/versions/clone`, {
+        validFrom,
+        // Solo se envía el motor si la persona eligió uno distinto del de origen (D-R3-E).
+        ...(cloneEngineChoice !== null && cloneEngineChoice !== motorOrigen
+          ? { engineId: cloneEngineChoice }
+          : {}),
+      }),
     onSuccess: () => {
       invalidate();
       setShowCloneForm(false);
+      setCloneEngineChoice(null);
       // El borrador nuevo pasa a ser la versión seleccionada y se lleva al
       // usuario a las alícuotas, que es lo que vino a modificar.
       setSelectedVersionId(null);
@@ -576,6 +604,12 @@ export function StudyReglasFiscales() {
         versionDateError={versionDateError}
         setVersionDateError={setVersionDateError}
         cloneMutation={cloneMutation}
+        regimeId={detailQuery.data?.regime.id ?? ""}
+        familiaDefinida={Boolean(detailQuery.data?.regime.calcFamilyId)}
+        regimeEnginesQuery={regimeEnginesQuery}
+        engineId={cloneEngineId}
+        setEngineId={setCloneEngineChoice}
+        avisoMotor={avisoMotorClon}
       />
 
 

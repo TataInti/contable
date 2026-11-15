@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -624,6 +624,14 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     await cleanupFiscal();
   });
 
+  // Los motores de prueba del clon quedan inactivos: el arranque de la API compara los motores activos con el registro del código.
+  afterEach(async () => {
+    await prisma.taxEngine.updateMany({
+      where: { engineKey: { startsWith: "TEST-" }, isActive: true },
+      data: { isActive: false },
+    });
+  });
+
   it("crea versiones v2, clona tramos y comparte el SHA con el validador", async () => {
     const fx = await setupMasters();
     const pack = await rules.createPack(ctxOwner, {
@@ -682,6 +690,155 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
 
     expect(result?.rulesHash).toBe(cloned.rulesHash);
     expect(result?.issues).toEqual([]);
+  });
+
+  // Catálogo del sistema: se escribe con el cliente owner (el rol runtime no tiene permiso sobre tax_engines).
+  async function crearMotorDePrueba(
+    familia: { key: string } | { notKey: string },
+    engineKey: string,
+    engineVersion: string,
+    activo = true,
+  ) {
+    const found = await prisma.calcFamily.findFirst({
+      where: "notKey" in familia ? { key: { not: familia.notKey } } : { key: familia.key },
+    });
+    if (!found) throw new Error("Falta una familia de cálculo sembrada por la migración");
+    return prisma.taxEngine.upsert({
+      where: { engineKey },
+      update: { isActive: activo, engineVersion, familyId: found.id },
+      create: { engineKey, engineVersion, familyId: found.id, label: `Demo · ${engineVersion}`, isActive: activo },
+    });
+  }
+
+  it("el clon sin engineId conserva el motor y el hash de la versión de origen", async () => {
+    const fx = await setupMasters();
+    const pack = await rules.createPack(ctxOwner, {
+      code: "AR_CLON_SIN_MOTOR-F",
+      name: "Clon sin motor",
+      regimeId: fx.ri.id,
+    });
+    const source = await rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineVersion: "ar-vat-ri-v1.0.0",
+      rulesHash: "caller-value-is-not-canonical",
+    });
+
+    const cloned = await rules.cloneVersion(ctxOwner, { packId: pack.id, validFrom: "2026-07-01" });
+    expect(cloned.engineId).toBe(source.engineId);
+    expect(cloned.engineVersion).toBe("ar-vat-ri-v1.0.0");
+    expect(cloned.rulesHash).toBe(computeRulesHashV2(cloned));
+  });
+
+  // Motor elegido en el clon (D-R3-E).
+  it("el clon con un motor de la misma familia usa ese motor y deja el hash coherente con él", async () => {
+    const fx = await setupMasters();
+    const pack = await rules.createPack(ctxOwner, {
+      code: "AR_CLON_MOTOR_MISMO-F",
+      name: "Clon con otro motor de la familia",
+      regimeId: fx.ri.id,
+    });
+    const source = await rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineVersion: "ar-vat-ri-v1.0.0",
+      rulesHash: "caller-value-is-not-canonical",
+    });
+    const motor = await crearMotorDePrueba(
+      { key: "VAT_RI" },
+      "TEST-VAT-RI-CLON-F",
+      "ar-vat-ri-clon-prueba-f",
+    );
+
+    const cloned = await rules.cloneVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-07-01",
+      engineId: motor.id,
+    } as never);
+    expect(cloned.engineId).toBe(motor.id);
+    expect(cloned.engineVersion).toBe("ar-vat-ri-clon-prueba-f");
+    expect(cloned.rulesHash).toBe(computeRulesHashV2(cloned));
+    expect(cloned.rulesHash).not.toBe(source.rulesHash);
+  });
+
+  it("el clon con un motor de otra familia responde ENGINE_FAMILY_MISMATCH", async () => {
+    const fx = await setupMasters();
+    const pack = await rules.createPack(ctxOwner, {
+      code: "AR_CLON_OTRA_FAMILIA-F",
+      name: "Clon con motor de otra familia",
+      regimeId: fx.ri.id,
+    });
+    await rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineVersion: "ar-vat-ri-v1.0.0",
+      rulesHash: "caller-value-is-not-canonical",
+    });
+    const motor = await crearMotorDePrueba(
+      { notKey: "VAT_RI" },
+      "TEST-OTRA-FAMILIA-CLON-F",
+      "ar-otra-familia-clon-f",
+    );
+
+    await expect(
+      rules.cloneVersion(ctxOwner, {
+        packId: pack.id,
+        validFrom: "2026-07-01",
+        engineId: motor.id,
+      } as never),
+    ).rejects.toMatchObject({ code: "ENGINE_FAMILY_MISMATCH", path: ["engineId"] });
+  });
+
+  it("el clon con un motor inexistente responde TAX_ENGINE_NOT_FOUND", async () => {
+    const fx = await setupMasters();
+    const pack = await rules.createPack(ctxOwner, {
+      code: "AR_CLON_MOTOR_INEXISTENTE-F",
+      name: "Clon con motor inexistente",
+      regimeId: fx.ri.id,
+    });
+    await rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineVersion: "ar-vat-ri-v1.0.0",
+      rulesHash: "caller-value-is-not-canonical",
+    });
+
+    await expect(
+      rules.cloneVersion(ctxOwner, {
+        packId: pack.id,
+        validFrom: "2026-07-01",
+        engineId: "00000000-0000-4000-8000-00000000ffff",
+      } as never),
+    ).rejects.toMatchObject({ code: "TAX_ENGINE_NOT_FOUND", path: ["engineId"] });
+  });
+
+  it("el clon con un motor inactivo responde TAX_ENGINE_NOT_FOUND", async () => {
+    const fx = await setupMasters();
+    const pack = await rules.createPack(ctxOwner, {
+      code: "AR_CLON_MOTOR_INACTIVO-F",
+      name: "Clon con motor inactivo",
+      regimeId: fx.ri.id,
+    });
+    await rules.createVersion(ctxOwner, {
+      packId: pack.id,
+      validFrom: "2026-01-01",
+      engineVersion: "ar-vat-ri-v1.0.0",
+      rulesHash: "caller-value-is-not-canonical",
+    });
+    const motor = await crearMotorDePrueba(
+      { key: "VAT_RI" },
+      "TEST-VAT-RI-INACTIVO-F",
+      "ar-vat-ri-inactivo-f",
+      false,
+    );
+
+    await expect(
+      rules.cloneVersion(ctxOwner, {
+        packId: pack.id,
+        validFrom: "2026-07-01",
+        engineId: motor.id,
+      } as never),
+    ).rejects.toMatchObject({ code: "TAX_ENGINE_NOT_FOUND", path: ["engineId"] });
   });
 
   it("el rol runtime puede reemplazar una regla de alícuota en un borrador", async () => {

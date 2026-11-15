@@ -24,6 +24,7 @@ export interface RuleVersion {
   createdByFirmId?: string | null;
   validFrom: string;
   validTo: string | null;
+  engineId?: string | null;
   engineVersion: string;
   rulesHash: string;
   rateRules: RuleRow[];

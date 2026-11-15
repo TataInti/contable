@@ -5,6 +5,7 @@ const FIELD_LABELS: Record<string, string> = {
   authorityId: "Organismo recaudador",
   code: "Código",
   concept: "Concepto",
+  engineId: "Opción de cálculo",
   engineVersion: "Motor compatible con el régimen",
   frequency: "Frecuencia",
   jurisdictionId: "Jurisdicción",
