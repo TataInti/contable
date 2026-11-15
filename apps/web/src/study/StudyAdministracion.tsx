@@ -30,249 +30,34 @@ import {
   type DenseColumn,
   type DenseTab,
 } from "../ui/Dense";
-import { credentialsCsv, parseBatchUsers, type BatchUserLine } from "./batch-users.js";
+import { credentialsCsv, parseBatchUsers } from "./batch-users.js";
 import "./study.css";
 import { formatearFechaHora } from "../lib/formatoFechas";
-
-interface PortalInvitation {
-  id: string;
-  emailNormalized: string;
-  role: string;
-  expiresAt: string;
-  acceptedAt: string | null;
-  revokedAt: string | null;
-}
-interface PortalMembership {
-  id: string;
-  role: string;
-  status: string;
-  revokedAt: string | null;
-  user: { name: string; emailNormalized: string };
-}
-interface CreatedInvitation {
-  invitationToken: string;
-  email: string;
-  expiresAt: string;
-}
-
-interface InternalMember {
-  id: string;
-  userId: string;
-  role: string;
-  status: string;
-  acceptedAt: string | null;
-  user?: { name: string; emailNormalized: string; status: string } | null;
-}
-interface FirmProfile {
-  legalName: string;
-  displayName: string;
-  taxId: string | null;
-  timezone: string;
-}
-interface CreatedInternalUser {
-  userId: string;
-  email: string;
-  name: string;
-  role: string;
-  temporaryPassword: string;
-}
-
-// Recuperación de acceso: el enlace se muestra UNA sola vez; en la base sólo
-// vive el hash del token. El gestor nunca ve ni define la contraseña.
-interface CreatedAccessRecovery {
-  recoveryId: string;
-  expiresAt: string;
-  sessionsRevoked: number;
-  recoveryToken: string;
-}
-
-interface AccountingStandardRow {
-  id: string;
-  name: string;
-  isActive: boolean;
-}
-
-const INTERNAL_ROLE_LABELS: Record<string, string> = {
-  OWNER: "Titular",
-  ADMIN: "Administrador",
-  PREPARER: "Preparador",
-  REVIEWER: "Revisor",
-  AUDITOR_READONLY: "Auditor · sólo lectura",
-};
-
-const INTERNAL_MODULES_BY_ROLE: Record<string, string[]> = {
-  OWNER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
-  ADMIN: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
-  PREPARER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
-  REVIEWER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
-  AUDITOR_READONLY: ["Clientes", "Configuración fiscal", "Liquidaciones", "Rentabilidad"],
-};
-
-const INTERNAL_ROLE_OPTIONS = Object.entries(INTERNAL_ROLE_LABELS);
-const INTERNAL_MODULES = INTERNAL_MODULES_BY_ROLE.OWNER ?? [];
-const PORTAL_ROLE_LABELS: Record<string, string> = {
-  OWNER: "Titular",
-  COLLABORATOR: "Colaborador",
-  READONLY: "Sólo lectura",
-};
-
-type AdminTab = "internal" | "portal" | "standards" | "profile" | "controls";
-
-const ARGENTINA_TIME_ZONES = [
-  "America/Argentina/Buenos_Aires",
-  "America/Argentina/Catamarca",
-  "America/Argentina/Cordoba",
-  "America/Argentina/Jujuy",
-  "America/Argentina/La_Rioja",
-  "America/Argentina/Mendoza",
-  "America/Argentina/Rio_Gallegos",
-  "America/Argentina/Salta",
-  "America/Argentina/San_Juan",
-  "America/Argentina/San_Luis",
-  "America/Argentina/Tucuman",
-  "America/Argentina/Ushuaia",
-];
-
-const TIME_ZONE_GROUP_LABELS: Record<string, string> = {
-  Africa: "África",
-  America: "América",
-  Antarctica: "Antártida",
-  Arctic: "Ártico",
-  Asia: "Asia",
-  Atlantic: "Atlántico",
-  Australia: "Australia",
-  Etc: "Otros",
-  Europe: "Europa",
-  Indian: "Océano Índico",
-  Pacific: "Pacífico",
-  UTC: "UTC",
-};
-
-interface TimeZoneOption {
-  value: string;
-  label: string;
-}
-
-interface TimeZoneGroup {
-  key: string;
-  label: string;
-  options: TimeZoneOption[];
-}
-
-function timeZoneCityName(timeZone: string): string {
-  return timeZone.split("/").at(-1)?.replaceAll("_", " ") ?? timeZone;
-}
-
-const TIME_ZONE_LABEL_CACHE = new Map<string, string>();
-
-function timeZoneLabel(timeZone: string): string {
-  const cached = TIME_ZONE_LABEL_CACHE.get(timeZone);
-  if (cached) return cached;
-  const city = timeZoneCityName(timeZone);
-  try {
-    const offset = new Intl.DateTimeFormat("es-AR", {
-      timeZone,
-      timeZoneName: "shortOffset",
-    })
-      .formatToParts(new Date())
-      .find((part) => part.type === "timeZoneName")?.value;
-    const label = offset ? `${city} (${offset})` : city;
-    TIME_ZONE_LABEL_CACHE.set(timeZone, label);
-    return label;
-  } catch {
-    TIME_ZONE_LABEL_CACHE.set(timeZone, city);
-    return city;
-  }
-}
-
-const SUPPORTED_TIME_ZONES =
-  typeof Intl.supportedValuesOf === "function"
-    ? Intl.supportedValuesOf("timeZone")
-    : ARGENTINA_TIME_ZONES;
-const TIME_ZONE_OPTIONS = Array.from(
-  new Set([...SUPPORTED_TIME_ZONES, "UTC", ...ARGENTINA_TIME_ZONES]),
-).sort((left, right) => timeZoneCityName(left).localeCompare(timeZoneCityName(right), "es-AR"));
-
-function groupTimeZones(currentTimeZone?: string): TimeZoneGroup[] {
-  const zones = currentTimeZone && !TIME_ZONE_OPTIONS.includes(currentTimeZone)
-    ? [...TIME_ZONE_OPTIONS, currentTimeZone]
-    : TIME_ZONE_OPTIONS;
-  const labelCounts = new Map<string, number>();
-  for (const timeZone of zones) {
-    const label = timeZoneLabel(timeZone);
-    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
-  }
-  const groups = new Map<string, TimeZoneOption[]>();
-  for (const timeZone of zones) {
-    const key = timeZone.split("/")[0] ?? "UTC";
-    const baseLabel = timeZoneLabel(timeZone);
-    const parts = timeZone.split("/");
-    const qualifier = parts.length > 1 ? parts[parts.length - 2] ?? key : key;
-    const label = (labelCounts.get(baseLabel) ?? 0) > 1
-      ? `${baseLabel} · ${TIME_ZONE_GROUP_LABELS[qualifier] ?? qualifier.replaceAll("_", " ")}`
-      : baseLabel;
-    groups.set(key, [...(groups.get(key) ?? []), { value: timeZone, label }]);
-  }
-  return [...groups.entries()]
-    .map(([key, options]) => ({
-      key,
-      label: TIME_ZONE_GROUP_LABELS[key] ?? key,
-      options,
-    }))
-    .sort((left, right) => left.label.localeCompare(right.label, "es-AR"));
-}
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value.trim());
-}
-
-function batchUserErrorLabel(error: string): string {
-  return error.replace(/\bEmail\b/g, "Correo").replace(/\bemail\b/g, "correo");
-}
-
-interface PortalRow {
-  key: string;
-  name: string | null;
-  email: string;
-  role: string;
-  status: string;
-  detail?: string;
-  membership: PortalMembership | null;
-  onRevoke: (() => void) | null;
-  onToggleStatus: (() => void) | null;
-  onEdit: (() => void) | null;
-  pending: boolean;
-}
-
-interface BatchResult {
-  line: BatchUserLine;
-  created: CreatedInternalUser | null;
-  error: string | null;
-}
-
-function initials(name: string | null | undefined): string {
-  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  return parts
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toLocaleUpperCase("es-AR");
-}
-
-function userMutationError(error: unknown, fallback: string): string {
-  const code =
-    error && typeof error === "object" && "code" in error
-      ? String((error as { code?: unknown }).code)
-      : "";
-  if (code === "LAST_ADMIN_REQUIRED") {
-    return "El estudio debe conservar al menos un titular o administrador activo.";
-  }
-  if (code === "USER_EMAIL_CONFLICT") {
-    return "Ese correo ya está asociado a otra cuenta.";
-  }
-  return error instanceof Error && error.message ? error.message : fallback;
-}
+import {
+  type AccountingStandardRow,
+  type AdminTab,
+  type BatchResult,
+  type CreatedAccessRecovery,
+  type CreatedInternalUser,
+  type CreatedInvitation,
+  type FirmProfile,
+  type InternalMember,
+  type PortalInvitation,
+  type PortalMembership,
+  type PortalRow,
+  INTERNAL_MODULES,
+  INTERNAL_MODULES_BY_ROLE,
+  INTERNAL_ROLE_LABELS,
+  INTERNAL_ROLE_OPTIONS,
+  PORTAL_ROLE_LABELS,
+} from "./administracion/tipos";
+import { groupTimeZones, timeZoneLabel } from "./administracion/zonasHorarias";
+import {
+  batchUserErrorLabel,
+  initials,
+  isValidEmail,
+  userMutationError,
+} from "./administracion/utilidades";
 
 /** Referencia rol × módulo: reemplaza repetir la lista de módulos en cada fila. */
 function RoleMatrix({ highlight }: { highlight: string | null }) {
