@@ -22,6 +22,7 @@ import { isPrismaUniqueViolation } from "../lib/prisma-errors.js";
  *   Publicar oculta la visible anterior en la misma transacción; mostrar una
  *   oculta intercambia con la visible y lo informa en la respuesta.
  * - «Ocultar» es reversible. No hay ruta para quitar celdas publicadas.
+ * - Una celda se quita solo de un borrador, y la baja queda auditada con la celda anterior.
  * - Cada escritura deja AuditEvent con antes y después.
  */
 
@@ -86,6 +87,10 @@ function notFound(): TaxCalendarError {
   return new TaxCalendarError("CALENDAR_NOT_FOUND", "El calendario no existe en este estudio");
 }
 
+function entryNotFound(): TaxCalendarError {
+  return new TaxCalendarError("CALENDAR_ENTRY_NOT_FOUND", "La celda no existe en este calendario");
+}
+
 function snapshot(calendar: {
   id: string;
   status: string;
@@ -134,7 +139,7 @@ async function recordAudit(
   action: string,
   entityId: string,
   before: Prisma.InputJsonObject | null,
-  after: Prisma.InputJsonObject,
+  after: Prisma.InputJsonObject | null,
 ): Promise<void> {
   await tx.auditEvent.create({
     data: {
@@ -145,7 +150,7 @@ async function recordAudit(
       entityType: "tax_calendar",
       entityId,
       ...(before !== null ? { before } : {}),
-      after,
+      ...(after !== null ? { after } : {}),
     },
   });
 }
@@ -226,6 +231,16 @@ function assertDraft(calendar: { status: string }): void {
     calendar.status === "PUBLISHED"
       ? "El calendario está publicado y no se edita. Creá a partir de este una versión nueva para corregirlo."
       : "El calendario está oculto y no se edita. Mostralo o creá a partir de este una versión nueva.",
+    { path: ["status"] },
+  );
+}
+
+/** Quitar una celda solo es posible en un borrador: lo publicado u oculto se corrige con una versión nueva. */
+function assertDraftForEntryRemoval(calendar: { status: string }): void {
+  if (calendar.status === "DRAFT") return;
+  throw new TaxCalendarError(
+    "CALENDAR_NOT_DRAFT",
+    "Este calendario está publicado (u oculto): para corregirlo, creá una versión nueva a partir de este.",
     { path: ["status"] },
   );
 }
@@ -407,6 +422,29 @@ export class TaxCalendarRegistryService {
       });
       await recordAudit(tx, ctx, "tax_calendar.entry_updated", calendarId, entrySnapshot(current), entrySnapshot(updated));
       return loadCalendar(tx, ctx.firmId, calendarId);
+    });
+  }
+
+  /**
+   * Quita una celda de un borrador (corte 2a-ii-a). Lo publicado u oculto no se
+   * quita: se corrige con una versión nueva. Lectura, auditoría y borrado van en
+   * la misma transacción.
+   */
+  async removeEntry(ctx: TenantContext, calendarId: string, entryId: string): Promise<void> {
+    await withTenantContext(ctx, async (tx) => {
+      const calendar = await loadCalendar(tx, ctx.firmId, calendarId);
+      assertDraftForEntryRemoval(calendar);
+      const entry = calendar.entries.find((item) => item.id === entryId);
+      if (!entry) throw entryNotFound();
+      await recordAudit(tx, ctx, "tax_calendar.entry_removed", calendarId, entrySnapshot(entry), null);
+      const removed = await tx.taxCalendarEntry.deleteMany({
+        where: { id: entryId, calendarId, firmId: ctx.firmId },
+      });
+      if (removed.count !== 1) {
+        // Otra operación cambió el estado o la celda después de leerlos: se informa cuál.
+        assertDraftForEntryRemoval(await loadCalendar(tx, ctx.firmId, calendarId));
+        throw entryNotFound();
+      }
     });
   }
 

@@ -114,6 +114,17 @@ export function taxCalendarRoutes(app: FastifyInstance) {
     }
   });
 
+  app.delete("/api/v1/firms/:firmId/tax-calendars/:calendarId/entries/:entryId", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const { calendarId, entryId } = req.params as { calendarId: string; entryId: string };
+      await calendars.removeEntry(ctx, calendarId, entryId);
+      return reply.code(204).send();
+    } catch (err) {
+      return handleError(app, reply, err);
+    }
+  });
+
   app.get("/api/v1/firms/:firmId/tax-calendars/:calendarId/validation", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     try {
