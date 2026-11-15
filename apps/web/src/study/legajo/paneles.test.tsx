@@ -208,7 +208,7 @@ describe("Legajo · libros IVA (K4)", () => {
       ),
     );
     expect(
-      await screen.findByText(/Se importaron 2 comprobante\(s\) de ventas \(Demo ventas\)/),
+      await screen.findByText(/Se importaron 2 comprobantes de ventas \(Demo ventas\)/),
     ).toBeInTheDocument();
   });
 
@@ -393,5 +393,19 @@ describe("Legajo · pie del cajón de saldo inicial (Foco 2.7a)", () => {
       cancelar.compareDocumentPosition(registrar) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(dialogo.querySelector(".action-drawer__content")?.contains(registrar)).toBe(false);
+  });
+});
+
+describe("Legajo · panel Importar libros IVA (Foco 2.7b)", () => {
+  it("«Elegí el archivo del libro» aparece una sola vez por sección y «Analizar alícuotas» e «Importar» van en un mismo grupo", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    const dialogo = await abrirLibrosIva();
+    const ventas = seccionLibro(dialogo, "Ventas");
+    expect(within(ventas).getAllByText(/Elegí el archivo del libro/)).toHaveLength(1);
+    const grupo = ventas.querySelector<HTMLElement>(".legajo-libro__acciones");
+    expect(grupo).not.toBeNull();
+    expect(within(grupo!).getByRole("button", { name: "Analizar alícuotas" })).toBeDisabled();
+    expect(within(grupo!).getByRole("button", { name: "Importar" })).toBeDisabled();
   });
 });

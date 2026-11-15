@@ -512,6 +512,14 @@
   flex: 0 0 100%;
 }
 
+/* Analizar alícuotas e Importar del mismo libro: separados por el espaciado en línea. */
+.legajo-libro__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
 .workpaper-source-import {
   display: grid;
   grid-template-columns: minmax(12rem, 1fr) minmax(16rem, 1.4fr) auto;

@@ -5,6 +5,7 @@ import { AsyncState, Button, Table } from "@contable/design-system";
 import { Icon } from "../../../ui/Icon";
 import { formatDateTime, formatMoney } from "../formato";
 import type { CreditLot } from "../tipos";
+import { identificadorCorto, pluralizar } from "../textos";
 
 export interface FormularioEditarSaldo {
   reference: string;
@@ -94,7 +95,7 @@ export function EtapaSaldos({
                   <>
                     <strong>{lot.kind.replaceAll("_", " ")}</strong>
                     <br />
-                    <small>{lot.movements.length} movimiento(s)</small>
+                    <small>{pluralizar(lot.movements.length, "movimiento", "movimientos")}</small>
                   </>
                 ),
               },
@@ -123,7 +124,9 @@ export function EtapaSaldos({
                     "Sin aplicaciones"
                   ) : (
                     <details className="workpaper-credit-movements">
-                      <summary>{lot.movements.length} movimiento(s)</summary>
+                      <summary>
+                        {pluralizar(lot.movements.length, "movimiento", "movimientos")}
+                      </summary>
                       <ul>
                         {lot.movements.map((movement) => (
                           <li key={movement.id}>
@@ -140,12 +143,15 @@ export function EtapaSaldos({
                 key: "evidence",
                 header: "Respaldo",
                 render: (lot) =>
-                  lot.reference ??
-                  (lot.evidenceDocumentId
-                    ? "Documentado"
-                    : lot.createdBy
-                      ? `Carga manual · ${lot.createdBy.name}`
-                      : "Cierre de liquidación"),
+                  typeof lot.reference === "string" ? (
+                    <span title={lot.reference}>{identificadorCorto(lot.reference)}</span>
+                  ) : lot.evidenceDocumentId ? (
+                    "Documentado"
+                  ) : lot.createdBy ? (
+                    `Carga manual · ${lot.createdBy.name}`
+                  ) : (
+                    "Cierre de liquidación"
+                  ),
               },
               {
                 key: "log",
@@ -155,7 +161,7 @@ export function EtapaSaldos({
                     <span className="muted-copy">Sin cambios</span>
                   ) : (
                     <details className="workpaper-credit-log">
-                      <summary>{lot.history.length} cambio(s)</summary>
+                      <summary>{pluralizar(lot.history.length, "cambio", "cambios")}</summary>
                       <ul>
                         {lot.history.map((entry) => (
                           <li key={entry.id}>

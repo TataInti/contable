@@ -264,3 +264,17 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
     );
   });
 });
+
+describe("Legajo · acciones de estado antes de la barra de etapas (Foco 2.7b)", () => {
+  it("las acciones de estado van antes de la barra de etapas, para verse sin desplazar", async () => {
+    contexto(TODAS);
+    const { container } = renderLegajos([legajoDemo("CALCULATED")]);
+    const acciones = await accionesDeLaTarjeta(container);
+    const barra = container.querySelector<HTMLElement>(".workpaper-step-footer");
+    expect(barra).not.toBeNull();
+    expect(
+      acciones.compareDocumentPosition(barra!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Enviar a revisión" })).toBeTruthy();
+  });
+});

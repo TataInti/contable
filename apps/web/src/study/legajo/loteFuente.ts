@@ -1,6 +1,7 @@
 import { api } from "../../lib/api";
 import { hashSourceFile, parseSourceFile } from "./archivoFuente";
 import type { WorkpaperSource } from "./tipos";
+import { pluralizar } from "./textos";
 
 // Los libros IVA se importan desde su fila de ARCA IVA («Importar libro»); «Importar lote» queda para las demás fuentes.
 export const CODIGO_FUENTE_LIBRO_IVA = {
@@ -63,7 +64,7 @@ export async function importarLoteFuente({
   }
   if (errorRows > 0) {
     throw new Error(
-      `El lote quedó validado con ${errorRows} fila(s) observadas. Corregí el archivo antes de reimportar.`,
+      `El lote quedó validado con ${pluralizar(errorRows, "fila observada", "filas observadas")}. Corregí el archivo antes de reimportar.`,
     );
   }
   if (status === "VALIDATED") {

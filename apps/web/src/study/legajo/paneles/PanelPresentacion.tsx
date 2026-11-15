@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, Field, getStatusBadgeMeta, MoneyField, useNotify } from "@contable/design-system";
 import { api } from "../../../lib/api";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { RECEIPT_ACCEPT, uploadFilingReceipt, waitForReceiptReady } from "../../filingReceipt";
 import type { EvidenceDocument, TaxPosition } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
@@ -82,21 +82,21 @@ export function PanelPresentacion({
       description="Cargá los datos de la presentación y adjuntá el acuse que emite el organismo."
       size="wide"
       footer={
-        <>
-          <Button
-            type="submit"
-            form="legajo-presentacion"
-            loading={recordFilingMutation.isPending}
-            loadingLabel="Subiendo y validando el acuse"
-            disabled={motivoRegistrar !== null}
-          >
-            Registrar presentación
-          </Button>
-          <Button type="button" variant="ghost" onClick={onCerrar}>
-            Cancelar
-          </Button>
-          {motivoRegistrar ? <span className="muted-copy">{motivoRegistrar}</span> : null}
-        </>
+        <ActionDrawerFooter
+          primary={
+            <Button
+              type="submit"
+              form="legajo-presentacion"
+              loading={recordFilingMutation.isPending}
+              loadingLabel="Subiendo y validando el acuse"
+              disabled={motivoRegistrar !== null}
+            >
+              Registrar presentación
+            </Button>
+          }
+          hint={motivoRegistrar}
+          onCancel={onCerrar}
+        />
       }
     >
       <form
@@ -122,14 +122,7 @@ export function PanelPresentacion({
           onChange={(event) => setFilingForm({ ...filingForm, filedAt: event.target.value })}
           required
         />
-        <Field
-          label="Identificador externo"
-          id="tax-filing-external-id"
-          value={filingForm.externalId}
-          onChange={(event) => setFilingForm({ ...filingForm, externalId: event.target.value })}
-          placeholder="Opcional"
-        />
-        <div className="ds-field">
+        <div className="ds-field study-form__full">
           <label className="ds-field__label" htmlFor="tax-filing-evidence">
             Acuse de presentación
           </label>
@@ -154,16 +147,24 @@ export function PanelPresentacion({
           </small>
         </div>
         {!filingForm.evidenceDocumentId ? (
-          <Field
-            label="Archivo del acuse"
-            id="tax-filing-receipt"
-            type="file"
-            accept={RECEIPT_ACCEPT}
-            hint="PDF o imagen."
-            required
-            onChange={(event) => setFilingReceipt(event.target.files?.[0] ?? null)}
-          />
+          <div className="study-form__full">
+            <Field
+              label="Archivo del acuse"
+              id="tax-filing-receipt"
+              type="file"
+              accept={RECEIPT_ACCEPT}
+              hint="PDF o imagen."
+              required
+              onChange={(event) => setFilingReceipt(event.target.files?.[0] ?? null)}
+            />
+          </div>
         ) : null}
+        <Field
+          label="Identificador externo (opcional)"
+          id="tax-filing-external-id"
+          value={filingForm.externalId}
+          onChange={(event) => setFilingForm({ ...filingForm, externalId: event.target.value })}
+        />
         <WorkpaperActionError error={recordFilingMutation.error} />
       </form>
     </ActionDrawer>

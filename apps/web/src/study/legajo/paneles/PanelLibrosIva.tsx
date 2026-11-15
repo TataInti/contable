@@ -8,6 +8,7 @@ import { importarLoteFuente, ladoDeLibroIva } from "../loteFuente";
 import { SifereAnalysisPanel } from "../SifereAnalysisPanel";
 import type { SifereAnalysis, WorkpaperSource } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
+import { pluralizar } from "../textos";
 
 type Lado = "SALE" | "PURCHASE";
 
@@ -107,7 +108,7 @@ export function PanelLibrosIva({
     onSuccess: (data) => {
       limpiarPanel();
       notify.success(
-        `Se importaron ${data.batch.committed} comprobante(s) de ${data.analysis.direction === "SALE" ? "ventas" : "compras"} (${data.analysis.sheetName}). Quedaron asociados al cliente y al período activo.`,
+        `${data.batch.committed === 1 ? "Se importó" : "Se importaron"} ${pluralizar(data.batch.committed, "comprobante", "comprobantes")} de ${data.analysis.direction === "SALE" ? "ventas" : "compras"} (${data.analysis.sheetName}). ${data.batch.committed === 1 ? "Quedó asociado" : "Quedaron asociados"} al cliente y al período activo.`,
       );
       invalidarCobertura();
     },
@@ -199,7 +200,7 @@ export function PanelLibrosIva({
               id={`libro-iva-${lado}`}
               type="file"
               label="Archivo del libro (.xlsx, .csv, .txt o .json)"
-              hint={file ? file.name : "Elegí el archivo del libro"}
+              hint={file ? file.name : undefined}
               accept=".xlsx,.xls,.csv,.txt,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,application/json"
               onChange={(event) => {
                 const selected = event.target.files?.[0] ?? null;
@@ -208,28 +209,30 @@ export function PanelLibrosIva({
               }}
             />
             <div>
-              {!file || excel ? (
+              <div className="legajo-libro__acciones">
+                {!file || excel ? (
+                  <Button
+                    variant="secondary"
+                    disabled={!file || isAnalyzing}
+                    loading={isAnalyzing}
+                    onClick={() => {
+                      if (file) analyzeSifereMutation.mutate({ direction: lado, file });
+                    }}
+                  >
+                    Analizar alícuotas
+                  </Button>
+                ) : null}
                 <Button
-                  variant="secondary"
-                  disabled={!file || isAnalyzing}
-                  loading={isAnalyzing}
+                  variant={principal === lado ? "primary" : "secondary"}
+                  disabled={!listoParaImportar(lado) || isImporting || fuentes === undefined}
+                  loading={isImporting}
                   onClick={() => {
-                    if (file) analyzeSifereMutation.mutate({ direction: lado, file });
+                    if (file) importar(lado, file);
                   }}
                 >
-                  Analizar alícuotas
+                  Importar
                 </Button>
-              ) : null}
-              <Button
-                variant={principal === lado ? "primary" : "secondary"}
-                disabled={!listoParaImportar(lado) || isImporting || fuentes === undefined}
-                loading={isImporting}
-                onClick={() => {
-                  if (file) importar(lado, file);
-                }}
-              >
-                Importar
-              </Button>
+              </div>
               {motivo ? <p className="muted-copy">{motivo}</p> : null}
             </div>
             <WorkpaperActionError

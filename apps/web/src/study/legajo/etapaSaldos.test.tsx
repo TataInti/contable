@@ -143,3 +143,16 @@ describe("Legajo · etapa Saldos (K9)", () => {
     expect(await screen.findByRole("button", { name: "Reintentar" })).toBeInTheDocument();
   });
 });
+
+describe("Legajo · etapa Saldos: respaldo de cierre con identificador corto (Foco 2.7b)", () => {
+  it("el identificador del cierre se muestra corto y el completo queda en title", async () => {
+    fijarContexto(PERMISOS_SALDOS);
+    const referencia = "Cierre 01a1de63-eb18-4c2a-9d3e-6f7a8b9c0d1e · versión 2";
+    vi.mocked(api.get).mockImplementation(
+      rutasDemo({ saldos: [{ ...saldoDemo, reference: referencia }] }) as never,
+    );
+    renderLegajo();
+    const respaldo = await screen.findByText("Cierre 01a1de63 · versión 2");
+    expect(respaldo).toHaveAttribute("title", referencia);
+  });
+});

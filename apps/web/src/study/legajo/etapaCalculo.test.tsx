@@ -254,9 +254,7 @@ describe("Legajo · etapa Cálculo (K12)", () => {
     renderLegajo();
     await abrirCalculo();
     fireEvent.click(await screen.findByRole("button", { name: "Registrar pago" }));
-    expect(
-      await screen.findByRole("dialog", { name: "Registrar pago · Ingresos Brutos" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Registrar pago" })).toBeInTheDocument();
   });
 
   it("Actualizar vuelve a consultar la posición fiscal del período", async () => {
