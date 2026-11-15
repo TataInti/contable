@@ -34,6 +34,7 @@ import {
 import { Icon } from "../ui/Icon";
 import "./study.css";
 import "./StudyCatalogosFiscales.css";
+import { formatearRango } from "../lib/formatoFechas";
 
 type JurisdictionOption = FiscalJurisdiction;
 type TaxTypeOption = FiscalTaxType;
@@ -151,14 +152,8 @@ const emptyJurisdictionForm: JurisdictionForm = {
 
 const emptyTaxTypeForm: TaxTypeForm = { code: "", name: "", defaultFamilyId: "" };
 
-function shortDate(value: string | null) {
-  return value ? new Date(value).toLocaleDateString("es-AR") : "—";
-}
-
 function validityLabel(validFrom: string, validTo: string | null) {
-  return validTo
-    ? `${shortDate(validFrom)} — ${shortDate(validTo)}`
-    : `Desde ${shortDate(validFrom)}`;
+  return formatearRango(validFrom, validTo);
 }
 
 type CatalogTab = "jurisdictions" | "taxTypes" | "authorities" | "regimes" | "activities";

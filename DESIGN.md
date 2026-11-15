@@ -53,6 +53,13 @@ Esta guía y las reglas globales de diseño y producto de Contable (aprobadas po
 
 Antes de tocar una validación, un bloqueo o un control se lo clasifica: **integridad** (se conserva y se explica), **secuencia** (se convierte en guía: se guarda incompleto y se marca qué falta) u **opinión del sistema** (se quita). Los cambios de reglas de negocio, permisos o flujos se proponen a Ciro y los decide Inti.
 
+### Fechas y períodos
+
+- Un formato por concepto en las pantallas del equipo: **fecha** dd/mm/aaaa con ceros («05/07/2026», «01/01/2027»); **mes** «julio de 2026», en minúscula; **rango** «01/07/2026 al 31/07/2026», sin flecha ni formato ISO; **fecha y hora** «05/07/2026 14:30», en 24 h y en hora de Argentina. Un rango sin fin se muestra «Desde 01/07/2026».
+- Valor interno ISO, pantalla en español: el estado, la API, la URL, el `value` de los campos `type="date"` y los nombres de archivo siguen en aaaa-mm-dd. Solo cambia lo que se muestra.
+- Una sola pieza compartida: `apps/web/src/lib/formatoFechas.ts` (`formatearFecha`, `formatearMes`, `formatearRango`, `formatearFechaHora`). El vacío lo indica cada pantalla con el segundo parámetro («—» por defecto). Ninguna pantalla formatea fechas con `toLocaleDateString`, `Intl.DateTimeFormat` ni `slice(0, 10)`.
+- Los selectores nativos de fecha del navegador usan el idioma del navegador y quedan fuera de este formato.
+
 ### Glosario vigente (P3)
 
 - **Configuración fiscal**: pantalla del cliente. Es el único título de esa pantalla.
@@ -1090,6 +1097,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Propósito:** mostrar qué hay para resolver en el alcance de quien entra (el estudio en `/`, la empresa del cliente en `/portal`) y llevar a la pantalla donde se resuelve.
 
+**Fechas y períodos:** los períodos y vencimientos de Inicio usan el formato único de la sección «Fechas y períodos».
+
 **Vigente en main (se conserva):** el recordatorio de acuses de presentación pendientes (#87) y su presentación ajustada (#90); «Liquidaciones en curso» deja afuera las liquidaciones `FINALIZED` y `SUPERSEDED` (#90), porque lo finalizado sin presentar ya figura en el recordatorio de acuses.
 
 **Composición:**
@@ -1122,6 +1131,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Propósito:** consultar un período y continuar sus tareas, distinguiendo pestaña, etapa y estado del legajo.
 
+**Fechas y períodos:** el período del legajo y las fechas de pago, presentación y cálculo usan el formato único de la sección «Fechas y períodos».
+
 **Composición:** encabezado C01; contexto de cliente, impuesto, período y revisión; estado en texto (C08); advertencia de autorrevisión visible; secciones con pestañas (C05); tabla (C04); respaldo y metadatos en detalle o panel (C06 y C09).
 
 **Entradas de pantalla:** identificación de contexto, estado, revisión, capacidades, fuentes de saldos y enlaces de respaldo. Los saldos y la posibilidad de cargar o rectificar los resuelve el dominio; la tabla los presenta.
@@ -1139,6 +1150,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 ### R03 — Reglas fiscales
 
 Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFooter` con «Cancelar» a la izquierda y el motivo junto a la acción principal; «Activar versión» conserva su cajón (decisión D-R3-B de Inti, fila A3) con el pie de `ActionDrawerFooter`; «Opción de cálculo» preselecciona la opción de origen y dice la consecuencia al cambiarla; la lista cuenta «N de M paquetes» cuando no entran todas las filas; Vencimientos, Fuentes, Control profesional y Probar van sin caja. Pendiente: la pestaña Alícuotas sigue con caja (hallazgo 26 de ux).
+
+**Fechas y períodos:** las vigencias, las fechas de versión, de fuente y de vencimiento usan el formato único de la sección «Fechas y períodos».
 
 **Propósito:** elegir un paquete, comprender su versión y vigencia, y preparar cambios de forma deliberada.
 

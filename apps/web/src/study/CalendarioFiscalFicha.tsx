@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, useNotify } from "@contable/design-system";
 import { api } from "../lib/api";
+import { formatearFecha } from "../lib/formatoFechas";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import {
@@ -232,7 +233,7 @@ export function CalendarioFiscalFicha({
   const askRemove = (entry: CalendarEntryRow) => {
     confirm.ask({
       title: "Quitar la celda",
-      description: `Se quita «${entry.conceptLabel}» (${periodLabel(entry)}, vence ${dayOf(entry.dueDate) ?? ""}). El calendario sigue en borrador y la validación se vuelve a calcular.`,
+      description: `Se quita «${entry.conceptLabel}» (${periodLabel(entry)}, vence ${formatearFecha(entry.dueDate, "")}). El calendario sigue en borrador y la validación se vuelve a calcular.`,
       confirmLabel: "Quitar celda",
       tone: "danger",
       onConfirm: () => removeEntry.mutate(entry.id),
@@ -264,7 +265,7 @@ export function CalendarioFiscalFicha({
       header: "Vencimiento",
       sortValue: (entry) => dayOf(entry.dueDate) ?? "",
       align: "right",
-      render: (entry) => dayOf(entry.dueDate) ?? "—",
+      render: (entry) => formatearFecha(entry.dueDate),
     },
     { key: "adjustment", header: "Ajuste", render: (entry) => adjustmentLabel(entry.adjustment) },
     {
@@ -286,7 +287,7 @@ export function CalendarioFiscalFicha({
                   type="button"
                   variant="text"
                   size="row"
-                  aria-label={`Editar ${entry.conceptLabel}, vence ${dayOf(entry.dueDate) ?? ""}`}
+                  aria-label={`Editar ${entry.conceptLabel}, vence ${formatearFecha(entry.dueDate, "")}`}
                   onClick={() => setCellDrawer({ entry })}
                 >
                   Editar
@@ -295,7 +296,7 @@ export function CalendarioFiscalFicha({
                   type="button"
                   variant="danger"
                   size="row"
-                  aria-label={`Quitar ${entry.conceptLabel}, vence ${dayOf(entry.dueDate) ?? ""}`}
+                  aria-label={`Quitar ${entry.conceptLabel}, vence ${formatearFecha(entry.dueDate, "")}`}
                   onClick={() => askRemove(entry)}
                 >
                   Quitar
@@ -316,14 +317,14 @@ export function CalendarioFiscalFicha({
       key: "published",
       header: "Publicación",
       render: (item) =>
-        item.publishedAt ? `${dayOf(item.publishedAt) ?? ""} · ${who(item.publishedByUserId) ?? ""}` : "—",
+        item.publishedAt ? `${formatearFecha(item.publishedAt, "")} · ${who(item.publishedByUserId) ?? ""}` : "—",
     },
     {
       key: "hidden",
       header: "Ocultamiento",
-      render: (item) => (item.hiddenAt ? `${dayOf(item.hiddenAt) ?? ""} · ${who(item.hiddenByUserId) ?? ""}` : "—"),
+      render: (item) => (item.hiddenAt ? `${formatearFecha(item.hiddenAt, "")} · ${who(item.hiddenByUserId) ?? ""}` : "—"),
     },
-    { key: "created", header: "Creada", render: (item) => dayOf(item.createdAt) ?? "—" },
+    { key: "created", header: "Creada", render: (item) => formatearFecha(item.createdAt) },
   ];
 
   const sourceVersion = calendar.supersedesId
@@ -357,10 +358,10 @@ export function CalendarioFiscalFicha({
                   ],
                   [
                     "Publicada",
-                    calendar.publishedAt ? `${dayOf(calendar.publishedAt) ?? ""} · ${who(calendar.publishedByUserId) ?? ""}` : null,
+                    calendar.publishedAt ? `${formatearFecha(calendar.publishedAt, "")} · ${who(calendar.publishedByUserId) ?? ""}` : null,
                   ],
-                  ["Ocultada", calendar.hiddenAt ? `${dayOf(calendar.hiddenAt) ?? ""} · ${who(calendar.hiddenByUserId) ?? ""}` : null],
-                  ["Última modificación", dayOf(calendar.updatedAt)],
+                  ["Ocultada", calendar.hiddenAt ? `${formatearFecha(calendar.hiddenAt, "")} · ${who(calendar.hiddenByUserId) ?? ""}` : null],
+                  ["Última modificación", formatearFecha(calendar.updatedAt)],
                 ]}
               />
             </div>

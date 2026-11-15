@@ -14,6 +14,7 @@ import {
 } from "../ui/Dense";
 import { actionErrorMessage } from "../ui/actionError";
 import "./study.css";
+import { formatearFecha } from "../lib/formatoFechas";
 
 interface BiPlan {
   version: number;
@@ -287,7 +288,7 @@ export function StudyReportes() {
                 key: "cutoff",
                 header: "Corte",
                 render: (run) =>
-                  new Date(run.cutoff).toLocaleDateString("es-AR", { timeZone: "UTC" }),
+                  formatearFecha(run.cutoff),
               },
               {
                 key: "status",

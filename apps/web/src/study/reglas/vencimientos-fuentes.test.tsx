@@ -28,7 +28,6 @@ vi.mock("../../lib/api", async (importOriginal) => {
 });
 
 // Misma fecha que muestra la pantalla: calendario de es-AR en UTC.
-const fecha = (valor: string) => new Date(valor).toLocaleDateString("es-AR", { timeZone: "UTC" });
 
 async function seccion(titulo: string): Promise<HTMLElement> {
   return (await screen.findByRole("heading", { name: titulo })).closest("section") as HTMLElement;
@@ -74,8 +73,8 @@ describe("Reglas fiscales — vencimientos y fuentes (K7)", () => {
     expect(tabla.getByText("ANUAL")).toBeTruthy();
     expect(tabla.getByText("Todas")).toBeTruthy();
     expect(tabla.getByText("9")).toBeTruthy();
-    expect(tabla.getByText(`${fecha("2026-01-01")} — Sin vencimiento`)).toBeTruthy();
-    expect(tabla.getByText(`${fecha("2026-01-01")} — ${fecha("2026-12-31")}`)).toBeTruthy();
+    expect(tabla.getByText("Desde 01/01/2026")).toBeTruthy();
+    expect(tabla.getByText("01/01/2026 al 31/12/2026")).toBeTruthy();
   });
 
   it("tabla de fuentes: referencia o guion y consulta; la URL no se muestra", async () => {
@@ -104,7 +103,7 @@ describe("Reglas fiscales — vencimientos y fuentes (K7)", () => {
     expect(tabla.getByText("RG Demo 1/2026")).toBeTruthy();
     expect(tabla.getByText("Demo · Padrón")).toBeTruthy();
     expect(tabla.getByText("—")).toBeTruthy();
-    expect(tabla.getByText(fecha("2026-02-10"))).toBeTruthy();
+    expect(tabla.getByText("10/02/2026")).toBeTruthy();
     expect(tabla.queryByText(/demo\.invalid/)).toBeNull();
     expect(section.querySelector("a")).toBeNull();
   });

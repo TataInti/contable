@@ -15,6 +15,7 @@ import {
   useDensity,
 } from "../ui/Dense";
 import "./study.css";
+import { formatearFecha, formatearRango } from "../lib/formatoFechas";
 
 interface CloseCycle {
   id: string;
@@ -54,7 +55,6 @@ interface EvidencePreview {
   originalName: string | null;
 }
 
-const DATE = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 
 export function StudyTrabajo() {
   const [density] = useDensity();
@@ -264,7 +264,7 @@ export function StudyTrabajo() {
     name: `${item.regime.taxType.name} · ${item.regime.jurisdiction.name}`,
     periodLabel:
       item.period.label ??
-      `${DATE.format(new Date(item.period.startDate))} → ${DATE.format(new Date(item.period.endDate))}`,
+      formatearRango(item.period.startDate, item.period.endDate),
     dueDate: item.dueDate ?? item.period.endDate,
     status: item.status,
     }));
@@ -605,7 +605,7 @@ export function StudyTrabajo() {
                   <div key={message.id} className="request-message-list__item">
                     <strong>{message.visibility === "SHARED" ? "Compartido" : "Interno"}</strong>
                     <p>{message.body}</p>
-                    <small>{DATE.format(new Date(message.createdAt))}</small>
+                    <small>{formatearFecha(message.createdAt)}</small>
                   </div>
                 ))}
               </div>
@@ -895,7 +895,7 @@ export function StudyTrabajo() {
             columns={[
               { key: "name", header: "Obligación", render: (row) => <strong>{row.name}</strong> },
               { key: "period", header: "Período", render: (row) => row.periodLabel },
-              { key: "due", header: "Vence", render: (row) => DATE.format(new Date(row.dueDate)) },
+              { key: "due", header: "Vence", render: (row) => formatearFecha(row.dueDate) },
               {
                 key: "status",
                 header: "Estado",

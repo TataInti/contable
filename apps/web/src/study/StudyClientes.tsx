@@ -41,6 +41,7 @@ import {
 } from "../ui/Dense";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
+import { formatearFecha } from "../lib/formatoFechas";
 
 
 const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -869,7 +870,7 @@ export function StudyClientes() {
                 ? selectedClient.profile.iibbJurisdictions.join(", ")
                 : "—",
             ],
-            ["Inicio del servicio", selectedClient.profile?.serviceStartDate?.slice(0, 10) || "—"],
+            ["Inicio del servicio", formatearFecha(selectedClient.profile?.serviceStartDate)],
           ]}
         />
       </InspectorSection>

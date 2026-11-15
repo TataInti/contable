@@ -17,16 +17,3 @@ export function selfReviewNote(wp: {
   if (finalized) return "Legajo finalizado por la misma persona que lo preparó.";
   return null;
 }
-
-export function formatDate(value: string | null): string {
-  if (!value) return "Sin vencimiento";
-  return new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" }).format(new Date(value));
-}
-
-export function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("es-AR", {
-    timeZone: "UTC",
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
-}

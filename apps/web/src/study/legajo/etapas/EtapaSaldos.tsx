@@ -3,7 +3,8 @@ import type { Dispatch, SetStateAction } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, Table } from "@contable/design-system";
 import { Icon } from "../../../ui/Icon";
-import { formatDateTime, formatMoney } from "../formato";
+import { formatMoney } from "../formato";
+import { formatearFechaHora } from "../../../lib/formatoFechas";
 import type { CreditLot } from "../tipos";
 import { identificadorCorto, pluralizar } from "../textos";
 
@@ -167,7 +168,7 @@ export function EtapaSaldos({
                           <li key={entry.id}>
                             <span>
                               {entry.createdBy?.name ?? "Usuario"} ·{" "}
-                              {formatDateTime(entry.createdAt)}
+                              {formatearFechaHora(entry.createdAt)}
                             </span>
                             <ul className="workpaper-credit-log__changes">
                               {Object.entries(entry.changes ?? {}).map(([field, diff]) => (

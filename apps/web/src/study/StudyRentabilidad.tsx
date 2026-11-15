@@ -13,6 +13,7 @@ import {
   useDensity,
 } from "../ui/Dense";
 import "./study.css";
+import { formatearFechaHora } from "../lib/formatoFechas";
 
 /**
  * Rentabilidad gerencial (Puerta 5, G5-01..G5-05).
@@ -243,7 +244,7 @@ export function StudyRentabilidad() {
           <p className="study-page__hint">
             Hash de salida: <code>{snapshot.outputHash.slice(0, 16)}…</code>
             {snapshot.publishedAt
-              ? ` · Publicado ${new Date(snapshot.publishedAt).toLocaleString("es-AR")}`
+              ? ` · Publicado ${formatearFechaHora(snapshot.publishedAt)}`
               : " · Borrador (no visible para el cliente)"}
           </p>
         </>

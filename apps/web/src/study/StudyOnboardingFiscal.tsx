@@ -14,6 +14,7 @@ import {
   useDensity,
 } from "../ui/Dense";
 import "./study.css";
+import { formatearFecha, formatearRango } from "../lib/formatoFechas";
 
 type FiscalStep = "perfil" | "inscripcion" | "actividades" | "periodos" | "obligaciones";
 type FiscalTab = "resumen" | "regimenes" | "actividades" | "periodos";
@@ -93,11 +94,6 @@ const CONDITION_LABELS = {
   NO_RESPONSABLE: "No Responsable",
 } as const;
 
-function formatDate(value: string) {
-  const [year, month, day] = value.slice(0, 10).split("-");
-  return day && month && year ? `${day}/${month}/${year}` : value;
-}
-
 /** Etiqueta del período sin repetir el impuesto, que la tabla ya muestra en su columna. */
 function periodName(period: TaxPeriod) {
   const label = periodDisplayLabel(period);
@@ -109,7 +105,7 @@ function periodName(period: TaxPeriod) {
 }
 
 function periodDisplayLabel(period: Pick<TaxPeriod, "label" | "startDate" | "endDate">) {
-  const range = `${formatDate(period.startDate)} – ${formatDate(period.endDate)}`;
+  const range = formatearRango(period.startDate, period.endDate);
   return period.label && !/\d{6,}/.test(period.label) ? period.label : range;
 }
 
@@ -520,7 +516,7 @@ export function StudyOnboardingFiscal() {
               { key: "regime", header: "Régimen", render: (row) => <strong>{row.regime.name}{!row.regime.isActive ? " (oculto)" : ""}</strong> },
               { key: "tax", header: "Impuesto", render: (row) => <>{row.regime.taxType.name}{!row.regime.taxType.isActive ? " (oculto)" : ""}</> },
               { key: "jurisdiction", header: "Jurisdicción", render: (row) => <>{row.regime.jurisdiction.name}{!row.regime.jurisdiction.isActive ? " (oculto)" : ""}</> },
-              { key: "from", header: "Desde", render: (row) => <span className="tabular-copy">{formatDate(row.validFrom)}</span> },
+              { key: "from", header: "Desde", render: (row) => <span className="tabular-copy">{formatearFecha(row.validFrom)}</span> },
               { key: "status", header: "Estado", render: (row) => <StatusBadge status={row.status} /> },
               { key: "actions", header: "", align: "right", render: (row) => canWrite && row.status === "ACTIVE" ? <Button size="sm" variant="ghost" loading={cancelRegistration.isPending} onClick={() => confirm.ask({ title: `¿Dar de baja ${row.regime.name}?`, description: "La adhesión al régimen quedará cancelada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Dar de baja", tone: "danger", onConfirm: () => cancelRegistration.mutate(row.id) })}>Dar de baja</Button> : null },
             ]} />}
@@ -597,7 +593,7 @@ export function StudyOnboardingFiscal() {
                 header: "Vencimiento",
                 render: (row) => {
                   const dueDate = obligationByPeriod.get(row.id)?.dueDate;
-                  return dueDate ? <span className="tabular-copy">{formatDate(dueDate)}</span> : <span className="muted-copy">—</span>;
+                  return dueDate ? <span className="tabular-copy">{formatearFecha(dueDate)}</span> : <span className="muted-copy">—</span>;
                 },
               },
               { key: "actions", header: "", align: "right", render: (row) => canWrite && !obligationByPeriod.has(row.id) ? <Button size="sm" variant="ghost" onClick={() => { setObligationForm({ regimeId: "", periodId: row.id, dueDate: "" }); openStepForm("obligaciones"); }}>Crear obligación</Button> : null },

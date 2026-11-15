@@ -1,5 +1,6 @@
 import { createTaxCalendarSchema, taxCalendarEntryInputSchema } from "@contable/contracts";
 import { ApiError } from "../lib/api";
+import { formatearRango } from "../lib/formatoFechas";
 
 /**
  * Lógica pura de la pantalla «Calendarios fiscales» (corte 2a-ii-b): tipos de
@@ -366,7 +367,7 @@ export function calendarPayload(form: CalendarForm) {
 export function periodLabel(entry: CalendarEntryRow): string {
   const start = dayOf(entry.referencePeriodStart);
   const end = dayOf(entry.referencePeriodEnd);
-  const range = start && end ? `${start} a ${end}` : null;
+  const range = start && end ? formatearRango(start, end) : null;
   if (entry.referenceLabel && range) return `${entry.referenceLabel} (${range})`;
   return entry.referenceLabel ?? range ?? "—";
 }

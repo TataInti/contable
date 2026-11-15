@@ -6,6 +6,7 @@ import {
   AUTOMATED_READING_UNAVAILABLE_MESSAGE,
   isAutomatedReadingUnavailableReason,
 } from "./extractionReadiness";
+import { formatearFecha } from "../lib/formatoFechas";
 
 interface ExtractionFiscalTableProps {
   voucherData: VoucherData | null;
@@ -57,12 +58,7 @@ function displayScalarValue(key: string, value: string | null): string | null {
   if (!value || (key !== "issueDate" && key !== "caeExpiration") || !isValidManualExtractionIsoDate(value)) {
     return value;
   }
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(`${value}T00:00:00.000Z`));
+  return formatearFecha(value);
 }
 
 function nonEmptyReason(reason: string | null | undefined): string | null {

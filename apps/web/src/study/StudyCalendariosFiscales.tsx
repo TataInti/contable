@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { AsyncState, Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
 import { useClientContext } from "../context/ClientContext";
 import { api } from "../lib/api";
+import { formatearFecha } from "../lib/formatoFechas";
 import { ActionDrawer, ActionDrawerFooter } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
@@ -22,7 +23,6 @@ import {
   applyStatusFilter,
   calendarIssues,
   calendarPayload,
-  dayOf,
   emptyCalendarForm,
   filtersFromParams,
   hasCalendarFilters,
@@ -156,7 +156,7 @@ export function StudyCalendariosFiscales() {
       key: "updated",
       header: "Última modificación",
       sortValue: (row) => row.updatedAt,
-      render: (row) => dayOf(row.updatedAt) ?? "—",
+      render: (row) => formatearFecha(row.updatedAt),
     },
   ];
 

@@ -3,6 +3,7 @@ import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState } from "@contable/design-system";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type FiscalYear } from "../lib/api";
+import { formatearRango } from "../lib/formatoFechas";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -237,7 +238,7 @@ export function StudyDashboard() {
       sortValue: (item) => item.period?.startDate ?? item.cutoff,
       render: (item) => (
         <span className="tabular-copy">
-          {(item.period?.startDate ?? item.cutoff).slice(0, 10)} → {(item.period?.endDate ?? "").slice(0, 10)}
+          {formatearRango(item.period?.startDate ?? item.cutoff, item.period?.endDate)}
         </span>
       ),
     },

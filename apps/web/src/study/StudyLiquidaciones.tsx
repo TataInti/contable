@@ -15,6 +15,7 @@ import {
 } from "../ui/Dense";
 import { actionErrorMessage } from "../ui/actionError";
 import "./study.css";
+import { formatearFecha, formatearRango } from "../lib/formatoFechas";
 
 interface TaxSettlement {
   id: string;
@@ -57,7 +58,7 @@ function formatMoney(value: string | undefined | null): string {
 }
 
 function taxPeriodLabel(period: TaxPeriod) {
-  return period.label ?? `${period.startDate.slice(0, 10)} a ${period.endDate.slice(0, 10)}`;
+  return period.label ?? formatearRango(period.startDate, period.endDate);
 }
 
 export function StudyLiquidaciones() {
@@ -383,7 +384,7 @@ export function StudyLiquidaciones() {
             {
               key: "period",
               header: "Período",
-              render: (row) => row.period.label ?? row.period.startDate.slice(0, 10),
+              render: (row) => row.period.label ?? formatearFecha(row.period.startDate),
             },
             {
               key: "tax",

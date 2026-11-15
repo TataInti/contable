@@ -1,4 +1,5 @@
 import { Button } from "@contable/design-system";
+import { formatearFechaHora } from "../lib/formatoFechas";
 
 export interface WorkpaperSourceReviewBatch {
   id: string;
@@ -39,13 +40,7 @@ export function WorkpaperSourceReviewAction({
       batch.reviewedByUserId &&
       batch.createdByUserId === batch.reviewedByUserId,
   );
-  const reviewedAtLabel = batch.reviewedAt
-    ? new Intl.DateTimeFormat("es-AR", {
-        timeZone: "UTC",
-        dateStyle: "short",
-        timeStyle: "short",
-      }).format(new Date(batch.reviewedAt))
-    : null;
+  const reviewedAtLabel = batch.reviewedAt ? formatearFechaHora(batch.reviewedAt) : null;
   const showReviewButton =
     batch.batchStatus === "COMMITTED" &&
     batch.reviewStatus !== "REVIEWED" &&

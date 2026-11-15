@@ -14,18 +14,7 @@ import {
   useDensity,
 } from "../ui/Dense";
 import "./study.css";
-
-const DATE_FORMAT = new Intl.DateTimeFormat("es-AR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  timeZone: "UTC",
-});
-const MONTH_FORMAT = new Intl.DateTimeFormat("es-AR", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
+import { formatearFecha, formatearMes, formatearRango } from "../lib/formatoFechas";
 
 const PERSON_TYPE_LABELS: Record<string, string> = {
   FISICA: "Persona física",
@@ -53,23 +42,6 @@ const MONTH_LABELS = [
   "Noviembre",
   "Diciembre",
 ];
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : DATE_FORMAT.format(date);
-}
-
-function formatMonth(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const label = MONTH_FORMAT.format(date);
-  return label.charAt(0).toLocaleUpperCase("es-AR") + label.slice(1);
-}
-
-function formatRange(startDate: string, endDate: string) {
-  return `${formatDate(startDate)} – ${formatDate(endDate)}`;
-}
 
 function displayValue(value: string | null | undefined) {
   return value?.trim() || "Sin configurar";
@@ -176,21 +148,21 @@ function buildSearchResults(summary: ClientSummary, search: string): SummarySear
 
   addSectionHit("accounting-periods", "Períodos contables");
   for (const year of summary.accounting.fiscalYears) {
-    if (matchesSearch(term, year.label, year.status, formatDate(year.startDate), formatDate(year.endDate))) {
+    if (matchesSearch(term, year.label, year.status, formatearFecha(year.startDate), formatearFecha(year.endDate))) {
       addResult({
         sectionId: "accounting-periods",
         sectionLabel: "Períodos contables",
         title: year.label,
-        detail: `${formatRange(year.startDate, year.endDate)} · ${year.status}`,
+        detail: `${formatearRango(year.startDate, year.endDate)} · ${year.status}`,
       });
     }
     for (const period of year.periods) {
-      if (matchesSearch(term, formatMonth(period.startDate), formatRange(period.startDate, period.endDate), period.status, period.ordinal)) {
+      if (matchesSearch(term, formatearMes(period.startDate), formatearRango(period.startDate, period.endDate), period.status, period.ordinal)) {
         addResult({
           sectionId: "accounting-periods",
           sectionLabel: "Períodos contables",
-          title: formatMonth(period.startDate),
-          detail: `${year.label} · ${formatRange(period.startDate, period.endDate)} · ${period.status}`,
+          title: formatearMes(period.startDate),
+          detail: `${year.label} · ${formatearRango(period.startDate, period.endDate)} · ${period.status}`,
         });
       }
     }
@@ -198,31 +170,31 @@ function buildSearchResults(summary: ClientSummary, search: string): SummarySear
 
   addSectionHit("tax-periods", "Períodos fiscales");
   for (const period of summary.fiscal.periods) {
-    if (matchesSearch(term, period.taxType.name, period.taxType.code, period.label, formatRange(period.startDate, period.endDate))) {
+    if (matchesSearch(term, period.taxType.name, period.taxType.code, period.label, formatearRango(period.startDate, period.endDate))) {
       addResult({
         sectionId: "tax-periods",
         sectionLabel: "Períodos fiscales",
         title: `${period.taxType.name} · ${displayValue(period.label)}`,
-        detail: `${period.taxType.code} · ${formatRange(period.startDate, period.endDate)}`,
+        detail: `${period.taxType.code} · ${formatearRango(period.startDate, period.endDate)}`,
       });
     }
   }
 
   addSectionHit("obligations", "Obligaciones");
   for (const obligation of summary.fiscal.obligations) {
-    if (matchesSearch(term, obligation.regime.name, obligation.regime.taxType.name, obligation.regime.jurisdiction.name, obligation.period.label, formatDate(obligation.dueDate), obligation.status)) {
+    if (matchesSearch(term, obligation.regime.name, obligation.regime.taxType.name, obligation.regime.jurisdiction.name, obligation.period.label, formatearFecha(obligation.dueDate), obligation.status)) {
       addResult({
         sectionId: "obligations",
         sectionLabel: "Obligaciones",
         title: `${obligation.regime.name} · ${displayValue(obligation.period.label)}`,
-        detail: `Vence ${formatDate(obligation.dueDate)} · ${obligation.status}`,
+        detail: `Vence ${formatearFecha(obligation.dueDate)} · ${obligation.status}`,
       });
     }
   }
 
   addSectionHit("base-config", "Ficha contable");
   const profile = summary.client.profile;
-  if (profile && matchesSearch(term, profile.functionalCurrency, MONTH_LABELS[profile.fiscalYearEndMonth - 1], profile.vatCondition, profile.legalForm, profile.province, profile.activity, profile.accountingStandard, profile.iibbJurisdictions.join(" "), formatDate(profile.serviceStartDate))) {
+  if (profile && matchesSearch(term, profile.functionalCurrency, MONTH_LABELS[profile.fiscalYearEndMonth - 1], profile.vatCondition, profile.legalForm, profile.province, profile.activity, profile.accountingStandard, profile.iibbJurisdictions.join(" "), formatearFecha(profile.serviceStartDate))) {
     addResult({
       sectionId: "base-config",
       sectionLabel: "Ficha contable",
@@ -233,7 +205,7 @@ function buildSearchResults(summary: ClientSummary, search: string): SummarySear
 
   addSectionHit("tax-profile", "Perfil fiscal");
   for (const profileVersion of summary.fiscal.profiles) {
-    if (matchesSearch(term, profileVersion.legalName, profileVersion.cuit, profileVersion.personType, profileVersion.nationalCondition, profileVersion.version, formatDate(profileVersion.validFrom), profileVersion.fiscalAddress, profileVersion.monotributoCategory, profileVersion.status)) {
+    if (matchesSearch(term, profileVersion.legalName, profileVersion.cuit, profileVersion.personType, profileVersion.nationalCondition, profileVersion.version, formatearFecha(profileVersion.validFrom), profileVersion.fiscalAddress, profileVersion.monotributoCategory, profileVersion.status)) {
       addResult({
         sectionId: "tax-profile",
         sectionLabel: "Perfil fiscal",
@@ -245,7 +217,7 @@ function buildSearchResults(summary: ClientSummary, search: string): SummarySear
 
   addSectionHit("registrations", "Regímenes adheridos");
   for (const registration of summary.fiscal.registrations) {
-    if (matchesSearch(term, registration.regime.name, registration.regime.taxType.name, registration.regime.jurisdiction.name, formatDate(registration.validFrom), formatDate(registration.validTo), registration.status)) {
+    if (matchesSearch(term, registration.regime.name, registration.regime.taxType.name, registration.regime.jurisdiction.name, formatearFecha(registration.validFrom), formatearFecha(registration.validTo), registration.status)) {
       addResult({
         sectionId: "registrations",
         sectionLabel: "Regímenes adheridos",
@@ -257,7 +229,7 @@ function buildSearchResults(summary: ClientSummary, search: string): SummarySear
 
   addSectionHit("activities", "Actividades registradas");
   for (const activity of summary.fiscal.activities) {
-    if (matchesSearch(term, activity.activity.name, activity.activity.code, activity.activity.jurisdiction.name, formatDate(activity.validFrom), formatDate(activity.validTo), activity.isPrimary ? "principal" : "secundaria")) {
+    if (matchesSearch(term, activity.activity.name, activity.activity.code, activity.activity.jurisdiction.name, formatearFecha(activity.validFrom), formatearFecha(activity.validTo), activity.isPrimary ? "principal" : "secundaria")) {
       addResult({
         sectionId: "activities",
         sectionLabel: "Actividades registradas",
@@ -544,9 +516,9 @@ export function StudyResumenCliente() {
                     <StatusBadge status={client.status} variant="pill" />
                   </span>
                   <span className="client-summary__overview-created">
-                    Alta en el estudio {formatDate(client.createdAt)}
+                    Alta en el estudio {formatearFecha(client.createdAt)}
                   </span>
-                  <span className="client-summary__updated">Actualizado {formatDate(client.updatedAt)}</span>
+                  <span className="client-summary__updated">Actualizado {formatearFecha(client.updatedAt)}</span>
                 </div>
               </div>
               <dl className="client-summary__overview-facts">
@@ -628,7 +600,7 @@ export function StudyResumenCliente() {
                       <div className="client-summary__year-heading">
                         <div>
                           <h3>{year.label}</h3>
-                          <p>{formatRange(year.startDate, year.endDate)}</p>
+                          <p>{formatearRango(year.startDate, year.endDate)}</p>
                         </div>
                         <StatusBadge status={year.status} />
                       </div>
@@ -640,8 +612,8 @@ export function StudyResumenCliente() {
                             <div className="client-summary__period-row" key={period.id}>
                               <span className="client-summary__period-number">{period.ordinal}</span>
                               <span>
-                                <strong>{formatMonth(period.startDate)}</strong>
-                                <small>{formatRange(period.startDate, period.endDate)}</small>
+                                <strong>{formatearMes(period.startDate)}</strong>
+                                <small>{formatearRango(period.startDate, period.endDate)}</small>
                               </span>
                               <StatusBadge status={period.status} />
                             </div>
@@ -690,7 +662,7 @@ export function StudyResumenCliente() {
                       render: (period) => (
                         <div className="summary-table__primary">
                           <strong>{displayValue(period.label)}</strong>
-                          <small>{formatRange(period.startDate, period.endDate)}</small>
+                          <small>{formatearRango(period.startDate, period.endDate)}</small>
                         </div>
                       ),
                     },
@@ -737,14 +709,14 @@ export function StudyResumenCliente() {
                       render: (obligation) => (
                         <div className="summary-table__primary">
                           <strong>{displayValue(obligation.period.label)}</strong>
-                          <small>{formatRange(obligation.period.startDate, obligation.period.endDate)}</small>
+                          <small>{formatearRango(obligation.period.startDate, obligation.period.endDate)}</small>
                         </div>
                       ),
                     },
                     {
                       key: "dueDate",
                       header: "Vencimiento",
-                      render: (obligation) => <span className="tabular-copy">{formatDate(obligation.dueDate)}</span>,
+                      render: (obligation) => <span className="tabular-copy">{formatearFecha(obligation.dueDate)}</span>,
                     },
                     {
                       key: "status",
@@ -779,7 +751,7 @@ export function StudyResumenCliente() {
                       label="Jurisdicciones IIBB"
                       value={profile.iibbJurisdictions.length > 0 ? profile.iibbJurisdictions.join(", ") : "Sin configurar"}
                     />
-                    <SummaryFact label="Inicio del servicio" value={formatDate(profile.serviceStartDate)} />
+                    <SummaryFact label="Inicio del servicio" value={formatearFecha(profile.serviceStartDate)} />
                   </>
                 ) : (
                   <SummaryFact
@@ -830,7 +802,7 @@ export function StudyResumenCliente() {
                     <SummaryFact label="Tipo de persona" value={PERSON_TYPE_LABELS[activeProfile.personType] ?? activeProfile.personType} />
                     <SummaryFact label="Condición nacional" value={CONDITION_LABELS[activeProfile.nationalCondition] ?? activeProfile.nationalCondition} />
                     <SummaryFact label="Versión" value={`v${activeProfile.version}`} />
-                    <SummaryFact label="Vigente desde" value={formatDate(activeProfile.validFrom)} />
+                    <SummaryFact label="Vigente desde" value={formatearFecha(activeProfile.validFrom)} />
                     <SummaryFact label="Categoría monotributo" value={displayValue(activeProfile.monotributoCategory)} />
                   </dl>
                   <div className="client-summary__history">
@@ -838,7 +810,7 @@ export function StudyResumenCliente() {
                     <ul>
                       {fiscal.profiles.map((profileVersion) => (
                         <li key={profileVersion.id}>
-                          <span>v{profileVersion.version} · {formatDate(profileVersion.validFrom)}</span>
+                          <span>v{profileVersion.version} · {formatearFecha(profileVersion.validFrom)}</span>
                           <StatusBadge status={profileVersion.status} />
                         </li>
                       ))}
@@ -877,7 +849,7 @@ export function StudyResumenCliente() {
                         <small>
                           {registration.regime.taxType.name}{!registration.regime.taxType.isActive ? " (oculto)" : ""} · {registration.regime.jurisdiction.name}{!registration.regime.jurisdiction.isActive ? " (oculto)" : ""}
                         </small>
-                        <small>Desde {formatDate(registration.validFrom)}{registration.validTo ? ` · hasta ${formatDate(registration.validTo)}` : ""}</small>
+                        <small>Desde {formatearFecha(registration.validFrom)}{registration.validTo ? ` · hasta ${formatearFecha(registration.validTo)}` : ""}</small>
                       </div>
                       <StatusBadge status={registration.status} />
                     </li>
@@ -910,7 +882,7 @@ export function StudyResumenCliente() {
                         <small>
                           {item.activity.code} · {item.activity.jurisdiction.name}{!item.activity.jurisdiction.isActive ? " (oculto)" : ""}
                         </small>
-                        <small>Desde {formatDate(item.validFrom)}{item.validTo ? ` · hasta ${formatDate(item.validTo)}` : ""}</small>
+                        <small>Desde {formatearFecha(item.validFrom)}{item.validTo ? ` · hasta ${formatearFecha(item.validTo)}` : ""}</small>
                       </div>
                       <StatusBadge
                         status="INFO"

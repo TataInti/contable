@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { Button, Table } from "@contable/design-system";
 import { DenseSection } from "../../ui/Dense";
 import { etiquetaFrecuencia } from "./frecuencias";
-import { shortDate } from "./utilidades";
+import { formatearRango } from "../../lib/formatoFechas";
 import type { RuleVersion } from "./tipos";
 
 interface TabVencimientosProps {
@@ -51,7 +51,7 @@ export function TabVencimientos({
           {
             key: "validFrom",
             header: "Vigencia",
-            render: (row) => `${shortDate(row.validFrom)} — ${shortDate(row.validTo)}`,
+            render: (row) => formatearRango(row.validFrom, row.validTo),
           },
         ]}
       />
