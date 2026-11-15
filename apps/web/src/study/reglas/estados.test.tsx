@@ -308,7 +308,7 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     renderDemoReglas();
     fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
     fireEvent.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Sí, activar versión" }),
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Activar versión" }),
     );
     await waitFor(() => expect(screen.getByText("Error de activación Demo")).toBeTruthy());
     expect(screen.getAllByText("Error de activación Demo")).toHaveLength(1);

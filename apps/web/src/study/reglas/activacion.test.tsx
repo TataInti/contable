@@ -66,14 +66,14 @@ describe("Reglas fiscales — activación (K9)", () => {
     renderDemoReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
-    let dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByRole("heading", { name: "Activar la versión v1" })).toBeTruthy();
+    let dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Demo · IVA Responsable Inscripto · versión v1" })).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /^Activar$/ }));
-    dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByRole("heading", { name: "Activar la versión v1" })).toBeTruthy();
+    dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Demo · IVA Responsable Inscripto · versión v1" })).toBeTruthy();
   });
 
   it("el aviso de retiro aparece solo cuando hay una versión vigente", async () => {
@@ -86,9 +86,9 @@ describe("Reglas fiscales — activación (K9)", () => {
     renderDemoReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
-    const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByRole("heading", { name: "Activar la versión v2" })).toBeTruthy();
-    expect(within(dialog).getByText(/La versión vigente v1 quedará retirada/)).toBeTruthy();
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: "Demo · IVA Responsable Inscripto · versión v2" })).toBeTruthy();
+    expect(within(dialog).getByText("Al activar esta versión, la versión vigente quedará retirada")).toBeTruthy();
   });
 
   it("sin versión vigente la confirmación no avisa del retiro", async () => {
@@ -98,25 +98,21 @@ describe("Reglas fiscales — activación (K9)", () => {
     renderDemoReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
-    const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByText(/No hay otra versión vigente que retirar/)).toBeTruthy();
-    expect(within(dialog).queryByText(/La versión vigente v/)).toBeNull();
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/Vigencia:/)).toBeTruthy();
+    expect(within(dialog).queryByText(/Al activar esta versión/)).toBeNull();
   });
-  it("el cajón de activar tiene título con la acción, la consecuencia en el cuerpo y «Cancelar» antes de «Sí, activar versión»", async () => {
+  it("el cajón de activar tiene «Cancelar» a la izquierda y «Activar versión» a la derecha", async () => {
     const detail = makeDemoDetail();
-    detail.versions = [
-      makeDemoVersion({ id: "version-active", version: 1, status: "ACTIVE" }),
-      makeDemoVersion({ id: "version-approved", version: 2, status: "APPROVED" }),
-    ];
+    detail.versions = [makeDemoVersion({ status: "APPROVED" })];
     mockDemoApi(detail);
     renderDemoReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
-    const dialog = await screen.findByRole("alertdialog");
-    expect(within(dialog).getByRole("heading", { name: "Activar la versión v2" })).toBeTruthy();
-    expect(within(dialog).getByText(/Demo · IVA Responsable Inscripto: queda vigente la versión v2/)).toBeTruthy();
+    const dialog = await screen.findByRole("dialog");
     const cancelar = within(dialog).getByRole("button", { name: "Cancelar" });
-    const confirmar = within(dialog).getByRole("button", { name: "Sí, activar versión" });
-    expect(cancelar.compareDocumentPosition(confirmar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const confirmar = within(dialog).getByRole("button", { name: "Activar versión" });
+    const posicion = cancelar.compareDocumentPosition(confirmar);
+    expect(posicion & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

@@ -891,7 +891,7 @@ Proporcioná siempre `onClose` para el cierre explícito, el scrim y Escape.
 
 #### ConfirmAction y ConfirmDialog
 
-Anatomía del panel y de la confirmación (Foco 2.7a). El pie de un cajón va en la prop `footer` de `ActionDrawer`; si tiene acción principal, se compone con `ActionDrawerFooter`: «Cancelar» (ghost) a la izquierda, la acción principal a la derecha y, junto a ella, el motivo del botón deshabilitado. El submit del formulario se asocia al botón con `form=`. Una confirmación usa `ConfirmDialog`: el título lleva la acción («Activar la versión v2»), el cuerpo dice la consecuencia y el pie tiene «Cancelar» a la izquierda y la acción confirmatoria («Sí, activar versión») a la derecha.
+Anatomía del pie de un cajón (Foco 2.7a). El pie va en la prop `footer` de `ActionDrawer`; si tiene acción principal, se compone con `ActionDrawerFooter`: «Cancelar» (ghost) a la izquierda, la acción principal a la derecha y, junto a ella, el motivo del botón deshabilitado. El submit del formulario se asocia al botón con `form=`.
 
 - **Propósito:** pedir confirmación in-app antes de ejecutar una acción; `useConfirmAction` administra una solicitud por página y `ConfirmDialog` la presenta.
 - **Props:** `ConfirmAction` recibe `open`, `title`, `confirmLabel`, `onConfirm` y `onCancel`; `description`, `tone` (`default` o `danger`) y `cancelLabel` son opcionales. `ConfirmDialog` recibe el estado `confirm` y un `cancelLabel` opcional.
@@ -1136,7 +1136,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 ### R03 — Reglas fiscales
 
-Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFooter` con «Cancelar» a la izquierda y el motivo junto a la acción principal; «Activar versión» confirma con `ConfirmDialog`; «Opción de cálculo» marca la opción de origen «(actual)» y dice la consecuencia al cambiarla; la lista cuenta «N de M paquetes» cuando no entran todas las filas; Vencimientos, Fuentes, Control profesional y Probar van sin caja. Pendiente: la pestaña Alícuotas sigue con caja (hallazgo 26 de ux).
+Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFooter` con «Cancelar» a la izquierda y el motivo junto a la acción principal; «Activar versión» conserva su cajón (decisión D-R3-B de Inti, fila A3) con el pie de `ActionDrawerFooter`; «Opción de cálculo» marca la opción de origen «(actual)» y dice la consecuencia al cambiarla; la lista cuenta «N de M paquetes» cuando no entran todas las filas; Vencimientos, Fuentes, Control profesional y Probar van sin caja. Pendiente: la pestaña Alícuotas sigue con caja (hallazgo 26 de ux).
 
 **Propósito:** elegir un paquete, comprender su versión y vigencia, y preparar cambios de forma deliberada.
 

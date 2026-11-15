@@ -238,6 +238,7 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     fireEvent.change(select, { target: { value: "engine-vat-legacy" } });
     // El envío vive en el pie fijo del cajón (fuera del formulario, por form=): se busca en el cajón.
     const dialog = screen.getByRole("dialog");
+    expect(select.closest('[role="dialog"]')).toBe(dialog);
     fireEvent.click(within(dialog).getByRole("button", { name: "Crear primera versión" }));
 
     await waitFor(() =>
@@ -651,16 +652,16 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     await waitFor(() => expect(activateButton.disabled).toBe(false));
     fireEvent.click(activateButton);
 
-    const confirmation = await screen.findByRole("alertdialog");
+    const confirmation = await screen.findByRole("dialog");
     expect(
       within(confirmation).getByRole("heading", {
-        name: "Activar la versión v1",
+        name: "IVA Responsable Inscripto · versión v1",
       }),
     ).toBeTruthy();
-    const validity = within(confirmation).getByText(/con vigencia/);
+    const validity = within(confirmation).getByText(/Vigencia:/);
     expect(validity.textContent).toContain("—");
     expect(api.post).not.toHaveBeenCalled();
-    expect(within(confirmation).queryByText(/La versión vigente v/)).toBeNull();
+    expect(within(confirmation).queryByText(/Al activar esta versión/)).toBeNull();
   });
 
   it("muestra la advertencia de retiro cuando el paquete ya tiene una versión vigente", async () => {
@@ -670,10 +671,10 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     renderReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
-    const confirmation = await screen.findByRole("alertdialog");
+    const confirmation = await screen.findByRole("dialog");
     expect(
       within(confirmation).getByText(
-        /La versión vigente v3 quedará retirada/,
+        "Al activar esta versión, la versión vigente quedará retirada",
       ),
     ).toBeTruthy();
     expect(api.post).not.toHaveBeenCalled();
@@ -686,7 +687,7 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     const activateButton = await screen.findByRole("button", { name: /^Activar$/ });
     activateButton.focus();
     fireEvent.click(activateButton);
-    const confirmation = await screen.findByRole("alertdialog");
+    const confirmation = await screen.findByRole("dialog");
     fireEvent.click(within(confirmation).getByRole("button", { name: "Cancelar" }));
 
     await waitFor(() => expect(document.activeElement).toBe(activateButton));
@@ -701,8 +702,8 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
 
     const activateButton = await screen.findByRole("button", { name: /^Activar$/ });
     fireEvent.click(activateButton);
-    const confirmation = await screen.findByRole("alertdialog");
-    fireEvent.click(within(confirmation).getByRole("button", { name: "Sí, activar versión" }));
+    const confirmation = await screen.findByRole("dialog");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Activar versión" }));
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/tax/rule-versions/version-1/activate"),
@@ -756,8 +757,8 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     const versionSelect = await screen.findByLabelText("Versión del paquete");
     fireEvent.change(versionSelect, { target: { value: "version-review" } });
     fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
-    const confirmation = await screen.findByRole("alertdialog");
-    fireEvent.click(within(confirmation).getByRole("button", { name: "Sí, activar versión" }));
+    const confirmation = await screen.findByRole("dialog");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Activar versión" }));
 
     const packageCard = screen.getByRole("heading", { name: "IVA Responsable Inscripto" }).closest("section");
     expect(packageCard).not.toBeNull();
@@ -778,8 +779,8 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
 
     const activateButton = await screen.findByRole("button", { name: /^Activar$/ });
     fireEvent.click(activateButton);
-    const confirmation = await screen.findByRole("alertdialog");
-    fireEvent.click(within(confirmation).getByRole("button", { name: "Sí, activar versión" }));
+    const confirmation = await screen.findByRole("dialog");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Activar versión" }));
 
     const packageCard = activateButton.closest("section");
     expect(packageCard).not.toBeNull();
@@ -802,8 +803,8 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     fireEvent.change(concept, { target: { value: "Operaciones generales" } });
     const activateButton = await screen.findByRole("button", { name: /^Activar$/ });
     fireEvent.click(activateButton);
-    const confirmation = await screen.findByRole("alertdialog");
-    fireEvent.click(within(confirmation).getByRole("button", { name: "Sí, activar versión" }));
+    const confirmation = await screen.findByRole("dialog");
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Activar versión" }));
 
     // D-R3-3: cada error va junto a su botón; Guardar y Activar están en el encabezado del resumen.
     const packageCard = activateButton.closest("section");
