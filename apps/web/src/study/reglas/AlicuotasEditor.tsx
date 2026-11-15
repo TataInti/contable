@@ -4,7 +4,7 @@ import type { CatalogEconomicActivity, TaxRuleKindOption } from "@contable/contr
 import { MONOTRIBUTO_CATEGORY_CODES } from "@contable/contracts";
 import { Button, MoneyField, Table } from "@contable/design-system";
 import { Icon } from "../../ui/Icon";
-import { ErrorAccion, ErrorConsulta } from "./Errores";
+import { ErrorConsulta } from "./Errores";
 import type { RuleJurisdictionOption, RulePackDetail, RuleRow, RuleVersion } from "./tipos";
 
 interface AlicuotasEditorProps {
@@ -23,7 +23,6 @@ interface AlicuotasEditorProps {
   ruleKindsQuery: UseQueryResult<TaxRuleKindOption[], Error>;
   activitiesQuery: UseQueryResult<CatalogEconomicActivity[], Error>;
   jurisdictionsQuery: UseQueryResult<RuleJurisdictionOption[], Error>;
-  saveMutation: UseMutationResult<unknown, Error, void>;
   canPropose: boolean;
 }
 
@@ -43,7 +42,6 @@ export function AlicuotasEditor({
   ruleKindsQuery,
   activitiesQuery,
   jurisdictionsQuery,
-  saveMutation,
   canPropose,
 }: AlicuotasEditorProps) {
   // Las columnas de actividad y jurisdicción dependen de los tipos de regla que devuelve el catálogo.
@@ -409,36 +407,6 @@ export function AlicuotasEditor({
                     },
                   ]}
                 />
-                {editable ? (
-                  <div className="study-page__actions fiscal-rule-actions">
-                    <Button
-                      onClick={() => {
-                        const missingKindRows = draftRows.filter((row) => !row.kindId);
-                        if (missingKindRows.length > 0) {
-                          setRowFieldErrors(Object.fromEntries(missingKindRows.map((row) => [
-                            `${row.id}.kindId`, "Seleccioná un tipo de regla.",
-                          ])));
-                          return;
-                        }
-                        saveMutation.mutate();
-                      }}
-                      loading={saveMutation.isPending}
-                      disabled={draftRows.some(
-                        (row) => !row.rate && !row.minAmount,
-                      )}
-                    >
-                      Guardar borrador
-                    </Button>
-                  </div>
-                ) : null}
-                {editable && draftRows.some((row) => !row.rate && !row.minAmount) ? (
-                  <p className="form-submit-hint" role="note">
-                    Completá la tasa, cuota o importe de cada fila para guardar el borrador.
-                  </p>
-                ) : null}
-                {editable && saveMutation.error && Object.keys(rowFieldErrors).length === 0 ? (
-                  <ErrorAccion error={saveMutation.error} />
-                ) : null}
               </section>
     </>
   );
