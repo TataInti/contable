@@ -37,6 +37,7 @@ function renderShell(path: string, clientId: string | null = "client-a") {
       "client.read",
       "tax.profile.read",
       "tax.rules.read",
+      "tax.calendars.read",
       "tax.settlements.read",
       "profitability.read",
       "report.run",
@@ -109,6 +110,7 @@ describe("StudyShell", () => {
       "Módulos de estudios",
       "Reglas fiscales",
       "Catálogos fiscales",
+      "Calendarios fiscales",
     ]);
     expect(within(settingsGroup).queryByRole("button")).toBeNull();
     expect(within(clientGroup).getByRole("link", { name: "Trabajo" }).getAttribute("aria-current")).toBe(
