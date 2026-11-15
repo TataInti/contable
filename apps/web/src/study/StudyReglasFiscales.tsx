@@ -371,7 +371,7 @@ export function StudyReglasFiscales() {
     onSuccess: (_result, ruleVersionId) => {
       invalidate();
       const activatedVersion = detailQuery.data?.versions.find((version) => version.id === ruleVersionId);
-      const message = `La versión v${activatedVersion?.version ?? ""} quedó activa y disponible para próximos cálculos.`;
+      const message = `La versión v${activatedVersion?.version ?? ""} quedó vigente y disponible para próximos cálculos.`;
       notify.success(message);
     },
     onError: (error) => {
@@ -509,7 +509,7 @@ export function StudyReglasFiscales() {
               onClick={() => setShowPackForm((visible) => !visible)}
             >
               <Icon name={showPackForm ? "close" : "plus"} size={16} />{" "}
-              {showPackForm ? "Cerrar alta" : isEmptyPackList ? "Crear paquete" : "Nuevo paquete"}
+              {showPackForm ? "Cerrar alta" : "Nuevo paquete"}
             </Button>
           ) : undefined
         }
@@ -549,7 +549,7 @@ export function StudyReglasFiscales() {
 
       <p className="dense-note fiscal-rules-guide" role="note">
         <strong>Secuencia de cambios:</strong> borrador → activación directa por Administrador o
-        Titular. Las versiones activas son inmutables; todo cambio posterior se prepara en una nueva
+        Titular. Las versiones vigentes son inmutables; todo cambio posterior se prepara en una nueva
         versión a partir de la vigente. Las versiones antiguas conservan su flujo de revisión.
       </p>
 

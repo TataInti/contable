@@ -36,7 +36,7 @@ afterEach(() => {
 });
 
 describe("RuleSimulator", () => {
-  it("envía el caso y muestra el resultado comparado con la versión activa", async () => {
+  it("envía el caso y muestra el resultado comparado con la versión vigente", async () => {
     vi.mocked(api.post).mockResolvedValue({
       engine: { key: "tem-smt", label: "TEM San Miguel de Tucumán" },
       period: { startDate: "2027-01-01", endDate: "2027-01-31" },
@@ -76,8 +76,8 @@ describe("RuleSimulator", () => {
     expect(vi.mocked(api.post)).toHaveBeenCalledWith("/tax/rule-versions/version-2/simulate", {
       incomes: [{ ruleId: "rule-comercio", amount: "100000" }],
     });
-    expect(screen.getByText("Activa v1")).toBeTruthy();
-    expect(screen.getByText(/cambia en \+ \$\s2\.000,00 respecto de la versión activa/)).toBeTruthy();
+    expect(screen.getByText("Vigente v1")).toBeTruthy();
+    expect(screen.getByText(/cambia en \+ \$\s2\.000,00 respecto de la versión vigente/)).toBeTruthy();
   });
 
   it("avisa que la prueba usa las reglas guardadas cuando hay cambios sin guardar", () => {

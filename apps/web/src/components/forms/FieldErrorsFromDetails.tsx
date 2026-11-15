@@ -6,7 +6,7 @@ const FIELD_LABELS: Record<string, string> = {
   code: "Código",
   concept: "Concepto",
   engineId: "Opción de cálculo",
-  engineVersion: "Motor compatible con el régimen",
+  engineVersion: "Motor de cálculo compatible con el régimen",
   frequency: "Frecuencia",
   jurisdictionId: "Jurisdicción",
   minAmount: "Monto mínimo",

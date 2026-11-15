@@ -439,7 +439,7 @@ describe("StudyReglasFiscales — rótulos de versión sin ambigüedad (F4)", ()
     vi.restoreAllMocks();
   });
 
-  it("distingue el borrador en edición de la versión activa del paquete", async () => {
+  it("distingue el borrador en edición de la versión vigente del paquete", async () => {
     const detail = makeDetail(null);
     detail.versions = [
       { ...detail.versions[0]!, id: "version-draft", version: 2, status: "DRAFT", rateRules: [] },
@@ -453,7 +453,7 @@ describe("StudyReglasFiscales — rótulos de versión sin ambigüedad (F4)", ()
     // El resumen dice explícitamente qué se está editando y cuál es la activa.
     // D-R3-5: el estado de la versión aparece una sola vez (en el resumen), sin «Editando borrador».
     await waitFor(() => expect(document.querySelectorAll('[data-status="DRAFT"]')).toHaveLength(1));
-    expect(await screen.findByText("Versión activa")).toBeTruthy();
+    expect(await screen.findByText("Versión vigente")).toBeTruthy();
     // El CTA guiado identifica la versión: Editar borrador v2.
     expect(screen.getByRole("button", { name: "Editar borrador v2" })).toBeTruthy();
   });
@@ -470,10 +470,10 @@ describe("StudyReglasFiscales — rótulos de versión sin ambigüedad (F4)", ()
     // El detalle cargó: muestra "Versión" como rótulo simple, sin activa extra.
     expect(await screen.findByText(/^Versión$/)).toBeTruthy();
     expect(screen.queryByText("Editando borrador")).toBeNull();
-    expect(screen.queryByText("Versión activa")).toBeNull();
+    expect(screen.queryByText("Versión vigente")).toBeNull();
   });
 
-  it("ofrece Modificar alícuotas junto a las alícuotas de una versión activa y muestra el rechazo del servidor en el panel", async () => {
+  it("ofrece Crear a partir de este junto a las alícuotas de una versión vigente y muestra el rechazo del servidor en el panel", async () => {
     const detail = makeDetail(null);
     detail.versions = [
       { ...detail.versions[0]!, id: "version-active", version: 4, status: "ACTIVE", rateRules: [] },
@@ -487,7 +487,7 @@ describe("StudyReglasFiscales — rótulos de versión sin ambigüedad (F4)", ()
     const ratesSection = (await screen.findByRole("heading", { name: "Alícuotas y porcentajes" }))
       .closest("section")!;
     expect(within(ratesSection).getByText(/Esta versión es de sólo lectura/)).toBeTruthy();
-    fireEvent.click(within(ratesSection).getByRole("button", { name: "Modificar alícuotas" }));
+    fireEvent.click(within(ratesSection).getByRole("button", { name: "Crear a partir de este" }));
 
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Crear borrador y editar" }));
@@ -663,7 +663,7 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     expect(within(confirmation).queryByText(/Al activar esta versión/)).toBeNull();
   });
 
-  it("muestra la advertencia de retiro cuando el paquete ya tiene una versión activa", async () => {
+  it("muestra la advertencia de retiro cuando el paquete ya tiene una versión vigente", async () => {
     const detail = makeDetail(null);
     detail.versions.push({ ...detail.versions[0]!, id: "version-active", version: 3, status: "ACTIVE" });
     mockApi(detail);
@@ -709,7 +709,7 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     );
     // La confirmación llega como notificación emergente, no dentro de la tarjeta.
     const toast = await screen.findByText(
-      "La versión v1 quedó activa y disponible para próximos cálculos.",
+      "La versión v1 quedó vigente y disponible para próximos cálculos.",
     );
     expect(toast.closest('[role="status"]')).not.toBeNull();
   });
@@ -833,9 +833,9 @@ describe("StudyReglasFiscales — estado vacío de paquetes", () => {
 
     expect(await screen.findByRole("heading", { name: "Todavía no hay paquetes de reglas" })).toBeTruthy();
     expect(document.querySelectorAll(".ds-empty")).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Crear paquete" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Nuevo paquete" })).toHaveLength(1);
     expect(document.querySelectorAll(".fiscal-rules .ds-button--primary")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Nuevo paquete" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Crear paquete" })).toBeNull();
     expect(screen.queryByRole("table", { name: "Paquetes de reglas disponibles" })).toBeNull();
     expect(screen.queryByText("No hay paquetes configurados.")).toBeNull();
 

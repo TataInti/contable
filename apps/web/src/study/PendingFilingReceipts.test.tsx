@@ -8,7 +8,7 @@ const apiMock = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock("../lib/api", () => ({ api: apiMock }));
 
 const NOW = new Date("2026-11-14T12:00:00.000Z").getTime();
-const HEADING = /Falta la constancia de presentación/;
+const HEADING = /Falta el acuse de presentación/;
 
 function receipt(overrides: Partial<PendingReceipt> = {}): PendingReceipt {
   return {
@@ -38,7 +38,7 @@ function renderList(onOpen = vi.fn(), canOpen = () => true) {
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
-describe("constancias de presentación pendientes en Inicio", () => {
+describe("acuses de presentación pendientes en Inicio", () => {
   it("no dibuja nada cuando no falta ninguna", async () => {
     apiMock.get.mockResolvedValue([]);
     renderList();
@@ -76,7 +76,7 @@ describe("constancias de presentación pendientes en Inicio", () => {
     renderList();
 
     expect(await screen.findByRole("heading", { name: HEADING })).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain("Consultando constancias pendientes");
+    expect(screen.getByRole("status").textContent).toContain("Consultando acuses pendientes");
     expect(screen.getByText("pendiente")).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByText("0")).toBeNull();
@@ -87,7 +87,7 @@ describe("constancias de presentación pendientes en Inicio", () => {
     renderList();
 
     expect(await screen.findByRole("alert")).toBeTruthy();
-    expect(screen.getByText("No se pudo cargar las constancias")).toBeTruthy();
+    expect(screen.getByText("No se pudo cargar los acuses")).toBeTruthy();
     expect(screen.getByRole("heading", { name: HEADING })).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
 
@@ -106,6 +106,6 @@ describe("constancias de presentación pendientes en Inicio", () => {
     const rows = within(await screen.findByRole("table")).getAllByRole("row");
     expect(rows[1]?.textContent).toContain("Cliente Antiguo S.A.");
     expect(rows[2]?.textContent).toContain("Cliente Reciente S.A.");
-    expect(screen.getByText("2 constancias pendientes")).toBeTruthy();
+    expect(screen.getByText("2 acuses pendientes")).toBeTruthy();
   });
 });

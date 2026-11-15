@@ -235,24 +235,24 @@ describe("Legajo · registrar presentación (K7)", () => {
     expect(within(dialogo).getByLabelText("Fecha de presentación")).toHaveValue(hoy());
   });
 
-  it("la constancia es obligatoria: Registrar presentación queda deshabilitado sin archivo ni constancia", async () => {
+  it("el acuse es obligatorio: Registrar presentación queda deshabilitado sin archivo ni acuse", async () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
     expect(within(dialogo).getByRole("button", { name: "Registrar presentación" })).toBeDisabled();
-    fireEvent.change(within(dialogo).getByLabelText("Constancia de presentación"), {
+    fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
       target: { value: "doc-a" },
     });
     expect(within(dialogo).getByRole("button", { name: "Registrar presentación" })).toBeEnabled();
   });
 
-  it("Registrar presentación también se habilita con un archivo de constancia elegido", async () => {
+  it("Registrar presentación también se habilita con un archivo de acuse elegido", async () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
-    fireEvent.change(within(dialogo).getByLabelText("Archivo de la constancia"), {
+    fireEvent.change(within(dialogo).getByLabelText("Archivo del acuse"), {
       target: {
         files: [new File(["constancia Demo"], "constancia-demo.pdf", { type: "application/pdf" })],
       },
@@ -260,12 +260,12 @@ describe("Legajo · registrar presentación (K7)", () => {
     expect(within(dialogo).getByRole("button", { name: "Registrar presentación" })).toBeEnabled();
   });
 
-  it("envía el devengado, la fecha y la constancia elegida, sin identificador externo si no se carga", async () => {
+  it("envía el devengado, la fecha y el acuse elegido, sin identificador externo si no se carga", async () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
-    fireEvent.change(within(dialogo).getByLabelText("Constancia de presentación"), {
+    fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
       target: { value: "doc-a" },
     });
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar presentación" }));
@@ -287,7 +287,7 @@ describe("Legajo · registrar presentación (K7)", () => {
     fireEvent.change(within(dialogo).getByLabelText("Identificador externo"), {
       target: { value: "ARCA-DEMO-0001" },
     });
-    fireEvent.change(within(dialogo).getByLabelText("Constancia de presentación"), {
+    fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
       target: { value: "doc-a" },
     });
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar presentación" }));
@@ -299,18 +299,16 @@ describe("Legajo · registrar presentación (K7)", () => {
     );
   });
 
-  it("al registrarla avisa «Presentación registrada con su constancia.»", async () => {
+  it("al registrarla avisa «Presentación registrada con su acuse.»", async () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
-    fireEvent.change(within(dialogo).getByLabelText("Constancia de presentación"), {
+    fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
       target: { value: "doc-a" },
     });
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar presentación" }));
-    expect(
-      await screen.findByText("Presentación registrada con su constancia."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Presentación registrada con su acuse.")).toBeInTheDocument();
   });
 
   it("un error de la acción se muestra dentro del cajón, que sigue abierto", async () => {
@@ -321,7 +319,7 @@ describe("Legajo · registrar presentación (K7)", () => {
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
-    fireEvent.change(within(dialogo).getByLabelText("Constancia de presentación"), {
+    fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
       target: { value: "doc-a" },
     });
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar presentación" }));
@@ -352,13 +350,13 @@ describe("Legajo · pago y presentación, accesibilidad mínima (Foco 2.2b)", ()
     expect(within(dialogo).getByText("Indicá el importe del pago.")).toBeInTheDocument();
   });
 
-  it("el cajón de presentación tiene una sola acción primaria y explica que falta la constancia", async () => {
+  it("el cajón de presentación tiene una sola acción primaria y explica que falta el acuse", async () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
     expect(dialogo.querySelectorAll(".ds-button--primary")).toHaveLength(1);
-    expect(within(dialogo).getByText("Adjuntá la constancia de presentación.")).toBeInTheDocument();
+    expect(within(dialogo).getByText("Adjuntá el acuse de presentación.")).toBeInTheDocument();
   });
 
   it("al cerrar el cajón de pago, el foco vuelve al botón que lo abrió", async () => {

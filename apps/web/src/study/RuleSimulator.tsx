@@ -208,8 +208,8 @@ export function RuleSimulator({
         <div className="rule-simulator__result" aria-live="polite">
           <h3>Resultado paso a paso</h3>
           <p className="muted-copy">
-            Motor {data.engine.label}. {isDraft ? `Borrador v${versionNumber}` : `Versión v${versionNumber}`}
-            {data.comparison ? `, comparado con la versión activa v${data.comparison.version}.` : "."}
+            Motor de cálculo {data.engine.label}. {isDraft ? `Borrador v${versionNumber}` : `Versión v${versionNumber}`}
+            {data.comparison ? `, comparado con la versión vigente v${data.comparison.version}.` : "."}
           </p>
           {data.result.blocks.map((block) => (
             <Notice key={block} tone="error">{block}</Notice>
@@ -232,7 +232,7 @@ export function RuleSimulator({
               ...(data.comparison
                 ? [{
                     key: "active",
-                    header: `Activa v${data.comparison.version}`,
+                    header: `Vigente v${data.comparison.version}`,
                     align: "right" as const,
                     render: (row: StepRow) => <span className="tabular-copy muted-copy">{money(row.compared)}</span>,
                   }]
@@ -252,13 +252,13 @@ export function RuleSimulator({
           {difference !== null ? (
             <p className="muted-copy">
               {difference === 0
-                ? "Con este borrador el caso da lo mismo que con la versión activa."
-                : `Con este borrador el caso cambia en ${difference > 0 ? "+" : "−"} ${money(String(Math.abs(difference)))} respecto de la versión activa.`}
+                ? "Con este borrador el caso da lo mismo que con la versión vigente."
+                : `Con este borrador el caso cambia en ${difference > 0 ? "+" : "−"} ${money(String(Math.abs(difference)))} respecto de la versión vigente.`}
             </p>
           ) : null}
           {data.unmatchedInComparison.length > 0 ? (
             <p className="muted-copy">
-              Sin equivalente en la versión activa: {data.unmatchedInComparison.join(", ")}.
+              Sin equivalente en la versión vigente: {data.unmatchedInComparison.join(", ")}.
             </p>
           ) : null}
           {data.result.warnings.length > 0 ? (

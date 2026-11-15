@@ -16,7 +16,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("constancia de presentación subida por el estudio", () => {
+describe("acuse de presentación subido por el estudio", () => {
   it("la sube como ACUSE, sin pedido documental", async () => {
     apiMock.post
       .mockResolvedValueOnce({ sessionId: "session-1", presignedUrl: "https://storage/put", objectKey: "key-1" })
@@ -37,7 +37,7 @@ describe("constancia de presentación subida por el estudio", () => {
     );
   });
 
-  it("espera a que termine la validación antes de dar la constancia por lista", async () => {
+  it("espera a que termine la validación antes de dar el acuse por listo", async () => {
     apiMock.get
       .mockResolvedValueOnce([{ id: "document-1", status: "VALIDATING" }])
       .mockResolvedValueOnce([{ id: "document-1", status: "READY" }]);
@@ -54,11 +54,11 @@ describe("constancia de presentación subida por el estudio", () => {
     );
   });
 
-  it("no espera para siempre: explica que la constancia ya quedó subida", async () => {
+  it("no espera para siempre: explica que el acuse ya quedó subido", async () => {
     apiMock.get.mockResolvedValue([{ id: "document-1", status: "VALIDATING" }]);
 
     await expect(
       waitForReceiptReady(BASE, "document-1", { intervalMs: 1, timeoutMs: 5 }),
-    ).rejects.toThrow(/ya quedó subida/);
+    ).rejects.toThrow(/ya quedó subido/);
   });
 });

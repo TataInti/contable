@@ -68,7 +68,7 @@ function motoresDe(detail: { regime: { id: string } }) {
 async function abrirCajonClon(): Promise<HTMLElement> {
   const botones = await screen.findAllByRole(
     "button",
-    { name: "Modificar alícuotas" },
+    { name: "Crear a partir de este" },
     { timeout: 5000 },
   );
   fireEvent.click(botones[0] as HTMLElement);

@@ -9,11 +9,11 @@ afterEach(() => cleanup());
 
 describe("EmptyState size inline (Foco 0)", () => {
   it("inline suma su modificador y conserva el título como encabezado", () => {
-    const { container } = render(<EmptyState size="inline" title="Sin constancias" />);
+    const { container } = render(<EmptyState size="inline" title="Sin acuses" />);
     const root = container.querySelector(".ds-empty");
     expect(root).toHaveClass("ds-empty", "ds-empty--inline");
     expect(root).not.toHaveClass("ds-empty--regular", "ds-empty--compact");
-    expect(screen.getByRole("heading", { level: 3, name: "Sin constancias" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Sin acuses" })).toBeInTheDocument();
   });
 
   it("inline conserva kind, descripción y acción", () => {

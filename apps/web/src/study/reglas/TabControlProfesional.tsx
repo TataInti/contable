@@ -32,7 +32,7 @@ export function TabControlProfesional({
                   <h2>Flujo de revisión anterior</h2>
                   <p>
                     La activación directa es el recorrido principal. Las versiones históricas pueden
-                    conservar revisión profesional; las versiones activas siguen siendo inmutables.
+                    conservar revisión profesional; las versiones vigentes siguen siendo inmutables.
                   </p>
                 </div>
                 <div className="fiscal-rule-approval__actions">

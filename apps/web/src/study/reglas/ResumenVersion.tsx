@@ -194,7 +194,7 @@ export function ResumenVersion({
             <StatusBadge status={selectedVersion.status} />
             {selectedVersion.status === "DRAFT" && activeVersion ? (
               <span>
-                Versión activa <strong>v{activeVersion.version}</strong>
+                Versión vigente <strong>v{activeVersion.version}</strong>
               </span>
             ) : null}
             <span>
@@ -204,7 +204,7 @@ export function ResumenVersion({
               </strong>
             </span>
             <span>
-              Motor <strong>{selectedVersion.engineVersion}</strong>
+              Motor de cálculo <strong>{selectedVersion.engineVersion}</strong>
             </span>
           </div>
           {activationError ? (

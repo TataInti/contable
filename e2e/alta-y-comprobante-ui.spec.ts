@@ -191,7 +191,7 @@ async function createActivity(page: Page, activity: Tax["activity"]) {
 /** Paquete de reglas completo: alícuota, vencimiento y fuente normativa, y activación. */
 async function createRulePack(page: Page, tax: Tax) {
   if (await exists(page, "rule-packs", tax.pack.code)) return;
-  await page.getByRole("button", { name: /^Crear paquete$|^Nuevo paquete|^Cerrar alta/ }).first().click();
+  await page.getByRole("button", { name: /^Nuevo paquete|^Cerrar alta/ }).first().click();
   await page.locator("#new-rule-pack-code").fill(tax.pack.code);
   await page.locator("#new-rule-pack-name").fill(tax.pack.name);
   await pickOption(page.locator("#new-rule-pack-regime"), tax.regime.name);
@@ -641,7 +641,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await drawer.getByLabel("Identificador externo").fill(`E2E-VEP-${SUFFIX}`);
     // La constancia la sube el estudio en este mismo paso: se valida (antivirus) y recién
     // entonces se registra la presentación.
-    await drawer.getByLabel("Archivo de la constancia").setInputFiles(fixture);
+    await drawer.getByLabel("Archivo del acuse").setInputFiles(fixture);
     await mutating(page, "/filings", () => drawer.getByRole("button", { name: "Registrar presentación" }).click());
     await card.getByRole("button", { name: "Registrar pago" }).first().click();
     await drawer.getByLabel("Importe", { exact: true }).fill("38199.00");

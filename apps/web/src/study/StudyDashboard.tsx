@@ -476,11 +476,11 @@ export function StudyDashboard() {
             }}
           />
         ) : (
-          <DenseSection id="pending-receipts" title="Falta la constancia de presentación" surface="integrated">
+          <DenseSection id="pending-receipts" title="Falta el acuse de presentación" surface="integrated">
             <EmptyState
               size="inline"
-              title="Constancias restringidas para tu rol"
-              description={`Tu rol no permite consultar las constancias de presentación de la firma. ${SALIDA_RESTRINGIDA}`}
+              title="Acuses restringidos para tu rol"
+              description={`Tu rol no permite consultar los acuses de presentación de la firma. ${SALIDA_RESTRINGIDA}`}
             />
           </DenseSection>
         )}

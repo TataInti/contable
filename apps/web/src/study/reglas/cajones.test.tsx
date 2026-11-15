@@ -234,7 +234,7 @@ describe("Reglas fiscales — cajones de versión (K5)", () => {
     expect(await screen.findByText("La primera versión quedó abierta como borrador.")).toBeTruthy();
   });
 
-  it("Modificar alícuotas envía la nueva vigencia y muestra el rechazo dentro del cajón", async () => {
+  it("Crear a partir de este envía la nueva vigencia y muestra el rechazo dentro del cajón", async () => {
     const detail = makeDemoDetail();
     detail.versions = [makeDemoVersion({ id: "version-1", status: "ACTIVE" })];
     mockDemoApi(detail);
@@ -243,7 +243,7 @@ describe("Reglas fiscales — cajones de versión (K5)", () => {
     );
     renderDemoReglas();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Modificar alícuotas" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Crear a partir de este" }));
     const dialog = await screen.findByRole("dialog");
     const date = within(dialog).getByLabelText("Nueva vigencia desde") as HTMLInputElement;
     fireEvent.change(date, { target: { value: "2027-03-01" } });

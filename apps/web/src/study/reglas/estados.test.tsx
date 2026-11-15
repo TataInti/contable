@@ -398,14 +398,14 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     expect(await within(panel).findByText("Error de aprobación Demo")).toBeTruthy();
   });
 
-  it("un error de «Modificar alícuotas» aparece una sola vez, dentro del cajón (7d-5)", async () => {
+  it("un error de «Crear a partir de este» aparece una sola vez, dentro del cajón (7d-5)", async () => {
     const detail = makeDemoDetail();
     detail.versions = [makeDemoVersion({ id: "version-active", version: 4, status: "ACTIVE" })];
     mockDemoApi(detail);
     vi.mocked(api.post).mockRejectedValue(new Error("Error de clon Demo"));
     renderDemoReglas();
     const alicuotas = await seccion("Alícuotas y porcentajes");
-    fireEvent.click(within(alicuotas).getByRole("button", { name: "Modificar alícuotas" }));
+    fireEvent.click(within(alicuotas).getByRole("button", { name: "Crear a partir de este" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Crear borrador y editar" }));
     expect(await within(dialog).findByText("Error de clon Demo")).toBeTruthy();

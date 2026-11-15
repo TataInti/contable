@@ -121,7 +121,7 @@ export function AlicuotasEditor({
                         setShowCloneForm(true);
                       }}
                     >
-                      Modificar alícuotas
+                      Crear a partir de este
                     </Button>
                   ) : null}
                 </div>
