@@ -83,7 +83,11 @@ export const fiscalBookSummaryQuerySchema = z.object({
   periodId: periodIdSchema,
 });
 
-/** Lista de columnas separada por comas. Vacía significa todas, en el orden del libro. */
+/**
+ * Lista de columnas separada por comas. Si el parámetro se omite, el libro trae todas las columnas,
+ * en el orden de FISCAL_BOOK_COLUMNS. Una lista vacía se rechaza con «columns: indicá al menos una
+ * columna»; la UI envía siempre la lista explícita.
+ */
 export const fiscalBookColumnsParamSchema = z
   .string({ invalid_type_error: "columns: indicá las columnas separadas por coma" })
   .max(400, { message: "columns: la lista de columnas es demasiado larga" })
