@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, Field, MoneyField } from "@contable/design-system";
 import { api } from "../../../lib/api";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
+import { formatMoney } from "../formato";
 import type { TaxPosition } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
 
@@ -47,23 +48,23 @@ export function PanelPago({ posicion, onCerrar, firmId, clientId }: PanelPagoPro
     <ActionDrawer
       isOpen
       onClose={onCerrar}
-      title={`Registrar pago · ${posicion.regime.taxType.name}`}
-      description="El pago se registrará de forma manual y actualizará el saldo pendiente."
+      title="Registrar pago"
+      description={`${posicion.regime.taxType.name}. El pago se registrará de forma manual y actualizará el saldo pendiente.`}
       footer={
-        <>
-          <Button
-            type="submit"
-            form="legajo-pago"
-            loading={recordPaymentMutation.isPending}
-            disabled={motivoRegistrar !== null}
-          >
-            Registrar pago
-          </Button>
-          <Button type="button" variant="ghost" onClick={onCerrar}>
-            Cancelar
-          </Button>
-          {motivoRegistrar ? <span className="muted-copy">{motivoRegistrar}</span> : null}
-        </>
+        <ActionDrawerFooter
+          primary={
+            <Button
+              type="submit"
+              form="legajo-pago"
+              loading={recordPaymentMutation.isPending}
+              disabled={motivoRegistrar !== null}
+            >
+              Registrar pago
+            </Button>
+          }
+          hint={motivoRegistrar}
+          onCancel={onCerrar}
+        />
       }
     >
       <form
@@ -74,6 +75,7 @@ export function PanelPago({ posicion, onCerrar, firmId, clientId }: PanelPagoPro
           recordPaymentMutation.mutate();
         }}
       >
+        <p className="muted-copy study-form__full">Pendiente: {formatMoney(posicion.pending)}</p>
         <MoneyField
           label="Importe"
           id="tax-payment-amount"
@@ -106,11 +108,10 @@ export function PanelPago({ posicion, onCerrar, firmId, clientId }: PanelPagoPro
           </select>
         </div>
         <Field
-          label="Referencia"
+          label="Referencia (opcional)"
           id="tax-payment-reference"
           value={paymentForm.reference}
           onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })}
-          placeholder="Opcional"
         />
         <WorkpaperActionError error={recordPaymentMutation.error} />
       </form>

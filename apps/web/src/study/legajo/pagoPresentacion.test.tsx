@@ -182,7 +182,7 @@ describe("Legajo · registrar pago (K7)", () => {
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPago();
-    fireEvent.change(within(dialogo).getByLabelText("Referencia"), {
+    fireEvent.change(within(dialogo).getByLabelText("Referencia (opcional)"), {
       target: { value: "Transferencia Demo 001" },
     });
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar pago" }));
@@ -284,7 +284,7 @@ describe("Legajo · registrar presentación (K7)", () => {
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
-    fireEvent.change(within(dialogo).getByLabelText("Identificador externo"), {
+    fireEvent.change(within(dialogo).getByLabelText("Identificador externo (opcional)"), {
       target: { value: "ARCA-DEMO-0001" },
     });
     fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
@@ -381,5 +381,66 @@ describe("Legajo · pago y presentación, accesibilidad mínima (Foco 2.2b)", ()
     const dialogo = await screen.findByRole("dialog", { name: /^Registrar presentación/ });
     fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
     await waitFor(() => expect(document.activeElement).toBe(origen));
+  });
+});
+
+describe("Legajo · paneles de presentación y pago (Foco 2.7b)", () => {
+  it("Registrar presentación: Importe y Fecha primero; el acuse y su archivo a todo el ancho; el identificador opcional al final", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    await abrirCalculo();
+    const dialogo = await abrirPresentacion();
+    const formulario = dialogo.querySelector<HTMLFormElement>("form#legajo-presentacion");
+    expect(formulario).not.toBeNull();
+    const etiquetas = Array.from(formulario!.querySelectorAll("label")).map((etiqueta) =>
+      etiqueta.textContent?.trim(),
+    );
+    expect(etiquetas).toEqual([
+      "Importe presentado",
+      "Fecha de presentación",
+      "Acuse de presentación",
+      "Archivo del acuse",
+      "Identificador externo (opcional)",
+    ]);
+    const anchoCompleto = Array.from(formulario!.querySelectorAll(".study-form__full")).map(
+      (bloque) => bloque.querySelector("label")?.textContent?.trim(),
+    );
+    expect(anchoCompleto).toEqual(["Acuse de presentación", "Archivo del acuse"]);
+  });
+
+  it("Registrar presentación: Cancelar a la izquierda y la principal a la derecha, con el motivo junto a la principal", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    await abrirCalculo();
+    const dialogo = await abrirPresentacion();
+    const pie = dialogo.querySelector<HTMLElement>(".action-drawer__footer");
+    expect(pie).not.toBeNull();
+    const cancelar = within(pie!).getByRole("button", { name: "Cancelar" });
+    const registrar = within(pie!).getByRole("button", { name: "Registrar presentación" });
+    expect(
+      cancelar.compareDocumentPosition(registrar) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(registrar).toBeDisabled();
+    const motivo = within(pie!).getByRole("note");
+    expect(motivo).toHaveTextContent("Adjuntá el acuse de presentación.");
+    expect(registrar.closest(".action-drawer__primary")?.contains(motivo)).toBe(true);
+  });
+
+  it("Registrar pago: título corto, impuesto en la bajada, pendiente a la vista y Referencia (opcional) en la etiqueta", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    await abrirCalculo();
+    const dialogo = await abrirPago();
+    expect(screen.getByRole("dialog", { name: "Registrar pago" })).toBe(dialogo);
+    expect(within(dialogo).getByText(/^Ingresos Brutos\./)).toBeInTheDocument();
+    expect(within(dialogo).getByText(/^Pendiente: /)).toBeInTheDocument();
+    expect(within(dialogo).getByLabelText("Referencia (opcional)")).toBeInTheDocument();
+    expect(within(dialogo).queryByPlaceholderText("Opcional")).toBeNull();
+    const pie = dialogo.querySelector<HTMLElement>(".action-drawer__footer");
+    const cancelar = within(pie!).getByRole("button", { name: "Cancelar" });
+    const registrar = within(pie!).getByRole("button", { name: "Registrar pago" });
+    expect(
+      cancelar.compareDocumentPosition(registrar) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

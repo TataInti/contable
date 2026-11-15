@@ -247,6 +247,12 @@
   grid-column: 1 / -1;
 }
 
+/* Bloque que ocupa las dos columnas de la grilla del formulario (acuse y su archivo). */
+.study-form > .study-form__full {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 .study-form__actions {
   display: flex;
   grid-column: 1 / -1;
