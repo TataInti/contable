@@ -12,10 +12,8 @@ import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
 import {
   DenseHeader,
-  DenseLoading,
   DensePage,
   DenseSearch,
-  DenseTable,
   DenseTabs,
   DenseToolbar,
   DenseWorkspace,
@@ -58,13 +56,7 @@ import type {
   MasterDrawer,
   CatalogDrawer,
 } from "./catalogos/tipos";
-import {
-  columnasOrganismos,
-  columnasRegimenes,
-  columnasActividades,
-  columnasJurisdicciones,
-  columnasTiposImpuesto,
-} from "./catalogos/columnas";
+import { TablaCatalogo, type VistaPestana } from "./catalogos/TablaCatalogo";
 import "./study.css";
 import "./StudyCatalogosFiscales.css";
 
@@ -786,9 +778,6 @@ export function StudyCatalogosFiscales() {
     </>
   );
 
-  const loadingFor = (loading: boolean, label: string) =>
-    loading ? <DenseLoading label={label} /> : null;
-
   const deleteButton = (path: string) => (
     <Button
       size="sm"
@@ -1100,185 +1089,52 @@ export function StudyCatalogosFiscales() {
     );
   }
 
-  const authorityColumns = columnasOrganismos({ regimesByAuthority });
 
-  const regimeColumns = columnasRegimenes({ regimeMismatch, authorityJurisdictionName });
 
-  const activityColumns = columnasActividades({ jurisdictions, jurisdictionName });
 
   const jurisdictionParentLabel = (jurisdiction: JurisdictionOption) => {
     const parent = jurisdictions.find((row) => row.id === jurisdiction.parentId) ?? jurisdiction.parent;
     const hidden = parent && "isActive" in parent && !parent.isActive;
     return parent ? `${parent.name}${hidden ? " (oculto)" : ""}` : "—";
   };
-  const jurisdictionColumns = columnasJurisdicciones({ jurisdictionParentLabel });
-  const taxTypeColumns = columnasTiposImpuesto();
 
   const select = (key: string | null) => setSelectedId(key);
+  const limpiarFiltrosActividades = () => {
+    setSearch("");
+    setJurisdictionFilter("");
+    setOriginFilter("");
+    setStateFilter("");
+  };
+  const vistaTabla: VistaPestana =
+    tab === "jurisdictions"
+      ? { tab, cargando: jurisdictionsQuery.isLoading, error: jurisdictionsQuery.isError, filas: visibleJurisdictions, sinRegistros: jurisdictions.length === 0 }
+      : tab === "taxTypes"
+        ? { tab, cargando: taxTypesQuery.isLoading, error: taxTypesQuery.isError, filas: visibleTaxTypes, sinRegistros: taxTypes.length === 0 }
+        : tab === "authorities"
+          ? { tab, cargando: authoritiesQuery.isLoading, error: authoritiesQuery.isError, filas: visibleAuthorities, sinRegistros: selectableAuthorities.length === 0 }
+          : tab === "regimes"
+            ? { tab, cargando: regimesQuery.isLoading, error: regimesQuery.isError, filas: visibleRegimes, sinRegistros: regimes.length === 0 }
+            : { tab: "activities", cargando: activitiesQuery.isLoading, error: activitiesQuery.isError, filas: visibleActivities, filtrosActivos: activityFiltersActive };
+  const tableBody = (
+    <TablaCatalogo
+      {...vistaTabla}
+      selectedId={selectedId}
+      inspectorOpen={inspectorOpen}
+      originKnown={originKnown}
+      select={select}
+      tableFooter={tableFooter}
+      onLimpiarFiltros={limpiarFiltrosActividades}
+      dependencias={{
+        jurisdictions,
+        jurisdictionName,
+        jurisdictionParentLabel,
+        regimesByAuthority,
+        regimeMismatch,
+        authorityJurisdictionName,
+      }}
+    />
+  );
 
-  let tableBody: ReactNode;
-  if (tab === "jurisdictions") {
-    tableBody =
-      loadingFor(jurisdictionsQuery.isLoading, "Cargando jurisdicciones…") ??
-      (jurisdictionsQuery.isError ? null : (
-        <DenseTable<JurisdictionOption>
-          label="Jurisdicciones"
-          columns={jurisdictionColumns}
-          rows={visibleJurisdictions}
-          rowKey={(row) => row.id}
-          selectedKey={selectedId}
-          onSelect={select}
-          inspectorOpen={inspectorOpen}
-          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
-          footer={tableFooter}
-          empty={
-            <EmptyState
-              size="compact"
-              kind={jurisdictions.length === 0 ? "no-data" : "no-results"}
-              title={jurisdictions.length === 0 ? "Todavía no hay jurisdicciones" : "Ninguna jurisdicción coincide con los filtros"}
-              description={jurisdictions.length === 0 ? "Creá Nación, provincia y municipio para completar el alcance fiscal del estudio." : "Probá con otro código o nombre, o quitá filtros."}
-            />
-          }
-        />
-      ));
-  } else if (tab === "taxTypes") {
-    tableBody =
-      loadingFor(taxTypesQuery.isLoading, "Cargando tipos de impuesto…") ??
-      (taxTypesQuery.isError ? null : (
-        <DenseTable<TaxTypeOption>
-          label="Tipos de impuesto"
-          columns={taxTypeColumns}
-          rows={visibleTaxTypes}
-          rowKey={(row) => row.id}
-          selectedKey={selectedId}
-          onSelect={select}
-          inspectorOpen={inspectorOpen}
-          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
-          footer={tableFooter}
-          empty={
-            <EmptyState
-              size="compact"
-              kind={taxTypes.length === 0 ? "no-data" : "no-results"}
-              title={taxTypes.length === 0 ? "Todavía no hay tipos de impuesto" : "Ningún tipo de impuesto coincide con los filtros"}
-              description={taxTypes.length === 0 ? "Creá un tipo de impuesto para poder iniciar regímenes fiscales." : "Probá con otro código o nombre, o quitá filtros."}
-            />
-          }
-        />
-      ));
-  } else if (tab === "authorities") {
-    tableBody =
-      loadingFor(authoritiesQuery.isLoading, "Cargando organismos recaudadores…") ??
-      (authoritiesQuery.isError ? null : (
-        <DenseTable<TaxAuthorityRow>
-          label="Organismos recaudadores"
-          columns={authorityColumns.filter((column) => originKnown || column.key !== "origin")}
-          rows={visibleAuthorities}
-          rowKey={(row) => row.id}
-          selectedKey={selectedId}
-          onSelect={select}
-          inspectorOpen={inspectorOpen}
-          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
-          footer={tableFooter}
-          empty={
-            <EmptyState
-              size="compact"
-              kind={selectableAuthorities.length === 0 ? "no-data" : "no-results"}
-              title={
-                selectableAuthorities.length === 0
-                  ? "Todavía no hay organismos recaudadores"
-                  : "Ningún organismo coincide con los filtros"
-              }
-              description={
-                selectableAuthorities.length === 0
-                  ? "Creá un organismo asociado a una jurisdicción para poder registrar regímenes."
-                  : "Probá con otro código o nombre, o quitá filtros."
-              }
-            />
-          }
-        />
-      ));
-  } else if (tab === "regimes") {
-    tableBody =
-      loadingFor(regimesQuery.isLoading, "Cargando regímenes…") ??
-      (regimesQuery.isError ? null : (
-        <DenseTable<TaxRegimeRow>
-          label="Regímenes"
-          columns={regimeColumns.filter((column) => originKnown || column.key !== "origin")}
-          rows={visibleRegimes}
-          rowKey={(row) => row.id}
-          selectedKey={selectedId}
-          onSelect={select}
-          inspectorOpen={inspectorOpen}
-          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
-          footer={tableFooter}
-          empty={
-            <EmptyState
-              size="compact"
-              kind={regimes.length === 0 ? "no-data" : "no-results"}
-              title={
-                regimes.length === 0
-                  ? "Todavía no hay regímenes fiscales"
-                  : "Ningún régimen coincide con los filtros"
-              }
-              description={
-                regimes.length === 0
-                  ? "Definí un régimen con un organismo recaudador y jurisdicción verificados."
-                  : "Probá con otro código o nombre, o quitá filtros."
-              }
-            />
-          }
-        />
-      ));
-  } else {
-    tableBody =
-      loadingFor(activitiesQuery.isLoading, "Cargando actividades económicas…") ??
-      (activitiesQuery.isError ? null : (
-        <DenseTable<CatalogActivityRow>
-          label="Actividades económicas"
-          columns={activityColumns.filter((column) => originKnown || column.key !== "origin")}
-          rows={visibleActivities}
-          rowKey={(row) => row.id}
-          selectedKey={selectedId}
-          onSelect={select}
-          inspectorOpen={inspectorOpen}
-          rowClassName={(row) => (row.isActive ? undefined : "dense-row--muted")}
-          footer={tableFooter}
-          empty={
-            <EmptyState
-              size="compact"
-              kind={activityFiltersActive ? "no-results" : "no-data"}
-              title={
-                activityFiltersActive
-                  ? "Ninguna actividad coincide con el filtro"
-                  : "Todavía no hay actividades económicas"
-              }
-              description={
-                activityFiltersActive
-                  ? "Ajustá los criterios de búsqueda o quitá el filtro."
-                  : "Creá una actividad para poder vincularla a clientes y reglas fiscales."
-              }
-              action={
-                activityFiltersActive ? (
-                  <Button
-                    type="button"
-                    variant="text"
-                    size="row"
-                    onClick={() => {
-                      setSearch("");
-                      setJurisdictionFilter("");
-                      setOriginFilter("");
-                      setStateFilter("");
-                    }}
-                  >
-                    Quitar filtro
-                  </Button>
-                ) : undefined
-              }
-            />
-          }
-        />
-      ));
-  }
 
   return (
     <DensePage density={density} flow className="fiscal-catalog-page">
