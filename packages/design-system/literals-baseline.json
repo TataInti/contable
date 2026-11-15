@@ -289,6 +289,30 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/legajo/etapaFuentes.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/etapas/EtapaFuentes.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/etapas/EtapaSaldos.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/etapaSaldos.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/legajo/ListaLegajos.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -439,6 +463,18 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/reglas/alicuotas.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/AlicuotasEditor.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/reglas/cajones.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -451,7 +487,25 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/reglas/control.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/reglas/datosDemoReglas.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/Errores.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/estados.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -500,6 +554,36 @@
       "color": 0
     },
     "apps/web/src/study/reglas/permisos.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/ResumenVersion.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/TabControlProfesional.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/TabFuentes.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/TabVencimientos.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/reglas/vencimientos-fuentes.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
