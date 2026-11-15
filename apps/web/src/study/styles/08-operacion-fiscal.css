@@ -345,10 +345,10 @@
   text-align: end;
 }
 
-/* Foco 2.9 (49 b): el motivo de la acción de la etapa se corta a dos renglones (ancho máximo; el texto no cambia),
-   así no queda pegado a la bajada de la etapa. Misma medida que la nota del cajón (.action-drawer__hint). */
+/* Foco 2.9 (49 b): el motivo de la acción de la etapa ocupa como máximo 60 caracteres (dos renglones; el texto no
+   cambia) y no queda pegado a la bajada de la etapa. */
 .workpaper-process__accion > .muted-copy {
-  max-width: 44ch;
+  max-width: 60ch;
 }
 
 .workpaper-process__index {
