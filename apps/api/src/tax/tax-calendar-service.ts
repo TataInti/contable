@@ -3,6 +3,8 @@ import { validateCalendarCoverage, type CalendarCoverageEntry, type CalendarProb
 import {
   taxCalendarEntryInputSchema,
   type CreateTaxCalendarInput,
+  type ImportTaxCalendarEntriesInput,
+  type TaxCalendarEntriesImportReport,
   type TaxCalendarEntryInput,
   type TaxCalendarEntryPatch,
   type TaxCalendarListQuery,
@@ -10,6 +12,14 @@ import {
 } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { isPrismaUniqueViolation } from "../lib/prisma-errors.js";
+import {
+  ArchivoCsvInvalidoError,
+  claveDeCelda,
+  leerCsvCalendario,
+  mapearImportacion,
+  type CeldaMapeada,
+  type LecturaCsv,
+} from "./tax-calendar-csv.js";
 
 /**
  * Calendarios fiscales del estudio (corte 2a-i).
@@ -309,6 +319,25 @@ function entryAsInput(entry: EntryRow): Record<string, unknown> {
   };
 }
 
+/** Celdas por INSERT en una importación; toda la importación va en una sola transacción. */
+const LOTE_IMPORTACION = 500;
+
+/**
+ * Campos de una celda importada desde CSV: como una carga a mano, pero la revisión sigue la duda
+ * del archivo (dudosa o revisada) y guarda la procedencia (página, extracción y fila).
+ */
+function importedEntryFields(ctx: TenantContext, celda: CeldaMapeada, sortOrder: number) {
+  const revisada = celda.revision === "REVIEWED";
+  return {
+    ...entryFields(ctx, celda.entrada, sortOrder),
+    reviewState: celda.revision,
+    reviewedByUserId: revisada ? ctx.userId : null,
+    reviewedAt: revisada ? new Date() : null,
+    sourcePage: celda.paginaOrigen,
+    extraction: celda.extraccion,
+  };
+}
+
 export class TaxCalendarRegistryService {
   /** Lista los calendarios del estudio con sus filtros. */
   async list(ctx: TenantContext, query: TaxCalendarListQuery) {
@@ -403,6 +432,86 @@ export class TaxCalendarRegistryService {
       await recordAudit(tx, ctx, "tax_calendar.entry_added", calendarId, null, entrySnapshot(entry));
       return loadCalendar(tx, ctx.firmId, calendarId);
     });
+  }
+
+  /**
+   * Importa celdas desde un CSV a un borrador (corte 2b-1). Con `dryRun` valida y devuelve el informe
+   * sin escribir nada. Sin `dryRun`, las filas válidas se crean en una sola transacción; las inválidas o
+   * repetidas se informan y no se importan. Si importa al menos una fila, deja un registro de auditoría resumen.
+   */
+  async importEntries(
+    ctx: TenantContext,
+    calendarId: string,
+    input: ImportTaxCalendarEntriesInput,
+  ): Promise<TaxCalendarEntriesImportReport> {
+    return withTenantContext(
+      ctx,
+      async (tx) => {
+        if (!input.dryRun) {
+          // Una importación real bloquea el calendario: el control de repetidos lee las celdas dentro de la misma transacción.
+          await tx.$queryRaw`SELECT id FROM tax_calendars WHERE id = ${calendarId} FOR UPDATE`;
+        }
+        const calendar = await loadCalendar(tx, ctx.firmId, calendarId);
+        assertDraft(calendar);
+        let lectura: LecturaCsv;
+        try {
+          lectura = leerCsvCalendario(input.csv);
+        } catch (err) {
+          if (err instanceof ArchivoCsvInvalidoError) {
+            throw new TaxCalendarError("CALENDAR_VALIDATION_FAILED", err.message, {
+              path: ["csv"],
+            });
+          }
+          throw err;
+        }
+        const existentes = new Set(
+          calendar.entries.map((entry) =>
+            claveDeCelda({
+              conceptLabel: entry.conceptLabel,
+              groupingKind: entry.groupingKind,
+              endingDigits: entry.endingDigits,
+              referencePeriodStart: entry.referencePeriodStart
+                ? isoDay(entry.referencePeriodStart)
+                : null,
+              referenceLabel: entry.referenceLabel,
+            }),
+          ),
+        );
+        const resultado = mapearImportacion(lectura, existentes);
+        const informe = {
+          dryRun: input.dryRun,
+          totalFilas: resultado.totalFilas,
+          validas: resultado.celdas.length,
+          rechazadas: resultado.rechazadas,
+          avisos: resultado.avisos,
+          columnasIgnoradas: lectura.columnasIgnoradas,
+          encabezadosFaltantes: [] as string[],
+        };
+        if (input.dryRun || resultado.celdas.length === 0) return { ...informe, importadas: 0 };
+
+        const ultimoOrden = calendar.entries.reduce(
+          (max, entry) => Math.max(max, entry.sortOrder),
+          -1,
+        );
+        const filas = resultado.celdas.map((celda, indice) => ({
+          ...importedEntryFields(ctx, celda, ultimoOrden + 1 + indice),
+          firmId: ctx.firmId,
+          calendarId,
+        }));
+        for (let inicio = 0; inicio < filas.length; inicio += LOTE_IMPORTACION) {
+          await tx.taxCalendarEntry.createMany({
+            data: filas.slice(inicio, inicio + LOTE_IMPORTACION),
+          });
+        }
+        await recordAudit(tx, ctx, "tax_calendar.entries_imported", calendarId, null, {
+          filas: resultado.totalFilas,
+          importadas: filas.length,
+          filasRechazadas: new Set(resultado.rechazadas.map((rechazo) => rechazo.fila)).size,
+        });
+        return { ...informe, importadas: filas.length };
+      },
+      { timeout: 30_000 },
+    );
   }
 
   /** Edita una celda de un borrador. Se valida el resultado combinado. */
