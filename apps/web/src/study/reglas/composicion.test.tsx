@@ -50,9 +50,7 @@ function primarios(): string[] {
 }
 
 function esPrimario(nombre: string): boolean {
-  return screen
-    .getByRole("button", { name: nombre, exact: true })
-    .classList.contains("ds-button--primary");
+  return screen.getByRole("button", { name: nombre }).classList.contains("ds-button--primary");
 }
 
 // Sección del resumen: la que contiene el título del paquete.
@@ -90,14 +88,14 @@ describe("una sola acción primaria visible por estado (D-R3-1)", () => {
     vi.restoreAllMocks();
   });
 
-  it.fails("sin paquetes, la primaria es «Crear paquete»", async () => {
+  it("sin paquetes, la primaria es «Crear paquete»", async () => {
     mockDemoApi(makeDemoDetail(), { [LISTA]: () => Promise.resolve([]) });
     renderDemoReglas();
     await screen.findByText("Todavía no hay paquetes de reglas");
     expect(primarios()).toEqual(["Crear paquete"]);
   });
 
-  it.fails("paquete sin versión: la primaria es «Crear primera versión»", async () => {
+  it("paquete sin versión: la primaria es «Crear primera versión»", async () => {
     mockDemoApi(paqueteConVersiones());
     renderDemoReglas();
     await screen.findByText("Este paquete todavía no tiene versión");
@@ -245,7 +243,7 @@ describe("filtros de la banda, región del detalle y un solo h1 (G02, D-R3-8)", 
     vi.restoreAllMocks();
   });
 
-  it.fails("los filtros de la banda exponen aria-pressed y lo alternan", async () => {
+  it("los filtros de la banda exponen aria-pressed y lo alternan", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     await resumen();
@@ -355,7 +353,7 @@ describe("aviso de cambios sin guardar y nombres de las acciones (P1, P4, conteo
       "Quitar",
     ];
     for (const nombre of nombres) {
-      expect(screen.getByRole("button", { name: nombre, exact: true })).toBeTruthy();
+      expect(screen.getByRole("button", { name: nombre })).toBeTruthy();
     }
   });
 });

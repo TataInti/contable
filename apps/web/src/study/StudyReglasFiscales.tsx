@@ -474,9 +474,13 @@ export function StudyReglasFiscales() {
         description="Alícuotas, mínimos y porcentajes normativos con vigencia; activación directa por Administrador o Titular."
         actions={
           canPropose ? (
-            <Button size="sm" onClick={() => setShowPackForm((visible) => !visible)}>
+            <Button
+              size="sm"
+              variant={isEmptyPackList && !showPackForm ? "primary" : "secondary"}
+              onClick={() => setShowPackForm((visible) => !visible)}
+            >
               <Icon name={showPackForm ? "close" : "plus"} size={16} />{" "}
-              {showPackForm ? "Cerrar alta" : "Nuevo paquete"}
+              {showPackForm ? "Cerrar alta" : isEmptyPackList ? "Crear paquete" : "Nuevo paquete"}
             </Button>
           ) : undefined
         }
@@ -491,6 +495,7 @@ export function StudyReglasFiscales() {
             label: "Con versión vigente",
             value: cifraPacks(packsWith("ACTIVE")),
             active: packFilter === "ACTIVE",
+            pressed: packFilter === "ACTIVE",
             onSelect: () => setPackFilter((current) => (current === "ACTIVE" ? "" : "ACTIVE")),
           },
           {
@@ -498,6 +503,7 @@ export function StudyReglasFiscales() {
             label: "Con borrador",
             value: cifraPacks(packsWith("DRAFT")),
             active: packFilter === "DRAFT",
+            pressed: packFilter === "DRAFT",
             onSelect: () => setPackFilter((current) => (current === "DRAFT" ? "" : "DRAFT")),
           },
           {
@@ -506,6 +512,7 @@ export function StudyReglasFiscales() {
             value: cifraPacks(packsWith("IN_REVIEW")),
             tone: packsQuery.isSuccess && packsWith("IN_REVIEW") > 0 ? "warn" : undefined,
             active: packFilter === "IN_REVIEW",
+            pressed: packFilter === "IN_REVIEW",
             onSelect: () => setPackFilter((current) => (current === "IN_REVIEW" ? "" : "IN_REVIEW")),
           },
         ]}

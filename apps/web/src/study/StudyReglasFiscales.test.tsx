@@ -840,9 +840,9 @@ describe("StudyReglasFiscales — estado vacío de paquetes", () => {
 
     expect(await screen.findByRole("heading", { name: "Todavía no hay paquetes de reglas" })).toBeTruthy();
     expect(document.querySelectorAll(".ds-empty")).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Nuevo paquete" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Crear paquete" })).toHaveLength(1);
     expect(document.querySelectorAll(".fiscal-rules .ds-button--primary")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Crear paquete" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Nuevo paquete" })).toBeNull();
     expect(screen.queryByRole("table", { name: "Paquetes de reglas disponibles" })).toBeNull();
     expect(screen.queryByText("No hay paquetes configurados.")).toBeNull();
 

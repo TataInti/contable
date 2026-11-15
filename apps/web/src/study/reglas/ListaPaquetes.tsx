@@ -108,9 +108,9 @@ export function ListaPaquetes({
             label="Buscar paquetes"
           />
           {filter ? (
-            <button type="button" className="dense-toggle" aria-pressed onClick={onClearFilter}>
+            <Button size="sm" variant="ghost" onClick={onClearFilter}>
               Filtro activo · quitar
-            </button>
+            </Button>
           ) : null}
           <span className="dense-toolbar__spacer" />
         </DenseToolbar>
@@ -128,7 +128,6 @@ export function ListaPaquetes({
       ) : isEmpty ? (
         <EmptyState
           size="compact"
-          className="fiscal-rules-empty"
           title="Todavía no hay paquetes de reglas"
           description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
         />
