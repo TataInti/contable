@@ -255,6 +255,7 @@ export function EtapaClasificacion({
                           size="sm"
                           variant="ghost"
                           disabled={classifyVoucherMutation.isPending}
+                          aria-label={`Actualizar clasificación del comprobante ${classification.voucher.letter ?? classification.voucher.type} ${String(classification.voucher.pointOfSale).padStart(4, "0")}-${String(classification.voucher.number).padStart(8, "0")}`}
                           onClick={() => classifyVoucherMutation.mutate(classification)}
                         >
                           Actualizar

@@ -307,7 +307,7 @@ export function StudyAyuda() {
         <h2 className="study-page__section-title">Legajo</h2>
         <p>Requiere cliente y período. Cabecera: Nuevo legajo, o Crear legajo si está vacío.</p>
         <p>
-          Subir Excel importa libros IVA de compras y ventas por separado. Las seis etapas quedan
+          «Importar libro», en la fila ARCA IVA de Fuentes, importa los libros IVA de compras y ventas por separado. Las seis etapas quedan
           siempre visibles. El cálculo no habilita si falta evidencia.
         </p>
         <ul className="help-flow" aria-label="Seis etapas del legajo">
