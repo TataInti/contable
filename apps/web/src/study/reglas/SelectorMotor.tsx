@@ -10,11 +10,11 @@ interface SelectorMotorProps {
   enginesQuery: UseQueryResult<TaxEngineOption[], Error>;
   value: string;
   onChange: (engineId: string) => void;
-  /** Opción de origen de una copia: se marca «(actual)» y, si se elige otra, se dice la consecuencia. */
+  /** Opción de origen de una copia: viene preseleccionada y, si se elige otra, se dice la consecuencia. */
   actualId?: string | null;
 }
 
-// Selector «Opción de cálculo» (P5): lo usan «Crear primera versión» y «Modificar alícuotas», con los mismos estados.
+// Selector «Opción de cálculo» (P5): lo usan «Crear primera versión» y «Crear a partir de este», con los mismos estados.
 export function SelectorMotor({
   id,
   regimeId,
@@ -99,7 +99,6 @@ export function SelectorMotor({
         {enginesQuery.data.map((engine) => (
           <option key={engine.id} value={engine.id}>
             {engine.label}
-            {engine.id === actualId ? " (actual)" : ""}
           </option>
         ))}
       </select>

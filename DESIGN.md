@@ -1136,7 +1136,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 ### R03 — Reglas fiscales
 
-Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFooter` con «Cancelar» a la izquierda y el motivo junto a la acción principal; «Activar versión» conserva su cajón (decisión D-R3-B de Inti, fila A3) con el pie de `ActionDrawerFooter`; «Opción de cálculo» marca la opción de origen «(actual)» y dice la consecuencia al cambiarla; la lista cuenta «N de M paquetes» cuando no entran todas las filas; Vencimientos, Fuentes, Control profesional y Probar van sin caja. Pendiente: la pestaña Alícuotas sigue con caja (hallazgo 26 de ux).
+Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFooter` con «Cancelar» a la izquierda y el motivo junto a la acción principal; «Activar versión» conserva su cajón (decisión D-R3-B de Inti, fila A3) con el pie de `ActionDrawerFooter`; «Opción de cálculo» preselecciona la opción de origen y dice la consecuencia al cambiarla; la lista cuenta «N de M paquetes» cuando no entran todas las filas; Vencimientos, Fuentes, Control profesional y Probar van sin caja. Pendiente: la pestaña Alícuotas sigue con caja (hallazgo 26 de ux).
 
 **Propósito:** elegir un paquete, comprender su versión y vigencia, y preparar cambios de forma deliberada.
 

@@ -347,7 +347,7 @@ describe("Reglas fiscales — opción de cálculo al copiar (Foco 2.7a)", () => 
     vi.restoreAllMocks();
   });
 
-  it("marca la opción de origen «(actual)» y, al elegir otra, dice con qué calcula la nueva versión", async () => {
+  it("preselecciona la opción de origen sin rótulo y, al elegir otra, dice con qué calcula la nueva versión", async () => {
     const detail = makeDemoDetail();
     detail.versions = [makeDemoVersion({ id: "version-1", status: "ACTIVE" })];
     mockDemoApi(detail);
@@ -357,7 +357,10 @@ describe("Reglas fiscales — opción de cálculo al copiar (Foco 2.7a)", () => 
     const dialog = await screen.findByRole("dialog");
     const select = (await within(dialog).findByLabelText("Opción de cálculo")) as HTMLSelectElement;
     expect(select.value).toBe("engine-demo-current");
-    expect(within(select).getByRole("option", { name: "Demo · IVA RI vigente (actual)" })).toBeTruthy();
+    expect(within(select).getByRole("option", { name: "Demo · IVA RI vigente" })).toBeTruthy();
+    for (const option of within(select).getAllByRole("option")) {
+      expect(option.textContent).not.toContain("(actual)");
+    }
     expect(within(dialog).queryByText(/La nueva versión va a calcular con/)).toBeNull();
 
     fireEvent.change(select, { target: { value: "engine-demo-legacy" } });
