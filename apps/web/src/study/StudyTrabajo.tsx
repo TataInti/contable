@@ -2,59 +2,17 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
-import { api, type DocumentRequest, type FiscalYear } from "../lib/api";
+import { api, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import {
-  DenseHeader,
-  DensePage,
-  StatStrip,
-  useDensity,
-} from "../ui/Dense";
+import { DenseHeader, DensePage, StatStrip, useDensity } from "../ui/Dense";
 import "./study.css";
-import { formatearFecha, formatearRango } from "../lib/formatoFechas";
-
-interface CloseCycle {
-  id: string;
-  status: string;
-  workItems: { id: string; title: string; status: string }[];
-}
-interface RequestThread {
-  id: string;
-  visibility: string;
-  messages: {
-    id: string;
-    authorUserId: string;
-    body: string;
-    visibility: string;
-    createdAt: string;
-  }[];
-}
-interface WorkDocumentRequest extends DocumentRequest {
-  description?: string | null;
-  dueDate?: string | null;
-  threads?: RequestThread[];
-}
-interface Obligation {
-  id: string;
-  status: string;
-  dueDate: string | null;
-  regime: {
-    name: string;
-    taxType: { name: string };
-    jurisdiction: { name: string };
-  };
-  period: { id: string; label: string | null; startDate: string; endDate: string };
-}
-interface EvidencePreview {
-  url: string;
-  mimeType: string | null;
-  originalName: string | null;
-}
-
+import { formatearFecha } from "../lib/formatoFechas";
+import type { CloseCycle, EvidencePreview, Obligation, RequestThread, WorkDocumentRequest } from "./trabajo/tipos";
+import { filasDeObligaciones } from "./trabajo/obligaciones";
 
 export function StudyTrabajo() {
   const [density] = useDensity();
@@ -251,23 +209,7 @@ export function StudyTrabajo() {
     );
 
   const activeRequests = (requests.data ?? []).filter((item) => item.status !== "COMPLETED");
-  const obligationRows = (obligations.data ?? [])
-    .filter((item) => {
-      if (!selectedAccountingPeriod) return true;
-      return (
-        item.period.startDate.slice(0, 10) === selectedAccountingPeriod.startDate.slice(0, 10) &&
-        item.period.endDate.slice(0, 10) === selectedAccountingPeriod.endDate.slice(0, 10)
-      );
-    })
-    .map((item) => ({
-    id: item.id,
-    name: `${item.regime.taxType.name} · ${item.regime.jurisdiction.name}`,
-    periodLabel:
-      item.period.label ??
-      formatearRango(item.period.startDate, item.period.endDate),
-    dueDate: item.dueDate ?? item.period.endDate,
-    status: item.status,
-    }));
+  const obligationRows = filasDeObligaciones(obligations.data, selectedAccountingPeriod);
   const openCloses = (closes.data ?? []).filter((item) => item.status !== "FINALIZED");
   const conversationRequest = activeConversation
     ? (requests.data ?? []).find((item) => item.id === activeConversation.requestId)
