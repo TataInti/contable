@@ -120,7 +120,7 @@ interface RuleJurisdictionOption {
 
 const today = new Date().toISOString().slice(0, 10);
 
-function validateRuleVersionDate(value: string): string | null {
+export function validateRuleVersionDate(value: string): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return "La fecha debe tener formato AAAA-MM-DD y un año entre 1900 y 2100.";
   }
@@ -135,13 +135,13 @@ function validateRuleVersionDate(value: string): string | null {
   return null;
 }
 
-function shortDate(value: string | null) {
+export function shortDate(value: string | null) {
   // Las vigencias son fechas calendario guardadas en UTC: se formatean en UTC
   // para no mostrar el día anterior en husos como el de Argentina (UTC-3).
   return value ? new Date(value).toLocaleDateString("es-AR", { timeZone: "UTC" }) : "Sin vencimiento";
 }
 
-function sameRuleRows(draftRows: RuleRow[], savedRows: RuleRow[]): boolean {
+export function sameRuleRows(draftRows: RuleRow[], savedRows: RuleRow[]): boolean {
   if (draftRows.length !== savedRows.length) return false;
   const savedById = new Map(savedRows.map((row) => [row.id, row]));
   return draftRows.every((row) => {
