@@ -324,6 +324,20 @@ describe("Reglas fiscales — pie de los cajones (Foco 2.7a)", () => {
     expectPieDelCajon(dialog, "Crear primera versión", /Asigná una familia de cálculo/);
   });
 
+  it("Crear a partir de este: la ayuda de la vigencia va en la columna de su campo", async () => {
+    const detail = makeDemoDetail();
+    detail.versions = [makeDemoVersion({ id: "version-1", status: "ACTIVE" })];
+    mockDemoApi(detail);
+    renderDemoReglas();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear a partir de este" }));
+    const dialog = await screen.findByRole("dialog");
+    const fecha = within(dialog).getByLabelText("Nueva vigencia desde");
+    const columna = fecha.closest<HTMLElement>(".study-form__campo");
+    expect(columna).not.toBeNull();
+    expect(within(columna!).getByText(/La versión vigente no se modifica/)).toBeTruthy();
+  });
+
   it("Crear a partir de este: «Cancelar» a la izquierda y la acción principal a la derecha", async () => {
     const detail = makeDemoDetail();
     detail.versions = [makeDemoVersion({ id: "version-1", status: "ACTIVE" })];
@@ -364,10 +378,10 @@ describe("Reglas fiscales — opción de cálculo al copiar (Foco 2.7a)", () => 
     expect(within(dialog).queryByText(/La nueva versión va a calcular con/)).toBeNull();
 
     fireEvent.change(select, { target: { value: "engine-demo-legacy" } });
-    expect(
-      within(dialog).getByText(
-        "La nueva versión va a calcular con Demo · IVA RI anterior en lugar de Demo · IVA RI vigente.",
-      ),
-    ).toBeTruthy();
+    const consecuencia = within(dialog).getByText(
+      "La nueva versión va a calcular con Demo · IVA RI anterior en lugar de Demo · IVA RI vigente.",
+    );
+    expect(consecuencia).toBeTruthy();
+    expect(consecuencia.classList.contains("selector-motor-consecuencia")).toBe(true);
   });
 });

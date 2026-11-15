@@ -103,7 +103,7 @@ export function SelectorMotor({
         ))}
       </select>
       {consecuencia ? (
-        <p className="form-submit-hint" role="note">
+        <p className="form-submit-hint selector-motor-consecuencia" role="note">
           {consecuencia}
         </p>
       ) : null}

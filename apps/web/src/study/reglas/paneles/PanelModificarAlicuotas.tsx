@@ -74,27 +74,33 @@ export function PanelModificarAlicuotas({
             cloneMutation.mutate();
           }}
         >
-          <Field
-            label="Nueva vigencia desde"
-            id="rule-valid-from"
-            type="date"
-            min="1900-01-01"
-            max="2100-12-31"
-            value={validFrom}
-            error={versionDateError ?? undefined}
-            onChange={(event) => {
-              setValidFrom(event.target.value);
-              setVersionDateError(null);
-            }}
-            onInvalid={(event) => {
-              event.preventDefault();
-              setVersionDateError(
-                validateRuleVersionDate(event.currentTarget.value) ??
-                  "La fecha debe estar entre 01/01/1900 y 31/12/2100.",
-              );
-            }}
-            required
-          />
+          <div className="study-form__campo">
+            <Field
+              label="Nueva vigencia desde"
+              id="rule-valid-from"
+              type="date"
+              min="1900-01-01"
+              max="2100-12-31"
+              value={validFrom}
+              error={versionDateError ?? undefined}
+              onChange={(event) => {
+                setValidFrom(event.target.value);
+                setVersionDateError(null);
+              }}
+              onInvalid={(event) => {
+                event.preventDefault();
+                setVersionDateError(
+                  validateRuleVersionDate(event.currentTarget.value) ??
+                    "La fecha debe estar entre 01/01/1900 y 31/12/2100.",
+                );
+              }}
+              required
+            />
+            <p className="muted-copy">
+              La versión vigente no se modifica: sigue vigente hasta que el Administrador o Titular
+              active esta nueva versión.
+            </p>
+          </div>
           <SelectorMotor
             id="rule-clone-engine"
             regimeId={regimeId}
@@ -110,10 +116,6 @@ export function PanelModificarAlicuotas({
             </p>
           ) : null}
           {cloneMutation.error ? <ErrorAccion error={cloneMutation.error} /> : null}
-          <p className="muted-copy">
-            La versión vigente no se modifica: sigue vigente hasta que el Administrador o Titular
-            active esta nueva versión.
-          </p>
         </form>
       </ActionDrawer>
     </>

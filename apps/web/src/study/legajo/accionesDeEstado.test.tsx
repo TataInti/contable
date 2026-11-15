@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -76,8 +76,8 @@ function contexto(capacidades: string[]) {
   } as unknown as ClientContextValue;
 }
 
-function renderLegajos(legajos: unknown[]) {
-  vi.mocked(api.get).mockImplementation(rutasDemo({ legajos }) as never);
+function renderLegajos(legajos: unknown[], calculo?: unknown[]) {
+  vi.mocked(api.get).mockImplementation(rutasDemo({ legajos, calculo }) as never);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -127,7 +127,7 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
     ["READY_TO_CALCULATE", ["Calcular"]],
     ["CHANGES_REQUESTED", ["Recalcular"]],
     ["CALCULATED", ["Enviar a revisión"]],
-    ["IN_REVIEW", ["Aprobar revisión", "Solicitar cambios"]],
+    ["IN_REVIEW", ["Solicitar cambios", "Aprobar revisión"]],
     ["REVIEWED", ["Finalizar"]],
     ["FINALIZED", ["Crear rectificativa"]],
   ];
@@ -290,7 +290,8 @@ describe("Legajo · acciones de estado antes de la barra de etapas (Foco 2.7b)",
   it("las acciones de estado van antes de la barra de etapas, para verse sin desplazar", async () => {
     contexto(TODAS);
     const { container } = renderLegajos([legajoDemo("IN_REVIEW")]);
-    const acciones = await accionesDeLaTarjeta(container);
+    await accionesDeLaTarjeta(container);
+    const acciones = container.querySelector<HTMLElement>(".workpaper-process__accion")!;
     const barra = container.querySelector<HTMLElement>(".workpaper-step-footer");
     expect(barra).not.toBeNull();
     expect(
@@ -299,3 +300,84 @@ describe("Legajo · acciones de estado antes de la barra de etapas (Foco 2.7b)",
     expect(screen.getByRole("button", { name: "Solicitar cambios" })).toBeTruthy();
   });
 });
+
+describe("Legajo · ciclo de revisión (Foco 2.10)", () => {
+  it("en revisión, Solicitar cambios va en la línea de la etapa, antes que Aprobar revisión, sin barra", async () => {
+    contexto(TODAS);
+    const { container } = renderLegajos([legajoDemo("IN_REVIEW")]);
+    await accionesDeLaTarjeta(container);
+
+    const linea = container.querySelector<HTMLElement>(".workpaper-process__accion")!;
+    const solicitar = within(linea).getByRole("button", { name: "Solicitar cambios" });
+    const aprobar = within(linea).getByRole("button", { name: "Aprobar revisión" });
+    expect(
+      solicitar.compareDocumentPosition(aprobar) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(solicitar.className).toContain("ds-button--secondary");
+    expect(aprobar.className).toContain("ds-button--primary");
+    expect(container.querySelector(".workpaper-card__actions")).toBeNull();
+  });
+
+  it("el pedido de cambios va bajo el estado, en un aviso warning y sin el código interno", async () => {
+    contexto(TODAS);
+    const { container } = renderLegajos(
+      [legajoDemo("CHANGES_REQUESTED")],
+      [componenteConPedido("Captura de la etapa 5 pendiente.")],
+    );
+    const titulo = await screen.findByText("Cambios solicitados", {
+      selector: ".ds-notice__title",
+    });
+    const aviso = titulo.closest<HTMLElement>(".ds-notice")!;
+    expect(aviso.classList.contains("ds-notice--warning")).toBe(true);
+    expect(within(aviso).getByText("Captura de la etapa 5 pendiente.")).toBeTruthy();
+    expect(container.textContent).not.toContain("CHANGES_REQUESTED");
+
+    const encabezado = container.querySelector<HTMLElement>(".workpaper-card__header")!;
+    const barra = container.querySelector<HTMLElement>(".workpaper-process")!;
+    expect(
+      encabezado.compareDocumentPosition(aviso) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(aviso.compareDocumentPosition(barra) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("sin pedido de cambios no se dibuja el aviso bajo el estado", async () => {
+    contexto(TODAS);
+    const { container } = renderLegajos([legajoDemo("IN_REVIEW")]);
+    await accionesDeLaTarjeta(container);
+    expect(container.querySelector(".workpaper-card__pedido")).toBeNull();
+  });
+});
+
+function componenteConPedido(mensaje: string) {
+  return {
+    role: "OBLIGATION",
+    required: true,
+    obligationId: "obligation-a",
+    obligation: {
+      regimeCode: "IIBB",
+      regimeName: "IIBB Tucumán",
+      taxTypeCode: "IIBB",
+      taxTypeName: "Ingresos Brutos",
+      jurisdictionName: "Tucumán",
+    },
+    settlement: {
+      id: "settlement-a",
+      status: "CHANGES_REQUESTED",
+      engineVersion: "v1",
+      ruleVersionId: null,
+      rulesHash: "hash-a",
+      totals: null,
+      lines: [],
+      f931Inputs: [],
+      differences: [
+        {
+          id: "difference-a",
+          severity: "WARNING",
+          status: "OPEN",
+          code: "CHANGES_REQUESTED",
+          message: mensaje,
+        },
+      ],
+    },
+  };
+}

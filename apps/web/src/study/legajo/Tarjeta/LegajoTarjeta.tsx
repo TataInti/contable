@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Button } from "@contable/design-system";
+import { Button, Notice, getStatusBadgeMeta } from "@contable/design-system";
 import { DenseTabs } from "../../../ui/Dense";
 import { Icon } from "../../../ui/Icon";
 import { StatusBadge } from "../../../ui/StatusBadge";
@@ -13,10 +13,12 @@ interface LegajoTarjetaProps {
   wp: Workpaper;
   etapaActiva: number;
   onCambiarEtapa: (indice: number) => void;
-  /** Acción primaria de la tarjeta (la de su estado): va en la línea «ETAPA N DE 6», antes de la barra de etapas. */
+  /** Acciones de su estado: la primaria va en la línea «ETAPA N DE 6», antes de la barra de etapas; en revisión, también «Solicitar cambios» (Foco 2.10). */
   accionPrincipal?: ReactNode;
   /** Acciones secundarias de estado; la pantalla pasa null si no hay ninguna ni error que mostrar (Foco 2.9). */
   acciones?: ReactNode;
+  /** Mensajes del pedido de cambios del revisor: se muestran bajo el estado, en un aviso (Foco 2.10). */
+  pedidosDeCambios?: string[];
   /** Cuerpo de la etapa activa (las seis etapas viven en la pantalla). */
   children: ReactNode;
 }
@@ -28,6 +30,7 @@ export function LegajoTarjeta({
   onCambiarEtapa,
   accionPrincipal,
   acciones,
+  pedidosDeCambios = [],
   children,
 }: LegajoTarjetaProps) {
   const bloqueantes = wp.controls.filter((c) => c.severity === "BLOCKING" && c.status === "OPEN");
@@ -57,6 +60,18 @@ export function LegajoTarjeta({
           </span>
         ) : null}
       </div>
+
+      {pedidosDeCambios.length > 0 ? (
+        <Notice
+          className="workpaper-card__pedido"
+          tone="warning"
+          title={getStatusBadgeMeta("CHANGES_REQUESTED").label}
+        >
+          {pedidosDeCambios.map((mensaje, indice) => (
+            <p key={indice}>{mensaje}</p>
+          ))}
+        </Notice>
+      ) : null}
 
       <div className="workpaper-process" aria-label="Navegación del legajo">
         <div className="workpaper-process__current">

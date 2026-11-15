@@ -153,6 +153,11 @@
   grid-column: 1 / -1;
 }
 
+/* Foco 2.10: la línea de consecuencia del motor se lee con el texto principal, no con el de ayuda. */
+.form-submit-hint.selector-motor-consecuencia {
+  color: var(--ds-color-text);
+}
+
 .study-form.fiscal-action-form > .study-panel__heading,
 .study-form.fiscal-action-form > .study-form__actions,
 .study-form--compact > .study-form__actions {
@@ -298,6 +303,11 @@
   margin-top: var(--ds-space-2);
 }
 
+/* Foco 2.10: el pedido de cambios va bajo el estado, con el mismo margen horizontal que el encabezado. */
+.workpaper-card > .workpaper-card__pedido {
+  margin: var(--ds-space-4) var(--ds-space-6) 0;
+}
+
 .workpaper-card__blocking {
   display: inline-flex;
   align-items: center;
@@ -349,6 +359,15 @@
    cambia) y no queda pegado a la bajada de la etapa. */
 .workpaper-process__accion > .muted-copy {
   max-width: 60ch;
+}
+
+/* Foco 2.10: en revisión, «Solicitar cambios» va a la izquierda de «Aprobar revisión», en la misma línea. */
+.workpaper-process__decision {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--ds-space-2);
 }
 
 .workpaper-process__index {
@@ -1132,6 +1151,14 @@
 /* Foco 2.8: en los formularios de dos columnas las etiquetas quedan alineadas por arriba. */
 .study-form.study-form--alinear-arriba {
   align-items: start;
+}
+
+/* Foco 2.10: la ayuda de un campo va pegada a su campo, dentro de su columna; la otra columna no la separa. */
+.study-form__campo {
+  display: grid;
+  align-content: start;
+  gap: var(--ds-space-2);
+  min-width: 0;
 }
 
 /* Foco 2.7c — Calendarios fiscales: Año con ancho corto, lista de problemas sin viñeta y etiquetas de la ficha. */
