@@ -1,60 +1,23 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Notice, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
-import { api, type DocumentRequest, type FiscalYear } from "../lib/api";
+import { api, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
-import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
-import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import {
-  DenseHeader,
-  DensePage,
-  StatStrip,
-  useDensity,
-} from "../ui/Dense";
+import { DenseHeader, DensePage, StatStrip, useDensity } from "../ui/Dense";
 import "./study.css";
-import { formatearFecha, formatearRango } from "../lib/formatoFechas";
-
-interface CloseCycle {
-  id: string;
-  status: string;
-  workItems: { id: string; title: string; status: string }[];
-}
-interface RequestThread {
-  id: string;
-  visibility: string;
-  messages: {
-    id: string;
-    authorUserId: string;
-    body: string;
-    visibility: string;
-    createdAt: string;
-  }[];
-}
-interface WorkDocumentRequest extends DocumentRequest {
-  description?: string | null;
-  dueDate?: string | null;
-  threads?: RequestThread[];
-}
-interface Obligation {
-  id: string;
-  status: string;
-  dueDate: string | null;
-  regime: {
-    name: string;
-    taxType: { name: string };
-    jurisdiction: { name: string };
-  };
-  period: { id: string; label: string | null; startDate: string; endDate: string };
-}
-interface EvidencePreview {
-  url: string;
-  mimeType: string | null;
-  originalName: string | null;
-}
-
+import type { CloseCycle, EvidencePreview, Obligation, RequestThread, WorkDocumentRequest } from "./trabajo/tipos";
+import { filasDeObligaciones } from "./trabajo/obligaciones";
+import { CajonNuevoPedido } from "./trabajo/CajonNuevoPedido";
+import { CajonIniciarCierre } from "./trabajo/CajonIniciarCierre";
+import { CajonRevision } from "./trabajo/CajonRevision";
+import { CajonEvidencia } from "./trabajo/CajonEvidencia";
+import { CajonConversacion } from "./trabajo/CajonConversacion";
+import { SeccionPedidos } from "./trabajo/SeccionPedidos";
+import { SeccionCierres } from "./trabajo/SeccionCierres";
+import { SeccionObligaciones } from "./trabajo/SeccionObligaciones";
 
 export function StudyTrabajo() {
   const [density] = useDensity();
@@ -251,23 +214,7 @@ export function StudyTrabajo() {
     );
 
   const activeRequests = (requests.data ?? []).filter((item) => item.status !== "COMPLETED");
-  const obligationRows = (obligations.data ?? [])
-    .filter((item) => {
-      if (!selectedAccountingPeriod) return true;
-      return (
-        item.period.startDate.slice(0, 10) === selectedAccountingPeriod.startDate.slice(0, 10) &&
-        item.period.endDate.slice(0, 10) === selectedAccountingPeriod.endDate.slice(0, 10)
-      );
-    })
-    .map((item) => ({
-    id: item.id,
-    name: `${item.regime.taxType.name} · ${item.regime.jurisdiction.name}`,
-    periodLabel:
-      item.period.label ??
-      formatearRango(item.period.startDate, item.period.endDate),
-    dueDate: item.dueDate ?? item.period.endDate,
-    status: item.status,
-    }));
+  const obligationRows = filasDeObligaciones(obligations.data, selectedAccountingPeriod);
   const openCloses = (closes.data ?? []).filter((item) => item.status !== "FINALIZED");
   const conversationRequest = activeConversation
     ? (requests.data ?? []).find((item) => item.id === activeConversation.requestId)
@@ -354,574 +301,76 @@ export function StudyTrabajo() {
         </Notice>
       ) : null}
 
-      <ActionDrawer
-        isOpen={showRequest}
-        onClose={() => setShowRequest(false)}
-        title="Nuevo pedido"
-        description="Describí exactamente qué necesitás y, si corresponde, cuándo debe entregarse."
-      >
-        <form
-          className="study-inline-form study-inline-form--request"
-          onSubmit={(event) => {
-            event.preventDefault();
-            createRequest.mutate();
-          }}
-        >
-          <Field
-            id="request-title"
-            label="Asunto"
-            value={request.title}
-            onChange={(event) => setRequest({ ...request, title: event.target.value })}
-            maxLength={200}
-            required
-          />
-          <Field
-            id="request-item"
-            label="Documento solicitado"
-            value={request.item}
-            onChange={(event) => setRequest({ ...request, item: event.target.value })}
-            maxLength={500}
-            required
-          />
-          <label className="ds-field" htmlFor="request-description">
-            <span className="ds-field__label">Instrucciones para el cliente</span>
-            <textarea
-              id="request-description"
-              className="study-textarea"
-              rows={2}
-              value={request.description}
-              onChange={(event) => setRequest({ ...request, description: event.target.value })}
-              maxLength={4000}
-              placeholder="Indicá el período, formato o detalle que necesitás."
-            />
-          </label>
-          <Field
-            id="request-due"
-            label="Fecha límite"
-            type="date"
-            value={request.dueDate}
-            onChange={(event) => setRequest({ ...request, dueDate: event.target.value })}
-          />
-          {createRequest.isError ? (
-            <Notice tone="error" className="study-inline-form__feedback">
-              No se pudo crear el pedido. Revisá los datos e intentá nuevamente.
-            </Notice>
-          ) : null}
-          <div className="study-inline-form__actions">
-            <Button
-              type="submit"
-              loading={createRequest.isPending}
-              disabled={!request.title.trim() || !request.item.trim()}
-            >
-              Crear pedido
-            </Button>
-          </div>
-        </form>
-      </ActionDrawer>
+      <CajonNuevoPedido
+        showRequest={showRequest}
+        setShowRequest={setShowRequest}
+        request={request}
+        setRequest={setRequest}
+        createRequest={createRequest}
+      />
 
-      <ActionDrawer
-        isOpen={showClose}
-        onClose={() => setShowClose(false)}
-        title="Iniciar cierre del período"
-        description="Definí las verificaciones del ciclo. Cada tarea se completa y queda auditada por separado."
-      >
-        <form
-          className="study-page__form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            createClose.mutate();
-          }}
-        >
-          <label className="ds-field" htmlFor="close-items">
-            <span className="ds-field__label">Tareas de cierre</span>
-            <textarea
-              id="close-items"
-              className="study-textarea"
-              rows={5}
-              value={closeItems}
-              onChange={(event) => setCloseItems(event.target.value)}
-              placeholder="Una tarea por línea"
-              required
-            />
-            <small className="study-page__hint">
-              Se crearán {closeItems.split("\n").filter((item) => item.trim()).length} tareas.
-            </small>
-          </label>
-          {!activeFiscalYear ? (
-            <Notice tone="error">
-              Seleccioná un período contable abierto antes de iniciar el cierre.
-            </Notice>
-          ) : null}
-          {createClose.isError ? (
-            <Notice tone="error">
-              {createClose.error.message}
-            </Notice>
-          ) : null}
-          <div className="study-inline-form__actions">
-            <Button
-              type="submit"
-              loading={createClose.isPending}
-              disabled={!activeFiscalYear || !periodId}
-            >
-              Crear ciclo de cierre
-            </Button>
-          </div>
-        </form>
-      </ActionDrawer>
+      <CajonIniciarCierre
+        showClose={showClose}
+        setShowClose={setShowClose}
+        closeItems={closeItems}
+        setCloseItems={setCloseItems}
+        activeFiscalYear={activeFiscalYear}
+        periodId={periodId}
+        createClose={createClose}
+      />
 
-      <ActionDrawer
-        isOpen={Boolean(reviewRequest)}
-        onClose={() => {
-          setActiveReviewRequestId(null);
-          setRejectReason("");
-        }}
-        title="Revisión de ítems"
-        description={reviewRequest?.title}
-      >
-        {reviewRequest ? (
-          <div className="study-page__form">
-            <p className="study-page__hint">
-              Estado del pedido: <strong>{reviewRequest.status}</strong>. La completitud se deriva
-              de los ítems aceptados o eximidos.
-            </p>
-            <div className="request-review-list">
-              {reviewRequest.items.map((item) => {
-                const canResolve = item.status === "ATTACHED";
-                return (
-                  <div key={item.id} className="request-review-list__item">
-                    <div>
-                      <strong>{item.description}</strong>
-                      <small>
-                        {item.required ? "Requerido" : "Opcional"} · {item.status}
-                      </small>
-                    </div>
-                    {canResolve && capabilities.has("request.manage") ? (
-                      <div className="table-actions">
-                        <Button
-                          size="sm"
-                          loading={acceptItem.isPending}
-                          onClick={() => acceptItem.mutate({ requestId: reviewRequest.id, itemId: item.id })}
-                        >
-                          Aceptar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          loading={waiveItem.isPending}
-                          onClick={() => waiveItem.mutate({ requestId: reviewRequest.id, itemId: item.id })}
-                        >
-                          Eximir
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          loading={rejectItem.isPending}
-                          disabled={!rejectReason.trim()}
-                          onClick={() =>
-                            rejectItem.mutate({
-                              requestId: reviewRequest.id,
-                              itemId: item.id,
-                              reason: rejectReason.trim(),
-                            })
-                          }
-                        >
-                          Rechazar
-                        </Button>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-            {reviewRequest.items.some((item) => item.status === "ATTACHED") &&
-            capabilities.has("request.manage") ? (
-              <>
-                <label className="ds-field" htmlFor="request-reject-reason">
-                  <span className="ds-field__label">Motivo de rechazo</span>
-                  <textarea
-                    id="request-reject-reason"
-                    className="study-textarea"
-                    rows={2}
-                    value={rejectReason}
-                    onChange={(event) => setRejectReason(event.target.value)}
-                    placeholder="Indicá qué debe corregir el cliente."
-                  />
-                </label>
-                <p className="study-page__hint">
-                  Para rechazar un ítem, elegí el motivo y usá la acción correspondiente en la
-                  fila.
-                </p>
-              </>
-            ) : null}
-          </div>
-        ) : null}
-      </ActionDrawer>
+      <CajonRevision
+        reviewRequest={reviewRequest}
+        setActiveReviewRequestId={setActiveReviewRequestId}
+        rejectReason={rejectReason}
+        setRejectReason={setRejectReason}
+        capabilities={capabilities}
+        acceptItem={acceptItem}
+        waiveItem={waiveItem}
+        rejectItem={rejectItem}
+      />
 
-      <ActionDrawer
-        isOpen={Boolean(preview)}
-        onClose={() => setPreview(null)}
-        title="Documento adjunto"
-        description={preview?.originalName ?? "Vista previa de la evidencia asociada al pedido."}
-        size="wide"
-      >
-        {preview ? (
-          <div className="evidence-preview">
-            {preview.mimeType === "application/pdf" ? (
-              <iframe
-                src={preview.url}
-                title="Vista previa del documento"
-                className="evidence-preview__frame"
-              />
-            ) : (
-              <img
-                src={preview.url}
-                alt="Vista previa del documento"
-                className="evidence-preview__image"
-              />
-            )}
-            <a
-              className="evidence-preview__link"
-              href={preview.url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Abrir en pestaña nueva
-            </a>
-          </div>
-        ) : null}
-      </ActionDrawer>
+      <CajonEvidencia preview={preview} setPreview={setPreview} />
 
-      <ActionDrawer
-        isOpen={Boolean(activeConversation)}
-        onClose={() => setActiveConversation(null)}
-        title="Conversación"
-        description={activeConversation?.title}
-      >
-        {activeConversation ? (
-          <>
-            {conversationThread?.messages.length ? (
-              <div className="request-message-list" aria-live="polite">
-                {conversationThread.messages.map((message) => (
-                  <div key={message.id} className="request-message-list__item">
-                    <strong>{message.visibility === "SHARED" ? "Compartido" : "Interno"}</strong>
-                    <p>{message.body}</p>
-                    <small>{formatearFecha(message.createdAt)}</small>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                size="compact"
-                title="Todavía no hay mensajes"
-                description="Dejá una instrucción o consulta para el cliente."
-              />
-            )}
-            {capabilities.has("message.shared") ? (
-              <form
-                className="study-page__form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  sendMessage.mutate();
-                }}
-              >
-                <label className="ds-field" htmlFor="request-message">
-                  <span className="ds-field__label">Mensaje compartido</span>
-                  <textarea
-                    id="request-message"
-                    className="study-textarea"
-                    rows={3}
-                    value={messageBody}
-                    onChange={(event) => setMessageBody(event.target.value)}
-                    maxLength={5000}
-                    placeholder="Escribí una instrucción clara para el cliente."
-                  />
-                </label>
-                {sendMessage.isError ? (
-                  <Notice tone="error">{sendMessage.error.message}</Notice>
-                ) : null}
-                <div className="study-inline-form__actions">
-                  <Button
-                    type="submit"
-                    loading={sendMessage.isPending}
-                    disabled={!messageBody.trim()}
-                  >
-                    Enviar mensaje
-                  </Button>
-                </div>
-              </form>
-            ) : null}
-          </>
-        ) : null}
-      </ActionDrawer>
+      <CajonConversacion
+        activeConversation={activeConversation}
+        setActiveConversation={setActiveConversation}
+        conversationThread={conversationThread}
+        capabilities={capabilities}
+        messageBody={messageBody}
+        setMessageBody={setMessageBody}
+        sendMessage={sendMessage}
+      />
 
       <div className="study-columns work-columns">
-        <section className="study-panel" id="work-requests-section">
-          <div className="study-panel__heading">
-            <div>
-              <h2>Pedidos documentales</h2>
-            </div>
-            <span className="section-count">{activeRequests.length}</span>
-          </div>
-          {requests.isLoading ? (
-            <div className="query-state query-state--compact">
-              <span className="loading-copy">Cargando pedidos…</span>
-            </div>
-          ) : activeRequests.length ? (
-            <Table
-              rows={activeRequests}
-              rowKey={(row) => row.id}
-              columns={[
-                {
-                  key: "title",
-                  header: "Pedido",
-                  render: (row) => (
-                    <div className="table-primary">
-                      <strong>{row.title}</strong>
-                      <small>
-                        {
-                          row.items.filter(
-                            (item) => item.status !== "ACCEPTED" && item.status !== "WAIVED",
-                          ).length
-                        }{" "}
-                        ítems pendientes
-                      </small>
-                    </div>
-                  ),
-                },
-                {
-                  key: "status",
-                  header: "Estado",
-                  render: (row) => <StatusBadge status={row.status} />,
-                },
-                {
-                  key: "evidence",
-                  header: "Evidencia",
-                  align: "right",
-                  render: (row) => {
-                    const attached = row.items.find((item) => item.status === "ATTACHED");
-                    return attached ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        loading={previewEvidence.isPending}
-                        onClick={() => previewEvidence.mutate(attached.id)}
-                      >
-                        <Icon name="file" size={15} /> Ver
-                      </Button>
-                    ) : (
-                      <span className="muted-copy">—</span>
-                    );
-                  },
-                },
-                {
-                  key: "conversation",
-                  header: "Conversación",
-                  align: "right",
-                  render: (row) =>
-                    capabilities.has("message.shared") ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        loading={openConversation.isPending}
-                        onClick={() => openConversation.mutate(row)}
-                      >
-                        <Icon name="message" size={15} /> Mensaje
-                      </Button>
-                    ) : (
-                      <span className="muted-copy">—</span>
-                    ),
-                },
-                {
-                  key: "actions",
-                  header: "Acciones",
-                  align: "right",
-                  render: (row) => (
-                    <div className="table-actions">
-                      {row.status === "DRAFT" && capabilities.has("request.manage") ? (
-                        <Button
-                          size="sm"
-                          loading={sendRequest.isPending}
-                          onClick={() => sendRequest.mutate(row.id)}
-                        >
-                          Enviar pedido
-                        </Button>
-                      ) : null}
-                      {capabilities.has("request.manage") ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setActiveReviewRequestId(row.id)}
-                        >
-                          Revisar
-                        </Button>
-                      ) : null}
-                    </div>
-                  ),
-                },
-              ]}
-            />
-          ) : (
-            <EmptyState
-              size="compact"
-              title="Sin pedidos abiertos"
-              description="El cliente no tiene documentación pendiente."
-              action={
-                capabilities.has("request.manage") ? (
-                  <Button size="sm" variant="secondary" onClick={() => setShowRequest(true)}>
-                    Crear pedido
-                  </Button>
-                ) : undefined
-              }
-            />
-          )}
-        </section>
-        <section className="study-panel" id="work-closes-section">
-          <div className="study-panel__heading">
-            <div>
-              <h2>Cierres</h2>
-            </div>
-            <span className="section-count">{openCloses.length}</span>
-          </div>
-          {closes.isLoading ? (
-            <div className="query-state query-state--compact">
-              <span className="loading-copy">Cargando cierres…</span>
-            </div>
-          ) : openCloses.length ? (
-            <Table
-              rows={openCloses}
-              rowKey={(row) => row.id}
-              columns={[
-                {
-                  key: "status",
-                  header: "Estado",
-                  render: (row) => <StatusBadge status={row.status} />,
-                },
-                {
-                  key: "progress",
-                  header: "Avance",
-                  render: (row) => {
-                    const done = row.workItems.filter((item) => item.status === "DONE").length;
-                    return (
-                      <div className="progress-cell">
-                        <progress
-                          value={done}
-                          max={Math.max(row.workItems.length, 1)}
-                          aria-label={`${done} de ${row.workItems.length} tareas completas`}
-                        />
-                        <small>
-                          {done} de {row.workItems.length}
-                        </small>
-                      </div>
-                    );
-                  },
-                },
-                {
-                  key: "actions",
-                  header: "Acciones",
-                  align: "right",
-                  render: (row) => {
-                    const next = row.workItems.find((item) => item.status !== "DONE");
-                    const ready = row.workItems.length > 0 && !next;
-                    if (!capabilities.has("period.soft_close"))
-                      return <span className="muted-copy">—</span>;
-                    return (
-                      <div className="table-actions">
-                        {next ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            loading={completeCloseItem.isPending}
-                            onClick={() =>
-                              completeCloseItem.mutate({ cycleId: row.id, workItemId: next.id })
-                            }
-                          >
-                            Completar: {next.title}
-                          </Button>
-                        ) : ready ? (
-                          <Button
-                            size="sm"
-                            loading={finalizeClose.isPending}
-                            onClick={() =>
-                              confirm.ask({
-                                title: "¿Finalizar este cierre?",
-                                description:
-                                  "El ciclo quedará bloqueado para auditoría y no podrá volver a un estado anterior.",
-                                confirmLabel: "Finalizar cierre",
-                                onConfirm: () => finalizeClose.mutate(row.id),
-                              })
-                            }
-                          >
-                            Finalizar cierre
-                          </Button>
-                        ) : null}
-                      </div>
-                    );
-                  },
-                },
-              ]}
-            />
-          ) : (
-            <EmptyState
-              size="compact"
-              title="Sin ciclos de cierre"
-              description="Cuando se abra un cierre vas a ver su avance acá."
-              action={
-                capabilities.has("period.soft_close") && activeFiscalYear ? (
-                  <Button size="sm" variant="secondary" onClick={() => setShowClose(true)}>
-                    Iniciar cierre
-                  </Button>
-                ) : undefined
-              }
-            />
-          )}
-        </section>
+        <SeccionPedidos
+          requests={requests}
+          activeRequests={activeRequests}
+          capabilities={capabilities}
+          previewEvidence={previewEvidence}
+          openConversation={openConversation}
+          sendRequest={sendRequest}
+          setActiveReviewRequestId={setActiveReviewRequestId}
+          setShowRequest={setShowRequest}
+        />
+        <SeccionCierres
+          closes={closes}
+          openCloses={openCloses}
+          capabilities={capabilities}
+          completeCloseItem={completeCloseItem}
+          finalizeClose={finalizeClose}
+          confirm={confirm}
+          activeFiscalYear={activeFiscalYear}
+          setShowClose={setShowClose}
+        />
       </div>
 
-      <section className="study-page__section" id="work-obligations-section">
-        <div className="section-heading">
-          <div>
-            <h2>Próximas obligaciones</h2>
-          </div>
-          <span className="section-count">{obligationRows.length}</span>
-        </div>
-        {obligations.isLoading ? (
-          <div className="query-state">
-            <span className="loading-copy">Cargando obligaciones…</span>
-          </div>
-        ) : obligationRows.length ? (
-          <Table
-            rows={obligationRows}
-            rowKey={(row) => row.id}
-            columns={[
-              { key: "name", header: "Obligación", render: (row) => <strong>{row.name}</strong> },
-              { key: "period", header: "Período", render: (row) => row.periodLabel },
-              { key: "due", header: "Vence", render: (row) => formatearFecha(row.dueDate) },
-              {
-                key: "status",
-                header: "Estado",
-                render: (row) => <StatusBadge status={row.status} />,
-              },
-            ]}
-          />
-        ) : (
-          <EmptyState
-            size="compact"
-            title="Sin obligaciones materializadas"
-            description="No hay vencimientos configurados para este contexto."
-            action={
-              capabilities.has("tax.profile.write") ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => navigate("/configuracion-fiscal")}
-                >
-                  Configurar obligaciones
-                </Button>
-              ) : undefined
-            }
-          />
-        )}
-      </section>
+      <SeccionObligaciones
+        obligations={obligations}
+        obligationRows={obligationRows}
+        capabilities={capabilities}
+        navigate={navigate}
+      />
       <ConfirmDialog confirm={confirm} />
     </DensePage>
   );
