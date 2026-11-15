@@ -35,6 +35,7 @@ import {
 } from "../ui/Dense";
 import "./study.css";
 import { formatearFechaHora } from "../lib/formatoFechas";
+import { documentFileName, documentTypeLabel, fileSize, validateFile, normalizeDocumentSearch } from "./bandeja/utilidades";
 
 interface UploadSession {
   sessionId: string;
@@ -46,8 +47,6 @@ interface UploadComplete {
   status: string;
 }
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024;
-const ALLOWED_TYPES = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
 const FIELD_LABELS: Record<string, string> = {
   voucherType: "Tipo de documento",
   letter: "Letra",
@@ -79,37 +78,6 @@ const REJECTION_REASONS = [
   { value: "OTHER_CLIENT", label: "Datos de otro cliente" },
   { value: "OTHER", label: "Otro" },
 ] as const;
-
-function validateFile(selected: File | null) {
-  if (!selected) return "Elegí un archivo para continuar.";
-  if (!ALLOWED_TYPES.has(selected.type) || selected.size > MAX_FILE_SIZE)
-    return "Elegí un PDF, JPG, PNG o WebP de hasta 25 MB.";
-  return null;
-}
-
-function fileSize(size: number) {
-  return size >= 1024 * 1024
-    ? `${(size / 1024 / 1024).toLocaleString("es-AR", { maximumFractionDigits: 1 })} MB`
-    : `${Math.ceil(size / 1024)} KB`;
-}
-
-function documentFileName(document: Document) {
-  return document.fileVersions?.[0]?.originalName ?? document.id.slice(0, 8);
-}
-
-function documentTypeLabel(document: Document) {
-  const mimeType = document.fileVersions?.[0]?.mimeType ?? "";
-  if (mimeType.includes("pdf")) return "PDF";
-  if (mimeType.includes("webp")) return "WEBP";
-  return "IMAGEN";
-}
-
-function normalizeDocumentSearch(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("es-AR");
-}
 
 export function StudyBandeja() {
   const [density] = useDensity();
