@@ -1,0 +1,194 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ClientContextValue } from "../../../context/ClientContext";
+import { api } from "../../../lib/api";
+import {
+  PENDIENTE,
+  contextoDemo,
+  miembrosDemo,
+  mockApiDemo,
+  renderizarAdministracion,
+} from "../pruebas/entornoDemo";
+
+const contexto = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
+
+vi.mock("../../../context/ClientContext", () => ({
+  useClientContext: () => contexto.current,
+}));
+
+vi.mock("../../../session/SessionContext", () => ({
+  useSession: () => ({
+    status: "authenticated",
+    me: null,
+    portalContexts: [],
+    error: null,
+    refresh: async () => {},
+  }),
+}));
+
+vi.mock("../../../lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../lib/api")>();
+  return {
+    ...actual,
+    api: {
+      get: vi.fn(),
+      post: vi.fn(),
+      patch: vi.fn(),
+      put: vi.fn(),
+      del: vi.fn(),
+      postWithHeaders: vi.fn(),
+    } as unknown as typeof actual.api,
+  };
+});
+
+/** Cuántas veces se pidió la lista de miembros del estudio. */
+const llamadasAMiembros = () =>
+  vi.mocked(api.get).mock.calls.filter(([ruta]) => String(ruta).endsWith("/members")).length;
+
+describe("Usuarios internos: tabla (caracterización K2)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    contexto.current = contextoDemo(["firm.manage", "firm.users.manage", "client.read"]);
+    mockApiDemo({ miembros: miembrosDemo });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("filtra por nombre o correo, por rol y por estado", async () => {
+    renderizarAdministracion();
+    await screen.findByText("Titular Demo");
+    const buscar = screen.getByRole("searchbox");
+
+    fireEvent.change(buscar, { target: { value: "titular" } });
+    expect(screen.getByText("Titular Demo")).toBeTruthy();
+    expect(screen.queryByText("Revisora Demo")).toBeNull();
+
+    fireEvent.change(buscar, { target: { value: "auditor@example.com" } });
+    expect(screen.getByText("Auditor Demo")).toBeTruthy();
+    expect(screen.queryByText("Titular Demo")).toBeNull();
+
+    fireEvent.change(buscar, { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Filtrar por rol"), { target: { value: "REVIEWER" } });
+    expect(screen.getByText("Revisora Demo")).toBeTruthy();
+    expect(screen.queryByText("Auditor Demo")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Filtrar por rol"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Filtrar por estado"), {
+      target: { value: "SUSPENDED" },
+    });
+    expect(screen.getByText("Auditor Demo")).toBeTruthy();
+    expect(screen.queryByText("Revisora Demo")).toBeNull();
+  });
+
+  it("usa el estado de la cuenta cuando difiere del de la membresía", async () => {
+    mockApiDemo({
+      miembros: [
+        {
+          id: "m4",
+          userId: "u4",
+          role: "PREPARER",
+          status: "ACTIVE",
+          acceptedAt: null,
+          user: { name: "Preparadora Demo", emailNormalized: "preparadora@example.com", status: "SUSPENDED" },
+        },
+        {
+          id: "m5",
+          userId: "u5",
+          role: "PREPARER",
+          status: "SUSPENDED",
+          acceptedAt: null,
+          user: { name: "Preparador Demo", emailNormalized: "preparador@example.com", status: "ACTIVE" },
+        },
+      ],
+    });
+    renderizarAdministracion();
+
+    const suspendida = await screen.findByRole("row", { name: /Preparadora Demo/ });
+    expect(within(suspendida).getByText("Suspendido")).toBeTruthy();
+    const activa = screen.getByRole("row", { name: /Preparador Demo/ });
+    expect(within(activa).getByText("Activo")).toBeTruthy();
+  });
+
+  it("ofrece por fila solo las acciones que corresponden al estado", async () => {
+    renderizarAdministracion();
+
+    const revisora = await screen.findByRole("row", { name: /Revisora Demo/ });
+    fireEvent.click(within(revisora).getByText("Más acciones"));
+    expect(within(revisora).getByRole("button", { name: "Suspender a Revisora Demo" })).toBeTruthy();
+    expect(
+      within(revisora).getByRole("button", { name: "Recuperar acceso de Revisora Demo" }),
+    ).toBeTruthy();
+    expect(within(revisora).queryByRole("button", { name: /Reactivar/ })).toBeNull();
+
+    const auditor = screen.getByRole("row", { name: /Auditor Demo/ });
+    fireEvent.click(within(auditor).getByText("Más acciones"));
+    expect(
+      within(auditor).getByRole("button", { name: "Reactivar acceso de Auditor Demo" }),
+    ).toBeTruthy();
+    expect(within(auditor).queryByRole("button", { name: /Suspender a/ })).toBeNull();
+    expect(within(auditor).queryByRole("button", { name: /Recuperar acceso/ })).toBeNull();
+  });
+
+  it("expone nombres accesibles, anchos de columna y la fila suspendida atenuada", async () => {
+    renderizarAdministracion();
+    await screen.findByText("Revisora Demo");
+
+    const tabla = screen.getByRole("table", { name: "Usuarios internos" });
+    expect((within(tabla).getByRole("columnheader", { name: "Rol" }) as HTMLElement).style.width).toBe(
+      "190px",
+    );
+    expect(
+      (within(tabla).getByRole("columnheader", { name: "Estado" }) as HTMLElement).style.width,
+    ).toBe("120px");
+    expect(
+      (within(tabla).getByRole("columnheader", { name: "Acciones" }) as HTMLElement).style.width,
+    ).toBe("180px");
+    expect(screen.getByRole("combobox", { name: "Rol de Revisora Demo" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Editar a Revisora Demo" })).toBeTruthy();
+    expect(screen.getByLabelText("Más acciones de Revisora Demo")).toBeTruthy();
+    expect(screen.getByRole("row", { name: /Auditor Demo/ }).className).toContain("dense-row--muted");
+    expect(
+      screen.getByText("El estudio debe conservar al menos un titular o administrador activo."),
+    ).toBeTruthy();
+  });
+
+  it("muestra el vacío sin usuarios con el alta como siguiente paso", async () => {
+    mockApiDemo({ miembros: [] });
+    renderizarAdministracion();
+    expect(await screen.findByText("Todavía no hay usuarios internos")).toBeTruthy();
+    expect(
+      screen.getByText("Creá la primera cuenta del estudio para asignarle un rol."),
+    ).toBeTruthy();
+  });
+
+  it("muestra el vacío de filtros cuando ningún usuario coincide", async () => {
+    renderizarAdministracion();
+    await screen.findByText("Titular Demo");
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz" } });
+    expect(screen.getByText("Ningún usuario coincide con los filtros")).toBeTruthy();
+    expect(screen.getByText("Probá con otro nombre o correo, o quitá filtros.")).toBeTruthy();
+  });
+
+  it("muestra la carga mientras responde la consulta de usuarios", async () => {
+    mockApiDemo({ miembros: PENDIENTE });
+    renderizarAdministracion();
+    expect(await screen.findByText("Cargando usuarios internos…")).toBeTruthy();
+  });
+
+  it("no finge vacío si la consulta falla y permite reintentar", async () => {
+    mockApiDemo({ miembros: new Error("Sin conexión con el servidor") });
+    renderizarAdministracion();
+    expect(await screen.findByText("No se pudieron cargar los usuarios")).toBeTruthy();
+    expect(
+      screen.getByText("No asumimos que no haya usuarios mientras la consulta está fallando."),
+    ).toBeTruthy();
+
+    const antes = llamadasAMiembros();
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    await waitFor(() => expect(llamadasAMiembros()).toBeGreaterThan(antes));
+  });
+});
