@@ -1,7 +1,7 @@
 // Etapa Cálculo del Legajo: determinación por obligación y posición fiscal del período, con sus acciones (Foco 2.3c).
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, Table } from "@contable/design-system";
+import { AsyncState, Button, EmptyState, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { calculationLabel } from "../etiquetas";
 import { formatDate, formatMoney } from "../formato";
@@ -29,6 +29,11 @@ export function EtapaCalculo({
   calculateInterestMutation,
   setPositionAction,
 }: EtapaCalculoProps) {
+  const actualizando = positionQuery.isFetching || calculationQuery.isFetching;
+  // Un solo «Actualizar» por etapa: refresca posición y determinación juntas (D8).
+  const actualizar = () => void Promise.all([positionQuery.refetch(), calculationQuery.refetch()]);
+  const determinacion = calculationQuery.data ?? [];
+
   return (
     <div className="workpaper-stage">
       <div className="workpaper-stage__heading">
@@ -38,8 +43,8 @@ export function EtapaCalculo({
             Devengado fiscal, pagos e intereses sin mezclarlo con el resultado gerencial.
           </small>
         </div>
-        <Button size="sm" variant="ghost" onClick={() => void positionQuery.refetch()}>
-          Actualizar posición
+        <Button size="sm" variant="ghost" disabled={actualizando} onClick={actualizar}>
+          {actualizando ? "Actualizando…" : "Actualizar"}
         </Button>
       </div>
       <div className="workpaper-calculation-breakdown">
@@ -50,109 +55,155 @@ export function EtapaCalculo({
               Totales, fórmulas, alícuotas y versión de reglas congeladas por obligación.
             </small>
           </div>
-          <Button size="sm" variant="ghost" onClick={() => void calculationQuery.refetch()}>
-            Actualizar cálculo
-          </Button>
         </div>
-        {calculationQuery.isLoading ? (
-          <p className="muted-copy">Cargando determinación…</p>
+        {calculationQuery.isError ? (
+          <AsyncState
+            loading={false}
+            error
+            errorTitle="No se pudo leer la determinación"
+            errorDescription="Reintentá la lectura. Hasta que responda, la etapa no muestra cálculos por obligación."
+            onRetry={() => void calculationQuery.refetch()}
+            loadingLabel="Cargando determinación…"
+          />
+        ) : !calculationQuery.isSuccess ? (
+          <AsyncState
+            loading
+            error={false}
+            errorTitle=""
+            errorDescription=""
+            onRetry={() => void calculationQuery.refetch()}
+            loadingLabel="Cargando determinación…"
+          />
+        ) : determinacion.length === 0 ? (
+          <EmptyState size="inline" title="No hay obligaciones vinculadas al legajo." />
         ) : (
-          (calculationQuery.data ?? []).map((component) => (
-            <article className="workpaper-calculation" key={component.obligationId}>
-              <div className="workpaper-calculation__header">
-                <span>
-                  <strong>
-                    {component.obligation.taxTypeName} · {component.obligation.regimeName}
-                  </strong>
-                  <small>{component.obligation.jurisdictionName}</small>
-                </span>
-                {component.settlement ? (
+          <>
+            {calculationQuery.isFetching ? (
+              <small className="muted-copy">Dato del último corte; se está actualizando.</small>
+            ) : null}
+            {determinacion.map((component) => (
+              <article className="workpaper-calculation" key={component.obligationId}>
+                <div className="workpaper-calculation__header">
                   <span>
-                    <StatusBadge status={component.settlement.status} />
+                    <strong>
+                      {component.obligation.taxTypeName} · {component.obligation.regimeName}
+                    </strong>
+                    <small>{component.obligation.jurisdictionName}</small>
                   </span>
+                  {component.settlement ? (
+                    <span>
+                      <StatusBadge status={component.settlement.status} />
+                    </span>
+                  ) : (
+                    <StatusBadge status="PENDING" />
+                  )}
+                </div>
+                {component.settlement ? (
+                  <>
+                    <dl className="workpaper-calculation__totals">
+                      {Object.entries(component.settlement.totals ?? {})
+                        .filter(([concept]) => calculationLabel(concept) !== null)
+                        .map(([concept, amount]) => (
+                          <div
+                            className={concept === "TOTAL_A_INGRESAR" ? "is-total" : ""}
+                            key={concept}
+                          >
+                            <dt>{calculationLabel(concept)}</dt>
+                            <dd>{formatMoney(amount)}</dd>
+                          </div>
+                        ))}
+                    </dl>
+                    {component.settlement.f931Inputs.length > 0 ? (
+                      <p className="workpaper-calculation__source-note">
+                        F.931 revisado · remuneración neta{" "}
+                        {formatMoney(
+                          String(
+                            component.settlement.f931Inputs[0]?.snapshot["netRemuneration"] ?? 0,
+                          ),
+                        )}
+                      </p>
+                    ) : null}
+                    <details className="workpaper-calculation__trace">
+                      <summary>Ver {component.settlement.lines.length} línea(s) de cálculo</summary>
+                      <Table<(typeof component.settlement.lines)[number]>
+                        rows={component.settlement.lines}
+                        rowKey={(line) => line.id}
+                        empty={
+                          <EmptyState size="inline" title="La liquidación no generó líneas." />
+                        }
+                        columns={[
+                          {
+                            key: "concept",
+                            header: "Concepto",
+                            render: (line) => line.concept.replaceAll("_", " "),
+                          },
+                          {
+                            key: "formula",
+                            header: "Fórmula / fuente",
+                            render: (line) => line.formula ?? "—",
+                          },
+                          {
+                            key: "amount",
+                            header: "Importe",
+                            align: "right",
+                            render: (line) => <strong>{formatMoney(line.amount)}</strong>,
+                          },
+                        ]}
+                      />
+                    </details>
+                    {component.settlement.differences.length > 0 ? (
+                      <div className="workpaper-calculation__differences">
+                        {component.settlement.differences.map((difference) => (
+                          <p key={difference.id}>
+                            <StatusBadge status={difference.severity} />
+                            <span>
+                              <strong>{difference.code}</strong> · {difference.message}
+                            </span>
+                          </p>
+                        ))}
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
-                  <StatusBadge status="PENDING" />
+                  <p className="muted-copy">El detalle se genera cuando el legajo se calcula.</p>
                 )}
-              </div>
-              {component.settlement ? (
-                <>
-                  <dl className="workpaper-calculation__totals">
-                    {Object.entries(component.settlement.totals ?? {})
-                      .filter(([concept]) => calculationLabel(concept) !== null)
-                      .map(([concept, amount]) => (
-                        <div
-                          className={concept === "TOTAL_A_INGRESAR" ? "is-total" : ""}
-                          key={concept}
-                        >
-                          <dt>{calculationLabel(concept)}</dt>
-                          <dd>{formatMoney(amount)}</dd>
-                        </div>
-                      ))}
-                  </dl>
-                  {component.settlement.f931Inputs.length > 0 ? (
-                    <p className="workpaper-calculation__source-note">
-                      F.931 revisado · remuneración neta{" "}
-                      {formatMoney(
-                        String(
-                          component.settlement.f931Inputs[0]?.snapshot["netRemuneration"] ?? 0,
-                        ),
-                      )}
-                    </p>
-                  ) : null}
-                  <details className="workpaper-calculation__trace">
-                    <summary>Ver {component.settlement.lines.length} línea(s) de cálculo</summary>
-                    <Table<(typeof component.settlement.lines)[number]>
-                      rows={component.settlement.lines}
-                      rowKey={(line) => line.id}
-                      empty="La liquidación no generó líneas."
-                      columns={[
-                        {
-                          key: "concept",
-                          header: "Concepto",
-                          render: (line) => line.concept.replaceAll("_", " "),
-                        },
-                        {
-                          key: "formula",
-                          header: "Fórmula / fuente",
-                          render: (line) => line.formula ?? "—",
-                        },
-                        {
-                          key: "amount",
-                          header: "Importe",
-                          align: "right",
-                          render: (line) => <strong>{formatMoney(line.amount)}</strong>,
-                        },
-                      ]}
-                    />
-                  </details>
-                  {component.settlement.differences.length > 0 ? (
-                    <div className="workpaper-calculation__differences">
-                      {component.settlement.differences.map((difference) => (
-                        <p key={difference.id}>
-                          <StatusBadge status={difference.severity} />
-                          <span>
-                            <strong>{difference.code}</strong> · {difference.message}
-                          </span>
-                        </p>
-                      ))}
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <p className="muted-copy">El detalle se genera cuando el legajo se calcula.</p>
-              )}
-            </article>
-          ))
+              </article>
+            ))}
+          </>
         )}
       </div>
-      {positionQuery.isLoading ? (
-        <p className="muted-copy">Calculando posición…</p>
+      {positionQuery.isError ? (
+        <AsyncState
+          loading={false}
+          error
+          errorTitle="No se pudo leer la posición fiscal"
+          errorDescription="Reintentá la lectura. Hasta que responda, la etapa no muestra importes ni acciones."
+          onRetry={() => void positionQuery.refetch()}
+          loadingLabel="Calculando posición…"
+        />
+      ) : !positionQuery.isSuccess ? (
+        <AsyncState
+          loading
+          error={false}
+          errorTitle=""
+          errorDescription=""
+          onRetry={() => void positionQuery.refetch()}
+          loadingLabel="Calculando posición…"
+        />
       ) : (
         <>
+          {positionQuery.isFetching ? (
+            <small className="muted-copy">Dato del último corte; se está actualizando.</small>
+          ) : null}
           <Table<TaxPosition>
             rows={positionQuery.data ?? []}
             rowKey={(position) => position.obligationId}
-            empty="No hay obligaciones fiscales para el período seleccionado."
+            empty={
+              <EmptyState
+                size="inline"
+                title="No hay obligaciones fiscales para el período seleccionado."
+              />
+            }
             columns={[
               {
                 key: "tax",

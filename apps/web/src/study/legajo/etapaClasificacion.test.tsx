@@ -308,25 +308,38 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     );
   });
 
-  // Hoy un fallo al leer la clasificación se ve como «0 Clasificados»; la etapa debería ofrecer Reintentar.
-  it.fails(
-    "un fallo al leer la clasificación se muestra con Reintentar, no como «0 Clasificados»",
-    async () => {
-      const rutas = rutasDemo({
-        clasificaciones: clasificacionesDemo,
-        imputaciones: imputacionesDemo,
-        actividades: actividadesDemo,
-        jurisdicciones: jurisdiccionesDemo,
-      });
-      vi.mocked(api.get).mockImplementation(((path: string) =>
-        path.endsWith("/classifications")
-          ? Promise.reject(new Error("Fallo Demo"))
-          : rutas(path)) as never);
-      fijarContexto(PERMISOS_CLASIFICAR);
-      renderLegajo();
-      await abrirClasificacion();
-      expect(await screen.findByText("Clasificados")).toBeInTheDocument();
-      expect(await screen.findByRole("button", { name: "Reintentar" })).toBeInTheDocument();
-    },
-  );
+  // Un fallo al leer la clasificación muestra Reintentar (antes se veía como «0 Clasificados»).
+  it("un fallo al leer la clasificación se muestra con Reintentar, no como «0 Clasificados»", async () => {
+    const rutas = rutasDemo({
+      clasificaciones: clasificacionesDemo,
+      imputaciones: imputacionesDemo,
+      actividades: actividadesDemo,
+      jurisdicciones: jurisdiccionesDemo,
+    });
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.endsWith("/classifications")
+        ? Promise.reject(new Error("Fallo Demo"))
+        : rutas(path)) as never);
+    fijarContexto(PERMISOS_CLASIFICAR);
+    renderLegajo();
+    await abrirClasificacion();
+    expect(await screen.findByText("Clasificados")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+  });
+  it("la carga de la clasificación y de las imputaciones se anuncia con role=status y la etapa tiene una sola acción primaria", async () => {
+    const rutas = rutasDemo({ actividades: actividadesDemo, jurisdicciones: jurisdiccionesDemo });
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.endsWith("/classifications") || path.endsWith("/allocations")
+        ? new Promise(() => {})
+        : rutas(path)) as never);
+    fijarContexto(PERMISOS_CLASIFICAR);
+    renderLegajo();
+    await abrirClasificacion();
+    const carga = await screen.findByText("Clasificando comprobantes respaldados…");
+    expect(carga.closest("[role='status']")).not.toBeNull();
+    expect(
+      screen.getByText("Imputando certificados revisados…").closest("[role='status']"),
+    ).not.toBeNull();
+    expect(document.querySelectorAll(".workpaper-card .ds-button--primary")).toHaveLength(1);
+  });
 });

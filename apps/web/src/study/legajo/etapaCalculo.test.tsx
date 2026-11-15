@@ -259,7 +259,7 @@ describe("Legajo · etapa Cálculo (K12)", () => {
     ).toBeInTheDocument();
   });
 
-  it("Actualizar posición vuelve a consultar la posición fiscal del período", async () => {
+  it("Actualizar vuelve a consultar la posición fiscal del período", async () => {
     fijarContexto(PERMISOS_CALCULO);
     fijarRespuestas({
       posiciones: { "period-a": [posicion("obligacion-iibb", "Ingresos Brutos")] },
@@ -271,31 +271,26 @@ describe("Legajo · etapa Cálculo (K12)", () => {
       vi.mocked(api.get).mock.calls.filter(([ruta]) => String(ruta).includes("/tax-position?"))
         .length;
     const antes = consultasDePosicion();
-    fireEvent.click(screen.getByRole("button", { name: "Actualizar posición" }));
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar" }));
     await waitFor(() => expect(consultasDePosicion()).toBeGreaterThan(antes));
   });
 
-  // Hoy el error de la determinación no dibuja nada: la etapa debería ofrecer Reintentar.
-  it.fails(
-    "un fallo al leer la determinación se muestra con Reintentar, no sin contenido",
-    async () => {
-      fijarContexto(PERMISOS_CALCULO);
-      const rutas = rutasDemo({ fuentes: fuentesPresentes });
-      vi.mocked(api.get).mockImplementation(((path: string) =>
-        path.endsWith("/calculation")
-          ? Promise.reject(new Error("Fallo Demo"))
-          : rutas(path)) as never);
-      renderLegajo();
-      await abrirCalculo();
-      expect(
-        await screen.findByText("Determinación y trazabilidad del cálculo"),
-      ).toBeInTheDocument();
-      expect(await screen.findByRole("button", { name: "Reintentar" })).toBeInTheDocument();
-    },
-  );
+  // Un fallo al leer la determinación muestra Reintentar (antes no dibujaba nada).
+  it("un fallo al leer la determinación se muestra con Reintentar, no sin contenido", async () => {
+    fijarContexto(PERMISOS_CALCULO);
+    const rutas = rutasDemo({ fuentes: fuentesPresentes });
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.endsWith("/calculation")
+        ? Promise.reject(new Error("Fallo Demo"))
+        : rutas(path)) as never);
+    renderLegajo();
+    await abrirCalculo();
+    expect(await screen.findByText("Determinación y trazabilidad del cálculo")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+  });
 
-  // Hoy un fallo al leer la posición se ve como «No hay obligaciones fiscales para el período seleccionado.».
-  it.fails("un fallo al leer la posición se muestra con Reintentar, no como vacío", async () => {
+  // Un fallo al leer la posición muestra Reintentar (antes se veía como «No hay obligaciones fiscales»).
+  it("un fallo al leer la posición se muestra con Reintentar, no como vacío", async () => {
     fijarContexto(PERMISOS_CALCULO);
     const rutas = rutasDemo({ fuentes: fuentesPresentes });
     vi.mocked(api.get).mockImplementation(((path: string) =>
@@ -306,5 +301,19 @@ describe("Legajo · etapa Cálculo (K12)", () => {
     await abrirCalculo();
     expect(await screen.findByText("Posición fiscal del período")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+  });
+  it("la carga de la determinación y de la posición se anuncia con role=status y la etapa tiene una sola acción primaria", async () => {
+    fijarContexto(PERMISOS_CALCULO);
+    const rutas = rutasDemo({ fuentes: fuentesPresentes });
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.endsWith("/calculation") || path.includes("/tax-position?")
+        ? new Promise(() => {})
+        : rutas(path)) as never);
+    renderLegajo();
+    await abrirCalculo();
+    const determinacion = await screen.findByText("Cargando determinación…");
+    expect(determinacion.closest("[role='status']")).not.toBeNull();
+    expect(screen.getByText("Calculando posición…").closest("[role='status']")).not.toBeNull();
+    expect(document.querySelectorAll(".workpaper-card .ds-button--primary")).toHaveLength(1);
   });
 });
