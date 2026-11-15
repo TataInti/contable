@@ -1251,7 +1251,6 @@
 
 .dense-packs {
   margin-bottom: var(--ds-space-3);
-  --dense-flow-max: 232px;
 }
 
 .dense-detail {

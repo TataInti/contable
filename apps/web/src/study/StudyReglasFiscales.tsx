@@ -491,6 +491,11 @@ export function StudyReglasFiscales() {
   const packsWith = (status: RuleStatus) =>
     allPacks.filter((pack) => pack.versions.some((version) => version.status === status)).length;
   const isEmptyPackList = packsQuery.isSuccess && allPacks.length === 0;
+  // El error de detalle nombra el paquete que falló (P4).
+  const paqueteElegido = allPacks.find((pack) => pack.id === selectedPackId);
+  const tituloErrorDetalle = paqueteElegido
+    ? `No se pudo cargar el paquete ${paqueteElegido.name}`
+    : "No se pudo cargar el paquete de reglas";
   // Antes de la respuesta la cifra dice «pendiente»; con error, «no disponible». El cero es solo respuesta.
   const cifraPacks = (valor: number) =>
     packsQuery.isError ? "no disponible" : packsQuery.isSuccess ? valor : "pendiente";
@@ -640,7 +645,7 @@ export function StudyReglasFiscales() {
             loading={detailQuery.isLoading}
             error={detailQuery.isError}
             loadingLabel="Cargando detalle de reglas…"
-            errorTitle="No se pudo cargar el paquete de reglas"
+            errorTitle={tituloErrorDetalle}
             errorDescription="Reintentá la consulta. La lista de paquetes sigue disponible."
             onRetry={() => void detailQuery.refetch()}
           />

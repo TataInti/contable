@@ -891,6 +891,8 @@ Proporcioná siempre `onClose` para el cierre explícito, el scrim y Escape.
 
 #### ConfirmAction y ConfirmDialog
 
+Anatomía del panel y de la confirmación (Foco 2.7a). El pie de un cajón va en la prop `footer` de `ActionDrawer`; si tiene acción principal, se compone con `ActionDrawerFooter`: «Cancelar» (ghost) a la izquierda, la acción principal a la derecha y, junto a ella, el motivo del botón deshabilitado. El submit del formulario se asocia al botón con `form=`. Una confirmación usa `ConfirmDialog`: el título lleva la acción («Activar la versión v2»), el cuerpo dice la consecuencia y el pie tiene «Cancelar» a la izquierda y la acción confirmatoria («Sí, activar versión») a la derecha.
+
 - **Propósito:** pedir confirmación in-app antes de ejecutar una acción; `useConfirmAction` administra una solicitud por página y `ConfirmDialog` la presenta.
 - **Props:** `ConfirmAction` recibe `open`, `title`, `confirmLabel`, `onConfirm` y `onCancel`; `description`, `tone` (`default` o `danger`) y `cancelLabel` son opcionales. `ConfirmDialog` recibe el estado `confirm` y un `cancelLabel` opcional.
 - **Estados:** cerrado no renderiza DOM; abierto expone `role="alertdialog"`, enfoca Confirmar, contiene el foco, cierra con Escape y restaura el foco anterior. El tono danger selecciona la variante destructiva del botón.
@@ -1133,6 +1135,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 **Estado: migrada** (Foco 2). Lo vigente tras la migración: encabezado con «Nuevo legajo» como acción secundaria; cada revisión se lee en una tarjeta con sus etapas; las etapas con consultas muestran el error con «Reintentar»; una sola acción primaria por tarjeta, la de su estado; «Finalizar», «Crear rectificativa» y «Eximir» piden confirmación; una revisión reemplazada se lee como resumen de solo lectura. Desvíos declarados: la tarjeta del legajo conserva su borde de contenedor (las etapas no llevan caja propia), y las reglas de composición propias del Legajo (`workpaper-*`) siguen vigentes porque el marcado las usa; retirarlas exige rehacer ese marcado con piezas del sistema y queda como trabajo posterior.
 
 ### R03 — Reglas fiscales
+
+Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFooter` con «Cancelar» a la izquierda y el motivo junto a la acción principal; «Activar versión» confirma con `ConfirmDialog`; «Opción de cálculo» marca la opción de origen «(actual)» y dice la consecuencia al cambiarla; la lista cuenta «N de M paquetes» cuando no entran todas las filas; Vencimientos, Fuentes, Control profesional y Probar van sin caja. Pendiente: la pestaña Alícuotas sigue con caja (hallazgo 26 de ux).
 
 **Propósito:** elegir un paquete, comprender su versión y vigencia, y preparar cambios de forma deliberada.
 

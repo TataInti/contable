@@ -200,7 +200,8 @@ describe("Lista de paquetes de reglas (K2, Demo)", () => {
     expect(within(tabla).getByText("En revisión v1")).toBeTruthy();
     expect(within(tabla).getByText("Sin versión vigente")).toBeTruthy();
     expect(screen.getByText("3 paquetes")).toBeTruthy();
-    expect(screen.getByText("Elegí un paquete para ver sus versiones y reglas.")).toBeTruthy();
+    // La página elige el primer paquete: con uno elegido, el pie ya no ofrece la elección (hallazgo 34).
+    expect(screen.queryByText("Elegí un paquete para ver sus versiones y reglas.")).toBeNull();
   });
 
   it("busca sin distinguir tildes ni mayúsculas en nombre, código, impuesto y jurisdicción", async () => {

@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button } from "@contable/design-system";
+import { DenseSection } from "../../ui/Dense";
 import type { Credential, RuleVersion } from "./tipos";
 import { ErrorAccion, ErrorConsulta } from "./Errores";
 
@@ -27,14 +28,11 @@ export function TabControlProfesional({
 }: TabControlProfesionalProps) {
   return (
     <>
-              <section id="rule-approval" className="study-panel fiscal-rule-approval">
-                <div>
-                  <h2>Flujo de revisión anterior</h2>
-                  <p>
-                    La activación directa es el recorrido principal. Las versiones históricas pueden
-                    conservar revisión profesional; las versiones vigentes siguen siendo inmutables.
-                  </p>
-                </div>
+              <DenseSection
+                id="rule-approval"
+                title="Flujo de revisión anterior"
+                description="La activación directa es el recorrido principal. Las versiones históricas pueden conservar revisión profesional; las versiones vigentes siguen siendo inmutables."
+              >
                 <div className="fiscal-rule-approval__actions">
                   {selectedVersion.status === "DRAFT" && canPropose ? (
                     <Button
@@ -102,7 +100,7 @@ export function TabControlProfesional({
                 ) : (
                   <p className="fiscal-rule-approval__sources">Sin fuente normativa cargada.</p>
                 )}
-              </section>
+              </DenseSection>
     </>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button, MoneyField, Notice, Table } from "@contable/design-system";
 import { api } from "../lib/api";
+import { DenseSection } from "../ui/Dense";
 import "./RuleSimulator.css";
 
 /**
@@ -119,16 +120,11 @@ export function RuleSimulator({
     : null;
 
   return (
-    <section className="study-panel rule-simulator" aria-labelledby="rule-simulator-title">
-      <div className="study-panel__heading">
-        <div>
-          <h2 id="rule-simulator-title">Probar liquidación</h2>
-          <p>
-            Cargá un caso chico y mirá cómo lo calcula esta versión, paso a paso, con el mismo motor
-            que liquida a los clientes. No guarda nada ni afecta a ningún cliente.
-          </p>
-        </div>
-      </div>
+    <DenseSection
+      id="rule-simulator"
+      title="Probar liquidación"
+      description="Cargá un caso chico y mirá cómo lo calcula esta versión, paso a paso, con el mismo motor que liquida a los clientes. No guarda nada ni afecta a ningún cliente."
+    >
 
       {hasUnsavedChanges ? (
         <Notice tone="warning">
@@ -268,6 +264,6 @@ export function RuleSimulator({
           ) : null}
         </div>
       ) : null}
-    </section>
+    </DenseSection>
   );
 }

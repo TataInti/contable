@@ -203,7 +203,7 @@ describe("Reglas fiscales — estados del detalle del paquete (7d-2)", () => {
     const detail = makeDemoDetail();
     mockDemoApi(detail, { [DETALLE]: fallaUnaVez(() => detail) });
     renderDemoReglas();
-    expect(await screen.findByText("No se pudo cargar el paquete de reglas")).toBeTruthy();
+    expect(await screen.findByText("No se pudo cargar el paquete Demo · IVA Responsable Inscripto")).toBeTruthy();
     expect(screen.getByText(/Reintentá la consulta/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(
