@@ -1145,7 +1145,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 | Receta | Información esencial | Accesos que se conservan |
 |---|---|---|
 | R01 Inicio | Cliente, impuesto, período, vencimiento, antigüedad, estado de liquidación y alcance de cada fuente | Abrir legajo, consultar liquidación, filtrar, actualizar y reintentar |
-| R02 Legajo | Contexto fiscal, revisión, estado, advertencia de autorrevisión, importes, movimientos y evidencia | Cambiar período, navegar secciones, ver respaldo e historial, importar y rectificar según capacidades |
+| R02 Legajo | Contexto fiscal, revisión, estado, advertencia de autorrevisión, importes, movimientos y evidencia | Cambiar período, navegar secciones, ver respaldo e historial, importar y rectificar según capacidades; **Exportar libros** (encabezado, acción secundaria; la ve quien tiene `tax.vouchers.read`): descarga el libro de compras o de ventas del período activo en xlsx o csv, con resumen previo de incluidos y excluidos por motivo |
 | R03 Reglas fiscales | Paquete, versión, vigencia, estado, parámetros y condición de lectura | Elegir paquete, consultar secciones, preparar modificación, alta global |
 | RG | La información que la pantalla muestra hoy | Todas las acciones que la pantalla ofrece hoy, según capacidades |
 
