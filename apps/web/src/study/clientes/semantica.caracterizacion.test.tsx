@@ -81,14 +81,13 @@ describe("StudyClientes — semántica de la banda y del espacio de trabajo (K7)
     expect(incompleta.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("el espacio de trabajo es un tabpanel sin pestañas y sin nombre accesible (vigente: defecto 7d-7)", async () => {
-    // vigente: defecto 7d-7 (cambia en este corte)
+  it("el espacio de trabajo es una región con nombre accesible", async () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
     const espacio = document.getElementById("clients-panel");
 
-    expect(espacio?.getAttribute("role")).toBe("tabpanel");
-    expect(espacio?.hasAttribute("aria-label")).toBe(false);
-    expect(espacio?.hasAttribute("aria-labelledby")).toBe(false);
+    expect(espacio?.getAttribute("role")).toBe("region");
+    expect(espacio?.getAttribute("aria-label")).toBe("Cartera de clientes y detalle");
+    expect(document.querySelector(".ds-notice--page")).toBeNull();
   });
 });

@@ -570,7 +570,6 @@ export function StudyClientes() {
       {contactRetry ? (
         <Notice
           tone="error"
-          className="ds-notice--page"
           action={
             <Button
               size="sm"
@@ -604,7 +603,12 @@ export function StudyClientes() {
         searchRef={searchRef}
       />
 
-      <DenseWorkspace panelId="clients-panel" inspector={inspector}>
+      <DenseWorkspace
+        panelId="clients-panel"
+        role="region"
+        aria-label="Cartera de clientes y detalle"
+        inspector={inspector}
+      >
         {tableBody}
       </DenseWorkspace>
 
