@@ -519,7 +519,7 @@ export function StudyDashboard() {
           description="Todavía sin presentar."
           surface="integrated"
           actions={
-            <Link className="dense-link" to={clientId ? "/trabajo" : "/clientes"}>
+            <Link className="dense-link" to="/trabajo">
               Abrir obligaciones
             </Link>
           }

@@ -149,6 +149,22 @@ describe("Inicio: «Actualizar» refresca las fuentes que la persona puede leer 
     expect(await screen.findByText(/Actualizando: se muestran los datos de la última consulta/)).toBeTruthy();
     expect(screen.getByRole("table", { name: "Liquidaciones en curso" })).toBeTruthy();
   });
+
+  it("si el resumen falla al actualizar, su error queda junto a él y las demás fuentes siguen visibles", async () => {
+    renderDashboard(["client.read", "tax.settlements.read"]);
+    await worklistTable();
+    await receiptsTable();
+    const button = await actualizar();
+
+    apiMock.get.mockImplementation((path: string) =>
+      path.endsWith("/dashboard") ? Promise.reject(new Error("sin respuesta")) : answer(path),
+    );
+    fireEvent.click(button);
+
+    expect(await screen.findByText("No se pudo cargar el resumen")).toBeTruthy();
+    expect(await worklistTable()).toBeTruthy();
+    expect(await receiptsTable()).toBeTruthy();
+  });
 });
 
 describe("Inicio: composición R01", () => {
@@ -188,5 +204,11 @@ describe("Inicio: composición R01", () => {
     expect(await screen.findByRole("heading", { name: "Otros circuitos" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Panorama general" })).toBeTruthy();
     expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("el enlace de obligaciones lleva a Trabajo, como en main", async () => {
+    renderDashboard(["client.read", "tax.settlements.read"]);
+    await worklistTable();
+    expect(screen.getByRole("link", { name: "Abrir obligaciones" }).getAttribute("href")).toBe("/trabajo");
   });
 });
