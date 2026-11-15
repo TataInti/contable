@@ -308,9 +308,7 @@ describe("Legajo · registrar presentación (K7)", () => {
       target: { value: "doc-a" },
     });
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar presentación" }));
-    expect(
-      await screen.findByText("Presentación registrada con su acuse."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Presentación registrada con su acuse.")).toBeInTheDocument();
   });
 
   it("un error de la acción se muestra dentro del cajón, que sigue abierto", async () => {

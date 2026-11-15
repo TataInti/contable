@@ -150,8 +150,7 @@ export function PanelPresentacion({
             ))}
           </select>
           <small className="ds-field__hint">
-            Es el comprobante que emite el organismo. Sin acuse la presentación no queda
-            registrada.
+            Es el comprobante que emite el organismo. Sin acuse la presentación no queda registrada.
           </small>
         </div>
         {!filingForm.evidenceDocumentId ? (
