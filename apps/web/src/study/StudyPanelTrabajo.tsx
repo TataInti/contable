@@ -50,6 +50,7 @@ import {
   textoVencimiento,
 } from "./panel/presentacion";
 import "./study.css";
+import "./panel/panel-trabajo.css";
 
 /** Pantalla «Panel de trabajo» (corte 4b): lista global de obligaciones por usuario. Ver DESIGN.md (RG). */
 
@@ -311,7 +312,12 @@ export function StudyPanelTrabajo() {
     },
   ];
 
-  const vacio = hayFiltros ? (
+  // «Todo el estudio» es una vista, no un criterio: sin otros criterios, un resultado vacío es el confirmado (P1).
+  const responsablePuntual =
+    filtros.responsable !== RESPONSABLE_MIS && filtros.responsable !== RESPONSABLE_TODOS;
+  const hayCriterios =
+    responsablePuntual || hayFiltrosActivos({ ...filtros, responsable: RESPONSABLE_MIS });
+  const vacio = hayCriterios ? (
     <EmptyState
       size="compact"
       kind="no-results"

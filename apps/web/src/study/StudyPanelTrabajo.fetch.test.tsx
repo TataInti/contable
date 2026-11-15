@@ -224,4 +224,12 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     expect(screen.getByText("El vencimiento «hasta» es anterior a «desde»")).toBeTruthy();
     expect(valorIndicador("Vencidas")).toBe("no disponible");
   });
+
+  it("«Todo el estudio» sin obligaciones muestra el vacío confirmado con salida a la configuración (P1)", async () => {
+    respuestaPanel = () => ({ status: 200, cuerpo: cuerpo([], { total: 0 }) });
+    renderPanel("/panel-trabajo?responsable=todos");
+    expect(await screen.findByText("No hay obligaciones para mostrar")).toBeTruthy();
+    expect(screen.queryByText("Ninguna obligación coincide con los filtros")).toBeNull();
+    expect(screen.getByRole("button", { name: "Configurar obligaciones" })).toBeTruthy();
+  });
 });

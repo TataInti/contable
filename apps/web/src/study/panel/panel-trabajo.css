@@ -1,0 +1,17 @@
+/*
+ * Panel de trabajo (corte 4b): los botones de terminación de CUIT miden al menos
+ * --ds-control-height-sm (32 px) en ancho, por encima del objetivo mínimo de 24 px
+ * del §5.5. Solo tokens: el resto del selector lo da el sistema de diseño.
+ */
+.dense-seg[aria-label="Terminación de CUIT"] .dense-seg__option {
+  min-inline-size: var(--ds-control-height-sm);
+}
+
+/*
+ * La tabla del Panel de trabajo entra en su contenedor a 1280 px (REGLAS-GLOBALES, P5):
+ * relleno lateral de --ds-space-2 en lugar de 12 px en las celdas de esta tabla.
+ */
+table[aria-label="Panel de trabajo"] thead th,
+table[aria-label="Panel de trabajo"] tbody td {
+  padding-inline: var(--ds-space-2);
+}

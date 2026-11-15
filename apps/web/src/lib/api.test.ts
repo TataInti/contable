@@ -74,9 +74,16 @@ describe("cliente API", () => {
     it("devuelve data y meta, mientras get sigue desenvolviendo data", async () => {
       const cuerpo = {
         data: [{ id: "ob-1" }, { id: "ob-2" }],
-        meta: { total: 3, limit: 2, offset: 0, options: { taxTypes: [{ id: "iva", name: "IVA" }] } },
+        meta: {
+          total: 3,
+          limit: 2,
+          offset: 0,
+          options: { taxTypes: [{ id: "iva", name: "IVA" }] },
+        },
       };
-      const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => respuestaJson(200, cuerpo));
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async () => respuestaJson(200, cuerpo));
       const ruta = "/firms/f1/portfolio/tax-worklist/obligations?limit=2&offset=0";
 
       await expect(api.get<{ id: string }[]>(ruta)).resolves.toEqual(cuerpo.data);
@@ -88,10 +95,18 @@ describe("cliente API", () => {
     });
 
     it.each([
-      { status: 404, error: { code: "NOT_FOUND", message: "No encontramos el panel", requestId: "req-404" } },
-      { status: 500, error: { code: "INTERNAL", message: "Falló la lectura del panel", requestId: "req-500" } },
+      {
+        status: 404,
+        error: { code: "NOT_FOUND", message: "No encontramos el panel", requestId: "req-404" },
+      },
+      {
+        status: 500,
+        error: { code: "INTERNAL", message: "Falló la lectura del panel", requestId: "req-500" },
+      },
     ])("lanza ApiError igual que get ante HTTP $status", async ({ status, error }) => {
-      vi.spyOn(globalThis, "fetch").mockImplementation(async () => respuestaJson(status, { error }));
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+        respuestaJson(status, { error }),
+      );
       const resumen = (caught: unknown) => ({
         esApiError: caught instanceof ApiError,
         code: (caught as ApiError).code,
@@ -102,7 +117,9 @@ describe("cliente API", () => {
       });
 
       const porGet = resumen(await api.get("/private").catch((caught: unknown) => caught));
-      const porEnvelope = resumen(await api.getEnvelope("/private").catch((caught: unknown) => caught));
+      const porEnvelope = resumen(
+        await api.getEnvelope("/private").catch((caught: unknown) => caught),
+      );
 
       expect(porEnvelope).toEqual(porGet);
       expect(porEnvelope).toEqual({
