@@ -294,8 +294,9 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
       target: { value: "Cambio Demo" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
-    const alicuotas = await seccion("Alícuotas y porcentajes");
-    expect(await within(alicuotas).findByText("Error de guardado Demo")).toBeTruthy();
+    // D-R3-3: el error de guardar va junto a «Guardar borrador», en el encabezado del resumen.
+    const resumen = (await screen.findByRole("heading", { level: 2, name: "Demo · IVA Responsable Inscripto" })).closest("section") as HTMLElement;
+    expect(await within(resumen).findByText("Error de guardado Demo")).toBeTruthy();
     expect(
       document.querySelector(".fiscal-rules > .form-error, .fiscal-rules > [role='alert']"),
     ).toBeNull();

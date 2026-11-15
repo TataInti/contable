@@ -128,14 +128,14 @@ describe("una sola acción primaria visible por estado (D-R3-1)", () => {
     },
   );
 
-  it.fails("versión en revisión: la primaria es «Activar»", async () => {
+  it("versión en revisión: la primaria es «Activar»", async () => {
     mockDemoApi(paqueteConVersiones({ id: "version-revision", version: 2, status: "IN_REVIEW" }));
     renderDemoReglas();
     await resumen();
     expect(primarios()).toEqual(["Activar"]);
   });
 
-  it.fails("«Guardar borrador» es secundaria si no hay cambios sin guardar", async () => {
+  it("«Guardar borrador» es secundaria si no hay cambios sin guardar", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     await resumen();
@@ -202,14 +202,14 @@ describe("«Eliminar paquete» y estado de la versión, una sola vez (D-R3-5, D-
     expect(seccion.querySelectorAll('[data-status="DRAFT"]')).toHaveLength(1);
   });
 
-  it.fails("el resumen no repite el estado en texto («Editando borrador»)", async () => {
+  it("el resumen no repite el estado en texto («Editando borrador»)", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     const seccion = await resumen();
     expect(within(seccion).queryByText(/Editando borrador/)).toBeNull();
   });
 
-  it.fails("el selector de versiones muestra solo número y vigencia", async () => {
+  it("el selector de versiones muestra solo número y vigencia", async () => {
     mockDemoApi(
       paqueteConVersiones(
         { id: "version-2", version: 2, status: "DRAFT" },
@@ -224,7 +224,7 @@ describe("«Eliminar paquete» y estado de la versión, una sola vez (D-R3-5, D-
     }
   });
 
-  it.fails("el régimen aparece una sola vez en el resumen", async () => {
+  it("el régimen aparece una sola vez en el resumen", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     const seccion = await resumen();
@@ -256,7 +256,7 @@ describe("filtros de la banda, región del detalle y un solo h1 (G02, D-R3-8)", 
     );
   });
 
-  it.fails("el detalle es una región con nombre", async () => {
+  it("el detalle es una región con nombre", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     await resumen();
@@ -282,7 +282,7 @@ describe("composición sin cajas en lectura, y caja en el editor (D-R3-7)", () =
     vi.restoreAllMocks();
   });
 
-  it.fails("el resumen no va en caja", async () => {
+  it("el resumen no va en caja", async () => {
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     const seccion = await resumen();
@@ -327,16 +327,13 @@ describe("aviso de cambios sin guardar y nombres de las acciones (P1, P4, conteo
     vi.restoreAllMocks();
   });
 
-  it.fails(
-    "el aviso «Guardá los cambios…» se ve con cambios sin guardar, sin pulsar Activar",
-    async () => {
-      mockDemoApi(makeDemoDetail());
-      renderDemoReglas();
-      await resumen();
-      await cambiarAlicuota();
-      expect(screen.getByText(/Guardá los cambios del borrador/)).toBeTruthy();
-    },
-  );
+  it("el aviso «Guardá los cambios…» se ve con cambios sin guardar, sin pulsar Activar", async () => {
+    mockDemoApi(makeDemoDetail());
+    renderDemoReglas();
+    await resumen();
+    await cambiarAlicuota();
+    expect(screen.getByText(/Guardá los cambios del borrador/)).toBeTruthy();
+  });
 
   it("un borrador conserva sus acciones con el mismo nombre", async () => {
     mockDemoApi(makeDemoDetail());

@@ -35,7 +35,6 @@ import { ResumenVersion } from "./reglas/ResumenVersion";
 import { AlicuotasEditor } from "./reglas/AlicuotasEditor";
 import { Icon } from "../ui/Icon";
 import {
-  DenseAlert,
   DenseHeader,
   DensePage,
   DenseTabs,
@@ -420,26 +419,22 @@ export function StudyReglasFiscales() {
     setActivationError(null);
     setActivationTarget(version);
   };
-  const rulesNextAction = (() => {
-    if (!selectedPackId) {
-      return canPropose
-        ? { label: "Crear paquete", description: "Definí el régimen sobre el que vas a configurar reglas.", onClick: () => setShowPackForm(true) }
-        : null;
+  // Guardar y editar el borrador viven en el encabezado del resumen (D-R3-1 y D-R3-2). Una fila
+  // sin tipo se marca antes de guardar, como antes en el pie del editor.
+  const draftIncomplete = draftRows.some((row) => !row.rate && !row.minAmount);
+  const guardarBorrador = () => {
+    const missingKindRows = draftRows.filter((row) => !row.kindId);
+    if (missingKindRows.length > 0) {
+      setRowFieldErrors(Object.fromEntries(missingKindRows.map((row) => [
+        `${row.id}.kindId`, "Seleccioná un tipo de regla.",
+      ])));
+      return;
     }
-    if (detailQuery.data && !selectedVersion) {
-      return canPropose
-        ? { label: "Crear primera versión", description: "Abrí un borrador para cargar alícuotas, vencimientos y fuentes.", onClick: () => setShowInitialVersionForm(true) }
-        : null;
-    }
-    if (!selectedVersion) return null;
-    if (selectedVersion.status === "DRAFT" && canPropose) {
-      return { label: `Editar borrador v${selectedVersion.version}`, description: "Revisá las reglas y guardá los cambios; después podés activar directamente esta versión.", onClick: () => document.getElementById("rule-rates-title")?.scrollIntoView({ behavior: "smooth", block: "start" }) };
-    }
-    if (["IN_REVIEW", "APPROVED"].includes(selectedVersion.status) && canActivateSelectedVersion) {
-      return { label: "Activar versión", description: "La versión quedará vigente para los próximos cálculos.", onClick: () => requestActivation(selectedVersion) };
-    }
-    return null;
-  })();
+    saveMutation.mutate();
+  };
+  const editarBorrador = () => {
+    document.getElementById("rule-rates-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   // Una versión que no es borrador es de sólo lectura: para cambiar valores se
   // abre un borrador nuevo. La acción se ofrece en la sección de alícuotas,
   // junto a los datos que el usuario quiere modificar.
@@ -594,7 +589,7 @@ export function StudyReglasFiscales() {
         canPropose={canPropose}
       />
 
-      <div className="fiscal-rules-detail dense-detail">
+      <div role="region" aria-label="Detalle del paquete de reglas" className="dense-detail">
           <AsyncState
             loading={detailQuery.isLoading}
             error={detailQuery.isError}
@@ -610,48 +605,41 @@ export function StudyReglasFiscales() {
               description="Elegí uno de la lista para ver sus versiones y reglas."
             />
           ) : null}
-          {selectedPackId && rulesNextAction ? (
-            <DenseAlert
-              tone="hint"
-              action={<Button size="sm" onClick={rulesNextAction.onClick}>{rulesNextAction.label}</Button>}
-            >
-              <strong>Próximo paso:</strong> {rulesNextAction.description}
-            </DenseAlert>
+          {detailQuery.data ? (
+            <ResumenVersion
+              detail={detailQuery.data}
+              selectedVersion={selectedVersion}
+              canPropose={canPropose}
+              canActivateSelectedVersion={canActivateSelectedVersion}
+              activateMutation={activateMutation}
+              requestActivation={requestActivation}
+              canDeleteVersion={canDeleteVersion}
+              canDeletePack={canDeletePack}
+              firmId={firmId}
+              setDeletingTarget={setDeletingTarget}
+              requestPackDeletion={requestPackDeletion}
+              setSelectedVersionId={setSelectedVersionId}
+              activeVersion={activeVersion}
+              activationError={activationError}
+              activationFeedbackRef={activationFeedbackRef}
+              editable={editable}
+              bloqueadaPorCambios={activationBlockedByUnsavedChanges}
+              saveMutation={saveMutation}
+              saveError={editable && Object.keys(rowFieldErrors).length === 0 ? saveMutation.error : null}
+              guardarIncompleto={draftIncomplete}
+              onGuardar={guardarBorrador}
+              onNuevaVersion={() => setShowInitialVersionForm(true)}
+              onEditarBorrador={editarBorrador}
+            />
           ) : null}
           {detailQuery.data && !selectedVersion ? (
             <EmptyState
               title="Este paquete todavía no tiene versión"
               description="Creá un borrador inicial antes de ingresar porcentajes o vencimientos."
-              {...(canDeletePack ? { action: (
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onClick={requestPackDeletion}
-                >
-                  Eliminar paquete
-                </Button>
-              ) } : {})}
             />
           ) : null}
           {detailQuery.data && selectedVersion ? (
             <>
-              <ResumenVersion
-                detail={detailQuery.data}
-                selectedVersion={selectedVersion}
-                canActivateSelectedVersion={canActivateSelectedVersion}
-                activateMutation={activateMutation}
-                requestActivation={requestActivation}
-                canDeleteVersion={canDeleteVersion}
-                canDeletePack={canDeletePack}
-                firmId={firmId}
-                setDeletingTarget={setDeletingTarget}
-                requestPackDeletion={requestPackDeletion}
-                setSelectedVersionId={setSelectedVersionId}
-                activeVersion={activeVersion}
-                activationError={activationError}
-                activationFeedbackRef={activationFeedbackRef}
-              />
-
               <DenseTabs<"rates" | "dueDates" | "sources" | "approval" | "simulate">
                 label="Secciones de la versión"
                 idPrefix="rule-tab"
@@ -665,7 +653,7 @@ export function StudyReglasFiscales() {
                   { id: "simulate", label: "Probar" },
                 ]}
               />
-              <div role="tabpanel" id="rule-tab-panel" className="dense-tabpanel">
+              <div role="tabpanel" id="rule-tab-panel">
               {ruleTab === "rates" ? (
               <AlicuotasEditor
                 editable={editable}
@@ -684,7 +672,6 @@ export function StudyReglasFiscales() {
                 ruleKindsQuery={ruleKindsQuery}
                 activitiesQuery={activitiesQuery}
                 jurisdictionsQuery={jurisdictionsQuery}
-                saveMutation={saveMutation}
               />
               ) : null}
               {ruleTab === "simulate" ? (

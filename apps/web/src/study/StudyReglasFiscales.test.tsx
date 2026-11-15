@@ -451,7 +451,8 @@ describe("StudyReglasFiscales — rótulos de versión sin ambigüedad (F4)", ()
     // El índice menciona ambas versiones: borrador en curso y vigente.
     expect(await screen.findByText("Borrador v2 · Vigente v4")).toBeTruthy();
     // El resumen dice explícitamente qué se está editando y cuál es la activa.
-    expect(await screen.findByText("Editando borrador")).toBeTruthy();
+    // D-R3-5: el estado de la versión aparece una sola vez (en el resumen), sin «Editando borrador».
+    await waitFor(() => expect(document.querySelectorAll('[data-status="DRAFT"]')).toHaveLength(1));
     expect(await screen.findByText("Versión activa")).toBeTruthy();
     // El CTA guiado identifica la versión: Editar borrador v2.
     expect(screen.getByRole("button", { name: "Editar borrador v2" })).toBeTruthy();
@@ -734,15 +735,9 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     });
     const activateButton = (await screen.findByRole("button", { name: /^Activar$/ })) as HTMLButtonElement;
 
-    expect(activateButton.disabled).toBe(false);
-    fireEvent.click(activateButton);
-
-    const packageCard = activateButton.closest("section");
-    expect(packageCard).not.toBeNull();
-    const activationAlert = await within(packageCard!).findByRole("alert");
-    expect(activationAlert.textContent).toContain(
-      "Guardá los cambios del borrador antes de activarlo.",
-    );
+    // D-R3-1 y P4: con cambios sin guardar, Activar queda deshabilitado y el aviso se ve junto al botón.
+    expect(activateButton.disabled).toBe(true);
+    expect(await screen.findByText("Guardá los cambios del borrador antes de activarlo.")).toBeTruthy();
     expect(api.post).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -810,13 +805,11 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     const confirmation = await screen.findByRole("dialog");
     fireEvent.click(within(confirmation).getByRole("button", { name: "Activar versión" }));
 
+    // D-R3-3: cada error va junto a su botón; Guardar y Activar están en el encabezado del resumen.
     const packageCard = activateButton.closest("section");
     expect(packageCard).not.toBeNull();
     expect(await within(packageCard!).findByText("Error actual de activación")).toBeTruthy();
-    expect(within(packageCard!).queryByText("Error viejo de guardado")).toBeNull();
-    expect(
-      within(screen.getByRole("heading", { name: "Alícuotas y porcentajes" }).closest("section")!).getByText("Error viejo de guardado"),
-    ).toBeTruthy();
+    expect(within(packageCard!).getByText("Error viejo de guardado")).toBeTruthy();
   });
 });
 
