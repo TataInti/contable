@@ -118,9 +118,7 @@ describe("Legajo · cabecera (K3)", () => {
     cleanup();
     fijarContexto(["client.read", "tax.settlements.calculate"]);
     renderLegajo();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Nuevo legajo" })).toBeEnabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Nuevo legajo" })).toBeEnabled());
   });
 
   it("Exportar libros no se dibuja sin tax.vouchers.read", async () => {

@@ -633,6 +633,7 @@ export function StudyExpedienteMensual() {
         capabilities={capabilities}
         selectedTaxPeriod={selectedTaxPeriod}
         creandoLegajo={createMutation.isPending}
+        cargandoPeriodos={taxPeriodsQuery.isLoading}
         errorCreacion={createMutation.error}
         onSubirLibros={() => setShowSifereModal(true)}
         onNuevoLegajo={() => void createMutation.mutate()}

@@ -343,3 +343,44 @@ describe("Legajo · editar saldo (K6)", () => {
     );
   });
 });
+
+describe("Legajo · accesibilidad mínima de cabecera y paneles", () => {
+  it("la pantalla tiene un solo h1", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    await screen.findByRole("button", { name: "Subir Excel" });
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  });
+
+  it("el cajón de libros IVA muestra como máximo una acción primaria", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    const dialogo = await abrirLibrosIva();
+    expect(dialogo.querySelectorAll(".ds-button--primary").length).toBeLessThanOrEqual(1);
+  });
+
+  it("el cajón de saldo inicial muestra como máximo una acción primaria", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    const dialogo = await abrirSaldoInicial();
+    expect(dialogo.querySelectorAll(".ds-button--primary").length).toBeLessThanOrEqual(1);
+  });
+
+  it("el cajón de editar saldo muestra como máximo una acción primaria", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    const dialogo = await abrirEditarSaldo();
+    expect(dialogo.querySelectorAll(".ds-button--primary").length).toBeLessThanOrEqual(1);
+  });
+
+  it("al cerrar el cajón, el foco vuelve al botón que lo abrió", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    const origen = await screen.findByRole("button", { name: "Cargar saldo inicial" });
+    origen.focus();
+    fireEvent.click(origen);
+    const dialogo = await screen.findByRole("dialog", { name: "Cargar saldo inicial" });
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(document.activeElement).toBe(origen));
+  });
+});
