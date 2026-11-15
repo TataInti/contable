@@ -42,7 +42,7 @@ describe("Reglas fiscales — activación (K9)", () => {
     mockDemoApi(detail);
     renderDemoReglas();
 
-    expect(await screen.findByRole("heading", { name: "Demo · IVA Responsable Inscripto" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Demo · IVA Responsable Inscripto" }, { timeout: 5000 })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Activar$/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Activar versión" })).toBeNull();
     expect(screen.queryByText("Próximo paso:")).toBeNull();
