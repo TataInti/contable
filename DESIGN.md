@@ -60,6 +60,12 @@ Antes de tocar una validación, un bloqueo o un control se lo clasifica: **integ
 - **Ficha del cliente**: su primera sección es el Resumen; un solo «Editar» con secciones; el estado del cliente es una acción aparte.
 - **Ocultar**: reversible, se muestra como acción neutra. **Eliminar**: irreversible, solo Titular.
 - **Crear a partir de este**: copia para una versión nueva; la pantalla lo anuncia como copia.
+- **Vigente**: la versión de reglas que usan los cálculos. «Activar» es solo la acción que la pone en uso.
+- **Motor de cálculo vN**: el motor de una versión de reglas. «Opción de cálculo» es el selector que lo elige.
+- **Nuevo paquete**: nombre único del alta de un paquete de reglas, en la cabecera y en el estado vacío.
+- **Legajo**: el trabajo mensual de un cliente y un período. La URL `/expediente-mensual` y los identificadores internos no cambian.
+- **Saldo a favor**: el saldo que favorece al contribuyente. **Disponible** es lo que queda de ese saldo.
+- **Acuse de presentación**: el comprobante que emite el organismo al presentar.
 - **Calendario fiscal**: vencimientos anuales de un organismo y una jurisdicción, con sus celdas por concepto, terminación de CUIT y período de referencia. Se carga en borrador, se valida y se publica; lo publicado no se edita: se corrige con una versión nueva.
 - **Vencimiento**: fecha límite de una obligación. Precedencia: valor manual justificado > calendario publicado del organismo y la jurisdicción > regla de vencimiento. Sin fuente, la obligación queda sin fecha y se avisa qué falta.
 - Pendiente de decisión de Inti: nombre y fuente única de «período» (fiscal y contable).
@@ -692,7 +698,7 @@ Para ausencia de contenido, usá `EmptyState`; `AsyncState` cubre carga y usa `N
 | Tokens | `--ds-color-success`, `--ds-color-warning`, `--ds-color-danger`, `--ds-color-info`, `--ds-color-warning-subtle` |
 
 **Aceptación observable:**
-- Una constancia pendiente se muestra como tarea en la pantalla.
+- Un acuse pendiente se muestra como tarea en la pantalla.
 - Una advertencia sensible permanece visible.
 - Una instrucción se lee en texto neutro.
 
@@ -1082,35 +1088,35 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Propósito:** mostrar qué hay para resolver en el alcance de quien entra (el estudio en `/`, la empresa del cliente en `/portal`) y llevar a la pantalla donde se resuelve.
 
-**Vigente en main (se conserva):** el recordatorio de constancias de presentación pendientes (#87) y su presentación ajustada (#90); «Liquidaciones en curso» deja afuera las liquidaciones `FINALIZED` y `SUPERSEDED` (#90), porque lo finalizado sin presentar ya figura en el recordatorio de constancias.
+**Vigente en main (se conserva):** el recordatorio de acuses de presentación pendientes (#87) y su presentación ajustada (#90); «Liquidaciones en curso» deja afuera las liquidaciones `FINALIZED` y `SUPERSEDED` (#90), porque lo finalizado sin presentar ya figura en el recordatorio de acuses.
 
 **Composición:**
 1. Encabezado C01 con el alcance del estudio y «Actualizar» como acción secundaria.
 2. Indicadores C03 con su alcance.
 3. Pendientes accionables, con los datos necesarios para decidir.
-4. Constancias pendientes y liquidaciones en curso como listas separadas, cada una con su fuente y su conteo.
+4. Acuses pendientes y liquidaciones en curso como listas separadas, cada una con su fuente y su conteo.
 5. Otros circuitos y panorama como contenido secundario, sobre el lienzo.
 
-**Constancias, información que se conserva:** cliente, impuesto, período, vencimiento, antigüedad desde la finalización y «Abrir legajo» según capacidad. Se mantiene la ordenación inicial del producto (la más antigua primero) y se anuncia otra ordenación si la persona la cambia.
+**Acuses, información que se conserva:** cliente, impuesto, período, vencimiento, antigüedad desde la finalización y «Abrir legajo» según capacidad. Se mantiene la ordenación inicial del producto (la más antigua primero) y se anuncia otra ordenación si la persona la cambia.
 
-**Decisión de producto pendiente de Inti (G07):** la prioridad relativa entre correcciones, constancias y vencimientos. Esta guía no la fija: la receta mantiene visibles los tres tipos de trabajo y conserva el orden vigente en main hasta que Inti lo defina. La ubicación en la pantalla es composición, no una regla de riesgo.
+**Decisión de producto pendiente de Inti (G07):** la prioridad relativa entre correcciones, acuses y vencimientos. Esta guía no la fija: la receta mantiene visibles los tres tipos de trabajo y conserva el orden vigente en main hasta que Inti lo defina. La ubicación en la pantalla es composición, no una regla de riesgo.
 
 | Estado o evento | Respuesta |
 |---|---|
 | Carga inicial | Indicador discreto de carga; las cifras dicen «pendiente» |
 | Datos | Filas accionables, acceso al contexto y campos esenciales |
-| Vacío confirmado | El bloque condicional de constancias se omite, como define #87 |
-| Error de constancias | Error y Reintentar locales; las demás fuentes siguen disponibles |
-| Actualización | «Actualizar» alcanza resumen, liquidaciones en curso y constancias; los datos previos se identifican como tales |
+| Vacío confirmado | El bloque condicional de acuses se omite, como define #87 |
+| Error de acuses | Error y Reintentar locales; las demás fuentes siguen disponibles |
+| Actualización | «Actualizar» alcanza resumen, liquidaciones en curso y acuses; los datos previos se identifican como tales |
 | Falta de acceso | La pantalla dice que la fuente está restringida para el rol y muestra el resto |
 | Abrir legajo | Conserva el cliente y sigue el flujo del producto para el contexto fiscal |
 | Liquidación finalizada o reemplazada | Figura fuera de «en curso» |
 
-**Estado: migrada** (Foco 1, corte 1). Lo vigente tras la migración: encabezado con «Actualizar» como acción secundaria y «Revisar bandeja» como única primaria; cifras con «pendiente», «no disponible» o «restringido» en lugar de cero; constancias y liquidaciones en listas separadas, con sus estados propios, y obligaciones pendientes a continuación, en el orden de main; otros circuitos y panorama como secciones secundarias del lienzo, sin panel lateral; región de trabajo con nombre accesible. **Cumple G03** (para esta pantalla), **G05** y **G06** (sección 7). G07 sigue pendiente de Inti.
+**Estado: migrada** (Foco 1, corte 1). Lo vigente tras la migración: encabezado con «Actualizar» como acción secundaria y «Revisar bandeja» como única primaria; cifras con «pendiente», «no disponible» o «restringido» en lugar de cero; acuses y liquidaciones en listas separadas, con sus estados propios, y obligaciones pendientes a continuación, en el orden de main; otros circuitos y panorama como secciones secundarias del lienzo, sin panel lateral; región de trabajo con nombre accesible. **Cumple G03** (para esta pantalla), **G05** y **G06** (sección 7). G07 sigue pendiente de Inti.
 
 ### R02 — Legajo
 
-**Propósito:** consultar un período y continuar sus tareas, distinguiendo pestaña, etapa y estado del expediente.
+**Propósito:** consultar un período y continuar sus tareas, distinguiendo pestaña, etapa y estado del legajo.
 
 **Composición:** encabezado C01; contexto de cliente, impuesto, período y revisión; estado en texto (C08); advertencia de autorrevisión visible; secciones con pestañas (C05); tabla (C04); respaldo y metadatos en detalle o panel (C06 y C09).
 
@@ -1134,15 +1140,15 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Entradas de pantalla:** paquetes visibles para el rol, versión seleccionada, estado, vigencia, parámetros y capacidades. Alícuotas, revisores y activación son del dominio.
 
-**Variantes:** versión activa de lectura y borrador editable, conforme al producto. La activación directa y la revisión existentes se mantienen como están.
+**Variantes:** versión vigente de lectura y borrador editable, conforme al producto. La activación directa y la revisión existentes se mantienen como están.
 
 **Interacciones que se conservan:** selección de paquete; consulta de alícuotas, vencimientos, fuentes y control; preparación de una modificación; creación global, permisos y confirmaciones. Preparar un borrador deja intacta la versión vigente.
 
 **Estados:** carga, error local con la lista disponible, restricción, vacío de paquetes, actualización y texto extenso.
 
-**Aceptación:** la versión activa se identifica como de sólo lectura; el paquete seleccionado se ve en la lista; hay una acción contextual principal.
+**Aceptación:** la versión vigente se identifica como de sólo lectura; el paquete seleccionado se ve en la lista; hay una acción contextual principal.
 
-**Estado: migrada** (Foco 3). Lo vigente tras la migración: «Nuevo paquete» como acción secundaria, y «Crear paquete» como primaria solo cuando no hay paquetes; una sola acción primaria por panel; el error de una consulta va junto al dato afectado, con «Reintentar» (`reglas/Errores.tsx`); el resumen de la versión va sin caja. Desvíos declarados: Alícuotas y Control profesional conservan la caja `study-panel`, y las reglas `fiscal-rule-*` que el marcado usa siguen vigentes; la caja y esas reglas quedan como trabajo posterior.
+**Estado: migrada** (Foco 3). Lo vigente tras la migración: «Nuevo paquete» como acción secundaria, y como primaria solo cuando no hay paquetes; una sola acción primaria por panel; el error de una consulta va junto al dato afectado, con «Reintentar» (`reglas/Errores.tsx`); el resumen de la versión va sin caja. Desvíos declarados: Alícuotas y Control profesional conservan la caja `study-panel`, y las reglas `fiscal-rule-*` que el marcado usa siguen vigentes; la caja y esas reglas quedan como trabajo posterior.
 
 **Catálogos fiscales** usa esta misma receta: una sola `DenseTabs` con los conteos de las cinco categorías; debajo, una línea breve con propios, referencia y alertas. La barra de filtros, la tabla y el detalle comparten la grilla; los datos del detalle usan columnas etiqueta/valor y los conteos numéricos se alinean a la derecha. Cada conteo aparece una vez, las cifras van a la derecha y la tabla tiene el ancho del resto de la pantalla.
 
@@ -1272,8 +1278,8 @@ Cada brecha es un compromiso del PR que implementa su pieza. Base de verificaci�
 | G03 | `DenseWorkspace` | `role="tabpanel"` fijo, también en pantallas sin pestañas | `role="region"` con nombre, o `tabpanel` con su controlador | Vigente en main; cumplido en Inicio (Foco 1, corte 1) |
 | G04 | `EmptyState` | Tamaños `regular` y `compact` | `size="inline"` para ausencias secundarias | Vigente en main |
 | G05 | `PendingFilingReceipts` | Usa `query.data ?? []` y devuelve `null` con cero filas, sin separar carga y error | Estados locales de carga y de error con Reintentar; el bloque se omite únicamente tras una respuesta vacía | Cumplido en Inicio (Foco 1, corte 1) |
-| G06 | «Actualizar» de Inicio (`StudyDashboard`) | Refresca resumen y liquidaciones en curso | Incluye la consulta de constancias y dice qué alcanza la actualización | Cumplido en Inicio (Foco 1, corte 1) |
-| G07 | Inicio | El orden visual entre circuitos no define una prioridad fiscal | **Decisión de producto pendiente de Inti.** Hasta entonces se conservan a la vista correcciones, constancias y vencimientos, en el orden vigente | Producto pendiente |
+| G06 | «Actualizar» de Inicio (`StudyDashboard`) | Refresca resumen y liquidaciones en curso | Incluye la consulta de acuses y dice qué alcanza la actualización | Cumplido en Inicio (Foco 1, corte 1) |
+| G07 | Inicio | El orden visual entre circuitos no define una prioridad fiscal | **Decisión de producto pendiente de Inti.** Hasta entonces se conservan a la vista correcciones, acuses y vencimientos, en el orden vigente | Producto pendiente |
 | G08 | `DenseToggleGroup`, `DenseTable.groupBy` | Vigentes en main (#91) | Se preservan en toda migración visual, con sus pruebas | Compatibilidad |
 
 Ninguno de estos compromisos agrega reglas de negocio ni cambia permisos.
