@@ -4,7 +4,8 @@ import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { calculationLabel } from "../etiquetas";
-import { formatDate, formatMoney } from "../formato";
+import { formatMoney } from "../formato";
+import { formatearFecha } from "../../../lib/formatoFechas";
 import type { PositionAction, TaxPosition, WorkpaperCalculationComponent } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
 import { pluralizar } from "../textos";
@@ -235,7 +236,7 @@ export function EtapaCalculo({
               {
                 key: "dueDate",
                 header: "Vencimiento",
-                render: (position) => formatDate(position.dueDate),
+                render: (position) => formatearFecha(position.dueDate, "Sin vencimiento"),
               },
               {
                 key: "accrued",
@@ -285,7 +286,7 @@ export function EtapaCalculo({
                   <span className="study-table__actions">
                     {position.filedAt ? (
                       <span className="muted-copy">
-                        Presentada el {formatDate(position.filedAt)}
+                        Presentada el {formatearFecha(position.filedAt, "Sin vencimiento")}
                       </span>
                     ) : position.settlement?.status === "FINALIZED" &&
                       capabilities.has("tax.filings.record") ? (

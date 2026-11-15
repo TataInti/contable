@@ -1,7 +1,8 @@
 import type { FiscalTaxPeriod } from "./tipos";
+import { formatearRango } from "../../lib/formatoFechas";
 
 export function fiscalTaxPeriodLabel(period: FiscalTaxPeriod) {
-  return period.label ?? `${period.startDate.slice(0, 10)} a ${period.endDate.slice(0, 10)}`;
+  return period.label ?? formatearRango(period.startDate, period.endDate);
 }
 
 export function fiscalTaxPeriodSelectionKey(firmId: string, clientId: string) {
