@@ -7,12 +7,15 @@ import { WORKPAPER_STEPS } from "../etiquetas";
 import { selfReviewNote } from "../formato";
 import type { Workpaper } from "../tipos";
 import { pluralizar } from "../textos";
+import { formatearMes } from "../../../lib/formatoFechas";
 
 interface LegajoTarjetaProps {
   wp: Workpaper;
   etapaActiva: number;
   onCambiarEtapa: (indice: number) => void;
-  /** Fila de acciones de estado; la arma la pantalla con sus mutaciones y errores. */
+  /** Acción primaria de la tarjeta (la de su estado): va en la línea «ETAPA N DE 6», antes de la barra de etapas. */
+  accionPrincipal?: ReactNode;
+  /** Acciones secundarias de estado; las arma la pantalla con sus mutaciones y errores. */
   acciones: ReactNode;
   /** Cuerpo de la etapa activa (las seis etapas viven en la pantalla). */
   children: ReactNode;
@@ -23,6 +26,7 @@ export function LegajoTarjeta({
   wp,
   etapaActiva,
   onCambiarEtapa,
+  accionPrincipal,
   acciones,
   children,
 }: LegajoTarjetaProps) {
@@ -38,7 +42,7 @@ export function LegajoTarjeta({
       <div className="workpaper-card__header">
         <div>
           <h2>
-            {wp.periodStart.slice(0, 7)} · Revisión {wp.revision}
+            {formatearMes(wp.periodStart)} · Revisión {wp.revision}
           </h2>
           <StatusBadge status={wp.status} />
           {nota ? (
@@ -62,13 +66,18 @@ export function LegajoTarjeta({
           <h3>{etapa.title}</h3>
           <p>{etapa.description}</p>
         </div>
-        <DenseTabs
-          label="Menú completo del legajo"
-          idPrefix={idPrefix}
-          tabs={WORKPAPER_STEPS.map((step, index) => ({ id: String(index), label: step.title }))}
-          active={String(etapaActiva)}
-          onChange={(id) => onCambiarEtapa(Number(id))}
-        />
+        <div className="workpaper-process__nav">
+          {accionPrincipal ? (
+            <div className="workpaper-process__accion">{accionPrincipal}</div>
+          ) : null}
+          <DenseTabs
+            label="Menú completo del legajo"
+            idPrefix={idPrefix}
+            tabs={WORKPAPER_STEPS.map((step, index) => ({ id: String(index), label: step.title }))}
+            active={String(etapaActiva)}
+            onChange={(id) => onCambiarEtapa(Number(id))}
+          />
+        </div>
       </div>
 
       <div
@@ -81,7 +90,7 @@ export function LegajoTarjeta({
         {children}
       </div>
 
-      {/* Las acciones de estado van antes de la barra de etapas: se ven sin desplazar a 1280×720. */}
+      {/* Las acciones secundarias van debajo del cuerpo de la etapa; la primaria, en el encabezado. */}
       <div className="workpaper-card__actions">{acciones}</div>
 
       <div className="workpaper-step-footer" aria-label="Cambio de etapa">

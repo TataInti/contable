@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, MoneyField } from "@contable/design-system";
 import { api } from "../../../lib/api";
-import { formatearRango } from "../../../lib/formatoFechas";
+import { formatearPeriodo } from "../../../lib/formatoFechas";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import type { EvidenceDocument, FiscalTaxPeriod, TaxRegime, TaxType } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
@@ -164,7 +164,7 @@ export function PanelSaldoInicial({
             <option value="">Seleccioná…</option>
             {openingTaxPeriods.map((taxPeriod) => (
               <option key={taxPeriod.id} value={taxPeriod.id}>
-                {taxPeriod.label ?? formatearRango(taxPeriod.startDate, taxPeriod.endDate)}
+                {taxPeriod.label ?? formatearPeriodo(taxPeriod.startDate, taxPeriod.endDate)}
               </option>
             ))}
           </select>

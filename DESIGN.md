@@ -57,7 +57,8 @@ Antes de tocar una validación, un bloqueo o un control se lo clasifica: **integ
 
 - Un formato por concepto en las pantallas del equipo: **fecha** dd/mm/aaaa con ceros («05/07/2026», «01/01/2027»); **mes** «julio de 2026», en minúscula; **rango** «01/07/2026 al 31/07/2026», sin flecha ni formato ISO; **fecha y hora** «05/07/2026 14:30», en 24 h y en hora de Argentina. Un rango sin fin se muestra «Desde 01/07/2026».
 - Valor interno ISO, pantalla en español: el estado, la API, la URL, el `value` de los campos `type="date"` y los nombres de archivo siguen en aaaa-mm-dd. Solo cambia lo que se muestra.
-- Una sola pieza compartida: `apps/web/src/lib/formatoFechas.ts` (`formatearFecha`, `formatearMes`, `formatearRango`, `formatearFechaHora`). El vacío lo indica cada pantalla con el segundo parámetro («—» por defecto). Ninguna pantalla formatea fechas con `toLocaleDateString`, `Intl.DateTimeFormat` ni `slice(0, 10)`.
+- **Período** de un rango de fechas: si cubre exactamente un mes calendario, se muestra como mes («septiembre de 2026»); en cualquier otro caso, como rango. El encabezado del Legajo muestra el mes («abril de 2026 · Revisión 1»).
+- Una sola pieza compartida: `apps/web/src/lib/formatoFechas.ts` (`formatearFecha`, `formatearMes`, `formatearRango`, `formatearPeriodo`, `formatearFechaHora`). El vacío lo indica cada pantalla con el segundo parámetro («—» por defecto). Ninguna pantalla formatea fechas con `toLocaleDateString`, `Intl.DateTimeFormat` ni `slice(0, 10)`.
 - Los selectores nativos de fecha del navegador usan el idioma del navegador y quedan fuera de este formato.
 
 ### Glosario vigente (P3)
@@ -898,7 +899,7 @@ Proporcioná siempre `onClose` para el cierre explícito, el scrim y Escape.
 
 #### ConfirmAction y ConfirmDialog
 
-Anatomía del pie de un cajón (Foco 2.7a). El pie va en la prop `footer` de `ActionDrawer`; si tiene acción principal, se compone con `ActionDrawerFooter`: «Cancelar» (ghost) a la izquierda, la acción principal a la derecha y, junto a ella, el motivo del botón deshabilitado. El submit del formulario se asocia al botón con `form=`.
+Anatomía del pie de un cajón (Foco 2.7a). El pie va en la prop `footer` de `ActionDrawer`; si tiene acción principal, se compone con `ActionDrawerFooter`: «Cancelar» (ghost) a la izquierda y la acción principal a la derecha, en el mismo renglón; el motivo del botón deshabilitado va en su propio renglón arriba, a todo el ancho y alineado a la derecha (Foco 2.8). El submit del formulario se asocia al botón con `form=`.
 
 - **Propósito:** pedir confirmación in-app antes de ejecutar una acción; `useConfirmAction` administra una solicitud por página y `ConfirmDialog` la presenta.
 - **Props:** `ConfirmAction` recibe `open`, `title`, `confirmLabel`, `onConfirm` y `onCancel`; `description`, `tone` (`default` o `danger`) y `cancelLabel` son opcionales. `ConfirmDialog` recibe el estado `confirm` y un `cancelLabel` opcional.
@@ -1101,6 +1102,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Vigente en main (se conserva):** el recordatorio de acuses de presentación pendientes (#87) y su presentación ajustada (#90); «Liquidaciones en curso» deja afuera las liquidaciones `FINALIZED` y `SUPERSEDED` (#90), porque lo finalizado sin presentar ya figura en el recordatorio de acuses.
 
+**Foco 2.8:** las acciones de fila de las tres tablas (Liquidaciones, Otros circuitos y acuses) usan la pieza de enlace `dense-link`, igual que «Ver todas» y «Abrir obligaciones»; el texto «Abrir» y el nombre accesible no cambian. Los contadores de Inicio y de la banda del Legajo concuerdan con el número (singular con 1).
+
 **Composición:**
 1. Encabezado C01 con el alcance del estudio y «Actualizar» como acción secundaria.
 2. Indicadores C03 con su alcance.
@@ -1145,7 +1148,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Aceptación:** pasar de Saldos a Fuentes conserva «Finalizado» como estado; la advertencia de revisión por la misma persona que preparó queda a la vista; el identificador y la evidencia siguen accesibles en el detalle; al cerrar el panel, el foco vuelve al origen.
 
-**Estado: migrada** (Foco 2). Lo vigente tras la migración: encabezado con «Nuevo legajo» como acción secundaria; cada revisión se lee en una tarjeta con sus etapas; las etapas con consultas muestran el error con «Reintentar»; una sola acción primaria por tarjeta, la de su estado, que va antes de la barra de etapas para verse sin desplazar a 1280×720; «Finalizar», «Crear rectificativa» y «Eximir» piden confirmación, y el diálogo de «Eximir» nombra el control y cita el motivo escrito; el contador de controles bloqueantes es información de la tarjeta y no una región de alerta; la carga de una etapa se anuncia una sola vez; el motivo de «Resolver» y «Eximir» va junto a los botones, que no cambian de lugar al escribir; una revisión reemplazada se lee como resumen de solo lectura. Desvíos declarados: la tarjeta del legajo conserva su borde de contenedor (las etapas no llevan caja propia), y las reglas de composición propias del Legajo (`workpaper-*`) siguen vigentes porque el marcado las usa; retirarlas exige rehacer ese marcado con piezas del sistema y queda como trabajo posterior.
+**Estado: migrada** (Foco 2). Lo vigente tras la migración: encabezado con «Nuevo legajo» como acción secundaria; cada revisión se lee en una tarjeta con sus etapas; las etapas con consultas muestran el error con «Reintentar»; una sola acción primaria por tarjeta, la de su estado, que va en la línea «ETAPA N DE 6», a la derecha y antes de la barra de etapas, para verse sin desplazar a 1280×720 en cualquier etapa (Foco 2.8); el encabezado de etapa es opaco (`--ds-color-surface`) y su período se muestra como mes; «Finalizar», «Crear rectificativa» y «Eximir» piden confirmación, y el diálogo de «Eximir» nombra el control y cita el motivo escrito; el contador de controles bloqueantes es información de la tarjeta y no una región de alerta; la carga de una etapa se anuncia una sola vez; el motivo de «Resolver» y «Eximir» va junto a los botones, que no cambian de lugar al escribir; una revisión reemplazada se lee como resumen de solo lectura. Desvíos declarados: la tarjeta del legajo conserva su borde de contenedor (las etapas no llevan caja propia), y las reglas de composición propias del Legajo (`workpaper-*`) siguen vigentes porque el marcado las usa; retirarlas exige rehacer ese marcado con piezas del sistema y queda como trabajo posterior.
 
 ### R03 — Reglas fiscales
 

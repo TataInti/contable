@@ -475,7 +475,7 @@ function NuevoCalendarioPanel({
         />
       }
     >
-      <form id="nuevo-calendario-form" className="study-form" noValidate onSubmit={onSubmit}>
+      <form id="nuevo-calendario-form" className="study-form study-form--alinear-arriba" noValidate onSubmit={onSubmit}>
         {serverNotice ? <Notice tone="error">{serverNotice}</Notice> : null}
         {authorities.isError ? (
           <AsyncState

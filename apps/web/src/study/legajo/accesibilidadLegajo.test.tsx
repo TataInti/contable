@@ -107,7 +107,7 @@ describe("Legajo · accesibilidad mínima (Foco 2.3a)", () => {
   it("la tarjeta muestra como máximo una acción primaria", async () => {
     const { container } = renderLegajos([legajoDemo("CALCULATED")]);
     await screen.findByRole("heading", { level: 2, name: /Revisión 1/ });
-    expect(container.querySelectorAll(".workpaper-card__actions .ds-button--primary")).toHaveLength(
+    expect(container.querySelectorAll(".workpaper-card .ds-button--primary")).toHaveLength(
       1,
     );
   });

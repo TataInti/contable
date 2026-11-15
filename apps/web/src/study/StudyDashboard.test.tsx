@@ -235,24 +235,27 @@ describe("Inicio: composición R01", () => {
 
   it("documentos y pedidos conservan su regla: con cliente, Bandeja y Trabajo; sin cliente, Clientes", async () => {
     renderDashboard(["client.read", "tax.settlements.read"]);
-    const documentos = await screen.findByRole("link", { name: /Documentos en procesamiento/ });
+    const documentos = await screen.findByRole("link", { name: /en procesamiento/ });
     expect(documentos.getAttribute("href")).toBe("/bandeja");
-    expect(screen.getByRole("link", { name: /Pedidos documentales abiertos/ }).getAttribute("href")).toBe("/trabajo");
+    expect(screen.getByRole("link", { name: /documental/ }).getAttribute("href")).toBe("/trabajo");
     cleanup();
     renderDashboard(["client.read", "tax.settlements.read"], null);
-    const documentosSinCliente = await screen.findByRole("link", { name: /Documentos en procesamiento/ });
+    const documentosSinCliente = await screen.findByRole("link", { name: /en procesamiento/ });
     expect(documentosSinCliente.getAttribute("href")).toBe("/clientes");
-    expect(screen.getByRole("link", { name: /Pedidos documentales abiertos/ }).getAttribute("href")).toBe("/clientes");
+    expect(screen.getByRole("link", { name: /documental/ }).getAttribute("href")).toBe("/clientes");
   });
-  it("las acciones de fila de Inicio usan un solo tratamiento (ghost) con nombre completo", async () => {
+  it("las acciones de fila de Inicio usan el tratamiento de enlace (dense-link) con nombre completo", async () => {
     renderDashboard(["client.read", "tax.settlements.read"]);
     await worklistTable();
     const liquidaciones = screen.getAllByRole("button", { name: /^Abrir liquidación de IVA, versión / });
     expect(liquidaciones.length).toBeGreaterThan(0);
-    for (const accion of liquidaciones) expect(accion.className).toContain("ds-button--ghost");
-    for (const circuito of ["Documentos en procesamiento", "Pedidos documentales abiertos"]) {
-      const accion = screen.getByRole("button", { name: `Abrir ${circuito}` });
-      expect(accion.className).toContain("ds-button--ghost");
+    for (const accion of liquidaciones) expect(accion.className).toContain("dense-link");
+    for (const circuito of [
+      /^Abrir Documento(s)? en procesamiento$/,
+      /^Abrir Pedido(s)? documental(es)? abierto(s)?$/,
+    ]) {
+      const accion = screen.getByRole("button", { name: circuito });
+      expect(accion.className).toContain("dense-link");
     }
   });
 

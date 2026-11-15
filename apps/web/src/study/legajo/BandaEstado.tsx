@@ -11,8 +11,12 @@ export function BandaEstado({ legajos, componentes }: BandaEstadoProps) {
     <StatStrip
       label="Estado del legajo"
       items={[
-        { key: "workpapers", label: "Legajos", value: legajos },
-        { key: "components", label: "Componentes", value: componentes },
+        { key: "workpapers", label: legajos === 1 ? "Legajo" : "Legajos", value: legajos },
+        {
+          key: "components",
+          label: componentes === 1 ? "Componente" : "Componentes",
+          value: componentes,
+        },
       ]}
     />
   );

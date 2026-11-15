@@ -65,7 +65,7 @@ export function PanelModificarAlicuotas({
       >
         <form
           id="rule-clone-form"
-          className="study-form study-form--compact fiscal-action-form"
+          className="study-form study-form--compact study-form--alinear-arriba fiscal-action-form"
           onSubmit={(event) => {
             event.preventDefault();
             const dateError = validateRuleVersionDate(validFrom);

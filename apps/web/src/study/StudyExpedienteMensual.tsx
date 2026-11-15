@@ -716,150 +716,158 @@ export function StudyExpedienteMensual() {
               ((wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review")) ||
                 (wp.status === "REVIEWED" && capabilities.has("tax.settlements.finalize"))),
             );
-          const acciones = (
+          const accionPrincipal = (
             <>
-                  {["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE"].includes(wp.status) ? (
-                    <>
-                      <Button
-                        variant="primary"
-                        disabled={calculateDisabled}
-                        title={calculateDisabledReason ?? "Calcular el legajo"}
-                        onClick={() => void calculateMutation.mutate(wp.id)}
-                      >
-                        Calcular
-                      </Button>
-                      <WorkpaperActionError
-                        error={calculateMutation.variables === wp.id ? calculateMutation.error : null}
-                      />
-                      {calculateDisabledReason ? (
-                        <small className="muted-copy" role="status">
-                          {calculateDisabledReason}
-                        </small>
-                      ) : null}
-                    </>
-                  ) : null}
-                  {wp.status === "CHANGES_REQUESTED" ? (
-                    <>
-                      <Button
-                        variant="primary"
-                        disabled={
-                          calculateMutation.isPending ||
-                          !capabilities.has("tax.settlements.calculate")
-                        }
-                        onClick={() => calculateMutation.mutate(wp.id)}
-                      >
-                        Recalcular
-                      </Button>
-                      {!capabilities.has("tax.settlements.calculate") ? (
-                        <small className="muted-copy" role="status">Tu perfil no tiene permiso para recalcular este legajo.</small>
-                      ) : null}
-                      <WorkpaperActionError
-                        error={calculateMutation.variables === wp.id ? calculateMutation.error : null}
-                      />
-                    </>
-                  ) : null}
-                  {wp.status === "CALCULATED" ? (
-                    <>
-                      <Button
-                        variant="primary"
-                        disabled={
-                          submitMutation.isPending ||
-                          !capabilities.has("tax.settlements.submit_review")
-                        }
-                        onClick={() => void submitMutation.mutate(wp.id)}
-                      >
-                        Enviar a revisión
-                      </Button>
-                      {!capabilities.has("tax.settlements.submit_review") ? (
-                        <small className="muted-copy" role="status">Tu perfil no tiene permiso para enviar este legajo a revisión.</small>
-                      ) : null}
-                      <WorkpaperActionError
-                        error={submitMutation.variables === wp.id ? submitMutation.error : null}
-                      />
-                    </>
-                  ) : null}
-                  {wp.status === "IN_REVIEW" ? (
-                    <span className="study-table__actions">
-                      {capabilities.has("tax.settlements.review") ? (
-                        <>
-                          <Button
-                            variant="primary"
-                            disabled={reviewMutation.isPending || selfReviewBlocked}
-                            onClick={() => reviewMutation.mutate({ id: wp.id, approved: true })}
-                          >
-                            Aprobar revisión
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            disabled={reviewMutation.isPending || selfReviewBlocked}
-                            onClick={() => reviewMutation.mutate({ id: wp.id, approved: false })}
-                          >
-                            Solicitar cambios
-                          </Button>
-                        </>
-                      ) : null}
-                    </span>
-                  ) : null}
-                  {wp.status === "IN_REVIEW" ? (
-                    <WorkpaperActionError
-                      error={reviewMutation.variables?.id === wp.id ? reviewMutation.error : null}
-                    />
-                  ) : null}
-                  {selfReviewBlocked && ["IN_REVIEW", "REVIEWED"].includes(wp.status) ? (
-                    <small className="muted-copy">
-                      Para revisar o finalizar este legajo, el Titular puede habilitar la
-                      autorrevisión en Configuración del estudio.
+              {["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE"].includes(wp.status) ? (
+                <>
+                  <Button
+                    variant="primary"
+                    disabled={calculateDisabled}
+                    title={calculateDisabledReason ?? "Calcular el legajo"}
+                    onClick={() => void calculateMutation.mutate(wp.id)}
+                  >
+                    Calcular
+                  </Button>
+                  <WorkpaperActionError
+                    error={calculateMutation.variables === wp.id ? calculateMutation.error : null}
+                  />
+                  {calculateDisabledReason ? (
+                    <small className="muted-copy" role="status">
+                      {calculateDisabledReason}
                     </small>
                   ) : null}
-                  {wp.status === "REVIEWED" ? (
-                    <Button
-                      variant="primary"
-                      disabled={
-                        finalizeMutation.isPending ||
-                        !capabilities.has("tax.settlements.finalize") ||
-                        selfReviewBlocked
-                      }
-                      onClick={() =>
-                        confirmar({
-                          title: "Finalizar el legajo",
-                          description: "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",
-                          confirmLabel: "Sí, finalizar",
-                          onConfirm: () => finalizeMutation.mutate(wp.id),
-                        })
-                      }
-                    >
-                      Finalizar
-                    </Button>
+                </>
+              ) : null}
+              {wp.status === "CHANGES_REQUESTED" ? (
+                <>
+                  <Button
+                    variant="primary"
+                    disabled={
+                      calculateMutation.isPending || !capabilities.has("tax.settlements.calculate")
+                    }
+                    onClick={() => calculateMutation.mutate(wp.id)}
+                  >
+                    Recalcular
+                  </Button>
+                  {!capabilities.has("tax.settlements.calculate") ? (
+                    <small className="muted-copy" role="status">
+                      Tu perfil no tiene permiso para recalcular este legajo.
+                    </small>
                   ) : null}
-                  {wp.status === "REVIEWED" && !capabilities.has("tax.settlements.finalize") ? (
-                    <small className="muted-copy" role="status">Tu perfil no tiene permiso para finalizar este legajo.</small>
+                  <WorkpaperActionError
+                    error={calculateMutation.variables === wp.id ? calculateMutation.error : null}
+                  />
+                </>
+              ) : null}
+              {wp.status === "CALCULATED" ? (
+                <>
+                  <Button
+                    variant="primary"
+                    disabled={
+                      submitMutation.isPending || !capabilities.has("tax.settlements.submit_review")
+                    }
+                    onClick={() => void submitMutation.mutate(wp.id)}
+                  >
+                    Enviar a revisión
+                  </Button>
+                  {!capabilities.has("tax.settlements.submit_review") ? (
+                    <small className="muted-copy" role="status">
+                      Tu perfil no tiene permiso para enviar este legajo a revisión.
+                    </small>
                   ) : null}
-                  {wp.status === "REVIEWED" ? (
-                    <WorkpaperActionError
-                      error={finalizeMutation.variables === wp.id ? finalizeMutation.error : null}
-                    />
-                  ) : null}
-                  {wp.status === "FINALIZED" && capabilities.has("tax.settlements.rectify") ? (
-                    <Button
-                      variant="secondary"
-                      disabled={rectifyMutation.isPending}
-                      onClick={() =>
-                        confirmar({
-                          title: "Crear rectificativa",
-                          description: "Abre una revisión nueva del período. La revisión actual queda finalizada y sin cambios.",
-                          confirmLabel: "Sí, crear rectificativa",
-                          onConfirm: () => rectifyMutation.mutate(wp.id),
-                        })
-                      }
-                    >
-                      Crear rectificativa
-                    </Button>
-                  ) : null}
-                  {wp.status === "FINALIZED" ? (
-                    <WorkpaperActionError
-                      error={rectifyMutation.variables === wp.id ? rectifyMutation.error : null}
-                    />
-                  ) : null}
+                  <WorkpaperActionError
+                    error={submitMutation.variables === wp.id ? submitMutation.error : null}
+                  />
+                </>
+              ) : null}
+              {wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review") ? (
+                <Button
+                  variant="primary"
+                  disabled={reviewMutation.isPending || selfReviewBlocked}
+                  onClick={() => reviewMutation.mutate({ id: wp.id, approved: true })}
+                >
+                  Aprobar revisión
+                </Button>
+              ) : null}
+              {wp.status === "REVIEWED" ? (
+                <Button
+                  variant="primary"
+                  disabled={
+                    finalizeMutation.isPending ||
+                    !capabilities.has("tax.settlements.finalize") ||
+                    selfReviewBlocked
+                  }
+                  onClick={() =>
+                    confirmar({
+                      title: "Finalizar el legajo",
+                      description:
+                        "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",
+                      confirmLabel: "Sí, finalizar",
+                      onConfirm: () => finalizeMutation.mutate(wp.id),
+                    })
+                  }
+                >
+                  Finalizar
+                </Button>
+              ) : null}
+              {wp.status === "REVIEWED" && !capabilities.has("tax.settlements.finalize") ? (
+                <small className="muted-copy" role="status">
+                  Tu perfil no tiene permiso para finalizar este legajo.
+                </small>
+              ) : null}
+              {wp.status === "REVIEWED" ? (
+                <WorkpaperActionError
+                  error={finalizeMutation.variables === wp.id ? finalizeMutation.error : null}
+                />
+              ) : null}
+              {selfReviewBlocked && ["IN_REVIEW", "REVIEWED"].includes(wp.status) ? (
+                <small className="muted-copy">
+                  Para revisar o finalizar este legajo, el Titular puede habilitar la autorrevisión
+                  en Configuración del estudio.
+                </small>
+              ) : null}
+            </>
+          );
+          const acciones = (
+            <>
+              {wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review") ? (
+                <span className="study-table__actions">
+                  <Button
+                    variant="secondary"
+                    disabled={reviewMutation.isPending || selfReviewBlocked}
+                    onClick={() => reviewMutation.mutate({ id: wp.id, approved: false })}
+                  >
+                    Solicitar cambios
+                  </Button>
+                </span>
+              ) : null}
+              {wp.status === "IN_REVIEW" ? (
+                <WorkpaperActionError
+                  error={reviewMutation.variables?.id === wp.id ? reviewMutation.error : null}
+                />
+              ) : null}
+              {wp.status === "FINALIZED" && capabilities.has("tax.settlements.rectify") ? (
+                <Button
+                  variant="secondary"
+                  disabled={rectifyMutation.isPending}
+                  onClick={() =>
+                    confirmar({
+                      title: "Crear rectificativa",
+                      description:
+                        "Abre una revisión nueva del período. La revisión actual queda finalizada y sin cambios.",
+                      confirmLabel: "Sí, crear rectificativa",
+                      onConfirm: () => rectifyMutation.mutate(wp.id),
+                    })
+                  }
+                >
+                  Crear rectificativa
+                </Button>
+              ) : null}
+              {wp.status === "FINALIZED" ? (
+                <WorkpaperActionError
+                  error={rectifyMutation.variables === wp.id ? rectifyMutation.error : null}
+                />
+              ) : null}
             </>
           );
           return (
@@ -868,6 +876,7 @@ export function StudyExpedienteMensual() {
               wp={wp}
               etapaActiva={safeActiveStep}
               onCambiarEtapa={goToStep}
+              accionPrincipal={accionPrincipal}
               acciones={acciones}
             >
               {renderEtapa(wp, safeActiveStep)}

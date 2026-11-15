@@ -75,6 +75,24 @@ export function formatearRango(
   return `${formatearFecha(desde)} al ${formatearFecha(hasta)}`;
 }
 
+/**
+ * Período de un rango de fechas. Si cubre exactamente un mes calendario, muestra el mes
+ * («septiembre de 2026»); en cualquier otro caso, el rango de `formatearRango`.
+ */
+export function formatearPeriodo(
+  desde: string | null | undefined,
+  hasta: string | null | undefined,
+  vacio = "—",
+): string {
+  const inicio = DIA_ISO.exec(desde ?? "");
+  const fin = DIA_ISO.exec(hasta ?? "");
+  if (inicio && fin && inicio[1] === fin[1] && inicio[2] === fin[2]) {
+    const ultimoDia = new Date(Date.UTC(Number(inicio[1]), Number(inicio[2]), 0)).getUTCDate();
+    if (inicio[3] === "01" && Number(fin[3]) === ultimoDia) return formatearMes(desde);
+  }
+  return formatearRango(desde, hasta, vacio);
+}
+
 /** Instante ISO con fecha y hora («05/07/2026 14:30»), en hora de Argentina. */
 export function formatearFechaHora(valor: string | null | undefined, vacio = "—"): string {
   if (!valor) return vacio;
