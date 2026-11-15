@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Button, EmptyState, Field, getStatusBadgeMeta, MoneyField, Table, useNotify } from "@contable/design-system";
+import { Button, EmptyState, getStatusBadgeMeta, Table } from "@contable/design-system";
 import { api, type Client } from "../lib/api";
-import { RECEIPT_ACCEPT, uploadFilingReceipt, waitForReceiptReady } from "./filingReceipt";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
-import { ActionDrawer } from "../ui/ActionDrawer";
 import { StatusBadge } from "../ui/StatusBadge";
 import { WorkpaperSourceReviewAction } from "./WorkpaperSourceReviewAction";
 import { Icon } from "../ui/Icon";
@@ -53,6 +51,8 @@ import { CabeceraLegajo } from "./legajo/paneles/CabeceraLegajo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
 import { PanelLibrosIva } from "./legajo/paneles/PanelLibrosIva";
 import { PanelSaldoInicial } from "./legajo/paneles/PanelSaldoInicial";
+import { PanelPago } from "./legajo/paneles/PanelPago";
+import { PanelPresentacion } from "./legajo/paneles/PanelPresentacion";
 import "./study.css";
 
 
@@ -91,19 +91,6 @@ export function StudyExpedienteMensual() {
   const [controlResolutions, setControlResolutions] = useState<Record<string, string>>({});
   const [controlEvidence, setControlEvidence] = useState<Record<string, string>>({});
   const [positionAction, setPositionAction] = useState<PositionAction>(null);
-  const [paymentForm, setPaymentForm] = useState({
-    amount: "",
-    paidAt: new Date().toISOString().slice(0, 10),
-    method: "TRANSFERENCIA",
-    reference: "",
-  });
-  const [filingForm, setFilingForm] = useState({
-    amountFiled: "",
-    filedAt: new Date().toISOString().slice(0, 10),
-    externalId: "",
-    evidenceDocumentId: "",
-  });
-  const [filingReceipt, setFilingReceipt] = useState<File | null>(null);
   const [sourceCode, setSourceCode] = useState("");
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [classificationDrafts, setClassificationDrafts] = useState<
@@ -111,7 +98,6 @@ export function StudyExpedienteMensual() {
   >({});
   const [allocationDrafts, setAllocationDrafts] = useState<Record<string, string>>({});
   const [showSifereModal, setShowSifereModal] = useState(false);
-  const notify = useNotify();
 
   const taxPeriodsQuery = useQuery({
     queryKey: ["tax-periods", firmId, clientId],
@@ -529,75 +515,6 @@ export function StudyExpedienteMensual() {
       });
     },
   });
-  const recordPaymentMutation = useMutation({
-    mutationFn: () =>
-      api.post(
-        `/firms/${firmId}/clients/${clientId}/tax-obligations/${positionAction?.position.obligationId}/payments`,
-        {
-          ...(positionAction?.position.settlement
-            ? { settlementId: positionAction.position.settlement.id }
-            : {}),
-          paidAt: paymentForm.paidAt,
-          amount: paymentForm.amount,
-          method: paymentForm.method,
-          ...(paymentForm.reference.trim() ? { reference: paymentForm.reference.trim() } : {}),
-        },
-      ),
-    onSuccess: () => {
-      setPositionAction(null);
-      setPaymentForm({
-        amount: "",
-        paidAt: new Date().toISOString().slice(0, 10),
-        method: "TRANSFERENCIA",
-        reference: "",
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["tax-position", firmId, clientId],
-      });
-    },
-  });
-  const recordFilingMutation = useMutation({
-    mutationFn: async () => {
-      const base = `/firms/${firmId}/clients/${clientId}`;
-      // La constancia es obligatoria: se elige una ya subida o se sube en este mismo paso.
-      let evidenceDocumentId = filingForm.evidenceDocumentId;
-      if (!evidenceDocumentId) {
-        if (!filingReceipt) throw new Error("Adjuntá la constancia de presentación.");
-        evidenceDocumentId = await uploadFilingReceipt(base, filingReceipt);
-        setFilingForm((form) => ({ ...form, evidenceDocumentId }));
-        setFilingReceipt(null);
-        await queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] });
-        await waitForReceiptReady(base, evidenceDocumentId);
-      }
-      return api.post(
-        `${base}/tax-obligations/${positionAction?.position.obligationId}/filings`,
-        {
-          settlementId: positionAction?.position.settlement?.id,
-          filedAt: filingForm.filedAt,
-          amountFiled: filingForm.amountFiled,
-          ...(filingForm.externalId.trim() ? { externalId: filingForm.externalId.trim() } : {}),
-          evidenceDocumentId,
-        },
-      );
-    },
-    onSuccess: () => {
-      notify.success("Presentación registrada con su constancia.");
-      setFilingReceipt(null);
-      setPositionAction(null);
-      setFilingForm({
-        amountFiled: "",
-        filedAt: new Date().toISOString().slice(0, 10),
-        externalId: "",
-        evidenceDocumentId: "",
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["tax-position", firmId, clientId],
-      });
-    },
-  });
-
-
-
   if (!firmId || !clientId) {
     return (
       <div className="study-page">
@@ -611,10 +528,6 @@ export function StudyExpedienteMensual() {
 
   const workpapers = listQuery.data ?? [];
   const safeActiveStep = Math.min(Math.max(activeStep, 0), WORKPAPER_STEPS.length - 1);
-  // Constancias ya subidas (por el estudio o por el cliente desde el portal) y listas para usar.
-  const filingReceiptDocuments = (documentsQuery.data ?? []).filter(
-    (document) => document.category === "ACUSE" && ["READY", "APPLIED"].includes(document.status),
-  );
   const eligibleEvidenceDocuments = (documentsQuery.data ?? []).filter((document) =>
     ["READY", "APPLIED", "REVIEWED"].includes(document.status),
   );
@@ -734,183 +647,24 @@ export function StudyExpedienteMensual() {
         documentos={documentsQuery.data}
       />
 
-      <ActionDrawer
-        isOpen={positionAction?.kind === "PAYMENT"}
-        onClose={() => setPositionAction(null)}
-        title={
-          positionAction?.kind === "PAYMENT"
-            ? `Registrar pago · ${positionAction.position.regime.taxType.name}`
-            : "Registrar pago"
-        }
-        description="El pago se registrará de forma manual y actualizará el saldo pendiente."
-      >
-        {positionAction?.kind === "PAYMENT" ? (
-          <form
-            className="study-form study-form--compact fiscal-action-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              recordPaymentMutation.mutate();
-            }}
-          >
-            <MoneyField
-              label="Importe"
-              id="tax-payment-amount"
-              value={paymentForm.amount}
-              onChange={(value) => setPaymentForm({ ...paymentForm, amount: value })}
-              required
-            />
-            <Field
-              label="Fecha de pago"
-              id="tax-payment-date"
-              type="date"
-              value={paymentForm.paidAt}
-              onChange={(event) => setPaymentForm({ ...paymentForm, paidAt: event.target.value })}
-              required
-            />
-            <div className="ds-field">
-              <label className="ds-field__label" htmlFor="tax-payment-method">
-                Medio
-              </label>
-              <select
-                id="tax-payment-method"
-                className="ds-field__input"
-                value={paymentForm.method}
-                onChange={(event) => setPaymentForm({ ...paymentForm, method: event.target.value })}
-              >
-                <option value="TRANSFERENCIA">Transferencia</option>
-                <option value="VEP">VEP</option>
-                <option value="EFECTIVO">Efectivo</option>
-                <option value="OTRO">Otro</option>
-              </select>
-            </div>
-            <Field
-              label="Referencia"
-              id="tax-payment-reference"
-              value={paymentForm.reference}
-              onChange={(event) =>
-                setPaymentForm({ ...paymentForm, reference: event.target.value })
-              }
-              placeholder="Opcional"
-            />
-            <div className="study-form__actions">
-              <Button
-                type="submit"
-                loading={recordPaymentMutation.isPending}
-                disabled={!paymentForm.amount}
-              >
-                Registrar pago
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setPositionAction(null)}>
-                Cancelar
-              </Button>
-            </div>
-            <WorkpaperActionError error={recordPaymentMutation.error} />
-          </form>
-        ) : null}
-      </ActionDrawer>
+      {positionAction?.kind === "PAYMENT" ? (
+        <PanelPago
+          posicion={positionAction.position}
+          onCerrar={() => setPositionAction(null)}
+          firmId={firmId}
+          clientId={clientId}
+        />
+      ) : null}
 
-      <ActionDrawer
-        isOpen={positionAction?.kind === "FILING"}
-        onClose={() => setPositionAction(null)}
-        title={
-          positionAction?.kind === "FILING"
-            ? `Registrar presentación · ${positionAction.position.regime.taxType.name}`
-            : "Registrar presentación"
-        }
-        description="Cargá los datos de la presentación y adjuntá la constancia que emite el organismo."
-        size="wide"
-      >
-        {positionAction?.kind === "FILING" ? (
-          <form
-            className="study-form study-form--compact fiscal-action-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              recordFilingMutation.mutate();
-            }}
-          >
-            <MoneyField
-              label="Importe presentado"
-              id="tax-filing-amount"
-              value={filingForm.amountFiled}
-              onChange={(value) => setFilingForm({ ...filingForm, amountFiled: value })}
-              required
-            />
-            <Field
-              label="Fecha de presentación"
-              id="tax-filing-date"
-              type="date"
-              value={filingForm.filedAt}
-              onChange={(event) => setFilingForm({ ...filingForm, filedAt: event.target.value })}
-              required
-            />
-            <Field
-              label="Identificador externo"
-              id="tax-filing-external-id"
-              value={filingForm.externalId}
-              onChange={(event) => setFilingForm({ ...filingForm, externalId: event.target.value })}
-              placeholder="Opcional"
-            />
-            <div className="ds-field fiscal-action-form__wide">
-              <label className="ds-field__label" htmlFor="tax-filing-evidence">
-                Constancia de presentación
-              </label>
-              <select
-                id="tax-filing-evidence"
-                className="ds-field__input"
-                value={filingForm.evidenceDocumentId}
-                onChange={(event) =>
-                  setFilingForm({ ...filingForm, evidenceDocumentId: event.target.value })
-                }
-              >
-                <option value="">Subir una constancia nueva</option>
-                {filingReceiptDocuments.map((document) => (
-                  <option key={document.id} value={document.id}>
-                    {document.fileVersions?.[0]?.originalName ?? "Constancia"} ·{" "}
-                    {getStatusBadgeMeta(document.status).label}
-                  </option>
-                ))}
-              </select>
-              <small className="ds-field__hint">
-                Es el comprobante que emite el organismo. Sin constancia la presentación no queda registrada.
-              </small>
-            </div>
-            {!filingForm.evidenceDocumentId ? (
-              <div className="ds-field fiscal-action-form__wide">
-                <label className="ds-field__label" htmlFor="tax-filing-receipt">
-                  Archivo de la constancia
-                </label>
-                <input
-                  id="tax-filing-receipt"
-                  className="ds-field__input"
-                  type="file"
-                  accept={RECEIPT_ACCEPT}
-                  required
-                  onChange={(event) => setFilingReceipt(event.target.files?.[0] ?? null)}
-                />
-                <small className="ds-field__hint">PDF o imagen.</small>
-              </div>
-            ) : null}
-            <div className="study-form__actions">
-              <Button
-                type="submit"
-                loading={recordFilingMutation.isPending}
-                loadingLabel="Subiendo y validando la constancia"
-                disabled={
-                  !positionAction.position.settlement ||
-                  !filingForm.amountFiled ||
-                  (!filingForm.evidenceDocumentId && !filingReceipt)
-                }
-              >
-                Registrar presentación
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setPositionAction(null)}>
-                Cancelar
-              </Button>
-            </div>
-            <WorkpaperActionError error={recordFilingMutation.error} />
-          </form>
-        ) : null}
-      </ActionDrawer>
+      {positionAction?.kind === "FILING" ? (
+        <PanelPresentacion
+          posicion={positionAction.position}
+          onCerrar={() => setPositionAction(null)}
+          firmId={firmId}
+          clientId={clientId}
+          documentos={documentsQuery.data}
+        />
+      ) : null}
 
       {listQuery.isLoading ? (
         <div className="study-page__state" role="status">
@@ -1993,12 +1747,6 @@ export function StudyExpedienteMensual() {
                                         variant="ghost"
                                         onClick={() => {
                                           setPositionAction({ kind: "FILING", position });
-                                          setFilingForm({
-                                            amountFiled: position.accrued,
-                                            filedAt: new Date().toISOString().slice(0, 10),
-                                            externalId: "",
-                                            evidenceDocumentId: "",
-                                          });
                                         }}
                                       >
                                         Registrar presentación
@@ -2040,12 +1788,6 @@ export function StudyExpedienteMensual() {
                                         variant="secondary"
                                         onClick={() => {
                                           setPositionAction({ kind: "PAYMENT", position });
-                                          setPaymentForm({
-                                            amount: position.totalPayable,
-                                            paidAt: new Date().toISOString().slice(0, 10),
-                                            method: "TRANSFERENCIA",
-                                            reference: "",
-                                          });
                                         }}
                                       >
                                         Registrar pago
