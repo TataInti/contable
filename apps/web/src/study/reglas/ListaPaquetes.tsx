@@ -1,5 +1,5 @@
 import { useMemo, type RefObject } from "react";
-import { EmptyState } from "@contable/design-system";
+import { AsyncState, Button, EmptyState } from "@contable/design-system";
 import { DenseFooter, DenseSearch, DenseTable, DenseToolbar, normalizeSearch, type DenseColumn } from "../../ui/Dense";
 import type { RulePack } from "./tipos";
 
@@ -9,6 +9,8 @@ interface ListaPaquetesProps {
   packs: RulePack[];
   isLoading: boolean;
   isEmpty: boolean;
+  isError: boolean;
+  onRetry: () => void;
   search: string;
   onSearchChange: (value: string) => void;
   searchRef: RefObject<HTMLInputElement | null>;
@@ -23,6 +25,8 @@ export function ListaPaquetes({
   packs,
   isLoading,
   isEmpty,
+  isError,
+  onRetry,
   search,
   onSearchChange,
   searchRef,
@@ -42,6 +46,11 @@ export function ListaPaquetes({
       ).includes(needle);
     });
   }, [packs, filter, search]);
+
+  const quitarFiltros = () => {
+    onSearchChange("");
+    onClearFilter();
+  };
 
   const versionsLabel = (pack: RulePack) => {
     const active = pack.versions.find((version) => version.status === "ACTIVE");
@@ -89,7 +98,7 @@ export function ListaPaquetes({
 
   return (
     <>
-      {!isEmpty ? (
+      {!isEmpty && !isError ? (
         <DenseToolbar>
           <DenseSearch
             inputRef={searchRef}
@@ -107,12 +116,15 @@ export function ListaPaquetes({
         </DenseToolbar>
       ) : null}
 
-      {isLoading ? (
-        <div className="dense-table-card">
-          <div className="query-state" role="status">
-            <span className="loading-copy">Cargando reglas…</span>
-          </div>
-        </div>
+      {isLoading || isError ? (
+        <AsyncState
+          loading={isLoading}
+          error={isError}
+          loadingLabel="Cargando reglas…"
+          errorTitle="No se pudo cargar la lista de paquetes"
+          errorDescription="Reintentá la consulta para volver a ver los paquetes de reglas."
+          onRetry={onRetry}
+        />
       ) : isEmpty ? (
         <EmptyState
           size="compact"
@@ -140,9 +152,13 @@ export function ListaPaquetes({
               />
             }
             empty={
-              <p className="muted-copy">
-                Ningún paquete coincide.
-              </p>
+              <EmptyState
+                size="compact"
+                kind="no-results"
+                title="Ningún paquete coincide"
+                description="Quitá los filtros o cambiá la búsqueda para ver otros paquetes."
+                action={<Button size="sm" variant="secondary" onClick={quitarFiltros}>Quitar filtros</Button>}
+              />
             }
           />
         </div>

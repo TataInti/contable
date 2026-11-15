@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, ConfirmDialog, EmptyState, useConfirmAction, useNotify } from "@contable/design-system";
+import { AsyncState, Button, ConfirmDialog, EmptyState, useConfirmAction, useNotify } from "@contable/design-system";
 import {
   type CatalogEconomicActivity,
   type TaxRuleKindOption,
@@ -479,6 +479,9 @@ export function StudyReglasFiscales() {
   const packsWith = (status: RuleStatus) =>
     allPacks.filter((pack) => pack.versions.some((version) => version.status === status)).length;
   const isEmptyPackList = packsQuery.isSuccess && allPacks.length === 0;
+  // Antes de la respuesta la cifra dice «pendiente»; con error, «no disponible». El cero es solo respuesta.
+  const cifraPacks = (valor: number) =>
+    packsQuery.isError ? "no disponible" : packsQuery.isSuccess ? valor : "pendiente";
   const newPackRef = useRef<() => void>(() => undefined);
   newPackRef.current = () => setShowPackForm(true);
   useDenseShortcuts({
@@ -504,26 +507,26 @@ export function StudyReglasFiscales() {
       <StatStrip
         label="Resumen de paquetes de reglas"
         items={[
-          { key: "packs", label: "Paquetes", value: allPacks.length },
+          { key: "packs", label: "Paquetes", value: cifraPacks(allPacks.length) },
           {
             key: "active",
             label: "Con versión vigente",
-            value: packsWith("ACTIVE"),
+            value: cifraPacks(packsWith("ACTIVE")),
             active: packFilter === "ACTIVE",
             onSelect: () => setPackFilter((current) => (current === "ACTIVE" ? "" : "ACTIVE")),
           },
           {
             key: "draft",
             label: "Con borrador",
-            value: packsWith("DRAFT"),
+            value: cifraPacks(packsWith("DRAFT")),
             active: packFilter === "DRAFT",
             onSelect: () => setPackFilter((current) => (current === "DRAFT" ? "" : "DRAFT")),
           },
           {
             key: "review",
             label: "En revisión",
-            value: packsWith("IN_REVIEW"),
-            tone: packsWith("IN_REVIEW") > 0 ? "warn" : undefined,
+            value: cifraPacks(packsWith("IN_REVIEW")),
+            tone: packsQuery.isSuccess && packsWith("IN_REVIEW") > 0 ? "warn" : undefined,
             active: packFilter === "IN_REVIEW",
             onSelect: () => setPackFilter((current) => (current === "IN_REVIEW" ? "" : "IN_REVIEW")),
           },
@@ -594,6 +597,8 @@ export function StudyReglasFiscales() {
         packs={allPacks}
         isLoading={packsQuery.isLoading}
         isEmpty={isEmptyPackList}
+        isError={packsQuery.isError}
+        onRetry={() => void packsQuery.refetch()}
         search={packSearch}
         onSearchChange={setPackSearch}
         searchRef={searchRef}
@@ -605,16 +610,19 @@ export function StudyReglasFiscales() {
       />
 
       <div className="fiscal-rules-detail dense-detail">
-          {detailQuery.isLoading ? (
-            <div className="query-state">Cargando detalle de reglas…</div>
-          ) : null}
-          {detailQuery.isError ? (
-            <EmptyState title="No se pudo cargar el paquete de reglas" />
-          ) : null}
-          {!selectedPackId && !packsQuery.isLoading && allPacks.length > 0 ? (
+          <AsyncState
+            loading={detailQuery.isLoading}
+            error={detailQuery.isError}
+            loadingLabel="Cargando detalle de reglas…"
+            errorTitle="No se pudo cargar el paquete de reglas"
+            errorDescription="Reintentá la consulta. La lista de paquetes sigue disponible."
+            onRetry={() => void detailQuery.refetch()}
+          />
+          {!selectedPackId && allPacks.length > 0 ? (
             <EmptyState
-              title="Todavía no hay paquetes de reglas"
-              description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
+              size="compact"
+              title="Ningún paquete seleccionado"
+              description="Elegí uno de la lista para ver sus versiones y reglas."
             />
           ) : null}
           {selectedPackId && rulesNextAction ? (

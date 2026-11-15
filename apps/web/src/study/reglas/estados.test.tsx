@@ -109,7 +109,7 @@ describe("Reglas fiscales — estados de la lista y de la banda (7d-1, 7d-4, 7d-
     vi.restoreAllMocks();
   });
 
-  it.fails("antes de responder, la banda dice «pendiente» y no cero (7d-4, C03)", async () => {
+  it("antes de responder, la banda dice «pendiente» y no cero (7d-4, C03)", async () => {
     mockDemoApi(makeDemoDetail(), { [LISTA]: sinRespuesta });
     renderDemoReglas();
     const banda = await screen.findByRole("group", { name: "Resumen de paquetes de reglas" });
@@ -117,16 +117,13 @@ describe("Reglas fiscales — estados de la lista y de la banda (7d-1, 7d-4, 7d-
     expect(within(banda).queryByText("0")).toBeNull();
   });
 
-  it.fails(
-    "con la lista en error, la banda dice «no disponible» y no cero (7d-4, C03)",
-    async () => {
-      mockDemoApi(makeDemoDetail(), { [LISTA]: () => Promise.reject(errorDemo()) });
-      renderDemoReglas();
-      const banda = await screen.findByRole("group", { name: "Resumen de paquetes de reglas" });
-      await waitFor(() => expect(within(banda).getAllByText("no disponible")).toHaveLength(4));
-      expect(within(banda).queryByText("0")).toBeNull();
-    },
-  );
+  it("con la lista en error, la banda dice «no disponible» y no cero (7d-4, C03)", async () => {
+    mockDemoApi(makeDemoDetail(), { [LISTA]: () => Promise.reject(errorDemo()) });
+    renderDemoReglas();
+    const banda = await screen.findByRole("group", { name: "Resumen de paquetes de reglas" });
+    await waitFor(() => expect(within(banda).getAllByText("no disponible")).toHaveLength(4));
+    expect(within(banda).queryByText("0")).toBeNull();
+  });
 
   it("mientras carga, la lista se anuncia con role=status y todavía no muestra la tabla (C07)", async () => {
     mockDemoApi(makeDemoDetail(), { [LISTA]: sinRespuesta });
@@ -136,54 +133,45 @@ describe("Reglas fiscales — estados de la lista y de la banda (7d-1, 7d-4, 7d-
     expect(screen.queryByRole("table", { name: "Paquetes de reglas disponibles" })).toBeNull();
   });
 
-  it.fails(
-    "si falla la lista, muestra «No se pudo cargar la lista de paquetes» con Reintentar y no «Ningún paquete coincide» (7d-1)",
-    async () => {
-      mockDemoApi(makeDemoDetail(), { [LISTA]: () => Promise.reject(errorDemo()) });
-      renderDemoReglas();
-      expect(await screen.findByText("No se pudo cargar la lista de paquetes")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy();
-      expect(screen.queryByText(/Ningún paquete coincide/)).toBeNull();
-      expect(document.querySelectorAll("tr[data-row-key]")).toHaveLength(0);
-    },
-  );
+  it("si falla la lista, muestra «No se pudo cargar la lista de paquetes» con Reintentar y no «Ningún paquete coincide» (7d-1)", async () => {
+    mockDemoApi(makeDemoDetail(), { [LISTA]: () => Promise.reject(errorDemo()) });
+    renderDemoReglas();
+    expect(await screen.findByText("No se pudo cargar la lista de paquetes")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy();
+    expect(screen.queryByText(/Ningún paquete coincide/)).toBeNull();
+    expect(document.querySelectorAll("tr[data-row-key]")).toHaveLength(0);
+  });
 
-  it.fails("el error de la lista se anuncia con role=alert (C08)", async () => {
+  it("el error de la lista se anuncia con role=alert (C08)", async () => {
     mockDemoApi(makeDemoDetail(), { [LISTA]: () => Promise.reject(errorDemo()) });
     renderDemoReglas();
     const alerta = await screen.findByRole("alert");
     expect(alerta.textContent).toContain("No se pudo cargar la lista de paquetes");
   });
 
-  it.fails(
-    "Reintentar de la lista vuelve a consultar /tax/rule-packs y muestra la tabla (7d-1)",
-    async () => {
-      const detail = makeDemoDetail();
-      mockDemoApi(detail, { [LISTA]: fallaUnaVez(() => demoPackList(detail)) });
-      renderDemoReglas();
-      fireEvent.click(await screen.findByRole("button", { name: "Reintentar" }));
-      expect(await tablaPaquetes()).toBeTruthy();
-      expect(llamadasA(LISTA)).toBe(2);
-    },
-  );
+  it("Reintentar de la lista vuelve a consultar /tax/rule-packs y muestra la tabla (7d-1)", async () => {
+    const detail = makeDemoDetail();
+    mockDemoApi(detail, { [LISTA]: fallaUnaVez(() => demoPackList(detail)) });
+    renderDemoReglas();
+    fireEvent.click(await screen.findByRole("button", { name: "Reintentar" }));
+    expect(await tablaPaquetes()).toBeTruthy();
+    expect(llamadasA(LISTA)).toBe(2);
+  });
 
-  it.fails(
-    "sin coincidencias, «Ningún paquete coincide» ofrece Quitar filtros y lo limpia (D-R3-9)",
-    async () => {
-      mockDemoApi(makeDemoDetail());
-      renderDemoReglas();
-      await tablaPaquetes();
-      fireEvent.change(screen.getByRole("searchbox", { name: /Buscar paquetes/ }), {
-        target: { value: "zzz-sin-coincidencias" },
-      });
-      expect(await screen.findByText("Ningún paquete coincide")).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Quitar filtros" }));
-      expect(await tablaPaquetes()).toBeTruthy();
-      expect(
-        (screen.getByRole("searchbox", { name: /Buscar paquetes/ }) as HTMLInputElement).value,
-      ).toBe("");
-    },
-  );
+  it("sin coincidencias, «Ningún paquete coincide» ofrece Quitar filtros y lo limpia (D-R3-9)", async () => {
+    mockDemoApi(makeDemoDetail());
+    renderDemoReglas();
+    await tablaPaquetes();
+    fireEvent.change(screen.getByRole("searchbox", { name: /Buscar paquetes/ }), {
+      target: { value: "zzz-sin-coincidencias" },
+    });
+    expect(await screen.findByText("Ningún paquete coincide")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Quitar filtros" }));
+    expect(await tablaPaquetes()).toBeTruthy();
+    expect(
+      (screen.getByRole("searchbox", { name: /Buscar paquetes/ }) as HTMLInputElement).value,
+    ).toBe("");
+  });
 
   it("con paquetes cargados, «Todavía no hay paquetes de reglas» no aparece (7d-10)", async () => {
     mockDemoApi(makeDemoDetail());
@@ -204,28 +192,25 @@ describe("Reglas fiscales — estados del detalle del paquete (7d-2)", () => {
     vi.restoreAllMocks();
   });
 
-  it.fails("mientras carga el detalle, se anuncia con role=status (C07)", async () => {
+  it("mientras carga el detalle, se anuncia con role=status (C07)", async () => {
     mockDemoApi(makeDemoDetail(), { [DETALLE]: sinRespuesta });
     renderDemoReglas();
     const texto = await screen.findByText("Cargando detalle de reglas…");
     expect(texto.closest('[role="status"]')).not.toBeNull();
   });
 
-  it.fails(
-    "si el detalle falla, muestra el error con descripción y Reintentar, que vuelve a consultar el paquete (7d-2)",
-    async () => {
-      const detail = makeDemoDetail();
-      mockDemoApi(detail, { [DETALLE]: fallaUnaVez(() => detail) });
-      renderDemoReglas();
-      expect(await screen.findByText("No se pudo cargar el paquete de reglas")).toBeTruthy();
-      expect(screen.getByText(/Reintentá la consulta/)).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
-      expect(
-        await screen.findByRole("heading", { name: "Demo · IVA Responsable Inscripto" }),
-      ).toBeTruthy();
-      expect(llamadasA(DETALLE)).toBe(2);
-    },
-  );
+  it("si el detalle falla, muestra el error con descripción y Reintentar, que vuelve a consultar el paquete (7d-2)", async () => {
+    const detail = makeDemoDetail();
+    mockDemoApi(detail, { [DETALLE]: fallaUnaVez(() => detail) });
+    renderDemoReglas();
+    expect(await screen.findByText("No se pudo cargar el paquete de reglas")).toBeTruthy();
+    expect(screen.getByText(/Reintentá la consulta/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(
+      await screen.findByRole("heading", { name: "Demo · IVA Responsable Inscripto" }),
+    ).toBeTruthy();
+    expect(llamadasA(DETALLE)).toBe(2);
+  });
 });
 
 describe("Reglas fiscales — catálogos con error (7d-3)", () => {
@@ -239,67 +224,55 @@ describe("Reglas fiscales — catálogos con error (7d-3)", () => {
     vi.restoreAllMocks();
   });
 
-  it.fails(
-    "si falla la consulta de tipos de regla, la columna dice que no se pudo cargar y ofrece Reintentar",
-    async () => {
-      mockDemoApi(makeDemoDetail(), { [TIPOS]: fallaUnaVez(() => demoKinds) });
-      renderDemoReglas();
-      expect(await screen.findByText("No se pudieron cargar los tipos de regla")).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
-      expect(await screen.findByLabelText("Tipo de regla de la fila 1")).toBeTruthy();
-      expect(llamadasA(TIPOS)).toBe(2);
-    },
-  );
+  it("si falla la consulta de tipos de regla, la columna dice que no se pudo cargar y ofrece Reintentar", async () => {
+    mockDemoApi(makeDemoDetail(), { [TIPOS]: fallaUnaVez(() => demoKinds) });
+    renderDemoReglas();
+    expect(await screen.findByText("No se pudieron cargar los tipos de regla")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(await screen.findByLabelText("Tipo de regla de la fila 1")).toBeTruthy();
+    expect(llamadasA(TIPOS)).toBe(2);
+  });
 
-  it.fails(
-    "si falla la consulta de actividades, la columna sigue visible y dice que no se pudo cargar",
-    async () => {
-      mockDemoApi(makeDemoDetail(), { [ACTIVIDADES]: fallaUnaVez(() => demoActivities) });
-      renderDemoReglas();
-      expect(await screen.findByText("No se pudieron cargar las actividades")).toBeTruthy();
-      expect(screen.getByRole("columnheader", { name: "Actividad" })).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
-      expect(await screen.findByLabelText("Actividad de la fila 1")).toBeTruthy();
-      expect(llamadasA(ACTIVIDADES)).toBe(2);
-    },
-  );
+  it("si falla la consulta de actividades, la columna sigue visible y dice que no se pudo cargar", async () => {
+    mockDemoApi(makeDemoDetail(), { [ACTIVIDADES]: fallaUnaVez(() => demoActivities) });
+    renderDemoReglas();
+    expect(await screen.findByText("No se pudieron cargar las actividades")).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Actividad" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(await screen.findByLabelText("Actividad de la fila 1")).toBeTruthy();
+    expect(llamadasA(ACTIVIDADES)).toBe(2);
+  });
 
-  it.fails(
-    "si falla la consulta de jurisdicciones, la columna dice que no se pudo cargar y ofrece Reintentar",
-    async () => {
-      const porJurisdiccion = [
-        {
-          id: "kind-activity",
-          key: "RATE",
-          label: "Alícuota por jurisdicción",
-          subject: "JURISDICTION",
-        },
-      ];
-      mockDemoApi(makeDemoDetail(), {
-        [TIPOS]: () => Promise.resolve(porJurisdiccion),
-        [JURISDICCIONES]: fallaUnaVez(() => demoJurisdictions),
-      });
-      renderDemoReglas();
-      expect(await screen.findByText("No se pudieron cargar las jurisdicciones")).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
-      expect(await screen.findByLabelText("Jurisdicción de la fila 1")).toBeTruthy();
-      expect(llamadasA(JURISDICCIONES)).toBe(2);
-    },
-  );
+  it("si falla la consulta de jurisdicciones, la columna dice que no se pudo cargar y ofrece Reintentar", async () => {
+    const porJurisdiccion = [
+      {
+        id: "kind-activity",
+        key: "RATE",
+        label: "Alícuota por jurisdicción",
+        subject: "JURISDICTION",
+      },
+    ];
+    mockDemoApi(makeDemoDetail(), {
+      [TIPOS]: () => Promise.resolve(porJurisdiccion),
+      [JURISDICCIONES]: fallaUnaVez(() => demoJurisdictions),
+    });
+    renderDemoReglas();
+    expect(await screen.findByText("No se pudieron cargar las jurisdicciones")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(await screen.findByLabelText("Jurisdicción de la fila 1")).toBeTruthy();
+    expect(llamadasA(JURISDICCIONES)).toBe(2);
+  });
 
-  it.fails(
-    "si falla la consulta de matrículas, el control profesional dice que no se pudo cargar y ofrece Reintentar",
-    async () => {
-      conCapacidades("tax.rules.read", "tax.rules.propose", "tax.rules.approve");
-      mockDemoApi(conVersionEnRevision(), { [MATRICULAS]: fallaUnaVez(() => demoCredentials) });
-      renderDemoReglas();
-      fireEvent.click(await pestana(/Control profesional/));
-      expect(await screen.findByText("No se pudieron cargar las matrículas")).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
-      expect(await screen.findByLabelText("Matrícula para aprobar")).toBeTruthy();
-      expect(llamadasA(MATRICULAS)).toBe(2);
-    },
-  );
+  it("si falla la consulta de matrículas, el control profesional dice que no se pudo cargar y ofrece Reintentar", async () => {
+    conCapacidades("tax.rules.read", "tax.rules.propose", "tax.rules.approve");
+    mockDemoApi(conVersionEnRevision(), { [MATRICULAS]: fallaUnaVez(() => demoCredentials) });
+    renderDemoReglas();
+    fireEvent.click(await pestana(/Control profesional/));
+    expect(await screen.findByText("No se pudieron cargar las matrículas")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(await screen.findByLabelText("Matrícula para aprobar")).toBeTruthy();
+    expect(llamadasA(MATRICULAS)).toBe(2);
+  });
 });
 
 describe("Reglas fiscales — errores de acción junto a su botón, sin error al pie (7d-5, 7d-7)", () => {

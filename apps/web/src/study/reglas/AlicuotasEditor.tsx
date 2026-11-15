@@ -4,6 +4,7 @@ import type { CatalogEconomicActivity, TaxRuleKindOption } from "@contable/contr
 import { MONOTRIBUTO_CATEGORY_CODES } from "@contable/contracts";
 import { Button, MoneyField, Table } from "@contable/design-system";
 import { Icon } from "../../ui/Icon";
+import { ErrorConsulta } from "./Errores";
 import type { RuleJurisdictionOption, RulePackDetail, RuleRow, RuleVersion } from "./tipos";
 
 interface AlicuotasEditorProps {
@@ -43,6 +44,10 @@ export function AlicuotasEditor({
   jurisdictionsQuery,
   saveMutation,
 }: AlicuotasEditorProps) {
+  // Las columnas de actividad y jurisdicción dependen de los tipos de regla que devuelve el catálogo.
+  const subjetosTipo = new Set((ruleKindsQuery.data ?? []).map((option) => option.subject));
+  const usaActividades = subjetosTipo.has("ACTIVITY") || subjetosTipo.has("ACTIVITY_OR_DEFAULT");
+  const usaJurisdicciones = subjetosTipo.has("JURISDICTION") || subjetosTipo.has("JURISDICTION_OR_DEFAULT");
   // Los campos de cada regla se nombran por su posición, no por un identificador interno.
   const rowNumber = (row: { id: string }) => draftRows.findIndex((item) => item.id === row.id) + 1;
 
@@ -120,6 +125,27 @@ export function AlicuotasEditor({
                     </Button>
                   ) : null}
                 </div>
+                {ruleKindsQuery.isError ? (
+                  <ErrorConsulta
+                    titulo="No se pudieron cargar los tipos de regla"
+                    descripcion="Sin ese catálogo no se puede elegir el tipo de cada regla."
+                    onRetry={() => void ruleKindsQuery.refetch()}
+                  />
+                ) : null}
+                {activitiesQuery.isError && usaActividades ? (
+                  <ErrorConsulta
+                    titulo="No se pudieron cargar las actividades"
+                    descripcion="Sin ese catálogo no se puede elegir la actividad de la regla."
+                    onRetry={() => void activitiesQuery.refetch()}
+                  />
+                ) : null}
+                {jurisdictionsQuery.isError && usaJurisdicciones ? (
+                  <ErrorConsulta
+                    titulo="No se pudieron cargar las jurisdicciones"
+                    descripcion="Sin ese catálogo no se puede elegir la jurisdicción de la regla."
+                    onRetry={() => void jurisdictionsQuery.refetch()}
+                  />
+                ) : null}
                 <Table<RuleRow>
                   rows={editable ? draftRows : selectedVersion.rateRules}
                   rowKey={(row) => row.id}
@@ -145,6 +171,7 @@ export function AlicuotasEditor({
                       key: "kind",
                       header: "Tipo de regla",
                       render: (row) => {
+                        if (ruleKindsQuery.isError) return <span className="muted-copy">No disponible</span>;
                         const kinds = ruleKindsQuery.data ?? [];
                         const currentKind = kinds.find((kind) => kind.id === row.kindId);
                         if (!editable) return currentKind?.label ?? "Tipo sin resolver";
@@ -179,6 +206,7 @@ export function AlicuotasEditor({
                       render: (row: RuleRow) => {
                         const kind = (ruleKindsQuery.data ?? []).find((option) => option.id === row.kindId);
                         if (kind?.subject !== "ACTIVITY_OR_DEFAULT" && kind?.subject !== "ACTIVITY") return "—";
+                        if (activitiesQuery.isError) return <span className="muted-copy">No disponible</span>;
                         if (!editable) {
                           const currentActivity = (activitiesQuery.data ?? []).find(
                             (activity) => activity.id === row.activityId,
@@ -252,6 +280,7 @@ export function AlicuotasEditor({
                       render: (row: RuleRow) => {
                         const kind = (ruleKindsQuery.data ?? []).find((option) => option.id === row.kindId);
                         if (kind?.subject !== "JURISDICTION" && kind?.subject !== "JURISDICTION_OR_DEFAULT") return "—";
+                        if (jurisdictionsQuery.isError) return <span className="muted-copy">No disponible</span>;
                         const options = jurisdictionsQuery.data ?? [];
                         const error = rowFieldErrors[`${row.id}.jurisdictionId`];
                         const current = options.find((option) => option.id === row.jurisdictionId);

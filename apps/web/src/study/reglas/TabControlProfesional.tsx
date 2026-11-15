@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button } from "@contable/design-system";
 import type { Credential, RuleVersion } from "./tipos";
+import { ErrorConsulta } from "./Errores";
 
 interface TabControlProfesionalProps {
   selectedVersion: RuleVersion;
@@ -47,6 +48,13 @@ export function TabControlProfesional({
                   {selectedVersion.status === "IN_REVIEW" &&
                   capabilities.has("tax.rules.approve") ? (
                     <>
+                      {credentialQuery.isError ? (
+                        <ErrorConsulta
+                          titulo="No se pudieron cargar las matrículas"
+                          descripcion="Sin ese catálogo no se puede elegir la matrícula para aprobar."
+                          onRetry={() => void credentialQuery.refetch()}
+                        />
+                      ) : (
                       <select
                         className="ds-field__input"
                         aria-label="Matrícula para aprobar"
@@ -60,6 +68,7 @@ export function TabControlProfesional({
                           </option>
                         ))}
                       </select>
+                      )}
                       <Button
                         disabled={!credentialId}
                         loading={approveMutation.isPending}
@@ -67,7 +76,7 @@ export function TabControlProfesional({
                       >
                         Aprobar
                       </Button>
-                      {!credentialId ? (
+                      {!credentialId && !credentialQuery.isError ? (
                         <p className="form-submit-hint" role="note">
                           Seleccioná la matrícula profesional para habilitar la aprobación.
                         </p>
