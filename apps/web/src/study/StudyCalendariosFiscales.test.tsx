@@ -507,7 +507,7 @@ describe("ficha del calendario", () => {
     fireEvent.click(await screen.findByRole("tab", { name: /^Versiones/ }));
     const table = await screen.findByRole("table", { name: "Versiones del calendario" });
     expect(within(table).getAllByRole("row").length).toBe(4);
-    expect(within(table).getByText(/2026-11-10 · Ana Titular/)).toBeTruthy();
+    expect(within(table).getByText(/10\/11\/2026 · Ana Titular/)).toBeTruthy();
   });
 });
 
@@ -521,7 +521,7 @@ describe("celdas", () => {
     expect(within(table).getByText("4 a 6")).toBeTruthy();
     expect(within(table).getByText("7 a 9")).toBeTruthy();
     expect(within(table).getByText("0 a 1")).toBeTruthy();
-    expect(within(table).getByText("Anticipo Ene-26 (2026-01-01 a 2026-01-31)")).toBeTruthy();
+    expect(within(table).getByText("Anticipo Ene-26 (01/01/2026 al 31/01/2026)")).toBeTruthy();
     expect(table.querySelectorAll("tr.dense-group-row").length).toBe(2);
   });
 
@@ -567,7 +567,7 @@ describe("celdas", () => {
     setCapabilities(CAP_MANAGE);
     renderAt(ficha(CAL_DRAFT));
     fireEvent.click(await screen.findByRole("tab", { name: /^Celdas/ }));
-    fireEvent.click(await screen.findByRole("button", { name: `Editar ${IB}, vence 2026-02-18` }));
+    fireEvent.click(await screen.findByRole("button", { name: `Editar ${IB}, vence 18/02/2026` }));
     const dialog = await screen.findByRole("dialog", { name: "Editar celda" });
     expect((within(dialog).getByLabelText("Concepto (como figura en el PDF)") as HTMLInputElement).value).toBe(IB);
     fireEvent.change(within(dialog).getByLabelText("Rótulo del período de referencia"), {
@@ -583,7 +583,7 @@ describe("celdas", () => {
     setCapabilities(CAP_MANAGE);
     renderAt(ficha(CAL_DRAFT));
     fireEvent.click(await screen.findByRole("tab", { name: /^Celdas/ }));
-    fireEvent.click(await screen.findByRole("button", { name: `Quitar ${IB}, vence 2026-02-18` }));
+    fireEvent.click(await screen.findByRole("button", { name: `Quitar ${IB}, vence 18/02/2026` }));
     const confirm = await screen.findByRole("alertdialog");
     expect(within(confirm).getByText(/El calendario sigue en borrador/)).toBeTruthy();
     fireEvent.click(within(confirm).getByRole("button", { name: "Quitar celda" }));

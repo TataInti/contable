@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@contable/design-system";
 import { api } from "../lib/api";
+import { formatearFecha, formatearMes } from "../lib/formatoFechas";
 import { AsyncState } from "../ui/AsyncState";
 import { DenseFooter, DenseSection, DenseTable, type DenseColumn } from "../ui/Dense";
 
@@ -25,8 +26,6 @@ export interface PendingReceipt {
   dueDate: string | null;
 }
 
-const MONTH = new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric", timeZone: "UTC" });
-const DAY = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
 
 function daysSince(value: string | null, now: number): number | null {
   if (!value) return null;
@@ -81,14 +80,14 @@ export function PendingFilingReceipts({
       key: "period",
       header: "Período",
       sortValue: (row) => row.periodStart,
-      render: (row) => MONTH.format(new Date(row.periodStart)),
+      render: (row) => formatearMes(row.periodStart),
     },
     {
       key: "due",
       header: "Vencimiento",
       sortValue: (row) => row.dueDate ?? "",
       render: (row) =>
-        row.dueDate ? <span className="tabular-copy">{DAY.format(new Date(row.dueDate))}</span> : "—",
+        row.dueDate ? <span className="tabular-copy">{formatearFecha(row.dueDate)}</span> : "—",
     },
     {
       key: "waiting",

@@ -193,7 +193,7 @@ describe("informe de validación y errores", () => {
 
   it("muestra el período con su rótulo y sus fechas", () => {
     expect(periodLabel(entry({ referenceLabel: "Anticipo Ene-26" }))).toBe(
-      "Anticipo Ene-26 (2026-01-01 a 2026-01-31)",
+      "Anticipo Ene-26 (01/01/2026 al 31/01/2026)",
     );
     expect(periodLabel(entry({ referenceLabel: null, referencePeriodStart: null, referencePeriodEnd: null }))).toBe("—");
   });
