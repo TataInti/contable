@@ -346,6 +346,7 @@ export function StudyDashboard() {
   const extractionRate = data?.documents
     ? `${Math.round(((data.extracted ?? 0) / data.documents) * 100)}%`
     : "—";
+  const participioExtraidos = data?.documents === 1 ? "extraído" : "extraídos";
 
   return (
     <DensePage density={density} flow>
@@ -456,7 +457,7 @@ export function StudyDashboard() {
                 key: "documents",
                 label: data?.documents === 1 ? "Documento" : "Documentos",
                 value: summaryValue(data?.documents),
-                detail: data ? `${extractionRate} extraídos` : undefined,
+                detail: data ? `${extractionRate} ${participioExtraidos}` : undefined,
               },
             ]}
           />

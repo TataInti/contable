@@ -101,7 +101,7 @@ export function PanelPresentacion({
     >
       <form
         id="legajo-presentacion"
-        className="study-form"
+        className="study-form study-form--presentacion"
         onSubmit={(event) => {
           event.preventDefault();
           recordFilingMutation.mutate();

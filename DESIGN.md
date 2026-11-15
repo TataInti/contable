@@ -990,6 +990,7 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 - `DensitySwitch` expone la opción elegida con `aria-pressed`; `useDensity` conserva la selección entre visitas.
 - `DenseTable` ordena al activar una cabecera con `sortValue`, alterna ascendente/descendente, oculta columnas `secondary` cuando `inspectorOpen` está activo y comunica selección con `aria-current`. Las filas seleccionables aceptan Enter/Espacio y flechas arriba/abajo.
 - `DenseWorkspace` activa el layout lateral cuando recibe `inspector`; `DensePage` conserva su variante de flujo mediante `flow`.
+- La lista de paquetes de Reglas fija su tope de flujo en `--dense-flow-max` = `--ds-table-head-height` + 7 × `--ds-space-12`, para que entren siete filas de 45 px. El resto de las listas de flujo conserva el tope de 340 px del paquete.
 - `Inspector` presenta de forma opcional banner, cierre y pie; `DenseLoading` distingue la espera del estado vacío.
 - `useDenseShortcuts` ignora escritura en campos editables y diálogos abiertos.
 

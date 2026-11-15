@@ -15,8 +15,8 @@ interface LegajoTarjetaProps {
   onCambiarEtapa: (indice: number) => void;
   /** Acción primaria de la tarjeta (la de su estado): va en la línea «ETAPA N DE 6», antes de la barra de etapas. */
   accionPrincipal?: ReactNode;
-  /** Acciones secundarias de estado; las arma la pantalla con sus mutaciones y errores. */
-  acciones: ReactNode;
+  /** Acciones secundarias de estado; la pantalla pasa null si no hay ninguna ni error que mostrar (Foco 2.9). */
+  acciones?: ReactNode;
   /** Cuerpo de la etapa activa (las seis etapas viven en la pantalla). */
   children: ReactNode;
 }
@@ -91,7 +91,7 @@ export function LegajoTarjeta({
       </div>
 
       {/* Las acciones secundarias van debajo del cuerpo de la etapa; la primaria, en el encabezado. */}
-      <div className="workpaper-card__actions">{acciones}</div>
+      {acciones ? <div className="workpaper-card__actions">{acciones}</div> : null}
 
       <div className="workpaper-step-footer" aria-label="Cambio de etapa">
         <Button

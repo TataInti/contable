@@ -165,7 +165,7 @@ export function ListaPaquetes({
           description="Creá un paquete para definir alícuotas, vencimientos y fuentes normativas."
         />
       ) : (
-        <div className="dense-packs" ref={listaRef}>
+        <div className="dense-packs dense-packs--tope-siete-filas" ref={listaRef}>
           <DenseTable<RulePack>
             label="Paquetes de reglas disponibles"
             columns={packColumns}

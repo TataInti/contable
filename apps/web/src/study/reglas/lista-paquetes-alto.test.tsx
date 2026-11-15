@@ -88,4 +88,11 @@ describe("Lista de paquetes con 7 paquetes (Foco 2.7a)", () => {
     renderLista(7, null);
     expect(await screen.findByText("6 de 7 paquetes")).toBeTruthy();
   });
+
+  it("la lista lleva el tope de siete filas (Foco 2.9)", () => {
+    const { container } = renderLista(8, null);
+    expect(
+      container.querySelector(".dense-packs")?.classList.contains("dense-packs--tope-siete-filas"),
+    ).toBe(true);
+  });
 });
