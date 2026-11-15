@@ -553,8 +553,6 @@ export function StudyClientes() {
             label: "Activos",
             value: query.data ? activeCount : "—",
             detail: query.data ? `${clients.length - activeCount} inactivos` : undefined,
-            active: statusFilter === "ACTIVE",
-            onSelect: () => setStatusFilter((current) => (current === "ACTIVE" ? "" : "ACTIVE")),
           },
           {
             key: "incomplete",
@@ -563,6 +561,7 @@ export function StudyClientes() {
             detail: "Faltan datos fiscales",
             tone: incompleteCount > 0 ? "warn" : undefined,
             active: onlyIncomplete,
+            pressed: onlyIncomplete,
             onSelect: () => setOnlyIncomplete((current) => !current),
           },
         ]}

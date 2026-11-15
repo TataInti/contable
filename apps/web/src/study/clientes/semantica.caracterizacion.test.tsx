@@ -69,16 +69,16 @@ describe("StudyClientes — semántica de la banda y del espacio de trabajo (K7)
     cleanup();
   });
 
-  it("las cifras que filtran la lista no exponen aria-pressed (vigente: defecto 7d-7)", async () => {
-    // vigente: defecto 7d-7 (cambia en este corte)
+  it("«Ficha incompleta» expone aria-pressed y alterna; «Activos» es de lectura y no es un botón", async () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
     const banda = screen.getByRole("group", { name: "Resumen de la cartera" });
 
-    const activos = within(banda).getByRole("button", { name: /Activos/ });
+    expect(within(banda).queryByRole("button", { name: /Activos/ })).toBeNull();
     const incompleta = within(banda).getByRole("button", { name: /Ficha incompleta/ });
-    expect(activos.hasAttribute("aria-pressed")).toBe(false);
-    expect(incompleta.hasAttribute("aria-pressed")).toBe(false);
+    expect(incompleta.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(incompleta);
+    expect(incompleta.getAttribute("aria-pressed")).toBe("true");
   });
 
   it("el espacio de trabajo es un tabpanel sin pestañas y sin nombre accesible (vigente: defecto 7d-7)", async () => {
