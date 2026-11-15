@@ -143,6 +143,11 @@ export interface OpcionesDemo {
   documentos?: unknown[];
   posiciones?: unknown[];
   fuentes?: unknown[];
+  clasificaciones?: unknown;
+  imputaciones?: unknown;
+  calculo?: unknown[];
+  actividades?: unknown[];
+  jurisdicciones?: unknown[];
 }
 
 /** Respuestas de lectura de la pantalla. Las rutas no previstas devuelven una lista vacía. */
@@ -161,14 +166,21 @@ export function rutasDemo(opciones: OpcionesDemo = {}) {
         opciones.fuentes ? { ...coberturaDemo, sources: opciones.fuentes } : coberturaDemo,
       );
     }
-    if (path.endsWith("/classifications")) return Promise.resolve(sinClasificaciones);
-    if (path.endsWith("/allocations")) return Promise.resolve(sinImputaciones);
-    if (path.endsWith("/calculation")) return Promise.resolve([]);
+    if (path.endsWith("/classifications")) {
+      return Promise.resolve(opciones.clasificaciones ?? sinClasificaciones);
+    }
+    if (path.endsWith("/allocations")) {
+      return Promise.resolve(opciones.imputaciones ?? sinImputaciones);
+    }
+    if (path.endsWith("/calculation")) return Promise.resolve(opciones.calculo ?? []);
+    if (path.endsWith("/activities")) return Promise.resolve(opciones.actividades ?? []);
     if (path.endsWith("/tax-credit-ledger")) return Promise.resolve(saldos);
     if (path.includes("/tax-position?")) return Promise.resolve(posiciones);
     if (path === "/tax/types") return Promise.resolve(tiposDemo);
     if (path === "/tax/regimes") return Promise.resolve(regimenesDemo);
-    if (path === "/tax/jurisdictions") return Promise.resolve(jurisdiccionesDemo);
+    if (path === "/tax/jurisdictions") {
+      return Promise.resolve(opciones.jurisdicciones ?? jurisdiccionesDemo);
+    }
     if (path.endsWith(`/clients/${CLIENTE_DEMO}`)) {
       return Promise.resolve({ id: CLIENTE_DEMO, cuit: CUIT_CLIENTE_DEMO });
     }

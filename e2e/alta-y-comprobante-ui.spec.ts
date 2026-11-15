@@ -499,7 +499,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
       await page.getByRole("tab", { name: new RegExp(stage) }).click();
       if (stage === "Fuentes") await page.locator(".workpaper-card").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
       if (stage === "Clasificación") {
-        await page.getByRole("button", { name: /Actualizar clasificación/ }).click();
+        await page.locator(".workpaper-card").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
         await page.waitForTimeout(2000);
         const controls = await page.locator(".workpaper-card").first().locator("select, input, button").evaluateAll((els) =>
           els.map((el) => `${el.tagName.toLowerCase()}:${el.getAttribute("aria-label") ?? (el.textContent ?? "").trim().slice(0, 30)}`).filter((x) => x.length > 8),
@@ -515,7 +515,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
         await pickOption(purchase.getByLabel("Rubro del proveedor"), "SUPER");
         await pickOption(purchase.getByLabel("Actividad", { exact: true }), taxes.iva.activity.code);
         await mutating(page, "/classifications", () => purchase.getByRole("button", { name: "Guardar" }).click());
-        await page.getByRole("button", { name: /Actualizar clasificación/ }).click();
+        await page.locator(".workpaper-card").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
         await page.waitForTimeout(1500);
         test.info().annotations.push({
           type: "legajo · Clasificación tras clasificar",
