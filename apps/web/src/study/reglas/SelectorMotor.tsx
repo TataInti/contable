@@ -10,6 +10,8 @@ interface SelectorMotorProps {
   enginesQuery: UseQueryResult<TaxEngineOption[], Error>;
   value: string;
   onChange: (engineId: string) => void;
+  /** Opción de origen de una copia: se marca «(actual)» y, si se elige otra, se dice la consecuencia. */
+  actualId?: string | null;
 }
 
 // Selector «Opción de cálculo» (P5): lo usan «Crear primera versión» y «Modificar alícuotas», con los mismos estados.
@@ -20,6 +22,7 @@ export function SelectorMotor({
   enginesQuery,
   value,
   onChange,
+  actualId = null,
 }: SelectorMotorProps) {
   const editarRegimen = (
     <a
@@ -74,6 +77,12 @@ export function SelectorMotor({
       </div>
     );
   }
+  const actual = actualId ? enginesQuery.data.find((engine) => engine.id === actualId) : undefined;
+  const elegida = enginesQuery.data.find((engine) => engine.id === value);
+  const consecuencia =
+    actual && elegida && elegida.id !== actual.id
+      ? `La nueva versión va a calcular con ${elegida.label} en lugar de ${actual.label}.`
+      : null;
   return (
     <div className="ds-field">
       <label className="ds-field__label" htmlFor={id}>
@@ -90,9 +99,15 @@ export function SelectorMotor({
         {enginesQuery.data.map((engine) => (
           <option key={engine.id} value={engine.id}>
             {engine.label}
+            {engine.id === actualId ? " (actual)" : ""}
           </option>
         ))}
       </select>
+      {consecuencia ? (
+        <p className="form-submit-hint" role="note">
+          {consecuencia}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -23,6 +23,7 @@ interface PanelModificarAlicuotasProps {
   regimeEnginesQuery: UseQueryResult<TaxEngineOption[], Error>;
   engineId: string;
   setEngineId: (engineId: string) => void;
+  motorOrigen: string | null;
   avisoMotor: string | null;
 }
 
@@ -40,6 +41,7 @@ export function PanelModificarAlicuotas({
   regimeEnginesQuery,
   engineId,
   setEngineId,
+  motorOrigen,
   avisoMotor,
 }: PanelModificarAlicuotasProps) {
   const footerClon = (
@@ -98,6 +100,7 @@ export function PanelModificarAlicuotas({
             regimeId={regimeId}
             familiaDefinida={familiaDefinida}
             enginesQuery={regimeEnginesQuery}
+            actualId={motorOrigen}
             value={engineId}
             onChange={setEngineId}
           />

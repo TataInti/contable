@@ -20,14 +20,13 @@ import type {
   RuleStatus,
   RuleVersion,
 } from "./reglas/tipos";
-import { motorDeOrigen, sameRuleRows, today } from "./reglas/utilidades";
+import { motorDeOrigen, sameRuleRows, shortDate, today } from "./reglas/utilidades";
 import { ListaPaquetes } from "./reglas/ListaPaquetes";
 import { PanelNuevoPaquete } from "./reglas/paneles/PanelNuevoPaquete";
 import { PanelVencimiento } from "./reglas/paneles/PanelVencimiento";
 import { PanelFuente } from "./reglas/paneles/PanelFuente";
 import { PanelPrimeraVersion } from "./reglas/paneles/PanelPrimeraVersion";
 import { PanelModificarAlicuotas } from "./reglas/paneles/PanelModificarAlicuotas";
-import { ConfirmarActivacion } from "./reglas/ConfirmarActivacion";
 import { TabVencimientos } from "./reglas/TabVencimientos";
 import { FRECUENCIA_POR_DEFECTO } from "./reglas/frecuencias";
 import { TabFuentes } from "./reglas/TabFuentes";
@@ -68,7 +67,6 @@ export function StudyReglasFiscales() {
   const confirm = useConfirmAction();
   const [activationError, setActivationError] = useState<Error | null>(null);
   const activationFeedbackRef = useRef<HTMLDivElement | null>(null);
-  const [activationTarget, setActivationTarget] = useState<RuleVersion | null>(null);
   const [showPackForm, setShowPackForm] = useState(false);
   const [showSourceForm, setShowSourceForm] = useState(false);
   const [showDueDateForm, setShowDueDateForm] = useState(false);
@@ -436,14 +434,13 @@ export function StudyReglasFiscales() {
     selectedVersion?.status === "DRAFT" &&
     (draftRowsVersionId !== selectedVersion.id || !sameRuleRows(draftRows, selectedVersion.rateRules)),
   );
-  const confirmActivation = () => {
-    if (!activationTarget) return;
-    const versionId = activationTarget.id;
-    setActivationTarget(null);
+  const confirmActivation = (versionId: string) => {
     setActivationError(null);
     activateMutation.reset();
     activateMutation.mutate(versionId);
   };
+  // Confirmación con el patrón de «Finalizar el legajo»: el título lleva la acción y el cuerpo
+  // dice qué versión queda vigente y cuál se retira.
   const requestActivation = (version: RuleVersion) => {
     if (activationBlockedByUnsavedChanges) {
       setActivationError(new Error("Guardá los cambios del borrador antes de activarlo."));
@@ -451,7 +448,15 @@ export function StudyReglasFiscales() {
     }
     activateMutation.reset();
     setActivationError(null);
-    setActivationTarget(version);
+    const retirada = activeVersion
+      ? `La versión vigente v${activeVersion.version} quedará retirada.`
+      : "No hay otra versión vigente que retirar.";
+    confirm.ask({
+      title: `Activar la versión v${version.version}`,
+      description: `${detailQuery.data?.name ?? "Paquete fiscal"}: queda vigente la versión v${version.version}, con vigencia ${shortDate(version.validFrom)} — ${shortDate(version.validTo)}. ${retirada}`,
+      confirmLabel: "Sí, activar versión",
+      onConfirm: () => confirmActivation(version.id),
+    });
   };
   // Guardar y editar el borrador viven en el encabezado del resumen (D-R3-1 y D-R3-2). Una fila
   // sin tipo se marca antes de guardar, como antes en el pie del editor.
@@ -609,6 +614,7 @@ export function StudyReglasFiscales() {
         regimeEnginesQuery={regimeEnginesQuery}
         engineId={cloneEngineId}
         setEngineId={setCloneEngineChoice}
+        motorOrigen={motorOrigen ?? null}
         avisoMotor={avisoMotorClon}
       />
 
@@ -756,14 +762,6 @@ export function StudyReglasFiscales() {
             </>
           ) : null}
       </div>
-      <ConfirmarActivacion
-        activationTarget={activationTarget}
-        setActivationTarget={setActivationTarget}
-        detailQuery={detailQuery}
-        activateMutation={activateMutation}
-        confirmActivation={confirmActivation}
-        activeVersion={activeVersion}
-      />
       <ConfirmDialog confirm={confirm} />
       {deletingTarget ? (
         <DeletionDrawer
