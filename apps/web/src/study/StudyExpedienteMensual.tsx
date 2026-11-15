@@ -6,8 +6,6 @@ import { api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { StatusBadge } from "../ui/StatusBadge";
-import { WorkpaperSourceReviewAction } from "./WorkpaperSourceReviewAction";
-import { Icon } from "../ui/Icon";
 import {
   DensePage,
   useDensity,
@@ -15,6 +13,7 @@ import {
 import type {
   AllocationCoverage,
   ClassificationCoverage,
+  CoberturaLegajo,
   CreditLot,
   EvidenceDocument,
   FiscalTaxPeriod,
@@ -27,7 +26,6 @@ import type {
   WorkpaperAllocation,
   WorkpaperCalculationComponent,
   WorkpaperClassification,
-  WorkpaperSource,
 } from "./legajo/tipos";
 import {
   fiscalTaxPeriodSelectionKey,
@@ -42,8 +40,8 @@ import {
   calculationDisabledMessage,
   calculationLabel,
 } from "./legajo/etiquetas";
-import { formatDate, formatDateTime, formatMoney } from "./legajo/formato";
-import { hashSourceFile, parseSourceFile } from "./legajo/archivoFuente";
+import { formatDate, formatMoney } from "./legajo/formato";
+import { importarLoteFuente } from "./legajo/loteFuente";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
 import { CabeceraLegajo } from "./legajo/paneles/CabeceraLegajo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
@@ -56,6 +54,8 @@ import { ListaLegajos } from "./legajo/ListaLegajos";
 import { SelectorPeriodo } from "./legajo/SelectorPeriodo";
 import { LegajoTarjeta } from "./legajo/Tarjeta/LegajoTarjeta";
 import { ResumenRevision } from "./legajo/Tarjeta/ResumenRevision";
+import { EtapaFuentes } from "./legajo/etapas/EtapaFuentes";
+import { EtapaSaldos } from "./legajo/etapas/EtapaSaldos";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import "./study.css";
 
@@ -68,6 +68,14 @@ import "./study.css";
  *   saldos → fuentes → clasificación → cálculo → controles → cierre.
  * Cada total permite drill-down hasta la evidencia fuente.
  */
+
+// Estados en los que el legajo admite cambios de fuentes (importar lotes o libros, revisar).
+const ESTADOS_EDITABLES_FUENTES = [
+  "DRAFT",
+  "COLLECTING_INPUTS",
+  "READY_TO_CALCULATE",
+  "CHANGES_REQUESTED",
+];
 
 export function StudyExpedienteMensual() {
   const [density] = useDensity();
@@ -101,7 +109,8 @@ export function StudyExpedienteMensual() {
     Record<string, { categoryCode: string; activityCode: string }>
   >({});
   const [allocationDrafts, setAllocationDrafts] = useState<Record<string, string>>({});
-  const [showSifereModal, setShowSifereModal] = useState(false);
+  // Panel de libros IVA: lado de la fila desde la que se abrió (null = cerrado).
+  const [libroIvaAbierto, setLibroIvaAbierto] = useState<"SALE" | "PURCHASE" | null>(null);
   const confirmacion = useConfirmAction();
   const { ask: pedirConfirmacion, request: solicitudConfirmacion } = confirmacion;
   const cerrarConfirmacion = useCallback(() => pedirConfirmacion(null), [pedirConfirmacion]);
@@ -160,21 +169,17 @@ export function StudyExpedienteMensual() {
   });
 
   const activeWorkpaperId = listQuery.data?.[0]?.id;
+  // Importar un libro IVA exige el permiso y un legajo editable; el motivo se muestra junto a la acción.
+  const legajoDelPeriodo = listQuery.data?.[0];
+  const motivoImportarLibro = !capabilities.has("tax.vouchers.prepare")
+    ? "Tu rol no puede importar libros IVA."
+    : !legajoDelPeriodo || !ESTADOS_EDITABLES_FUENTES.includes(legajoDelPeriodo.status)
+      ? "El legajo no admite cambios de fuentes en su estado actual."
+      : null;
   const coverageQuery = useQuery({
     queryKey: ["monthly-workpaper-coverage", firmId, clientId, activeWorkpaperId],
     queryFn: () =>
-      api.get<{
-        components: Array<{
-          obligationId: string;
-          regimeCode: string;
-          taxTypeCode: string;
-          required: boolean;
-          linked: boolean;
-          settlementStatus: string | null;
-        }>;
-        sources: WorkpaperSource[];
-        allowSelfReview: boolean;
-      }>(
+      api.get<CoberturaLegajo>(
         `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/coverage`,
       ),
     enabled: Boolean(firmId && clientId && activeWorkpaperId),
@@ -316,49 +321,14 @@ export function StudyExpedienteMensual() {
       if (!source || !sourceFile || !activeWorkpaperId || !clientQuery.data) {
         throw new Error("Seleccioná una fuente y un archivo antes de importar");
       }
-      if (!source.taxTypeId || !source.periodId) {
-        throw new Error("La fuente no tiene una obligación fiscal materializada");
-      }
-
-      const content = await sourceFile.text();
-      const rows = parseSourceFile(sourceFile.name, content);
-      if (rows.length > 20_000) throw new Error("El lote supera el máximo de 20.000 filas");
-      const fileHash = await hashSourceFile(content);
-      const batch = await api.post<{
-        id: string;
-        status: string;
-        errorRows: number;
-      }>(`/firms/${firmId}/clients/${clientId}/import-batches`, {
-        origin: source.origin,
-        taxTypeId: source.taxTypeId,
-        periodId: source.periodId,
-        adapterVersion: source.adapterVersion,
-        fileName: sourceFile.name,
-        fileHash,
+      await importarLoteFuente({
+        firmId,
+        clientId,
+        source,
+        file: sourceFile,
         workpaperId: activeWorkpaperId,
-        sourceCode: source.code,
+        clientCuit: clientQuery.data.cuit,
       });
-
-      let status = batch.status;
-      let errorRows = batch.errorRows;
-      if (status === "UPLOADED") {
-        const validation = await api.post<{ totals: { errorRows: number } }>(
-          `/firms/${firmId}/clients/${clientId}/import-batches/${batch.id}/validate`,
-          { rows },
-        );
-        status = "VALIDATED";
-        errorRows = validation.totals.errorRows;
-      }
-      if (errorRows > 0) {
-        throw new Error(
-          `El lote quedó validado con ${errorRows} fila(s) observadas. Corregí el archivo antes de reimportar.`,
-        );
-      }
-      if (status === "VALIDATED") {
-        await api.post(`/firms/${firmId}/clients/${clientId}/import-batches/${batch.id}/commit`, {
-          clientCuit: clientQuery.data.cuit,
-        });
-      }
     },
     onSuccess: () => {
       setSourceFile(null);
@@ -559,387 +529,33 @@ export function StudyExpedienteMensual() {
   };
 
   const renderEtapa = (wp: Workpaper, safeActiveStep: number) => {
-    const canEditSources = [
-      "DRAFT",
-      "COLLECTING_INPUTS",
-      "READY_TO_CALCULATE",
-      "CHANGES_REQUESTED",
-    ].includes(wp.status);
+    const canEditSources = ESTADOS_EDITABLES_FUENTES.includes(wp.status);
     const blocking = wp.controls.filter((c) => c.severity === "BLOCKING" && c.status === "OPEN");
     return (
       <>
                   {safeActiveStep === 0 ? (
-                    <div className="workpaper-stage">
-                      <div className="workpaper-stage__heading">
-                        <div>
-                          <strong>Saldos a favor y arrastres</strong>
-                          <small>
-                            Disponibles por impuesto, régimen y jurisdicción. Cada saldo conserva su
-                            respaldo.
-                          </small>
-                        </div>
-                        <span className="workpaper-stage__actions">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => void ledgerQuery.refetch()}
-                          >
-                            Actualizar
-                          </Button>
-                          {capabilities.has("tax.settlements.calculate") ? (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => setShowOpening((visible) => !visible)}
-                            >
-                              <Icon name="plus" size={15} /> Cargar saldo inicial
-                            </Button>
-                          ) : null}
-                        </span>
-                      </div>
-                      {ledgerQuery.isLoading ? (
-                        <p className="muted-copy">Cargando saldos…</p>
-                      ) : (
-                        <Table<CreditLot>
-                          rows={ledgerQuery.data ?? []}
-                          rowKey={(lot) => lot.id}
-                          empty="No hay saldos a favor disponibles para este cliente."
-                          columns={[
-                            {
-                              key: "kind",
-                              header: "Saldo",
-                              render: (lot) => (
-                                <>
-                                  <strong>{lot.kind.replaceAll("_", " ")}</strong>
-                                  <br />
-                                  <small>{lot.movements.length} movimiento(s)</small>
-                                </>
-                              ),
-                            },
-                            {
-                              key: "scope",
-                              header: "Alcance",
-                              render: (lot) => (lot.regimeId ? "Régimen específico" : "Impuesto"),
-                            },
-                            {
-                              key: "original",
-                              header: "Original",
-                              align: "right",
-                              render: (lot) => formatMoney(lot.originalAmount),
-                            },
-                            {
-                              key: "available",
-                              header: "Disponible",
-                              align: "right",
-                              render: (lot) => <strong>{formatMoney(lot.available)}</strong>,
-                            },
-                            {
-                              key: "movements",
-                              header: "Movimientos",
-                              render: (lot) =>
-                                lot.movements.length === 0 ? (
-                                  "Sin aplicaciones"
-                                ) : (
-                                  <details className="workpaper-credit-movements">
-                                    <summary>{lot.movements.length} movimiento(s)</summary>
-                                    <ul>
-                                      {lot.movements.map((movement) => (
-                                        <li key={movement.id}>
-                                          <span>{movement.kind.replaceAll("_", " ")}</span>
-                                          <strong>{formatMoney(movement.amount)}</strong>
-                                          {movement.reference ? <small>{movement.reference}</small> : null}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </details>
-                                ),
-                            },
-                            {
-                              key: "evidence",
-                              header: "Respaldo",
-                              render: (lot) =>
-                                lot.reference ??
-                                (lot.evidenceDocumentId
-                                  ? "Documentado"
-                                  : lot.createdBy
-                                    ? `Carga manual · ${lot.createdBy.name}`
-                                    : "Cierre de liquidación"),
-                            },
-                            {
-                              key: "log",
-                              header: "Log",
-                              render: (lot) =>
-                                !lot.history || lot.history.length === 0 ? (
-                                  <span className="muted-copy">Sin cambios</span>
-                                ) : (
-                                  <details className="workpaper-credit-log">
-                                    <summary>{lot.history.length} cambio(s)</summary>
-                                    <ul>
-                                      {lot.history.map((entry) => (
-                                        <li key={entry.id}>
-                                          <span>
-                                            {entry.createdBy?.name ?? "Usuario"} ·{" "}
-                                            {formatDateTime(entry.createdAt)}
-                                          </span>
-                                          <ul className="workpaper-credit-log__changes">
-                                            {Object.entries(entry.changes ?? {}).map(
-                                              ([field, diff]) => (
-                                                <li key={field}>
-                                                  <strong>{field}</strong>:{" "}
-                                                  {diff?.from ?? "—"} → {diff?.to ?? "—"}
-                                                </li>
-                                              ),
-                                            )}
-                                          </ul>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </details>
-                                ),
-                            },
-                            {
-                              key: "actions",
-                              header: "",
-                              align: "right",
-                              render: (lot) =>
-                                capabilities.has("tax.settlements.calculate") ? (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => {
-                                      setEditingLot(lot);
-                                      setEditForm({
-                                        reference: lot.reference ?? "",
-                                        evidenceDocumentId: lot.evidenceDocumentId ?? "",
-                                        originalAmount: lot.originalAmount ?? "",
-                                      });
-                                    }}
-                                  >
-                                    Editar
-                                  </Button>
-                                ) : null,
-                            },
-                          ]}
-                        />
-                      )}
-                    </div>
+                    <EtapaSaldos
+                      capabilities={capabilities}
+                      ledgerQuery={ledgerQuery}
+                      setShowOpening={setShowOpening}
+                      setEditingLot={setEditingLot}
+                      setEditForm={setEditForm}
+                    />
                   ) : safeActiveStep === 1 ? (
-                    <div className="workpaper-stage">
-                      <div className="workpaper-stage__heading">
-                        <div>
-                          <strong>Cobertura de fuentes</strong>
-                          <small>
-                            El legajo declara qué llegó y qué todavía bloquea el cálculo.
-                          </small>
-                        </div>
-                        <span className="workpaper-stage__actions">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => void coverageQuery.refetch()}
-                          >
-                            Actualizar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => navigate("/bandeja")}
-                          >
-                            Ir a bandeja
-                          </Button>
-                        </span>
-                      </div>
-                      {coverageQuery.isLoading ? (
-                        <p className="muted-copy">Verificando cobertura…</p>
-                      ) : (
-                        <>
-                          {canEditSources &&
-                          capabilities.has("tax.vouchers.prepare") &&
-                          (coverageQuery.data?.sources.length ?? 0) > 0 ? (
-                            <div className="workpaper-source-import">
-                              <label>
-                                <span>Fuente</span>
-                                <select
-                                  value={sourceCode}
-                                  onChange={(event) => {
-                                    setSourceCode(event.target.value);
-                                    setSourceFile(null);
-                                  }}
-                                >
-                                  <option value="">Seleccionar…</option>
-                                  {(coverageQuery.data?.sources ?? []).map((source) => (
-                                    <option key={source.code} value={source.code}>
-                                      {source.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                              <label>
-                                <span>Archivo CSV, TXT o JSON</span>
-                                <input
-                                  type="file"
-                                  accept=".csv,.txt,.json,text/csv,text/plain,application/json"
-                                  onChange={(event) =>
-                                    setSourceFile(event.target.files?.[0] ?? null)
-                                  }
-                                />
-                              </label>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={
-                                  !sourceCode || !sourceFile || sourceUploadMutation.isPending
-                                }
-                                onClick={() => sourceUploadMutation.mutate()}
-                              >
-                                {sourceUploadMutation.isPending ? "Procesando…" : "Importar lote"}
-                              </Button>
-                              <WorkpaperActionError error={sourceUploadMutation.error} />
-                              {sourceCode ? (
-                                <small>
-                                  Columnas esperadas: {coverageQuery.data?.sources
-                                    .find((source) => source.code === sourceCode)
-                                    ?.expectedColumns.join(", ")}
-                                </small>
-                              ) : null}
-                            </div>
-                          ) : null}
-                          <Table
-                            rows={coverageQuery.data?.sources ?? []}
-                            rowKey={(source) => source.code}
-                            empty="No hay fuentes definidas para el legajo."
-                            columns={[
-                              {
-                                key: "source",
-                                header: "Fuente",
-                                render: (source) => (
-                                  <>
-                                    <strong>{source.label}</strong>
-                                    <br />
-                                    <small>{source.code}</small>
-                                  </>
-                                ),
-                              },
-                              {
-                                key: "records",
-                                header: "Registros",
-                                align: "right",
-                                render: (source) => source.count,
-                              },
-                              {
-                                key: "required",
-                                header: "Tipo",
-                                render: (source) => (source.required ? "Obligatoria" : "Opcional"),
-                              },
-                              {
-                                key: "batches",
-                                header: "Lotes",
-                                render: (source) =>
-                                  source.batches.length === 0 ? (
-                                    "Sin lotes"
-                                  ) : (
-                                    <div className="workpaper-source-batches">
-                                      {source.batches.map((batch) => (
-                                        <div key={batch.id}>
-                                          <span>
-                                            {batch.fileName ?? "Lote sin nombre"} · {batch.validRows}/
-                                            {batch.totalRows} filas
-                                          </span>
-                                          <StatusBadge
-                                            status={
-                                              batch.reviewStatus === "REVIEWED"
-                                                ? "READY"
-                                                : batch.batchStatus
-                                            }
-                                          />
-                                          <WorkpaperSourceReviewAction
-                                            batch={batch}
-                                            currentUserId={currentUserId}
-                                            allowSelfReview={coverageQuery.data?.allowSelfReview === true}
-                                            canEditSources={canEditSources}
-                                            canReview={capabilities.has("tax.vouchers.review")}
-                                            pending={reviewSourceMutation.isPending}
-                                            error={
-                                              reviewSourceMutation.variables === batch.id
-                                                ? reviewSourceMutation.error
-                                                : null
-                                            }
-                                            onReview={(sourceLinkId) =>
-                                              reviewSourceMutation.mutate(sourceLinkId)
-                                            }
-                                          />
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ),
-                              },
-                              {
-                                key: "state",
-                                header: "Estado",
-                                render: (source) => (
-                                  <StatusBadge
-                                    status={
-                                      source.present
-                                        ? "READY"
-                                        : source.required
-                                          ? "WAITING_INPUTS"
-                                          : "PENDING"
-                                    }
-                                  />
-                                ),
-                              },
-                            ]}
-                          />
-                          {coverageQuery.data?.sources.some(
-                            (source) => source.required && !source.present && source.count === 0,
-                          ) ? (
-                            <p className="workpaper-stage__note" role="status">
-                              La cobertura cuenta solo lotes revisados. Los lotes pendientes de
-                              revisión mantienen el conteo en 0 registros.
-                            </p>
-                          ) : null}
-                          <WorkpaperActionError
-                            error={
-                              coverageQuery.data?.sources.some((source) =>
-                                source.batches.some(
-                                  (batch) => batch.id === reviewSourceMutation.variables,
-                                ),
-                              )
-                                ? reviewSourceMutation.error
-                                : null
-                            }
-                          />
-                          <Table
-                            rows={coverageQuery.data?.components ?? []}
-                            rowKey={(component) => component.obligationId}
-                            empty="No hay obligaciones vinculadas."
-                            columns={[
-                              {
-                                key: "regime",
-                                header: "Componente",
-                                render: (component) =>
-                                  `${component.taxTypeCode} · ${component.regimeCode}`,
-                              },
-                              {
-                                key: "required",
-                                header: "Requerido",
-                                render: (component) => (component.required ? "Sí" : "No"),
-                              },
-                              {
-                                key: "state",
-                                header: "Liquidación",
-                                render: (component) =>
-                                  component.settlementStatus ? (
-                                    <StatusBadge status={component.settlementStatus} />
-                                  ) : (
-                                    "Sin liquidación calculada"
-                                  ),
-                              },
-                            ]}
-                          />
-                        </>
-                      )}
-                    </div>
+                    <EtapaFuentes
+                      coverageQuery={coverageQuery}
+                      capabilities={capabilities}
+                      canEditSources={canEditSources}
+                      currentUserId={currentUserId}
+                      motivoImportarLibro={motivoImportarLibro}
+                      onAbrirLibroIva={setLibroIvaAbierto}
+                      sourceCode={sourceCode}
+                      setSourceCode={setSourceCode}
+                      sourceFile={sourceFile}
+                      setSourceFile={setSourceFile}
+                      sourceUploadMutation={sourceUploadMutation}
+                      reviewSourceMutation={reviewSourceMutation}
+                    />
                   ) : safeActiveStep === 2 ? (
                     <div className="workpaper-stage">
                       <div className="workpaper-stage__heading">
@@ -1737,7 +1353,6 @@ export function StudyExpedienteMensual() {
         creandoLegajo={createMutation.isPending}
         cargandoPeriodos={taxPeriodsQuery.isLoading}
         errorCreacion={createMutation.error}
-        onSubirLibros={() => setShowSifereModal(true)}
         onNuevoLegajo={() => void createMutation.mutate()}
       />
 
@@ -1764,13 +1379,15 @@ export function StudyExpedienteMensual() {
 
 
       <PanelLibrosIva
-        abierto={showSifereModal}
-        onCerrar={() => setShowSifereModal(false)}
+        abierto={libroIvaAbierto !== null}
+        ladoInicial={libroIvaAbierto}
+        onCerrar={() => setLibroIvaAbierto(null)}
         firmId={firmId}
         clientId={clientId}
         activeWorkpaperId={activeWorkpaperId}
         fuentes={coverageQuery.data?.sources}
         cuitCliente={clientQuery.data?.cuit}
+        motivoBloqueo={motivoImportarLibro}
       />
 
       <PanelSaldoInicial

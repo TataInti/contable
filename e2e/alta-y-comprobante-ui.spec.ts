@@ -438,6 +438,17 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.getByRole("tab", { name: /Fuentes/ }).first().click();
     const sourcePanel = page.locator(".workpaper-source-import");
     for (const { source, file } of sourceFiles) {
+      if (source.startsWith("Libro IVA")) {
+        // D2a: los libros IVA se importan desde su fila («Importar libro») en el panel de libros; el JSON sigue sirviendo.
+        const seccion = source.endsWith("Ventas") ? "Libro de ventas" : "Libro de compras";
+        await page.getByRole("row", { name: new RegExp(source) }).getByRole("button", { name: "Importar libro" }).click();
+        const panel = page.getByRole("dialog", { name: "Importar libros IVA" });
+        const libro = panel.locator(`section[aria-label="${seccion}"]`);
+        await libro.locator('input[type="file"]').setInputFiles(file);
+        await mutating(page, "/import-batches", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
+        await expect(panel).toBeHidden({ timeout: 60_000 });
+        continue;
+      }
       await pickOption(sourcePanel.locator("select"), source);
       await sourcePanel.locator('input[type="file"]').setInputFiles(file);
       await mutating(page, "/import-batches", () => sourcePanel.getByRole("button", { name: "Importar lote" }).click());

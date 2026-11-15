@@ -101,9 +101,12 @@ function renderLegajo() {
   );
 }
 
+// «Importar libro» vive en la fila ARCA IVA de Fuentes: se abre esa pestaña y se usa la fila de ventas.
 async function abrirLibrosIva() {
-  fireEvent.click(await screen.findByRole("button", { name: "Subir Excel" }));
-  return screen.findByRole("dialog", { name: "Subir libros IVA (Excel)" });
+  fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
+  await esperarCoberturaDemo();
+  fireEvent.click((await screen.findAllByRole("button", { name: "Importar libro" }))[0]!);
+  return screen.findByRole("dialog", { name: "Importar libros IVA" });
 }
 
 // La cobertura (fuentes) llega después de la lista de legajos y el botón Importar depende de ella.
@@ -153,21 +156,13 @@ describe("Legajo · libros IVA (K4)", () => {
     expect(within(ventas).getByRole("button", { name: "Importar" })).toBeDisabled();
   });
 
-  it("Importar queda deshabilitado sin legajo activo aunque el análisis esté listo", async () => {
+  // Sin legajo del período no hay fila ARCA IVA: «Importar libro» no aparece y la lista ofrece crear el legajo (P1).
+  it("sin legajo del período no se ofrece Importar libro y la pantalla ofrece Crear legajo", async () => {
     vi.mocked(api.get).mockImplementation(rutasDemo({ legajos: [] }) as never);
-    vi.mocked(api.post).mockResolvedValue(analisisDemo as never);
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
-    const dialogo = await abrirLibrosIva();
-    const ventas = seccionLibro(dialogo, "Ventas");
-    const archivo = new File(["ventas demo"], "libro-ventas-demo.xlsx");
-    fireEvent.change(ventas.querySelector('input[type="file"]') as HTMLInputElement, {
-      target: { files: [archivo] },
-    });
-    fireEvent.click(within(ventas).getByRole("button", { name: "Analizar alícuotas" }));
-    await waitFor(() =>
-      expect(within(ventas).getByRole("button", { name: "Importar" })).toBeDisabled(),
-    );
+    expect(await screen.findByRole("button", { name: "Crear legajo" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Importar libro" })).toBeNull();
   });
 
   it("analiza el libro de ventas, lo importa y avisa el resultado", async () => {
@@ -348,7 +343,7 @@ describe("Legajo · accesibilidad mínima de cabecera y paneles", () => {
   it("la pantalla tiene un solo h1", async () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
-    await screen.findByRole("button", { name: "Subir Excel" });
+    await screen.findByRole("button", { name: "Cargar saldo inicial" });
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
   });
 

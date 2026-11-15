@@ -13,17 +13,16 @@ interface CabeceraLegajoProps {
   creandoLegajo: boolean;
   cargandoPeriodos: boolean;
   errorCreacion: Error | null | undefined;
-  onSubirLibros: () => void;
   onNuevoLegajo: () => void;
 }
 
+// «Subir Excel» salió de la cabecera: los libros IVA se importan desde su fila en Fuentes (D2a).
 export function CabeceraLegajo({
   capabilities,
   selectedTaxPeriod,
   creandoLegajo,
   cargandoPeriodos,
   errorCreacion,
-  onSubirLibros,
   onNuevoLegajo,
 }: CabeceraLegajoProps) {
   return (
@@ -32,17 +31,6 @@ export function CabeceraLegajo({
       description="Coordina IVA, IIBB y TEM del período con evidencia trazable."
       actions={
         <>
-          <Button
-            variant="secondary"
-            disabled={!capabilities.has("tax.vouchers.prepare")}
-            onClick={() => onSubirLibros()}
-          >
-            <Icon name="upload" size={16} />
-            Subir Excel
-          </Button>
-          {!capabilities.has("tax.vouchers.prepare") ? (
-            <span className="muted-copy">Tu rol no puede subir libros IVA.</span>
-          ) : null}
           <FiscalBooksExportAction
             periodId={selectedTaxPeriod?.id ?? null}
             periodLabel={

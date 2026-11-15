@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 // Caracterización de la cabecera del Legajo (K3) con datos sintéticos «Demo».
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -86,16 +86,22 @@ afterEach(() => {
 });
 
 describe("Legajo · cabecera (K3)", () => {
-  it("Subir Excel queda deshabilitado sin tax.vouchers.prepare", async () => {
+  // «Importar libro» salió de la cabecera: vive en la fila ARCA IVA de Fuentes (D2a); sus permisos y motivo se afirman allí.
+  it("Importar libro queda deshabilitado sin tax.vouchers.prepare y dice el motivo", async () => {
     fijarContexto(["client.read", "tax.settlements.calculate"]);
     renderLegajo();
-    expect(await screen.findByRole("button", { name: "Subir Excel" })).toBeDisabled();
+    fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
+    const [libroVentas] = await screen.findAllByRole("button", { name: "Importar libro" });
+    expect(libroVentas).toBeDisabled();
+    expect(screen.getAllByText("Tu rol no puede importar libros IVA.").length).toBeGreaterThan(0);
   });
 
-  it("Subir Excel se habilita con tax.vouchers.prepare", async () => {
+  it("Importar libro se habilita con tax.vouchers.prepare", async () => {
     fijarContexto(["client.read", "tax.vouchers.prepare"]);
     renderLegajo();
-    expect(await screen.findByRole("button", { name: "Subir Excel" })).toBeEnabled();
+    fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
+    const [libroVentas] = await screen.findAllByRole("button", { name: "Importar libro" });
+    expect(libroVentas).toBeEnabled();
   });
 
   it("Nuevo legajo queda deshabilitado sin período fiscal", async () => {
