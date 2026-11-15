@@ -1,9 +1,11 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { UseMutationResult } from "@tanstack/react-query";
+import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
+import type { TaxEngineOption } from "@contable/contracts";
 import { Button, Field } from "@contable/design-system";
 import { Icon } from "../../../ui/Icon";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { ErrorAccion } from "../Errores";
+import { SelectorMotor } from "../SelectorMotor";
 import type { RuleVersion } from "../tipos";
 import { validateRuleVersionDate } from "../utilidades";
 
@@ -16,6 +18,12 @@ interface PanelModificarAlicuotasProps {
   versionDateError: string | null;
   setVersionDateError: Dispatch<SetStateAction<string | null>>;
   cloneMutation: UseMutationResult<unknown, Error, void>;
+  regimeId: string;
+  familiaDefinida: boolean;
+  regimeEnginesQuery: UseQueryResult<TaxEngineOption[], Error>;
+  engineId: string;
+  setEngineId: (engineId: string) => void;
+  avisoMotor: string | null;
 }
 
 export function PanelModificarAlicuotas({
@@ -27,6 +35,12 @@ export function PanelModificarAlicuotas({
   versionDateError,
   setVersionDateError,
   cloneMutation,
+  regimeId,
+  familiaDefinida,
+  regimeEnginesQuery,
+  engineId,
+  setEngineId,
+  avisoMotor,
 }: PanelModificarAlicuotasProps) {
   return (
     <>
@@ -67,6 +81,19 @@ export function PanelModificarAlicuotas({
             }}
             required
           />
+          <SelectorMotor
+            id="rule-clone-engine"
+            regimeId={regimeId}
+            familiaDefinida={familiaDefinida}
+            enginesQuery={regimeEnginesQuery}
+            value={engineId}
+            onChange={setEngineId}
+          />
+          {avisoMotor ? (
+            <p className="form-submit-hint" role="note">
+              {avisoMotor}
+            </p>
+          ) : null}
           {cloneMutation.error ? <ErrorAccion error={cloneMutation.error} /> : null}
           <div className="study-form__actions">
             <Button type="submit" loading={cloneMutation.isPending}>

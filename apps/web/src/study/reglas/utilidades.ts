@@ -1,3 +1,4 @@
+import type { TaxEngineOption } from "@contable/contracts";
 import type { RuleRow } from "./tipos";
 
 export const today = new Date().toISOString().slice(0, 10);
@@ -43,4 +44,17 @@ export function sameRuleRows(draftRows: RuleRow[], savedRows: RuleRow[]): boolea
       (row.validTo?.slice(0, 10) ?? null) === (saved.validTo?.slice(0, 10) ?? null),
     );
   });
+}
+
+/** Motor de la versión de origen: el que trae la versión o, si no lo trae, el del catálogo con la misma engineVersion. */
+export function motorDeOrigen(
+  version: { engineId?: string | null; engineVersion: string } | undefined,
+  engines: TaxEngineOption[] | undefined,
+): string | null {
+  if (!version) return null;
+  if (version.engineId) return version.engineId;
+  const coincidencias =
+    engines?.filter((engine) => engine.engineVersion === version.engineVersion) ?? [];
+  const [unico] = coincidencias;
+  return coincidencias.length === 1 && unico ? unico.id : null;
 }

@@ -46,14 +46,19 @@ describe("clon de versión: motor opcional (D-R3-E)", () => {
   it("sin engineId el clon llega al servicio sin motor (comportamiento de hoy)", async () => {
     const { response, servicio } = await clonar({});
     expect(response.statusCode).toBe(201);
-    expect(servicio).toHaveBeenCalledWith(expect.anything(), expect.not.objectContaining({ engineId: expect.anything() }));
+    expect(servicio).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.not.objectContaining({ engineId: expect.anything() }),
+    );
   });
 
-  // Hoy el esquema es estricto y no conoce engineId: el clon con motor responde 400.
-  it.fails("acepta un engineId uuid y lo pasa al servicio", async () => {
+  it("acepta un engineId uuid y lo pasa al servicio", async () => {
     const { response, servicio } = await clonar({ engineId: MOTOR_ID });
     expect(response.statusCode).toBe(201);
-    expect(servicio).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ engineId: MOTOR_ID }));
+    expect(servicio).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ engineId: MOTOR_ID }),
+    );
   });
 
   it("rechaza un engineId que no es uuid con 400 y no llega al servicio", async () => {

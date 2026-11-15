@@ -73,6 +73,7 @@ const cloneRulePackVersionSchema = z
   .object({
     validFrom: ruleVersionDateSchema,
     validTo: ruleVersionDateSchema.optional(),
+    engineId: z.string().uuid().optional(),
   })
   .strict()
   .superRefine(validateRuleVersionRange);
@@ -899,7 +900,15 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     const { packId } = req.params as { packId: string };
     try {
       const body = cloneRulePackVersionSchema.parse(req.body);
-      const data = await rules.cloneVersion(ctx, pickDefined({ packId, ...body }) as { packId: string; validFrom: string; validTo?: string });
+      const data = await rules.cloneVersion(
+        ctx,
+        pickDefined({ packId, ...body }) as {
+          packId: string;
+          validFrom: string;
+          validTo?: string;
+          engineId?: string;
+        },
+      );
       return reply.code(201).send({ data });
     } catch (err) {
       return handleError(reply, err);

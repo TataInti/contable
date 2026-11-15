@@ -1884,6 +1884,38 @@ export class TaxRuleService {
   }
 
   /** Crea la primera versión de un rule pack. */
+  /** Motor del catálogo para una versión nueva o un clon: activo y de la familia del régimen (D-R3-E). */
+  private async motorDeFamilia(
+    tx: Prisma.TransactionClient,
+    engineId: string,
+    calcFamilyId: string | null,
+  ): Promise<{ id: string; engineVersion: string; familyId: string }> {
+    if (!calcFamilyId) {
+      throw new FiscalError("REGIME_FAMILY_REQUIRED", "Elegí la familia de cálculo del régimen", [
+        "calcFamilyId",
+      ]);
+    }
+    const engine = await tx.taxEngine.findFirst({
+      where: { id: engineId, isActive: true },
+      select: { id: true, engineVersion: true, familyId: true },
+    });
+    if (!engine) {
+      throw new FiscalError(
+        "TAX_ENGINE_NOT_FOUND",
+        "El motor seleccionado no existe o está inactivo",
+        ["engineId"],
+      );
+    }
+    if (engine.familyId !== calcFamilyId) {
+      throw new FiscalError(
+        "ENGINE_FAMILY_MISMATCH",
+        "El motor seleccionado no pertenece a la familia de cálculo del régimen",
+        ["engineId"],
+      );
+    }
+    return engine;
+  }
+
   async createVersion(
     ctx: TenantContext,
     input: {
@@ -1913,27 +1945,7 @@ export class TaxRuleService {
 
       let engine: { id: string; engineVersion: string; familyId: string } | null | undefined;
       if (input.engineId) {
-        if (!pack.regime.calcFamilyId) {
-          throw new FiscalError(
-            "REGIME_FAMILY_REQUIRED",
-            "Elegí la familia de cálculo del régimen",
-            ["calcFamilyId"],
-          );
-        }
-        engine = await tx.taxEngine.findFirst({
-          where: { id: input.engineId, isActive: true },
-          select: { id: true, engineVersion: true, familyId: true },
-        });
-        if (!engine) {
-          throw new FiscalError("TAX_ENGINE_NOT_FOUND", "El motor seleccionado no existe o está inactivo", ["engineId"]);
-        }
-        if (engine.familyId !== pack.regime.calcFamilyId) {
-          throw new FiscalError(
-            "ENGINE_FAMILY_MISMATCH",
-            "El motor seleccionado no pertenece a la familia de cálculo del régimen",
-            ["engineId"],
-          );
-        }
+        engine = await this.motorDeFamilia(tx, input.engineId, pack.regime.calcFamilyId);
       } else {
         if (!input.engineVersion) {
           throw new FiscalError("TAX_ENGINE_NOT_FOUND", "Elegí un motor del catálogo", ["engineId"]);
@@ -1996,7 +2008,10 @@ export class TaxRuleService {
    * Los cambios normativos siempre parten de una versión conocida. Copia la
    * configuración operativa y deja un borrador aislado para revisión.
    */
-  async cloneVersion(ctx: TenantContext, input: { packId: string; validFrom: string; validTo?: string }) {
+  async cloneVersion(
+    ctx: TenantContext,
+    input: { packId: string; validFrom: string; validTo?: string; engineId?: string },
+  ) {
     return withTenantContext(ctx, async (tx) => {
       const source = await tx.taxRuleVersion.findFirst({
         where: { packId: input.packId },
@@ -2024,19 +2039,24 @@ export class TaxRuleService {
         },
       });
       if (!source) throw new FiscalError("RULE_VERSION_NOT_FOUND", "El pack no tiene una versión para clonar");
-      if (source.engineId && source.engine && source.pack.regime.calcFamilyId) {
-        if (source.engine.familyId !== source.pack.regime.calcFamilyId) {
-          throw new FiscalError(
-            "ENGINE_FAMILY_MISMATCH",
-            "La familia del régimen no coincide con el motor de la versión a clonar",
-            ["calcFamilyId"],
+      const motorElegido = input.engineId
+        ? await this.motorDeFamilia(tx, input.engineId, source.pack.regime.calcFamilyId)
+        : null;
+      if (!motorElegido) {
+        if (source.engineId && source.engine && source.pack.regime.calcFamilyId) {
+          if (source.engine.familyId !== source.pack.regime.calcFamilyId) {
+            throw new FiscalError(
+              "ENGINE_FAMILY_MISMATCH",
+              "La familia del régimen no coincide con el motor de la versión a clonar",
+              ["calcFamilyId"],
+            );
+          }
+        } else {
+          assertTaxEngineVersionCompatible(
+            taxRegimeEngineScope(source.pack.regime),
+            source.engineVersion,
           );
         }
-      } else {
-        assertTaxEngineVersionCompatible(
-          taxRegimeEngineScope(source.pack.regime),
-          source.engineVersion,
-        );
       }
       const count = await tx.taxRuleVersion.count({ where: { packId: input.packId } });
       const typedClone = source.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3 ||
@@ -2050,8 +2070,8 @@ export class TaxRuleService {
           status: "DRAFT",
           validFrom: new Date(input.validFrom),
           ...(input.validTo ? { validTo: new Date(input.validTo) } : {}),
-          engineId: source.engineId,
-          engineVersion: source.engineVersion,
+          engineId: motorElegido ? motorElegido.id : source.engineId,
+          engineVersion: motorElegido ? motorElegido.engineVersion : source.engineVersion,
           rulesHash: source.rulesHash,
           rulesHashSchemaVersion: typedClone
             ? RULES_HASH_SCHEMA_VERSION_V3

@@ -698,7 +698,13 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
       return tx.taxEngine.upsert({
         where: { engineKey },
         update: { isActive: activo, engineVersion, familyId: found.id },
-        create: { engineKey, engineVersion, familyId: found.id, label: `Demo · ${engineVersion}`, isActive: activo },
+        create: {
+          engineKey,
+          engineVersion,
+          familyId: found.id,
+          label: `Demo · ${engineVersion}`,
+          isActive: activo,
+        },
       });
     });
   }
@@ -723,8 +729,8 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     expect(cloned.rulesHash).toBe(computeRulesHashV2(cloned));
   });
 
-  // Motor elegido en el clon (D-R3-E): hoy el servicio ignora engineId, por eso estas pruebas fallan por ahora.
-  it.fails("el clon con un motor de la misma familia usa ese motor y deja el hash coherente con él", async () => {
+  // Motor elegido en el clon (D-R3-E).
+  it("el clon con un motor de la misma familia usa ese motor y deja el hash coherente con él", async () => {
     const fx = await setupMasters();
     const pack = await rules.createPack(ctxOwner, {
       code: "AR_CLON_MOTOR_MISMO-F",
@@ -737,7 +743,11 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
       engineVersion: "ar-vat-ri-v1.0.0",
       rulesHash: "caller-value-is-not-canonical",
     });
-    const motor = await crearMotorDePrueba({ key: "VAT_RI" }, "TEST-VAT-RI-CLON-F", "ar-vat-ri-clon-prueba-f");
+    const motor = await crearMotorDePrueba(
+      { key: "VAT_RI" },
+      "TEST-VAT-RI-CLON-F",
+      "ar-vat-ri-clon-prueba-f",
+    );
 
     const cloned = await rules.cloneVersion(ctxOwner, {
       packId: pack.id,
@@ -750,7 +760,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     expect(cloned.rulesHash).not.toBe(source.rulesHash);
   });
 
-  it.fails("el clon con un motor de otra familia responde ENGINE_FAMILY_MISMATCH", async () => {
+  it("el clon con un motor de otra familia responde ENGINE_FAMILY_MISMATCH", async () => {
     const fx = await setupMasters();
     const pack = await rules.createPack(ctxOwner, {
       code: "AR_CLON_OTRA_FAMILIA-F",
@@ -763,14 +773,22 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
       engineVersion: "ar-vat-ri-v1.0.0",
       rulesHash: "caller-value-is-not-canonical",
     });
-    const motor = await crearMotorDePrueba({ notKey: "VAT_RI" }, "TEST-OTRA-FAMILIA-CLON-F", "ar-otra-familia-clon-f");
+    const motor = await crearMotorDePrueba(
+      { notKey: "VAT_RI" },
+      "TEST-OTRA-FAMILIA-CLON-F",
+      "ar-otra-familia-clon-f",
+    );
 
     await expect(
-      rules.cloneVersion(ctxOwner, { packId: pack.id, validFrom: "2026-07-01", engineId: motor.id } as never),
+      rules.cloneVersion(ctxOwner, {
+        packId: pack.id,
+        validFrom: "2026-07-01",
+        engineId: motor.id,
+      } as never),
     ).rejects.toMatchObject({ code: "ENGINE_FAMILY_MISMATCH", path: ["engineId"] });
   });
 
-  it.fails("el clon con un motor inexistente responde TAX_ENGINE_NOT_FOUND", async () => {
+  it("el clon con un motor inexistente responde TAX_ENGINE_NOT_FOUND", async () => {
     const fx = await setupMasters();
     const pack = await rules.createPack(ctxOwner, {
       code: "AR_CLON_MOTOR_INEXISTENTE-F",
@@ -793,7 +811,7 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
     ).rejects.toMatchObject({ code: "TAX_ENGINE_NOT_FOUND", path: ["engineId"] });
   });
 
-  it.fails("el clon con un motor inactivo responde TAX_ENGINE_NOT_FOUND", async () => {
+  it("el clon con un motor inactivo responde TAX_ENGINE_NOT_FOUND", async () => {
     const fx = await setupMasters();
     const pack = await rules.createPack(ctxOwner, {
       code: "AR_CLON_MOTOR_INACTIVO-F",
@@ -806,10 +824,19 @@ describe("G1-05 reglas fiscales (integración DB)", () => {
       engineVersion: "ar-vat-ri-v1.0.0",
       rulesHash: "caller-value-is-not-canonical",
     });
-    const motor = await crearMotorDePrueba({ key: "VAT_RI" }, "TEST-VAT-RI-INACTIVO-F", "ar-vat-ri-inactivo-f", false);
+    const motor = await crearMotorDePrueba(
+      { key: "VAT_RI" },
+      "TEST-VAT-RI-INACTIVO-F",
+      "ar-vat-ri-inactivo-f",
+      false,
+    );
 
     await expect(
-      rules.cloneVersion(ctxOwner, { packId: pack.id, validFrom: "2026-07-01", engineId: motor.id } as never),
+      rules.cloneVersion(ctxOwner, {
+        packId: pack.id,
+        validFrom: "2026-07-01",
+        engineId: motor.id,
+      } as never),
     ).rejects.toMatchObject({ code: "TAX_ENGINE_NOT_FOUND", path: ["engineId"] });
   });
 
