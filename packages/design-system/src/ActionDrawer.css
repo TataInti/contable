@@ -141,8 +141,7 @@
 
 .action-drawer .study-form__actions,
 .action-drawer .study-inline-form__actions,
-.action-drawer .upload-panel__actions,
-.action-drawer .opening-credit-form__actions {
+.action-drawer .upload-panel__actions {
   position: sticky;
   bottom: calc(-1 * clamp(20px, 3vw, 30px));
   margin-inline: calc(-1 * clamp(20px, 3vw, 30px));
@@ -153,12 +152,6 @@
 
 .action-drawer .upload-panel__secure-note {
   margin-bottom: var(--ds-space-4);
-}
-
-.action-drawer .opening-credit-form {
-  padding: 0;
-  border: 0;
-  background: transparent;
 }
 
 @keyframes drawer-scrim-in {
