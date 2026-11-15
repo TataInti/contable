@@ -1187,6 +1187,8 @@ Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFoote
 
 **Estado (Foco 2.7c), Calendarios fiscales:** el alta usa el pie `ActionDrawerFooter` («Cancelar» a la izquierda y «Crear calendario» a la derecha) y muestra el motivo junto al botón mientras no se puede crear. La ficha en borrador concuerda en singular y plural y, con un solo problema, ofrece un único enlace («Ir al problema»). La lista muestra el estado elegido en «Estado», con «Todos» para volver a la lista completa (selección múltiple), y el encabezado «Año» muestra su indicador de orden (`sortHint` de `DenseTable`). El subtítulo usa voseo.
 
+**Importación de celdas (Calendarios 2b-2):** el cajón «Importar celdas desde un archivo» usa el pie `ActionDrawerFooter` con el motivo junto a «Importar N celdas»; el informe de la prueba es un bloque `role="status"` con cuatro cifras, las filas rechazadas por número y la línea de dudosas, y los errores del archivo van en `Notice` junto al campo.
+
 Cada PR de migración incluye su matriz antes/después de información y accesos.
 
 ### Pantalla → receta
