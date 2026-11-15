@@ -3,8 +3,14 @@ import type { UseMutationResult } from "@tanstack/react-query";
 import { Button, Field } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { ErrorAccion } from "../Errores";
+import { esFrecuencia, OPCIONES_FRECUENCIA, type DueDateFrequency } from "../frecuencias";
 
-type NuevoVencimiento = { frequency: string; dueDay: string; cuitEnding: string; validFrom: string };
+type NuevoVencimiento = {
+  frequency: DueDateFrequency;
+  dueDay: string;
+  cuitEnding: string;
+  validFrom: string;
+};
 
 interface PanelVencimientoProps {
   showDueDateForm: boolean;
@@ -39,13 +45,28 @@ export function PanelVencimiento({
             addDueDateMutation.mutate();
           }}
         >
-          <Field
-            label="Frecuencia"
-            id="rule-due-frequency"
-            value={newDueDate.frequency}
-            onChange={(event) => setNewDueDate({ ...newDueDate, frequency: event.target.value })}
-            required
-          />
+          <div className="ds-field">
+            <label className="ds-field__label" htmlFor="rule-due-frequency">
+              Frecuencia
+            </label>
+            <select
+              id="rule-due-frequency"
+              className="ds-field__input"
+              value={newDueDate.frequency}
+              onChange={(event) => {
+                const frecuencia = event.target.value;
+                if (esFrecuencia(frecuencia))
+                  setNewDueDate({ ...newDueDate, frequency: frecuencia });
+              }}
+              required
+            >
+              {OPCIONES_FRECUENCIA.map((opcion) => (
+                <option key={opcion.value} value={opcion.value}>
+                  {opcion.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <Field
             label="Día del mes"
             id="rule-due-day"

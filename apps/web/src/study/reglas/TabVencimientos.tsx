@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Button, Table } from "@contable/design-system";
 import { DenseSection } from "../../ui/Dense";
+import { etiquetaFrecuencia } from "./frecuencias";
 import { shortDate } from "./utilidades";
 import type { RuleVersion } from "./tipos";
 
@@ -22,7 +23,7 @@ export function TabVencimientos({
     <DenseSection
       id="rule-due-dates"
       title="Vencimientos"
-      description="Reglas usadas para calcular fechas de presentación y pago."
+      description="El calendario publicado del organismo tiene prioridad. Estas reglas calculan las fechas de presentación y pago cuando no hay calendario publicado."
       actions={
         editable ? (
           <Button size="sm" variant="secondary" onClick={() => setShowDueDateForm((visible) => !visible)}>
@@ -39,7 +40,7 @@ export function TabVencimientos({
           {
             key: "frequency",
             header: "Frecuencia",
-            render: (row) => row.frequency ?? "—",
+            render: (row) => etiquetaFrecuencia(row.frequency),
           },
           { key: "dueDay", header: "Día", render: (row) => String(row.dueDay) },
           {

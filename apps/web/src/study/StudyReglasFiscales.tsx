@@ -29,6 +29,7 @@ import { PanelPrimeraVersion } from "./reglas/paneles/PanelPrimeraVersion";
 import { PanelModificarAlicuotas } from "./reglas/paneles/PanelModificarAlicuotas";
 import { ConfirmarActivacion } from "./reglas/ConfirmarActivacion";
 import { TabVencimientos } from "./reglas/TabVencimientos";
+import { FRECUENCIA_POR_DEFECTO } from "./reglas/frecuencias";
 import { TabFuentes } from "./reglas/TabFuentes";
 import { TabControlProfesional } from "./reglas/TabControlProfesional";
 import { ResumenVersion } from "./reglas/ResumenVersion";
@@ -85,7 +86,7 @@ export function StudyReglasFiscales() {
     consultedAt: today,
   });
   const [newDueDate, setNewDueDate] = useState({
-    frequency: "MENSUAL",
+    frequency: FRECUENCIA_POR_DEFECTO,
     dueDay: "",
     cuitEnding: "",
     validFrom: today,
@@ -369,14 +370,19 @@ export function StudyReglasFiscales() {
     mutationFn: () =>
       api.post(`/tax/rule-versions/${selectedVersion?.id}/due-date-rules`, {
         jurisdictionId: detailQuery.data?.regime.jurisdiction.id,
-        ...(newDueDate.frequency.trim() ? { frequency: newDueDate.frequency.trim() } : {}),
+        frequency: newDueDate.frequency,
         dueDay: Number(newDueDate.dueDay),
         ...(newDueDate.cuitEnding.trim() ? { cuitEnding: newDueDate.cuitEnding.trim() } : {}),
         validFrom: newDueDate.validFrom,
       }),
     onSuccess: () => {
       invalidate();
-      setNewDueDate({ frequency: "MENSUAL", dueDay: "", cuitEnding: "", validFrom: today });
+      setNewDueDate({
+        frequency: FRECUENCIA_POR_DEFECTO,
+        dueDay: "",
+        cuitEnding: "",
+        validFrom: today,
+      });
       setShowDueDateForm(false);
       notify.success("El vencimiento quedó agregado al borrador.");
     },

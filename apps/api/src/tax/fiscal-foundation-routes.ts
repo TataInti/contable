@@ -13,6 +13,8 @@ import { rulePackValidator } from "./rule-pack-validator.js";
 import {
   createEconomicActivitySchema,
   updateEconomicActivitySchema,
+  dueDateFrequencySchema,
+  type DueDateFrequency,
 } from "@contable/contracts";
 import { z } from "zod";
 import {
@@ -990,7 +992,7 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
       const body = z
         .object({
           jurisdictionId: z.string().uuid(),
-          frequency: z.string().max(40).optional(),
+          frequency: dueDateFrequencySchema.optional(),
           dueDay: z.number().int().min(1).max(31),
           monthOffset: z.number().int().min(0).max(24).optional(),
           cuitEnding: z.string().max(4).optional(),
@@ -999,7 +1001,19 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         })
         .strict()
         .parse(req.body);
-      const data = await rules.addDueDateRule(ctx, pickDefined({ ...body, ruleVersionId }) as { ruleVersionId: string; jurisdictionId: string; frequency?: string; dueDay: number; monthOffset?: number; cuitEnding?: string; validFrom: string; validTo?: string });
+      const data = await rules.addDueDateRule(
+        ctx,
+        pickDefined({ ...body, ruleVersionId }) as {
+          ruleVersionId: string;
+          jurisdictionId: string;
+          frequency?: DueDateFrequency;
+          dueDay: number;
+          monthOffset?: number;
+          cuitEnding?: string;
+          validFrom: string;
+          validTo?: string;
+        },
+      );
       return reply.code(201).send({ data });
     } catch (err) {
       return handleError(reply, err);

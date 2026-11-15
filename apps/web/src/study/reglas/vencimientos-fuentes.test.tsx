@@ -139,7 +139,7 @@ describe("Reglas fiscales — vencimientos y fuentes (K7)", () => {
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/tax/rule-versions/version-1/due-date-rules", {
         jurisdictionId: "jur-1",
-        frequency: "MENSUAL",
+        frequency: "MONTHLY",
         dueDay: 20,
         cuitEnding: "9",
         validFrom: expect.any(String),
