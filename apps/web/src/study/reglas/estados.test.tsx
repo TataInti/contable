@@ -474,7 +474,11 @@ describe("Reglas fiscales — bloqueos que dicen el motivo (P1, 7d-9, 7d-11, 7d-
     mockDemoApi(conVersionEnRevision());
     renderDemoReglas();
     fireEvent.click(await pestana(/Control profesional/));
-    expect(await screen.findByText(/No hay matrículas profesionales cargadas/)).toBeTruthy();
+    expect(
+      await screen.findByText(
+        /No hay matrículas profesionales cargadas para el estudio; sin una no se puede aprobar esta versión\./,
+      ),
+    ).toBeTruthy();
   });
 
   it("un borrador de solo lectura sin permiso de proponer lo dice (7d-12)", async () => {

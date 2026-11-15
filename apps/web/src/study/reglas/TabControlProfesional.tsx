@@ -56,7 +56,7 @@ export function TabControlProfesional({
                           onRetry={() => void credentialQuery.refetch()}
                         />
                       ) : credentialQuery.data?.length === 0 ? (
-                        <p className="muted-copy">No hay matrículas profesionales cargadas para la firma. Quien administra el estudio las carga; sin una no se puede aprobar esta versión.</p>
+                        <p className="muted-copy">No hay matrículas profesionales cargadas para el estudio; sin una no se puede aprobar esta versión.</p>
                       ) : (
                       <select
                         className="ds-field__input"
