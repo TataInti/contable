@@ -53,7 +53,7 @@ const ALFA = "Sintético Alfa S.A.";
 const CUIT_BETA = "20-00000000-1";
 const BETA = "Sintético Beta S.R.L.";
 
-// Caracterización K6 (Foco 5.2): afirma el comportamiento VIGENTE de origin/main (5cdd0cf).
+// Pruebas K6 (Foco 5.2): estados y errores de Clientes, sobre las aserciones sustituidas en los bloques (a) y (b).
 // Cada aserción vigente lleva el defecto 7d-N que el corte corrige; al corregir se reemplaza
 // (no se borra) por la aserción nueva, listada en «Aserciones tocadas». Sin it.fails ni skip.
 
@@ -79,6 +79,16 @@ describe("StudyClientes — estados y errores (K6)", () => {
     cleanup();
   });
 
+  async function abrirEdicion() {
+    renderConRutas("/clientes", <StudyClientes />);
+    const detalle = await seleccionarCliente(CUIT_ALFA, ALFA);
+    fireEvent.click(within(detalle).getByRole("button", { name: "Editar" }));
+    return screen.findByRole("dialog", { name: "Editar cliente" });
+  }
+
+  const llamadasA = (fragmento: string) =>
+    vi.mocked(api.get).mock.calls.filter(([path]) => String(path).includes(fragmento)).length;
+
   it("si falla la consulta de contactos, el aviso ofrece «Reintentar» y repite la consulta", async () => {
     respuestaContactos = () => Promise.reject(new Error("Sin conexión"));
     renderConRutas("/clientes", <StudyClientes />);
@@ -101,23 +111,19 @@ describe("StudyClientes — estados y errores (K6)", () => {
     expect(detalle.querySelector(".client-contacts__toolbar")?.textContent).not.toContain("0 contactos");
   });
 
-  it("si falla el catálogo de jurisdicciones, la sección no ofrece «Reintentar» (vigente: defecto 7d-2)", async () => {
-    // vigente: defecto 7d-2 (cambia en este corte)
+  it("si falla el catálogo de jurisdicciones, la sección ofrece «Reintentar» y lo repite", async () => {
     respuestaCatalogo["/tax/jurisdictions"] = () => Promise.reject(new Error("Catálogo caído"));
-    renderConRutas("/clientes", <StudyClientes />);
-    const detalle = await seleccionarCliente(CUIT_ALFA, ALFA);
-    fireEvent.click(within(detalle).getByRole("button", { name: "Editar" }));
-    const cajon = await screen.findByRole("dialog", { name: "Editar cliente" });
+    const cajon = await abrirEdicion();
 
     expect(
       await within(cajon).findByText("No se pudo cargar el catálogo de jurisdicciones. Reintentá."),
     ).toBeTruthy();
     const seccion = cajon.querySelector("#client-profile-iibb") as HTMLElement;
-    expect(within(seccion).queryByRole("button", { name: "Reintentar" })).toBeNull();
+    fireEvent.click(within(seccion).getByRole("button", { name: "Reintentar" }));
+    await waitFor(() => expect(llamadasA("/tax/jurisdictions")).toBe(2));
   });
 
-  it("si falla el catálogo de actividades en el alta, no ofrece «Reintentar» (vigente: defecto 7d-2)", async () => {
-    // vigente: defecto 7d-2 (cambia en este corte)
+  it("si falla el catálogo de actividades en el alta, ofrece «Reintentar» y lo repite", async () => {
     respuestaCatalogo["/client-profile-catalogs/activities"] = () => Promise.reject(new Error("Catálogo caído"));
     renderConRutas("/clientes", <StudyClientes />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
@@ -126,34 +132,29 @@ describe("StudyClientes — estados y errores (K6)", () => {
     expect(
       await within(cajon).findByText("No se pudo cargar el catálogo de actividades. Reintentá."),
     ).toBeTruthy();
-    expect(within(cajon).queryByRole("button", { name: "Reintentar" })).toBeNull();
+    fireEvent.click(within(cajon).getByRole("button", { name: "Reintentar" }));
+    await waitFor(() => expect(llamadasA("/client-profile-catalogs/activities")).toBe(2));
   });
 
-  it("si falla el catálogo de actividades en la edición, no ofrece «Reintentar» (vigente: defecto 7d-2)", async () => {
-    // vigente: defecto 7d-2 (cambia en este corte)
+  it("si falla el catálogo de actividades en la edición, ofrece «Reintentar» y lo repite", async () => {
     respuestaCatalogo["/client-profile-catalogs/activities"] = () => Promise.reject(new Error("Catálogo caído"));
-    renderConRutas("/clientes", <StudyClientes />);
-    const detalle = await seleccionarCliente(CUIT_ALFA, ALFA);
-    fireEvent.click(within(detalle).getByRole("button", { name: "Editar" }));
-    const cajon = await screen.findByRole("dialog", { name: "Editar cliente" });
+    const cajon = await abrirEdicion();
 
     expect(
       await within(cajon).findByText("No se pudo cargar el catálogo de actividades. Reintentá."),
     ).toBeTruthy();
-    expect(within(cajon).queryByRole("button", { name: "Reintentar" })).toBeNull();
+    fireEvent.click(within(cajon).getByRole("button", { name: "Reintentar" }));
+    await waitFor(() => expect(llamadasA("/client-profile-catalogs/activities")).toBe(2));
   });
 
-  it("si cae el catálogo de normas, una opción deshabilitada hace de aviso (vigente: defecto 7d-2)", async () => {
-    // vigente: defecto 7d-2 (cambia en este corte)
+  it("si cae el catálogo de normas, lo dice con «Reintentar» y no lo muestra como opción", async () => {
     respuestaCatalogo["/accounting-standards"] = () => Promise.reject(new Error("Catálogo caído"));
-    renderConRutas("/clientes", <StudyClientes />);
-    const detalle = await seleccionarCliente(CUIT_ALFA, ALFA);
-    fireEvent.click(within(detalle).getByRole("button", { name: "Editar" }));
-    const cajon = await screen.findByRole("dialog", { name: "Editar cliente" });
+    const cajon = await abrirEdicion();
 
-    const opcion = await within(cajon).findByRole("option", { name: "No se pudo cargar el catálogo de normas" });
-    expect((opcion as HTMLOptionElement).disabled).toBe(true);
-    expect(within(cajon).queryByRole("button", { name: "Reintentar" })).toBeNull();
+    expect(await within(cajon).findByText("No se pudo cargar el catálogo de normas. Reintentá.")).toBeTruthy();
+    expect(within(cajon).queryByRole("option", { name: "No se pudo cargar el catálogo de normas" })).toBeNull();
+    fireEvent.click(within(cajon).getByRole("button", { name: "Reintentar" }));
+    await waitFor(() => expect(llamadasA("/accounting-standards")).toBe(2));
   });
 
   it("si falla el reintento del correo, el aviso lo dice y ofrece volver a intentarlo", async () => {
@@ -182,5 +183,50 @@ describe("StudyClientes — estados y errores (K6)", () => {
         "No se pudo registrar el correo. Reintentá o agregalo desde Contactos.",
       ),
     );
+  });
+
+  it("mientras cargan los catálogos de la ficha, cada uno lo anuncia como estado", async () => {
+    respuestaCatalogo["/tax/jurisdictions"] = () => new Promise(() => {});
+    respuestaCatalogo["/client-profile-catalogs/activities"] = () => new Promise(() => {});
+    respuestaCatalogo["/accounting-standards"] = () => new Promise(() => {});
+    const cajon = await abrirEdicion();
+
+    for (const texto of [
+      "Cargando catálogo de jurisdicciones…",
+      "Cargando catálogo de actividades…",
+      "Cargando normas contables…",
+    ]) {
+      expect((await within(cajon).findByText(texto)).getAttribute("role")).toBe("status");
+    }
+  });
+
+  it("un catálogo de jurisdicciones vacío explica qué falta y a quién pedirlo", async () => {
+    respuestaCatalogo["/tax/jurisdictions"] = () => Promise.resolve([]);
+    const cajon = await abrirEdicion();
+
+    expect(await within(cajon).findByText("No hay jurisdicciones cargadas.")).toBeTruthy();
+    expect(
+      within(cajon).getByText("Pedí a quien administra el estudio que las cargue en Catálogos fiscales."),
+    ).toBeTruthy();
+  });
+
+  it("un catálogo de actividades vacío explica qué falta y a quién pedirlo", async () => {
+    respuestaCatalogo["/client-profile-catalogs/activities"] = () => Promise.resolve([]);
+    const cajon = await abrirEdicion();
+
+    expect(await within(cajon).findByText("No hay actividades cargadas.")).toBeTruthy();
+    expect(
+      within(cajon).getByText("Pedí a quien administra el estudio que las cargue en Catálogos fiscales."),
+    ).toBeTruthy();
+  });
+
+  it("un catálogo de normas vacío explica qué falta y a quién pedirlo", async () => {
+    respuestaCatalogo["/accounting-standards"] = () => Promise.resolve([]);
+    const cajon = await abrirEdicion();
+
+    expect(await within(cajon).findByText("No hay normas contables cargadas.")).toBeTruthy();
+    expect(
+      within(cajon).getByText("Pedí a quien administra el estudio que las cargue en Administración."),
+    ).toBeTruthy();
   });
 });

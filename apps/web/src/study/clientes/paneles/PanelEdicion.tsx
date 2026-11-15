@@ -1,6 +1,6 @@
 import type { FormEvent } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, Field, Notice } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { ApiError, type Client } from "../../../lib/api";
 import {
@@ -61,6 +61,9 @@ export function PanelEdicion({
     activityIsInactive,
     standardValue,
     standardCatalogUnavailable,
+    standardCatalogLoading,
+    standardCatalogEmpty,
+    reintentarNormas,
     standardCatalog,
     outOfCatalogJurisdictions,
     selectedJurisdictions,
@@ -287,7 +290,7 @@ export function PanelEdicion({
                 </option>
               ) : null}
             </select>
-            {clientActivityCatalog.isLoading ? <small>Cargando catálogo de actividades…</small> : null}
+            {clientActivityCatalog.isLoading ? <small role="status">Cargando catálogo de actividades…</small> : null}
             {activityIsLegacy || activityIsInactive ? (
               <small className="study-legacy-note">
                 El valor guardado sigue visible y se conserva si no lo reemplazás.
@@ -295,7 +298,23 @@ export function PanelEdicion({
             ) : null}
           </label>
           {clientActivityCatalog.isError ? (
-            <Notice tone="error">No se pudo cargar el catálogo de actividades. Reintentá.</Notice>
+            <Notice
+              tone="error"
+              action={
+                <Button size="sm" variant="secondary" onClick={() => void clientActivityCatalog.refetch()}>
+                  Reintentar
+                </Button>
+              }
+            >
+              No se pudo cargar el catálogo de actividades. Reintentá.
+            </Notice>
+          ) : null}
+          {clientActivityCatalog.isSuccess && clientActivityCatalog.data.length === 0 ? (
+            <EmptyState
+              size="inline"
+              title="No hay actividades cargadas."
+              description="Pedí a quien administra el estudio que las cargue en Catálogos fiscales."
+            />
           ) : null}
           <label className="ds-field">
             <span className="ds-field__label">Forma jurídica</span>
@@ -326,11 +345,24 @@ export function PanelEdicion({
           <fieldset className="ds-field" id="client-profile-iibb">
             <legend className="ds-field__label">Jurisdicciones IIBB</legend>
             {jurisdictionCatalog.isLoading ? (
-              <p>Cargando catálogo de jurisdicciones…</p>
+              <p role="status">Cargando catálogo de jurisdicciones…</p>
             ) : jurisdictionCatalog.isError ? (
-              <Notice tone="error">
+              <Notice
+                tone="error"
+                action={
+                  <Button size="sm" variant="secondary" onClick={() => void jurisdictionCatalog.refetch()}>
+                    Reintentar
+                  </Button>
+                }
+              >
                 No se pudo cargar el catálogo de jurisdicciones. Reintentá.
               </Notice>
+            ) : jurisdictionCatalog.isSuccess && (catalogData?.length ?? 0) === 0 ? (
+              <EmptyState
+                size="inline"
+                title="No hay jurisdicciones cargadas."
+                description="Pedí a quien administra el estudio que las cargue en Catálogos fiscales."
+              />
             ) : (
               <div className="study-check-list">
                 {catalogData?.filter((entry) => entry.isActive).map((entry) => (
@@ -371,10 +403,8 @@ export function PanelEdicion({
               }
             >
               <option value="">Sin definir</option>
-              {standardCatalogUnavailable ? (
-                <option value="" disabled>
-                  No se pudo cargar el catálogo de normas
-                </option>
+              {standardCatalogUnavailable && standardValue ? (
+                <option value={standardValue}>{standardValue}</option>
               ) : null}
               {standardCatalog
                 .filter((entry) => entry.isActive)
@@ -395,6 +425,26 @@ export function PanelEdicion({
               ) : null}
             </select>
           </label>
+          {standardCatalogLoading ? <small role="status">Cargando normas contables…</small> : null}
+          {standardCatalogUnavailable ? (
+            <Notice
+              tone="error"
+              action={
+                <Button size="sm" variant="secondary" onClick={reintentarNormas}>
+                  Reintentar
+                </Button>
+              }
+            >
+              No se pudo cargar el catálogo de normas. Reintentá.
+            </Notice>
+          ) : null}
+          {standardCatalogEmpty ? (
+            <EmptyState
+              size="inline"
+              title="No hay normas contables cargadas."
+              description="Pedí a quien administra el estudio que las cargue en Administración."
+            />
+          ) : null}
           {standardUnknown ? (
             <Notice tone="warning">
               La norma contable guardada no está en el catálogo del estudio. Definila en Administración o elegí una del catálogo para guardar la ficha.
