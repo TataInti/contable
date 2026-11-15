@@ -38,10 +38,7 @@ import {
   DenseHeader,
   DenseLoading,
   DensePage,
-  DenseSearch,
   DenseTable,
-  DenseToggleGroup,
-  DenseToolbar,
   DenseWorkspace,
   Inspector,
   InspectorFacts,
@@ -49,12 +46,13 @@ import {
   StatStrip,
   useDenseShortcuts,
   useDensity,
-  type DenseColumn,
 } from "../ui/Dense";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
 import { formatearFecha } from "../lib/formatoFechas";
-import { MONTH_LONG, MONTH_SHORT, profileGaps, vatLabel } from "./clientes/etiquetas";
+import { columnasCartera } from "./clientes/ColumnasCartera";
+import { FiltrosCartera, hasActiveFilters } from "./clientes/FiltrosCartera";
+import { MONTH_LONG, profileGaps, vatLabel } from "./clientes/etiquetas";
 import { profileFormFrom } from "./clientes/tipos";
 import type {
   AccountingStandardCatalogEntry,
@@ -64,7 +62,7 @@ import type {
   ClientWithProfile,
   ContactRetryTarget,
 } from "./clientes/tipos";
-import { CUIT_ENDINGS, endingGroup, parseEndingFilter } from "./clientes/terminacion";
+import { endingGroup, parseEndingFilter } from "./clientes/terminacion";
 
 
 export function StudyClientes() {
@@ -82,8 +80,6 @@ export function StudyClientes() {
   const endingParam = searchParams.get("terminacion");
   const endingFilter = useMemo(() => parseEndingFilter(endingParam), [endingParam]);
   const grouped = searchParams.get("agrupar") === "terminacion";
-  const hasActiveFilters =
-    search.trim() !== "" || statusFilter !== "" || vatFilter !== "" || onlyIncomplete || endingFilter.length > 0;
   const updateUrl = (change: (params: URLSearchParams) => void) => {
     const next = new URLSearchParams(searchParams);
     change(next);
@@ -526,156 +522,7 @@ export function StudyClientes() {
     }
   }, [contactClientId, query.data]);
 
-  const columns: DenseColumn<ClientWithProfile>[] = [
-    {
-      key: "legalName",
-      header: "Cliente",
-      width: inspectorOpen ? "24%" : "18%",
-      className: "client-list__client-column",
-      sortValue: (row) => row.legalName.toLocaleLowerCase("es-AR"),
-      render: (row) => (
-        <Button
-          type="button"
-          variant="text"
-          size="row"
-          className="dense-name-action"
-          aria-label={row.legalName}
-          title={`${row.legalName}${row.tradeName ? ` — ${row.tradeName}` : ""}`}
-          aria-current={clientId === row.id ? "true" : undefined}
-          onClick={() => openClientWorkspace(row.id)}
-        >
-          <span className="dense-avatar" aria-hidden="true">
-            {row.legalName.slice(0, 1).toLocaleUpperCase("es-AR")}
-          </span>
-          <span className="dense-name__text">
-            <strong>{row.legalName}</strong>
-            {row.tradeName || clientId === row.id ? (
-              <span className="dense-name__secondary">
-                {row.tradeName ? <small>{row.tradeName}</small> : null}
-                {clientId === row.id ? <span className="dense-tag dense-tag--context">En contexto</span> : null}
-              </span>
-            ) : null}
-          </span>
-        </Button>
-      ),
-    },
-    {
-      key: "cuit",
-      header: "CUIT",
-      width: "11%",
-      className: "client-list__cuit-column",
-      sortValue: (row) => row.cuit,
-      render: (row) => <span className="tabular-copy">{formatCuit(row.cuit)}</span>,
-    },
-    {
-      key: "cuitEnding",
-      header: "Terminación de CUIT",
-      width: "10%",
-      className: "client-list__ending-column",
-      sortValue: (row) => (row.cuitEnding == null ? 10 : Number(row.cuitEnding)),
-      render: (row) =>
-        row.cuitEnding == null ? (
-          <span className="dense-dim">Sin CUIT</span>
-        ) : (
-          <span className="tabular-copy">{row.cuitEnding}</span>
-        ),
-    },
-    {
-      key: "vat",
-      header: "Condición IVA",
-      width: inspectorOpen ? "12%" : "10%",
-      className: "client-list__vat-column",
-      sortValue: (row) => vatLabel(row.profile?.vatCondition),
-      render: (row) => vatLabel(row.profile?.vatCondition) || <span className="dense-dim">—</span>,
-    },
-    {
-      key: "province",
-      header: "Provincia",
-      width: inspectorOpen ? "0%" : "5%",
-      className: "client-list__secondary-column",
-      secondary: true,
-      sortValue: (row) => row.profile?.province ?? "",
-      render: (row) => row.profile?.province || <span className="dense-dim">—</span>,
-    },
-    {
-      key: "activity",
-      header: "Actividad",
-      width: inspectorOpen ? "0%" : "5%",
-      className: "client-list__secondary-column",
-      secondary: true,
-      sortValue: (row) => row.profile?.activity ?? "",
-      render: (row) => row.profile?.activity || <span className="dense-dim">—</span>,
-    },
-    {
-      key: "standard",
-      header: "Norma",
-      width: inspectorOpen ? "0%" : "4%",
-      className: "client-list__secondary-column",
-      secondary: true,
-      sortValue: (row) => row.profile?.accountingStandard ?? "",
-      render: (row) => row.profile?.accountingStandard || <span className="dense-dim">—</span>,
-    },
-    {
-      key: "closing",
-      header: "Cierre",
-      width: inspectorOpen ? "0%" : "4%",
-      className: "client-list__secondary-column",
-      secondary: true,
-      sortValue: (row) => row.profile?.fiscalYearEndMonth ?? 0,
-      render: (row) =>
-        row.profile?.fiscalYearEndMonth ? (
-          MONTH_SHORT[row.profile.fiscalYearEndMonth - 1]
-        ) : (
-          <span className="dense-dim">—</span>
-        ),
-    },
-    {
-      key: "gaps",
-      header: "Ficha",
-      width: inspectorOpen ? "10%" : "8%",
-      className: "client-list__profile-column",
-      sortValue: (row) => missingProfileFields(row).length,
-      render: (row) => {
-        const gaps = missingProfileFields(row);
-        return gaps.length === 0 ? (
-          <span className="dense-dim">Completa</span>
-        ) : (
-          <span title={`Falta: ${gaps.join(", ")}`}>
-            <StatusBadge status="MISSING" label={`Faltan ${gaps.length}`} />
-          </span>
-        );
-      },
-    },
-    {
-      key: "status",
-      header: "Estado",
-      width: inspectorOpen ? "22%" : "17%",
-      className: "client-list__status-column",
-      sortValue: (row) => row.status,
-      render: (row) => <StatusBadge status={row.status} />,
-    },
-    {
-      key: "open",
-      header: "",
-      width: inspectorOpen ? "13%" : "9%",
-      className: "client-list__action-column",
-      sticky: "right",
-      align: "right",
-      render: (row) => (
-        <Button
-          size="sm"
-          variant="secondary"
-          aria-label={`Abrir ficha de ${row.legalName}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            openClientSummary(row.id);
-          }}
-        >
-          Abrir
-        </Button>
-      ),
-    },
-  ];
+  const columns = columnasCartera({ inspectorOpen, clientId, openClientWorkspace, openClientSummary });
 
   const inspector = selectedClient ? (
     <Inspector
@@ -903,7 +750,7 @@ export function StudyClientes() {
               <Button size="sm" onClick={openNew}>
                 Crear cliente
               </Button>
-            ) : clients.length > 0 && hasActiveFilters ? (
+            ) : clients.length > 0 && hasActiveFilters({ search, statusFilter, vatFilter, onlyIncomplete, endingFilter }) ? (
               <Button size="sm" variant="secondary" onClick={clearFilters}>
                 Quitar filtros
               </Button>
@@ -972,51 +819,19 @@ export function StudyClientes() {
         </Notice>
       ) : null}
 
-      <DenseToolbar>
-        <DenseSearch
-          inputRef={searchRef}
-          value={search}
-          onChange={setSearch}
-          placeholder="Buscar por nombre o CUIT…"
-          label="Buscar clientes"
-        />
-        <select
-          className="dense-select"
-          aria-label="Filtrar por estado"
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
-        >
-          <option value="">Estado: todos</option>
-          <option value="ACTIVE">Activos</option>
-          <option value="INACTIVE">Inactivos</option>
-        </select>
-        <select
-          className="dense-select"
-          aria-label="Filtrar por condición IVA"
-          value={vatFilter}
-          onChange={(event) => setVatFilter(event.target.value)}
-        >
-          <option value="">IVA: todas</option>
-          {CLIENT_VAT_CONDITIONS.map((value) => (
-            <option key={value} value={value}>
-              {CLIENT_VAT_CONDITION_LABELS[value]}
-            </option>
-          ))}
-        </select>
-        <span className="dense-dim">Terminación de CUIT</span>
-        <DenseToggleGroup
-          label="Terminación de CUIT"
-          options={CUIT_ENDINGS.map((digit) => ({ value: digit, label: digit }))}
-          selected={endingFilter}
-          onChange={setEndingFilter}
-        />
-        <DenseToggleGroup
-          label="Agrupación de la lista"
-          options={[{ value: "terminacion", label: "Agrupar por terminación" }]}
-          selected={grouped ? ["terminacion"] : []}
-          onChange={(next) => setGrouping(next.includes("terminacion"))}
-        />
-      </DenseToolbar>
+      <FiltrosCartera
+        search={search}
+        setSearch={setSearch}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        vatFilter={vatFilter}
+        setVatFilter={setVatFilter}
+        endingFilter={endingFilter}
+        setEndingFilter={setEndingFilter}
+        grouped={grouped}
+        setGrouping={setGrouping}
+        searchRef={searchRef}
+      />
 
       <DenseWorkspace panelId="clients-panel" inspector={inspector}>
         {tableBody}
