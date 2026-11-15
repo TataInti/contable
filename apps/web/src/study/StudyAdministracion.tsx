@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, useNotify } from "@contable/design-system";
+import { Button, EmptyState, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { buildPortalInvitationLink } from "../lib/portalInvitationLink";
@@ -9,270 +9,25 @@ import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import { memberRecoveryCopy, memberRowActions } from "./member-row-actions.js";
-import { ActionDrawer } from "../ui/ActionDrawer";
 import { StudyUserAssignments } from "./StudyUserAssignments";
-import {
-  DenseHeader,
-  DensePage,
-  DenseSearch,
-  DenseTable,
-  DenseTabs,
-  DenseToolbar,
-  DenseWorkspace,
-  Inspector,
-  InspectorFacts,
-  InspectorSection,
-  ShortcutHint,
-  StatStrip,
-  normalizeSearch,
-  useDenseShortcuts,
-  useDensity,
-  type DenseColumn,
-  type DenseTab,
-} from "../ui/Dense";
-import { credentialsCsv, parseBatchUsers, type BatchUserLine } from "./batch-users.js";
+import { DenseHeader, DensePage, DenseSearch, DenseTabs, DenseToolbar, DenseWorkspace, Inspector, InspectorFacts, InspectorSection, StatStrip, normalizeSearch, useDenseShortcuts, useDensity, type DenseTab } from "../ui/Dense";
+import { credentialsCsv, parseBatchUsers } from "./batch-users.js";
 import "./study.css";
 import { formatearFechaHora } from "../lib/formatoFechas";
-
-interface PortalInvitation {
-  id: string;
-  emailNormalized: string;
-  role: string;
-  expiresAt: string;
-  acceptedAt: string | null;
-  revokedAt: string | null;
-}
-interface PortalMembership {
-  id: string;
-  role: string;
-  status: string;
-  revokedAt: string | null;
-  user: { name: string; emailNormalized: string };
-}
-interface CreatedInvitation {
-  invitationToken: string;
-  email: string;
-  expiresAt: string;
-}
-
-interface InternalMember {
-  id: string;
-  userId: string;
-  role: string;
-  status: string;
-  acceptedAt: string | null;
-  user?: { name: string; emailNormalized: string; status: string } | null;
-}
-interface FirmProfile {
-  legalName: string;
-  displayName: string;
-  taxId: string | null;
-  timezone: string;
-}
-interface CreatedInternalUser {
-  userId: string;
-  email: string;
-  name: string;
-  role: string;
-  temporaryPassword: string;
-}
-
-// Recuperación de acceso: el enlace se muestra UNA sola vez; en la base sólo
-// vive el hash del token. El gestor nunca ve ni define la contraseña.
-interface CreatedAccessRecovery {
-  recoveryId: string;
-  expiresAt: string;
-  sessionsRevoked: number;
-  recoveryToken: string;
-}
-
-interface AccountingStandardRow {
-  id: string;
-  name: string;
-  isActive: boolean;
-}
-
-const INTERNAL_ROLE_LABELS: Record<string, string> = {
-  OWNER: "Titular",
-  ADMIN: "Administrador",
-  PREPARER: "Preparador",
-  REVIEWER: "Revisor",
-  AUDITOR_READONLY: "Auditor · sólo lectura",
-};
-
-const INTERNAL_MODULES_BY_ROLE: Record<string, string[]> = {
-  OWNER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
-  ADMIN: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
-  PREPARER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
-  REVIEWER: ["Clientes", "Bandeja documental", "Configuración fiscal", "Trabajo", "Liquidaciones", "Legajo", "Rentabilidad"],
-  AUDITOR_READONLY: ["Clientes", "Configuración fiscal", "Liquidaciones", "Rentabilidad"],
-};
-
-const INTERNAL_ROLE_OPTIONS = Object.entries(INTERNAL_ROLE_LABELS);
-const INTERNAL_MODULES = INTERNAL_MODULES_BY_ROLE.OWNER ?? [];
-const PORTAL_ROLE_LABELS: Record<string, string> = {
-  OWNER: "Titular",
-  COLLABORATOR: "Colaborador",
-  READONLY: "Sólo lectura",
-};
-
-type AdminTab = "internal" | "portal" | "standards" | "profile" | "controls";
-
-const ARGENTINA_TIME_ZONES = [
-  "America/Argentina/Buenos_Aires",
-  "America/Argentina/Catamarca",
-  "America/Argentina/Cordoba",
-  "America/Argentina/Jujuy",
-  "America/Argentina/La_Rioja",
-  "America/Argentina/Mendoza",
-  "America/Argentina/Rio_Gallegos",
-  "America/Argentina/Salta",
-  "America/Argentina/San_Juan",
-  "America/Argentina/San_Luis",
-  "America/Argentina/Tucuman",
-  "America/Argentina/Ushuaia",
-];
-
-const TIME_ZONE_GROUP_LABELS: Record<string, string> = {
-  Africa: "África",
-  America: "América",
-  Antarctica: "Antártida",
-  Arctic: "Ártico",
-  Asia: "Asia",
-  Atlantic: "Atlántico",
-  Australia: "Australia",
-  Etc: "Otros",
-  Europe: "Europa",
-  Indian: "Océano Índico",
-  Pacific: "Pacífico",
-  UTC: "UTC",
-};
-
-interface TimeZoneOption {
-  value: string;
-  label: string;
-}
-
-interface TimeZoneGroup {
-  key: string;
-  label: string;
-  options: TimeZoneOption[];
-}
-
-function timeZoneCityName(timeZone: string): string {
-  return timeZone.split("/").at(-1)?.replaceAll("_", " ") ?? timeZone;
-}
-
-const TIME_ZONE_LABEL_CACHE = new Map<string, string>();
-
-function timeZoneLabel(timeZone: string): string {
-  const cached = TIME_ZONE_LABEL_CACHE.get(timeZone);
-  if (cached) return cached;
-  const city = timeZoneCityName(timeZone);
-  try {
-    const offset = new Intl.DateTimeFormat("es-AR", {
-      timeZone,
-      timeZoneName: "shortOffset",
-    })
-      .formatToParts(new Date())
-      .find((part) => part.type === "timeZoneName")?.value;
-    const label = offset ? `${city} (${offset})` : city;
-    TIME_ZONE_LABEL_CACHE.set(timeZone, label);
-    return label;
-  } catch {
-    TIME_ZONE_LABEL_CACHE.set(timeZone, city);
-    return city;
-  }
-}
-
-const SUPPORTED_TIME_ZONES =
-  typeof Intl.supportedValuesOf === "function"
-    ? Intl.supportedValuesOf("timeZone")
-    : ARGENTINA_TIME_ZONES;
-const TIME_ZONE_OPTIONS = Array.from(
-  new Set([...SUPPORTED_TIME_ZONES, "UTC", ...ARGENTINA_TIME_ZONES]),
-).sort((left, right) => timeZoneCityName(left).localeCompare(timeZoneCityName(right), "es-AR"));
-
-function groupTimeZones(currentTimeZone?: string): TimeZoneGroup[] {
-  const zones = currentTimeZone && !TIME_ZONE_OPTIONS.includes(currentTimeZone)
-    ? [...TIME_ZONE_OPTIONS, currentTimeZone]
-    : TIME_ZONE_OPTIONS;
-  const labelCounts = new Map<string, number>();
-  for (const timeZone of zones) {
-    const label = timeZoneLabel(timeZone);
-    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
-  }
-  const groups = new Map<string, TimeZoneOption[]>();
-  for (const timeZone of zones) {
-    const key = timeZone.split("/")[0] ?? "UTC";
-    const baseLabel = timeZoneLabel(timeZone);
-    const parts = timeZone.split("/");
-    const qualifier = parts.length > 1 ? parts[parts.length - 2] ?? key : key;
-    const label = (labelCounts.get(baseLabel) ?? 0) > 1
-      ? `${baseLabel} · ${TIME_ZONE_GROUP_LABELS[qualifier] ?? qualifier.replaceAll("_", " ")}`
-      : baseLabel;
-    groups.set(key, [...(groups.get(key) ?? []), { value: timeZone, label }]);
-  }
-  return [...groups.entries()]
-    .map(([key, options]) => ({
-      key,
-      label: TIME_ZONE_GROUP_LABELS[key] ?? key,
-      options,
-    }))
-    .sort((left, right) => left.label.localeCompare(right.label, "es-AR"));
-}
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value.trim());
-}
-
-function batchUserErrorLabel(error: string): string {
-  return error.replace(/\bEmail\b/g, "Correo").replace(/\bemail\b/g, "correo");
-}
-
-interface PortalRow {
-  key: string;
-  name: string | null;
-  email: string;
-  role: string;
-  status: string;
-  detail?: string;
-  membership: PortalMembership | null;
-  onRevoke: (() => void) | null;
-  onToggleStatus: (() => void) | null;
-  onEdit: (() => void) | null;
-  pending: boolean;
-}
-
-interface BatchResult {
-  line: BatchUserLine;
-  created: CreatedInternalUser | null;
-  error: string | null;
-}
-
-function initials(name: string | null | undefined): string {
-  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  return parts
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toLocaleUpperCase("es-AR");
-}
-
-function userMutationError(error: unknown, fallback: string): string {
-  const code =
-    error && typeof error === "object" && "code" in error
-      ? String((error as { code?: unknown }).code)
-      : "";
-  if (code === "LAST_ADMIN_REQUIRED") {
-    return "El estudio debe conservar al menos un titular o administrador activo.";
-  }
-  if (code === "USER_EMAIL_CONFLICT") {
-    return "Ese correo ya está asociado a otra cuenta.";
-  }
-  return error instanceof Error && error.message ? error.message : fallback;
-}
+import { type AccountingStandardRow, type AdminTab, type BatchResult, type CreatedAccessRecovery, type CreatedInternalUser, type CreatedInvitation, type FirmProfile, type InternalMember, type PortalInvitation, type PortalMembership, INTERNAL_MODULES, INTERNAL_MODULES_BY_ROLE, INTERNAL_ROLE_LABELS, INTERNAL_ROLE_OPTIONS } from "./administracion/tipos";
+import { groupTimeZones } from "./administracion/zonasHorarias";
+import { batchUserErrorLabel, initials, isValidEmail, userMutationError } from "./administracion/utilidades";
+import { PanelControles } from "./administracion/tablas/PanelControles";
+import { PanelDatosEstudio } from "./administracion/tablas/PanelDatosEstudio";
+import { TablaAccesosPortal, filasDelPortal } from "./administracion/tablas/TablaAccesosPortal";
+import { TablaNormasContables } from "./administracion/tablas/TablaNormasContables";
+import { TablaUsuariosInternos } from "./administracion/tablas/TablaUsuariosInternos";
+import { PanelAltaUsuarios } from "./administracion/paneles/PanelAltaUsuarios";
+import { PanelEditarAcceso } from "./administracion/paneles/PanelEditarAcceso";
+import { PanelEditarDatosEstudio } from "./administracion/paneles/PanelDatosEstudio";
+import { PanelEditarUsuario } from "./administracion/paneles/PanelEditarUsuario";
+import { PanelInvitarPortal } from "./administracion/paneles/PanelInvitarPortal";
+import { PanelNorma } from "./administracion/paneles/PanelNorma";
 
 /** Referencia rol × módulo: reemplaza repetir la lista de módulos en cada fila. */
 function RoleMatrix({ highlight }: { highlight: string | null }) {
@@ -834,101 +589,6 @@ export function StudyAdministracion() {
     updateInternalRole.mutate({ userId: item.userId, role: nextRole });
   };
 
-  const internalColumns: DenseColumn<InternalMember>[] = [
-    {
-      key: "person",
-      header: "Persona",
-      sortValue: (item) => item.user?.name ?? "",
-      render: (item) => (
-        <span className="dense-person">
-          <span className="dense-avatar" aria-hidden="true">
-            {initials(item.user?.name)}
-          </span>
-          <strong>{item.user?.name ?? "Usuario eliminado"}</strong>
-          <span className="dense-person__email">{item.user?.emailNormalized ?? "—"}</span>
-        </span>
-      ),
-    },
-    {
-      key: "role",
-      header: "Rol",
-      width: "190px",
-      sortValue: (item) => INTERNAL_ROLE_LABELS[item.role] ?? item.role,
-      render: (item) => (
-        <>
-          <label className="sr-only" htmlFor={`internal-role-${item.userId}`}>
-            Rol de {item.user?.name ?? "usuario eliminado"}
-          </label>
-          <select
-            id={`internal-role-${item.userId}`}
-            className="dense-select dense-select--inline"
-            value={internalRoleDrafts[item.userId] ?? item.role}
-            disabled={
-              updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId
-            }
-            onChange={(event) => changeRole(item, event.target.value)}
-          >
-            {INTERNAL_ROLE_OPTIONS.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </>
-      ),
-    },
-    {
-      key: "status",
-      header: "Estado",
-      width: "120px",
-      sortValue: (item) => effectiveStatus(item),
-      render: (item) => <StatusBadge status={effectiveStatus(item)} />,
-    },
-    {
-      key: "actions",
-      header: "Acciones",
-      width: "180px",
-      secondary: true,
-      align: "right",
-      render: (item) => (
-        <span className="dense-row-actions">
-          <Button
-            size="row"
-            variant="secondary"
-            aria-label={`Editar a ${item.user?.name ?? "este usuario"}`}
-            onClick={() => openIdentityEdit(item)}
-          >
-            Editar
-          </Button>
-          <details className="dense-inspector-actions__menu administration-user-actions">
-            <summary
-              className="dense-inspector-actions__trigger"
-              aria-label={`Más acciones de ${item.user?.name ?? "este usuario"}`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              Más acciones
-            </summary>
-            <div
-              className="dense-inspector-actions__items"
-              role="group"
-              aria-label={`Acciones de ${item.user?.name ?? "este usuario"}`}
-            >
-              <Button
-                size="row"
-                variant="ghost"
-                aria-label={`Administrar clientes de ${item.user?.name ?? "este usuario"}`}
-                onClick={() => setAssigningMember(item)}
-              >
-                Clientes
-              </Button>
-              {memberActionButtons(item, "ghost")}
-            </div>
-          </details>
-        </span>
-      ),
-    },
-  ];
-
   let internalInspector: ReactNode = null;
   if (tab === "internal" && selectedMember) {
     internalInspector = (
@@ -999,193 +659,16 @@ export function StudyAdministracion() {
     );
   }
 
-  // Accesos del portal: miembros activos e invitaciones en una sola tabla.
-  const portalRows: PortalRow[] = [
-    ...(memberships.data ?? []).map<PortalRow>((item) => ({
-      key: `membership-${item.id}`,
-      name: item.user?.name ?? "Usuario eliminado",
-      email: item.user?.emailNormalized ?? "—",
-      role: item.role,
-      status: item.revokedAt ? "REVOKED" : item.status,
-      membership: item,
-      onRevoke: null,
-      onToggleStatus: () => {
-        setActionError(null);
-        updatePortalMembership.mutate({
-          id: item.id,
-          patch: { status: item.status === "ACTIVE" && !item.revokedAt ? "SUSPENDED" : "ACTIVE" },
-        });
-      },
-      onEdit: () => openPortalEdit(item),
-      pending: updatePortalMembership.isPending && updatePortalMembership.variables?.id === item.id,
-    })),
-    ...(invitations.data ?? [])
-      .filter((item) => !item.acceptedAt)
-      .map<PortalRow>((item) => {
-        const isPending = !item.revokedAt && new Date(item.expiresAt) >= new Date();
-        return {
-          key: `invitation-${item.id}`,
-          name: null,
-          email: item.emailNormalized,
-          role: item.role,
-          status: item.revokedAt ? "REVOKED" : isPending ? "PENDING" : "EXPIRED",
-          detail: isPending ? `vence ${formatearFechaHora(item.expiresAt)}` : undefined,
-          membership: null,
-          onRevoke: isPending
-            ? () =>
-                confirm.ask({
-                  title: `¿Revocar la invitación para ${item.emailNormalized}?`,
-                  description:
-                    "El enlace dejará de funcionar y la persona no podrá aceptar la invitación.",
-                  confirmLabel: "Revocar invitación",
-                  tone: "danger",
-                  onConfirm: () => revokeInvitation.mutate(item.id),
-                })
-            : null,
-          onToggleStatus: null,
-          onEdit: null,
-          pending: revokeInvitation.isPending && revokeInvitation.variables === item.id,
-        };
-      }),
-  ].filter(
-    (row) =>
-      !searchQuery || normalizeSearch(`${row.name ?? ""} ${row.email}`).includes(searchQuery),
-  );
-
-  const portalColumns: DenseColumn<PortalRow>[] = [
-    {
-      key: "person",
-      header: "Persona",
-      sortValue: (row) => row.name ?? row.email,
-      render: (row) => (
-        <span className="dense-person">
-          <span className="dense-avatar" aria-hidden="true">
-            {initials(row.name)}
-          </span>
-          {row.name ? <strong>{row.name}</strong> : null}
-          <span className="dense-person__email">{row.email}</span>
-        </span>
-      ),
-    },
-    {
-      key: "role",
-      header: "Rol",
-      width: "140px",
-      sortValue: (row) => PORTAL_ROLE_LABELS[row.role] ?? row.role,
-      render: (row) => PORTAL_ROLE_LABELS[row.role] ?? row.role,
-    },
-    {
-      key: "status",
-      header: "Estado",
-      width: "260px",
-      sortValue: (row) => row.status,
-      render: (row) => (
-        <span className="dense-cell-inline">
-          <StatusBadge status={row.status} />
-          {row.detail ? <small className="muted-copy">{row.detail}</small> : null}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: "Acción",
-      width: "240px",
-      align: "right",
-      render: (row) => (
-        <span className="dense-row-actions">
-          {row.onEdit ? (
-            <Button
-              size="row"
-              variant="secondary"
-              aria-label={`Editar acceso de ${row.name ?? row.email}`}
-              disabled={row.pending}
-              onClick={row.onEdit}
-            >
-              Editar
-            </Button>
-          ) : null}
-          {row.onToggleStatus ? (
-            <Button
-              size="row"
-              variant={row.status === "ACTIVE" ? "ghost" : "secondary"}
-              className={row.status === "ACTIVE" ? "dense-action--danger" : undefined}
-              aria-label={`${row.status === "ACTIVE" ? "Suspender" : "Reactivar"} acceso de ${row.name ?? row.email}`}
-              loading={row.pending}
-              onClick={row.onToggleStatus}
-            >
-              {row.status === "ACTIVE" ? "Suspender" : "Reactivar"}
-            </Button>
-          ) : null}
-          {row.onRevoke ? (
-            <Button
-              size="row"
-              variant="ghost"
-              className="dense-action--danger"
-              aria-label={`Revocar invitación para ${row.email}`}
-              loading={row.pending}
-              onClick={row.onRevoke}
-            >
-              Revocar
-            </Button>
-          ) : null}
-        </span>
-      ),
-    },
-  ];
-
-  const standardsRows = (accountingStandards.data ?? []).filter(
-    (item) => !searchQuery || normalizeSearch(item.name).includes(searchQuery),
-  );
-  const standardColumns: DenseColumn<AccountingStandardRow>[] = [
-    {
-      key: "name",
-      header: "Norma",
-      sortValue: (item) => item.name,
-      render: (item) => <span className="dense-code">{item.name}</span>,
-    },
-    {
-      key: "status",
-      header: "Estado",
-      width: "140px",
-      sortValue: (item) => item.isActive,
-      render: (item) => <StatusBadge status={item.isActive ? "ACTIVE" : "INACTIVE"} />,
-    },
-    {
-      key: "action",
-      header: "Acción",
-      width: "220px",
-      align: "right",
-      render: (item) => (
-        <span className="dense-row-actions">
-          <Button size="sm" variant="secondary" onClick={() => openStandardEdit(item)}>
-            Editar
-          </Button>
-          <Button
-            size="sm"
-            variant={item.isActive ? "ghost" : "secondary"}
-            loading={updateStandard.isPending && updateStandard.variables?.id === item.id}
-            onClick={() => toggleStandard(item)}
-          >
-            {item.isActive ? "Desactivar" : "Reactivar"}
-          </Button>
-        </span>
-      ),
-    },
-  ];
-
-  const footerWith = (hint: string) => (
-    <>
-      <span>{hint}</span>
-      <span className="dense-table-foot__spacer" />
-      <ShortcutHint
-        items={[
-          ["/", "buscar"],
-          ["N", "nuevo"],
-          ["Esc", "cerrar"],
-        ]}
-      />
-    </>
-  );
+  const portalRows = filasDelPortal({
+    memberships,
+    invitations,
+    searchQuery,
+    updatePortalMembership,
+    openPortalEdit,
+    setActionError,
+    confirm,
+    revokeInvitation,
+  });
 
   const queryState = (loading: boolean, label: string) =>
     loading ? (
@@ -1211,31 +694,19 @@ export function StudyAdministracion() {
           }
         />
       ) : (
-        <DenseTable<InternalMember>
-          label="Usuarios internos"
-          columns={internalColumns}
-          rows={visibleMembers}
-          rowKey={(item) => item.userId}
-          selectedKey={selectedUserId}
-          onSelect={setSelectedUserId}
-          inspectorOpen={Boolean(internalInspector)}
-          rowClassName={(item) => (effectiveStatus(item) === "SUSPENDED" ? "dense-row--muted" : undefined)}
-          footer={footerWith("El estudio debe conservar al menos un titular o administrador activo.")}
-          empty={
-            <EmptyState
-              size="compact"
-              title={
-                allMembers.length === 0
-                  ? "Todavía no hay usuarios internos"
-                  : "Ningún usuario coincide con los filtros"
-              }
-              description={
-                allMembers.length === 0
-                  ? "Creá la primera cuenta del estudio para asignarle un rol."
-                  : "Probá con otro nombre o correo, o quitá filtros."
-              }
-            />
-          }
+        <TablaUsuariosInternos
+          allMembers={allMembers}
+          visibleMembers={visibleMembers}
+          selectedUserId={selectedUserId}
+          setSelectedUserId={setSelectedUserId}
+          internalInspector={internalInspector}
+          internalRoleDrafts={internalRoleDrafts}
+          updateInternalRole={updateInternalRole}
+          changeRole={changeRole}
+          openIdentityEdit={openIdentityEdit}
+          setAssigningMember={setAssigningMember}
+          memberActionButtons={memberActionButtons}
+          effectiveStatus={effectiveStatus}
         />
       ));
   } else if (tab === "portal") {
@@ -1273,21 +744,7 @@ export function StudyAdministracion() {
           }
         />
       ) : (
-        <DenseTable<PortalRow>
-          label="Accesos del portal"
-          columns={portalColumns}
-          rows={portalRows}
-          rowKey={(row) => row.key}
-          rowClassName={(row) => (row.status === "REVOKED" ? "dense-row--muted" : undefined)}
-          footer={footerWith("La invitación vence a los siete días y sólo puede usarse con el correo indicado.")}
-          empty={
-            <EmptyState
-              size="compact"
-              title="Todavía nadie tiene acceso"
-              description="Usá “Invitar al portal” para habilitar a una persona del cliente."
-            />
-          }
-        />
+        <TablaAccesosPortal portalRows={portalRows} />
       )))
     );
   } else if (tab === "profile") {
@@ -1304,32 +761,7 @@ export function StudyAdministracion() {
           }
         />
       ) : firmProfile.data ? (
-        <section className="administration-profile" aria-label="Datos del estudio">
-          <div className="administration-profile__heading">
-            <h2>Datos del estudio</h2>
-            <Button size="sm" variant="secondary" onClick={openProfileEdit}>
-              Editar datos
-            </Button>
-          </div>
-          <dl className="administration-profile__facts">
-            <div>
-              <dt>Razón social</dt>
-              <dd>{firmProfile.data.legalName || "—"}</dd>
-            </div>
-            <div>
-              <dt>Nombre del estudio</dt>
-              <dd>{firmProfile.data.displayName || "—"}</dd>
-            </div>
-            <div>
-              <dt>CUIT</dt>
-              <dd>{firmProfile.data.taxId || "—"}</dd>
-            </div>
-            <div>
-              <dt>Zona horaria</dt>
-              <dd>{timeZoneLabel(firmProfile.data.timezone)}</dd>
-            </div>
-          </dl>
-        </section>
+        <PanelDatosEstudio firmProfile={{ data: firmProfile.data }} openProfileEdit={openProfileEdit} />
       ) : (
         <EmptyState
           title="Datos del estudio no disponibles"
@@ -1343,51 +775,11 @@ export function StudyAdministracion() {
       ));
   } else if (tab === "controls") {
     tableBody = (
-      <section className="study-panel self-review-setting" aria-labelledby="self-review-setting-title">
-        <div className="self-review-setting__heading">
-          <h2 className="self-review-setting__title" id="self-review-setting-title">
-            Permitir autorrevisión de fuentes y legajos
-          </h2>
-          <p>
-            Permite que el Titular y los Administradores revisen los lotes que importaron y
-            revisen y finalicen los legajos que prepararon. Los demás roles siempre necesitan
-            a otra persona. La opción reduce el control interno de cuatro ojos; cada
-            autorrevisión queda registrada en la auditoría.
-          </p>
-        </div>
-        <label className="self-review-setting__toggle">
-          <input
-            type="checkbox"
-            aria-label="Permitir autorrevisión de fuentes y legajos"
-            checked={selfReviewSetting.data?.allowSelfReview ?? false}
-            disabled={
-              !canManageSelfReview ||
-              selfReviewSetting.isLoading ||
-              selfReviewSetting.isError ||
-              updateSelfReviewSetting.isPending
-            }
-            onChange={(event) => updateSelfReviewSetting.mutate(event.target.checked)}
-          />
-          <span>{selfReviewSetting.data?.allowSelfReview ? "Activada" : "Desactivada"}</span>
-        </label>
-        {!canManageSelfReview ? (
-          <small className="muted-copy">Solo el Titular puede cambiar esta opción.</small>
-        ) : null}
-        {selfReviewSetting.isError ? (
-          <p className="form-error" role="alert">
-            {selfReviewSetting.error instanceof Error
-              ? selfReviewSetting.error.message
-              : "No se pudo consultar la configuración de autorrevisión."}
-          </p>
-        ) : null}
-        {updateSelfReviewSetting.isError ? (
-          <p className="form-error" role="alert">
-            {updateSelfReviewSetting.error instanceof Error
-              ? updateSelfReviewSetting.error.message
-              : "No se pudo actualizar la configuración de autorrevisión."}
-          </p>
-        ) : null}
-      </section>
+      <PanelControles
+        selfReviewSetting={selfReviewSetting}
+        updateSelfReviewSetting={updateSelfReviewSetting}
+        canManageSelfReview={canManageSelfReview}
+      />
     );
   } else {
     tableBody =
@@ -1403,28 +795,12 @@ export function StudyAdministracion() {
           }
         />
       ) : (
-        <DenseTable<AccountingStandardRow>
-          label="Normas contables"
-          columns={standardColumns}
-          rows={standardsRows}
-          rowKey={(item) => item.id}
-          rowClassName={(item) => (item.isActive ? undefined : "dense-row--muted")}
-          footer={footerWith("La ficha de cada cliente elige de acá, sin texto libre. Desactivar no altera a los clientes que ya la tienen.")}
-          empty={
-            <EmptyState
-              size="compact"
-              title={
-                (accountingStandards.data?.length ?? 0) === 0
-                  ? "Todavía no hay normas contables"
-                  : "Ninguna norma coincide con la búsqueda"
-              }
-              description={
-                (accountingStandards.data?.length ?? 0) === 0
-                  ? "Creá las normas que usa el estudio para poder seleccionarlas en la ficha de clientes."
-                  : "Probá con otro nombre."
-              }
-            />
-          }
+        <TablaNormasContables
+          accountingStandards={accountingStandards}
+          searchQuery={searchQuery}
+          openStandardEdit={openStandardEdit}
+          updateStandard={updateStandard}
+          toggleStandard={toggleStandard}
         />
       ));
   }
@@ -1525,6 +901,58 @@ export function StudyAdministracion() {
     ...(capabilities.has("firm.manage") ? [{ id: "controls" as const, label: "Controles" }] : []),
   ];
 
+  const tablaResultadoLote = batchResults ? (
+    <table aria-label="Resultado del alta en lote">
+      <thead>
+        <tr>
+          <th>Persona</th>
+          <th>Rol</th>
+          <th>Resultado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {batchResults.map((item) => (
+          <tr key={item.line.line} className={item.error ? "is-bad" : undefined}>
+            <td>
+              <strong>{item.line.name}</strong> <span className="muted-copy">{item.line.email}</span>
+            </td>
+            <td>{INTERNAL_ROLE_LABELS[item.line.role ?? ""] ?? "—"}</td>
+            <td>
+              {item.created ? (
+                <code>{item.created.temporaryPassword}</code>
+              ) : (
+                (item.error ?? "Error")
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : null;
+  const tablaVistaPreviaLote = batchLines.length > 0 ? (
+    <table aria-label="Vista previa del alta en lote">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Correo</th>
+          <th>Rol</th>
+        </tr>
+      </thead>
+      <tbody>
+        {batchLines.map((line) => (
+          <tr key={line.line} className={line.error ? "is-bad" : undefined}>
+            <td>{line.name || "—"}</td>
+            <td>{line.email || "—"}</td>
+            <td>
+              {line.error
+                ? batchUserErrorLabel(line.error)
+                : (INTERNAL_ROLE_LABELS[line.role ?? ""] ?? "—")}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : null;
   return (
     <DensePage density={density} className="administration-users">
       <DenseHeader
@@ -1673,470 +1101,88 @@ export function StudyAdministracion() {
         {tableBody}
       </DenseWorkspace>
 
-      <ActionDrawer
-        isOpen={showInternalInviteForm}
-        onClose={closeInternalDrawer}
-        title="Crear usuarios del estudio"
-        description="Se genera una contraseña temporal por cuenta, que se muestra una sola vez. Cada persona deberá cambiarla al ingresar."
-        size={createMode === "batch" ? "wide" : "default"}
-      >
-        <DenseTabs<"single" | "batch">
-          label="Modo de alta"
-          idPrefix="create-user-mode"
-          tabs={createTabs}
-          active={createMode}
-          onChange={setCreateMode}
-        />
-        <div className="dense-drawer-body">
-          {createMode === "single" ? (
-            createdInternalUser ? (
-              <div className="study-form study-form--compact" role="status">
-                <p>
-                  Cuenta creada para <strong>{createdInternalUser.email}</strong>.
-                </p>
-                <Field
-                  id="internal-temporary-password"
-                  label="Contraseña temporal"
-                  type="text"
-                  readOnly
-                  value={createdInternalUser.temporaryPassword}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void navigator.clipboard.writeText(createdInternalUser.temporaryPassword)}
-                >
-                  Copiar contraseña
-                </Button>
-                <div className="study-form__actions">
-                  <Button type="button" onClick={closeInternalDrawer}>
-                    Terminar
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={() => setCreatedInternalUser(null)}>
-                    Crear otro
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <form
-                className="study-form study-form--compact dense-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  setActionError(null);
-                  inviteInternal.mutate();
-                }}
-              >
-                <Field
-                  id="internal-invite-name"
-                  label="Nombre"
-                  value={internalName}
-                  onChange={(event) => setInternalName(event.target.value)}
-                  required
-                />
-                <Field
-                  id="internal-invite-email"
-                  label="Correo"
-                  type="email"
-                  value={internalEmail}
-                  onChange={(event) => setInternalEmail(event.target.value)}
-                  required
-                />
-                <fieldset className="dense-roles dense-form__full">
-                  <legend className="ds-field__label">Rol interno</legend>
-                  {INTERNAL_ROLE_OPTIONS.map(([value, label]) => (
-                    <label
-                      key={value}
-                      className={`dense-role${internalRole === value ? " dense-role--on" : ""}`}
-                    >
-                      <input
-                        type="radio"
-                        name="internal-role"
-                        value={value}
-                        checked={internalRole === value}
-                        onChange={() => setInternalRole(value)}
-                      />
-                      <span>
-                        <strong>{label}</strong>{" "}
-                        <small>
-                          · {(INTERNAL_MODULES_BY_ROLE[value] ?? []).length} de {INTERNAL_MODULES.length} módulos
-                        </small>
-                      </span>
-                    </label>
-                  ))}
-                  <small className="muted-copy">
-                    {(INTERNAL_MODULES_BY_ROLE[internalRole] ?? []).join(" · ")}
-                  </small>
-                </fieldset>
-                {inviteInternal.isError && actionError ? (
-                  <p className="form-error" role="alert">
-                    {actionError}
-                  </p>
-                ) : null}
-                {!internalEmail.trim() || !internalName.trim() ? (
-                  <p className="form-submit-hint" role="note">
-                    Ingresá nombre y correo para poder crear el usuario.
-                  </p>
-                ) : null}
-                <div className="study-form__actions">
-                  <Button
-                    type="submit"
-                    loading={inviteInternal.isPending}
-                    disabled={!internalEmail.trim() || !internalName.trim()}
-                  >
-                    <Icon name="plus" size={17} /> Crear usuario
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={closeInternalDrawer}>
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            )
-          ) : batchResults ? (
-            <div className="dense-stack" role="status">
-              <p>
-                Se crearon <strong>{batchResults.filter((item) => item.created).length}</strong> de{" "}
-                {batchResults.length} usuarios. Las contraseñas temporales se muestran una sola vez:
-                descargalas ahora.
-              </p>
-              <div className="dense-batch-preview">
-                <table aria-label="Resultado del alta en lote">
-                  <thead>
-                    <tr>
-                      <th>Persona</th>
-                      <th>Rol</th>
-                      <th>Resultado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {batchResults.map((item) => (
-                      <tr key={item.line.line} className={item.error ? "is-bad" : undefined}>
-                        <td>
-                          <strong>{item.line.name}</strong> <span className="muted-copy">{item.line.email}</span>
-                        </td>
-                        <td>{INTERNAL_ROLE_LABELS[item.line.role ?? ""] ?? "—"}</td>
-                        <td>
-                          {item.created ? (
-                            <code>{item.created.temporaryPassword}</code>
-                          ) : (
-                            (item.error ?? "Error")
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="study-form__actions">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={downloadBatchCredentials}
-                  disabled={!batchResults.some((item) => item.created)}
-                >
-                  Descargar CSV
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setBatchText("");
-                    closeInternalDrawer();
-                  }}
-                >
-                  Terminar
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="dense-stack">
-              <label className="ds-field">
-                <span className="ds-field__label">Una persona por línea: nombre, correo, rol</span>
-                <textarea
-                  className="ds-field__input dense-textarea"
-                  rows={6}
-                  value={batchText}
-                  onChange={(event) => setBatchText(event.target.value)}
-                  placeholder={"Lucía Fernández, lucia@estudio.com, Preparador\nMartín Acosta, martin@estudio.com, Revisor"}
-                />
-                <span className="ds-field__hint">
-                  Si falta el rol se asigna Preparador. Podés cambiarlo después desde la tabla.
-                </span>
-              </label>
-              {batchLines.length > 0 ? (
-                <div className="dense-batch-preview">
-                  <table aria-label="Vista previa del alta en lote">
-                    <thead>
-                      <tr>
-                        <th>Nombre</th>
-                        <th>Correo</th>
-                        <th>Rol</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {batchLines.map((line) => (
-                        <tr key={line.line} className={line.error ? "is-bad" : undefined}>
-                          <td>{line.name || "—"}</td>
-                          <td>{line.email || "—"}</td>
-                          <td>
-                            {line.error
-                              ? batchUserErrorLabel(line.error)
-                              : (INTERNAL_ROLE_LABELS[line.role ?? ""] ?? "—")}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-              <div className="study-form__actions">
-                <Button
-                  type="button"
-                  loading={batchRunning}
-                  disabled={validBatchLines.length === 0}
-                  onClick={() => void runBatch()}
-                >
-                  <Icon name="plus" size={17} /> Crear {validBatchLines.length}{" "}
-                  {validBatchLines.length === 1 ? "usuario" : "usuarios"}
-                </Button>
-                <Button type="button" variant="ghost" onClick={closeInternalDrawer}>
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </ActionDrawer>
+      <PanelAltaUsuarios
+        showInternalInviteForm={showInternalInviteForm}
+        closeInternalDrawer={closeInternalDrawer}
+        createMode={createMode}
+        setCreateMode={setCreateMode}
+        createTabs={createTabs}
+        createdInternalUser={createdInternalUser}
+        setCreatedInternalUser={setCreatedInternalUser}
+        internalName={internalName}
+        setInternalName={setInternalName}
+        internalEmail={internalEmail}
+        setInternalEmail={setInternalEmail}
+        internalRole={internalRole}
+        setInternalRole={setInternalRole}
+        inviteInternal={inviteInternal}
+        actionError={actionError}
+        setActionError={setActionError}
+        batchResults={batchResults}
+        batchText={batchText}
+        setBatchText={setBatchText}
+        batchLines={batchLines}
+        validBatchLines={validBatchLines}
+        batchRunning={batchRunning}
+        runBatch={runBatch}
+        downloadBatchCredentials={downloadBatchCredentials}
+        tablaResultadoLote={tablaResultadoLote}
+        tablaVistaPreviaLote={tablaVistaPreviaLote}
+      />
 
       {identityEditing ? (
-        <ActionDrawer
-          isOpen
-          onClose={() => setIdentityEditing(null)}
-          title="Editar usuario"
-          description="Actualizá el nombre y el correo de la cuenta."
-          footer={
-            <>
-              <Button type="submit" form="member-edit-form" loading={updateMemberIdentity.isPending}>
-                Guardar cambios
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setIdentityEditing(null)}>
-                Cancelar
-              </Button>
-            </>
-          }
-        >
-          <form
-            id="member-edit-form"
-            className="study-form study-form--compact administration-user-edit-form"
-            noValidate
-            onSubmit={(event) => {
-              event.preventDefault();
-              setIdentitySubmitted(true);
-              if (!identityName.trim() || !isValidEmail(identityEmail)) return;
-              setActionError(null);
-              updateMemberIdentity.mutate({
-                userId: identityEditing.userId,
-                name: identityName,
-                email: identityEmail,
-              });
-            }}
-          >
-            <Field
-              id="member-edit-name"
-              label="Nombre"
-              value={identityName}
-              onChange={(event) => setIdentityName(event.target.value)}
-              error={identityNameError}
-              required
-            />
-            <Field
-              id="member-edit-email"
-              label="Correo"
-              type="email"
-              value={identityEmail}
-              onChange={(event) => setIdentityEmail(event.target.value)}
-              error={identityEmailError}
-              required
-            />
-            {updateMemberIdentity.isError && actionError ? (
-              <p className="form-error" role="alert">{actionError}</p>
-            ) : null}
-          </form>
-        </ActionDrawer>
+        <PanelEditarUsuario
+          identityEditing={identityEditing}
+          setIdentityEditing={setIdentityEditing}
+          identityName={identityName}
+          setIdentityName={setIdentityName}
+          identityEmail={identityEmail}
+          setIdentityEmail={setIdentityEmail}
+          setIdentitySubmitted={setIdentitySubmitted}
+          identityNameError={identityNameError}
+          identityEmailError={identityEmailError}
+          updateMemberIdentity={updateMemberIdentity}
+          actionError={actionError}
+          setActionError={setActionError}
+        />
       ) : null}
 
       {portalEditing ? (
-        <ActionDrawer
-          isOpen
-          onClose={() => setPortalEditing(null)}
-          title="Editar acceso"
-          description={`Cambiar el rol de ${portalEditing.user?.name ?? "esta persona"}.`}
-        >
-          <form
-            className="study-form study-form--compact"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setActionError(null);
-              updatePortalMembership.mutate({
-                id: portalEditing.id,
-                patch: { role: portalRoleDraft },
-              });
-            }}
-          >
-            <label className="ds-field">
-              <span className="ds-field__label">Rol del portal</span>
-              <select
-                className="ds-field__input"
-                value={portalRoleDraft}
-                onChange={(event) => setPortalRoleDraft(event.target.value)}
-              >
-                {Object.entries(PORTAL_ROLE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </label>
-            {updatePortalMembership.isError && actionError ? (
-              <p className="form-error" role="alert">{actionError}</p>
-            ) : null}
-            <div className="study-form__actions">
-              <Button type="submit" loading={updatePortalMembership.isPending}>
-                Guardar cambios
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setPortalEditing(null)}>
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        </ActionDrawer>
+        <PanelEditarAcceso
+          portalEditing={portalEditing}
+          setPortalEditing={setPortalEditing}
+          portalRoleDraft={portalRoleDraft}
+          setPortalRoleDraft={setPortalRoleDraft}
+          updatePortalMembership={updatePortalMembership}
+          actionError={actionError}
+          setActionError={setActionError}
+        />
       ) : null}
 
       {showProfileForm && profileDraft ? (
-        <ActionDrawer
-          isOpen
-          onClose={() => {
-            setShowProfileForm(false);
-            setProfileDraft(null);
-          }}
-          title="Editar datos del estudio"
-          description="Actualizá la razón social, el nombre, el CUIT y la zona horaria."
-        >
-          <form
-            className="study-form study-form--compact"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setActionError(null);
-              updateFirmProfile.mutate(profileDraft);
-            }}
-          >
-            <Field
-              id="firm-profile-legal-name"
-              label="Razón social"
-              value={profileDraft.legalName}
-              onChange={(event) => setProfileDraft({ ...profileDraft, legalName: event.target.value })}
-            />
-            <Field
-              id="firm-profile-display-name"
-              label="Nombre del estudio"
-              value={profileDraft.displayName}
-              onChange={(event) => setProfileDraft({ ...profileDraft, displayName: event.target.value })}
-            />
-            <Field
-              id="firm-profile-tax-id"
-              label="CUIT"
-              value={profileDraft.taxId ?? ""}
-              onChange={(event) => setProfileDraft({ ...profileDraft, taxId: event.target.value })}
-            />
-            <label className="ds-field">
-              <span className="ds-field__label">Zona horaria</span>
-              <select
-                id="firm-profile-timezone"
-                className="ds-field__input"
-                value={profileDraft.timezone}
-                onChange={(event) => setProfileDraft({ ...profileDraft, timezone: event.target.value })}
-              >
-                {profileTimeZoneGroups.map((group) => (
-                  <optgroup key={group.key} label={group.label}>
-                    {group.options.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-            {updateFirmProfile.isError && actionError ? (
-              <p className="form-error" role="alert">{actionError}</p>
-            ) : null}
-            <div className="study-form__actions">
-              <Button type="submit" loading={updateFirmProfile.isPending}>
-                Guardar cambios
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setShowProfileForm(false);
-                  setProfileDraft(null);
-                }}
-              >
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        </ActionDrawer>
+        <PanelEditarDatosEstudio
+          setShowProfileForm={setShowProfileForm}
+          profileDraft={profileDraft}
+          setProfileDraft={setProfileDraft}
+          profileTimeZoneGroups={profileTimeZoneGroups}
+          updateFirmProfile={updateFirmProfile}
+          actionError={actionError}
+          setActionError={setActionError}
+        />
       ) : null}
 
       {clientId ? (
-        <ActionDrawer
-          isOpen={showInviteForm}
-          onClose={() => setShowInviteForm(false)}
-          title="Invitar al portal"
-          description="Invitación para el cliente seleccionado. Vence a los siete días y sólo puede usarse con el correo indicado."
-        >
-          <form
-            className="study-form study-form--compact dense-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setActionError(null);
-              invite.mutate();
-            }}
-          >
-            <div className="dense-form__full">
-              <Field
-                id="portal-invite-email"
-                label="Correo"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-            </div>
-            <label className="ds-field dense-form__full">
-              <span className="ds-field__label">Rol</span>
-              <select
-                className="ds-field__input"
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-              >
-                <option value="OWNER">Titular</option>
-                <option value="COLLABORATOR">Colaborador</option>
-                <option value="READONLY">Sólo lectura</option>
-              </select>
-            </label>
-            {invite.isError && actionError ? (
-              <p className="form-error" role="alert">
-                {actionError}
-              </p>
-            ) : null}
-            <div className="study-form__actions">
-              <Button type="submit" loading={invite.isPending} disabled={!email.trim()}>
-                <Icon name="plus" size={17} /> Enviar invitación
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setShowInviteForm(false)}>
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        </ActionDrawer>
+        <PanelInvitarPortal
+          showInviteForm={showInviteForm}
+          setShowInviteForm={setShowInviteForm}
+          email={email}
+          setEmail={setEmail}
+          role={role}
+          setRole={setRole}
+          invite={invite}
+          actionError={actionError}
+          setActionError={setActionError}
+        />
       ) : null}
 
       {firmId && assigningMember ? (
@@ -2149,63 +1195,18 @@ export function StudyAdministracion() {
         />
       ) : null}
 
-      <ActionDrawer
-        isOpen={showStandardForm}
-        onClose={() => {
-          setShowStandardForm(false);
-          setStandardEditing(null);
-          setStandardName("");
-        }}
-        title={standardEditing ? "Editar norma contable" : "Nueva norma contable"}
-        description="El nombre es el valor que se muestra y se guarda en la ficha de clientes. No se precargan normas: el estudio define las suyas."
-      >
-        <form
-          className="study-form study-form--compact"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setActionError(null);
-            if (standardEditing)
-              updateStandard.mutate({ id: standardEditing.id, name: standardName.trim() });
-            else createStandard.mutate();
-          }}
-        >
-          <Field
-            id="accounting-standard-name"
-            label="Nombre de la norma"
-            value={standardName}
-            onChange={(event) => setStandardName(event.target.value)}
-            maxLength={100}
-            required
-          />
-          {createStandard.isError || updateStandard.isError ? (
-            actionError ? (
-              <p className="form-error" role="alert">
-                {actionError}
-              </p>
-            ) : null
-          ) : null}
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={createStandard.isPending || updateStandard.isPending}
-              disabled={!standardName.trim()}
-            >
-              {standardEditing ? "Guardar cambios" : "Crear norma"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setShowStandardForm(false);
-                setStandardEditing(null);
-                setStandardName("");
-              }}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </form>
-      </ActionDrawer>
+      <PanelNorma
+        showStandardForm={showStandardForm}
+        setShowStandardForm={setShowStandardForm}
+        standardEditing={standardEditing}
+        setStandardEditing={setStandardEditing}
+        standardName={standardName}
+        setStandardName={setStandardName}
+        createStandard={createStandard}
+        updateStandard={updateStandard}
+        actionError={actionError}
+        setActionError={setActionError}
+      />
       <ConfirmDialog confirm={confirm} />
     </DensePage>
   );
