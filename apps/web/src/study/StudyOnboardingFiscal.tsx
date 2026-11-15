@@ -1,36 +1,36 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
+import { Button, EmptyState, useNotify } from "@contable/design-system";
 import { api } from "../lib/api";
 import { formatCuit } from "../lib/cuit";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import { ActionDrawer } from "../ui/ActionDrawer";
 import { DenseHeader, DensePage, DenseTabs, useDensity } from "../ui/Dense";
 import "./study.css";
-import { formatearFecha } from "../lib/formatoFechas";
 import { PasosFiscales } from "./fiscal/Pasos";
 import { MutationError } from "./fiscal/MutationError";
+import { AvisoConsultas } from "./fiscal/AvisoConsultas";
 import { nextRequiredStepFor, stepCompletionFor, stepStatusLabelFor } from "./fiscal/pasos";
-import {
-  CONDITION_LABELS,
-  periodDisplayLabel,
-  periodName,
-  previousMonth,
-  today,
-  type ClientActivityLink,
-  type EconomicActivity,
-  type FiscalStep,
-  type FiscalTab,
-  type ProfileForm,
-  type TaxObligation,
-  type TaxPeriod,
-  type TaxRegime,
-  type TaxRegistration,
-  type TaxType,
-  type TaxpayerProfileVersion,
-} from "./fiscal/utilidades";
+import { PestanaResumen } from "./fiscal/pestanas/PestanaResumen";
+import { PestanaRegimenes } from "./fiscal/pestanas/PestanaRegimenes";
+import { PestanaActividades } from "./fiscal/pestanas/PestanaActividades";
+import { PestanaPeriodos } from "./fiscal/pestanas/PestanaPeriodos";
+import { CajonPerfil } from "./fiscal/cajones/CajonPerfil";
+import { CajonInscripcion } from "./fiscal/cajones/CajonInscripcion";
+import { CajonActividad } from "./fiscal/cajones/CajonActividad";
+import { CajonPeriodo } from "./fiscal/cajones/CajonPeriodo";
+import { CajonObligacion } from "./fiscal/cajones/CajonObligacion";
+import { previousMonth, today, type ClientActivityLink, type EconomicActivity, type FiscalStep, type FiscalTab, type ProfileForm, type TaxObligation, type TaxPeriod, type TaxRegime, type TaxRegistration, type TaxType, type TaxpayerProfileVersion } from "./fiscal/utilidades";
+
+// Columna «Estado» de Actividades: el texto «Principal» se queda en este archivo (DesignCorrections lo lee aquí).
+function renderEstadoActividad(row: ClientActivityLink) {
+  return !row.validTo && row.isPrimary ? (
+    <span className="muted-copy">Principal</span>
+  ) : (
+    <StatusBadge status={row.validTo ? "FINALIZED" : "ACTIVE"} label={row.validTo ? "Finalizada" : "Vigente"} className="status-badge--regular" />
+  );
+}
 
 export function StudyOnboardingFiscal() {
   const [density] = useDensity();
@@ -252,14 +252,7 @@ export function StudyOnboardingFiscal() {
           </div>
         </dl>
       ) : null}
-      {nextRequiredStep ? (
-        <PasosFiscales
-          nextRequiredStep={nextRequiredStep}
-          stepCompletion={stepCompletion}
-          stepStatusLabel={stepStatusLabel}
-          setTab={setTab}
-        />
-      ) : null}
+      {nextRequiredStep ? <PasosFiscales nextRequiredStep={nextRequiredStep} stepCompletion={stepCompletion} stepStatusLabel={stepStatusLabel} setTab={setTab} /> : null}
 
       <DenseTabs<FiscalTab>
         label="Secciones de la configuración fiscal"
@@ -280,299 +273,21 @@ export function StudyOnboardingFiscal() {
         role="tabpanel"
         aria-labelledby={`fiscal-config-tab-${tab}`}
       >
-        {failedQueries.length > 0 ? (
-          <Notice tone="error">
-            <p>
-              <strong>
-                No pudimos cargar {failedQueries.length === 1 ? failedQueries[0]?.label ?? "la información" : "parte de la información"}.
-              </strong>{" "}
-              Revisá tu conexión e intentá de nuevo.
-            </p>
-            {failedQueries.map((item) =>
-              item.query.isError ? (
-                <Button
-                  key={item.key}
-                  type="button"
-                  variant="text"
-                  size="row"
-                  onClick={() => item.query.refetch()}
-                >
-                  Reintentar {item.label}
-                </Button>
-              ) : null,
-            )}
-          </Notice>
-        ) : null}
+        {failedQueries.length > 0 ? <AvisoConsultas failedQueries={failedQueries} /> : null}
 
-        {tab === "resumen" ? (
-          <>
-            {!nextRequiredStep ? (
-              <p className="fiscal-config__complete">
-                <StatusBadge status="COMPLETED" label="Configuración completa" />
-                <span>El cliente ya tiene todo lo necesario para abrir una liquidación.</span>
-              </p>
-            ) : null}
-
-            <section className="fiscal-section" aria-labelledby="contributor-title">
-              <div className="fiscal-section__heading">
-                <h2 id="contributor-title">Datos del contribuyente</h2>
-                {latestProfile ? <StatusBadge status={latestProfile.status} /> : null}
-              </div>
-              {latestProfile ? (
-                <>
-                  <dl className="fiscal-facts">
-                    <div><dt>Razón social</dt><dd>{latestProfile.legalName}</dd></div>
-                    <div><dt>CUIT</dt><dd>{formatCuit(latestProfile.cuit)}</dd></div>
-                    <div><dt>Tipo</dt><dd>{latestProfile.personType === "JURIDICA" ? "Persona jurídica" : "Persona física"}</dd></div>
-                    <div><dt>Condición</dt><dd>{CONDITION_LABELS[latestProfile.nationalCondition]}</dd></div>
-                    <div><dt>Domicilio fiscal</dt><dd>{latestProfile.fiscalAddress?.trim() || "No cargado"}</dd></div>
-                    <div><dt>Versión</dt><dd>v{latestProfile.version}</dd></div>
-                  </dl>
-                  {canWrite || (profileQuery.data?.length ?? 0) > 1 ? <div className="fiscal-section__actions">
-                    {canWrite && latestProfile.status === "DRAFT" ? <Button size="sm" variant="secondary" onClick={() => submitReview.mutate()} loading={submitReview.isPending}>Enviar a revisión</Button> : null}
-                    {canWrite && latestProfile.status === "IN_REVIEW" ? <Button size="sm" variant="secondary" onClick={() => activate.mutate()} loading={activate.isPending}>Activar perfil</Button> : null}
-                    {canWrite && latestProfile.status === "ACTIVE" ? <Button size="sm" variant="secondary" onClick={() => { setProfileId(null); setForm({ legalName: latestProfile.legalName, cuit: latestProfile.cuit, fiscalAddress: latestProfile.fiscalAddress ?? "", personType: latestProfile.personType, nationalCondition: latestProfile.nationalCondition, validFrom: today }); openStepForm("perfil"); }}>Crear nueva versión</Button> : null}
-                    {(profileQuery.data?.length ?? 0) > 1 ? <Button type="button" size="sm" variant="ghost" onClick={() => setShowProfileHistory((visible) => !visible)} aria-expanded={showProfileHistory}>{showProfileHistory ? "Ocultar historial" : "Ver historial"}</Button> : null}
-                  </div> : null}
-                  {showProfileHistory ? <ul className="fiscal-history" aria-label="Historial de versiones fiscales">
-                    {profileQuery.data?.map((profile) => <li key={profile.id}><span>v{profile.version} · {profile.legalName}</span><StatusBadge status={profile.status} /></li>)}
-                  </ul> : null}
-                </>
-              ) : (
-                <EmptyState
-                  size="compact"
-                  kind="no-data"
-                  title="Todavía no hay un perfil fiscal configurado"
-                  description={
-                    canWrite
-                      ? "Completá los datos del contribuyente para continuar con la configuración fiscal."
-                      : "Tenés acceso de consulta; solicitá permiso de edición para crear el perfil."
-                  }
-                />
-              )}
-            </section>
-
-            <section className="fiscal-section" aria-labelledby="fiscal-setup-title">
-              <div className="fiscal-section__heading">
-                <h2 id="fiscal-setup-title">Configuración vigente</h2>
-              </div>
-              <dl className="fiscal-overview">
-                <div>
-                  <dt>Regímenes</dt>
-                  <dd>
-                    {activeRegistrations.length === 0
-                      ? <span className="muted-copy">Sin regímenes adheridos</span>
-                      : activeRegistrations.map((row) => <span key={row.id} className="fiscal-overview__item">{row.regime.name}</span>)}
-                  </dd>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setTab("regimenes")}>Ver regímenes</Button>
-                </div>
-                <div>
-                  <dt>Actividades</dt>
-                  <dd>
-                    {currentActivities.length === 0
-                      ? <span className="muted-copy">Sin actividades vinculadas</span>
-                      : currentActivities.map((row) => <span key={row.id} className="fiscal-overview__item">{row.activity.code} · {row.activity.name}</span>)}
-                  </dd>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setTab("actividades")}>Ver actividades</Button>
-                </div>
-                <div>
-                  <dt>Períodos</dt>
-                  <dd>
-                    {(periodsQuery.data?.length ?? 0) === 0
-                      ? <span className="muted-copy">Sin períodos fiscales</span>
-                      : <span className="fiscal-overview__item">
-                          {periodsQuery.data?.length} {periodsQuery.data?.length === 1 ? "período" : "períodos"} · {periodsWithObligation} con obligación
-                          {periodsWithoutObligation > 0 ? ` · ${periodsWithoutObligation} sin obligación` : ""}
-                        </span>}
-                  </dd>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setTab("periodos")}>Ver períodos</Button>
-                </div>
-              </dl>
-            </section>
-          </>
-        ) : null}
-
-        {tab === "regimenes" ? (
-          <section className="fiscal-section" aria-labelledby="fiscal-regimes-title">
-            <div className="fiscal-client-overview__heading"><h3 id="fiscal-regimes-title">Regímenes adheridos</h3>{canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("inscripcion")}>Agregar</Button> : null}</div>
-            {registrationsQuery.isLoading ? <p className="muted-copy">Cargando adhesiones…</p> : (registrationsQuery.data?.length ?? 0) === 0 ? <EmptyState size="compact" title="Sin regímenes adheridos" description="Registrá el régimen fiscal que aplica al contribuyente." action={canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("inscripcion")}>Registrar inscripción</Button> : undefined} /> : <Table<TaxRegistration> rows={registrationsQuery.data ?? []} rowKey={(row) => row.id} columns={[
-              { key: "regime", header: "Régimen", render: (row) => <strong>{row.regime.name}{!row.regime.isActive ? " (oculto)" : ""}</strong> },
-              { key: "tax", header: "Impuesto", render: (row) => <>{row.regime.taxType.name}{!row.regime.taxType.isActive ? " (oculto)" : ""}</> },
-              { key: "jurisdiction", header: "Jurisdicción", render: (row) => <>{row.regime.jurisdiction.name}{!row.regime.jurisdiction.isActive ? " (oculto)" : ""}</> },
-              { key: "from", header: "Desde", render: (row) => <span className="tabular-copy">{formatearFecha(row.validFrom)}</span> },
-              { key: "status", header: "Estado", render: (row) => <StatusBadge status={row.status} /> },
-              { key: "actions", header: "", align: "right", render: (row) => canWrite && row.status === "ACTIVE" ? <Button size="sm" variant="ghost" loading={cancelRegistration.isPending} onClick={() => confirm.ask({ title: `¿Dar de baja ${row.regime.name}?`, description: "La adhesión al régimen quedará cancelada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Dar de baja", tone: "danger", onConfirm: () => cancelRegistration.mutate(row.id) })}>Dar de baja</Button> : null },
-            ]} />}
-          </section>
-        ) : null}
-
-        {tab === "actividades" ? (
-          <section className="fiscal-section" aria-labelledby="fiscal-activities-title">
-            <div className="fiscal-client-overview__heading"><h3 id="fiscal-activities-title">Actividades</h3>{canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("actividades")}>Agregar</Button> : null}</div>
-            {clientActivitiesQuery.isLoading ? <p className="muted-copy">Cargando actividades…</p> : (clientActivitiesQuery.data?.length ?? 0) === 0 ? <EmptyState size="compact" title="Sin actividades vinculadas" description="Vinculá la actividad económica principal del contribuyente." action={canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("actividades")}>Vincular actividad</Button> : undefined} /> : <Table<ClientActivityLink> rows={clientActivitiesQuery.data ?? []} rowKey={(row) => row.id} columns={[
-              { key: "code", header: "Código", render: (row) => <strong>{row.activity.code}{!row.activity.isActive ? " (oculto)" : ""}</strong> },
-              { key: "activity", header: "Actividad", render: (row) => <>{row.activity.name}</> },
-              { key: "jurisdiction", header: "Jurisdicción", render: (row) => <>{row.activity.jurisdiction.name}{!row.activity.jurisdiction.isActive ? " (oculto)" : ""}</> },
-              {
-                key: "status",
-                header: "Estado",
-                render: (row) =>
-                  !row.validTo && row.isPrimary ? (
-                    <span className="muted-copy">Principal</span>
-                  ) : (
-                    <StatusBadge
-                      status={row.validTo ? "FINALIZED" : "ACTIVE"}
-                      label={row.validTo ? "Finalizada" : "Vigente"}
-                      className="status-badge--regular"
-                    />
-                  ),
-              },
-              { key: "actions", header: "", align: "right", render: (row) => canWrite && !row.validTo ? <Button size="sm" variant="ghost" loading={endActivity.isPending} onClick={() => confirm.ask({ title: `¿Finalizar ${row.activity.name}?`, description: "La actividad quedará finalizada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Finalizar", tone: "danger", onConfirm: () => endActivity.mutate(row.id) })}>Finalizar</Button> : null },
-            ]} />}
-          </section>
-        ) : null}
-
-        {tab === "periodos" ? (
-          <section className="fiscal-section" aria-labelledby="fiscal-periods-title">
-            <div className="fiscal-client-overview__heading"><h3 id="fiscal-periods-title">Períodos fiscales</h3>{canWrite ? <Button size="sm" variant="ghost" onClick={() => openStepForm("periodos")}>Agregar</Button> : null}</div>
-            {canWrite ? (
-              <form
-                className="fiscal-open-month"
-                onSubmit={(event) => { event.preventDefault(); openMonth.mutate(); }}
-              >
-                <label className="fiscal-open-month__field">
-                  <span>Mes a liquidar</span>
-                  <input
-                    className="ds-field__input"
-                    type="month"
-                    value={monthToOpen}
-                    onChange={(event) => setMonthToOpen(event.target.value)}
-                    required
-                  />
-                </label>
-                <Button type="submit" size="sm" variant="secondary" loading={openMonth.isPending} disabled={!monthToOpen}>
-                  Abrir mes
-                </Button>
-                <small className="muted-copy">
-                  Crea el período y la obligación de cada régimen del cliente, con su vencimiento.
-                </small>
-              </form>
-            ) : null}
-            {periodsQuery.isLoading ? <p className="muted-copy">Cargando períodos…</p> : (periodsQuery.data?.length ?? 0) === 0 ? <EmptyState size="compact" title="Todavía no hay períodos fiscales" description="Creá el período de cada impuesto para poder abrir su obligación." /> : <Table<TaxPeriod> rows={periodsQuery.data ?? []} rowKey={(row) => row.id} columns={[
-              { key: "tax", header: "Impuesto", render: (row) => <strong>{row.taxType.name}{!row.taxType.isActive ? " (oculto)" : ""}</strong> },
-              { key: "period", header: "Período", render: (row) => <>{periodName(row)}</> },
-              {
-                key: "obligation",
-                header: "Obligación",
-                render: (row) => {
-                  const obligation = obligationByPeriod.get(row.id);
-                  return obligation
-                    ? <>{obligation.regime.name} <StatusBadge status={obligation.status} /></>
-                    : <span className="muted-copy">Sin obligación</span>;
-                },
-              },
-              {
-                key: "due",
-                header: "Vencimiento",
-                render: (row) => {
-                  const dueDate = obligationByPeriod.get(row.id)?.dueDate;
-                  return dueDate ? <span className="tabular-copy">{formatearFecha(dueDate)}</span> : <span className="muted-copy">—</span>;
-                },
-              },
-              { key: "actions", header: "", align: "right", render: (row) => canWrite && !obligationByPeriod.has(row.id) ? <Button size="sm" variant="ghost" onClick={() => { setObligationForm({ regimeId: "", periodId: row.id, dueDate: "" }); openStepForm("obligaciones"); }}>Crear obligación</Button> : null },
-            ]} />}
-          </section>
-        ) : null}
+        {tab === "resumen" ? <PestanaResumen nextRequiredStep={nextRequiredStep} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
+        {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} confirm={confirm} /> : null}
+        {tab === "actividades" ? <PestanaActividades canWrite={canWrite} openStepForm={openStepForm} clientActivitiesQuery={clientActivitiesQuery} endActivity={endActivity} confirm={confirm} renderEstado={renderEstadoActividad} /> : null}
+        {tab === "periodos" ? <PestanaPeriodos canWrite={canWrite} monthToOpen={monthToOpen} setMonthToOpen={setMonthToOpen} openMonth={openMonth} periodsQuery={periodsQuery} openStepForm={openStepForm} obligationByPeriod={obligationByPeriod} setObligationForm={setObligationForm} /> : null}
 
         <MutationError error={mutationError} />
       </div>
 
-      <ActionDrawer
-        isOpen={openFormStep === "perfil"}
-        onClose={() => setOpenFormStep(null)}
-        title={latestProfile ? "Crear nueva versión del perfil" : "Crear perfil fiscal"}
-        description="Completá la identidad y condición fiscal del contribuyente."
-        size="wide"
-        footer={
-          <>
-            <Button type="submit" form="fiscal-profile-form" loading={createProfile.isPending}>
-              Crear perfil
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setOpenFormStep(null)}>
-              Cancelar
-            </Button>
-          </>
-        }
-      >
-        <form id="fiscal-profile-form" className="study-form" onSubmit={(event) => { event.preventDefault(); createProfile.mutate(); }}>
-          <Field label="Razón social" id="pf-legal-name" value={form.legalName} onChange={(event) => setForm({ ...form, legalName: event.target.value })} required />
-          <Field label="CUIT" id="pf-cuit" value={form.cuit} onChange={(event) => setForm({ ...form, cuit: event.target.value.replace(/\D/g, "").slice(0, 11) })} inputMode="numeric" pattern="\d{11}" required />
-          <Field label="Domicilio fiscal" id="pf-fiscal-address" value={form.fiscalAddress} onChange={(event) => setForm({ ...form, fiscalAddress: event.target.value })} pattern=".*\S.*" title="Ingresá un domicilio fiscal o dejá el campo vacío." />
-          <div className="ds-field"><label className="ds-field__label" htmlFor="pf-person-type">Tipo de persona</label><select id="pf-person-type" className="ds-field__input" value={form.personType} onChange={(event) => setForm({ ...form, personType: event.target.value as "FISICA" | "JURIDICA" })}><option value="JURIDICA">Jurídica</option><option value="FISICA">Física</option></select></div>
-          <div className="ds-field"><label className="ds-field__label" htmlFor="pf-condition">Condición nacional</label><select id="pf-condition" className="ds-field__input" value={form.nationalCondition} onChange={(event) => setForm({ ...form, nationalCondition: event.target.value as keyof typeof CONDITION_LABELS })}>{Object.entries(CONDITION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-          <Field label="Vigencia desde" id="pf-valid-from" type="date" value={form.validFrom} onChange={(event) => setForm({ ...form, validFrom: event.target.value })} required />
-          <MutationError error={createProfile.error} />
-        </form>
-      </ActionDrawer>
-
-      <ActionDrawer
-        isOpen={openFormStep === "inscripcion"}
-        onClose={() => setOpenFormStep(null)}
-        title="Registrar inscripción"
-        description="Elegí el régimen fiscal aplicable al contribuyente."
-      >
-        <form className="study-form study-form--compact" onSubmit={(event) => { event.preventDefault(); addRegistration.mutate(); }}>
-          <div className="ds-field"><label className="ds-field__label" htmlFor="reg-regime">Régimen</label><select id="reg-regime" className="ds-field__input" value={regimeId} onChange={(event) => setRegimeId(event.target.value)} required><option value="">Seleccioná un régimen…</option>{regimesQuery.data?.map((regime) => <option key={regime.id} value={regime.id}>{regime.name} ({regime.code})</option>)}</select></div>
-          <MutationError error={addRegistration.error} />
-          <div className="study-form__actions"><Button type="submit" loading={addRegistration.isPending} disabled={!regimeId || !effectiveProfileId}>Registrar inscripción</Button><Button type="button" variant="ghost" onClick={() => setOpenFormStep(null)}>Cancelar</Button></div>
-        </form>
-      </ActionDrawer>
-
-      <ActionDrawer
-        isOpen={openFormStep === "actividades"}
-        onClose={() => setOpenFormStep(null)}
-        title="Vincular actividad económica"
-        description="Seleccioná la actividad principal del contribuyente."
-      >
-        <form className="study-form study-form--compact" onSubmit={(event) => { event.preventDefault(); addActivity.mutate(); }}>
-          <div className="ds-field"><label className="ds-field__label" htmlFor="act-activity">Actividad</label><select id="act-activity" className="ds-field__input" value={activityId} onChange={(event) => setActivityId(event.target.value)} required><option value="">Seleccioná una actividad…</option>{activitiesQuery.data?.map((activity) => <option key={activity.id} value={activity.id}>{activity.code} — {activity.name}</option>)}</select></div>
-          <MutationError error={addActivity.error} />
-          <div className="study-form__actions"><Button type="submit" loading={addActivity.isPending} disabled={!activityId || !effectiveProfileId}>Vincular actividad</Button><Button type="button" variant="ghost" onClick={() => setOpenFormStep(null)}>Cancelar</Button></div>
-        </form>
-      </ActionDrawer>
-
-      <ActionDrawer
-        isOpen={openFormStep === "periodos"}
-        onClose={() => setOpenFormStep(null)}
-        title="Crear período fiscal"
-        description="Definí las fechas reales antes de materializar obligaciones."
-        size="wide"
-      >
-        <form className="study-form" onSubmit={(event) => { event.preventDefault(); createPeriod.mutate(); }}>
-          <div className="ds-field"><label className="ds-field__label" htmlFor="per-tax-type">Impuesto</label><select id="per-tax-type" className="ds-field__input" value={periodForm.taxTypeId} onChange={(event) => setPeriodForm({ ...periodForm, taxTypeId: event.target.value })} required><option value="">Seleccioná un impuesto…</option>{typesQuery.data?.map((type) => <option key={type.id} value={type.id}>{type.name} ({type.code})</option>)}</select></div>
-          <Field label="Desde" id="per-start" type="date" value={periodForm.startDate} onChange={(event) => setPeriodForm({ ...periodForm, startDate: event.target.value })} required />
-          <Field label="Hasta" id="per-end" type="date" value={periodForm.endDate} onChange={(event) => setPeriodForm({ ...periodForm, endDate: event.target.value })} required />
-          <Field label="Etiqueta (opcional)" id="per-label" value={periodForm.label} onChange={(event) => setPeriodForm({ ...periodForm, label: event.target.value })} placeholder="Ej. Agosto 2026" />
-          <MutationError error={createPeriod.error} />
-          <div className="study-form__actions"><Button type="submit" loading={createPeriod.isPending} disabled={!periodForm.taxTypeId || periodForm.endDate < periodForm.startDate}>Crear período</Button><Button type="button" variant="ghost" onClick={() => setOpenFormStep(null)}>Cancelar</Button></div>
-        </form>
-      </ActionDrawer>
-
-      <ActionDrawer
-        isOpen={openFormStep === "obligaciones"}
-        onClose={() => setOpenFormStep(null)}
-        title="Crear obligación"
-        description="Vinculá un régimen activo con su período fiscal y vencimiento."
-        size="wide"
-      >
-        <form className="study-form study-form--compact" onSubmit={(event) => { event.preventDefault(); createObligation.mutate(); }}>
-          <div className="ds-field"><label className="ds-field__label" htmlFor="obl-period">Período fiscal</label><select id="obl-period" className="ds-field__input" value={obligationForm.periodId} onChange={(event) => setObligationForm({ ...obligationForm, periodId: event.target.value, regimeId: "" })} required><option value="">Seleccioná un período…</option>{selectablePeriods.map((period) => <option key={period.id} value={period.id}>{period.taxType.name} · {periodDisplayLabel(period)}</option>)}</select></div>
-          <div className="ds-field"><label className="ds-field__label" htmlFor="obl-regime">Régimen adherido</label><select id="obl-regime" className="ds-field__input" value={obligationForm.regimeId} onChange={(event) => setObligationForm({ ...obligationForm, regimeId: event.target.value })} required disabled={!obligationForm.periodId}><option value="">Seleccioná un régimen…</option>{eligibleRegistrations.map((registration) => <option key={registration.id} value={registration.regime.id}>{registration.regime.name}{!registration.regime.isActive ? " (oculto)" : ""} · {registration.regime.jurisdiction.name}{!registration.regime.jurisdiction.isActive ? " (oculto)" : ""}</option>)}</select></div>
-          <Field label="Vencimiento (opcional)" id="obl-due-date" type="date" value={obligationForm.dueDate} onChange={(event) => setObligationForm({ ...obligationForm, dueDate: event.target.value })} />
-          <MutationError error={createObligation.error} />
-          <div className="study-form__actions"><Button type="submit" loading={createObligation.isPending} disabled={!effectiveProfileId || !obligationForm.regimeId || !obligationForm.periodId}>Crear obligación</Button><Button type="button" variant="ghost" onClick={() => setOpenFormStep(null)}>Cancelar</Button></div>
-        </form>
-      </ActionDrawer>
+      <CajonPerfil openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} latestProfile={latestProfile} createProfile={createProfile} form={form} setForm={setForm} />
+      <CajonInscripcion openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} regimeId={regimeId} setRegimeId={setRegimeId} addRegistration={addRegistration} regimesQuery={regimesQuery} effectiveProfileId={effectiveProfileId} />
+      <CajonActividad openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} activityId={activityId} setActivityId={setActivityId} addActivity={addActivity} activitiesQuery={activitiesQuery} effectiveProfileId={effectiveProfileId} />
+      <CajonPeriodo openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} periodForm={periodForm} setPeriodForm={setPeriodForm} createPeriod={createPeriod} typesQuery={typesQuery} />
+      <CajonObligacion openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} obligationForm={obligationForm} setObligationForm={setObligationForm} createObligation={createObligation} selectablePeriods={selectablePeriods} eligibleRegistrations={eligibleRegistrations} effectiveProfileId={effectiveProfileId} />
 
       <ConfirmDialog confirm={confirm} />
     
