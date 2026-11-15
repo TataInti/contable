@@ -111,13 +111,27 @@ function fuenteDemo(code: string, label: string) {
   };
 }
 
-const coberturaDemo = {
-  components: [],
-  sources: [
-    fuenteDemo("ARCA_IVA_SALES", "ARCA IVA ventas"),
-    fuenteDemo("ARCA_IVA_PURCHASES", "ARCA IVA compras"),
-  ],
+export const fuentesDemo = [
+  fuenteDemo("ARCA_IVA_SALES", "ARCA IVA ventas"),
+  fuenteDemo("ARCA_IVA_PURCHASES", "ARCA IVA compras"),
+];
+
+// Fuente que no es de IVA: su lote se importa con «Importar lote».
+export const fuenteRetencionesDemo = {
+  code: "RETENCIONES_IIBB_DEMO",
+  label: "Retenciones IIBB Demo",
+  required: false,
+  present: false,
+  count: 0,
+  taxTypeId: "tax-type-a",
+  periodId: "period-a",
+  origin: "ARCA",
+  adapterVersion: "RET_V1",
+  expectedColumns: ["fecha", "comprobante", "importe"],
+  batches: [],
 };
+
+const coberturaDemo = { components: [], sources: fuentesDemo };
 
 const sinClasificaciones = { total: 0, classified: 0, pending: 0, ready: true, items: [] };
 const sinImputaciones = { total: 0, allocated: 0, pending: 0, ready: true, items: [] };
@@ -128,6 +142,7 @@ export interface OpcionesDemo {
   saldos?: unknown[];
   documentos?: unknown[];
   posiciones?: unknown[];
+  fuentes?: unknown[];
 }
 
 /** Respuestas de lectura de la pantalla. Las rutas no previstas devuelven una lista vacía. */
@@ -141,7 +156,11 @@ export function rutasDemo(opciones: OpcionesDemo = {}) {
     if (path.endsWith("/tax-periods")) return Promise.resolve(periodos);
     if (path.includes("/monthly-tax-workpapers?")) return Promise.resolve(legajos);
     if (path.endsWith("/documents")) return Promise.resolve(documentos);
-    if (path.endsWith("/coverage")) return Promise.resolve(coberturaDemo);
+    if (path.endsWith("/coverage")) {
+      return Promise.resolve(
+        opciones.fuentes ? { ...coberturaDemo, sources: opciones.fuentes } : coberturaDemo,
+      );
+    }
     if (path.endsWith("/classifications")) return Promise.resolve(sinClasificaciones);
     if (path.endsWith("/allocations")) return Promise.resolve(sinImputaciones);
     if (path.endsWith("/calculation")) return Promise.resolve([]);
