@@ -50,6 +50,8 @@ import {
   calculationDisabledMessage,
   calculationLabel,
 } from "./legajo/etiquetas";
+import { formatDate, formatDateTime, formatMoney, selfReviewNote } from "./legajo/formato";
+import { fileToBase64, fileToHash, hashSourceFile, parseSourceFile } from "./legajo/archivoFuente";
 import "./study.css";
 
 function WorkpaperActionError({ error }: { error: Error | null | undefined }) {
@@ -84,39 +86,6 @@ function WorkpaperActionError({ error }: { error: Error | null | undefined }) {
  *   saldos → fuentes → clasificación → cálculo → controles → cierre.
  * Cada total permite drill-down hasta la evidencia fuente.
  */
-
-export function formatMoney(value: string | undefined | null): string {
-  const num = Number(value ?? 0);
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(num);
-}
-
-/** Una sola nota cuando quien preparó el legajo también lo revisó o lo finalizó. */
-export function selfReviewNote(wp: {
-  preparedByUserId?: string | null;
-  reviewedByUserId?: string | null;
-  finalizedByUserId?: string | null;
-}): string | null {
-  if (!wp.preparedByUserId) return null;
-  const reviewed = wp.reviewedByUserId === wp.preparedByUserId;
-  const finalized = wp.finalizedByUserId === wp.preparedByUserId;
-  if (reviewed && finalized) return "Legajo revisado y finalizado por la misma persona que lo preparó.";
-  if (reviewed) return "Legajo revisado por la misma persona que lo preparó.";
-  if (finalized) return "Legajo finalizado por la misma persona que lo preparó.";
-  return null;
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return "Sin vencimiento";
-  return new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" }).format(new Date(value));
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("es-AR", {
-    timeZone: "UTC",
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
 
 export function SifereAnalysisPanel({ analysis }: { analysis: SifereAnalysis }) {
   return (
@@ -173,80 +142,6 @@ export function SifereAnalysisPanel({ analysis }: { analysis: SifereAnalysis }) 
       </small>
     </div>
   );
-}
-
-function parseDelimitedRow(line: string, delimiter: string): string[] {
-  const cells: string[] = [];
-  let current = "";
-  let quoted = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index]!;
-    if (character === '"') {
-      if (quoted && line[index + 1] === '"') {
-        current += '"';
-        index += 1;
-      } else {
-        quoted = !quoted;
-      }
-    } else if (character === delimiter && !quoted) {
-      cells.push(current.trim());
-      current = "";
-    } else {
-      current += character;
-    }
-  }
-  cells.push(current.trim());
-  return cells;
-}
-
-export function parseSourceFile(fileName: string, content: string): Record<string, unknown>[] {
-  if (fileName.toLowerCase().endsWith(".json")) {
-    const parsed = JSON.parse(content) as unknown;
-    if (!Array.isArray(parsed) || parsed.some((row) => !row || typeof row !== "object")) {
-      throw new Error("El JSON debe contener un arreglo de filas");
-    }
-    return parsed as Record<string, unknown>[];
-  }
-
-  const lines = content
-    .replace(/^\uFEFF/, "")
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0);
-  if (lines.length < 2) throw new Error("El archivo debe contener encabezado y al menos una fila");
-  const delimiter = [";", "\t", ","].sort(
-    (left, right) => lines[0]!.split(right).length - lines[0]!.split(left).length,
-  )[0]!;
-  const headers = parseDelimitedRow(lines[0]!, delimiter);
-  if (new Set(headers).size !== headers.length || headers.some((header) => !header)) {
-    throw new Error("El encabezado contiene columnas vacías o duplicadas");
-  }
-  return lines.slice(1).map((line) => {
-    const values = parseDelimitedRow(line, delimiter);
-    return Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]));
-  });
-}
-
-export async function hashSourceFile(content: string): Promise<string> {
-  const bytes = new TextEncoder().encode(content);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  const chunk = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk));
-  }
-  return btoa(binary);
-}
-
-async function fileToHash(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const digest = await crypto.subtle.digest("SHA-256", buffer);
-  return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function StudyExpedienteMensual() {

@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculationDisabledMessage } from "./etiquetas";
-import {
-  formatMoney,
-  hashSourceFile,
-  parseSourceFile,
-  selfReviewNote,
-} from "../StudyExpedienteMensual";
+import { formatMoney, selfReviewNote } from "./formato";
+import { hashSourceFile, parseSourceFile } from "./archivoFuente";
 
 // Datos sintéticos rotulados «Demo»: nombres, usuarios y cifras inventados, sin datos de clientes.
 
