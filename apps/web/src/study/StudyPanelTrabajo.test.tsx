@@ -360,4 +360,37 @@ describe("Panel de trabajo: pantalla", () => {
     ).toBeTruthy();
     expect(screen.getByText("2 de 2 obligaciones")).toBeTruthy();
   });
+
+  it("cada par etiqueta y control de la barra queda en un único contenedor con el nombre accesible del control", async () => {
+    renderPanel();
+    await tablaPanel();
+    const etiquetas = Array.from(
+      document.querySelectorAll<HTMLElement>(".dense-toolbar .panel-trabajo__filtro"),
+    )
+      .map((par) => par.querySelector(".dense-dim, .ds-field__label")?.textContent)
+      .filter((texto): texto is string => texto !== undefined);
+    expect(etiquetas).toEqual([
+      "Responsable",
+      "Terminación de CUIT",
+      "Impuesto",
+      "Estado",
+      "Período fiscal",
+      "Vencimiento desde",
+      "Vencimiento hasta",
+    ]);
+    const controles: Array<[string, HTMLElement]> = [
+      ["Responsable", screen.getByRole("combobox", { name: "Responsable" })],
+      ["Terminación de CUIT", screen.getByRole("group", { name: "Terminación de CUIT" })],
+      ["Impuesto", screen.getByRole("combobox", { name: "Impuesto" })],
+      ["Estado", screen.getByRole("combobox", { name: "Estado" })],
+      ["Período fiscal", screen.getByRole("combobox", { name: "Período fiscal" })],
+      ["Vencimiento desde", screen.getByLabelText("Vencimiento desde")],
+      ["Vencimiento hasta", screen.getByLabelText("Vencimiento hasta")],
+    ];
+    for (const [etiqueta, control] of controles) {
+      const par = control.closest<HTMLElement>(".panel-trabajo__filtro");
+      expect(par, `el control «${etiqueta}» debe quedar dentro de su par`).not.toBeNull();
+      expect(par?.querySelector(".dense-dim, .ds-field__label")?.textContent).toBe(etiqueta);
+    }
+  });
 });

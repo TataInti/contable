@@ -422,81 +422,91 @@ export function StudyPanelTrabajo() {
             Mis obligaciones ×
           </Button>
         ) : null}
-        <span className="dense-dim">Responsable</span>
-        <select
-          className="dense-select"
-          aria-label="Responsable"
-          value={filtros.responsable}
-          onChange={(evento) =>
-            cambiarFiltros((actual) => ({ ...actual, responsable: evento.target.value }))
-          }
-        >
-          <option value={RESPONSABLE_MIS}>Mis obligaciones</option>
-          <option value={RESPONSABLE_TODOS}>Todo el estudio</option>
-          {responsables.map((opcion) => (
-            <option key={opcion.value} value={opcion.value}>
-              {opcion.label}
-            </option>
-          ))}
-        </select>
-        <span className="dense-dim">Terminación de CUIT</span>
-        <DenseToggleGroup
-          label="Terminación de CUIT"
-          options={CUIT_ENDINGS.map((digito) => ({ value: digito, label: digito }))}
-          selected={filtros.terminacion}
-          onChange={(siguiente) =>
-            cambiarFiltros((actual) => ({ ...actual, terminacion: siguiente }))
-          }
-        />
-        <span className="dense-dim">Impuesto</span>
-        <select
-          className="dense-select"
-          aria-label="Impuesto"
-          value={filtros.impuesto}
-          onChange={(evento) =>
-            cambiarFiltros((actual) => ({ ...actual, impuesto: evento.target.value }))
-          }
-        >
-          <option value="">Impuesto: todos</option>
-          {impuestos.map((opcion) => (
-            <option key={opcion.value} value={opcion.value}>
-              {opcion.label}
-            </option>
-          ))}
-        </select>
-        <span className="dense-dim">Estado</span>
-        <select
-          className="dense-select"
-          aria-label="Estado"
-          value={filtros.estado}
-          onChange={(evento) =>
-            cambiarFiltros((actual) => ({ ...actual, estado: evento.target.value }))
-          }
-        >
-          <option value="">Estado: todos</option>
-          {opcionesEstado().map((opcion) => (
-            <option key={opcion.value} value={opcion.value}>
-              {opcion.label}
-            </option>
-          ))}
-        </select>
-        <span className="dense-dim">Período fiscal</span>
-        <select
-          className="dense-select"
-          aria-label="Período fiscal"
-          value={filtros.periodo}
-          onChange={(evento) =>
-            cambiarFiltros((actual) => ({ ...actual, periodo: evento.target.value }))
-          }
-        >
-          <option value="">Período: todos</option>
-          {periodos.map((opcion) => (
-            <option key={opcion.value} value={opcion.value}>
-              {opcion.label}
-            </option>
-          ))}
-        </select>
-        <label className="ds-field">
+        <div className="panel-trabajo__filtro">
+          <span className="dense-dim">Responsable</span>
+          <select
+            className="dense-select"
+            aria-label="Responsable"
+            value={filtros.responsable}
+            onChange={(evento) =>
+              cambiarFiltros((actual) => ({ ...actual, responsable: evento.target.value }))
+            }
+          >
+            <option value={RESPONSABLE_MIS}>Mis obligaciones</option>
+            <option value={RESPONSABLE_TODOS}>Todo el estudio</option>
+            {responsables.map((opcion) => (
+              <option key={opcion.value} value={opcion.value}>
+                {opcion.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="panel-trabajo__filtro">
+          <span className="dense-dim">Terminación de CUIT</span>
+          <DenseToggleGroup
+            label="Terminación de CUIT"
+            options={CUIT_ENDINGS.map((digito) => ({ value: digito, label: digito }))}
+            selected={filtros.terminacion}
+            onChange={(siguiente) =>
+              cambiarFiltros((actual) => ({ ...actual, terminacion: siguiente }))
+            }
+          />
+        </div>
+        <div className="panel-trabajo__filtro">
+          <span className="dense-dim">Impuesto</span>
+          <select
+            className="dense-select"
+            aria-label="Impuesto"
+            value={filtros.impuesto}
+            onChange={(evento) =>
+              cambiarFiltros((actual) => ({ ...actual, impuesto: evento.target.value }))
+            }
+          >
+            <option value="">Impuesto: todos</option>
+            {impuestos.map((opcion) => (
+              <option key={opcion.value} value={opcion.value}>
+                {opcion.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="panel-trabajo__filtro">
+          <span className="dense-dim">Estado</span>
+          <select
+            className="dense-select"
+            aria-label="Estado"
+            value={filtros.estado}
+            onChange={(evento) =>
+              cambiarFiltros((actual) => ({ ...actual, estado: evento.target.value }))
+            }
+          >
+            <option value="">Estado: todos</option>
+            {opcionesEstado().map((opcion) => (
+              <option key={opcion.value} value={opcion.value}>
+                {opcion.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="panel-trabajo__filtro">
+          <span className="dense-dim">Período fiscal</span>
+          <select
+            className="dense-select"
+            aria-label="Período fiscal"
+            value={filtros.periodo}
+            onChange={(evento) =>
+              cambiarFiltros((actual) => ({ ...actual, periodo: evento.target.value }))
+            }
+          >
+            <option value="">Período: todos</option>
+            {periodos.map((opcion) => (
+              <option key={opcion.value} value={opcion.value}>
+                {opcion.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <label className="ds-field panel-trabajo__filtro">
           <span className="ds-field__label">Vencimiento desde</span>
           <input
             ref={desdeRef}
@@ -508,7 +518,7 @@ export function StudyPanelTrabajo() {
             }
           />
         </label>
-        <label className="ds-field">
+        <label className="ds-field panel-trabajo__filtro">
           <span className="ds-field__label">Vencimiento hasta</span>
           <input
             className="ds-field__input"
@@ -520,9 +530,11 @@ export function StudyPanelTrabajo() {
           />
         </label>
         {hayFiltros ? (
-          <Button size="sm" variant="ghost" onClick={quitarFiltros}>
-            Quitar filtros
-          </Button>
+          <div className="panel-trabajo__filtro">
+            <Button size="sm" variant="ghost" onClick={quitarFiltros}>
+              Quitar filtros
+            </Button>
+          </div>
         ) : null}
       </DenseToolbar>
       {avisoError}

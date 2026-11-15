@@ -15,3 +15,30 @@ table[aria-label="Panel de trabajo"] thead th,
 table[aria-label="Panel de trabajo"] tbody td {
   padding-inline: var(--ds-space-2);
 }
+
+/*
+ * Barra de filtros (corte 4b, ajuste): cada par etiqueta + control es una unidad que no se parte al envolver.
+ * La etiqueta y el control comparten el borde superior (align-items: stretch) y el texto de la etiqueta queda centrado.
+ * Solución local del panel: DenseToolbar del sistema de diseño no se toca.
+ */
+.panel-trabajo__filtro {
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--ds-space-1);
+  white-space: nowrap;
+}
+
+.panel-trabajo__filtro > .dense-dim,
+.panel-trabajo__filtro > .ds-field__label {
+  display: flex;
+  align-items: center;
+}
+
+/* Los pares de fecha van con la etiqueta a la izquierda del control, no apilados. */
+.panel-trabajo__filtro.ds-field {
+  flex-direction: row;
+}
+
+.panel-trabajo__filtro .ds-field__input {
+  inline-size: auto;
+}
