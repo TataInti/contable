@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, ConfirmDialog, EmptyState, Field, MoneyField, Table, useConfirmAction, useNotify } from "@contable/design-system";
+import { Button, ConfirmDialog, EmptyState, MoneyField, Table, useConfirmAction, useNotify } from "@contable/design-system";
 import {
   MONOTRIBUTO_CATEGORY_CODES,
   type CatalogEconomicActivity,
@@ -10,7 +10,6 @@ import type { TaxEngineOption } from "@contable/contracts";
 import { ApiError, api } from "../lib/api";
 import { FieldErrorsFromDetails } from "../components/forms/FieldErrorsFromDetails";
 import { useClientContext } from "../context/ClientContext";
-import { ActionDrawer } from "../ui/ActionDrawer";
 import { DeletionDrawer } from "../ui/DeletionDrawer";
 import { RuleSimulator } from "./RuleSimulator";
 import type {
@@ -23,8 +22,14 @@ import type {
   RuleStatus,
   RuleVersion,
 } from "./reglas/tipos";
-import { sameRuleRows, shortDate, today, validateRuleVersionDate } from "./reglas/utilidades";
+import { sameRuleRows, shortDate, today } from "./reglas/utilidades";
 import { ListaPaquetes } from "./reglas/ListaPaquetes";
+import { PanelNuevoPaquete } from "./reglas/paneles/PanelNuevoPaquete";
+import { PanelVencimiento } from "./reglas/paneles/PanelVencimiento";
+import { PanelFuente } from "./reglas/paneles/PanelFuente";
+import { PanelPrimeraVersion } from "./reglas/paneles/PanelPrimeraVersion";
+import { PanelModificarAlicuotas } from "./reglas/paneles/PanelModificarAlicuotas";
+import { ConfirmarActivacion } from "./reglas/ConfirmarActivacion";
 import { getStatusBadgeMeta, StatusBadge } from "../ui/StatusBadge";
 import { Icon } from "../ui/Icon";
 import {
@@ -536,367 +541,58 @@ export function StudyReglasFiscales() {
         versión a partir de la vigente. Las versiones antiguas conservan su flujo de revisión.
       </p>
 
-      <ActionDrawer
-        isOpen={showPackForm}
-        onClose={() => setShowPackForm(false)}
-        title="Nuevo paquete de reglas"
-        description="Iniciá la configuración para un régimen y luego abrí su primera versión."
-        size="wide"
-      >
-        <form
-          className="study-form fiscal-action-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            createPackMutation.mutate();
-          }}
-        >
-          <Field
-            label="Código"
-            id="new-rule-pack-code"
-            value={newPack.code}
-            onChange={(event) => setNewPack({ ...newPack, code: event.target.value.toUpperCase() })}
-            placeholder="IVA-RI-ARCA"
-            required
-          />
-          <Field
-            label="Nombre"
-            id="new-rule-pack-name"
-            value={newPack.name}
-            onChange={(event) => setNewPack({ ...newPack, name: event.target.value })}
-            placeholder="IVA Responsable Inscripto"
-            required
-          />
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="new-rule-pack-regime">
-              Régimen
-            </label>
-            <select
-              id="new-rule-pack-regime"
-              className="ds-field__input"
-              value={newPack.regimeId}
-              onChange={(event) => setNewPack({ ...newPack, regimeId: event.target.value })}
-              required
-            >
-              <option value="">Seleccioná un régimen…</option>
-              {regimesQuery.data?.map((regime) => (
-                <option key={regime.id} value={regime.id}>
-                  {regime.name} · {regime.taxType.name} · {regime.jurisdiction.name}
-                </option>
-              ))}
-            </select>
-            {regimesQuery.isError ? (
-              <p className="form-error" role="alert">
-                No pudimos consultar los regímenes.{" "}
-                <button type="button" className="fiscal-retry" onClick={() => void regimesQuery.refetch()}>
-                  Reintentar
-                </button>
-              </p>
-            ) : regimesQuery.isSuccess && regimesQuery.data.length === 0 ? (
-              <p className="form-submit-hint" role="note">
-                Todavía no hay regímenes. Creá uno en{" "}
-                <a
-                  className="dense-link"
-                  href="/catalogos-fiscales"
-                >
-                  Catálogos fiscales
-                </a>.
-              </p>
-            ) : null}
-          </div>
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={createPackMutation.isPending}
-              disabled={!newPack.code.trim() || !newPack.name.trim() || !newPack.regimeId}
-            >
-              Crear paquete
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setShowPackForm(false)}>
-              Cancelar
-            </Button>
-          </div>
-          {!newPack.code.trim() || !newPack.name.trim() || !newPack.regimeId ? (
-            <p className="form-submit-hint" role="note">
-              Completá código, nombre y régimen para poder crear el paquete.
-            </p>
-          ) : null}
-        </form>
-      </ActionDrawer>
+      <PanelNuevoPaquete
+        showPackForm={showPackForm}
+        setShowPackForm={setShowPackForm}
+        newPack={newPack}
+        setNewPack={setNewPack}
+        createPackMutation={createPackMutation}
+        regimesQuery={regimesQuery}
+      />
 
-      <ActionDrawer
-        isOpen={showDueDateForm && editable}
-        onClose={() => setShowDueDateForm(false)}
-        title="Agregar vencimiento"
-        description="Definí la regla usada para calcular fechas de presentación y pago."
-      >
-        <form
-          className="study-form study-form--compact fiscal-action-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            addDueDateMutation.mutate();
-          }}
-        >
-          <Field
-            label="Frecuencia"
-            id="rule-due-frequency"
-            value={newDueDate.frequency}
-            onChange={(event) => setNewDueDate({ ...newDueDate, frequency: event.target.value })}
-            required
-          />
-          <Field
-            label="Día del mes"
-            id="rule-due-day"
-            type="number"
-            min="1"
-            max="31"
-            value={newDueDate.dueDay}
-            onChange={(event) => setNewDueDate({ ...newDueDate, dueDay: event.target.value })}
-            required
-          />
-          <Field
-            label="Terminación de CUIT"
-            id="rule-due-cuit-ending"
-            value={newDueDate.cuitEnding}
-            onChange={(event) => setNewDueDate({ ...newDueDate, cuitEnding: event.target.value })}
-            placeholder="Opcional"
-          />
-          <Field
-            label="Vigencia desde"
-            id="rule-due-valid-from"
-            type="date"
-            value={newDueDate.validFrom}
-            onChange={(event) => setNewDueDate({ ...newDueDate, validFrom: event.target.value })}
-            required
-          />
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={addDueDateMutation.isPending}
-              disabled={
-                !newDueDate.dueDay ||
-                Number(newDueDate.dueDay) < 1 ||
-                Number(newDueDate.dueDay) > 31
-              }
-            >
-              Guardar vencimiento
-            </Button>
-          </div>
-        </form>
-      </ActionDrawer>
+      <PanelVencimiento
+        showDueDateForm={showDueDateForm}
+        setShowDueDateForm={setShowDueDateForm}
+        editable={editable}
+        newDueDate={newDueDate}
+        setNewDueDate={setNewDueDate}
+        addDueDateMutation={addDueDateMutation}
+      />
 
-      <ActionDrawer
-        isOpen={showSourceForm && editable}
-        onClose={() => setShowSourceForm(false)}
-        title="Agregar fuente normativa"
-        description="Asociá la norma, padrón o resolución que respalda esta versión."
-        size="wide"
-      >
-        <form
-          className="study-form fiscal-action-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            addSourceMutation.mutate();
-          }}
-        >
-          <Field
-            label="Título"
-            id="rule-source-title"
-            value={newSource.title}
-            onChange={(event) => setNewSource({ ...newSource, title: event.target.value })}
-            required
-          />
-          <Field
-            label="Referencia"
-            id="rule-source-reference"
-            value={newSource.reference}
-            onChange={(event) => setNewSource({ ...newSource, reference: event.target.value })}
-            placeholder="Opcional"
-          />
-          <Field
-            label="URL"
-            id="rule-source-url"
-            type="url"
-            value={newSource.url}
-            onChange={(event) => setNewSource({ ...newSource, url: event.target.value })}
-            placeholder="https://…"
-          />
-          <Field
-            label="Consultada el"
-            id="rule-source-consulted-at"
-            type="date"
-            value={newSource.consultedAt}
-            onChange={(event) => setNewSource({ ...newSource, consultedAt: event.target.value })}
-            required
-          />
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={addSourceMutation.isPending}
-              disabled={!newSource.title.trim()}
-            >
-              Guardar fuente
-            </Button>
-          </div>
-        </form>
-      </ActionDrawer>
+      <PanelFuente
+        showSourceForm={showSourceForm}
+        setShowSourceForm={setShowSourceForm}
+        editable={editable}
+        newSource={newSource}
+        setNewSource={setNewSource}
+        addSourceMutation={addSourceMutation}
+      />
 
-      <ActionDrawer
-        isOpen={showInitialVersionForm && Boolean(detailQuery.data) && !selectedVersion}
-        onClose={() => setShowInitialVersionForm(false)}
-        title="Crear primera versión"
-        description="Abrí un borrador para cargar alícuotas, vencimientos y las fuentes que respaldan el cálculo."
-      >
-        <form
-          className="study-form study-form--compact fiscal-action-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const dateError = validateRuleVersionDate(validFrom);
-            setVersionDateError(dateError);
-            if (dateError) return;
-            createVersionMutation.mutate();
-          }}
-        >
-          <Field
-            label="Vigencia desde"
-            id="first-rule-version-valid-from"
-            type="date"
-            min="1900-01-01"
-            max="2100-12-31"
-            value={validFrom}
-            error={versionDateError ?? undefined}
-            onChange={(event) => {
-              setValidFrom(event.target.value);
-              setVersionDateError(null);
-            }}
-            onInvalid={(event) => {
-              event.preventDefault();
-              setVersionDateError(
-                validateRuleVersionDate(event.currentTarget.value) ??
-                  "La fecha debe estar entre 01/01/1900 y 31/12/2100.",
-              );
-            }}
-            required
-          />
-          {!detailQuery.data?.regime.calcFamilyId ? (
-            <EmptyState
-              size="compact"
-              role="alert"
-              title="Elegí una familia de cálculo"
-              description="Este régimen necesita una familia para mostrar las opciones de cálculo."
-              action={(
-                <a
-                  className="dense-link"
-                  href={`/catalogos-fiscales?editRegime=${encodeURIComponent(detailQuery.data?.regime.id ?? "")}`}
-                >
-                  Editar régimen
-                </a>
-              )}
-            />
-          ) : regimeEnginesQuery.isLoading ? (
-            <p className="muted-copy" role="status">Buscando opciones de cálculo…</p>
-          ) : regimeEnginesQuery.isError ? (
-            <p className="form-error" role="alert">
-              No pudimos cargar las opciones de cálculo. <Button type="button" variant="ghost" size="sm" onClick={() => void regimeEnginesQuery.refetch()}>Reintentar</Button>
-            </p>
-          ) : regimeEnginesQuery.data?.length ? (
-            <div className="ds-field">
-              <label className="ds-field__label" htmlFor="first-rule-version-engine">Opción de cálculo</label>
-              <select
-                id="first-rule-version-engine"
-                className="ds-field__input"
-                value={engineId}
-                onChange={(event) => setEngineId(event.target.value)}
-                required
-              >
-                <option value="">Seleccioná una opción…</option>
-                {regimeEnginesQuery.data.map((engine) => (
-                  <option key={engine.id} value={engine.id}>{engine.label}</option>
-                ))}
-              </select>
-              {createVersionMutation.error instanceof ApiError ? (
-                <p className="form-error" role="alert">{createVersionMutation.error.message}</p>
-              ) : null}
-            </div>
-          ) : (
-            <EmptyState
-              size="compact"
-              title="Esta familia aún no tiene opciones de cálculo"
-              description="Elegí otra familia para este régimen o consultá con quien administra la configuración del estudio."
-            />
-          )}
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={createVersionMutation.isPending}
-              disabled={!regimeEnginesQuery.data?.some((engine) => engine.id === engineId)}
-            >
-              Crear primera versión
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setShowInitialVersionForm(false)}>
-              Cancelar
-            </Button>
-          </div>
-        </form>
-      </ActionDrawer>
+      <PanelPrimeraVersion
+        showInitialVersionForm={showInitialVersionForm}
+        setShowInitialVersionForm={setShowInitialVersionForm}
+        detailQuery={detailQuery}
+        selectedVersion={selectedVersion}
+        validFrom={validFrom}
+        setValidFrom={setValidFrom}
+        versionDateError={versionDateError}
+        setVersionDateError={setVersionDateError}
+        createVersionMutation={createVersionMutation}
+        regimeEnginesQuery={regimeEnginesQuery}
+        engineId={engineId}
+        setEngineId={setEngineId}
+      />
 
-      <ActionDrawer
-        isOpen={showCloneForm && Boolean(selectedVersion) && selectedVersion?.status !== "DRAFT"}
-        onClose={() => setShowCloneForm(false)}
-        title="Modificar alícuotas"
-        description="Primero elegí desde cuándo rigen los nuevos valores. Al continuar se abre un borrador con las alícuotas actuales para que las edites; la versión vigente sigue aplicando hasta que el Administrador o Titular active la nueva."
-      >
-        <form
-          className="study-form study-form--compact fiscal-action-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const dateError = validateRuleVersionDate(validFrom);
-            setVersionDateError(dateError);
-            if (dateError) return;
-            cloneMutation.mutate();
-          }}
-        >
-          <Field
-            label="Nueva vigencia desde"
-            id="rule-valid-from"
-            type="date"
-            min="1900-01-01"
-            max="2100-12-31"
-            value={validFrom}
-            error={versionDateError ?? undefined}
-            onChange={(event) => {
-              setValidFrom(event.target.value);
-              setVersionDateError(null);
-            }}
-            onInvalid={(event) => {
-              event.preventDefault();
-              setVersionDateError(
-                validateRuleVersionDate(event.currentTarget.value) ??
-                  "La fecha debe estar entre 01/01/1900 y 31/12/2100.",
-              );
-            }}
-            required
-          />
-          {cloneMutation.error ? (
-            <p className="form-error" role="alert">
-              {cloneMutation.error instanceof Error
-                ? cloneMutation.error.message
-                : "No se pudo crear el borrador."}
-            </p>
-          ) : null}
-          <div className="study-form__actions">
-            <Button type="submit" loading={cloneMutation.isPending}>
-              <Icon name="plus" size={16} /> Crear borrador y editar
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setShowCloneForm(false)}>
-              Cancelar
-            </Button>
-          </div>
-          <p className="muted-copy">
-            La versión vigente no se modifica: sigue activa hasta que el Administrador o Titular
-            active esta nueva versión.
-          </p>
-        </form>
-      </ActionDrawer>
+      <PanelModificarAlicuotas
+        showCloneForm={showCloneForm}
+        setShowCloneForm={setShowCloneForm}
+        selectedVersion={selectedVersion}
+        validFrom={validFrom}
+        setValidFrom={setValidFrom}
+        versionDateError={versionDateError}
+        setVersionDateError={setVersionDateError}
+        cloneMutation={cloneMutation}
+      />
 
 
       <ListaPaquetes
@@ -1582,35 +1278,14 @@ export function StudyReglasFiscales() {
           </p>
         )
       ) : null}
-      <ActionDrawer
-        isOpen={Boolean(activationTarget)}
-        onClose={() => setActivationTarget(null)}
-        title={
-          activationTarget
-            ? `${detailQuery.data?.name ?? "Paquete fiscal"} · versión v${activationTarget.version}`
-            : "Confirmar activación"
-        }
-        description="Revisá el paquete y la vigencia antes de activar esta versión."
-        footer={
-          <div className="study-form__actions">
-            <Button type="button" loading={activateMutation.isPending} onClick={confirmActivation}>
-              Activar versión
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setActivationTarget(null)}>
-              Cancelar
-            </Button>
-          </div>
-        }
-      >
-        {activationTarget ? (
-          <div>
-            <p>Vigencia: {shortDate(activationTarget.validFrom)} — {shortDate(activationTarget.validTo)}</p>
-            {activeVersion ? (
-              <p role="note">Al activar esta versión, la versión vigente quedará retirada</p>
-            ) : null}
-          </div>
-        ) : null}
-      </ActionDrawer>
+      <ConfirmarActivacion
+        activationTarget={activationTarget}
+        setActivationTarget={setActivationTarget}
+        detailQuery={detailQuery}
+        activateMutation={activateMutation}
+        confirmActivation={confirmActivation}
+        activeVersion={activeVersion}
+      />
       <ConfirmDialog confirm={confirm} />
       {deletingTarget ? (
         <DeletionDrawer
