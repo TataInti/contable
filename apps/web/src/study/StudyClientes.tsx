@@ -1,6 +1,18 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
+import {
+  Button,
+  EmptyState,
+  Field,
+  Notice,
+  useNotify,
+} from "@contable/design-system";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ARGENTINA_PROVINCES,
@@ -42,6 +54,15 @@ import {
 import { StatusBadge } from "../ui/StatusBadge";
 import "./study.css";
 import { formatearFecha } from "../lib/formatoFechas";
+import type {
+  AccountingStandardCatalogEntry,
+  ClientContactForm,
+  ClientProfile,
+  ClientProfileForm,
+  ClientWithProfile,
+  ContactRetryTarget,
+} from "./clientes/tipos";
+import { CUIT_ENDINGS, endingGroup, parseEndingFilter } from "./clientes/terminacion";
 
 
 const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -76,60 +97,6 @@ function profileGaps(client: { profile?: ClientProfile | null }): string[] {
   return gaps;
 }
 
-interface ClientProfile {
-  functionalCurrency: string;
-  accountingStandard: string | null;
-  fiscalYearEndMonth: number;
-  vatCondition: string | null;
-  iibbJurisdictions: string[];
-  province: string | null;
-  activity: string | null;
-  legalForm: string | null;
-  serviceStartDate: string | null;
-}
-
-/** Entrada del catálogo de normas contables definido por el estudio. */
-interface AccountingStandardCatalogEntry {
-  id: string;
-  name: string;
-  isActive: boolean;
-}
-
-interface ClientWithProfile extends Client {
-  /** Terminación de CUIT derivada por la API; null cuando el cliente no tiene CUIT. */
-  cuitEnding?: string | null;
-  tradeName?: string | null;
-  profile?: ClientProfile | null;
-}
-
-interface ClientContactForm {
-  name: string;
-  function: string;
-  email: string;
-  phone: string;
-  isPrimary: boolean;
-}
-
-interface ContactRetryTarget {
-  firmId: string;
-  clientId: string;
-  legalName: string;
-  email: string;
-}
-
-interface ClientProfileForm {
-  functionalCurrency: string;
-  accountingStandard: string;
-  fiscalYearEndMonth: string;
-  vatCondition: string;
-  /** Códigos canónicos seleccionados del catálogo. null = derivar de lo guardado + catálogo. */
-  iibbJurisdictions: string[] | null;
-  province: string;
-  activity: string;
-  legalForm: string;
-  serviceStartDate: string;
-}
-
 function profileFormFrom(client: ClientWithProfile): ClientProfileForm {
   const profile = client.profile;
   return {
@@ -143,21 +110,6 @@ function profileFormFrom(client: ClientWithProfile): ClientProfileForm {
     legalForm: profile?.legalForm ?? "",
     serviceStartDate: profile?.serviceStartDate?.slice(0, 10) ?? "",
   };
-}
-
-/** Dígitos de terminación de CUIT, en el orden en que se muestran y se filtran. */
-const CUIT_ENDINGS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
-
-/** Lee el filtro de la URL (?terminacion=0,9): solo dígitos válidos, siempre en orden. */
-function parseEndingFilter(value: string | null): string[] {
-  const picked = (value ?? "").split(",");
-  return CUIT_ENDINGS.filter((digit) => picked.includes(digit));
-}
-
-/** Grupo de la tabla: un encabezado por dígito y «Sin CUIT» al final. */
-function endingGroup(row: ClientWithProfile) {
-  if (row.cuitEnding == null) return { key: "sin-cuit", label: "Sin CUIT", order: 10 };
-  return { key: row.cuitEnding, label: `Terminación de CUIT ${row.cuitEnding}`, order: Number(row.cuitEnding) };
 }
 
 export function StudyClientes() {
