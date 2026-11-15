@@ -53,9 +53,33 @@ export function EtapaControles({
   );
   // Los controles vienen dentro del legajo: no tienen consulta propia, así que su vacío sale de la respuesta del legajo.
   const puedeResolver = capabilities.has("tax.settlements.review");
+  // La lectura de documentos es una sola para la etapa: su aviso y su carga se muestran una vez, arriba de la lista.
+  const pideRespaldo =
+    puedeResolver &&
+    wp.controls.some((control) => control.status === "OPEN" && control.severity === "BLOCKING");
 
   return (
     <div className="workpaper-controls">
+      {pideRespaldo && documentsQuery.isError ? (
+        <AsyncState
+          loading={false}
+          error
+          errorTitle="No se pudieron leer los documentos de respaldo"
+          errorDescription="Reintentá la lectura. Mientras tanto, el control puede resolverse sin respaldo."
+          onRetry={() => void documentsQuery.refetch()}
+          loadingLabel={CARGA_DOCUMENTOS}
+        />
+      ) : null}
+      {pideRespaldo && !documentsQuery.isError && !documentsQuery.isSuccess ? (
+        <AsyncState
+          loading
+          error={false}
+          errorTitle=""
+          errorDescription=""
+          onRetry={() => void documentsQuery.refetch()}
+          loadingLabel={CARGA_DOCUMENTOS}
+        />
+      ) : null}
       {wp.controls.length === 0 ? (
         <EmptyState size="inline" title="No hay controles registrados para este legajo." />
       ) : (
@@ -105,109 +129,83 @@ export function EtapaControles({
                       }))
                     }
                   />
-                  {control.severity === "BLOCKING" ? (
-                    documentsQuery.isError ? (
-                      <AsyncState
-                        loading={false}
-                        error
-                        errorTitle="No se pudieron leer los documentos de respaldo"
-                        errorDescription="Reintentá la lectura. Mientras tanto, el control puede resolverse sin respaldo."
-                        onRetry={() => void documentsQuery.refetch()}
-                        loadingLabel={CARGA_DOCUMENTOS}
-                      />
-                    ) : documentsQuery.isSuccess ? (
+                  {control.severity === "BLOCKING" && documentsQuery.isSuccess ? (
+                    <select
+                      aria-label={`Evidencia ${control.code}`}
+                      value={controlEvidence[control.id] ?? ""}
+                      onChange={(event) =>
+                        setControlEvidence((values) => ({
+                          ...values,
+                          [control.id]: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Sin documento de respaldo</option>
+                      {eligibleEvidenceDocuments.map((document) => (
+                        <option key={document.id} value={document.id}>
+                          {document.fileVersions?.[0]?.originalName ??
+                            document.category ??
+                            "Documento"}{" "}
+                          · {getStatusBadgeMeta(document.status).label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  <span className="workpaper-control__acciones">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={!resolucion}
+                      loading={resolveControlMutation.isPending}
+                      onClick={() =>
+                        resolveControlMutation.mutate({
+                          workpaperId: wp.id,
+                          findingId: control.id,
+                          status: "RESOLVED",
+                          ...(controlEvidence[control.id]
+                            ? { evidenceDocumentId: controlEvidence[control.id] }
+                            : {}),
+                        })
+                      }
+                    >
+                      Resolver
+                    </Button>
+                    {!resolucion ? (
+                      <small className="form-submit-hint" role="note">
+                        Escribí la resolución para resolver el control.
+                      </small>
+                    ) : null}
+                    {control.severity !== "BLOCKING" ? (
                       <>
-                        <select
-                          aria-label={`Evidencia ${control.code}`}
-                          value={controlEvidence[control.id] ?? ""}
-                          onChange={(event) =>
-                            setControlEvidence((values) => ({
-                              ...values,
-                              [control.id]: event.target.value,
-                            }))
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={!resolucion}
+                          onClick={() =>
+                            confirmar({
+                              title: "Eximir el control",
+                              description:
+                                "Vas a eximir este control con el motivo escrito. Quedará registrado como eximido.",
+                              confirmLabel: "Sí, eximir",
+                              onConfirm: () =>
+                                resolveControlMutation.mutate({
+                                  workpaperId: wp.id,
+                                  findingId: control.id,
+                                  status: "WAIVED",
+                                }),
+                            })
                           }
                         >
-                          <option value="">Sin documento de respaldo</option>
-                          {eligibleEvidenceDocuments.map((document) => (
-                            <option key={document.id} value={document.id}>
-                              {document.fileVersions?.[0]?.originalName ??
-                                document.category ??
-                                "Documento"}{" "}
-                              · {getStatusBadgeMeta(document.status).label}
-                            </option>
-                          ))}
-                        </select>
-                        {eligibleEvidenceDocuments.length === 0 ? (
-                          <small className="muted-copy">
-                            El respaldo es opcional. Para adjuntar uno, aprobá la extracción del
-                            documento en Bandeja.
+                          Eximir
+                        </Button>
+                        {!resolucion ? (
+                          <small className="form-submit-hint" role="note">
+                            Escribí el motivo para eximir el control.
                           </small>
                         ) : null}
                       </>
-                    ) : (
-                      <AsyncState
-                        loading
-                        error={false}
-                        errorTitle=""
-                        errorDescription=""
-                        onRetry={() => void documentsQuery.refetch()}
-                        loadingLabel={CARGA_DOCUMENTOS}
-                      />
-                    )
-                  ) : null}
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={!resolucion}
-                    loading={resolveControlMutation.isPending}
-                    onClick={() =>
-                      resolveControlMutation.mutate({
-                        workpaperId: wp.id,
-                        findingId: control.id,
-                        status: "RESOLVED",
-                        ...(controlEvidence[control.id]
-                          ? { evidenceDocumentId: controlEvidence[control.id] }
-                          : {}),
-                      })
-                    }
-                  >
-                    Resolver
-                  </Button>
-                  {!resolucion ? (
-                    <small className="muted-copy" role="status">
-                      Escribí la resolución para resolver el control.
-                    </small>
-                  ) : null}
-                  {control.severity !== "BLOCKING" ? (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={!resolucion}
-                        onClick={() =>
-                          confirmar({
-                            title: "Eximir el control",
-                            description:
-                              "Vas a eximir este control con el motivo escrito. Quedará registrado como eximido.",
-                            confirmLabel: "Sí, eximir",
-                            onConfirm: () =>
-                              resolveControlMutation.mutate({
-                                workpaperId: wp.id,
-                                findingId: control.id,
-                                status: "WAIVED",
-                              }),
-                          })
-                        }
-                      >
-                        Eximir
-                      </Button>
-                      {!resolucion ? (
-                        <small className="muted-copy" role="status">
-                          Escribí el motivo para eximir el control.
-                        </small>
-                      ) : null}
-                    </>
-                  ) : null}
+                    ) : null}
+                  </span>
                   <WorkpaperActionError
                     error={
                       resolveControlMutation.variables?.findingId === control.id
@@ -215,6 +213,14 @@ export function EtapaControles({
                         : null
                     }
                   />
+                  {control.severity === "BLOCKING" &&
+                  documentsQuery.isSuccess &&
+                  eligibleEvidenceDocuments.length === 0 ? (
+                    <small className="muted-copy workpaper-control__ayuda">
+                      El respaldo es opcional. Para adjuntar uno, aprobá la extracción del documento
+                      en Bandeja.
+                    </small>
+                  ) : null}
                 </span>
               ) : null}
             </div>

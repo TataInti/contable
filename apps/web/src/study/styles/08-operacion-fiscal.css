@@ -461,6 +461,7 @@
 
 .workpaper-control__resolution {
   display: flex;
+  flex-wrap: wrap;
   grid-column: 1 / -1;
   align-items: center;
   gap: var(--ds-space-2);
@@ -468,14 +469,42 @@
 
 .workpaper-control__resolution input,
 .workpaper-control__resolution select {
-  min-width: 0;
-  flex: 1;
   padding: 0.42rem 0.55rem;
   border: 1px solid var(--ds-border);
   border-radius: var(--ds-radius-sm);
   background: var(--ds-surface);
   color: var(--ds-text);
   font: inherit;
+}
+
+/* Ancho legible de los campos: 16 rem la resolución y 14 rem la evidencia. No hay token de esa medida:
+   se toman múltiplos de --ds-space-8. La fila parte en renglones antes que achicar los campos. */
+.workpaper-control__resolution input {
+  flex: 1 1 calc(var(--ds-space-8) * 8);
+  min-width: calc(var(--ds-space-8) * 8);
+}
+
+.workpaper-control__resolution select {
+  flex: 1 1 calc(var(--ds-space-8) * 7);
+  min-width: calc(var(--ds-space-8) * 7);
+}
+
+/* Resolver y su motivo van juntos: si no entran al lado de los campos, bajan como bloque. */
+.workpaper-control__acciones {
+  display: flex;
+  flex: 0 1 calc(var(--ds-space-8) * 10);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.workpaper-control__acciones .form-submit-hint {
+  margin: 0;
+}
+
+/* El texto de ayuda del respaldo ocupa su propio renglón, debajo de los campos. */
+.workpaper-control__ayuda {
+  flex: 0 0 100%;
 }
 
 .workpaper-source-import {

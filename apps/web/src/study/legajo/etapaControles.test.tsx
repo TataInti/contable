@@ -447,15 +447,18 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect(carga.closest("[role='status']")).not.toBeNull();
   });
 
-  it("un error al leer los documentos de respaldo se ve junto al control, y Reintentar lo vuelve a leer", async () => {
+  it("un error al leer los documentos de respaldo se ve una vez, fuera de las filas, y Reintentar lo vuelve a leer", async () => {
     fijarContexto(PERMISOS_REVISION);
     fijarRespuestas({ controles: [bloqueante()], documentosFallan: true });
     renderLegajo();
     await abrirEtapa(/Controles/);
 
-    expect(
-      await screen.findByText("No se pudieron leer los documentos de respaldo"),
-    ).toBeInTheDocument();
+    const aviso = (
+      await screen.findByText("No se pudieron leer los documentos de respaldo")
+    ).closest("[role='alert']");
+    expect(aviso).not.toBeNull();
+    expect(aviso?.closest(".workpaper-control")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Reintentar" })).toHaveLength(1);
     expect(
       screen.queryByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" }),
     ).toBeNull();
@@ -465,6 +468,104 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect(
       await screen.findByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("No se pudieron leer los documentos de respaldo")).toBeNull();
+  });
+
+  it("con error al leer los documentos, la resolución y Resolver siguen operando sin respaldo", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({ controles: [bloqueante()], documentosFallan: true });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+
+    await screen.findByText("No se pudieron leer los documentos de respaldo");
+    expect((screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(screen.getByText(MOTIVO_RESOLVER)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), {
+      target: { value: "Conciliado sin respaldo" },
+    });
+    expect((screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+    expect(screen.queryByText(MOTIVO_RESOLVER)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
+
+    await waitFor(() => expect(llamadasResolve()).toHaveLength(1));
+    expect(llamadasResolve()[0]).toStrictEqual([
+      `${LEGAJO}/controls/control-a/resolve`,
+      { resolution: "Conciliado sin respaldo", status: "RESOLVED" },
+    ]);
+  });
+
+  it("con dos controles bloqueantes abiertos y error de lectura hay un solo aviso, con un solo Reintentar", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({
+      controles: [
+        bloqueante(),
+        bloqueante({ id: "control-c", code: "CASH_ALLOCATION_RECONCILIATION" }),
+      ],
+      documentosFallan: true,
+    });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+
+    expect(
+      await screen.findAllByText("No se pudieron leer los documentos de respaldo"),
+    ).toHaveLength(1);
+    const alertasDeLectura = screen
+      .getAllByRole("alert")
+      .filter((alerta) =>
+        alerta.textContent?.includes("No se pudieron leer los documentos de respaldo"),
+      );
+    expect(alertasDeLectura).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Reintentar" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Resolver" })).toHaveLength(2);
+    expect(
+      screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Resolución CASH_ALLOCATION_RECONCILIATION" }),
+    ).toBeInTheDocument();
+  });
+
+  it("con documentos de respaldo cargados no hay aviso de lectura ni de carga", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({
+      controles: [
+        bloqueante(),
+        bloqueante({ id: "control-c", code: "CASH_ALLOCATION_RECONCILIATION" }),
+      ],
+    });
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+
+    expect(await screen.findAllByRole("combobox", { name: /^Evidencia / })).toHaveLength(2);
+    expect(screen.getAllByRole("textbox", { name: /^Resolución / })).toHaveLength(2);
+    expect(screen.queryByText("No se pudieron leer los documentos de respaldo")).toBeNull();
+    expect(screen.queryByText("Cargando documentos de respaldo…")).toBeNull();
+  });
+
+  it("con dos controles bloqueantes, la carga de los documentos se anuncia una sola vez", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    const wp = {
+      ...legajoDemo("REVIEWED"),
+      controls: [
+        bloqueante(),
+        bloqueante({ id: "control-c", code: "CASH_ALLOCATION_RECONCILIATION" }),
+      ],
+    } as Workpaper;
+    const rutas = rutasDemo({ legajos: [wp], documentos: DOCUMENTOS_DEMO });
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.endsWith("/documents") ? new Promise(() => {}) : rutas(path)) as never);
+    renderLegajo();
+    await abrirEtapa(/Controles/);
+
+    const carga = await screen.findAllByText("Cargando documentos de respaldo…");
+    expect(carga).toHaveLength(1);
+    expect(carga[0]?.closest("[role='status']")).toBeInstanceOf(HTMLElement);
+    expect(screen.getAllByRole("button", { name: "Resolver" })).toHaveLength(2);
   });
 
   it("la etapa no tiene acciones primarias: la única primaria visible es la de la tarjeta", async () => {
