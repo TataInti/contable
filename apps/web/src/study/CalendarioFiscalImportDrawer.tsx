@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, Field, Notice, useNotify } from "@contable/design-system";
 import type { TaxCalendarEntriesImportReport } from "@contable/contracts";
@@ -256,9 +256,19 @@ export function CalendarioFiscalImportDrawer({
 function InformeImportacion({ informe }: { informe: TaxCalendarEntriesImportReport }) {
   const resumen = resumenInforme(informe);
   const dudosas = lineaDudosas(resumen.dudosas);
+  const bloque = useRef<HTMLDivElement>(null);
+  const titulo = useRef<HTMLHeadingElement>(null);
+  // Después de una prueba correcta, el informe va a la vista y su título recibe el foco.
+  // Si la prueba falla no se mueve nada: el foco queda donde está.
+  useEffect(() => {
+    bloque.current?.scrollIntoView?.({ block: "start" });
+    titulo.current?.focus({ preventScroll: true });
+  }, [informe]);
   return (
-    <div className="importar-informe" role="status">
-      <h3 className="importar-informe__titulo">Informe de la prueba</h3>
+    <div className="importar-informe" role="status" ref={bloque}>
+      <h3 className="importar-informe__titulo" tabIndex={-1} ref={titulo}>
+        Informe de la prueba
+      </h3>
       <InspectorFacts
         items={[
           ["Filas leídas", String(resumen.leidas)],
@@ -269,26 +279,40 @@ function InformeImportacion({ informe }: { informe: TaxCalendarEntriesImportRepo
       />
       {dudosas ? <p className="importar-informe__dudosas">{dudosas}</p> : null}
       {informe.rechazadas.length > 0 ? (
-        <section className="importar-informe__seccion" aria-labelledby="importar-rechazadas">
+        <div className="importar-informe__seccion">
           <h4 id="importar-rechazadas">Filas rechazadas</h4>
-          <ul className="importar-informe__lista">
-            {informe.rechazadas.map((rechazo, indice) => (
-              <li key={`${rechazo.fila}-${indice}`}>
-                {`Fila ${rechazo.fila}${rechazo.columna ? ` (${rechazo.columna})` : ""}: ${rechazo.motivo}`}
-              </li>
-            ))}
-          </ul>
-        </section>
+          <div
+            className="importar-informe__desplazable"
+            role="region"
+            aria-labelledby="importar-rechazadas"
+            tabIndex={0}
+          >
+            <ul className="importar-informe__lista">
+              {informe.rechazadas.map((rechazo, indice) => (
+                <li key={`${rechazo.fila}-${indice}`}>
+                  {`Fila ${rechazo.fila}${rechazo.columna ? ` (${rechazo.columna})` : ""}: ${rechazo.motivo}`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       ) : null}
       {informe.avisos.length > 0 ? (
-        <section className="importar-informe__seccion" aria-labelledby="importar-avisos">
+        <div className="importar-informe__seccion">
           <h4 id="importar-avisos">Avisos</h4>
-          <ul className="importar-informe__lista">
-            {informe.avisos.map((aviso, indice) => (
-              <li key={`${aviso.fila}-${indice}`}>{`Fila ${aviso.fila}: ${aviso.motivo}`}</li>
-            ))}
-          </ul>
-        </section>
+          <div
+            className="importar-informe__desplazable"
+            role="region"
+            aria-labelledby="importar-avisos"
+            tabIndex={0}
+          >
+            <ul className="importar-informe__lista">
+              {informe.avisos.map((aviso, indice) => (
+                <li key={`${aviso.fila}-${indice}`}>{`Fila ${aviso.fila}: ${aviso.motivo}`}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
       ) : null}
     </div>
   );

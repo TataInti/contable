@@ -1217,3 +1217,9 @@
 .importar-informe__lista li + li {
   margin-top: var(--ds-space-1);
 }
+
+/* Listas largas del informe: región desplazable con nombre; las cifras y el pie quedan fuera. */
+.importar-informe__desplazable {
+  max-block-size: 16rem;
+  overflow: auto;
+}

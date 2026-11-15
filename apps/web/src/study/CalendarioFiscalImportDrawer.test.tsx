@@ -195,6 +195,18 @@ async function esperarProbar(dialog: HTMLElement) {
   );
 }
 
+/** jsdom no implementa scrollIntoView: se registra a qué elemento se le pide llevar a la vista. */
+function espiarScrollIntoView(): Element[] {
+  const llamadas: Element[] = [];
+  Object.defineProperty(Element.prototype, "scrollIntoView", {
+    configurable: true,
+    value(this: Element) {
+      llamadas.push(this);
+    },
+  });
+  return llamadas;
+}
+
 beforeEach(() => {
   get.mockReset();
   post.mockReset();
@@ -205,6 +217,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
 });
 
 describe("botón «Importar celdas desde un archivo» en la ficha", () => {
@@ -278,6 +291,47 @@ describe("cajón «Importar celdas desde un archivo»", () => {
       name: "Importar 2 celdas",
     }) as HTMLButtonElement;
     expect(importar.disabled).toBe(false);
+  });
+
+  it("tras una prueba correcta, el informe va a la vista y su título recibe el foco", async () => {
+    const llamadasAScroll = espiarScrollIntoView();
+    post.mockResolvedValueOnce(INFORME_PRUEBA);
+    const dialog = await abrirCajon();
+    elegir(dialog, archivoCsv());
+    await esperarProbar(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
+    const informe = await within(dialog).findByRole("status");
+    const titulo = within(informe).getByRole("heading", { name: "Informe de la prueba" });
+    await waitFor(() => expect(document.activeElement).toBe(titulo));
+    expect(llamadasAScroll).toContain(informe);
+  });
+
+  it("si la prueba falla, el cajón no mueve el foco: no llama a focus()", async () => {
+    post.mockRejectedValueOnce(new ApiError("INTERNAL_ERROR", "Ocurrió un error interno", 500));
+    const dialog = await abrirCajon();
+    elegir(dialog, archivoCsv());
+    await esperarProbar(dialog);
+    const probar = within(dialog).getByRole("button", { name: "Probar sin guardar" });
+    probar.focus();
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    fireEvent.click(probar);
+    await within(dialog).findByRole("alert");
+    expect(focus).not.toHaveBeenCalled();
+    focus.mockRestore();
+  });
+
+  it("las listas largas del informe son regiones desplazables con nombre accesible", async () => {
+    post.mockResolvedValueOnce(INFORME_PRUEBA);
+    const dialog = await abrirCajon();
+    elegir(dialog, archivoCsv());
+    await esperarProbar(dialog);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
+    const informe = await within(dialog).findByRole("status");
+    for (const nombre of ["Filas rechazadas", "Avisos"]) {
+      const region = within(informe).getByRole("region", { name: nombre });
+      expect(region.tabIndex).toBe(0);
+      expect(within(region).getByRole("list")).toBeTruthy();
+    }
   });
 
   it("«Importar N celdas» envía dryRun false, refresca la ficha, avisa y cierra el cajón", async () => {
