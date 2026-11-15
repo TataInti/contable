@@ -199,9 +199,7 @@ export function ResumenVersion({
             ) : null}
             <span>
               Vigencia{" "}
-              <strong>
-                {formatearRango(selectedVersion.validFrom, selectedVersion.validTo)}
-              </strong>
+              <strong>{formatearRango(selectedVersion.validFrom, selectedVersion.validTo)}</strong>
             </span>
             <span>
               Motor de cálculo <strong>{selectedVersion.engineVersion}</strong>

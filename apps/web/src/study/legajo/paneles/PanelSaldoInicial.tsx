@@ -164,8 +164,7 @@ export function PanelSaldoInicial({
             <option value="">Seleccioná…</option>
             {openingTaxPeriods.map((taxPeriod) => (
               <option key={taxPeriod.id} value={taxPeriod.id}>
-                {taxPeriod.label ??
-                  formatearRango(taxPeriod.startDate, taxPeriod.endDate)}
+                {taxPeriod.label ?? formatearRango(taxPeriod.startDate, taxPeriod.endDate)}
               </option>
             ))}
           </select>
