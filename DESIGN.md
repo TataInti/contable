@@ -1102,6 +1102,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Vigente en main (se conserva):** el recordatorio de acuses de presentación pendientes (#87) y su presentación ajustada (#90); «Liquidaciones en curso» deja afuera las liquidaciones `FINALIZED` y `SUPERSEDED` (#90), porque lo finalizado sin presentar ya figura en el recordatorio de acuses.
 
+**Foco 2.8:** las acciones de fila de las tres tablas (Liquidaciones, Otros circuitos y acuses) usan la pieza de enlace `dense-link`, igual que «Ver todas» y «Abrir obligaciones»; el texto «Abrir» y el nombre accesible no cambian. Los contadores de Inicio y de la banda del Legajo concuerdan con el número (singular con 1).
+
 **Composición:**
 1. Encabezado C01 con el alcance del estudio y «Actualizar» como acción secundaria.
 2. Indicadores C03 con su alcance.
