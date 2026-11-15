@@ -515,6 +515,14 @@ export const taxFilingSchema = z.object({
   status: taxFilingStatus,
   evidenceDocumentId: uuid.nullable(),
   createdAt: z.string().datetime(),
+  // Corte 5a: la DJ viaja con la presentación; opcional para no romper a quien lee hoy.
+  declarationDocumentId: uuid.nullish(),
+  impuestoDeterminado: money.nullish(),
+  saldoFavorTecnico: money.nullish(),
+  saldoLibreDisponibilidad: money.nullish(),
+  totalAPagar: money.nullish(),
+  declaredByUserId: z.string().nullish(),
+  declaredAt: z.string().datetime().nullish(),
 });
 export type TaxFiling = z.infer<typeof taxFilingSchema>;
 

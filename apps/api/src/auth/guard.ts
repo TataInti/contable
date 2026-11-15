@@ -136,6 +136,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   // G5 fix: filings/payments de una obligación se mapean a sus capacidades
   // específicas ANTES del catch-all de /tax-obligations.
   { match: /\/tax-obligations\/.*\/filings$/, resolve: () => "tax.filings.record" },
+  // Corte 5a: la DJ de una presentación usa la misma capacidad que registrarla (antes del catch-all).
+  { match: /\/tax-obligations\/[^/]+\/filings\/[^/]+\/declaration$/, resolve: () => "tax.filings.record" },
   { match: /\/tax-obligations\/.*\/payments$/, resolve: () => "tax.payments.record" },
   { match: /\/tax-obligations/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
   // Borrado definitivo de catálogos y reglas fiscales: sólo Titular (OWNER).
