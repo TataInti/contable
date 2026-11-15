@@ -48,24 +48,24 @@ describe("Reglas fiscales — activación (K9)", () => {
     expect(screen.queryByText("Próximo paso:")).toBeNull();
   });
 
-  it("con versión aprobada ofrece Activar en el resumen y Activar versión como próximo paso", async () => {
+  it("con versión aprobada ofrece Activar como primaria del encabezado, sin próximo paso repetido", async () => {
     const detail = makeDemoDetail();
     detail.versions = [makeDemoVersion({ status: "APPROVED" })];
     mockDemoApi(detail);
     renderDemoReglas();
 
     expect(await screen.findByRole("button", { name: /^Activar$/ })).toBeTruthy();
-    expect(screen.getByText("Próximo paso:")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Activar versión" })).toBeTruthy();
+    expect(screen.queryByText("Próximo paso:")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Activar versión" })).toBeNull();
   });
 
-  it("Activar del resumen y Activar versión del próximo paso abren la misma confirmación", async () => {
+  it("Activar del resumen abre la confirmación, se cancela y vuelve a abrirse", async () => {
     const detail = makeDemoDetail();
     detail.versions = [makeDemoVersion({ status: "APPROVED" })];
     mockDemoApi(detail);
     renderDemoReglas();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Activar versión" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
     let dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("heading", { name: "Demo · IVA Responsable Inscripto · versión v1" })).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));

@@ -73,6 +73,7 @@ export function TabControlProfesional({
                       </select>
                       )}
                       <Button
+                        variant="secondary"
                         disabled={!credentialId}
                         loading={approveMutation.isPending}
                         onClick={() => approveMutation.mutate()}
