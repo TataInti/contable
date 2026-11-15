@@ -7,121 +7,30 @@ import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import { ActionDrawer } from "../ui/ActionDrawer";
-import {
-  DenseHeader,
-  DensePage,
-  DenseTabs,
-  useDensity,
-} from "../ui/Dense";
+import { DenseHeader, DensePage, DenseTabs, useDensity } from "../ui/Dense";
 import "./study.css";
-import { formatearFecha, formatearRango } from "../lib/formatoFechas";
-
-type FiscalStep = "perfil" | "inscripcion" | "actividades" | "periodos" | "obligaciones";
-type FiscalTab = "resumen" | "regimenes" | "actividades" | "periodos";
-
-/** Pestaña donde vive cada paso de la configuración. */
-const STEP_TAB: Record<FiscalStep, FiscalTab> = {
-  perfil: "resumen",
-  inscripcion: "regimenes",
-  actividades: "actividades",
-  periodos: "periodos",
-  obligaciones: "periodos",
-};
-type ProfileForm = {
-  legalName: string;
-  cuit: string;
-  fiscalAddress: string;
-  personType: "FISICA" | "JURIDICA";
-  nationalCondition: keyof typeof CONDITION_LABELS;
-  validFrom: string;
-};
-
-interface TaxRegime { id: string; code: string; name: string; isActive: boolean }
-interface EconomicActivity { id: string; code: string; name: string; isActive: boolean }
-interface TaxType { id: string; code: string; name: string; isActive: boolean }
-interface TaxpayerProfileVersion {
-  id: string;
-  version: number;
-  legalName: string;
-  cuit: string;
-  personType: "FISICA" | "JURIDICA";
-  nationalCondition: keyof typeof CONDITION_LABELS;
-  fiscalAddress: string | null;
-  status: "DRAFT" | "IN_REVIEW" | "ACTIVE" | "SUPERSEDED";
-}
-interface TaxPeriod {
-  id: string;
-  taxTypeId: string;
-  startDate: string;
-  endDate: string;
-  label: string | null;
-  taxType: { id: string; code: string; name: string; isActive: boolean };
-}
-interface TaxObligation {
-  id: string;
-  status: string;
-  dueDate: string | null;
-  regime: { id: string; code: string; name: string; isActive: boolean; taxType: { name: string; isActive: boolean }; jurisdiction: { name: string; isActive: boolean } };
-  period: { id: string; label: string | null; startDate: string; endDate: string };
-}
-interface TaxRegistration {
-  id: string;
-  status: string;
-  validFrom: string;
-  validTo: string | null;
-  registrationNumber: string | null;
-  regime: { id: string; code: string; name: string; isActive: boolean; taxType: { id: string; name: string; isActive: boolean }; jurisdiction: { name: string; isActive: boolean } };
-}
-interface ClientActivityLink {
-  id: string;
-  isPrimary: boolean;
-  validFrom: string;
-  validTo: string | null;
-  activity: { code: string; name: string; isActive: boolean; jurisdiction: { name: string; isActive: boolean } };
-}
-
-const today = new Date().toISOString().slice(0, 10);
-/** Mes anterior al actual (AAAA-MM): es el que se liquida normalmente. */
-function previousMonth(): string {
-  const now = new Date();
-  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-  return date.toISOString().slice(0, 7);
-}
-const CONDITION_LABELS = {
-  RESPONSABLE_INSCRIPTO: "Responsable Inscripto",
-  MONOTRIBUTISTA: "Monotributista",
-  EXENTO: "Exento",
-  NO_RESPONSABLE: "No Responsable",
-} as const;
-
-/** Etiqueta del período sin repetir el impuesto, que la tabla ya muestra en su columna. */
-function periodName(period: TaxPeriod) {
-  const label = periodDisplayLabel(period);
-  for (const prefix of [period.taxType.code, period.taxType.name]) {
-    const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[·:—–-]\\s*`, "i");
-    if (pattern.test(label)) return label.replace(pattern, "");
-  }
-  return label;
-}
-
-function periodDisplayLabel(period: Pick<TaxPeriod, "label" | "startDate" | "endDate">) {
-  const range = formatearRango(period.startDate, period.endDate);
-  return period.label && !/\d{6,}/.test(period.label) ? period.label : range;
-}
-
-const FISCAL_STEPS: Array<{ key: FiscalStep; label: string }> = [
-  { key: "perfil", label: "Perfil fiscal" },
-  { key: "inscripcion", label: "Inscripción" },
-  { key: "actividades", label: "Actividades" },
-  { key: "periodos", label: "Períodos" },
-  { key: "obligaciones", label: "Obligaciones" },
-];
-
-function MutationError({ error }: { error: unknown }) {
-  if (!error) return null;
-  const message = error instanceof Error ? error.message : "Ocurrió un error inesperado.";
-  return <Notice tone="error">{message}</Notice>;
-}
+import { formatearFecha } from "../lib/formatoFechas";
+import { PasosFiscales } from "./fiscal/Pasos";
+import { MutationError } from "./fiscal/MutationError";
+import { nextRequiredStepFor, stepCompletionFor, stepStatusLabelFor } from "./fiscal/pasos";
+import {
+  CONDITION_LABELS,
+  periodDisplayLabel,
+  periodName,
+  previousMonth,
+  today,
+  type ClientActivityLink,
+  type EconomicActivity,
+  type FiscalStep,
+  type FiscalTab,
+  type ProfileForm,
+  type TaxObligation,
+  type TaxPeriod,
+  type TaxRegime,
+  type TaxRegistration,
+  type TaxType,
+  type TaxpayerProfileVersion,
+} from "./fiscal/utilidades";
 
 export function StudyOnboardingFiscal() {
   const [density] = useDensity();
@@ -209,14 +118,8 @@ export function StudyOnboardingFiscal() {
     (registration) => registration.status === "ACTIVE" && registration.regime.isActive &&
       (!selectedPeriod || registration.regime.taxType.id === selectedPeriod.taxTypeId),
   );
-  const stepCompletion: Record<FiscalStep, boolean> = {
-    perfil: Boolean(latestProfile),
-    inscripcion: (registrationsQuery.data?.length ?? 0) > 0,
-    actividades: (clientActivitiesQuery.data?.length ?? 0) > 0,
-    periodos: (periodsQuery.data?.length ?? 0) > 0,
-    obligaciones: (obligationsQuery.data?.length ?? 0) > 0,
-  };
-  const nextRequiredStep = FISCAL_STEPS.find((item) => !stepCompletion[item.key]);
+  const stepCompletion = stepCompletionFor({ latestProfile, registrationsQuery, clientActivitiesQuery, periodsQuery, obligationsQuery });
+  const nextRequiredStep = nextRequiredStepFor(stepCompletion);
   const fiscalQueries = [
     { key: "perfil", label: "el perfil fiscal", query: profileQuery },
     { key: "regimenes", label: "los regímenes", query: regimesQuery },
@@ -315,11 +218,7 @@ export function StudyOnboardingFiscal() {
     setOpenFormStep(nextStep);
   };
   const hasActiveProfile = (profileQuery.data ?? []).some((profile) => profile.status === "ACTIVE");
-  // Un perfil cargado pero sin activar no está terminado: se dice, en lugar de darlo por completo.
-  const stepStatusLabel = (key: FiscalStep) => {
-    if (!stepCompletion[key]) return "Pendiente";
-    return key === "perfil" && !hasActiveProfile ? "Falta activar" : "Completado";
-  };
+  const stepStatusLabel = (key: FiscalStep) => stepStatusLabelFor(key, stepCompletion, hasActiveProfile);
   const activeRegistrations = (registrationsQuery.data ?? []).filter((row) => row.status === "ACTIVE");
   const currentActivities = (clientActivitiesQuery.data ?? []).filter((row) => !row.validTo);
   const obligationByPeriod = new Map((obligationsQuery.data ?? []).map((obligation) => [obligation.period.id, obligation]));
@@ -354,28 +253,12 @@ export function StudyOnboardingFiscal() {
         </dl>
       ) : null}
       {nextRequiredStep ? (
-        <nav className="fiscal-progress" aria-label="Pasos del onboarding fiscal">
-          <ol className="fiscal-progress__list">
-            {FISCAL_STEPS.map((item, index) => (
-              <li key={item.key}>
-                <Button
-                  type="button"
-                  variant="text"
-                  size="row"
-                  className="fiscal-progress__step"
-                  aria-current={nextRequiredStep.key === item.key ? "step" : undefined}
-                  onClick={() => setTab(STEP_TAB[item.key])}
-                >
-                  <span className="fiscal-progress__marker" aria-hidden="true">{index + 1}</span>
-                  <span>{item.label}</span>
-                  <span className={`fiscal-progress__status${stepCompletion[item.key] ? " fiscal-progress__status--done" : ""}`}>
-                    {stepStatusLabel(item.key)}
-                  </span>
-                </Button>
-              </li>
-            ))}
-          </ol>
-        </nav>
+        <PasosFiscales
+          nextRequiredStep={nextRequiredStep}
+          stepCompletion={stepCompletion}
+          stepStatusLabel={stepStatusLabel}
+          setTab={setTab}
+        />
       ) : null}
 
       <DenseTabs<FiscalTab>
