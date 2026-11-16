@@ -116,10 +116,10 @@ describe("Pie de los cuatro cajones de Clientes: estado vigente (K9, 5.3a)", () 
     expect(pieDe(cajon).querySelector(".action-drawer__hint")).toBeNull();
   });
 
-  it("estado: el pie tiene solo «Guardar estado»", async () => {
+  it("estado: «Cancelar» a la izquierda y «Guardar estado» a la derecha", async () => {
     const cajon = await abrirEstado();
-    // vigente: cambia con D5-2 (sin «Cancelar»)
-    expect(botonesDelPie(cajon)).toEqual(["Guardar estado"]);
+    expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Guardar estado"]);
+    expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe("Cancelar");
   });
 
   it("contacto vacío: «Guardar contacto» deshabilitado y sin motivo visible", async () => {

@@ -1,6 +1,6 @@
 import type { UseMutationResult } from "@tanstack/react-query";
 import { Button, Notice } from "@contable/design-system";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ApiError, type Client } from "../../../lib/api";
 import type { ClientWithProfile } from "../tipos";
 
@@ -19,24 +19,30 @@ export function PanelEstado({
   statusForm,
   setStatusForm,
 }: PanelEstadoProps) {
+  const cerrar = () => {
+    setStatusClient(null);
+    updateStatus.reset();
+  };
   return (
     <ActionDrawer
       isOpen={Boolean(statusClient)}
-      onClose={() => {
-        setStatusClient(null);
-        updateStatus.reset();
-      }}
+      onClose={cerrar}
       title="Cambiar estado"
       description="Elegí el estado del cliente."
       footer={
-        <Button
-          type="submit"
-          form="client-status-form"
-          loading={updateStatus.isPending}
-          loadingLabel="Guardando estado"
-        >
-          Guardar estado
-        </Button>
+        <ActionDrawerFooter
+          primary={
+            <Button
+              type="submit"
+              form="client-status-form"
+              loading={updateStatus.isPending}
+              loadingLabel="Guardando estado"
+            >
+              Guardar estado
+            </Button>
+          }
+          onCancel={cerrar}
+        />
       }
     >
       {statusClient ? (
