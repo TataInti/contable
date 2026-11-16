@@ -86,7 +86,9 @@ describe("declaración jurada: detalle del saldo a favor por impuesto y jurisdic
         amount: "1.0000",
       }));
     expect(
-      rutas(taxFilingDeclarationBodySchema.safeParse({ ...cuerpo, saldosFavorDetalle: ítems(101) })),
+      rutas(
+        taxFilingDeclarationBodySchema.safeParse({ ...cuerpo, saldosFavorDetalle: ítems(101) }),
+      ),
     ).toContain("saldosFavorDetalle");
     expect(
       taxFilingDeclarationBodySchema.safeParse({ ...cuerpo, saldosFavorDetalle: ítems(100) })

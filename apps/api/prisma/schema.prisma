@@ -3287,6 +3287,7 @@ model TaxFiling {
   totalAPagar              Decimal?  @db.Decimal(20, 4)
   declaredByUserId         String?
   declaredAt               DateTime? @db.Timestamp(3)
+  saldosFavorDetalle       Json?
   createdByUserId   String
   createdAt         DateTime @default(now())
 

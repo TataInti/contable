@@ -30,7 +30,10 @@ export const taxFilingCreditDetailItemSchema = z
     taxTypeId: uuid,
     regimeId: uuid.optional(),
     jurisdictionId: uuid.optional(),
-    amount: declaredAmount.refine((value) => /[1-9]/.test(value), "El importe debe ser mayor que cero"),
+    amount: declaredAmount.refine(
+      (value) => /[1-9]/.test(value),
+      "El importe debe ser mayor que cero",
+    ),
   })
   .strict();
 export type TaxFilingCreditDetailItem = z.infer<typeof taxFilingCreditDetailItemSchema>;
@@ -45,12 +48,15 @@ export const taxFilingCreditDetailSchema = z
   .superRefine((items, ctx) => {
     const combinaciones = new Set<string>();
     items.forEach((item, index) => {
-      const combinacion = [item.taxTypeId, item.regimeId ?? "", item.jurisdictionId ?? ""].join("|");
+      const combinacion = [item.taxTypeId, item.regimeId ?? "", item.jurisdictionId ?? ""].join(
+        "|",
+      );
       if (combinaciones.has(combinacion)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [index],
-          message: "Ya hay un saldo para este impuesto, régimen y jurisdicción: cargalo una sola vez",
+          message:
+            "Ya hay un saldo para este impuesto, régimen y jurisdicción: cargalo una sola vez",
         });
       }
       combinaciones.add(combinacion);

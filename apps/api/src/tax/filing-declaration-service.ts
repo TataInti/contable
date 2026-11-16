@@ -2,10 +2,12 @@ import { Prisma } from "@prisma/client";
 import {
   FILING_DECLARATION_DOCUMENT_CATEGORY,
   FILING_DECLARATION_TOLERANCE,
+  type TaxFilingCreditDetailItem,
   type TaxFilingDeclarationBody,
   type TaxFilingDeclarationWarning,
 } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import { creditOriginProblem, type CreditOriginProblem } from "./workpaper-service.js";
 
 /**
  * Declaración jurada (DJ) de una presentación FILED (corte 5a, D-DJ2). Reglas:
@@ -23,7 +25,13 @@ export type FilingDeclarationErrorCode =
   | "FILING_SETTLEMENT_SUPERSEDED"
   | "DECLARATION_DOCUMENT_NOT_FOUND"
   | "DECLARATION_DOCUMENT_NOT_READY"
-  | "DECLARATION_DOCUMENT_WRONG_CATEGORY";
+  | "DECLARATION_DOCUMENT_WRONG_CATEGORY"
+  | "DECLARATION_CREDIT_TAX_NOT_FOUND"
+  | "DECLARATION_CREDIT_IVA_NOT_ALLOWED"
+  | "DECLARATION_CREDIT_REGIME_NOT_OF_TAX"
+  | "DECLARATION_CREDIT_CM_REQUIRES_JURISDICTION"
+  | "DECLARATION_CREDIT_JURISDICTION_MISMATCH"
+  | "DECLARATION_CREDIT_JURISDICTION_NOT_ACTIVE";
 
 export class FilingDeclarationError extends Error {
   readonly code: FilingDeclarationErrorCode;
@@ -98,6 +106,95 @@ export function declarationWarnings(input: {
   return warnings;
 }
 
+/** Ítem del detalle tal como se guarda en tax_filings.saldosFavorDetalle (importes con 4 decimales). */
+type StoredCreditDetailItem = {
+  taxTypeId: string;
+  regimeId: string | null;
+  jurisdictionId: string | null;
+  amount: string;
+};
+
+/** Código, campo y motivo en la DJ para cada problema de origen (creditOriginProblem). */
+const CREDIT_ORIGIN_DECLARATION_ERRORS: Record<
+  CreditOriginProblem,
+  { code: FilingDeclarationErrorCode; campo: "regimeId" | "jurisdictionId"; motivo: string }
+> = {
+  REGIME_NOT_OF_TAX: {
+    code: "DECLARATION_CREDIT_REGIME_NOT_OF_TAX",
+    campo: "regimeId",
+    motivo: "el régimen no corresponde al impuesto del saldo. Elegí un régimen de ese impuesto.",
+  },
+  CM_REQUIRES_JURISDICTION: {
+    code: "DECLARATION_CREDIT_CM_REQUIRES_JURISDICTION",
+    campo: "jurisdictionId",
+    motivo: "el saldo de Convenio Multilateral requiere una jurisdicción.",
+  },
+  JURISDICTION_MISMATCH: {
+    code: "DECLARATION_CREDIT_JURISDICTION_MISMATCH",
+    campo: "jurisdictionId",
+    motivo: "la jurisdicción no coincide con el régimen del saldo.",
+  },
+  JURISDICTION_NOT_ACTIVE: {
+    code: "DECLARATION_CREDIT_JURISDICTION_NOT_ACTIVE",
+    campo: "jurisdictionId",
+    motivo: "la jurisdicción no existe o está inactiva. Elegí una jurisdicción activa.",
+  },
+};
+
+/**
+ * Valida cada ítem del detalle (D13-4 a): el impuesto existe y no es IVA (sus saldos tienen campos
+ * propios) y el origen cumple las reglas del saldo inicial. Devuelve lo que se guarda, o null sin
+ * detalle. Corta en el primer ítem inválido e indica el campo y el motivo (P4).
+ */
+async function validarSaldosFavorDetalle(
+  tx: Prisma.TransactionClient,
+  items: TaxFilingCreditDetailItem[],
+): Promise<StoredCreditDetailItem[] | null> {
+  if (items.length === 0) return null;
+  const iva = await tx.taxType.findUnique({ where: { code: "IVA" }, select: { id: true } });
+  const guardados: StoredCreditDetailItem[] = [];
+  for (const [index, item] of items.entries()) {
+    const ruta = (campo: string) => ["saldosFavorDetalle", String(index), campo];
+    const impuesto = await tx.taxType.findUnique({
+      where: { id: item.taxTypeId },
+      select: { id: true },
+    });
+    if (!impuesto) {
+      throw new FilingDeclarationError(
+        "DECLARATION_CREDIT_TAX_NOT_FOUND",
+        `saldosFavorDetalle.${index}.taxTypeId: el impuesto del saldo no existe. Elegí un impuesto del catálogo.`,
+        422,
+        ruta("taxTypeId"),
+      );
+    }
+    if (iva && impuesto.id === iva.id) {
+      throw new FilingDeclarationError(
+        "DECLARATION_CREDIT_IVA_NOT_ALLOWED",
+        `saldosFavorDetalle.${index}.taxTypeId: el IVA se declara con sus saldos técnico y libre, no en el detalle.`,
+        422,
+        ruta("taxTypeId"),
+      );
+    }
+    const problema = await creditOriginProblem(tx, item);
+    if (problema) {
+      const error = CREDIT_ORIGIN_DECLARATION_ERRORS[problema];
+      throw new FilingDeclarationError(
+        error.code,
+        `saldosFavorDetalle.${index}.${error.campo}: ${error.motivo}`,
+        422,
+        ruta(error.campo),
+      );
+    }
+    guardados.push({
+      taxTypeId: item.taxTypeId,
+      regimeId: item.regimeId ?? null,
+      jurisdictionId: item.jurisdictionId ?? null,
+      amount: new Prisma.Decimal(item.amount).toFixed(4),
+    });
+  }
+  return guardados;
+}
+
 export class FilingDeclarationService {
   async recordDeclaration(ctx: TenantContext, input: RecordDeclarationInput) {
     return withTenantContext(ctx, async (tx) => {
@@ -168,6 +265,7 @@ export class FilingDeclarationService {
         );
       }
 
+      const detalle = await validarSaldosFavorDetalle(tx, input.saldosFavorDetalle ?? []);
       const previous = filing.declarationDocumentId
         ? {
             declarationDocumentId: filing.declarationDocumentId,
@@ -177,6 +275,7 @@ export class FilingDeclarationService {
             totalAPagar: filing.totalAPagar?.toFixed(4) ?? null,
             declaredByUserId: filing.declaredByUserId,
             declaredAt: filing.declaredAt?.toISOString() ?? null,
+            saldosFavorDetalle: filing.saldosFavorDetalle ?? null,
           }
         : null;
 
@@ -190,6 +289,7 @@ export class FilingDeclarationService {
           totalAPagar: new Prisma.Decimal(input.totalAPagar),
           declaredByUserId: ctx.userId,
           declaredAt: new Date(),
+          saldosFavorDetalle: detalle ?? Prisma.DbNull,
         },
       });
 
@@ -209,6 +309,7 @@ export class FilingDeclarationService {
             saldoFavorTecnico: new Prisma.Decimal(input.saldoFavorTecnico).toFixed(4),
             saldoLibreDisponibilidad: new Prisma.Decimal(input.saldoLibreDisponibilidad).toFixed(4),
             totalAPagar: new Prisma.Decimal(input.totalAPagar).toFixed(4),
+            saldosFavorDetalle: detalle,
           },
         },
       });

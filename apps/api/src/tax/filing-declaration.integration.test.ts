@@ -522,3 +522,238 @@ describe("declaración jurada: lectura, no bloqueo (D3) y RLS", () => {
     ).toBe("tax.filings.record");
   });
 });
+
+describe("declaración jurada: detalle del saldo a favor por impuesto y jurisdicción (D13-4 a)", () => {
+  let iibb: { id: string };
+  let cm: { id: string };
+  let ar: { id: string };
+  let inactiva: { id: string };
+
+  beforeAll(async () => {
+    iibb = await prisma.taxType.findUniqueOrThrow({
+      where: { code: "IIBB" },
+      select: { id: true },
+    });
+    cm = await prisma.taxRegime.findUniqueOrThrow({
+      where: { code: "CM_ART2" },
+      select: { id: true },
+    });
+    ar = await prisma.jurisdiction.findFirstOrThrow({
+      where: { code: "AR" },
+      select: { id: true },
+    });
+    inactiva = await prisma.jurisdiction.create({
+      data: {
+        code: `DJ5A-INACTIVA-${randomUUID().slice(0, 8)}`,
+        name: "Jurisdicción sintética DJ 5A inactiva",
+        kind: "PROVINCIAL",
+        isActive: false,
+      },
+      select: { id: true },
+    });
+  });
+
+  it("guarda el detalle con importes de 4 decimales y lo devuelve en la DJ y en la lectura del cronograma", async () => {
+    const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
+    const dj = await documento(DJ, "READY");
+    const esperado = [
+      { taxTypeId: iibb.id, regimeId: null, jurisdictionId: null, amount: "250.5000" },
+      { taxTypeId: iibb.id, regimeId: cm.id, jurisdictionId: ar.id, amount: "100.0000" },
+    ];
+    const res = await declarar(e, {
+      declarationDocumentId: dj,
+      ...CUERPO_BASE,
+      saldosFavorDetalle: [
+        { taxTypeId: iibb.id, amount: "250.5" },
+        { taxTypeId: iibb.id, regimeId: cm.id, jurisdictionId: ar.id, amount: "100.0000" },
+      ],
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.filing.saldosFavorDetalle).toEqual(esperado);
+
+    const cronograma = await app.inject({
+      method: "GET",
+      url: `/api/v1/firms/${FIRM}/clients/${clientId}/tax-settlements/${e.settlementId}/timeline`,
+      cookies: { refresh_token: token },
+    });
+    expect(cronograma.statusCode).toBe(200);
+    const presentacion = cronograma
+      .json()
+      .data.filings.find((f: { id: string }) => f.id === e.filingId);
+    expect(presentacion.saldosFavorDetalle).toEqual(esperado);
+  });
+
+  it("una DJ sin detalle (omitido o []) sigue igual y guarda el detalle como nulo", async () => {
+    const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
+    const dj1 = await documento(DJ, "READY");
+    const dj2 = await documento(DJ, "READY");
+    const omitido = await declarar(e, { declarationDocumentId: dj1, ...CUERPO_BASE });
+    expect(omitido.statusCode).toBe(200);
+    expect(omitido.json().data.filing.saldosFavorDetalle).toBeNull();
+    const vacio = await declarar(e, {
+      declarationDocumentId: dj2,
+      ...CUERPO_BASE,
+      saldosFavorDetalle: [],
+    });
+    expect(vacio.statusCode).toBe(200);
+    expect(vacio.json().data.filing.saldosFavorDetalle).toBeNull();
+    expect(vacio.json().data.warnings).toEqual([]);
+  });
+
+  it("recargar la DJ reemplaza el detalle y deja el valor anterior en la auditoría", async () => {
+    const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
+    const dj1 = await documento(DJ, "READY");
+    const dj2 = await documento(DJ, "READY");
+    const previo = [
+      { taxTypeId: iibb.id, regimeId: null, jurisdictionId: null, amount: "80.0000" },
+    ];
+    expect(
+      (
+        await declarar(e, {
+          declarationDocumentId: dj1,
+          ...CUERPO_BASE,
+          saldosFavorDetalle: [{ taxTypeId: iibb.id, amount: "80" }],
+        })
+      ).statusCode,
+    ).toBe(200);
+    const res = await declarar(e, { declarationDocumentId: dj2, ...CUERPO_BASE });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.filing.saldosFavorDetalle).toBeNull();
+
+    const auditoria = await prisma.auditEvent.findMany({
+      where: { entityId: e.filingId, action: "FILING_DECLARATION_RECORDED" },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(auditoria).toHaveLength(2);
+    expect(auditoria[0]?.after).toMatchObject({ saldosFavorDetalle: previo });
+    expect(auditoria[1]?.before).toMatchObject({ saldosFavorDetalle: previo });
+    expect(auditoria[1]?.after).toMatchObject({ saldosFavorDetalle: null });
+  });
+
+  const reglas: Array<[string, () => Record<string, string>, string, string]> = [
+    [
+      "IVA",
+      () => ({ taxTypeId: regime.taxTypeId, amount: "10.0000" }),
+      "DECLARATION_CREDIT_IVA_NOT_ALLOWED",
+      "taxTypeId",
+    ],
+    [
+      "régimen de otro impuesto",
+      () => ({ taxTypeId: iibb.id, regimeId: regime.id, amount: "10.0000" }),
+      "DECLARATION_CREDIT_REGIME_NOT_OF_TAX",
+      "regimeId",
+    ],
+    [
+      "Convenio Multilateral sin jurisdicción",
+      () => ({ taxTypeId: iibb.id, regimeId: cm.id, amount: "10.0000" }),
+      "DECLARATION_CREDIT_CM_REQUIRES_JURISDICTION",
+      "jurisdictionId",
+    ],
+    [
+      "jurisdicción inactiva",
+      () => ({ taxTypeId: iibb.id, jurisdictionId: inactiva.id, amount: "10.0000" }),
+      "DECLARATION_CREDIT_JURISDICTION_NOT_ACTIVE",
+      "jurisdictionId",
+    ],
+    [
+      "impuesto inexistente",
+      () => ({ taxTypeId: randomUUID(), amount: "10.0000" }),
+      "DECLARATION_CREDIT_TAX_NOT_FOUND",
+      "taxTypeId",
+    ],
+  ];
+  it.each(reglas)(
+    "rechaza %s con 422, el código y el campo del ítem",
+    async (_nombre, ítem, codigo, campo) => {
+      const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
+      const dj = await documento(DJ, "READY");
+      const res = await declarar(e, {
+        declarationDocumentId: dj,
+        ...CUERPO_BASE,
+        saldosFavorDetalle: [ítem()],
+      });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error).toMatchObject({
+        code: codigo,
+        details: { path: ["saldosFavorDetalle", "0", campo] },
+      });
+      expect(res.json().error.message).toContain(`saldosFavorDetalle.0.${campo}`);
+    },
+  );
+
+  it.each([
+    ["importe cero", () => [{ taxTypeId: iibb.id, amount: "0" }], "saldosFavorDetalle.0.amount"],
+    [
+      "importe negativo",
+      () => [{ taxTypeId: iibb.id, amount: "-5" }],
+      "saldosFavorDetalle.0.amount",
+    ],
+    [
+      "ítem repetido",
+      () => [
+        { taxTypeId: iibb.id, amount: "5" },
+        { taxTypeId: iibb.id, amount: "6" },
+      ],
+      "saldosFavorDetalle.1",
+    ],
+    [
+      "más de 100 ítems",
+      () =>
+        Array.from({ length: 101 }, (_, i) => ({
+          taxTypeId: iibb.id,
+          jurisdictionId: `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
+          amount: "1.0000",
+        })),
+      "saldosFavorDetalle",
+    ],
+  ])(
+    "rechaza en el contrato %s con 400 y el campo",
+    async (_nombre, detalle: () => Record<string, string>[], campo) => {
+      const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
+      const dj = await documento(DJ, "READY");
+      const res = await declarar(e, {
+        declarationDocumentId: dj,
+        ...CUERPO_BASE,
+        saldosFavorDetalle: detalle(),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe("VALIDATION_ERROR");
+      expect(res.json().error.details.map((d: { path: string }) => d.path)).toContain(campo);
+    },
+  );
+
+  it("RLS: el rol runtime ve el detalle de su estudio y no el de otro; la columna es JSONB nullable", async () => {
+    const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
+    const dj = await documento(DJ, "READY");
+    expect(
+      (
+        await declarar(e, {
+          declarationDocumentId: dj,
+          ...CUERPO_BASE,
+          saldosFavorDetalle: [{ taxTypeId: iibb.id, amount: "7.0000" }],
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const leer = (firm: string) =>
+      comoRuntime(
+        firm,
+        (tx) =>
+          tx.$queryRaw<{ saldosFavorDetalle: unknown }[]>`
+          SELECT "saldosFavorDetalle" FROM tax_filings WHERE id = ${e.filingId}`,
+      );
+    expect(await leer(FIRM)).toEqual([
+      {
+        saldosFavorDetalle: [
+          { taxTypeId: iibb.id, regimeId: null, jurisdictionId: null, amount: "7.0000" },
+        ],
+      },
+    ]);
+    expect(await leer(OTHER_FIRM)).toEqual([]);
+
+    const columna = await prisma.$queryRaw<{ data_type: string; is_nullable: string }[]>`
+      SELECT data_type, is_nullable FROM information_schema.columns
+      WHERE table_name = 'tax_filings' AND column_name = 'saldosFavorDetalle'`;
+    expect(columna).toEqual([{ data_type: "jsonb", is_nullable: "YES" }]);
+  });
+});
