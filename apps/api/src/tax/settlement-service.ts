@@ -78,7 +78,25 @@ export type SettlementErrorCode =
   | "OVERPAYMENT"
   | "INTEREST_SNAPSHOT_REQUIRED"
   | "FILING_REQUIRES_EVIDENCE"
-  | "EVIDENCE_NOT_FOUND";
+  | "EVIDENCE_NOT_FOUND"
+  | "ARTIFACT_NOT_FOUND"
+  | "ARTIFACT_CHECKSUM_MISMATCH";
+
+/** Tipos de contenido del papel de trabajo descargable, por formato guardado. */
+const ARTIFACT_CONTENT_TYPES: Readonly<Record<string, string>> = {
+  pdf: "application/pdf",
+  csv: "text/csv; charset=utf-8",
+};
+
+/**
+ * Nombre del archivo que recibe quien descarga el papel de trabajo:
+ * liquidacion-<código del impuesto>-<AAAA-MM>-v<versión>.<formato>, en minúsculas y sin espacios.
+ */
+export function artifactFilename(input: { taxTypeCode: string; startDate: Date; version: number; format: string }): string {
+  return `liquidacion-${input.taxTypeCode}-${input.startDate.toISOString().slice(0, 7)}-v${input.version}.${input.format}`
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+}
 
 export class SettlementError extends Error {
   readonly code: SettlementErrorCode;
@@ -2776,6 +2794,54 @@ export class SettlementService {
         take: 50,
       }),
     );
+  }
+
+  /**
+   * Descarga de un papel de trabajo guardado (corte liq-descarga, D7C-2 a). Solo de una
+   * liquidación FINALIZED del mismo estudio y cliente. Lee el objeto de MinIO y compara su
+   * sha256 con el checksum guardado: si no coincide, no se entrega (el export es evidencia).
+   */
+  async downloadArtifact(ctx: TenantContext, input: { clientId: string; settlementId: string; artifactId: string }) {
+    const storage = this.storage;
+    const { settlement, artifact } = await withTenantContext(ctx, async (tx) => {
+      const settlement = await tx.taxSettlement.findFirst({
+        where: { id: input.settlementId, firmId: ctx.firmId, clientId: input.clientId },
+        include: { period: true, regime: { include: { taxType: true } } },
+      });
+      if (!settlement) throw new SettlementError("SETTLEMENT_NOT_FOUND", "Liquidación no encontrada");
+      if (settlement.status !== "FINALIZED") {
+        throw new SettlementError(
+          "SETTLEMENT_IMMUTABLE",
+          "El papel de trabajo sólo se descarga desde una liquidación finalizada",
+        );
+      }
+      const artifact = await tx.taxExportArtifact.findFirst({
+        where: { id: input.artifactId, firmId: ctx.firmId, clientId: input.clientId, settlementId: settlement.id },
+      });
+      if (!artifact?.objectKey || !artifact.checksum) {
+        throw new SettlementError("ARTIFACT_NOT_FOUND", "Papel de trabajo no encontrado");
+      }
+      return { settlement, artifact: { ...artifact, objectKey: artifact.objectKey, checksum: artifact.checksum } };
+    });
+
+    const body = await storage.get(BUCKETS.exports, artifact.objectKey);
+    if (createHash("sha256").update(body).digest("hex") !== artifact.checksum) {
+      throw new SettlementError(
+        "ARTIFACT_CHECKSUM_MISMATCH",
+        "El papel de trabajo guardado no coincide con su checksum: no se entrega el archivo.",
+      );
+    }
+    return {
+      body,
+      checksum: artifact.checksum,
+      contentType: ARTIFACT_CONTENT_TYPES[artifact.format] ?? "application/octet-stream",
+      filename: artifactFilename({
+        taxTypeCode: settlement.regime.taxType.code,
+        startDate: settlement.period.startDate,
+        version: settlement.version,
+        format: artifact.format,
+      }),
+    };
   }
 
   // ------------------------------------------------------------------
