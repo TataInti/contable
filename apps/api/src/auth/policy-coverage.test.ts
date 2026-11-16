@@ -41,6 +41,11 @@ describe("cobertura total del ROUTE_POLICY (deny-by-default)", () => {
       "POST /api/v1/firms", // PLATFORM_ADMIN handling antes del policy check
       "GET /api/v1/portal/contexts", // manejo propio del portal
       "GET /api/v1/portal/clients/:p/summary", // portal (capabilities propias)
+      // Avisos propios (corte 3c): datos del propio usuario. La RLS notif_* y el filtro por estudio limitan lo visible.
+      "GET /api/v1/me/notifications",
+      "GET /api/v1/me/notifications/unread-count",
+      "POST /api/v1/me/notifications/:p/read",
+      "POST /api/v1/me/notifications/:p/archive",
     ]);
 
     const missing: string[] = [];
@@ -72,5 +77,14 @@ describe("cobertura total del ROUTE_POLICY (deny-by-default)", () => {
     expect(requiredCapability("GET", `${base}/summary`)).toBe("tax.vouchers.read");
     expect(requiredCapability("GET", `${base}/export`)).toBe("tax.vouchers.read");
     expect(requiredCapability("POST", `${base}/export`)).toBeNull();
+  });
+
+  it("avisos propios (corte 3c): las rutas /me/notifications no exigen capacidad", () => {
+    // Decisión explícita: estas rutas no están en ROUTE_POLICY y ninguna regla de firma les asigna capacidad.
+    // Si una regla nueva las captura (como pasó con un catch-all en 5a), esta prueba falla.
+    expect(requiredCapability("GET", "/api/v1/me/notifications")).toBeNull();
+    expect(requiredCapability("GET", "/api/v1/me/notifications/unread-count")).toBeNull();
+    expect(requiredCapability("POST", "/api/v1/me/notifications/:p/read")).toBeNull();
+    expect(requiredCapability("POST", "/api/v1/me/notifications/:p/archive")).toBeNull();
   });
 });
