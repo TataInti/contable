@@ -49,18 +49,18 @@ describe("busqueda del Resumen del cliente (R1 y R2, funciones puras)", () => {
     expect(buildSearchResults(resumen, "20111111112")).toEqual([
       { sectionId: "overview", sectionLabel: "Resumen", title: "Cliente SINTÉTICO A", detail: "CUIT 20111111112" },
     ]);
-    expect(buildSearchResults(resumen, "noviembre").map((resultado) => resultado.title)).toContain("IVA · Noviembre 2026");
+    expect(buildSearchResults(resumen, "noviembre").map((resultado) => resultado.title)).toContain("IVA · noviembre de 2026");
     expect(buildSearchResults(resumen, "zzz")).toEqual([]);
   });
 
-  it("R2 · documenta el tope de 6 por sección: con 8 obligaciones coincidentes devuelve 6", () => {
+  it("R2 · sin tope: con 8 obligaciones coincidentes devuelve las 8", () => {
     const obligaciones = Array.from({ length: 8 }, (_, indice) => ({
       ...obligacion,
       id: `obligation-${indice + 1}`,
       period: { ...obligacion.period, id: `period-${indice + 1}`, label: `Mes ${indice + 1}` },
     }));
     const resultados = buildSearchResults(resumenSintetico({ obligaciones }), "IVA");
-    expect(resultados).toHaveLength(6);
+    expect(resultados).toHaveLength(8);
     expect(resultados.every((resultado) => resultado.sectionId === "obligations")).toBe(true);
     // vigente: defecto 3.1.1 (el contador cuenta solo lo devuelto); lo cambia 7a.2 (sin D7A-N en §7.2)
   });

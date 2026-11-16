@@ -1,8 +1,9 @@
 import { Table } from "@contable/design-system";
 import type { ClientSummary } from "../../../lib/api";
 import { formatearRango } from "../../../lib/formatoFechas";
-import { displayValue } from "../etiquetas";
-import { SummarySectionEmpty } from "../Piezas";
+import { DenseSection } from "../../../ui/Dense";
+import { etiquetaPeriodo } from "../etiquetas";
+import { SalidaConfiguracionFiscal, SummarySectionEmpty } from "../Piezas";
 
 type Props = {
   fiscal: ClientSummary["fiscal"];
@@ -10,18 +11,18 @@ type Props = {
 
 export function SeccionPeriodosFiscales({ fiscal }: Props) {
   return (
-    <section className="client-summary__detail-section" aria-labelledby="tax-periods-title">
-      <div className="client-summary__detail-heading">
-        <div>
-          <h2 id="tax-periods-title">Períodos fiscales</h2>
-          <p>Períodos disponibles para asociar saldos, presentaciones y obligaciones.</p>
-        </div>
-        <span className="section-count">{fiscal.periods.length}</span>
-      </div>
+    <DenseSection
+      id="rc-periodos-fiscales"
+      title="Períodos fiscales"
+      description="Períodos disponibles para asociar saldos, presentaciones y obligaciones."
+      count={fiscal.periods.length}
+      surface="integrated"
+    >
       {fiscal.periods.length === 0 ? (
         <SummarySectionEmpty
           title="Sin períodos fiscales"
-          description="La configuración fiscal todavía no tiene períodos para este cliente."
+          description="Los períodos fiscales se cargan en Configuración fiscal."
+          action={<SalidaConfiguracionFiscal />}
         />
       ) : (
         <Table
@@ -43,7 +44,7 @@ export function SeccionPeriodosFiscales({ fiscal }: Props) {
               header: "Período",
               render: (period) => (
                 <div className="summary-table__primary">
-                  <strong>{displayValue(period.label)}</strong>
+                  <strong>{etiquetaPeriodo(period.label)}</strong>
                   <small>{formatearRango(period.startDate, period.endDate)}</small>
                 </div>
               ),
@@ -51,6 +52,6 @@ export function SeccionPeriodosFiscales({ fiscal }: Props) {
           ]}
         />
       )}
-    </section>
+    </DenseSection>
   );
 }

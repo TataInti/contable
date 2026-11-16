@@ -1,5 +1,6 @@
 import type { ClientSummary } from "../../../lib/api";
 import { formatearMes, formatearRango } from "../../../lib/formatoFechas";
+import { DenseSection } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { SummarySectionEmpty } from "../Piezas";
 
@@ -10,14 +11,13 @@ type Props = {
 
 export function SeccionPeriodosContables({ accounting, accountingPeriodCount }: Props) {
   return (
-    <section className="client-summary__detail-section" aria-labelledby="accounting-periods-title">
-      <div className="client-summary__detail-heading">
-        <div>
-          <h2 id="accounting-periods-title">Períodos contables</h2>
-          <p>Cada ejercicio con el detalle de sus períodos y estado de cierre.</p>
-        </div>
-        <span className="section-count">{accountingPeriodCount}</span>
-      </div>
+    <DenseSection
+      id="rc-periodos-contables"
+      title="Períodos contables"
+      description="Cada ejercicio con el detalle de sus períodos y estado de cierre."
+      count={accountingPeriodCount}
+      surface="integrated"
+    >
       {accounting.fiscalYears.length === 0 ? (
         <SummarySectionEmpty
           title="Sin ejercicios contables"
@@ -54,6 +54,6 @@ export function SeccionPeriodosContables({ accounting, accountingPeriodCount }: 
           ))}
         </div>
       )}
-    </section>
+    </DenseSection>
   );
 }

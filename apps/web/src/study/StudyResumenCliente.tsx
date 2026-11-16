@@ -1,18 +1,13 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, EmptyState, Notice } from "@contable/design-system";
+import { AsyncState, Button, EmptyState } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api, type ClientContact, type ClientSummary } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
-import {
-  DenseHeader,
-  DensePage,
-  DenseSearch,
-  DenseToolbar,
-  useDensity,
-} from "../ui/Dense";
+import { DenseHeader, DensePage, DenseSearch, DenseToolbar, useDensity } from "../ui/Dense";
 import "./study.css";
 import { buildSearchResults, type SummarySectionDefinition, type SummarySectionId } from "./resumen/busqueda";
+import { etiquetaCoincidencias } from "./resumen/etiquetas";
 import { IndiceSecciones } from "./resumen/IndiceSecciones";
 import { SummarySectionEmpty } from "./resumen/Piezas";
 import { SeccionResumen } from "./resumen/secciones/SeccionResumen";
@@ -58,30 +53,16 @@ export function StudyResumenCliente() {
     () => contactsQuery.data?.find((contact) => contact.isPrimary && contact.isActive) ?? null,
     [contactsQuery.data],
   );
-  const contactValue = contactsQuery.isLoading
-    ? "Cargando…"
-    : contactsQuery.isError
-      ? "No disponible"
-      : primaryContact?.name.trim() || "No cargado";
-  const contactEmailValue = contactsQuery.isLoading
-    ? "Cargando…"
-    : contactsQuery.isError
-      ? "No disponible"
-      : primaryContact?.email?.trim() || "No cargado";
-  const contactPhoneValue = contactsQuery.isLoading
-    ? "Cargando…"
-    : contactsQuery.isError
-      ? "No disponible"
-      : primaryContact?.phone?.trim() || "No cargado";
-  const contactAction =
-    contactsQuery.isLoading || (primaryContact && !contactsQuery.isError)
-      ? undefined
-      : contactsQuery.isError
-        ? <><span>No se pudo cargar. </span><a href="/clientes" onClick={(event) => { event.preventDefault(); navigate("/clientes", { state: { contactClientId: clientId } }); }}>Abrir Contactos</a></>
-        : <a href="/clientes" onClick={(event) => { event.preventDefault(); navigate("/clientes", { state: { contactClientId: clientId } }); }}>Cargar en Contactos</a>;
+  const contactos = {
+    cargando: contactsQuery.isPending && contactsQuery.fetchStatus !== "idle",
+    error: contactsQuery.isError,
+    principal: primaryContact,
+    onReintentar: () => void contactsQuery.refetch(),
+  };
   const activeActivities = query.data?.fiscal.activities.filter((item) => !item.validTo).length ?? 0;
   const openAccountingYearCount =
     query.data?.accounting.fiscalYears.filter((year) => year.status === "OPEN").length ?? 0;
+  const cargandoResumen = query.isPending && query.fetchStatus !== "idle";
 
   if (!firmId || !clientId) {
     return (
@@ -95,28 +76,25 @@ export function StudyResumenCliente() {
     );
   }
 
-  if (query.isLoading) {
+  if (query.isError) {
     return (
-      <div className="study-page study-route-state" role="status" aria-live="polite">
-        Preparando el resumen del cliente…
+      <div className="study-page study-route-state">
+        <AsyncState
+          loading={false}
+          error
+          loadingLabel=""
+          errorTitle="No pudimos cargar el resumen del cliente"
+          errorDescription="Revisá tu conexión e intentá de nuevo."
+          onRetry={() => void query.refetch()}
+        />
       </div>
     );
   }
 
-  if (query.isError || !query.data) {
+  if (cargandoResumen || !query.data) {
     return (
-      <div className="study-page study-route-state">
-        <Notice
-          tone="error"
-          title="No se pudo cargar el resumen"
-          action={
-            <Button variant="secondary" onClick={() => void query.refetch()}>
-              Reintentar
-            </Button>
-          }
-        >
-          Reintentá para volver a cargar la ficha consolidada sin perder el cliente seleccionado.
-        </Notice>
+      <div className="study-route-state" role="status">
+        Preparando el resumen del cliente…
       </div>
     );
   }
@@ -135,6 +113,7 @@ export function StudyResumenCliente() {
     { id: "catalogs", group: "Configuración", label: "Catálogos" },
   ];
   const searchResults = buildSearchResults(query.data, search);
+  const termino = search.trim();
 
   return (
     <DensePage density={density} flow className="client-summary">
@@ -143,14 +122,13 @@ export function StudyResumenCliente() {
         description={`${client.legalName}${client.tradeName ? ` · ${client.tradeName}` : ""} · CUIT ${client.cuit}`}
         actions={
           <>
-          <Button variant="ghost" onClick={() => navigate("/clientes")}>
-            Volver a clientes
-          </Button>
-          <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
-            Configuración fiscal
-          </Button>
-          <Button onClick={() => navigate("/trabajo")}>Abrir trabajo</Button>
-        
+            <Button variant="ghost" onClick={() => navigate("/clientes")}>
+              Volver a clientes
+            </Button>
+            <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
+              Configuración fiscal
+            </Button>
+            <Button onClick={() => navigate("/trabajo")}>Abrir trabajo</Button>
           </>
         }
       />
@@ -162,30 +140,30 @@ export function StudyResumenCliente() {
           placeholder="CUIT, período, impuesto, obligación…"
           label="Buscar en este cliente"
         />
-        {search.trim() ? (
-          <span className="client-summary__search-status" role="status" aria-live="polite">
-            {searchResults.length > 0 ? `${searchResults.length} coincidencias` : "Sin coincidencias"}
-          </span>
-        ) : null}
+        {termino ? <span className="client-summary__search-status">{etiquetaCoincidencias(searchResults.length)}</span> : null}
       </DenseToolbar>
       <div className="client-summary__workspace">
         <IndiceSecciones
           secciones={sections}
           activeSection={activeSection}
-          hayBusqueda={Boolean(search.trim())}
+          hayBusqueda={Boolean(termino)}
           onSelect={(id) => {
             setSearch("");
             setActiveSection(id);
           }}
         />
 
-        <div className="client-summary__detail" aria-live="polite">
-          {search.trim() ? (
+        <div className="client-summary__detail">
+          {termino ? (
             <section className="client-summary__detail-section" aria-labelledby="client-summary-search-results-title">
               <div className="client-summary__detail-heading">
                 <div>
-                  <h2 id="client-summary-search-results-title">Coincidencias para “{search.trim()}”</h2>
-                  <p>Seleccioná un resultado para abrir su sección y continuar desde ahí.</p>
+                  <h2 id="client-summary-search-results-title" aria-live="polite">
+                    Coincidencias para “{termino}”
+                  </h2>
+                  {searchResults.length > 0 ? (
+                    <p>Seleccioná un resultado para abrir su sección y continuar desde ahí.</p>
+                  ) : null}
                 </div>
                 {searchResults.length > 0 ? <span className="section-count">{searchResults.length}</span> : null}
               </div>
@@ -221,7 +199,7 @@ export function StudyResumenCliente() {
             </section>
           ) : null}
 
-          {!search.trim() && activeSection === "overview" ? (
+          {!termino && activeSection === "overview" ? (
             <SeccionResumen
               client={client}
               profile={profile}
@@ -232,64 +210,36 @@ export function StudyResumenCliente() {
             />
           ) : null}
 
-          {!search.trim() && activeSection === "accounting-periods" ? (
-            <SeccionPeriodosContables
-              accounting={accounting}
-              accountingPeriodCount={accountingPeriodCount}
-            />
+          {!termino && activeSection === "accounting-periods" ? (
+            <SeccionPeriodosContables accounting={accounting} accountingPeriodCount={accountingPeriodCount} />
           ) : null}
 
-          {!search.trim() && activeSection === "tax-periods" ? (
-            <SeccionPeriodosFiscales
-              fiscal={fiscal}
-            />
-          ) : null}
+          {!termino && activeSection === "tax-periods" ? <SeccionPeriodosFiscales fiscal={fiscal} /> : null}
 
-          {!search.trim() && activeSection === "obligations" ? (
-            <SeccionObligaciones
-              fiscal={fiscal}
-            />
-          ) : null}
+          {!termino && activeSection === "obligations" ? <SeccionObligaciones fiscal={fiscal} /> : null}
 
-          {!search.trim() && activeSection === "base-config" ? (
+          {!termino && activeSection === "base-config" ? (
             <SeccionFichaContable
               profile={profile}
               canManageContacts={canManageContacts}
-              contactValue={contactValue}
-              contactEmailValue={contactEmailValue}
-              contactPhoneValue={contactPhoneValue}
-              contactAction={contactAction}
+              contactos={contactos}
               activeProfile={activeProfile}
               clientId={clientId}
               navigate={navigate}
             />
           ) : null}
 
-          {!search.trim() && activeSection === "tax-profile" ? (
-            <SeccionPerfilFiscal
-              activeProfile={activeProfile}
-              fiscal={fiscal}
-            />
+          {!termino && activeSection === "tax-profile" ? (
+            <SeccionPerfilFiscal activeProfile={activeProfile} fiscal={fiscal} />
           ) : null}
 
-          {!search.trim() && activeSection === "registrations" ? (
-            <SeccionRegimenes
-              fiscal={fiscal}
-            />
+          {!termino && activeSection === "registrations" ? <SeccionRegimenes fiscal={fiscal} /> : null}
+
+          {!termino && activeSection === "activities" ? (
+            <SeccionActividades fiscal={fiscal} activeActivities={activeActivities} />
           ) : null}
 
-          {!search.trim() && activeSection === "activities" ? (
-            <SeccionActividades
-              fiscal={fiscal}
-              activeActivities={activeActivities}
-            />
-          ) : null}
-
-          {!search.trim() && activeSection === "catalogs" ? (
-            <SeccionCatalogos
-              counts={counts}
-            />
-          ) : null}
+          {!termino && activeSection === "catalogs" ? <SeccionCatalogos counts={counts} /> : null}
         </div>
       </div>
     </DensePage>

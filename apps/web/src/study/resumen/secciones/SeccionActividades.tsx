@@ -1,7 +1,8 @@
-import { StatusBadge } from "../../../ui/StatusBadge";
 import type { ClientSummary } from "../../../lib/api";
 import { formatearFecha } from "../../../lib/formatoFechas";
-import { SummarySectionEmpty } from "../Piezas";
+import { DenseSection } from "../../../ui/Dense";
+import { StatusBadge } from "../../../ui/StatusBadge";
+import { SalidaConfiguracionFiscal, SummarySectionEmpty } from "../Piezas";
 
 type Props = {
   fiscal: ClientSummary["fiscal"];
@@ -10,18 +11,18 @@ type Props = {
 
 export function SeccionActividades({ fiscal, activeActivities }: Props) {
   return (
-    <section className="client-summary__detail-section" aria-labelledby="activities-title">
-      <div className="client-summary__detail-heading">
-        <div>
-          <h2 id="activities-title">Actividades registradas</h2>
-          <p>{activeActivities} vigentes · la principal aparece primero.</p>
-        </div>
-        <span className="section-count">{fiscal.activities.length}</span>
-      </div>
+    <DenseSection
+      id="rc-actividades"
+      title="Actividades registradas"
+      description={`${activeActivities} vigentes · la principal aparece primero.`}
+      count={fiscal.activities.length}
+      surface="integrated"
+    >
       {fiscal.activities.length === 0 ? (
         <SummarySectionEmpty
           title="Sin actividades"
-          description="Las actividades económicas se administran desde configuración fiscal."
+          description="Las actividades se administran en Configuración fiscal."
+          action={<SalidaConfiguracionFiscal />}
         />
       ) : (
         <ul className="client-summary__detail-list">
@@ -43,6 +44,6 @@ export function SeccionActividades({ fiscal, activeActivities }: Props) {
           ))}
         </ul>
       )}
-    </section>
+    </DenseSection>
   );
 }

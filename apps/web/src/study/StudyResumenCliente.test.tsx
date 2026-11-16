@@ -329,7 +329,7 @@ describe("StudyResumenCliente — datos de contacto y domicilio", () => {
     const ficha = openAccountingFacts();
     await waitFor(() => expect(within(ficha).getAllByText("No cargado").length).toBeGreaterThanOrEqual(3));
     expect(within(ficha).getByRole("link", { name: "Cargar en Contactos" })).toBeTruthy();
-    expect(within(ficha).getByRole("link", { name: "Cargar en Onboarding fiscal" })).toBeTruthy();
+    expect(within(ficha).getByRole("link", { name: "Cargar en Configuración fiscal" })).toBeTruthy();
   });
 
   it("no consulta ni expone contactos para quien no tiene client.manage", async () => {
