@@ -243,6 +243,26 @@ describe("StudyClientes — estados y errores (K6)", () => {
     ).toBeTruthy();
   });
 
+  it("con firm.manage, el aviso de normas vacías enlaza a Usuarios y accesos (pestaña Normas contables)", async () => {
+    contextMock.current = contextoDePrueba(["client.read", "client.manage", "firm.manage"]);
+    respuestaCatalogo["/accounting-standards"] = () => Promise.resolve([]);
+    const cajon = await abrirEdicion();
+
+    expect(await within(cajon).findByText("No hay normas contables cargadas.")).toBeTruthy();
+    const enlace = within(cajon).getByRole("link", {
+      name: "Cargalas en Usuarios y accesos, pestaña Normas contables",
+    });
+    expect(enlace.getAttribute("href")).toBe("/administracion");
+  });
+
+  it("sin firm.manage, el aviso de normas vacías nombra la pantalla y no enlaza", async () => {
+    respuestaCatalogo["/accounting-standards"] = () => Promise.resolve([]);
+    const cajon = await abrirEdicion();
+
+    expect(await within(cajon).findByText("No hay normas contables cargadas.")).toBeTruthy();
+    expect(within(cajon).queryByRole("link", { name: /Cargalas/ })).toBeNull();
+  });
+
   it("un catálogo de normas vacío explica qué falta y a quién pedirlo", async () => {
     respuestaCatalogo["/accounting-standards"] = () => Promise.resolve([]);
     const cajon = await abrirEdicion();
@@ -250,7 +270,8 @@ describe("StudyClientes — estados y errores (K6)", () => {
     expect(await within(cajon).findByText("No hay normas contables cargadas.")).toBeTruthy();
     expect(
       within(cajon).getByText(
-        "Pedí a quien administra el estudio que las cargue en Administración.",
+        // vigente: cambia con decisión de Inti (16-nov)
+        "Pedí a quien administra el estudio que las cargue en Usuarios y accesos, pestaña Normas contables.",
       ),
     ).toBeTruthy();
   });
