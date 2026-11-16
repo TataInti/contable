@@ -122,12 +122,12 @@ describe("Pie de los cuatro cajones de Clientes: estado vigente (K9, 5.3a)", () 
     expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe("Cancelar");
   });
 
-  it("contacto vacío: «Guardar contacto» deshabilitado y sin motivo visible", async () => {
+  it("contacto vacío: «Cancelar» a la izquierda y el motivo junto a «Guardar contacto»", async () => {
     const cajon = await abrirContacto();
     expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Guardar contacto"]);
-    expect((within(cajon).getByRole("button", { name: "Guardar contacto" }) as HTMLButtonElement).disabled).toBe(true);
-    // vigente: cambia con D5-2 (hoy no hay motivo visible)
-    expect(pieDe(cajon).querySelector(".action-drawer__hint")).toBeNull();
+    expect(pieDe(cajon).querySelector(".action-drawer__primary .action-drawer__hint")?.textContent).toBe(
+      "Falta completar el nombre del contacto.",
+    );
   });
 
   it("el pie es el último hijo del cajón de edición (formulario largo)", async () => {

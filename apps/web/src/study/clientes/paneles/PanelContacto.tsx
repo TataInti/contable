@@ -1,6 +1,6 @@
 import type { UseMutationResult } from "@tanstack/react-query";
 import { Button, Field, Notice } from "@contable/design-system";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ApiError, type ClientContact } from "../../../lib/api";
 import type { ClientContactForm } from "../tipos";
 
@@ -21,6 +21,7 @@ export function PanelContacto({
   setContactForm,
   saveContact,
 }: PanelContactoProps) {
+  const sinNombre = contactForm.name.trim().length === 0;
   return (
     <ActionDrawer
       isOpen={contactEditorOpen}
@@ -28,20 +29,21 @@ export function PanelContacto({
       title={editingContact ? "Editar contacto" : "Nuevo contacto"}
       description="Completá los datos de contacto y, si corresponde, marcá el principal."
       footer={
-        <>
-          <Button type="button" variant="ghost" onClick={closeContactEditor}>
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            form="client-contact-form"
-            loading={saveContact.isPending}
-            loadingLabel="Guardando contacto"
-            disabled={contactForm.name.trim().length === 0}
-          >
-            Guardar contacto
-          </Button>
-        </>
+        <ActionDrawerFooter
+          primary={
+            <Button
+              type="submit"
+              form="client-contact-form"
+              loading={saveContact.isPending}
+              loadingLabel="Guardando contacto"
+              disabled={sinNombre}
+            >
+              Guardar contacto
+            </Button>
+          }
+          hint={sinNombre ? "Falta completar el nombre del contacto." : null}
+          onCancel={closeContactEditor}
+        />
       }
     >
       <form
