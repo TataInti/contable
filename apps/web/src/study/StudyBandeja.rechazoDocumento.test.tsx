@@ -45,12 +45,19 @@ describe("Caracterización · rechazo de documentos antes de D23-1", () => {
     vi.unstubAllGlobals();
   });
 
-  it("vigente: cambia con D23-1 · un documento FAILED muestra «El procesamiento no terminó» y hoy no ofrece «Rechazar documento»", async () => {
+  it("vigente: cambia con D23-1 · un documento FAILED muestra «El procesamiento no terminó» y ofrece «Rechazar documento»", async () => {
     fetchSimulado(
       rutaBandeja(
         documento("doc-a", "FAILED", {
           processingJobs: [
-            { id: "job-a", type: "VALIDATE", status: "FAILED", stage: null, progress: 100, error: "CHECKSUM_MISMATCH" },
+            {
+              id: "job-a",
+              type: "VALIDATE",
+              status: "FAILED",
+              stage: null,
+              progress: 100,
+              error: "CHECKSUM_MISMATCH",
+            },
           ],
         }),
       ),
@@ -58,7 +65,7 @@ describe("Caracterización · rechazo de documentos antes de D23-1", () => {
     renderBandeja(clienteComoApp());
     await abrirFactura();
     expect(await screen.findByText("El procesamiento no terminó")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Rechazar documento" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Rechazar documento" })).toBeTruthy();
   });
 
   it("vigente, no cambia: un documento en VALIDATING sigue en «Procesando comprobante» sin acciones de rechazo", async () => {

@@ -61,6 +61,7 @@ const ETAPAS_EN_CURSO: Partial<Record<string, string>> = {
   READING_AI: "Leyendo el comprobante con IA",
 };
 const AVISO_AL_ESTUDIO = "Avisá a quien administra el estudio para que revise el archivo.";
+const AVISO_SUBIR_ARCHIVO_NUEVO = "Para reemplazarlo, subí un archivo nuevo.";
 
 interface DetalleDocumentoProps {
   rows: Document[];
@@ -278,6 +279,10 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
     trabajoFallido?.error && isAutomatedReadingUnavailableReason(trabajoFallido.error)
       ? AUTOMATED_READING_UNAVAILABLE_MESSAGE
       : AVISO_AL_ESTUDIO;
+  // D23-1 (a), etapa 1: un trabajo en cola o en curso frena el rechazo. Lo decide la lista de tareas de la API, no un texto.
+  const hayTareaActiva = Boolean(
+    detail.data?.processingJobs?.some((job) => ["QUEUED", "RUNNING"].includes(job.status)),
+  );
   const activeReprocessJob =
     detail.data?.processingJobs?.some(
       (job) => job.type === "REPROCESS" && ["QUEUED", "RUNNING"].includes(job.status),
@@ -388,9 +393,42 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                 El archivo no se puede abrir ni procesar. Avisá a quien administra el estudio.
               </Notice>
             ) : detail.data?.status === "FAILED" || detail.data?.status === "CANCELED" ? (
-              <Notice tone="error" title="El procesamiento no terminó">
-                {textoFallo}
-              </Notice>
+              <>
+                <Notice tone="error" title="El procesamiento no terminó">
+                  <span>{textoFallo}</span>
+                  {detail.data?.status === "FAILED" ? (
+                    <>
+                      {" "}
+                      <span>{AVISO_SUBIR_ARCHIVO_NUEVO}</span>
+                    </>
+                  ) : null}
+                </Notice>
+                {detail.data?.status === "FAILED" ? (
+                  <div className="review-actions">
+                    <div className="review-actions__buttons">
+                      {capabilities.has("document.review") ? (
+                        <Button
+                          variant="danger"
+                          disabled={hayTareaActiva}
+                          onClick={() => setShowRejectDialog(true)}
+                        >
+                          Rechazar documento
+                        </Button>
+                      ) : null}
+                    </div>
+                    {!capabilities.has("document.review") ? (
+                      <p className="review-actions__hint" role="note">
+                        Para rechazarlo hace falta el permiso de revisión. Pedíselo a quien
+                        administra el estudio.
+                      </p>
+                    ) : hayTareaActiva ? (
+                      <p className="review-actions__hint" role="note">
+                        Todavía se está procesando: esperá a que termine
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>
             ) : detail.data?.status !== "EXTRACTED" && detail.data?.status !== "REVIEWED" ? (
               <div className="processing-state">
                 <div>
@@ -617,7 +655,11 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
         isOpen={showRejectDialog}
         base={base}
         documentId={selectedId}
-        extractionId={extraction.data?.id ?? null}
+        objetivo={
+          detail.data?.status === "FAILED"
+            ? { tipo: "documento" }
+            : { tipo: "extraccion", extractionId: extraction.data?.id ?? null }
+        }
         onClose={() => setShowRejectDialog(false)}
         onRejected={(documentId, reason) =>
           setRejectionReceipts((current) => ({ ...current, [documentId]: reason }))

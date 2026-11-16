@@ -13,11 +13,31 @@ const REJECTION_REASONS = [
   { value: "OTHER", label: "Otro" },
 ] as const;
 
+/** Qué se rechaza: el documento que falló al procesarse (D23-1 a) o la extracción de la revisión. */
+export type ObjetivoRechazo =
+  { tipo: "documento" } | { tipo: "extraccion"; extractionId: string | null };
+
+const DESCRIPCION_RECHAZO_EXTRACCION =
+  "Elegí el motivo del rechazo. La decisión queda registrada y el documento sale de Para revisar.";
+const DESCRIPCION_RECHAZO_DOCUMENTO =
+  "Elegí el motivo del rechazo. La decisión queda registrada y el documento no vuelve a procesarse.";
+
+/** Ruta del rechazo según el objetivo; null mientras falte un dato para enviarlo. */
+function endpointDeRechazo(
+  base: string | null,
+  documentId: string | null,
+  objetivo: ObjetivoRechazo,
+): string | null {
+  if (!base || !documentId) return null;
+  if (objetivo.tipo === "documento") return `${base}/documents/${documentId}/reject`;
+  return objetivo.extractionId ? `${base}/extractions/${objetivo.extractionId}/reject` : null;
+}
+
 interface RechazarDocumentoProps {
   isOpen: boolean;
   base: string | null;
   documentId: string | null;
-  extractionId: string | null;
+  objetivo: ObjetivoRechazo;
   onClose: () => void;
   onRejected: (documentId: string, reason: string) => void;
 }
@@ -26,7 +46,7 @@ export function RechazarDocumento({
   isOpen,
   base,
   documentId,
-  extractionId,
+  objetivo,
   onClose,
   onRejected,
 }: RechazarDocumentoProps) {
@@ -35,14 +55,8 @@ export function RechazarDocumento({
   const [rejectionReasonCode, setRejectionReasonCode] = useState("");
   const [rejectionNote, setRejectionNote] = useState("");
   const reject = useMutation({
-    mutationFn: ({
-      extractionId,
-      reason,
-    }: {
-      documentId: string;
-      extractionId: string;
-      reason: string;
-    }) => api.post(`${base}/extractions/${extractionId}/reject`, { reason }),
+    mutationFn: ({ endpoint, reason }: { documentId: string; endpoint: string; reason: string }) =>
+      api.post(endpoint, { reason }),
     onSuccess: (_result, variables) => {
       onRejected(variables.documentId, variables.reason);
       onClose();
@@ -63,12 +77,14 @@ export function RechazarDocumento({
     setRejectionNote("");
   }, [isOpen, resetRejection]);
 
+  const descripcion =
+    objetivo.tipo === "documento" ? DESCRIPCION_RECHAZO_DOCUMENTO : DESCRIPCION_RECHAZO_EXTRACCION;
   return (
     <ActionDrawer
       isOpen={isOpen}
       onClose={onClose}
       title="¿Rechazar este documento?"
-      description="Elegí el motivo del rechazo. La decisión queda registrada y el documento sale de Para revisar."
+      description={descripcion}
       footer={
         <>
           <Button variant="ghost" onClick={() => onClose()}>
@@ -93,13 +109,10 @@ export function RechazarDocumento({
           const selectedReason = REJECTION_REASONS.find(
             (option) => option.value === rejectionReasonCode,
           );
-          if (!selectedReason || !documentId || !extractionId) return;
+          const endpoint = endpointDeRechazo(base, documentId, objetivo);
+          if (!selectedReason || !documentId || !endpoint) return;
           const reason = [selectedReason.label, rejectionNote.trim()].filter(Boolean).join(" — ");
-          reject.mutate({
-            documentId,
-            extractionId,
-            reason,
-          });
+          reject.mutate({ documentId, endpoint, reason });
         }}
       >
         <label className="ds-field" htmlFor="document-rejection-reason">
@@ -131,6 +144,11 @@ export function RechazarDocumento({
             placeholder="Agregá un detalle para facilitar la revisión."
           />
         </label>
+        {reject.isPending ? (
+          <p className="loading-copy" role="status">
+            Rechazando…
+          </p>
+        ) : null}
         {reject.isError ? (
           <p className="form-error" role="alert">
             {reject.error instanceof ApiError
