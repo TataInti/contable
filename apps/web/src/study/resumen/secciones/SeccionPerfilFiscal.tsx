@@ -1,9 +1,9 @@
-import { StatusBadge } from "../../../ui/StatusBadge";
 import type { ClientSummary } from "../../../lib/api";
 import { formatearFecha } from "../../../lib/formatoFechas";
+import { DenseSection } from "../../../ui/Dense";
+import { StatusBadge } from "../../../ui/StatusBadge";
 import { CONDITION_LABELS, PERSON_TYPE_LABELS, displayValue } from "../etiquetas";
-import { SummaryFact } from "../Piezas";
-import { SummarySectionEmpty } from "../Piezas";
+import { SalidaConfiguracionFiscal, SummaryFact, SummarySectionEmpty } from "../Piezas";
 
 type Props = {
   activeProfile: ClientSummary["fiscal"]["profiles"][number] | undefined;
@@ -12,14 +12,13 @@ type Props = {
 
 export function SeccionPerfilFiscal({ activeProfile, fiscal }: Props) {
   return (
-    <section className="client-summary__detail-section" aria-labelledby="tax-profile-title">
-      <div className="client-summary__detail-heading">
-        <div>
-          <h2 id="tax-profile-title">Perfil del contribuyente</h2>
-          <p>Versión vigente y trazabilidad de sus cambios.</p>
-        </div>
-        {activeProfile ? <StatusBadge status={activeProfile.status} /> : null}
-      </div>
+    <DenseSection
+      id="rc-perfil"
+      title="Perfil del contribuyente"
+      description="Versión vigente y trazabilidad de sus cambios."
+      actions={activeProfile ? <StatusBadge status={activeProfile.status} /> : undefined}
+      surface="integrated"
+    >
       {activeProfile ? (
         <>
           <dl className="client-summary__facts">
@@ -47,8 +46,9 @@ export function SeccionPerfilFiscal({ activeProfile, fiscal }: Props) {
         <SummarySectionEmpty
           title="Sin perfil fiscal"
           description="Todavía no hay una versión de perfil fiscal para este cliente."
+          action={<SalidaConfiguracionFiscal />}
         />
       )}
-    </section>
+    </DenseSection>
   );
 }

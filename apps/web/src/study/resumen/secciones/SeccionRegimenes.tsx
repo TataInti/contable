@@ -1,7 +1,8 @@
-import { StatusBadge } from "../../../ui/StatusBadge";
 import type { ClientSummary } from "../../../lib/api";
 import { formatearFecha } from "../../../lib/formatoFechas";
-import { SummarySectionEmpty } from "../Piezas";
+import { DenseSection } from "../../../ui/Dense";
+import { StatusBadge } from "../../../ui/StatusBadge";
+import { SalidaConfiguracionFiscal, SummarySectionEmpty } from "../Piezas";
 
 type Props = {
   fiscal: ClientSummary["fiscal"];
@@ -9,18 +10,18 @@ type Props = {
 
 export function SeccionRegimenes({ fiscal }: Props) {
   return (
-    <section className="client-summary__detail-section" aria-labelledby="registrations-title">
-      <div className="client-summary__detail-heading">
-        <div>
-          <h2 id="registrations-title">Regímenes adheridos</h2>
-          <p>Inscripciones fiscales y su vigencia.</p>
-        </div>
-        <span className="section-count">{fiscal.registrations.length}</span>
-      </div>
+    <DenseSection
+      id="rc-regimenes"
+      title="Regímenes adheridos"
+      description="Inscripciones fiscales y su vigencia."
+      count={fiscal.registrations.length}
+      surface="integrated"
+    >
       {fiscal.registrations.length === 0 ? (
         <SummarySectionEmpty
           title="Sin inscripciones"
-          description="Los regímenes del cliente se administran desde configuración fiscal."
+          description="Los regímenes se administran en Configuración fiscal."
+          action={<SalidaConfiguracionFiscal />}
         />
       ) : (
         <ul className="client-summary__detail-list">
@@ -38,6 +39,6 @@ export function SeccionRegimenes({ fiscal }: Props) {
           ))}
         </ul>
       )}
-    </section>
+    </DenseSection>
   );
 }

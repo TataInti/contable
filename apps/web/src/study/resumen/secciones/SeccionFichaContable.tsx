@@ -1,31 +1,58 @@
-import type { ReactNode } from "react";
 import type { NavigateFunction } from "react-router-dom";
-import type { ClientSummary } from "../../../lib/api";
+import { AsyncState } from "@contable/design-system";
+import type { ClientContact, ClientSummary } from "../../../lib/api";
 import { formatearFecha } from "../../../lib/formatoFechas";
+import { DenseSection } from "../../../ui/Dense";
 import { MONTH_LABELS, displayValue, displayVatCondition } from "../etiquetas";
 import { SummaryFact } from "../Piezas";
 
 type Props = {
   profile: ClientSummary["client"]["profile"];
   canManageContacts: boolean;
-  contactValue: string;
-  contactEmailValue: string;
-  contactPhoneValue: string;
-  contactAction: ReactNode;
+  contactos: {
+    cargando: boolean;
+    error: boolean;
+    principal: ClientContact | null;
+    onReintentar: () => void;
+  };
   activeProfile: ClientSummary["fiscal"]["profiles"][number] | undefined;
   clientId: string | null;
   navigate: NavigateFunction;
 };
 
-export function SeccionFichaContable({ profile, canManageContacts, contactValue, contactEmailValue, contactPhoneValue, contactAction, activeProfile, clientId, navigate }: Props) {
+export function SeccionFichaContable({ profile, canManageContacts, contactos, activeProfile, clientId, navigate }: Props) {
+  const { cargando, error, principal } = contactos;
+  const valorDeContacto = (dato: string | null | undefined) =>
+    cargando ? "Cargando…" : error ? "No disponible" : dato?.trim() || "No cargado";
+  const irAContactos = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    navigate("/clientes", { state: { contactClientId: clientId } });
+  };
+  const accionContacto =
+    cargando || (principal && !error) ? undefined : error ? (
+      <a href="/clientes" onClick={irAContactos}>Abrir Contactos</a>
+    ) : (
+      <a href="/clientes" onClick={irAContactos}>Cargar en Contactos</a>
+    );
+
   return (
-    <section className="client-summary__detail-section" aria-labelledby="base-config-title">
-      <div className="client-summary__detail-heading">
-        <div>
-          <h2 id="base-config-title">Ficha contable</h2>
-          <p>Parámetros generales que sostienen el trabajo del cliente.</p>
-        </div>
-      </div>
+    <DenseSection
+      id="rc-ficha"
+      title="Ficha contable"
+      description="Parámetros generales que sostienen el trabajo del cliente."
+      surface="integrated"
+    >
+      {error && canManageContacts ? (
+        <AsyncState
+          loading={false}
+          error
+          loadingLabel=""
+          errorTitle="No pudimos cargar los contactos"
+          errorDescription="Revisá tu conexión e intentá de nuevo."
+          onRetry={contactos.onReintentar}
+          className="client-summary__contacts-error"
+        />
+      ) : null}
       <dl className="client-summary__facts">
         {profile ? (
           <>
@@ -47,7 +74,7 @@ export function SeccionFichaContable({ profile, canManageContacts, contactValue,
             label="Ficha contable"
             value="No cargado"
             detail={
-              <a href="/clientes" onClick={(event) => { event.preventDefault(); navigate("/clientes", { state: { contactClientId: clientId } }); }}>
+              <a href="/clientes" onClick={irAContactos}>
                 Completar desde Clientes
               </a>
             }
@@ -55,9 +82,14 @@ export function SeccionFichaContable({ profile, canManageContacts, contactValue,
         )}
         {canManageContacts ? (
           <>
-            <SummaryFact label="Contacto principal" value={contactValue} detail={contactAction} wrap />
-            <SummaryFact label="Correo de contacto" value={contactEmailValue} wrap />
-            <SummaryFact label="Teléfono de contacto" value={contactPhoneValue} wrap />
+            <SummaryFact
+              label="Contacto principal"
+              value={cargando ? "Cargando…" : error ? "No disponible" : principal?.name.trim() || "No cargado"}
+              detail={accionContacto}
+              wrap
+            />
+            <SummaryFact label="Correo de contacto" value={valorDeContacto(principal?.email)} wrap />
+            <SummaryFact label="Teléfono de contacto" value={valorDeContacto(principal?.phone)} wrap />
           </>
         ) : null}
         <SummaryFact
@@ -65,12 +97,14 @@ export function SeccionFichaContable({ profile, canManageContacts, contactValue,
           value={activeProfile?.fiscalAddress?.trim() || "No cargado"}
           wrap
           detail={
-            activeProfile?.fiscalAddress?.trim()
-              ? undefined
-              : <a href="/configuracion-fiscal" onClick={(event) => { event.preventDefault(); navigate("/configuracion-fiscal"); }}>Cargar en Onboarding fiscal</a>
+            activeProfile?.fiscalAddress?.trim() ? undefined : (
+              <a href="/configuracion-fiscal" onClick={(event) => { event.preventDefault(); navigate("/configuracion-fiscal"); }}>
+                Cargar en Configuración fiscal
+              </a>
+            )
           }
         />
       </dl>
-    </section>
+    </DenseSection>
   );
 }

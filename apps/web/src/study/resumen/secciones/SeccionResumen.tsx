@@ -2,6 +2,7 @@ import type { NavigateFunction } from "react-router-dom";
 import { Button } from "@contable/design-system";
 import type { ClientSummary } from "../../../lib/api";
 import { formatearFecha } from "../../../lib/formatoFechas";
+import { DenseSection } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { SummaryFact } from "../Piezas";
 
@@ -16,12 +17,12 @@ type Props = {
 
 export function SeccionResumen({ client, profile, fiscal, openAccountingYearCount, activeActivities, navigate }: Props) {
   return (
-    <section className="client-summary__detail-section" aria-labelledby="client-summary-overview-title">
-      <div className="client-summary__detail-heading">
-        <div>
-          <h2 id="client-summary-overview-title">Resumen</h2>
-          <p>Una lectura rápida para decidir dónde continuar.</p>
-        </div>
+    <DenseSection
+      id="rc-resumen"
+      title="Resumen"
+      description="Una lectura rápida para decidir dónde continuar."
+      surface="integrated"
+      actions={
         <div className="client-summary__overview-meta">
           <span className="client-summary__overview-status">
             <span>Estado</span>
@@ -32,19 +33,15 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
           </span>
           <span className="client-summary__updated">Actualizado {formatearFecha(client.updatedAt)}</span>
         </div>
-      </div>
+      }
+    >
       <dl className="client-summary__overview-facts">
         <SummaryFact
           label="Ficha contable"
-          value={
-            <StatusBadge
-              status={profile ? "CONFIGURED" : "PENDING"}
-              className="status-badge--regular"
-            />
-          }
+          value={<StatusBadge status={profile ? "CONFIGURED" : "PENDING"} className="status-badge--regular" />}
         />
         <SummaryFact
-          label="Onboarding fiscal"
+          label="Configuración fiscal"
           value={
             <StatusBadge
               status={client.onboarding?.completed ? "COMPLETED" : "PENDING"}
@@ -88,6 +85,6 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
           </li>
         </ul>
       </div>
-    </section>
+    </DenseSection>
   );
 }

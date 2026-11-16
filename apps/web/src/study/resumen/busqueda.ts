@@ -1,6 +1,6 @@
 import type { ClientSummary } from "../../lib/api";
 import { formatearFecha, formatearMes, formatearRango } from "../../lib/formatoFechas";
-import { MONTH_LABELS, displayValue } from "./etiquetas";
+import { MONTH_LABELS, displayValue, etiquetaPeriodo } from "./etiquetas";
 
 export type SummarySectionId =
   | "overview"
@@ -42,11 +42,8 @@ export function buildSearchResults(summary: ClientSummary, search: string): Summ
   if (!term) return [];
 
   const results: SummarySearchResult[] = [];
-  const sectionHits = new Map<SummarySectionId, number>();
   const addResult = (result: SummarySearchResult) => {
-    const sectionResultCount = sectionHits.get(result.sectionId) ?? 0;
-    sectionHits.set(result.sectionId, sectionResultCount + 1);
-    if (sectionResultCount < 6) results.push(result);
+    results.push(result);
   };
   const addSectionHit = (sectionId: SummarySectionId, sectionLabel: string) => {
     if (normalizeSearchValue(sectionLabel).includes(term)) {
@@ -92,7 +89,7 @@ export function buildSearchResults(summary: ClientSummary, search: string): Summ
       addResult({
         sectionId: "tax-periods",
         sectionLabel: "Períodos fiscales",
-        title: `${period.taxType.name} · ${displayValue(period.label)}`,
+        title: `${period.taxType.name} · ${etiquetaPeriodo(period.label)}`,
         detail: `${period.taxType.code} · ${formatearRango(period.startDate, period.endDate)}`,
       });
     }
@@ -104,7 +101,7 @@ export function buildSearchResults(summary: ClientSummary, search: string): Summ
       addResult({
         sectionId: "obligations",
         sectionLabel: "Obligaciones",
-        title: `${obligation.regime.name} · ${displayValue(obligation.period.label)}`,
+        title: `${obligation.regime.name} · ${etiquetaPeriodo(obligation.period.label)}`,
         detail: `Vence ${formatearFecha(obligation.dueDate)} · ${obligation.status}`,
       });
     }

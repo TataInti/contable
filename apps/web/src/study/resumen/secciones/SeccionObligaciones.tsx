@@ -2,8 +2,9 @@ import { Table } from "@contable/design-system";
 import type { ClientSummary } from "../../../lib/api";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { formatearFecha, formatearRango } from "../../../lib/formatoFechas";
-import { displayValue } from "../etiquetas";
-import { SummarySectionEmpty } from "../Piezas";
+import { DenseSection } from "../../../ui/Dense";
+import { etiquetaPeriodo } from "../etiquetas";
+import { SalidaConfiguracionFiscal, SummarySectionEmpty } from "../Piezas";
 
 type Props = {
   fiscal: ClientSummary["fiscal"];
@@ -11,18 +12,18 @@ type Props = {
 
 export function SeccionObligaciones({ fiscal }: Props) {
   return (
-    <section className="client-summary__detail-section" aria-labelledby="obligations-title">
-      <div className="client-summary__detail-heading">
-        <div>
-          <h2 id="obligations-title">Obligaciones materializadas</h2>
-          <p>Régimen, período, vencimiento y estado de cada obligación del cliente.</p>
-        </div>
-        <span className="section-count">{fiscal.obligations.length}</span>
-      </div>
+    <DenseSection
+      id="rc-obligaciones"
+      title="Obligaciones materializadas"
+      description="Régimen, período, vencimiento y estado de cada obligación del cliente."
+      count={fiscal.obligations.length}
+      surface="integrated"
+    >
       {fiscal.obligations.length === 0 ? (
         <SummarySectionEmpty
           title="Sin obligaciones materializadas"
-          description="Las obligaciones aparecen acá cuando se generan desde la configuración fiscal."
+          description="Las obligaciones aparecen acá cuando se materializan en Configuración fiscal."
+          action={<SalidaConfiguracionFiscal />}
         />
       ) : (
         <Table
@@ -46,7 +47,7 @@ export function SeccionObligaciones({ fiscal }: Props) {
               header: "Período",
               render: (obligation) => (
                 <div className="summary-table__primary">
-                  <strong>{displayValue(obligation.period.label)}</strong>
+                  <strong>{etiquetaPeriodo(obligation.period.label)}</strong>
                   <small>{formatearRango(obligation.period.startDate, obligation.period.endDate)}</small>
                 </div>
               ),
@@ -64,6 +65,6 @@ export function SeccionObligaciones({ fiscal }: Props) {
           ]}
         />
       )}
-    </section>
+    </DenseSection>
   );
 }
