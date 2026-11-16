@@ -87,4 +87,11 @@ describe("cobertura total del ROUTE_POLICY (deny-by-default)", () => {
     expect(requiredCapability("POST", "/api/v1/me/notifications/:p/read")).toBeNull();
     expect(requiredCapability("POST", "/api/v1/me/notifications/:p/archive")).toBeNull();
   });
+
+  it("ficha del profesional (A4-2a): leer matrículas de un miembro exige firm.users.manage, sin escritura", () => {
+    const ruta = "/api/v1/firms/11111111-1111-4111-8111-111111111111/users/22222222-2222-4222-8222-222222222222/credentials";
+    expect(requiredCapability("GET", ruta)).toBe("firm.users.manage");
+    expect(requiredCapability("POST", ruta)).toBeNull();
+    expect(requiredCapability("PATCH", ruta)).toBeNull();
+  });
 });
