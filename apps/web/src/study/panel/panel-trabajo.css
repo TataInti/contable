@@ -52,15 +52,18 @@ table[aria-label="Panel de trabajo"] tbody td {
 /* Anchos fijos por filtro: entran el valor más largo sin cortar el nombre. */
 .panel-trabajo__filtro--responsable > .dense-select {
   inline-size: calc(var(--ds-space-4) * 14.5);
+  max-inline-size: calc(var(--ds-space-4) * 14.5);
 }
 
 .panel-trabajo__filtro--impuesto > .dense-select {
   inline-size: calc(var(--ds-space-4) * 14);
+  max-inline-size: calc(var(--ds-space-4) * 14);
 }
 
 .panel-trabajo__filtro--estado > .dense-select,
 .panel-trabajo__filtro--periodo > .dense-select {
   inline-size: calc(var(--ds-space-4) * 16);
+  max-inline-size: calc(var(--ds-space-4) * 16);
 }
 
 .panel-trabajo__filtro .ds-field__input {
