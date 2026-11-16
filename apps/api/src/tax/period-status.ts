@@ -70,7 +70,7 @@ export function derivePeriodStatus(facts: PeriodStatusFacts): PeriodStatus {
 
   const missing: PeriodMissingItem[] = [];
   if (!facts.filing?.hasAcuse) missing.push("ACUSE");
-  if (!facts.filing?.hasDeclaration) missing.push("DJ");
+  if (faltaDeclaracion(facts.filing)) missing.push("DJ");
 
   if (missing.length === 0) {
     return {
@@ -86,6 +86,14 @@ export function derivePeriodStatus(facts: PeriodStatusFacts): PeriodStatus {
     missing,
     missingText: missingText(missing),
   };
+}
+
+/**
+ * Regla única de «falta la DJ» (corte 8a): la comparten el estado del período y la caja fiscal.
+ * Falta cuando no hay presentación o la presentación no tiene declaración jurada cargada.
+ */
+export function faltaDeclaracion(filing: PeriodStatusFacts["filing"]): boolean {
+  return !filing?.hasDeclaration;
 }
 
 function missingText(missing: PeriodMissingItem[]): string {
