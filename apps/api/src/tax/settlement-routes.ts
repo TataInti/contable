@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { tenantContextFromRequest, withTenantContext } from "../auth/tenant.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
+import { FilingDeclarationError, FilingDeclarationService } from "./filing-declaration-service.js";
+import { taxFilingDeclarationBodySchema } from "@contable/contracts";
 import { FeatureFlagService } from "../flags/feature-flag-service.js";
 import {
   requireTaxRegimeEnabled,
@@ -30,6 +32,7 @@ function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
 
 export function settlementRoutes(app: FastifyInstance) {
   const service = new SettlementService();
+  const declarations = new FilingDeclarationService();
   const flags = new FeatureFlagService();
 
   const handleError = (
@@ -39,6 +42,11 @@ export function settlementRoutes(app: FastifyInstance) {
     if (err instanceof SettlementError) {
       const status = err.code.includes("NOT_FOUND") ? 404 : err.code.includes("BLOCKING") ? 422 : 409;
       return reply.status(status).send({ error: { code: err.code, message: err.message } });
+    }
+    if (err instanceof FilingDeclarationError) {
+      return reply.status(err.httpStatus).send({
+        error: { code: err.code, message: err.message, details: { path: err.path } },
+      });
     }
     if (err instanceof TaxRegimeDisabledError) {
       return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } });
@@ -343,6 +351,42 @@ export function settlementRoutes(app: FastifyInstance) {
         evidenceDocumentId: body.evidenceDocumentId,
       });
       return reply.status(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // Corte 5a: la DJ con sus importes se carga sobre una presentación FILED (D-DJ2). Responde la presentación y las advertencias.
+  app.patch("/api/v1/firms/:firmId/clients/:clientId/tax-obligations/:obligationId/filings/:filingId/declaration", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { clientId, obligationId, filingId } = req.params as {
+      clientId: string;
+      obligationId: string;
+      filingId: string;
+    };
+    const body = taxFilingDeclarationBodySchema.safeParse(req.body);
+    if (!body.success) {
+      return reply.status(400).send({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: body.error.issues
+            .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+            .join("; "),
+          details: body.error.issues.map(({ path, message }) => ({
+            path: path.join("."),
+            message,
+          })),
+        },
+      });
+    }
+    try {
+      const data = await declarations.recordDeclaration(ctx, {
+        clientId,
+        obligationId,
+        filingId,
+        ...body.data,
+      });
+      return reply.status(200).send({ data });
     } catch (err) {
       return handleError(reply, err);
     }

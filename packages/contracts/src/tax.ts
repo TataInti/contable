@@ -21,6 +21,7 @@ import {
   taxpayerProfileStatus,
 } from "./tax-enums.js";
 import { cuit, decimalRate, isoDate, money, uuid } from "./primitives.js";
+import { taxFilingCreditDetailReadSchema } from "./tax-filing-declaration.js";
 
 // ============================================================
 // Contratos de la fundación fiscal (Puerta 1)
@@ -524,6 +525,16 @@ export const taxFilingSchema = z.object({
   status: taxFilingStatus,
   evidenceDocumentId: uuid.nullable(),
   createdAt: z.string().datetime(),
+  // Corte 5a: la DJ viaja con la presentación; opcional para no romper a quien lee hoy.
+  declarationDocumentId: uuid.nullish(),
+  impuestoDeterminado: money.nullish(),
+  saldoFavorTecnico: money.nullish(),
+  saldoLibreDisponibilidad: money.nullish(),
+  totalAPagar: money.nullish(),
+  declaredByUserId: z.string().nullish(),
+  declaredAt: z.string().datetime().nullish(),
+  // D13-4 a: detalle del saldo a favor por impuesto y jurisdicción (null si la DJ no lo trae).
+  saldosFavorDetalle: taxFilingCreditDetailReadSchema,
 });
 export type TaxFiling = z.infer<typeof taxFilingSchema>;
 

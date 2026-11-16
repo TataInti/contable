@@ -60,6 +60,66 @@ export type WorkpaperErrorCode =
   | "INTEREST_RULE_NOT_FOUND"
   | "DUPLICATE_WORKPAPER";
 
+/** Problema de origen de un saldo a favor, compartido por el saldo inicial y el detalle de la DJ (D13-4 a). */
+export type CreditOriginProblem =
+  | "REGIME_NOT_OF_TAX"
+  | "CM_REQUIRES_JURISDICTION"
+  | "JURISDICTION_MISMATCH"
+  | "JURISDICTION_NOT_ACTIVE";
+
+/**
+ * Reglas del origen de un saldo a favor: el régimen pertenece al impuesto, el Convenio Multilateral
+ * exige jurisdicción y la jurisdicción existe y está activa. Devuelve el primer problema o null;
+ * cada llamador traduce el código a su propio error.
+ */
+export async function creditOriginProblem(
+  tx: Prisma.TransactionClient,
+  origen: { taxTypeId: string; regimeId?: string | undefined; jurisdictionId?: string | undefined },
+): Promise<CreditOriginProblem | null> {
+  if (origen.regimeId) {
+    const regime = await tx.taxRegime.findFirst({
+      where: { id: origen.regimeId, taxTypeId: origen.taxTypeId },
+    });
+    if (!regime) return "REGIME_NOT_OF_TAX";
+    if (regime.code === "CM_ART2" && !origen.jurisdictionId) return "CM_REQUIRES_JURISDICTION";
+    if (
+      regime.code !== "CM_ART2" &&
+      origen.jurisdictionId &&
+      regime.jurisdictionId !== origen.jurisdictionId
+    ) {
+      return "JURISDICTION_MISMATCH";
+    }
+  }
+  if (origen.jurisdictionId) {
+    const jurisdiction = await tx.jurisdiction.findUnique({ where: { id: origen.jurisdictionId } });
+    if (!jurisdiction || !jurisdiction.isActive) return "JURISDICTION_NOT_ACTIVE";
+  }
+  return null;
+}
+
+/** Traducción de cada problema al error del saldo inicial (códigos y mensajes de siempre). */
+const OPENING_CREDIT_ORIGIN_ERRORS: Record<
+  CreditOriginProblem,
+  { code: WorkpaperErrorCode; message: string }
+> = {
+  REGIME_NOT_OF_TAX: {
+    code: "PERIOD_NOT_FOUND",
+    message: "El régimen no corresponde al impuesto seleccionado",
+  },
+  CM_REQUIRES_JURISDICTION: {
+    code: "INVALID_TRANSITION",
+    message: "El saldo de Convenio Multilateral requiere una jurisdicción",
+  },
+  JURISDICTION_MISMATCH: {
+    code: "INVALID_TRANSITION",
+    message: "La jurisdicción no coincide con el régimen seleccionado",
+  },
+  JURISDICTION_NOT_ACTIVE: {
+    code: "PERIOD_NOT_FOUND",
+    message: "La jurisdicción del saldo no existe o está inactiva",
+  },
+};
+
 export class WorkpaperError extends Error {
   readonly code: WorkpaperErrorCode;
   constructor(code: WorkpaperErrorCode, message: string) {
@@ -2305,28 +2365,10 @@ export class MonthlyWorkpaperService {
       if (input.kind.startsWith("IVA_") && taxType.code !== "IVA") {
         throw new WorkpaperError("INVALID_TRANSITION", "Los saldos técnicos y libres sólo corresponden a IVA");
       }
-      if (input.regimeId) {
-        const regime = await tx.taxRegime.findFirst({ where: { id: input.regimeId, taxTypeId: input.taxTypeId } });
-        if (!regime) throw new WorkpaperError("PERIOD_NOT_FOUND", "El régimen no corresponde al impuesto seleccionado");
-        if (regime.code === "CM_ART2" && !input.jurisdictionId) {
-          throw new WorkpaperError(
-            "INVALID_TRANSITION",
-            "El saldo de Convenio Multilateral requiere una jurisdicción",
-          );
-        }
-        if (
-          regime.code !== "CM_ART2" &&
-          input.jurisdictionId &&
-          regime.jurisdictionId !== input.jurisdictionId
-        ) {
-          throw new WorkpaperError("INVALID_TRANSITION", "La jurisdicción no coincide con el régimen seleccionado");
-        }
-      }
-      if (input.jurisdictionId) {
-        const jurisdiction = await tx.jurisdiction.findUnique({ where: { id: input.jurisdictionId } });
-        if (!jurisdiction || !jurisdiction.isActive) {
-          throw new WorkpaperError("PERIOD_NOT_FOUND", "La jurisdicción del saldo no existe o está inactiva");
-        }
+      const problema = await creditOriginProblem(tx, input);
+      if (problema) {
+        const error = OPENING_CREDIT_ORIGIN_ERRORS[problema];
+        throw new WorkpaperError(error.code, error.message);
       }
       const existing = await tx.taxCreditLot.findFirst({
         where: {

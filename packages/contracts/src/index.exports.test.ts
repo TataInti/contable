@@ -72,4 +72,32 @@ describe("índice de contratos: exportaciones de calendarios y libros", () => {
       professionalCredentialListResponseSchema.safeParse({ data: [conFechaHora] }).success,
     ).toBe(false);
   });
+
+  it("exporta el contrato de la declaración jurada (corte 5a): importes no negativos, hasta 4 decimales y sin campos extra", () => {
+    const body = {
+      declarationDocumentId: "11111111-1111-4111-8111-111111111111",
+      impuestoDeterminado: "1500.5000",
+      saldoFavorTecnico: "0",
+      saldoLibreDisponibilidad: "20.25",
+      totalAPagar: "1500.50",
+    };
+    expect(contracts.taxFilingDeclarationBodySchema.safeParse(body).success).toBe(true);
+    expect(
+      contracts.taxFilingDeclarationBodySchema.safeParse({ ...body, totalAPagar: "-1" }).success,
+    ).toBe(false);
+    expect(
+      contracts.taxFilingDeclarationBodySchema.safeParse({ ...body, totalAPagar: "1.00001" })
+        .success,
+    ).toBe(false);
+    expect(contracts.taxFilingDeclarationBodySchema.safeParse({ ...body, extra: 1 }).success).toBe(
+      false,
+    );
+    expect(contracts.FILING_DECLARATION_DOCUMENT_CATEGORY).toBe("DECLARACION_JURADA");
+  });
+
+  it("exporta el detalle de saldos a favor de la DJ (D13-4 a): tope de 100 ítems y lectura", () => {
+    expect(contracts.FILING_DECLARATION_CREDIT_DETAIL_MAX_ITEMS).toBe(100);
+    expect(contracts).toHaveProperty("taxFilingCreditDetailSchema");
+    expect(contracts).toHaveProperty("taxFilingCreditDetailReadSchema");
+  });
 });
