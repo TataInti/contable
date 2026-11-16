@@ -1224,3 +1224,12 @@
   padding-inline-start: var(--ds-space-4);
   list-style: none;
 }
+
+/* Calendarios pulido (hallazgo 80): la pestaña Celdas usa el alto de la página; un solo scroll. */
+.calendario-celdas {
+  --dense-flow-max: none;
+}
+
+.calendario-celdas .dense-table-scroll {
+  max-height: none;
+}

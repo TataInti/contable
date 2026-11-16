@@ -463,3 +463,33 @@ export function serverIssues(error: unknown): ServerIssues {
   }
   return { fields, message: error.message };
 }
+
+/** Una celda es dudosa cuando su revisión es «Dudosa» en `reviewStatus` (estado FLAGGED). */
+export function esCeldaDudosa(entrada: Pick<CalendarEntryRow, "reviewState">): boolean {
+  return entrada.reviewState === "FLAGGED";
+}
+
+/** Filas de la pestaña Celdas: con «Solo dudosas», únicamente las dudosas, en su orden (hallazgo 80). */
+export function celdasVisibles<T extends Pick<CalendarEntryRow, "reviewState">>(
+  entradas: readonly T[],
+  soloDudosas: boolean,
+): T[] {
+  return soloDudosas ? entradas.filter(esCeldaDudosa) : [...entradas];
+}
+
+export function resumenCeldas(entradas: readonly Pick<CalendarEntryRow, "reviewState">[]): {
+  total: number;
+  dudosas: number;
+} {
+  return { total: entradas.length, dudosas: entradas.filter(esCeldaDudosa).length };
+}
+
+/** «1 dudosa» o «297 dudosas». */
+export function textoDudosas(cantidad: number): string {
+  return cantidad === 1 ? "1 dudosa" : `${cantidad} dudosas`;
+}
+
+/** Pie de la pestaña Celdas: «412 celdas · 297 dudosas». */
+export function textoPieCeldas(total: number, dudosas: number): string {
+  return `${total} ${total === 1 ? "celda" : "celdas"} · ${textoDudosas(dudosas)}`;
+}

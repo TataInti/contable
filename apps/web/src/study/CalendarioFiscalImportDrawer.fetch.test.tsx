@@ -94,6 +94,7 @@ const INFORME_AGRUPADO = {
 type Llamada = { metodo: string; ruta: string; cuerpo: unknown };
 const llamadas: Llamada[] = [];
 let respuestasImportacion: Array<{ status: number; body: unknown }> = [];
+let entradasDetalle: unknown[] = [];
 
 function respuesta(status: number, body: unknown) {
   return {
@@ -125,7 +126,7 @@ function calendarioDetalle() {
     updatedAt: "2026-11-02T00:00:00.000Z",
     taxAuthority: { id: AUTH, code: "AUT-SYN", name: "Organismo sintético" },
     jurisdiction: { id: JUR, code: "JUR-SYN", name: "Jurisdicción sintética" },
-    entries: [],
+    entries: entradasDetalle,
   };
 }
 
@@ -340,5 +341,82 @@ describe("cajón contra el cliente api real (capa de fetch)", () => {
       within(informe).getByText("Dígitos «(inferido)» no reconocidos · columna digitos"),
     ).toBeTruthy();
     expect(within(informe).queryByRole("region")).toBeNull();
+  });
+});
+
+function celdaDetalle(
+  id: string,
+  conceptLabel: string,
+  reviewState: "PROPOSED" | "REVIEWED" | "FLAGGED",
+) {
+  return {
+    id,
+    conceptLabel,
+    taxTypeId: null,
+    regimeId: null,
+    groupingKind: "ALL",
+    endingDigits: null,
+    zoneCode: null,
+    referencePeriodStart: null,
+    referencePeriodEnd: null,
+    referenceLabel: null,
+    dueDate: "2026-02-18T00:00:00.000Z",
+    dueDateRaw: null,
+    adjustment: "NONE",
+    noteRef: null,
+    noteText: null,
+    reviewState,
+    sortOrder: 0,
+  };
+}
+
+function renderizarFicha() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>
+        <MemoryRouter initialEntries={[`/calendarios-fiscales?calendario=${CAL_DRAFT}`]}>
+          <StudyCalendariosFiscales />
+        </MemoryRouter>
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe("pestaña Celdas contra el cliente api real (capa de fetch)", () => {
+  beforeEach(() => {
+    entradasDetalle = [
+      celdaDetalle("c-1", "IVA", "FLAGGED"),
+      celdaDetalle("c-2", "IVA", "REVIEWED"),
+      celdaDetalle("c-3", "Ingresos brutos", "PROPOSED"),
+    ];
+  });
+
+  it("«Solo dudosas» filtra con aria-pressed, cuenta las dudosas y dice cuántas filas quedan", async () => {
+    renderizarFicha();
+    fireEvent.click(await screen.findByRole("tab", { name: /^Celdas/ }));
+    const tabla = await screen.findByRole("table", { name: "Celdas del calendario" });
+    expect(within(tabla).getAllByRole("button", { name: /^Editar / })).toHaveLength(3);
+    expect(within(tabla).getAllByText("Dudosa")).toHaveLength(1);
+    expect(screen.getByText("3 celdas · 1 dudosa")).toBeTruthy();
+    const filtro = screen.getByRole("button", { name: "Solo dudosas" });
+    expect(filtro.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(filtro);
+    expect(filtro.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("1 de 3 celdas")).toBeTruthy();
+    const editar = within(tabla).getAllByRole("button", { name: /^Editar / });
+    expect(editar).toHaveLength(1);
+    expect(editar[0]?.getAttribute("aria-label")).toMatch(/^Editar IVA, vence /);
+  });
+
+  it("sin celdas dudosas, el filtro lo dice y ofrece quitarlo", async () => {
+    entradasDetalle = [celdaDetalle("c-2", "IVA", "REVIEWED")];
+    renderizarFicha();
+    fireEvent.click(await screen.findByRole("tab", { name: /^Celdas/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Solo dudosas" }));
+    expect(await screen.findByText("No hay celdas dudosas")).toBeTruthy();
+    expect(
+      screen.getByText("Quitá el filtro «Solo dudosas» para ver todas las celdas."),
+    ).toBeTruthy();
   });
 });
