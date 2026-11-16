@@ -19,15 +19,18 @@ import { CalendarioFiscalImportDrawer } from "./CalendarioFiscalImportDrawer";
 import {
   adjustmentLabel,
   calendarTitleLine,
+  celdasVisibles,
   conceptOrder,
   dayOf,
   groupingLabel,
   periodLabel,
   problemTarget,
+  resumenCeldas,
   reviewStatus,
   scopeOf,
   serverIssues,
   statusLabel,
+  textoPieCeldas,
   type CalendarDetail,
   type CalendarEntryRow,
   type CalendarListItem,
@@ -75,6 +78,7 @@ export function CalendarioFiscalFicha({
   const [focusEntryId, setFocusEntryId] = useState<string | null>(null);
   const [cellDrawer, setCellDrawer] = useState<{ entry: CalendarEntryRow | null } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [soloDudosas, setSoloDudosas] = useState(false);
 
   const detail = useCalendarDetail(firmId, calendarId, true);
   const calendar = detail.data;
@@ -218,6 +222,7 @@ export function CalendarioFiscalFicha({
 
   const goToEntry = (entryId: string) => {
     setTab("celdas");
+    setSoloDudosas(false);
     setSelectedEntryId(entryId);
     setFocusEntryId(entryId);
   };
@@ -259,6 +264,8 @@ export function CalendarioFiscalFicha({
           : "Oculto: las celdas no se editan. Mostralo o creá una versión nueva a partir de este.";
 
   const cellOrder = conceptOrder(calendar.entries);
+  const resumen = resumenCeldas(calendar.entries);
+  const celdasFiltradas = celdasVisibles(calendar.entries, soloDudosas);
   const cellColumns: ReadonlyArray<DenseColumn<CalendarEntryRow>> = [
     { key: "period", header: "Período de referencia", render: (entry) => periodLabel(entry) },
     { key: "grouping", header: "Terminaciones", render: (entry) => groupingLabel(entry) },
@@ -451,7 +458,11 @@ export function CalendarioFiscalFicha({
             <DenseToolbar>
               {canEditCells ? (
                 <>
-                  <Button type="button" variant="primary" onClick={() => setCellDrawer({ entry: null })}>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => setCellDrawer({ entry: null })}
+                  >
                     Agregar celda
                   </Button>
                   <Button type="button" variant="secondary" onClick={() => setImportOpen(true)}>
@@ -459,31 +470,53 @@ export function CalendarioFiscalFicha({
                   </Button>
                 </>
               ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                aria-pressed={soloDudosas}
+                onClick={() => setSoloDudosas((activo) => !activo)}
+              >
+                Solo dudosas
+              </Button>
+              {soloDudosas ? (
+                <span>{`${celdasFiltradas.length} de ${resumen.total} ${resumen.total === 1 ? "celda" : "celdas"}`}</span>
+              ) : null}
               {cellsNote ? <span>{cellsNote}</span> : null}
             </DenseToolbar>
-            <DenseTable<CalendarEntryRow>
-              label="Celdas del calendario"
-              surface="integrated"
-              columns={cellColumns}
-              rows={calendar.entries}
-              rowKey={(entry) => entry.id}
-              selectedKey={selectedEntryId}
-              onSelect={setSelectedEntryId}
-              groupBy={(entry) => ({
-                key: entry.conceptLabel,
-                label: entry.conceptLabel,
-                order: cellOrder.get(entry.conceptLabel) ?? 0,
-              })}
-              footer={`${calendar.entries.length} ${calendar.entries.length === 1 ? "celda" : "celdas"}`}
-              empty={
-                <EmptyState
-                  kind="no-data"
-                  size="inline"
-                  title="Todavía no hay celdas"
-                  description="Agregá cada vencimiento con su grupo de terminaciones y su período de referencia."
-                />
-              }
-            />
+            <div className="calendario-celdas">
+              <DenseTable<CalendarEntryRow>
+                label="Celdas del calendario"
+                surface="integrated"
+                columns={cellColumns}
+                rows={celdasFiltradas}
+                rowKey={(entry) => entry.id}
+                selectedKey={selectedEntryId}
+                onSelect={setSelectedEntryId}
+                groupBy={(entry) => ({
+                  key: entry.conceptLabel,
+                  label: entry.conceptLabel,
+                  order: cellOrder.get(entry.conceptLabel) ?? 0,
+                })}
+                footer={textoPieCeldas(resumen.total, resumen.dudosas)}
+                empty={
+                  soloDudosas ? (
+                    <EmptyState
+                      kind="no-data"
+                      size="inline"
+                      title="No hay celdas dudosas"
+                      description="Quitá el filtro «Solo dudosas» para ver todas las celdas."
+                    />
+                  ) : (
+                    <EmptyState
+                      kind="no-data"
+                      size="inline"
+                      title="Todavía no hay celdas"
+                      description="Agregá cada vencimiento con su grupo de terminaciones y su período de referencia."
+                    />
+                  )
+                }
+              />
+            </div>
           </>
         ) : null}
         {tab === "versiones" ? (
@@ -524,7 +557,10 @@ export function CalendarioFiscalFicha({
         />
       ) : null}
       {importOpen ? (
-        <CalendarioFiscalImportDrawer firmId={firmId} calendarId={calendarId} onClose={() => setImportOpen(false)} />
+        <CalendarioFiscalImportDrawer firmId={firmId} calendarId={calendarId}
+          destino={calendarTitleLine(calendar)}
+          onClose={() => setImportOpen(false)}
+        />
       ) : null}
       <ConfirmDialog confirm={confirm} />
     </DenseSection>

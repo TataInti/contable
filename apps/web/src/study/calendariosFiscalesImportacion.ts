@@ -149,3 +149,109 @@ export function motivoImportar(estado: EstadoImportacion): string | null {
   }
   return null;
 }
+
+/** Cifras de cuatro dígitos (años) se conservan; el resto de las cifras de un texto se agrupa como «N». */
+function plantillaDeMensaje(motivo: string): string {
+  return motivo.replace(/\d+/g, (cifra) => (cifra.length === 4 ? cifra : "N"));
+}
+
+/** Texto de un grupo de dudosas: la causa se nombra como la pantalla («no verificada en imagen»). */
+function textoDeDudosa(motivo: string): string {
+  const causa = /^Queda marcada como dudosa \((.+?)\)/.exec(motivo)?.[1] ?? "";
+  if (causa === "verificado_en_imagen distinto de «si»") {
+    return "queda marcada como dudosa (no verificada en imagen)";
+  }
+  return causa ? `queda marcada como dudosa (${causa})` : "queda marcada como dudosa";
+}
+
+/** «El período…» pasa a «el período…» cuando empieza con una palabra capitalizada. */
+function minusculaInicial(texto: string): string {
+  return /^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]/.test(texto)
+    ? `${texto.charAt(0).toLowerCase()}${texto.slice(1)}`
+    : texto;
+}
+
+/** Rangos de filas contiguas, en orden: «98 a 103», «2 a 4 y 9». */
+export function rangosDeFilas(filas: readonly number[]): string {
+  const tramos: Array<[number, number]> = [];
+  for (const fila of [...new Set(filas)].sort((a, b) => a - b)) {
+    const ultimo = tramos[tramos.length - 1];
+    if (ultimo && fila === ultimo[1] + 1) ultimo[1] = fila;
+    else tramos.push([fila, fila]);
+  }
+  const textos = tramos.map(([desde, hasta]) =>
+    desde === hasta ? `${desde}` : `${desde} a ${hasta}`,
+  );
+  if (textos.length <= 1) return textos[0] ?? "";
+  return `${textos.slice(0, -1).join(", ")} y ${textos[textos.length - 1]}`;
+}
+
+export interface GrupoDeAvisos {
+  /** Texto del grupo; «N» marca la cifra que cambia de una fila a otra. */
+  mensaje: string;
+  /** Filas del grupo, sin repetir y en orden. */
+  filas: number[];
+  /** Rangos de filas contiguas: «98 a 103», «2 a 4 y 9». */
+  rangos: string;
+  /** Lo que sí es distinto por fila; vacío cuando todas las filas traen el mismo texto. */
+  detalle: Array<{ fila: number; motivo: string }>;
+}
+
+/**
+ * Agrupa los avisos del informe. Los que solo difieren en una cifra (cuota 1/2026, cuota 2/2026…)
+ * forman un grupo, y su detalle conserva el texto de cada fila (hallazgo 64).
+ */
+export function agruparAvisos(avisos: readonly TaxCalendarImportNotice[]): GrupoDeAvisos[] {
+  const porPlantilla = new Map<string, TaxCalendarImportNotice[]>();
+  for (const aviso of avisos) {
+    const clave = plantillaDeMensaje(aviso.motivo);
+    porPlantilla.set(clave, [...(porPlantilla.get(clave) ?? []), aviso]);
+  }
+  return [...porPlantilla.entries()]
+    .map(([clave, del]) => {
+      const ordenados = [...del].sort((a, b) => a.fila - b.fila);
+      const primero = ordenados[0]?.motivo ?? clave;
+      const unico = new Set(ordenados.map((aviso) => aviso.motivo)).size === 1;
+      const filas = [...new Set(ordenados.map((aviso) => aviso.fila))];
+      return {
+        mensaje: primero.startsWith(PREFIJO_DUDOSA)
+          ? textoDeDudosa(primero)
+          : unico
+            ? primero
+            : clave,
+        filas,
+        rangos: rangosDeFilas(filas),
+        detalle: unico
+          ? []
+          : ordenados.map((aviso) => ({ fila: aviso.fila, motivo: aviso.motivo })),
+      };
+    })
+    .sort((a, b) => (a.filas[0] ?? 0) - (b.filas[0] ?? 0));
+}
+
+/** Línea del informe: «Filas 98 a 103 (6): el período «cuota N/2026»…» o «Fila 2: queda marcada…». */
+export function etiquetaGrupo(grupo: GrupoDeAvisos): string {
+  const cantidad = grupo.filas.length;
+  const cabeza =
+    cantidad === 1 ? `Fila ${grupo.filas[0] ?? ""}` : `Filas ${grupo.rangos} (${cantidad})`;
+  return `${cabeza}: ${minusculaInicial(grupo.mensaje)}`;
+}
+
+type RechazoDeImportacion = TaxCalendarEntriesImportReport["rechazadas"][number];
+
+export interface FilaRechazada {
+  fila: number;
+  /** Motivos de la fila, en el orden del informe. */
+  motivos: Array<{ columna: string | null; motivo: string }>;
+}
+
+/** Agrupa los rechazos por fila: una fila con varios motivos aparece una sola vez (hallazgo 65). */
+export function agruparRechazos(rechazadas: readonly RechazoDeImportacion[]): FilaRechazada[] {
+  const porFila = new Map<number, FilaRechazada>();
+  for (const rechazo of rechazadas) {
+    const fila = porFila.get(rechazo.fila) ?? { fila: rechazo.fila, motivos: [] };
+    fila.motivos.push({ columna: rechazo.columna, motivo: rechazo.motivo });
+    porFila.set(rechazo.fila, fila);
+  }
+  return [...porFila.values()].sort((a, b) => a.fila - b.fila);
+}

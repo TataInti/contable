@@ -53,9 +53,48 @@ const INFORME = {
   encabezadosFaltantes: [],
 };
 
+const CUOTA = (cuota: number) =>
+  `El período «cuota ${cuota}/2026» es texto libre: se importa solo con ese texto, sin fechas de referencia`;
+
+// Informe con avisos repetidos (cuotas 98 a 103), una dudosa y una fila con dos motivos.
+const INFORME_AGRUPADO = {
+  dryRun: true,
+  totalFilas: 110,
+  validas: 109,
+  importadas: 0,
+  rechazadas: [
+    {
+      fila: 4,
+      columna: "fecha_completa",
+      motivo: "La fecha es obligatoria (AAAA-MM-DD)",
+      valorRecibido: null,
+    },
+    {
+      fila: 4,
+      columna: "digitos",
+      motivo: "Dígitos «(inferido)» no reconocidos",
+      valorRecibido: "(inferido)",
+    },
+  ],
+  avisos: [
+    {
+      fila: 2,
+      motivo:
+        "Queda marcada como dudosa (verificado_en_imagen distinto de «si»). Revisala en la grilla antes de publicar.",
+    },
+    ...[98, 99, 100, 101, 102, 103].map((fila, indice) => ({
+      fila,
+      motivo: CUOTA(indice + 1),
+    })),
+  ],
+  columnasIgnoradas: [],
+  encabezadosFaltantes: [],
+};
+
 type Llamada = { metodo: string; ruta: string; cuerpo: unknown };
 const llamadas: Llamada[] = [];
 let respuestasImportacion: Array<{ status: number; body: unknown }> = [];
+let entradasDetalle: unknown[] = [];
 
 function respuesta(status: number, body: unknown) {
   return {
@@ -87,7 +126,7 @@ function calendarioDetalle() {
     updatedAt: "2026-11-02T00:00:00.000Z",
     taxAuthority: { id: AUTH, code: "AUT-SYN", name: "Organismo sintético" },
     jurisdiction: { id: JUR, code: "JUR-SYN", name: "Jurisdicción sintética" },
-    entries: [],
+    entries: entradasDetalle,
   };
 }
 
@@ -182,13 +221,14 @@ describe("cajón contra el cliente api real (capa de fetch)", () => {
     respuestasImportacion = [{ status: 200, body: { data: INFORME } }];
     const dialog = await abrirCajonConArchivo();
     fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
-    const informe = await within(dialog).findByRole("status");
+    const informe = await within(dialog).findByRole("status", { name: "Informe de la prueba" });
     expect(
       within(informe).getByText(
         "1 celda quedará marcada «Dudosa»: hay que revisarla antes de publicar el calendario.",
       ),
     ).toBeTruthy();
-    expect(within(informe).getByText(/^Fila 4 \(fecha_completa\)/)).toBeTruthy();
+    // vigente: cambia con hallazgo 65 (antes: /^Fila 4 \(fecha_completa\)/)
+    expect(within(informe).getByText("Fila 4")).toBeTruthy();
     const importar = within(dialog).getByRole("button", {
       name: "Importar 2 celdas",
     }) as HTMLButtonElement;
@@ -207,7 +247,7 @@ describe("cajón contra el cliente api real (capa de fetch)", () => {
     ];
     const dialog = await abrirCajonConArchivo();
     fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
-    await within(dialog).findByRole("status");
+    await within(dialog).findByRole("status", { name: "Informe de la prueba" });
     const detalleAntes = llamadas.filter(
       (llamada) => llamada.ruta === RUTA && llamada.metodo === "GET",
     ).length;
@@ -264,12 +304,131 @@ describe("cajón contra el cliente api real (capa de fetch)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
     const alerta = await within(dialog).findByRole("alert");
     fireEvent.click(within(alerta).getByRole("button", { name: "Reintentar" }));
-    expect(await within(dialog).findByRole("status")).toBeTruthy();
+    expect(
+      await within(dialog).findByRole("status", { name: "Informe de la prueba" }),
+    ).toBeTruthy();
     expect(
       llamadas.filter((llamada) => llamada.ruta === RUTA_IMPORT).map((llamada) => llamada.cuerpo),
     ).toEqual([
       { csv: CSV, dryRun: true },
       { csv: CSV, dryRun: true },
     ]);
+  });
+
+  it("informe agrupado: avisos repetidos con su rango y rechazos por fila con sus motivos (hallazgos 64 y 65)", async () => {
+    respuestasImportacion = [{ status: 200, body: { data: INFORME_AGRUPADO } }];
+    const dialog = await abrirCajonConArchivo();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
+    const informe = await within(dialog).findByRole("status", { name: "Informe de la prueba" });
+    expect(
+      within(informe).getByText(
+        "Filas 98 a 103 (6): el período «cuota N/2026» es texto libre: se importa solo con ese texto, sin fechas de referencia",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(informe).getByText(
+        "Fila 98: El período «cuota 1/2026» es texto libre: se importa solo con ese texto, sin fechas de referencia",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(informe).getByText("Fila 2: queda marcada como dudosa (no verificada en imagen)"),
+    ).toBeTruthy();
+    expect(within(informe).getByText("Fila 4")).toBeTruthy();
+    expect(
+      within(informe).getByText("La fecha es obligatoria (AAAA-MM-DD) · columna fecha_completa"),
+    ).toBeTruthy();
+    expect(
+      within(informe).getByText("Dígitos «(inferido)» no reconocidos · columna digitos"),
+    ).toBeTruthy();
+    expect(within(informe).queryByRole("region")).toBeNull();
+  });
+});
+
+function celdaDetalle(
+  id: string,
+  conceptLabel: string,
+  reviewState: "PROPOSED" | "REVIEWED" | "FLAGGED",
+) {
+  return {
+    id,
+    conceptLabel,
+    taxTypeId: null,
+    regimeId: null,
+    groupingKind: "ALL",
+    endingDigits: null,
+    zoneCode: null,
+    referencePeriodStart: null,
+    referencePeriodEnd: null,
+    referenceLabel: null,
+    dueDate: "2026-02-18T00:00:00.000Z",
+    dueDateRaw: null,
+    adjustment: "NONE",
+    noteRef: null,
+    noteText: null,
+    reviewState,
+    sortOrder: 0,
+  };
+}
+
+function renderizarFicha() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>
+        <MemoryRouter initialEntries={[`/calendarios-fiscales?calendario=${CAL_DRAFT}`]}>
+          <StudyCalendariosFiscales />
+        </MemoryRouter>
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe("pestaña Celdas contra el cliente api real (capa de fetch)", () => {
+  beforeEach(() => {
+    entradasDetalle = [
+      celdaDetalle("c-1", "IVA", "FLAGGED"),
+      celdaDetalle("c-2", "IVA", "REVIEWED"),
+      celdaDetalle("c-3", "Ingresos brutos", "PROPOSED"),
+    ];
+  });
+
+  it("«Solo dudosas» filtra con aria-pressed, cuenta las dudosas y dice cuántas filas quedan", async () => {
+    renderizarFicha();
+    fireEvent.click(await screen.findByRole("tab", { name: /^Celdas/ }));
+    const tabla = await screen.findByRole("table", { name: "Celdas del calendario" });
+    expect(within(tabla).getAllByRole("button", { name: /^Editar / })).toHaveLength(3);
+    expect(within(tabla).getAllByText("Dudosa")).toHaveLength(1);
+    expect(screen.getByText("3 celdas · 1 dudosa")).toBeTruthy();
+    const filtro = screen.getByRole("button", { name: "Solo dudosas" });
+    expect(filtro.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(filtro);
+    expect(filtro.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("1 de 3 celdas")).toBeTruthy();
+    const editar = within(tabla).getAllByRole("button", { name: /^Editar / });
+    expect(editar).toHaveLength(1);
+    expect(editar[0]?.getAttribute("aria-label")).toMatch(/^Editar IVA, vence /);
+  });
+
+  it("sin celdas dudosas, el filtro lo dice y ofrece quitarlo", async () => {
+    entradasDetalle = [celdaDetalle("c-2", "IVA", "REVIEWED")];
+    renderizarFicha();
+    fireEvent.click(await screen.findByRole("tab", { name: /^Celdas/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Solo dudosas" }));
+    expect(await screen.findByText("No hay celdas dudosas")).toBeTruthy();
+    expect(
+      screen.getByText("Quitá el filtro «Solo dudosas» para ver todas las celdas."),
+    ).toBeTruthy();
+  });
+});
+
+describe("encabezado del cajón (hallazgo 83)", () => {
+  it("nombra el calendario de destino: organismo, jurisdicción y año", async () => {
+    await abrirCajonConArchivo();
+    const dialog = await screen.findByRole("dialog", { name: NOMBRE_CAJON });
+    expect(
+      within(dialog).getByText(
+        "Calendario de destino: Organismo sintético · Jurisdicción sintética · 2026",
+      ),
+    ).toBeTruthy();
   });
 });

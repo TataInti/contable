@@ -275,17 +275,20 @@ describe("cajón «Importar celdas desde un archivo»", () => {
     elegir(dialog, archivoCsv());
     await esperarProbar(dialog);
     fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
-    const informe = await within(dialog).findByRole("status");
+    const informe = await within(dialog).findByRole("status", { name: "Informe de la prueba" });
     expect(within(informe).getByText("Informe de la prueba")).toBeTruthy();
     expect(
       within(informe).getByText(
         "1 celda quedará marcada «Dudosa»: hay que revisarla antes de publicar el calendario.",
       ),
     ).toBeTruthy();
+    // vigente: cambia con hallazgo 65 (antes: /^Fila 4 \(fecha_completa\): La fecha es obligatoria/)
+    expect(within(informe).getByText("Fila 4")).toBeTruthy();
+    expect(within(informe).getByText(/^La fecha es obligatoria/)).toBeTruthy();
+    // vigente: cambia con hallazgo 64 (antes: /^Fila 2: Queda marcada como dudosa/)
     expect(
-      within(informe).getByText(/^Fila 4 \(fecha_completa\): La fecha es obligatoria/),
+      within(informe).getByText("Fila 2: queda marcada como dudosa (no verificada en imagen)"),
     ).toBeTruthy();
-    expect(within(informe).getByText(/^Fila 2: Queda marcada como dudosa/)).toBeTruthy();
     expect(post).toHaveBeenCalledWith(RUTA_IMPORT, { csv: CSV_BUENO, dryRun: true });
     const importar = within(dialog).getByRole("button", {
       name: "Importar 2 celdas",
@@ -300,7 +303,7 @@ describe("cajón «Importar celdas desde un archivo»", () => {
     elegir(dialog, archivoCsv());
     await esperarProbar(dialog);
     fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
-    const informe = await within(dialog).findByRole("status");
+    const informe = await within(dialog).findByRole("status", { name: "Informe de la prueba" });
     const titulo = within(informe).getByRole("heading", { name: "Informe de la prueba" });
     await waitFor(() => expect(document.activeElement).toBe(titulo));
     expect(llamadasAScroll).toContain(informe);
@@ -392,18 +395,15 @@ describe("cajón «Importar celdas desde un archivo»", () => {
     expect(document.activeElement).toBe(cancelar);
   });
 
-  it("las listas largas del informe son regiones desplazables con nombre accesible", async () => {
+  it("el informe no tiene regiones con scroll propio: un solo scroll, el del cajón", async () => {
+    // vigente: cambia con hallazgo 65 (antes: «las listas largas del informe son regiones desplazables con nombre accesible»: regiones «Filas rechazadas» y «Avisos», tabIndex 0)
     post.mockResolvedValueOnce(INFORME_PRUEBA);
     const dialog = await abrirCajon();
     elegir(dialog, archivoCsv());
     await esperarProbar(dialog);
     fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
-    const informe = await within(dialog).findByRole("status");
-    for (const nombre of ["Filas rechazadas", "Avisos"]) {
-      const region = within(informe).getByRole("region", { name: nombre });
-      expect(region.tabIndex).toBe(0);
-      expect(within(region).getByRole("list")).toBeTruthy();
-    }
+    const informe = await within(dialog).findByRole("status", { name: "Informe de la prueba" });
+    expect(within(informe).queryByRole("region")).toBeNull();
   });
 
   it("«Importar N celdas» envía dryRun false, refresca la ficha, avisa y cierra el cajón", async () => {
@@ -413,7 +413,7 @@ describe("cajón «Importar celdas desde un archivo»", () => {
     elegir(dialog, archivoCsv());
     await esperarProbar(dialog);
     fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
-    await within(dialog).findByRole("status");
+    await within(dialog).findByRole("status", { name: "Informe de la prueba" });
     const lecturasAntes = get.mock.calls.filter((call) => call[0] === RUTA_DETALLE).length;
     fireEvent.click(within(dialog).getByRole("button", { name: "Importar 2 celdas" }));
     expect(
@@ -483,7 +483,9 @@ describe("cajón «Importar celdas desde un archivo»", () => {
     const alerta = await within(dialog).findByRole("alert");
     expect(within(alerta).getByText("Ocurrió un error interno")).toBeTruthy();
     fireEvent.click(within(alerta).getByRole("button", { name: "Reintentar" }));
-    expect(await within(dialog).findByRole("status")).toBeTruthy();
+    expect(
+      await within(dialog).findByRole("status", { name: "Informe de la prueba" }),
+    ).toBeTruthy();
     expect(post).toHaveBeenCalledTimes(2);
     expect(post.mock.calls[1]).toEqual([RUTA_IMPORT, { csv: CSV_BUENO, dryRun: true }]);
   });
