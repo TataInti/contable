@@ -363,12 +363,28 @@ export function calendarPayload(form: CalendarForm) {
   };
 }
 
-/** Texto del período de referencia: el rótulo y, entre paréntesis, las fechas. */
+/** Clave para comparar textos: sin tildes, en minúsculas y con los espacios colapsados. */
+function claveDeTexto(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Texto del período de referencia: el rótulo y, entre paréntesis, las fechas. Si el rótulo es el
+ * mismo mes que el rango («enero de 2026»), se muestra una sola vez.
+ */
 export function periodLabel(entry: CalendarEntryRow): string {
   const start = dayOf(entry.referencePeriodStart);
   const end = dayOf(entry.referencePeriodEnd);
   const range = start && end ? formatearPeriodo(start, end) : null;
-  if (entry.referenceLabel && range) return `${entry.referenceLabel} (${range})`;
+  if (entry.referenceLabel && range) {
+    if (claveDeTexto(entry.referenceLabel) === claveDeTexto(range)) return range;
+    return `${entry.referenceLabel} (${range})`;
+  }
   return entry.referenceLabel ?? range ?? "—";
 }
 

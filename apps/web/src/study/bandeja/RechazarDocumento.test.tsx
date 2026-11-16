@@ -131,7 +131,7 @@ function renderBandeja() {
 
 async function abrirRechazo() {
   renderBandeja();
-  fireEvent.click(await screen.findByRole("button", { name: /factura\.pdf/ }));
+  fireEvent.click(await screen.findByRole("row", { name: /factura\.pdf/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Rechazar" }));
   return screen.findByRole("dialog", { name: "¿Rechazar este documento?" });
 }

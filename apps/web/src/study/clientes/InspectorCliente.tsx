@@ -5,6 +5,7 @@ import { formatCuit } from "../../lib/cuit";
 import { formatearFecha } from "../../lib/formatoFechas";
 import { Inspector, InspectorFacts, InspectorSection } from "../../ui/Dense";
 import { StatusBadge } from "../../ui/StatusBadge";
+import { sinRespuesta } from "./consultas";
 import { MONTH_LONG, profileGaps, vatLabel } from "./etiquetas";
 import type { ClientWithProfile } from "./tipos";
 
@@ -39,6 +40,13 @@ export function InspectorCliente({
   setDeletingClient,
   setSelectedId,
 }: InspectorClienteProps) {
+  // C03: sin respuesta el contador no dice 0; en carga dice «pendiente» y con error «no disponible».
+  const cantidadContactos = contactsQuery.data?.length ?? 0;
+  const rotuloContactos = sinRespuesta(contactsQuery)
+    ? "pendiente"
+    : contactsQuery.isError
+      ? "no disponible"
+      : `${cantidadContactos} ${cantidadContactos === 1 ? "contacto" : "contactos"}`;
   return (
     <Inspector
       label={`Detalle de ${selectedClient.legalName}`}
@@ -151,16 +159,23 @@ export function InspectorCliente({
         <InspectorSection title="Contactos">
           <div className="client-contacts__toolbar">
             <span className="dense-dim">
-              {contactsQuery.data?.length ?? 0} {(contactsQuery.data?.length ?? 0) === 1 ? "contacto" : "contactos"}
+              {rotuloContactos}
             </span>
             <Button size="sm" variant="secondary" onClick={() => openContactEditor()}>
               Nuevo contacto
             </Button>
           </div>
-          {contactsQuery.isLoading ? (
+          {sinRespuesta(contactsQuery) ? (
             <p role="status">Cargando contactos…</p>
           ) : contactsQuery.isError ? (
-            <Notice tone="error">
+            <Notice
+              tone="error"
+              action={
+                <Button size="sm" variant="secondary" onClick={() => void contactsQuery.refetch()}>
+                  Reintentar
+                </Button>
+              }
+            >
               No se pudieron cargar los contactos. Reintentá.
             </Notice>
           ) : contactsQuery.data?.length ? (

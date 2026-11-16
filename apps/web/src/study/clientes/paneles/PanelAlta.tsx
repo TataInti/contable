@@ -1,6 +1,7 @@
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, Field, Notice } from "@contable/design-system";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { Button, EmptyState, Field, Notice } from "@contable/design-system";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
+import { sinRespuesta } from "../consultas";
 import { ApiError, type Client } from "../../../lib/api";
 import {
   ARGENTINA_PROVINCES,
@@ -52,24 +53,21 @@ export function PanelAlta({
       title="Alta de cliente"
       description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
       footer={
-        <>
-          <span id="client-create-hint" className="client-create__hint" aria-live="polite">
-            {createFieldsHint}
-          </span>
-          <Button type="button" variant="secondary" onClick={() => setCreating(false)}>
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            form="client-create-form"
-            aria-describedby="client-create-hint"
-            loading={create.isPending}
-            loadingLabel="Creando cliente"
-            disabled={missingCreateFields.length > 0}
-          >
-            Crear cliente
-          </Button>
-        </>
+        <ActionDrawerFooter
+          primary={
+            <Button
+              type="submit"
+              form="client-create-form"
+              loading={create.isPending}
+              loadingLabel="Creando cliente"
+              disabled={missingCreateFields.length > 0}
+            >
+              Crear cliente
+            </Button>
+          }
+          hint={missingCreateFields.length > 0 ? createFieldsHint : null}
+          onCancel={() => setCreating(false)}
+        />
       }
     >
       <form
@@ -160,10 +158,26 @@ export function PanelAlta({
               return <option key={`${activity.code}:${activity.name}`} value={value}>{value}</option>;
             })}
           </select>
-          {clientActivityCatalog.isLoading ? <small>Cargando catálogo de actividades…</small> : null}
+          {sinRespuesta(clientActivityCatalog) ? <small role="status">Cargando catálogo de actividades…</small> : null}
         </label>
         {clientActivityCatalog.isError ? (
-          <Notice tone="error">No se pudo cargar el catálogo de actividades. Reintentá.</Notice>
+          <Notice
+            tone="error"
+            action={
+              <Button size="sm" variant="secondary" onClick={() => void clientActivityCatalog.refetch()}>
+                Reintentar
+              </Button>
+            }
+          >
+            No se pudo cargar el catálogo de actividades. Reintentá.
+          </Notice>
+        ) : null}
+        {clientActivityCatalog.isSuccess && clientActivityCatalog.data.length === 0 ? (
+          <EmptyState
+            size="inline"
+            title="No hay actividades cargadas."
+            description="Pedí a quien administra el estudio que las cargue en Catálogos fiscales."
+          />
         ) : null}
         <label className="ds-field">
           <span className="ds-field__label">Forma jurídica</span>

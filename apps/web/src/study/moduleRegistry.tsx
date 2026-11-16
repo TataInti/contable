@@ -125,6 +125,19 @@ export const STUDY_MODULES: readonly StudyModule[] = [
     ),
   },
   {
+    id: "panel-trabajo",
+    path: "/panel-trabajo",
+    label: "Panel de trabajo",
+    icon: "tasks",
+    navigationGroup: "Ejecución",
+    requiredCapability: "tax.settlements.read",
+    requirements: { firm: true },
+    status: "released",
+    component: lazy(() =>
+      import("./StudyPanelTrabajo").then((module) => ({ default: module.StudyPanelTrabajo })),
+    ),
+  },
+  {
     id: "contabilidad",
     path: "/contabilidad",
     label: "Contabilidad",

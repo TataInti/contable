@@ -160,7 +160,7 @@ function renderBandeja() {
 
 async function openExtraction() {
   renderBandeja();
-  fireEvent.click(await screen.findByRole("button", { name: /factura\.pdf/ }));
+  fireEvent.click(await screen.findByRole("row", { name: /factura\.pdf/ }));
   return screen.findByRole("table", { name: "Datos fiscales extraídos" });
 }
 
@@ -381,7 +381,7 @@ describe("StudyBandeja — revisión de extracción", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Para revisar/ }));
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: /factura\.pdf/ })).toBeNull(),
+      expect(screen.queryByRole("row", { name: /factura\.pdf/ })).toBeNull(),
     );
   });
 
@@ -416,7 +416,8 @@ describe("StudyBandeja — revisión de extracción", () => {
     );
     const approve = screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
-    expect(screen.getByRole("note").textContent).toBe("Cargá al menos un dato para aprobar.");
+    // El pie de la lista también es una nota (atajos de teclado): el aviso se busca por su texto.
+    expect(screen.getByText("Cargá al menos un dato para aprobar.").getAttribute("role")).toBe("note");
     const reject = screen.getByRole("button", { name: "Rechazar" }) as HTMLButtonElement;
     expect(reject.disabled).toBe(false);
   });
@@ -451,7 +452,7 @@ describe("StudyBandeja — revisión de extracción", () => {
         (screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled,
       ).toBe(false),
     );
-    expect(screen.queryByRole("note")).toBeNull();
+    expect(screen.queryByText("Cargá al menos un dato para aprobar.")).toBeNull();
   });
 
   it("guarda en bloque, recarga del servidor y muestra el dato manual antes de habilitar Aprobar", async () => {
@@ -586,7 +587,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     documentFixture.status = "EXTRACTION_FAILED";
     extractionFixture.status = "FAILED";
     renderBandeja();
-    fireEvent.click(await screen.findByRole("button", { name: /factura\.pdf/ }));
+    fireEvent.click(await screen.findByRole("row", { name: /factura\.pdf/ }));
     await screen.findByRole("heading", { name: "Procesando comprobante" });
     expect(screen.queryByRole("button", { name: "Releer con IA" })).toBeNull();
   });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
-import { api } from "../lib/api";
+import { api, downloadFile } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { Icon } from "../ui/Icon";
@@ -48,6 +48,12 @@ interface TaxRegime {
   jurisdictionId: string;
   taxType: { name: string; isActive: boolean };
   jurisdiction: { name: string; isActive: boolean };
+}
+
+type ArtifactFormat = "csv" | "pdf";
+interface TaxExportArtifact {
+  id: string;
+  format: string;
 }
 
 const today = new Date().toISOString().slice(0, 10);
@@ -172,13 +178,21 @@ export function StudyLiquidaciones() {
     },
     onError: failed,
   });
+  // El papel de trabajo se genera una vez por versión y formato: si ya existe, se descarga el guardado.
+  const downloadArtifact = async (id: string, format: ArtifactFormat) => {
+    const artifactsPath = `/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/artifacts`;
+    const existing = (await api.get<TaxExportArtifact[]>(artifactsPath)).find((artifact) => artifact.format === format);
+    const artifactId =
+      existing?.id ?? (await api.post<{ artifact: TaxExportArtifact }>(artifactsPath, { format })).artifact.id;
+    await downloadFile(`${artifactsPath}/${artifactId}/download`);
+  };
   const artifactMutation = useMutation({
-    mutationFn: ({ id, format }: { id: string; format: "csv" | "pdf" }) =>
-      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/artifacts`, { format }),
-    onSuccess: (_, variables) =>
-      notify.success(`Se generó el papel de trabajo en ${variables.format.toUpperCase()}.`),
+    mutationFn: ({ id, format }: { id: string; format: ArtifactFormat }) => downloadArtifact(id, format),
+    onSuccess: (_, variables) => notify.success(`Se descargó el papel de trabajo en ${variables.format.toUpperCase()}.`),
     onError: failed,
   });
+  const artifactIsBusy = (id: string, format: ArtifactFormat) =>
+    artifactMutation.isPending && artifactMutation.variables?.id === id && artifactMutation.variables.format === format;
 
   if (!firmId || !clientId) {
     return (
@@ -450,6 +464,9 @@ export function StudyLiquidaciones() {
                       <Button
                         size="sm"
                         variant="ghost"
+                        loading={artifactIsBusy(row.id, "pdf")}
+                        loadingLabel="Generando…"
+                        disabled={artifactMutation.isPending}
                         onClick={() => artifactMutation.mutate({ id: row.id, format: "pdf" })}
                       >
                         PDF
@@ -457,6 +474,9 @@ export function StudyLiquidaciones() {
                       <Button
                         size="sm"
                         variant="ghost"
+                        loading={artifactIsBusy(row.id, "csv")}
+                        loadingLabel="Generando…"
+                        disabled={artifactMutation.isPending}
                         onClick={() => artifactMutation.mutate({ id: row.id, format: "csv" })}
                       >
                         CSV

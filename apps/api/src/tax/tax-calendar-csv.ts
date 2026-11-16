@@ -325,7 +325,7 @@ export function mapearFila(entrada: FilaCsv): ResultadoFila {
   }
 
   const fechaBruta = valores.fecha_completa ?? "";
-  if (fechaBruta === "") rechazar("fecha_completa", "Falta la fecha de vencimiento");
+  if (fechaBruta === "") rechazar("fecha_completa", "La fecha es obligatoria (AAAA-MM-DD)");
   else if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaBruta))
     rechazar("fecha_completa", "La fecha debe tener el formato aaaa-mm-dd");
   else if (!isRealIsoDate(fechaBruta)) rechazar("fecha_completa", "La fecha no existe");

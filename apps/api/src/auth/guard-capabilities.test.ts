@@ -219,6 +219,12 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     ).toBe("tax.settlements.export");
   });
 
+  it("la descarga de un papel de trabajo exige tax.settlements.export", () => {
+    expect(
+      requiredCapability("GET", "/api/v1/firms/f/clients/c/tax-settlements/s/artifacts/a/download"),
+    ).toBe("tax.settlements.export");
+  });
+
   it("profitability/calculate exige profitability.calculate (no read)", () => {
     // G5 fix: AUDITOR_READONLY tiene profitability.read pero no calculate;
     // calcular crea snapshots (escritura) y no debe permitirse a sólo lectura.

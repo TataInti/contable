@@ -60,7 +60,17 @@ function fallbackMessage(status: number): string {
   return "No se pudo completar la solicitud";
 }
 
-async function request<T>(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
+/**
+ * `envelope` devuelve el cuerpo completo (`data`, `meta`, `groups`…) en lugar de desenvolver `data`.
+ * Lo usan los listados paginados que necesitan `meta` (Panel de trabajo, corte 4b). Mismos errores y cabeceras.
+ */
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>,
+  envelope = false,
+): Promise<T> {
   const headers: Record<string, string> = { ...extraHeaders };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
@@ -114,11 +124,13 @@ async function request<T>(method: string, path: string, body?: unknown, extraHea
     );
   }
 
-  return (payload?.data ?? payload) as T;
+  return (envelope ? payload : (payload?.data ?? payload)) as T;
 }
 
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
+  /** Lectura con el cuerpo completo `{ data, meta, groups? }`. Mismo manejo de errores que `get`. */
+  getEnvelope: <T>(path: string) => request<T>("GET", path, undefined, undefined, true),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   postWithHeaders: <T>(path: string, body: unknown, headers: Record<string, string>) => request<T>("POST", path, body, headers),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),

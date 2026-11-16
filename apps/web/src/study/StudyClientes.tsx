@@ -30,6 +30,7 @@ import { PanelAlta, type FormularioAlta } from "./clientes/paneles/PanelAlta";
 import { PanelContacto } from "./clientes/paneles/PanelContacto";
 import { PanelEdicion, type FormularioIdentidad } from "./clientes/paneles/PanelEdicion";
 import { PanelEstado } from "./clientes/paneles/PanelEstado";
+import { sinRespuesta } from "./clientes/consultas";
 import { useCatalogosFicha } from "./clientes/useCatalogosFicha";
 import { InspectorCliente } from "./clientes/InspectorCliente";
 import { columnasCartera } from "./clientes/ColumnasCartera";
@@ -122,6 +123,8 @@ export function StudyClientes() {
   }));
   const notify = useNotify();
   const [contactRetry, setContactRetry] = useState<ContactRetryTarget | null>(null);
+  // D5-8: guardado parcial de la ficha. Indica qué quedó guardado («identidad» o «ficha»).
+  const [guardadoParcial, setGuardadoParcial] = useState<"identidad" | "ficha" | null>(null);
   const query = useQuery({
     queryKey: ["clients", firmId],
     queryFn: () => api.get<ClientWithProfile[]>(`/firms/${firmId}/clients`),
@@ -359,6 +362,7 @@ export function StudyClientes() {
 
   const startClientEdit = (client: ClientWithProfile) => {
     setCreating(false);
+    setGuardadoParcial(null);
     updateIdentity.reset();
     updateProfile.reset();
     setEditingClient(client);
@@ -381,14 +385,18 @@ export function StudyClientes() {
     if (!editingClient) return;
 
     const clientName = editingClient.legalName;
-    const results = await Promise.allSettled([
+    setGuardadoParcial(null);
+    const [identidad, ficha] = await Promise.allSettled([
       updateIdentity.mutateAsync(),
       updateProfile.mutateAsync(),
     ]);
     await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
-    if (results.every((result) => result.status === "fulfilled")) {
+    if (identidad.status === "fulfilled" && ficha.status === "fulfilled") {
       setEditingClient(null);
       notify.success(`La ficha de ${clientName} quedó actualizada.`);
+    } else if (identidad.status === "fulfilled" || ficha.status === "fulfilled") {
+      // Guardado parcial: el cajón sigue abierto con sus datos y un solo mensaje dice qué quedó guardado.
+      setGuardadoParcial(identidad.status === "fulfilled" ? "identidad" : "ficha");
     }
   };
 
@@ -471,7 +479,7 @@ export function StudyClientes() {
     />
   ) : null;
 
-  const tableBody = query.isLoading ? (
+  const tableBody = sinRespuesta(query) ? (
     <DenseLoading label="Cargando la cartera…" />
   ) : query.isError ? (
     <Notice
@@ -511,7 +519,9 @@ export function StudyClientes() {
           title={clients.length === 0 ? "Todavía no hay clientes" : "Ningún cliente coincide"}
           description={
             clients.length === 0
-              ? "Creá el primer cliente para comenzar a organizar la operación."
+              ? canManage
+                ? "Creá el primer cliente para comenzar a organizar la operación."
+                : "Para cargar el primero hace falta el permiso de crear clientes. Pedíselo a quien administra el estudio."
               : "Probá con otro nombre o CUIT, o quitá filtros."
           }
           action={
@@ -553,8 +563,6 @@ export function StudyClientes() {
             label: "Activos",
             value: query.data ? activeCount : "—",
             detail: query.data ? `${clients.length - activeCount} inactivos` : undefined,
-            active: statusFilter === "ACTIVE",
-            onSelect: () => setStatusFilter((current) => (current === "ACTIVE" ? "" : "ACTIVE")),
           },
           {
             key: "incomplete",
@@ -563,6 +571,7 @@ export function StudyClientes() {
             detail: "Faltan datos fiscales",
             tone: incompleteCount > 0 ? "warn" : undefined,
             active: onlyIncomplete,
+            pressed: onlyIncomplete,
             onSelect: () => setOnlyIncomplete((current) => !current),
           },
         ]}
@@ -571,7 +580,6 @@ export function StudyClientes() {
       {contactRetry ? (
         <Notice
           tone="error"
-          className="ds-notice--page"
           action={
             <Button
               size="sm"
@@ -585,6 +593,9 @@ export function StudyClientes() {
           }
         >
           Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.
+          {retryContact.isError ? (
+            <p>No se pudo registrar el correo. Reintentá o agregalo desde Contactos.</p>
+          ) : null}
         </Notice>
       ) : null}
 
@@ -602,7 +613,12 @@ export function StudyClientes() {
         searchRef={searchRef}
       />
 
-      <DenseWorkspace panelId="clients-panel" inspector={inspector}>
+      <DenseWorkspace
+        panelId="clients-panel"
+        role="region"
+        aria-label="Cartera de clientes y detalle"
+        inspector={inspector}
+      >
         {tableBody}
       </DenseWorkspace>
 
@@ -620,6 +636,7 @@ export function StudyClientes() {
 
       <PanelEdicion
         editingClient={editingClient}
+        guardadoParcial={guardadoParcial}
         setEditingClient={setEditingClient}
         identityForm={identityForm}
         setIdentityForm={setIdentityForm}

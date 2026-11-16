@@ -76,6 +76,7 @@ Antes de tocar una validación, un bloqueo o un control se lo clasifica: **integ
 - **Acuse de presentación**: el comprobante que emite el organismo al presentar.
 - **Calendario fiscal**: vencimientos anuales de un organismo y una jurisdicción, con sus celdas por concepto, terminación de CUIT y período de referencia. Se carga en borrador, se valida y se publica; lo publicado no se edita: se corrige con una versión nueva.
 - **Vencimiento**: fecha límite de una obligación. Precedencia: valor manual justificado > calendario publicado del organismo y la jurisdicción > regla de vencimiento. Sin fuente, la obligación queda sin fecha y se avisa qué falta.
+- **Panel de trabajo**: lista global de las obligaciones del estudio, por usuario, con su estado de legajo y de DJ. Es la pantalla `/panel-trabajo` del menú «Estudio»; cada fila abre el cliente.
 - Pendiente de decisión de Inti: nombre y fuente única de «período» (fiscal y contable).
 
 ### Decisiones de diseño (cerradas 11-nov)
@@ -1187,6 +1188,8 @@ Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFoote
 
 **Estado (Foco 2.7c), Calendarios fiscales:** el alta usa el pie `ActionDrawerFooter` («Cancelar» a la izquierda y «Crear calendario» a la derecha) y muestra el motivo junto al botón mientras no se puede crear. La ficha en borrador concuerda en singular y plural y, con un solo problema, ofrece un único enlace («Ir al problema»). La lista muestra el estado elegido en «Estado», con «Todos» para volver a la lista completa (selección múltiple), y el encabezado «Año» muestra su indicador de orden (`sortHint` de `DenseTable`). El subtítulo usa voseo.
 
+**Importación de celdas (Calendarios 2b-2):** el cajón «Importar celdas desde un archivo» usa el pie `ActionDrawerFooter` con el motivo junto a «Importar N celdas»; el informe de la prueba es un bloque `role="status"` con cuatro cifras, las filas rechazadas por número y la línea de dudosas, y los errores del archivo van en `Notice` junto al campo.
+
 Cada PR de migración incluye su matriz antes/después de información y accesos.
 
 ### Pantalla → receta
@@ -1204,7 +1207,7 @@ Cubre todas las pantallas de `apps/web/src` en main: 18 del estudio (`study/`), 
 | 7 | Módulos de estudios (`/administracion-plataforma`) | `study/StudyAdministracionPlataforma.tsx` | RG, lista | C01, C03, C04, C05, C07, C09 — `StatStrip`, `DenseSearch`, `DenseTable`, `Switch`, `ConfirmDialog` | 6 |
 | 8 | Resumen del cliente (`/resumen-cliente`) | `study/StudyResumenCliente.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08 — `DenseHeader`, `DenseTabs`, `Table`, `EmptyState`, `StatusBadge` | 7 |
 | 9 | Configuración fiscal (`/configuracion-fiscal`) | `study/StudyOnboardingFiscal.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08, C09 — `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `ConfirmDialog` | 7 |
-| 10 | Bandeja documental (`/bandeja`) | `study/StudyBandeja.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `StatStrip`, `DenseSearch`, `Table`, `StatusBadge`, `ActionDrawer`, `ConfirmDialog` | 7 |
+| 10 | Bandeja documental (`/bandeja`) | `study/StudyBandeja.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `StatStrip` (con `pressed`), `DenseSearch`, `DenseTable`, `DenseFooter`, `AsyncState`, `EmptyState`, `StatusBadge`, `ActionDrawer`, `ConfirmDialog` (cabecera, indicadores y lista en 7b.2; el detalle sigue en 7b.3) | 7 |
 | 11 | Trabajo (`/trabajo`) | `study/StudyTrabajo.tsx` | RG, secciones | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `DenseSection`, `Table`, `StatusBadge`, `ActionDrawer` | 7 |
 | 12 | Liquidaciones (`/liquidaciones`) | `study/StudyLiquidaciones.tsx` | RG, lista | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `Table`, `StatusBadge`, `ActionDrawer` | 7 |
 | 13 | Rentabilidad (`/rentabilidad`) | `study/StudyRentabilidad.tsx` | RG, secciones | C01, C02, C03, C07, C08, C09 — `StatStrip`, `DenseSection`, `StatusBadge`, `ConfirmDialog` | 7 |
@@ -1228,6 +1231,9 @@ Cubre todas las pantallas de `apps/web/src` en main: 18 del estudio (`study/`), 
 | 31 | Recuperar acceso (`/recuperar-acceso`) | `auth/RecoverAccessPage.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estado de enlace incompleto | 11 |
 | 32 | Sin acceso (`/sin-acceso`), carga de sesión y conexión no disponible | `App.tsx` | RG, sólo estados | C07 — `EmptyState` con su salida, carga | 11 |
 | 33 | Calendarios fiscales (`/calendarios-fiscales`) | `study/StudyCalendariosFiscales.tsx` | R03 | C01, C02, C04, C05, C07, C08, C09 — `DensePage`, `DenseHeader`, `DenseToolbar`, `DenseTabs`, `DenseSection` (`surface="integrated"`), `DenseTable` con `groupBy`, `DenseToggleGroup`, `InspectorFacts`, `ActionDrawer`, `ConfirmDialog`, `Field`, `StatusBadge`, `AsyncState`, `EmptyState`, `useNotify` | nace en Foco |
+| 34 | Panel de trabajo (`/panel-trabajo`) | `study/StudyPanelTrabajo.tsx` | RG | C01, C03, C04, C05, C07, C08 — `DenseHeader`, `StatStrip`, `DenseToolbar`, `DenseToggleGroup`, `DenseTable` (`surface="integrated"`), `StatusBadge` (`variant="plain"`), `EmptyState`, `Notice` | 4b |
+
+**Desvío de Clientes (D5-11):** la pantalla no tiene «Actualizar»: la lista se refresca al mutar y al volver a la pestaña, y el estado «actualización con datos previos identificados» no aplica a esta pantalla.
 
 **Pantallas de acceso (28 a 32).** Se muestran sin menú ni barra de período, antes de entrar a un espacio de trabajo. Usan RG con estas precisiones, todas con piezas vigentes en main:
 

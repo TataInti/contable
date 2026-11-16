@@ -228,6 +228,23 @@ export function settlementRoutes(app: FastifyInstance) {
     }
   });
 
+  // Descarga del papel de trabajo guardado (liq-descarga): solo lectura con tax.settlements.export (guard.ts).
+  app.get("/api/v1/firms/:firmId/clients/:clientId/tax-settlements/:settlementId/artifacts/:artifactId/download", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { clientId, settlementId, artifactId } = req.params as { clientId: string; settlementId: string; artifactId: string };
+    try {
+      const file = await service.downloadArtifact(ctx, { clientId, settlementId, artifactId });
+      return reply
+        .header("Content-Type", file.contentType)
+        .header("Content-Disposition", `attachment; filename="${file.filename}"`)
+        .header("Cache-Control", "private, no-store")
+        .header("X-Checksum-Sha256", file.checksum)
+        .send(file.body);
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   // ------------------------------------------------------------------
   // G3-04: Workflow maker-checker
   // ------------------------------------------------------------------

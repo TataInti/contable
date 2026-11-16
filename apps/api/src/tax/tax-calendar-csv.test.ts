@@ -188,7 +188,7 @@ describe("mapeo de una fila a una celda", () => {
 
   it("rechaza una fecha vacía, imposible o con otro formato, con el motivo del brief", () => {
     expect(motivos(mapearUna(csvCon(filaCsv({ fecha_completa: "" }))))).toEqual([
-      "fecha_completa: Falta la fecha de vencimiento",
+      "fecha_completa: La fecha es obligatoria (AAAA-MM-DD)",
     ]);
     expect(motivos(mapearUna(csvCon(filaCsv({ fecha_completa: "2026-02-30" }))))).toEqual([
       "fecha_completa: La fecha no existe",
@@ -247,7 +247,7 @@ describe("mapeo de una fila a una celda", () => {
   it("informa cada campo con error de la misma fila, sin repetir el mismo campo", () => {
     expect(motivos(mapearUna(csvCon(filaCsv({ digitos: "4-2", fecha_completa: "" }))))).toEqual([
       "digitos: El rango «4-2» va de menor a mayor, por ejemplo 0-3",
-      "fecha_completa: Falta la fecha de vencimiento",
+      "fecha_completa: La fecha es obligatoria (AAAA-MM-DD)",
     ]);
   });
 
@@ -374,7 +374,7 @@ describe("extractos reales de los tres CSV verificados", () => {
       "8 digitos",
       "8 fecha_completa",
     ]);
-    expect(resultado.rechazadas[1]?.motivo).toBe("Falta la fecha de vencimiento");
+    expect(resultado.rechazadas[1]?.motivo).toBe("La fecha es obligatoria (AAAA-MM-DD)");
     expect(resultado.celdas.some((celda) => celda.entrada.groupingKind === "ALL")).toBe(true);
     expect(resultado.celdas.some((celda) => celda.entrada.referenceLabel === "PF 2025")).toBe(true);
   });

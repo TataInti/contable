@@ -127,16 +127,17 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     await screen.findByText("Ningún cliente coincide");
   });
 
-  it("la cifra Activos filtra por estado y alterna al volver a pulsarla", async () => {
+  it("la cifra Activos es de lectura: no filtra y el select Estado es el único control del criterio", async () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
 
-    fireEvent.click(cifraFiltro(/Activos/));
-    expect(filasClave()).toEqual(["c1", "c2", "c4", "c5"]);
-    expect((screen.getByLabelText("Filtrar por estado") as HTMLSelectElement).value).toBe("ACTIVE");
-
-    fireEvent.click(cifraFiltro(/Activos/));
+    const banda = screen.getByRole("group", { name: "Resumen de la cartera" });
+    const cifra = within(banda).getByText("Activos").closest(".dense-stat") as HTMLElement;
+    expect(cifra.querySelector("button")).toBeNull();
+    expect(cifra.textContent).toContain("4");
+    expect(cifra.textContent).toContain("2 inactivos");
     expect(filasClave()).toEqual(["c1", "c2", "c3", "c4", "c5", "c6"]);
+    expect((screen.getByLabelText("Filtrar por estado") as HTMLSelectElement).value).toBe("");
   });
 
   it("«Quitar filtros» quita la terminación de la URL y conserva la agrupación, que no es un filtro", async () => {

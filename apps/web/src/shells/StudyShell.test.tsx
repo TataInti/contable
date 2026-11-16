@@ -93,7 +93,7 @@ describe("StudyShell", () => {
       within(group).getAllByRole("link").map((link) => link.textContent?.trim());
 
     expect(within(nav).getAllByRole("group")).toHaveLength(3);
-    expect(labels(studyGroup)).toEqual(["Inicio", "Clientes"]);
+    expect(labels(studyGroup)).toEqual(["Inicio", "Clientes", "Panel de trabajo"]);
     // Dentro del cliente, el orden sigue el trabajo del mes.
     expect(labels(clientGroup)).toEqual([
       "Resumen",
