@@ -588,7 +588,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     extractionFixture.status = "FAILED";
     renderBandeja();
     fireEvent.click(await screen.findByRole("row", { name: /factura\.pdf/ }));
-    await screen.findByRole("heading", { name: "Procesando comprobante" });
+    await screen.findByText("Documento rechazado");
     expect(screen.queryByRole("button", { name: "Releer con IA" })).toBeNull();
   });
 

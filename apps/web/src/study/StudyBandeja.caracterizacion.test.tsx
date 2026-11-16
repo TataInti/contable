@@ -10,7 +10,6 @@ import {
   clienteComoApp,
   contexto,
   documento,
-  esperarTurno,
   extraccion,
   fetchSimulado,
   renderBandeja,
@@ -121,7 +120,7 @@ describe("StudyBandeja · caracterización del detalle (7b.3a, antes de mover na
     expect(await screen.findByRole("heading", { name: "factura.pdf" })).toBeTruthy();
   });
 
-  it("K7 · vigente: defecto 7b-4 — si la vista previa falla, «Ver archivo» no avisa", async () => {
+  it("K7 · si la vista previa falla, «Ver archivo» avisa «No se pudo abrir el archivo.» (defecto 7b-4 corregido)", async () => {
     const abrir = vi.spyOn(window, "open").mockImplementation(() => null);
     fetchSimulado(
       rutaBandeja(documento("doc-a", "EXTRACTED"), {
@@ -134,10 +133,10 @@ describe("StudyBandeja · caracterización del detalle (7b.3a, antes de mover na
     renderBandeja(clienteComoApp());
     await abrirFactura();
     fireEvent.click(await screen.findByRole("button", { name: "Ver archivo" }));
-    await esperarTurno();
-    // vigente: defecto 7b-4
+    // Corregido en 7b.3a (defecto 7b-4): antes no había aviso.
+    const aviso = await screen.findByRole("alert");
+    expect(aviso.textContent).toContain("No se pudo abrir el archivo.");
     expect(abrir).not.toHaveBeenCalled();
-    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it.each(["UPLOADED", "VALIDATING"])(
@@ -152,17 +151,19 @@ describe("StudyBandeja · caracterización del detalle (7b.3a, antes de mover na
     },
   );
 
-  // vigente: defecto 7b-2 — un documento con error se muestra como «Procesando comprobante» con la barra.
-  it.each(["EXTRACTION_FAILED", "INFECTED", "FAILED", "CANCELED"])(
-    "K8 · vigente: defecto 7b-2 — %s se ve como «Procesando comprobante»",
-    async (estado) => {
-      fetchSimulado(rutaBandeja(documento("doc-a", estado)));
-      renderBandeja(clienteComoApp());
-      await abrirFactura();
-      // vigente: defecto 7b-2
-      expect(await screen.findByRole("heading", { name: "Procesando comprobante" })).toBeTruthy();
-    },
-  );
+  // Corregido en 7b.3a (defecto 7b-2): cada estado de error dice qué pasó, no «Procesando comprobante».
+  it.each([
+    ["EXTRACTION_FAILED", "Documento rechazado"],
+    ["INFECTED", "Se detectó una amenaza en el archivo"],
+    ["FAILED", "El procesamiento no terminó"],
+    ["CANCELED", "El procesamiento no terminó"],
+  ])("K8 · %s (defecto 7b-2 corregido): dice «%s»", async (estado, titulo) => {
+    fetchSimulado(rutaBandeja(documento("doc-a", estado)));
+    renderBandeja(clienteComoApp());
+    await abrirFactura();
+    expect(await screen.findByText(titulo)).toBeTruthy();
+    expect(screen.queryByText("Procesando comprobante")).toBeNull();
+  });
 
   it("K9 · con la extracción cargando dice «Recuperando campos extraídos…»", async () => {
     fetchSimulado(rutaBandeja(documento("doc-a", "EXTRACTED"), { extraccion: PENDIENTE }));
@@ -179,12 +180,12 @@ describe("StudyBandeja · caracterización del detalle (7b.3a, antes de mover na
     expect(screen.getByText("1 campos corregibles")).toBeTruthy();
   });
 
-  it("K9 · vigente: defecto 7b-1 — la extracción con error 500 se ve como «La extracción todavía no está disponible»", async () => {
+  it("K9 · error 500 de la extracción: aviso «No se pudo cargar la extracción» (defecto 7b-1 corregido)", async () => {
     fetchSimulado(rutaBandeja(documento("doc-a", "EXTRACTED"), { extraccion: ERROR_SERVIDOR }));
     renderBandeja(clienteComoApp());
     await abrirFactura();
-    // vigente: defecto 7b-1
-    expect(await screen.findByText("La extracción todavía no está disponible")).toBeTruthy();
+    expect(await screen.findByText("No se pudo cargar la extracción")).toBeTruthy();
+    expect(screen.queryByText("La extracción todavía no está disponible")).toBeNull();
   });
 
   it("K11 · sin datos leídos ni corregidos, «Aprobar extracción» está deshabilitado y lo dice", async () => {
@@ -202,7 +203,7 @@ describe("StudyBandeja · caracterización del detalle (7b.3a, antes de mover na
     expect(screen.getByText("Cargá al menos un dato para aprobar.")).toBeTruthy();
   });
 
-  it("K11 · vigente: defecto 7b-3 — si «Aprobar extracción» falla, no se muestra ningún aviso", async () => {
+  it("K11 · si «Aprobar extracción» falla, avisa con el mensaje de la API (defecto 7b-3 corregido)", async () => {
     const fetchMock = fetchSimulado(
       rutaBandeja(documento("doc-a", "EXTRACTED"), {
         aprobar: {
@@ -223,9 +224,9 @@ describe("StudyBandeja · caracterización del detalle (7b.3a, antes de mover na
         ),
       ).toBe(true),
     );
-    await esperarTurno();
-    // vigente: defecto 7b-3
-    expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.queryByText("La extracción cambió.")).toBeNull();
+    // Corregido en 7b.3a (defecto 7b-3): antes no había aviso.
+    const aviso = await screen.findByRole("alert");
+    expect(aviso.textContent).toContain("No se pudo aprobar la extracción");
+    expect(aviso.textContent).toContain("La extracción cambió.");
   });
 });

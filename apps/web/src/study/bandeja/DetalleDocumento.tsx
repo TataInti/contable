@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field } from "@contable/design-system";
+import { AsyncState, Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
 import { isManualExtractionFieldKey } from "@contable/contracts";
 import {
   ApiError,
@@ -13,6 +13,7 @@ import { useClientContext } from "../../context/ClientContext";
 import { ExtractionFiscalTable } from "../ExtractionFiscalTable";
 import {
   hasEffectiveFiscalData,
+  AUTOMATED_READING_UNAVAILABLE_MESSAGE,
   isAutomatedReadingUnavailableReason,
 } from "../extractionReadiness";
 import {
@@ -28,6 +29,7 @@ import { StatusBadge } from "../../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../../ui/ConfirmAction";
 import { formatearFechaHora } from "../../lib/formatoFechas";
 import { RechazarDocumento } from "./RechazarDocumento";
+import { sinRespuesta } from "../clientes/consultas";
 
 const FIELD_LABELS: Record<string, string> = {
   voucherType: "Tipo de documento",
@@ -53,6 +55,13 @@ const FIELD_LABELS: Record<string, string> = {
   caeExpiration: "Vencimiento del CAE",
 };
 
+/** Etapas que emite el worker mientras el trabajo corre (apps/worker/src/document-processor.ts). Otra etapa cae en «Procesando comprobante». */
+const ETAPAS_EN_CURSO: Partial<Record<string, string>> = {
+  VALIDATED: "Archivo validado",
+  READING_AI: "Leyendo el comprobante con IA",
+};
+const AVISO_AL_ESTUDIO = "Avisá a quien administra el estudio para que revise el archivo.";
+
 interface DetalleDocumentoProps {
   rows: Document[];
   selectedId: string | null;
@@ -64,6 +73,7 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
   const queryClient = useQueryClient();
   const [reprocessJobId, setReprocessJobId] = useState<string | null>(null);
   const confirm = useConfirmAction();
+  const notify = useNotify();
   const [corrections, setCorrections] = useState<Record<string, string>>({});
   const [showManualFieldsDialog, setShowManualFieldsDialog] = useState(false);
   const [manualFieldsError, setManualFieldsError] = useState<string | null>(null);
@@ -205,6 +215,11 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
     setShowManualFieldsDialog(true);
   };
   const approve = useMutation({
+    // 7b-3: el error de aprobar se avisa con el mensaje de la API si es legible; el diálogo ya se cerró al confirmar.
+    onError: (error) =>
+      notify.error(error instanceof ApiError ? error.message : "Volvé a intentarlo.", {
+        title: "No se pudo aprobar la extracción",
+      }),
     mutationFn: () => api.post(`${base}/extractions/${extraction.data!.id}/approve`),
     onSuccess: () =>
       // El documento pasa a "Revisado": la lista de documentos también se refresca, si no el Legajo
@@ -234,6 +249,8 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
   // G2-07.5: ver/descargar el archivo subido. La URL firmada se pide al servidor
   // en el momento (reautoriza por RLS) y sólo se expone una vez validada.
   const openFile = useMutation({
+    // 7b-4: si la vista previa falla, el clic no puede quedar sin respuesta.
+    onError: () => notify.error("No se pudo abrir el archivo."),
     mutationFn: async (documentId: string) => {
       const preview = await api.get<{ url: string }>(`${base}/documents/${documentId}/preview`);
       window.open(preview.url, "_blank", "noopener,noreferrer");
@@ -245,6 +262,22 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
       detail.data?.status === "EXTRACTED" ||
       detail.data?.fileVersions?.[0]?.antivirusStatus === "CLEAN");
   const rejectionReceipt = detail.data ? rejectionReceipts[detail.data.id] : undefined;
+  // C7B-8: etapa y progreso en texto, solo para una etapa conocida; el resto cae en «Procesando comprobante».
+  const trabajoEnCurso = detail.data?.processingJobs?.find(
+    (job) => job.type !== "REPROCESS" && ["QUEUED", "RUNNING"].includes(job.status),
+  );
+  const etapaEnCurso = trabajoEnCurso?.stage ? ETAPAS_EN_CURSO[trabajoEnCurso.stage] : undefined;
+  const textoEtapa = etapaEnCurso
+    ? `${etapaEnCurso}${trabajoEnCurso && trabajoEnCurso.progress > 0 ? ` · ${trabajoEnCurso.progress}%` : ""}`
+    : null;
+  // I7B-1 y P4: un trabajo fallido con motivo de lectura lo traduce; cualquier otro motivo se dice sin código.
+  const trabajoFallido = detail.data?.processingJobs?.find(
+    (job) => job.status === "FAILED" && Boolean(job.error),
+  );
+  const textoFallo =
+    trabajoFallido?.error && isAutomatedReadingUnavailableReason(trabajoFallido.error)
+      ? AUTOMATED_READING_UNAVAILABLE_MESSAGE
+      : AVISO_AL_ESTUDIO;
   const activeReprocessJob =
     detail.data?.processingJobs?.some(
       (job) => job.type === "REPROCESS" && ["QUEUED", "RUNNING"].includes(job.status),
@@ -298,18 +331,18 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
               ) : undefined
             }
           />
-        ) : detail.isLoading ? (
+        ) : sinRespuesta(detail) ? (
           <div className="query-state">
             <span className="loading-copy">Abriendo documento…</span>
           </div>
         ) : detail.isError ? (
-          <EmptyState
-            title="No se pudo abrir el documento"
-            action={
-              <Button variant="secondary" onClick={() => void detail.refetch()}>
-                Reintentar
-              </Button>
-            }
+          <AsyncState
+            loading={false}
+            error
+            loadingLabel="Abriendo documento…"
+            errorTitle="No se pudo abrir el documento"
+            errorDescription="Reintentá la consulta."
+            onRetry={() => void detail.refetch()}
           />
         ) : (
           <>
@@ -346,6 +379,18 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                   <small>Motivo: {rejectionReceipt}</small>
                 </span>
               </div>
+            ) : detail.data?.status === "EXTRACTION_FAILED" ? (
+              <Notice tone="warning" title="Documento rechazado">
+                El documento queda registrado como rechazado.
+              </Notice>
+            ) : detail.data?.status === "INFECTED" ? (
+              <Notice tone="error" title="Se detectó una amenaza en el archivo">
+                El archivo no se puede abrir ni procesar. Avisá a quien administra el estudio.
+              </Notice>
+            ) : detail.data?.status === "FAILED" || detail.data?.status === "CANCELED" ? (
+              <Notice tone="error" title="El procesamiento no terminó">
+                {textoFallo}
+              </Notice>
             ) : detail.data?.status !== "EXTRACTED" && detail.data?.status !== "REVIEWED" ? (
               <div className="processing-state">
                 <div>
@@ -355,6 +400,7 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                       ? "La lectura nueva continúa en segundo plano. Esta vista se actualiza automáticamente."
                       : "La validación y extracción continúan en segundo plano. Esta vista se actualiza automáticamente."}
                   </p>
+                  {textoEtapa ? <p>{textoEtapa}</p> : null}
                   <span className="processing-state__track">
                     <span />
                   </span>
@@ -365,7 +411,16 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                   ) : null}
                 </div>
               </div>
-            ) : extraction.isLoading ? (
+            ) : extraction.isError ? (
+              <AsyncState
+                loading={false}
+                error
+                loadingLabel="Recuperando campos extraídos…"
+                errorTitle="No se pudo cargar la extracción"
+                errorDescription="No se pudieron recuperar los campos del comprobante."
+                onRetry={() => void extraction.refetch()}
+              />
+            ) : sinRespuesta(extraction) ? (
               <div className="query-state">
                 <span className="loading-copy">Recuperando campos extraídos…</span>
               </div>
@@ -552,9 +607,9 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                   />
                 ) : null}
               </>
-            ) : (
+            ) : extraction.isSuccess ? (
               <EmptyState title="La extracción todavía no está disponible" />
-            )}
+            ) : null}
           </>
         )}
       </aside>
