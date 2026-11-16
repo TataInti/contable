@@ -38,7 +38,10 @@ function servidor(_método: string, url: string): Respuesta {
   if (url === RUTA_DOCUMENTOS) return { status: 200, cuerpo: { data: [documentoActual] } };
   if (url === `${BASE}/document-requests`) return { status: 200, cuerpo: { data: [] } };
   if (url === `${BASE}/documents/doc-a`) return { status: 200, cuerpo: { data: documentoActual } };
-  return { status: 404, cuerpo: { error: { code: "NOT_FOUND", message: "No encontramos el recurso solicitado" } } };
+  return {
+    status: 404,
+    cuerpo: { error: { code: "NOT_FOUND", message: "No encontramos el recurso solicitado" } },
+  };
 }
 
 async function abrirFactura() {
@@ -66,11 +69,15 @@ describe("Detalle del documento · pistas de permiso y de tarea activa (D5)", ()
   it("con tarea activa: la pista queda junto al botón «Rechazar documento» deshabilitado", async () => {
     contextMock.current = contexto();
     documentoActual = documento("doc-a", "FAILED", {
-      processingJobs: [{ id: "job-b", type: "VALIDATE", status: "QUEUED", stage: null, progress: 0, error: null }],
+      processingJobs: [
+        { id: "job-b", type: "VALIDATE", status: "QUEUED", stage: null, progress: 0, error: null },
+      ],
     });
     fetchSimulado(servidor);
     await abrirFactura();
-    const boton = (await screen.findByRole("button", { name: "Rechazar documento" })) as HTMLButtonElement;
+    const boton = (await screen.findByRole("button", {
+      name: "Rechazar documento",
+    })) as HTMLButtonElement;
     const pista = screen.getByText("Todavía se está procesando: esperá a que termine");
     expect(boton.disabled).toBe(true);
     expect(pista.parentElement).toBe(boton.parentElement);

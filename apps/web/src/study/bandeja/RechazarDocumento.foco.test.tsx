@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Correcciones 7b.3c, D1 y D9: mientras se envía, «Confirmar rechazo» sigue enfocable y marcado como ocupado, sin
 // enviar dos veces; al completarse el rechazo, el foco pasa al recibo «Documento rechazado». Datos sintéticos «Demo».
-import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import {
@@ -12,9 +12,7 @@ import {
   contexto,
   documento,
   fetchSimulado,
-  fetchSimuladoConAborto,
   renderBandeja,
-  rutaBandeja,
   type Respuesta,
 } from "../StudyBandeja.pruebas";
 
@@ -36,7 +34,6 @@ vi.mock("../../session/SessionContext", () => ({
 
 const DETALLE = `${BASE}/documents/doc-a`;
 const RECHAZO = `${DETALLE}/reject`;
-const MOTIVO_AYUDA = "Elegí un motivo para confirmar el rechazo.";
 
 let documentoActual: Record<string, unknown> = {};
 let respuestaRechazo: () => Respuesta = () => PENDIENTE;
@@ -44,7 +41,14 @@ let respuestaRechazo: () => Respuesta = () => PENDIENTE;
 function fallido() {
   return documento("doc-a", "FAILED", {
     processingJobs: [
-      { id: "job-a", type: "VALIDATE", status: "FAILED", stage: null, progress: 100, error: "MAGIC_BYTES_INVALID" },
+      {
+        id: "job-a",
+        type: "VALIDATE",
+        status: "FAILED",
+        stage: null,
+        progress: 100,
+        error: "MAGIC_BYTES_INVALID",
+      },
     ],
   });
 }
@@ -54,7 +58,10 @@ function servidor(método: string, url: string): Respuesta {
   if (url === `${BASE}/document-requests`) return { status: 200, cuerpo: { data: [] } };
   if (url === DETALLE) return { status: 200, cuerpo: { data: documentoActual } };
   if (url === RECHAZO && método === "POST") return respuestaRechazo();
-  return { status: 404, cuerpo: { error: { code: "NOT_FOUND", message: "No encontramos el recurso solicitado" } } };
+  return {
+    status: 404,
+    cuerpo: { error: { code: "NOT_FOUND", message: "No encontramos el recurso solicitado" } },
+  };
 }
 
 type Fetch = ReturnType<typeof fetchSimulado>;

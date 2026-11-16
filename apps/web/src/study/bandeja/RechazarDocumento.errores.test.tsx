@@ -15,7 +15,6 @@ import {
   fetchSimulado,
   fetchSimuladoConAborto,
   renderBandeja,
-  rutaBandeja,
   type Respuesta,
 } from "../StudyBandeja.pruebas";
 
@@ -37,7 +36,6 @@ vi.mock("../../session/SessionContext", () => ({
 
 const DETALLE = `${BASE}/documents/doc-a`;
 const RECHAZO = `${DETALLE}/reject`;
-const MOTIVO_AYUDA = "Elegí un motivo para confirmar el rechazo.";
 
 let documentoActual: Record<string, unknown> = {};
 let respuestaRechazo: () => Respuesta = () => PENDIENTE;
@@ -45,7 +43,14 @@ let respuestaRechazo: () => Respuesta = () => PENDIENTE;
 function fallido() {
   return documento("doc-a", "FAILED", {
     processingJobs: [
-      { id: "job-a", type: "VALIDATE", status: "FAILED", stage: null, progress: 100, error: "MAGIC_BYTES_INVALID" },
+      {
+        id: "job-a",
+        type: "VALIDATE",
+        status: "FAILED",
+        stage: null,
+        progress: 100,
+        error: "MAGIC_BYTES_INVALID",
+      },
     ],
   });
 }
@@ -55,7 +60,10 @@ function servidor(método: string, url: string): Respuesta {
   if (url === `${BASE}/document-requests`) return { status: 200, cuerpo: { data: [] } };
   if (url === DETALLE) return { status: 200, cuerpo: { data: documentoActual } };
   if (url === RECHAZO && método === "POST") return respuestaRechazo();
-  return { status: 404, cuerpo: { error: { code: "NOT_FOUND", message: "No encontramos el recurso solicitado" } } };
+  return {
+    status: 404,
+    cuerpo: { error: { code: "NOT_FOUND", message: "No encontramos el recurso solicitado" } },
+  };
 }
 
 type Fetch = ReturnType<typeof fetchSimulado>;
@@ -92,7 +100,10 @@ describe("Rechazo de un documento que falló · errores del rechazo (D2 y D8)", 
   it("409 DOCUMENT_ALREADY_REJECTED: vuelve a pedir el detalle y «Rechazar documento» desaparece", async () => {
     respuestaRechazo = () => {
       documentoActual = documento("doc-a", "EXTRACTION_FAILED");
-      return { status: 409, cuerpo: { error: { code: "DOCUMENT_ALREADY_REJECTED", message: "Ya está rechazado" } } };
+      return {
+        status: 409,
+        cuerpo: { error: { code: "DOCUMENT_ALREADY_REJECTED", message: "Ya está rechazado" } },
+      };
     };
     const fetchMock = fetchSimuladoConAborto(servidor);
     const dialog = await abrirRechazo();
@@ -100,7 +111,9 @@ describe("Rechazo de un documento que falló · errores del rechazo (D2 y D8)", 
     const detalleAntes = llamadas(fetchMock, DETALLE).length;
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar rechazo" }));
     expect(await within(dialog).findByText("Ya está rechazado")).toBeTruthy();
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Rechazar documento" })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Rechazar documento" })).toBeNull(),
+    );
     expect(llamadas(fetchMock, DETALLE).length).toBeGreaterThan(detalleAntes);
   });
 
