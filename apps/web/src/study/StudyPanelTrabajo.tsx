@@ -28,9 +28,11 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { CUIT_ENDINGS } from "./clientes/terminacion";
 import { abrirClienteDelPanel } from "./panel/abrirCliente";
 import {
+  MENSAJE_RANGO_INVERTIDO,
   PANEL_PAGE_SIZE,
   RESPONSABLE_MIS,
   RESPONSABLE_TODOS,
+  esRangoValido,
   escribirFiltros,
   hayFiltrosActivos,
   leerFiltros,
@@ -39,6 +41,7 @@ import {
 } from "./panel/filtros";
 import {
   badgeDj,
+  calificadorDelConteo,
   conOpcionElegida,
   errorDelPanel,
   indicadoresDelPanel,
@@ -58,9 +61,10 @@ const CAPACIDAD = "tax.settlements.read";
 const ROLES_TODO_EL_ESTUDIO = ["OWNER", "ADMIN"];
 const MOTIVO_CLAVE = "motivo";
 const MOTIVO_SIN_ASIGNACIONES = "sin-asignaciones";
+const ID_RANGO = "panel-trabajo-rango-error";
 
 export function StudyPanelTrabajo() {
-  const { firmId, capabilities, setClientId, setPeriodId } = useClientContext();
+  const { firmId, capabilities, setClientId, setPeriodId, clientId } = useClientContext();
   const session = useSession();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -76,11 +80,36 @@ export function StudyPanelTrabajo() {
   const verTodoPorRol = rol !== null && ROLES_TODO_EL_ESTUDIO.includes(rol);
   const propio = session.me?.userId ?? null;
 
+  // Hallazgo 58: el rango se valida en el cliente con el «desde» que muestra la pantalla. La fecha
+  // de referencia de la API llega con la primera respuesta.
+  const [asOfConocido, setAsOfConocido] = useState<string | null>(null);
+  const desdeVigente =
+    filtros.desde !== ""
+      ? filtros.desde
+      : asOfConocido !== null
+        ? sumarDias(asOfConocido, -TAX_PANEL_DEFAULT_LOOKBACK_DAYS)
+        : "";
+  const rangoValido = esRangoValido(desdeVigente, filtros.hasta);
+  // Con un rango inválido se sigue mostrando el último resultado válido; si no hubo ninguno, la vista inicial (sin fechas).
+  const [ultimoValido, setUltimoValido] = useState<FiltrosPanel>(() =>
+    rangoValido ? filtros : { ...filtros, desde: "", hasta: "" },
+  );
+  if (
+    rangoValido &&
+    escribirFiltros(ultimoValido).toString() !== escribirFiltros(filtros).toString()
+  ) {
+    setUltimoValido(filtros);
+  }
+  const consultaFiltros = rangoValido ? filtros : ultimoValido;
+
   const consulta = useInfiniteQuery({
-    queryKey: ["panel-trabajo", firmId, escribirFiltros(filtros).toString()],
+    queryKey: ["panel-trabajo", firmId, escribirFiltros(consultaFiltros).toString()],
     queryFn: ({ pageParam }) =>
       api.getEnvelope<TaxPanelResponse>(
-        rutaObligaciones(firmId ?? "", filtros, { offset: pageParam, limit: PANEL_PAGE_SIZE }),
+        rutaObligaciones(firmId ?? "", consultaFiltros, {
+          offset: pageParam,
+          limit: PANEL_PAGE_SIZE,
+        }),
       ),
     initialPageParam: 0,
     getNextPageParam: (ultima) => {
@@ -96,6 +125,10 @@ export function StudyPanelTrabajo() {
   const filas: TaxPanelRow[] = paginas.flatMap((pagina) => pagina.data);
   const total = ultimaPagina?.meta.total ?? 0;
   const opciones = primeraPagina?.meta.options;
+  const asOfRespuesta = primeraPagina?.meta.asOf;
+  useEffect(() => {
+    if (asOfRespuesta !== undefined) setAsOfConocido(asOfRespuesta);
+  }, [asOfRespuesta]);
 
   // S4-6: en la primera carga, OWNER/ADMIN sin obligaciones propias abren en «Todo el estudio»,
   // con el motivo visible en la URL. Después de esa carga, lo que elige la persona manda.
@@ -150,9 +183,6 @@ export function StudyPanelTrabajo() {
 
   const indicadores = indicadoresDelPanel(filas);
   const parcial = filas.length < total;
-  const alcance = parcial
-    ? `sobre las ${filas.length} filas cargadas`
-    : "sobre las filas filtradas";
   const valorIndicador = (numero: number): ReactNode => {
     if (!puedeLeer) return "restringido";
     if (consulta.data !== undefined) return numero;
@@ -163,25 +193,21 @@ export function StudyPanelTrabajo() {
       key: "vencidas",
       label: "Vencidas",
       value: valorIndicador(indicadores.vencidas),
-      detail: alcance,
     },
     {
       key: "semana",
       label: "Vencen esta semana",
       value: valorIndicador(indicadores.semana),
-      detail: alcance,
     },
     {
       key: "sin-legajo",
       label: "Sin legajo",
       value: valorIndicador(indicadores.sinLegajo),
-      detail: alcance,
     },
     {
       key: "dj-pendientes",
       label: "DJ pendientes",
       value: valorIndicador(indicadores.djPendientes),
-      detail: alcance,
     },
   ];
 
@@ -274,7 +300,15 @@ export function StudyPanelTrabajo() {
         ) : (
           <>
             <div>{formatearFecha(fila.dueDate)}</div>
-            <div className="dense-dim">{textoVencimiento(fila.daysUntilDue)}</div>
+            <div
+              className={
+                fila.daysUntilDue !== null && fila.daysUntilDue < 0
+                  ? "panel-trabajo__vencida"
+                  : "dense-dim"
+              }
+            >
+              {textoVencimiento(fila.daysUntilDue)}
+            </div>
           </>
         ),
     },
@@ -317,6 +351,10 @@ export function StudyPanelTrabajo() {
     filtros.responsable !== RESPONSABLE_MIS && filtros.responsable !== RESPONSABLE_TODOS;
   const hayCriterios =
     responsablePuntual || hayFiltrosActivos({ ...filtros, responsable: RESPONSABLE_MIS });
+  // Hallazgo 69: «Configurar obligaciones» lleva a Configuración fiscal, que exige un cliente elegido.
+  const aclaracionCliente = clientId
+    ? ""
+    : " Elegí un cliente en el menú para configurar sus obligaciones.";
   const vacio = hayCriterios ? (
     <EmptyState
       size="compact"
@@ -336,8 +374,8 @@ export function StudyPanelTrabajo() {
       title="No hay obligaciones para mostrar"
       description={
         filtros.responsable === RESPONSABLE_MIS
-          ? "No tenés obligaciones asignadas en esta vista. Si no tenés clientes asignados, pedí al titular o al administrador del estudio que te los asigne."
-          : "No hay obligaciones cargadas en esta vista. Se configuran por cliente en Configuración fiscal."
+          ? `No tenés obligaciones asignadas en esta vista. Si no tenés clientes asignados, pedí al titular o al administrador del estudio que te los asigne.${aclaracionCliente}`
+          : `No hay obligaciones cargadas en esta vista. Se configuran por cliente en Configuración fiscal.${aclaracionCliente}`
       }
       action={
         <Button size="sm" variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
@@ -407,135 +445,142 @@ export function StudyPanelTrabajo() {
           </Button>
         }
       />
+      {hayCriterios || parcial ? (
+        <p className="dense-dim">
+          {parcial
+            ? calificadorDelConteo(filas.length, "cargadas")
+            : calificadorDelConteo(total, "filtradas")}
+        </p>
+      ) : null}
       <StatStrip label="Indicadores del panel de trabajo" items={indicadoresItems} />
       <DenseToolbar>
-        {filtros.responsable === RESPONSABLE_MIS ? (
-          <Button
-            size="sm"
-            variant="secondary"
-            className="dense-chip"
-            aria-label="Quitar el filtro Mis obligaciones"
-            onClick={() =>
-              cambiarFiltros((actual) => ({ ...actual, responsable: RESPONSABLE_TODOS }))
-            }
-          >
-            Mis obligaciones ×
-          </Button>
-        ) : null}
-        <div className="panel-trabajo__filtro">
-          <span className="dense-dim">Responsable</span>
-          <select
-            className="dense-select"
-            aria-label="Responsable"
-            value={filtros.responsable}
-            onChange={(evento) =>
-              cambiarFiltros((actual) => ({ ...actual, responsable: evento.target.value }))
-            }
-          >
-            <option value={RESPONSABLE_MIS}>Mis obligaciones</option>
-            <option value={RESPONSABLE_TODOS}>Todo el estudio</option>
-            {responsables.map((opcion) => (
-              <option key={opcion.value} value={opcion.value}>
-                {opcion.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="panel-trabajo__filtro">
-          <span className="dense-dim">Terminación de CUIT</span>
-          <DenseToggleGroup
-            label="Terminación de CUIT"
-            options={CUIT_ENDINGS.map((digito) => ({ value: digito, label: digito }))}
-            selected={filtros.terminacion}
-            onChange={(siguiente) =>
-              cambiarFiltros((actual) => ({ ...actual, terminacion: siguiente }))
-            }
-          />
-        </div>
-        <div className="panel-trabajo__filtro">
-          <span className="dense-dim">Impuesto</span>
-          <select
-            className="dense-select"
-            aria-label="Impuesto"
-            value={filtros.impuesto}
-            onChange={(evento) =>
-              cambiarFiltros((actual) => ({ ...actual, impuesto: evento.target.value }))
-            }
-          >
-            <option value="">Impuesto: todos</option>
-            {impuestos.map((opcion) => (
-              <option key={opcion.value} value={opcion.value}>
-                {opcion.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="panel-trabajo__filtro">
-          <span className="dense-dim">Estado</span>
-          <select
-            className="dense-select"
-            aria-label="Estado"
-            value={filtros.estado}
-            onChange={(evento) =>
-              cambiarFiltros((actual) => ({ ...actual, estado: evento.target.value }))
-            }
-          >
-            <option value="">Estado: todos</option>
-            {opcionesEstado().map((opcion) => (
-              <option key={opcion.value} value={opcion.value}>
-                {opcion.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="panel-trabajo__filtro">
-          <span className="dense-dim">Período fiscal</span>
-          <select
-            className="dense-select"
-            aria-label="Período fiscal"
-            value={filtros.periodo}
-            onChange={(evento) =>
-              cambiarFiltros((actual) => ({ ...actual, periodo: evento.target.value }))
-            }
-          >
-            <option value="">Período: todos</option>
-            {periodos.map((opcion) => (
-              <option key={opcion.value} value={opcion.value}>
-                {opcion.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <label className="ds-field panel-trabajo__filtro">
-          <span className="ds-field__label">Vencimiento desde</span>
-          <input
-            ref={desdeRef}
-            className="ds-field__input"
-            type="date"
-            value={filtros.desde !== "" ? filtros.desde : desdeDefecto}
-            onChange={(evento) =>
-              cambiarFiltros((actual) => ({ ...actual, desde: evento.target.value }))
-            }
-          />
-        </label>
-        <label className="ds-field panel-trabajo__filtro">
-          <span className="ds-field__label">Vencimiento hasta</span>
-          <input
-            className="ds-field__input"
-            type="date"
-            value={filtros.hasta}
-            onChange={(evento) =>
-              cambiarFiltros((actual) => ({ ...actual, hasta: evento.target.value }))
-            }
-          />
-        </label>
-        {hayFiltros ? (
-          <div className="panel-trabajo__filtro">
-            <Button size="sm" variant="ghost" onClick={quitarFiltros}>
-              Quitar filtros
-            </Button>
+        <div className="panel-trabajo__fila">
+          <div className="panel-trabajo__filtro panel-trabajo__filtro--responsable">
+            <select
+              className="dense-select"
+              aria-label="Responsable"
+              value={filtros.responsable}
+              onChange={(evento) =>
+                cambiarFiltros((actual) => ({ ...actual, responsable: evento.target.value }))
+              }
+            >
+              <option value={RESPONSABLE_MIS}>Responsable: Mis obligaciones</option>
+              <option value={RESPONSABLE_TODOS}>Responsable: Todo el estudio</option>
+              {responsables.map((opcion) => (
+                <option key={opcion.value} value={opcion.value}>
+                  {`Responsable: ${opcion.label}`}
+                </option>
+              ))}
+            </select>
           </div>
-        ) : null}
+          <div className="panel-trabajo__filtro panel-trabajo__filtro--terminacion">
+            <span className="dense-dim">Terminación de CUIT</span>
+            <DenseToggleGroup
+              label="Terminación de CUIT"
+              options={CUIT_ENDINGS.map((digito) => ({ value: digito, label: digito }))}
+              selected={filtros.terminacion}
+              onChange={(siguiente) =>
+                cambiarFiltros((actual) => ({ ...actual, terminacion: siguiente }))
+              }
+            />
+          </div>
+          <div className="panel-trabajo__filtro panel-trabajo__filtro--impuesto">
+            <select
+              className="dense-select"
+              aria-label="Impuesto"
+              value={filtros.impuesto}
+              onChange={(evento) =>
+                cambiarFiltros((actual) => ({ ...actual, impuesto: evento.target.value }))
+              }
+            >
+              <option value="">Impuesto: todos</option>
+              {impuestos.map((opcion) => (
+                <option key={opcion.value} value={opcion.value}>
+                  {`Impuesto: ${opcion.label}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="panel-trabajo__fila">
+          <div className="panel-trabajo__filtro panel-trabajo__filtro--estado">
+            <select
+              className="dense-select"
+              aria-label="Estado"
+              value={filtros.estado}
+              onChange={(evento) =>
+                cambiarFiltros((actual) => ({ ...actual, estado: evento.target.value }))
+              }
+            >
+              <option value="">Estado: todos</option>
+              {opcionesEstado().map((opcion) => (
+                <option key={opcion.value} value={opcion.value}>
+                  {`Estado: ${opcion.label}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="panel-trabajo__filtro panel-trabajo__filtro--periodo">
+            <select
+              className="dense-select"
+              aria-label="Período fiscal"
+              value={filtros.periodo}
+              onChange={(evento) =>
+                cambiarFiltros((actual) => ({ ...actual, periodo: evento.target.value }))
+              }
+            >
+              <option value="">Período fiscal: todos</option>
+              {periodos.map((opcion) => (
+                <option key={opcion.value} value={opcion.value}>
+                  {`Período fiscal: ${opcion.label}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="panel-trabajo__fechas">
+            <div className="panel-trabajo__fechas-campos">
+              <label className="ds-field panel-trabajo__filtro">
+                <span className="ds-field__label">Vencimiento desde</span>
+                <input
+                  ref={desdeRef}
+                  className="ds-field__input"
+                  type="date"
+                  aria-invalid={rangoValido ? undefined : true}
+                  aria-describedby={rangoValido ? undefined : ID_RANGO}
+                  value={filtros.desde !== "" ? filtros.desde : desdeDefecto}
+                  onChange={(evento) =>
+                    cambiarFiltros((actual) => ({ ...actual, desde: evento.target.value }))
+                  }
+                />
+              </label>
+              <label className="ds-field panel-trabajo__filtro">
+                <span className="ds-field__label">Vencimiento hasta</span>
+                <input
+                  className="ds-field__input"
+                  type="date"
+                  aria-invalid={rangoValido ? undefined : true}
+                  aria-describedby={rangoValido ? undefined : ID_RANGO}
+                  value={filtros.hasta}
+                  onChange={(evento) =>
+                    cambiarFiltros((actual) => ({ ...actual, hasta: evento.target.value }))
+                  }
+                />
+              </label>
+            </div>
+            {rangoValido ? null : (
+              <span className="ds-field__error" id={ID_RANGO}>
+                {MENSAJE_RANGO_INVERTIDO}
+              </span>
+            )}
+          </div>
+          {hayFiltros ? (
+            <div className="panel-trabajo__filtro">
+              <Button size="sm" variant="ghost" onClick={quitarFiltros}>
+                Quitar filtros
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </DenseToolbar>
       {avisoError}
       {avisoMotivo}

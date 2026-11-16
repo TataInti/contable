@@ -173,7 +173,8 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     expect(screen.getByText("1 de 2 obligaciones")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cargar más" })).toBeTruthy();
     expect(valorIndicador("Sin legajo")).toBe("1");
-    expect(screen.getAllByText("sobre las 1 filas cargadas")).toHaveLength(4);
+    expect(screen.getByText("Sobre 1 obligación cargada:")).toBeTruthy();
+    expect(screen.queryByText("sobre las 1 filas cargadas")).toBeNull();
     expect(pedidos.find((ruta) => ruta.includes("/tax-worklist/obligations"))).toContain(
       "responsable=me",
     );
@@ -183,9 +184,11 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     renderPanel();
     await tablaPanel();
     const responsable = screen.getByRole("combobox", { name: "Responsable" });
-    expect(within(responsable).getByRole("option", { name: "Beto Demo" })).toBeTruthy();
+    expect(
+      within(responsable).getByRole("option", { name: "Responsable: Beto Demo" }),
+    ).toBeTruthy();
     const impuesto = screen.getByRole("combobox", { name: "Impuesto" });
-    expect(within(impuesto).getByRole("option", { name: "IVA" })).toBeTruthy();
+    expect(within(impuesto).getByRole("option", { name: "Impuesto: IVA" })).toBeTruthy();
   });
 
   it("«Cargar más» pide la página siguiente por la red y suma sus filas al pie", async () => {
@@ -209,7 +212,7 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     expect(pedidos.some((ruta) => ruta.includes("offset=1"))).toBe(true);
   });
 
-  it("un 400 por rango inválido muestra el mensaje de la API y deja «no disponible» en los indicadores", async () => {
+  it("un 400 de la API muestra su mensaje y deja «no disponible» en los indicadores", async () => {
     respuestaPanel = () => ({
       status: 400,
       cuerpo: {
@@ -219,7 +222,7 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
         },
       },
     });
-    renderPanel("/panel-trabajo?desde=2026-12-31&hasta=2026-01-01");
+    renderPanel("/panel-trabajo?responsable=todos");
     expect(await screen.findByText("No se pudo cargar el panel de trabajo")).toBeTruthy();
     expect(screen.getByText("El vencimiento «hasta» es anterior a «desde»")).toBeTruthy();
     expect(valorIndicador("Vencidas")).toBe("no disponible");
@@ -231,5 +234,17 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     expect(await screen.findByText("No hay obligaciones para mostrar")).toBeTruthy();
     expect(screen.queryByText("Ninguna obligación coincide con los filtros")).toBeNull();
     expect(screen.getByRole("button", { name: "Configurar obligaciones" })).toBeTruthy();
+  });
+
+  it("con «desde» posterior a «hasta» no se pide ese rango a la API y la tabla sigue visible", async () => {
+    respuestaPanel = () => ({ status: 200, cuerpo: cuerpo([fila()], { total: 1 }) });
+    renderPanel("/panel-trabajo?desde=2026-12-31&hasta=2026-01-01");
+    await tablaPanel();
+    expect(pedidos.some((ruta) => ruta.includes("dueFrom=2026-12-31&dueTo=2026-01-01"))).toBe(
+      false,
+    );
+    expect(
+      await screen.findByText("La fecha hasta tiene que ser igual o posterior a la fecha desde"),
+    ).toBeTruthy();
   });
 });

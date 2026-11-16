@@ -34,11 +34,56 @@ table[aria-label="Panel de trabajo"] tbody td {
   align-items: center;
 }
 
-/* Los pares de fecha van con la etiqueta a la izquierda del control, no apilados. */
+/* Hallazgos 63 y 81: la etiqueta de cada fecha va arriba de su campo, dentro de su par. */
 .panel-trabajo__filtro.ds-field {
-  flex-direction: row;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Dos filas fijas (1280 y 1440): cada fila ocupa el ancho de la barra. */
+.panel-trabajo__fila {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: var(--ds-space-3);
+  inline-size: 100%;
+}
+
+/* Anchos fijos por filtro: entran el valor más largo sin cortar el nombre. */
+.panel-trabajo__filtro--responsable > .dense-select {
+  inline-size: calc(var(--ds-space-4) * 14.5);
+  max-inline-size: calc(var(--ds-space-4) * 14.5);
+}
+
+.panel-trabajo__filtro--impuesto > .dense-select {
+  inline-size: calc(var(--ds-space-4) * 14);
+  max-inline-size: calc(var(--ds-space-4) * 14);
+}
+
+.panel-trabajo__filtro--estado > .dense-select,
+.panel-trabajo__filtro--periodo > .dense-select {
+  inline-size: calc(var(--ds-space-4) * 16);
+  max-inline-size: calc(var(--ds-space-4) * 16);
 }
 
 .panel-trabajo__filtro .ds-field__input {
   inline-size: auto;
+}
+
+/* Hallazgo 58: el mensaje del rango va bajo los dos campos de fecha, dentro de la barra. */
+.panel-trabajo__fechas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+
+.panel-trabajo__fechas-campos {
+  display: flex;
+  gap: var(--ds-space-2);
+}
+
+/* Hallazgo 87: la fila vencida usa el token de alerta de la etiqueta de estado (color y peso). */
+.panel-trabajo__vencida {
+  color: var(--ds-color-danger);
+  font-weight: var(--ds-font-weight-medium);
 }

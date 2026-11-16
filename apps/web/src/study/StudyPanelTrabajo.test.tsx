@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -222,6 +222,24 @@ describe("Panel de trabajo: pantalla", () => {
     expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
   });
 
+  it("sin cliente elegido, el vacío aclara que hay que elegir uno para configurar obligaciones (hallazgo 69)", async () => {
+    apiMock.getEnvelope.mockResolvedValue(respuesta([]));
+    renderPanel();
+    expect(await screen.findByText("No hay obligaciones para mostrar")).toBeTruthy();
+    expect(
+      screen.getByText(/Elegí un cliente en el menú para configurar sus obligaciones\./),
+    ).toBeTruthy();
+  });
+
+  it("con un cliente elegido, el vacío no pide elegir cliente (hallazgo 69)", async () => {
+    contextMock.current = contexto({ clientId: "client-a" });
+    apiMock.getEnvelope.mockResolvedValue(respuesta([]));
+    renderPanel();
+    expect(await screen.findByText("No hay obligaciones para mostrar")).toBeTruthy();
+    expect(screen.queryByText(/Elegí un cliente en el menú/)).toBeNull();
+    contextMock.current = contexto();
+  });
+
   it("vacío confirmado con salida a la configuración (P1)", async () => {
     apiMock.getEnvelope.mockResolvedValue(respuesta([]));
     renderPanel();
@@ -290,7 +308,8 @@ describe("Panel de trabajo: pantalla", () => {
     expect(valorIndicador("Vencen esta semana")).toBe("1");
     expect(valorIndicador("Sin legajo")).toBe("1");
     expect(valorIndicador("DJ pendientes")).toBe("1");
-    expect(screen.getAllByText("sobre las filas filtradas")).toHaveLength(4);
+    expect(screen.queryByText("sobre las filas filtradas")).toBeNull();
+    expect(screen.queryByText(/^Sobre /)).toBeNull();
   });
 
   it("«Abrir cliente» con período contable elige el período y va al Legajo", async () => {
@@ -361,36 +380,42 @@ describe("Panel de trabajo: pantalla", () => {
     expect(screen.getByText("2 de 2 obligaciones")).toBeTruthy();
   });
 
-  it("cada par etiqueta y control de la barra queda en un único contenedor con el nombre accesible del control", async () => {
+  it("«Todo el estudio» sin otros criterios es una vista: no muestra calificador del conteo", async () => {
+    renderPanel("/panel-trabajo?responsable=todos");
+    await tablaPanel();
+    expect(screen.queryByText(/^Sobre /)).toBeNull();
+  });
+
+  it("la barra tiene dos filas, cada control queda en su par y el nombre va dentro del control (hallazgos 63 y 81)", async () => {
+    renderPanel("/panel-trabajo?estado=DJ_PENDIENTE");
+    await tablaPanel();
+    const filas = document.querySelectorAll<HTMLElement>(".dense-toolbar .panel-trabajo__fila");
+    expect(filas).toHaveLength(2);
+    const primera = filas[0] as HTMLElement;
+    const segunda = filas[1] as HTMLElement;
+    expect(within(primera).getByRole("combobox", { name: "Responsable" })).toBeTruthy();
+    expect(within(primera).getByRole("group", { name: "Terminación de CUIT" })).toBeTruthy();
+    expect(within(primera).getByRole("combobox", { name: "Impuesto" })).toBeTruthy();
+    expect(within(segunda).getByRole("combobox", { name: "Estado" })).toBeTruthy();
+    expect(within(segunda).getByRole("combobox", { name: "Período fiscal" })).toBeTruthy();
+    expect(within(segunda).getByLabelText("Vencimiento desde")).toBeTruthy();
+    expect(within(segunda).getByLabelText("Vencimiento hasta")).toBeTruthy();
+    expect(within(segunda).getByRole("button", { name: "Quitar filtros" })).toBeTruthy();
+    const estado = screen.getByRole("combobox", { name: "Estado" }) as HTMLSelectElement;
+    expect(estado.selectedOptions[0]?.textContent).toBe("Estado: DJ pendiente");
+    expect(screen.queryByRole("button", { name: "Quitar el filtro Mis obligaciones" })).toBeNull();
+  });
+
+  it("la fila vencida usa el token de alerta en color y peso; «en N días» conserva el estilo normal (hallazgo 87)", async () => {
+    apiMock.getEnvelope.mockResolvedValue(
+      respuesta([
+        fila({ obligationId: "a", daysUntilDue: -26, dueDate: "2026-10-20" }),
+        fila({ obligationId: "b", daysUntilDue: 5, dueDate: "2026-11-20" }),
+      ]),
+    );
     renderPanel();
     await tablaPanel();
-    const etiquetas = Array.from(
-      document.querySelectorAll<HTMLElement>(".dense-toolbar .panel-trabajo__filtro"),
-    )
-      .map((par) => par.querySelector(".dense-dim, .ds-field__label")?.textContent)
-      .filter((texto): texto is string => texto !== undefined);
-    expect(etiquetas).toEqual([
-      "Responsable",
-      "Terminación de CUIT",
-      "Impuesto",
-      "Estado",
-      "Período fiscal",
-      "Vencimiento desde",
-      "Vencimiento hasta",
-    ]);
-    const controles: Array<[string, HTMLElement]> = [
-      ["Responsable", screen.getByRole("combobox", { name: "Responsable" })],
-      ["Terminación de CUIT", screen.getByRole("group", { name: "Terminación de CUIT" })],
-      ["Impuesto", screen.getByRole("combobox", { name: "Impuesto" })],
-      ["Estado", screen.getByRole("combobox", { name: "Estado" })],
-      ["Período fiscal", screen.getByRole("combobox", { name: "Período fiscal" })],
-      ["Vencimiento desde", screen.getByLabelText("Vencimiento desde")],
-      ["Vencimiento hasta", screen.getByLabelText("Vencimiento hasta")],
-    ];
-    for (const [etiqueta, control] of controles) {
-      const par = control.closest<HTMLElement>(".panel-trabajo__filtro");
-      expect(par, `el control «${etiqueta}» debe quedar dentro de su par`).not.toBeNull();
-      expect(par?.querySelector(".dense-dim, .ds-field__label")?.textContent).toBe(etiqueta);
-    }
+    expect(screen.getByText("vencida hace 26 días").className).toBe("panel-trabajo__vencida");
+    expect(screen.getByText("en 5 días").className).toBe("dense-dim");
   });
 });
