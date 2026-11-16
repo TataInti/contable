@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useId, useLayoutEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@contable/design-system";
 import { useClientContext } from "../../context/ClientContext";
@@ -67,6 +67,7 @@ export function RechazarDocumento({
   const queryClient = useQueryClient();
   const [rejectionReasonCode, setRejectionReasonCode] = useState("");
   const [rejectionNote, setRejectionNote] = useState("");
+  const motivoId = useId();
   const reject = useMutation({
     mutationFn: ({ endpoint, reason }: { documentId: string; endpoint: string; reason: string }) =>
       api.post(endpoint, { reason }),
@@ -106,12 +107,18 @@ export function RechazarDocumento({
           <Button variant="ghost" onClick={() => onClose()}>
             Cancelar
           </Button>
+          {rejectionReasonCode ? null : (
+            <p id={motivoId} className="action-drawer__hint" role="note">
+              Elegí un motivo para confirmar el rechazo.
+            </p>
+          )}
           <Button
             type="submit"
             form="document-rejection-form"
             variant="danger"
             loading={reject.isPending}
             disabled={!rejectionReasonCode || reject.isPending}
+            aria-describedby={rejectionReasonCode ? undefined : motivoId}
           >
             Confirmar rechazo
           </Button>
