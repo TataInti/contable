@@ -76,6 +76,7 @@ Antes de tocar una validación, un bloqueo o un control se lo clasifica: **integ
 - **Acuse de presentación**: el comprobante que emite el organismo al presentar.
 - **Calendario fiscal**: vencimientos anuales de un organismo y una jurisdicción, con sus celdas por concepto, terminación de CUIT y período de referencia. Se carga en borrador, se valida y se publica; lo publicado no se edita: se corrige con una versión nueva.
 - **Vencimiento**: fecha límite de una obligación. Precedencia: valor manual justificado > calendario publicado del organismo y la jurisdicción > regla de vencimiento. Sin fuente, la obligación queda sin fecha y se avisa qué falta.
+- **Panel de trabajo**: lista global de las obligaciones del estudio, por usuario, con su estado de legajo y de DJ. Es la pantalla `/panel-trabajo` del menú «Estudio»; cada fila abre el cliente.
 - Pendiente de decisión de Inti: nombre y fuente única de «período» (fiscal y contable).
 
 ### Decisiones de diseño (cerradas 11-nov)
@@ -1228,6 +1229,7 @@ Cubre todas las pantallas de `apps/web/src` en main: 18 del estudio (`study/`), 
 | 31 | Recuperar acceso (`/recuperar-acceso`) | `auth/RecoverAccessPage.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estado de enlace incompleto | 11 |
 | 32 | Sin acceso (`/sin-acceso`), carga de sesión y conexión no disponible | `App.tsx` | RG, sólo estados | C07 — `EmptyState` con su salida, carga | 11 |
 | 33 | Calendarios fiscales (`/calendarios-fiscales`) | `study/StudyCalendariosFiscales.tsx` | R03 | C01, C02, C04, C05, C07, C08, C09 — `DensePage`, `DenseHeader`, `DenseToolbar`, `DenseTabs`, `DenseSection` (`surface="integrated"`), `DenseTable` con `groupBy`, `DenseToggleGroup`, `InspectorFacts`, `ActionDrawer`, `ConfirmDialog`, `Field`, `StatusBadge`, `AsyncState`, `EmptyState`, `useNotify` | nace en Foco |
+| 34 | Panel de trabajo (`/panel-trabajo`) | `study/StudyPanelTrabajo.tsx` | RG | C01, C03, C04, C05, C07, C08 — `DenseHeader`, `StatStrip`, `DenseToolbar`, `DenseToggleGroup`, `DenseTable` (`surface="integrated"`), `StatusBadge` (`variant="plain"`), `EmptyState`, `Notice` | 4b |
 
 **Pantallas de acceso (28 a 32).** Se muestran sin menú ni barra de período, antes de entrar a un espacio de trabajo. Usan RG con estas precisiones, todas con piezas vigentes en main:
 
