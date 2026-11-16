@@ -1,7 +1,7 @@
 import { useEffect, useRef, type FormEvent } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Notice } from "@contable/design-system";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ApiError, type Client } from "../../../lib/api";
 import {
   ARGENTINA_PROVINCES,
@@ -87,33 +87,45 @@ export function PanelEdicion({
     catalogData,
     activeActivityEntries,
   } = catalogos;
+  // Motivo visible junto a «Guardar cambios» mientras está deshabilitado (P4): mismas condiciones que el disabled.
+  const motivoGuardar =
+    identityForm.legalName.trim().length === 0
+      ? "Falta completar la razón social."
+      : identityForm.cuit.length !== 11
+        ? "Falta completar el CUIT (11 dígitos)."
+        : currencyNotBacked
+          ? `Elegí ${BACKED_CURRENCIES.join(" o ")} para guardar la ficha.`
+          : standardUnknown
+            ? "Definila en Administración o elegí una del catálogo para guardar la ficha."
+            : null;
+  const cerrar = () => {
+    setEditingClient(null);
+    updateIdentity.reset();
+    updateProfile.reset();
+  };
   return (
     <ActionDrawer
       isOpen={Boolean(editingClient)}
-      onClose={() => {
-        setEditingClient(null);
-        updateIdentity.reset();
-        updateProfile.reset();
-      }}
+      onClose={cerrar}
       title="Editar cliente"
       description="Actualizá la identidad y los datos fiscales del cliente."
-      size="wide"
       footer={
         editingClient ? (
-          <Button
-            type="submit"
-            form="client-edit-form"
-            loading={updateIdentity.isPending || updateProfile.isPending}
-            loadingLabel="Guardando cambios"
-            disabled={
-              identityForm.legalName.trim().length === 0 ||
-              identityForm.cuit.length !== 11 ||
-              currencyNotBacked ||
-              standardUnknown
+          <ActionDrawerFooter
+            primary={
+              <Button
+                type="submit"
+                form="client-edit-form"
+                loading={updateIdentity.isPending || updateProfile.isPending}
+                loadingLabel="Guardando cambios"
+                disabled={motivoGuardar !== null}
+              >
+                Guardar cambios
+              </Button>
             }
-          >
-            Guardar cambios
-          </Button>
+            hint={motivoGuardar}
+            onCancel={cerrar}
+          />
         ) : null
       }
     >
@@ -174,6 +186,15 @@ export function PanelEdicion({
           </section>
           <section className="client-edit__section" aria-labelledby="client-edit-fiscal-title">
             <h3 id="client-edit-fiscal-title">Datos fiscales</h3>
+          <Field
+            id="client-profile-service-start"
+            label="Inicio del servicio"
+            type="date"
+            value={profileForm.serviceStartDate}
+            onChange={(event) =>
+              setProfileForm({ ...profileForm, serviceStartDate: event.target.value })
+            }
+          />
           <label className="ds-field">
             <span className="ds-field__label">Moneda funcional</span>
             <select
@@ -467,15 +488,6 @@ export function PanelEdicion({
               La norma contable guardada no está en el catálogo del estudio. Definila en Administración o elegí una del catálogo para guardar la ficha.
             </Notice>
           ) : null}
-          <Field
-            id="client-profile-service-start"
-            label="Inicio del servicio"
-            type="date"
-            value={profileForm.serviceStartDate}
-            onChange={(event) =>
-              setProfileForm({ ...profileForm, serviceStartDate: event.target.value })
-            }
-          />
           {guardadoParcial ? (
             <div ref={avisoParcialRef} className="client-edit__aviso-parcial">
               <Notice tone="error" className="study-inline-form__feedback">
