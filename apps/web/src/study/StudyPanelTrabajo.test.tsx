@@ -382,13 +382,16 @@ describe("Panel de trabajo: pantalla", () => {
     expect(screen.queryByRole("button", { name: "Quitar el filtro Mis obligaciones" })).toBeNull();
   });
 
-  // vigente: cambia con hallazgo 87
-  it("la fila vencida se muestra con el mismo estilo que las demás", async () => {
+  it("la fila vencida usa el token de alerta en color y peso; «en N días» conserva el estilo normal (hallazgo 87)", async () => {
     apiMock.getEnvelope.mockResolvedValue(
-      respuesta([fila({ daysUntilDue: -26, dueDate: "2026-10-20" })]),
+      respuesta([
+        fila({ obligationId: "a", daysUntilDue: -26, dueDate: "2026-10-20" }),
+        fila({ obligationId: "b", daysUntilDue: 5, dueDate: "2026-11-20" }),
+      ]),
     );
     renderPanel();
     await tablaPanel();
-    expect(screen.getByText("vencida hace 26 días").className).toBe("dense-dim");
+    expect(screen.getByText("vencida hace 26 días").className).toBe("panel-trabajo__vencida");
+    expect(screen.getByText("en 5 días").className).toBe("dense-dim");
   });
 });

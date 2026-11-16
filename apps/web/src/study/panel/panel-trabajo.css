@@ -78,3 +78,9 @@ table[aria-label="Panel de trabajo"] tbody td {
   display: flex;
   gap: var(--ds-space-2);
 }
+
+/* Hallazgo 87: la fila vencida usa el token de alerta de la etiqueta de estado (color y peso). */
+.panel-trabajo__vencida {
+  color: var(--ds-color-danger);
+  font-weight: var(--ds-font-weight-medium);
+}

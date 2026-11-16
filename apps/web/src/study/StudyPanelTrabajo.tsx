@@ -300,7 +300,15 @@ export function StudyPanelTrabajo() {
         ) : (
           <>
             <div>{formatearFecha(fila.dueDate)}</div>
-            <div className="dense-dim">{textoVencimiento(fila.daysUntilDue)}</div>
+            <div
+              className={
+                fila.daysUntilDue !== null && fila.daysUntilDue < 0
+                  ? "panel-trabajo__vencida"
+                  : "dense-dim"
+              }
+            >
+              {textoVencimiento(fila.daysUntilDue)}
+            </div>
           </>
         ),
     },
