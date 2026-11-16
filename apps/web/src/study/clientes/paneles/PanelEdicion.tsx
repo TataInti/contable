@@ -1,6 +1,6 @@
-import type { FormEvent } from "react";
+import { useEffect, useRef, type FormEvent } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, Field, Notice } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { ApiError, type Client } from "../../../lib/api";
 import {
@@ -13,6 +13,7 @@ import {
   type CatalogJurisdiction,
   type ClientEconomicActivityOption,
 } from "@contable/contracts";
+import { sinRespuesta } from "../consultas";
 import type { CatalogosFicha } from "../useCatalogosFicha";
 import type { ClientProfile, ClientProfileForm, ClientWithProfile } from "../tipos";
 
@@ -35,6 +36,7 @@ interface PanelEdicionProps {
   jurisdictionCatalog: UseQueryResult<(CatalogJurisdiction & { isActive: boolean })[], Error>;
   clientActivityCatalog: UseQueryResult<ClientEconomicActivityOption[], Error>;
   catalogos: CatalogosFicha;
+  guardadoParcial: "identidad" | "ficha" | null;
 }
 
 export function PanelEdicion({
@@ -50,7 +52,21 @@ export function PanelEdicion({
   jurisdictionCatalog,
   clientActivityCatalog,
   catalogos,
+  guardadoParcial,
 }: PanelEdicionProps) {
+  const avisoParcialRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (guardadoParcial) avisoParcialRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [guardadoParcial]);
+  // El motivo de la API acompaña al aviso; el CUIT en conflicto ya se muestra junto a su campo (P4).
+  const motivoDe = (error: unknown) =>
+    error instanceof ApiError && error.code !== "CLIENT_CUIT_CONFLICT" ? error.message : "";
+  const motivoGuardado =
+    guardadoParcial === "identidad"
+      ? motivoDe(updateProfile.error)
+      : guardadoParcial === "ficha"
+        ? motivoDe(updateIdentity.error)
+        : "";
   const {
     currencyNotBacked,
     standardUnknown,
@@ -61,6 +77,9 @@ export function PanelEdicion({
     activityIsInactive,
     standardValue,
     standardCatalogUnavailable,
+    standardCatalogLoading,
+    standardCatalogEmpty,
+    reintentarNormas,
     standardCatalog,
     outOfCatalogJurisdictions,
     selectedJurisdictions,
@@ -143,6 +162,7 @@ export function PanelEdicion({
               required
             />
             {updateIdentity.isError &&
+            guardadoParcial !== "ficha" &&
             !(updateIdentity.error instanceof ApiError &&
               updateIdentity.error.code === "CLIENT_CUIT_CONFLICT") ? (
               <Notice tone="error" className="study-inline-form__feedback">
@@ -287,7 +307,7 @@ export function PanelEdicion({
                 </option>
               ) : null}
             </select>
-            {clientActivityCatalog.isLoading ? <small>Cargando catálogo de actividades…</small> : null}
+            {sinRespuesta(clientActivityCatalog) ? <small role="status">Cargando catálogo de actividades…</small> : null}
             {activityIsLegacy || activityIsInactive ? (
               <small className="study-legacy-note">
                 El valor guardado sigue visible y se conserva si no lo reemplazás.
@@ -295,7 +315,23 @@ export function PanelEdicion({
             ) : null}
           </label>
           {clientActivityCatalog.isError ? (
-            <Notice tone="error">No se pudo cargar el catálogo de actividades. Reintentá.</Notice>
+            <Notice
+              tone="error"
+              action={
+                <Button size="sm" variant="secondary" onClick={() => void clientActivityCatalog.refetch()}>
+                  Reintentar
+                </Button>
+              }
+            >
+              No se pudo cargar el catálogo de actividades. Reintentá.
+            </Notice>
+          ) : null}
+          {clientActivityCatalog.isSuccess && clientActivityCatalog.data.length === 0 ? (
+            <EmptyState
+              size="inline"
+              title="No hay actividades cargadas."
+              description="Pedí a quien administra el estudio que las cargue en Catálogos fiscales."
+            />
           ) : null}
           <label className="ds-field">
             <span className="ds-field__label">Forma jurídica</span>
@@ -325,12 +361,25 @@ export function PanelEdicion({
           </label>
           <fieldset className="ds-field" id="client-profile-iibb">
             <legend className="ds-field__label">Jurisdicciones IIBB</legend>
-            {jurisdictionCatalog.isLoading ? (
-              <p>Cargando catálogo de jurisdicciones…</p>
+            {sinRespuesta(jurisdictionCatalog) ? (
+              <p role="status">Cargando catálogo de jurisdicciones…</p>
             ) : jurisdictionCatalog.isError ? (
-              <Notice tone="error">
+              <Notice
+                tone="error"
+                action={
+                  <Button size="sm" variant="secondary" onClick={() => void jurisdictionCatalog.refetch()}>
+                    Reintentar
+                  </Button>
+                }
+              >
                 No se pudo cargar el catálogo de jurisdicciones. Reintentá.
               </Notice>
+            ) : jurisdictionCatalog.isSuccess && (catalogData?.length ?? 0) === 0 ? (
+              <EmptyState
+                size="inline"
+                title="No hay jurisdicciones cargadas."
+                description="Pedí a quien administra el estudio que las cargue en Catálogos fiscales."
+              />
             ) : (
               <div className="study-check-list">
                 {catalogData?.filter((entry) => entry.isActive).map((entry) => (
@@ -371,10 +420,8 @@ export function PanelEdicion({
               }
             >
               <option value="">Sin definir</option>
-              {standardCatalogUnavailable ? (
-                <option value="" disabled>
-                  No se pudo cargar el catálogo de normas
-                </option>
+              {standardCatalogUnavailable && standardValue ? (
+                <option value={standardValue}>{standardValue}</option>
               ) : null}
               {standardCatalog
                 .filter((entry) => entry.isActive)
@@ -395,6 +442,26 @@ export function PanelEdicion({
               ) : null}
             </select>
           </label>
+          {standardCatalogLoading ? <small role="status">Cargando normas contables…</small> : null}
+          {standardCatalogUnavailable ? (
+            <Notice
+              tone="error"
+              action={
+                <Button size="sm" variant="secondary" onClick={reintentarNormas}>
+                  Reintentar
+                </Button>
+              }
+            >
+              No se pudo cargar el catálogo de normas. Reintentá.
+            </Notice>
+          ) : null}
+          {standardCatalogEmpty ? (
+            <EmptyState
+              size="inline"
+              title="No hay normas contables cargadas."
+              description="Pedí a quien administra el estudio que las cargue en Administración."
+            />
+          ) : null}
           {standardUnknown ? (
             <Notice tone="warning">
               La norma contable guardada no está en el catálogo del estudio. Definila en Administración o elegí una del catálogo para guardar la ficha.
@@ -409,7 +476,21 @@ export function PanelEdicion({
               setProfileForm({ ...profileForm, serviceStartDate: event.target.value })
             }
           />
-          {updateProfile.isError &&
+          {guardadoParcial ? (
+            <div ref={avisoParcialRef} className="client-edit__aviso-parcial">
+              <Notice tone="error" className="study-inline-form__feedback">
+                {guardadoParcial === "identidad"
+                  ? "Se guardó la identidad; no se pudo guardar la ficha fiscal. Reintentá."
+                  : "Se guardó la ficha fiscal; no se pudo guardar la identidad. Reintentá."}
+                {motivoGuardado ? (
+                  <>
+                    {" "}
+                    <span>{motivoGuardado}</span>
+                  </>
+                ) : null}
+              </Notice>
+            </div>
+          ) : updateProfile.isError &&
           !(updateIdentity.isError && updateProfile.error.message === updateIdentity.error.message) ? (
             <Notice tone="error" className="study-inline-form__feedback">
               {updateProfile.error instanceof ApiError

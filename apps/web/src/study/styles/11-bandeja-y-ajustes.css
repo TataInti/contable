@@ -977,6 +977,11 @@
   grid-column: 1 / -1;
 }
 
+/* D5-8: el guardado parcial ocupa todo el ancho bajo los campos, no una columna de la grilla. */
+.client-edit__section > .client-edit__aviso-parcial {
+  grid-column: 1 / -1;
+}
+
 .client-edit__section > h3 {
   margin: 0;
   color: var(--ds-color-text);

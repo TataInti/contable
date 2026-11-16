@@ -1233,6 +1233,8 @@ Cubre todas las pantallas de `apps/web/src` en main: 18 del estudio (`study/`), 
 | 33 | Calendarios fiscales (`/calendarios-fiscales`) | `study/StudyCalendariosFiscales.tsx` | R03 | C01, C02, C04, C05, C07, C08, C09 — `DensePage`, `DenseHeader`, `DenseToolbar`, `DenseTabs`, `DenseSection` (`surface="integrated"`), `DenseTable` con `groupBy`, `DenseToggleGroup`, `InspectorFacts`, `ActionDrawer`, `ConfirmDialog`, `Field`, `StatusBadge`, `AsyncState`, `EmptyState`, `useNotify` | nace en Foco |
 | 34 | Panel de trabajo (`/panel-trabajo`) | `study/StudyPanelTrabajo.tsx` | RG | C01, C03, C04, C05, C07, C08 — `DenseHeader`, `StatStrip`, `DenseToolbar`, `DenseToggleGroup`, `DenseTable` (`surface="integrated"`), `StatusBadge` (`variant="plain"`), `EmptyState`, `Notice` | 4b |
 
+**Desvío de Clientes (D5-11):** la pantalla no tiene «Actualizar»: la lista se refresca al mutar y al volver a la pestaña, y el estado «actualización con datos previos identificados» no aplica a esta pantalla.
+
 **Pantallas de acceso (28 a 32).** Se muestran sin menú ni barra de período, antes de entrar a un espacio de trabajo. Usan RG con estas precisiones, todas con piezas vigentes en main:
 
 - **El formulario es el contenido de la página:** campos `Field` y un solo botón principal. No va en `ActionDrawer`, porque no hay una lista detrás del panel.
