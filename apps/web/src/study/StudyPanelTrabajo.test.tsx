@@ -226,7 +226,9 @@ describe("Panel de trabajo: pantalla", () => {
     apiMock.getEnvelope.mockResolvedValue(respuesta([]));
     renderPanel();
     expect(await screen.findByText("No hay obligaciones para mostrar")).toBeTruthy();
-    expect(screen.getByText(/Elegí un cliente en el menú para configurar sus obligaciones\./)).toBeTruthy();
+    expect(
+      screen.getByText(/Elegí un cliente en el menú para configurar sus obligaciones\./),
+    ).toBeTruthy();
   });
 
   it("con un cliente elegido, el vacío no pide elegir cliente (hallazgo 69)", async () => {
