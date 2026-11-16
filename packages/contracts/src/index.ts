@@ -19,3 +19,4 @@ export * from "./cuit-ending.js";
 export * from "./fiscal-books.js";
 export * from "./tax-calendars.js";
 export * from "./tax-panel.js";
+export * from "./notifications.js";

@@ -40,4 +40,14 @@ describe("índice de contratos: exportaciones de calendarios y libros", () => {
     expect(contracts).toHaveProperty("taxPanelQuerySchema");
     expect(contracts.taxPanelQuerySchema.parse({}).limit).toBe(50);
   });
+
+  it("exporta los contratos de avisos propios (corte 3c)", () => {
+    expect(contracts.DUE_ALERT_NOTIFICATION_TYPES).toEqual(["DUE_ALERT", "DUE_OVERDUE"]);
+    expect(contracts).toHaveProperty("notificationListQuerySchema");
+    expect(contracts).toHaveProperty("notificationItemSchema");
+    expect(contracts).toHaveProperty("notificationListResponseSchema");
+    expect(contracts).toHaveProperty("notificationUnreadCountResponseSchema");
+    expect(contracts).toHaveProperty("notificationReadResponseSchema");
+    expect(contracts).toHaveProperty("notificationArchiveResponseSchema");
+  });
 });
