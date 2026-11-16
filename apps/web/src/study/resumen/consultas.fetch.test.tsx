@@ -47,8 +47,12 @@ const contacto = {
 };
 
 function respuesta(status: number, data: unknown) {
-  const cuerpo = status >= 400 ? { error: { code: "FALLA_SINTETICA", message: "Falla sintética" } } : { data };
-  return new Response(JSON.stringify(cuerpo), { status, headers: { "Content-Type": "application/json" } });
+  const cuerpo =
+    status >= 400 ? { error: { code: "FALLA_SINTETICA", message: "Falla sintética" } } : { data };
+  return new Response(JSON.stringify(cuerpo), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 function Ubicacion() {
@@ -77,7 +81,9 @@ function montar(responder: (ruta: string, intento: number) => Response | Promise
     setClientId: vi.fn(),
     setPeriodId: vi.fn(),
   };
-  const cliente = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const cliente = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   render(
     <QueryClientProvider client={cliente}>
       <MemoryRouter initialEntries={["/resumen-cliente"]}>
@@ -103,11 +109,14 @@ describe("Foco 7a.2 · consultas con fetch simulado (cliente de consultas real)"
   it("F-A · error de contactos: aviso de error con «Reintentar» que vuelve a pedir /contacts", async () => {
     const { llamadas } = montar((ruta, intento) => {
       if (ruta.endsWith("/summary")) return respuesta(200, resumenVacio());
-      if (ruta.endsWith("/contacts")) return intento === 1 ? respuesta(500, null) : respuesta(200, [contacto]);
+      if (ruta.endsWith("/contacts"))
+        return intento === 1 ? respuesta(500, null) : respuesta(200, [contacto]);
       return respuesta(200, []);
     });
     fireEvent.click(
-      within(await screen.findByRole("navigation", { name: "Secciones internas del cliente" })).getByRole("button", {
+      within(
+        await screen.findByRole("navigation", { name: "Secciones internas del cliente" }),
+      ).getByRole("button", {
         name: "Ficha contable",
       }),
     );
@@ -121,12 +130,21 @@ describe("Foco 7a.2 · consultas con fetch simulado (cliente de consultas real)"
 
   it("F-B · vacíos de Períodos fiscales, Obligaciones, Regímenes y Actividades con salida a Configuración fiscal", async () => {
     montar(porDefecto);
-    const menu = within(await screen.findByRole("navigation", { name: "Secciones internas del cliente" }));
-    for (const seccion of ["Períodos fiscales", "Obligaciones", "Regímenes adheridos", "Actividades registradas"]) {
+    const menu = within(
+      await screen.findByRole("navigation", { name: "Secciones internas del cliente" }),
+    );
+    for (const seccion of [
+      "Períodos fiscales",
+      "Obligaciones",
+      "Regímenes adheridos",
+      "Actividades registradas",
+    ]) {
       fireEvent.click(menu.getByRole("button", { name: seccion }));
       const region = await screen.findByRole("region", { name: new RegExp(seccion) });
       fireEvent.click(within(region).getByRole("button", { name: "Ir a Configuración fiscal" }));
-      await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/configuracion-fiscal"));
+      await waitFor(() =>
+        expect(screen.getByTestId("current-path").textContent).toBe("/configuracion-fiscal"),
+      );
     }
   });
 
@@ -141,16 +159,22 @@ describe("Foco 7a.2 · consultas con fetch simulado (cliente de consultas real)"
     });
   });
   it("F-D · carga de la pantalla: encabezado con un solo h1 y «Actualizar» visibles mientras carga", async () => {
-    montar((ruta) => (ruta.endsWith("/summary") ? new Promise<Response>(() => undefined) : respuesta(200, [])));
+    montar((ruta) =>
+      ruta.endsWith("/summary") ? new Promise<Response>(() => undefined) : respuesta(200, []),
+    );
     expect(await screen.findByText("Preparando el resumen del cliente…")).toBeTruthy();
-    expect(screen.getAllByRole("heading", { level: 1, name: "Resumen del cliente" })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 1, name: "Resumen del cliente" })).toHaveLength(
+      1,
+    );
     expect(screen.getByRole("button", { name: "Actualizar" })).toBeTruthy();
   });
 
   it("F-E · error del resumen: encabezado con un solo h1 y aviso con «Reintentar»", async () => {
     montar((ruta) => (ruta.endsWith("/summary") ? respuesta(500, null) : respuesta(200, [])));
     expect(await screen.findByText("No pudimos cargar el resumen del cliente")).toBeTruthy();
-    expect(screen.getAllByRole("heading", { level: 1, name: "Resumen del cliente" })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { level: 1, name: "Resumen del cliente" })).toHaveLength(
+      1,
+    );
     expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy();
   });
 });
