@@ -1,0 +1,629 @@
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AsyncState, Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
+import { isManualExtractionFieldKey } from "@contable/contracts";
+import {
+  ApiError,
+  api,
+  type Document,
+  type DocumentExtraction,
+  type ExtractedField,
+} from "../../lib/api";
+import { useClientContext } from "../../context/ClientContext";
+import { ExtractionFiscalTable } from "../ExtractionFiscalTable";
+import {
+  hasEffectiveFiscalData,
+  AUTOMATED_READING_UNAVAILABLE_MESSAGE,
+  isAutomatedReadingUnavailableReason,
+} from "../extractionReadiness";
+import {
+  ManualExtractionFieldsDialog,
+  type ManualExtractionFieldValue,
+} from "../ManualExtractionFieldsDialog";
+import {
+  ManualExtractionValueControl,
+  normalizeManualExtractionInput,
+} from "../ManualExtractionValueControl";
+import { EXTRACTION_SCALAR_FIELDS, fiscalScalarHasValue } from "../extractionScalarFields";
+import { StatusBadge } from "../../ui/StatusBadge";
+import { ConfirmDialog, useConfirmAction } from "../../ui/ConfirmAction";
+import { formatearFechaHora } from "../../lib/formatoFechas";
+import { RechazarDocumento } from "./RechazarDocumento";
+import { sinRespuesta } from "../clientes/consultas";
+
+const FIELD_LABELS: Record<string, string> = {
+  voucherType: "Tipo de documento",
+  letter: "Letra",
+  pointOfSale: "Punto de venta",
+  voucherNumber: "Número",
+  issueDate: "Fecha",
+  issuerTaxId: "CUIT emisor",
+  receiverTaxId: "CUIT receptor",
+  issuerName: "Razón social emisor",
+  receiverName: "Razón social receptor",
+  vatCondition: "Condición frente al IVA",
+  netAmount: "Neto gravado",
+  vatRate: "Alícuota de IVA",
+  vatAmount: "Importe de IVA",
+  nonTaxableAmount: "No gravado",
+  exemptAmount: "Exento",
+  perceptionType: "Tipo de percepción",
+  perceptionAmount: "Importe de percepción",
+  totalAmount: "Total",
+  currency: "Moneda",
+  cae: "CAE",
+  caeExpiration: "Vencimiento del CAE",
+};
+
+/** Etapas que emite el worker mientras el trabajo corre (apps/worker/src/document-processor.ts). Otra etapa cae en «Procesando comprobante». */
+const ETAPAS_EN_CURSO: Partial<Record<string, string>> = {
+  VALIDATED: "Archivo validado",
+  READING_AI: "Leyendo el comprobante con IA",
+};
+const AVISO_AL_ESTUDIO = "Avisá a quien administra el estudio para que revise el archivo.";
+
+interface DetalleDocumentoProps {
+  rows: Document[];
+  selectedId: string | null;
+  setSelectedId: (id: string) => void;
+}
+
+export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDocumentoProps) {
+  const { firmId, clientId, capabilities } = useClientContext();
+  const queryClient = useQueryClient();
+  const [reprocessJobId, setReprocessJobId] = useState<string | null>(null);
+  const confirm = useConfirmAction();
+  const notify = useNotify();
+  const [corrections, setCorrections] = useState<Record<string, string>>({});
+  const [showManualFieldsDialog, setShowManualFieldsDialog] = useState(false);
+  const [manualFieldsError, setManualFieldsError] = useState<string | null>(null);
+  const [manualFieldsSavedCount, setManualFieldsSavedCount] = useState<number | null>(null);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectionReceipts, setRejectionReceipts] = useState<Record<string, string>>({});
+  const base = firmId && clientId ? `/firms/${firmId}/clients/${clientId}` : null;
+  const detail = useQuery({
+    queryKey: ["document", firmId, clientId, selectedId],
+    queryFn: () => api.get<Document>(`${base}/documents/${selectedId}`),
+    enabled: Boolean(base && selectedId),
+    refetchInterval: 3_000,
+  });
+  const extraction = useQuery({
+    queryKey: ["extraction", firmId, clientId, selectedId],
+    queryFn: () => api.get<DocumentExtraction>(`${base}/documents/${selectedId}/extraction`),
+    enabled: Boolean(
+      base &&
+      selectedId &&
+      (detail.data?.status === "EXTRACTED" || detail.data?.status === "REVIEWED"),
+    ),
+    retry: false,
+  });
+  const correctableExtractionFields = (extraction.data?.fields ?? []).filter(
+    (field) => FIELD_LABELS[field.key],
+  );
+  // Sin datos leídos ni correcciones vigentes no hay nada que aprobar.
+  const canApproveExtraction = hasEffectiveFiscalData(
+    extraction.data?.voucherData ?? null,
+    correctableExtractionFields,
+    corrections,
+  );
+  const canLoadManualFields =
+    capabilities.has("document.review") &&
+    (extraction.data?.status === "GENERATED" || extraction.data?.status === "NEEDS_REVIEW");
+  const hasEmptyScalarFields = Boolean(
+    extraction.data &&
+    EXTRACTION_SCALAR_FIELDS.some(
+      (field) =>
+        !fiscalScalarHasValue(extraction.data!.voucherData, extraction.data!.fields, field),
+    ),
+  );
+  const canReprocessExtraction = Boolean(
+    capabilities.has("document.review") &&
+    detail.data?.status === "EXTRACTED" &&
+    extraction.data &&
+    ["GENERATED", "NEEDS_REVIEW"].includes(extraction.data.status),
+  );
+  const manualFieldCount = (extraction.data?.fields ?? []).filter(
+    (field) => field.method?.toUpperCase() === "HUMAN" || Boolean(field.correction?.trim()),
+  ).length;
+  const reprocessShouldBeHighlighted = Boolean(
+    extraction.data &&
+    (extraction.data.promptVersion === "voucher-ar-v1" ||
+      extraction.data.ocrEngine === "tesseract-ocr" ||
+      !hasEffectiveFiscalData(
+        extraction.data.voucherData,
+        correctableExtractionFields,
+        corrections,
+      ) ||
+      isAutomatedReadingUnavailableReason(extraction.data.reviewReason ?? "") ||
+      (extraction.data.reviewIssues ?? []).some((issue) =>
+        isAutomatedReadingUnavailableReason(issue.reason),
+      )),
+  );
+
+  useEffect(() => {
+    if (extraction.data)
+      setCorrections(
+        Object.fromEntries(
+          extraction.data.fields.map((field) => [
+            field.id,
+            field.correction ?? field.normalizedValue ?? field.rawValue ?? "",
+          ]),
+        ),
+      );
+  }, [extraction.data]);
+
+  const correct = useMutation({
+    mutationFn: ({ fieldId, correction }: { fieldId: string; correction: string }) =>
+      api.patch(`${base}/extractions/${extraction.data!.id}/fields/${fieldId}`, {
+        correction,
+        reason: "Corrección manual en bandeja",
+      }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: ["extraction", firmId, clientId, selectedId],
+      }),
+  });
+  const persistCorrection = (field: ExtractedField) => {
+    const next = corrections[field.id] ?? "";
+    const original = field.correction ?? field.normalizedValue ?? field.rawValue ?? "";
+    if (!next || next === original) return;
+
+    if (isManualExtractionFieldKey(field.key)) {
+      const normalized = normalizeManualExtractionInput(field.key, next);
+      if (normalized) correct.mutate({ fieldId: field.id, correction: normalized });
+      return;
+    }
+
+    correct.mutate({ fieldId: field.id, correction: next });
+  };
+  const addManualFields = useMutation({
+    mutationFn: (fields: ManualExtractionFieldValue[]) =>
+      api.put<{ status: string; savedCount: number; addedCount: number }>(
+        `${base}/extractions/${extraction.data!.id}/fields`,
+        { fields },
+      ),
+    onMutate: () => setManualFieldsError(null),
+    onSuccess: async (result) => {
+      const queryKey = ["extraction", firmId, clientId, selectedId];
+      try {
+        await queryClient.invalidateQueries({ queryKey, exact: true, refetchType: "none" });
+        await queryClient.fetchQuery({
+          queryKey,
+          queryFn: () => api.get<DocumentExtraction>(`${base}/documents/${selectedId}/extraction`),
+          staleTime: 0,
+        });
+        setManualFieldsSavedCount(result.savedCount);
+        setShowManualFieldsDialog(false);
+      } catch {
+        setManualFieldsError(
+          "Los datos se guardaron, pero no se pudo recargar la extracción. Volvé a intentar guardar.",
+        );
+      }
+    },
+    onError: (error) => {
+      setManualFieldsError(
+        error instanceof ApiError
+          ? error.message
+          : "No se pudieron guardar los datos. Volvé a intentarlo.",
+      );
+    },
+  });
+  const openManualFields = () => {
+    addManualFields.reset();
+    setManualFieldsError(null);
+    setManualFieldsSavedCount(null);
+    setShowManualFieldsDialog(true);
+  };
+  const approve = useMutation({
+    // 7b-3: el error de aprobar se avisa con el mensaje de la API si es legible; el diálogo ya se cerró al confirmar.
+    onError: (error) =>
+      notify.error(error instanceof ApiError ? error.message : "Volvé a intentarlo.", {
+        title: "No se pudo aprobar la extracción",
+      }),
+    mutationFn: () => api.post(`${base}/extractions/${extraction.data!.id}/approve`),
+    onSuccess: () =>
+      // El documento pasa a "Revisado": la lista de documentos también se refresca, si no el Legajo
+      // no lo ofrece como respaldo hasta que vence la caché.
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["extraction", firmId, clientId, selectedId] }),
+        queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
+      ]),
+  });
+
+  const reprocess = useMutation({
+    mutationFn: () => {
+      if (!base || !selectedId) throw new Error("Seleccioná un documento para releer.");
+      return api.post<{ status: string; processingJobId: string }>(
+        `${base}/documents/${selectedId}/reprocess`,
+      );
+    },
+    onSuccess: async (result) => {
+      setReprocessJobId(result.processingJobId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
+        queryClient.invalidateQueries({ queryKey: ["document", firmId, clientId, selectedId] }),
+        queryClient.invalidateQueries({ queryKey: ["extraction", firmId, clientId, selectedId] }),
+      ]);
+    },
+  });
+  // G2-07.5: ver/descargar el archivo subido. La URL firmada se pide al servidor
+  // en el momento (reautoriza por RLS) y sólo se expone una vez validada.
+  const openFile = useMutation({
+    // 7b-4: si la vista previa falla, el clic no puede quedar sin respuesta.
+    onError: () => notify.error("No se pudo abrir el archivo."),
+    mutationFn: async (documentId: string) => {
+      const preview = await api.get<{ url: string }>(`${base}/documents/${documentId}/preview`);
+      window.open(preview.url, "_blank", "noopener,noreferrer");
+    },
+  });
+  const fileReady =
+    Boolean(detail.data) &&
+    (detail.data?.fileVersions?.[0]?.bucket === "originals" ||
+      detail.data?.status === "EXTRACTED" ||
+      detail.data?.fileVersions?.[0]?.antivirusStatus === "CLEAN");
+  const rejectionReceipt = detail.data ? rejectionReceipts[detail.data.id] : undefined;
+  // C7B-8: etapa y progreso en texto, solo para una etapa conocida; el resto cae en «Procesando comprobante».
+  const trabajoEnCurso = detail.data?.processingJobs?.find(
+    (job) => job.type !== "REPROCESS" && ["QUEUED", "RUNNING"].includes(job.status),
+  );
+  const etapaEnCurso = trabajoEnCurso?.stage ? ETAPAS_EN_CURSO[trabajoEnCurso.stage] : undefined;
+  const textoEtapa = etapaEnCurso
+    ? `${etapaEnCurso}${trabajoEnCurso && trabajoEnCurso.progress > 0 ? ` · ${trabajoEnCurso.progress}%` : ""}`
+    : null;
+  // I7B-1 y P4: un trabajo fallido con motivo de lectura lo traduce; cualquier otro motivo se dice sin código.
+  const trabajoFallido = detail.data?.processingJobs?.find(
+    (job) => job.status === "FAILED" && Boolean(job.error),
+  );
+  const textoFallo =
+    trabajoFallido?.error && isAutomatedReadingUnavailableReason(trabajoFallido.error)
+      ? AUTOMATED_READING_UNAVAILABLE_MESSAGE
+      : AVISO_AL_ESTUDIO;
+  const activeReprocessJob =
+    detail.data?.processingJobs?.some(
+      (job) => job.type === "REPROCESS" && ["QUEUED", "RUNNING"].includes(job.status),
+    ) ?? false;
+  const trackedReprocessJob = detail.data?.processingJobs?.find((job) => job.id === reprocessJobId);
+  const reprocessIsActive =
+    reprocess.isPending ||
+    activeReprocessJob ||
+    Boolean(
+      reprocessJobId &&
+      (!trackedReprocessJob || ["QUEUED", "RUNNING"].includes(trackedReprocessJob.status)),
+    );
+  const completedReprocessJobId =
+    detail.data?.processingJobs?.find(
+      (job) =>
+        job.id === reprocessJobId &&
+        job.type === "REPROCESS" &&
+        ["SUCCEEDED", "FAILED", "DEAD_LETTER", "CANCELED"].includes(job.status),
+    )?.id ??
+    detail.data?.processingJobs?.find(
+      (job) =>
+        job.type === "REPROCESS" &&
+        ["SUCCEEDED", "FAILED", "DEAD_LETTER", "CANCELED"].includes(job.status),
+    )?.id;
+
+  useEffect(() => {
+    setReprocessJobId(null);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!completedReprocessJobId) return;
+    setReprocessJobId((current) => (current === completedReprocessJobId ? null : current));
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
+      queryClient.invalidateQueries({ queryKey: ["document", firmId, clientId, selectedId] }),
+      queryClient.invalidateQueries({ queryKey: ["extraction", firmId, clientId, selectedId] }),
+    ]);
+  }, [completedReprocessJobId, firmId, clientId, selectedId, queryClient]);
+  return (
+    <>
+      <aside className="review-detail" aria-live="polite">
+        {!selectedId ? (
+          <EmptyState
+            title="Elegí un documento"
+            description="Vas a revisar sus datos y preparar el asiento en este panel."
+            action={
+              rows.length > 0 ? (
+                <Button size="sm" variant="secondary" onClick={() => setSelectedId(rows[0]!.id)}>
+                  Abrir el más reciente
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : sinRespuesta(detail) ? (
+          <div className="query-state">
+            <span className="loading-copy">Abriendo documento…</span>
+          </div>
+        ) : detail.isError ? (
+          <AsyncState
+            loading={false}
+            error
+            loadingLabel="Abriendo documento…"
+            errorTitle="No se pudo abrir el documento"
+            errorDescription="Reintentá la consulta."
+            onRetry={() => void detail.refetch()}
+          />
+        ) : (
+          <>
+            <div className="review-detail__heading">
+              <div>
+                <h2>{detail.data?.fileVersions?.[0]?.originalName ?? "Documento"}</h2>
+                <p>
+                  Ingresó{" "}
+                  {detail.data?.createdAt
+                    ? formatearFechaHora(detail.data.createdAt)
+                    : "recientemente"}
+                </p>
+              </div>
+              <div className="review-detail__actions">
+                {fileReady ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={openFile.isPending}
+                    disabled={openFile.isPending}
+                    title="Ver o descargar el archivo"
+                    onClick={() => openFile.mutate(detail.data!.id)}
+                  >
+                    Ver archivo
+                  </Button>
+                ) : null}
+                <StatusBadge status={detail.data?.status} />
+              </div>
+            </div>
+            {rejectionReceipt ? (
+              <div className="action-receipt action-receipt--rejected" role="status">
+                <span>
+                  <strong>Documento rechazado</strong>
+                  <small>Motivo: {rejectionReceipt}</small>
+                </span>
+              </div>
+            ) : detail.data?.status === "EXTRACTION_FAILED" ? (
+              <Notice tone="warning" title="Documento rechazado">
+                El documento queda registrado como rechazado.
+              </Notice>
+            ) : detail.data?.status === "INFECTED" ? (
+              <Notice tone="error" title="Se detectó una amenaza en el archivo">
+                El archivo no se puede abrir ni procesar. Avisá a quien administra el estudio.
+              </Notice>
+            ) : detail.data?.status === "FAILED" || detail.data?.status === "CANCELED" ? (
+              <Notice tone="error" title="El procesamiento no terminó">
+                {textoFallo}
+              </Notice>
+            ) : detail.data?.status !== "EXTRACTED" && detail.data?.status !== "REVIEWED" ? (
+              <div className="processing-state">
+                <div>
+                  <h3>{reprocessIsActive ? "Releyendo…" : "Procesando comprobante"}</h3>
+                  <p>
+                    {reprocessIsActive
+                      ? "La lectura nueva continúa en segundo plano. Esta vista se actualiza automáticamente."
+                      : "La validación y extracción continúan en segundo plano. Esta vista se actualiza automáticamente."}
+                  </p>
+                  {textoEtapa ? <p>{textoEtapa}</p> : null}
+                  <span className="processing-state__track">
+                    <span />
+                  </span>
+                  {reprocessIsActive && capabilities.has("document.review") ? (
+                    <Button size="sm" variant="secondary" loading disabled>
+                      Releyendo…
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : extraction.isError ? (
+              <AsyncState
+                loading={false}
+                error
+                loadingLabel="Recuperando campos extraídos…"
+                errorTitle="No se pudo cargar la extracción"
+                errorDescription="No se pudieron recuperar los campos del comprobante."
+                onRetry={() => void extraction.refetch()}
+              />
+            ) : sinRespuesta(extraction) ? (
+              <div className="query-state">
+                <span className="loading-copy">Recuperando campos extraídos…</span>
+              </div>
+            ) : extraction.data ? (
+              <>
+                <div className="extraction-heading">
+                  <div>
+                    <h3>Revisá contra el comprobante</h3>
+                  </div>
+                  <span>
+                    {extraction.data.fields.filter((field) => FIELD_LABELS[field.key]).length}{" "}
+                    campos corregibles
+                  </span>
+                </div>
+                <ExtractionFiscalTable
+                  voucherData={extraction.data.voucherData}
+                  documentReviewReason={extraction.data.reviewReason}
+                  reviewIssues={extraction.data.reviewIssues}
+                  fields={extraction.data.fields}
+                  onAddManualData={canLoadManualFields ? openManualFields : undefined}
+                />
+                {manualFieldsSavedCount !== null ? (
+                  <p className="manual-fields-saved" role="status">
+                    Datos guardados: {manualFieldsSavedCount}{" "}
+                    {manualFieldsSavedCount === 1 ? "campo" : "campos"}.
+                  </p>
+                ) : null}
+                {extraction.data.fields.some((field) => FIELD_LABELS[field.key]) ? (
+                  <section
+                    className="extraction-corrections"
+                    aria-labelledby="extraction-corrections-title"
+                  >
+                    <h4 id="extraction-corrections-title">Corregir campos detectados</h4>
+                    <div className="extraction-fields">
+                      {extraction.data.fields
+                        .filter((field) => FIELD_LABELS[field.key])
+                        .map((field) => (
+                          <div className="extraction-field" key={field.id}>
+                            {isManualExtractionFieldKey(field.key) ? (
+                              <ManualExtractionValueControl
+                                fieldKey={field.key}
+                                id={`extracted-${field.id}`}
+                                label={FIELD_LABELS[field.key]!}
+                                value={corrections[field.id] ?? ""}
+                                hint={`Confianza ${Math.round(field.confidence * 100)}% · ${field.correction ? "corregido manualmente" : "valor extraído"}`}
+                                layout="field"
+                                showValidation={
+                                  (corrections[field.id] ?? "") !==
+                                  (field.correction ??
+                                    field.normalizedValue ??
+                                    field.rawValue ??
+                                    "")
+                                }
+                                onChange={(value) =>
+                                  setCorrections((current) => ({ ...current, [field.id]: value }))
+                                }
+                                onBlur={() => persistCorrection(field)}
+                              />
+                            ) : (
+                              <Field
+                                id={`extracted-${field.id}`}
+                                label={FIELD_LABELS[field.key]!}
+                                value={corrections[field.id] ?? ""}
+                                hint={`Confianza ${Math.round(field.confidence * 100)}% · ${field.correction ? "corregido manualmente" : "valor extraído"}`}
+                                onChange={(event) =>
+                                  setCorrections((current) => ({
+                                    ...current,
+                                    [field.id]: event.target.value,
+                                  }))
+                                }
+                                onBlur={() => persistCorrection(field)}
+                              />
+                            )}
+                            <span
+                              className={`confidence-mark confidence-mark--${field.confidence >= 0.9 ? "high" : field.confidence >= 0.7 ? "medium" : "low"}`}
+                              aria-hidden="true"
+                            />
+                          </div>
+                        ))}
+                    </div>
+                  </section>
+                ) : null}
+                {correct.isError ? (
+                  <p className="form-error" role="alert">
+                    No se pudo guardar una corrección. Volvé a intentarlo.
+                  </p>
+                ) : null}
+                {capabilities.has("document.review") && extraction.data.status !== "REVIEWED" ? (
+                  <div className="review-actions">
+                    <div className="review-actions__copy">
+                      <p>Confirmá que los datos coinciden con la evidencia antes de aprobar.</p>
+                      {canApproveExtraction ? null : (
+                        <p className="review-actions__hint" role="note">
+                          Cargá al menos un dato para aprobar.
+                        </p>
+                      )}
+                    </div>
+                    <div className="review-actions__buttons">
+                      {canLoadManualFields && hasEmptyScalarFields ? (
+                        <Button variant="ghost" onClick={openManualFields}>
+                          Cargar datos a mano
+                        </Button>
+                      ) : null}
+                      {canReprocessExtraction ? (
+                        <Button
+                          variant={reprocessShouldBeHighlighted ? "primary" : "secondary"}
+                          loading={reprocess.isPending}
+                          disabled={reprocessIsActive}
+                          onClick={() => {
+                            const description = [
+                              "Se volverá a leer el documento con IA. La lectura anterior y lo que cargaste a mano se conservan en el historial.",
+                              manualFieldCount > 0
+                                ? `Tiene ${manualFieldCount} campos cargados o corregidos a mano: no se copian a la lectura nueva; podés volver a cargarlos.`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" ");
+                            confirm.ask({
+                              title: "¿Releer el documento con IA?",
+                              description,
+                              confirmLabel: "Releer con IA",
+                              onConfirm: () => reprocess.mutate(),
+                            });
+                          }}
+                        >
+                          {reprocessIsActive ? "Releyendo…" : "Releer con IA"}
+                        </Button>
+                      ) : null}
+                      <Button
+                        onClick={() =>
+                          confirm.ask({
+                            title: "¿Aprobar la extracción?",
+                            description:
+                              "Confirmá que revisaste los datos contra el comprobante. La aprobación queda registrada en la auditoría.",
+                            confirmLabel: "Aprobar extracción",
+                            onConfirm: () => approve.mutate(),
+                          })
+                        }
+                        loading={approve.isPending}
+                        disabled={!canApproveExtraction}
+                      >
+                        Aprobar extracción
+                      </Button>
+                      <Button variant="danger" onClick={() => setShowRejectDialog(true)}>
+                        Rechazar
+                      </Button>
+                    </div>
+                    {reprocess.isError ? (
+                      <p className="form-error" role="alert">
+                        {reprocess.error instanceof ApiError
+                          ? reprocess.error.message
+                          : "No se pudo releer el documento. Volvé a intentarlo."}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+                {extraction.data.status === "REVIEWED" ? (
+                  <div className="action-receipt">
+                    <span>
+                      <strong>Extracción revisada</strong>
+                      <small>Los campos están listos para preparar la propuesta contable.</small>
+                    </span>
+                  </div>
+                ) : null}
+                {extraction.data.status === "REVIEWED" ? (
+                  <div className="action-receipt" role="status">
+                    <span>
+                      <strong>Datos listos para registrar</strong>
+                      <small>
+                        La creación automática se retiró para conservar el control. La evidencia
+                        queda disponible como respaldo del legajo.
+                      </small>
+                    </span>
+                  </div>
+                ) : null}
+                {showManualFieldsDialog ? (
+                  <ManualExtractionFieldsDialog
+                    fields={extraction.data.fields}
+                    voucherData={extraction.data.voucherData}
+                    isSaving={addManualFields.isPending}
+                    error={manualFieldsError}
+                    onSave={(fields) => addManualFields.mutate(fields)}
+                    onClose={() => setShowManualFieldsDialog(false)}
+                  />
+                ) : null}
+              </>
+            ) : extraction.isSuccess ? (
+              <EmptyState title="La extracción todavía no está disponible" />
+            ) : null}
+          </>
+        )}
+      </aside>
+      <RechazarDocumento
+        isOpen={showRejectDialog}
+        base={base}
+        documentId={selectedId}
+        extractionId={extraction.data?.id ?? null}
+        onClose={() => setShowRejectDialog(false)}
+        onRejected={(documentId, reason) =>
+          setRejectionReceipts((current) => ({ ...current, [documentId]: reason }))
+        }
+      />
+      <ConfirmDialog confirm={confirm} />
+    </>
+  );
+}

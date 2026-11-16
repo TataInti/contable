@@ -49,7 +49,7 @@ const RULES: Rule[] = [
     pattern: /className="action-receipt(?!--page)/g,
     allowed: {
       // Estados del documento en la revisión; se convierten al rediseñar la Bandeja.
-      "study/StudyBandeja.tsx": 3,
+      "study/bandeja/DetalleDocumento.tsx": 3,
     },
   },
   {
