@@ -959,16 +959,27 @@
   gap: var(--ds-space-6);
 }
 
+/* Foco 5.3a (hallazgo 79): «Editar cliente» se compone como «Alta de cliente»: dos columnas parejas, «Identidad» primero. */
+.action-drawer__panel:has(#client-edit-form) #client-edit-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--ds-space-4) var(--ds-space-5);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .client-edit__section {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--ds-space-3);
   min-width: 0;
 }
 
 .client-edit__section + .client-edit__section {
-  padding-top: var(--ds-space-5);
-  border-top: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  padding-top: 0;
+  border-top: 0;
 }
 
 .client-edit__section > h3,

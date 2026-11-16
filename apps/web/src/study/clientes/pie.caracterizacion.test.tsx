@@ -100,7 +100,7 @@ async function abrirContacto(): Promise<HTMLElement> {
   return screen.findByRole("dialog", { name: "Nuevo contacto" });
 }
 
-describe("Pie de los cuatro cajones de Clientes: estado vigente (K9, 5.3a)", () => {
+describe("Pie de los cuatro cajones de Clientes (5.3a)", () => {
   it("alta vacía: «Cancelar» a la izquierda, motivo junto a «Crear cliente»", async () => {
     const cajon = await abrirAlta();
     expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Crear cliente"]);
@@ -110,11 +110,22 @@ describe("Pie de los cuatro cajones de Clientes: estado vigente (K9, 5.3a)", () 
     );
   });
 
-  it("edición: el pie tiene solo «Guardar cambios» y no muestra motivo", async () => {
+  it("edición: «Cancelar» a la izquierda y «Guardar cambios» habilitado sin motivo", async () => {
     const cajon = await abrirEdicion();
-    // vigente: cambia con D5-2 (sin «Cancelar» ni motivo)
-    expect(botonesDelPie(cajon)).toEqual(["Guardar cambios"]);
+    expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Guardar cambios"]);
+    expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe("Cancelar");
     expect(pieDe(cajon).querySelector(".action-drawer__hint")).toBeNull();
+  });
+
+  it("edición sin razón social: el motivo va junto a «Guardar cambios» y la primaria queda deshabilitada", async () => {
+    const cajon = await abrirEdicion();
+    fireEvent.change(cajon.querySelector("#client-identity-legal-name") as HTMLInputElement, {
+      target: { value: "" },
+    });
+    expect(pieDe(cajon).querySelector(".action-drawer__primary .action-drawer__hint")?.textContent).toBe(
+      "Falta completar la razón social.",
+    );
+    expect((within(cajon).getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("estado: «Cancelar» a la izquierda y «Guardar estado» a la derecha", async () => {
