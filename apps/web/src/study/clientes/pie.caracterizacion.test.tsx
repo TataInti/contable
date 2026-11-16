@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
@@ -54,7 +54,9 @@ const ALFA = "Sintético Alfa S.A.";
 /** Botones del pie del cajón, en orden de DOM. */
 function botonesDelPie(cajon: HTMLElement): string[] {
   const pie = cajon.querySelector("footer.action-drawer__footer");
-  return Array.from(pie?.querySelectorAll("button") ?? []).map((boton) => (boton.textContent ?? "").trim());
+  return Array.from(pie?.querySelectorAll("button") ?? []).map((boton) =>
+    (boton.textContent ?? "").trim(),
+  );
 }
 
 function pieDe(cajon: HTMLElement): HTMLElement {
@@ -65,7 +67,8 @@ beforeEach(() => {
   vi.resetAllMocks();
   contextMock.current = contextoDePrueba(["client.read", "client.manage"]);
   sessionMock.current = SESION_AUTENTICADA;
-  vi.mocked(api.get).mockImplementation(((path: string) => respuestaApi(path, CLIENTES_SINTETICOS)) as never);
+  vi.mocked(api.get).mockImplementation(((path: string) =>
+    respuestaApi(path, CLIENTES_SINTETICOS)) as never);
 });
 
 afterEach(() => {
@@ -104,16 +107,20 @@ describe("Pie de los cuatro cajones de Clientes (5.3a)", () => {
   it("alta vacía: «Cancelar» a la izquierda, motivo junto a «Crear cliente»", async () => {
     const cajon = await abrirAlta();
     expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Crear cliente"]);
-    expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe("Cancelar");
-    expect(pieDe(cajon).querySelector(".action-drawer__primary .action-drawer__hint")?.textContent).toBe(
-      "Falta completar 2 campos: razón social y CUIT.",
+    expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe(
+      "Cancelar",
     );
+    expect(
+      pieDe(cajon).querySelector(".action-drawer__primary .action-drawer__hint")?.textContent,
+    ).toBe("Falta completar 2 campos: razón social y CUIT.");
   });
 
   it("edición: «Cancelar» a la izquierda y «Guardar cambios» habilitado sin motivo", async () => {
     const cajon = await abrirEdicion();
     expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Guardar cambios"]);
-    expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe("Cancelar");
+    expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe(
+      "Cancelar",
+    );
     expect(pieDe(cajon).querySelector(".action-drawer__hint")).toBeNull();
   });
 
@@ -122,24 +129,29 @@ describe("Pie de los cuatro cajones de Clientes (5.3a)", () => {
     fireEvent.change(cajon.querySelector("#client-identity-legal-name") as HTMLInputElement, {
       target: { value: "" },
     });
-    expect(pieDe(cajon).querySelector(".action-drawer__primary .action-drawer__hint")?.textContent).toBe(
-      "Falta completar la razón social.",
-    );
-    expect((within(cajon).getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      pieDe(cajon).querySelector(".action-drawer__primary .action-drawer__hint")?.textContent,
+    ).toBe("Falta completar la razón social.");
+    expect(
+      (within(cajon).getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
   });
 
   it("estado: «Cancelar» a la izquierda y «Guardar estado» a la derecha", async () => {
     const cajon = await abrirEstado();
     expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Guardar estado"]);
-    expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe("Cancelar");
+    expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe(
+      "Cancelar",
+    );
   });
 
   it("contacto vacío: «Cancelar» a la izquierda y el motivo junto a «Guardar contacto»", async () => {
     const cajon = await abrirContacto();
     expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Guardar contacto"]);
-    expect(pieDe(cajon).querySelector(".action-drawer__primary .action-drawer__hint")?.textContent).toBe(
-      "Falta completar el nombre del contacto.",
-    );
+    expect(
+      pieDe(cajon).querySelector(".action-drawer__primary .action-drawer__hint")?.textContent,
+    ).toBe("Falta completar el nombre del contacto.");
   });
 
   it("el pie es el último hijo del cajón de edición (formulario largo)", async () => {
