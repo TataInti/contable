@@ -441,7 +441,7 @@ export function StudyPanelTrabajo() {
           </Button>
         }
       />
-      {hayFiltros || parcial ? (
+      {hayCriterios || parcial ? (
         <p className="dense-dim">
           {parcial
             ? calificadorDelConteo(filas.length, "cargadas")

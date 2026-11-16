@@ -362,6 +362,12 @@ describe("Panel de trabajo: pantalla", () => {
     expect(screen.getByText("2 de 2 obligaciones")).toBeTruthy();
   });
 
+  it("«Todo el estudio» sin otros criterios es una vista: no muestra calificador del conteo", async () => {
+    renderPanel("/panel-trabajo?responsable=todos");
+    await tablaPanel();
+    expect(screen.queryByText(/^Sobre /)).toBeNull();
+  });
+
   it("la barra tiene dos filas, cada control queda en su par y el nombre va dentro del control (hallazgos 63 y 81)", async () => {
     renderPanel("/panel-trabajo?estado=DJ_PENDIENTE");
     await tablaPanel();
