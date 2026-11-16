@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { creditLotCarryForwardSchema } from "@contable/contracts";
 import { tenantContextFromRequest } from "../auth/tenant.js";
 import { MonthlyWorkpaperService, WorkpaperError } from "./workpaper-service.js";
 import { SettlementError } from "./settlement-service.js";
@@ -393,7 +394,7 @@ export function workpaperRoutes(app: FastifyInstance) {
         reference: z.string().max(240).nullable().optional(),
         evidenceDocumentId: z.string().uuid().nullable().optional(),
         originalAmount: z.string().regex(/^\d+(\.\d+)?$/).optional(),
-        carryForward: z.boolean().optional(),
+        carryForward: creditLotCarryForwardSchema.optional(),
       })
       .strict()
       .parse(req.body);
