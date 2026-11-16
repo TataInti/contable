@@ -33,6 +33,19 @@ function endpointDeRechazo(
   return objetivo.extractionId ? `${base}/extractions/${objetivo.extractionId}/reject` : null;
 }
 
+const AVISO_SIN_RESPUESTA =
+  "No sabemos si el rechazo llegó. Actualizamos la bandeja: si el documento sigue fallido, intentá de nuevo.";
+
+/**
+ * Aviso del cajón según el tipo de error. Sin respuesta del servidor (espera vencida o red, status 0) no se
+ * sabe si el rechazo llegó; con respuesta, se muestra el mensaje y el código que devuelve la API.
+ */
+function avisoDeError(error: unknown): string {
+  if (error instanceof ApiError && error.status === 0) return AVISO_SIN_RESPUESTA;
+  if (error instanceof ApiError) return error.message;
+  return "No se pudo rechazar el documento. Volvé a intentarlo.";
+}
+
 interface RechazarDocumentoProps {
   isOpen: boolean;
   base: string | null;
@@ -60,6 +73,9 @@ export function RechazarDocumento({
     onSuccess: (_result, variables) => {
       onRejected(variables.documentId, variables.reason);
       onClose();
+    },
+    // Con o sin error: la bandeja y el detalle se piden de nuevo, para que el detalle muestre el estado real.
+    onSettled: (_result, _error, variables) => {
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
         queryClient.invalidateQueries({
@@ -151,9 +167,7 @@ export function RechazarDocumento({
         ) : null}
         {reject.isError ? (
           <p className="form-error" role="alert">
-            {reject.error instanceof ApiError
-              ? reject.error.message
-              : "No se pudo rechazar el documento. Volvé a intentarlo."}
+            {avisoDeError(reject.error)}
           </p>
         ) : null}
       </form>

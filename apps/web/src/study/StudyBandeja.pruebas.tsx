@@ -194,3 +194,23 @@ export function renderBandeja(client: QueryClient) {
 
 /** Deja correr las respuestas simuladas antes de afirmar que no hubo aviso. */
 export const esperarTurno = () => new Promise((resolve) => setTimeout(resolve, 80));
+
+/** Como fetchSimulado, pero una respuesta PENDIENTE se rechaza al abortarse la petición (espera vencida del cliente). */
+export function fetchSimuladoConAborto(ruta: (método: string, url: string) => Respuesta) {
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const respuesta = ruta((init?.method ?? "GET").toUpperCase(), url);
+    if (respuesta === PENDIENTE) {
+      return new Promise<Response>((_resolver, rechazar) => {
+        init?.signal?.addEventListener("abort", () =>
+          rechazar(new DOMException("La petición fue abortada", "AbortError")),
+        );
+      });
+    }
+    return new Response(JSON.stringify(respuesta.cuerpo), {
+      status: respuesta.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
