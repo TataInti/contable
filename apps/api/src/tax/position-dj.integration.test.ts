@@ -54,7 +54,10 @@ function cuitEndingIn(ending: string): string {
   const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
   for (;;) {
     const base = `20${String(randomInt(0, 100_000_000)).padStart(8, "0")}`;
-    const sum = weights.reduce((total, weight, index) => total + Number(base.charAt(index)) * weight, 0);
+    const sum = weights.reduce(
+      (total, weight, index) => total + Number(base.charAt(index)) * weight,
+      0,
+    );
     const check = (11 - (sum % 11)) % 11;
     if (check < 10 && String(check) === ending) return `${base}${check}`;
   }
@@ -91,7 +94,13 @@ async function alta(userId: string, nombre: string, firmId: string, role: string
 
 async function nuevoCliente(nombre: string) {
   return prisma.client.create({
-    data: { firmId: FIRM, legalName: nombre, tradeName: nombre, cuit: cuitEndingIn("7"), status: "ACTIVE" },
+    data: {
+      firmId: FIRM,
+      legalName: nombre,
+      tradeName: nombre,
+      cuit: cuitEndingIn("7"),
+      status: "ACTIVE",
+    },
   });
 }
 
@@ -119,7 +128,9 @@ async function crearLiquidacion(
       status,
       totals,
       preparedByUserId: USUARIOS.OWNER,
-      ...(status === "FINALIZED" ? { finalizedByUserId: USUARIOS.OWNER, finalizedAt: new Date() } : {}),
+      ...(status === "FINALIZED"
+        ? { finalizedByUserId: USUARIOS.OWNER, finalizedAt: new Date() }
+        : {}),
       ...(supersedesId ? { supersedesId } : {}),
     },
   });
@@ -173,7 +184,9 @@ async function escenario(opts: {
 }
 
 async function documento(category: string): Promise<string> {
-  const doc = await prisma.document.create({ data: { firmId: FIRM, clientId, category, status: "READY" } });
+  const doc = await prisma.document.create({
+    data: { firmId: FIRM, clientId, category, status: "READY" },
+  });
   return doc.id;
 }
 
@@ -245,7 +258,9 @@ beforeAll(async () => {
   profileVersionId = perfil.id;
   // OWNER y ADMIN son de firma completa; los demás roles necesitan asignación al cliente (guard.ts).
   for (const rol of ["PREPARER", "REVIEWER", "AUDITOR_READONLY"] as const) {
-    await prisma.clientAssignment.create({ data: { firmId: FIRM, clientId, userId: USUARIOS[rol] } });
+    await prisma.clientAssignment.create({
+      data: { firmId: FIRM, clientId, userId: USUARIOS[rol] },
+    });
   }
 });
 
@@ -325,13 +340,22 @@ describe("posición del legajo con la DJ (pruebas en rojo, corte 5b-2)", () => {
     expect(item.totalAPagar).toBe("1500.0000");
     expect(item.saldosFavorDetalle).toBeNull();
     expect(item.declaredAt).not.toBeNull();
-    expect(item.periodStatus).toEqual({ code: "COMPLETO", label: "Completo", missing: [], missingText: null });
+    expect(item.periodStatus).toEqual({
+      code: "COMPLETO",
+      label: "Completo",
+      missing: [],
+      missingText: null,
+    });
   });
 
   it("una DJ con advertencias de diferencia cuenta como cargada", async () => {
     const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
     const docId = await documento(DJ);
-    const res = await declarar(e, { ...CUERPO_BASE, totalAPagar: "1600.00", declarationDocumentId: docId });
+    const res = await declarar(e, {
+      ...CUERPO_BASE,
+      totalAPagar: "1600.00",
+      declarationDocumentId: docId,
+    });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.warnings.length).toBeGreaterThan(0);
     const [item] = (await posicion("OWNER", e.periodId)).json().data;
@@ -349,7 +373,13 @@ describe("posición del legajo con la DJ (pruebas en rojo, corte 5b-2)", () => {
 
   it("en una rectificativa cuenta la DJ de la versión vigente, no la de la anterior", async () => {
     const e = await escenario({ settlementStatus: "SUPERSEDED", filingStatus: "FILED" });
-    const v2Id = await crearLiquidacion(e.periodId, 2, "FINALIZED", TOTALES_LIQUIDACION, e.settlementId);
+    const v2Id = await crearLiquidacion(
+      e.periodId,
+      2,
+      "FINALIZED",
+      TOTALES_LIQUIDACION,
+      e.settlementId,
+    );
     const acuse = await documento("ACUSE");
     const filing2 = await prisma.taxFiling.create({
       data: {
@@ -367,7 +397,12 @@ describe("posición del legajo con la DJ (pruebas en rojo, corte 5b-2)", () => {
     const docId = await documento(DJ);
     const res = await declarar(
       e,
-      { ...CUERPO_BASE, impuestoDeterminado: "2000.00", totalAPagar: "2000.00", declarationDocumentId: docId },
+      {
+        ...CUERPO_BASE,
+        impuestoDeterminado: "2000.00",
+        totalAPagar: "2000.00",
+        declarationDocumentId: docId,
+      },
       filing2.id,
     );
     expect(res.statusCode).toBe(200);
@@ -382,7 +417,9 @@ describe("posición del legajo con la DJ (pruebas en rojo, corte 5b-2)", () => {
   it("los cinco roles con lectura de la posición ven los importes de la declaración", async () => {
     const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
     const docId = await documento(DJ);
-    expect((await declarar(e, { ...CUERPO_BASE, declarationDocumentId: docId })).statusCode).toBe(200);
+    expect((await declarar(e, { ...CUERPO_BASE, declarationDocumentId: docId })).statusCode).toBe(
+      200,
+    );
     for (const rol of ROLES) {
       const res = await posicion(rol, e.periodId);
       expect(res.statusCode, rol).toBe(200);
