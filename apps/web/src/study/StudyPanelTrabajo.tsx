@@ -64,7 +64,7 @@ const MOTIVO_SIN_ASIGNACIONES = "sin-asignaciones";
 const ID_RANGO = "panel-trabajo-rango-error";
 
 export function StudyPanelTrabajo() {
-  const { firmId, capabilities, setClientId, setPeriodId } = useClientContext();
+  const { firmId, capabilities, setClientId, setPeriodId, clientId } = useClientContext();
   const session = useSession();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -351,6 +351,10 @@ export function StudyPanelTrabajo() {
     filtros.responsable !== RESPONSABLE_MIS && filtros.responsable !== RESPONSABLE_TODOS;
   const hayCriterios =
     responsablePuntual || hayFiltrosActivos({ ...filtros, responsable: RESPONSABLE_MIS });
+  // Hallazgo 69: «Configurar obligaciones» lleva a Configuración fiscal, que exige un cliente elegido.
+  const aclaracionCliente = clientId
+    ? ""
+    : " Elegí un cliente en el menú para configurar sus obligaciones.";
   const vacio = hayCriterios ? (
     <EmptyState
       size="compact"
@@ -370,8 +374,8 @@ export function StudyPanelTrabajo() {
       title="No hay obligaciones para mostrar"
       description={
         filtros.responsable === RESPONSABLE_MIS
-          ? "No tenés obligaciones asignadas en esta vista. Si no tenés clientes asignados, pedí al titular o al administrador del estudio que te los asigne."
-          : "No hay obligaciones cargadas en esta vista. Se configuran por cliente en Configuración fiscal."
+          ? `No tenés obligaciones asignadas en esta vista. Si no tenés clientes asignados, pedí al titular o al administrador del estudio que te los asigne.${aclaracionCliente}`
+          : `No hay obligaciones cargadas en esta vista. Se configuran por cliente en Configuración fiscal.${aclaracionCliente}`
       }
       action={
         <Button size="sm" variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>

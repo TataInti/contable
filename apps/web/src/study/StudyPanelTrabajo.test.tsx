@@ -222,6 +222,22 @@ describe("Panel de trabajo: pantalla", () => {
     expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
   });
 
+  it("sin cliente elegido, el vacío aclara que hay que elegir uno para configurar obligaciones (hallazgo 69)", async () => {
+    apiMock.getEnvelope.mockResolvedValue(respuesta([]));
+    renderPanel();
+    expect(await screen.findByText("No hay obligaciones para mostrar")).toBeTruthy();
+    expect(screen.getByText(/Elegí un cliente en el menú para configurar sus obligaciones\./)).toBeTruthy();
+  });
+
+  it("con un cliente elegido, el vacío no pide elegir cliente (hallazgo 69)", async () => {
+    contextMock.current = contexto({ clientId: "client-a" });
+    apiMock.getEnvelope.mockResolvedValue(respuesta([]));
+    renderPanel();
+    expect(await screen.findByText("No hay obligaciones para mostrar")).toBeTruthy();
+    expect(screen.queryByText(/Elegí un cliente en el menú/)).toBeNull();
+    contextMock.current = contexto();
+  });
+
   it("vacío confirmado con salida a la configuración (P1)", async () => {
     apiMock.getEnvelope.mockResolvedValue(respuesta([]));
     renderPanel();
