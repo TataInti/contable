@@ -191,7 +191,9 @@ describe("Rechazo de un documento que falló · D23-1 (a), etapa 1", () => {
     }) as HTMLButtonElement;
     fireEvent.click(confirmar);
     expect(await within(dialog).findByText("Rechazando…")).toBeTruthy();
-    expect(confirmar.disabled).toBe(true);
+    // vigente: cambia con 7b.3c correcciones (D1): el botón queda ocupado y enfocable, sin deshabilitarse
+    expect(confirmar.disabled).toBe(false);
+    expect(confirmar.getAttribute("aria-busy")).toBe("true");
     fireEvent.click(confirmar);
     await esperarTurno();
     expect(envios(fetchMock)).toHaveLength(1);
