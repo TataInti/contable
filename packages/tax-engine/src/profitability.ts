@@ -334,7 +334,9 @@ export function calculateCajaFiscal(input: CajaFiscalInput): CajaFiscalResult {
   }
 
   const ventasNetas = dec(input.ventas.facturadoConIva).minus(dec(input.ventas.notasCreditoConIva));
-  const comprasNetas = dec(input.compras.facturadoConIva).minus(dec(input.compras.notasCreditoConIva));
+  const comprasNetas = dec(input.compras.facturadoConIva).minus(
+    dec(input.compras.notasCreditoConIva),
+  );
 
   const faltantes: CajaFiscalFaltante[] = [];
   const impuestos: CajaFiscalDesglose["impuestos"] = [];
@@ -392,4 +394,3 @@ export function calculateCajaFiscal(input: CajaFiscalInput): CajaFiscalResult {
     outputHash,
   };
 }
-
