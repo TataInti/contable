@@ -30,14 +30,6 @@ function pickDefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
  * G3-10: worklist, líneas, diferencias y timeline.
  */
 
-/** Estado HTTP de un error de liquidaciones: un solo lugar, por código estable (nunca por el texto). */
-function estadoDeErrorDeLiquidacion(code: string): number {
-  if (code === "ARTIFACT_STORAGE_UNAVAILABLE") return 503;
-  if (code.includes("NOT_FOUND")) return 404;
-  if (code.includes("BLOCKING")) return 422;
-  return 409;
-}
-
 export function settlementRoutes(app: FastifyInstance) {
   const service = new SettlementService();
   const declarations = new FilingDeclarationService();
@@ -48,7 +40,13 @@ export function settlementRoutes(app: FastifyInstance) {
     err: unknown,
   ) => {
     if (err instanceof SettlementError) {
-      const status = estadoDeErrorDeLiquidacion(err.code);
+      // El estado lo fija el error (503 de almacenamiento); si no, decide el código.
+      const porCodigo = err.code.includes("NOT_FOUND")
+        ? 404
+        : err.code.includes("BLOCKING")
+          ? 422
+          : 409;
+      const status = err.httpStatus ?? porCodigo;
       return reply.status(status).send({ error: { code: err.code, message: err.message } });
     }
     if (err instanceof FilingDeclarationError) {

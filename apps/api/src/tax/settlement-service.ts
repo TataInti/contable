@@ -102,10 +102,13 @@ export function artifactFilename(input: { taxTypeCode: string; startDate: Date; 
 
 export class SettlementError extends Error {
   readonly code: SettlementErrorCode;
-  constructor(code: SettlementErrorCode, message: string) {
+  /** Estado HTTP que fija quien lanza el error; si falta, la ruta decide por el código. */
+  readonly httpStatus: number | undefined;
+  constructor(code: SettlementErrorCode, message: string, httpStatus?: number) {
     super(message);
     this.name = "SettlementError";
     this.code = code;
+    this.httpStatus = httpStatus;
   }
 }
 
@@ -2840,6 +2843,7 @@ export class SettlementService {
       throw new SettlementError(
         "ARTIFACT_STORAGE_UNAVAILABLE",
         "No se puede entregar el archivo ahora: el almacenamiento no responde. Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+        503,
       );
     });
     if (createHash("sha256").update(body).digest("hex") !== artifact.checksum) {
