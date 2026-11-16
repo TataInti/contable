@@ -216,3 +216,11 @@ export const extractionApprovedSnapshotSchema = z
   })
   .strict();
 export type ExtractionApprovedSnapshot = z.infer<typeof extractionApprovedSnapshotSchema>;
+
+/** Rechazo de un documento que falló al procesarse (D23-1 a): el motivo es obligatorio y queda auditado. */
+export const documentRejectRequestSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+export type DocumentRejectRequest = z.infer<typeof documentRejectRequestSchema>;

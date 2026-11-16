@@ -94,8 +94,18 @@ describe("cobertura total del ROUTE_POLICY (deny-by-default)", () => {
     expect(requiredCapability("POST", ruta)).toBeNull();
     expect(requiredCapability("PATCH", ruta)).toBeNull();
   });
+  it("rechazo de un documento que falló (D23-1 a): POST exige document.review; GET no tiene capacidad", () => {
+    const ruta = "/api/v1/firms/:p/clients/:p/documents/:p/reject";
+    expect(requiredCapability("POST", ruta)).toBe("document.review");
+    expect(requiredCapability("GET", ruta)).toBeNull();
+  });
+
   it("caracterización (vigente): releer una extracción y rechazar una extracción exigen document.review", () => {
-    expect(requiredCapability("POST", "/api/v1/firms/:p/clients/:p/documents/:p/reprocess")).toBe("document.review");
-    expect(requiredCapability("POST", "/api/v1/firms/:p/clients/:p/extractions/:p/reject")).toBe("document.review");
+    expect(requiredCapability("POST", "/api/v1/firms/:p/clients/:p/documents/:p/reprocess")).toBe(
+      "document.review",
+    );
+    expect(requiredCapability("POST", "/api/v1/firms/:p/clients/:p/extractions/:p/reject")).toBe(
+      "document.review",
+    );
   });
 });
