@@ -656,6 +656,47 @@ describe("G3-1 cobertura y cálculo determinista", () => {
     expect(result.result.blocks).toHaveLength(0);
   });
 
+  it("caracterización (vigente): el cierre crea su lote VERIFIED con usuario y fecha, y su referencia nombra la liquidación", async () => {
+    await activateDetailedVatRules();
+    const { v3: januaryPurchase } = await createApprovedVouchers();
+    const scope = {
+      voucherIds: [januaryPurchase.id],
+      withholdingIds: [],
+      perceptionIds: [],
+      f931RunIds: [],
+      classifications: [
+        {
+          voucherId: januaryPurchase.id,
+          documentKind: "INVOICE",
+          activityCode: "COMPRAS",
+          categoryCode: "SUPER",
+          rateBuckets: [{ rate: "21", base: "40000.0000", amount: "8400.0000" }],
+          snapshotHash: "sha256:caracterizacion-cierre-6a",
+        },
+      ],
+    };
+    const cierre = await settlements.calculate(ctxPreparer, {
+      ...calculateParams(),
+      sourceScope: scope,
+    });
+    await settlements.submitReview(ctxPreparer, cierre.settlement.id);
+    await settlements.review(ctxReviewer, cierre.settlement.id);
+    await settlements.finalize(ctxOwner, cierre.settlement.id);
+
+    const lots = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.taxCreditLot.findMany({
+        where: { clientId: CLIENT_SET, sourceSettlementId: cierre.settlement.id },
+      }),
+    );
+    expect(lots).toHaveLength(2);
+    for (const lot of lots) {
+      expect(lot.verificationStatus).toBe("VERIFIED");
+      expect(lot.verifiedByUserId).toBe(OWNER_A);
+      expect(lot.verifiedAt).toBeInstanceOf(Date);
+      expect(lot.reference?.startsWith(`Cierre ${cierre.settlement.id}`)).toBe(true);
+    }
+  });
+
   it("arrastra IVA v2 sin duplicar saldos al rectificar y usar el mes siguiente", async () => {
     await activateDetailedVatRules();
     const { v3: januaryPurchase } = await createApprovedVouchers();

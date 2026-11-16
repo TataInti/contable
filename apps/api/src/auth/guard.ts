@@ -277,6 +277,9 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/tax-position/, resolve: () => "tax.settlements.read" },
   { match: /\/tax-credit-allocations/, resolve: () => "tax.settlements.calculate" },
   { match: /\/tax-worklist/, resolve: () => "tax.settlements.read" },
+  // Saldo de caja fiscal (corte 8a): lectura con la capacidad de la rentabilidad. Explícita para que una
+  // regla general no la capture; cualquier otro método queda sin capacidad (deny-by-default).
+  { match: /\/profitability\/caja-fiscal$/, resolve: (m) => (m === "GET" ? "profitability.read" : null) },
   {
     match: /\/profitability/,
     resolve: (m, path) => {

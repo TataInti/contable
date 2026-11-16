@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { tenantContextFromRequest } from "../auth/tenant.js";
+import { cajaFiscalQuerySchema } from "@contable/contracts";
+import { CajaFiscalError } from "@contable/tax-engine";
 import { ProfitabilityService, ProfitabilityError } from "./profitability-service.js";
 
 /**
@@ -61,6 +63,24 @@ export function profitabilityRoutes(app: FastifyInstance) {
       });
       return reply.send({ data });
     } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // Saldo de caja fiscal del período (corte 8a): cálculo en vivo y solo lectura. No publica ni persiste.
+  app.get("/api/v1/firms/:firmId/clients/:clientId/profitability/caja-fiscal", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const q = cajaFiscalQuerySchema.parse(req.query);
+    try {
+      const { data, meta } = await service.cajaFiscal(ctx, { clientId: ctx.clientId!, periodId: q.periodId });
+      return reply.send({ data, meta });
+    } catch (err) {
+      if (err instanceof CajaFiscalError) {
+        // P4: la API devuelve el campo que hay que corregir y el motivo en lenguaje llano.
+        return reply.status(422).send({
+          error: { code: err.code, message: err.message, campo: "exchangeRate", comprobantes: err.comprobantes },
+        });
+      }
       return handleError(reply, err);
     }
   });
