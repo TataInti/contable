@@ -21,6 +21,7 @@ import {
   taxpayerProfileStatus,
 } from "./tax-enums.js";
 import { cuit, decimalRate, isoDate, money, uuid } from "./primitives.js";
+import { taxFilingCreditDetailReadSchema } from "./tax-filing-declaration.js";
 
 // ============================================================
 // Contratos de la fundación fiscal (Puerta 1)
@@ -532,6 +533,8 @@ export const taxFilingSchema = z.object({
   totalAPagar: money.nullish(),
   declaredByUserId: z.string().nullish(),
   declaredAt: z.string().datetime().nullish(),
+  // D13-4 a: detalle del saldo a favor por impuesto y jurisdicción (null si la DJ no lo trae).
+  saldosFavorDetalle: taxFilingCreditDetailReadSchema,
 });
 export type TaxFiling = z.infer<typeof taxFilingSchema>;
 

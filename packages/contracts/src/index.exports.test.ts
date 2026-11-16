@@ -94,4 +94,10 @@ describe("índice de contratos: exportaciones de calendarios y libros", () => {
     );
     expect(contracts.FILING_DECLARATION_DOCUMENT_CATEGORY).toBe("DECLARACION_JURADA");
   });
+
+  it("exporta el detalle de saldos a favor de la DJ (D13-4 a): tope de 100 ítems y lectura", () => {
+    expect(contracts.FILING_DECLARATION_CREDIT_DETAIL_MAX_ITEMS).toBe(100);
+    expect(contracts).toHaveProperty("taxFilingCreditDetailSchema");
+    expect(contracts).toHaveProperty("taxFilingCreditDetailReadSchema");
+  });
 });
