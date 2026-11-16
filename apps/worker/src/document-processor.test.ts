@@ -66,7 +66,9 @@ describe("DocumentProcessor categorías de evidencia (corte 5b-1)", () => {
       },
       document: { update: vi.fn().mockResolvedValue({}) },
       documentProcessingJob: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-      documentExtraction: { create: vi.fn(async () => ({ id: "55555555-5555-4555-8555-555555555555" })) },
+      documentExtraction: {
+        create: vi.fn(async () => ({ id: "55555555-5555-4555-8555-555555555555" })),
+      },
       extractedLineItem: { create: vi.fn() },
     };
     vi.mocked(withWorkerTenant).mockImplementation(async (_firmId, _clientId, callback) =>
@@ -76,7 +78,9 @@ describe("DocumentProcessor categorías de evidencia (corte 5b-1)", () => {
       get: vi.fn().mockResolvedValue(data),
       promote: vi.fn().mockResolvedValue(undefined),
     } as unknown as ObjectStorage;
-    const ai = { runExtraction: vi.fn().mockResolvedValue(extractionResult) } as unknown as AiClient;
+    const ai = {
+      runExtraction: vi.fn().mockResolvedValue(extractionResult),
+    } as unknown as AiClient;
     const clamav = {
       scan: vi.fn().mockResolvedValue({ clean: true, result: "synthetic OK" }),
     } as unknown as ClamAvClient;
@@ -110,7 +114,9 @@ describe("DocumentProcessor categorías de evidencia (corte 5b-1)", () => {
       data: { status: "READY" },
     });
     expect(fakeTx.documentProcessingJob.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ stage: "VALIDATED_NO_EXTRACTION" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ stage: "VALIDATED_NO_EXTRACTION" }),
+      }),
     );
   });
   it("la declaración jurada queda READY sin extracción (pruebas en rojo, corte 5b-1)", async () => {
@@ -122,7 +128,9 @@ describe("DocumentProcessor categorías de evidencia (corte 5b-1)", () => {
       data: { status: "READY" },
     });
     expect(fakeTx.documentProcessingJob.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ stage: "VALIDATED_NO_EXTRACTION" }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ stage: "VALIDATED_NO_EXTRACTION" }),
+      }),
     );
   });
 });

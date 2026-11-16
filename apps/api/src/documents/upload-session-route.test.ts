@@ -52,7 +52,10 @@ let app: FastifyInstance;
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  mocks.createUploadSession.mockResolvedValue({ id: "session-1", expiresAt: new Date("2026-11-17T00:00:00Z") });
+  mocks.createUploadSession.mockResolvedValue({
+    id: "session-1",
+    expiresAt: new Date("2026-11-17T00:00:00Z"),
+  });
   mocks.getRequestItem.mockResolvedValue({ clientId: CLIENT_ID });
   mocks.getPresignedPutUrl.mockResolvedValue("https://storage/put");
   app = Fastify();
@@ -131,7 +134,10 @@ describe("sesión de upload con la declaración jurada (pruebas en rojo, corte 5
   });
 
   it("la declaración jurada con pedido documental responde 201, igual que el acuse con pedido", async () => {
-    const response = await crearSesion({ category: "DECLARACION_JURADA", requestItemId: REQUEST_ITEM_ID });
+    const response = await crearSesion({
+      category: "DECLARACION_JURADA",
+      requestItemId: REQUEST_ITEM_ID,
+    });
 
     expect(response.statusCode).toBe(201);
   });

@@ -21,24 +21,32 @@ describe("createUploadSessionSchema sin pedido documental (caracterización, cor
   });
 
   it("acepta un documento de pedido sin categoría", () => {
-    expect(createUploadSessionSchema.safeParse({ requestItemId: REQUEST_ITEM_ID }).success).toBe(true);
+    expect(createUploadSessionSchema.safeParse({ requestItemId: REQUEST_ITEM_ID }).success).toBe(
+      true,
+    );
   });
 
   it("acepta la constancia ACUSE con pedido documental", () => {
     expect(
-      createUploadSessionSchema.safeParse({ category: "ACUSE", requestItemId: REQUEST_ITEM_ID }).success,
+      createUploadSessionSchema.safeParse({ category: "ACUSE", requestItemId: REQUEST_ITEM_ID })
+        .success,
     ).toBe(true);
   });
 });
 
 describe("createUploadSessionSchema con la declaración jurada (pruebas en rojo, corte 5b-1)", () => {
   it("acepta la declaración jurada sin pedido", () => {
-    expect(createUploadSessionSchema.safeParse({ category: "DECLARACION_JURADA" }).success).toBe(true);
+    expect(createUploadSessionSchema.safeParse({ category: "DECLARACION_JURADA" }).success).toBe(
+      true,
+    );
   });
 
   it("acepta la declaración jurada con pedido documental, igual que el acuse", () => {
     expect(
-      createUploadSessionSchema.safeParse({ category: "DECLARACION_JURADA", requestItemId: REQUEST_ITEM_ID }).success,
+      createUploadSessionSchema.safeParse({
+        category: "DECLARACION_JURADA",
+        requestItemId: REQUEST_ITEM_ID,
+      }).success,
     ).toBe(true);
   });
 
