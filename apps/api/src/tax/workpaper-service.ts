@@ -1,3 +1,4 @@
+import { derivePeriodStatus } from "./period-status.js";
 import { Prisma } from "@prisma/client";
 import { calculateLateInterest, taxHash } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
@@ -2637,7 +2638,7 @@ export class MonthlyWorkpaperService {
           period: true,
           regime: { include: { taxType: true, jurisdiction: true } },
           payments: { where: { status: "PAID" } },
-          filings: { where: { status: "FILED" }, orderBy: { filedAt: "desc" }, take: 1 },
+          filings: { where: { status: "FILED" }, orderBy: { filedAt: "desc" } },
         },
         orderBy: { dueDate: "asc" },
       });
@@ -2653,9 +2654,21 @@ export class MonthlyWorkpaperService {
         where: { firmId: ctx.firmId, clientId },
         include: { movements: true },
       });
+      // Legajo mensual por período (la revisión más alta primero): su estado entra en periodStatus.
+      const workpapers = await tx.monthlyTaxWorkpaper.findMany({
+        where: { firmId: ctx.firmId, clientId },
+        select: { periodStart: true, periodEnd: true, status: true },
+        orderBy: { revision: "desc" },
+      });
 
       return obligations.map((obligation) => {
         const settlement = settlements.find((item) => item.regimeId === obligation.regimeId);
+        // La presentación que cuenta es la de la liquidación vigente: una rectificativa no hereda la DJ anterior.
+        const filing = settlement
+          ? (obligation.filings.find((item) => item.settlementId === settlement.id) ?? null)
+          : null;
+        const hasAcuse = Boolean(filing?.evidenceDocumentId);
+        const hasDeclaration = Boolean(filing?.declarationDocumentId);
         const totals = (settlement?.totals ?? {}) as Record<string, string>;
         const accrued = new Prisma.Decimal(totals["TOTAL_A_INGRESAR"] ?? totals["totalDue"] ?? "0");
         const paid = obligation.payments.reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0));
@@ -2696,6 +2709,28 @@ export class MonthlyWorkpaperService {
           regime: obligation.regime,
           // Presentación ya registrada (con su constancia): la pantalla no la vuelve a ofrecer.
           filedAt: obligation.filings[0]?.filedAt ?? null,
+          // Presentación de la liquidación vigente y su declaración jurada (corte 5b-2).
+          filingId: filing?.id ?? null,
+          hasAcuse,
+          hasDeclaration,
+          declarationDocumentId: filing?.declarationDocumentId ?? null,
+          impuestoDeterminado: filing?.impuestoDeterminado?.toFixed(4) ?? null,
+          saldoFavorTecnico: filing?.saldoFavorTecnico?.toFixed(4) ?? null,
+          saldoLibreDisponibilidad: filing?.saldoLibreDisponibilidad?.toFixed(4) ?? null,
+          totalAPagar: filing?.totalAPagar?.toFixed(4) ?? null,
+          saldosFavorDetalle: filing?.saldosFavorDetalle ?? null,
+          declaredAt: filing?.declaredAt ?? null,
+          // Única fuente del estado del período (period-status.ts); la web no lo recalcula.
+          periodStatus: derivePeriodStatus({
+            workpaperStatus:
+              workpapers.find(
+                (item) =>
+                  item.periodStart.getTime() === obligation.period.startDate.getTime() &&
+                  item.periodEnd.getTime() === obligation.period.endDate.getTime(),
+              )?.status ?? null,
+            settlementStatus: settlement?.status ?? null,
+            filing: filing ? { hasAcuse, hasDeclaration } : null,
+          }),
           settlement: settlement
             ? { id: settlement.id, status: settlement.status, version: settlement.version, totals }
             : null,
