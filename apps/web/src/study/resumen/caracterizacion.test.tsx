@@ -347,3 +347,193 @@ describe("Caracterización · Resumen del cliente: errores y contrato (R10 y R11
     await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/clientes"));
   });
 });
+
+describe("Caracterización · matriz §2.1 (13 filas): datos visibles con cliente completo y con cliente vacío", () => {
+  const vacio = {
+    perfilContable: null as never,
+    ejercicios: [],
+    periodos: [],
+    obligaciones: [],
+    perfiles: [],
+    inscripciones: [],
+    actividades: [],
+    contadores: { accounts: 0, counterparties: 0, costCenters: 0 },
+  };
+  const conPeriodo = {
+    ...ejercicioBase,
+    status: "OPEN",
+    periods: [{ id: "period-nov", ordinal: 1, status: "OPEN", startDate: FECHA, endDate: FIN }],
+  } as never;
+
+  async function abrir(seccion: string) {
+    const menu = await screen.findByRole("navigation", { name: "Secciones internas del cliente" });
+    fireEvent.click(within(menu).getByRole("button", { name: seccion }));
+  }
+
+  it("M1 · encabezado: h1, descripción con razón social, fantasía y CUIT, y tres acciones (completo y vacío)", async () => {
+    for (const datos of [resumen(), resumen(vacio)]) {
+      cleanup();
+      montar({ datos });
+      expect(await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" })).toBeTruthy();
+      const encabezado = document.querySelector(".dense-head") as HTMLElement;
+      expect(encabezado.textContent).toContain("Cliente SINTÉTICO A · SINTÉTICO · CUIT 20111111112");
+      expect(within(encabezado).getAllByRole("button").map((boton) => boton.textContent?.trim())).toEqual([
+        "Volver a clientes",
+        "Configuración fiscal",
+        "Abrir trabajo",
+      ]);
+    }
+  });
+
+  it("M2 · búsqueda: con datos encuentra coincidencias; sin datos dice que no hay coincidencias", async () => {
+    montar();
+    fireEvent.change(await screen.findByLabelText(/Buscar en este cliente/), { target: { value: "IVA" } });
+    expect(document.querySelectorAll(".client-summary__search-results li").length).toBeGreaterThan(0);
+    cleanup();
+    montar({ datos: resumen(vacio) });
+    fireEvent.change(await screen.findByLabelText(/Buscar en este cliente/), { target: { value: "IVA" } });
+    expect(await screen.findByText("No encontramos coincidencias")).toBeTruthy();
+  });
+
+  it("M3 · índice: 9 secciones en 5 grupos (completo y vacío)", async () => {
+    for (const datos of [resumen(), resumen(vacio)]) {
+      cleanup();
+      montar({ datos });
+      await screen.findByRole("region", { name: "Resumen" });
+      const indice = screen.getByRole("navigation", { name: "Secciones internas del cliente" });
+      expect(indice.querySelectorAll("button")).toHaveLength(9);
+      expect(indice.querySelectorAll(".client-summary__index-group")).toHaveLength(5);
+    }
+  });
+
+  it("M4 · resultados de búsqueda: cada resultado abre su sección", async () => {
+    montar();
+    fireEvent.change(await screen.findByLabelText(/Buscar en este cliente/), { target: { value: "noviembre" } });
+    const resultados = document.querySelectorAll(".client-summary__search-results li");
+    expect(resultados).toHaveLength(2);
+    fireEvent.click(within(resultados[0] as HTMLElement).getByRole("button"));
+    expect(await screen.findByRole("region", { name: "Períodos fiscales" })).toBeTruthy();
+  });
+
+  it("M5 · resumen: 4 datos de estado y 3 accesos rápidos (completo y vacío)", async () => {
+    for (const datos of [resumen(), resumen(vacio)]) {
+      cleanup();
+      montar({ datos });
+      const resumenSeccion = await screen.findByRole("region", { name: "Resumen" });
+      expect(resumenSeccion.querySelectorAll("dt")).toHaveLength(4);
+      expect(within(resumenSeccion).getAllByRole("button")).toHaveLength(3);
+    }
+  });
+
+  it("M6 · períodos contables: ejercicio con su período mensual, o vacío", async () => {
+    montar({ datos: resumen({ ejercicios: [conPeriodo] as never }) });
+    await abrir("Períodos contables");
+    const contables = await screen.findByRole("region", { name: "Períodos contables" });
+    expect(within(contables).getByRole("heading", { level: 3, name: "2026" })).toBeTruthy();
+    expect(within(contables).getByText("noviembre de 2026")).toBeTruthy();
+    cleanup();
+    montar({ datos: resumen(vacio) });
+    await abrir("Períodos contables");
+    expect(await screen.findByText("Sin ejercicios contables")).toBeTruthy();
+  });
+
+  it("M7 · períodos fiscales: impuesto, período y rango; o vacío", async () => {
+    montar();
+    await abrir("Períodos fiscales");
+    const seccion = await screen.findByRole("region", { name: "Períodos fiscales" });
+    expect(within(seccion).getAllByRole("row")).toHaveLength(2);
+    // vigente: cambia con D7A-13 (el período se lee «Noviembre 2026» tal como lo devuelve la API)
+    expect(within(seccion).getByText("Noviembre 2026")).toBeTruthy();
+    cleanup();
+    montar({ datos: resumen(vacio) });
+    await abrir("Períodos fiscales");
+    expect(await screen.findByText("Sin períodos fiscales")).toBeTruthy();
+  });
+
+  it("M8 · obligaciones: 4 columnas y una fila con su estado; o vacío", async () => {
+    montar();
+    await abrir("Obligaciones");
+    const seccion = await screen.findByRole("region", { name: /Obligaciones materializadas/ });
+    expect(within(seccion).getAllByRole("columnheader")).toHaveLength(4);
+    expect(within(seccion).getAllByRole("row")).toHaveLength(2);
+    expect(within(seccion).getByText("Pendiente")).toBeTruthy();
+    cleanup();
+    montar({ datos: resumen(vacio) });
+    await abrir("Obligaciones");
+    expect(await screen.findByText("Sin obligaciones materializadas")).toBeTruthy();
+  });
+
+  it("M9 · ficha contable: 9 datos, contacto (con client.manage) y domicilio; o «No cargado» con salida", async () => {
+    montar();
+    await abrir("Ficha contable");
+    const ficha = await screen.findByRole("region", { name: "Ficha contable" });
+    expect(ficha.querySelectorAll("dt")).toHaveLength(13);
+    expect(within(ficha).getByText("Comercio")).toBeTruthy();
+    cleanup();
+    montar({ datos: resumen(vacio) });
+    await abrir("Ficha contable");
+    const fichaVacia = await screen.findByRole("region", { name: "Ficha contable" });
+    expect(fichaVacia.querySelectorAll("dt")).toHaveLength(5);
+    expect(within(fichaVacia).getByRole("link", { name: "Completar desde Clientes" })).toBeTruthy();
+    // vigente: cambia con D7A-12 (el nombre «Onboarding fiscal» pasa a «Configuración fiscal»)
+    expect(within(fichaVacia).getByRole("link", { name: "Cargar en Onboarding fiscal" })).toBeTruthy();
+  });
+
+  it("M10 · perfil fiscal: 7 datos e historial de versiones; o «Sin perfil fiscal»", async () => {
+    montar();
+    await abrir("Perfil fiscal");
+    const seccion = await screen.findByRole("region", { name: "Perfil del contribuyente" });
+    expect(seccion.querySelectorAll(".client-summary__facts dt")).toHaveLength(7);
+    expect(within(seccion).getByText("Historial de versiones")).toBeTruthy();
+    cleanup();
+    montar({ datos: resumen({ perfiles: [] }) });
+    await abrir("Perfil fiscal");
+    expect(await screen.findByText("Sin perfil fiscal")).toBeTruthy();
+  });
+
+  it("M11 · regímenes adheridos: régimen, impuesto, jurisdicción y estado; o «Sin inscripciones»", async () => {
+    montar();
+    await abrir("Regímenes adheridos");
+    const seccion = await screen.findByRole("region", { name: "Regímenes adheridos" });
+    expect(seccion.querySelectorAll("li")).toHaveLength(1);
+    expect(within(seccion).getByText("Régimen general")).toBeTruthy();
+    expect(within(seccion).getByText("Activo")).toBeTruthy();
+    cleanup();
+    montar({ datos: resumen({ inscripciones: [] }) });
+    await abrir("Regímenes adheridos");
+    expect(await screen.findByText("Sin inscripciones")).toBeTruthy();
+  });
+
+  it("M12 · actividades registradas: actividad y Principal o Secundaria; o «Sin actividades»", async () => {
+    montar();
+    await abrir("Actividades registradas");
+    const seccion = await screen.findByRole("region", { name: "Actividades registradas" });
+    expect(seccion.querySelectorAll("li")).toHaveLength(1);
+    expect(within(seccion).getByText("Comercio minorista")).toBeTruthy();
+    expect(within(seccion).getByText("Principal")).toBeTruthy();
+    cleanup();
+    montar({ datos: resumen({ actividades: [] }) });
+    await abrir("Actividades registradas");
+    expect(await screen.findByText("Sin actividades")).toBeTruthy();
+  });
+
+  it("M13 · catálogos: plan de cuentas, contrapartes y centros de costo; con ceros también se muestran", async () => {
+    montar();
+    await abrir("Catálogos");
+    const seccion = await screen.findByRole("region", { name: "Catálogos del cliente" });
+    expect(Array.from(seccion.querySelectorAll("li"), (li) => li.textContent)).toEqual([
+      "Plan de cuentas1",
+      "Contrapartes2",
+      "Centros de costo activos3",
+    ]);
+    cleanup();
+    montar({ datos: resumen(vacio) });
+    await abrir("Catálogos");
+    const vacia = await screen.findByRole("region", { name: "Catálogos del cliente" });
+    expect(Array.from(vacia.querySelectorAll("li"), (li) => li.textContent)).toEqual([
+      "Plan de cuentas0",
+      "Contrapartes0",
+      "Centros de costo activos0",
+    ]);
+  });
+});
