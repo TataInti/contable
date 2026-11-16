@@ -28,9 +28,11 @@ import { StatusBadge } from "../ui/StatusBadge";
 import { CUIT_ENDINGS } from "./clientes/terminacion";
 import { abrirClienteDelPanel } from "./panel/abrirCliente";
 import {
+  MENSAJE_RANGO_INVERTIDO,
   PANEL_PAGE_SIZE,
   RESPONSABLE_MIS,
   RESPONSABLE_TODOS,
+  esRangoValido,
   escribirFiltros,
   hayFiltrosActivos,
   leerFiltros,
@@ -58,6 +60,7 @@ const CAPACIDAD = "tax.settlements.read";
 const ROLES_TODO_EL_ESTUDIO = ["OWNER", "ADMIN"];
 const MOTIVO_CLAVE = "motivo";
 const MOTIVO_SIN_ASIGNACIONES = "sin-asignaciones";
+const ID_RANGO = "panel-trabajo-rango-error";
 
 export function StudyPanelTrabajo() {
   const { firmId, capabilities, setClientId, setPeriodId } = useClientContext();
@@ -76,11 +79,36 @@ export function StudyPanelTrabajo() {
   const verTodoPorRol = rol !== null && ROLES_TODO_EL_ESTUDIO.includes(rol);
   const propio = session.me?.userId ?? null;
 
+  // Hallazgo 58: el rango se valida en el cliente con el «desde» que muestra la pantalla. La fecha
+  // de referencia de la API llega con la primera respuesta.
+  const [asOfConocido, setAsOfConocido] = useState<string | null>(null);
+  const desdeVigente =
+    filtros.desde !== ""
+      ? filtros.desde
+      : asOfConocido !== null
+        ? sumarDias(asOfConocido, -TAX_PANEL_DEFAULT_LOOKBACK_DAYS)
+        : "";
+  const rangoValido = esRangoValido(desdeVigente, filtros.hasta);
+  // Con un rango inválido se sigue mostrando el último resultado válido; si no hubo ninguno, la vista inicial (sin fechas).
+  const [ultimoValido, setUltimoValido] = useState<FiltrosPanel>(() =>
+    rangoValido ? filtros : { ...filtros, desde: "", hasta: "" },
+  );
+  if (
+    rangoValido &&
+    escribirFiltros(ultimoValido).toString() !== escribirFiltros(filtros).toString()
+  ) {
+    setUltimoValido(filtros);
+  }
+  const consultaFiltros = rangoValido ? filtros : ultimoValido;
+
   const consulta = useInfiniteQuery({
-    queryKey: ["panel-trabajo", firmId, escribirFiltros(filtros).toString()],
+    queryKey: ["panel-trabajo", firmId, escribirFiltros(consultaFiltros).toString()],
     queryFn: ({ pageParam }) =>
       api.getEnvelope<TaxPanelResponse>(
-        rutaObligaciones(firmId ?? "", filtros, { offset: pageParam, limit: PANEL_PAGE_SIZE }),
+        rutaObligaciones(firmId ?? "", consultaFiltros, {
+          offset: pageParam,
+          limit: PANEL_PAGE_SIZE,
+        }),
       ),
     initialPageParam: 0,
     getNextPageParam: (ultima) => {
@@ -96,6 +124,10 @@ export function StudyPanelTrabajo() {
   const filas: TaxPanelRow[] = paginas.flatMap((pagina) => pagina.data);
   const total = ultimaPagina?.meta.total ?? 0;
   const opciones = primeraPagina?.meta.options;
+  const asOfRespuesta = primeraPagina?.meta.asOf;
+  useEffect(() => {
+    if (asOfRespuesta !== undefined) setAsOfConocido(asOfRespuesta);
+  }, [asOfRespuesta]);
 
   // S4-6: en la primera carga, OWNER/ADMIN sin obligaciones propias abren en «Todo el estudio»,
   // con el motivo visible en la URL. Después de esa carga, lo que elige la persona manda.
@@ -506,29 +538,42 @@ export function StudyPanelTrabajo() {
             ))}
           </select>
         </div>
-        <label className="ds-field panel-trabajo__filtro">
-          <span className="ds-field__label">Vencimiento desde</span>
-          <input
-            ref={desdeRef}
-            className="ds-field__input"
-            type="date"
-            value={filtros.desde !== "" ? filtros.desde : desdeDefecto}
-            onChange={(evento) =>
-              cambiarFiltros((actual) => ({ ...actual, desde: evento.target.value }))
-            }
-          />
-        </label>
-        <label className="ds-field panel-trabajo__filtro">
-          <span className="ds-field__label">Vencimiento hasta</span>
-          <input
-            className="ds-field__input"
-            type="date"
-            value={filtros.hasta}
-            onChange={(evento) =>
-              cambiarFiltros((actual) => ({ ...actual, hasta: evento.target.value }))
-            }
-          />
-        </label>
+        <div className="panel-trabajo__fechas">
+          <div className="panel-trabajo__fechas-campos">
+            <label className="ds-field panel-trabajo__filtro">
+              <span className="ds-field__label">Vencimiento desde</span>
+              <input
+                ref={desdeRef}
+                className="ds-field__input"
+                type="date"
+                aria-invalid={rangoValido ? undefined : true}
+                aria-describedby={rangoValido ? undefined : ID_RANGO}
+                value={filtros.desde !== "" ? filtros.desde : desdeDefecto}
+                onChange={(evento) =>
+                  cambiarFiltros((actual) => ({ ...actual, desde: evento.target.value }))
+                }
+              />
+            </label>
+            <label className="ds-field panel-trabajo__filtro">
+              <span className="ds-field__label">Vencimiento hasta</span>
+              <input
+                className="ds-field__input"
+                type="date"
+                aria-invalid={rangoValido ? undefined : true}
+                aria-describedby={rangoValido ? undefined : ID_RANGO}
+                value={filtros.hasta}
+                onChange={(evento) =>
+                  cambiarFiltros((actual) => ({ ...actual, hasta: evento.target.value }))
+                }
+              />
+            </label>
+          </div>
+          {rangoValido ? null : (
+            <span className="ds-field__error" id={ID_RANGO}>
+              {MENSAJE_RANGO_INVERTIDO}
+            </span>
+          )}
+        </div>
         {hayFiltros ? (
           <div className="panel-trabajo__filtro">
             <Button size="sm" variant="ghost" onClick={quitarFiltros}>

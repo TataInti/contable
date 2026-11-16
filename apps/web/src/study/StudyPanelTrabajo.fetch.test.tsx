@@ -210,8 +210,7 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     expect(pedidos.some((ruta) => ruta.includes("offset=1"))).toBe(true);
   });
 
-  // vigente: cambia con hallazgo 58
-  it("un 400 por rango inválido muestra el mensaje de la API y deja «no disponible» en los indicadores", async () => {
+  it("un 400 de la API muestra su mensaje y deja «no disponible» en los indicadores", async () => {
     respuestaPanel = () => ({
       status: 400,
       cuerpo: {
@@ -221,7 +220,7 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
         },
       },
     });
-    renderPanel("/panel-trabajo?desde=2026-12-31&hasta=2026-01-01");
+    renderPanel("/panel-trabajo?responsable=todos");
     expect(await screen.findByText("No se pudo cargar el panel de trabajo")).toBeTruthy();
     expect(screen.getByText("El vencimiento «hasta» es anterior a «desde»")).toBeTruthy();
     expect(valorIndicador("Vencidas")).toBe("no disponible");
@@ -235,11 +234,15 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     expect(screen.getByRole("button", { name: "Configurar obligaciones" })).toBeTruthy();
   });
 
-  // vigente: cambia con hallazgo 58
-  it("con «desde» posterior a «hasta» la pantalla pide igual a la API con ese rango", async () => {
+  it("con «desde» posterior a «hasta» no se pide ese rango a la API y la tabla sigue visible", async () => {
     respuestaPanel = () => ({ status: 200, cuerpo: cuerpo([fila()], { total: 1 }) });
     renderPanel("/panel-trabajo?desde=2026-12-31&hasta=2026-01-01");
     await tablaPanel();
-    expect(pedidos.some((ruta) => ruta.includes("dueFrom=2026-12-31&dueTo=2026-01-01"))).toBe(true);
+    expect(pedidos.some((ruta) => ruta.includes("dueFrom=2026-12-31&dueTo=2026-01-01"))).toBe(
+      false,
+    );
+    expect(
+      await screen.findByText("La fecha hasta tiene que ser igual o posterior a la fecha desde"),
+    ).toBeTruthy();
   });
 });

@@ -42,3 +42,15 @@ table[aria-label="Panel de trabajo"] tbody td {
 .panel-trabajo__filtro .ds-field__input {
   inline-size: auto;
 }
+
+/* Hallazgo 58: el mensaje del rango va bajo los dos campos de fecha, dentro de la barra. */
+.panel-trabajo__fechas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+
+.panel-trabajo__fechas-campos {
+  display: flex;
+  gap: var(--ds-space-2);
+}

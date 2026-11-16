@@ -110,3 +110,12 @@ export function rutaObligaciones(
   params.set("offset", String(pagina.offset));
   return `/firms/${firmId}/portfolio/tax-worklist/obligations?${params.toString()}`;
 }
+
+/** Hallazgo 58: mensaje del rango invertido, junto a los campos de fecha. */
+export const MENSAJE_RANGO_INVERTIDO =
+  "La fecha hasta tiene que ser igual o posterior a la fecha desde";
+
+/** Vacío = sin tope. Las fechas AAAA-MM-DD se comparan como texto. */
+export function esRangoValido(desde: string, hasta: string): boolean {
+  return desde === "" || hasta === "" || desde <= hasta;
+}
