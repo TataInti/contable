@@ -6,6 +6,8 @@
  * argumentos.
  */
 
+import { isBusinessDay } from "./business-days.js";
+
 /** Frecuencias del motor: la misma lista que DUE_DATE_FREQUENCIES de packages/contracts (prueba en apps/api/src/tax). */
 export type DueDateFrequency = "MONTHLY" | "QUARTERLY" | "ANNUAL" | "ONCE";
 
@@ -59,9 +61,8 @@ export function nextBusinessDay(iso: string, holidays: readonly string[] = []): 
   const [y, m, d] = iso.split("-").map(Number) as [number, number, number];
   const date = new Date(Date.UTC(y, m - 1, d));
   while (true) {
-    const day = date.getUTCDay(); // 0=Sun,6=Sat
     const iso2 = formatIso(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
-    if (day !== 0 && day !== 6 && !holidays.includes(iso2)) return iso2;
+    if (isBusinessDay(iso2, holidays)) return iso2;
     date.setUTCDate(date.getUTCDate() + 1);
   }
 }
