@@ -197,4 +197,24 @@ describe("informe de validación y errores", () => {
     );
     expect(periodLabel(entry({ referenceLabel: null, referencePeriodStart: null, referencePeriodEnd: null }))).toBe("—");
   });
+
+  it("no repite el mes cuando el rótulo es el mismo que el rango (sin tildes, mayúsculas ni espacios de más)", () => {
+    expect(periodLabel(entry({ referenceLabel: "enero de 2026" }))).toBe("enero de 2026");
+    expect(periodLabel(entry({ referenceLabel: "  ENERO   de 2026 " }))).toBe("enero de 2026");
+    // Tilde combinante sobre la «e» de «septiembre» (dato sintético): se compara sin tildes.
+    expect(
+      periodLabel(
+        entry({
+          referenceLabel: "septie\u0301mbre de 2026",
+          referencePeriodStart: "2026-09-01T00:00:00.000Z",
+          referencePeriodEnd: "2026-09-30T00:00:00.000Z",
+        }),
+      ),
+    ).toBe("septiembre de 2026");
+    // Un rótulo distinto del mes conserva «rótulo (rango)»; un rango parcial muestra sus fechas.
+    expect(periodLabel(entry({ referenceLabel: "Ene-26" }))).toBe("Ene-26 (enero de 2026)");
+    expect(
+      periodLabel(entry({ referenceLabel: "enero de 2026", referencePeriodEnd: "2026-01-15T00:00:00.000Z" })),
+    ).toBe("enero de 2026 (01/01/2026 al 15/01/2026)");
+  });
 });

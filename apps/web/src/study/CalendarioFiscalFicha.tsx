@@ -15,6 +15,7 @@ import {
   type DenseColumn,
 } from "../ui/Dense";
 import { CalendarioFiscalCeldaDrawer } from "./CalendarioFiscalCeldaDrawer";
+import { CalendarioFiscalImportDrawer } from "./CalendarioFiscalImportDrawer";
 import {
   adjustmentLabel,
   calendarTitleLine,
@@ -73,6 +74,7 @@ export function CalendarioFiscalFicha({
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [focusEntryId, setFocusEntryId] = useState<string | null>(null);
   const [cellDrawer, setCellDrawer] = useState<{ entry: CalendarEntryRow | null } | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const detail = useCalendarDetail(firmId, calendarId, true);
   const calendar = detail.data;
@@ -448,9 +450,14 @@ export function CalendarioFiscalFicha({
           <>
             <DenseToolbar>
               {canEditCells ? (
-                <Button type="button" variant="primary" onClick={() => setCellDrawer({ entry: null })}>
-                  Agregar celda
-                </Button>
+                <>
+                  <Button type="button" variant="primary" onClick={() => setCellDrawer({ entry: null })}>
+                    Agregar celda
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => setImportOpen(true)}>
+                    Importar celdas desde un archivo
+                  </Button>
+                </>
               ) : null}
               {cellsNote ? <span>{cellsNote}</span> : null}
             </DenseToolbar>
@@ -515,6 +522,9 @@ export function CalendarioFiscalFicha({
           calendarId={calendarId}
           entry={cellDrawer.entry}
         />
+      ) : null}
+      {importOpen ? (
+        <CalendarioFiscalImportDrawer firmId={firmId} calendarId={calendarId} onClose={() => setImportOpen(false)} />
       ) : null}
       <ConfirmDialog confirm={confirm} />
     </DenseSection>
