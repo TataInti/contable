@@ -180,6 +180,14 @@ export interface WorkpaperCreateInput {
   accountingPeriodId?: string;
 }
 
+/**
+ * Control bloqueante abierto: impide enviar el expediente a revisión y cerrarlo.
+ * Un solo predicado para ambos casos (P3): el envío y el cierre lo usan.
+ */
+export function esControlBloqueanteAbierto(control: { severity: string; status: string }): boolean {
+  return control.severity === "BLOCKING" && control.status === "OPEN";
+}
+
 export class MonthlyWorkpaperService {
   private readonly mutablePreparationStates = [
     "DRAFT",
@@ -1681,13 +1689,22 @@ export class MonthlyWorkpaperService {
     return withTenantContext(ctx, async (tx) => {
       const wp = await tx.monthlyTaxWorkpaper.findFirst({
         where: { id: workpaperId, firmId: ctx.firmId },
-        include: { settlements: { include: { settlement: true } } },
+        include: { settlements: { include: { settlement: true } }, controls: true },
       });
       if (!wp) throw new WorkpaperError("WORKPAPER_NOT_FOUND", "Expediente no encontrado");
       if (wp.status !== "CALCULATED" && wp.status !== "CHANGES_REQUESTED") {
         throw new WorkpaperError(
           "INVALID_TRANSITION",
           `No se puede enviar a revisión desde ${wp.status}`,
+        );
+      }
+
+      // Compuerta de la API (desvío 1, decisión de Ciro): no se envía con controles bloqueantes abiertos.
+      const bloqueantes = wp.controls.filter(esControlBloqueanteAbierto);
+      if (bloqueantes.length > 0) {
+        throw new WorkpaperError(
+          "BLOCKING_CONTROLS",
+          `Hay ${bloqueantes.length} control(es) que bloquean el envío. Resolvelos o eximilos y volvé a enviar.`,
         );
       }
 
@@ -1849,7 +1866,7 @@ export class MonthlyWorkpaperService {
       }
 
       // Controles bloqueantes abiertos impiden el cierre.
-      const blocking = wp.controls.filter((c) => c.severity === "BLOCKING" && c.status === "OPEN");
+      const blocking = wp.controls.filter(esControlBloqueanteAbierto);
       if (blocking.length > 0) {
         throw new WorkpaperError(
           "BLOCKING_CONTROLS",

@@ -506,15 +506,13 @@ describe("B8 — humo de liquidación completa por API", () => {
     ]);
     expectB8(blockingControls.every((control) => control.status === "OPEN"), "ambos controles bloqueantes nacen abiertos").toBe(true);
 
-    const submitted = await request("POST", `${sourceBase}/submit-review`);
-    expectStatus(submitted, 200, "envío del cálculo a revisión de cierre");
-    const reviewed = await request("POST", `${sourceBase}/review`, { approved: true, comment: "T-Revisión B8" });
-    expectStatus(reviewed, 200, "aprobación del cálculo previo al cierre");
-
-    const blockedFinalize = await request("POST", `${sourceBase}/finalize`);
-    expectStatus(blockedFinalize, 422, "el cierre rechaza controles bloqueantes abiertos");
-    const blockedError = (blockedFinalize.json() as { error: { message: string } }).error;
-    expectB8(blockedError.message, "el cierre explica que quedan dos controles sin resolver").toBe("2 control(es) bloqueante(s) sin resolver");
+    // Desvío 1 (decisión de Ciro, 16-nov): la API no envía a revisión con controles bloqueantes abiertos.
+    // vigente: cambia con decisión de Inti (16-nov, hallazgo 48)
+    const submittedWithOpenBlockers = await request("POST", `${sourceBase}/submit-review`);
+    expectStatus(submittedWithOpenBlockers, 422, "el envío con controles bloqueantes abiertos se rechaza");
+    const blockedSubmit = (submittedWithOpenBlockers.json() as { error: { code: string; message: string } }).error;
+    expectB8(blockedSubmit.code, "el rechazo identifica BLOCKING_CONTROLS").toBe("BLOCKING_CONTROLS");
+    expectB8(blockedSubmit.message, "el rechazo indica que quedan dos controles por resolver").toBe("Hay 2 control(es) que bloquean el envío. Resolvelos o eximilos y volvé a enviar.");
 
     // 8. READY se crea mediante el fixture de repositorio documentado arriba;
     // las resoluciones siguen usando el endpoint público de controles.
@@ -532,6 +530,12 @@ describe("B8 — humo de liquidación completa por API", () => {
       expectB8(resolved.status, `${control.code} queda resuelto`).toBe("RESOLVED");
       expectB8(resolved.evidenceDocumentId, `${control.code} conserva el documento de evidencia`).toBe(evidence.id);
     }
+
+    // Con los controles resueltos, el envío pasa y la revisión aprueba el cálculo antes del cierre.
+    const submitted = await request("POST", `${sourceBase}/submit-review`);
+    expectStatus(submitted, 200, "envío del cálculo a revisión de cierre tras resolver los controles");
+    const reviewed = await request("POST", `${sourceBase}/review`, { approved: true, comment: "T-Revisión B8" });
+    expectStatus(reviewed, 200, "aprobación del cálculo previo al cierre");
 
     const finalizationResponse = await request("POST", `${sourceBase}/finalize`);
     expectStatus(finalizationResponse, 200, "cierre del expediente tras resolver controles con evidencia READY");

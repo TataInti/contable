@@ -1628,4 +1628,42 @@ describe("envío a revisión por HTTP: caracterización y compuerta de controles
     expect(res.statusCode).toBe(404);
     expect(await estadoEnRuntime(workpaperId)).toBe("CALCULATED");
   });
+
+  it("con un control bloqueante abierto, responde 422 BLOCKING_CONTROLS y no cambia el estado", async () => {
+    const workpaperId = await expedienteCalculado();
+    await createBlockingControl(workpaperId, "BOOK_RATE_RECONCILIATION");
+    const res = await enviar(workpaperId, tokenOwner);
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toEqual({
+      error: {
+        code: "BLOCKING_CONTROLS",
+        message: "Hay 1 control(es) que bloquean el envío. Resolvelos o eximilos y volvé a enviar.",
+      },
+    });
+    expect(await estadoEnRuntime(workpaperId)).toBe("CALCULATED");
+  });
+
+  it("con el control bloqueante resuelto, el envío pasa (200) y queda IN_REVIEW", async () => {
+    const workpaperId = await expedienteCalculado();
+    const control = await createBlockingControl(workpaperId, "BOOK_RATE_RECONCILIATION");
+    await service.resolveControl(ctxReviewer, workpaperId, control.id, {
+      resolution: "Conciliación verificada en el respaldo de prueba",
+      status: "RESOLVED",
+    });
+    const res = await enviar(workpaperId, tokenOwner);
+    expect(res.statusCode).toBe(200);
+    expect(await estadoEnRuntime(workpaperId)).toBe("IN_REVIEW");
+  });
+
+  it("con el control bloqueante eximido por el revisor, el envío pasa (200) y queda IN_REVIEW", async () => {
+    const workpaperId = await expedienteCalculado();
+    const control = await createBlockingControl(workpaperId, "BOOK_RATE_RECONCILIATION");
+    await service.resolveControl(ctxReviewer, workpaperId, control.id, {
+      resolution: "Diferencia aceptada por el revisor en la prueba",
+      status: "WAIVED",
+    });
+    const res = await enviar(workpaperId, tokenOwner);
+    expect(res.statusCode).toBe(200);
+    expect(await estadoEnRuntime(workpaperId)).toBe("IN_REVIEW");
+  });
 });
