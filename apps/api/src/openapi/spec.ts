@@ -110,6 +110,20 @@ export function fiscalPaths(): OpenApiPath[] {
       capability: "tax.settlements.calculate",
     },
     {
+      method: "patch",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/tax-credit-ledger/{lotId}",
+      summary:
+        "Edita referencia, respaldo, importe o arrastre (carryForward) de un lote; cada cambio queda en el historial",
+      capability: "tax.settlements.calculate",
+    },
+    {
+      method: "patch",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/tax-obligations/{obligationId}/filings/{filingId}/declaration",
+      summary:
+        "Carga la declaración jurada de una presentación y genera los saldos del libro (saldosGenerados)",
+      capability: "tax.filings.record",
+    },
+    {
       method: "post",
       path: "/api/v1/firms/{firmId}/clients/{clientId}/document-requests/{requestId}/send",
       summary: "Envía un pedido documental (DRAFT → SENT)",

@@ -49,6 +49,92 @@ const extractionResult: ExtractionResult = {
   estimatedCostUsd: null,
 };
 
+describe("DocumentProcessor categorías de evidencia (corte 5b-1)", () => {
+  async function procesarCon(category: string | null) {
+    const data = Buffer.from("%PDF-1.4 synthetic fixture");
+    const fileVersion = {
+      id: "44444444-4444-4444-8444-444444444444",
+      objectKey: "synthetic/document.pdf",
+      sha256: sha256Of(data),
+      sizeBytes: data.byteLength,
+      document: { category },
+    };
+    const fakeTx = {
+      documentFileVersion: {
+        findFirst: vi.fn().mockResolvedValueOnce(fileVersion).mockResolvedValueOnce(null),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      document: { update: vi.fn().mockResolvedValue({}) },
+      documentProcessingJob: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      documentExtraction: {
+        create: vi.fn(async () => ({ id: "55555555-5555-4555-8555-555555555555" })),
+      },
+      extractedLineItem: { create: vi.fn() },
+    };
+    vi.mocked(withWorkerTenant).mockImplementation(async (_firmId, _clientId, callback) =>
+      callback(fakeTx as unknown as Prisma.TransactionClient),
+    );
+    const storage = {
+      get: vi.fn().mockResolvedValue(data),
+      promote: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ObjectStorage;
+    const ai = {
+      runExtraction: vi.fn().mockResolvedValue(extractionResult),
+    } as unknown as AiClient;
+    const clamav = {
+      scan: vi.fn().mockResolvedValue({ clean: true, result: "synthetic OK" }),
+    } as unknown as ClamAvClient;
+    await new DocumentProcessor(storage, ai, clamav).process({
+      documentId: "33333333-3333-4333-8333-333333333333",
+      fileVersionId: fileVersion.id,
+      firmId: "11111111-1111-4111-8111-111111111111",
+      clientId: "22222222-2222-4222-8222-222222222222",
+    });
+    return { ai, fakeTx };
+  }
+
+  it("un documento común sin categoría va a la extracción", async () => {
+    const { ai } = await procesarCon(null);
+
+    expect(ai.runExtraction).toHaveBeenCalledOnce();
+  });
+
+  it("un documento de otra categoría va a la extracción", async () => {
+    const { ai } = await procesarCon("OTRO");
+
+    expect(ai.runExtraction).toHaveBeenCalledOnce();
+  });
+
+  it("el acuse queda READY sin extracción", async () => {
+    const { ai, fakeTx } = await procesarCon("ACUSE");
+
+    expect(ai.runExtraction).not.toHaveBeenCalled();
+    expect(fakeTx.document.update).toHaveBeenCalledWith({
+      where: { id: "33333333-3333-4333-8333-333333333333" },
+      data: { status: "READY" },
+    });
+    expect(fakeTx.documentProcessingJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ stage: "VALIDATED_NO_EXTRACTION" }),
+      }),
+    );
+  });
+  it("la declaración jurada queda READY sin extracción (pruebas en rojo, corte 5b-1)", async () => {
+    const { ai, fakeTx } = await procesarCon("DECLARACION_JURADA");
+
+    expect(ai.runExtraction).not.toHaveBeenCalled();
+    expect(fakeTx.document.update).toHaveBeenCalledWith({
+      where: { id: "33333333-3333-4333-8333-333333333333" },
+      data: { status: "READY" },
+    });
+    expect(fakeTx.documentProcessingJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ stage: "VALIDATED_NO_EXTRACTION" }),
+      }),
+    );
+  });
+});
+
 describe("DocumentProcessor extracción sin ítems", () => {
   it("no crea filas de ítems con un resultado sintético", async () => {
     const data = Buffer.from("%PDF-1.4 synthetic fixture");

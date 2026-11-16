@@ -3297,6 +3297,7 @@ model TaxFiling {
   evidence    Document?     @relation("TaxFilingEvidence", fields: [evidenceDocumentId], references: [id])
   declaration Document?     @relation("TaxFilingDeclaration", fields: [declarationDocumentId], references: [id], onDelete: NoAction, onUpdate: Cascade)
 
+  creditLots TaxCreditLot[] @relation("TaxCreditLotSourceFiling")
   @@index([firmId, clientId, obligationId])
   @@map("tax_filings")
 }
@@ -3709,10 +3710,13 @@ model TaxCreditLot {
   verifiedAt     DateTime?
   createdByUserId String
   createdAt      DateTime @default(now())
+  sourceFilingId String?
+  carryForward   Boolean @default(true)
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   createdBy User @relation(fields: [createdByUserId], references: [id])
   verifiedBy User? @relation("creditLotVerifiedBy", fields: [verifiedByUserId], references: [id])
+  sourceFiling TaxFiling? @relation("TaxCreditLotSourceFiling", fields: [sourceFilingId], references: [id], onDelete: NoAction, onUpdate: Cascade)
   movements TaxCreditMovement[]
   history TaxCreditLotHistory[]
 

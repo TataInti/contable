@@ -20,5 +20,6 @@ export * from "./fiscal-books.js";
 export * from "./tax-calendars.js";
 export * from "./tax-panel.js";
 export * from "./tax-filing-declaration.js";
+export * from "./tax-credit-lot.js";
 export * from "./tax-caja-fiscal.js";
 export * from "./notifications.js";

@@ -1,4 +1,6 @@
+import { derivePeriodStatus } from "./period-status.js";
 import { Prisma } from "@prisma/client";
+import { motivoSiLoteUsado, origenDelLote } from "./declaration-credit-lots.js";
 import { calculateLateInterest, taxHash } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { settlementService } from "./settlement-service.js";
@@ -2138,6 +2140,9 @@ export class MonthlyWorkpaperService {
           originalAmount: lot.originalAmount.toFixed(4),
           available: lot.originalAmount.minus(applied).toFixed(4),
           verificationStatus: lot.verificationStatus,
+          origin: origenDelLote(lot),
+          sourceFilingId: lot.sourceFilingId,
+          carryForward: lot.carryForward,
           verifiedBy: lot.verifiedByUserId
             ? { id: lot.verifiedByUserId, name: lot.verifiedBy?.name ?? null }
             : null,
@@ -2381,6 +2386,7 @@ export class MonthlyWorkpaperService {
           kind: input.kind,
           evidenceDocumentId: input.evidenceDocumentId ?? null,
           sourceSettlementId: null,
+          sourceFilingId: null,
         },
       });
       if (existing) {
@@ -2409,6 +2415,7 @@ export class MonthlyWorkpaperService {
           periodId: input.periodId,
           kind: input.kind,
           sourceSettlementId: null,
+          sourceFilingId: null,
           verificationStatus: { not: "SUPERSEDED" },
         },
         data: { verificationStatus: "SUPERSEDED" },
@@ -2447,6 +2454,7 @@ export class MonthlyWorkpaperService {
       reference?: string | null;
       evidenceDocumentId?: string | null;
       originalAmount?: string;
+      carryForward?: boolean;
     },
   ) {
     return withTenantContext(ctx, async (tx) => {
@@ -2475,7 +2483,7 @@ export class MonthlyWorkpaperService {
       }
 
       // Construir el diff de campos modificados para la auditoría.
-      const changes: Record<string, { from: string | null; to: string | null }> = {};
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
       const nextReference = input.reference ?? null;
       const nextEvidence = input.evidenceDocumentId ?? null;
       const nextAmount = input.originalAmount ?? null;
@@ -2497,6 +2505,12 @@ export class MonthlyWorkpaperService {
         }
       }
 
+      // Corte 6a: el arrastre se cambia con historial y no si el saldo ya se usó en un cierre.
+      if (input.carryForward !== undefined && input.carryForward !== lot.carryForward) {
+        const motivo = await motivoSiLoteUsado(tx, lot);
+        if (motivo) throw new WorkpaperError("INVALID_TRANSITION", motivo);
+        changes.carryForward = { from: lot.carryForward, to: input.carryForward };
+      }
       if (Object.keys(changes).length === 0) {
         // Sin cambios reales: no se registra historial ni se toca la BD.
         return {
@@ -2504,6 +2518,7 @@ export class MonthlyWorkpaperService {
           reference: lot.reference,
           evidenceDocumentId: lot.evidenceDocumentId,
           originalAmount: lot.originalAmount.toFixed(4),
+          carryForward: lot.carryForward,
           changed: false,
         };
       }
@@ -2512,6 +2527,9 @@ export class MonthlyWorkpaperService {
       if (nextReference !== undefined) updateData.reference = nextReference;
       if (nextEvidence !== undefined) updateData.evidenceDocumentId = nextEvidence;
       if (changes.originalAmount && nextAmount != null) updateData.originalAmount = nextAmount;
+      if (changes.carryForward && input.carryForward !== undefined) {
+        updateData.carryForward = input.carryForward;
+      }
 
       const updated = await tx.taxCreditLot.update({
         where: { id: lot.id },
@@ -2533,6 +2551,7 @@ export class MonthlyWorkpaperService {
         reference: updated.reference,
         evidenceDocumentId: updated.evidenceDocumentId,
         originalAmount: updated.originalAmount.toFixed(4),
+        carryForward: updated.carryForward,
         changed: true,
       };
     });
@@ -2637,7 +2656,7 @@ export class MonthlyWorkpaperService {
           period: true,
           regime: { include: { taxType: true, jurisdiction: true } },
           payments: { where: { status: "PAID" } },
-          filings: { where: { status: "FILED" }, orderBy: { filedAt: "desc" }, take: 1 },
+          filings: { where: { status: "FILED" }, orderBy: { filedAt: "desc" } },
         },
         orderBy: { dueDate: "asc" },
       });
@@ -2653,9 +2672,21 @@ export class MonthlyWorkpaperService {
         where: { firmId: ctx.firmId, clientId },
         include: { movements: true },
       });
+      // Legajo mensual por período (la revisión más alta primero): su estado entra en periodStatus.
+      const workpapers = await tx.monthlyTaxWorkpaper.findMany({
+        where: { firmId: ctx.firmId, clientId },
+        select: { periodStart: true, periodEnd: true, status: true },
+        orderBy: { revision: "desc" },
+      });
 
       return obligations.map((obligation) => {
         const settlement = settlements.find((item) => item.regimeId === obligation.regimeId);
+        // La presentación que cuenta es la de la liquidación vigente: una rectificativa no hereda la DJ anterior.
+        const filing = settlement
+          ? (obligation.filings.find((item) => item.settlementId === settlement.id) ?? null)
+          : null;
+        const hasAcuse = Boolean(filing?.evidenceDocumentId);
+        const hasDeclaration = Boolean(filing?.declarationDocumentId);
         const totals = (settlement?.totals ?? {}) as Record<string, string>;
         const accrued = new Prisma.Decimal(totals["TOTAL_A_INGRESAR"] ?? totals["totalDue"] ?? "0");
         const paid = obligation.payments.reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0));
@@ -2696,6 +2727,28 @@ export class MonthlyWorkpaperService {
           regime: obligation.regime,
           // Presentación ya registrada (con su constancia): la pantalla no la vuelve a ofrecer.
           filedAt: obligation.filings[0]?.filedAt ?? null,
+          // Presentación de la liquidación vigente y su declaración jurada (corte 5b-2).
+          filingId: filing?.id ?? null,
+          hasAcuse,
+          hasDeclaration,
+          declarationDocumentId: filing?.declarationDocumentId ?? null,
+          impuestoDeterminado: filing?.impuestoDeterminado?.toFixed(4) ?? null,
+          saldoFavorTecnico: filing?.saldoFavorTecnico?.toFixed(4) ?? null,
+          saldoLibreDisponibilidad: filing?.saldoLibreDisponibilidad?.toFixed(4) ?? null,
+          totalAPagar: filing?.totalAPagar?.toFixed(4) ?? null,
+          saldosFavorDetalle: filing?.saldosFavorDetalle ?? null,
+          declaredAt: filing?.declaredAt ?? null,
+          // Única fuente del estado del período (period-status.ts); la web no lo recalcula.
+          periodStatus: derivePeriodStatus({
+            workpaperStatus:
+              workpapers.find(
+                (item) =>
+                  item.periodStart.getTime() === obligation.period.startDate.getTime() &&
+                  item.periodEnd.getTime() === obligation.period.endDate.getTime(),
+              )?.status ?? null,
+            settlementStatus: settlement?.status ?? null,
+            filing: filing ? { hasAcuse, hasDeclaration } : null,
+          }),
           settlement: settlement
             ? { id: settlement.id, status: settlement.status, version: settlement.version, totals }
             : null,
