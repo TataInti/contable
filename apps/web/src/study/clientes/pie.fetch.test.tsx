@@ -31,7 +31,10 @@ const ALFA = "Sintético Alfa S.A.";
 async function respuestaFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const cabeceras = { "Content-Type": "application/json" };
   if (init?.method && init.method !== "GET") {
-    return new Response(JSON.stringify({ data: { id: "c1" } }), { status: 200, headers: cabeceras });
+    return new Response(JSON.stringify({ data: { id: "c1" } }), {
+      status: 200,
+      headers: cabeceras,
+    });
   }
   const url = new URL(String(input), "http://localhost");
   const ruta = url.pathname.replace(/^\/api\/v1/, "") + url.search;
@@ -59,8 +62,12 @@ describe("Cajones de Clientes con cliente de consultas real y fetch simulado (5.
     fireEvent.click(disparador);
     const cajon = await screen.findByRole("dialog", { name: "Editar cliente" });
     fireEvent.click(within(cajon).getByRole("button", { name: "Cancelar" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Editar cliente" })).toBeNull());
-    expect(fetchEspiado.mock.calls.filter(([, init]) => init?.method && init.method !== "GET")).toHaveLength(0);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Editar cliente" })).toBeNull(),
+    );
+    expect(
+      fetchEspiado.mock.calls.filter(([, init]) => init?.method && init.method !== "GET"),
+    ).toHaveLength(0);
     expect(document.activeElement).toBe(disparador);
   });
 
