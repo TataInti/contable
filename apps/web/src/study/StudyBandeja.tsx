@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Table } from "@contable/design-system";
+import { Button, EmptyState, Field } from "@contable/design-system";
 import { isManualExtractionFieldKey } from "@contable/contracts";
 import {
   ApiError,
@@ -11,7 +11,12 @@ import {
   type DocumentRequest,
 } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
-import { belongsToDocumentQueue, type DocumentQueueFilter } from "./documentQueue";
+import {
+  belongsToDocumentQueue,
+  coincideConBusqueda,
+  ordenarPorIngresoDescendente,
+  type DocumentQueueFilter,
+} from "./bandeja/colaDeDocumentos";
 import { ExtractionFiscalTable } from "./ExtractionFiscalTable";
 import {
   hasEffectiveFiscalData,
@@ -22,17 +27,11 @@ import { ManualExtractionValueControl, normalizeManualExtractionInput } from "./
 import { EXTRACTION_SCALAR_FIELDS, fiscalScalarHasValue } from "./extractionScalarFields";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import {
-  DenseHeader,
-  DensePage,
-  DenseSearch,
-  DenseToolbar,
-  StatStrip,
-  useDensity,
-} from "../ui/Dense";
+import { DensePage, useDensity } from "../ui/Dense";
 import "./study.css";
 import { formatearFechaHora } from "../lib/formatoFechas";
-import { documentFileName, documentTypeLabel, normalizeDocumentSearch } from "./bandeja/utilidades";
+import { CabeceraBandeja, type VistaBandeja } from "./bandeja/CabeceraBandeja";
+import { ListaDocumentos } from "./bandeja/ListaDocumentos";
 import { CargarDocumento, type CargarDocumentoHandle } from "./bandeja/CargarDocumento";
 import { RechazarDocumento } from "./bandeja/RechazarDocumento";
 
@@ -78,6 +77,7 @@ export function StudyBandeja() {
   const cargaRef = useRef<CargarDocumentoHandle>(null);
   const [documentSearch, setDocumentSearch] = useState("");
   const [documentFilter, setDocumentFilter] = useState<DocumentQueueFilter>("ALL");
+  const [actualizando, setActualizando] = useState(false);
   const base = firmId && clientId ? `/firms/${firmId}/clients/${clientId}` : null;
   const documents = useQuery({
     queryKey: ["documents", firmId, clientId],
@@ -93,7 +93,7 @@ export function StudyBandeja() {
   const requests = useQuery({
     queryKey: ["document-requests", firmId, clientId],
     queryFn: () => api.get<DocumentRequest[]>(`${base}/document-requests`),
-    enabled: Boolean(base && showUpload),
+    enabled: Boolean(base),
   });
   const detail = useQuery({
     queryKey: ["document", firmId, clientId, selectedId],
@@ -291,95 +291,63 @@ export function StudyBandeja() {
   }, [completedReprocessJobId, firmId, clientId, selectedId, queryClient]);
 
   const rows = documents.data ?? [];
-  const normalizedDocumentSearch = normalizeDocumentSearch(documentSearch.trim());
-  const visibleRows = rows.filter((document) => {
-    if (!belongsToDocumentQueue(document, documentFilter)) return false;
-    if (!normalizedDocumentSearch) return true;
-    return normalizeDocumentSearch(
-      `${documentFileName(document)} ${document.status} ${document.category ?? ""} ${document.direction ?? ""} ${document.createdAt}`,
-    ).includes(normalizedDocumentSearch);
-  });
-  const documentQueue = [
-    { id: "ALL" as const, label: "Todos", count: rows.length },
-    {
-      id: "NEEDS_REVIEW" as const,
-      label: "Para revisar",
-      count: rows.filter((document) => belongsToDocumentQueue(document, "NEEDS_REVIEW")).length,
-    },
-    {
-      id: "PROCESSING" as const,
-      label: "Procesando",
-      count: rows.filter((document) => belongsToDocumentQueue(document, "PROCESSING")).length,
-    },
-    {
-      id: "REVIEWED" as const,
-      label: "Revisados",
-      count: rows.filter((document) => belongsToDocumentQueue(document, "REVIEWED")).length,
-    },
-    {
-      id: "ERROR" as const,
-      label: "Con error",
-      count: rows.filter((document) => belongsToDocumentQueue(document, "ERROR")).length,
-    },
+  // Más recientes primero (7b-12): la pantalla ordena por fecha de ingreso y no depende del orden de la API.
+  const documentosVisibles = ordenarPorIngresoDescendente(rows).filter(
+    (document) => belongsToDocumentQueue(document, documentFilter) && coincideConBusqueda(document, documentSearch),
+  );
+  const cantidadEnCola = (filter: DocumentQueueFilter) =>
+    rows.filter((document) => belongsToDocumentQueue(document, filter)).length;
+  // Una cifra sin respuesta no es 0 (C7B-5 y regla transversal): sin cliente no hay consulta; con error, «no disponible».
+  const cifraDeCola = (filter: DocumentQueueFilter) => {
+    if (!base) return "—";
+    if (documents.isError) return "no disponible";
+    if (documents.data === undefined) return "…";
+    return cantidadEnCola(filter);
+  };
+  const vistas: VistaBandeja[] = [
+    { id: "ALL", label: "Todos", value: cifraDeCola("ALL") },
+    { id: "NEEDS_REVIEW", label: "Para revisar", value: cifraDeCola("NEEDS_REVIEW") },
+    { id: "PROCESSING", label: "Procesando", value: cifraDeCola("PROCESSING") },
+    { id: "REVIEWED", label: "Revisado", value: cifraDeCola("REVIEWED") },
+    { id: "ERROR", label: "Con error", value: cifraDeCola("ERROR") },
   ];
   const pendingRequestItems = (requests.data ?? []).flatMap((request) =>
     request.items
       .filter((item) => item.status === "PENDING")
       .map((item) => ({ ...item, requestTitle: request.title })),
   );
+  // C7B-5: «Ítems pendientes» se carga al abrir la pantalla; sin respuesta muestra «…» o «no disponible».
+  const pendientesValor = !base
+    ? "—"
+    : requests.isError
+      ? "no disponible"
+      : requests.data === undefined
+        ? "…"
+        : pendingRequestItems.length;
+  const actualizar = () => {
+    setActualizando(true);
+    // Alcance sin cambios: documentos y, con el cajón abierto, pedidos. No refresca detalle ni extracción.
+    const consultas: Promise<unknown>[] = [documents.refetch()];
+    if (showUpload) consultas.push(requests.refetch());
+    void Promise.allSettled(consultas).finally(() => setActualizando(false));
+  };
   return (
     <DensePage density={density} flow className="document-inbox">
-      <DenseHeader
-        title="Bandeja documental"
-        description="Cargá comprobantes, validá los datos extraídos y prepará el asiento sin perder la evidencia."
-        actions={
-          <>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              void documents.refetch();
-              if (showUpload) void requests.refetch();
-              }}
-            >
-              Actualizar
-            </Button>
-          {base && capabilities.has("document.upload") ? (
-            <Button
-              onClick={() => {
-                setShowUpload((value) => !value);
-                cargaRef.current?.limpiarError();
-              }}
-              variant={showUpload ? "secondary" : "primary"}
-            >
-              {showUpload ? "Cerrar carga" : "Subir documento"}
-            </Button>
-          ) : null}
-        
-          </>
-        }
+      <CabeceraBandeja
+        vistas={vistas}
+        vistaActiva={documentFilter}
+        vistasSeleccionables={Boolean(base)}
+        onElegirVista={setDocumentFilter}
+        pendientes={{ value: pendientesValor, warn: pendingRequestItems.length > 0 }}
+        puedeSubir={Boolean(base) && capabilities.has("document.upload")}
+        cargaAbierta={showUpload}
+        onAlternarCarga={() => {
+          setShowUpload((value) => !value);
+          cargaRef.current?.limpiarError();
+        }}
+        actualizando={actualizando}
+        onActualizar={actualizar}
       />
-
-      <StatStrip
-        label="Vistas de la bandeja"
-        items={[
-          ...documentQueue.map((queue) => ({
-            key: queue.id,
-            label: queue.label,
-            value: documents.isLoading ? "…" : queue.count,
-            active: base ? documentFilter === queue.id : false,
-            onSelect: base ? () => setDocumentFilter(queue.id) : undefined,
-          })),
-          {
-            key: "pending-items",
-            label: "Ítems pendientes",
-            value: pendingRequestItems.length,
-            tone: pendingRequestItems.length > 0 ? ("warn" as const) : undefined,
-          },
-        ]}
-      />
-
-
-
 
       <CargarDocumento
         ref={cargaRef}
@@ -401,107 +369,25 @@ export function StudyBandeja() {
         />
       ) : (
         <>
-          <DenseToolbar>
-            <DenseSearch
-              value={documentSearch}
-              onChange={setDocumentSearch}
-              placeholder="Nombre, categoría o estado…"
-              label="Buscar"
-            />
-            <select
-              className="dense-select"
-              aria-label="Estado"
-              value={documentFilter}
-              onChange={(event) => setDocumentFilter(event.target.value as DocumentQueueFilter)}
-            >
-              {documentQueue.map((queue) => (
-                <option key={queue.id} value={queue.id}>
-                  {queue.label}
-                </option>
-              ))}
-            </select>
-          </DenseToolbar>
-
-
           <div className="review-workspace">
-          <section className="review-list" aria-label="Documentos">
-            <div className="review-list__heading">
-              <div>
-                <h2>Documentos</h2>
-                <span>{documents.isLoading ? "…" : visibleRows.length}</span>
-              </div>
-              <small>{visibleRows.length === rows.length ? "Más recientes primero" : `de ${rows.length}`}</small>
-            </div>
-            {documents.isLoading ? (
-              <div className="query-state query-state--compact" role="status">
-                <span className="loading-copy">Cargando documentos…</span>
-              </div>
-            ) : documents.isError ? (
-              <EmptyState
-                size="compact"
-                title="No se pudo cargar la bandeja"
-                action={
-                  <button className="text-action" onClick={() => void documents.refetch()}>
-                    Reintentar
-                  </button>
-                }
-              />
-            ) : rows.length === 0 ? (
-              <EmptyState
-                size="compact"
-                title="Bandeja vacía"
-                description="Subí un archivo para iniciar el flujo."
-                action={
-                  capabilities.has("document.upload") ? (
-                    <Button size="sm" onClick={() => setShowUpload(true)}>
-                      Subir documento
-                    </Button>
-                  ) : undefined
-                }
-              />
-            ) : (
-              <Table
-                rows={visibleRows}
-                rowKey={(row) => row.id}
-                empty={
-                  <EmptyState
-                    size="compact"
-                    title="No hay documentos en esta vista"
-                    description="Probá con otro estado o ajustá la búsqueda."
-                  />
-                }
-                columns={[
-                  {
-                    key: "document",
-                    header: "Documento",
-                    render: (row) => (
-                      <button
-                        type="button"
-                        className="document-link"
-                        aria-current={selectedId === row.id ? "true" : undefined}
-                        onClick={() => {
-                          setSelectedId(row.id);
-                        }}
-                      >
-                        <span className="document-link__type">{documentTypeLabel(row)}</span>
-                        <span>
-                          <strong>{documentFileName(row)}</strong>
-                          <small>
-                            {formatearFechaHora(row.createdAt)}
-                          </small>
-                        </span>
-                      </button>
-                    ),
-                  },
-                  {
-                    key: "status",
-                    header: "Estado",
-                    render: (row) => <StatusBadge status={row.status} />,
-                  },
-                ]}
-              />
-              )}
-            </section>
+            <ListaDocumentos
+              todos={rows}
+              visibles={documentosVisibles}
+              cargando={documents.isLoading}
+              error={documents.isError}
+              onReintentar={() => void documents.refetch()}
+              busqueda={documentSearch}
+              onBuscar={setDocumentSearch}
+              filtrada={documentFilter !== "ALL" || documentSearch.trim() !== ""}
+              seleccionadoId={selectedId}
+              onSeleccionar={setSelectedId}
+              puedeSubir={capabilities.has("document.upload")}
+              onSubir={() => setShowUpload(true)}
+              onQuitarFiltros={() => {
+                setDocumentFilter("ALL");
+                setDocumentSearch("");
+              }}
+            />
           <aside className="review-detail" aria-live="polite">
             {!selectedId ? (
               <EmptyState

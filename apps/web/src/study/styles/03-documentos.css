@@ -85,69 +85,11 @@
   align-items: start;
 }
 
-.review-list,
 .review-detail {
   min-width: 0;
   border: 1px solid var(--ds-color-border);
   border-radius: var(--ds-radius-lg);
   background: var(--ds-color-surface);
-}
-
-.review-list {
-  position: sticky;
-  top: 88px;
-  overflow: hidden;
-}
-
-.review-list__heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--ds-space-4);
-  padding: var(--ds-space-4) var(--ds-space-5);
-  border-bottom: 1px solid var(--ds-color-border);
-}
-
-.review-list__heading > div {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-}
-
-.review-list__heading h2,
-.review-list__heading small {
-  margin: 0;
-}
-
-.review-list__heading h2 {
-  font-size: var(--ds-text-lg);
-}
-
-.review-list__heading span {
-  display: grid;
-  place-items: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--ds-color-surface-muted);
-  color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-xs);
-  font-weight: 700;
-}
-
-.review-list__heading small {
-  color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-xs);
-}
-
-.review-list .ds-table__wrapper {
-  border: 0;
-  border-radius: 0;
-}
-
-.review-list .ds-table thead th {
-  top: 0;
 }
 
 .review-detail {

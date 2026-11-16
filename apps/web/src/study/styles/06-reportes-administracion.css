@@ -86,10 +86,6 @@
     grid-template-columns: 1fr;
   }
 
-  .review-list {
-    position: static;
-  }
-
   .extraction-fields {
     grid-template-columns: 1fr;
   }

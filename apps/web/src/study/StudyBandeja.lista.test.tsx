@@ -8,9 +8,9 @@ import { api } from "../lib/api";
 import { StudyBandeja } from "./StudyBandeja";
 
 /**
- * Caracterización de la lista de la Bandeja (Foco 7b.2: K1, K2, K6, K15, K16 y K17).
- * Datos sintéticos «Demo». Cada aserción marcada «vigente» describe lo que la pantalla
- * hace hoy; el corte que cambia ese comportamiento la reemplaza por la aserción nueva.
+ * Lista de la Bandeja (Foco 7b.2): K1, K2, K6, K15, K16 y K17, con los reemplazos de C7B-1 a C7B-5
+ * y de los defectos 7b-5, 7b-6 y 7b-12. Cada reemplazo lleva el «antes» que sustituye.
+ * Datos sintéticos «Demo».
  */
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -147,12 +147,17 @@ function indicador(etiqueta: string) {
   return etiquetaEl.parentElement?.querySelector(".dense-stat__value")?.textContent;
 }
 
+/** Botón de un indicador, por su nombre visible («Para revisar 1» responde a /^Para revisar\b/). */
+function indicadorBoton(etiqueta: string) {
+  return screen.getByRole("button", { name: new RegExp(`^${etiqueta}`) });
+}
+
 /** Veces que se pidió una ruta que termina en el sufijo dado. */
 function pedidos(sufijo: string) {
   return vi.mocked(api.get).mock.calls.filter(([ruta]) => String(ruta).endsWith(sufijo)).length;
 }
 
-describe("StudyBandeja · caracterización de la lista (7b.2)", () => {
+describe("StudyBandeja · lista de documentos (7b.2)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     contextMock.current = contexto();
@@ -173,7 +178,8 @@ describe("StudyBandeja · caracterización de la lista (7b.2)", () => {
     await waitFor(() => expect(indicador("Todos")).toBe("10"));
     expect(indicador("Para revisar")).toBe("1");
     expect(indicador("Procesando")).toBe("5");
-    expect(indicador("Revisados")).toBe("1");
+    // C7B-4 (7b.2): la cola pasa de «Revisados» a «Revisado», el mismo nombre que su etiqueta. Antes: indicador("Revisados").
+    expect(indicador("Revisado")).toBe("1");
     expect(indicador("Con error")).toBe("2");
   });
 
@@ -191,44 +197,49 @@ describe("StudyBandeja · caracterización de la lista (7b.2)", () => {
     expect(screen.queryByText("ticket.jpg")).toBeNull();
   });
 
-  // K2 · la búsqueda mira campos que la pantalla no muestra (defecto 7b-6).
-  it("K2 · vigente: la búsqueda usa el código de estado, la fecha ISO y la categoría", async () => {
+  // K2 · la búsqueda recorre lo que la fila muestra (defecto 7b-6, corregido en este corte).
+  it("K2 · la búsqueda recorre el nombre, el tipo, el estado con su nombre visible y la fecha dd/mm/aaaa", async () => {
     responder(listaDe([factura(), ticket()]));
     renderBandeja();
     await screen.findByText("factura.pdf");
     const buscar = screen.getByRole("searchbox", { name: "Buscar" });
-    // vigente: defecto 7b-6 (busca por el código REVIEWED y no por el nombre visible «Revisado»)
+    // 7b-6, antes: «REVIEWED» encontraba el documento por su código de estado. Ahora no.
     fireEvent.change(buscar, { target: { value: "REVIEWED" } });
-    expect(screen.queryByText("ticket.jpg")).not.toBeNull();
-    // vigente: defecto 7b-6 (el nombre visible «Revisado» no encuentra el documento)
-    fireEvent.change(buscar, { target: { value: "Revisado" } });
     expect(screen.queryByText("ticket.jpg")).toBeNull();
-    // vigente: defecto 7b-6 (busca la fecha ISO, que la pantalla no muestra)
+    // 7b-6, antes: «Revisado» no encontraba el documento. Ahora sí: es el nombre visible del estado.
+    fireEvent.change(buscar, { target: { value: "Revisado" } });
+    expect(screen.queryByText("ticket.jpg")).not.toBeNull();
+    // 7b-6, antes: la fecha ISO encontraba el documento. Ahora no.
     fireEvent.change(buscar, { target: { value: "2026-10-20" } });
+    expect(screen.queryByText("ticket.jpg")).toBeNull();
+    // 7b-6, antes: no se buscaba la fecha dd/mm/aaaa que la fila muestra. Ahora sí.
+    fireEvent.change(buscar, { target: { value: "20/10/2026" } });
     expect(screen.queryByText("ticket.jpg")).not.toBeNull();
-    // vigente: defecto 7b-6 (busca la categoría, que la pantalla no muestra)
+    // 7b-6, antes: la categoría (SALE) encontraba el documento. Ahora no: la fila no la muestra.
     fireEvent.change(buscar, { target: { value: "SALE" } });
-    expect(screen.queryByText("ticket.jpg")).not.toBeNull();
+    expect(screen.queryByText("ticket.jpg")).toBeNull();
   });
 
-  // K2 · el filtro de estado es un <select> en la barra (C7B-2).
-  it("K2 · vigente: el filtro de estado es un <select> «Estado» en la barra", async () => {
+  // K2 · C7B-2: un solo control para la cola; el <select> «Estado» se quita de la barra.
+  it("K2 · C7B-2: el estado se filtra con el indicador «Para revisar» (aria-pressed) y ya no hay <select> «Estado»", async () => {
     responder(listaDe([factura(), ticket()]));
     renderBandeja();
     await screen.findByText("factura.pdf");
-    // vigente: cambia con C7B-2 (se quita el <select> «Estado»; el filtro queda solo en los indicadores)
-    fireEvent.change(screen.getByRole("combobox", { name: "Estado" }), {
-      target: { value: "NEEDS_REVIEW" },
-    });
+    // C7B-2, antes: fireEvent.change sobre el <select> «Estado» con NEEDS_REVIEW. Ahora el select no existe.
+    expect(screen.queryByRole("combobox", { name: "Estado" })).toBeNull();
+    fireEvent.click(indicadorBoton("Para revisar"));
+    expect(indicadorBoton("Para revisar").getAttribute("aria-pressed")).toBe("true");
+    expect(indicadorBoton("Todos").getAttribute("aria-pressed")).toBe("false");
     expect(screen.queryByText("factura.pdf")).not.toBeNull();
     expect(screen.queryByText("ticket.jpg")).toBeNull();
   });
 
   // K6 · carga.
-  it("K6 · carga: «Cargando documentos…» mientras la lista no llega", async () => {
+  it("K6 · carga: «Cargando documentos…», sin afirmar el orden mientras la lista no llega", async () => {
     responder((ruta) => (ruta.endsWith("/documents") ? new Promise(() => {}) : undefined));
     renderBandeja();
     expect(await screen.findByText("Cargando documentos…")).toBeTruthy();
+    expect(screen.queryByText("Más recientes primero")).toBeNull();
   });
 
   // K6 · error y reintento.
@@ -246,33 +257,39 @@ describe("StudyBandeja · caracterización de la lista (7b.2)", () => {
     expect(intentos).toBe(2);
   });
 
-  // K6 · vacío.
-  it("K6 · vacío: «Bandeja vacía» con «Subir documento» en el estado vacío", async () => {
+  // K6 · vacío (C7B-1).
+  it("K6 · vacío: «Bandeja vacía» con «Subir documento» primaria en el estado vacío; la cabecera la ofrece secundaria", async () => {
     responder(listaDe([]));
     renderBandeja();
     const titulo = await screen.findByText("Bandeja vacía");
     const estadoVacio = titulo.closest(".ds-empty") as HTMLElement;
-    expect(within(estadoVacio).getByRole("button", { name: "Subir documento" })).toBeTruthy();
-    // vigente: cambia con C7B-1 («Subir documento» es primaria en la cabecera; desde 7b.2 es secundaria ahí)
+    // C7B-1, antes: la de la cabecera era primaria (ds-button--primary). Ahora es secundaria.
     expect(screen.getAllByRole("button", { name: "Subir documento" })[0]?.className).toContain(
+      "ds-button--secondary",
+    );
+    expect(within(estadoVacio).getByRole("button", { name: "Subir documento" }).className).toContain(
       "ds-button--primary",
     );
+    expect(screen.queryByText("Más recientes primero")).toBeNull();
   });
 
-  // K6 · sin coincidencias.
-  it("K6 · sin coincidencias: la búsqueda sin resultados muestra «No hay documentos en esta vista»", async () => {
+  // K6 · sin coincidencias (7b.2, c).
+  it("K6 · sin coincidencias: «No hay documentos en esta vista» con «Quitar filtros», que limpia la búsqueda", async () => {
     responder(listaDe([factura(), ticket()]));
     renderBandeja();
     await screen.findByText("factura.pdf");
-    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar" }), { target: { value: "zzz" } });
-    expect(await screen.findByText("No hay documentos en esta vista")).toBeTruthy();
-    // vigente: cambia en 7b.2 (c): «sin coincidencias» pasa a EmptyState kind="no-results" con «Quitar filtros»
-    expect(screen.queryByRole("button", { name: "Quitar filtros" })).toBeNull();
-    // vigente: cambia en 7b.2 (c): la descripción habla de «otro estado», que ya no existe como selector
-    expect(screen.getByText("Probá con otro estado o ajustá la búsqueda.")).toBeTruthy();
+    const buscar = screen.getByRole("searchbox", { name: "Buscar" }) as HTMLInputElement;
+    fireEvent.change(buscar, { target: { value: "zzz" } });
+    const titulo = await screen.findByText("No hay documentos en esta vista");
+    // 7b.2 (c), antes: sin «Quitar filtros» y con la descripción «Probá con otro estado…». Ahora es no-results.
+    expect(titulo.closest(".ds-empty")?.getAttribute("data-empty-kind")).toBe("no-results");
+    expect(screen.getByText("Probá con otra vista o ajustá la búsqueda.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Quitar filtros" }));
+    expect(buscar.value).toBe("");
+    expect(screen.queryByText("ticket.jpg")).not.toBeNull();
   });
 
-  // K6 · fila seleccionada. Vale para el botón de hoy y para la fila de DenseTable: se mide el elemento que contiene el nombre.
+  // K6 · fila seleccionada. Se mide el elemento que contiene el nombre: vale para el botón de antes y para la fila de hoy.
   it("K6 · la fila seleccionada lleva aria-current", async () => {
     responder((ruta) => {
       if (ruta.endsWith("/documents")) return Promise.resolve([factura(), ticket()]);
@@ -286,6 +303,31 @@ describe("StudyBandeja · caracterización de la lista (7b.2)", () => {
       "true",
     );
     expect(screen.getByText("ticket.jpg").closest("[aria-current]")).toBeNull();
+  });
+
+  // C7B-3 · cada documento es una fila de DenseTable; la fila seleccionada lleva aria-current.
+  it("C7B-3 · cada documento es una fila de DenseTable, no un botón, con aria-current en la seleccionada", async () => {
+    responder(listaDe([factura(), ticket()]));
+    renderBandeja();
+    await screen.findByText("factura.pdf");
+    // C7B-3, antes: un <button class="document-link"> por documento.
+    expect(screen.queryByRole("button", { name: /factura\.pdf/ })).toBeNull();
+    fireEvent.click(screen.getByRole("row", { name: /factura\.pdf/ }));
+    expect(screen.getByRole("row", { name: /factura\.pdf/ }).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("table", { name: "Documentos" })).toBeTruthy();
+    expect(screen.getByText("2 documentos")).toBeTruthy();
+  });
+
+  // 7b-12 · la lista ordena por fecha de ingreso y solo afirma el orden cuando lo muestra.
+  it("7b-12 · la lista se ordena por fecha de ingreso, más reciente primero, aunque la API llegue al revés", async () => {
+    responder(listaDe([ticket(), factura()]));
+    renderBandeja();
+    await screen.findByText("factura.pdf");
+    const claves = Array.from(document.querySelectorAll("tr[data-row-key]")).map((fila) =>
+      fila.getAttribute("data-row-key"),
+    );
+    expect(claves).toEqual(["doc-factura", "doc-ticket"]);
+    expect(screen.getByText("Más recientes primero")).toBeTruthy();
   });
 
   // K15 · Actualizar.
@@ -312,19 +354,59 @@ describe("StudyBandeja · caracterización de la lista (7b.2)", () => {
     expect(pedidos("/document-requests")).toBe(antes.pedidosDocs);
   });
 
-  // K16 · «Ítems pendientes».
-  it("K16 · vigente: «Ítems pendientes» marca 0 hasta abrir el cajón de carga y después el número real", async () => {
+  // K15 · «Actualizando…» mientras la consulta corre (7b.2, a).
+  it("K15 · «Actualizar» muestra «Actualizando…» y aria-busy mientras pide la lista", async () => {
+    let liberar: () => void = () => {};
+    let llamadas = 0;
+    responder((ruta) => {
+      if (!ruta.endsWith("/documents")) return undefined;
+      llamadas += 1;
+      if (llamadas === 1) return Promise.resolve([factura()]);
+      return new Promise((resolver) => {
+        liberar = () => resolver([factura()]);
+      });
+    });
+    renderBandeja();
+    await screen.findByText("factura.pdf");
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar" }));
+    const enCurso = await screen.findByRole("button", { name: "Actualizando…" });
+    expect(enCurso.getAttribute("aria-busy")).toBe("true");
+    liberar();
+    expect(await screen.findByRole("button", { name: "Actualizar" })).toBeTruthy();
+  });
+
+  // K16 · «Ítems pendientes» (C7B-5).
+  it("K16 · «Ítems pendientes» se carga al abrir la pantalla: «…» mientras carga y después el número real", async () => {
     responder((ruta) => {
       if (ruta.endsWith("/documents")) return Promise.resolve([factura()]);
       if (ruta.endsWith("/document-requests")) return Promise.resolve([pedido()]);
       return undefined;
     });
     renderBandeja();
-    await screen.findByText("factura.pdf");
-    // vigente: defecto 7b-5 (cambia con C7B-5: la cifra se carga al abrir la pantalla; mientras carga muestra «…»)
-    expect(indicador("Ítems pendientes")).toBe("0");
-    fireEvent.click(screen.getByRole("button", { name: "Subir documento" }));
+    // C7B-5, antes: «0» sin abrir el cajón de carga (defecto 7b-5).
+    expect(indicador("Ítems pendientes")).toBe("…");
     await waitFor(() => expect(indicador("Ítems pendientes")).toBe("2"));
+    fireEvent.click(screen.getByRole("button", { name: "Subir documento" }));
+    expect(indicador("Ítems pendientes")).toBe("2");
+  });
+
+  // C7B-5 · sin respuesta, nunca 0.
+  it("C7B-5 · «Ítems pendientes» dice «no disponible» si falla su consulta, nunca 0", async () => {
+    responder((ruta) => {
+      if (ruta.endsWith("/documents")) return Promise.resolve([factura()]);
+      if (ruta.endsWith("/document-requests")) return Promise.reject(new Error("falla de red"));
+      return undefined;
+    });
+    renderBandeja();
+    await waitFor(() => expect(indicador("Ítems pendientes")).toBe("no disponible"));
+  });
+
+  it("C7B-5 · con la lista en error, las cifras de las colas dicen «no disponible», nunca 0", async () => {
+    responder((ruta) => (ruta.endsWith("/documents") ? Promise.reject(new Error("falla de red")) : undefined));
+    renderBandeja();
+    await waitFor(() => expect(indicador("Todos")).toBe("no disponible"));
+    expect(indicador("Con error")).toBe("no disponible");
+    expect(screen.getByText("No se pudo cargar la bandeja")).toBeTruthy();
   });
 
   // K17 · sin cliente y permisos.
