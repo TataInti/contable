@@ -3,6 +3,7 @@ import { cuit, isoDate, uuid } from "./primitives.js";
 import { functionalCurrency } from "./catalogs.js";
 import { nationalTaxCondition } from "./tax-enums.js";
 import { ARGENTINA_PROVINCES, CLIENT_LEGAL_FORMS } from "./client-profile-catalogs.js";
+import { FILING_DECLARATION_DOCUMENT_CATEGORY } from "./tax-filing-declaration.js";
 
 /** Creación de cliente */
 export const createClientSchema = z
@@ -153,6 +154,13 @@ export const createPeriodSchema = z
   .strict();
 export type CreatePeriod = z.infer<typeof createPeriodSchema>;
 
+/** Categorías de evidencia de una presentación: el estudio las sube sin pedido. Una sola fuente de sus nombres. */
+export const PRESENTATION_EVIDENCE_CATEGORIES = [
+  "ACUSE",
+  FILING_DECLARATION_DOCUMENT_CATEGORY,
+] as const;
+export type PresentationEvidenceCategory = (typeof PRESENTATION_EVIDENCE_CATEGORIES)[number];
+
 /** Creación de sesión de upload de documento (G2-07: requestItemId obligatorio) */
 export const createUploadSessionSchema = z
   .object({
@@ -161,12 +169,17 @@ export const createUploadSessionSchema = z
     // G2-07: el ítem de pedido al que responde el documento. Obligatorio para
     // que cada archivo quede ligado al ítem correcto del pedido documental.
     requestItemId: z.string().uuid().optional(),
-    // La constancia de una presentación la sube el estudio y no responde a
-    // ningún pedido: es el único caso sin requestItemId.
-    category: z.literal("ACUSE").optional(),
+    // El acuse y la declaración jurada los sube el estudio sin pedido: son las
+    // únicas categorías que pueden ir sin requestItemId.
+    category: z
+      .enum(PRESENTATION_EVIDENCE_CATEGORIES, {
+        message:
+          "Para subir un archivo sin pedido, elegí la categoría Acuse de presentación o Declaración jurada.",
+      })
+      .optional(),
   })
   .strict()
-  .refine((value) => value.requestItemId !== undefined || value.category === "ACUSE", {
+  .refine((value) => value.requestItemId !== undefined || value.category !== undefined, {
     message: "El archivo debe corresponder a un ítem de pedido",
     path: ["requestItemId"],
   });

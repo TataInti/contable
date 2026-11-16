@@ -1,3 +1,4 @@
+import type { PresentationEvidenceCategory } from "@contable/contracts";
 import { api, uploadToSignedUrl } from "../lib/api";
 
 /**
@@ -25,11 +26,18 @@ const FAILED_STATUSES = ["FAILED", "CANCELED", "EXTRACTION_FAILED"];
 
 export const RECEIPT_ACCEPT = ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
 
-/** Sube la constancia y devuelve el id del documento, todavía en validación. */
-export async function uploadFilingReceipt(base: string, file: File): Promise<string> {
+/**
+ * Sube una constancia o una declaración jurada del estudio, sin pedido documental, y devuelve el
+ * id del documento, todavía en validación.
+ */
+export async function uploadPresentacionDocument(
+  base: string,
+  file: File,
+  category: PresentationEvidenceCategory,
+): Promise<string> {
   const session = await api.post<UploadSession>(`${base}/document-upload-sessions`, {
     ...(file.type ? { expectedMime: file.type } : {}),
-    category: "ACUSE",
+    category,
   });
   await uploadToSignedUrl(session.presignedUrl, file);
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
@@ -47,6 +55,11 @@ export async function uploadFilingReceipt(base: string, file: File): Promise<str
     },
   );
   return completed.documentId;
+}
+
+/** El acuse de presentación: atajo de PanelPresentacion, que no cambia en 5b-1. */
+export function uploadFilingReceipt(base: string, file: File): Promise<string> {
+  return uploadPresentacionDocument(base, file, "ACUSE");
 }
 
 /** Espera a que la constancia termine la validación. Rechaza si falla o si tarda demasiado. */

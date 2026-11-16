@@ -13,6 +13,13 @@ const CUSTOMER_DATA_EXTRACTION_DISABLED = "CUSTOMER_DATA_EXTRACTION_DISABLED";
  * dispara la extracción IA (Fase 5).
  */
 
+/**
+ * Acuse y declaración jurada: evidencia de una presentación. Espejo de
+ * PRESENTATION_EVIDENCE_CATEGORIES (packages/contracts/src/clients.ts); el worker
+ * no depende de @contable/contracts, así que los nombres se fijan aquí y en su prueba.
+ */
+const PRESENTATION_EVIDENCE_CATEGORIES: readonly string[] = ["ACUSE", "DECLARACION_JURADA"];
+
 export interface DocumentJobPayload {
   documentId: string;
   fileVersionId: string;
@@ -130,10 +137,13 @@ export class DocumentProcessor {
       return;
     }
 
-    // Los acuses son evidencia de una presentación, no comprobantes a
-    // extraer. Después de antivirus, hash y promoción ya cumplen el contrato
-    // de evidencia READY y no deben depender del servicio IA/OCR.
-    if (fileVersion.document.category === "ACUSE") {
+    // Los acuses y las declaraciones juradas son evidencia de una presentación,
+    // no comprobantes a extraer. Después de antivirus, hash y promoción ya
+    // cumplen el contrato de evidencia READY y no deben depender del servicio IA/OCR.
+    if (
+      fileVersion.document.category !== null &&
+      PRESENTATION_EVIDENCE_CATEGORIES.includes(fileVersion.document.category)
+    ) {
       await withWorkerTenant(payload.firmId, payload.clientId, async (tx) => {
         await tx.document.update({ where: { id: payload.documentId }, data: { status: "READY" } });
         await tx.documentProcessingJob.updateMany({

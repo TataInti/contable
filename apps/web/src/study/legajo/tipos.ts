@@ -81,6 +81,26 @@ export interface TaxPosition {
   availableCredit: string;
   interest: string;
   totalPayable: string;
+  /** Presentación de la liquidación vigente y su declaración jurada (corte 5b-2). La API los entrega; las pantallas actuales no los leen. */
+  filingId?: string | null;
+  hasAcuse?: boolean;
+  hasDeclaration?: boolean;
+  declarationDocumentId?: string | null;
+  impuestoDeterminado?: string | null;
+  saldoFavorTecnico?: string | null;
+  saldoLibreDisponibilidad?: string | null;
+  totalAPagar?: string | null;
+  saldosFavorDetalle?: unknown;
+  declaredAt?: string | null;
+  periodStatus?: TaxPeriodStatus;
+}
+
+/** Estado del período que entrega la API (derivePeriodStatus). La web no lo recalcula. */
+export interface TaxPeriodStatus {
+  code: "EN_CURSO" | "LEGAJO_FINALIZADO_DJ_PENDIENTE" | "COMPLETO";
+  label: string;
+  missing: Array<"ACUSE" | "DJ">;
+  missingText: string | null;
 }
 
 export interface TaxType {

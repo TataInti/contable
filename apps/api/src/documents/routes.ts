@@ -96,7 +96,7 @@ export function documentRoutes(app: FastifyInstance) {
     const userId = ctx.userId;
 
     // G2-07: valida que el ítem existe y pertenece al cliente antes de crear la sesión.
-    // Una constancia de presentación (ACUSE) la sube el estudio sin pedido.
+    // Una constancia de presentación (ACUSE) o una declaración jurada la sube el estudio sin pedido.
     if (body.requestItemId) {
       const item = await service.getRequestItem(ctx, body.requestItemId);
       if (!item || item.clientId !== clientId) {
