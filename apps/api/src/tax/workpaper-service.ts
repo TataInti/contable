@@ -1,5 +1,6 @@
 import { derivePeriodStatus } from "./period-status.js";
 import { Prisma } from "@prisma/client";
+import { motivoSiLoteUsado, origenDelLote } from "./declaration-credit-lots.js";
 import { calculateLateInterest, taxHash } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { settlementService } from "./settlement-service.js";
@@ -2139,6 +2140,9 @@ export class MonthlyWorkpaperService {
           originalAmount: lot.originalAmount.toFixed(4),
           available: lot.originalAmount.minus(applied).toFixed(4),
           verificationStatus: lot.verificationStatus,
+          origin: origenDelLote(lot),
+          sourceFilingId: lot.sourceFilingId,
+          carryForward: lot.carryForward,
           verifiedBy: lot.verifiedByUserId
             ? { id: lot.verifiedByUserId, name: lot.verifiedBy?.name ?? null }
             : null,
@@ -2382,6 +2386,7 @@ export class MonthlyWorkpaperService {
           kind: input.kind,
           evidenceDocumentId: input.evidenceDocumentId ?? null,
           sourceSettlementId: null,
+          sourceFilingId: null,
         },
       });
       if (existing) {
@@ -2410,6 +2415,7 @@ export class MonthlyWorkpaperService {
           periodId: input.periodId,
           kind: input.kind,
           sourceSettlementId: null,
+          sourceFilingId: null,
           verificationStatus: { not: "SUPERSEDED" },
         },
         data: { verificationStatus: "SUPERSEDED" },
@@ -2448,6 +2454,7 @@ export class MonthlyWorkpaperService {
       reference?: string | null;
       evidenceDocumentId?: string | null;
       originalAmount?: string;
+      carryForward?: boolean;
     },
   ) {
     return withTenantContext(ctx, async (tx) => {
@@ -2476,7 +2483,7 @@ export class MonthlyWorkpaperService {
       }
 
       // Construir el diff de campos modificados para la auditoría.
-      const changes: Record<string, { from: string | null; to: string | null }> = {};
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
       const nextReference = input.reference ?? null;
       const nextEvidence = input.evidenceDocumentId ?? null;
       const nextAmount = input.originalAmount ?? null;
@@ -2498,6 +2505,12 @@ export class MonthlyWorkpaperService {
         }
       }
 
+      // Corte 6a: el arrastre se cambia con historial y no si el saldo ya se usó en un cierre.
+      if (input.carryForward !== undefined && input.carryForward !== lot.carryForward) {
+        const motivo = await motivoSiLoteUsado(tx, lot);
+        if (motivo) throw new WorkpaperError("INVALID_TRANSITION", motivo);
+        changes.carryForward = { from: lot.carryForward, to: input.carryForward };
+      }
       if (Object.keys(changes).length === 0) {
         // Sin cambios reales: no se registra historial ni se toca la BD.
         return {
@@ -2505,6 +2518,7 @@ export class MonthlyWorkpaperService {
           reference: lot.reference,
           evidenceDocumentId: lot.evidenceDocumentId,
           originalAmount: lot.originalAmount.toFixed(4),
+          carryForward: lot.carryForward,
           changed: false,
         };
       }
@@ -2513,6 +2527,9 @@ export class MonthlyWorkpaperService {
       if (nextReference !== undefined) updateData.reference = nextReference;
       if (nextEvidence !== undefined) updateData.evidenceDocumentId = nextEvidence;
       if (changes.originalAmount && nextAmount != null) updateData.originalAmount = nextAmount;
+      if (changes.carryForward && input.carryForward !== undefined) {
+        updateData.carryForward = input.carryForward;
+      }
 
       const updated = await tx.taxCreditLot.update({
         where: { id: lot.id },
@@ -2534,6 +2551,7 @@ export class MonthlyWorkpaperService {
         reference: updated.reference,
         evidenceDocumentId: updated.evidenceDocumentId,
         originalAmount: updated.originalAmount.toFixed(4),
+        carryForward: updated.carryForward,
         changed: true,
       };
     });
