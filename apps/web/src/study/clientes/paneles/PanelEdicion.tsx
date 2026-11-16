@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import { useEffect, useRef, type FormEvent } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Notice } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
@@ -35,6 +35,7 @@ interface PanelEdicionProps {
   jurisdictionCatalog: UseQueryResult<(CatalogJurisdiction & { isActive: boolean })[], Error>;
   clientActivityCatalog: UseQueryResult<ClientEconomicActivityOption[], Error>;
   catalogos: CatalogosFicha;
+  guardadoParcial: "identidad" | "ficha" | null;
 }
 
 export function PanelEdicion({
@@ -50,7 +51,21 @@ export function PanelEdicion({
   jurisdictionCatalog,
   clientActivityCatalog,
   catalogos,
+  guardadoParcial,
 }: PanelEdicionProps) {
+  const avisoParcialRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (guardadoParcial) avisoParcialRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [guardadoParcial]);
+  // El motivo de la API acompaña al aviso; el CUIT en conflicto ya se muestra junto a su campo (P4).
+  const motivoDe = (error: unknown) =>
+    error instanceof ApiError && error.code !== "CLIENT_CUIT_CONFLICT" ? error.message : "";
+  const motivoGuardado =
+    guardadoParcial === "identidad"
+      ? motivoDe(updateProfile.error)
+      : guardadoParcial === "ficha"
+        ? motivoDe(updateIdentity.error)
+        : "";
   const {
     currencyNotBacked,
     standardUnknown,
@@ -146,6 +161,7 @@ export function PanelEdicion({
               required
             />
             {updateIdentity.isError &&
+            guardadoParcial !== "ficha" &&
             !(updateIdentity.error instanceof ApiError &&
               updateIdentity.error.code === "CLIENT_CUIT_CONFLICT") ? (
               <Notice tone="error" className="study-inline-form__feedback">
@@ -459,7 +475,21 @@ export function PanelEdicion({
               setProfileForm({ ...profileForm, serviceStartDate: event.target.value })
             }
           />
-          {updateProfile.isError &&
+          {guardadoParcial ? (
+            <div ref={avisoParcialRef}>
+              <Notice tone="error" className="study-inline-form__feedback">
+                {guardadoParcial === "identidad"
+                  ? "Se guardó la identidad; no se pudo guardar la ficha fiscal. Reintentá."
+                  : "Se guardó la ficha fiscal; no se pudo guardar la identidad. Reintentá."}
+                {motivoGuardado ? (
+                  <>
+                    {" "}
+                    <span>{motivoGuardado}</span>
+                  </>
+                ) : null}
+              </Notice>
+            </div>
+          ) : updateProfile.isError &&
           !(updateIdentity.isError && updateProfile.error.message === updateIdentity.error.message) ? (
             <Notice tone="error" className="study-inline-form__feedback">
               {updateProfile.error instanceof ApiError

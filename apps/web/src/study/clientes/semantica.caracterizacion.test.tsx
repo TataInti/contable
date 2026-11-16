@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
@@ -10,7 +10,6 @@ import {
   contextoDePrueba,
   renderConRutas,
   respuestaApi,
-  seleccionarCliente,
 } from "./clientes.testutil";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -47,11 +46,6 @@ vi.mock("../../lib/api", async (importOriginal) => {
     } as unknown as typeof actual.api,
   };
 });
-
-const CUIT_ALFA = "20-00000006-0";
-const ALFA = "Sintético Alfa S.A.";
-const CUIT_BETA = "20-00000000-1";
-const BETA = "Sintético Beta S.R.L.";
 
 // Caracterización K7 (Foco 5.2): semántica G02 y G03 de la banda y del espacio de trabajo.
 // Afirma el comportamiento VIGENTE de origin/main (5cdd0cf), defecto 7d-7; se reemplaza al corregir.

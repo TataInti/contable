@@ -50,8 +50,6 @@ vi.mock("../../lib/api", async (importOriginal) => {
 
 const CUIT_ALFA = "20-00000006-0";
 const ALFA = "Sintético Alfa S.A.";
-const CUIT_BETA = "20-00000000-1";
-const BETA = "Sintético Beta S.R.L.";
 
 // Pruebas K6 (Foco 5.2): estados y errores de Clientes, sobre las aserciones sustituidas en los bloques (a) y (b).
 // Cada aserción vigente lleva el defecto 7d-N que el corte corrige; al corregir se reemplaza
@@ -70,7 +68,8 @@ describe("StudyClientes — estados y errores (K6)", () => {
     vi.mocked(api.get).mockImplementation(((path: string) => {
       if (path.endsWith("/contacts")) return respuestaContactos();
       const ruta = Object.keys(respuestaCatalogo).find((clave) => path.includes(clave));
-      if (ruta) return respuestaCatalogo[ruta]();
+      const respuesta = ruta ? respuestaCatalogo[ruta] : undefined;
+      if (respuesta) return respuesta();
       return respuestaApi(path, CLIENTES_SINTETICOS);
     }) as never);
   });
@@ -94,10 +93,14 @@ describe("StudyClientes — estados y errores (K6)", () => {
     renderConRutas("/clientes", <StudyClientes />);
     const detalle = await seleccionarCliente(CUIT_ALFA, ALFA);
 
-    expect(await within(detalle).findByText("No se pudieron cargar los contactos. Reintentá.")).toBeTruthy();
+    expect(
+      await within(detalle).findByText("No se pudieron cargar los contactos. Reintentá."),
+    ).toBeTruthy();
     fireEvent.click(within(detalle).getByRole("button", { name: "Reintentar" }));
     await waitFor(() =>
-      expect(vi.mocked(api.get).mock.calls.filter(([path]) => String(path).endsWith("/contacts"))).toHaveLength(2),
+      expect(
+        vi.mocked(api.get).mock.calls.filter(([path]) => String(path).endsWith("/contacts")),
+      ).toHaveLength(2),
     );
   });
 
@@ -108,7 +111,9 @@ describe("StudyClientes — estados y errores (K6)", () => {
 
     expect(await within(detalle).findByText("Cargando contactos…")).toBeTruthy();
     expect(detalle.querySelector(".client-contacts__toolbar")?.textContent).toContain("pendiente");
-    expect(detalle.querySelector(".client-contacts__toolbar")?.textContent).not.toContain("0 contactos");
+    expect(detalle.querySelector(".client-contacts__toolbar")?.textContent).not.toContain(
+      "0 contactos",
+    );
   });
 
   it("si falla el catálogo de jurisdicciones, la sección ofrece «Reintentar» y lo repite", async () => {
@@ -124,7 +129,8 @@ describe("StudyClientes — estados y errores (K6)", () => {
   });
 
   it("si falla el catálogo de actividades en el alta, ofrece «Reintentar» y lo repite", async () => {
-    respuestaCatalogo["/client-profile-catalogs/activities"] = () => Promise.reject(new Error("Catálogo caído"));
+    respuestaCatalogo["/client-profile-catalogs/activities"] = () =>
+      Promise.reject(new Error("Catálogo caído"));
     renderConRutas("/clientes", <StudyClientes />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
     const cajon = await screen.findByRole("dialog", { name: "Alta de cliente" });
@@ -137,7 +143,8 @@ describe("StudyClientes — estados y errores (K6)", () => {
   });
 
   it("si falla el catálogo de actividades en la edición, ofrece «Reintentar» y lo repite", async () => {
-    respuestaCatalogo["/client-profile-catalogs/activities"] = () => Promise.reject(new Error("Catálogo caído"));
+    respuestaCatalogo["/client-profile-catalogs/activities"] = () =>
+      Promise.reject(new Error("Catálogo caído"));
     const cajon = await abrirEdicion();
 
     expect(
@@ -151,8 +158,12 @@ describe("StudyClientes — estados y errores (K6)", () => {
     respuestaCatalogo["/accounting-standards"] = () => Promise.reject(new Error("Catálogo caído"));
     const cajon = await abrirEdicion();
 
-    expect(await within(cajon).findByText("No se pudo cargar el catálogo de normas. Reintentá.")).toBeTruthy();
-    expect(within(cajon).queryByRole("option", { name: "No se pudo cargar el catálogo de normas" })).toBeNull();
+    expect(
+      await within(cajon).findByText("No se pudo cargar el catálogo de normas. Reintentá."),
+    ).toBeTruthy();
+    expect(
+      within(cajon).queryByRole("option", { name: "No se pudo cargar el catálogo de normas" }),
+    ).toBeNull();
     fireEvent.click(within(cajon).getByRole("button", { name: "Reintentar" }));
     await waitFor(() => expect(llamadasA("/accounting-standards")).toBe(2));
   });
@@ -164,13 +175,21 @@ describe("StudyClientes — estados y errores (K6)", () => {
         : Promise.resolve({ id: "client-new", legalName: "Sintético Nuevo S.A." })) as never);
     renderConRutas("/clientes", <StudyClientes />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
-    fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Sintético Nuevo S.A." } });
+    fireEvent.change(screen.getByLabelText("Razón social"), {
+      target: { value: "Sintético Nuevo S.A." },
+    });
     fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20000000112" } });
-    fireEvent.change(screen.getByLabelText("Correo de contacto"), { target: { value: "contacto@example.com" } });
+    fireEvent.change(screen.getByLabelText("Correo de contacto"), {
+      target: { value: "contacto@example.com" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
 
     const aviso = await screen.findByRole("alert");
-    expect(within(aviso).getByText("Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.")).toBeTruthy();
+    expect(
+      within(aviso).getByText(
+        "Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.",
+      ),
+    ).toBeTruthy();
 
     fireEvent.click(within(aviso).getByRole("button", { name: "Reintentar" }));
     await waitFor(() =>
@@ -206,7 +225,9 @@ describe("StudyClientes — estados y errores (K6)", () => {
 
     expect(await within(cajon).findByText("No hay jurisdicciones cargadas.")).toBeTruthy();
     expect(
-      within(cajon).getByText("Pedí a quien administra el estudio que las cargue en Catálogos fiscales."),
+      within(cajon).getByText(
+        "Pedí a quien administra el estudio que las cargue en Catálogos fiscales.",
+      ),
     ).toBeTruthy();
   });
 
@@ -216,7 +237,9 @@ describe("StudyClientes — estados y errores (K6)", () => {
 
     expect(await within(cajon).findByText("No hay actividades cargadas.")).toBeTruthy();
     expect(
-      within(cajon).getByText("Pedí a quien administra el estudio que las cargue en Catálogos fiscales."),
+      within(cajon).getByText(
+        "Pedí a quien administra el estudio que las cargue en Catálogos fiscales.",
+      ),
     ).toBeTruthy();
   });
 
@@ -226,7 +249,23 @@ describe("StudyClientes — estados y errores (K6)", () => {
 
     expect(await within(cajon).findByText("No hay normas contables cargadas.")).toBeTruthy();
     expect(
-      within(cajon).getByText("Pedí a quien administra el estudio que las cargue en Administración."),
+      within(cajon).getByText(
+        "Pedí a quien administra el estudio que las cargue en Administración.",
+      ),
     ).toBeTruthy();
+  });
+
+  it("sin client.manage, la cartera vacía explica qué falta y a quién pedirlo, sin acción de crear", async () => {
+    contextMock.current = contextoDePrueba(["client.read"]);
+    vi.mocked(api.get).mockImplementation(((path: string) => respuestaApi(path, [])) as never);
+    renderConRutas("/clientes", <StudyClientes />);
+
+    expect(await screen.findByText("Todavía no hay clientes")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Para cargar el primero hace falta el permiso de crear clientes. Pedíselo a quien administra el estudio.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Crear cliente" })).toBeNull();
   });
 });

@@ -122,6 +122,8 @@ export function StudyClientes() {
   }));
   const notify = useNotify();
   const [contactRetry, setContactRetry] = useState<ContactRetryTarget | null>(null);
+  // D5-8: guardado parcial de la ficha. Indica qué quedó guardado («identidad» o «ficha»).
+  const [guardadoParcial, setGuardadoParcial] = useState<"identidad" | "ficha" | null>(null);
   const query = useQuery({
     queryKey: ["clients", firmId],
     queryFn: () => api.get<ClientWithProfile[]>(`/firms/${firmId}/clients`),
@@ -359,6 +361,7 @@ export function StudyClientes() {
 
   const startClientEdit = (client: ClientWithProfile) => {
     setCreating(false);
+    setGuardadoParcial(null);
     updateIdentity.reset();
     updateProfile.reset();
     setEditingClient(client);
@@ -381,14 +384,18 @@ export function StudyClientes() {
     if (!editingClient) return;
 
     const clientName = editingClient.legalName;
-    const results = await Promise.allSettled([
+    setGuardadoParcial(null);
+    const [identidad, ficha] = await Promise.allSettled([
       updateIdentity.mutateAsync(),
       updateProfile.mutateAsync(),
     ]);
     await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
-    if (results.every((result) => result.status === "fulfilled")) {
+    if (identidad.status === "fulfilled" && ficha.status === "fulfilled") {
       setEditingClient(null);
       notify.success(`La ficha de ${clientName} quedó actualizada.`);
+    } else if (identidad.status === "fulfilled" || ficha.status === "fulfilled") {
+      // Guardado parcial: el cajón sigue abierto con sus datos y un solo mensaje dice qué quedó guardado.
+      setGuardadoParcial(identidad.status === "fulfilled" ? "identidad" : "ficha");
     }
   };
 
@@ -511,7 +518,9 @@ export function StudyClientes() {
           title={clients.length === 0 ? "Todavía no hay clientes" : "Ningún cliente coincide"}
           description={
             clients.length === 0
-              ? "Creá el primer cliente para comenzar a organizar la operación."
+              ? canManage
+                ? "Creá el primer cliente para comenzar a organizar la operación."
+                : "Para cargar el primero hace falta el permiso de crear clientes. Pedíselo a quien administra el estudio."
               : "Probá con otro nombre o CUIT, o quitá filtros."
           }
           action={
@@ -626,6 +635,7 @@ export function StudyClientes() {
 
       <PanelEdicion
         editingClient={editingClient}
+        guardadoParcial={guardadoParcial}
         setEditingClient={setEditingClient}
         identityForm={identityForm}
         setIdentityForm={setIdentityForm}
