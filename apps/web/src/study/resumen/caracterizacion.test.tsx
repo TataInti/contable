@@ -270,7 +270,7 @@ describe("Caracterización · Resumen del cliente: índice y secciones (R3 a R5)
 });
 
 describe("Caracterización · Resumen del cliente: estados y datos (R6 a R9)", () => {
-  it("R6 · documenta: con perfil contable y onboarding pendiente, «Ficha contable» dice «Configurada» y «Onboarding fiscal» dice «Pendiente»", async () => {
+  it("R6 · documenta: con perfil contable y configuración fiscal pendiente, «Ficha contable» dice «Configurada» y «Configuración fiscal» dice «Pendiente»", async () => {
     montar();
     const resumenSeccion = await screen.findByRole("region", { name: "Resumen" });
     const valorDe = (etiqueta: string) => within(resumenSeccion).getByText(etiqueta, { selector: "dt" }).parentElement?.textContent;

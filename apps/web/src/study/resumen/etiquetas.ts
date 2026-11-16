@@ -40,10 +40,12 @@ export function displayVatCondition(value: string | null | undefined) {
 export function etiquetaPeriodo(label: string | null | undefined) {
   const texto = label?.trim();
   if (!texto) return "Sin configurar";
-  const partes = /^([A-Za-zÁÉÍÓÚáéíóúÑñ]+)\s+(\d{4})$/.exec(texto);
-  if (!partes) return texto;
-  const mes = MONTH_LABELS.find((nombre) => nombre.toLocaleLowerCase("es-AR") === partes[1].toLocaleLowerCase("es-AR"));
-  return mes ? `${mes.toLocaleLowerCase("es-AR")} de ${partes[2]}` : texto;
+  const coincidencia = /^([A-Za-zÁÉÍÓÚáéíóúÑñ]+)\s+(\d{4})$/.exec(texto);
+  const nombreMes = coincidencia?.[1]?.toLocaleLowerCase("es-AR");
+  const anio = coincidencia?.[2];
+  if (!nombreMes || !anio) return texto;
+  const mes = MONTH_LABELS.find((nombre) => nombre.toLocaleLowerCase("es-AR") === nombreMes);
+  return mes ? `${mes.toLocaleLowerCase("es-AR")} de ${anio}` : texto;
 }
 
 /** Contador de la búsqueda: el total real de coincidencias, sin tope. */
