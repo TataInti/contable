@@ -190,6 +190,12 @@ export function fiscalPaths(): OpenApiPath[] {
       capability: "profitability.read",
     },
     {
+      method: "get",
+      path: "/api/v1/firms/{firmId}/clients/{clientId}/profitability/caja-fiscal",
+      summary: "Saldo de caja fiscal del período (cálculo en vivo, sin publicar)",
+      capability: "profitability.read",
+    },
+    {
       method: "post",
       path: "/api/v1/firms/{firmId}/clients/{clientId}/profitability/calculate",
       summary: "Calcula un snapshot de rentabilidad",

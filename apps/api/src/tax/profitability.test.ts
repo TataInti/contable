@@ -567,3 +567,60 @@ describe("G5-4 publicación versionada", () => {
     expect(after).toHaveLength(1);
   });
 });
+
+describe("caracterización corte 8a: devengado y caja toman solo comprobantes APPROVED del período", () => {
+  // Fija el filtro de gatherFacts (estado APPROVED y issuedOn dentro del período) que el saldo de
+  // caja fiscal reutiliza. Va antes de cualquier cambio: si este filtro se mueve, la caja fiscal se mueve con él.
+  async function crearComprobanteSinAprobar(
+    status: "DRAFT" | "IN_REVIEW" | "REJECTED" | "SUPERSEDED" | "APPROVED",
+    issuedOn: string,
+    numero: number,
+    neto: string,
+  ) {
+    await prisma.fiscalVoucher.create({
+      data: {
+        firmId: FIRM_P5,
+        clientId: CLIENT_P5,
+        direction: "SALE",
+        type: "A",
+        letter: "A",
+        pointOfSale: 2,
+        number: numero,
+        issuerCuit: "20999999992",
+        receiverCuit: "20111111111",
+        issuedOn: new Date(issuedOn),
+        total: new Prisma.Decimal(neto),
+        status,
+        components: {
+          create: [
+            {
+              firmId: FIRM_P5,
+              clientId: CLIENT_P5,
+              concept: "NETO",
+              base: new Prisma.Decimal(neto),
+              amount: new Prisma.Decimal(neto),
+            },
+          ],
+        },
+      },
+    });
+  }
+
+  it("DEVENGADO y CAJA ignoran DRAFT, IN_REVIEW, REJECTED, SUPERSEDED y comprobantes de otro período", async () => {
+    await createApprovedVouchers();
+    await crearComprobanteSinAprobar("DRAFT", "2026-01-20", 901, "700000.00");
+    await crearComprobanteSinAprobar("IN_REVIEW", "2026-01-21", 902, "800000.00");
+    await crearComprobanteSinAprobar("REJECTED", "2026-01-22", 903, "900000.00");
+    await crearComprobanteSinAprobar("SUPERSEDED", "2026-01-23", 904, "600000.00");
+    await crearComprobanteSinAprobar("APPROVED", "2026-02-03", 905, "500000.00");
+
+    const devengado = await profitability.calculate(ctxOwner, defaultParams("DEVENGADO"));
+    const devengadoTotals = devengado.snapshot.totals as Record<string, string>;
+    expect(devengadoTotals["VENTAS"]).toBe("200000.00");
+    expect(devengadoTotals["GASTO_FISCAL"]).toBe("40000.00");
+
+    const caja = await profitability.calculate(ctxOwner, defaultParams("CAJA"));
+    const cajaTotals = caja.snapshot.totals as Record<string, string>;
+    expect(cajaTotals["COBROS"]).toBe("200000.00");
+  });
+});

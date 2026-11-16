@@ -1,6 +1,15 @@
 import { Prisma } from "@prisma/client";
-import { calculateProfitability, isFiscalExpense } from "@contable/tax-engine";
+import {
+  CAJA_FISCAL_ENGINE_VERSION,
+  calculateCajaFiscal,
+  calculateProfitability,
+  isFiscalExpense,
+  type CajaFiscalImpuesto,
+  type CajaFiscalLado,
+} from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import { faltaDeclaracion } from "./period-status.js";
+import { voucherDocumentKind } from "./workpaper-classification.js";
 
 /**
  * Servicio de rentabilidad gerencial (Puerta 5, G5-01..G5-05).
@@ -30,7 +39,8 @@ export type ProfitabilityErrorCode =
   | "SNAPSHOT_NOT_FOUND"
   | "ALREADY_PUBLISHED"
   | "INVALID_TRANSITION"
-  | "NOT_PUBLISHED";
+  | "NOT_PUBLISHED"
+  | "CLIENT_NOT_FOUND";
 
 export class ProfitabilityError extends Error {
   readonly code: ProfitabilityErrorCode;
@@ -408,6 +418,142 @@ export class ProfitabilityService {
     });
   }
 
+  /**
+   * Saldo de caja fiscal del período (corte 8a). Cálculo en vivo y solo lectura: no escribe ni publica.
+   * Comprobantes APPROVED con issuedOn en el período (como gatherFacts). Por impuesto, la DJ de la
+   * liquidación vigente: la última FINALIZED que no reemplaza otra FINALIZED (supersedesId).
+   */
+  async cajaFiscal(ctx: TenantContext, params: { clientId: string; periodId: string }) {
+    return withTenantContext(ctx, async (tx) => {
+      const cliente = await tx.client.findFirst({
+        where: { id: params.clientId, firmId: ctx.firmId },
+        select: { id: true },
+      });
+      if (!cliente) {
+        throw new ProfitabilityError("CLIENT_NOT_FOUND", "Cliente no encontrado en este estudio");
+      }
+      const periodo = await tx.taxPeriod.findFirst({
+        where: { id: params.periodId, firmId: ctx.firmId, clientId: params.clientId },
+      });
+      if (!periodo) throw new ProfitabilityError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
+
+      const comprobantes = await tx.fiscalVoucher.findMany({
+        where: {
+          firmId: ctx.firmId,
+          clientId: params.clientId,
+          status: "APPROVED",
+          issuedOn: { gte: periodo.startDate, lte: periodo.endDate },
+        },
+        select: {
+          id: true,
+          direction: true,
+          type: true,
+          letter: true,
+          total: true,
+          currency: true,
+          exchangeRate: true,
+        },
+      });
+      const ventas = nuevoLado();
+      const compras = nuevoLado();
+      for (const v of comprobantes) acumular(v.direction === "SALE" ? ventas : compras, v);
+
+      const obligaciones = await tx.taxObligation.findMany({
+        where: {
+          firmId: ctx.firmId,
+          clientId: params.clientId,
+          status: { not: "NOT_APPLICABLE" },
+          period: { startDate: { gte: periodo.startDate }, endDate: { lte: periodo.endDate } },
+        },
+        select: {
+          id: true,
+          regimeId: true,
+          periodId: true,
+          regime: { select: { code: true, taxType: { select: { code: true } } } },
+          period: { select: { startDate: true } },
+        },
+      });
+      const liquidaciones = await tx.taxSettlement.findMany({
+        where: {
+          firmId: ctx.firmId,
+          clientId: params.clientId,
+          status: "FINALIZED",
+          period: { startDate: { gte: periodo.startDate }, endDate: { lte: periodo.endDate } },
+        },
+        select: {
+          id: true,
+          regimeId: true,
+          periodId: true,
+          version: true,
+          supersedesId: true,
+          filings: {
+            select: { id: true, obligationId: true, status: true, declaredAt: true, totalAPagar: true },
+          },
+        },
+      });
+      // Reemplazada = otra liquidación FINALIZED la tiene como antecesora. No se usa el estado SUPERSEDED:
+      // la rectificativa no lo marca y trg_settlement_immutable impide cambiarlo en una FINALIZED.
+      const reemplazadas = new Set(
+        liquidaciones.map((l) => l.supersedesId).filter((id): id is string => id !== null),
+      );
+      const vigentes = liquidaciones.filter((l) => !reemplazadas.has(l.id));
+
+      const impuestos: CajaFiscalImpuesto[] = obligaciones
+        .map((ob) => {
+          const vigente = vigentes
+            .filter((l) => l.regimeId === ob.regimeId && l.periodId === ob.periodId)
+            .sort((a, b) => b.version - a.version)[0];
+          const presentacion = vigente?.filings
+            .filter((f) => f.obligationId === ob.id && f.status === "FILED")
+            .sort((a, b) => (b.declaredAt?.getTime() ?? 0) - (a.declaredAt?.getTime() ?? 0))[0];
+          const facts = presentacion
+            ? {
+                hasAcuse: true,
+                hasDeclaration: presentacion.declaredAt !== null && presentacion.totalAPagar !== null,
+              }
+            : null;
+          const dj =
+            presentacion && presentacion.totalAPagar !== null && !faltaDeclaracion(facts)
+              ? { id: presentacion.id, totalAPagar: presentacion.totalAPagar.toFixed(4) }
+              : null;
+          return {
+            impuesto: ob.regime.taxType.code,
+            periodo: etiquetaMes(ob.period.startDate),
+            regimen: ob.regime.code,
+            dj,
+          };
+        })
+        .sort((a, b) => `${a.impuesto}|${a.regimen}`.localeCompare(`${b.impuesto}|${b.regimen}`));
+
+      const periodoEtiqueta = etiquetaMes(periodo.startDate);
+      const resultado = calculateCajaFiscal({
+        periodo: { id: periodo.id, etiqueta: periodoEtiqueta },
+        ventas: ladoParaMotor(ventas),
+        compras: ladoParaMotor(compras),
+        impuestos,
+      });
+      return {
+        data: {
+          estado: resultado.estado,
+          cifra: resultado.cifra,
+          periodo: { id: periodo.id, etiqueta: periodoEtiqueta },
+          desglose: resultado.desglose,
+          faltantes: resultado.faltantes,
+          comprobantes: resultado.comprobantes,
+          inputHash: resultado.inputHash,
+          outputHash: resultado.outputHash,
+        },
+        meta: {
+          base: "CAJA_FISCAL" as const,
+          publicado: false as const,
+          moneda: "ARS" as const,
+          motor: CAJA_FISCAL_ENGINE_VERSION,
+          paginacion: "no aplica: una fila por cliente y período" as const,
+        },
+      };
+    });
+  }
+
   /** Lista snapshots del período (historial versionado). */
   async listForPeriod(ctx: TenantContext, clientId: string, periodId: string) {
     return withTenantContext(ctx, (tx) =>
@@ -440,3 +586,67 @@ export class ProfitabilityService {
 
 /** Instancia única del servicio de rentabilidad. */
 export const profitabilityService = new ProfitabilityService();
+
+interface LadoAcumulado {
+  comprobantes: number;
+  facturado: Prisma.Decimal;
+  notasCredito: Prisma.Decimal;
+  sinTipoDeCambio: string[];
+}
+
+function nuevoLado(): LadoAcumulado {
+  return {
+    comprobantes: 0,
+    facturado: new Prisma.Decimal(0),
+    notasCredito: new Prisma.Decimal(0),
+    sinTipoDeCambio: [],
+  };
+}
+
+/**
+ * Suma un comprobante en pesos. ARS tal cual; moneda extranjera = total × tipo de cambio a centavos con
+ * mitad hacia arriba (criterio de los libros fiscales). Sin tipo de cambio válido (nulo o cero) queda como
+ * bloqueo (L-021, L-022). La clasificación de nota de crédito es la de voucherDocumentKind, en un solo lugar.
+ */
+function acumular(
+  lado: LadoAcumulado,
+  v: {
+    id: string;
+    type: string;
+    letter: string | null;
+    total: Prisma.Decimal;
+    currency: string;
+    exchangeRate: Prisma.Decimal | null;
+  },
+): void {
+  lado.comprobantes += 1;
+  let pesos: Prisma.Decimal;
+  if (v.currency === "ARS") {
+    pesos = v.total.abs();
+  } else if (v.exchangeRate === null || v.exchangeRate.lte(0)) {
+    lado.sinTipoDeCambio.push(v.id);
+    return;
+  } else {
+    pesos = v.total.abs().mul(v.exchangeRate).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  }
+  if (voucherDocumentKind(v) === "CREDIT_NOTE") {
+    lado.notasCredito = lado.notasCredito.plus(pesos);
+  } else {
+    lado.facturado = lado.facturado.plus(pesos);
+  }
+}
+
+function ladoParaMotor(l: LadoAcumulado): CajaFiscalLado {
+  return {
+    comprobantes: l.comprobantes,
+    facturadoConIva: l.facturado.toFixed(4),
+    notasCreditoConIva: l.notasCredito.toFixed(4),
+    sinTipoDeCambio: l.sinTipoDeCambio,
+  };
+}
+
+/** Mes y año del período en formato MM/AAAA (UTC), como se muestra en la DJ y en los faltantes. */
+function etiquetaMes(fecha: Date): string {
+  return `${String(fecha.getUTCMonth() + 1).padStart(2, "0")}/${fecha.getUTCFullYear()}`;
+}
+

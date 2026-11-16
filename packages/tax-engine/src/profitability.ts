@@ -242,3 +242,155 @@ export function calculateProfitability(input: ProfitabilityInput): Profitability
     outputHash,
   };
 }
+
+// --- Saldo de caja fiscal (corte 8a) -------------------------------------------------
+// Cálculo propio: nunca se mezcla con DEVENGADO ni CAJA (S-8.2; G5-01 y G5-02). Recibe entradas
+// ya agregadas por el servicio y no accede a la base. Importes en pesos.
+// Caja fiscal = ventas con IVA − compras con IVA − Σ max(0, totalAPagar) de las DJ cargadas.
+// Las notas de crédito restan en su lado (S-8.1). Una DJ con totalAPagar ≤ 0 deduce 0 (S-8.4).
+
+export const CAJA_FISCAL_ENGINE_VERSION = "ar-caja-fiscal-v1.0.0";
+
+export const CAJA_FISCAL_ESTADOS = ["COMPLETO", "PARCIAL", "SIN_DATOS"] as const;
+export type CajaFiscalEstado = (typeof CAJA_FISCAL_ESTADOS)[number];
+
+/** Comprobantes APPROVED de un lado (venta o compra) del período, ya en pesos. */
+export interface CajaFiscalLado {
+  /** Comprobantes APPROVED del período (facturas y notas de crédito). */
+  comprobantes: number;
+  /** Facturas y notas de débito con IVA, en pesos (positivo). */
+  facturadoConIva: string;
+  /** Notas de crédito con IVA, en pesos (positivo: se resta en su lado). */
+  notasCreditoConIva: string;
+  /** Comprobantes en moneda extranjera sin tipo de cambio válido: bloquean el cálculo (L-021, L-022). */
+  sinTipoDeCambio: string[];
+}
+
+/** Impuesto del período. dj es la DJ cargada de la liquidación vigente, o null si falta. */
+export interface CajaFiscalImpuesto {
+  impuesto: string;
+  periodo: string;
+  regimen: string;
+  dj: { id: string; totalAPagar: string } | null;
+}
+
+export interface CajaFiscalInput {
+  periodo: { id: string; etiqueta: string };
+  ventas: CajaFiscalLado;
+  compras: CajaFiscalLado;
+  impuestos: CajaFiscalImpuesto[];
+}
+
+export interface CajaFiscalFaltante {
+  impuesto: string;
+  periodo: string;
+  regimen: string;
+}
+
+export interface CajaFiscalDesglose {
+  ventasConIva: string;
+  comprasConIva: string;
+  impuestos: Array<{
+    impuesto: string;
+    periodo: string;
+    regimen: string;
+    presentacionId: string;
+    totalAPagar: string;
+    deduccion: string;
+  }>;
+  totalImpuestos: string;
+}
+
+export interface CajaFiscalResult {
+  engineVersion: string;
+  estado: CajaFiscalEstado;
+  cifra: string | null;
+  desglose: CajaFiscalDesglose | null;
+  faltantes: CajaFiscalFaltante[];
+  comprobantes: { ventas: number; compras: number };
+  inputHash: string;
+  outputHash: string;
+}
+
+/** Bloqueo con motivo en lenguaje llano (P1, P4). Lista los comprobantes que lo causan. */
+export class CajaFiscalError extends Error {
+  readonly code = "TIPO_DE_CAMBIO_REQUERIDO";
+  readonly comprobantes: string[];
+
+  constructor(message: string, comprobantes: string[]) {
+    super(message);
+    this.name = "CajaFiscalError";
+    this.comprobantes = comprobantes;
+  }
+}
+
+export function calculateCajaFiscal(input: CajaFiscalInput): CajaFiscalResult {
+  const sinTipoDeCambio = [...input.ventas.sinTipoDeCambio, ...input.compras.sinTipoDeCambio];
+  if (sinTipoDeCambio.length > 0) {
+    throw new CajaFiscalError(
+      `Hay ${sinTipoDeCambio.length} comprobante(s) en moneda extranjera sin tipo de cambio. Cargá el tipo de cambio de cada uno para calcular la caja fiscal.`,
+      sinTipoDeCambio,
+    );
+  }
+
+  const ventasNetas = dec(input.ventas.facturadoConIva).minus(dec(input.ventas.notasCreditoConIva));
+  const comprasNetas = dec(input.compras.facturadoConIva).minus(
+    dec(input.compras.notasCreditoConIva),
+  );
+
+  const faltantes: CajaFiscalFaltante[] = [];
+  const impuestos: CajaFiscalDesglose["impuestos"] = [];
+  let totalImpuestos = dec(0);
+  for (const imp of input.impuestos) {
+    if (imp.dj === null) {
+      faltantes.push({ impuesto: imp.impuesto, periodo: imp.periodo, regimen: imp.regimen });
+      continue;
+    }
+    const totalAPagar = dec(imp.dj.totalAPagar);
+    const deduccion = totalAPagar.greaterThan(0) ? totalAPagar : dec(0);
+    totalImpuestos = totalImpuestos.plus(deduccion);
+    impuestos.push({
+      impuesto: imp.impuesto,
+      periodo: imp.periodo,
+      regimen: imp.regimen,
+      presentacionId: imp.dj.id,
+      totalAPagar: fmtMoney(totalAPagar),
+      deduccion: fmtMoney(deduccion),
+    });
+  }
+
+  const cantidad = input.ventas.comprobantes + input.compras.comprobantes;
+  const estado: CajaFiscalEstado =
+    cantidad === 0 ? "SIN_DATOS" : faltantes.length > 0 ? "PARCIAL" : "COMPLETO";
+  const desglose: CajaFiscalDesglose | null =
+    estado === "SIN_DATOS"
+      ? null
+      : {
+          ventasConIva: fmtMoney(ventasNetas),
+          comprasConIva: fmtMoney(comprasNetas),
+          impuestos,
+          totalImpuestos: fmtMoney(totalImpuestos),
+        };
+  const cifra =
+    estado === "COMPLETO" ? fmtMoney(ventasNetas.minus(comprasNetas).minus(totalImpuestos)) : null;
+
+  const inputHash = taxHash({
+    engineVersion: CAJA_FISCAL_ENGINE_VERSION,
+    periodo: input.periodo,
+    ventas: input.ventas,
+    compras: input.compras,
+    impuestos: input.impuestos,
+  });
+  const outputHash = taxHash({ inputHash, estado, cifra, desglose, faltantes });
+
+  return {
+    engineVersion: CAJA_FISCAL_ENGINE_VERSION,
+    estado,
+    cifra,
+    desglose,
+    faltantes,
+    comprobantes: { ventas: input.ventas.comprobantes, compras: input.compras.comprobantes },
+    inputHash,
+    outputHash,
+  };
+}
