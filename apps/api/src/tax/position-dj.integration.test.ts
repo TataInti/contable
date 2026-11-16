@@ -287,3 +287,106 @@ describe("posición del legajo sin DJ (caracterización, corte 5b-2)", () => {
     expect((await posicion("OTRO", e.periodId)).statusCode).toBe(404);
   });
 });
+
+describe("posición del legajo con la DJ (pruebas en rojo, corte 5b-2)", () => {
+  it("con acuse y sin DJ: hasDeclaration es false y el estado pide la declaración jurada", async () => {
+    const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
+    const [item] = (await posicion("OWNER", e.periodId)).json().data;
+    expect(item.filingId).toBe(e.filingId);
+    expect(item.hasAcuse).toBe(true);
+    expect(item.hasDeclaration).toBe(false);
+    expect(item.periodStatus).toEqual({
+      code: "LEGAJO_FINALIZADO_DJ_PENDIENTE",
+      label: "Legajo finalizado · DJ pendiente",
+      missing: ["DJ"],
+      missingText: "Falta: declaración jurada",
+    });
+  });
+
+  it("sin presentación: el acuse figura como faltante y la DJ no cuenta como cargada", async () => {
+    const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "PENDING" });
+    const [item] = (await posicion("OWNER", e.periodId)).json().data;
+    expect(item.hasAcuse).toBe(false);
+    expect(item.hasDeclaration).toBe(false);
+    expect(item.periodStatus.missing).toContain("ACUSE");
+  });
+
+  it("con acuse y DJ: el período queda Completo y la posición trae los importes de la declaración", async () => {
+    const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
+    const docId = await documento(DJ);
+    const res = await declarar(e, { ...CUERPO_BASE, declarationDocumentId: docId });
+    expect(res.statusCode).toBe(200);
+    const [item] = (await posicion("OWNER", e.periodId)).json().data;
+    expect(item.hasDeclaration).toBe(true);
+    expect(item.declarationDocumentId).toBe(docId);
+    expect(item.impuestoDeterminado).toBe("1500.0000");
+    expect(item.saldoFavorTecnico).toBe("120.5000");
+    expect(item.saldoLibreDisponibilidad).toBe("30.0000");
+    expect(item.totalAPagar).toBe("1500.0000");
+    expect(item.saldosFavorDetalle).toBeNull();
+    expect(item.declaredAt).not.toBeNull();
+    expect(item.periodStatus).toEqual({ code: "COMPLETO", label: "Completo", missing: [], missingText: null });
+  });
+
+  it("una DJ con advertencias de diferencia cuenta como cargada", async () => {
+    const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
+    const docId = await documento(DJ);
+    const res = await declarar(e, { ...CUERPO_BASE, totalAPagar: "1600.00", declarationDocumentId: docId });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.warnings.length).toBeGreaterThan(0);
+    const [item] = (await posicion("OWNER", e.periodId)).json().data;
+    expect(item.periodStatus.code).toBe("COMPLETO");
+  });
+
+  it("una liquidación reemplazada no cuenta: la versión vigente pide su propia presentación", async () => {
+    const e = await escenario({ settlementStatus: "SUPERSEDED", filingStatus: "FILED" });
+    await crearLiquidacion(e.periodId, 2, "FINALIZED", TOTALES_LIQUIDACION, e.settlementId);
+    const [item] = (await posicion("OWNER", e.periodId)).json().data;
+    expect(item.hasAcuse).toBe(false);
+    expect(item.hasDeclaration).toBe(false);
+    expect(item.periodStatus.code).toBe("LEGAJO_FINALIZADO_DJ_PENDIENTE");
+  });
+
+  it("en una rectificativa cuenta la DJ de la versión vigente, no la de la anterior", async () => {
+    const e = await escenario({ settlementStatus: "SUPERSEDED", filingStatus: "FILED" });
+    const v2Id = await crearLiquidacion(e.periodId, 2, "FINALIZED", TOTALES_LIQUIDACION, e.settlementId);
+    const acuse = await documento("ACUSE");
+    const filing2 = await prisma.taxFiling.create({
+      data: {
+        firmId: FIRM,
+        clientId,
+        obligationId: e.obligationId,
+        settlementId: v2Id,
+        filedAt: new Date(Date.UTC(2026, mes, 12)),
+        amountFiled: "1500.00",
+        status: "FILED",
+        evidenceDocumentId: acuse,
+        createdByUserId: USUARIOS.OWNER,
+      },
+    });
+    const docId = await documento(DJ);
+    const res = await declarar(
+      e,
+      { ...CUERPO_BASE, impuestoDeterminado: "2000.00", totalAPagar: "2000.00", declarationDocumentId: docId },
+      filing2.id,
+    );
+    expect(res.statusCode).toBe(200);
+    const [item] = (await posicion("OWNER", e.periodId)).json().data;
+    expect(item.settlement.id).toBe(v2Id);
+    expect(item.filingId).toBe(filing2.id);
+    expect(item.declarationDocumentId).toBe(docId);
+    expect(item.impuestoDeterminado).toBe("2000.0000");
+    expect(item.periodStatus.code).toBe("COMPLETO");
+  });
+
+  it("los cinco roles con lectura de la posición ven los importes de la declaración", async () => {
+    const e = await escenario({ settlementStatus: "FINALIZED", filingStatus: "FILED" });
+    const docId = await documento(DJ);
+    expect((await declarar(e, { ...CUERPO_BASE, declarationDocumentId: docId })).statusCode).toBe(200);
+    for (const rol of ROLES) {
+      const res = await posicion(rol, e.periodId);
+      expect(res.statusCode, rol).toBe(200);
+      expect(res.json().data[0].impuestoDeterminado, rol).toBe("1500.0000");
+    }
+  });
+});
