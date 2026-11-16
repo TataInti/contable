@@ -385,7 +385,7 @@ describe("StudyExpedienteMensual", () => {
     fireEvent.click(createButton);
     expect(await screen.findByText("Error anterior al crear el legajo")).toBeTruthy();
 
-    const calculateButton = await screen.findByRole("button", { name: "Calcular" });
+    const calculateButton = await screen.findByRole("button", { name: "Calcular liquidación" }); // vigente: cambia con decisión de Ciro (16-nov, 49a)
     fireEvent.click(calculateButton);
 
     const currentError = await screen.findByText("Vigencia desde: Campo obligatorio");
@@ -441,7 +441,7 @@ describe("StudyExpedienteMensual", () => {
     mockPageApi({ status: "COLLECTING_INPUTS", sourcePresent: false });
     renderPage();
 
-    const button = (await screen.findByRole("button", { name: "Calcular" })) as HTMLButtonElement;
+    const button = (await screen.findByRole("button", { name: "Calcular liquidación" })) as HTMLButtonElement; // vigente: cambia con decisión de Ciro (16-nov, 49a)
     expect(button.disabled).toBe(true);
     const explanation = await screen.findByText("Faltan fuentes obligatorias revisadas.");
     expect(button.parentElement?.contains(explanation)).toBe(true);
