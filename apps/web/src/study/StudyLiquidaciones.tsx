@@ -13,7 +13,7 @@ import {
   StatStrip,
   useDensity,
 } from "../ui/Dense";
-import { actionErrorMessage } from "../ui/actionError";
+import { mensajeDeErrorDeLiquidacion } from "./liquidaciones/errores";
 import "./study.css";
 import { formatearFecha, formatearRango } from "../lib/formatoFechas";
 
@@ -120,9 +120,9 @@ export function StudyLiquidaciones() {
     void queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId] });
   };
 
-  // Una acción que falla se avisa donde se avisa todo: en la notificación.
+  // Una acción que falla se avisa donde se avisa todo: en la notificación, con el mapeo único de errores.
   const failed = (error: unknown) =>
-    notify.error(actionErrorMessage(error, "No se pudo completar la acción sobre la liquidación."));
+    notify.error(mensajeDeErrorDeLiquidacion(error, "No se pudo completar la acción sobre la liquidación."));
   const calculateMutation = useMutation({
     mutationFn: () =>
       api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/calculate`, {

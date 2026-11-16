@@ -251,16 +251,33 @@ describe("Liquidaciones: PDF y CSV del papel de trabajo", () => {
   });
 
   it.each([
-    [404, "ARTIFACT_NOT_FOUND", "Papel de trabajo no encontrado"],
+    [
+      404,
+      "ARTIFACT_NOT_FOUND",
+      "Papel de trabajo no encontrado",
+      "Papel de trabajo no encontrado. Actualizá la pantalla. Si sigue igual, avisá a quien administra el estudio.",
+    ],
     [
       409,
       "ARTIFACT_CHECKSUM_MISMATCH",
-      "El papel de trabajo guardado no coincide con su checksum: no se entrega el archivo.",
+      "El archivo guardado no coincide con su verificación de integridad y no se entrega, porque es evidencia. Avisá a quien administra el estudio.",
+      "El archivo guardado no coincide con su verificación de integridad y no se entrega, porque es evidencia. Avisá a quien administra el estudio.",
     ],
-    [500, "INTERNAL_ERROR", "Error interno al leer el papel de trabajo guardado."],
+    [
+      500,
+      "INTERNAL_ERROR",
+      "connect ECONNREFUSED 127.0.0.1:9000",
+      "Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+    ],
+    [
+      503,
+      "ARTIFACT_STORAGE_UNAVAILABLE",
+      "No se puede entregar el archivo ahora: el almacenamiento no responde. Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+      "No se puede entregar el archivo ahora: el almacenamiento no responde. Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+    ],
   ])(
-    "si la descarga responde %i, avisa el motivo, no descarga y el botón vuelve a quedar disponible",
-    async (status, code, message) => {
+    "si la descarga responde %i, avisa el motivo y el paso siguiente, no descarga y el botón vuelve a quedar disponible",
+    async (status, code, message, visible) => {
       stubApi(
         withBase((method, path) => {
           if (method === "GET" && path === ARTIFACTS) return json([{ id: "art-x", format: "pdf" }]);
@@ -272,7 +289,8 @@ describe("Liquidaciones: PDF y CSV del papel de trabajo", () => {
       renderPage(FULL);
       await waitForRows();
       fireEvent.click(pdfButton());
-      expect(await screen.findByText(message)).toBeTruthy();
+      expect(await screen.findByText(visible)).toBeTruthy();
+      expect(screen.queryByText(/ECONNREFUSED/)).toBeNull();
       expect(downloads).toEqual([]);
       await waitFor(() => expect(pdfButton().disabled).toBe(false));
       expect(pdfButton().getAttribute("aria-busy")).toBeNull();

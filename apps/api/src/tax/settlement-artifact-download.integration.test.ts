@@ -402,9 +402,29 @@ describe("descarga del papel de trabajo (liq-descarga)", () => {
     );
     expect(res.statusCode).toBe(409);
     expect(res.json().error.code).toBe("ARTIFACT_CHECKSUM_MISMATCH");
+    expect(res.json().error.message).toBe(
+      "El archivo guardado no coincide con su verificación de integridad y no se entrega, porque es evidencia. Avisá a quien administra el estudio.",
+    );
     expect(res.headers["content-type"]).toMatch(/application\/json/);
     expect(res.headers["content-disposition"]).toBeUndefined();
     expect(res.rawPayload.equals(ALTERADO)).toBe(false);
+  });
+
+  it("sin almacenamiento disponible responde 503 controlado, sin el texto técnico en el cuerpo", async () => {
+    vi.spyOn(ObjectStorage.prototype, "get").mockRejectedValueOnce(
+      new Error("connect ECONNREFUSED 127.0.0.1:9000"),
+    );
+    const res = await get(
+      tokens.owner,
+      `${base}/${CLIENT_A}/tax-settlements/${settlementFinal}/artifacts/${artifactPdf}/download`,
+    );
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error.code).toBe("ARTIFACT_STORAGE_UNAVAILABLE");
+    expect(res.json().error.message).toBe(
+      "No se puede entregar el archivo ahora: el almacenamiento no responde. Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+    );
+    expect(res.body).not.toContain("ECONNREFUSED");
+    expect(res.headers["content-disposition"]).toBeUndefined();
   });
 
   it("el nombre del archivo sale en minúsculas, con el año y mes del período y la versión", () => {

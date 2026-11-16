@@ -81,7 +81,8 @@ export type SettlementErrorCode =
   | "FILING_REQUIRES_EVIDENCE"
   | "EVIDENCE_NOT_FOUND"
   | "ARTIFACT_NOT_FOUND"
-  | "ARTIFACT_CHECKSUM_MISMATCH";
+  | "ARTIFACT_CHECKSUM_MISMATCH"
+  | "ARTIFACT_STORAGE_UNAVAILABLE";
 
 /** Tipos de contenido del papel de trabajo descargable, por formato guardado. */
 const ARTIFACT_CONTENT_TYPES: Readonly<Record<string, string>> = {
@@ -2834,11 +2835,17 @@ export class SettlementService {
       return { settlement, artifact: { ...artifact, objectKey: artifact.objectKey, checksum: artifact.checksum } };
     });
 
-    const body = await storage.get(BUCKETS.exports, artifact.objectKey);
+    // Un fallo al leer el almacenamiento no sale al usuario: se responde 503 controlado (ver settlement-routes).
+    const body = await storage.get(BUCKETS.exports, artifact.objectKey).catch(() => {
+      throw new SettlementError(
+        "ARTIFACT_STORAGE_UNAVAILABLE",
+        "No se puede entregar el archivo ahora: el almacenamiento no responde. Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+      );
+    });
     if (createHash("sha256").update(body).digest("hex") !== artifact.checksum) {
       throw new SettlementError(
         "ARTIFACT_CHECKSUM_MISMATCH",
-        "El papel de trabajo guardado no coincide con su checksum: no se entrega el archivo.",
+        "El archivo guardado no coincide con su verificación de integridad y no se entrega, porque es evidencia. Avisá a quien administra el estudio.",
       );
     }
     return {
