@@ -173,8 +173,8 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     expect(screen.getByText("1 de 2 obligaciones")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cargar más" })).toBeTruthy();
     expect(valorIndicador("Sin legajo")).toBe("1");
-    // vigente: cambia con hallazgo 62
-    expect(screen.getAllByText("sobre las 1 filas cargadas")).toHaveLength(4);
+    expect(screen.getByText("Sobre 1 obligación cargada:")).toBeTruthy();
+    expect(screen.queryByText("sobre las 1 filas cargadas")).toBeNull();
     expect(pedidos.find((ruta) => ruta.includes("/tax-worklist/obligations"))).toContain(
       "responsable=me",
     );

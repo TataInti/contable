@@ -41,6 +41,7 @@ import {
 } from "./panel/filtros";
 import {
   badgeDj,
+  calificadorDelConteo,
   conOpcionElegida,
   errorDelPanel,
   indicadoresDelPanel,
@@ -182,9 +183,6 @@ export function StudyPanelTrabajo() {
 
   const indicadores = indicadoresDelPanel(filas);
   const parcial = filas.length < total;
-  const alcance = parcial
-    ? `sobre las ${filas.length} filas cargadas`
-    : "sobre las filas filtradas";
   const valorIndicador = (numero: number): ReactNode => {
     if (!puedeLeer) return "restringido";
     if (consulta.data !== undefined) return numero;
@@ -195,25 +193,21 @@ export function StudyPanelTrabajo() {
       key: "vencidas",
       label: "Vencidas",
       value: valorIndicador(indicadores.vencidas),
-      detail: alcance,
     },
     {
       key: "semana",
       label: "Vencen esta semana",
       value: valorIndicador(indicadores.semana),
-      detail: alcance,
     },
     {
       key: "sin-legajo",
       label: "Sin legajo",
       value: valorIndicador(indicadores.sinLegajo),
-      detail: alcance,
     },
     {
       key: "dj-pendientes",
       label: "DJ pendientes",
       value: valorIndicador(indicadores.djPendientes),
-      detail: alcance,
     },
   ];
 
@@ -439,6 +433,13 @@ export function StudyPanelTrabajo() {
           </Button>
         }
       />
+      {hayFiltros || parcial ? (
+        <p className="dense-dim">
+          {parcial
+            ? calificadorDelConteo(filas.length, "cargadas")
+            : calificadorDelConteo(total, "filtradas")}
+        </p>
+      ) : null}
       <StatStrip label="Indicadores del panel de trabajo" items={indicadoresItems} />
       <DenseToolbar>
         {filtros.responsable === RESPONSABLE_MIS ? (

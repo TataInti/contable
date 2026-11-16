@@ -18,6 +18,7 @@ import {
 } from "./filtros";
 import {
   badgeDj,
+  calificadorDelConteo,
   conOpcionElegida,
   errorDelPanel,
   indicadoresDelPanel,
@@ -309,5 +310,14 @@ describe("abrir cliente desde el panel", () => {
     });
     expect(destino).toBe(RUTA_RESUMEN);
     expect(navigate).toHaveBeenCalledWith(RUTA_RESUMEN);
+  });
+});
+
+describe("calificador del conteo (hallazgo 62)", () => {
+  it("nombra el alcance una sola vez y concuerda el número con el sustantivo", () => {
+    expect(calificadorDelConteo(1, "filtradas")).toBe("Sobre 1 obligación filtrada:");
+    expect(calificadorDelConteo(2, "filtradas")).toBe("Sobre las 2 obligaciones filtradas:");
+    expect(calificadorDelConteo(1, "cargadas")).toBe("Sobre 1 obligación cargada:");
+    expect(calificadorDelConteo(3, "cargadas")).toBe("Sobre las 3 obligaciones cargadas:");
   });
 });

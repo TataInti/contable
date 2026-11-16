@@ -290,8 +290,8 @@ describe("Panel de trabajo: pantalla", () => {
     expect(valorIndicador("Vencen esta semana")).toBe("1");
     expect(valorIndicador("Sin legajo")).toBe("1");
     expect(valorIndicador("DJ pendientes")).toBe("1");
-    // vigente: cambia con hallazgo 62
-    expect(screen.getAllByText("sobre las filas filtradas")).toHaveLength(4);
+    expect(screen.queryByText("sobre las filas filtradas")).toBeNull();
+    expect(screen.queryByText(/^Sobre /)).toBeNull();
   });
 
   it("«Abrir cliente» con período contable elige el período y va al Legajo", async () => {
@@ -396,11 +396,12 @@ describe("Panel de trabajo: pantalla", () => {
     }
   });
 
-  // vigente: cambia con hallazgo 62
-  it("con filtros activos el calificador «sobre las filas filtradas» se repite en los cuatro contadores", async () => {
+  it("con filtros activos hay un solo calificador, sobre los contadores, y los contadores no lo repiten", async () => {
     renderPanel("/panel-trabajo?responsable=todos&estado=DJ_PENDIENTE");
     await tablaPanel();
-    expect(screen.getAllByText("sobre las filas filtradas")).toHaveLength(4);
+    expect(screen.getByText("Sobre 1 obligación filtrada:")).toBeTruthy();
+    expect(screen.queryByText("sobre las filas filtradas")).toBeNull();
+    expect(screen.getAllByText(/^Sobre /)).toHaveLength(1);
   });
 
   // vigente: cambia con hallazgo 87

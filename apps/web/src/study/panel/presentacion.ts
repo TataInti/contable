@@ -177,3 +177,13 @@ export function errorDelPanel(error: unknown): {
     descripcion: mensaje ?? "Reintentá en unos minutos o comprobá tu conexión.",
   };
 }
+
+/**
+ * Hallazgo 62: calificador único, en una línea sobre los contadores. Concuerda el número con el
+ * sustantivo («Sobre 1 obligación filtrada:», «Sobre las 2 obligaciones filtradas:»).
+ */
+export function calificadorDelConteo(n: number, alcance: "filtradas" | "cargadas"): string {
+  return n === 1
+    ? `Sobre 1 obligación ${alcance === "filtradas" ? "filtrada" : "cargada"}:`
+    : `Sobre las ${n} obligaciones ${alcance}:`;
+}
