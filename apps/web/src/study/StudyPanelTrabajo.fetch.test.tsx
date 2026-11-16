@@ -173,6 +173,7 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     expect(screen.getByText("1 de 2 obligaciones")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cargar más" })).toBeTruthy();
     expect(valorIndicador("Sin legajo")).toBe("1");
+    // vigente: cambia con hallazgo 62
     expect(screen.getAllByText("sobre las 1 filas cargadas")).toHaveLength(4);
     expect(pedidos.find((ruta) => ruta.includes("/tax-worklist/obligations"))).toContain(
       "responsable=me",
@@ -209,6 +210,7 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     expect(pedidos.some((ruta) => ruta.includes("offset=1"))).toBe(true);
   });
 
+  // vigente: cambia con hallazgo 58
   it("un 400 por rango inválido muestra el mensaje de la API y deja «no disponible» en los indicadores", async () => {
     respuestaPanel = () => ({
       status: 400,
@@ -231,5 +233,13 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     expect(await screen.findByText("No hay obligaciones para mostrar")).toBeTruthy();
     expect(screen.queryByText("Ninguna obligación coincide con los filtros")).toBeNull();
     expect(screen.getByRole("button", { name: "Configurar obligaciones" })).toBeTruthy();
+  });
+
+  // vigente: cambia con hallazgo 58
+  it("con «desde» posterior a «hasta» la pantalla pide igual a la API con ese rango", async () => {
+    respuestaPanel = () => ({ status: 200, cuerpo: cuerpo([fila()], { total: 1 }) });
+    renderPanel("/panel-trabajo?desde=2026-12-31&hasta=2026-01-01");
+    await tablaPanel();
+    expect(pedidos.some((ruta) => ruta.includes("dueFrom=2026-12-31&dueTo=2026-01-01"))).toBe(true);
   });
 });

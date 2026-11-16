@@ -290,6 +290,7 @@ describe("Panel de trabajo: pantalla", () => {
     expect(valorIndicador("Vencen esta semana")).toBe("1");
     expect(valorIndicador("Sin legajo")).toBe("1");
     expect(valorIndicador("DJ pendientes")).toBe("1");
+    // vigente: cambia con hallazgo 62
     expect(screen.getAllByText("sobre las filas filtradas")).toHaveLength(4);
   });
 
@@ -361,6 +362,7 @@ describe("Panel de trabajo: pantalla", () => {
     expect(screen.getByText("2 de 2 obligaciones")).toBeTruthy();
   });
 
+  // vigente: cambia con hallazgos 63 y 81
   it("cada par etiqueta y control de la barra queda en un único contenedor con el nombre accesible del control", async () => {
     renderPanel();
     await tablaPanel();
@@ -392,5 +394,20 @@ describe("Panel de trabajo: pantalla", () => {
       expect(par, `el control «${etiqueta}» debe quedar dentro de su par`).not.toBeNull();
       expect(par?.querySelector(".dense-dim, .ds-field__label")?.textContent).toBe(etiqueta);
     }
+  });
+
+  // vigente: cambia con hallazgo 62
+  it("con filtros activos el calificador «sobre las filas filtradas» se repite en los cuatro contadores", async () => {
+    renderPanel("/panel-trabajo?responsable=todos&estado=DJ_PENDIENTE");
+    await tablaPanel();
+    expect(screen.getAllByText("sobre las filas filtradas")).toHaveLength(4);
+  });
+
+  // vigente: cambia con hallazgo 87
+  it("la fila vencida se muestra con el mismo estilo que las demás", async () => {
+    apiMock.getEnvelope.mockResolvedValue(respuesta([fila({ daysUntilDue: -26, dueDate: "2026-10-20" })]));
+    renderPanel();
+    await tablaPanel();
+    expect(screen.getByText("vencida hace 26 días").className).toBe("dense-dim");
   });
 });
