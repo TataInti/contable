@@ -1,6 +1,6 @@
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Notice } from "@contable/design-system";
-import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { sinRespuesta } from "../consultas";
 import { ApiError, type Client } from "../../../lib/api";
 import {
@@ -53,24 +53,21 @@ export function PanelAlta({
       title="Alta de cliente"
       description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
       footer={
-        <>
-          <span id="client-create-hint" className="client-create__hint" aria-live="polite">
-            {createFieldsHint}
-          </span>
-          <Button type="button" variant="secondary" onClick={() => setCreating(false)}>
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            form="client-create-form"
-            aria-describedby="client-create-hint"
-            loading={create.isPending}
-            loadingLabel="Creando cliente"
-            disabled={missingCreateFields.length > 0}
-          >
-            Crear cliente
-          </Button>
-        </>
+        <ActionDrawerFooter
+          primary={
+            <Button
+              type="submit"
+              form="client-create-form"
+              loading={create.isPending}
+              loadingLabel="Creando cliente"
+              disabled={missingCreateFields.length > 0}
+            >
+              Crear cliente
+            </Button>
+          }
+          hint={missingCreateFields.length > 0 ? createFieldsHint : null}
+          onCancel={() => setCreating(false)}
+        />
       }
     >
       <form

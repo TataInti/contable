@@ -101,12 +101,13 @@ async function abrirContacto(): Promise<HTMLElement> {
 }
 
 describe("Pie de los cuatro cajones de Clientes: estado vigente (K9, 5.3a)", () => {
-  it("alta vacía: el motivo va antes de «Cancelar»; «Crear cliente» deshabilitado", async () => {
+  it("alta vacía: «Cancelar» a la izquierda, motivo junto a «Crear cliente»", async () => {
     const cajon = await abrirAlta();
-    // vigente: cambia con D5-2 (hoy el motivo va antes de «Cancelar»)
-    expect(pieDe(cajon).firstElementChild?.id).toBe("client-create-hint");
     expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Crear cliente"]);
-    expect((within(cajon).getByRole("button", { name: "Crear cliente" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe("Cancelar");
+    expect(pieDe(cajon).querySelector(".action-drawer__primary .action-drawer__hint")?.textContent).toBe(
+      "Falta completar 2 campos: razón social y CUIT.",
+    );
   });
 
   it("edición: el pie tiene solo «Guardar cambios» y no muestra motivo", async () => {

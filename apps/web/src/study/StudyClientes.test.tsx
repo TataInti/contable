@@ -938,7 +938,7 @@ describe("StudyClientes — cartera densa", () => {
 
     const createButton = within(drawer).getByRole("button", { name: "Crear cliente" }) as HTMLButtonElement;
     expect(createButton.disabled).toBe(true);
-    expect(createButton.getAttribute("aria-describedby")).toBe("client-create-hint");
+    expect(drawer.querySelector(".action-drawer__primary")?.contains(createButton)).toBe(true);
     expect(within(drawer).getByText("Falta completar 2 campos: razón social y CUIT.")).toBeTruthy();
     expect(drawer.querySelector(".action-drawer__footer")?.querySelectorAll("button.ds-button--primary")).toHaveLength(1);
     expect(within(drawer).getByRole("button", { name: "Cancelar" }).closest(".action-drawer__footer")).toBeTruthy();

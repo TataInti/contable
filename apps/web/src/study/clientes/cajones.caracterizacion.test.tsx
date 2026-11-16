@@ -83,7 +83,7 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
       expect(cajon.querySelector(`#${id}`)).not.toBeNull();
     }
     expect(cajon.querySelectorAll(".ds-field")).toHaveLength(8);
-    expect(cajon.querySelector("#client-create-hint")?.textContent).toBe(
+    expect(cajon.querySelector(".action-drawer__primary .action-drawer__hint")?.textContent).toBe(
       "Falta completar 2 campos: razón social y CUIT.",
     );
     expect((within(cajon).getByRole("button", { name: "Crear cliente" }) as HTMLButtonElement).disabled).toBe(true);
@@ -101,7 +101,7 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
     fireEvent.change(cajon.querySelector("#client-cuit") as HTMLInputElement, {
       target: { value: "20000000112" },
     });
-    expect(cajon.querySelector("#client-create-hint")?.textContent).toBe("Los datos requeridos están completos.");
+    expect(cajon.querySelector(".action-drawer__hint")).toBeNull();
 
     fireEvent.click(within(cajon).getByRole("button", { name: "Crear cliente" }));
 
