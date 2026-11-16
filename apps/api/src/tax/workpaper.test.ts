@@ -1,6 +1,10 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, beforeEach } from "vitest";
+import { randomBytes, randomUUID } from "node:crypto";
+import type { FastifyInstance } from "fastify";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { buildServer } from "../server.js";
+import { sha256 } from "../auth/sessions.js";
 import { prisma } from "../lib/prisma.js";
 import { MonthlyWorkpaperService, WorkpaperError } from "./workpaper-service.js";
 
@@ -1463,5 +1467,165 @@ describe("F1.1 expediente mensual de liquidación", () => {
     expect(supersededControl).toBeDefined();
     expect(supersededControl?.severity).toBe("BLOCKING");
     expect(supersededControl?.status).toBe("OPEN");
+  });
+});
+
+// Envío a revisión por HTTP (desvío 1, decisión de Ciro: compuerta en la API). Primero se fija
+// lo que no cambia: el envío sin bloqueantes, y los 401, 403 y 404 de la ruta.
+describe("envío a revisión por HTTP: caracterización y compuerta de controles bloqueantes", () => {
+  let app: FastifyInstance;
+  let tokenOwner = "";
+  let tokenReviewer = "";
+  let tokenAjeno = "";
+  const AJENO_WP = randomUUID();
+  const submitUrl = (workpaperId: string) =>
+    `/api/v1/firms/${FIRM_WP}/clients/${CLIENT_WP}/monthly-tax-workpapers/${workpaperId}/submit-review`;
+
+  beforeAll(async () => {
+    app = await buildServer({
+      postgres: async () => true,
+      valkey: async () => true,
+      minio: async () => true,
+      ai: async () => true,
+    });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(async () => {
+    await setupMembership();
+    await setupFiscalComponent();
+    await cleanupWorkpaperCycle();
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO users ("id", "emailNormalized", name, "passwordHash", "updatedAt")
+      VALUES ('${AJENO_WP}', 'ajeno-${AJENO_WP}@test.local', 'Ajeno envío WP', 'x', now())
+      ON CONFLICT ("id") DO NOTHING
+    `);
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO firm_memberships ("id", "firmId", "userId", role, status, "acceptedAt")
+      VALUES (gen_random_uuid()::text, '${OTHER_FIRM_WP}', '${AJENO_WP}', 'OWNER', 'ACTIVE', now())
+      ON CONFLICT ("firmId", "userId") DO NOTHING
+    `);
+    // El revisor tiene asignado el cliente: así la ruta llega a la comprobación de capacidad (403).
+    const asignado = await prisma.clientAssignment.findFirst({
+      where: { firmId: FIRM_WP, userId: REVIEWER_WP, clientId: CLIENT_WP },
+    });
+    if (!asignado) {
+      await prisma.clientAssignment.create({
+        data: { firmId: FIRM_WP, userId: REVIEWER_WP, clientId: CLIENT_WP, capabilities: [] },
+      });
+    }
+    tokenOwner = await abrirSesion(OWNER_WP);
+    tokenReviewer = await abrirSesion(REVIEWER_WP);
+    tokenAjeno = await abrirSesion(AJENO_WP);
+  });
+
+  async function abrirSesion(userId: string) {
+    const token = randomBytes(32).toString("base64url");
+    await prisma.deviceSession.create({
+      data: {
+        id: randomUUID(),
+        userId,
+        refreshTokenHash: sha256(token),
+        familyId: randomUUID(),
+        rotationCounter: 0,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+    return token;
+  }
+
+  async function expedienteCalculado() {
+    const wp = await service.create(ctxPreparer, {
+      clientId: CLIENT_WP,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+    });
+    await service.calculate(ctxPreparer, wp.id);
+    await resolveGeneratedBlockingControls(wp.id);
+    return wp.id;
+  }
+
+  // Lee el estado con el rol de producción (sin BYPASSRLS), no con el cliente de pruebas.
+  async function estadoEnRuntime(workpaperId: string) {
+    return runAsRuntime(OWNER_WP, FIRM_WP, async (tx) => {
+      const wp = await tx.monthlyTaxWorkpaper.findFirst({
+        where: { id: workpaperId },
+        select: { status: true },
+      });
+      return wp?.status;
+    });
+  }
+
+  // Doble envío CSRF (cookie y cabecera iguales) para los POST con sesión, como en las demás pruebas HTTP.
+  const CSRF = randomBytes(24).toString("base64url");
+  function enviar(workpaperId: string, token?: string) {
+    return app.inject({
+      method: "POST",
+      url: submitUrl(workpaperId),
+      ...(token
+        ? { cookies: { refresh_token: token, csrf_token: CSRF }, headers: { "x-csrf-token": CSRF } }
+        : {}),
+    });
+  }
+
+  it("sin controles bloqueantes, envía desde CALCULATED (200) y queda IN_REVIEW", async () => {
+    const workpaperId = await expedienteCalculado();
+    const res = await enviar(workpaperId, tokenOwner);
+    expect(res.statusCode).toBe(200);
+    expect(await estadoEnRuntime(workpaperId)).toBe("IN_REVIEW");
+  });
+
+  it("tras «cambios solicitados», el envío directo responde 409 y no cambia el estado (vigente)", async () => {
+    const workpaperId = await expedienteCalculado();
+    await service.submitReview(ctxPreparer, workpaperId);
+    await service.review(ctxReviewer, workpaperId, {
+      approved: false,
+      comment: "Revisar la imputación",
+    });
+    expect(await estadoEnRuntime(workpaperId)).toBe("CHANGES_REQUESTED");
+    const res = await enviar(workpaperId, tokenOwner);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: { code: "INVALID_TRANSITION" } });
+    expect(await estadoEnRuntime(workpaperId)).toBe("CHANGES_REQUESTED");
+  });
+
+  it("tras «cambios solicitados», Recalcular vuelve a CALCULATED y el envío sin bloqueantes pasa (200)", async () => {
+    const workpaperId = await expedienteCalculado();
+    await service.submitReview(ctxPreparer, workpaperId);
+    await service.review(ctxReviewer, workpaperId, {
+      approved: false,
+      comment: "Revisar la imputación",
+    });
+    await service.calculate(ctxPreparer, workpaperId);
+    await resolveGeneratedBlockingControls(workpaperId);
+    expect(await estadoEnRuntime(workpaperId)).toBe("CALCULATED");
+    const res = await enviar(workpaperId, tokenOwner);
+    expect(res.statusCode).toBe(200);
+    expect(await estadoEnRuntime(workpaperId)).toBe("IN_REVIEW");
+  });
+
+  it("sin sesión responde 401 y no cambia el estado", async () => {
+    const workpaperId = await expedienteCalculado();
+    const res = await enviar(workpaperId);
+    expect(res.statusCode).toBe(401);
+    expect(await estadoEnRuntime(workpaperId)).toBe("CALCULATED");
+  });
+
+  it("sin capacidad de envío responde 403 y no cambia el estado", async () => {
+    const workpaperId = await expedienteCalculado();
+    const res = await enviar(workpaperId, tokenReviewer);
+    expect(res.statusCode).toBe(403);
+    expect(await estadoEnRuntime(workpaperId)).toBe("CALCULATED");
+  });
+
+  it("un expediente de otro estudio responde 404 y no cambia el estado", async () => {
+    const workpaperId = await expedienteCalculado();
+    const res = await enviar(workpaperId, tokenAjeno);
+    expect(res.statusCode).toBe(404);
+    expect(await estadoEnRuntime(workpaperId)).toBe("CALCULATED");
   });
 });
