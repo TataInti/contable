@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { uploadFilingReceipt, waitForReceiptReady } from "./filingReceipt";
+import { uploadFilingReceipt, uploadPresentacionDocument, waitForReceiptReady } from "./filingReceipt";
 
 const apiMock = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 const uploadMock = vi.hoisted(() => vi.fn());
@@ -14,6 +14,27 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe("declaración jurada subida por el estudio (pruebas en rojo, corte 5b-1)", () => {
+  it("la sube como DECLARACION_JURADA, sin pedido documental", async () => {
+    apiMock.post
+      .mockResolvedValueOnce({ sessionId: "session-2", presignedUrl: "https://storage/put", objectKey: "key-2" })
+      .mockResolvedValueOnce({ documentId: "document-2" });
+    const file = new File(["declaracion"], "dj-2026.pdf", { type: "application/pdf" });
+
+    await expect(uploadPresentacionDocument(BASE, file, "DECLARACION_JURADA")).resolves.toBe("document-2");
+
+    expect(apiMock.post).toHaveBeenNthCalledWith(1, `${BASE}/document-upload-sessions`, {
+      expectedMime: "application/pdf",
+      category: "DECLARACION_JURADA",
+    });
+    expect(apiMock.post).toHaveBeenNthCalledWith(
+      2,
+      `${BASE}/document-upload-sessions/session-2/complete`,
+      expect.objectContaining({ originalName: "dj-2026.pdf", objectKey: "key-2", sizeBytes: file.size }),
+    );
+  });
 });
 
 describe("acuse de presentación subido por el estudio", () => {

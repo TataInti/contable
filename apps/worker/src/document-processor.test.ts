@@ -49,7 +49,7 @@ const extractionResult: ExtractionResult = {
   estimatedCostUsd: null,
 };
 
-describe("DocumentProcessor categorías de evidencia (caracterización, corte 5b-1)", () => {
+describe("DocumentProcessor categorías de evidencia (corte 5b-1)", () => {
   async function procesarCon(category: string | null) {
     const data = Buffer.from("%PDF-1.4 synthetic fixture");
     const fileVersion = {
@@ -103,6 +103,18 @@ describe("DocumentProcessor categorías de evidencia (caracterización, corte 5b
 
   it("el acuse queda READY sin extracción", async () => {
     const { ai, fakeTx } = await procesarCon("ACUSE");
+
+    expect(ai.runExtraction).not.toHaveBeenCalled();
+    expect(fakeTx.document.update).toHaveBeenCalledWith({
+      where: { id: "33333333-3333-4333-8333-333333333333" },
+      data: { status: "READY" },
+    });
+    expect(fakeTx.documentProcessingJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ stage: "VALIDATED_NO_EXTRACTION" }) }),
+    );
+  });
+  it("la declaración jurada queda READY sin extracción (pruebas en rojo, corte 5b-1)", async () => {
+    const { ai, fakeTx } = await procesarCon("DECLARACION_JURADA");
 
     expect(ai.runExtraction).not.toHaveBeenCalled();
     expect(fakeTx.document.update).toHaveBeenCalledWith({

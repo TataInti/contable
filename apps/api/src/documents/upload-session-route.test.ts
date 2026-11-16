@@ -115,3 +115,24 @@ describe("sesión de upload sin pedido documental (caracterización, corte 5b-1)
     );
   });
 });
+
+describe("sesión de upload con la declaración jurada (pruebas en rojo, corte 5b-1)", () => {
+  it("la declaración jurada sin pedido responde 201 y crea la sesión con su categoría", async () => {
+    const response = await crearSesion({ category: "DECLARACION_JURADA" });
+
+    expect(response.statusCode).toBe(201);
+    expect(mocks.createUploadSession).toHaveBeenCalledWith(
+      "firm-a",
+      CLIENT_ID,
+      "user-a",
+      { category: "DECLARACION_JURADA" },
+      expect.anything(),
+    );
+  });
+
+  it("la declaración jurada con pedido documental responde 201, igual que el acuse con pedido", async () => {
+    const response = await crearSesion({ category: "DECLARACION_JURADA", requestItemId: REQUEST_ITEM_ID });
+
+    expect(response.statusCode).toBe(201);
+  });
+});

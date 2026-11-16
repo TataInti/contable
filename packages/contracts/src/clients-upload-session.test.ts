@@ -30,3 +30,23 @@ describe("createUploadSessionSchema sin pedido documental (caracterización, cor
     ).toBe(true);
   });
 });
+
+describe("createUploadSessionSchema con la declaración jurada (pruebas en rojo, corte 5b-1)", () => {
+  it("acepta la declaración jurada sin pedido", () => {
+    expect(createUploadSessionSchema.safeParse({ category: "DECLARACION_JURADA" }).success).toBe(true);
+  });
+
+  it("acepta la declaración jurada con pedido documental, igual que el acuse", () => {
+    expect(
+      createUploadSessionSchema.safeParse({ category: "DECLARACION_JURADA", requestItemId: REQUEST_ITEM_ID }).success,
+    ).toBe(true);
+  });
+
+  it("explica en lenguaje llano qué elegir cuando la categoría no admite el archivo sin pedido", () => {
+    const result = createUploadSessionSchema.safeParse({ category: "OTRO" });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+      "Para subir un archivo sin pedido, elegí la categoría Acuse de presentación o Declaración jurada.",
+    ]);
+  });
+});
