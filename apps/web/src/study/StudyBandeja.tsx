@@ -370,10 +370,11 @@ export function StudyBandeja() {
       ) : (
         <>
           <div className="review-workspace">
+            {/* Una consulta sin respuesta (pausada: sin conexión o pestaña oculta) sigue cargando: no es lista vacía (7b.2, cierre). */}
             <ListaDocumentos
               todos={rows}
               visibles={documentosVisibles}
-              cargando={documents.isLoading}
+              cargando={documents.isPending}
               error={documents.isError}
               onReintentar={() => void documents.refetch()}
               busqueda={documentSearch}
