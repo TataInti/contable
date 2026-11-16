@@ -94,4 +94,10 @@ describe("cobertura total del ROUTE_POLICY (deny-by-default)", () => {
     expect(requiredCapability("POST", ruta)).toBeNull();
     expect(requiredCapability("PATCH", ruta)).toBeNull();
   });
+
+  it("caja fiscal (corte 8a): lectura con profitability.read; sin escritura (deny-by-default)", () => {
+    const ruta = "/api/v1/firms/:p/clients/:p/profitability/caja-fiscal";
+    expect(requiredCapability("GET", ruta)).toBe("profitability.read");
+    expect(requiredCapability("POST", ruta)).toBeNull();
+  });
 });
