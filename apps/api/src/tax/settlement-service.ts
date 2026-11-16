@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { retirarLotesDeLaLiquidacionReemplazada } from "./declaration-credit-lots.js";
 import { createHash } from "node:crypto";
 import {
   calculateCm03,
@@ -610,6 +611,8 @@ export class SettlementService {
           taxTypeId: input.taxTypeId,
           // B1 (§3.1): un saldo no verificado nunca reduce un impuesto.
           verificationStatus: "VERIFIED",
+          // Corte 6a: un saldo que no se arrastra (carryForward = false) no entra al cálculo.
+          carryForward: true,
           OR: [
             { periodId: null },
             { periodId: { in: eligiblePeriodIds.map((item) => item.id) } },
@@ -2372,6 +2375,12 @@ export class SettlementService {
       where: { id: settlement.periodId },
     });
     if (settlement.supersedesId) {
+      // Corte 6a: los lotes de la DJ de la versión que se reemplaza dejan de contar.
+      await retirarLotesDeLaLiquidacionReemplazada(tx, {
+        firmId: settlement.firmId,
+        settlementId: settlement.supersedesId,
+        userId,
+      });
       const downstreamFinalized = await tx.taxSettlement.findMany({
         where: {
           firmId: settlement.firmId,
@@ -2429,6 +2438,7 @@ export class SettlementService {
           firmId: settlement.firmId,
           clientId: settlement.clientId,
           taxTypeId: settlement.taxTypeId,
+          carryForward: true,
           OR: [
             { periodId: null },
             { periodId: { in: eligiblePeriodIds.map((item) => item.id) } },

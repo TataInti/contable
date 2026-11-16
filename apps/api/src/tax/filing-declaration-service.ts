@@ -2,12 +2,18 @@ import { Prisma } from "@prisma/client";
 import {
   FILING_DECLARATION_DOCUMENT_CATEGORY,
   FILING_DECLARATION_TOLERANCE,
+  type DeclarationCreditLotResult,
   type TaxFilingCreditDetailItem,
   type TaxFilingDeclarationBody,
   type TaxFilingDeclarationWarning,
 } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { creditOriginProblem, type CreditOriginProblem } from "./workpaper-service.js";
+import {
+  aplicarLotesDeclaracion,
+  CreditLotError,
+  planificarLotesDeclaracion,
+} from "./declaration-credit-lots.js";
 
 /**
  * Declaración jurada (DJ) de una presentación FILED (corte 5a, D-DJ2). Reglas:
@@ -17,6 +23,8 @@ import { creditOriginProblem, type CreditOriginProblem } from "./workpaper-servi
  * (c) una presentación de liquidación SUPERSEDED no admite DJ;
  * (d) cargar de nuevo reemplaza la anterior y deja auditoría con el valor previo.
  * Las advertencias de diferencia no bloquean.
+ * Corte 6a: la misma transacción genera los saldos del libro (saldosGenerados): IVA técnico y
+ * libre, y saldo a favor del detalle del propio impuesto y régimen (declaration-credit-lots.ts).
  */
 
 export type FilingDeclarationErrorCode =
@@ -31,7 +39,8 @@ export type FilingDeclarationErrorCode =
   | "DECLARATION_CREDIT_REGIME_NOT_OF_TAX"
   | "DECLARATION_CREDIT_CM_REQUIRES_JURISDICTION"
   | "DECLARATION_CREDIT_JURISDICTION_MISMATCH"
-  | "DECLARATION_CREDIT_JURISDICTION_NOT_ACTIVE";
+  | "DECLARATION_CREDIT_JURISDICTION_NOT_ACTIVE"
+  | "DECLARATION_CREDIT_ALREADY_USED";
 
 export class FilingDeclarationError extends Error {
   readonly code: FilingDeclarationErrorCode;
@@ -195,6 +204,26 @@ async function validarSaldosFavorDetalle(
   return guardados;
 }
 
+/** Traduce el error de los lotes al de la DJ (mismo código, mismo estado HTTP y motivo). */
+async function aplicarSaldos(
+  tx: Prisma.TransactionClient,
+  args: Parameters<typeof aplicarLotesDeclaracion>[1],
+): Promise<DeclarationCreditLotResult[]> {
+  try {
+    return await aplicarLotesDeclaracion(tx, args);
+  } catch (err) {
+    if (err instanceof CreditLotError) {
+      throw new FilingDeclarationError(
+        err.code as FilingDeclarationErrorCode,
+        err.message,
+        err.httpStatus,
+        err.path,
+      );
+    }
+    throw err;
+  }
+}
+
 export class FilingDeclarationService {
   async recordDeclaration(ctx: TenantContext, input: RecordDeclarationInput) {
     return withTenantContext(ctx, async (tx) => {
@@ -225,7 +254,7 @@ export class FilingDeclarationService {
       const settlement = filing.settlementId
         ? await tx.taxSettlement.findUnique({
             where: { id: filing.settlementId },
-            select: { status: true, totals: true },
+            select: { status: true, totals: true, regimeId: true, jurisdictionId: true },
           })
         : null;
       if (settlement?.status === "SUPERSEDED") {
@@ -266,6 +295,46 @@ export class FilingDeclarationService {
       }
 
       const detalle = await validarSaldosFavorDetalle(tx, input.saldosFavorDetalle ?? []);
+
+      const obligacion = await tx.taxObligation.findUniqueOrThrow({
+        where: { id: filing.obligationId },
+        include: { regime: { select: { taxTypeId: true, jurisdictionId: true } } },
+      });
+      // P2: IVA se reconoce por id del catálogo, no por el texto del código.
+      const iva = await tx.taxType.findUnique({ where: { code: "IVA" }, select: { id: true } });
+      // Una liquidación con versión posterior (supersedesId) ya no genera saldos: la DJ vigente es la de la versión nueva.
+      const sucesora = filing.settlementId
+        ? await tx.taxSettlement.findFirst({
+            where: { firmId: ctx.firmId, supersedesId: filing.settlementId },
+            select: { id: true },
+          })
+        : null;
+      const plan = planificarLotesDeclaracion({
+        obligacion: {
+          taxTypeId: obligacion.regime.taxTypeId,
+          regimeId: obligacion.regimeId,
+          jurisdictionId: obligacion.regime.jurisdictionId,
+          esIva: iva !== null && obligacion.regime.taxTypeId === iva.id,
+        },
+        liquidacion: settlement
+          ? { regimeId: settlement.regimeId, jurisdictionId: settlement.jurisdictionId }
+          : null,
+        saldoFavorTecnico: input.saldoFavorTecnico,
+        saldoLibreDisponibilidad: input.saldoLibreDisponibilidad,
+        saldosFavorDetalle: input.saldosFavorDetalle,
+        reemplazada: sucesora !== null,
+      });
+      const saldosGenerados = await aplicarSaldos(tx, {
+        firmId: ctx.firmId,
+        clientId: input.clientId,
+        userId: ctx.userId,
+        actorKind: ctx.actorKind,
+        filingId: filing.id,
+        settlementId: filing.settlementId,
+        periodId: obligacion.periodId,
+        plan,
+      });
+
       const previous = filing.declarationDocumentId
         ? {
             declarationDocumentId: filing.declarationDocumentId,
@@ -321,7 +390,7 @@ export class FilingDeclarationService {
         amountFiled: filing.amountFiled,
         settlementTotals: (settlement?.totals ?? null) as Record<string, string> | null,
       });
-      return { filing: updated, warnings };
+      return { filing: updated, warnings, saldosGenerados };
     });
   }
 }

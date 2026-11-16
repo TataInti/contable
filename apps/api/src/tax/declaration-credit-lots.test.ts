@@ -35,8 +35,20 @@ describe("planificación de lotes de la DJ (corte 6a, pura)", () => {
   it("U1 IVA: el saldo técnico y el libre van al lote con el alcance de la liquidación y cubren el cierre", () => {
     const plan = planificarLotesDeclaracion(IVA_DJ);
     expect(plan.lotes).toEqual([
-      { kind: "IVA_TECNICO", taxTypeId: IVA_TAX, regimeId: REG_IVA, jurisdictionId: JUR_NAC, amount: "50000.0000" },
-      { kind: "IVA_LIBRE", taxTypeId: IVA_TAX, regimeId: REG_IVA, jurisdictionId: JUR_NAC, amount: "20000.0000" },
+      {
+        kind: "IVA_TECNICO",
+        taxTypeId: IVA_TAX,
+        regimeId: REG_IVA,
+        jurisdictionId: JUR_NAC,
+        amount: "50000.0000",
+      },
+      {
+        kind: "IVA_LIBRE",
+        taxTypeId: IVA_TAX,
+        regimeId: REG_IVA,
+        jurisdictionId: JUR_NAC,
+        amount: "20000.0000",
+      },
     ]);
     expect(plan.cubre).toEqual({ ivaTecnicoLibre: true, saldoAFavor: false });
     expect(plan.noCreados).toEqual([]);
@@ -46,7 +58,11 @@ describe("planificación de lotes de la DJ (corte 6a, pura)", () => {
     const plan = planificarLotesDeclaracion({ ...IVA_DJ, saldoFavorTecnico: "0.0000" });
     expect(plan.lotes.map((lote) => lote.kind)).toEqual(["IVA_LIBRE"]);
     expect(plan.noCreados).toEqual([
-      expect.objectContaining({ kind: "IVA_TECNICO", amount: "0.0000", motivo: expect.stringMatching(/saldo en cero/) }),
+      expect.objectContaining({
+        kind: "IVA_TECNICO",
+        amount: "0.0000",
+        motivo: expect.stringMatching(/saldo en cero/),
+      }),
     ]);
   });
 
@@ -78,8 +94,20 @@ describe("planificación de lotes de la DJ (corte 6a, pura)", () => {
       reemplazada: false,
     });
     expect(plan.lotes).toEqual([
-      { kind: "SALDO_A_FAVOR", taxTypeId: IIBB_TAX, regimeId: REG_CM, jurisdictionId: JUR_CABA, amount: "100.0000" },
-      { kind: "SALDO_A_FAVOR", taxTypeId: IIBB_TAX, regimeId: REG_CM, jurisdictionId: JUR_BA, amount: "40.5000" },
+      {
+        kind: "SALDO_A_FAVOR",
+        taxTypeId: IIBB_TAX,
+        regimeId: REG_CM,
+        jurisdictionId: JUR_CABA,
+        amount: "100.0000",
+      },
+      {
+        kind: "SALDO_A_FAVOR",
+        taxTypeId: IIBB_TAX,
+        regimeId: REG_CM,
+        jurisdictionId: JUR_BA,
+        amount: "40.5000",
+      },
     ]);
     expect(plan.cubre).toEqual({ ivaTecnicoLibre: false, saldoAFavor: true });
     expect(plan.noCreados).toEqual([]);
@@ -106,7 +134,9 @@ describe("planificación de lotes de la DJ (corte 6a, pura)", () => {
       expect.objectContaining({ kind: "IVA_TECNICO", motivo: expect.stringMatching(/solo IVA/) }),
     ]);
     expect(planificarLotesDeclaracion(IVA_DJ).cubre.saldoAFavor).toBe(false);
-    expect(planificarLotesDeclaracion({ ...IVA_DJ, saldosFavorDetalle: [] }).cubre.saldoAFavor).toBe(true);
+    expect(
+      planificarLotesDeclaracion({ ...IVA_DJ, saldosFavorDetalle: [] }).cubre.saldoAFavor,
+    ).toBe(true);
   });
 
   it("U7 el origen de cada lote sale de un único lugar: DJ si viene de una presentación, CIERRE si viene de una liquidación, MANUAL en otro caso", () => {
@@ -130,7 +160,10 @@ function cuitEndingIn(ending: string): string {
   const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
   for (;;) {
     const base = `20${String(randomInt(0, 100_000_000)).padStart(8, "0")}`;
-    const sum = weights.reduce((total, weight, index) => total + Number(base.charAt(index)) * weight, 0);
+    const sum = weights.reduce(
+      (total, weight, index) => total + Number(base.charAt(index)) * weight,
+      0,
+    );
     const check = (11 - (sum % 11)) % 11;
     if (check < 10 && String(check) === ending) return `${base}${check}`;
   }
@@ -153,7 +186,13 @@ beforeAll(async () => {
     orderBy: { code: "asc" },
   });
   const cliente = await prisma.client.create({
-    data: { firmId: FIRM, legalName: "Cliente sintético cascada 6A", tradeName: "Cascada 6A", cuit: cuitEndingIn("1"), status: "ACTIVE" },
+    data: {
+      firmId: FIRM,
+      legalName: "Cliente sintético cascada 6A",
+      tradeName: "Cascada 6A",
+      cuit: cuitEndingIn("1"),
+      status: "ACTIVE",
+    },
   });
   clientId = cliente.id;
   const perfil = await prisma.taxpayerProfileVersion.create({
@@ -179,7 +218,14 @@ beforeAll(async () => {
     },
   });
   const obligacion = await prisma.taxObligation.create({
-    data: { firmId: FIRM, clientId, profileVersionId: perfil.id, regimeId: iva.id, periodId: periodo.id, status: "FILED" },
+    data: {
+      firmId: FIRM,
+      clientId,
+      profileVersionId: perfil.id,
+      regimeId: iva.id,
+      periodId: periodo.id,
+      status: "FILED",
+    },
   });
   const base = {
     firmId: FIRM,
@@ -197,14 +243,22 @@ beforeAll(async () => {
     preparedByUserId: USER,
   };
   const anterior = await prisma.taxSettlement.create({
-    data: { ...base, version: 1, status: "FINALIZED", finalizedByUserId: USER, finalizedAt: new Date() },
+    data: {
+      ...base,
+      version: 1,
+      status: "FINALIZED",
+      finalizedByUserId: USER,
+      finalizedAt: new Date(),
+    },
   });
   versionAnteriorId = anterior.id;
   const nueva = await prisma.taxSettlement.create({
     data: { ...base, version: 2, status: "DRAFT", supersedesId: anterior.id },
   });
   versionNuevaId = nueva.id;
-  const acuse = await prisma.document.create({ data: { firmId: FIRM, clientId, category: "ACUSE", status: "READY" } });
+  const acuse = await prisma.document.create({
+    data: { firmId: FIRM, clientId, category: "ACUSE", status: "READY" },
+  });
   const presentacion = await prisma.taxFiling.create({
     data: {
       firmId: FIRM,

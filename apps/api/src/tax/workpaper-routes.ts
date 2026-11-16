@@ -393,6 +393,7 @@ export function workpaperRoutes(app: FastifyInstance) {
         reference: z.string().max(240).nullable().optional(),
         evidenceDocumentId: z.string().uuid().nullable().optional(),
         originalAmount: z.string().regex(/^\d+(\.\d+)?$/).optional(),
+        carryForward: z.boolean().optional(),
       })
       .strict()
       .parse(req.body);
@@ -403,6 +404,7 @@ export function workpaperRoutes(app: FastifyInstance) {
           ? { evidenceDocumentId: body.evidenceDocumentId }
           : {}),
         ...(body.originalAmount !== undefined ? { originalAmount: body.originalAmount } : {}),
+        ...(body.carryForward !== undefined ? { carryForward: body.carryForward } : {}),
       });
       return reply.send({ data });
     } catch (err) {

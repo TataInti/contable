@@ -425,11 +425,16 @@ async function loteVigente(filingId: string, kind: string) {
   return lote;
 }
 
-/** Disponible que tomaría la liquidación siguiente: lotes VERIFIED que arrastran, del impuesto y régimen de IVA. */
-async function disponibleParaSiguiente(kind: string): Promise<string> {
+/**
+ * Disponible que tomaría la liquidación siguiente por el saldo de un período: lotes VERIFIED que
+ * arrastran, del impuesto y régimen de IVA, con el período de la liquidación que se cierra. Se acota
+ * por período para no sumar los saldos de otros escenarios del mismo cliente.
+ */
+async function disponibleParaSiguiente(kind: string, periodId: string): Promise<string> {
   const lotes = await prisma.taxCreditLot.findMany({
     where: {
       clientId,
+      periodId,
       taxTypeId: ivaRegime.taxTypeId,
       regimeId: ivaRegime.id,
       kind,
@@ -476,17 +481,19 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
     const tecnico = await loteVigente(e.filingId, "IVA_TECNICO");
     expect(tecnico.originalAmount.toFixed(4)).toBe("50000.0000");
     const generados = res.json().data.saldosGenerados as ResultadoLote[];
-    expect(generados.filter((g) => g.status === "CREADO").map((g) => g.kind).sort()).toEqual([
-      "IVA_LIBRE",
-      "IVA_TECNICO",
-    ]);
+    expect(
+      generados
+        .filter((g) => g.status === "CREADO")
+        .map((g) => g.kind)
+        .sort(),
+    ).toEqual(["IVA_LIBRE", "IVA_TECNICO"]);
   });
 
   it("R2 (golden) al cargar la DJ el cierre de P queda SUPERSEDED sin cambiar su importe; P+1 toma 50.000,00 para IVA técnico (ni 98.000,00 ni 48.000,00) y 20.000,00 para el libre", async () => {
     const e = await escenario();
     const cierreTecnico = await cierre(e, "IVA_TECNICO", "48000.0000");
     await cierre(e, "IVA_LIBRE", "20000.0000");
-    expect(await disponibleParaSiguiente("IVA_TECNICO")).toBe("48000.0000");
+    expect(await disponibleParaSiguiente("IVA_TECNICO", e.periodId)).toBe("48000.0000");
     const res = await declarar(e, { declarationDocumentId: await documento(DJ), ...CUERPO_DJ });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.warnings.map((w: { code: string }) => w.code)).toContain(
@@ -495,8 +502,8 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
     const tras = await prisma.taxCreditLot.findUniqueOrThrow({ where: { id: cierreTecnico.id } });
     expect(tras.verificationStatus).toBe("SUPERSEDED");
     expect(tras.originalAmount.toFixed(4)).toBe("48000.0000");
-    expect(await disponibleParaSiguiente("IVA_TECNICO")).toBe("50000.0000");
-    expect(await disponibleParaSiguiente("IVA_LIBRE")).toBe("20000.0000");
+    expect(await disponibleParaSiguiente("IVA_TECNICO", e.periodId)).toBe("50000.0000");
+    expect(await disponibleParaSiguiente("IVA_LIBRE", e.periodId)).toBe("20000.0000");
   });
 
   it("R3 DJ en cero: no crea lote para el técnico (NO_CREADO, saldo en cero), el cierre de ese saldo queda SUPERSEDED y P+1 toma cero", async () => {
@@ -519,7 +526,7 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
     );
     const tras = await prisma.taxCreditLot.findUniqueOrThrow({ where: { id: cierreTecnico.id } });
     expect(tras.verificationStatus).toBe("SUPERSEDED");
-    expect(await disponibleParaSiguiente("IVA_TECNICO")).toBe("0.0000");
+    expect(await disponibleParaSiguiente("IVA_TECNICO", e.periodId)).toBe("0.0000");
   });
 
   it("R4 un saldo del detalle de otro impuesto no genera lote en esta obligación y se informa con su motivo", async () => {
@@ -531,7 +538,9 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
       saldosFavorDetalle: [{ taxTypeId: otro.id, amount: "250.5000" }],
     });
     expect(res.statusCode).toBe(200);
-    expect((await lotesDeLaDJ(e.filingId)).filter((lote) => lote.kind === "SALDO_A_FAVOR")).toHaveLength(0);
+    expect(
+      (await lotesDeLaDJ(e.filingId)).filter((lote) => lote.kind === "SALDO_A_FAVOR"),
+    ).toHaveLength(0);
     const generados = res.json().data.saldosGenerados as ResultadoLote[];
     expect(generados).toContainEqual(
       expect.objectContaining({
@@ -568,7 +577,9 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
     expect(res.statusCode).toBe(200);
     const lotes = (await lotesDeLaDJ(e.filingId)).filter((lote) => lote.kind === "SALDO_A_FAVOR");
     expect(
-      lotes.map((lote) => [lote.jurisdictionId, lote.regimeId, lote.originalAmount.toFixed(4)]).sort(),
+      lotes
+        .map((lote) => [lote.jurisdictionId, lote.regimeId, lote.originalAmount.toFixed(4)])
+        .sort(),
     ).toEqual(
       [
         [j1.id, cm.id, "100.0000"],
@@ -579,7 +590,9 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
 
   it("R6 la DJ de una liquidación reemplazada por una versión posterior se registra y no crea lotes", async () => {
     const e = await escenario();
-    const liquidacion = await prisma.taxSettlement.findUniqueOrThrow({ where: { id: e.settlementId } });
+    const liquidacion = await prisma.taxSettlement.findUniqueOrThrow({
+      where: { id: e.settlementId },
+    });
     await prisma.taxSettlement.create({
       data: {
         firmId: FIRM,
@@ -687,9 +700,14 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
     const e = await escenario();
     await declarar(e, { declarationDocumentId: await documento(DJ), ...CUERPO_DJ });
     const tecnico = await loteVigente(e.filingId, "IVA_TECNICO");
-    const res = await pedir("PATCH", `${clienteUrl()}/tax-credit-ledger/${tecnico.id}`, TOKEN_OWNER, {
-      carryForward: false,
-    });
+    const res = await pedir(
+      "PATCH",
+      `${clienteUrl()}/tax-credit-ledger/${tecnico.id}`,
+      TOKEN_OWNER,
+      {
+        carryForward: false,
+      },
+    );
     expect(res.statusCode).toBe(200);
     expect(res.json().data.carryForward).toBe(false);
     const lote = (await libro()).find((item) => item.id === tecnico.id);
@@ -697,7 +715,7 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
     const ultimo = lote?.history.at(-1);
     expect(ultimo?.changes).toMatchObject({ carryForward: { from: true, to: false } });
     expect(ultimo?.createdBy?.id).toBe(OWNER);
-    expect(await disponibleParaSiguiente("IVA_TECNICO")).toBe("0.0000");
+    expect(await disponibleParaSiguiente("IVA_TECNICO", e.periodId)).toBe("0.0000");
   });
 
   it("R12 PATCH carryForward sobre un lote ya usado en un cierre responde 409 con el motivo", async () => {
@@ -705,9 +723,14 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
     await declarar(e, { declarationDocumentId: await documento(DJ), ...CUERPO_DJ });
     const tecnico = await loteVigente(e.filingId, "IVA_TECNICO");
     await consumidoPor(tecnico.id, await escenario(), "50000.0000");
-    const res = await pedir("PATCH", `${clienteUrl()}/tax-credit-ledger/${tecnico.id}`, TOKEN_OWNER, {
-      carryForward: false,
-    });
+    const res = await pedir(
+      "PATCH",
+      `${clienteUrl()}/tax-credit-ledger/${tecnico.id}`,
+      TOKEN_OWNER,
+      {
+        carryForward: false,
+      },
+    );
     expect(res.statusCode).toBe(409);
     expect(res.json().error.message).toMatch(MOTIVO_YA_USADO);
   });

@@ -18,6 +18,14 @@ describe("índice de contratos: exportaciones de calendarios y libros", () => {
     const { fiscalBookExportQuerySchema } = contracts;
     expect(typeof fiscalBookExportQuerySchema.safeParse).toBe("function");
   });
+  it("exporta el libro de saldos de la DJ: orígenes, estados por saldo y el interruptor de arrastre (corte 6a)", () => {
+    expect(contracts).toHaveProperty("CREDIT_LOT_ORIGINS");
+    expect(contracts).toHaveProperty("DECLARATION_CREDIT_LOT_STATUSES");
+    expect(contracts).toHaveProperty("creditLotCarryForwardSchema");
+    expect(contracts.CREDIT_LOT_ORIGINS).toEqual(["CIERRE", "DJ", "MANUAL"]);
+    expect(contracts.creditLotCarryForwardSchema.safeParse(false).success).toBe(true);
+  });
+
   it("exporta los esquemas de calendarios fiscales (corte 2a-i)", () => {
     expect(contracts).toHaveProperty("createTaxCalendarSchema");
     expect(contracts).toHaveProperty("taxCalendarEntryInputSchema");
