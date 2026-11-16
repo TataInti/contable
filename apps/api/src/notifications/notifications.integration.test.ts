@@ -42,8 +42,8 @@ type Alert = {
   type?: "DUE_ALERT" | "DUE_OVERDUE";
   status?: "PENDING" | "FILED";
   filed?: boolean;
-  readAt?: number;
-  archivedAt?: number;
+  readAt?: number | undefined;
+  archivedAt?: number | undefined;
 };
 
 const CSRF = randomBytes(24).toString("base64url");
@@ -98,11 +98,14 @@ const post = (url: string, token: string) =>
   });
 
 const listAs = async (token: string, query = "limit=50") =>
-  notificationListResponseSchema.parse((await get(`/api/v1/me/notifications?${query}`, token)).json());
+  notificationListResponseSchema.parse(
+    (await get(`/api/v1/me/notifications?${query}`, token)).json(),
+  );
 
 const unreadAs = async (token: string) =>
-  notificationUnreadCountResponseSchema.parse((await get("/api/v1/me/notifications/unread-count", token)).json())
-    .data.count;
+  notificationUnreadCountResponseSchema.parse(
+    (await get("/api/v1/me/notifications/unread-count", token)).json(),
+  ).data.count;
 
 const idOf = (tag: string) => alertIds[tag] ?? "";
 
@@ -154,8 +157,18 @@ beforeAll(async () => {
   });
   await prisma.user.createMany({
     data: [
-      { id: USER.owner, emailNormalized: `${USER.owner}@3c.test.local`, name: "Titular sintético 3C", passwordHash: "x" },
-      { id: USER.other, emailNormalized: `${USER.other}@3c.test.local`, name: "Revisor sintético 3C", passwordHash: "x" },
+      {
+        id: USER.owner,
+        emailNormalized: `${USER.owner}@3c.test.local`,
+        name: "Titular sintético 3C",
+        passwordHash: "x",
+      },
+      {
+        id: USER.other,
+        emailNormalized: `${USER.other}@3c.test.local`,
+        name: "Revisor sintético 3C",
+        passwordHash: "x",
+      },
       {
         id: USER.preparer,
         emailNormalized: `${USER.preparer}@3c.test.local`,
@@ -167,26 +180,112 @@ beforeAll(async () => {
   await prisma.firmMembership.createMany({
     data: [
       { firmId: FIRM.uno, userId: USER.owner, role: "OWNER", status: "ACTIVE", acceptedAt: at(0) },
-      { firmId: FIRM.dos, userId: USER.owner, role: "OWNER", status: "SUSPENDED", acceptedAt: at(0) },
+      {
+        firmId: FIRM.dos,
+        userId: USER.owner,
+        role: "OWNER",
+        status: "SUSPENDED",
+        acceptedAt: at(0),
+      },
       { firmId: FIRM.tres, userId: USER.owner, role: "ADMIN", status: "ACTIVE", acceptedAt: at(0) },
-      { firmId: FIRM.uno, userId: USER.other, role: "REVIEWER", status: "ACTIVE", acceptedAt: at(0) },
-      { firmId: FIRM.uno, userId: USER.preparer, role: "PREPARER", status: "ACTIVE", acceptedAt: at(0) },
+      {
+        firmId: FIRM.uno,
+        userId: USER.other,
+        role: "REVIEWER",
+        status: "ACTIVE",
+        acceptedAt: at(0),
+      },
+      {
+        firmId: FIRM.uno,
+        userId: USER.preparer,
+        role: "PREPARER",
+        status: "ACTIVE",
+        acceptedAt: at(0),
+      },
     ],
   });
   await prisma.client.createMany({
     data: [
-      { id: CLIENT.c1, firmId: FIRM.uno, legalName: CLIENT_NAME.c1, tradeName: "Sintético 3C", cuit: CUIT.c1, status: "ACTIVE" },
-      { id: CLIENT.c2, firmId: FIRM.uno, legalName: CLIENT_NAME.c2, tradeName: "Sintético 3C", cuit: CUIT.c2, status: "ACTIVE" },
-      { id: CLIENT.c3, firmId: FIRM.tres, legalName: CLIENT_NAME.c3, tradeName: "Sintético 3C", cuit: CUIT.c3, status: "ACTIVE" },
-      { id: CLIENT.c4, firmId: FIRM.dos, legalName: CLIENT_NAME.c4, tradeName: "Sintético 3C", cuit: CUIT.c4, status: "ACTIVE" },
+      {
+        id: CLIENT.c1,
+        firmId: FIRM.uno,
+        legalName: CLIENT_NAME.c1,
+        tradeName: "Sintético 3C",
+        cuit: CUIT.c1,
+        status: "ACTIVE",
+      },
+      {
+        id: CLIENT.c2,
+        firmId: FIRM.uno,
+        legalName: CLIENT_NAME.c2,
+        tradeName: "Sintético 3C",
+        cuit: CUIT.c2,
+        status: "ACTIVE",
+      },
+      {
+        id: CLIENT.c3,
+        firmId: FIRM.tres,
+        legalName: CLIENT_NAME.c3,
+        tradeName: "Sintético 3C",
+        cuit: CUIT.c3,
+        status: "ACTIVE",
+      },
+      {
+        id: CLIENT.c4,
+        firmId: FIRM.dos,
+        legalName: CLIENT_NAME.c4,
+        tradeName: "Sintético 3C",
+        cuit: CUIT.c4,
+        status: "ACTIVE",
+      },
     ],
   });
   await prisma.taxpayerProfileVersion.createMany({
     data: [
-      { id: PROFILE.c1, firmId: FIRM.uno, clientId: CLIENT.c1, legalName: CLIENT_NAME.c1, cuit: CUIT.c1, personType: "JURIDICA", nationalCondition: "RESPONSABLE_INSCRIPTO", validFrom: utc("2026-01-01"), status: "ACTIVE" },
-      { id: PROFILE.c2, firmId: FIRM.uno, clientId: CLIENT.c2, legalName: CLIENT_NAME.c2, cuit: CUIT.c2, personType: "JURIDICA", nationalCondition: "RESPONSABLE_INSCRIPTO", validFrom: utc("2026-01-01"), status: "ACTIVE" },
-      { id: PROFILE.c3, firmId: FIRM.tres, clientId: CLIENT.c3, legalName: CLIENT_NAME.c3, cuit: CUIT.c3, personType: "JURIDICA", nationalCondition: "RESPONSABLE_INSCRIPTO", validFrom: utc("2026-01-01"), status: "ACTIVE" },
-      { id: PROFILE.c4, firmId: FIRM.dos, clientId: CLIENT.c4, legalName: CLIENT_NAME.c4, cuit: CUIT.c4, personType: "JURIDICA", nationalCondition: "RESPONSABLE_INSCRIPTO", validFrom: utc("2026-01-01"), status: "ACTIVE" },
+      {
+        id: PROFILE.c1,
+        firmId: FIRM.uno,
+        clientId: CLIENT.c1,
+        legalName: CLIENT_NAME.c1,
+        cuit: CUIT.c1,
+        personType: "JURIDICA",
+        nationalCondition: "RESPONSABLE_INSCRIPTO",
+        validFrom: utc("2026-01-01"),
+        status: "ACTIVE",
+      },
+      {
+        id: PROFILE.c2,
+        firmId: FIRM.uno,
+        clientId: CLIENT.c2,
+        legalName: CLIENT_NAME.c2,
+        cuit: CUIT.c2,
+        personType: "JURIDICA",
+        nationalCondition: "RESPONSABLE_INSCRIPTO",
+        validFrom: utc("2026-01-01"),
+        status: "ACTIVE",
+      },
+      {
+        id: PROFILE.c3,
+        firmId: FIRM.tres,
+        clientId: CLIENT.c3,
+        legalName: CLIENT_NAME.c3,
+        cuit: CUIT.c3,
+        personType: "JURIDICA",
+        nationalCondition: "RESPONSABLE_INSCRIPTO",
+        validFrom: utc("2026-01-01"),
+        status: "ACTIVE",
+      },
+      {
+        id: PROFILE.c4,
+        firmId: FIRM.dos,
+        clientId: CLIENT.c4,
+        legalName: CLIENT_NAME.c4,
+        cuit: CUIT.c4,
+        personType: "JURIDICA",
+        nationalCondition: "RESPONSABLE_INSCRIPTO",
+        validFrom: utc("2026-01-01"),
+        status: "ACTIVE",
+      },
     ],
   });
 
@@ -308,15 +407,78 @@ beforeAll(async () => {
     createdAt: at(26 * 60),
   });
   alertIds.general = generalId;
-  addAlert({ tag: "f3-a", userId: USER.owner, firmId: FIRM.tres, clientId: CLIENT.c3, profileId: PROFILE.c3, seconds: 150 });
-  addAlert({ tag: "f3-b", userId: USER.owner, firmId: FIRM.tres, clientId: CLIENT.c3, profileId: PROFILE.c3, seconds: 570 });
-  addAlert({ tag: "f3-c", userId: USER.owner, firmId: FIRM.tres, clientId: CLIENT.c3, profileId: PROFILE.c3, seconds: 1290 });
-  addAlert({ tag: "f2-a", userId: USER.owner, firmId: FIRM.dos, clientId: CLIENT.c4, profileId: PROFILE.c4, seconds: 1800 });
-  addAlert({ tag: "f2-b", userId: USER.owner, firmId: FIRM.dos, clientId: CLIENT.c4, profileId: PROFILE.c4, seconds: 1860 });
-  addAlert({ tag: "b-a", userId: USER.other, firmId: FIRM.uno, clientId: CLIENT.c2, profileId: PROFILE.c2, seconds: 2400 });
-  addAlert({ tag: "b-b", userId: USER.other, firmId: FIRM.uno, clientId: CLIENT.c2, profileId: PROFILE.c2, seconds: 2460 });
-  addAlert({ tag: "p-c1", userId: USER.preparer, firmId: FIRM.uno, clientId: CLIENT.c1, profileId: PROFILE.c1, seconds: 3000 });
-  addAlert({ tag: "p-c2", userId: USER.preparer, firmId: FIRM.uno, clientId: CLIENT.c2, profileId: PROFILE.c2, seconds: 3060 });
+  addAlert({
+    tag: "f3-a",
+    userId: USER.owner,
+    firmId: FIRM.tres,
+    clientId: CLIENT.c3,
+    profileId: PROFILE.c3,
+    seconds: 150,
+  });
+  addAlert({
+    tag: "f3-b",
+    userId: USER.owner,
+    firmId: FIRM.tres,
+    clientId: CLIENT.c3,
+    profileId: PROFILE.c3,
+    seconds: 570,
+  });
+  addAlert({
+    tag: "f3-c",
+    userId: USER.owner,
+    firmId: FIRM.tres,
+    clientId: CLIENT.c3,
+    profileId: PROFILE.c3,
+    seconds: 1290,
+  });
+  addAlert({
+    tag: "f2-a",
+    userId: USER.owner,
+    firmId: FIRM.dos,
+    clientId: CLIENT.c4,
+    profileId: PROFILE.c4,
+    seconds: 1800,
+  });
+  addAlert({
+    tag: "f2-b",
+    userId: USER.owner,
+    firmId: FIRM.dos,
+    clientId: CLIENT.c4,
+    profileId: PROFILE.c4,
+    seconds: 1860,
+  });
+  addAlert({
+    tag: "b-a",
+    userId: USER.other,
+    firmId: FIRM.uno,
+    clientId: CLIENT.c2,
+    profileId: PROFILE.c2,
+    seconds: 2400,
+  });
+  addAlert({
+    tag: "b-b",
+    userId: USER.other,
+    firmId: FIRM.uno,
+    clientId: CLIENT.c2,
+    profileId: PROFILE.c2,
+    seconds: 2460,
+  });
+  addAlert({
+    tag: "p-c1",
+    userId: USER.preparer,
+    firmId: FIRM.uno,
+    clientId: CLIENT.c1,
+    profileId: PROFILE.c1,
+    seconds: 3000,
+  });
+  addAlert({
+    tag: "p-c2",
+    userId: USER.preparer,
+    firmId: FIRM.uno,
+    clientId: CLIENT.c2,
+    profileId: PROFILE.c2,
+    seconds: 3060,
+  });
 
   await prisma.taxPeriod.createMany({ data: periods });
   await prisma.taxObligation.createMany({ data: obligations });
@@ -395,7 +557,10 @@ describe("GET /api/v1/me/notifications: listado", () => {
       expect(res.statusCode).toBe(401);
       expect(res.json().error.code).toBe("UNAUTHENTICATED");
     }
-    const marked = await app.inject({ method: "POST", url: `/api/v1/me/notifications/${idOf("f1-20")}/read` });
+    const marked = await app.inject({
+      method: "POST",
+      url: `/api/v1/me/notifications/${idOf("f1-20")}/read`,
+    });
     expect(marked.statusCode).toBe(401);
   });
 });
@@ -403,7 +568,9 @@ describe("GET /api/v1/me/notifications: listado", () => {
 describe("GET /api/v1/me/notifications/unread-count", () => {
   it("cuenta solo los no leídos visibles: sin presentadas, archivadas ni leídas", async () => {
     const res = await get("/api/v1/me/notifications/unread-count", tokens.owner);
-    expect(notificationUnreadCountResponseSchema.parse(res.json())).toEqual({ data: { count: 24 } });
+    expect(notificationUnreadCountResponseSchema.parse(res.json())).toEqual({
+      data: { count: 24 },
+    });
     expect(await unreadAs(tokens.other)).toBe(2);
   });
 });
@@ -420,14 +587,22 @@ describe("RLS real con el rol runtime (sin BYPASSRLS)", () => {
 
   it("el servicio con el rol runtime lista y cuenta solo lo propio", async () => {
     const service = new NotificationService();
-    const owner = await service.list(USER.owner, { limit: 50, offset: 0 }, runtimeRunner(USER.owner));
+    const owner = await service.list(
+      USER.owner,
+      { limit: 50, offset: 0 },
+      runtimeRunner(USER.owner),
+    );
     expect(owner.meta.total).toBe(25);
     expect(await service.unreadCount(USER.other, runtimeRunner(USER.other))).toBe(2);
   });
 
   it("un preparador no ve avisos de clientes que no tiene asignados", async () => {
     const service = new NotificationService();
-    const body = await service.list(USER.preparer, { limit: 20, offset: 0 }, runtimeRunner(USER.preparer));
+    const body = await service.list(
+      USER.preparer,
+      { limit: 20, offset: 0 },
+      runtimeRunner(USER.preparer),
+    );
     expect(body.meta.total).toBe(1);
     expect(body.data[0]?.clientId).toBe(CLIENT.c1);
   });
@@ -481,7 +656,9 @@ describe("POST /api/v1/me/notifications/:id/read y /archive", () => {
     expect(suspended).toMatchObject({ readAt: null, archivedAt: null });
     const ajeno = await prisma.userNotification.findUnique({ where: { id: idOf("b-a") } });
     expect(ajeno).toMatchObject({ readAt: null, archivedAt: null });
-    const ajenoDelTitular = await prisma.userNotification.findUnique({ where: { id: idOf("f1-18") } });
+    const ajenoDelTitular = await prisma.userNotification.findUnique({
+      where: { id: idOf("f1-18") },
+    });
     expect(ajenoDelTitular).toMatchObject({ readAt: null, archivedAt: null });
   });
 });
