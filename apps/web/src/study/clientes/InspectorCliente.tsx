@@ -5,6 +5,7 @@ import { formatCuit } from "../../lib/cuit";
 import { formatearFecha } from "../../lib/formatoFechas";
 import { Inspector, InspectorFacts, InspectorSection } from "../../ui/Dense";
 import { StatusBadge } from "../../ui/StatusBadge";
+import { sinRespuesta } from "./consultas";
 import { MONTH_LONG, profileGaps, vatLabel } from "./etiquetas";
 import type { ClientWithProfile } from "./tipos";
 
@@ -41,7 +42,7 @@ export function InspectorCliente({
 }: InspectorClienteProps) {
   // C03: sin respuesta el contador no dice 0; en carga dice «pendiente» y con error «no disponible».
   const cantidadContactos = contactsQuery.data?.length ?? 0;
-  const rotuloContactos = contactsQuery.isLoading
+  const rotuloContactos = sinRespuesta(contactsQuery)
     ? "pendiente"
     : contactsQuery.isError
       ? "no disponible"
@@ -164,7 +165,7 @@ export function InspectorCliente({
               Nuevo contacto
             </Button>
           </div>
-          {contactsQuery.isLoading ? (
+          {sinRespuesta(contactsQuery) ? (
             <p role="status">Cargando contactos…</p>
           ) : contactsQuery.isError ? (
             <Notice

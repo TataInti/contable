@@ -1,6 +1,7 @@
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Notice } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
+import { sinRespuesta } from "../consultas";
 import { ApiError, type Client } from "../../../lib/api";
 import {
   ARGENTINA_PROVINCES,
@@ -160,7 +161,7 @@ export function PanelAlta({
               return <option key={`${activity.code}:${activity.name}`} value={value}>{value}</option>;
             })}
           </select>
-          {clientActivityCatalog.isLoading ? <small role="status">Cargando catálogo de actividades…</small> : null}
+          {sinRespuesta(clientActivityCatalog) ? <small role="status">Cargando catálogo de actividades…</small> : null}
         </label>
         {clientActivityCatalog.isError ? (
           <Notice

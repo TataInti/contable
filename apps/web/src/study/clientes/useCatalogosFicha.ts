@@ -11,6 +11,7 @@ import {
   type CatalogJurisdiction,
   type ClientEconomicActivityOption,
 } from "@contable/contracts";
+import { sinRespuesta } from "./consultas";
 import type { AccountingStandardCatalogEntry, ClientProfileForm, ClientWithProfile } from "./tipos";
 
 interface UseCatalogosFichaParams {
@@ -73,11 +74,11 @@ export function useCatalogosFicha({
   const standardValue = selectedStandardMatch.canonical[0] ?? selectedStandard;
   const selectedStandardEntry = standardCatalog.find((entry) => entry.name === standardValue);
   const standardCatalogUnavailable = accountingStandardsCatalog.isError;
-  const standardCatalogLoading = accountingStandardsCatalog.isLoading;
+  const standardCatalogLoading = sinRespuesta(accountingStandardsCatalog);
   const standardCatalogEmpty = accountingStandardsCatalog.isSuccess && standardCatalog.length === 0;
   const reintentarNormas = () => void accountingStandardsCatalog.refetch();
   const standardUnknown =
-    !accountingStandardsCatalog.isLoading &&
+    !standardCatalogLoading &&
     !standardCatalogUnavailable &&
     selectedStandard !== "" &&
     !selectedStandardEntry;

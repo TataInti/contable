@@ -30,6 +30,7 @@ import { PanelAlta, type FormularioAlta } from "./clientes/paneles/PanelAlta";
 import { PanelContacto } from "./clientes/paneles/PanelContacto";
 import { PanelEdicion, type FormularioIdentidad } from "./clientes/paneles/PanelEdicion";
 import { PanelEstado } from "./clientes/paneles/PanelEstado";
+import { sinRespuesta } from "./clientes/consultas";
 import { useCatalogosFicha } from "./clientes/useCatalogosFicha";
 import { InspectorCliente } from "./clientes/InspectorCliente";
 import { columnasCartera } from "./clientes/ColumnasCartera";
@@ -478,7 +479,7 @@ export function StudyClientes() {
     />
   ) : null;
 
-  const tableBody = query.isLoading ? (
+  const tableBody = sinRespuesta(query) ? (
     <DenseLoading label="Cargando la cartera…" />
   ) : query.isError ? (
     <Notice

@@ -13,6 +13,7 @@ import {
   type CatalogJurisdiction,
   type ClientEconomicActivityOption,
 } from "@contable/contracts";
+import { sinRespuesta } from "../consultas";
 import type { CatalogosFicha } from "../useCatalogosFicha";
 import type { ClientProfile, ClientProfileForm, ClientWithProfile } from "../tipos";
 
@@ -306,7 +307,7 @@ export function PanelEdicion({
                 </option>
               ) : null}
             </select>
-            {clientActivityCatalog.isLoading ? <small role="status">Cargando catálogo de actividades…</small> : null}
+            {sinRespuesta(clientActivityCatalog) ? <small role="status">Cargando catálogo de actividades…</small> : null}
             {activityIsLegacy || activityIsInactive ? (
               <small className="study-legacy-note">
                 El valor guardado sigue visible y se conserva si no lo reemplazás.
@@ -360,7 +361,7 @@ export function PanelEdicion({
           </label>
           <fieldset className="ds-field" id="client-profile-iibb">
             <legend className="ds-field__label">Jurisdicciones IIBB</legend>
-            {jurisdictionCatalog.isLoading ? (
+            {sinRespuesta(jurisdictionCatalog) ? (
               <p role="status">Cargando catálogo de jurisdicciones…</p>
             ) : jurisdictionCatalog.isError ? (
               <Notice
