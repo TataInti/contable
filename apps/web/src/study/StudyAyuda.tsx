@@ -224,10 +224,10 @@ export function StudyAyuda() {
       </section>
 
       <section className="study-page__section help-section" id="clientes">
-        <h2 className="study-page__section-title">Alta de un cliente</h2>
+        <h2 className="study-page__section-title">Nuevo cliente</h2>
         <p>Pantalla Clientes. Hace falta permiso de gestión (titular o administrador).</p>
         <ol>
-          <li>Crear cliente.</li>
+          <li>Nuevo cliente.</li>
           <li>
             Completá razón social, nombre comercial, CUIT, condición frente al IVA, forma jurídica,
             provincia, moneda (por ejemplo ARS) y datos de alta.

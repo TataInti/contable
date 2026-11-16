@@ -497,7 +497,7 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     fireEvent.change(screen.getByLabelText("Forma jurídica", { selector: "select" }), {
       target: { value: "Sociedad anónima (SA)" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
 
     await waitFor(() => expect(vi.mocked(api.post)).toHaveBeenCalled());
     expect(vi.mocked(api.post)).toHaveBeenCalledTimes(1);
@@ -529,7 +529,7 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     fireEvent.change(emailInput, { target: { value: "correo-inválido" } });
     expect(emailInput.validity.typeMismatch).toBe(true);
     fireEvent.change(emailInput, { target: { value: "contacto@example.com" } });
-    fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
 
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
     expect(api.post).toHaveBeenNthCalledWith(1, "/firms/firm-a/clients", expect.objectContaining({
@@ -570,7 +570,7 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Alta libre S.A." } });
     fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20111111112" } });
     fireEvent.change(screen.getByLabelText("Correo de contacto"), { target: { value: "contacto@example.com" } });
-    fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
 
     const alert = await screen.findByRole("alert");
     expect(within(alert).getByText("Cliente creado. El correo no se pudo registrar; podés agregarlo desde Contactos.")).toBeTruthy();
@@ -930,13 +930,13 @@ describe("StudyClientes — cartera densa", () => {
     renderClientes();
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
 
-    const drawer = await screen.findByRole("dialog", { name: "Alta de cliente" });
+    const drawer = await screen.findByRole("dialog", { name: "Nuevo cliente" }); // vigente: cambia con decisión de Inti (16-nov)
     const form = drawer.querySelector("#client-create-form") as HTMLFormElement;
     expect(form.classList.contains("study-inline-form--client")).toBe(true);
     expect(form.classList.contains("client-create-form")).toBe(true);
     expect(form.querySelectorAll(".ds-field")).toHaveLength(8);
 
-    const createButton = within(drawer).getByRole("button", { name: "Crear cliente" }) as HTMLButtonElement;
+    const createButton = within(drawer).getByRole("button", { name: "Guardar cliente" }) as HTMLButtonElement; // vigente: cambia con decisión de Inti (16-nov)
     expect(createButton.disabled).toBe(true);
     expect(drawer.querySelector(".action-drawer__primary")?.contains(createButton)).toBe(true);
     expect(within(drawer).getByText("Falta completar 2 campos: razón social y CUIT.")).toBeTruthy();

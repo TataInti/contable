@@ -133,7 +133,7 @@ describe("StudyClientes — estados y errores (K6)", () => {
       Promise.reject(new Error("Catálogo caído"));
     renderConRutas("/clientes", <StudyClientes />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
-    const cajon = await screen.findByRole("dialog", { name: "Alta de cliente" });
+    const cajon = await screen.findByRole("dialog", { name: "Nuevo cliente" }); // vigente: cambia con decisión de Inti (16-nov)
 
     expect(
       await within(cajon).findByText("No se pudo cargar el catálogo de actividades. Reintentá."),
@@ -182,7 +182,7 @@ describe("StudyClientes — estados y errores (K6)", () => {
     fireEvent.change(screen.getByLabelText("Correo de contacto"), {
       target: { value: "contacto@example.com" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
 
     const aviso = await screen.findByRole("alert");
     expect(
@@ -266,6 +266,6 @@ describe("StudyClientes — estados y errores (K6)", () => {
         "Para cargar el primero hace falta el permiso de crear clientes. Pedíselo a quien administra el estudio.",
       ),
     ).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Crear cliente" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Guardar cliente" })).toBeNull(); // vigente: cambia con decisión de Inti (16-nov)
   });
 });

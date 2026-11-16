@@ -20,7 +20,7 @@ describe("regresiones visuales F3b-3", () => {
     );
   });
 
-  it("deja Alta de cliente con el alto completo y scroll interno del drawer estándar", () => {
+  it("deja Nuevo cliente con el alto completo y scroll interno del drawer estándar", () => { // vigente: cambia con decisión de Inti (16-nov)
     const standardPanel = drawerStyles.match(/\.action-drawer__panel\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(standardPanel).toMatch(/height:\s*100%;/);
     expect(standardPanel).toMatch(/max-height:\s*100dvh;/);
