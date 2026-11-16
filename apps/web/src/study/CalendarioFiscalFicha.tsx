@@ -557,7 +557,10 @@ export function CalendarioFiscalFicha({
         />
       ) : null}
       {importOpen ? (
-        <CalendarioFiscalImportDrawer firmId={firmId} calendarId={calendarId} onClose={() => setImportOpen(false)} />
+        <CalendarioFiscalImportDrawer firmId={firmId} calendarId={calendarId}
+          destino={calendarTitleLine(calendar)}
+          onClose={() => setImportOpen(false)}
+        />
       ) : null}
       <ConfirmDialog confirm={confirm} />
     </DenseSection>

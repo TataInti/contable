@@ -44,10 +44,13 @@ function leerTexto(archivo: File): Promise<string> {
 export function CalendarioFiscalImportDrawer({
   firmId,
   calendarId,
+  destino,
   onClose,
 }: {
   firmId: string | null;
   calendarId: string;
+  /** Organismo, jurisdicción y año del calendario de destino, como los muestra la ficha. */
+  destino: string;
   onClose: () => void;
 }) {
   const notify = useNotify();
@@ -220,6 +223,7 @@ export function CalendarioFiscalImportDrawer({
       }
     >
       <div className="importar-celdas">
+        <p className="importar-celdas__destino">{`Calendario de destino: ${destino}`}</p>
         <div className="importar-celdas__formato">
           <p>
             Cada fila del archivo es una celda. Es un CSV de texto con el encabezado en la primera

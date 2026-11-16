@@ -420,3 +420,15 @@ describe("pestaña Celdas contra el cliente api real (capa de fetch)", () => {
     ).toBeTruthy();
   });
 });
+
+describe("encabezado del cajón (hallazgo 83)", () => {
+  it("nombra el calendario de destino: organismo, jurisdicción y año", async () => {
+    await abrirCajonConArchivo();
+    const dialog = await screen.findByRole("dialog", { name: NOMBRE_CAJON });
+    expect(
+      within(dialog).getByText(
+        "Calendario de destino: Organismo sintético · Jurisdicción sintética · 2026",
+      ),
+    ).toBeTruthy();
+  });
+});

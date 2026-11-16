@@ -1182,6 +1182,7 @@
   gap: var(--ds-space-3);
 }
 
+.importar-celdas__destino,
 .importar-celdas__formato p {
   margin: 0;
 }
