@@ -92,25 +92,6 @@ textarea {
   gap: var(--ds-space-2);
 }
 
-.text-action {
-  min-height: 36px;
-  padding: var(--ds-space-1) var(--ds-space-2);
-  border: 0;
-  border-radius: var(--ds-radius-sm);
-  background: transparent;
-  color: var(--ds-color-primary);
-  font-size: var(--ds-text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    color 150ms ease-out,
-    background-color 150ms ease-out;
-}
-
-.text-action:hover {
-  background: var(--ds-color-primary-soft);
-}
-
 :focus-visible {
   outline: 2px solid var(--ds-color-focus);
   outline-offset: 2px;

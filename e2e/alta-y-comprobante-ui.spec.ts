@@ -391,7 +391,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
 
   await test.step("Bandeja: el worker valida, pasa antivirus y lee el documento", async () => {
     await page.locator(".action-drawer").getByRole("button", { name: "Cerrar", exact: true }).click();
-    await page.getByRole("button", { name: /ticket-mesa-8/ }).first().click();
+    await page.getByRole("row", { name: /ticket-mesa-8/ }).first().click();
     await expect(page.getByText("Procesando comprobante")).toHaveCount(0, { timeout: 120_000 });
     await expect(page.getByRole("heading", { name: "Revisá contra el comprobante" })).toBeVisible();
     // Lo que el sistema leyó solo, tal cual lo muestra la pantalla (queda en el reporte de la corrida).

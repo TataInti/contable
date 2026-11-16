@@ -16,50 +16,52 @@
   gap: clamp(var(--ds-space-6), 4vw, var(--ds-space-10));
 }
 
-.document-inbox .review-list,
 .document-inbox .review-detail {
   border: 0;
   border-radius: 0;
   background: transparent;
 }
 
-.document-inbox .review-list {
+/* Lista de documentos (DenseTable) y celda del documento */
+.document-inbox .bandeja-lista {
   position: sticky;
   top: var(--ds-space-5);
-  overflow: visible;
+  min-width: 0;
   padding-right: var(--ds-space-5);
   border-right: 1px solid var(--document-inbox-line);
 }
 
-.document-inbox .review-list__heading {
-  padding: 0 0 var(--ds-space-4);
-  border-bottom: 1px solid var(--document-inbox-line);
+/* Pie de la lista (DenseFooter, 7b.2): el conteo y el «?» quedan en el primer renglón; el aviso puede partirse en dos. */
+.document-inbox .bandeja-lista .dense-table-foot {
+  flex-wrap: nowrap;
 }
 
-.document-inbox .review-list .ds-table__wrapper {
-  max-height: min(64vh, 720px);
-  overflow: auto;
-  margin-top: var(--ds-space-3);
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+.document-inbox .bandeja-lista .dense-table-foot > span:first-child,
+.document-inbox .bandeja-lista .dense-shortcuts {
+  flex: none;
+  white-space: nowrap;
 }
 
-.document-inbox .review-list .ds-table thead th {
-  background: transparent;
+.document-inbox .bandeja-lista .dense-table-foot > span:not(:first-child) {
+  min-width: 0;
 }
 
-.document-inbox .review-list .ds-table tbody td {
-  padding-inline: var(--ds-space-2);
+.document-inbox .bandeja-documento {
+  display: grid;
+  min-width: 0;
+  gap: var(--ds-space-1);
 }
 
-.document-inbox .review-list .ds-table tbody td:first-child {
-  padding-left: 0;
+.document-inbox .bandeja-documento strong,
+.document-inbox .bandeja-documento small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.document-inbox .review-list .ds-table tbody td:last-child {
-  padding-right: 0;
+.document-inbox .bandeja-documento small {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
 }
 
 .document-inbox .review-detail {
@@ -135,27 +137,13 @@
   display: inline-block;
 }
 
-.document-link__type {
-  display: inline-grid;
-  place-items: center;
-  width: 38px;
-  min-height: 26px;
-  flex: 0 0 38px;
-  border: 1px solid var(--document-inbox-line);
-  border-radius: var(--ds-radius-sm);
-  color: var(--ds-color-text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
 @media (max-width: 900px) {
 
   .document-inbox .review-workspace {
     grid-template-columns: 1fr;
   }
 
-  .document-inbox .review-list {
+  .document-inbox .bandeja-lista {
     position: static;
     padding-right: 0;
     padding-bottom: var(--ds-space-5);

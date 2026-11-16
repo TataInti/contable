@@ -211,7 +211,181 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/administracion/AltaEnLote.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/InvitacionRecuperacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/MatrizRoles.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/paneles/Cajones.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/paneles/PanelAltaUsuarios.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/paneles/PanelDatosEstudio.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/paneles/PanelEditarAcceso.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/paneles/PanelEditarUsuario.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/paneles/PanelInvitarPortal.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/paneles/PanelNorma.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/pruebas/entornoDemo.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/AccesosPortal.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/Inspector.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/NormasContables.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/PanelControles.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/PanelControles.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/PanelDatosEstudio.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/PanelDatosEstudio.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/pieDeTabla.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/TablaAccesosPortal.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/TablaNormasContables.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/TablaUsuariosInternos.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/administracion/tablas/UsuariosInternos.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/ayuda.css": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/bandeja/CabeceraBandeja.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/bandeja/CargarDocumento.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/bandeja/CargarDocumento.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/bandeja/ListaDocumentos.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/bandeja/RechazarDocumento.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/bandeja/RechazarDocumento.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -235,6 +409,108 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/catalogos/columnas.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/catalogos/piezas.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/catalogos/TablaCatalogo.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/catalogos/TablaCatalogo.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/cajones.caracterizacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/clientes.testutil.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/columnas.caracterizacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/ColumnasCartera.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/edicion.caracterizacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/filtros.caracterizacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/FiltrosCartera.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/inspector.caracterizacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/InspectorCliente.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/paneles/PanelAlta.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/paneles/PanelContacto.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/paneles/PanelEdicion.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/clientes/paneles/PanelEstado.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/DensePages.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
@@ -248,6 +524,84 @@
       "color": 0
     },
     "apps/web/src/study/ExtractionFiscalTable.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/AvisoConsultas.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/cajones/CajonActividad.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/cajones/CajonInscripcion.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/cajones/CajonObligacion.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/cajones/CajonPerfil.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/cajones/CajonPeriodo.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/caracterizacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/MutationError.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/Pasos.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/pestanas/PestanaActividades.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/pestanas/PestanaPeriodos.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/pestanas/PestanaRegimenes.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/fiscal/pestanas/PestanaResumen.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -272,6 +626,12 @@
       "color": 0
     },
     "apps/web/src/study/legajo/accionesDeEstado.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/legajo/BandaEstado.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -661,6 +1021,78 @@
       "radius": 0,
       "color": 0
     },
+    "apps/web/src/study/resumen/caracterizacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/IndiceSecciones.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/Piezas.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/secciones/SeccionActividades.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/secciones/SeccionCatalogos.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/secciones/SeccionFichaContable.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/secciones/SeccionObligaciones.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/secciones/SeccionPerfilFiscal.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/secciones/SeccionPeriodosContables.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/secciones/SeccionPeriodosFiscales.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/secciones/SeccionRegimenes.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/resumen/secciones/SeccionResumen.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
     "apps/web/src/study/RuleSimulator.css": {
       "fontSize": 0,
       "spacing": 0,
@@ -716,6 +1148,12 @@
       "color": 0
     },
     "apps/web/src/study/StudyAyuda.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/StudyBandeja.lista.test.tsx": {
       "fontSize": 0,
       "spacing": 0,
       "radius": 0,
@@ -897,14 +1335,14 @@
     },
     "apps/web/src/study/styles/02-cartera.css": {
       "fontSize": 0,
-      "spacing": 2,
+      "spacing": 1,
       "radius": 0,
       "color": 0
     },
     "apps/web/src/study/styles/03-documentos.css": {
       "fontSize": 0,
-      "spacing": 7,
-      "radius": 3,
+      "spacing": 6,
+      "radius": 2,
       "color": 0
     },
     "apps/web/src/study/styles/04-trabajo-contabilidad.css": {
@@ -950,10 +1388,64 @@
       "color": 0
     },
     "apps/web/src/study/styles/11-bandeja-y-ajustes.css": {
-      "fontSize": 3,
+      "fontSize": 2,
       "spacing": 4,
       "radius": 0,
       "color": 1
+    },
+    "apps/web/src/study/trabajo/CajonConversacion.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/trabajo/CajonEvidencia.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/trabajo/CajonIniciarCierre.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/trabajo/CajonNuevoPedido.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/trabajo/CajonRevision.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/trabajo/caracterizacion.test.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/trabajo/SeccionCierres.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/trabajo/SeccionObligaciones.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
+    },
+    "apps/web/src/study/trabajo/SeccionPedidos.tsx": {
+      "fontSize": 0,
+      "spacing": 0,
+      "radius": 0,
+      "color": 0
     },
     "apps/web/src/study/WorkpaperSourceReviewAction.test.tsx": {
       "fontSize": 0,
