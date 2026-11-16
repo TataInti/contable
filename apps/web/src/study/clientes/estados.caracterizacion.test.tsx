@@ -260,7 +260,14 @@ describe("StudyClientes — estados y errores (K6)", () => {
     const cajon = await abrirEdicion();
 
     expect(await within(cajon).findByText("No hay normas contables cargadas.")).toBeTruthy();
+    expect(
+      within(cajon).getByText(
+        "Pedí a quien administra el estudio que las cargue en Usuarios y accesos, pestaña Normas contables.",
+      ),
+    ).toBeTruthy();
     expect(within(cajon).queryByRole("link", { name: /Cargalas/ })).toBeNull();
+    expect(within(cajon).queryByRole("link", { name: /Usuarios y accesos/ })).toBeNull();
+    expect(cajon.querySelector('a[href="/administracion"]')).toBeNull();
   });
 
   it("un catálogo de normas vacío explica qué falta y a quién pedirlo", async () => {
