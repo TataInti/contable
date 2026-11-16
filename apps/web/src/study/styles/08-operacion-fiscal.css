@@ -1218,8 +1218,9 @@
   margin-top: var(--ds-space-1);
 }
 
-/* Listas largas del informe: región desplazable con nombre; las cifras y el pie quedan fuera. */
-.importar-informe__desplazable {
-  max-block-size: 16rem;
-  overflow: auto;
+/* Motivos de una fila rechazada o detalle de un grupo de avisos: sangría, sin scroll propio. */
+.importar-informe__motivos {
+  margin: var(--ds-space-1) 0 0;
+  padding-inline-start: var(--ds-space-4);
+  list-style: none;
 }

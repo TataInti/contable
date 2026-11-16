@@ -53,6 +53,44 @@ const INFORME = {
   encabezadosFaltantes: [],
 };
 
+const CUOTA = (cuota: number) =>
+  `El período «cuota ${cuota}/2026» es texto libre: se importa solo con ese texto, sin fechas de referencia`;
+
+// Informe con avisos repetidos (cuotas 98 a 103), una dudosa y una fila con dos motivos.
+const INFORME_AGRUPADO = {
+  dryRun: true,
+  totalFilas: 110,
+  validas: 109,
+  importadas: 0,
+  rechazadas: [
+    {
+      fila: 4,
+      columna: "fecha_completa",
+      motivo: "La fecha es obligatoria (AAAA-MM-DD)",
+      valorRecibido: null,
+    },
+    {
+      fila: 4,
+      columna: "digitos",
+      motivo: "Dígitos «(inferido)» no reconocidos",
+      valorRecibido: "(inferido)",
+    },
+  ],
+  avisos: [
+    {
+      fila: 2,
+      motivo:
+        "Queda marcada como dudosa (verificado_en_imagen distinto de «si»). Revisala en la grilla antes de publicar.",
+    },
+    ...[98, 99, 100, 101, 102, 103].map((fila, indice) => ({
+      fila,
+      motivo: CUOTA(indice + 1),
+    })),
+  ],
+  columnasIgnoradas: [],
+  encabezadosFaltantes: [],
+};
+
 type Llamada = { metodo: string; ruta: string; cuerpo: unknown };
 const llamadas: Llamada[] = [];
 let respuestasImportacion: Array<{ status: number; body: unknown }> = [];
@@ -182,13 +220,14 @@ describe("cajón contra el cliente api real (capa de fetch)", () => {
     respuestasImportacion = [{ status: 200, body: { data: INFORME } }];
     const dialog = await abrirCajonConArchivo();
     fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
-    const informe = await within(dialog).findByRole("status");
+    const informe = await within(dialog).findByRole("status", { name: "Informe de la prueba" });
     expect(
       within(informe).getByText(
         "1 celda quedará marcada «Dudosa»: hay que revisarla antes de publicar el calendario.",
       ),
     ).toBeTruthy();
-    expect(within(informe).getByText(/^Fila 4 \(fecha_completa\)/)).toBeTruthy();
+    // vigente: cambia con hallazgo 65 (antes: /^Fila 4 \(fecha_completa\)/)
+    expect(within(informe).getByText("Fila 4")).toBeTruthy();
     const importar = within(dialog).getByRole("button", {
       name: "Importar 2 celdas",
     }) as HTMLButtonElement;
@@ -207,7 +246,7 @@ describe("cajón contra el cliente api real (capa de fetch)", () => {
     ];
     const dialog = await abrirCajonConArchivo();
     fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
-    await within(dialog).findByRole("status");
+    await within(dialog).findByRole("status", { name: "Informe de la prueba" });
     const detalleAntes = llamadas.filter(
       (llamada) => llamada.ruta === RUTA && llamada.metodo === "GET",
     ).length;
@@ -264,12 +303,42 @@ describe("cajón contra el cliente api real (capa de fetch)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
     const alerta = await within(dialog).findByRole("alert");
     fireEvent.click(within(alerta).getByRole("button", { name: "Reintentar" }));
-    expect(await within(dialog).findByRole("status")).toBeTruthy();
+    expect(
+      await within(dialog).findByRole("status", { name: "Informe de la prueba" }),
+    ).toBeTruthy();
     expect(
       llamadas.filter((llamada) => llamada.ruta === RUTA_IMPORT).map((llamada) => llamada.cuerpo),
     ).toEqual([
       { csv: CSV, dryRun: true },
       { csv: CSV, dryRun: true },
     ]);
+  });
+
+  it("informe agrupado: avisos repetidos con su rango y rechazos por fila con sus motivos (hallazgos 64 y 65)", async () => {
+    respuestasImportacion = [{ status: 200, body: { data: INFORME_AGRUPADO } }];
+    const dialog = await abrirCajonConArchivo();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Probar sin guardar" }));
+    const informe = await within(dialog).findByRole("status", { name: "Informe de la prueba" });
+    expect(
+      within(informe).getByText(
+        "Filas 98 a 103 (6): el período «cuota N/2026» es texto libre: se importa solo con ese texto, sin fechas de referencia",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(informe).getByText(
+        "Fila 98: El período «cuota 1/2026» es texto libre: se importa solo con ese texto, sin fechas de referencia",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(informe).getByText("Fila 2: queda marcada como dudosa (no verificada en imagen)"),
+    ).toBeTruthy();
+    expect(within(informe).getByText("Fila 4")).toBeTruthy();
+    expect(
+      within(informe).getByText("La fecha es obligatoria (AAAA-MM-DD) · columna fecha_completa"),
+    ).toBeTruthy();
+    expect(
+      within(informe).getByText("Dígitos «(inferido)» no reconocidos · columna digitos"),
+    ).toBeTruthy();
+    expect(within(informe).queryByRole("region")).toBeNull();
   });
 });
