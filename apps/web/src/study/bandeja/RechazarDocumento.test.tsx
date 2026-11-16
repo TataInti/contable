@@ -233,12 +233,14 @@ describe("Caracterización K12 · rechazo: motivo, cancelar, motivo compuesto y 
     expect(within(dialog).queryByRole("alert")).toBeNull();
   });
 
-  it("mientras el rechazo se envía, «Confirmar rechazo» queda deshabilitado", async () => {
+  it("mientras el rechazo se envía, «Confirmar rechazo» sigue enfocable y marcado como ocupado", async () => {
     vi.mocked(api.post).mockImplementation((() => new Promise(() => {})) as never);
     const dialog = await abrirRechazo();
     fireEvent.change(motivo(dialog), { target: { value: "DUPLICATE" } });
     fireEvent.click(confirmar(dialog));
-    await waitFor(() => expect(confirmar(dialog).disabled).toBe(true));
+    // vigente: cambia con 7b.3c correcciones (D1): antes el botón se deshabilitaba y el foco caía en BODY
+    await waitFor(() => expect(confirmar(dialog).getAttribute("aria-busy")).toBe("true"));
+    expect(confirmar(dialog).disabled).toBe(false);
     expect(api.post).toHaveBeenCalledWith(RECHAZO, { reason: "Duplicado" });
   });
 });

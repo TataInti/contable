@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
 import { isManualExtractionFieldKey } from "@contable/contracts";
@@ -263,6 +263,14 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
       detail.data?.status === "EXTRACTED" ||
       detail.data?.fileVersions?.[0]?.antivirusStatus === "CLEAN");
   const rejectionReceipt = detail.data ? rejectionReceipts[detail.data.id] : undefined;
+  // D9: al completarse el rechazo, el foco pasa al recibo «Documento rechazado» y no queda en BODY.
+  const reciboRef = useRef<HTMLDivElement>(null);
+  const enfocarReciboAlRechazar = useRef(false);
+  useEffect(() => {
+    if (!rejectionReceipt || !enfocarReciboAlRechazar.current) return;
+    enfocarReciboAlRechazar.current = false;
+    reciboRef.current?.focus();
+  }, [rejectionReceipt]);
   // C7B-8: etapa y progreso en texto, solo para una etapa conocida; el resto cae en «Procesando comprobante».
   const trabajoEnCurso = detail.data?.processingJobs?.find(
     (job) => job.type !== "REPROCESS" && ["QUEUED", "RUNNING"].includes(job.status),
@@ -378,7 +386,12 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
               </div>
             </div>
             {rejectionReceipt ? (
-              <div className="action-receipt action-receipt--rejected" role="status">
+              <div
+                ref={reciboRef}
+                tabIndex={-1}
+                className="action-receipt action-receipt--rejected"
+                role="status"
+              >
                 <span>
                   <strong>Documento rechazado</strong>
                   <small>Motivo: {rejectionReceipt}</small>
@@ -661,9 +674,10 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
             : { tipo: "extraccion", extractionId: extraction.data?.id ?? null }
         }
         onClose={() => setShowRejectDialog(false)}
-        onRejected={(documentId, reason) =>
-          setRejectionReceipts((current) => ({ ...current, [documentId]: reason }))
-        }
+        onRejected={(documentId, reason) => {
+          enfocarReciboAlRechazar.current = true;
+          setRejectionReceipts((current) => ({ ...current, [documentId]: reason }));
+        }}
       />
       <ConfirmDialog confirm={confirm} />
     </>

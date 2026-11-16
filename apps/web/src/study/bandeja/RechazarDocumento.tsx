@@ -116,8 +116,9 @@ export function RechazarDocumento({
             type="submit"
             form="document-rejection-form"
             variant="danger"
-            loading={reject.isPending}
-            disabled={!rejectionReasonCode || reject.isPending}
+            disabled={!rejectionReasonCode}
+            aria-busy={reject.isPending || undefined}
+            aria-disabled={reject.isPending || undefined}
             aria-describedby={rejectionReasonCode ? undefined : motivoId}
           >
             Confirmar rechazo
@@ -129,6 +130,8 @@ export function RechazarDocumento({
         id="document-rejection-form"
         onSubmit={(event) => {
           event.preventDefault();
+          // Mientras dura la petición no se envía de nuevo; el botón sigue enfocable y marcado como ocupado (D1).
+          if (reject.isPending) return;
           const selectedReason = REJECTION_REASONS.find(
             (option) => option.value === rejectionReasonCode,
           );
