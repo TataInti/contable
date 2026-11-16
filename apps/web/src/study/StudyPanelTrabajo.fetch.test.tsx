@@ -184,9 +184,11 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     renderPanel();
     await tablaPanel();
     const responsable = screen.getByRole("combobox", { name: "Responsable" });
-    expect(within(responsable).getByRole("option", { name: "Beto Demo" })).toBeTruthy();
+    expect(
+      within(responsable).getByRole("option", { name: "Responsable: Beto Demo" }),
+    ).toBeTruthy();
     const impuesto = screen.getByRole("combobox", { name: "Impuesto" });
-    expect(within(impuesto).getByRole("option", { name: "IVA" })).toBeTruthy();
+    expect(within(impuesto).getByRole("option", { name: "Impuesto: IVA" })).toBeTruthy();
   });
 
   it("«Cargar más» pide la página siguiente por la red y suma sus filas al pie", async () => {
