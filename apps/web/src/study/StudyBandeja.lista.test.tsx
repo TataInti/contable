@@ -74,15 +74,31 @@ function documento(
     createdAt,
     category,
     direction: null,
-    fileVersions: [{ originalName: nombre, mimeType, bucket: "originals", antivirusStatus: "CLEAN" }],
+    fileVersions: [
+      { originalName: nombre, mimeType, bucket: "originals", antivirusStatus: "CLEAN" },
+    ],
     processingJobs: [],
   };
 }
 
 const factura = () =>
-  documento("doc-factura", "EXTRACTED", "factura.pdf", "application/pdf", "2026-10-31T12:00:00.000Z", "PURCHASE");
+  documento(
+    "doc-factura",
+    "EXTRACTED",
+    "factura.pdf",
+    "application/pdf",
+    "2026-10-31T12:00:00.000Z",
+    "PURCHASE",
+  );
 const ticket = () =>
-  documento("doc-ticket", "REVIEWED", "ticket.jpg", "image/jpeg", "2026-10-20T12:00:00.000Z", "SALE");
+  documento(
+    "doc-ticket",
+    "REVIEWED",
+    "ticket.jpg",
+    "image/jpeg",
+    "2026-10-20T12:00:00.000Z",
+    "SALE",
+  );
 
 const ESTADOS_K1 = [
   "UPLOADED",
@@ -120,7 +136,9 @@ const pedido = () => ({
 
 /** Responde según la ruta; las rutas no previstas devuelven una lista vacía. */
 function responder(mapa: (ruta: string) => Promise<unknown> | undefined) {
-  vi.mocked(api.get).mockImplementation(((ruta: string) => mapa(ruta) ?? Promise.resolve([])) as never);
+  vi.mocked(api.get).mockImplementation(
+    ((ruta: string) => mapa(ruta) ?? Promise.resolve([])) as never,
+  );
 }
 
 function listaDe(documentos: unknown[]) {
@@ -248,7 +266,9 @@ describe("StudyBandeja · lista de documentos (7b.2)", () => {
     responder((ruta) => {
       if (!ruta.endsWith("/documents")) return undefined;
       intentos += 1;
-      return intentos === 1 ? Promise.reject(new Error("falla de red")) : Promise.resolve([factura()]);
+      return intentos === 1
+        ? Promise.reject(new Error("falla de red"))
+        : Promise.resolve([factura()]);
     });
     renderBandeja();
     expect(await screen.findByText("No se pudo cargar la bandeja")).toBeTruthy();
@@ -267,9 +287,9 @@ describe("StudyBandeja · lista de documentos (7b.2)", () => {
     expect(screen.getAllByRole("button", { name: "Subir documento" })[0]?.className).toContain(
       "ds-button--secondary",
     );
-    expect(within(estadoVacio).getByRole("button", { name: "Subir documento" }).className).toContain(
-      "ds-button--primary",
-    );
+    expect(
+      within(estadoVacio).getByRole("button", { name: "Subir documento" }).className,
+    ).toContain("ds-button--primary");
     expect(screen.queryByText("Más recientes primero")).toBeNull();
   });
 
@@ -299,9 +319,12 @@ describe("StudyBandeja · lista de documentos (7b.2)", () => {
     });
     renderBandeja();
     fireEvent.click(await screen.findByText("factura.pdf"));
-    expect(screen.getAllByText("factura.pdf")[0]?.closest("[aria-current]")?.getAttribute("aria-current")).toBe(
-      "true",
-    );
+    expect(
+      screen
+        .getAllByText("factura.pdf")[0]
+        ?.closest("[aria-current]")
+        ?.getAttribute("aria-current"),
+    ).toBe("true");
     expect(screen.getByText("ticket.jpg").closest("[aria-current]")).toBeNull();
   });
 
@@ -313,7 +336,9 @@ describe("StudyBandeja · lista de documentos (7b.2)", () => {
     // C7B-3, antes: un <button class="document-link"> por documento.
     expect(screen.queryByRole("button", { name: /factura\.pdf/ })).toBeNull();
     fireEvent.click(screen.getByRole("row", { name: /factura\.pdf/ }));
-    expect(screen.getByRole("row", { name: /factura\.pdf/ }).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("row", { name: /factura\.pdf/ }).getAttribute("aria-current")).toBe(
+      "true",
+    );
     expect(screen.getByRole("table", { name: "Documentos" })).toBeTruthy();
     expect(screen.getByText("2 documentos")).toBeTruthy();
   });
@@ -402,7 +427,9 @@ describe("StudyBandeja · lista de documentos (7b.2)", () => {
   });
 
   it("C7B-5 · con la lista en error, las cifras de las colas dicen «no disponible», nunca 0", async () => {
-    responder((ruta) => (ruta.endsWith("/documents") ? Promise.reject(new Error("falla de red")) : undefined));
+    responder((ruta) =>
+      ruta.endsWith("/documents") ? Promise.reject(new Error("falla de red")) : undefined,
+    );
     renderBandeja();
     await waitFor(() => expect(indicador("Todos")).toBe("no disponible"));
     expect(indicador("Con error")).toBe("no disponible");

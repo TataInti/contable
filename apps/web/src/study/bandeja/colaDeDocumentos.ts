@@ -12,7 +12,13 @@ import { documentFileName, documentTypeLabel, normalizeDocumentSearch } from "./
  */
 export type DocumentQueueFilter = "ALL" | "PROCESSING" | "NEEDS_REVIEW" | "REVIEWED" | "ERROR";
 
-const PROCESSING_DOCUMENT_STATUSES = new Set(["UPLOADED", "VALIDATING", "PROCESSING", "IN_PROGRESS", "RUNNING"]);
+const PROCESSING_DOCUMENT_STATUSES = new Set([
+  "UPLOADED",
+  "VALIDATING",
+  "PROCESSING",
+  "IN_PROGRESS",
+  "RUNNING",
+]);
 const ERROR_DOCUMENT_STATUSES = new Set(["EXTRACTION_FAILED", "INFECTED", "FAILED"]);
 
 export function belongsToDocumentQueue(document: { status: string }, filter: DocumentQueueFilter) {
@@ -63,6 +69,10 @@ export function coincideConBusqueda(document: Document, busqueda: string): boole
 }
 
 /** Más recientes primero (7b-12): la pantalla ordena por fecha de ingreso y no depende del orden de la API. */
-export function ordenarPorIngresoDescendente<T extends { createdAt: string }>(documentos: readonly T[]): T[] {
-  return [...documentos].sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+export function ordenarPorIngresoDescendente<T extends { createdAt: string }>(
+  documentos: readonly T[],
+): T[] {
+  return [...documentos].sort(
+    (a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0),
+  );
 }
