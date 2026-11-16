@@ -56,7 +56,7 @@ function Ubicacion() {
   return <output data-testid="current-path">{pathname}</output>;
 }
 
-function montar(responder: (ruta: string, intento: number) => Response) {
+function montar(responder: (ruta: string, intento: number) => Response | Promise<Response>) {
   const llamadas: string[] = [];
   vi.stubGlobal(
     "fetch",
@@ -128,5 +128,29 @@ describe("Foco 7a.2 · consultas con fetch simulado (cliente de consultas real)"
       fireEvent.click(within(region).getByRole("button", { name: "Ir a Configuración fiscal" }));
       await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/configuracion-fiscal"));
     }
+  });
+
+  it("F-C · «Actualizar» en el encabezado vuelve a pedir el resumen y los contactos", async () => {
+    const { llamadas } = montar(porDefecto);
+    await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" });
+    await screen.findByRole("navigation", { name: "Secciones internas del cliente" });
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar" }));
+    await waitFor(() => {
+      expect(llamadas.filter((ruta) => ruta.endsWith("/summary"))).toHaveLength(2);
+      expect(llamadas.filter((ruta) => ruta.endsWith("/contacts"))).toHaveLength(2);
+    });
+  });
+  it("F-D · carga de la pantalla: encabezado con un solo h1 y «Actualizar» visibles mientras carga", async () => {
+    montar((ruta) => (ruta.endsWith("/summary") ? new Promise<Response>(() => undefined) : respuesta(200, [])));
+    expect(await screen.findByText("Preparando el resumen del cliente…")).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 1, name: "Resumen del cliente" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Actualizar" })).toBeTruthy();
+  });
+
+  it("F-E · error del resumen: encabezado con un solo h1 y aviso con «Reintentar»", async () => {
+    montar((ruta) => (ruta.endsWith("/summary") ? respuesta(500, null) : respuesta(200, [])));
+    expect(await screen.findByText("No pudimos cargar el resumen del cliente")).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 1, name: "Resumen del cliente" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy();
   });
 });

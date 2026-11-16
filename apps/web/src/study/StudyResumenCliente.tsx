@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api, type ClientContact, type ClientSummary } from "../lib/api";
@@ -24,6 +24,7 @@ export function StudyResumenCliente() {
   const [density] = useDensity();
   const { firmId, clientId, capabilities } = useClientContext();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<SummarySectionId>("overview");
   const [search, setSearch] = useState("");
   const canManageContacts = capabilities.has("client.manage");
@@ -64,6 +65,25 @@ export function StudyResumenCliente() {
     query.data?.accounting.fiscalYears.filter((year) => year.status === "OPEN").length ?? 0;
   const cargandoResumen = query.isPending && query.fetchStatus !== "idle";
 
+  const actualizar = () => {
+    void queryClient.invalidateQueries({ queryKey: ["client-summary", firmId, clientId] });
+    void queryClient.invalidateQueries({ queryKey: ["client-contacts", firmId, clientId] });
+  };
+  const acciones = (
+    <>
+      <Button variant="ghost" onClick={() => navigate("/clientes")}>
+        Volver a clientes
+      </Button>
+      <Button variant="secondary" onClick={actualizar}>
+        Actualizar
+      </Button>
+      <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
+        Configuración fiscal
+      </Button>
+      <Button onClick={() => navigate("/trabajo")}>Abrir trabajo</Button>
+    </>
+  );
+
   if (!firmId || !clientId) {
     return (
       <div className="study-page study-route-state">
@@ -78,7 +98,8 @@ export function StudyResumenCliente() {
 
   if (query.isError) {
     return (
-      <div className="study-page study-route-state">
+      <DensePage density={density} flow className="client-summary">
+        <DenseHeader title="Resumen del cliente" actions={acciones} />
         <AsyncState
           loading={false}
           error
@@ -87,15 +108,18 @@ export function StudyResumenCliente() {
           errorDescription="Revisá tu conexión e intentá de nuevo."
           onRetry={() => void query.refetch()}
         />
-      </div>
+      </DensePage>
     );
   }
 
   if (cargandoResumen || !query.data) {
     return (
-      <div className="study-route-state" role="status">
-        Preparando el resumen del cliente…
-      </div>
+      <DensePage density={density} flow className="client-summary">
+        <DenseHeader title="Resumen del cliente" actions={acciones} />
+        <div className="study-route-state" role="status">
+          Preparando el resumen del cliente…
+        </div>
+      </DensePage>
     );
   }
 
@@ -120,17 +144,7 @@ export function StudyResumenCliente() {
       <DenseHeader
         title="Resumen del cliente"
         description={`${client.legalName}${client.tradeName ? ` · ${client.tradeName}` : ""} · CUIT ${client.cuit}`}
-        actions={
-          <>
-            <Button variant="ghost" onClick={() => navigate("/clientes")}>
-              Volver a clientes
-            </Button>
-            <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
-              Configuración fiscal
-            </Button>
-            <Button onClick={() => navigate("/trabajo")}>Abrir trabajo</Button>
-          </>
-        }
+        actions={acciones}
       />
 
       <DenseToolbar>

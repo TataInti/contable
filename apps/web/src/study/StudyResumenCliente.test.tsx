@@ -306,7 +306,7 @@ describe("StudyResumenCliente — datos de contacto y domicilio", () => {
     ];
     renderSummary(summaryFixture("CLOSED", "Av. Rivadavia 123", false), contacts, true);
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Resumen" })).toBeTruthy();
     const ficha = openAccountingFacts();
     await waitFor(() => expect(within(ficha).getByText("Ana Contacto")).toBeTruthy());
     expect(within(ficha).getByText(/ana@example\.com/)).toBeTruthy();
@@ -325,7 +325,7 @@ describe("StudyResumenCliente — datos de contacto y domicilio", () => {
   it("muestra No cargado y enlaces de carga cuando la lista de contactos y el domicilio están vacíos", async () => {
     renderSummary(summaryFixture("CLOSED", null, false), [], true);
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Resumen" })).toBeTruthy();
     const ficha = openAccountingFacts();
     await waitFor(() => expect(within(ficha).getAllByText("No cargado").length).toBeGreaterThanOrEqual(3));
     expect(within(ficha).getByRole("link", { name: "Cargar en Contactos" })).toBeTruthy();
@@ -352,7 +352,7 @@ describe("StudyResumenCliente — datos de contacto y domicilio", () => {
       ],
     );
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Resumen" })).toBeTruthy();
     const ficha = openAccountingFacts();
     await waitFor(() => expect(within(ficha).getByText("Domicilio fiscal")).toBeTruthy());
     expect(within(ficha).queryByText("Contacto principal")).toBeNull();

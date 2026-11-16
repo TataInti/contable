@@ -336,7 +336,8 @@ describe("Caracterización · Resumen del cliente: errores y contrato (R10 y R11
       },
     });
     fireEvent.click(await screen.findByRole("button", { name: "Reintentar" }));
-    expect(await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Resumen" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Resumen del cliente" })).toBeTruthy();
     expect(contextMock.current.clientId).toBe("client-a");
     expect(contextMock.current.setClientId).not.toHaveBeenCalled();
   });
@@ -375,11 +376,12 @@ describe("Caracterización · matriz §2.1 (13 filas): datos visibles con client
     for (const datos of [resumen(), resumen(vacio)]) {
       cleanup();
       montar({ datos });
-      expect(await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" })).toBeTruthy();
+      expect(await screen.findByRole("region", { name: "Resumen" })).toBeTruthy();
       const encabezado = document.querySelector(".dense-head") as HTMLElement;
       expect(encabezado.textContent).toContain("Cliente SINTÉTICO A · SINTÉTICO · CUIT 20111111112");
       expect(within(encabezado).getAllByRole("button").map((boton) => boton.textContent?.trim())).toEqual([
         "Volver a clientes",
+        "Actualizar",
         "Configuración fiscal",
         "Abrir trabajo",
       ]);
