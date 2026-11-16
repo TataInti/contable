@@ -50,4 +50,26 @@ describe("índice de contratos: exportaciones de calendarios y libros", () => {
     expect(contracts).toHaveProperty("notificationReadResponseSchema");
     expect(contracts).toHaveProperty("notificationArchiveResponseSchema");
   });
+
+  it("exporta la lista de matrículas de un miembro (ficha del profesional, A4-2a)", () => {
+    expect(contracts).toHaveProperty("professionalCredentialListResponseSchema");
+    const item = {
+      id: "11111111-1111-4111-8111-111111111111",
+      firmId: "11111111-1111-4111-8111-111111111111",
+      userId: "11111111-1111-4111-8111-111111111111",
+      jurisdictionId: "11111111-1111-4111-8111-111111111111",
+      authorityId: "11111111-1111-4111-8111-111111111111",
+      registrationNumber: "DEMO-100",
+      status: "ACTIVE",
+      validFrom: "2025-01-01",
+      validTo: null,
+    };
+    const { professionalCredentialListResponseSchema } = contracts;
+    expect(professionalCredentialListResponseSchema.safeParse({ data: [item] }).success).toBe(true);
+    expect(professionalCredentialListResponseSchema.safeParse({ data: [] }).success).toBe(true);
+    const conFechaHora = { ...item, validFrom: "2025-01-01T00:00:00.000Z" };
+    expect(
+      professionalCredentialListResponseSchema.safeParse({ data: [conFechaHora] }).success,
+    ).toBe(false);
+  });
 });

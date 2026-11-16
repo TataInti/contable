@@ -1129,6 +1129,24 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  // Ficha del profesional (A4-2a): matrículas de un miembro del estudio. Lectura con
+  // firm.users.manage (ROUTE_POLICY en auth/guard.ts); no hay escritura en este corte.
+  app.get("/api/v1/firms/:firmId/users/:userId/credentials", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const { userId } = z.object({ userId: z.string().uuid() }).parse(req.params);
+      const rows = await profiles.listMemberCredentials(ctx, userId);
+      const data = rows.map((row) => ({
+        ...row,
+        validFrom: row.validFrom.toISOString().slice(0, 10),
+        validTo: row.validTo ? row.validTo.toISOString().slice(0, 10) : null,
+      }));
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   // ------------------------------------------------------------------
   // G1-10: Calendario fiscal (feriados y vencimientos deterministas)
   // ------------------------------------------------------------------

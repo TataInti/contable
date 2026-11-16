@@ -247,6 +247,15 @@ export const createProfessionalCredentialSchema = z.object({
 });
 export type CreateProfessionalCredential = z.infer<typeof createProfessionalCredentialSchema>;
 
+// Lectura de las matrículas de un miembro (ficha del profesional, A4-2a). Cada ítem usa
+// professionalCredentialSchema: ids de jurisdicción y de organismo, fechas YYYY-MM-DD.
+export const professionalCredentialListResponseSchema = z.object({
+  data: z.array(professionalCredentialSchema),
+});
+export type ProfessionalCredentialListResponse = z.infer<
+  typeof professionalCredentialListResponseSchema
+>;
+
 // --- Períodos y obligaciones ---
 
 export const taxPeriodSchema = z.object({

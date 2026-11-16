@@ -35,6 +35,7 @@ const calendarIsoDay = (date: Date): string => date.toISOString().slice(0, 10);
  */
 
 export type FiscalErrorCode =
+  | "MEMBER_NOT_FOUND"
   | "PROFILE_NOT_FOUND"
   | "PROFILE_ALREADY_ACTIVE"
   | "PROFILE_VERSION_CONFLICT"
@@ -1382,6 +1383,9 @@ async function withActiveClientLinks(
 // G1-03: Perfil fiscal, inscripciones, actividades del cliente y matrícula
 // ---------------------------------------------------------------------------
 
+/** Ejecuta una lectura con el contexto del estudio (RLS). Las pruebas la cambian por el rol runtime. */
+export type CredentialRunner = <T>(fn: (tx: Prisma.TransactionClient) => Promise<T>) => Promise<T>;
+
 export class TaxpayerProfileService {
   /** Lista versiones de perfil del cliente. */
   async listVersions(ctx: TenantContext, clientId?: string) {
@@ -1690,6 +1694,44 @@ export class TaxpayerProfileService {
         throw new FiscalError("INVALID_TRANSITION", "La baja no puede ser anterior al inicio de vigencia");
       }
       return tx.clientActivity.update({ where: { id: link.id }, data: { validTo } });
+    });
+  }
+
+  /**
+   * Matrículas de un miembro del estudio, para la ficha del profesional (A4-2a).
+   * Lista todas las del miembro, en cualquier estado, ordenadas por jurisdicción (nombre)
+   * y número de matrícula. Un userId que no es miembro del estudio responde como
+   * inexistente (MEMBER_NOT_FOUND), sin revelar si existe en otro estudio. El estado de la
+   * membresía no cambia la lectura: quien administra ve también a un miembro suspendido.
+   */
+  async listMemberCredentials(
+    ctx: TenantContext,
+    userId: string,
+    run: CredentialRunner = (fn) => withTenantContext(ctx, fn),
+  ) {
+    return run(async (tx) => {
+      const membership = await tx.firmMembership.findUnique({
+        where: { firmId_userId: { firmId: ctx.firmId, userId } },
+        select: { id: true },
+      });
+      if (!membership) {
+        throw new FiscalError("MEMBER_NOT_FOUND", "El usuario no es miembro de este estudio");
+      }
+      return tx.professionalCredential.findMany({
+        where: { firmId: ctx.firmId, userId },
+        orderBy: [{ jurisdiction: { name: "asc" } }, { registrationNumber: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          firmId: true,
+          userId: true,
+          jurisdictionId: true,
+          authorityId: true,
+          registrationNumber: true,
+          status: true,
+          validFrom: true,
+          validTo: true,
+        },
+      });
     });
   }
 
