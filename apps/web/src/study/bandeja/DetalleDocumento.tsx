@@ -428,17 +428,17 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                           Rechazar documento
                         </Button>
                       ) : null}
+                      {!capabilities.has("document.review") ? (
+                        <p className="form-submit-hint" role="note">
+                          Para rechazarlo hace falta el permiso de revisión. Pedíselo a quien
+                          administra el estudio.
+                        </p>
+                      ) : hayTareaActiva ? (
+                        <p className="form-submit-hint" role="note">
+                          Todavía se está procesando: esperá a que termine
+                        </p>
+                      ) : null}
                     </div>
-                    {!capabilities.has("document.review") ? (
-                      <p className="review-actions__hint" role="note">
-                        Para rechazarlo hace falta el permiso de revisión. Pedíselo a quien
-                        administra el estudio.
-                      </p>
-                    ) : hayTareaActiva ? (
-                      <p className="review-actions__hint" role="note">
-                        Todavía se está procesando: esperá a que termine
-                      </p>
-                    ) : null}
                   </div>
                 ) : null}
               </>
