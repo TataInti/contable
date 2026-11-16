@@ -477,7 +477,7 @@ export function PanelEdicion({
             }
           />
           {guardadoParcial ? (
-            <div ref={avisoParcialRef}>
+            <div ref={avisoParcialRef} className="client-edit__aviso-parcial">
               <Notice tone="error" className="study-inline-form__feedback">
                 {guardadoParcial === "identidad"
                   ? "Se guardó la identidad; no se pudo guardar la ficha fiscal. Reintentá."
