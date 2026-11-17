@@ -15,8 +15,7 @@ export function journalRoutes(app: FastifyInstance) {
 
   const handleError = (reply: { status: (code: number) => { send: (body: object) => void } }, err: unknown) => {
     if (err instanceof JournalError) {
-      const status =
-        err.code === "ENTRY_NOT_FOUND" ? 404 : err.code === "ROW_VERSION_CONFLICT" ? 409 : 400;
+      const status = err.code === "ROW_VERSION_CONFLICT" ? 409 : 400;
       return reply.status(status).send({ error: { code: err.code, message: err.message } });
     }
     throw err;

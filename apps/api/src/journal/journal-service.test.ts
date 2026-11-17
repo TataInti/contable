@@ -38,8 +38,18 @@ async function runAsRuntime<T>(
 const journal = new JournalService();
 const ledger = new LedgerService();
 
-const ctxOwner = { userId: OWNER_A, firmId: FIRM_ALFA, actorKind: "USER" as const };
-const ctxPreparer = { userId: PREPARER_A, firmId: FIRM_ALFA, actorKind: "USER" as const };
+const ctxOwner = {
+  userId: OWNER_A,
+  firmId: FIRM_ALFA,
+  clientId: CLIENT_ALFA,
+  actorKind: "USER" as const,
+};
+const ctxPreparer = {
+  userId: PREPARER_A,
+  firmId: FIRM_ALFA,
+  clientId: CLIENT_ALFA,
+  actorKind: "USER" as const,
+};
 
 /** Crea un ejercicio, período y dos cuentas para el cliente de prueba. */
 async function setupFixtures(year: number) {
