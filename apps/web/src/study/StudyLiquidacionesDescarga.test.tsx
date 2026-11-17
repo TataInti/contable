@@ -297,6 +297,38 @@ describe("Liquidaciones: PDF y CSV del papel de trabajo", () => {
     },
   );
 
+  it.each([
+    ["PDF", "pdf"],
+    ["CSV", "csv"],
+  ])(
+    "si la descarga de %s no tiene respuesta de la red, avisa el paso siguiente, no descarga y el botón vuelve a quedar disponible",
+    async (nombre, formato) => {
+      stubApi(
+        withBase((method, path) => {
+          if (method === "GET" && path === ARTIFACTS)
+            return json([{ id: "art-x", format: formato }]);
+          if (method === "GET" && path === `${ARTIFACTS}/art-x/download`)
+            return Promise.reject(new TypeError("Failed to fetch"));
+          return undefined;
+        }),
+      );
+      renderPage(FULL);
+      await waitForRows();
+      const boton = () => screen.getByRole("button", { name: nombre }) as HTMLButtonElement;
+      fireEvent.click(boton());
+      expect(
+        await screen.findByText(
+          "Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText(/Failed to fetch/)).toBeNull();
+      expect(screen.queryByText("No se pudo completar la acción sobre la liquidación.")).toBeNull();
+      expect(downloads).toEqual([]);
+      await waitFor(() => expect(boton().disabled).toBe(false));
+      expect(boton().getAttribute("aria-busy")).toBeNull();
+    },
+  );
+
   it("un segundo clic mientras genera no crea otro papel de trabajo", async () => {
     let release: (value: Response) => void = () => undefined;
     const pending = new Promise<Response>((resolve) => {

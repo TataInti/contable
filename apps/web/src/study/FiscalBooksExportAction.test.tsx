@@ -112,6 +112,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 describe("Exportar libros en el Legajo", () => {
@@ -231,6 +232,24 @@ describe("Exportar libros en el Legajo", () => {
     const message = await screen.findByText("format: indicá «xlsx» o «csv»");
     const field = screen.getByLabelText("Formato").closest(".ds-field");
     expect(field?.contains(message)).toBe(true);
+  });
+
+  it("si la red falla sin respuesta del servidor, conserva el aviso con su paso siguiente", async () => {
+    // Descarga real (lib/api.ts) con fetch sin respuesta: el cambio de downloadFile no altera este aviso.
+    const actual = await vi.importActual<typeof import("../lib/api")>("../lib/api");
+    vi.mocked(api.get).mockResolvedValue(summaryFixture);
+    vi.mocked(downloadFile).mockImplementation(actual.downloadFile);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    renderAction();
+    await openPanel();
+    await waitForDownloadEnabled();
+
+    fireEvent.click(downloadButton());
+
+    expect(
+      await screen.findByText("No se pudo descargar el libro. Reintentá en unos minutos."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/No se pudo conectar con el servidor/)).toBeNull();
   });
 
   it("un rol sin tax.vouchers.read no ve la acción", () => {
