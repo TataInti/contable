@@ -1,6 +1,15 @@
 import { unzipSync, strFromU8, strToU8, zipSync } from "fflate";
 import { Decimal } from "decimal.js";
 import { normalizeArcaVoucherRow, type ArcaVoucherInput } from "./importers.js";
+import {
+  arcaCurrency,
+  arcaCuit,
+  arcaIsoDate,
+  arcaTipoLetter,
+  normalizeArcaHeader,
+  resolveArcaColumns,
+  type ArcaColumnKey,
+} from "./arca-columnas.js";
 
 /**
  * Parser del libro IVA digital en formato Excel (.xlsx) de ARCA.
@@ -9,21 +18,23 @@ import { normalizeArcaVoucherRow, type ArcaVoucherInput } from "./importers.js";
  * completo (alícuotas, tributos asociados y filas normalizadas listas para el
  * adaptador ARCA), sin consultar DB ni HTTP.
  *
- * El formato real del archivo `demo-liquidacion-manual.xlsx` usa los
- * encabezados nativos del libro IVA Digital (español, ej. "Neto Gravado IVA
- * 21%", "Importe IVA 21%", "Importe de Percepciones de Ingresos Brutos") y
- * fechas como número de serie de Excel. Este módulo resuelve:
- *   - extracción ZIP (via fflate), shared strings y celdas (número / string);
- *   - mapeo de encabezados nativos a los campos del adaptador ARCA;
- *   - conversión de fecha en serie Excel (epoch 1899-12-30) a ISO;
- *   - normalización de CUIT (consumidor final → 11 ceros, padding de ceros);
- *   - letra del comprobante a partir del código de tipo (1→A, 6→B, 3/8→NC, …);
- *   - clasificación por alícuota (10,5% / 21% / 27%) y tributos asociados
- *     (percepciones de IIBB, percepciones de IVA, municipales, internos, no
- *     gravado, exento).
+ * Acepta dos formatos:
+ *   - el libro IVA digital del modelo del producto (hoja «Ventas» o «Compras»,
+ *     encabezados nativos, fechas como número de serie);
+ *   - «Mis Comprobantes» de ARCA: una hoja (p. ej. «Sheet1»), título en la fila 1,
+ *     encabezados en la fila 2 y datos desde la fila 3; «Tipo» como «6 - Factura B»
+ *     y fechas dd/mm/aaaa.
+ *
+ * El sentido (ventas o compras) se infiere del contenido: el título («Emitidos» o
+ * «Recibidos»), las columnas «Denominación Receptor» o «Denominación Emisor» y,
+ * en último término, el nombre de la hoja. Si el contenido contradice el sentido
+ * pedido, se rechaza con SHEET_DIRECTION_MISMATCH y no se guarda nada.
  */
 
 export type SifereDirection = "SALE" | "PURCHASE";
+
+/** De dónde sale el sentido inferido del libro. */
+export type SifereDirectionSource = "titulo" | "columnas" | "hoja";
 
 export interface SifereAnalysisRate {
   rate: "10.5" | "21" | "27";
@@ -58,7 +69,11 @@ export interface SifereMappedRow {
 }
 
 export interface SifereWorkbookResult {
+  /** Sentido pedido (y, si el libro lo declara, el mismo que surge del contenido). */
   direction: SifereDirection;
+  /** Sentido que surge del contenido del libro; null si no se puede inferir. */
+  detectedDirection: SifereDirection | null;
+  directionSource: SifereDirectionSource | null;
   sheetName: string;
   headers: string[];
   totals: {
@@ -81,7 +96,8 @@ export type SifereParseErrorCode =
   | "WORKBOOK_NOT_FOUND"
   | "HEADER_NOT_FOUND"
   | "SHEET_NOT_FOUND"
-  | "NO_DETAIL_ROWS";
+  | "NO_DETAIL_ROWS"
+  | "SHEET_DIRECTION_MISMATCH";
 
 export class SifereParseError extends Error {
   readonly code: SifereParseErrorCode;
@@ -96,8 +112,6 @@ export class SifereParseError extends Error {
 // Utilidades de XML / celdas
 // ---------------------------------------------------------------
 
-const EXCEL_EPOCH_MS = 25569 * 86400000; // 1899-12-30 en ms desde epoch
-
 function parseSharedStrings(xml: string): string[] {
   const out: string[] = [];
   const siRe = /<si\b[^>]*>(.*?)<\/si>/gs;
@@ -111,15 +125,6 @@ function parseSharedStrings(xml: string): string[] {
     out.push(acc);
   }
   return out;
-}
-
-function normalizeHeader(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
 }
 
 function columnLetterToIndex(letters: string): number {
@@ -167,102 +172,13 @@ function extractRowCells(rowXml: string, shared: string[]): Map<number, string> 
 
 function parseWorksheet(xml: string, shared: string[]): Array<Map<number, string>> {
   const rows: Array<Map<number, string>> = [];
-  const rowRe = /<row\b[^>]*>(.*?)<\/row>/gs;
+  // Una fila vacía autocerrada (<row r="5"/>) no debe tomar la fila siguiente.
+  const rowRe = /<row\b[^>]*?(?:\/>|>(.*?)<\/row>)/gs;
   let match: RegExpExecArray | null;
   while ((match = rowRe.exec(xml)) !== null) {
     rows.push(extractRowCells(match[0], shared));
   }
   return rows;
-}
-
-// ---------------------------------------------------------------
-// Mapeo de encabezados nativos
-// ---------------------------------------------------------------
-
-interface HeaderRule {
-  key: string;
-  test: RegExp;
-}
-
-const HEADER_RULES: readonly HeaderRule[] = [
-  { key: "numberTo", test: /numero de comprobante hasta/ },
-  { key: "issuedOn", test: /fecha de emision/ },
-  { key: "typeCode", test: /tipo de comprobante/ },
-  { key: "pointOfSale", test: /punto de venta/ },
-  { key: "numberFrom", test: /^numero de comprobante$/ },
-  { key: "docType", test: /tipo doc/ },
-  { key: "cuit", test: /nro doc/ },
-  { key: "name", test: /denominacion/ },
-  { key: "total", test: /importe total/ },
-  { key: "currency", test: /moneda/ },
-  { key: "exchangeRate", test: /tipo de cambio/ },
-  { key: "noGravado", test: /no gravado/ },
-  { key: "exempt", test: /exento/ },
-  { key: "percepIIBB", test: /percepciones de ingresos brutos/ },
-  { key: "percepIVA", test: /percepciones o pagos a cuenta de iva/ },
-  { key: "percepNoCat", test: /percepcion a no categor/ },
-  { key: "municipales", test: /impuestos municipales/ },
-  { key: "internos", test: /impuestos internos/ },
-  { key: "otrosTrib", test: /otros tributos/ },
-  { key: "neto105", test: /neto gravado iva 10/ },
-  { key: "iva105", test: /importe iva 10/ },
-  { key: "neto21", test: /neto gravado iva 21/ },
-  { key: "iva21", test: /importe iva 21/ },
-  { key: "neto27", test: /neto gravado iva 27/ },
-  { key: "iva27", test: /importe iva 27/ },
-  { key: "netoGravado", test: /total neto gravado/ },
-  { key: "totalIva", test: /total iva/ },
-  { key: "actividad", test: /actividad/ },
-];
-
-function resolveHeaders(headerRow: Map<number, string>): Record<string, number> {
-  const byName = new Map<string, number>();
-  for (const [col, value] of headerRow) {
-    const normalized = normalizeHeader(value);
-    if (normalized) byName.set(normalized, col);
-  }
-  const resolved: Record<string, number> = {};
-  for (const rule of HEADER_RULES) {
-    if (resolved[rule.key] !== undefined) continue;
-    for (const [name, col] of byName) {
-      if (rule.test.test(name)) {
-        resolved[rule.key] = col;
-        break;
-      }
-    }
-  }
-  return resolved;
-}
-
-// ---------------------------------------------------------------
-// Conversión de valores
-// ---------------------------------------------------------------
-
-const TYPE_TO_LETTER: Readonly<Record<string, string>> = {
-  "1": "A", "2": "ND", "3": "NC",
-  "6": "B", "7": "ND", "8": "NC",
-  "11": "C", "12": "ND", "13": "NC",
-  "51": "M", "52": "ND", "53": "NC",
-};
-
-function serialToIso(value: string | undefined | null): string | null {
-  if (value == null) return null;
-  const trimmed = value.trim();
-  if (trimmed === "") return null;
-  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
-  const serial = Number(trimmed);
-  if (!Number.isFinite(serial)) return null;
-  const ms = Math.round(serial * 86400000 - EXCEL_EPOCH_MS);
-  const date = new Date(ms);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10);
-}
-
-function normalizeCuit(value: string | undefined | null): string {
-  const digits = (value ?? "").replace(/\D/g, "");
-  if (digits === "" || /^0+$/.test(digits)) return "00000000000";
-  if (digits.length < 11) return digits.padStart(11, "0");
-  return digits;
 }
 
 function dec(value: string | undefined | null): Decimal {
@@ -277,7 +193,7 @@ function money(value: Decimal): string {
 }
 
 // ---------------------------------------------------------------
-// Parser principal
+// Hojas y encabezado
 // ---------------------------------------------------------------
 
 interface SheetRef {
@@ -343,10 +259,65 @@ function readDirections(files: Record<string, Uint8Array>): SheetXml[] {
   return sheets;
 }
 
+const HEADER_SCAN_LIMIT = 20;
+
+const CELDA_NUMERICA = /^-?\d+(?:[.,]\d+)?$/;
+
 /**
- * Parsea un libro IVA digital (.xlsx) y detecta la hoja de Ventas o Compras.
- * Devuelve el análisis por alícuota, los tributos asociados y las filas
- * normalizadas listas para el adaptador ARCA.
+ * Índice de la fila de encabezados, o -1. Es la fila de texto inmediatamente anterior a la
+ * primera fila de datos, que es la primera con al menos tres celdas numéricas (importes,
+ * número de comprobante, punto de venta). No compara texto: los nombres de columna se
+ * resuelven después con resolveArcaColumns.
+ */
+function headerRowIndex(rows: ReadonlyArray<Map<number, string>>): number {
+  const limit = Math.min(rows.length, HEADER_SCAN_LIMIT);
+  for (let i = 1; i < limit; i += 1) {
+    const numericas = [...rows[i]!.values()].filter((valor) => CELDA_NUMERICA.test(valor.trim())).length;
+    if (numericas >= 3) return i - 1;
+  }
+  return -1;
+}
+
+// ---------------------------------------------------------------
+// Sentido del libro (desde el contenido)
+// ---------------------------------------------------------------
+
+function sentidoDeTitulo(titulo: string): SifereDirection | null {
+  const name = normalizeArcaHeader(titulo);
+  const venta = /\bemitid|\bventas\b/.test(name);
+  const compra = /\brecibid|\bcompras\b/.test(name);
+  if (venta === compra) return null;
+  return venta ? "SALE" : "PURCHASE";
+}
+
+function sentidoDeColumnas(nombres: ReadonlyMap<string, number>): SifereDirection | null {
+  const receptor = nombres.has("denominacion receptor");
+  const emisor = nombres.has("denominacion emisor");
+  if (receptor === emisor) return null;
+  return receptor ? "SALE" : "PURCHASE";
+}
+
+function sentidoDeHoja(nombre: string): SifereDirection | null {
+  const name = normalizeArcaHeader(nombre);
+  if (name === "ventas") return "SALE";
+  if (name === "compras") return "PURCHASE";
+  return null;
+}
+
+function mensajeSentido(detectado: SifereDirection, detalle: string): string {
+  const libro = detectado === "SALE" ? "ventas" : "compras";
+  const seccion = detectado === "SALE" ? "Ventas" : "Compras";
+  return `Este archivo es un libro de ${libro} (${detalle}). Cargalo en la sección ${seccion}.`;
+}
+
+// ---------------------------------------------------------------
+// Parser principal
+// ---------------------------------------------------------------
+
+/**
+ * Parsea un libro IVA digital (.xlsx), verifica que su contenido corresponda al
+ * sentido pedido y devuelve el análisis por alícuota, los tributos asociados y
+ * las filas normalizadas listas para el adaptador ARCA.
  */
 export function parseSifereWorkbook(
   raw: Uint8Array,
@@ -363,55 +334,76 @@ export function parseSifereWorkbook(
   const shared = sharedXml ? parseSharedStrings(strFromU8(sharedXml)) : [];
 
   const sheets = readDirections(files);
-  const wanted = direction === "SALE" ? "ventas" : "compras";
+  if (sheets.length === 0) {
+    throw new SifereParseError("SHEET_NOT_FOUND", "El libro no tiene hojas");
+  }
 
-  let chosen: SheetXml | undefined;
-  // Preferencia: nombre de hoja que contenga "ventas"/"compras"; sino la que
-  // exhiba el encabezado "Fecha de Emisión" + "Tipo de Comprobante".
-  chosen = sheets.find((sheet) => {
-    const name = normalizeHeader(sheet.name);
-    return wanted === "ventas" ? name === "ventas" : name === "compras";
+  // Sirve la hoja que tiene la fila de encabezado del libro IVA.
+  const candidatas = sheets.flatMap((sheet) => {
+    const rows = parseWorksheet(sheet.xml, shared);
+    const headerIndex = headerRowIndex(rows);
+    if (headerIndex === -1) return [];
+    // Un libro IVA de ARCA necesita «Fecha» y «Punto de Venta» en su encabezado.
+    const celdas: Array<string | undefined> = [];
+    for (const [col, value] of rows[headerIndex]!) celdas[col] = value;
+    const columnas = resolveArcaColumns(celdas, direction);
+    if (columnas.issuedOn === undefined || columnas.pointOfSale === undefined) return [];
+    return [{ sheet, rows, headerIndex }];
   });
-  if (!chosen) {
-    chosen = sheets.find((sheet) => sheet.xml.includes("Fecha de Emisi") || sheet.xml.includes("Fecha de emisi"));
+  if (candidatas.length === 0) {
+    throw new SifereParseError("HEADER_NOT_FOUND", "No se encontró el encabezado del libro IVA");
   }
-  if (!chosen) {
-    chosen = sheets.find((sheet) => {
-      const name = normalizeHeader(sheet.name);
-      return wanted === "ventas" ? name.includes("venta") : name.includes("compra");
-    });
+  // Preferencia: la hoja con el nombre del sentido pedido; si no hay, la primera con encabezado.
+  const nombreEsperado = direction === "SALE" ? "ventas" : "compras";
+  const elegida =
+    candidatas.find((candidata) => normalizeArcaHeader(candidata.sheet.name) === nombreEsperado) ??
+    candidatas[0]!;
+  const { sheet, rows, headerIndex } = elegida;
+
+  const headerRow = rows[headerIndex]!;
+  const headerCells: Array<string | undefined> = [];
+  const nombres = new Map<string, number>();
+  for (const [col, value] of headerRow) {
+    headerCells[col] = value;
+    const name = normalizeArcaHeader(value);
+    if (name && !nombres.has(name)) nombres.set(name, col);
   }
-  if (!chosen) {
+  const headers: string[] = [];
+  for (const value of headerRow.values()) {
+    if (value) headers.push(value);
+  }
+  const columns = resolveArcaColumns(headerCells, direction);
+
+  // Sentido desde el contenido: título, columnas de contraparte y nombre de hoja.
+  const textosTitulo = rows
+    .slice(0, headerIndex)
+    .flatMap((row) => [...row.values()])
+    .filter((text) => text.trim() !== "");
+  const baseTitulo = (textosTitulo[0] ?? "").split(" - ")[0]!.trim().slice(0, 80);
+  const deTitulo = sentidoDeTitulo(textosTitulo.join(" "));
+  const deColumnas = sentidoDeColumnas(nombres);
+  const deHoja = sentidoDeHoja(sheet.name);
+  let detectado: { direction: SifereDirection; source: SifereDirectionSource; detalle: string } | null =
+    null;
+  if (deTitulo) {
+    detectado = { direction: deTitulo, source: "titulo", detalle: baseTitulo };
+  } else if (deColumnas) {
+    detectado = {
+      direction: deColumnas,
+      source: "columnas",
+      detalle: `columna «Denominación ${deColumnas === "SALE" ? "Receptor" : "Emisor"}»`,
+    };
+  } else if (deHoja) {
+    detectado = { direction: deHoja, source: "hoja", detalle: `hoja «${sheet.name}»` };
+  }
+  if (detectado && detectado.direction !== direction) {
     throw new SifereParseError(
-      "SHEET_NOT_FOUND",
-      `No se encontró la hoja de ${wanted === "ventas" ? "Ventas" : "Compras"} en el libro`,
+      "SHEET_DIRECTION_MISMATCH",
+      mensajeSentido(detectado.direction, detectado.detalle),
     );
   }
 
-  const rows = parseWorksheet(chosen.xml, shared);
-
-  // Localizar fila de encabezado (contiene "Fecha de Emisión" y "Punto de Venta").
-  let headerIndex = -1;
-  let columns: Record<string, number> = {};
-  const headers: string[] = [];
-  const scanLimit = Math.min(rows.length, 20);
-  for (let i = 0; i < scanLimit; i += 1) {
-    const row = rows[i]!;
-    const names = [...row.values()].map(normalizeHeader);
-    if (names.some((n) => n === "fecha de emision") && names.some((n) => n === "punto de venta")) {
-      headerIndex = i;
-      columns = resolveHeaders(row);
-      for (const value of row.values()) {
-        if (value) headers.push(value);
-      }
-      break;
-    }
-  }
-  if (headerIndex === -1) {
-    throw new SifereParseError("HEADER_NOT_FOUND", "No se encontró el encabezado del libro IVA");
-  }
-
-  const get = (row: Map<number, string>, key: string): string | undefined => {
+  const get = (row: Map<number, string>, key: ArcaColumnKey): string | undefined => {
     const col = columns[key];
     return col !== undefined ? row.get(col) : undefined;
   };
@@ -441,19 +433,18 @@ export function parseSifereWorkbook(
 
   for (let i = headerIndex + 1; i < rows.length; i += 1) {
     const row = rows[i]!;
-    const typeCode = (get(row, "typeCode") ?? "").trim();
+    const typeRaw = (get(row, "typeCode") ?? "").trim();
     const posRaw = (get(row, "pointOfSale") ?? "").trim();
     const numRaw = (get(row, "numberFrom") ?? "").trim();
     // Saltea filas de totales, notas o vacías (no llevan tipo/PV/número).
-    if (!typeCode || !posRaw || !numRaw) continue;
-    if (!/^\d+$/.test(typeCode) || !/^\d+$/.test(posRaw) || !/^\d+$/.test(numRaw)) continue;
+    if (!typeRaw || !posRaw || !numRaw) continue;
+    if (!/^\d+/.test(typeRaw) || !/^\d+$/.test(posRaw) || !/^\d+$/.test(numRaw)) continue;
 
-    const letter = TYPE_TO_LETTER[typeCode] ?? "";
+    const letter = arcaTipoLetter(typeRaw);
     const numberTo = (get(row, "numberTo") ?? "").trim();
-    const cuit = normalizeCuit(get(row, "cuit"));
-    const issuedOn = serialToIso(get(row, "issuedOn"));
-    const currencyRaw = (get(row, "currency") ?? "").trim();
-    const currency = currencyRaw === "PES" ? "ARS" : currencyRaw.length === 3 ? currencyRaw : "ARS";
+    const cuit = arcaCuit(get(row, "cuit"));
+    const issuedOn = arcaIsoDate(get(row, "issuedOn"));
+    const currency = arcaCurrency(get(row, "currency"));
     const exchangeRate = (get(row, "exchangeRate") ?? "").trim();
 
     const neto105 = dec(get(row, "neto105"));
@@ -462,6 +453,8 @@ export function parseSifereWorkbook(
     const iva21 = dec(get(row, "iva21"));
     const neto27 = dec(get(row, "neto27"));
     const iva27 = dec(get(row, "iva27"));
+    const iva25 = dec(get(row, "iva25"));
+    const iva5 = dec(get(row, "iva5"));
     const netoGravado = dec(get(row, "netoGravado"));
     const importeTotal = dec(get(row, "total"));
     const noGravado = dec(get(row, "noGravado"));
@@ -500,6 +493,8 @@ export function parseSifereWorkbook(
     }
 
     const hasIva = iva21.greaterThan(0) || iva105.greaterThan(0) || iva27.greaterThan(0);
+    // IVA a 2,5% o 5%: el modelo no lo soporta; la fila queda con error, no se pierde en silencio.
+    const ivaNoSoportado = !iva25.isZero() || !iva5.isZero();
     const input: ArcaVoucherInput = {
       direction,
       letter,
@@ -517,6 +512,7 @@ export function parseSifereWorkbook(
       currency,
       ...(numberTo ? { numberTo } : {}),
       ...(exchangeRate ? { exchangeRate } : {}),
+      ...(ivaNoSoportado ? { ivaNoSoportado: true } : {}),
     };
 
     const normalized = normalizeArcaVoucherRow(input);
@@ -546,7 +542,9 @@ export function parseSifereWorkbook(
 
   return {
     direction,
-    sheetName: chosen.name,
+    detectedDirection: detectado?.direction ?? null,
+    directionSource: detectado?.source ?? null,
+    sheetName: sheet.name,
     headers,
     totals: {
       importeTotal: money(totals.importeTotal),

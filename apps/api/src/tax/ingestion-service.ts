@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { taxHash } from "@contable/tax-engine";
 import {
+  mapArcaCsvRow,
   normalizeArcaVoucherBatch,
   normalizeCm03Batch,
   normalizeF931Batch,
@@ -140,12 +141,19 @@ type SourceAdapter = {
  * una política sin entrada no se procesa (nunca cae a un adaptador por defecto).
  */
 const SOURCE_ADAPTERS: Readonly<Record<string, SourceAdapter>> = {
+  // El lote fija el sentido: las filas con encabezados de ARCA se mapean a las claves canónicas.
   ARCA_IVA_SALES: {
-    normalize: (rows) => normalizeArcaVoucherBatch(rows as ArcaVoucherInput[]),
+    normalize: (rows) =>
+      normalizeArcaVoucherBatch(
+        rows.map((row) => mapArcaCsvRow(row as Record<string, unknown>, "SALE")) as ArcaVoucherInput[],
+      ),
     commitBranch: "VOUCHER",
   },
   ARCA_IVA_PURCHASES: {
-    normalize: (rows) => normalizeArcaVoucherBatch(rows as ArcaVoucherInput[]),
+    normalize: (rows) =>
+      normalizeArcaVoucherBatch(
+        rows.map((row) => mapArcaCsvRow(row as Record<string, unknown>, "PURCHASE")) as ArcaVoucherInput[],
+      ),
     commitBranch: "VOUCHER",
   },
   SICORE_IVA: {

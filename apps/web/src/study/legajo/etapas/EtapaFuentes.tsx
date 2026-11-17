@@ -5,7 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { AsyncState, Button, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { WorkpaperSourceReviewAction } from "../../WorkpaperSourceReviewAction";
-import { ladoDeLibroIva } from "../loteFuente";
+import { estadoDeLote, ladoDeLibroIva } from "../loteFuente";
+import { FilasConErrorDeLote } from "../DetalleFilasLote";
 import type { CoberturaLegajo } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
 
@@ -173,9 +174,10 @@ export function EtapaFuentes({
                             {batch.fileName ?? "Lote sin nombre"} · {batch.validRows}/
                             {batch.totalRows} filas
                           </span>
-                          <StatusBadge
-                            status={batch.reviewStatus === "REVIEWED" ? "READY" : batch.batchStatus}
-                          />
+                          <StatusBadge {...estadoDeLote(batch)} />
+                          {ladoDeLibroIva(source.code) !== null && batch.errorRows > 0 ? (
+                            <FilasConErrorDeLote batchId={batch.id} />
+                          ) : null}
                           <WorkpaperSourceReviewAction
                             batch={batch}
                             currentUserId={currentUserId}
