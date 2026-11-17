@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@contable/design-system";
 import { useClientContext } from "../../context/ClientContext";
 import { api } from "../../lib/api";
@@ -66,10 +66,18 @@ export function DetalleFilasLote({
   );
 }
 
-/** «Ver filas con error» de un lote de libro IVA con errores: el detalle se pide solo al abrirlo. */
+/**
+ * «Ver filas con error» de un lote de libro IVA con errores: el detalle se pide solo al abrirlo.
+ * `batchId` es el lote importado (`importBatchId` de la cobertura), no el id del vínculo con el legajo.
+ */
 export function FilasConErrorDeLote({ batchId }: { batchId: string }) {
   const { firmId, clientId } = useClientContext();
   const [abierto, setAbierto] = useState(false);
+  const detalleRef = useRef<HTMLDivElement>(null);
+  // Al abrir, el botón se desmonta: el foco pasa al detalle y no cae en <body>.
+  useEffect(() => {
+    if (abierto) detalleRef.current?.focus({ preventScroll: true });
+  }, [abierto]);
   if (!abierto) {
     return (
       <Button size="sm" variant="ghost" onClick={() => setAbierto(true)}>
@@ -78,5 +86,9 @@ export function FilasConErrorDeLote({ batchId }: { batchId: string }) {
     );
   }
   if (!firmId || !clientId) return null;
-  return <DetalleFilasLote firmId={firmId} clientId={clientId} batchId={batchId} />;
+  return (
+    <div ref={detalleRef} role="group" aria-label="Detalle de filas con error" tabIndex={-1}>
+      <DetalleFilasLote firmId={firmId} clientId={clientId} batchId={batchId} />
+    </div>
+  );
 }

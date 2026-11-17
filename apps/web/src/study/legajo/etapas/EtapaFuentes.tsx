@@ -176,7 +176,7 @@ export function EtapaFuentes({
                           </span>
                           <StatusBadge {...estadoDeLote(batch)} />
                           {ladoDeLibroIva(source.code) !== null && batch.errorRows > 0 ? (
-                            <FilasConErrorDeLote batchId={batch.id} />
+                            <FilasConErrorDeLote batchId={batch.importBatchId} />
                           ) : null}
                           <WorkpaperSourceReviewAction
                             batch={batch}
