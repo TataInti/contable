@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import { NotFoundInClientError, clientScope } from "../auth/client-scope.js";
 import { assertBalanced, type EngineLine } from "@contable/accounting-engine";
 import type { JournalEntryDraft } from "@contable/contracts";
 import { createHash, randomUUID } from "node:crypto";
@@ -16,7 +17,6 @@ import { createHash, randomUUID } from "node:crypto";
  */
 
 export type JournalErrorCode =
-  | "ENTRY_NOT_FOUND"
   | "ENTRY_NOT_EDITABLE"
   | "ENTRY_NOT_REVIEWABLE"
   | "ENTRY_NOT_POSTABLE"
@@ -110,9 +110,9 @@ export class JournalService {
   async submit(ctx: TenantContext, entryId: string) {
     return withTenantContext(ctx, async (tx) => {
       const entry = await tx.journalEntry.findFirst({
-        where: { id: entryId, firmId: ctx.firmId },
+        where: { id: entryId, ...clientScope(ctx) },
       });
-      if (!entry) throw new JournalError("ENTRY_NOT_FOUND", "Asiento no encontrado");
+      if (!entry) throw new NotFoundInClientError("asiento");
       if (entry.status !== "DRAFT") throw new JournalError("ENTRY_NOT_EDITABLE", "Sólo borradores se envían a revisión");
 
       return tx.journalEntry.update({
@@ -126,9 +126,9 @@ export class JournalService {
   async review(ctx: TenantContext, entryId: string) {
     return withTenantContext(ctx, async (tx) => {
       const entry = await tx.journalEntry.findFirst({
-        where: { id: entryId, firmId: ctx.firmId },
+        where: { id: entryId, ...clientScope(ctx) },
       });
-      if (!entry) throw new JournalError("ENTRY_NOT_FOUND", "Asiento no encontrado");
+      if (!entry) throw new NotFoundInClientError("asiento");
       if (entry.status !== "IN_REVIEW") throw new JournalError("ENTRY_NOT_REVIEWABLE", "Sólo asientos en revisión se aprueban");
       if (entry.preparedByUserId === ctx.userId) {
         throw new JournalError("ENTRY_NOT_REVIEWABLE", "El preparador no puede aprobar su propio asiento (maker-checker)");
@@ -145,9 +145,9 @@ export class JournalService {
   async reject(ctx: TenantContext, entryId: string) {
     return withTenantContext(ctx, async (tx) => {
       const entry = await tx.journalEntry.findFirst({
-        where: { id: entryId, firmId: ctx.firmId },
+        where: { id: entryId, ...clientScope(ctx) },
       });
-      if (!entry) throw new JournalError("ENTRY_NOT_FOUND", "Asiento no encontrado");
+      if (!entry) throw new NotFoundInClientError("asiento");
       if (entry.status !== "IN_REVIEW") throw new JournalError("ENTRY_NOT_REVIEWABLE", "Sólo asientos en revisión se rechazan");
 
       return tx.journalEntry.update({
@@ -164,10 +164,10 @@ export class JournalService {
   async post(ctx: TenantContext, entryId: string, expectedRowVersion: number, idempotencyKey?: string) {
     return withTenantContext(ctx, async (tx) => {
       const entry = await tx.journalEntry.findFirst({
-        where: { id: entryId, firmId: ctx.firmId },
+        where: { id: entryId, ...clientScope(ctx) },
         include: { lines: true },
       });
-      if (!entry) throw new JournalError("ENTRY_NOT_FOUND", "Asiento no encontrado");
+      if (!entry) throw new NotFoundInClientError("asiento");
       if (entry.status !== "REVIEWED") throw new JournalError("ENTRY_NOT_POSTABLE", "Sólo asientos aprobados se postean");
       if (entry.rowVersion !== expectedRowVersion) {
         throw new JournalError("ROW_VERSION_CONFLICT", "Conflicto de versión: el asiento fue modificado");
@@ -258,10 +258,10 @@ export class JournalService {
   async reverse(ctx: TenantContext, entryId: string, description?: string) {
     return withTenantContext(ctx, async (tx) => {
       const entry = await tx.journalEntry.findFirst({
-        where: { id: entryId, firmId: ctx.firmId },
+        where: { id: entryId, ...clientScope(ctx) },
         include: { lines: true },
       });
-      if (!entry) throw new JournalError("ENTRY_NOT_FOUND", "Asiento no encontrado");
+      if (!entry) throw new NotFoundInClientError("asiento");
       if (entry.status !== "POSTED") throw new JournalError("ENTRY_NOT_REVERSIBLE", "Sólo asientos posteados se revierten");
       if (entry.reversedByEntryId) throw new JournalError("REVERSAL_EXISTS", "El asiento ya fue revertido");
 
