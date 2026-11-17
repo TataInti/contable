@@ -1,4 +1,14 @@
 import { Decimal } from "decimal.js";
+import {
+  arcaAmount,
+  arcaCurrency,
+  arcaCuit,
+  arcaIsoDate,
+  arcaTipoLetter,
+  esImporteDecimal,
+  resolveArcaColumns,
+  type ArcaColumnKey,
+} from "./arca-columnas.js";
 
 /**
  * Adaptadores de importación fiscal (G2-02 / G2-03).
@@ -95,6 +105,7 @@ export type ArcaVoucherError =
   | "DATE_INVALID"
   | "NET_INVALID"
   | "IVA_MISSING"
+  | "ALICUOTA_NO_SOPORTADA"
   | "TOTAL_MISMATCH";
 
 const VALID_LETTERS = new Set(["A", "B", "C", "M", "NC", "ND"]);
@@ -130,6 +141,8 @@ export interface ArcaVoucherInput {
   exchangeRate?: unknown;
   /** Moneda ISO 4217. */
   currency?: unknown;
+  /** IVA a una alícuota que el modelo no soporta (2,5% o 5%) con importe distinto de cero. */
+  ivaNoSoportado?: unknown;
 }
 
 function normalizeLetter(value: unknown): { ok: true; letter: string } | { ok: false; error: ArcaVoucherError } {
@@ -180,6 +193,9 @@ export function normalizeArcaVoucherRow(input: ArcaVoucherInput): NormalizedRow<
 
   if (hasIva && !iva21 && !iva105 && !iva27) {
     errors.push("IVA_MISSING");
+  }
+  if (input.ivaNoSoportado === true) {
+    errors.push("ALICUOTA_NO_SOPORTADA");
   }
 
   const exempt = isDecimalString(input.exempt) ? new Decimal(input.exempt) : new Decimal(0);
@@ -253,6 +269,63 @@ export function normalizeArcaVoucherBatch(
       errorRows: errors,
     },
   };
+}
+
+/**
+ * Adapta una fila de CSV o JSON con encabezados de ARCA («Fecha», «Tipo»,
+ * «Número Desde», «Nro. Doc. Receptor», «Neto Gravado Total», «IVA 21%»…) a las
+ * claves canónicas del adaptador. El lote fija el sentido (`lado`): en una venta
+ * la contraparte es el receptor y en una compra, el emisor. Una fila que ya
+ * trae las claves canónicas (por ejemplo, un libro del modelo) se devuelve tal cual.
+ */
+export function mapArcaCsvRow(
+  row: Record<string, unknown>,
+  lado: "SALE" | "PURCHASE",
+): Record<string, unknown> {
+  if (row["direction"] !== undefined) return row;
+  const headers = Object.keys(row);
+  const cols = resolveArcaColumns(headers, lado);
+  const raw = (key: ArcaColumnKey): unknown => {
+    const col = cols[key];
+    return col === undefined ? undefined : row[headers[col]!];
+  };
+  const texto = (key: ArcaColumnKey): string | undefined => {
+    const value = raw(key);
+    if (value === undefined || value === null) return undefined;
+    const text = String(value).trim();
+    return text === "" ? undefined : text;
+  };
+  const out: Record<string, unknown> = { ...row, direction: lado };
+  const set = (key: string, value: unknown): void => {
+    if (out[key] === undefined && value !== undefined) out[key] = value;
+  };
+  const tipo = texto("typeCode");
+  set("letter", tipo === undefined ? undefined : arcaTipoLetter(tipo));
+  set("pointOfSale", texto("pointOfSale"));
+  set("numberFrom", texto("numberFrom"));
+  set("numberTo", texto("numberTo"));
+  if (cols.cuit !== undefined) set("cuit", arcaCuit(texto("cuit")));
+  set("issuedOn", arcaIsoDate(texto("issuedOn")) ?? undefined);
+  set("net", arcaAmount(raw("netoGravado")));
+  const iva21 = arcaAmount(raw("iva21"));
+  const iva105 = arcaAmount(raw("iva105"));
+  const iva27 = arcaAmount(raw("iva27"));
+  set("iva21", iva21);
+  set("iva105", iva105);
+  set("iva27", iva27);
+  const conIva = [iva21, iva105, iva27].some(
+    (value) => value !== undefined && esImporteDecimal(value) && new Decimal(value).greaterThan(0),
+  );
+  set("hasIva", conIva);
+  const ivaNoSoportado = [arcaAmount(raw("iva25")), arcaAmount(raw("iva5"))].some(
+    (value) => value !== undefined && esImporteDecimal(value) && !new Decimal(value).isZero(),
+  );
+  if (ivaNoSoportado) out["ivaNoSoportado"] = true;
+  set("exempt", arcaAmount(raw("exempt")));
+  set("otherTaxes", arcaAmount(raw("otrosTrib")));
+  set("exchangeRate", arcaAmount(raw("exchangeRate")));
+  set("currency", arcaCurrency(texto("currency")));
+  return out;
 }
 
 // ============================================================

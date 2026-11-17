@@ -4,7 +4,8 @@ import { Button, Field, useNotify } from "@contable/design-system";
 import { api } from "../../../lib/api";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { fileToBase64, fileToHash } from "../archivoFuente";
-import { importarLoteFuente, ladoDeLibroIva } from "../loteFuente";
+import { importarLoteFuente, LoteConFilasObservadas, ladoDeLibroIva } from "../loteFuente";
+import { DetalleFilasLote } from "../DetalleFilasLote";
 import { SifereAnalysisPanel } from "../SifereAnalysisPanel";
 import type { SifereAnalysis, WorkpaperSource } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
@@ -108,7 +109,7 @@ export function PanelLibrosIva({
     onSuccess: (data) => {
       limpiarPanel();
       notify.success(
-        `${data.batch.committed === 1 ? "Se importó" : "Se importaron"} ${pluralizar(data.batch.committed, "comprobante", "comprobantes")} de ${data.analysis.direction === "SALE" ? "ventas" : "compras"} (${data.analysis.sheetName}). ${data.batch.committed === 1 ? "Quedó asociado" : "Quedaron asociados"} al cliente y al período activo.`,
+        `${data.batch.committed === 1 ? "Se importó" : "Se importaron"} ${pluralizar(data.batch.committed, "comprobante", "comprobantes")} de ${data.analysis.direction === "SALE" ? "ventas" : "compras"}. ${data.batch.committed === 1 ? "Quedó asociado" : "Quedaron asociados"} al cliente y al período activo.`,
       );
       invalidarCobertura();
     },
@@ -185,6 +186,8 @@ export function PanelLibrosIva({
           (importSifereMutation.isPending && importSifereMutation.variables?.direction === lado) ||
           (importLoteMutation.isPending && importLoteMutation.variables?.direction === lado);
         const motivo = isAnalyzing || isImporting ? null : motivoDe(lado, file, analysis, excel);
+        const errorLote =
+          importLoteMutation.variables?.direction === lado ? importLoteMutation.error : null;
         return (
           <section key={lado} aria-label={lado === "SALE" ? "Libro de ventas" : "Libro de compras"}>
             <h3>{lado === "SALE" ? "Ventas" : "Compras"}</h3>
@@ -249,11 +252,10 @@ export function PanelLibrosIva({
                   : null
               }
             />
-            <WorkpaperActionError
-              error={
-                importLoteMutation.variables?.direction === lado ? importLoteMutation.error : null
-              }
-            />
+            <WorkpaperActionError error={errorLote} />
+            {errorLote instanceof LoteConFilasObservadas ? (
+              <DetalleFilasLote firmId={firmId} clientId={clientId} batchId={errorLote.batchId} />
+            ) : null}
             {analysis ? <SifereAnalysisPanel analysis={analysis} /> : null}
           </section>
         );

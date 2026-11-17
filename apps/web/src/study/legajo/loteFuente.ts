@@ -1,7 +1,6 @@
 import { api } from "../../lib/api";
 import { hashSourceFile, parseSourceFile } from "./archivoFuente";
 import type { WorkpaperSource } from "./tipos";
-import { pluralizar } from "./textos";
 
 // Los libros IVA se importan desde su fila de ARCA IVA («Importar libro»); «Importar lote» queda para las demás fuentes.
 export const CODIGO_FUENTE_LIBRO_IVA = {
@@ -13,6 +12,37 @@ export function ladoDeLibroIva(codigo: string): "SALE" | "PURCHASE" | null {
   if (codigo === CODIGO_FUENTE_LIBRO_IVA.SALE) return "SALE";
   if (codigo === CODIGO_FUENTE_LIBRO_IVA.PURCHASE) return "PURCHASE";
   return null;
+}
+
+/** El lote quedó validado con filas con error: no se confirma. El panel muestra el detalle por fila. */
+export class LoteConFilasObservadas extends Error {
+  readonly batchId: string;
+  readonly errorRows: number;
+  readonly totalRows: number;
+
+  constructor(batchId: string, errorRows: number, totalRows: number) {
+    super(
+      `El lote tiene ${errorRows} de ${totalRows} filas con error. Corregí esas filas en el archivo y volvé a importarlo.`,
+    );
+    this.name = "LoteConFilasObservadas";
+    this.batchId = batchId;
+    this.errorRows = errorRows;
+    this.totalRows = totalRows;
+  }
+}
+
+/** Estado visible de un lote: con filas con error no se muestra «Validado». */
+export function estadoDeLote(lote: {
+  reviewStatus: string;
+  batchStatus: string;
+  errorRows: number;
+  totalRows: number;
+}): { status: string; label?: string } {
+  if (lote.reviewStatus === "REVIEWED") return { status: "READY" };
+  if (lote.batchStatus === "VALIDATED" && lote.errorRows > 0) {
+    return { status: "NEEDS_REVIEW", label: `${lote.errorRows} de ${lote.totalRows} filas con error` };
+  }
+  return { status: lote.batchStatus };
 }
 
 // Lote de una fuente (CSV, TXT o JSON): crea el lote, lo valida y, sin filas observadas, lo confirma.
@@ -63,9 +93,7 @@ export async function importarLoteFuente({
     errorRows = validation.totals.errorRows;
   }
   if (errorRows > 0) {
-    throw new Error(
-      `El lote quedó validado con ${pluralizar(errorRows, "fila observada", "filas observadas")}. Corregí el archivo antes de reimportar.`,
-    );
+    throw new LoteConFilasObservadas(batch.id, errorRows, rows.length);
   }
   if (status === "VALIDATED") {
     await api.post(`/firms/${firmId}/clients/${clientId}/import-batches/${batch.id}/commit`, {

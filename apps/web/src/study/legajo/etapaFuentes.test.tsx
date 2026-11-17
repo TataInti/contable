@@ -180,7 +180,7 @@ describe("Legajo · etapa Fuentes (K10)", () => {
     renderLegajo();
     await importarLoteDemo();
     expect(
-      await screen.findByText(/El lote quedó validado con 2 filas observadas/),
+      await screen.findByText(/El lote tiene 2 de 2 filas con error/),
     ).toBeInTheDocument();
     expect(llamadasA("/commit")).toHaveLength(0);
   });
@@ -220,5 +220,96 @@ describe("Legajo · etapa Fuentes: un solo anuncio por carga (Foco 2.7b)", () =>
     expect(anuncios).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Actualizando…" })).toBeNull();
     expect(screen.getByRole("button", { name: "Actualizar" })).toBeDisabled();
+  });
+});
+
+// A27-1d: lote de libro IVA con filas con error en la lista de fuentes. En la cobertura, `id` es el del
+// vínculo con el legajo; el lote importado es `importBatchId`, y /rows se pide con ese.
+const ID_VINCULO_LOTE = "vinculo-lote-ventas";
+const ID_LOTE_IMPORTADO = "lote-importado-ventas";
+const loteVentasConErrores = {
+  id: ID_VINCULO_LOTE,
+  importBatchId: ID_LOTE_IMPORTADO,
+  fileName: "libro-ventas-con-errores-demo.csv",
+  batchStatus: "VALIDATED",
+  reviewStatus: "PENDING",
+  totalRows: 3,
+  validRows: 1,
+  errorRows: 2,
+  snapshotHash: null,
+  reviewedAt: null,
+  reviewedByUserId: null,
+  createdByUserId: "user-demo",
+  createdAt: "2026-11-01T00:00:00.000Z",
+};
+const filasDelLoteVentas = [
+  { id: "fila-1", position: 0, status: "VALID", errors: [], raw: null },
+  {
+    id: "fila-2",
+    position: 5,
+    status: "ERROR",
+    errors: ["POS_INVALID"],
+    raw: { Tipo: "6 - Factura B", "Número Desde": 880101 },
+  },
+  {
+    id: "fila-3",
+    position: 6,
+    status: "ERROR",
+    errors: ["DATE_INVALID"],
+    raw: { Tipo: "6 - Factura B", "Número Desde": 880102 },
+  },
+];
+
+// Lecturas de la pantalla con el lote observado en la fuente de ventas. /rows responde 200 con las filas
+// que `filasDe` devuelve para el id pedido: lista vacía si el id no es el de un lote, como el endpoint real.
+function responderLoteConErrores(filasDe: (idLote: string) => unknown[]) {
+  const lecturas = rutasDemo({
+    fuentes: [{ ...fuentesDemo[0], batches: [loteVentasConErrores] }, fuentesDemo[1]],
+  });
+  vi.mocked(api.get).mockImplementation(((path: string) => {
+    const idLote = /\/import-batches\/([^/]+)\/rows$/.exec(path)?.[1];
+    return idLote === undefined ? lecturas(path) : Promise.resolve(filasDe(idLote));
+  }) as never);
+}
+
+function rutasDeLotesPedidas() {
+  return vi
+    .mocked(api.get)
+    .mock.calls.map(([ruta]) => String(ruta))
+    .filter((ruta) => ruta.includes("/import-batches/"));
+}
+
+describe("Legajo · etapa Fuentes: «Ver filas con error» de un lote de libro IVA (A27-1d)", () => {
+  it("pide las filas con el id del lote importado, nunca con el del vínculo, y muestra sus motivos (D1)", async () => {
+    responderLoteConErrores((idLote) => (idLote === ID_LOTE_IMPORTADO ? filasDelLoteVentas : []));
+    fijarContexto(PERMISOS_FUENTES);
+    renderLegajo();
+    fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ver filas con error" }));
+    await waitFor(() => expect(rutasDeLotesPedidas()).not.toHaveLength(0));
+    expect(rutasDeLotesPedidas()).toEqual([`${BASE}/import-batches/${ID_LOTE_IMPORTADO}/rows`]);
+    expect(rutasDeLotesPedidas().some((ruta) => ruta.includes(ID_VINCULO_LOTE))).toBe(false);
+    expect(
+      await screen.findByText(/El punto de venta no es un número válido\./),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/La fecha no es válida\./)).toBeInTheDocument();
+  });
+
+  it("al abrir el detalle con el teclado, el foco pasa al detalle y no cae en <body> (D2)", async () => {
+    responderLoteConErrores(() => filasDelLoteVentas);
+    fijarContexto(PERMISOS_FUENTES);
+    renderLegajo();
+    fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
+    const abrir = await screen.findByRole("button", { name: "Ver filas con error" });
+    abrir.focus();
+    expect(abrir).toHaveFocus();
+    // Con Enter el navegador entrega un clic al botón enfocado; jsdom no lo convierte solo.
+    fireEvent.keyDown(abrir, { key: "Enter", code: "Enter" });
+    fireEvent.click(abrir);
+    const motivo = await screen.findByText(/El punto de venta no es un número válido\./);
+    expect(document.activeElement?.tagName).not.toBe("BODY");
+    const detalle = screen.getByRole("group", { name: "Detalle de filas con error" });
+    expect(detalle).toContainElement(motivo);
+    expect(detalle.contains(document.activeElement)).toBe(true);
   });
 });
