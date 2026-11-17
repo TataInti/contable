@@ -185,7 +185,8 @@ export const STUDY_MODULES: readonly StudyModule[] = [
     icon: "trending",
     navigationGroup: "Análisis",
     requiredCapability: "profitability.read",
-    requirements: { firm: true, client: true, period: true },
+    // Sin período contable (A27 D27-2 a): la pantalla resuelve su período con las obligaciones fiscales.
+    requirements: { firm: true, client: true },
     status: "released",
     component: lazy(() =>
       import("./StudyRentabilidad").then((module) => ({ default: module.StudyRentabilidad })),

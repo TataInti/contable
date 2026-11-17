@@ -6,6 +6,7 @@ import type { ClientContextValue } from "../context/ClientContext";
 import { STUDY_MODULES } from "../study/moduleRegistry";
 import type { ReactNode } from "react";
 import { StudyShell } from "./StudyShell";
+import { ContextBar } from "./ContextBar";
 
 const state = vi.hoisted(() => ({
   context: null as unknown as ClientContextValue,
@@ -154,8 +155,18 @@ describe("StudyShell", () => {
     },
   );
 
-  it("deja sólo el selector de período en una pantalla que lo necesita", () => {
+  it("no muestra la barra de período en Rentabilidad: su período sale de sus obligaciones fiscales", () => {
     renderShell("/rentabilidad");
+    expect(document.querySelector("#context-bar")).toBeNull();
+  });
+
+  it("cuando una pantalla pide período, la barra muestra sólo el selector de período", () => {
+    renderShell("/trabajo");
+    render(
+      <MemoryRouter>
+        <ContextBar only="period" />
+      </MemoryRouter>,
+    );
     const bar = document.querySelector("#context-bar") as HTMLElement;
 
     expect(bar).not.toBeNull();

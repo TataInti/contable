@@ -22,7 +22,10 @@ describe("registro de módulos del estudio", () => {
     expect(moduleById.get("liquidaciones")?.requirements.period).toBeUndefined();
     expect(moduleById.get("expediente-mensual")?.requirements.period).toBeUndefined();
     expect(moduleById.get("contabilidad")?.requirements.period).toBe(true);
-    expect(moduleById.get("rentabilidad")?.requirements.period).toBe(true);
+    expect(moduleById.get("reportes")?.requirements.period).toBe(true);
+    expect(moduleById.get("asistente")?.requirements.period).toBe(true);
+    // Sustituye la aserción que pedía período a Rentabilidad (A27 D27-2 a).
+    expect(moduleById.get("rentabilidad")?.requirements.period).toBeUndefined();
   });
 
   it("muestra cada módulo liberado cuando el rol tiene la capacidad requerida", () => {
