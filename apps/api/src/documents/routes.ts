@@ -1,8 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
-import { createUploadSessionSchema, extractionApprovedSnapshotSchema } from "@contable/contracts";
+import {
+  createUploadSessionSchema,
+  documentRejectRequestSchema,
+  extractionApprovedSnapshotSchema,
+} from "@contable/contracts";
 import { DocumentService } from "./document-service.js";
 import { DocumentReprocessError, DocumentReprocessService } from "./reprocess-service.js";
+import { DocumentRejectError, DocumentRejectService } from "./document-reject-service.js";
 import {
   ExtractionError,
   ExtractionService,
@@ -80,6 +85,7 @@ export function documentRoutes(app: FastifyInstance) {
   const storage = new ObjectStorage();
   const service = new DocumentService(storage);
   const reprocessService = new DocumentReprocessService();
+  const documentRejectService = new DocumentRejectService();
   const extractionService = new ExtractionService();
 
   // Crear sesión de upload (G2-07: el body valida requestItemId obligatorio)
@@ -220,6 +226,39 @@ export function documentRoutes(app: FastifyInstance) {
       throw err;
     }
   });
+
+  // Rechazar un documento que falló al procesarse (D23-1 a, etapa 1): FAILED pasa a EXTRACTION_FAILED.
+  // El motivo es obligatorio; el archivo no se vuelve a procesar (para reemplazarlo se sube otro).
+  app.post(
+    "/api/v1/firms/:firmId/clients/:clientId/documents/:documentId/reject",
+    async (req, reply) => {
+      const { documentId } = req.params as { firmId: string; clientId: string; documentId: string };
+      const parsed = documentRejectRequestSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: "REJECTION_REASON_REQUIRED",
+            message: "Indicá el motivo del rechazo (hasta 500 caracteres)",
+          },
+        });
+      }
+      try {
+        const result = await documentRejectService.reject(
+          tenantContextFromRequest(req),
+          documentId,
+          parsed.data.reason,
+        );
+        return reply.send({ data: result });
+      } catch (err) {
+        if (err instanceof DocumentRejectError) {
+          return reply
+            .status(err.statusCode)
+            .send({ error: { code: err.code, message: err.message } });
+        }
+        throw err;
+      }
+    },
+  );
 
   // Cargar campos fiscales escalares manualmente en una única transacción.
   app.put("/api/v1/firms/:firmId/clients/:clientId/extractions/:extractionId/fields", async (req, reply) => {

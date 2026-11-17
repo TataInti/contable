@@ -106,6 +106,11 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/document-upload-sessions/, resolve: () => "document.upload" },
   { match: /\/extractions\//, resolve: (m) => (m === "GET" ? "document.prepare" : "document.review") },
   { match: /\/documents\/[^/]+\/reprocess$/, resolve: (m) => (m === "POST" ? "document.review" : null) },
+  // Rechazo de un documento que falló (D23-1 a): es revisión, no carga; va antes de la regla general de /documents.
+  {
+    match: /\/documents\/[^/]+\/reject$/,
+    resolve: (m) => (m === "POST" ? "document.review" : null),
+  },
   { match: /\/documents/, resolve: (m) => (m === "GET" ? "client.read" : "document.upload") },
   { match: /\/journal-entries\/[^/]+\/submit$/, resolve: () => "entry.submit" },
   { match: /\/journal-entries\/[^/]+\/(review|reject)$/, resolve: () => "entry.review" },

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
 import { isManualExtractionFieldKey } from "@contable/contracts";
@@ -61,6 +61,7 @@ const ETAPAS_EN_CURSO: Partial<Record<string, string>> = {
   READING_AI: "Leyendo el comprobante con IA",
 };
 const AVISO_AL_ESTUDIO = "Avisá a quien administra el estudio para que revise el archivo.";
+const AVISO_SUBIR_ARCHIVO_NUEVO = "Para reemplazarlo, subí un archivo nuevo.";
 
 interface DetalleDocumentoProps {
   rows: Document[];
@@ -262,6 +263,14 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
       detail.data?.status === "EXTRACTED" ||
       detail.data?.fileVersions?.[0]?.antivirusStatus === "CLEAN");
   const rejectionReceipt = detail.data ? rejectionReceipts[detail.data.id] : undefined;
+  // D9: al completarse el rechazo, el foco pasa al recibo «Documento rechazado» y no queda en BODY.
+  const reciboRef = useRef<HTMLDivElement>(null);
+  const enfocarReciboAlRechazar = useRef(false);
+  useEffect(() => {
+    if (!rejectionReceipt || !enfocarReciboAlRechazar.current) return;
+    enfocarReciboAlRechazar.current = false;
+    reciboRef.current?.focus();
+  }, [rejectionReceipt]);
   // C7B-8: etapa y progreso en texto, solo para una etapa conocida; el resto cae en «Procesando comprobante».
   const trabajoEnCurso = detail.data?.processingJobs?.find(
     (job) => job.type !== "REPROCESS" && ["QUEUED", "RUNNING"].includes(job.status),
@@ -278,6 +287,10 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
     trabajoFallido?.error && isAutomatedReadingUnavailableReason(trabajoFallido.error)
       ? AUTOMATED_READING_UNAVAILABLE_MESSAGE
       : AVISO_AL_ESTUDIO;
+  // D23-1 (a), etapa 1: un trabajo en cola o en curso frena el rechazo. Lo decide la lista de tareas de la API, no un texto.
+  const hayTareaActiva = Boolean(
+    detail.data?.processingJobs?.some((job) => ["QUEUED", "RUNNING"].includes(job.status)),
+  );
   const activeReprocessJob =
     detail.data?.processingJobs?.some(
       (job) => job.type === "REPROCESS" && ["QUEUED", "RUNNING"].includes(job.status),
@@ -373,7 +386,12 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
               </div>
             </div>
             {rejectionReceipt ? (
-              <div className="action-receipt action-receipt--rejected" role="status">
+              <div
+                ref={reciboRef}
+                tabIndex={-1}
+                className="action-receipt action-receipt--rejected"
+                role="status"
+              >
                 <span>
                   <strong>Documento rechazado</strong>
                   <small>Motivo: {rejectionReceipt}</small>
@@ -388,9 +406,42 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                 El archivo no se puede abrir ni procesar. Avisá a quien administra el estudio.
               </Notice>
             ) : detail.data?.status === "FAILED" || detail.data?.status === "CANCELED" ? (
-              <Notice tone="error" title="El procesamiento no terminó">
-                {textoFallo}
-              </Notice>
+              <>
+                <Notice tone="error" title="El procesamiento no terminó">
+                  <span>{textoFallo}</span>
+                  {detail.data?.status === "FAILED" ? (
+                    <>
+                      {" "}
+                      <span>{AVISO_SUBIR_ARCHIVO_NUEVO}</span>
+                    </>
+                  ) : null}
+                </Notice>
+                {detail.data?.status === "FAILED" ? (
+                  <div className="review-actions">
+                    <div className="review-actions__buttons">
+                      {capabilities.has("document.review") ? (
+                        <Button
+                          variant="danger"
+                          disabled={hayTareaActiva}
+                          onClick={() => setShowRejectDialog(true)}
+                        >
+                          Rechazar documento
+                        </Button>
+                      ) : null}
+                      {!capabilities.has("document.review") ? (
+                        <p className="form-submit-hint" role="note">
+                          Para rechazarlo hace falta el permiso de revisión. Pedíselo a quien
+                          administra el estudio.
+                        </p>
+                      ) : hayTareaActiva ? (
+                        <p className="form-submit-hint" role="note">
+                          Todavía se está procesando: esperá a que termine
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : detail.data?.status !== "EXTRACTED" && detail.data?.status !== "REVIEWED" ? (
               <div className="processing-state">
                 <div>
@@ -617,11 +668,16 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
         isOpen={showRejectDialog}
         base={base}
         documentId={selectedId}
-        extractionId={extraction.data?.id ?? null}
-        onClose={() => setShowRejectDialog(false)}
-        onRejected={(documentId, reason) =>
-          setRejectionReceipts((current) => ({ ...current, [documentId]: reason }))
+        objetivo={
+          detail.data?.status === "FAILED"
+            ? { tipo: "documento" }
+            : { tipo: "extraccion", extractionId: extraction.data?.id ?? null }
         }
+        onClose={() => setShowRejectDialog(false)}
+        onRejected={(documentId, reason) => {
+          enfocarReciboAlRechazar.current = true;
+          setRejectionReceipts((current) => ({ ...current, [documentId]: reason }));
+        }}
       />
       <ConfirmDialog confirm={confirm} />
     </>

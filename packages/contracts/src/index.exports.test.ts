@@ -108,6 +108,13 @@ describe("índice de contratos: exportaciones de calendarios y libros", () => {
     expect(contracts).toHaveProperty("taxFilingCreditDetailSchema");
     expect(contracts).toHaveProperty("taxFilingCreditDetailReadSchema");
   });
+  it("exporta el contrato del rechazo de un documento que falló (D23-1 a)", () => {
+    expect(contracts).toHaveProperty("documentRejectRequestSchema");
+    expect(contracts.documentRejectRequestSchema.parse({ reason: "  Ilegible  " }).reason).toBe(
+      "Ilegible",
+    );
+    expect(contracts.documentRejectRequestSchema.safeParse({ reason: "   " }).success).toBe(false);
+  });
 
   it("exporta el contrato del saldo de caja fiscal (corte 8a): estados, consulta y respuesta", () => {
     expect(contracts.cajaFiscalEstado.options).toEqual(["COMPLETO", "PARCIAL", "SIN_DATOS"]);
