@@ -303,7 +303,10 @@ export interface WorkpaperCalculationComponent {
     }>;
   } | null;
 }
-export type PositionAction = { kind: "PAYMENT" | "FILING"; position: TaxPosition } | null;
+export type PositionAction = {
+  kind: "PAYMENT" | "FILING" | "DECLARATION";
+  position: TaxPosition;
+} | null;
 
 export interface CoberturaLegajo {
   components: Array<{

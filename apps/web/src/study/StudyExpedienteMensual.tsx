@@ -44,6 +44,7 @@ import { PanelLibrosIva } from "./legajo/paneles/PanelLibrosIva";
 import { PanelSaldoInicial } from "./legajo/paneles/PanelSaldoInicial";
 import { PanelPago } from "./legajo/paneles/PanelPago";
 import { PanelPresentacion } from "./legajo/paneles/PanelPresentacion";
+import { PanelDeclaracion } from "./legajo/paneles/PanelDeclaracion";
 import { BandaEstado } from "./legajo/BandaEstado";
 import { ListaLegajos } from "./legajo/ListaLegajos";
 import { SelectorPeriodo } from "./legajo/SelectorPeriodo";
@@ -676,6 +677,16 @@ export function StudyExpedienteMensual() {
           firmId={firmId}
           clientId={clientId}
           documentos={documentsQuery.data}
+        />
+      ) : null}
+
+      {positionAction?.kind === "DECLARATION" ? (
+        <PanelDeclaracion
+          posicion={positionAction.position}
+          onCerrar={() => setPositionAction(null)}
+          firmId={firmId}
+          clientId={clientId}
+          documentsQuery={documentsQuery}
         />
       ) : null}
 

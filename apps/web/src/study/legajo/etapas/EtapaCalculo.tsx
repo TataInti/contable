@@ -302,6 +302,27 @@ export function EtapaCalculo({
                         Registrar presentación
                       </Button>
                     ) : null}
+                    {position.filedAt ? (
+                      capabilities.has("tax.filings.record") ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setPositionAction({ kind: "DECLARATION", position });
+                          }}
+                        >
+                          {position.hasDeclaration
+                            ? "Corregir declaración jurada"
+                            : "Cargar declaración jurada"}
+                        </Button>
+                      ) : (
+                        <span className="muted-copy">
+                          {position.hasDeclaration
+                            ? `Declaración jurada cargada · total a pagar ${formatMoney(position.totalAPagar)}`
+                            : "Falta la declaración jurada: la carga el Titular, el Administrador o el Revisor."}
+                        </span>
+                      )
+                    ) : null}
                     {Number(position.pending) > 0 &&
                     position.dueDate &&
                     new Date(position.dueDate) < new Date() &&
