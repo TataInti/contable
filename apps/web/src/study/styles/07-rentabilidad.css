@@ -101,4 +101,47 @@
   color: var(--ds-text-muted);
 }
 
+/* Saldo de caja fiscal (corte 8b): bloque fiscal propio, separado del resultado gerencial */
+.caja-fiscal {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  padding: var(--ds-space-5);
+  margin-top: var(--ds-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+}
+
+.caja-fiscal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  flex-wrap: wrap;
+}
+
+.caja-fiscal__title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.caja-fiscal__meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ds-text-muted);
+}
+
+.caja-fiscal__cifra {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.caja-fiscal__faltantes {
+  margin: var(--ds-space-2) 0 0;
+  padding-left: var(--ds-space-5);
+}
+
 /* Cartera por riesgo (G5-06) */

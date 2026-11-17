@@ -14,6 +14,7 @@ import {
 } from "../ui/Dense";
 import "./study.css";
 import { formatearFechaHora } from "../lib/formatoFechas";
+import { CajaFiscal } from "./rentabilidad/CajaFiscal";
 
 /**
  * Rentabilidad gerencial (Puerta 5, G5-01..G5-05).
@@ -352,6 +353,7 @@ export function StudyRentabilidad() {
             {renderView(devengado, "DEVENGADO")}
             {renderView(caja, "CAJA")}
           </div>
+          <CajaFiscal periodo={selectedPeriod} />
           {calculateMutation.isError || publishMutation.isError ? (
             <Notice tone="error">
               {(calculateMutation.error ?? publishMutation.error)?.message ??
