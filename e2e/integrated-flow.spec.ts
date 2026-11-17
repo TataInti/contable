@@ -104,14 +104,17 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   await navigateStudy(page, "Legajo");
   await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
 
-  // Rentabilidad necesita período: se elige en la barra de la propia pantalla.
+  // Rentabilidad no exige período contable (A27 D27-2 a): la pantalla resuelve su período con las
+  // obligaciones fiscales del cliente. Muestra su selector de períodos fiscales, o su estado vacío si
+  // el cliente no tiene obligaciones; no hay barra de período ni bloqueo «Elegí un período».
   await navigateStudy(page, "Rentabilidad");
-  // Los períodos del cliente llegan después de abrir la pantalla.
-  const periodOptions = page
-    .locator("#context-bar")
-    .getByRole("combobox", { name: /^Período/ })
-    .locator("option");
-  await expect.poll(() => periodOptions.count()).toBeGreaterThan(1);
+  await expect(
+    page
+      .getByRole("combobox", { name: "Seleccionar período de rentabilidad" })
+      .or(page.getByText("Sin período fiscal para calcular", { exact: true })),
+  ).toBeVisible();
+  await expect(page.locator("#context-bar")).toHaveCount(0);
+  await expect(page.getByText("Elegí un período", { exact: true })).toHaveCount(0);
   await ensureStudyContext(page);
   await expect(page.getByRole("heading", { name: "Rentabilidad", exact: true })).toBeVisible();
 
