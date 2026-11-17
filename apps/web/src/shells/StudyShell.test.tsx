@@ -28,7 +28,16 @@ vi.mock("../ui/GuidedTour", () => ({
     children({ startTour: vi.fn() }),
 }));
 
-function renderShell(path: string, clientId: string | null = "client-a") {
+interface OpcionesShell {
+  clientes?: { clientId: string; clientName: string; periods: never[] }[];
+  capacidades?: string[];
+}
+
+function renderShell(
+  path: string,
+  clientId: string | null = "client-a",
+  opciones: OpcionesShell = {},
+) {
   state.context = {
     firmId: "firm-a",
     clientId,
@@ -45,6 +54,7 @@ function renderShell(path: string, clientId: string | null = "client-a") {
       "ai.use",
       "firm.users.manage",
       "platform.modules.manage",
+      ...(opciones.capacidades ?? []),
     ]),
     hasClientAccess: () => true,
     setFirmId: vi.fn(),
@@ -60,7 +70,9 @@ function renderShell(path: string, clientId: string | null = "client-a") {
           firmId: "firm-a",
           firmName: "Estudio Demo",
           role: "OWNER",
-          clients: [{ clientId: "client-a", clientName: "Cliente Demo", periods: [] }],
+          clients: opciones.clientes ?? [
+            { clientId: "client-a", clientName: "Cliente Demo", periods: [] },
+          ],
         },
       ],
     },
@@ -189,5 +201,21 @@ describe("StudyShell", () => {
     expect(help.open).toBe(true);
     expect(screen.getByRole("link", { name: "Ayuda paso a paso" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Recorrer el estudio" })).toBeTruthy();
+  });
+
+  // A27 D27-3: sin clientes, el selector del menú dice lo mismo que la barra de contexto.
+  it("sin client.manage y sin clientes asignados, el selector del menú dice «Sin clientes asignados»", () => {
+    renderShell("/trabajo", null, { clientes: [] });
+    const selector = document.querySelector(".study__client-select") as HTMLSelectElement;
+
+    expect(selector.disabled).toBe(true);
+    expect(selector.textContent?.trim()).toBe("Sin clientes asignados");
+  });
+
+  it("con client.manage y sin clientes, el selector del menú usa la misma frase, sin variantes", () => {
+    renderShell("/trabajo", null, { clientes: [], capacidades: ["client.manage"] });
+    const selector = document.querySelector(".study__client-select") as HTMLSelectElement;
+
+    expect(selector.textContent?.trim()).toBe("Sin clientes asignados");
   });
 });

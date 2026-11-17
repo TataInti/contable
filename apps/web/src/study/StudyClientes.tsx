@@ -516,12 +516,18 @@ export function StudyClientes() {
         <EmptyState
           size="compact"
           kind={clients.length === 0 ? "no-data" : "no-results"}
-          title={clients.length === 0 ? "Todavía no hay clientes" : "Ningún cliente coincide"}
+          title={
+            clients.length === 0
+              ? canManage
+                ? "Todavía no hay clientes"
+                : "Todavía no tenés clientes asignados"
+              : "Ningún cliente coincide"
+          }
           description={
             clients.length === 0
               ? canManage
                 ? "Creá el primer cliente para comenzar a organizar la operación."
-                : "Para cargar el primero hace falta el permiso de crear clientes. Pedíselo a quien administra el estudio."
+                : "Pedile a quien administra el estudio que te asigne uno."
               : "Probá con otro nombre o CUIT, o quitá filtros."
           }
           action={
