@@ -50,6 +50,23 @@ describe("estados de rutas del estudio", () => {
     expect(screen.queryByText("Contenido de rentabilidad")).toBeNull();
   });
 
+  it("no pide período contable a Rentabilidad: abre con cliente y sin período", () => {
+    contextMock.current = context({ periodId: null, capabilities: new Set(["profitability.read"]) });
+    const module = moduleById("rentabilidad");
+    if (!module) throw new Error("Módulo rentabilidad no encontrado");
+
+    render(
+      <MemoryRouter>
+        <StudyModuleGuard module={module}>
+          <p>Contenido de rentabilidad</p>
+        </StudyModuleGuard>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Contenido de rentabilidad")).toBeTruthy();
+    expect(screen.queryByText("Elegí un período")).toBeNull();
+  });
+
   it("muestra estado no disponible para el asistente hasta que el piloto lo habilite", () => {
     contextMock.current = context({ capabilities: new Set(["ai.use"]) });
     const module = moduleById("asistente");
