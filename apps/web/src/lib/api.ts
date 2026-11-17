@@ -60,6 +60,17 @@ function fallbackMessage(status: number): string {
   return "No se pudo completar la solicitud";
 }
 
+/** Sin respuesta del servidor (falla la red o se agota el tiempo): un solo error para toda llamada a la API. */
+function networkError(timedOut = false): ApiError {
+  return new ApiError(
+    timedOut ? "REQUEST_TIMEOUT" : "NETWORK_ERROR",
+    timedOut
+      ? "La solicitud tardó demasiado. Reintentá en unos minutos"
+      : "No se pudo conectar con el servidor",
+    0,
+  );
+}
+
 /**
  * `envelope` devuelve el cuerpo completo (`data`, `meta`, `groups`…) en lugar de desenvolver `data`.
  * Lo usan los listados paginados que necesitan `meta` (Panel de trabajo, corte 4b). Mismos errores y cabeceras.
@@ -97,11 +108,7 @@ async function request<T>(
       signal: controller.signal,
     });
   } catch {
-    throw new ApiError(
-      timedOut ? "REQUEST_TIMEOUT" : "NETWORK_ERROR",
-      timedOut ? "La solicitud tardó demasiado. Reintentá en unos minutos" : "No se pudo conectar con el servidor",
-      0,
-    );
+    throw networkError(timedOut);
   } finally {
     clearTimeout(timeout);
   }
@@ -139,7 +146,12 @@ export const api = {
 };
 
 export async function downloadFile(path: string): Promise<void> {
-  const res = await fetch(`${BASE}${path}`, { credentials: "same-origin" });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, { credentials: "same-origin" });
+  } catch {
+    throw networkError();
+  }
   if (!res.ok) {
     const payload = await res.json().catch(() => null) as
       | { error?: ApiErrorPayload }

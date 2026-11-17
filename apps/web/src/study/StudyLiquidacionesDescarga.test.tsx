@@ -251,16 +251,33 @@ describe("Liquidaciones: PDF y CSV del papel de trabajo", () => {
   });
 
   it.each([
-    [404, "ARTIFACT_NOT_FOUND", "Papel de trabajo no encontrado"],
+    [
+      404,
+      "ARTIFACT_NOT_FOUND",
+      "Papel de trabajo no encontrado",
+      "Papel de trabajo no encontrado. Actualizá la pantalla. Si sigue igual, avisá a quien administra el estudio.",
+    ],
     [
       409,
       "ARTIFACT_CHECKSUM_MISMATCH",
-      "El papel de trabajo guardado no coincide con su checksum: no se entrega el archivo.",
+      "El archivo guardado no coincide con su verificación de integridad y no se entrega, porque es evidencia. Avisá a quien administra el estudio.",
+      "El archivo guardado no coincide con su verificación de integridad y no se entrega, porque es evidencia. Avisá a quien administra el estudio.",
     ],
-    [500, "INTERNAL_ERROR", "Error interno al leer el papel de trabajo guardado."],
+    [
+      500,
+      "INTERNAL_ERROR",
+      "connect ECONNREFUSED 127.0.0.1:9000",
+      "Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+    ],
+    [
+      503,
+      "ARTIFACT_STORAGE_UNAVAILABLE",
+      "No se puede entregar el archivo ahora: el almacenamiento no responde. Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+      "No se puede entregar el archivo ahora: el almacenamiento no responde. Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+    ],
   ])(
-    "si la descarga responde %i, avisa el motivo, no descarga y el botón vuelve a quedar disponible",
-    async (status, code, message) => {
+    "si la descarga responde %i, avisa el motivo y el paso siguiente, no descarga y el botón vuelve a quedar disponible",
+    async (status, code, message, visible) => {
       stubApi(
         withBase((method, path) => {
           if (method === "GET" && path === ARTIFACTS) return json([{ id: "art-x", format: "pdf" }]);
@@ -272,10 +289,43 @@ describe("Liquidaciones: PDF y CSV del papel de trabajo", () => {
       renderPage(FULL);
       await waitForRows();
       fireEvent.click(pdfButton());
-      expect(await screen.findByText(message)).toBeTruthy();
+      expect(await screen.findByText(visible)).toBeTruthy();
+      expect(screen.queryByText(/ECONNREFUSED/)).toBeNull();
       expect(downloads).toEqual([]);
       await waitFor(() => expect(pdfButton().disabled).toBe(false));
       expect(pdfButton().getAttribute("aria-busy")).toBeNull();
+    },
+  );
+
+  it.each([
+    ["PDF", "pdf"],
+    ["CSV", "csv"],
+  ])(
+    "si la descarga de %s no tiene respuesta de la red, avisa el paso siguiente, no descarga y el botón vuelve a quedar disponible",
+    async (nombre, formato) => {
+      stubApi(
+        withBase((method, path) => {
+          if (method === "GET" && path === ARTIFACTS)
+            return json([{ id: "art-x", format: formato }]);
+          if (method === "GET" && path === `${ARTIFACTS}/art-x/download`)
+            return Promise.reject(new TypeError("Failed to fetch"));
+          return undefined;
+        }),
+      );
+      renderPage(FULL);
+      await waitForRows();
+      const boton = () => screen.getByRole("button", { name: nombre }) as HTMLButtonElement;
+      fireEvent.click(boton());
+      expect(
+        await screen.findByText(
+          "Volvé a intentarlo en unos minutos. Si sigue igual, avisá a quien administra el estudio.",
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText(/Failed to fetch/)).toBeNull();
+      expect(screen.queryByText("No se pudo completar la acción sobre la liquidación.")).toBeNull();
+      expect(downloads).toEqual([]);
+      await waitFor(() => expect(boton().disabled).toBe(false));
+      expect(boton().getAttribute("aria-busy")).toBeNull();
     },
   );
 

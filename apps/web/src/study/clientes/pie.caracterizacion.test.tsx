@@ -78,7 +78,7 @@ afterEach(() => {
 async function abrirAlta(): Promise<HTMLElement> {
   renderConRutas("/clientes", <StudyClientes />);
   fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
-  return screen.findByRole("dialog", { name: "Alta de cliente" });
+  return screen.findByRole("dialog", { name: "Nuevo cliente" }); // vigente: cambia con decisión de Inti (16-nov)
 }
 
 async function abrirEdicion(): Promise<HTMLElement> {
@@ -104,9 +104,10 @@ async function abrirContacto(): Promise<HTMLElement> {
 }
 
 describe("Pie de los cuatro cajones de Clientes (5.3a)", () => {
-  it("alta vacía: «Cancelar» a la izquierda, motivo junto a «Crear cliente»", async () => {
+  it("alta vacía: «Cancelar» a la izquierda, motivo junto a «Guardar cliente»", async () => {
+    // vigente: cambia con decisión de Inti (16-nov)
     const cajon = await abrirAlta();
-    expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Crear cliente"]);
+    expect(botonesDelPie(cajon)).toEqual(["Cancelar", "Guardar cliente"]); // vigente: cambia con decisión de Inti (16-nov)
     expect(pieDe(cajon).querySelector(".action-drawer__actions > button")?.textContent).toBe(
       "Cancelar",
     );

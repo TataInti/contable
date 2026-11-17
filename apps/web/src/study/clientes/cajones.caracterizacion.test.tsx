@@ -65,10 +65,10 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
     cleanup();
   });
 
-  it("alta: expone los campos con sus id, el motivo de faltantes y deshabilita «Crear cliente»", async () => {
+  it("alta: expone los campos con sus id, el motivo de faltantes y deshabilita «Guardar cliente»", async () => { // vigente: cambia con decisión de Inti (16-nov)
     renderConRutas("/clientes", <StudyClientes />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
-    const cajon = await screen.findByRole("dialog", { name: "Alta de cliente" });
+    const cajon = await screen.findByRole("dialog", { name: "Nuevo cliente" }); // vigente: cambia con decisión de Inti (16-nov)
 
     for (const id of [
       "client-legal-name",
@@ -86,14 +86,14 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
     expect(cajon.querySelector(".action-drawer__primary .action-drawer__hint")?.textContent).toBe(
       "Falta completar 2 campos: razón social y CUIT.",
     );
-    expect((within(cajon).getByRole("button", { name: "Crear cliente" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(cajon).getByRole("button", { name: "Guardar cliente" }) as HTMLButtonElement).disabled).toBe(true); // vigente: cambia con decisión de Inti (16-nov)
   });
 
   it("alta: envía el payload con los campos requeridos y navega a Configuración fiscal", async () => {
     vi.mocked(api.post).mockResolvedValue({ id: "c-nuevo", legalName: "Sintético Nuevo S.A." } as never);
     renderConRutas("/clientes", <StudyClientes />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
-    const cajon = await screen.findByRole("dialog", { name: "Alta de cliente" });
+    const cajon = await screen.findByRole("dialog", { name: "Nuevo cliente" }); // vigente: cambia con decisión de Inti (16-nov)
 
     fireEvent.change(cajon.querySelector("#client-legal-name") as HTMLInputElement, {
       target: { value: "Sintético Nuevo S.A." },
@@ -103,7 +103,7 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
     });
     expect(cajon.querySelector(".action-drawer__hint")).toBeNull();
 
-    fireEvent.click(within(cajon).getByRole("button", { name: "Crear cliente" }));
+    fireEvent.click(within(cajon).getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/firms/firm-a/clients", {
@@ -124,7 +124,7 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
       )) as never);
     renderConRutas("/clientes", <StudyClientes />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
-    const cajon = await screen.findByRole("dialog", { name: "Alta de cliente" });
+    const cajon = await screen.findByRole("dialog", { name: "Nuevo cliente" }); // vigente: cambia con decisión de Inti (16-nov)
 
     fireEvent.change(cajon.querySelector("#client-legal-name") as HTMLInputElement, {
       target: { value: "Sintético Nuevo S.A." },
@@ -135,7 +135,7 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
     fireEvent.change(cajon.querySelector("#client-create-contact-email") as HTMLInputElement, {
       target: { value: "contacto@example.com" },
     });
-    fireEvent.click(within(cajon).getByRole("button", { name: "Crear cliente" }));
+    fireEvent.click(within(cajon).getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/firms/firm-a/clients/c-nuevo/contacts", {

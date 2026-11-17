@@ -527,7 +527,7 @@ export function StudyClientes() {
           action={
             clients.length === 0 && canManage ? (
               <Button size="sm" onClick={openNew}>
-                Crear cliente
+                Nuevo cliente
               </Button>
             ) : clients.length > 0 && hasActiveFilters({ search, statusFilter, vatFilter, onlyIncomplete, endingFilter }) ? (
               <Button size="sm" variant="secondary" onClick={clearFilters}>
@@ -547,7 +547,7 @@ export function StudyClientes() {
         description="Elegí el contexto de trabajo o incorporá una nueva empresa."
         actions={
           canManage ? (
-            <Button size="sm" onClick={openNew}>
+            <Button size="sm" variant={clients.length === 0 ? "secondary" : "primary"} onClick={openNew}>
               <Icon name="plus" size={16} /> Nuevo cliente
             </Button>
           ) : undefined
@@ -635,6 +635,7 @@ export function StudyClientes() {
       />
 
       <PanelEdicion
+        puedeCargarNormas={capabilities.has("firm.manage")}
         editingClient={editingClient}
         guardadoParcial={guardadoParcial}
         setEditingClient={setEditingClient}

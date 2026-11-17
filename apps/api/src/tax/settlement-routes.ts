@@ -40,7 +40,13 @@ export function settlementRoutes(app: FastifyInstance) {
     err: unknown,
   ) => {
     if (err instanceof SettlementError) {
-      const status = err.code.includes("NOT_FOUND") ? 404 : err.code.includes("BLOCKING") ? 422 : 409;
+      // El estado lo fija el error (503 de almacenamiento); si no, decide el código.
+      const porCodigo = err.code.includes("NOT_FOUND")
+        ? 404
+        : err.code.includes("BLOCKING")
+          ? 422
+          : 409;
+      const status = err.httpStatus ?? porCodigo;
       return reply.status(status).send({ error: { code: err.code, message: err.message } });
     }
     if (err instanceof FilingDeclarationError) {

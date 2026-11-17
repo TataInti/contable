@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError } from "./api";
+import { api, ApiError, downloadFile } from "./api";
 
 describe("cliente API", () => {
   afterEach(() => {
@@ -130,6 +130,132 @@ describe("cliente API", () => {
         retryable: status >= 500,
         message: error.message,
       });
+    });
+  });
+});
+
+describe("sin respuesta del servidor y descargas del cliente API", () => {
+  const originalClick = HTMLAnchorElement.prototype.click;
+  const originalCreate = URL.createObjectURL;
+  const originalRevoke = URL.revokeObjectURL;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    HTMLAnchorElement.prototype.click = originalClick;
+    URL.createObjectURL = originalCreate;
+    URL.revokeObjectURL = originalRevoke;
+  });
+
+  // Caracterización de lo vigente (verde antes y después): el error de red de `request`, que pasa a compartir downloadFile.
+  it("una llamada sin respuesta del servidor falla con NETWORK_ERROR, estado 0 y reintentable", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const error = await api.get("/caida").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      code: "NETWORK_ERROR",
+      message: "No se pudo conectar con el servidor",
+      status: 0,
+      retryable: true,
+    });
+  });
+
+  it("una llamada que supera los 20 s sin respuesta falla con REQUEST_TIMEOUT y estado 0", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    );
+    const pending = api.get("/lenta").catch((caught: unknown) => caught);
+    await vi.advanceTimersByTimeAsync(20_000);
+    const error = await pending;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      code: "REQUEST_TIMEOUT",
+      message: "La solicitud tardó demasiado. Reintentá en unos minutos",
+      status: 0,
+    });
+  });
+
+  // Caracterización de lo vigente de downloadFile: la descarga que funciona y los errores con respuesta no cambian.
+  it("descarga el archivo con el nombre del encabezado y libera la URL temporal", async () => {
+    const descargas: string[] = [];
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+      descargas.push(this.download);
+    };
+    URL.createObjectURL = vi.fn(() => "blob:demo");
+    URL.revokeObjectURL = vi.fn();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("%PDF-1.4 Demo sintético", {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": 'attachment; filename="liquidacion-demo.pdf"',
+        },
+      }),
+    );
+    await downloadFile("/descarga");
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/descarga", { credentials: "same-origin" });
+    expect(descargas).toEqual(["liquidacion-demo.pdf"]);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:demo");
+  });
+
+  it("un error con respuesta conserva código, mensaje, estado e identificador del servidor", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "ARTIFACT_NOT_FOUND",
+            message: "Papel de trabajo no encontrado",
+            requestId: "req-404",
+          },
+        }),
+        { status: 404, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const error = await downloadFile("/descarga").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      code: "ARTIFACT_NOT_FOUND",
+      message: "Papel de trabajo no encontrado",
+      status: 404,
+      requestId: "req-404",
+      retryable: false,
+    });
+  });
+
+  it("un error con respuesta sin cuerpo usa el texto de respaldo del estado y la cabecera de identificador", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html>Bad Gateway</html>", {
+        status: 502,
+        headers: { "x-request-id": "req-502" },
+      }),
+    );
+    const error = await downloadFile("/descarga").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      code: "DOWNLOAD_FAILED",
+      message: "El servidor no está disponible en este momento",
+      status: 502,
+      requestId: "req-502",
+      retryable: true,
+    });
+  });
+
+  // La corrección (P4 y P3): la descarga trata la falta de respuesta igual que el resto de la API.
+  it("una descarga sin respuesta del servidor falla con el mismo error de red que el resto de la API", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const error = await downloadFile("/descarga").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      code: "NETWORK_ERROR",
+      message: "No se pudo conectar con el servidor",
+      status: 0,
+      retryable: true,
     });
   });
 });

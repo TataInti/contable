@@ -67,7 +67,8 @@ function isValidationIssue(value: unknown): value is { path: Array<string | numb
 
 /** Toma el campo y el motivo que informa el servidor para mostrarlos junto al control (P4). */
 function failureFrom(error: unknown): DownloadFailure {
-  if (!(error instanceof ApiError)) {
+  // Sin respuesta del servidor (estado 0) el aviso conserva su paso siguiente, sin el texto de la red.
+  if (!(error instanceof ApiError) || error.status === 0) {
     return { field: null, message: "No se pudo descargar el libro. Reintentá en unos minutos." };
   }
   const rawIssues: unknown = error.details?.details;

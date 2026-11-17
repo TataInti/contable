@@ -332,7 +332,7 @@ describe("Clientes · consultas sin respuesta (Foco 5.2, cierre)", () => {
     fireEvent.change(screen.getByLabelText("Correo de contacto"), {
       target: { value: "contacto@ejemplo.test" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Crear cliente" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
     const aviso = await screen.findByRole("alert");
     expect(
       within(aviso).getByText(
@@ -353,7 +353,7 @@ describe("Clientes · consultas sin respuesta (Foco 5.2, cierre)", () => {
     const client = clienteComoApp();
     renderClientes(client);
     fireEvent.click(screen.getByRole("button", { name: "Nuevo cliente" }));
-    const cajon = await screen.findByRole("dialog", { name: "Alta de cliente" });
+    const cajon = await screen.findByRole("dialog", { name: "Nuevo cliente" }); // vigente: cambia con decisión de Inti (16-nov)
     await esperarPausadas(client, [CLAVE_ACTIVIDADES]);
     expect(within(cajon).getByText("Cargando catálogo de actividades…")).toBeTruthy();
     expect(within(cajon).queryByText("No hay actividades cargadas.")).toBeNull();

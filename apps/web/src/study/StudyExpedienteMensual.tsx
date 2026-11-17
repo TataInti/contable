@@ -717,6 +717,13 @@ export function StudyExpedienteMensual() {
               ((wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review")) ||
                 (wp.status === "REVIEWED" && capabilities.has("tax.settlements.finalize"))),
             );
+          const controlesBloqueantes = wp.controls.filter(
+            (control) => control.severity === "BLOCKING" && control.status === "OPEN",
+          ).length;
+          const submitDisabledReason =
+            controlesBloqueantes > 0
+              ? `Resolvé o eximí los controles que bloquean: quedan ${controlesBloqueantes} ${controlesBloqueantes === 1 ? "abierto" : "abiertos"}.`
+              : null;
           const accionPrincipal = (
             <>
               {["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE"].includes(wp.status) ? (
@@ -724,10 +731,10 @@ export function StudyExpedienteMensual() {
                   <Button
                     variant="primary"
                     disabled={calculateDisabled}
-                    title={calculateDisabledReason ?? "Calcular el legajo"}
+                    title={calculateDisabledReason ?? "Calcular liquidación"}
                     onClick={() => void calculateMutation.mutate(wp.id)}
                   >
-                    Calcular
+                    Calcular liquidación
                   </Button>
                   <WorkpaperActionError
                     error={calculateMutation.variables === wp.id ? calculateMutation.error : null}
@@ -765,8 +772,11 @@ export function StudyExpedienteMensual() {
                   <Button
                     variant="primary"
                     disabled={
-                      submitMutation.isPending || !capabilities.has("tax.settlements.submit_review")
+                      submitMutation.isPending ||
+                      !capabilities.has("tax.settlements.submit_review") ||
+                      submitDisabledReason !== null
                     }
+                    title={submitDisabledReason ?? "Enviar a revisión"}
                     onClick={() => void submitMutation.mutate(wp.id)}
                   >
                     Enviar a revisión
@@ -774,6 +784,11 @@ export function StudyExpedienteMensual() {
                   {!capabilities.has("tax.settlements.submit_review") ? (
                     <small className="muted-copy" role="status">
                       Tu perfil no tiene permiso para enviar este legajo a revisión.
+                    </small>
+                  ) : null}
+                  {submitDisabledReason ? (
+                    <small className="muted-copy" role="status">
+                      {submitDisabledReason}
                     </small>
                   ) : null}
                   <WorkpaperActionError

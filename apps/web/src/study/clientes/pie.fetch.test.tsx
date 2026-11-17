@@ -71,11 +71,12 @@ describe("Cajones de Clientes con cliente de consultas real y fetch simulado (5.
     expect(document.activeElement).toBe(disparador);
   });
 
-  it("alta: con los catálogos respondidos por fetch, «Cancelar» queda a la izquierda y el motivo junto a «Crear cliente»", async () => {
+  it("alta: con los catálogos respondidos por fetch, «Cancelar» queda a la izquierda y el motivo junto a «Guardar cliente»", async () => {
+    // vigente: cambia con decisión de Inti (16-nov)
     vi.spyOn(globalThis, "fetch").mockImplementation(respuestaFetch);
     renderConRutas("/clientes", <StudyClientes />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
-    const cajon = await screen.findByRole("dialog", { name: "Alta de cliente" });
+    const cajon = await screen.findByRole("dialog", { name: "Nuevo cliente" }); // vigente: cambia con decisión de Inti (16-nov)
     await waitFor(() => expect(cajon.querySelector('small[role="status"]')).toBeNull());
     const pie = cajon.querySelector("footer.action-drawer__footer") as HTMLElement;
     expect(pie.querySelector(".action-drawer__actions > button")?.textContent).toBe("Cancelar");

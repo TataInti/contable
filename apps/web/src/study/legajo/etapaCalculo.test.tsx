@@ -167,7 +167,9 @@ describe("Legajo · etapa Cálculo (K12)", () => {
       imputaciones: imputacionesPendientes,
     });
     renderLegajo();
-    const boton = (await screen.findByRole("button", { name: "Calcular" })) as HTMLButtonElement;
+    const boton = (await screen.findByRole("button", {
+      name: "Calcular liquidación",
+    })) as HTMLButtonElement; // vigente: cambia con decisión de Ciro (16-nov, 49a)
     expect(boton.disabled).toBe(true);
     expect(
       await screen.findByText(
@@ -183,7 +185,10 @@ describe("Legajo · etapa Cálculo (K12)", () => {
     expect(
       await screen.findByText("Tu perfil no tiene permiso para calcular este legajo."),
     ).toBeInTheDocument();
-    expect((screen.getByRole("button", { name: "Calcular" }) as HTMLButtonElement).disabled).toBe(
+    expect(
+      (screen.getByRole("button", { name: "Calcular liquidación" }) as HTMLButtonElement).disabled,
+    ).toBe(
+      // vigente: cambia con decisión de Ciro (16-nov, 49a)
       true,
     );
   });
@@ -193,7 +198,7 @@ describe("Legajo · etapa Cálculo (K12)", () => {
     fijarRespuestas({ fuentes: fuentesPresentes, legajos: [legajoDemo("READY_TO_CALCULATE")] });
     vi.mocked(api.post).mockImplementation((() => new Promise(() => {})) as never);
     renderLegajo();
-    fireEvent.click(await screen.findByRole("button", { name: "Calcular" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Calcular liquidación" })); // vigente: cambia con decisión de Ciro (16-nov, 49a)
     expect(await screen.findByText("El cálculo está en curso.")).toBeInTheDocument();
   });
 
@@ -201,7 +206,7 @@ describe("Legajo · etapa Cálculo (K12)", () => {
     fijarContexto(PERMISOS_CALCULO);
     fijarRespuestas({ fuentes: fuentesPresentes, legajos: [legajoDemo("READY_TO_CALCULATE")] });
     renderLegajo();
-    fireEvent.click(await screen.findByRole("button", { name: "Calcular" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Calcular liquidación" })); // vigente: cambia con decisión de Ciro (16-nov, 49a)
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(`${LEGAJO}/calculate`));
   });
 

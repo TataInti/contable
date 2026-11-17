@@ -50,7 +50,7 @@ export function PanelAlta({
     <ActionDrawer
       isOpen={creating}
       onClose={() => setCreating(false)}
-      title="Alta de cliente"
+      title="Nuevo cliente"
       description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
       footer={
         <ActionDrawerFooter
@@ -59,10 +59,10 @@ export function PanelAlta({
               type="submit"
               form="client-create-form"
               loading={create.isPending}
-              loadingLabel="Creando cliente"
+              loadingLabel="Guardando cliente"
               disabled={missingCreateFields.length > 0}
             >
-              Crear cliente
+              Guardar cliente
             </Button>
           }
           hint={missingCreateFields.length > 0 ? createFieldsHint : null}

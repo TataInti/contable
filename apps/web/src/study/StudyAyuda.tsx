@@ -213,7 +213,7 @@ export function StudyAyuda() {
             ["2. Pedir lo que falta", "Trabajo", "Pedido enviado, con fecha límite e ítems claros."],
             ["3. Entrar la evidencia", "Bandeja documental", "Cada archivo validado, extraído y aprobado."],
             ["4. Armar el mes", "Legajo", "Fuentes cubiertas, clasificación hecha, controles resueltos."],
-            ["5. Calcular", "Legajo / Liquidaciones", "Posición calculada, sin diferencias abiertas."],
+            ["5. Calcular liquidación", "Legajo / Liquidaciones", "Posición calculada, sin diferencias abiertas."],
             ["6. Cuatro ojos", "Legajo", "Un revisor distinto aprueba."],
             ["7. Cerrar", "Legajo", "Finalizar. El mes queda congelado."],
             ["8. Organismo y cobro", "Legajo · Cálculo", "Presentación con acuse y pago registrados."],
@@ -224,10 +224,10 @@ export function StudyAyuda() {
       </section>
 
       <section className="study-page__section help-section" id="clientes">
-        <h2 className="study-page__section-title">Alta de un cliente</h2>
+        <h2 className="study-page__section-title">Nuevo cliente</h2>
         <p>Pantalla Clientes. Hace falta permiso de gestión (titular o administrador).</p>
         <ol>
-          <li>Crear cliente.</li>
+          <li>Nuevo cliente.</li>
           <li>
             Completá razón social, nombre comercial, CUIT, condición frente al IVA, forma jurídica,
             provincia, moneda (por ejemplo ARS) y datos de alta.
@@ -324,7 +324,7 @@ export function StudyAyuda() {
             ["1. Saldos", "Revisá arrastres. Cargar saldo inicial si el mes arranca con un saldo que todavía no está en el sistema."],
             ["2. Fuentes", "Subí o vinculá cada fuente. El revisor aprueba el lote. El preparador no se autoaprueba."],
             ["3. Clasificación", "Completá actividades y rubros. Tiene que llegar a clasificados / 0 pendientes."],
-            ["4. Cálculo", "Calcular se habilita cuando está listo. Si pidieron cambios, el botón pasa a Recalcular."],
+            ["4. Cálculo", "Calcular liquidación se habilita cuando está listo. Si pidieron cambios, el botón pasa a Recalcular."],
             ["5. Controles", "Resolvé hallazgos bloqueantes con evidencia. No finalices con controles abiertos."],
             ["6. Cierre", "Enviar a revisión → Aprobar o Solicitar cambios → Finalizar. Finalizar congela el mes."],
           ]}
@@ -332,7 +332,7 @@ export function StudyAyuda() {
         <HelpTable
           headers={["Estado", "Quién", "Botón"]}
           rows={[
-            ["Listo para calcular", "Preparador", "Calcular"],
+            ["Listo para calcular", "Preparador", "Calcular liquidación"],
             ["Calculado", "Preparador", "Enviar a revisión"],
             ["En revisión", "Revisor", "Aprobar revisión o Solicitar cambios"],
             ["Revisado", "Revisor", "Finalizar"],

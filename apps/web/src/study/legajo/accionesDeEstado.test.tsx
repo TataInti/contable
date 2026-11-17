@@ -122,9 +122,9 @@ afterEach(() => {
 
 describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
   const estados: Array<[string, string[]]> = [
-    ["DRAFT", ["Calcular"]],
-    ["COLLECTING_INPUTS", ["Calcular"]],
-    ["READY_TO_CALCULATE", ["Calcular"]],
+    ["DRAFT", ["Calcular liquidación"]], // vigente: cambia con decisión de Ciro (16-nov, 49a)
+    ["COLLECTING_INPUTS", ["Calcular liquidación"]], // vigente: cambia con decisión de Ciro (16-nov, 49a)
+    ["READY_TO_CALCULATE", ["Calcular liquidación"]], // vigente: cambia con decisión de Ciro (16-nov, 49a)
     ["CHANGES_REQUESTED", ["Recalcular"]],
     ["CALCULATED", ["Enviar a revisión"]],
     ["IN_REVIEW", ["Solicitar cambios", "Aprobar revisión"]],
@@ -165,7 +165,7 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
     const { container } = renderLegajos([legajoDemo("DRAFT")]);
     await accionesDeLaTarjeta(container);
 
-    const boton = screen.getByRole("button", { name: "Calcular" }) as HTMLButtonElement;
+    const boton = screen.getByRole("button", { name: "Calcular liquidación" }) as HTMLButtonElement; // vigente: cambia con decisión de Ciro (16-nov, 49a)
     expect(boton.disabled).toBe(true);
     expect(screen.getByText("Tu perfil no tiene permiso para calcular este legajo.")).toBeTruthy();
   });
