@@ -543,3 +543,82 @@ describe("asientos por HTTP con la ruta del cliente del propio asiento (lo vigen
 });
 
 // --- fin de la caracterización ---
+
+/*
+ * Corte C1: el asiento se carga por el cliente de la ruta. Un asiento llamado con la ruta de
+ * otro cliente del mismo estudio responde 404, con el mismo texto que un id que no existe.
+ */
+const ROUTES: readonly Route[] = ["submit", "review", "reject", "post", "reverse"];
+/** Estado que muestra la respuesta de cada ruta cuando sale bien. */
+const RESULT: Record<Route, string> = {
+  submit: "IN_REVIEW",
+  review: "REVIEWED",
+  reject: "REJECTED",
+  post: "POSTED",
+  reverse: "POSTED",
+};
+/** Quién llama a cada ruta: el rol de menor privilegio con la capacidad, el Titular y el Administrador. */
+const CALLS: ReadonlyArray<readonly [Login, Route]> = [
+  ["preparerA", "submit"],
+  ["reviewerA", "review"],
+  ["reviewerA", "reject"],
+  ["reviewerA", "post"],
+  ["reviewerA", "reverse"],
+  ...ROUTES.map((route) => ["owner", route] as const),
+  ...ROUTES.map((route) => ["admin", route] as const),
+];
+/** Las mismas llamadas con la ruta del propio cliente del asiento; Titular y Administrador, también en B. */
+const OWN_CLIENT_CALLS: ReadonlyArray<readonly [Login, Route, "A" | "B"]> = [
+  ...CALLS.map(([login, route]) => [login, route, "A"] as const),
+  ...ROUTES.flatMap((route) =>
+    (["owner", "admin"] as const).map((login) => [login, route, "B"] as const),
+  ),
+];
+const NOT_FOUND_IN_CLIENT = [
+  404,
+  "RESOURCE_NOT_FOUND",
+  "No encontramos el asiento en este cliente. Abrilo desde la ficha del cliente donde está.",
+];
+const shape = (reply: Reply) => [reply.status, reply.body.error?.code, reply.body.error?.message];
+
+describe("asientos acotados por el cliente de la ruta (corte C1)", () => {
+  it.each(CALLS)(
+    "%s llama a %s con la ruta de A y el id de un asiento de B: 404 y el asiento queda intacto",
+    async (login, route) => {
+      const entry = await entryIn(B, FROM[route]);
+      const before = await snapshot(entry.id);
+      const reply = await callRoute(login, A.id, entry, route);
+      expect(shape(reply)).toEqual(NOT_FOUND_IN_CLIENT);
+      expect(await snapshot(entry.id)).toEqual(before);
+    },
+  );
+
+  it.each(OWN_CLIENT_CALLS)(
+    "%s llama a %s con la ruta del cliente %s y el id de su propio asiento: se opera",
+    async (login, route, which) => {
+      const client = which === "A" ? A : B;
+      const entry = await entryIn(client, FROM[route]);
+      const reply = await callRoute(login, client.id, entry, route);
+      expect([reply.status, entryOf(reply).status]).toEqual([200, RESULT[route]]);
+    },
+  );
+
+  it.each(CALLS.slice(0, 5))(
+    "%s, %s: un id que no existe y un asiento de otro cliente responden lo mismo",
+    async (login, route) => {
+      const foreign = await entryIn(B, FROM[route]);
+      const missing = await callRoute(login, A.id, { id: randomUUID(), rowVersion: 1 }, route);
+      expect(shape(missing)).toEqual(NOT_FOUND_IN_CLIENT);
+      expect(shape(await callRoute(login, A.id, foreign, route))).toEqual(shape(missing));
+    },
+  );
+
+  it("sin cliente en el contexto, el servicio no opera ningún asiento", async () => {
+    const entry = await entryIn(A, "DRAFT");
+    const withoutClient: TenantContext = { userId: ID.owner, firmId: FIRM, actorKind: "USER" };
+    await expect(journal.submit(withoutClient, entry.id)).rejects.toThrow(
+      "requiere el cliente de la ruta",
+    );
+    expect((await snapshot(entry.id)).status).toBe("DRAFT");
+  });
+});
