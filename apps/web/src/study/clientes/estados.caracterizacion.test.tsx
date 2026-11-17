@@ -288,12 +288,24 @@ describe("StudyClientes — estados y errores (K6)", () => {
     vi.mocked(api.get).mockImplementation(((path: string) => respuestaApi(path, [])) as never);
     renderConRutas("/clientes", <StudyClientes />);
 
+    expect(await screen.findByText("Todavía no tenés clientes asignados")).toBeTruthy();
+    expect(
+      screen.getByText("Pedile a quien administra el estudio que te asigne uno."),
+    ).toBeTruthy();
+    expect(screen.queryByText("Todavía no hay clientes")).toBeNull();
+    // D27-3 no cambia la acción: sin client.manage no hay «Guardar cliente».
+    expect(screen.queryByRole("button", { name: "Guardar cliente" })).toBeNull();
+  });
+
+  it("con client.manage, la cartera vacía sigue ofreciendo crear el primero (sin cambios por A27 D27-3)", async () => {
+    contextMock.current = contextoDePrueba(["client.read", "client.manage"]);
+    vi.mocked(api.get).mockImplementation(((path: string) => respuestaApi(path, [])) as never);
+    renderConRutas("/clientes", <StudyClientes />);
+
     expect(await screen.findByText("Todavía no hay clientes")).toBeTruthy();
     expect(
-      screen.getByText(
-        "Para cargar el primero hace falta el permiso de crear clientes. Pedíselo a quien administra el estudio.",
-      ),
+      screen.getByText("Creá el primer cliente para comenzar a organizar la operación."),
     ).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Guardar cliente" })).toBeNull(); // vigente: cambia con decisión de Inti (16-nov)
+    expect(screen.queryByText("Todavía no tenés clientes asignados")).toBeNull();
   });
 });

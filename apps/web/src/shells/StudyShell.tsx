@@ -219,7 +219,7 @@ export function StudyShell() {
                 onChange={(event) => setClientId(event.target.value || null)}
               >
                 <option value="">
-                  {clients.length === 0 ? "Sin clientes todavía" : "Elegí un cliente…"}
+                  {clients.length === 0 ? "Sin clientes asignados" : "Elegí un cliente…"}
                 </option>
                 {clients.map((client) => (
                   <option key={client.clientId} value={client.clientId}>
