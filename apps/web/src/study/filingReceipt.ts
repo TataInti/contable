@@ -62,11 +62,23 @@ export function uploadFilingReceipt(base: string, file: File): Promise<string> {
   return uploadPresentacionDocument(base, file, "ACUSE");
 }
 
-/** Espera a que la constancia termine la validación. Rechaza si falla o si tarda demasiado. */
+/** Espera a que la constancia termine la validación. Rechaza si falla o si tarda demasiado. La declaración jurada pasa sus mensajes. */
 export async function waitForReceiptReady(
   base: string,
   documentId: string,
-  { timeoutMs = 90_000, intervalMs = 2_000 }: { timeoutMs?: number; intervalMs?: number } = {},
+  {
+    timeoutMs = 90_000,
+    intervalMs = 2_000,
+    mensajes = {
+      fallo: "El acuse no pasó la validación del archivo. Probá con otro archivo.",
+      pendiente:
+        "El acuse ya quedó subido pero sigue en validación. Esperá un momento, elegilo de la lista y registrá la presentación.",
+    },
+  }: {
+    timeoutMs?: number;
+    intervalMs?: number;
+    mensajes?: { fallo: string; pendiente: string };
+  } = {},
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -74,12 +86,10 @@ export async function waitForReceiptReady(
     const status = documents.find((document) => document.id === documentId)?.status;
     if (status && READY_STATUSES.includes(status)) return;
     if (status && FAILED_STATUSES.includes(status)) {
-      throw new Error("El acuse no pasó la validación del archivo. Probá con otro archivo.");
+      throw new Error(mensajes.fallo);
     }
     if (Date.now() >= deadline) {
-      throw new Error(
-        "El acuse ya quedó subido pero sigue en validación. Esperá un momento, elegilo de la lista y registrá la presentación.",
-      );
+      throw new Error(mensajes.pendiente);
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
