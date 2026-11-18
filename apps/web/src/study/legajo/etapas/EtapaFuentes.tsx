@@ -13,6 +13,8 @@ export interface EtapaFuentesProps {
   coverageQuery: UseQueryResult<CoberturaLegajo, Error>;
   capabilities: ReadonlySet<string>;
   canEditSources: boolean;
+  /** Revisión anterior en solo lectura: no se ofrece importar ni revisar (A29). */
+  soloLectura?: boolean;
   currentUserId: string | null;
   motivoImportarLibro: string | null;
   onAbrirLibroIva: (lado: "SALE" | "PURCHASE") => void;
@@ -28,6 +30,7 @@ export function EtapaFuentes({
   coverageQuery,
   capabilities,
   canEditSources,
+  soloLectura = false,
   currentUserId,
   motivoImportarLibro,
   onAbrirLibroIva,
@@ -188,29 +191,33 @@ export function EtapaFuentes({
                   />
                 ),
               },
-              {
-                key: "accion",
-                header: "Acción",
-                render: (source) => {
-                  const lado = ladoDeLibroIva(source.code);
-                  if (!lado) return null;
-                  return (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={Boolean(motivoImportarLibro)}
-                        onClick={() => onAbrirLibroIva(lado)}
-                      >
-                        Importar libro
-                      </Button>
-                      {motivoImportarLibro ? (
-                        <small className="muted-copy">{motivoImportarLibro}</small>
-                      ) : null}
-                    </>
-                  );
-                },
-              },
+              ...(soloLectura
+                ? []
+                : [
+                    {
+                      key: "accion",
+                      header: "Acción",
+                      render: (source) => {
+                        const lado = ladoDeLibroIva(source.code);
+                        if (!lado) return null;
+                        return (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={Boolean(motivoImportarLibro)}
+                              onClick={() => onAbrirLibroIva(lado)}
+                            >
+                              Importar libro
+                            </Button>
+                            {motivoImportarLibro ? (
+                              <small className="muted-copy">{motivoImportarLibro}</small>
+                            ) : null}
+                          </>
+                        );
+                      },
+                    },
+                  ]),
             ]}
           />
           {fuentes.some((source) => source.required && !source.present && source.count === 0) ? (

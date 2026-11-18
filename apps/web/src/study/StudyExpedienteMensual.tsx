@@ -69,7 +69,6 @@ import { EtapaClasificacion } from "./legajo/etapas/EtapaClasificacion";
 import { EtapaControles } from "./legajo/etapas/EtapaControles";
 import { EtapaCierre } from "./legajo/etapas/EtapaCierre";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import { ResumenRevision } from "./legajo/Tarjeta/ResumenRevision";
 import "./study.css";
 
 
@@ -93,6 +92,25 @@ const ESTADOS_EDITABLES_FUENTES = [
 /** Error de una acción: solo ocupa lugar en la barra si hay un error que mostrar (P4). */
 function errorDe(error: Error | null | undefined, clave: string) {
   return error ? <WorkpaperActionError key={clave} error={error} /> : null;
+}
+
+// Permisos que escriben en el legajo: una revisión anterior en solo lectura no los conserva (A29).
+const PERMISOS_DE_ESCRITURA_LEGAJO = [
+  "tax.settlements.calculate",
+  "tax.settlements.submit_review",
+  "tax.settlements.review",
+  "tax.settlements.finalize",
+  "tax.settlements.rectify",
+  "tax.vouchers.prepare",
+  "tax.vouchers.review",
+  "tax.filings.record",
+  "tax.payments.record",
+];
+
+function sinPermisosDeEscritura(permisos: ReadonlySet<string>) {
+  return new Set(
+    [...permisos].filter((permiso) => !PERMISOS_DE_ESCRITURA_LEGAJO.includes(permiso)),
+  );
 }
 
 export function StudyExpedienteMensual() {
@@ -558,16 +576,25 @@ export function StudyExpedienteMensual() {
 
   const renderEtapa = (wp: Workpaper, step: number) => {
     const canEditSources = !soloLectura && ESTADOS_EDITABLES_FUENTES.includes(wp.status);
-    // Saldos consulta por cliente y por período (tax-credit-ledger, tax-position): una revisión anterior no tiene datos propios.
-    // Fuentes, Clasificación, Cálculo y Controles consultan por el id del legajo y muestran la revisión elegida en solo lectura.
+    // En solo lectura, ninguna etapa conserva un permiso que escriba: la revisión anterior no ofrece acciones que escriban (A29).
+    const capacidades = soloLectura ? sinPermisosDeEscritura(capabilities) : capabilities;
+    // Saldos consulta por cliente y por período (tax-credit-ledger, tax-position): la revisión anterior muestra la misma tabla, en solo lectura.
     if (soloLectura && step === 0) {
-      const sucesora = reemplazadaPor(wp);
-      return sucesora ? <ResumenRevision wp={wp} reemplazadaPor={sucesora} /> : null;
+      return (
+        <>
+          <p className="muted-copy">
+            Saldos vigentes del cliente y del período; no se guardan por revisión.
+          </p>
+          <EtapaSaldos
+            capabilities={capacidades}
+            ledgerQuery={ledgerQuery}
+            setEditingLot={setEditingLot}
+            setEditForm={setEditForm}
+          />
+        </>
+      );
     }
-    // En solo lectura, la pantalla no ofrece permisos de escritura en las etapas que quedan.
-    const capacidades = soloLectura
-      ? new Set([...capabilities].filter((permiso) => permiso !== "tax.settlements.review"))
-      : capabilities;
+    // Fuentes, Clasificación, Cálculo y Controles consultan por el id del legajo y muestran la revisión elegida en solo lectura.
     return (
       <>
         {step === 0 ? (
@@ -580,8 +607,9 @@ export function StudyExpedienteMensual() {
         ) : step === 1 ? (
           <EtapaFuentes
             coverageQuery={coverageQuery}
-            capabilities={capabilities}
+            capabilities={capacidades}
             canEditSources={canEditSources}
+            soloLectura={soloLectura}
             currentUserId={currentUserId}
             motivoImportarLibro={motivoImportarLibro}
             onAbrirLibroIva={setLibroIvaAbierto}
@@ -609,7 +637,7 @@ export function StudyExpedienteMensual() {
           />
         ) : step === 3 ? (
           <EtapaCalculo
-            capabilities={capabilities}
+            capabilities={capacidades}
             workpaperId={wp.id}
             calculationQuery={calculationQuery}
             positionQuery={positionQuery}
