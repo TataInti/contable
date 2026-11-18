@@ -197,7 +197,7 @@ export function EtapaFuentes({
                     {
                       key: "accion",
                       header: "Acción",
-                      render: (source) => {
+                      render: (source: CoberturaLegajo["sources"][number]) => {
                         const lado = ladoDeLibroIva(source.code);
                         if (!lado) return null;
                         return (
