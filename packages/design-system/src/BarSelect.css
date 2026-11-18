@@ -19,3 +19,12 @@
   text-overflow: ellipsis;
   cursor: pointer;
 }
+
+/* Lectura nativa: un <select> cumple :read-only, y la regla de solo lectura de Field.css (0,3,0) le pondría
+   el gris --ds-color-surface-muted, sombra none y cursor por defecto. Esta regla (0,4,0) repone la superficie
+   y la sombra del botón secundario (Barra 2d; la causa está medida en el navegador). */
+.ds-field__input.ds-bar-select:read-only:not(:disabled) {
+  background-color: var(--ds-color-surface);
+  box-shadow: var(--ds-shadow-control);
+  cursor: pointer;
+}
