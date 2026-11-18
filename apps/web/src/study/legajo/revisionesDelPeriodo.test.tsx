@@ -141,9 +141,10 @@ describe("Legajo · dos revisiones del mismo período (K16)", () => {
     await screen.findByRole("tab", { name: "Saldos" });
     elegirRevision(1);
     // vigente: cambia con A29 (antes: findByText("Revisión 1 · Finalizado · reemplazada por la revisión 2"))
+    // vigente: cambia con A29 (antes: la frase de Saldos iba sola en su párrafo)
     expect(
       await screen.findByText(
-        "Saldos vigentes del cliente y del período; no se guardan por revisión.",
+        (_, el) => el?.tagName === "P" && el.textContent === PARRAFO_SALDOS_RO,
       ),
     ).toBeTruthy();
     expect(
@@ -184,6 +185,8 @@ const PERMISOS_COMPLETOS = [
   "tax.filings.record",
 ];
 const FRASE_SALDOS = "Saldos vigentes del cliente y del período; no se guardan por revisión.";
+// Barra 2e (A29): las dos frases de Saldos en una revisión anterior van en un mismo párrafo.
+const PARRAFO_SALDOS_RO = `${FRASE_SALDOS} Disponibles por impuesto, régimen y jurisdicción. Cada saldo conserva su respaldo.`;
 const controlAbierto = {
   id: "control-a",
   code: "CONTROL_DEMO",
@@ -261,7 +264,8 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     elegirRevision(1);
     expect(await screen.findByText("SALDO A FAVOR")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Editar" })).toBeNull();
-    expect(document.querySelector(".work-page__content p")?.textContent).toBe(FRASE_SALDOS);
+    // vigente: cambia con A29 (antes: el primer párrafo era la frase sola)
+    expect(document.querySelector(".work-page__content p")?.textContent).toBe(PARRAFO_SALDOS_RO);
   });
 
   it("Fuentes: sin Importar libro, Importar lote ni Revisar", async () => {

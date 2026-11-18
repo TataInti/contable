@@ -584,17 +584,13 @@ export function StudyExpedienteMensual() {
     // Saldos consulta por cliente y por período (tax-credit-ledger, tax-position): la revisión anterior muestra la misma tabla, en solo lectura.
     if (soloLectura && step === 0) {
       return (
-        <>
-          <p className="muted-copy">
-            Saldos vigentes del cliente y del período; no se guardan por revisión.
-          </p>
-          <EtapaSaldos
-            capabilities={capacidades}
-            ledgerQuery={ledgerQuery}
-            setEditingLot={setEditingLot}
-            setEditForm={setEditForm}
-          />
-        </>
+        <EtapaSaldos
+          capabilities={capacidades}
+          ledgerQuery={ledgerQuery}
+          setEditingLot={setEditingLot}
+          setEditForm={setEditForm}
+          fraseRevision="Saldos vigentes del cliente y del período; no se guardan por revisión."
+        />
       );
     }
     // Fuentes, Clasificación, Cálculo y Controles consultan por el id del legajo y muestran la revisión elegida en solo lectura.
