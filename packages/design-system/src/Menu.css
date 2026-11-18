@@ -1,0 +1,120 @@
+/* Menú desplegable (Menu). Estilo: --ds-shadow-menu y --ds-z-dropdown; ítems de --ds-control-height-sm.
+   El disparador es un Button secundario de 32 px (la única familia de botones). */
+.ds-menu {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  min-width: 0;
+}
+
+.ds-menu__flecha {
+  flex: none;
+  margin-inline-start: var(--ds-space-1);
+}
+
+.ds-menu__panel {
+  position: absolute;
+  top: calc(100% + var(--ds-space-1));
+  left: 0;
+  z-index: var(--ds-z-dropdown);
+  display: grid;
+  gap: var(--ds-space-0-5);
+  width: max-content;
+  min-width: calc(var(--ds-space-16) * 3);
+  max-width: calc(var(--ds-space-16) * 6);
+  padding: var(--ds-space-1);
+  border: var(--ds-border-width) solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background-color: var(--ds-color-surface);
+  box-shadow: var(--ds-shadow-menu);
+}
+
+.ds-menu__panel--end {
+  right: 0;
+  left: auto;
+}
+
+.ds-menu__item {
+  display: grid;
+  grid-template-columns: var(--ds-space-4) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--ds-space-2);
+  min-block-size: var(--ds-control-height-sm);
+  padding-block: var(--ds-space-1);
+  padding-inline: var(--ds-space-2) var(--ds-space-3);
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  background-color: transparent;
+  color: var(--ds-color-text);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: var(--ds-leading-tight);
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ds-menu__item:hover,
+.ds-menu__item:focus-visible {
+  background-color: var(--ds-color-surface-hover);
+}
+
+.ds-menu__item:focus-visible {
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: calc(var(--ds-focus-width) * -1);
+}
+
+.ds-menu__item[aria-checked="true"] {
+  background-color: var(--ds-color-selected);
+}
+
+.ds-menu__item[aria-disabled="true"] {
+  color: var(--ds-color-text-disabled);
+  cursor: not-allowed;
+}
+
+.ds-menu__item[aria-disabled="true"]:hover {
+  background-color: transparent;
+}
+
+.ds-menu__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ds-color-text-muted);
+}
+
+.ds-menu__item[aria-checked="true"] .ds-menu__icono {
+  color: var(--ds-color-primary);
+}
+
+.ds-menu__texto {
+  display: grid;
+  min-width: 0;
+}
+
+.ds-menu__linea {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+
+.ds-menu__rotulo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-menu__estado {
+  flex: none;
+}
+
+.ds-menu__detalle {
+  overflow: hidden;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-font-weight-regular);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
