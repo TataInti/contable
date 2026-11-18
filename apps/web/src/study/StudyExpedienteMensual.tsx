@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
@@ -150,6 +150,8 @@ export function StudyExpedienteMensual() {
   // Revisión elegida en el menú «Revisión» (null = la más reciente) y cajón «Exportar libros».
   const [revisionElegidaId, setRevisionElegidaId] = useState<string | null>(null);
   const [exportarAbierto, setExportarAbierto] = useState(false);
+  // Contenido de la etapa: recibe el foco al elegir «Ir a la revisión» en una revisión anterior (Barra 2e).
+  const cuerpoRef = useRef<HTMLDivElement>(null);
   const confirmacion = useConfirmAction();
   const { ask: pedirConfirmacion, request: solicitudConfirmacion } = confirmacion;
   const cerrarConfirmacion = useCallback(() => pedirConfirmacion(null), [pedirConfirmacion]);
@@ -928,7 +930,21 @@ export function StudyExpedienteMensual() {
   const motivosVisibles = motivosBarra.filter(Boolean);
   const pedidosDeCambios =
     vigente && !soloLectura ? mensajesDePedidoDeCambios(calculationQuery.data) : [];
-  const notaBarra = soloLectura ? textoSoloLectura : (acciones?.nota ?? null);
+  // En una revisión anterior, el aviso ofrece «Ir a la revisión» de la más reciente: misma acción que el desplegable «Revisión» (Barra 2e).
+  const irAVigente = () => {
+    setRevisionElegidaId(null);
+    cuerpoRef.current?.focus();
+  };
+  const notaBarra = soloLectura ? (
+    textoSoloLectura ? (
+      <>
+        <span>{textoSoloLectura}</span>{" "}
+        <Button size="sm" variant="text" onClick={irAVigente}>
+          Ir a la revisión {vigente?.revision}
+        </Button>
+      </>
+    ) : null
+  ) : (acciones?.nota ?? null);
 
   // Acciones de la etapa activa: a la derecha de sus pestañas, con sus condiciones de hoy.
   const actualizarBoton = (ocupado: boolean, onClick: () => void, texto: string) => (
@@ -1166,9 +1182,11 @@ export function StudyExpedienteMensual() {
           </Notice>
         ) : null}
         <div
+          ref={cuerpoRef}
           className="workpaper-body"
           id="workpaper-panel"
           role="tabpanel"
+          tabIndex={-1}
           aria-labelledby={`workpaper-${safeActiveStep}`}
           aria-live="polite"
         >

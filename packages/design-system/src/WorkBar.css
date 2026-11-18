@@ -71,6 +71,12 @@
   min-width: 0;
 }
 
+/* Un botón de texto dentro del aviso (Barra 2e) toma la altura de la línea: el renglón de avisos no crece. */
+.work-bar__nota .ds-button {
+  min-block-size: 0;
+  padding-block: 0;
+}
+
 /* El motivo va bajo la acción, alineado a la derecha (P4). */
 .work-bar__motivo {
   min-width: 0;

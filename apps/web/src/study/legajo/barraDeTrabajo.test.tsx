@@ -396,3 +396,21 @@ describe("Legajo · correcciones de la barra (Barra 2c)", () => {
     expect(boton.classList.contains("ds-button--sm")).toBe(true);
   });
 });
+
+describe("Legajo · aviso de solo lectura con salida (Barra 2e)", () => {
+  it("«Ir a la revisión 2» en el aviso de la revisión anterior elige la vigente y lleva el foco al contenido", async () => {
+    renderLegajo({ legajos: [revisionVigente(), revisionAnterior()] });
+    await within(barra()).findByRole("button", { name: "Calcular liquidación" });
+    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 2" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /^Revisión 1/ }));
+    const aviso = await within(barra()).findByText(
+      "Revisión 1 en solo lectura: fue reemplazada por la revisión 2.",
+    );
+    const ir = within(barra()).getByRole("button", { name: "Ir a la revisión 2" });
+    expect(aviso.closest(".work-bar__nota")?.contains(ir)).toBe(true);
+    fireEvent.click(ir);
+    expect(within(barra()).getByRole("button", { name: "Revisión 2" })).toBeTruthy();
+    expect(within(barra()).queryByText(/en solo lectura/)).toBeNull();
+    expect(document.activeElement).toBe(document.getElementById("workpaper-panel"));
+  });
+});
