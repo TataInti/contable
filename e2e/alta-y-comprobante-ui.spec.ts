@@ -102,6 +102,34 @@ const data = {
   ticket: { isoDate: "2025-03-16", total: "29900", net: "24710.74", vat: "5189.26" },
 };
 
+/** Medidas de la barra de trabajo del Legajo en el navegador (Barra 2c): zona, desplazamiento, desborde y alto. */
+async function medirBarraDeLegajo(page: Page) {
+  return page.evaluate(() => {
+    const barra = document.querySelector<HTMLElement>(".work-bar");
+    const cuerpo = document.querySelector<HTMLElement>(".work-page__body");
+    const pagina = document.querySelector<HTMLElement>(".work-page");
+    if (!barra || !cuerpo || !pagina) return null;
+    const conDesplazamientoVertical = [
+      pagina,
+      ...Array.from(pagina.querySelectorAll<HTMLElement>("*")),
+    ].filter((elemento) => {
+      const desplazamiento = getComputedStyle(elemento).overflowY;
+      return desplazamiento === "auto" || desplazamiento === "scroll";
+    });
+    const conAvisos = barra.querySelector('[data-renglon="avisos"]') !== null;
+    return {
+      barraFueraDelCuerpo: !cuerpo.contains(barra),
+      contenedoresConDesplazamientoVertical: conDesplazamientoVertical.length,
+      desbordeHorizontal: Math.max(
+        0,
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+      altoBarra: barra.getBoundingClientRect().height,
+      altoEsperado: conAvisos ? 112 : 89,
+    };
+  });
+}
+
 /** Etiqueta que guarda el período de marzo 2025 de cada impuesto (única por corrida). */
 function etiquetaDelPeriodo(tax: Tax) {
   return `Marzo 2025 ${tax.taxType.code} ${SUFFIX}`;
@@ -463,6 +491,33 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
       type: "legajo · Fuentes tras importar",
       description: (await page.locator(".work-page").first().innerText()).replace(/\s+/g, " ").slice(0, 1800),
     });
+  });
+
+  await test.step("Legajo: barra de trabajo en 1280×720 y 1440×900 (medidas automáticas)", async () => {
+    for (const tamano of [
+      { width: 1280, height: 720 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(tamano);
+      await expect(
+        page.getByRole("region", { name: "Legajo: período, revisión, etapas y acciones" }),
+      ).toBeVisible();
+      const medida = await medirBarraDeLegajo(page);
+      expect(medida, `sin barra de trabajo a ${tamano.width}×${tamano.height}`).not.toBeNull();
+      expect(medida!.barraFueraDelCuerpo, "la barra queda dentro del área que se desplaza").toBe(
+        true,
+      );
+      expect(
+        medida!.contenedoresConDesplazamientoVertical,
+        "contenedores con desplazamiento vertical",
+      ).toBe(1);
+      expect(medida!.desbordeHorizontal, "desborde horizontal de la página").toBe(0);
+      expect(
+        Math.abs(medida!.altoBarra - medida!.altoEsperado),
+        `alto de la barra: ${medida!.altoBarra} px`,
+      ).toBeLessThanOrEqual(1);
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
   });
 
   await test.step("Usuarios y accesos: asignar el cliente al revisor", async () => {
