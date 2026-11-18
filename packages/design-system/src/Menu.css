@@ -10,6 +10,8 @@
 .ds-menu__flecha {
   flex: none;
   margin-inline-start: var(--ds-space-1);
+  /* El ícono «chevron» apunta a la derecha; girado 90° indica que el menú se despliega hacia abajo. */
+  transform: rotate(90deg);
 }
 
 .ds-menu__panel {
