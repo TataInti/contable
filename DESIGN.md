@@ -2,7 +2,7 @@
 
 Fuente versionada de uso visual e interacción. **Foco v1 es el único lenguaje visual de Contable**, en el estudio, en el portal y en las pantallas de acceso. Los valores fuente viven en `packages/design-system/src/tokens.css`; esta guía describe sus valores reales, el contrato de cada familia de componentes y la receta de cada pantalla de `apps/web/src`. Si cambia un token, un componente o una receta, actualizá esta guía en el mismo PR. La guía UI existente de formularios y paneles sigue siendo la referencia detallada de interacción transaccional: [Guía UI — formularios y paneles emergentes](docs/guia-ui-formularios-paneles.md).
 
-Cada pieza de esta guía lleva uno de dos rótulos de estado: **vigente en main** (el código ya lo cumple) o **extensión aprobada, implementación pendiente** (la dirección está aprobada y todavía no existe en el paquete). Una extensión pendiente se usa recién cuando su PR la incorpora y actualiza su rótulo acá.
+Cada patrón indica su alcance y estado: **vigente en main** (el código ya lo cumple), **por aplicar: tramo N** (aprobado y asignado a un tramo) o **fuera de alcance por ahora** (por ejemplo, el portal). Una extensión se documenta como vigente cuando su PR la incorpora y actualiza su rótulo acá.
 
 ## 1. Principios
 
@@ -89,8 +89,9 @@ Siguen vigentes y Foco las aplica tal como están.
 4. **Composición:** usar caja para elementos que se operan; separar secciones y filas con línea (`--ds-color-border-subtle`); limitar cada pantalla a un único fondo de aviso, con el token semántico del aviso correspondiente (por ejemplo, `--ds-color-warning-subtle`).
 5. **Medidas:** construir separaciones sobre la grilla de 4 px y usar `--ds-space-0-5` (2 px) para el medio paso; `--ds-radius-full` identifica el radio circular. Mantener fila de 32 px y controles de barra de 32 px (`--ds-control-height-sm`), y campos de 40 px (`--ds-control-height-md`).
 6. **Componentes:** mantener las primitivas existentes en `packages/design-system/src` y llevar allí Dense*, `StatusBadge`, drawers y diálogo, con exports desde el paquete. Unificar la tabla, la píldora, los avisos y los botones de texto como primitivas compartidas del mismo paquete. Cada token o estilo nuevo respeta la regla contra literales y el baseline de `packages/design-system/literals-baseline.json`.
+7. **Barra de trabajo (aprobada por Inti el 18-nov).** Toda pantalla de trabajo del estudio usa `WorkPage` y `WorkBar`: contexto, estado, acciones y navegación quedan arriba y fuera del desplazamiento; el contenido empieza debajo y tiene un solo desplazamiento. La barra admite como máximo una acción primaria. En main este patrón ya está vigente en el Legajo; las demás pantallas lo adoptan por tramos. El portal del cliente queda como está por ahora y las pantallas de acceso no llevan barra.
 
-Decisiones cerradas de Inti que acompañan a las anteriores: solo escritorio; errores en línea junto al campo; composición sin cajas y con alineación; todo lleva usuario y los permisos deciden.
+Decisiones cerradas de Inti que acompañan a las anteriores: solo escritorio; errores en línea junto al campo; composición sin cajas y con alineación; todo lleva usuario y los permisos deciden; barra de trabajo como regla para las pantallas del estudio (18-nov), con el portal y el acceso fuera de alcance.
 
 Notas de referencia: guía visual de trabajo en `/root/.hermes/workspace/contable/guia-diseno/` (corte del 11-nov) y contrato y galería Foco v1 en `/root/.hermes/workspace/contable/contrato-foco/` (corte del 14-nov). Esta guía versionada no depende de esos archivos para build o pruebas.
 
@@ -389,11 +390,11 @@ Cada extensión es una prop opcional. Sin ella, la pieza conserva su marcado y s
 | Propósito y límite | Dar orientación y jerarquizar la próxima acción. Los indicadores van en C03; el encabezado no los repite |
 | Entradas | `DenseHeader`: `title`, `description?`, `actions?`. `Button` distingue enlace de acción, `loading`, `disabled` e `iconOnly` con nombre accesible |
 | Variantes | `primary`, `secondary`, `ghost`, `text`, `link`, `danger` y `danger-solid`. Es la única familia de botones |
-| Anatomía | Un `h1` (24 px, `--ds-text-2xl`, peso 600), una línea de descripción y las acciones alineadas a la derecha. Como máximo una acción primaria por pantalla o panel activo; una pantalla de consulta puede no tener ninguna. Sin rótulo superior: el menú ya dice dónde se está |
+| Anatomía | En una pantalla de trabajo del estudio ya migrada, C01b ocupa el lugar del encabezado visible: el `h1` queda solo para lectores de pantalla y repite el nombre del menú. Hasta que la pantalla migra, conserva `DenseHeader`: título de 24 px, descripción y acciones a la derecha. Como máximo una acción primaria por pantalla o panel activo; una pantalla de consulta puede no tener ninguna. Sin rótulo superior |
 | Estados | Datos, contenido extenso, restricción de acceso, actualización con datos previos identificados |
 | Interacción | La pantalla decide disponibilidad y destino de cada acción. Capacidades y consultas se resuelven fuera del encabezado |
 | Accesibilidad | Nombre accesible y foco visible en cada acción; `iconOnly` requiere `aria-label`; los enlaces conservan semántica de navegación |
-| Tokens | `--ds-font-sans`, `--ds-text-2xl`, `--ds-control-height-md`, `--ds-space-4`, `--ds-space-6` |
+| Tokens | `--ds-font-sans`, `--ds-text-2xl`, `--ds-control-height-md`, `--ds-control-height-sm`, `--ds-space-4`, `--ds-space-6`, `--ds-space-10`, `--ds-space-12`, `--ds-z-sticky`, `--ds-z-dropdown`, `--ds-shadow-menu`, `--ds-color-border-subtle` |
 
 **Aceptación observable:**
 - Un título largo convive con las acciones sin superponerse.
@@ -461,25 +462,32 @@ Los dos primeros quedan como acción primaria por defecto. Elegí la jerarquía 
 
 `aria-label` no forma parte de las props; usá `title` para un icono informativo o acompañalo con texto.
 
-#### Página de trabajo y barra de trabajo (WorkPage, WorkBar, Menu, BarSelect)
+#### C01b — Página de trabajo y barra de trabajo (WorkPage, WorkBar, Menu, BarSelect)
 
-**Estado:** vigente en main; primer uso en el Legajo, en el corte siguiente. Es la pieza de P5 para cualquier pantalla de trabajo: la barra se define una vez y cada pantalla la arma con sus controles.
+**Estado:** `WorkPage`, `WorkBar`, `Menu` y `BarSelect` están vigentes en main y se usan en el Legajo (`StudyExpedienteMensual.tsx`). La extensión del patrón al resto de las pantallas del estudio queda por aplicar según la columna «Tramo barra» de la tabla. El portal del cliente y las pantallas de acceso quedan fuera de esta regla.
 
 | Campo | Contrato |
 |---|---|
-| Propósito y límite | Mantener a la vista el período, la revisión, el estado, las secciones y las acciones. El contenido empieza justo debajo de la barra y es lo único que se desplaza. La barra no tiene lógica de dominio: la pantalla resuelve cada control antes de pasarlo |
-| Entradas | `WorkPage`: `bar` (una `WorkBar`) y `children`. `WorkBar`: `label`, `context`, `action?`, `note?`, `reason?`, `sections?`, `sectionActions?` |
-| Variantes | Con o sin renglón de avisos (`note` o `reason`) y con o sin renglón de secciones (`sections` o `sectionActions`) |
-| Anatomía | Renglón de contexto de 48 px: contexto a la izquierda y la acción de la pantalla a la derecha. Renglón de avisos de una línea, solo con contenido: nota a la izquierda y motivo a la derecha, bajo el botón. Renglón de secciones de 40 px con divisor: navegación a la izquierda y acciones de la sección a la derecha. Fondo `--ds-color-surface`, borde inferior `--ds-color-border`, capa `--ds-z-sticky`, bordes alineados con el contenido |
-| Estados | Alto de referencia: 89 px sin avisos y 112 px con avisos. La acción puede estar disponible o deshabilitada con su motivo visible (P4) |
-| Interacción | El cuerpo se desplaza bajo una barra fija. El menú se abre desde la barra y se superpone al contenido |
-| Accesibilidad | `WorkBar` es una región con nombre (`label`). Cada control conserva su nombre accesible |
-| Tokens | `--ds-space-1`, `--ds-space-2`, `--ds-space-4`, `--ds-space-6`, `--ds-space-7`, `--ds-space-10`, `--ds-space-12`, `--ds-color-surface`, `--ds-color-border`, `--ds-color-border-subtle`, `--ds-z-sticky` |
+| Propósito y límite | Mantener a la vista contexto, estado, acciones y secciones. La barra no tiene lógica de dominio: la pantalla resuelve cada control antes de pasarlo |
+| Entradas | `WorkPage`: `bar`, `children`, `className?`. `WorkBar`: `label`, `context`, `action?`, `note?`, `reason?`, `sections?`, `sectionActions?`, `className?`. `Menu`: `kind` (`actions` o `select`), `label`, `trigger`, `align?` y `items` o `options` según el tipo. `BarSelect`: `label`, `options`, valor y atributos nativos de `select` |
+| Variantes | BT-0 sin barra; BT-1 etapas; BT-2 lista con búsqueda y filtros; BT-3 lista con detalle; BT-4 ficha con pestañas; BT-5 secciones con contexto; BT-6 lectura. `WorkBar` permite avisos y secciones de forma independiente |
+| Anatomía | `WorkBar` renderiza, en este orden, el renglón de contexto/acción (48 px), el renglón de avisos opcional (23 px, nota a la izquierda y motivo a la derecha) y el renglón de secciones opcional (40 px, con divisor). Fondo `--ds-color-surface`, borde inferior `--ds-color-border`, capa `--ds-z-sticky`, bordes alineados con el contenido |
+| Estados | Altos efectivos del componente: 49 px solo contexto; 72 px con avisos y sin secciones; 89 px con secciones y sin avisos; 112 px con ambos. La acción puede estar deshabilitada con su motivo visible (P4) |
+| Lugar | `WorkPage` va como hijo directo de `main.study__content`. La barra ocupa su lugar fuera del cuerpo que se desplaza; `.work-bar` no usa `position: sticky`. En escritorio, `WorkPage` deja un único contenedor de desplazamiento para el contenido. Las tablas de una pantalla migrada no tienen tope ni desplazamiento propio; el encabezado queda pegado al borde superior de ese contenedor |
+| Interacción | El menú se abre desde la barra y se superpone al contenido. Una sola acción primaria es la regla de diseño; hoy `WorkBar` avisa por consola si encuentra más de una, pero no lo impide |
+| Accesibilidad | `WorkBar` renderiza una `<section aria-label={label}>` con nombre accesible; cada control conserva su nombre. `Menu` implementa recorrido por teclado y retorno del foco |
+| Tokens | `--ds-color-surface`, `--ds-color-border`, `--ds-color-border-subtle`, `--ds-color-selected`, `--ds-space-1`, `--ds-space-2`, `--ds-space-4`, `--ds-space-6`, `--ds-space-7`, `--ds-space-10`, `--ds-space-12`, `--ds-control-height-sm`, `--ds-text-sm`, `--ds-z-sticky`, `--ds-z-dropdown`, `--ds-shadow-menu` |
 
 **Reglas de uso:**
-- `WorkPage` va como hijo directo de `main.study__content`. Dentro de la página, las tablas no tienen tope ni desplazamiento propio y su encabezado queda pegado bajo la barra. La regla de 420 px de las páginas de flujo sigue igual.
-- La barra tiene como máximo una acción primaria. Si la acción se deshabilita, su motivo va en `reason`, bajo el botón.
-- La navegación de secciones la arma la pantalla (por ejemplo, `DenseTabs`); la barra le da lugar y alineación.
+- En las pantallas que adoptan `WorkPage`, el contenido es el único que se desplaza; no se conserva el tope de 420 px ni un desplazamiento propio de tabla o lista.
+- La barra tiene como máximo una acción primaria. Si la acción se deshabilita, su motivo va en `reason`, debajo de la acción.
+- La pantalla arma la navegación (por ejemplo, `DenseTabs`) y la entrega en `sections`; `sectionActions` contiene las acciones de esa sección.
+- El `Menu` actual no tiene una prop `danger`: ubicar una acción irreversible en el menú es posible, pero mostrarla en rojo requiere una extensión pendiente; no se documenta como comportamiento existente.
+- `BarSelect` mide 32 px y tiene ancho automático con mínimo de 192 px; el código actual no fija el máximo de 320 px propuesto para los filtros.
+
+**Aceptación de cada migración:** a 1280×720 y 1440×900, la barra no desborda ni recorta controles; el contenido no pasa por encima o por debajo; la tabla se desplaza junto con el contenido y su encabezado queda pegado al borde inferior de la barra; hay una sola acción primaria.
+
+**Por aplicar:** `DenseSearch` y `DenseToggleGroup` necesitan su variante `size="bar"` para el tamaño aprobado (tramo 1); el retiro de `ContextBar` del `StudyShell` corresponde al tramo 3; el tratamiento rojo de acciones irreversibles en `Menu` se construye con las acciones de Reglas fiscales (tramo 5).
 
 **Correcto:**
 
@@ -533,7 +541,7 @@ El primero arma una barra pegada a mano; el segundo tiene dos acciones primarias
 
 - **Propósito:** elegir un período u otra opción simple dentro de la barra.
 - **Props:** `label` (nombre accesible; no lleva etiqueta visible), `options` (pares `value` y `label`), `value` y `onChange`.
-- **Medida y estados:** 32 px (`--ds-control-height-sm`) con el aspecto de `.ds-field__input`. Un texto largo se corta con puntos suspensivos y el campo tiene tope de 320 px.
+- **Medida y estados:** 32 px (`--ds-control-height-sm`), ancho automático y mínimo de 192 px. El CSS declara elipsis para textos largos; el componente no fija un máximo de 320 px.
 - **Correcto:** `<BarSelect label="Período fiscal" options={periodos} value={periodo} onChange={elegirPeriodo} />`
 - **Incorrecto:** `BarSelect` en un formulario con etiqueta visible; ahí va `Field`.
 
@@ -568,7 +576,7 @@ El primero arma una barra pegada a mano; el segundo tiene dos acciones primarias
 | Propósito y límite | Resumir datos conocidos y decir su alcance. Cada indicador proviene de una fuente con respuesta; un estado global se muestra cuando todas sus fuentes respondieron |
 | Entradas | `StatStrip`: `items` y `label`. Cada ítem: `key`, `label`, `value`, `detail?`, `tone?`, `active?`, `onSelect?`. La pantalla calcula los valores |
 | Variantes | Lectura, navegación y filtro. `pressed` identifica al ítem que alterna un filtro; el ítem que navega es un enlace |
-| Anatomía | Una línea discreta de cifras bajo el encabezado, valor y etiqueta separados, sin caja ni mayúsculas. Cada dato aparece una sola vez en la pantalla |
+| Anatomía | Una línea discreta de cifras, valor y etiqueta separados, sin caja ni mayúsculas. Si filtran la lista, viven como botones en el renglón de secciones de la barra de trabajo; si solo informan, quedan en el contenido bajo la barra. Cada dato aparece una sola vez en la pantalla |
 | Estados | Datos, carga inicial, vacío confirmado, error local o parcial, actualización con datos previos identificados, contenido extenso |
 | Interacción | `onSelect` aplica el filtro o navega; las reglas de dominio se calculan en la pantalla. Un filtro seleccionado se puede restablecer |
 | Accesibilidad | `aria-pressed` en los ítems que alternan un filtro; el grupo tiene `role="group"` y nombre. Un valor desconocido se expresa con texto |
@@ -579,7 +587,7 @@ El primero arma una barra pegada a mano; el segundo tiene dos acciones primarias
 - Ante un error, el indicador dice «no disponible».
 - Los alcances fiscal y documental se muestran por separado; sumarlos requiere una definición de producto.
 
-Sólo van cifras de la lista que se ve (cantidades, pendientes); el estudio, el cliente y el período ya están en el menú y en la barra de período. Una cifra que filtra la lista es un botón y queda resaltada mientras el filtro está activo.
+Solo van cifras de la lista que se ve (cantidades, pendientes); el estudio, el cliente y el período ya están en el menú y en la barra de trabajo. Una cifra que filtra la lista es un botón y queda resaltada mientras el filtro está activo.
 
 ### C04 — Tablas y agrupación
 
@@ -638,16 +646,18 @@ La clave debe ser estable y única por fila. `Table` es una tabla de lectura; pa
 | Propósito y límite | Cambiar lo que se consulta. Una pestaña es una sección de la pantalla; el estado del negocio se expresa con C08 |
 | Entradas | Los contratos actuales. `DenseToggleGroup` recibe `label`, `options` (pares `value` y `label`), `selected` y `onChange(next)`. `DenseTabs` recibe `label`, `tabs`, `active`, `onChange` e `idPrefix?` |
 | Variantes | Filtro simple, selección múltiple y navegación de secciones |
-| Anatomía | Un lugar por criterio, selección visible y acción «Quitar filtros». Agrupar es una opción distinta de filtrar |
+| Anatomía | En las pantallas que adoptan la barra, búsqueda (260 px) y filtros van a la izquierda del primer renglón; desplegables compactos de 32 px (hasta cuatro a 1280 px, tope visual propuesto de 320 px). Pestañas, etapas, controles segmentados, cifras que filtran y «Quitar filtros» van al renglón de secciones. Agrupar es una opción distinta de filtrar. Un criterio ocupa un solo lugar |
 | Estados | Datos, sin coincidencias, contenido extenso |
 | Interacción | Los filtros conservan su lugar en la URL donde ya existe. Cambiar de sección conserva el estado del registro |
 | Accesibilidad | Pestañas con teclado y selección; opciones múltiples con `aria-pressed`. Etiquetas persistentes además del placeholder |
-| Tokens | `--ds-control-height-sm`, `--ds-space-2`, `--ds-space-4`, `--ds-color-primary` |
+| Tokens | `--ds-control-height-sm`, `--ds-space-2`, `--ds-space-4`, `--ds-color-primary`, `--ds-color-selected`, `--ds-color-warning` |
 
 **Aceptación observable:**
 - «Quitar filtros» devuelve la lista completa.
 - La agrupación sobrevive a la migración de estilo.
 - Cada estado se filtra con un solo control.
+
+**Por aplicar (tramo 1):** `DenseSearch` todavía mide 30 px y no acepta `size="bar"`; la variante aprobada mide 32 px. `DenseToggleGroup` tampoco acepta esa variante: hoy su botón mide 32 px (`--ds-control-height-sm`) y el borde del grupo agrega 2 px; en la barra el botón pasa a 30 px para que el grupo mida 32 px. El tope de 320 px para los filtros tampoco forma parte de `BarSelect`, cuyo ancho actual es automático.
 
 #### SectionIndex
 
@@ -679,7 +689,7 @@ En una barra de trabajo, el cambio de revisión o de período usa `Menu` (selecc
 | Propósito y límite | Consultar un registro en contexto, con la selección a la vista. El detalle ocupa lugar cuando hay un registro elegido |
 | Entradas | `panelId`, `inspector?`, `children`. `Inspector` conserva título, cierre y metadatos |
 | Variantes | Lista sola, o lista y detalle cuando la tarea lo justifica. `role="region"` con nombre cuando la pantalla no tiene pestañas; `role="tabpanel"` con su controlador asociado |
-| Anatomía | Selección identificable; detalle con líneas y metadatos ordenados en columnas etiqueta/valor, sobre un solo nivel de superficie |
+| Anatomía | Selección identificable; detalle con líneas y metadatos ordenados en columnas etiqueta/valor, sobre un solo nivel de superficie. Con `WorkPage`, el `Inspector` comienza debajo de la barra y ocupa el alto del cuerpo: sus acciones quedan en la cabecera del detalle y la barra no las repite. En el detalle apilado de Reglas fiscales, las acciones del registro elegido van a la derecha del renglón de secciones (por aplicar: tramo 5) |
 | Estados | Datos, carga inicial, vacío confirmado, error local o parcial, restricción de acceso, contenido extenso |
 | Interacción | El detalle se abre por intención; al cerrarlo, el foco vuelve al origen. Cambiar de cliente limpia el detalle anterior según el flujo vigente |
 | Accesibilidad | `region` con nombre cuando no pertenece a pestañas; `tabpanel` con controlador asociado. Cada rol responde a una función real |
@@ -945,9 +955,9 @@ Canal para decir cómo terminó una acción, salvo el error de una acción de fi
 | Variantes | Formulario, lectura detallada y confirmación separada para alto impacto. `danger-solid` confirma el riesgo |
 | Anatomía | Contexto arriba, contenido desplazable y pie fijo abajo, con el mismo orden de botones en todos los paneles. Etiquetas persistentes y error junto al campo |
 | Estados | Datos, error local o parcial, restricción de acceso, contenido extenso, envío en proceso |
-| Interacción | Escape y Cancelar cierran; el foco queda contenido y se restaura al cerrar. «Procesando» impide el doble envío. Las validaciones fiscales son del dominio y se conservan |
+| Interacción | Escape y Cancelar cierran; el foco queda contenido y se restaura al cerrar. «Procesando» impide el doble envío. Las validaciones fiscales son del dominio y se conservan. Los cajones y diálogos se montan en `--ds-z-modal` (300), cubren la barra con su velo y no cambian su posición (`--ds-z-sticky`, 100) |
 | Accesibilidad | Diálogo con nombre y descripción, primer foco deliberado y Tab contenido dentro del panel |
-| Tokens | `--ds-control-height-md`, `--ds-color-border-strong`, `--ds-color-focus`, `--ds-space-4`, `--ds-space-6` |
+| Tokens | `--ds-control-height-md`, `--ds-color-border-strong`, `--ds-color-focus`, `--ds-space-4`, `--ds-space-6`, `--ds-z-modal`, `--ds-z-sticky` |
 
 **Aceptación observable:**
 - Con contenido largo, el pie sigue alcanzable.
@@ -1114,13 +1124,13 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 | Orientación y "próximo paso" | Cuando la pantalla tiene un próximo paso, es su botón principal del encabezado, no un aviso; una pantalla de consulta puede no tener botón principal. Si hace falta orientar, se usa texto neutro, `Notice` con tono `info` o `DenseAlert` con tono `hint` (sin fondo ni color de estado). El tono `success` se reserva para confirmar una acción recién hecha; no se usa para estados permanentes ni para guiar, porque comparte el verde de la marca. Como máximo un aviso con fondo por pantalla |
 | Notificaciones (`ToastProvider`, `useNotify`) | Canal para decir cómo terminó una acción, salvo el error de una acción de fila, que va junto a su botón. `notify.success` se cierra sola a los 5 s; `notify.error` queda hasta cerrarla; `notify.info` para avisos sin resultado. Se monta una vez en la raíz de la app. El tono se lee en el icono: la tarjeta no usa fondo de color. Ninguna pantalla dibuja una cinta de "Acción completada" ni guarda un estado local para el recibo: `apps/web/src/ui/UiPatterns.test.ts` falla si reaparece |
 | Cómo se comunica cada cosa | Acción que salió bien → notificación. Acción que falló → notificación de error; si el error es de un campo o de un formulario abierto, además junto al campo o dentro del panel. Estado que bloquea el trabajo de la pantalla → un `Notice` fijo, como máximo uno. Todo en orden → nada, o texto gris con tilde |
-| Menú del estudio (`StudyShell`) | Dos niveles: **Estudio** (lo de toda la cartera) y **Cliente** (lo del cliente elegido, en el orden del trabajo del mes), más **Ajustes del estudio** (en main, «Configuración del estudio»), siempre a la vista. El cliente se elige una sola vez, con el selector del bloque Cliente; sin cliente, sus secciones se muestran deshabilitadas con el motivo. La barra superior queda sólo para el período contable, en las pantallas que lo necesitan. Cada ítem lleva el icono declarado en `moduleRegistry` |
+| Menú del estudio (`StudyShell`) | Dos niveles: **Estudio** y **Cliente**, más **Ajustes del estudio**, siempre a la vista. El cliente se elige una sola vez; sin cliente, sus secciones muestran el motivo. Cada ítem lleva el icono de `moduleRegistry`. En una pantalla de trabajo migrada, su contexto y sus acciones viven en C01b; el período que requiere la pantalla pasa a su barra. Esto se aplica por tramos. Hoy `StudyShell` todavía monta `ContextBar` para Contabilidad, Reportes y Asistente (no liberadas); retirarla corresponde al tramo 3. Rentabilidad no declara período contable: conserva su selector de período fiscal propio. Cada pantalla mantiene su concepto y rótulo; la fuente única de «período» sigue pendiente de decisión de Inti. El portal conserva su marco y su `ContextBar` |
 | Iconos | Los iconos del paquete (`Icon`) se muestran: acompañan a la etiqueta en el menú y en botones, y pueden ir solos sólo en botones con `aria-label`. No se ocultan con reglas globales |
-| Encabezado de pantalla (`DenseHeader`) | Uno por pantalla: título (24 px, peso 600), una línea de descripción debajo y, a la derecha, las acciones con una sola principal. No lleva rótulo superior: el menú ya dice dónde se está |
-| Resumen de pantalla (`StatStrip`) | Una línea discreta de cifras bajo el encabezado, sin caja ni mayúsculas. Sólo cifras de la lista que se ve (cantidades, pendientes); el estudio, el cliente o el período no van acá porque ya están en el menú y en la barra de período. Una cifra que filtra la lista es un botón y queda resaltada mientras el filtro está activo |
+| Encabezado de pantalla (`DenseHeader`) | Mientras una pantalla del estudio no adopta C01b, conserva un `h1` visible (24 px, peso 600), una línea de descripción y las acciones, con una sola principal como máximo. En las pantallas migradas, `DenseHeader` se retira y el `h1` queda solo para lectores de pantalla, con el nombre del ítem del menú. Las pantallas de acceso conservan título y descripción visibles; el portal queda como está por ahora |
+| Resumen de pantalla (`StatStrip`) | Una línea discreta de cifras, sin caja ni mayúsculas. Solo cifras de la lista que se ve (cantidades, pendientes); el estudio, el cliente y el período ya están en el menú o la barra. Si una cifra filtra, aparece como botón en el renglón de secciones; si solo informa, queda bajo la barra. Cada dato aparece una sola vez |
 | Acciones riesgosas (`Button` `danger` / `danger-solid`) | En pantallas, fichas y filas el peligro es discreto: `variant="danger"`, texto rojo sobre fondo transparente. El rojo sólido (`danger-solid`) es exclusivo del botón que confirma dentro de un diálogo (`ConfirmDialog`, `DeletionDrawer`). Nunca hay una columna de botones rojos |
 | Interruptor (`Switch`) | Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con el estado escrito al lado. Apagar algo que afecta a otros pide confirmación. Dentro de un formulario que se envía después va una casilla |
-| Tablas (`Table`, `DenseTable`) | Dos componentes con un mismo aspecto: `Table` para leer y `DenseTable` para listas con selección, orden y detalle lateral. Comparten encabezado (`--ds-table-head-height`) y alto de fila (`--ds-row-height`). No se escribe `<table>` en una pantalla; las cuatro que quedan están registradas como deuda en `UiPatterns.test.ts` |
+| Tablas (`Table`, `DenseTable`) | Dos componentes con un mismo aspecto: `Table` para leer y `DenseTable` para listas con selección, orden y detalle lateral. Comparten encabezado (`--ds-table-head-height`) y alto de fila (`--ds-row-height`). No se escribe `<table>` en una pantalla. En una pantalla con `WorkPage`, la tabla no tiene tope ni desplazamiento propio; el cuerpo desplaza y el encabezado queda pegado al borde inferior de la barra. Fuera de `WorkPage` se conserva el contrato vigente de su contenedor |
 | Densidad de filas (`useDensity`) | Preferencia de la persona, no de la pantalla: un solo valor (28, 32 o 40 px) guardado en el navegador y aplicado a todas las tablas. Se cambia en un único lugar, el menú de ayuda del estudio. Ninguna barra de filtros lleva el selector |
 | Dónde va cada error | **Campo inválido**: debajo del campo. **No se pudo guardar un formulario o cajón**: `Notice` de error dentro del mismo formulario, junto a los botones. **No se pudo cargar una lista**: `Notice` de error con botón Reintentar en el lugar de la lista. **Falló una acción de fila**: el error va junto al botón que la disparó. **Falló una acción de barra** (enviar, publicar, descargar, activar): `notify.error`, nunca un aviso al pie de la página. `actionErrorMessage` arma el texto |
 | Títulos de paneles, cajones y fichas | Título y, si hace falta, una línea de descripción. `ActionDrawer` e `Inspector` no tienen rótulo superior; los paneles tampoco |
@@ -1150,15 +1160,16 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 4. Alineá etiquetas y valores por columna y línea base; alineá los números a la derecha con cifras tabulares, sin elementos flotantes ni centrados.
 5. Extendé listas y bloques al ancho de la grilla para que terminen en el mismo borde derecho.
 6. Mostrá cada dato una sola vez por pantalla y un único fondo de aviso por pantalla, con el tono semántico correspondiente.
+7. La barra de trabajo ocupa su lugar fuera del área que se desplaza; el contenido empieza justo debajo y nada pasa por detrás o por encima. La pantalla usa un único desplazamiento de contenido.
 
 ### RG — Receta general
 
 **Propósito:** dar a toda pantalla el mismo orden de lectura, de arriba hacia abajo.
 
 **Composición:**
-1. **Encabezado (C01):** un título, una línea de descripción y las acciones, con una sola principal como máximo.
+1. **Barra de trabajo (C01b), en pantallas de trabajo del estudio:** contexto a la izquierda y acciones a la derecha; una sola acción primaria como máximo. No hay título ni descripción visibles; el `h1` queda para lectores de pantalla y repite el nombre del menú. Las pantallas aún no migradas conservan C01.
 2. **Indicadores (C03), opcional:** una línea de cifras de la lista que se ve, con su alcance.
-3. **Filtros y navegación (C05), opcional:** pestañas de sección, búsqueda, filtros y agrupación; cada criterio en un solo lugar.
+3. **Filtros y navegación (C05), opcional:** búsqueda y filtros en el primer renglón; pestañas, etapas, controles segmentados y cifras que filtran en el renglón de secciones. Cada criterio ocupa un solo lugar; agrupar es distinto de filtrar.
 4. **Contenido:** una de tres disposiciones.
    - **Lista:** una tabla a ancho completo (C04).
    - **Lista y detalle:** tabla más detalle lateral que se abre por intención (C04 y C06).
@@ -1168,7 +1179,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Estados que toda pantalla contempla:** carga inicial, datos, vacío confirmado, sin coincidencias (si filtra), error local o parcial, restricción de acceso, actualización con datos previos identificados y contenido extenso.
 
-**Aceptación:** a 1440×900 y 1280×720 la página entra sin desborde horizontal y cada tabla entra en su contenedor; hay un solo `h1`; hay como máximo una acción primaria; todo vacío o bloqueo ofrece su salida (P1); los nombres coinciden con el glosario (P3).
+**Aceptación:** a 1440×900 y 1280×720 la página entra sin desborde horizontal y cada tabla entra en su contenedor; donde se usa C01b, la barra no supera 112 px y no desborda; el contenido tiene un único desplazamiento; hay un solo `h1`, como máximo una acción primaria y la tabla queda debajo de la barra; todo vacío o bloqueo ofrece su salida (P1); los nombres coinciden con el glosario (P3).
 
 **Formularios:** altas y ediciones usan `ActionDrawer` con título, descripción y campos `Field`; los selects usan `label.ds-field` y `.ds-field__input`, como indica la guía UI. El envío muestra loading y Cancelar usa ghost. El pie usa `ActionDrawerFooter`: «Cancelar» a la izquierda, la acción principal a la derecha y, junto a ella, el motivo mientras la principal está deshabilitada. Un bloque que ocupa las dos columnas del formulario usa la clase `.study-form__full`.
 
@@ -1187,8 +1198,8 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 **Foco 2.8:** las acciones de fila de las tres tablas (Liquidaciones, Otros circuitos y acuses) usan la pieza de enlace `dense-link`, igual que «Ver todas» y «Abrir obligaciones»; el texto «Abrir» y el nombre accesible no cambian. Los contadores de Inicio y de la banda del Legajo concuerdan con el número (singular con 1).
 
 **Composición:**
-1. Encabezado C01 con el alcance del estudio y «Actualizar» como acción secundaria.
-2. Indicadores C03 con su alcance.
+1. Barra de trabajo BT-6 (C01b; por aplicar: tramo 2): el estudio a la izquierda; «Actualizar» como ghost y «Revisar bandeja» como única primaria a la derecha. El `h1` dice «Inicio», igual que el menú.
+2. Indicadores C03 como lectura bajo la barra, con su alcance.
 3. Pendientes accionables, con los datos necesarios para decidir.
 4. Acuses pendientes y liquidaciones en curso como listas separadas, cada una con su fuente y su conteo.
 5. Otros circuitos y panorama como contenido secundario, sobre el lienzo.
@@ -1208,7 +1219,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 | Abrir legajo | Conserva el cliente y sigue el flujo del producto para el contexto fiscal |
 | Liquidación finalizada o reemplazada | Figura fuera de «en curso» |
 
-**Estado: migrada** (Foco 1, corte 1). Lo vigente tras la migración: encabezado con «Actualizar» como acción secundaria y «Revisar bandeja» como única primaria; cifras con «pendiente», «no disponible» o «restringido» en lugar de cero; acuses y liquidaciones en listas separadas, con sus estados propios, y obligaciones pendientes a continuación, en el orden de main; otros circuitos y panorama como secciones secundarias del lienzo, sin panel lateral; región de trabajo con nombre accesible. **Cumple G03** (para esta pantalla), **G05** y **G06** (sección 7). G07 sigue pendiente de Inti.
+**Estado: migrada** (Foco 1, corte 1); la barra queda por aplicar en el tramo 2. Hasta esa migración, main conserva `DenseHeader` con «Actualizar» secundaria y «Revisar bandeja» como única primaria. También conserva las cifras con «pendiente», «no disponible» o «restringido» en lugar de cero; acuses y liquidaciones en listas separadas, con sus estados propios, y obligaciones pendientes a continuación, en el orden de main; otros circuitos y panorama como secciones secundarias del lienzo, sin panel lateral; región de trabajo con nombre accesible. **Cumple G03** (para esta pantalla), **G05** y **G06** (sección 7). G07 sigue pendiente de Inti.
 
 **Estado (Foco 2.7c):** cada acción de fila de Inicio es un botón `ghost` con nombre completo: «Abrir liquidación de <impuesto>, versión N», «Abrir legajo de <cliente>» y «Abrir <circuito>» en Otros circuitos, con un solo tratamiento. El dato secundario de «Impuesto» va en renglón propio (la misma regla de Reglas, Foco 2.7a). «Abrir obligaciones» y «Ver clientes» tienen relleno vertical de objetivo.
 
@@ -1218,7 +1229,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Fechas y períodos:** el período del legajo y las fechas de pago, presentación y cálculo usan el formato único de la sección «Fechas y períodos».
 
-**Composición (vigente en main):** barra de trabajo fija (`WorkPage` y `WorkBar`, C01b): período (`BarSelect`), «Acciones del período» (`Menu`), «Revisión» (`Menu`, la más reciente por defecto), estado en texto (C08) y, a la derecha, la acción del legajo, con una sola primaria; avisos de autorrevisión y de motivo; las seis etapas como pestañas (C05), con el contador de controles bloqueantes abiertos; acciones de la etapa a la derecha de las pestañas. El contenido de la etapa es el cuerpo de la página, sin tarjeta y sin título visible (el `h1` «Legajo» queda para lectores de pantalla); las tablas (C04) se desplazan con la página. Una revisión anterior se ve en solo lectura, sin acciones que escriban. Respaldo y metadatos en detalle o panel (C06 y C09).
+**Composición (vigente en main):** barra de trabajo (`WorkPage` y `WorkBar`, C01b): período fiscal (`BarSelect`), «Acciones del período» (`Menu`), «Revisión» (`Menu`, la más reciente por defecto), estado en texto (C08) y, a la derecha, la acción del legajo, con una sola primaria; el renglón de avisos de autorrevisión y motivo; las seis etapas como pestañas (C05), con el contador de controles bloqueantes; acciones de la etapa a la derecha de las pestañas. El `WorkBar` actual renderiza los avisos antes del renglón de secciones. El contenido de la etapa es el cuerpo de `WorkPage`, sin tarjeta ni título visible (el `h1` «Legajo» queda para lectores de pantalla); las tablas (C04) se desplazan con el cuerpo. Una revisión anterior se ve en solo lectura, sin acciones que escriban. Respaldo y metadatos van en detalle o panel (C06 y C09).
 
 **Entradas de pantalla:** identificación de contexto, estado, revisión, capacidades, fuentes de saldos y enlaces de respaldo. Los saldos y la posibilidad de cargar o rectificar los resuelve el dominio; la tabla los presenta.
 
@@ -1230,7 +1241,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Aceptación:** pasar de Saldos a Fuentes conserva «Finalizado» como estado; la advertencia de revisión por la misma persona que preparó queda a la vista; el identificador y la evidencia siguen accesibles en el detalle; al cerrar el panel, el foco vuelve al origen.
 
-**Estado: migrada** (Foco 2). Lo vigente tras la migración: encabezado con «Nuevo legajo» como acción secundaria; cada revisión se lee en una tarjeta con sus etapas; las etapas con consultas muestran el error con «Reintentar»; una sola acción primaria por tarjeta, la de su estado, que va en la línea «ETAPA N DE 6», a la derecha y antes de la barra de etapas, para verse sin desplazar a 1280×720 en cualquier etapa (Foco 2.8); el encabezado de etapa es opaco (`--ds-color-surface`) y su período se muestra como mes; «Finalizar», «Crear rectificativa» y «Eximir» piden confirmación, y el diálogo de «Eximir» nombra el control y cita el motivo escrito; el contador de controles bloqueantes es información de la tarjeta y no una región de alerta; la carga de una etapa se anuncia una sola vez; el motivo de «Resolver» y «Eximir» va junto a los botones, que no cambian de lugar al escribir; una revisión reemplazada se lee como resumen de solo lectura. Desvíos declarados: la tarjeta del legajo conserva su borde de contenedor (las etapas no llevan caja propia), y las reglas de composición propias del Legajo (`workpaper-*`) siguen vigentes porque el marcado las usa; retirarlas exige rehacer ese marcado con piezas del sistema y queda como trabajo posterior.
+**Estado de barra: vigente en main (tramo 0).** El Legajo es la primera pantalla de trabajo migrada: el encabezado visible, la tarjeta por revisión y la franja inferior de navegación se reemplazaron por `WorkPage` y `WorkBar`; el `h1` accesible queda oculto visualmente. La acción del legajo, las etapas y sus acciones se agrupan arriba; tablas y contenido se desplazan en el cuerpo. El flujo, los permisos, las confirmaciones, los errores y los datos del Legajo se conservan. La guía de 36 px para `.dense-tab` se corrige en la sección 7: los botones de pestaña usan `ds-button--row` de 32 px.
 
 ### R03 — Reglas fiscales
 
@@ -1240,7 +1251,7 @@ Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFoote
 
 **Propósito:** elegir un paquete, comprender su versión y vigencia, y preparar cambios de forma deliberada.
 
-**Composición:** encabezado C01 con el alta global como acción secundaria; lista y detalle (C06); metadatos; pestañas (C05); tabla (C04); una acción contextual destacada, que es la principal del panel.
+**Composición de barra (aprobada; por aplicar: tramo 5):** BT-3 con detalle apilado. Primer renglón: búsqueda de paquetes y «Nuevo paquete» como secundaria (primaria solo si no hay paquetes). Renglón de secciones: las tres cifras que filtran a la izquierda; a la derecha, las acciones de la versión elegida en el orden «Guardar borrador», «Editar borrador vN», «Activar» (primaria) y «Más acciones». El menú reúne «Eliminar borrador vN» y «Eliminar paquete», en rojo cuando `Menu` incorpore ese tratamiento. La nota «Secuencia de cambios» queda como párrafo de ancho completo, sin fondo. Lista, detalle y tabla comparten un desplazamiento; las acciones de la versión quedan a la vista. La lectura de Catálogos fiscales usa BT-3: las cinco categorías y sus conteos van en el renglón de secciones; «Nuevo <categoría>» cambia con la pestaña; las acciones del `Inspector` quedan en el detalle y la línea de propios, referencia y alertas pasa al contenido.
 
 **Entradas de pantalla:** paquetes visibles para el rol, versión seleccionada, estado, vigencia, parámetros y capacidades. Alícuotas, revisores y activación son del dominio.
 
@@ -1252,9 +1263,17 @@ Estado (Foco 2.7a): los cajones de Reglas usan el pie fijo de `ActionDrawerFoote
 
 **Aceptación:** la versión vigente se identifica como de sólo lectura; el paquete seleccionado se ve en la lista; hay una acción contextual principal.
 
-**Estado: migrada** (Foco 3). Lo vigente tras la migración: «Nuevo paquete» como acción secundaria, y como primaria solo cuando no hay paquetes; una sola acción primaria por panel; el error de una consulta va junto al dato afectado, con «Reintentar» (`reglas/Errores.tsx`); el resumen de la versión va sin caja. Desvíos declarados: Alícuotas y Control profesional conservan la caja `study-panel`, y las reglas `fiscal-rule-*` que el marcado usa siguen vigentes; la caja y esas reglas quedan como trabajo posterior.
+**Estado: migrada** (Foco 3), con barra por aplicar en el tramo 5. Hasta esa migración, main conserva el encabezado C01; el alta global sigue secundaria y es primaria solo cuando no hay paquetes; hay una sola primaria por panel, el error de consulta va junto al dato afectado con «Reintentar», y el resumen de la versión va sin caja. Alícuotas y Control profesional conservan la caja `study-panel`, y las reglas `fiscal-rule-*` siguen vigentes hasta su corte.
 
-**Catálogos fiscales** usa esta misma receta: una sola `DenseTabs` con los conteos de las cinco categorías; debajo, una línea breve con propios, referencia y alertas. La barra de filtros, la tabla y el detalle comparten la grilla; los datos del detalle usan columnas etiqueta/valor y los conteos numéricos se alinean a la derecha. Cada conteo aparece una vez, las cifras van a la derecha y la tabla tiene el ancho del resto de la pantalla.
+**Medidas de los modelos aprobados (HTML de referencia, no pantallas de producción):**
+
+| Pantalla | Barra | Primera fila, 1280×720 / 1440×900 | Espacio libre mínimo en peor caso, 1280 / 1440 | Desplazamiento anidado en el modelo |
+|---|---:|---:|---:|---:|
+| Clientes | 89 px | 148 / 148 px | 132 / 292 px | 1 → 0 |
+| Reglas fiscales | 89 px | 198 / 198 px | 161 / 321 px | 1 → 0 |
+| Rentabilidad | 89 px | 175 / 175 px | 256 / 416 px | 0 → 0 |
+
+Las tres maquetas se midieron a 1280×720 y 1440×900, en caso normal y peor caso. En las 12 combinaciones no hubo desborde horizontal ni controles recortados; 162 posiciones de desplazamiento dieron 0 fallos al comprobar el borde de la barra y el encabezado de tabla. Son resultados de las maquetas, no una prueba de la aplicación. El «antes» es una reproducción CSS; Rentabilidad antes tiene una incertidumbre estimada de ±15 px y no está calibrada. Los anchos de las otras pantallas siguen siendo hipótesis hasta sus tramos.
 
 ### Matriz de información y acciones preservadas
 
@@ -1274,44 +1293,46 @@ Cada PR de migración incluye su matriz antes/después de información y accesos
 
 ### Pantalla → receta
 
-Cubre todas las pantallas de `apps/web/src` en main: 18 del estudio (`study/`), 9 del portal (`portal/`) y 5 de acceso (4 en `auth/` y «sin acceso», que vive en `App.tsx`), 32 en total. La columna de familias y componentes es la composición destino: los componentes que la pantalla todavía no usa en main se incorporan en su corte. La columna «Corte» es el orden de migración; el corte 0 son las extensiones de primitivas, previo a toda pantalla.
+Cubre 34 filas: 20 del estudio (incluida la fila de estados de ruta), 9 del portal y 5 de acceso (4 en `auth/` y «sin acceso», que vive en `App.tsx`; la fila 32 incluye estados de sesión). Las variantes BT-1 a BT-6 son la asignación aprobada para el estudio; BT-0 no lleva barra. Las variantes del portal son propuestas y no se aplican hasta que Inti lo decida. La columna «Corte Foco» conserva el orden de migración Foco; «Tramo barra» es independiente y sigue el orden aprobado para este corte.
 
-| Nº | Pantalla (ruta) | Archivo | Receta | Familias y componentes Foco (composición destino) | Corte |
-|---:|---|---|---|---|---:|
-| 1 | Inicio (`/`) | `study/StudyDashboard.tsx` | R01 | C01, C02, C03, C04, C07, C08 — `DenseHeader`, `StatStrip`, `DenseSection`, `DenseTable`, `DenseWorkspace`, `InspectorFacts`, `AsyncState`, `EmptyState`, `StatusBadge` (migrada) | 1 (migrada) |
-| 2 | Legajo (`/expediente-mensual`) | `study/StudyExpedienteMensual.tsx` | R02 | C01, C02, C04, C05, C06, C07, C08, C09 — `WorkPage`, `WorkBar`, `Menu`, `BarSelect`, `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` (vigente en main) | 2 (migrada) |
-| 3 | Reglas fiscales (`/reglas-fiscales`) | `study/StudyReglasFiscales.tsx` | R03 | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `DenseTabs`, `DenseTable`, `DenseWorkspace`, `ActionDrawer`, `ConfirmDialog`, `DeletionDrawer` | 3 (migrada) |
-| 4 | Catálogos fiscales (`/catalogos-fiscales`) | `study/StudyCatalogosFiscales.tsx` | R03 | C01, C04, C05, C06, C07, C08, C09 — `DenseTabs`, `DenseSearch`, `DenseTable`, `Inspector`, `ActionDrawer`, `DeletionDrawer` | 4 |
-| 5 | Clientes (`/clientes`) | `study/StudyClientes.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `StatStrip`, `DenseToggleGroup`, `DenseTable` con `groupBy`, `Inspector`, `ActionDrawer` | 5 |
-| 6 | Usuarios y accesos (`/administracion`) | `study/StudyAdministracion.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseTabs`, `DenseTable`, `Inspector`, `ActionDrawer`, `ConfirmDialog` | 6 |
-| 7 | Módulos de estudios (`/administracion-plataforma`) | `study/StudyAdministracionPlataforma.tsx` | RG, lista | C01, C03, C04, C05, C07, C09 — `StatStrip`, `DenseSearch`, `DenseTable`, `Switch`, `ConfirmDialog` | 6 |
-| 8 | Resumen del cliente (`/resumen-cliente`) | `study/StudyResumenCliente.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08 — `DenseHeader`, `DenseTabs`, `Table`, `EmptyState`, `StatusBadge` | 7 |
-| 9 | Configuración fiscal (`/configuracion-fiscal`) | `study/StudyOnboardingFiscal.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08, C09 — `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `ConfirmDialog` | 7 |
-| 10 | Bandeja documental (`/bandeja`) | `study/StudyBandeja.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `StatStrip` (con `pressed`), `DenseSearch`, `DenseTable`, `DenseFooter`, `AsyncState`, `EmptyState`, `StatusBadge`, `ActionDrawer`, `ConfirmDialog` (cabecera, indicadores y lista en 7b.2; el detalle sigue en 7b.3) | 7 |
-| 11 | Trabajo (`/trabajo`) | `study/StudyTrabajo.tsx` | RG, secciones | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `DenseSection`, `Table`, `StatusBadge`, `ActionDrawer` | 7 |
-| 12 | Liquidaciones (`/liquidaciones`) | `study/StudyLiquidaciones.tsx` | RG, lista | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `Table`, `StatusBadge`, `ActionDrawer` | 7 |
-| 13 | Rentabilidad (`/rentabilidad`) | `study/StudyRentabilidad.tsx` | RG, secciones | C01, C02, C03, C07, C08, C09 — `StatStrip`, `DenseSection`, `StatusBadge`, `ConfirmDialog` | 7 |
-| 14 | Ayuda (`/ayuda`) | `study/StudyAyuda.tsx` | RG, secciones | C01, C02, C05 — `DenseHeader`, `DenseSection`, `SectionIndex` | 9 |
-| 15 | Estados de ruta: módulo no disponible y página no encontrada del estudio y del portal | `study/StudyRouteStates.tsx` | RG, sólo estados | C07 — `EmptyState` con su salida | 9 |
-| 16 | Contabilidad (`/contabilidad`, no liberada) | `study/StudyContabilidad.tsx` | RG, secciones | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` | 10 |
-| 17 | Reportes y análisis (`/reportes`, no liberada) | `study/StudyReportes.tsx` | RG, secciones | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `Table`, `StatusBadge`, `ConfirmDialog` | 10 |
-| 18 | Asistente contable (`/asistente`, no liberada) | `study/StudyAsistente.tsx` | RG, secciones | C01, C02, C07, C08 — `DenseHeader`, `DenseSection`, `EmptyState`, `Notice` | 10 |
-| 19 | Inicio del portal (`/portal`) | `portal/PortalDashboard.tsx` | R01 | C01, C02, C05, C07 — encabezado, secciones «Para resolver» y accesos, `SectionIndex`, `AsyncState` | 8 |
-| 20 | Pendientes (`/portal/pendientes`) | `portal/PortalPendientes.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `StatusBadge`, `EmptyState`, `Notice` | 8 |
-| 21 | Subir documentos (`/portal/upload`) | `portal/PortalUpload.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08, C09 — formulario de carga, `Table`, `StatusBadge`, `Notice` | 8 |
-| 22 | Impuestos (`/portal/impuestos`) | `portal/PortalObligaciones.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `StatusBadge`, `EmptyState` | 8 |
-| 23 | Liquidaciones (`/portal/liquidaciones`) | `portal/PortalLiquidaciones.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `StatusBadge`, `EmptyState` | 8 |
-| 24 | Rentabilidad (`/portal/rentabilidad`) | `portal/PortalRentabilidad.tsx` | RG, secciones | C01, C02, C05, C07, C08 — secciones Devengado y Caja, `EmptyState`, `Notice` | 8 |
-| 25 | Estados y reportes (`/portal/reportes`) | `portal/PortalReportes.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `EmptyState`, `Notice` | 8 |
-| 26 | Mensajes (`/portal/mensajes`) | `portal/PortalMensajes.tsx` | RG, lista y detalle | C01, C02, C05, C06, C07, C08, C09 — conversaciones y respuesta, `EmptyState`, `Notice` | 8 |
-| 27 | Perfil (`/portal/perfil`) | `portal/PortalPerfil.tsx` | RG, secciones | C01, C02, C05, C07, C08, C09 — `Field`, `Notice`, `EmptyState` | 8 |
-| 28 | Ingreso y verificación en dos pasos (`/login`) | `auth/LoginPage.tsx` | RG, formulario en página | C01, C08, C09 — título y descripción, `Field`, `Notice`, `Button` | 11 |
-| 29 | Cambio de contraseña temporal (`/cambiar-contrasena`) | `auth/ChangePasswordPage.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estados de sesión | 11 |
-| 30 | Aceptar invitación al portal (`/aceptar-invitacion`) | `auth/AcceptPortalInvitation.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estado de enlace incompleto | 11 |
-| 31 | Recuperar acceso (`/recuperar-acceso`) | `auth/RecoverAccessPage.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estado de enlace incompleto | 11 |
-| 32 | Sin acceso (`/sin-acceso`), carga de sesión y conexión no disponible | `App.tsx` | RG, sólo estados | C07 — `EmptyState` con su salida, carga | 11 |
-| 33 | Calendarios fiscales (`/calendarios-fiscales`) | `study/StudyCalendariosFiscales.tsx` | R03 | C01, C02, C04, C05, C07, C08, C09 — `DensePage`, `DenseHeader`, `DenseToolbar`, `DenseTabs`, `DenseSection` (`surface="integrated"`), `DenseTable` con `groupBy`, `DenseToggleGroup`, `InspectorFacts`, `ActionDrawer`, `ConfirmDialog`, `Field`, `StatusBadge`, `AsyncState`, `EmptyState`, `useNotify` | nace en Foco |
-| 34 | Panel de trabajo (`/panel-trabajo`) | `study/StudyPanelTrabajo.tsx` | RG | C01, C03, C04, C05, C07, C08 — `DenseHeader`, `StatStrip`, `DenseToolbar`, `DenseToggleGroup`, `DenseTable` (`surface="integrated"`), `StatusBadge` (`variant="plain"`), `EmptyState`, `Notice` | 4b |
+| Nº | Pantalla (ruta) | Archivo | Receta | Familias y componentes Foco (composición destino) | Corte Foco | Barra | Tramo barra | Estado barra |
+|---:|---|---|---|---|---:|---|---|---|
+| 1 | Inicio (`/`) | `study/StudyDashboard.tsx` | R01 | C01, C02, C03, C04, C07, C08 — `DenseHeader`, `StatStrip`, `DenseSection`, `DenseTable`, `DenseWorkspace`, `InspectorFacts`, `AsyncState`, `EmptyState`, `StatusBadge` (migrada) | 1 (migrada) | BT-6 | T2 | por aplicar: tramo 2 |
+| 2 | Legajo (`/expediente-mensual`) | `study/StudyExpedienteMensual.tsx` | R02 | C01, C02, C04, C05, C06, C07, C08, C09 — `WorkPage`, `WorkBar`, `Menu`, `BarSelect`, `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` (vigente en main) | 2 (migrada) | BT-1 | T0 | vigente |
+| 3 | Reglas fiscales (`/reglas-fiscales`) | `study/StudyReglasFiscales.tsx` | R03 | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `DenseTabs`, `DenseTable`, `DenseWorkspace`, `ActionDrawer`, `ConfirmDialog`, `DeletionDrawer` | 3 (migrada) | BT-3 | T5 | por aplicar: tramo 5 |
+| 4 | Catálogos fiscales (`/catalogos-fiscales`) | `study/StudyCatalogosFiscales.tsx` | R03 | C01, C04, C05, C06, C07, C08, C09 — `DenseTabs`, `DenseSearch`, `DenseTable`, `Inspector`, `ActionDrawer`, `DeletionDrawer` | 4 | BT-3 | T5 | por aplicar: tramo 5 |
+| 5 | Clientes (`/clientes`) | `study/StudyClientes.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `StatStrip`, `DenseToggleGroup`, `DenseTable` con `groupBy`, `Inspector`, `ActionDrawer` | 5 | BT-3 | T1 | por aplicar: tramo 1 |
+| 6 | Usuarios y accesos (`/administracion`) | `study/StudyAdministracion.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseTabs`, `DenseTable`, `Inspector`, `ActionDrawer`, `ConfirmDialog` | 6 | BT-3 | T5 | por aplicar: tramo 5 |
+| 7 | Módulos de estudios (`/administracion-plataforma`) | `study/StudyAdministracionPlataforma.tsx` | RG, lista | C01, C03, C04, C05, C07, C09 — `StatStrip`, `DenseSearch`, `DenseTable`, `Switch`, `ConfirmDialog` | 6 | BT-2 | T5 | por aplicar: tramo 5 |
+| 8 | Resumen del cliente (`/resumen-cliente`) | `study/StudyResumenCliente.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08 — `DenseHeader`, `DenseTabs`, `Table`, `EmptyState`, `StatusBadge` | 7 | BT-4 | T4 | por aplicar: tramo 4 |
+| 9 | Configuración fiscal (`/configuracion-fiscal`) | `study/StudyOnboardingFiscal.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08, C09 — `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `ConfirmDialog` | 7 | BT-4 | T4 | por aplicar: tramo 4 |
+| 10 | Bandeja documental (`/bandeja`) | `study/StudyBandeja.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `StatStrip` (con `pressed`), `DenseSearch`, `DenseTable`, `DenseFooter`, `AsyncState`, `EmptyState`, `StatusBadge`, `ActionDrawer`, `ConfirmDialog` (cabecera, indicadores y lista en 7b.2; el detalle sigue en 7b.3) | 7 | BT-3 | T1 | por aplicar: tramo 1 |
+| 11 | Trabajo (`/trabajo`) | `study/StudyTrabajo.tsx` | RG, secciones | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `DenseSection`, `Table`, `StatusBadge`, `ActionDrawer` | 7 | BT-5 | T2 | por aplicar: tramo 2 |
+| 12 | Liquidaciones (`/liquidaciones`) | `study/StudyLiquidaciones.tsx` | RG, lista | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `Table`, `StatusBadge`, `ActionDrawer` | 7 | BT-2 | T2 | por aplicar: tramo 2 |
+| 13 | Rentabilidad (`/rentabilidad`) | `study/StudyRentabilidad.tsx` | RG, secciones | C01, C02, C03, C07, C08, C09 — `StatStrip`, `DenseSection`, `StatusBadge`, `ConfirmDialog` | 7 | BT-5 | T3 | por aplicar: tramo 3 |
+| 14 | Ayuda (`/ayuda`) | `study/StudyAyuda.tsx` | RG, secciones | C01, C02, C05 — `DenseHeader`, `DenseSection`, `SectionIndex` | 9 | BT-6 | T6 | por aplicar: tramo 6 |
+| 15 | Estados de ruta: módulo no disponible y página no encontrada del estudio y del portal | `study/StudyRouteStates.tsx` | RG, sólo estados | C07 — `EmptyState` con su salida | 9 | BT-0 | T6 | vigente: sin barra (estado de ruta) |
+| 16 | Contabilidad (`/contabilidad`, no liberada) | `study/StudyContabilidad.tsx` | RG, secciones | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` | 10 | BT-5 | T3 | por aplicar: tramo 3 |
+| 17 | Reportes y análisis (`/reportes`, no liberada) | `study/StudyReportes.tsx` | RG, secciones | C01, C02, C03, C04, C07, C08, C09 — `StatStrip`, `Table`, `StatusBadge`, `ConfirmDialog` | 10 | BT-5 | T3 | por aplicar: tramo 3 |
+| 18 | Asistente contable (`/asistente`, no liberada) | `study/StudyAsistente.tsx` | RG, secciones | C01, C02, C07, C08 — `DenseHeader`, `DenseSection`, `EmptyState`, `Notice` | 10 | BT-5 | T3 | por aplicar: tramo 3 |
+| 19 | Inicio del portal (`/portal`) | `portal/PortalDashboard.tsx` | R01 | C01, C02, C05, C07 — encabezado, secciones «Para resolver» y accesos, `SectionIndex`, `AsyncState` | 8 | BT-6 (propuesta) | T7 condicional | fuera de alcance: portal como está |
+| 20 | Pendientes (`/portal/pendientes`) | `portal/PortalPendientes.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `StatusBadge`, `EmptyState`, `Notice` | 8 | BT-2 (propuesta) | T7 condicional | fuera de alcance: portal como está |
+| 21 | Subir documentos (`/portal/upload`) | `portal/PortalUpload.tsx` | RG, secciones | C01, C02, C04, C05, C07, C08, C09 — formulario de carga, `Table`, `StatusBadge`, `Notice` | 8 | BT-5 (propuesta) | T7 condicional | fuera de alcance: portal como está |
+| 22 | Impuestos (`/portal/impuestos`) | `portal/PortalObligaciones.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `StatusBadge`, `EmptyState` | 8 | BT-2 (propuesta) | T7 condicional | fuera de alcance: portal como está |
+| 23 | Liquidaciones (`/portal/liquidaciones`) | `portal/PortalLiquidaciones.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `StatusBadge`, `EmptyState` | 8 | BT-2 (propuesta) | T7 condicional | fuera de alcance: portal como está |
+| 24 | Rentabilidad (`/portal/rentabilidad`) | `portal/PortalRentabilidad.tsx` | RG, secciones | C01, C02, C05, C07, C08 — secciones Devengado y Caja, `EmptyState`, `Notice` | 8 | BT-5 (propuesta) | T7 condicional | fuera de alcance: portal como está |
+| 25 | Estados y reportes (`/portal/reportes`) | `portal/PortalReportes.tsx` | RG, lista | C01, C02, C04, C05, C07, C08 — `Table`, `EmptyState`, `Notice` | 8 | BT-2 (propuesta) | T7 condicional | fuera de alcance: portal como está |
+| 26 | Mensajes (`/portal/mensajes`) | `portal/PortalMensajes.tsx` | RG, lista y detalle | C01, C02, C05, C06, C07, C08, C09 — conversaciones y respuesta, `EmptyState`, `Notice` | 8 | BT-3 (propuesta) | T7 condicional | fuera de alcance: portal como está |
+| 27 | Perfil (`/portal/perfil`) | `portal/PortalPerfil.tsx` | RG, secciones | C01, C02, C05, C07, C08, C09 — `Field`, `Notice`, `EmptyState` | 8 | BT-6 (propuesta) | T7 condicional | fuera de alcance: portal como está |
+| 28 | Ingreso y verificación en dos pasos (`/login`) | `auth/LoginPage.tsx` | RG, formulario en página | C01, C08, C09 — título y descripción, `Field`, `Notice`, `Button` | 11 | BT-0 | — | vigente: sin barra (acceso) |
+| 29 | Cambio de contraseña temporal (`/cambiar-contrasena`) | `auth/ChangePasswordPage.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estados de sesión | 11 | BT-0 | — | vigente: sin barra (acceso) |
+| 30 | Aceptar invitación al portal (`/aceptar-invitacion`) | `auth/AcceptPortalInvitation.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estado de enlace incompleto | 11 | BT-0 | — | vigente: sin barra (acceso) |
+| 31 | Recuperar acceso (`/recuperar-acceso`) | `auth/RecoverAccessPage.tsx` | RG, formulario en página | C01, C07, C08, C09 — título y descripción, `Field`, `Notice`, `Button`, estado de enlace incompleto | 11 | BT-0 | — | vigente: sin barra (acceso) |
+| 32 | Sin acceso (`/sin-acceso`), carga de sesión y conexión no disponible | `App.tsx` | RG, sólo estados | C07 — `EmptyState` con su salida, carga | 11 | BT-0 | — | vigente: sin barra (acceso/estado) |
+| 33 | Calendarios fiscales (`/calendarios-fiscales`) | `study/StudyCalendariosFiscales.tsx` | R03 | C01, C02, C04, C05, C07, C08, C09 — `DensePage`, `DenseHeader`, `DenseToolbar`, `DenseTabs`, `DenseSection` (`surface="integrated"`), `DenseTable` con `groupBy`, `DenseToggleGroup`, `InspectorFacts`, `ActionDrawer`, `ConfirmDialog`, `Field`, `StatusBadge`, `AsyncState`, `EmptyState`, `useNotify` | nace en Foco | BT-2 | T5 | por aplicar: tramo 5 |
+| 34 | Panel de trabajo (`/panel-trabajo`) | `study/StudyPanelTrabajo.tsx` | RG | C01, C03, C04, C05, C07, C08 — `DenseHeader`, `StatStrip`, `DenseToolbar`, `DenseToggleGroup`, `DenseTable` (`surface="integrated"`), `StatusBadge` (`variant="plain"`), `EmptyState`, `Notice` | 4b | BT-2 | T1 | por aplicar: tramo 1 |
+
+**Orden de migración de la barra:** T0 (vigente) → T1 → T5 → T2 → T3 → T4 → T6. T7 queda condicional a una decisión de Inti. La columna «Corte Foco» no cambia. Las nueve variantes del portal son solo una propuesta; mientras tanto, el portal conserva su marco actual.
 
 **Desvío de Clientes (D5-11):** la pantalla no tiene «Actualizar»: la lista se refresca al mutar y al volver a la pestaña, y el estado «actualización con datos previos identificados» no aplica a esta pantalla.
 
@@ -1407,10 +1428,10 @@ Todo PR que implementa una pieza o migra una pantalla a Foco verifica, sobre los
 
 La galería del contrato Foco v1 validó composición e interacción sobre HTML de referencia; el zoom, el lector de pantalla y los indicadores no textuales se validan en el PR de implementación.
 
-### Brechas observadas previas, vigentes
+### Brechas observadas y correcciones documentales
 
 - `--ds-color-text-disabled` sobre `--ds-color-control-disabled` mide 3,91:1 frente al umbral general. `--ds-color-text-faint` cumple sobre las superficies generales, muted y hover; la fila muted seleccionada queda en 4,3786:1, según la tabla de contraste y la decisión de conservar el token exacto.
-- En Dense UI varios objetivos interactivos quedan por debajo del objetivo interno de 44 px: `.dense-tab` tiene `min-height: 36px`; `.dense-input` y `.dense-select` miden 30 px; botones de `.dense-seg` miden 28 px. En el shell, `.study__nav-link` tiene 42 px. El botón móvil de menú sí mide 44 px.
+- **Corrección de la guía (vigente en main):** `.dense-tab` usa `Button size="row"` y mide 32 px (`--ds-control-height-sm`), no 36 px. `.dense-input` y `.dense-select` miden 30 px. `DenseToggleGroup` usa botones de 32 px y un borde de 1 px alrededor del grupo; su futura variante de barra mide 30 px por botón para que el grupo completo mida 32 px. En el shell, `.study__nav-link` tiene 42 px. El botón móvil de menú mide 44 px.
 - `Field` relaciona su error mediante `aria-describedby` pero no añade `role="alert"`; por eso el anuncio inmediato recomendado por la guía de formularios y paneles no está garantizado en el componente por sí solo.
 - La tabla genérica `Table` usa semántica nativa, pero no implementa selección/foco de fila ni manejo de flechas; las listas con selección obtienen ese soporte mediante `DenseTable`.
 
@@ -1425,6 +1446,17 @@ La galería del contrato Foco v1 validó composición e interacción sobre HTML 
 - **Lo vigente se preserva.** Toda migración conserva la información y los accesos de la pantalla (matriz antes/después), la agrupación y selección por terminación de CUIT (#91) y las reglas de Inicio (#87 y #90).
 - **Un patrón se corrige una vez.** Un hallazgo que se repite en dos pantallas se trata como patrón y se corrige en la pieza compartida.
 - **Producto decide producto.** Cambios de reglas de negocio, permisos o flujos se proponen a Ciro y los decide Inti. Una decisión pendiente (por ejemplo G07) se anota como pendiente en la guía y la pantalla conserva el comportamiento vigente.
+
+### Migración de una pantalla a la barra de trabajo
+
+1. **Confirmá el alcance y la variante.** Elegí BT-1 a BT-6 y el tramo de la tabla. Las pantallas del portal quedan como están; las pantallas de acceso y los estados de bloqueo usan BT-0, sin barra.
+2. **Armá el marco compartido.** Como hijo directo de `main.study__content`, usá `WorkPage bar={<WorkBar ...>}`. Pasá contexto y acción en `context`/`action`, avisos en `note`/`reason` y navegación/acciones de sección en `sections`/`sectionActions`. Elegí entre `BarSelect` y `Menu` para las opciones de contexto; usá `DenseTabs` para secciones. No agregues una pieza por pantalla.
+3. **Retirá duplicaciones en el mismo corte.** En la pantalla migrada, sacá el `DenseHeader` visible, el título y descripción repetidos, los filtros que se suben a la barra y cualquier copia de una acción o cifra. Conservá el `h1` como texto solo para lectores de pantalla, con el nombre del menú. En el tramo 3, trasladá a la barra el período requerido por cada pantalla y recién entonces retirás `ContextBar` de `StudyShell`; no modifiques el marco del portal.
+4. **Unificá el desplazamiento.** Dentro de `WorkPage`, quitá el tope de alto y el scroll propio de tablas/listas. El cuerpo es el contenedor de desplazamiento; mantené la barra fuera de él y el encabezado de tabla pegado debajo. Los cajones y diálogos cubren la barra sin moverla.
+5. **Verificá el layout y la interacción.** A 1280×720 y 1440×900, probá el ancho normal y el peor caso, sin desborde ni controles recortados; comprobá alto de barra (49, 72, 89 o 112 px), un solo desplazamiento, encabezado visible, estado de pestaña y una sola acción primaria. El estudio es de escritorio.
+6. **Acompañá la migración con pruebas.** Sumá pruebas de layout para ambos viewports y pruebas de la pantalla; corré `design-md.test.ts`, `design-literals.test.ts` y `UiPatterns.test.ts`. No amplíes la línea base de literales.
+
+La variante `size="bar"` de `DenseSearch` y `DenseToggleGroup` se construye en T1 y después se reutiliza. El tratamiento rojo de acciones irreversibles en `Menu` se implementa con Reglas fiscales en T5. Las medidas de las tres maquetas son referencias, no reemplazan la verificación de la aplicación real.
 
 ### Tokens
 
