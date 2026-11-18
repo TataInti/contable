@@ -118,7 +118,11 @@ describe("Legajo · lista de legajos y tarjeta (K8)", () => {
     renderPage();
 
     // vigente: cambia con A29 (antes: «Sin legajos para este período»)
-    expect(await screen.findByText("Creá el legajo para reunir las fuentes, clasificar y calcular la liquidación del período.")).toBeTruthy();
+    expect(
+      await screen.findByText(
+        "Creá el legajo para reunir las fuentes, clasificar y calcular la liquidación del período.",
+      ),
+    ).toBeTruthy();
     expect(screen.queryByText("Sin legajos para este período")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Nuevo legajo" }));
     await waitFor(() =>
