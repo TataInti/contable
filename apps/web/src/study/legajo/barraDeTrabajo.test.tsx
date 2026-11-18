@@ -373,4 +373,13 @@ describe("Legajo · correcciones de la barra (Barra 2c)", () => {
     const boton = await within(barra()).findByRole("button", { name: "Crear rectificativa" });
     expect(boton.classList.contains("ds-button--sm")).toBe(true);
   });
+
+  it("las dos frases de guía de Clasificación van en un mismo párrafo", async () => {
+    renderLegajo({ legajos: [legajoDemo("FINALIZED")] });
+    fireEvent.click(await within(barra()).findByRole("tab", { name: "Clasificación" }));
+    const guia = await screen.findByText(/^Las actividades adheridas determinan/);
+    expect(guia.closest("p")?.textContent).toBe(
+      "Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular. El legajo no admite cambios de fuentes en su estado actual.",
+    );
+  });
 });

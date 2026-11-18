@@ -64,8 +64,8 @@ export function EtapaClasificacion({
       <p className="muted-copy">
         Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de
         calcular.
+        {motivoEditar ? ` ${motivoEditar}` : null}
       </p>
-      {motivoEditar ? <small className="muted-copy">{motivoEditar}</small> : null}
       <div className="workpaper-classification-summary">
         <span>
           <strong>{indicador(classificationQuery.data?.classified)}</strong>
