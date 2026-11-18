@@ -74,3 +74,27 @@ describe("reglas de flujo fuera de WorkPage: sin cambios", () => {
     expect(regla(densa, ".study__content:has(> .dense-page--flow)")).toMatch(/overflow:\s*auto/);
   });
 });
+
+describe("barra de trabajo: alturas, margen y cabecera pegada (Barra 2c)", () => {
+  const tabla = readFileSync(new URL("./Table.css", import.meta.url), "utf8");
+
+  it("las pestañas de etapa no añaden margen superior: la fila de etapas mide 40 px y la barra 89 px", () => {
+    expect(regla(barra, ".work-bar__row--secciones .dense-tabs")).toMatch(
+      /margin-top:\s*0(?:px)?\s*;/,
+    );
+  });
+
+  it("el renglón de contexto deja un margen mínimo de 24 px entre el período y la acción", () => {
+    expect(regla(barra, ".work-bar__inicio")).toMatch(/margin-inline-end:\s*var\(--ds-space-6\)/);
+  });
+
+  it("la cabecera de la tabla se pega bajo la barra: sus celdas son sticky con top 0", () => {
+    const encabezado = regla(tabla, ".ds-table thead th");
+    expect(encabezado).toMatch(/position:\s*sticky/);
+    expect(encabezado).toMatch(/top:\s*0/);
+  });
+
+  it("el cuerpo no tiene relleno superior: la cabecera pegada queda a 0 px de la barra", () => {
+    expect(regla(pagina, ".work-page__body")).not.toMatch(/padding-top|padding-block-start/);
+  });
+});

@@ -845,6 +845,7 @@ export function StudyExpedienteMensual() {
     if (wp.status === "FINALIZED" && capabilities.has("tax.settlements.rectify")) {
       accion = (
         <Button
+          size="sm"
           variant="secondary"
           disabled={rectifyMutation.isPending}
           onClick={() =>

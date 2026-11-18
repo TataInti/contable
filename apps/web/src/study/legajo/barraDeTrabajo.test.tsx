@@ -354,7 +354,11 @@ describe("Legajo · correcciones de la barra (Barra 2c)", () => {
     const selector = (await within(barra()).findByRole("combobox", {
       name: "Período fiscal",
     })) as HTMLSelectElement;
-    expect(within(selector).getAllByRole("option").map((opcion) => opcion.textContent)).toEqual([
+    expect(
+      within(selector)
+        .getAllByRole("option")
+        .map((opcion) => opcion.textContent),
+    ).toEqual([
       "Seleccioná un período fiscal…",
       "Octubre de 2026 · Ingresos Brutos · 2026-10",
       "Octubre de 2026 · IVA · 2026-10",
@@ -362,5 +366,11 @@ describe("Legajo · correcciones de la barra (Barra 2c)", () => {
     expect(selector.selectedOptions[0]?.textContent).toBe(
       "Octubre de 2026 · Ingresos Brutos · 2026-10",
     );
+  });
+
+  it("«Crear rectificativa» tiene el tamaño de los demás controles de la barra (32 px)", async () => {
+    renderLegajo({ legajos: [legajoDemo("FINALIZED")] });
+    const boton = await within(barra()).findByRole("button", { name: "Crear rectificativa" });
+    expect(boton.classList.contains("ds-button--sm")).toBe(true);
   });
 });
