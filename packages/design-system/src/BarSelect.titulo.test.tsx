@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { BarSelect } from "./BarSelect";
+import { BarSelect } from "./BarSelect.js";
 
 describe("desplegable de barra (BarSelect): rótulo completo (Barra 2e)", () => {
   it("el valor elegido lleva su rótulo completo en title, para leerlo cuando el texto se corta", () => {
