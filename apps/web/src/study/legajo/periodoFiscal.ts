@@ -27,3 +27,9 @@ export function writeFiscalTaxPeriodSelection(key: string, periodId: string) {
     // La selección en memoria sigue funcionando si el navegador bloquea storage.
   }
 }
+
+/** Rótulo del período en el desplegable de la barra: el mes y el año primero, y después el rótulo de siempre (Barra 2c). */
+export function rotuloPeriodoFiscal(period: FiscalTaxPeriod) {
+  const mes = formatearPeriodo(period.startDate, period.endDate);
+  return `${mes.charAt(0).toLocaleUpperCase("es-AR")}${mes.slice(1)} · ${period.taxType.name} · ${fiscalTaxPeriodLabel(period)}`;
+}

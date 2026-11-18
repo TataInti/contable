@@ -347,3 +347,20 @@ describe("Legajo · sustitutas de la banda de cifras (BandaEstado.test.tsx, reti
     expect(screen.queryByText(/\d+ Componentes?/)).toBeNull();
   });
 });
+
+describe("Legajo · correcciones de la barra (Barra 2c)", () => {
+  it("el período fiscal muestra el mes y el año primero, en cada opción y en el valor elegido", async () => {
+    renderLegajo({ legajos: [legajoDemo("DRAFT")] });
+    const selector = (await within(barra()).findByRole("combobox", {
+      name: "Período fiscal",
+    })) as HTMLSelectElement;
+    expect(within(selector).getAllByRole("option").map((opcion) => opcion.textContent)).toEqual([
+      "Seleccioná un período fiscal…",
+      "Octubre de 2026 · Ingresos Brutos · 2026-10",
+      "Octubre de 2026 · IVA · 2026-10",
+    ]);
+    expect(selector.selectedOptions[0]?.textContent).toBe(
+      "Octubre de 2026 · Ingresos Brutos · 2026-10",
+    );
+  });
+});

@@ -1,11 +1,16 @@
-/* Desplegable compacto de barra (BarSelect): campo de 32 px con el aspecto de .ds-field__input.
-   Tope de ancho con puntos suspensivos para textos largos; el nombre accesible va en aria-label. */
+/* Desplegable compacto de barra (BarSelect): mismo alto, superficie y borde que los botones de la barra
+   (secundario), sin el gris de campo. Crece hasta su contenido (el mes y el año van primero) y se achica
+   hasta un mínimo que deja el mes a la vista; el resto del rótulo se corta con puntos suspensivos.
+   El nombre accesible va en aria-label. */
 .ds-field__input.ds-bar-select {
   inline-size: auto;
-  max-inline-size: 320px;
-  min-block-size: var(--ds-control-height-sm);
+  min-inline-size: calc(var(--ds-space-16) * 3);
   block-size: var(--ds-control-height-sm);
+  min-block-size: var(--ds-control-height-sm);
   padding-block: 0;
+  background-color: var(--ds-color-surface);
+  border-color: var(--ds-color-border-strong);
+  box-shadow: var(--ds-shadow-control);
   font-size: var(--ds-text-sm);
   font-weight: var(--ds-font-weight-medium);
   line-height: var(--ds-leading-tight);

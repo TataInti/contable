@@ -102,9 +102,14 @@ const data = {
   ticket: { isoDate: "2025-03-16", total: "29900", net: "24710.74", vat: "5189.26" },
 };
 
-/** Etiqueta del período de marzo 2025 de cada impuesto (única por corrida). */
-function periodLabel(tax: Tax) {
+/** Etiqueta que guarda el período de marzo 2025 de cada impuesto (única por corrida). */
+function etiquetaDelPeriodo(tax: Tax) {
   return `Marzo 2025 ${tax.taxType.code} ${SUFFIX}`;
+}
+
+/** Rótulo del período en el desplegable de la barra: mes y año primero, y después el rótulo de siempre. */
+function periodLabel(tax: Tax) {
+  return `Marzo de 2025 · ${tax.taxType.name} · ${etiquetaDelPeriodo(tax)}`;
 }
 
 /** Lecturas del catálogo (no crean nada): permiten repetir la prueba sin chocar con lo que ya existe. */
@@ -347,7 +352,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
 
   await test.step("Configuración fiscal: período de marzo 2025 y obligación por impuesto", async () => {
     for (const tax of Object.values(taxes)) {
-      const label = periodLabel(tax);
+      const label = etiquetaDelPeriodo(tax);
       await clickAdd(page, "Períodos fiscales");
       await pickOption(page.locator("#per-tax-type"), tax.taxTypeOption);
       await page.locator("#per-start").fill(data.periodStart);

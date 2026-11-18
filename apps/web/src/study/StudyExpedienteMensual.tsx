@@ -46,6 +46,7 @@ import {
   fiscalTaxPeriodSelectionKey,
   readFiscalTaxPeriodSelection,
   writeFiscalTaxPeriodSelection,
+  rotuloPeriodoFiscal,
 } from "./legajo/periodoFiscal";
 import {
   WORKPAPER_STEPS,
@@ -643,7 +644,7 @@ export function StudyExpedienteMensual() {
     { value: "", label: "Seleccioná un período fiscal…" },
     ...selectableTaxPeriods.map((taxPeriod) => ({
       value: taxPeriod.id,
-      label: `${taxPeriod.taxType.name} · ${fiscalTaxPeriodLabel(taxPeriod)}`,
+      label: rotuloPeriodoFiscal(taxPeriod),
     })),
   ];
   const sinPeriodosFiscales = taxPeriodsQuery.isSuccess && selectableTaxPeriods.length === 0;
