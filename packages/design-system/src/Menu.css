@@ -120,3 +120,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Disparador con su menú abierto (Barra 2e): borde del color de foco, el mismo token que el anillo de los demás controles. */
+.ds-menu > .ds-button[aria-expanded="true"]:not(:disabled) {
+  border-color: var(--ds-color-focus);
+}
