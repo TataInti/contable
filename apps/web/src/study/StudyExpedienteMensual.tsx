@@ -56,6 +56,7 @@ import { importarLoteFuente } from "./legajo/loteFuente";
 import { pluralizar } from "./legajo/textos";
 import { mensajesDePedidoDeCambios, selfReviewNote } from "./legajo/formato";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
+import { PeriodoSinLegajo } from "./legajo/PeriodoSinLegajo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
 import { PanelLibrosIva } from "./legajo/paneles/PanelLibrosIva";
 import { PanelSaldoInicial } from "./legajo/paneles/PanelSaldoInicial";
@@ -1155,16 +1156,10 @@ export function StudyExpedienteMensual() {
     );
   } else if (!seleccionada) {
     cuerpo = listQuery.isSuccess ? (
-      <EmptyState
-        title="Sin legajos para este período"
-        description="Creá un legajo para coordinar las liquidaciones del período."
-        action={
-          canCalculate ? (
-            <Button onClick={() => createMutation.mutate()} loading={createMutation.isPending}>
-              Nuevo legajo
-            </Button>
-          ) : undefined
-        }
+      <PeriodoSinLegajo
+        puedeCrear={canCalculate}
+        creando={createMutation.isPending}
+        onCrear={() => createMutation.mutate()}
       />
     ) : null;
   } else {

@@ -232,7 +232,9 @@ describe("Legajo · barra de trabajo (Barra 2a)", () => {
     renderLegajo({ legajos: [] });
     expect(await within(barra()).findByText("Sin legajo en este período")).toBeTruthy();
     expect(within(barra()).queryAllByRole("tab")).toHaveLength(0);
-    expect(await screen.findByText("Sin legajos para este período")).toBeTruthy();
+    // vigente: cambia con A29 (antes: «Sin legajos para este período»)
+    expect(await screen.findByText("Creá el legajo para reunir las fuentes, clasificar y calcular la liquidación del período.")).toBeTruthy();
+    expect(screen.queryByText("Sin legajos para este período")).toBeNull();
     expect(screen.getByRole("button", { name: "Nuevo legajo" })).toBeTruthy();
   });
 

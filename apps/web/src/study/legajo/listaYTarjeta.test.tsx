@@ -117,7 +117,9 @@ describe("Legajo · lista de legajos y tarjeta (K8)", () => {
     vi.mocked(api.get).mockImplementation(rutasDemo({ legajos: [] }) as never);
     renderPage();
 
-    expect(await screen.findByText("Sin legajos para este período")).toBeTruthy();
+    // vigente: cambia con A29 (antes: «Sin legajos para este período»)
+    expect(await screen.findByText("Creá el legajo para reunir las fuentes, clasificar y calcular la liquidación del período.")).toBeTruthy();
+    expect(screen.queryByText("Sin legajos para este período")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Nuevo legajo" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(expect.stringMatching(/\/monthly-tax-workpapers$/), {
