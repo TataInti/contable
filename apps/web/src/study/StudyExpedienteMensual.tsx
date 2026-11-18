@@ -950,7 +950,7 @@ export function StudyExpedienteMensual() {
     </Button>
   );
   let accionesEtapa: ReactNode = null;
-  if (vigente && safeActiveStep === 0 && !soloLectura) {
+  if (vigente && safeActiveStep === 0) {
     accionesEtapa = (
       <>
         {actualizarBoton(
@@ -958,14 +958,16 @@ export function StudyExpedienteMensual() {
           () => void ledgerQuery.refetch(),
           ledgerQuery.isFetching ? "Actualizando…" : "Actualizar",
         )}
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={!capabilities.has("tax.settlements.calculate")}
-          onClick={() => setShowOpening((visible) => !visible)}
-        >
-          <Icon name="plus" size={15} /> Cargar saldo inicial
-        </Button>
+        {soloLectura ? null : (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!capabilities.has("tax.settlements.calculate")}
+            onClick={() => setShowOpening((visible) => !visible)}
+          >
+            <Icon name="plus" size={15} /> Cargar saldo inicial
+          </Button>
+        )}
       </>
     );
   } else if (vigente && safeActiveStep === 1) {
@@ -995,7 +997,7 @@ export function StudyExpedienteMensual() {
         </Button>
       </>
     );
-  } else if (vigente && safeActiveStep === 3 && !soloLectura) {
+  } else if (vigente && safeActiveStep === 3) {
     const actualizandoCalculo = positionQuery.isFetching || calculationQuery.isFetching;
     accionesEtapa = actualizarBoton(
       actualizandoCalculo,

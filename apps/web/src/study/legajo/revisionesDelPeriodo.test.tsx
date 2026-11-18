@@ -351,3 +351,26 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     expect(within(contenido).queryAllByRole("button")).toHaveLength(0);
   });
 });
+
+describe("Legajo · «Actualizar» en una revisión anterior (Barra 2e)", () => {
+  it("Saldos y Cálculo: «Actualizar» vuelve en solo lectura y no hay «Cargar saldo inicial» ni acción que escriba", async () => {
+    vi.mocked(api.get).mockImplementation(
+      rutasDemo({
+        legajos: [revisionVigente, revisionAnterior],
+        posiciones: [posicionDemo],
+      }) as never,
+    );
+    renderPage();
+    await screen.findByRole("tab", { name: "Saldos" });
+    elegirRevision(1);
+    expect(await screen.findByText("SALDO A FAVOR")).toBeTruthy();
+    const barraLegajo = screen.getByRole("region", {
+      name: "Legajo: período, revisión, etapas y acciones",
+    });
+    expect(await within(barraLegajo).findByRole("button", { name: "Actualizar" })).toBeTruthy();
+    expect(within(barraLegajo).queryByRole("button", { name: "Cargar saldo inicial" })).toBeNull();
+    fireEvent.click(within(barraLegajo).getByRole("tab", { name: "Cálculo" }));
+    expect(await within(barraLegajo).findByRole("button", { name: "Actualizar" })).toBeTruthy();
+    expect(within(barraLegajo).queryByRole("button", { name: "Cargar saldo inicial" })).toBeNull();
+  });
+});
