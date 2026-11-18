@@ -43,6 +43,26 @@ describe("página de trabajo (WorkPage): reglas CSS", () => {
   });
 });
 
+describe("tablas dentro de WorkPage: sin tope ni desplazamiento propio", () => {
+  it("la tabla de Table no tiene tope y no crea contenedor de desplazamiento", () => {
+    const bloque = regla(pagina, ".work-page .ds-table__wrapper");
+    expect(bloque).toMatch(/max-height:\s*none/);
+    expect(bloque).toMatch(/overflow:\s*clip/);
+    expect(bloque).not.toMatch(/overflow:\s*(?:auto|scroll|hidden)/);
+  });
+
+  it("la tabla de DenseTable tampoco tiene tope ni desplazamiento propio", () => {
+    expect(regla(pagina, ".work-page .dense-table-scroll")).toMatch(/max-height:\s*none/);
+    expect(regla(pagina, ".work-page .dense-table-scroll")).toMatch(/overflow:\s*visible/);
+    expect(regla(pagina, ".work-page .dense-table-card")).toMatch(/overflow:\s*clip/);
+  });
+
+  it("el ancho mínimo de la tabla impide que se recorte", () => {
+    expect(regla(pagina, ".work-page .ds-table__wrapper")).toMatch(/min-width:\s*min-content/);
+    expect(regla(pagina, ".work-page .dense-table-card")).toMatch(/min-width:\s*min-content/);
+  });
+});
+
 describe("reglas de flujo fuera de WorkPage: sin cambios", () => {
   it("la tabla de las páginas de flujo conserva su tope de 420 px y su desplazamiento", () => {
     const bloque = regla(densa, ".dense-page--flow .ds-table__wrapper");

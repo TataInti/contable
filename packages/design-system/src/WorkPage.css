@@ -36,3 +36,24 @@
 .work-page__content {
   padding-top: var(--ds-space-4);
 }
+
+/* Tablas dentro de una página de trabajo: sin tope de alto ni desplazamiento propio. El encabezado
+   pegado (position: sticky) se fija al cuerpo, que es el único contenedor de desplazamiento.
+   `clip` conserva las esquinas y no crea un contenedor de desplazamiento. `min-width: min-content`
+   impide que la tabla se recorte: si no entra en el ancho, es el cuerpo el que se desplaza en
+   horizontal. */
+.work-page .ds-table__wrapper {
+  max-height: none;
+  overflow: clip;
+  min-width: min-content;
+}
+
+.work-page .dense-table-card {
+  overflow: clip;
+  min-width: min-content;
+}
+
+.work-page .dense-table-scroll {
+  max-height: none;
+  overflow: visible;
+}
