@@ -751,6 +751,7 @@ export function StudyExpedienteMensual() {
     if (["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE"].includes(wp.status)) {
       accion = (
         <Button
+          size="sm"
           variant="primary"
           disabled={calculateDisabled}
           title={calculateDisabledReason ?? "Calcular liquidación"}
@@ -771,6 +772,7 @@ export function StudyExpedienteMensual() {
     if (wp.status === "CHANGES_REQUESTED") {
       accion = (
         <Button
+          size="sm"
           variant="primary"
           disabled={calculateMutation.isPending || !canCalculate}
           onClick={() => calculateMutation.mutate(wp.id)}
@@ -790,6 +792,7 @@ export function StudyExpedienteMensual() {
     if (wp.status === "CALCULATED") {
       accion = (
         <Button
+          size="sm"
           variant="primary"
           disabled={
             submitMutation.isPending ||
@@ -822,6 +825,7 @@ export function StudyExpedienteMensual() {
       accion = (
         <>
           <Button
+            size="sm"
             variant="secondary"
             disabled={reviewMutation.isPending || selfReviewBlocked}
             onClick={() => reviewMutation.mutate({ id: wp.id, approved: false })}
@@ -829,6 +833,7 @@ export function StudyExpedienteMensual() {
             Solicitar cambios
           </Button>
           <Button
+            size="sm"
             variant="primary"
             disabled={reviewMutation.isPending || selfReviewBlocked}
             onClick={() => reviewMutation.mutate({ id: wp.id, approved: true })}
@@ -842,6 +847,7 @@ export function StudyExpedienteMensual() {
     if (wp.status === "REVIEWED") {
       accion = (
         <Button
+          size="sm"
           variant="primary"
           disabled={
             finalizeMutation.isPending ||

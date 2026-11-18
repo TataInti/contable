@@ -382,4 +382,17 @@ describe("Legajo · correcciones de la barra (Barra 2c)", () => {
       "Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular. El legajo no admite cambios de fuentes en su estado actual.",
     );
   });
+  it.each([
+    ["DRAFT", "Calcular liquidación"],
+    ["CHANGES_REQUESTED", "Recalcular"],
+    ["CALCULATED", "Enviar a revisión"],
+    ["IN_REVIEW", "Solicitar cambios"],
+    ["IN_REVIEW", "Aprobar revisión"],
+    ["REVIEWED", "Finalizar"],
+    ["FINALIZED", "Crear rectificativa"],
+  ])("en %s, «%s» mide 32 px: tamaño sm como el resto de los controles de la barra", async (estado, nombre) => {
+    renderLegajo({ legajos: [legajoDemo(estado)] });
+    const boton = await within(barra()).findByRole("button", { name: nombre });
+    expect(boton.classList.contains("ds-button--sm")).toBe(true);
+  });
 });
