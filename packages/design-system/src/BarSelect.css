@@ -1,0 +1,16 @@
+/* Desplegable compacto de barra (BarSelect): campo de 32 px con el aspecto de .ds-field__input.
+   Tope de ancho con puntos suspensivos para textos largos; el nombre accesible va en aria-label. */
+.ds-field__input.ds-bar-select {
+  inline-size: auto;
+  max-inline-size: 320px;
+  min-block-size: var(--ds-control-height-sm);
+  block-size: var(--ds-control-height-sm);
+  padding-block: 0;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: var(--ds-leading-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}

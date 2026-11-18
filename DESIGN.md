@@ -461,6 +461,84 @@ Los dos primeros quedan como acción primaria por defecto. Elegí la jerarquía 
 
 `aria-label` no forma parte de las props; usá `title` para un icono informativo o acompañalo con texto.
 
+#### Página de trabajo y barra de trabajo (WorkPage, WorkBar, Menu, BarSelect)
+
+**Estado:** vigente en main; primer uso en el Legajo, en el corte siguiente. Es la pieza de P5 para cualquier pantalla de trabajo: la barra se define una vez y cada pantalla la arma con sus controles.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Mantener a la vista el período, la revisión, el estado, las secciones y las acciones. El contenido empieza justo debajo de la barra y es lo único que se desplaza. La barra no tiene lógica de dominio: la pantalla resuelve cada control antes de pasarlo |
+| Entradas | `WorkPage`: `bar` (una `WorkBar`) y `children`. `WorkBar`: `label`, `context`, `action?`, `note?`, `reason?`, `sections?`, `sectionActions?` |
+| Variantes | Con o sin renglón de avisos (`note` o `reason`) y con o sin renglón de secciones (`sections` o `sectionActions`) |
+| Anatomía | Renglón de contexto de 48 px: contexto a la izquierda y la acción de la pantalla a la derecha. Renglón de avisos de una línea, solo con contenido: nota a la izquierda y motivo a la derecha, bajo el botón. Renglón de secciones de 40 px con divisor: navegación a la izquierda y acciones de la sección a la derecha. Fondo `--ds-color-surface`, borde inferior `--ds-color-border`, capa `--ds-z-sticky`, bordes alineados con el contenido |
+| Estados | Alto de referencia: 89 px sin avisos y 112 px con avisos. La acción puede estar disponible o deshabilitada con su motivo visible (P4) |
+| Interacción | El cuerpo se desplaza bajo una barra fija. El menú se abre desde la barra y se superpone al contenido |
+| Accesibilidad | `WorkBar` es una región con nombre (`label`). Cada control conserva su nombre accesible |
+| Tokens | `--ds-space-1`, `--ds-space-2`, `--ds-space-4`, `--ds-space-6`, `--ds-space-7`, `--ds-space-10`, `--ds-space-12`, `--ds-color-surface`, `--ds-color-border`, `--ds-color-border-subtle`, `--ds-z-sticky` |
+
+**Reglas de uso:**
+- `WorkPage` va como hijo directo de `main.study__content`. Dentro de la página, las tablas no tienen tope ni desplazamiento propio y su encabezado queda pegado bajo la barra. La regla de 420 px de las páginas de flujo sigue igual.
+- La barra tiene como máximo una acción primaria. Si la acción se deshabilita, su motivo va en `reason`, bajo el botón.
+- La navegación de secciones la arma la pantalla (por ejemplo, `DenseTabs`); la barra le da lugar y alineación.
+
+**Correcto:**
+
+```tsx
+<WorkPage
+  bar={
+    <WorkBar
+      label="Legajo: período, revisión, etapas y acciones"
+      context={
+        <>
+          <BarSelect label="Período fiscal" options={periodos} value={periodo} onChange={elegirPeriodo} />
+          <Menu kind="select" label="Revisión" trigger="Revisión 2" options={revisiones} value="r2" onChange={elegirRevision} />
+        </>
+      }
+      action={<Button type="button">Calcular liquidación</Button>}
+      reason="Faltan 2 controles bloqueantes."
+      sections={navegacionDeEtapas}
+    />
+  }
+>
+  <Table columns={columnas} rows={filas} rowKey={(fila) => fila.id} />
+</WorkPage>
+```
+
+**Incorrecto:**
+
+```tsx
+<div style={{ position: "sticky", top: 0 }}>{controles}</div>
+<WorkBar label="Barra" context={controles} action={<Button variant="primary">Guardar</Button>} sectionActions={<Button variant="primary">Aprobar</Button>} />
+```
+
+El primero arma una barra pegada a mano; el segundo tiene dos acciones primarias en la misma barra.
+
+#### Menu
+
+- **Propósito:** abrir desde un botón una lista de acciones o una lista de selección única.
+- **Props:** `kind` (`"actions"` o `"select"`), `label` (nombre accesible de la lista), `trigger` (contenido del botón) y `align?` (`"start"` o `"end"`). En `actions`: `items` con `key`, `label`, `description?`, `icon?`, `disabled?`, `disabledReason?` y `onSelect`. En `select`: `options` con `key`, `label`, `status?`, `secondary?`, `disabled?` y `disabledReason?`, más `value` y `onChange(key)`.
+- **Estados:** cerrado; abierto con foco en un ítem; ítem deshabilitado con su motivo (`aria-disabled`, sigue enfocable para que el motivo se lea); opción elegida (`aria-checked`).
+- **Teclado:** clic, Enter, Espacio o flecha abajo abren (flecha arriba abre en el último). Las flechas recorren con vuelta; Inicio y Fin van al primero y al último. Escape cierra y devuelve el foco al botón. Tab y el clic afuera cierran.
+- **Roles:** `menu` con `menuitem` (acciones) o `menuitemradio` con `aria-checked` (selección única).
+- **Correcto:**
+
+```tsx
+<Menu kind="actions" label="Acciones del período" trigger="Acciones del período" items={acciones} />
+<Menu kind="select" label="Revisión" trigger="Revisión 2" options={revisiones} value="r2" onChange={elegirRevision} />
+```
+
+- **Incorrecto:** un `select` nativo para mostrar estado o texto secundario; una acción única de la pantalla dentro de un menú (es un `Button`).
+
+#### BarSelect
+
+- **Propósito:** elegir un período u otra opción simple dentro de la barra.
+- **Props:** `label` (nombre accesible; no lleva etiqueta visible), `options` (pares `value` y `label`), `value` y `onChange`.
+- **Medida y estados:** 32 px (`--ds-control-height-sm`) con el aspecto de `.ds-field__input`. Un texto largo se corta con puntos suspensivos y el campo tiene tope de 320 px.
+- **Correcto:** `<BarSelect label="Período fiscal" options={periodos} value={periodo} onChange={elegirPeriodo} />`
+- **Incorrecto:** `BarSelect` en un formulario con etiqueta visible; ahí va `Field`.
+
+**Límites de esta pieza:** las medidas en navegador a 1280×720 y 1440×900 se toman en el corte del Legajo. `DenseTabs` sigue en el adaptador web.
+
 ### C02 — Secciones de lectura
 
 **Base:** `DensePage`, `DenseSection`. **Estado:** vigente en main, incluida la prop `surface`.
@@ -589,6 +667,8 @@ La clave debe ser estable y única por fila. `Table` es una tabla de lectura; pa
 ```
 
 Cada `id` debe coincidir con un destino único de la misma vista.
+
+En una barra de trabajo, el cambio de revisión o de período usa `Menu` (selección única) o `BarSelect` (campo compacto), definidos en C01 con `WorkBar`. La navegación de secciones sigue en `DenseTabs`, dentro de la barra.
 
 ### C06 — Lista y detalle
 

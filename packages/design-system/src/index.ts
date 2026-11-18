@@ -17,3 +17,9 @@ export * from "./ActionDrawer.js";
 export * from "./ConfirmAction.js";
 export * from "./Toast.js";
 export * from "./Switch.js";
+
+// Página de trabajo: la barra vive fuera del área que se desplaza (P5, Barra 1).
+export * from "./WorkPage.js";
+export * from "./WorkBar.js";
+export * from "./Menu.js";
+export * from "./BarSelect.js";
