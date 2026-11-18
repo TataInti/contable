@@ -14,6 +14,10 @@ function regla(selector: string): string {
 }
 
 describe("barra de trabajo (WorkBar): reglas CSS (Barra 2e)", () => {
+  it("la fila de contexto no agrega separación: el margen mínimo de 24 px lo pone el contexto", () => {
+    expect(regla(".work-bar__row--contexto")).toMatch(/gap:\s*0/);
+  });
+
   it("un botón de texto dentro del aviso no agranda el renglón de avisos: su alto es el de la línea", () => {
     expect(regla(".work-bar__nota .ds-button")).toMatch(/min-block-size:\s*0/);
   });
