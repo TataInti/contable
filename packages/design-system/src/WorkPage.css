@@ -1,0 +1,38 @@
+/* Página de trabajo (WorkPage): la barra vive fuera del área que se desplaza.
+   La regla sobre `main.study__content` sigue el criterio de las páginas de flujo (Dense.css):
+   el `main` deja de desplazarse y de tener relleno, y el cuerpo es el único contenedor de
+   desplazamiento. Desde 1025 px, igual que la regla de flujo. */
+@media (min-width: 1025px) {
+  .study__content:has(> .work-page) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+  }
+}
+
+.work-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  /* La barra y sus menús forman su propio contexto de apilado, por encima del cuerpo. */
+  isolation: isolate;
+}
+
+.work-page__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* Sin relleno superior: el encabezado pegado de una tabla queda a 0 px de la barra. */
+  padding-inline: var(--ds-space-6);
+  padding-bottom: var(--ds-space-7);
+  /* El ancho del cuerpo no cambia al aparecer la barra de desplazamiento. */
+  scrollbar-gutter: stable;
+}
+
+/* El relleno superior va en el contenido, no en el área que se desplaza. */
+.work-page__content {
+  padding-top: var(--ds-space-4);
+}
