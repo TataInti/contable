@@ -6,14 +6,9 @@ export function EtapaCierre({ wp }: { wp: Workpaper }) {
 
   return (
     <div className="workpaper-stage">
-      <div className="workpaper-stage__heading">
-        <div>
-          <strong>Cierre y arrastre</strong>
-          <small>
-            Finalizar congela los hashes y genera los saldos de cierre para el siguiente período.
-          </small>
-        </div>
-      </div>
+      <p className="muted-copy">
+        Finalizar congela los hashes y genera los saldos de cierre para el siguiente período.
+      </p>
       <dl className="workpaper-close-details">
         <div>
           <dt>Hash de entrada</dt>

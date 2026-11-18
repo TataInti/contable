@@ -268,164 +268,6 @@
   font-size: 0.82rem;
 }
 
-.workpaper-list {
-  display: grid;
-  gap: var(--ds-space-6);
-}
-
-.workpaper-card {
-  overflow: clip;
-  border: 1px solid var(--ds-color-border);
-  border-radius: var(--ds-radius-lg);
-  background: var(--ds-color-surface);
-}
-
-.workpaper-card__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--ds-space-4);
-  padding: var(--ds-space-5) var(--ds-space-6);
-  border-bottom: 1px solid var(--ds-color-border);
-}
-
-.workpaper-card__header h2,
-.workpaper-card__header p {
-  margin: 0;
-}
-
-.workpaper-card__header h2 {
-  font-size: var(--ds-text-xl);
-  line-height: 1.2;
-}
-
-.workpaper-card__header .status-badge {
-  margin-top: var(--ds-space-2);
-}
-
-/* Foco 2.10: el pedido de cambios va bajo el estado, con el mismo margen horizontal que el encabezado. */
-.workpaper-card > .workpaper-card__pedido {
-  margin: var(--ds-space-4) var(--ds-space-6) 0;
-}
-
-.workpaper-card__blocking {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 3px 10px;
-  border: 1px solid color-mix(in srgb, var(--ds-color-warning) 28%, transparent);
-  border-radius: 999px;
-  background: var(--ds-color-warning-subtle);
-  color: var(--ds-color-warning);
-  font-size: var(--ds-text-xs);
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.workpaper-process {
-  position: sticky;
-  top: var(--ds-space-3);
-  z-index: var(--ds-z-sticky);
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto;
-  gap: var(--ds-space-4);
-  padding: var(--ds-space-4) var(--ds-space-6);
-  border-bottom: 1px solid var(--ds-color-border);
-  /* Foco 2.8: encabezado opaco; al desplazar, el texto de la tarjeta no se lee por detrás. */
-  background: var(--ds-color-surface);
-}
-
-.workpaper-process__current {
-  min-width: 0;
-}
-
-/* Foco 2.8: la acción primaria de la tarjeta va en la línea «ETAPA N DE 6», antes de la barra de etapas. */
-.workpaper-process__nav {
-  display: grid;
-  align-content: start;
-  justify-items: end;
-  gap: var(--ds-space-2);
-  min-width: 0;
-}
-
-.workpaper-process__accion {
-  display: grid;
-  justify-items: end;
-  gap: var(--ds-space-1);
-  text-align: end;
-}
-
-/* Foco 2.9 (49 b): el motivo de la acción de la etapa ocupa como máximo 60 caracteres (dos renglones; el texto no
-   cambia) y no queda pegado a la bajada de la etapa. */
-.workpaper-process__accion > .muted-copy {
-  max-width: 60ch;
-}
-
-/* Foco 2.10: en revisión, «Solicitar cambios» va a la izquierda de «Aprobar revisión», en la misma línea. */
-.workpaper-process__decision {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
-  gap: var(--ds-space-2);
-}
-
-.workpaper-process__index {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--ds-color-primary);
-  font-size: var(--ds-text-xs);
-  font-weight: 800;
-  letter-spacing: 0.095em;
-  text-transform: uppercase;
-}
-
-.workpaper-process__current h3,
-.workpaper-process__current p {
-  margin: 0;
-}
-
-.workpaper-process__current h3 {
-  font-size: var(--ds-text-xl);
-  line-height: 1.15;
-}
-
-.workpaper-process__current p {
-  margin-top: var(--ds-space-1);
-  color: var(--ds-color-text-muted);
-  line-height: 1.45;
-}
-
-.workpaper-card__body {
-  padding: var(--ds-space-5) var(--ds-space-6);
-}
-
-.workpaper-step-footer,
-.workpaper-card__actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-4) var(--ds-space-6);
-  border-top: 1px solid var(--ds-color-border);
-}
-
-.workpaper-step-footer {
-  background: var(--ds-color-surface-muted);
-}
-
-.workpaper-step-footer > span {
-  color: var(--ds-color-text-muted);
-  font-size: var(--ds-text-sm);
-  font-weight: 650;
-}
-
-.workpaper-card__actions {
-  justify-content: flex-end;
-  background: color-mix(in srgb, var(--ds-color-surface) 72%, var(--ds-color-background));
-}
-
 /* Foco 2.9 (46): en el cajón «Registrar presentación» la separación entre renglones baja de 16 a 8 px, para que
    «Identificador externo (opcional)» entre entero a 1280×720. Solo ese formulario. */
 .study-form.study-form--presentacion {
@@ -664,30 +506,9 @@
   flex-wrap: wrap;
 }
 
-.workpaper-classification-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--ds-space-2);
-}
 
-.workpaper-classification-summary > span {
-  display: grid;
-  gap: var(--ds-space-1);
-  min-height: 4.2rem;
-  align-content: center;
-  padding: var(--ds-space-3);
-  border: 1px solid var(--ds-border);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-muted);
-}
 
-.workpaper-classification-summary strong {
-  font-size: 1.25rem;
-}
 
-.workpaper-classification-summary small {
-  color: var(--ds-text-muted);
-}
 
 .workpaper-classification-fields {
   display: grid;
@@ -895,11 +716,6 @@
   .workpaper-source-import {
     grid-template-columns: 1fr;
   }
-
-  .workpaper-process {
-    position: static;
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 860px) {
@@ -919,10 +735,7 @@
 
   .fiscal-rule-approval,
   .workpaper-stage__heading,
-  .workpaper-card__header,
-  .workpaper-calculation__header,
-  .workpaper-step-footer,
-  .workpaper-card__actions {
+  .workpaper-calculation__header {
     align-items: stretch;
     flex-direction: column;
   }
@@ -941,18 +754,9 @@
 
   .fiscal-rule-approval__actions .ds-button,
   .workpaper-control__resolution .ds-button,
-  .workpaper-step-footer .ds-button,
   .study-form__actions .ds-button,
   .study-inline-form__actions .ds-button {
     flex: 1;
-  }
-
-  .workpaper-card__header,
-  .workpaper-process,
-  .workpaper-card__body,
-  .workpaper-step-footer,
-  .workpaper-card__actions {
-    padding-inline: var(--ds-space-4);
   }
 }
 
@@ -1233,4 +1037,51 @@
 
 .calendario-celdas .dense-table-scroll {
   max-height: none;
+}
+
+/* Controles bloqueantes abiertos: punto y número junto a la pestaña «Controles» (sin píldora ni fondo). */
+.workpaper-bloqueos {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  margin-inline-start: var(--ds-space-1);
+  color: var(--ds-color-warning);
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+}
+
+.workpaper-bloqueos__punto {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+/* Separador vertical entre el período y la revisión en la barra del Legajo. */
+.work-bar__separador {
+  inline-size: 1px;
+  block-size: 20px;
+  background: var(--ds-color-border);
+}
+
+/* Clasificación: los tres indicadores son un renglón de cifras, sin cajas (regla «sin cajas»). */
+.workpaper-classification-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ds-space-6);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.workpaper-classification-summary > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+}
+
+.workpaper-classification-summary > span small {
+  color: var(--ds-color-text-muted);
 }

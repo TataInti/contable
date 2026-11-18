@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { AsyncState, Button, EmptyState, Table, useNotify, type TableColumn } from "@contable/design-system";
@@ -35,6 +35,9 @@ interface FiscalBooksExportActionProps {
   periodId: string | null;
   /** Nombre visible del período activo, para el panel. */
   periodLabel: string | null;
+  /** Modo controlado (menú de la barra): el padre abre y cierra el cajón y no hay botón propio. */
+  abierto?: boolean;
+  onCerrar?: () => void;
 }
 
 /** Controles del panel que pueden recibir un error del servidor junto a ellos. */
@@ -131,11 +134,20 @@ function ExportSelect<T extends string>({ id, label, value, options, error, onCh
  * descargar el libro de compras o de ventas del período activo. El servidor
  * decide qué comprobantes entran; la pantalla muestra su resumen y arma la descarga.
  */
-export function FiscalBooksExportAction({ periodId, periodLabel }: FiscalBooksExportActionProps) {
+export function FiscalBooksExportAction({ periodId, periodLabel, abierto, onCerrar }: FiscalBooksExportActionProps) {
   const { firmId, clientId, capabilities } = useClientContext();
   const navigate = useNavigate();
   const notify = useNotify();
   const [open, setOpen] = useState(false);
+  const controlado = abierto !== undefined;
+  const panelAbierto = controlado ? abierto : open;
+  // Al abrir desde el menú se limpia el error del intento anterior, como en el modo propio.
+  useEffect(() => {
+    if (controlado && abierto) {
+      setFailure(null);
+      setColumnsNotice(null);
+    }
+  }, [controlado, abierto]);
   const [book, setBook] = useState<FiscalBookKind>("purchases");
   const [format, setFormat] = useState<FiscalBookFormat>("xlsx");
   const [columns, setColumns] = useState<readonly FiscalBookColumnKey[]>(ALL_FISCAL_BOOK_COLUMNS);
@@ -168,9 +180,12 @@ export function FiscalBooksExportAction({ periodId, periodLabel }: FiscalBooksEx
     setColumnsNotice(null);
     setOpen(true);
   };
-  const closePanel = () => setOpen(false);
+  const closePanel = () => {
+    if (!controlado) setOpen(false);
+    onCerrar?.();
+  };
   const goToBandeja = () => {
-    setOpen(false);
+    closePanel();
     navigate("/bandeja");
   };
 
@@ -211,6 +226,8 @@ export function FiscalBooksExportAction({ periodId, periodLabel }: FiscalBooksEx
 
   return (
     <>
+      {controlado ? null : (
+      <>
       <Button
         type="button"
         variant="secondary"
@@ -226,8 +243,10 @@ export function FiscalBooksExportAction({ periodId, periodLabel }: FiscalBooksEx
           {missingScope}
         </span>
       ) : null}
+      </>
+      )}
       <ActionDrawer
-        isOpen={open}
+        isOpen={panelAbierto}
         onClose={closePanel}
         title="Exportar libros"
         description={`${periodLabel ? `Período ${periodLabel}. ` : ""}Elegí el libro, el formato, las columnas y el orden; antes de descargar ves qué entra y qué queda afuera.`}

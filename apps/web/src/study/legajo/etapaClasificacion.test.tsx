@@ -340,6 +340,6 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     expect(
       screen.getByText("Imputando certificados revisados…").closest("[role='status']"),
     ).not.toBeNull();
-    expect(document.querySelectorAll(".workpaper-card .ds-button--primary")).toHaveLength(1);
+    expect(document.querySelectorAll(".work-bar .ds-button--primary")).toHaveLength(1);
   });
 });

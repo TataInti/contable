@@ -34,7 +34,7 @@ export {
 
 export interface DenseTab<T extends string> {
   id: T;
-  label: string;
+  label: ReactNode;
   count?: number;
   warnCount?: number;
 }

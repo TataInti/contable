@@ -380,8 +380,9 @@ describe("StudyExpedienteMensual", () => {
 
     // El botón del encabezado aparece deshabilitado hasta que carga el período
     // fiscal: esperamos a que esté habilitado antes de accionar.
-    const createButton = await screen.findByRole<HTMLButtonElement>("button", { name: "Nuevo legajo" });
-    await waitFor(() => expect(createButton.disabled).toBe(false));
+    fireEvent.click(await screen.findByRole("button", { name: "Acciones del período" }));
+    const createButton = await screen.findByRole<HTMLButtonElement>("menuitem", { name: /Nuevo legajo/ });
+    await waitFor(() => expect(createButton.getAttribute("aria-disabled")).not.toBe("true")); // vigente: cambia con A29
     fireEvent.click(createButton);
     expect(await screen.findByText("Error anterior al crear el legajo")).toBeTruthy();
 
@@ -394,7 +395,7 @@ describe("StudyExpedienteMensual", () => {
     expect(currentAlert).not.toBeNull();
     const actionError = currentAlert?.closest(".workpaper-action-error");
     if (!actionError) throw new Error("No se encontró el contenedor de error de Calcular");
-    expect(calculateButton.parentElement?.contains(actionError)).toBe(true);
+    expect(actionError.closest('[data-renglon="avisos"]')).not.toBeNull(); // vigente: cambia con A29 (el error va en el renglón de avisos, bajo la acción)
     await waitFor(() => expect(document.activeElement).toBe(actionError));
     expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: "smooth", block: "center" });
     expect(screen.getByText("Error anterior al crear el legajo")).toBeTruthy();
@@ -444,7 +445,7 @@ describe("StudyExpedienteMensual", () => {
     const button = (await screen.findByRole("button", { name: "Calcular liquidación" })) as HTMLButtonElement; // vigente: cambia con decisión de Ciro (16-nov, 49a)
     expect(button.disabled).toBe(true);
     const explanation = await screen.findByText("Faltan fuentes obligatorias revisadas.");
-    expect(button.parentElement?.contains(explanation)).toBe(true);
+    expect(explanation.closest('[data-renglon="avisos"]')).not.toBeNull(); // vigente: cambia con A29
   });
 
   it("describe la acción pendiente como una liquidación sin calcular", async () => {

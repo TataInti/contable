@@ -431,8 +431,8 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Legajo: crear el legajo de marzo 2025 y recorrer sus etapas", async () => {
     await goTo(page, "Legajo");
     await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
-    await pickOption(page.locator("#monthly-workpaper-tax-period"), periodLabel(taxes.iva));
-    await mutating(page, "/monthly-tax-workpapers", () => page.getByRole("button", { name: "Crear legajo" }).click());
+    await pickOption(page.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await mutating(page, "/monthly-tax-workpapers", () => page.getByRole("button", { name: "Nuevo legajo", exact: true }).click());
     // Libros y archivos de marzo. Del ticket salen fecha, neto, IVA 21 % y número de la única compra; el CUIT
     // del proveedor y la letra A son inventados (el ticket no los trae). Ventas, IIBB y TEM son sintéticos.
     await page.getByRole("tab", { name: /Fuentes/ }).first().click();
@@ -456,7 +456,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     }
     test.info().annotations.push({
       type: "legajo · Fuentes tras importar",
-      description: (await page.locator(".workpaper-card").first().innerText()).replace(/\s+/g, " ").slice(0, 1800),
+      description: (await page.locator(".work-page").first().innerText()).replace(/\s+/g, " ").slice(0, 1800),
     });
   });
 
@@ -478,7 +478,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await login(reviewer, "revisor@contable.local", "revisor1234");
     await pickOption(reviewer.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), data.client.legalName);
     await goTo(reviewer, "Legajo");
-    await pickOption(reviewer.locator("#monthly-workpaper-tax-period"), periodLabel(taxes.iva));
+    await pickOption(reviewer.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await reviewer.getByRole("tab", { name: /Fuentes/ }).first().click();
     const pending = reviewer.getByRole("button", { name: "Revisar", exact: true });
     test.info().annotations.push({ type: "revisor · lotes por revisar", description: String(await pending.count()) });
@@ -493,15 +493,15 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Legajo: clasificación, cálculo y controles tras la revisión", async () => {
     await goTo(page, "Liquidaciones");
     await goTo(page, "Legajo");
-    await pickOption(page.locator("#monthly-workpaper-tax-period"), periodLabel(taxes.iva));
+    await pickOption(page.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await expect(page.getByRole("tab", { name: /Saldos/ })).toBeVisible();
     for (const stage of ["Saldos", "Fuentes", "Clasificación", "Cálculo", "Controles", "Cierre"]) {
       await page.getByRole("tab", { name: new RegExp(stage) }).click();
-      if (stage === "Fuentes") await page.locator(".workpaper-card").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
+      if (stage === "Fuentes") await page.locator(".work-page").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
       if (stage === "Clasificación") {
-        await page.locator(".workpaper-card").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
+        await page.locator(".work-page").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
         await page.waitForTimeout(2000);
-        const controls = await page.locator(".workpaper-card").first().locator("select, input, button").evaluateAll((els) =>
+        const controls = await page.locator(".work-page").first().locator("select, input, button").evaluateAll((els) =>
           els.map((el) => `${el.tagName.toLowerCase()}:${el.getAttribute("aria-label") ?? (el.textContent ?? "").trim().slice(0, 30)}`).filter((x) => x.length > 8),
         );
         test.info().annotations.push({ type: "clasificación · controles", description: controls.join(" | ").slice(0, 1500) });
@@ -515,36 +515,36 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
         await pickOption(purchase.getByLabel("Rubro del proveedor"), "SUPER");
         await pickOption(purchase.getByLabel("Actividad", { exact: true }), taxes.iva.activity.code);
         await mutating(page, "/classifications", () => purchase.getByRole("button", { name: "Guardar" }).click());
-        await page.locator(".workpaper-card").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
+        await page.locator(".work-page").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
         await page.waitForTimeout(1500);
         test.info().annotations.push({
           type: "legajo · Clasificación tras clasificar",
-          description: (await page.locator(".workpaper-card").first().innerText()).replace(/\s+/g, " ").slice(0, 1300),
+          description: (await page.locator(".work-page").first().innerText()).replace(/\s+/g, " ").slice(0, 1300),
         });
       }
-      const text = await page.locator(".workpaper-card").first().innerText();
+      const text = await page.locator(".work-page").first().innerText();
       test.info().annotations.push({ type: `legajo · ${stage}`, description: text.replace(/\s+/g, " ").slice(0, 1500) });
     }
   });
 
   await test.step("Legajo: calcular IVA, IIBB y TEM con los datos importados", async () => {
     await page.getByRole("tab", { name: /Cálculo/ }).click();
-    await mutating(page, "/calculate", () => page.locator(".workpaper-card").first().getByRole("button", { name: "Calcular", exact: true }).click());
+    await mutating(page, "/calculate", () => page.locator(".work-page").first().getByRole("button", { name: "Calcular", exact: true }).click());
     await page.waitForTimeout(2500);
-    const calcControls = await page.locator(".workpaper-card").first().locator("select, input, textarea, button").evaluateAll((els) =>
+    const calcControls = await page.locator(".work-page").first().locator("select, input, textarea, button").evaluateAll((els) =>
       els.map((el) => `${el.tagName.toLowerCase()}:${el.getAttribute("aria-label") ?? (el.textContent ?? "").trim().slice(0, 40)}`).filter((x) => x.length > 8),
     );
     test.info().annotations.push({ type: "cálculo · controles de pantalla", description: calcControls.join(" | ").slice(0, 1500) });
     test.info().annotations.push({
       type: "legajo · Cálculo tras calcular",
-      description: (await page.locator(".workpaper-card").first().innerText()).replace(/\s+/g, " ").slice(0, 2600),
+      description: (await page.locator(".work-page").first().innerText()).replace(/\s+/g, " ").slice(0, 2600),
     });
   });
 
   await test.step("Legajo: controles tras el cálculo", async () => {
     await page.getByRole("tab", { name: /Controles/ }).click();
     await page.waitForTimeout(1500);
-    const card = page.locator(".workpaper-card").first();
+    const card = page.locator(".work-page").first();
     test.info().annotations.push({ type: "legajo · Controles tras calcular", description: (await card.innerText()).replace(/\s+/g, " ").slice(0, 1800) });
     const controls = await card.locator("select, input, textarea, button").evaluateAll((els) =>
       els.map((el) => `${el.tagName.toLowerCase()}:${el.getAttribute("aria-label") ?? (el.textContent ?? "").trim().slice(0, 30)}`).filter((x) => x.length > 8),
@@ -555,7 +555,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Legajo: resolver los dos controles bloqueantes con el comprobante aprobado como respaldo", async () => {
     // Acreditaciones bancarias y caja piden respaldo documental. Se usa el ticket aprobado: es lo único que
     // hay cargado y alcanza para recorrer el circuito (no es un respaldo real de acreditaciones bancarias).
-    const card = page.locator(".workpaper-card").first();
+    const card = page.locator(".work-page").first();
     for (const control of ["BANK_CREDIT_RECONCILIATION", "CASH_ALLOCATION_RECONCILIATION"]) {
       await card.getByLabel(`Resolución ${control}`).fill("Conciliado contra el comprobante de respaldo cargado en la bandeja.");
       await pickOption(card.getByLabel(`Evidencia ${control}`), "ticket-mesa-8");
@@ -568,7 +568,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   });
 
   await test.step("Legajo: enviar a revisión y mirar el cierre con el revisor", async () => {
-    const card = page.locator(".workpaper-card").first();
+    const card = page.locator(".work-page").first();
     await mutating(page, "/submit-review", () => card.getByRole("button", { name: "Enviar a revisión" }).click());
     await page.waitForTimeout(2000);
     test.info().annotations.push({ type: "legajo · tras enviar a revisión", description: (await card.innerText()).replace(/\s+/g, " ").slice(0, 900) });
@@ -579,8 +579,8 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await login(reviewer, "revisor@contable.local", "revisor1234");
     await pickOption(reviewer.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), data.client.legalName);
     await goTo(reviewer, "Legajo");
-    await pickOption(reviewer.locator("#monthly-workpaper-tax-period"), periodLabel(taxes.iva));
-    const rcard = reviewer.locator(".workpaper-card").first();
+    await pickOption(reviewer.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    const rcard = reviewer.locator(".work-page").first();
     await reviewer.getByRole("tab", { name: /Cierre/ }).click();
     await reviewer.waitForTimeout(1500);
     test.info().annotations.push({ type: "revisor · cierre", description: (await rcard.innerText()).replace(/\s+/g, " ").slice(0, 1200) });
@@ -631,9 +631,9 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.waitForTimeout(31_000);
     await goTo(page, "Liquidaciones");
     await goTo(page, "Legajo");
-    await pickOption(page.locator("#monthly-workpaper-tax-period"), periodLabel(taxes.iva));
+    await pickOption(page.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await page.getByRole("tab", { name: /Cálculo/ }).click();
-    const card = page.locator(".workpaper-card").first();
+    const card = page.locator(".work-page").first();
     await card.getByRole("button", { name: "Registrar presentación" }).first().click();
     const drawer = page.locator(".action-drawer");
     await drawer.getByLabel("Importe presentado").fill("38199.00");

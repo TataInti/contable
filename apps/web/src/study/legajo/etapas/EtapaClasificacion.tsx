@@ -1,7 +1,6 @@
 // Etapa Clasificación e imputación del Legajo: clasificación de comprobantes e imputación de retenciones y percepciones (Foco 2.3c).
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
 import { AsyncState, Button, EmptyState, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { CLASSIFICATION_ORIGIN_LABELS } from "../etiquetas";
@@ -46,11 +45,6 @@ export function EtapaClasificacion({
   classifyVoucherMutation,
   reallocateInputMutation,
 }: EtapaClasificacionProps) {
-  const navigate = useNavigate();
-  const actualizando = classificationQuery.isFetching || allocationQuery.isFetching;
-  // Un solo «Actualizar» por etapa: refresca clasificación e imputaciones juntas (D8).
-  const actualizar = () =>
-    void Promise.all([classificationQuery.refetch(), allocationQuery.refetch()]);
   // Motivo visible junto a la tabla cuando la pantalla no deja clasificar ni imputar (P1).
   const motivoEditar = !capabilities.has("tax.vouchers.prepare")
     ? "Tu rol no puede clasificar comprobantes ni imputar retenciones."
@@ -67,23 +61,10 @@ export function EtapaClasificacion({
 
   return (
     <div className="workpaper-stage">
-      <div className="workpaper-stage__heading">
-        <div>
-          <strong>Clasificación</strong>
-          <small>
-            Las actividades adheridas determinan la alícuota aplicable. Completá las que falten
-            antes de calcular.
-          </small>
-        </div>
-        <span className="workpaper-stage__actions">
-          <Button size="sm" variant="ghost" disabled={actualizando} onClick={actualizar}>
-            {actualizando ? "Actualizando…" : "Actualizar"}
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
-            Ver configuración fiscal
-          </Button>
-        </span>
-      </div>
+      <p className="muted-copy">
+        Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de
+        calcular.
+      </p>
       {motivoEditar ? <small className="muted-copy">{motivoEditar}</small> : null}
       <div className="workpaper-classification-summary">
         <span>

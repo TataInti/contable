@@ -49,6 +49,12 @@ vi.mock("../../lib/api", async (importOriginal) => {
 const revisionVigente = { ...legajoDemo("DRAFT"), id: "wp-b", revision: 2 };
 const revisionAnterior = { ...legajoDemo("FINALIZED"), id: "wp-a", revision: 1 };
 
+/** Abre el menú «Revisión» de la barra y elige la revisión pedida. */
+function elegirRevision(numero: number) {
+  fireEvent.click(screen.getByRole("button", { name: /^Revisión \d+$/ }));
+  fireEvent.click(screen.getByRole("menuitemradio", { name: new RegExp(`^Revisión ${numero}`) }));
+}
+
 function renderPage() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -100,24 +106,40 @@ afterEach(() => {
 describe("Legajo · dos revisiones del mismo período (K16)", () => {
   // Defecto de D6a: hoy cada tarjeta dibuja etapas y comparte una sola etapa activa.
   // Estas pruebas fijan el estado actual con it.fails; el corte las pasa a aserción.
-  it("la revisión anterior no tiene pestañas de etapa", async () => {
+  it("la revisión anterior se abre en solo lectura: sus seis etapas y ninguna acción que escriba", async () => {
+    // vigente: cambia con A29
     renderPage();
-    await screen.findByRole("heading", { level: 2, name: /Revisión 2/ });
-    expect(screen.getAllByRole("tablist")).toHaveLength(1);
+    await screen.findByRole("tab", { name: "Saldos" });
+    const barra = screen.getByRole("region", {
+      name: "Legajo: período, revisión, etapas y acciones",
+    });
+    elegirRevision(1);
+    expect(
+      await screen.findByText("Revisión 1 en solo lectura: fue reemplazada por la revisión 2."),
+    ).toBeTruthy();
+    expect(within(barra).getAllByRole("tab")).toHaveLength(6);
+    expect(within(barra).queryByRole("button", { name: "Crear rectificativa" })).toBeNull();
   });
 
-  it("cambiar de etapa en la revisión vigente no cambia la anterior", async () => {
+  it("la etapa elegida se conserva al pasar a la revisión anterior, en solo lectura", async () => {
+    // vigente: cambia con A29
     renderPage();
-    const pestanas = await screen.findAllByRole("tab", { name: /Fuentes/ });
-    fireEvent.click(pestanas[0]!);
-
-    const tarjetas = screen.getAllByRole("article");
-    const anterior = tarjetas[1]!;
-    expect(within(anterior).queryAllByRole("tab")).toHaveLength(0);
+    await screen.findByRole("tab", { name: "Saldos" });
+    const barra = screen.getByRole("region", {
+      name: "Legajo: período, revisión, etapas y acciones",
+    });
+    fireEvent.click(within(barra).getByRole("tab", { name: "Fuentes" }));
+    elegirRevision(1);
+    expect(within(barra).getByRole("tab", { name: "Fuentes" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
   });
 
   it("la revisión anterior muestra su estado y la que la reemplaza", async () => {
+    // vigente: cambia con A29
     renderPage();
+    await screen.findByRole("tab", { name: "Saldos" });
+    elegirRevision(1);
     expect(
       await screen.findByText("Revisión 1 · Finalizado · reemplazada por la revisión 2"),
     ).toBeTruthy();
@@ -125,7 +147,7 @@ describe("Legajo · dos revisiones del mismo período (K16)", () => {
 
   it("las etapas leen la revisión vigente y no la anterior", async () => {
     renderPage();
-    await screen.findByRole("heading", { level: 2, name: /Revisión 2/ });
+    await screen.findByRole("tab", { name: "Saldos" });
 
     await waitFor(() =>
       expect(api.get).toHaveBeenCalledWith(

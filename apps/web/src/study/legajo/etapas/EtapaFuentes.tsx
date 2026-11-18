@@ -1,7 +1,6 @@
 // Etapa Fuentes del Legajo: cobertura, lotes y libros IVA desde su fila (Foco 2.3b-2).
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
 import { AsyncState, Button, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { WorkpaperSourceReviewAction } from "../../WorkpaperSourceReviewAction";
@@ -39,7 +38,6 @@ export function EtapaFuentes({
   sourceUploadMutation,
   reviewSourceMutation,
 }: EtapaFuentesProps) {
-  const navigate = useNavigate();
   const fuentes = coverageQuery.data?.sources ?? [];
   const fuentesLote = fuentes.filter((source) => !ladoDeLibroIva(source.code));
   const fuenteElegida = fuentesLote.find((source) => source.code === sourceCode);
@@ -47,25 +45,7 @@ export function EtapaFuentes({
     !sourceCode || !sourceFile ? "Elegí una fuente y un archivo para importar el lote." : null;
   return (
     <div className="workpaper-stage">
-      <div className="workpaper-stage__heading">
-        <div>
-          <strong>Cobertura de fuentes</strong>
-          <small>El legajo declara qué llegó y qué todavía bloquea el cálculo.</small>
-        </div>
-        <span className="workpaper-stage__actions">
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={coverageQuery.isFetching}
-            onClick={() => void coverageQuery.refetch()}
-          >
-            {coverageQuery.isFetching && coverageQuery.isSuccess ? "Actualizando…" : "Actualizar"}
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => navigate("/bandeja")}>
-            Ir a bandeja
-          </Button>
-        </span>
-      </div>
+      <p className="muted-copy">El legajo declara qué llegó y qué todavía bloquea el cálculo.</p>
       {coverageQuery.isError ? (
         <AsyncState
           loading={false}

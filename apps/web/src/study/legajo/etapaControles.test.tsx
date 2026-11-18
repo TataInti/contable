@@ -574,9 +574,9 @@ describe("Legajo · etapa Controles (K13)", () => {
     await abrirEtapa(/Controles/);
 
     await screen.findByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" });
-    const tarjeta = document.querySelector<HTMLElement>(".workpaper-card");
+    const tarjeta = document.querySelector<HTMLElement>(".work-page");
     expect(tarjeta).not.toBeNull();
-    expect(tarjeta!.querySelectorAll(".workpaper-card__body .ds-button--primary")).toHaveLength(0);
+    expect(tarjeta!.querySelectorAll(".workpaper-body .ds-button--primary")).toHaveLength(0);
     expect(tarjeta!.querySelectorAll(".ds-button--primary")).toHaveLength(1);
     expect(within(tarjeta!).getByRole("button", { name: "Finalizar" })).toBeInTheDocument();
   });
@@ -597,7 +597,11 @@ describe("Legajo · etapa Cierre (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Cierre/);
 
-    expect(await screen.findByText("Cierre y arrastre")).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        "Finalizar congela los hashes y genera los saldos de cierre para el siguiente período.",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "Finalizar congela los hashes y genera los saldos de cierre para el siguiente período.",
@@ -616,7 +620,11 @@ describe("Legajo · etapa Cierre (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Cierre/);
 
-    expect(await screen.findByText("Cierre y arrastre")).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        "Finalizar congela los hashes y genera los saldos de cierre para el siguiente período.",
+      ),
+    ).toBeInTheDocument();
     const valor = (etiqueta: string) =>
       screen.getByText(etiqueta).parentElement?.querySelector("dd")?.textContent;
     expect(valor("Hash de entrada")).toBe("Se genera al calcular");
@@ -664,9 +672,9 @@ describe("Legajo · Controles: motivo, lugar de las acciones y diálogo de Eximi
     });
     renderLegajo();
     await abrirEtapa(/Controles/);
-    const contador = document.querySelector<HTMLElement>(".workpaper-card__blocking");
+    const contador = document.querySelector<HTMLElement>(".workpaper-bloqueos");
     expect(contador).not.toBeNull();
-    expect(contador!).toHaveTextContent("2 controles bloqueantes");
+    expect(contador!).toHaveTextContent("2 bloqueantes abiertos"); // vigente: cambia con A29
     expect(contador!.getAttribute("role")).toBeNull();
     expect(contador!.closest("[role='alert']")).toBeNull();
     expect(
@@ -696,13 +704,14 @@ describe("Legajo · Controles: motivo, lugar de las acciones y diálogo de Eximi
 });
 
 describe("Legajo · Controles: plural del contador de bloqueantes (Foco 2.7b)", () => {
-  it("con un solo control bloqueante abierto el contador dice «1 control bloqueante»", async () => {
+  it("con un solo control bloqueante abierto el contador dice «1 bloqueante abierto»", async () => {
+    // vigente: cambia con A29
     fijarContexto(PERMISOS_REVISION);
     fijarRespuestas({ controles: [bloqueante()] });
     renderLegajo();
     await abrirEtapa(/Controles/);
-    expect(document.querySelector(".workpaper-card__blocking")).toHaveTextContent(
-      /^1 control bloqueante$/,
+    expect(document.querySelector(".workpaper-bloqueos")).toHaveTextContent(
+      /^1 bloqueante abierto$/,
     );
   });
 });

@@ -31,24 +31,13 @@ export function EtapaCalculo({
   calculateInterestMutation,
   setPositionAction,
 }: EtapaCalculoProps) {
-  const actualizando = positionQuery.isFetching || calculationQuery.isFetching;
-  // Un solo «Actualizar» por etapa: refresca posición y determinación juntas (D8).
-  const actualizar = () => void Promise.all([positionQuery.refetch(), calculationQuery.refetch()]);
   const determinacion = calculationQuery.data ?? [];
 
   return (
     <div className="workpaper-stage">
-      <div className="workpaper-stage__heading">
-        <div>
-          <strong>Posición fiscal del período</strong>
-          <small>
-            Devengado fiscal, pagos e intereses sin mezclarlo con el resultado gerencial.
-          </small>
-        </div>
-        <Button size="sm" variant="ghost" disabled={actualizando} onClick={actualizar}>
-          {actualizando ? "Actualizando…" : "Actualizar"}
-        </Button>
-      </div>
+      <p className="muted-copy">
+        Devengado fiscal, pagos e intereses sin mezclarlo con el resultado gerencial.
+      </p>
       <div className="workpaper-calculation-breakdown">
         <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
           <div>
