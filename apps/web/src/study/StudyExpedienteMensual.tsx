@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
@@ -56,6 +56,7 @@ import { importarLoteFuente } from "./legajo/loteFuente";
 import { pluralizar } from "./legajo/textos";
 import { mensajesDePedidoDeCambios, selfReviewNote } from "./legajo/formato";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
+import { PeriodoSinLegajo } from "./legajo/PeriodoSinLegajo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
 import { PanelLibrosIva } from "./legajo/paneles/PanelLibrosIva";
 import { PanelSaldoInicial } from "./legajo/paneles/PanelSaldoInicial";
@@ -150,6 +151,8 @@ export function StudyExpedienteMensual() {
   // Revisión elegida en el menú «Revisión» (null = la más reciente) y cajón «Exportar libros».
   const [revisionElegidaId, setRevisionElegidaId] = useState<string | null>(null);
   const [exportarAbierto, setExportarAbierto] = useState(false);
+  // Contenido de la etapa: recibe el foco al elegir «Ir a la revisión» en una revisión anterior (Barra 2e).
+  const cuerpoRef = useRef<HTMLDivElement>(null);
   const confirmacion = useConfirmAction();
   const { ask: pedirConfirmacion, request: solicitudConfirmacion } = confirmacion;
   const cerrarConfirmacion = useCallback(() => pedirConfirmacion(null), [pedirConfirmacion]);
@@ -581,17 +584,13 @@ export function StudyExpedienteMensual() {
     // Saldos consulta por cliente y por período (tax-credit-ledger, tax-position): la revisión anterior muestra la misma tabla, en solo lectura.
     if (soloLectura && step === 0) {
       return (
-        <>
-          <p className="muted-copy">
-            Saldos vigentes del cliente y del período; no se guardan por revisión.
-          </p>
-          <EtapaSaldos
-            capabilities={capacidades}
-            ledgerQuery={ledgerQuery}
-            setEditingLot={setEditingLot}
-            setEditForm={setEditForm}
-          />
-        </>
+        <EtapaSaldos
+          capabilities={capacidades}
+          ledgerQuery={ledgerQuery}
+          setEditingLot={setEditingLot}
+          setEditForm={setEditForm}
+          fraseRevision="Saldos vigentes del cliente y del período; no se guardan por revisión."
+        />
       );
     }
     // Fuentes, Clasificación, Cálculo y Controles consultan por el id del legajo y muestran la revisión elegida en solo lectura.
@@ -928,7 +927,21 @@ export function StudyExpedienteMensual() {
   const motivosVisibles = motivosBarra.filter(Boolean);
   const pedidosDeCambios =
     vigente && !soloLectura ? mensajesDePedidoDeCambios(calculationQuery.data) : [];
-  const notaBarra = soloLectura ? textoSoloLectura : (acciones?.nota ?? null);
+  // En una revisión anterior, el aviso ofrece «Ir a la revisión» de la más reciente: misma acción que el desplegable «Revisión» (Barra 2e).
+  const irAVigente = () => {
+    setRevisionElegidaId(null);
+    cuerpoRef.current?.focus();
+  };
+  const notaBarra = soloLectura ? (
+    textoSoloLectura ? (
+      <>
+        <span>{textoSoloLectura}</span>{" "}
+        <Button size="sm" variant="text" onClick={irAVigente}>
+          Ir a la revisión {vigente?.revision}
+        </Button>
+      </>
+    ) : null
+  ) : (acciones?.nota ?? null);
 
   // Acciones de la etapa activa: a la derecha de sus pestañas, con sus condiciones de hoy.
   const actualizarBoton = (ocupado: boolean, onClick: () => void, texto: string) => (
@@ -937,7 +950,7 @@ export function StudyExpedienteMensual() {
     </Button>
   );
   let accionesEtapa: ReactNode = null;
-  if (vigente && safeActiveStep === 0 && !soloLectura) {
+  if (vigente && safeActiveStep === 0) {
     accionesEtapa = (
       <>
         {actualizarBoton(
@@ -945,14 +958,16 @@ export function StudyExpedienteMensual() {
           () => void ledgerQuery.refetch(),
           ledgerQuery.isFetching ? "Actualizando…" : "Actualizar",
         )}
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={!capabilities.has("tax.settlements.calculate")}
-          onClick={() => setShowOpening((visible) => !visible)}
-        >
-          <Icon name="plus" size={15} /> Cargar saldo inicial
-        </Button>
+        {soloLectura ? null : (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!capabilities.has("tax.settlements.calculate")}
+            onClick={() => setShowOpening((visible) => !visible)}
+          >
+            <Icon name="plus" size={15} /> Cargar saldo inicial
+          </Button>
+        )}
       </>
     );
   } else if (vigente && safeActiveStep === 1) {
@@ -982,7 +997,7 @@ export function StudyExpedienteMensual() {
         </Button>
       </>
     );
-  } else if (vigente && safeActiveStep === 3 && !soloLectura) {
+  } else if (vigente && safeActiveStep === 3) {
     const actualizandoCalculo = positionQuery.isFetching || calculationQuery.isFetching;
     accionesEtapa = actualizarBoton(
       actualizandoCalculo,
@@ -1139,16 +1154,10 @@ export function StudyExpedienteMensual() {
     );
   } else if (!seleccionada) {
     cuerpo = listQuery.isSuccess ? (
-      <EmptyState
-        title="Sin legajos para este período"
-        description="Creá un legajo para coordinar las liquidaciones del período."
-        action={
-          canCalculate ? (
-            <Button onClick={() => createMutation.mutate()} loading={createMutation.isPending}>
-              Nuevo legajo
-            </Button>
-          ) : undefined
-        }
+      <PeriodoSinLegajo
+        puedeCrear={canCalculate}
+        creando={createMutation.isPending}
+        onCrear={() => createMutation.mutate()}
       />
     ) : null;
   } else {
@@ -1166,9 +1175,11 @@ export function StudyExpedienteMensual() {
           </Notice>
         ) : null}
         <div
+          ref={cuerpoRef}
           className="workpaper-body"
           id="workpaper-panel"
           role="tabpanel"
+          tabIndex={-1}
           aria-labelledby={`workpaper-${safeActiveStep}`}
           aria-live="polite"
         >

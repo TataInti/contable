@@ -1,0 +1,14 @@
+/* Período sin legajo (Barra 2e): la guía y la acción van alineadas a la izquierda, como el resto de la pantalla. */
+.periodo-sin-legajo {
+  display: grid;
+  justify-items: start;
+  gap: var(--ds-space-3);
+  padding-block: var(--ds-space-6);
+  text-align: start;
+}
+
+.periodo-sin-legajo__guia {
+  margin: 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-base);
+}

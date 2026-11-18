@@ -18,3 +18,11 @@ describe("menú (Menu): reglas CSS", () => {
     expect(regla(".ds-menu__flecha")).toMatch(/transform:\s*rotate\(90deg\)/);
   });
 });
+
+describe("menú (Menu): disparador con su menú abierto (Barra 2e)", () => {
+  it("el disparador abierto lleva el borde del color de foco, como los demás controles", () => {
+    expect(regla('.ds-menu > .ds-button[aria-expanded="true"]:not(:disabled)')).toMatch(
+      /border-color:\s*var\(--ds-color-focus\)/,
+    );
+  });
+});

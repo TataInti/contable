@@ -22,6 +22,11 @@
   min-height: var(--ds-space-12);
 }
 
+/* Renglón de contexto (Barra 2e): sin separación extra; el margen mínimo de 24 px lo pone .work-bar__inicio. */
+.work-bar__row--contexto {
+  gap: 0;
+}
+
 /* Renglón de secciones (40 px, con su divisor incluido). Las pestañas se apoyan en el borde. */
 .work-bar__row--secciones {
   align-items: flex-end;
@@ -69,6 +74,12 @@
 
 .work-bar__nota {
   min-width: 0;
+}
+
+/* Un botón de texto dentro del aviso (Barra 2e) toma la altura de la línea: el renglón de avisos no crece. */
+.work-bar__nota .ds-button {
+  min-block-size: 0;
+  padding-block: 0;
 }
 
 /* El motivo va bajo la acción, alineado a la derecha (P4). */

@@ -18,6 +18,8 @@ export interface EtapaSaldosProps {
   ledgerQuery: UseQueryResult<CreditLot[], Error>;
   setEditingLot: Dispatch<SetStateAction<CreditLot | null>>;
   setEditForm: Dispatch<SetStateAction<FormularioEditarSaldo>>;
+  /** Frase de guía de una revisión anterior: va en el mismo párrafo que la de Saldos (Barra 2e). */
+  fraseRevision?: string;
 }
 
 export function EtapaSaldos({
@@ -25,11 +27,13 @@ export function EtapaSaldos({
   ledgerQuery,
   setEditingLot,
   setEditForm,
+  fraseRevision,
 }: EtapaSaldosProps) {
   const puedeCargarSaldo = capabilities.has("tax.settlements.calculate");
   return (
     <div className="workpaper-stage">
       <p className="muted-copy">
+        {fraseRevision ? `${fraseRevision} ` : null}
         Disponibles por impuesto, régimen y jurisdicción. Cada saldo conserva su respaldo.
       </p>
       {ledgerQuery.isError ? (
