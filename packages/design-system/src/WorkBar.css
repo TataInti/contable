@@ -29,11 +29,19 @@
   border-top: var(--ds-border-width) solid var(--ds-color-border-subtle);
 }
 
+/* Las pestañas de etapa se apoyan en el borde de la fila: sin el margen superior de .dense-tabs (12 px),
+   que llevaba la fila a 46 px. La barra mide 89 px sin avisos y 112 px con avisos. */
+.work-bar__row--secciones .dense-tabs {
+  margin-top: 0;
+}
+
 .work-bar__inicio {
   display: flex;
   align-items: center;
   gap: var(--ds-space-2);
   min-width: 0;
+  /* Margen mínimo de 24 px entre el contexto y la acción: el período se achica antes que este margen. */
+  margin-inline-end: var(--ds-space-6);
 }
 
 .work-bar__fin {

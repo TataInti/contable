@@ -305,7 +305,7 @@ export function StudyAyuda() {
 
       <section className="study-page__section help-section" id="expediente">
         <h2 className="study-page__section-title">Legajo</h2>
-        <p>Requiere cliente y período. Cabecera: Nuevo legajo, o Crear legajo si está vacío.</p>
+        <p>Requiere cliente y período. La barra superior muestra período, revisión y estado. En «Acciones del período» están Nuevo legajo y Exportar libros.</p>
         <p>
           «Importar libro», en la fila ARCA IVA de Fuentes, importa los libros IVA de compras y ventas por separado. Las seis etapas quedan
           siempre visibles. El cálculo no habilita si falta evidencia.

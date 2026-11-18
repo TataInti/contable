@@ -1,14 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Button, EmptyState } from "@contable/design-system";
+import {
+  AsyncState,
+  BarSelect,
+  Button,
+  EmptyState,
+  Menu,
+  Notice,
+  WorkBar,
+  WorkPage,
+  getStatusBadgeMeta,
+  type MenuActionItem,
+} from "@contable/design-system";
+import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
+import { Icon } from "../ui/Icon";
 import { api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import {
   DensePage,
+  DenseTabs,
   useDensity,
 } from "../ui/Dense";
+import { StatusBadge } from "../ui/StatusBadge";
 import type {
   AllocationCoverage,
   ClassificationCoverage,
@@ -27,29 +42,26 @@ import type {
   WorkpaperClassification,
 } from "./legajo/tipos";
 import {
+  fiscalTaxPeriodLabel,
   fiscalTaxPeriodSelectionKey,
   readFiscalTaxPeriodSelection,
   writeFiscalTaxPeriodSelection,
+  rotuloPeriodoFiscal,
 } from "./legajo/periodoFiscal";
 import {
   WORKPAPER_STEPS,
   calculationDisabledMessage,
 } from "./legajo/etiquetas";
 import { importarLoteFuente } from "./legajo/loteFuente";
-import { mensajesDePedidoDeCambios } from "./legajo/formato";
+import { pluralizar } from "./legajo/textos";
+import { mensajesDePedidoDeCambios, selfReviewNote } from "./legajo/formato";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
-import { CabeceraLegajo } from "./legajo/paneles/CabeceraLegajo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
 import { PanelLibrosIva } from "./legajo/paneles/PanelLibrosIva";
 import { PanelSaldoInicial } from "./legajo/paneles/PanelSaldoInicial";
 import { PanelPago } from "./legajo/paneles/PanelPago";
 import { PanelPresentacion } from "./legajo/paneles/PanelPresentacion";
 import { PanelDeclaracion } from "./legajo/paneles/PanelDeclaracion";
-import { BandaEstado } from "./legajo/BandaEstado";
-import { ListaLegajos } from "./legajo/ListaLegajos";
-import { SelectorPeriodo } from "./legajo/SelectorPeriodo";
-import { LegajoTarjeta } from "./legajo/Tarjeta/LegajoTarjeta";
-import { ResumenRevision } from "./legajo/Tarjeta/ResumenRevision";
 import { EtapaFuentes } from "./legajo/etapas/EtapaFuentes";
 import { EtapaSaldos } from "./legajo/etapas/EtapaSaldos";
 import { EtapaCalculo } from "./legajo/etapas/EtapaCalculo";
@@ -76,6 +88,30 @@ const ESTADOS_EDITABLES_FUENTES = [
   "READY_TO_CALCULATE",
   "CHANGES_REQUESTED",
 ];
+
+/** Error de una acción: solo ocupa lugar en la barra si hay un error que mostrar (P4). */
+function errorDe(error: Error | null | undefined, clave: string) {
+  return error ? <WorkpaperActionError key={clave} error={error} /> : null;
+}
+
+// Permisos que escriben en el legajo: una revisión anterior en solo lectura no los conserva (A29).
+const PERMISOS_DE_ESCRITURA_LEGAJO = [
+  "tax.settlements.calculate",
+  "tax.settlements.submit_review",
+  "tax.settlements.review",
+  "tax.settlements.finalize",
+  "tax.settlements.rectify",
+  "tax.vouchers.prepare",
+  "tax.vouchers.review",
+  "tax.filings.record",
+  "tax.payments.record",
+];
+
+function sinPermisosDeEscritura(permisos: ReadonlySet<string>) {
+  return new Set(
+    [...permisos].filter((permiso) => !PERMISOS_DE_ESCRITURA_LEGAJO.includes(permiso)),
+  );
+}
 
 export function StudyExpedienteMensual() {
   const [density] = useDensity();
@@ -111,6 +147,9 @@ export function StudyExpedienteMensual() {
   const [allocationDrafts, setAllocationDrafts] = useState<Record<string, string>>({});
   // Panel de libros IVA: lado de la fila desde la que se abrió (null = cerrado).
   const [libroIvaAbierto, setLibroIvaAbierto] = useState<"SALE" | "PURCHASE" | null>(null);
+  // Revisión elegida en el menú «Revisión» (null = la más reciente) y cajón «Exportar libros».
+  const [revisionElegidaId, setRevisionElegidaId] = useState<string | null>(null);
+  const [exportarAbierto, setExportarAbierto] = useState(false);
   const confirmacion = useConfirmAction();
   const { ask: pedirConfirmacion, request: solicitudConfirmacion } = confirmacion;
   const cerrarConfirmacion = useCallback(() => pedirConfirmacion(null), [pedirConfirmacion]);
@@ -168,9 +207,12 @@ export function StudyExpedienteMensual() {
     enabled: Boolean(firmId && clientId && selectedTaxPeriod),
   });
 
-  const activeWorkpaperId = listQuery.data?.[0]?.id;
+  // La revisión que se muestra: la más reciente, salvo que se elija una anterior (solo lectura).
+  const legajoSeleccionado =
+    (listQuery.data ?? []).find((wp) => wp.id === revisionElegidaId) ?? listQuery.data?.[0];
+  const activeWorkpaperId = legajoSeleccionado?.id;
   // Importar un libro IVA exige el permiso y un legajo editable; el motivo se muestra junto a la acción.
-  const legajoDelPeriodo = listQuery.data?.[0];
+  const legajoDelPeriodo = legajoSeleccionado;
   const motivoImportarLibro = !capabilities.has("tax.vouchers.prepare")
     ? "Tu rol no puede importar libros IVA."
     : !legajoDelPeriodo || !ESTADOS_EDITABLES_FUENTES.includes(legajoDelPeriodo.status)
@@ -513,6 +555,13 @@ export function StudyExpedienteMensual() {
   const workpapers = listQuery.data ?? [];
   // Las etapas son de la revisión vigente (la primera de la lista) y cada legajo guarda su etapa.
   const vigente = workpapers[0];
+  // Revisión que se muestra: la más reciente salvo que se elija una anterior (solo lectura).
+  const seleccionada = legajoSeleccionado;
+  const soloLectura = Boolean(vigente && seleccionada && seleccionada.id !== vigente.id);
+  const reemplazadaPor = (wp: Workpaper): Workpaper | undefined => {
+    const indice = workpapers.findIndex((item) => item.id === wp.id);
+    return indice > 0 ? workpapers[indice - 1] : undefined;
+  };
   const safeActiveStep = Math.min(
     Math.max(vigente ? (etapaPorLegajo[vigente.id] ?? 0) : 0, 0),
     WORKPAPER_STEPS.length - 1,
@@ -525,108 +574,629 @@ export function StudyExpedienteMensual() {
     }));
   };
 
-  const renderEtapa = (wp: Workpaper, safeActiveStep: number) => {
-    const canEditSources = ESTADOS_EDITABLES_FUENTES.includes(wp.status);
+  const renderEtapa = (wp: Workpaper, step: number) => {
+    const canEditSources = !soloLectura && ESTADOS_EDITABLES_FUENTES.includes(wp.status);
+    // En solo lectura, ninguna etapa conserva un permiso que escriba: la revisión anterior no ofrece acciones que escriban (A29).
+    const capacidades = soloLectura ? sinPermisosDeEscritura(capabilities) : capabilities;
+    // Saldos consulta por cliente y por período (tax-credit-ledger, tax-position): la revisión anterior muestra la misma tabla, en solo lectura.
+    if (soloLectura && step === 0) {
+      return (
+        <>
+          <p className="muted-copy">
+            Saldos vigentes del cliente y del período; no se guardan por revisión.
+          </p>
+          <EtapaSaldos
+            capabilities={capacidades}
+            ledgerQuery={ledgerQuery}
+            setEditingLot={setEditingLot}
+            setEditForm={setEditForm}
+          />
+        </>
+      );
+    }
+    // Fuentes, Clasificación, Cálculo y Controles consultan por el id del legajo y muestran la revisión elegida en solo lectura.
     return (
       <>
-                  {safeActiveStep === 0 ? (
-                    <EtapaSaldos
-                      capabilities={capabilities}
-                      ledgerQuery={ledgerQuery}
-                      setShowOpening={setShowOpening}
-                      setEditingLot={setEditingLot}
-                      setEditForm={setEditForm}
-                    />
-                  ) : safeActiveStep === 1 ? (
-                    <EtapaFuentes
-                      coverageQuery={coverageQuery}
-                      capabilities={capabilities}
-                      canEditSources={canEditSources}
-                      currentUserId={currentUserId}
-                      motivoImportarLibro={motivoImportarLibro}
-                      onAbrirLibroIva={setLibroIvaAbierto}
-                      sourceCode={sourceCode}
-                      setSourceCode={setSourceCode}
-                      sourceFile={sourceFile}
-                      setSourceFile={setSourceFile}
-                      sourceUploadMutation={sourceUploadMutation}
-                      reviewSourceMutation={reviewSourceMutation}
-                    />
-                  ) : safeActiveStep === 2 ? (
-                    <EtapaClasificacion
-                      capabilities={capabilities}
-                      canEditSources={canEditSources}
-                      classificationQuery={classificationQuery}
-                      allocationQuery={allocationQuery}
-                      jurisdictionsQuery={jurisdictionsQuery}
-                      activityOptions={activityOptions}
-                      classificationDrafts={classificationDrafts}
-                      setClassificationDrafts={setClassificationDrafts}
-                      allocationDrafts={allocationDrafts}
-                      setAllocationDrafts={setAllocationDrafts}
-                      classifyVoucherMutation={classifyVoucherMutation}
-                      reallocateInputMutation={reallocateInputMutation}
-                    />
-                  ) : safeActiveStep === 3 ? (
-                    <EtapaCalculo
-                      capabilities={capabilities}
-                      workpaperId={wp.id}
-                      calculationQuery={calculationQuery}
-                      positionQuery={positionQuery}
-                      calculateInterestMutation={calculateInterestMutation}
-                      setPositionAction={setPositionAction}
-                    />
-                  ) : safeActiveStep === 4 ? (
-                    <EtapaControles
-                      capabilities={capabilities}
-                      wp={wp}
-                      controlResolutions={controlResolutions}
-                      setControlResolutions={setControlResolutions}
-                      controlEvidence={controlEvidence}
-                      setControlEvidence={setControlEvidence}
-                      documentsQuery={documentsQuery}
-                      resolveControlMutation={resolveControlMutation}
-                      confirmar={confirmar}
-                    />
-                  ) : (
-                    <EtapaCierre wp={wp} />
-                  )}
+        {step === 0 ? (
+          <EtapaSaldos
+            capabilities={capabilities}
+            ledgerQuery={ledgerQuery}
+            setEditingLot={setEditingLot}
+            setEditForm={setEditForm}
+          />
+        ) : step === 1 ? (
+          <EtapaFuentes
+            coverageQuery={coverageQuery}
+            capabilities={capacidades}
+            canEditSources={canEditSources}
+            soloLectura={soloLectura}
+            currentUserId={currentUserId}
+            motivoImportarLibro={motivoImportarLibro}
+            onAbrirLibroIva={setLibroIvaAbierto}
+            sourceCode={sourceCode}
+            setSourceCode={setSourceCode}
+            sourceFile={sourceFile}
+            setSourceFile={setSourceFile}
+            sourceUploadMutation={sourceUploadMutation}
+            reviewSourceMutation={reviewSourceMutation}
+          />
+        ) : step === 2 ? (
+          <EtapaClasificacion
+            capabilities={capabilities}
+            canEditSources={canEditSources}
+            classificationQuery={classificationQuery}
+            allocationQuery={allocationQuery}
+            jurisdictionsQuery={jurisdictionsQuery}
+            activityOptions={activityOptions}
+            classificationDrafts={classificationDrafts}
+            setClassificationDrafts={setClassificationDrafts}
+            allocationDrafts={allocationDrafts}
+            setAllocationDrafts={setAllocationDrafts}
+            classifyVoucherMutation={classifyVoucherMutation}
+            reallocateInputMutation={reallocateInputMutation}
+          />
+        ) : step === 3 ? (
+          <EtapaCalculo
+            capabilities={capacidades}
+            workpaperId={wp.id}
+            calculationQuery={calculationQuery}
+            positionQuery={positionQuery}
+            calculateInterestMutation={calculateInterestMutation}
+            setPositionAction={setPositionAction}
+          />
+        ) : step === 4 ? (
+          <EtapaControles
+            capabilities={capacidades}
+            wp={wp}
+            controlResolutions={controlResolutions}
+            setControlResolutions={setControlResolutions}
+            controlEvidence={controlEvidence}
+            setControlEvidence={setControlEvidence}
+            documentsQuery={documentsQuery}
+            resolveControlMutation={resolveControlMutation}
+            confirmar={confirmar}
+          />
+        ) : (
+          <EtapaCierre wp={wp} />
+        )}
       </>
     );
   };
 
-  return (
-    <DensePage density={density} flow>
-      <CabeceraLegajo
-        capabilities={capabilities}
-        selectedTaxPeriod={selectedTaxPeriod}
-        creandoLegajo={createMutation.isPending}
-        cargandoPeriodos={taxPeriodsQuery.isLoading}
-        errorCreacion={createMutation.error}
-        onNuevoLegajo={() => void createMutation.mutate()}
-      />
+  const cambiarPeriodo = (id: string) => {
+    setTaxPeriodSelection({ key: taxPeriodStorageKey, id });
+    setRevisionElegidaId(null);
+    if (taxPeriodStorageKey) writeFiscalTaxPeriodSelection(taxPeriodStorageKey, id);
+  };
+  const opcionesPeriodo = [
+    { value: "", label: "Seleccioná un período fiscal…" },
+    ...selectableTaxPeriods.map((taxPeriod) => ({
+      value: taxPeriod.id,
+      label: rotuloPeriodoFiscal(taxPeriod),
+    })),
+  ];
+  const sinPeriodosFiscales = taxPeriodsQuery.isSuccess && selectableTaxPeriods.length === 0;
+  const sinLegajo = Boolean(selectedTaxPeriod) && listQuery.isSuccess && workpapers.length === 0;
+  const bloqueantesAbiertos =
+    vigente?.controls.filter((control) => control.severity === "BLOCKING" && control.status === "OPEN")
+      .length ?? 0;
+  const canCalculate = capabilities.has("tax.settlements.calculate");
+  const textoSoloLectura =
+    seleccionada && soloLectura && reemplazadaPor(seleccionada)
+      ? `Revisión ${seleccionada.revision} en solo lectura: fue reemplazada por la revisión ${reemplazadaPor(seleccionada)!.revision}.`
+      : null;
 
-      <SelectorPeriodo
-        cargando={taxPeriodsQuery.isLoading}
-        error={taxPeriodsQuery.isError}
-        onReintentar={() => void taxPeriodsQuery.refetch()}
-        periodos={selectableTaxPeriods}
-        valor={selectedTaxPeriodId}
-        onCambiar={(id) => {
-          setTaxPeriodSelection({ key: taxPeriodStorageKey, id });
-          if (taxPeriodStorageKey) {
-            writeFiscalTaxPeriodSelection(taxPeriodStorageKey, id);
+  // «Acciones del período»: exportar libros y crear el legajo, con su motivo si no se puede.
+  const accionesDelPeriodo: MenuActionItem[] = [
+    ...(capabilities.has("tax.vouchers.read")
+      ? [
+          {
+            key: "exportar-libros",
+            label: "Exportar libros",
+            description: "Abre el panel para elegir libro, formato y columnas.",
+            icon: "download" as const,
+            disabled: !selectedTaxPeriod,
+            disabledReason: selectedTaxPeriod ? undefined : "Elegí un período fiscal para exportar sus libros.",
+            onSelect: () => setExportarAbierto(true),
+          },
+        ]
+      : []),
+    {
+      key: "nuevo-legajo",
+      label: "Nuevo legajo",
+      description: "Crea el legajo del período elegido.",
+      icon: "plus" as const,
+      disabled: !selectedTaxPeriod || createMutation.isPending || !canCalculate || soloLectura,
+      disabledReason: !selectedTaxPeriod
+        ? "Configurá un período fiscal para crear el legajo."
+        : !canCalculate
+          ? "Tu rol no puede crear legajos."
+          : (textoSoloLectura ?? undefined),
+      onSelect: () => createMutation.mutate(),
+    },
+  ];
+
+  // Acciones del legajo según su estado: la misma matriz de hoy, con sus permisos, confirmaciones y textos.
+  const armarAccionesLegajo = (wp: Workpaper) => {
+    const calculateDisabled =
+      calculateMutation.isPending || wp.status !== "READY_TO_CALCULATE" || !canCalculate;
+    const calculateDisabledReason = calculateDisabled
+      ? calculationDisabledMessage({
+          status: wp.status,
+          sources: coverageQuery.data?.sources,
+          classifications: classificationQuery.data,
+          allocations: allocationQuery.data,
+          canCalculate,
+          isPending: calculateMutation.isPending,
+        })
+      : null;
+    const selfReviewBlocked = Boolean(
+      currentUserId &&
+        wp.preparedByUserId === currentUserId &&
+        coverageQuery.data &&
+        !coverageQuery.data.allowSelfReview &&
+        ((wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review")) ||
+          (wp.status === "REVIEWED" && capabilities.has("tax.settlements.finalize"))),
+    );
+    const controlesBloqueantes = wp.controls.filter(
+      (control) => control.severity === "BLOCKING" && control.status === "OPEN",
+    ).length;
+    const submitDisabledReason =
+      controlesBloqueantes > 0
+        ? `Resolvé o eximí los controles que bloquean: quedan ${controlesBloqueantes} ${controlesBloqueantes === 1 ? "abierto" : "abiertos"}.`
+        : null;
+    const motivos: ReactNode[] = [];
+    let accion: ReactNode = null;
+
+    if (["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE"].includes(wp.status)) {
+      accion = (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={calculateDisabled}
+          title={calculateDisabledReason ?? "Calcular liquidación"}
+          onClick={() => void calculateMutation.mutate(wp.id)}
+        >
+          Calcular liquidación
+        </Button>
+      );
+      if (calculateDisabledReason) {
+        motivos.push(
+          <small className="muted-copy" role="status" key="motivo-calcular">
+            {calculateDisabledReason}
+          </small>,
+        );
+      }
+      motivos.push(errorDe(calculateMutation.variables === wp.id ? calculateMutation.error : null, "error-calcular"));
+    }
+    if (wp.status === "CHANGES_REQUESTED") {
+      accion = (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={calculateMutation.isPending || !canCalculate}
+          onClick={() => calculateMutation.mutate(wp.id)}
+        >
+          Recalcular
+        </Button>
+      );
+      if (!canCalculate) {
+        motivos.push(
+          <small className="muted-copy" role="status" key="motivo-recalcular">
+            Tu perfil no tiene permiso para recalcular este legajo.
+          </small>,
+        );
+      }
+      motivos.push(errorDe(calculateMutation.variables === wp.id ? calculateMutation.error : null, "error-recalcular"));
+    }
+    if (wp.status === "CALCULATED") {
+      accion = (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={
+            submitMutation.isPending ||
+            !capabilities.has("tax.settlements.submit_review") ||
+            submitDisabledReason !== null
           }
-        }}
-        onConfigurar={() => navigate("/configuracion-fiscal")}
+          title={submitDisabledReason ?? "Enviar a revisión"}
+          onClick={() => void submitMutation.mutate(wp.id)}
+        >
+          Enviar a revisión
+        </Button>
+      );
+      if (!capabilities.has("tax.settlements.submit_review")) {
+        motivos.push(
+          <small className="muted-copy" role="status" key="motivo-enviar">
+            Tu perfil no tiene permiso para enviar este legajo a revisión.
+          </small>,
+        );
+      }
+      if (submitDisabledReason) {
+        motivos.push(
+          <small className="muted-copy" role="status" key="motivo-bloqueantes">
+            {submitDisabledReason}
+          </small>,
+        );
+      }
+      motivos.push(errorDe(submitMutation.variables === wp.id ? submitMutation.error : null, "error-enviar"));
+    }
+    if (wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review")) {
+      accion = (
+        <>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={reviewMutation.isPending || selfReviewBlocked}
+            onClick={() => reviewMutation.mutate({ id: wp.id, approved: false })}
+          >
+            Solicitar cambios
+          </Button>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={reviewMutation.isPending || selfReviewBlocked}
+            onClick={() => reviewMutation.mutate({ id: wp.id, approved: true })}
+          >
+            Aprobar revisión
+          </Button>
+        </>
+      );
+      motivos.push(errorDe(reviewMutation.variables?.id === wp.id ? reviewMutation.error : null, "error-revision"));
+    }
+    if (wp.status === "REVIEWED") {
+      accion = (
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={
+            finalizeMutation.isPending ||
+            !capabilities.has("tax.settlements.finalize") ||
+            selfReviewBlocked
+          }
+          onClick={() =>
+            confirmar({
+              title: "Finalizar el legajo",
+              description:
+                "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",
+              confirmLabel: "Sí, finalizar",
+              onConfirm: () => finalizeMutation.mutate(wp.id),
+            })
+          }
+        >
+          Finalizar
+        </Button>
+      );
+      if (!capabilities.has("tax.settlements.finalize")) {
+        motivos.push(
+          <small className="muted-copy" role="status" key="motivo-finalizar">
+            Tu perfil no tiene permiso para finalizar este legajo.
+          </small>,
+        );
+      }
+      motivos.push(errorDe(finalizeMutation.variables === wp.id ? finalizeMutation.error : null, "error-finalizar"));
+    }
+    if (wp.status === "FINALIZED" && capabilities.has("tax.settlements.rectify")) {
+      accion = (
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={rectifyMutation.isPending}
+          onClick={() =>
+            confirmar({
+              title: "Crear rectificativa",
+              description:
+                "Abre una revisión nueva del período. La revisión actual queda finalizada y sin cambios.",
+              confirmLabel: "Sí, crear rectificativa",
+              onConfirm: () => rectifyMutation.mutate(wp.id),
+            })
+          }
+        >
+          Crear rectificativa
+        </Button>
+      );
+    }
+    if (wp.status === "FINALIZED") {
+      motivos.push(errorDe(rectifyMutation.variables === wp.id ? rectifyMutation.error : null, "error-rectificar"));
+    }
+    if (selfReviewBlocked && ["IN_REVIEW", "REVIEWED"].includes(wp.status)) {
+      motivos.push(
+        <small className="muted-copy" key="autorrevision">
+          Para revisar o finalizar este legajo, el Titular puede habilitar la autorrevisión en
+          Configuración del estudio.
+        </small>,
+      );
+    }
+    return { accion, motivos, nota: selfReviewNote(wp) };
+  };
+
+  // Solo la revisión vigente tiene acciones del legajo; una revisión anterior no escribe nada.
+  const acciones = vigente && !soloLectura ? armarAccionesLegajo(vigente) : null;
+  const motivoEtapaSaldos =
+    !soloLectura && vigente && safeActiveStep === 0 && !capabilities.has("tax.settlements.calculate")
+      ? "Tu rol no puede cargar saldos iniciales."
+      : null;
+  const motivosBarra: ReactNode[] = [
+    ...(acciones?.motivos ?? []),
+    motivoEtapaSaldos ? (
+      <small className="muted-copy" role="status" key="motivo-saldos">
+        {motivoEtapaSaldos}
+      </small>
+    ) : null,
+    errorDe(createMutation.error, "error-crear"),
+  ];
+  const motivosVisibles = motivosBarra.filter(Boolean);
+  const pedidosDeCambios =
+    vigente && !soloLectura ? mensajesDePedidoDeCambios(calculationQuery.data) : [];
+  const notaBarra = soloLectura ? textoSoloLectura : (acciones?.nota ?? null);
+
+  // Acciones de la etapa activa: a la derecha de sus pestañas, con sus condiciones de hoy.
+  const actualizarBoton = (ocupado: boolean, onClick: () => void, texto: string) => (
+    <Button size="sm" variant="ghost" disabled={ocupado} onClick={onClick}>
+      {texto}
+    </Button>
+  );
+  let accionesEtapa: ReactNode = null;
+  if (vigente && safeActiveStep === 0 && !soloLectura) {
+    accionesEtapa = (
+      <>
+        {actualizarBoton(
+          ledgerQuery.isFetching,
+          () => void ledgerQuery.refetch(),
+          ledgerQuery.isFetching ? "Actualizando…" : "Actualizar",
+        )}
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={!capabilities.has("tax.settlements.calculate")}
+          onClick={() => setShowOpening((visible) => !visible)}
+        >
+          <Icon name="plus" size={15} /> Cargar saldo inicial
+        </Button>
+      </>
+    );
+  } else if (vigente && safeActiveStep === 1) {
+    accionesEtapa = (
+      <>
+        {actualizarBoton(
+          coverageQuery.isFetching,
+          () => void coverageQuery.refetch(),
+          coverageQuery.isFetching && coverageQuery.isSuccess ? "Actualizando…" : "Actualizar",
+        )}
+        <Button size="sm" variant="secondary" onClick={() => navigate("/bandeja")}>
+          Ir a bandeja
+        </Button>
+      </>
+    );
+  } else if (vigente && safeActiveStep === 2) {
+    const actualizandoClasificacion = classificationQuery.isFetching || allocationQuery.isFetching;
+    accionesEtapa = (
+      <>
+        {actualizarBoton(
+          actualizandoClasificacion,
+          () => void Promise.all([classificationQuery.refetch(), allocationQuery.refetch()]),
+          actualizandoClasificacion ? "Actualizando…" : "Actualizar",
+        )}
+        <Button size="sm" variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
+          Ver configuración fiscal
+        </Button>
+      </>
+    );
+  } else if (vigente && safeActiveStep === 3 && !soloLectura) {
+    const actualizandoCalculo = positionQuery.isFetching || calculationQuery.isFetching;
+    accionesEtapa = actualizarBoton(
+      actualizandoCalculo,
+      () => void Promise.all([positionQuery.refetch(), calculationQuery.refetch()]),
+      actualizandoCalculo ? "Actualizando…" : "Actualizar",
+    );
+  }
+
+  const contexto = (
+    <>
+      {selectableTaxPeriods.length > 0 ? (
+        <BarSelect
+          label="Período fiscal"
+          options={opcionesPeriodo}
+          value={selectedTaxPeriodId}
+          onChange={(event) => cambiarPeriodo(event.target.value)}
+        />
+      ) : null}
+      <Menu kind="actions" label="Acciones del período" trigger="Acciones del período" items={accionesDelPeriodo} />
+      {seleccionada ? (
+        <>
+          <span className="work-bar__separador" aria-hidden="true" />
+          <Menu
+            kind="select"
+            label="Revisiones del período"
+            trigger={`Revisión ${seleccionada.revision}`}
+            value={seleccionada.id}
+            options={workpapers.map((wp, indice) => ({
+              key: wp.id,
+              label: `Revisión ${wp.revision}`,
+              status: <StatusBadge status={wp.status} variant="plain" />,
+              secondary:
+                indice === 0
+                  ? "la más reciente"
+                  : `reemplazada por la revisión ${workpapers[indice - 1]!.revision} · solo lectura`,
+            }))}
+            onChange={(key) => setRevisionElegidaId(key === vigente?.id ? null : key)}
+          />
+          <StatusBadge status={seleccionada.status} variant="plain" />
+        </>
+      ) : null}
+      {sinLegajo ? <span className="muted-copy">Sin legajo en este período</span> : null}
+      {sinPeriodosFiscales ? <span className="muted-copy">Sin períodos fiscales</span> : null}
+    </>
+  );
+
+  const pestanas = WORKPAPER_STEPS.map((step, indice) => ({
+    id: String(indice),
+    label:
+      indice === 4 && bloqueantesAbiertos > 0 ? (
+        <>
+          {step.title}
+          <span
+            className="workpaper-bloqueos"
+            title={pluralizar(bloqueantesAbiertos, "control bloqueante abierto", "controles bloqueantes abiertos")}
+          >
+            <span className="workpaper-bloqueos__punto" aria-hidden="true" />
+            {bloqueantesAbiertos}{" "}
+            <span className="sr-only">
+              {bloqueantesAbiertos === 1 ? "bloqueante abierto" : "bloqueantes abiertos"}
+            </span>
+          </span>
+        </>
+      ) : (
+        step.title
+      ),
+  }));
+
+  const barra = (
+    <WorkBar
+      label="Legajo: período, revisión, etapas y acciones"
+      context={contexto}
+      action={acciones?.accion ?? null}
+      note={notaBarra}
+      reason={motivosVisibles.length > 0 ? motivosVisibles : null}
+      sections={
+        vigente ? (
+          <DenseTabs
+            label="Etapas del legajo"
+            idPrefix="workpaper"
+            tabs={pestanas}
+            active={String(safeActiveStep)}
+            onChange={(id) => goToStep(Number(id))}
+          />
+        ) : null
+      }
+      sectionActions={accionesEtapa}
+    />
+  );
+
+  let cuerpo: ReactNode;
+  if (taxPeriodsQuery.isLoading) {
+    cuerpo = (
+      <AsyncState
+        loading
+        error={false}
+        loadingLabel="Cargando períodos fiscales…"
+        errorTitle=""
+        errorDescription=""
+        onRetry={() => void taxPeriodsQuery.refetch()}
       />
-
-      <BandaEstado
-        legajos={listQuery.isError ? "no disponible" : listQuery.data ? workpapers.length : listQuery.isLoading || taxPeriodsQuery.isLoading ? "pendiente" : "—"}
-        componentes={coverageQuery.isError ? "no disponible" : coverageQuery.data ? coverageQuery.data.components.length : coverageQuery.isLoading ? "pendiente" : "—"}
+    );
+  } else if (taxPeriodsQuery.isError) {
+    cuerpo = (
+      <AsyncState
+        loading={false}
+        error
+        loadingLabel="Cargando períodos fiscales…"
+        errorTitle="No se pudieron cargar los períodos fiscales"
+        errorDescription="Reintentá la consulta para volver a cargar los períodos del cliente."
+        onRetry={() => void taxPeriodsQuery.refetch()}
       />
+    );
+  } else if (selectableTaxPeriods.length === 0) {
+    cuerpo = (
+      <EmptyState
+        title="Configurá un período fiscal"
+        description="El legajo organiza las obligaciones del mes seleccionado."
+        action={
+          <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
+            Abrir configuración fiscal
+          </Button>
+        }
+      />
+    );
+  } else if (!selectedTaxPeriod) {
+    cuerpo = (
+      <EmptyState
+        title="Elegí un período fiscal"
+        description="Seleccioná un período fiscal para consultar o crear el legajo del mes."
+      />
+    );
+  } else if (listQuery.isLoading) {
+    cuerpo = (
+      <AsyncState
+        loading
+        error={false}
+        loadingLabel="Cargando legajos…"
+        errorTitle=""
+        errorDescription=""
+        onRetry={() => void listQuery.refetch()}
+      />
+    );
+  } else if (listQuery.isError) {
+    cuerpo = (
+      <AsyncState
+        loading={false}
+        error
+        loadingLabel="Cargando legajos…"
+        errorTitle="No se pudieron cargar los legajos"
+        errorDescription="Reintentá en un momento."
+        onRetry={() => void listQuery.refetch()}
+      />
+    );
+  } else if (!seleccionada) {
+    cuerpo = listQuery.isSuccess ? (
+      <EmptyState
+        title="Sin legajos para este período"
+        description="Creá un legajo para coordinar las liquidaciones del período."
+        action={
+          canCalculate ? (
+            <Button onClick={() => createMutation.mutate()} loading={createMutation.isPending}>
+              Nuevo legajo
+            </Button>
+          ) : undefined
+        }
+      />
+    ) : null;
+  } else {
+    cuerpo = (
+      <>
+        {pedidosDeCambios.length > 0 ? (
+          <Notice
+            className="workpaper-pedido"
+            tone="warning"
+            title={getStatusBadgeMeta("CHANGES_REQUESTED").label}
+          >
+            {pedidosDeCambios.map((mensaje, indice) => (
+              <p key={indice}>{mensaje}</p>
+            ))}
+          </Notice>
+        ) : null}
+        <div
+          className="workpaper-body"
+          id="workpaper-panel"
+          role="tabpanel"
+          aria-labelledby={`workpaper-${safeActiveStep}`}
+          aria-live="polite"
+        >
+          {renderEtapa(seleccionada, safeActiveStep)}
+        </div>
+      </>
+    );
+  }
 
+  return (
+    <>
+      <WorkPage bar={barra}>
+        <DensePage density={density}>
+          <h1 className="sr-only">Legajo</h1>
+          {cuerpo}
+        </DensePage>
+      </WorkPage>
 
+      <FiscalBooksExportAction
+        periodId={selectedTaxPeriod?.id ?? null}
+        periodLabel={
+          selectedTaxPeriod
+            ? `${selectedTaxPeriod.taxType.name} · ${fiscalTaxPeriodLabel(selectedTaxPeriod)}`
+            : null
+        }
+        abierto={exportarAbierto}
+        onCerrar={() => setExportarAbierto(false)}
+      />
 
       <PanelLibrosIva
         abierto={libroIvaAbierto !== null}
@@ -691,237 +1261,6 @@ export function StudyExpedienteMensual() {
       ) : null}
 
       <ConfirmDialog confirm={confirmacionEstable} />
-      <ListaLegajos
-        cargando={listQuery.isLoading}
-        error={listQuery.isError}
-        onReintentar={() => void listQuery.refetch()}
-        exito={listQuery.isSuccess}
-        sinPeriodo={!selectedTaxPeriod}
-        legajos={workpapers}
-        puedeCrear={capabilities.has("tax.settlements.calculate")}
-        creando={createMutation.isPending}
-        onCrear={() => createMutation.mutate()}
-        renderLegajo={(wp, indice) => {
-          if (indice > 0 && vigente) {
-            return <ResumenRevision key={wp.id} wp={wp} vigente={vigente} />;
-          }
-            const canCalculate = capabilities.has("tax.settlements.calculate");
-            const calculateDisabled =
-              calculateMutation.isPending ||
-              wp.status !== "READY_TO_CALCULATE" ||
-              !canCalculate;
-            const calculateDisabledReason = calculateDisabled
-              ? calculationDisabledMessage({
-                  status: wp.status,
-                  sources: coverageQuery.data?.sources,
-                  classifications: classificationQuery.data,
-                  allocations: allocationQuery.data,
-                  canCalculate,
-                  isPending: calculateMutation.isPending,
-                })
-              : null;
-            const selfReviewBlocked = Boolean(
-              currentUserId &&
-              wp.preparedByUserId === currentUserId &&
-              coverageQuery.data &&
-              !coverageQuery.data.allowSelfReview &&
-              ((wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review")) ||
-                (wp.status === "REVIEWED" && capabilities.has("tax.settlements.finalize"))),
-            );
-          const controlesBloqueantes = wp.controls.filter(
-            (control) => control.severity === "BLOCKING" && control.status === "OPEN",
-          ).length;
-          const submitDisabledReason =
-            controlesBloqueantes > 0
-              ? `Resolvé o eximí los controles que bloquean: quedan ${controlesBloqueantes} ${controlesBloqueantes === 1 ? "abierto" : "abiertos"}.`
-              : null;
-          const accionPrincipal = (
-            <>
-              {["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE"].includes(wp.status) ? (
-                <>
-                  <Button
-                    variant="primary"
-                    disabled={calculateDisabled}
-                    title={calculateDisabledReason ?? "Calcular liquidación"}
-                    onClick={() => void calculateMutation.mutate(wp.id)}
-                  >
-                    Calcular liquidación
-                  </Button>
-                  <WorkpaperActionError
-                    error={calculateMutation.variables === wp.id ? calculateMutation.error : null}
-                  />
-                  {calculateDisabledReason ? (
-                    <small className="muted-copy" role="status">
-                      {calculateDisabledReason}
-                    </small>
-                  ) : null}
-                </>
-              ) : null}
-              {wp.status === "CHANGES_REQUESTED" ? (
-                <>
-                  <Button
-                    variant="primary"
-                    disabled={
-                      calculateMutation.isPending || !capabilities.has("tax.settlements.calculate")
-                    }
-                    onClick={() => calculateMutation.mutate(wp.id)}
-                  >
-                    Recalcular
-                  </Button>
-                  {!capabilities.has("tax.settlements.calculate") ? (
-                    <small className="muted-copy" role="status">
-                      Tu perfil no tiene permiso para recalcular este legajo.
-                    </small>
-                  ) : null}
-                  <WorkpaperActionError
-                    error={calculateMutation.variables === wp.id ? calculateMutation.error : null}
-                  />
-                </>
-              ) : null}
-              {wp.status === "CALCULATED" ? (
-                <>
-                  <Button
-                    variant="primary"
-                    disabled={
-                      submitMutation.isPending ||
-                      !capabilities.has("tax.settlements.submit_review") ||
-                      submitDisabledReason !== null
-                    }
-                    title={submitDisabledReason ?? "Enviar a revisión"}
-                    onClick={() => void submitMutation.mutate(wp.id)}
-                  >
-                    Enviar a revisión
-                  </Button>
-                  {!capabilities.has("tax.settlements.submit_review") ? (
-                    <small className="muted-copy" role="status">
-                      Tu perfil no tiene permiso para enviar este legajo a revisión.
-                    </small>
-                  ) : null}
-                  {submitDisabledReason ? (
-                    <small className="muted-copy" role="status">
-                      {submitDisabledReason}
-                    </small>
-                  ) : null}
-                  <WorkpaperActionError
-                    error={submitMutation.variables === wp.id ? submitMutation.error : null}
-                  />
-                </>
-              ) : null}
-              {wp.status === "IN_REVIEW" && capabilities.has("tax.settlements.review") ? (
-                <span className="workpaper-process__decision">
-                  <Button
-                    variant="secondary"
-                    disabled={reviewMutation.isPending || selfReviewBlocked}
-                    onClick={() => reviewMutation.mutate({ id: wp.id, approved: false })}
-                  >
-                    Solicitar cambios
-                  </Button>
-                  <Button
-                    variant="primary"
-                    disabled={reviewMutation.isPending || selfReviewBlocked}
-                    onClick={() => reviewMutation.mutate({ id: wp.id, approved: true })}
-                  >
-                    Aprobar revisión
-                  </Button>
-                </span>
-              ) : null}
-              {wp.status === "REVIEWED" ? (
-                <Button
-                  variant="primary"
-                  disabled={
-                    finalizeMutation.isPending ||
-                    !capabilities.has("tax.settlements.finalize") ||
-                    selfReviewBlocked
-                  }
-                  onClick={() =>
-                    confirmar({
-                      title: "Finalizar el legajo",
-                      description:
-                        "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",
-                      confirmLabel: "Sí, finalizar",
-                      onConfirm: () => finalizeMutation.mutate(wp.id),
-                    })
-                  }
-                >
-                  Finalizar
-                </Button>
-              ) : null}
-              {wp.status === "REVIEWED" && !capabilities.has("tax.settlements.finalize") ? (
-                <small className="muted-copy" role="status">
-                  Tu perfil no tiene permiso para finalizar este legajo.
-                </small>
-              ) : null}
-              {wp.status === "REVIEWED" ? (
-                <WorkpaperActionError
-                  error={finalizeMutation.variables === wp.id ? finalizeMutation.error : null}
-                />
-              ) : null}
-              {selfReviewBlocked && ["IN_REVIEW", "REVIEWED"].includes(wp.status) ? (
-                <small className="muted-copy">
-                  Para revisar o finalizar este legajo, el Titular puede habilitar la autorrevisión
-                  en Configuración del estudio.
-                </small>
-              ) : null}
-            </>
-          );
-          // Foco 2.9: la barra de acciones secundarias se dibuja solo con un botón o un error que mostrar.
-          // Foco 2.10: en revisión, «Solicitar cambios» va en la línea de la etapa; la barra queda solo con un error.
-          const hayAccionesSecundarias =
-            (wp.status === "IN_REVIEW" &&
-              reviewMutation.variables?.id === wp.id &&
-              Boolean(reviewMutation.error)) ||
-            (wp.status === "FINALIZED" && capabilities.has("tax.settlements.rectify")) ||
-            (wp.status === "FINALIZED" &&
-              rectifyMutation.variables === wp.id &&
-              Boolean(rectifyMutation.error));
-          const acciones = (
-            <>
-              {wp.status === "IN_REVIEW" ? (
-                <WorkpaperActionError
-                  error={reviewMutation.variables?.id === wp.id ? reviewMutation.error : null}
-                />
-              ) : null}
-              {wp.status === "FINALIZED" && capabilities.has("tax.settlements.rectify") ? (
-                <Button
-                  variant="secondary"
-                  disabled={rectifyMutation.isPending}
-                  onClick={() =>
-                    confirmar({
-                      title: "Crear rectificativa",
-                      description:
-                        "Abre una revisión nueva del período. La revisión actual queda finalizada y sin cambios.",
-                      confirmLabel: "Sí, crear rectificativa",
-                      onConfirm: () => rectifyMutation.mutate(wp.id),
-                    })
-                  }
-                >
-                  Crear rectificativa
-                </Button>
-              ) : null}
-              {wp.status === "FINALIZED" ? (
-                <WorkpaperActionError
-                  error={rectifyMutation.variables === wp.id ? rectifyMutation.error : null}
-                />
-              ) : null}
-            </>
-          );
-          return (
-            <LegajoTarjeta
-              key={wp.id}
-              wp={wp}
-              etapaActiva={safeActiveStep}
-              onCambiarEtapa={goToStep}
-              accionPrincipal={accionPrincipal}
-              pedidosDeCambios={
-                wp.id === activeWorkpaperId ? mensajesDePedidoDeCambios(calculationQuery.data) : []
-              }
-              acciones={hayAccionesSecundarias ? acciones : null}
-            >
-              {renderEtapa(wp, safeActiveStep)}
-            </LegajoTarjeta>
-          );
-        }}
-      />
-    </DensePage>
+    </>
   );
 }

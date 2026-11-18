@@ -90,16 +90,17 @@ function renderLegajos(legajos: unknown[], calculo?: unknown[]) {
   );
 }
 
+/** Renglón de acción de la barra del legajo: la acción del estado y, si hay, las secundarias. */
 async function accionesDeLaTarjeta(container: HTMLElement) {
-  await screen.findByRole("heading", { level: 2, name: /Revisión 1/ });
-  return container.querySelector(".workpaper-card__actions") as HTMLElement;
+  await screen.findByRole("tab", { name: "Saldos" });
+  return container.querySelector<HTMLElement>(".work-bar [data-renglon='contexto'] .work-bar__fin");
 }
 
 /** Botones de acción de la tarjeta: la primaria va en el encabezado de la etapa y las secundarias, en la barra (Foco 2.8). */
 function botonesDeAcciones(container: HTMLElement): HTMLButtonElement[] {
   return [
     ...container.querySelectorAll<HTMLButtonElement>(
-      ".workpaper-process__accion button, .workpaper-card__actions button",
+      ".work-bar [data-renglon='contexto'] .work-bar__fin button",
     ),
   ];
 }
@@ -165,7 +166,9 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
     const { container } = renderLegajos([legajoDemo("DRAFT")]);
     await accionesDeLaTarjeta(container);
 
-    const boton = screen.getByRole("button", { name: "Calcular liquidación" }) as HTMLButtonElement; // vigente: cambia con decisión de Ciro (16-nov, 49a)
+    const boton = (await screen.findByRole("button", {
+      name: "Calcular liquidación",
+    })) as HTMLButtonElement; // vigente: cambia con decisión de Ciro (16-nov, 49a)
     expect(boton.disabled).toBe(true);
     expect(screen.getByText("Tu perfil no tiene permiso para calcular este legajo.")).toBeTruthy();
   });
@@ -280,8 +283,13 @@ describe("Legajo · barra de acciones sin contenido (Foco 2.9)", () => {
       const { container } = renderLegajos([legajoDemo(estado)]);
       await accionesDeLaTarjeta(container);
 
-      expect(container.querySelector(".workpaper-card__actions")).toBeNull();
-      expect(container.querySelector(".workpaper-step-footer")).not.toBeNull();
+      // vigente: cambia con A29
+      expect(
+        botonesDeAcciones(container).some((boton) =>
+          boton.classList.contains("ds-button--secondary"),
+        ),
+      ).toBe(false);
+      expect(container.querySelector(".work-bar__row--secciones")).not.toBeNull();
     },
   );
 });
@@ -291,8 +299,10 @@ describe("Legajo · acciones de estado antes de la barra de etapas (Foco 2.7b)",
     contexto(TODAS);
     const { container } = renderLegajos([legajoDemo("IN_REVIEW")]);
     await accionesDeLaTarjeta(container);
-    const acciones = container.querySelector<HTMLElement>(".workpaper-process__accion")!;
-    const barra = container.querySelector<HTMLElement>(".workpaper-step-footer");
+    const acciones = container.querySelector<HTMLElement>(
+      ".work-bar [data-renglon='contexto'] .work-bar__fin",
+    )!;
+    const barra = container.querySelector<HTMLElement>(".work-bar__row--secciones");
     expect(barra).not.toBeNull();
     expect(
       acciones.compareDocumentPosition(barra!) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -307,7 +317,9 @@ describe("Legajo · ciclo de revisión (Foco 2.10)", () => {
     const { container } = renderLegajos([legajoDemo("IN_REVIEW")]);
     await accionesDeLaTarjeta(container);
 
-    const linea = container.querySelector<HTMLElement>(".workpaper-process__accion")!;
+    const linea = container.querySelector<HTMLElement>(
+      ".work-bar [data-renglon='contexto'] .work-bar__fin",
+    )!;
     const solicitar = within(linea).getByRole("button", { name: "Solicitar cambios" });
     const aprobar = within(linea).getByRole("button", { name: "Aprobar revisión" });
     expect(
@@ -315,7 +327,8 @@ describe("Legajo · ciclo de revisión (Foco 2.10)", () => {
     ).toBeTruthy();
     expect(solicitar.className).toContain("ds-button--secondary");
     expect(aprobar.className).toContain("ds-button--primary");
-    expect(container.querySelector(".workpaper-card__actions")).toBeNull();
+    // vigente: cambia con A29
+    expect(within(linea).getAllByRole("button")).toHaveLength(2);
   });
 
   it("el pedido de cambios va bajo el estado, en un aviso warning y sin el código interno", async () => {
@@ -332,19 +345,17 @@ describe("Legajo · ciclo de revisión (Foco 2.10)", () => {
     expect(within(aviso).getByText("Captura de la etapa 5 pendiente.")).toBeTruthy();
     expect(container.textContent).not.toContain("CHANGES_REQUESTED");
 
-    const encabezado = container.querySelector<HTMLElement>(".workpaper-card__header")!;
-    const barra = container.querySelector<HTMLElement>(".workpaper-process")!;
-    expect(
-      encabezado.compareDocumentPosition(aviso) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(aviso.compareDocumentPosition(barra) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const barra = container.querySelector<HTMLElement>(".work-bar")!;
+    // vigente: cambia con A29
+    expect(barra.compareDocumentPosition(aviso) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(aviso.previousElementSibling?.tagName).toBe("H1");
   });
 
   it("sin pedido de cambios no se dibuja el aviso bajo el estado", async () => {
     contexto(TODAS);
     const { container } = renderLegajos([legajoDemo("IN_REVIEW")]);
     await accionesDeLaTarjeta(container);
-    expect(container.querySelector(".workpaper-card__pedido")).toBeNull();
+    expect(container.querySelector(".workpaper-pedido")).toBeNull();
   });
 });
 

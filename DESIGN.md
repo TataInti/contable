@@ -1218,7 +1218,7 @@ Una receta define la composición y lo que se conserva. Las consultas, los permi
 
 **Fechas y períodos:** el período del legajo y las fechas de pago, presentación y cálculo usan el formato único de la sección «Fechas y períodos».
 
-**Composición:** encabezado C01; contexto de cliente, impuesto, período y revisión; estado en texto (C08); advertencia de autorrevisión visible; secciones con pestañas (C05); tabla (C04); respaldo y metadatos en detalle o panel (C06 y C09).
+**Composición (vigente en main):** barra de trabajo fija (`WorkPage` y `WorkBar`, C01b): período (`BarSelect`), «Acciones del período» (`Menu`), «Revisión» (`Menu`, la más reciente por defecto), estado en texto (C08) y, a la derecha, la acción del legajo, con una sola primaria; avisos de autorrevisión y de motivo; las seis etapas como pestañas (C05), con el contador de controles bloqueantes abiertos; acciones de la etapa a la derecha de las pestañas. El contenido de la etapa es el cuerpo de la página, sin tarjeta y sin título visible (el `h1` «Legajo» queda para lectores de pantalla); las tablas (C04) se desplazan con la página. Una revisión anterior se ve en solo lectura, sin acciones que escriban. Respaldo y metadatos en detalle o panel (C06 y C09).
 
 **Entradas de pantalla:** identificación de contexto, estado, revisión, capacidades, fuentes de saldos y enlaces de respaldo. Los saldos y la posibilidad de cargar o rectificar los resuelve el dominio; la tabla los presenta.
 
@@ -1279,7 +1279,7 @@ Cubre todas las pantallas de `apps/web/src` en main: 18 del estudio (`study/`), 
 | Nº | Pantalla (ruta) | Archivo | Receta | Familias y componentes Foco (composición destino) | Corte |
 |---:|---|---|---|---|---:|
 | 1 | Inicio (`/`) | `study/StudyDashboard.tsx` | R01 | C01, C02, C03, C04, C07, C08 — `DenseHeader`, `StatStrip`, `DenseSection`, `DenseTable`, `DenseWorkspace`, `InspectorFacts`, `AsyncState`, `EmptyState`, `StatusBadge` (migrada) | 1 (migrada) |
-| 2 | Legajo (`/expediente-mensual`) | `study/StudyExpedienteMensual.tsx` | R02 | C01, C02, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `StatStrip`, `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` | 2 (migrada) |
+| 2 | Legajo (`/expediente-mensual`) | `study/StudyExpedienteMensual.tsx` | R02 | C01, C02, C04, C05, C06, C07, C08, C09 — `WorkPage`, `WorkBar`, `Menu`, `BarSelect`, `DenseTabs`, `Table`, `StatusBadge`, `ActionDrawer`, `MoneyField` (vigente en main) | 2 (migrada) |
 | 3 | Reglas fiscales (`/reglas-fiscales`) | `study/StudyReglasFiscales.tsx` | R03 | C01, C03, C04, C05, C06, C07, C08, C09 — `DenseHeader`, `DenseTabs`, `DenseTable`, `DenseWorkspace`, `ActionDrawer`, `ConfirmDialog`, `DeletionDrawer` | 3 (migrada) |
 | 4 | Catálogos fiscales (`/catalogos-fiscales`) | `study/StudyCatalogosFiscales.tsx` | R03 | C01, C04, C05, C06, C07, C08, C09 — `DenseTabs`, `DenseSearch`, `DenseTable`, `Inspector`, `ActionDrawer`, `DeletionDrawer` | 4 |
 | 5 | Clientes (`/clientes`) | `study/StudyClientes.tsx` | RG, lista y detalle | C01, C03, C04, C05, C06, C07, C08, C09 — `StatStrip`, `DenseToggleGroup`, `DenseTable` con `groupBy`, `Inspector`, `ActionDrawer` | 5 |

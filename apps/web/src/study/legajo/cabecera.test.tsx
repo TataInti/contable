@@ -104,42 +104,59 @@ describe("Legajo · cabecera (K3)", () => {
     expect(libroVentas).toBeEnabled();
   });
 
+  /** Espera a que la barra tenga el período elegido, para que los ítems del menú reflejen el período. */
+  async function esperarPeriodo() {
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("combobox", { name: "Período fiscal" }) as HTMLSelectElement).value,
+      ).toBe(PERIODO_ELEGIDO_DEMO),
+    );
+  }
+
+  /** Abre «Acciones del período» y devuelve el ítem pedido. */
+  function itemDelPeriodo(nombre: RegExp): HTMLElement {
+    fireEvent.click(screen.getByRole("button", { name: "Acciones del período" }));
+    return screen.getByRole("menuitem", { name: nombre });
+  }
+
   it("Nuevo legajo queda deshabilitado sin período fiscal", async () => {
     vi.mocked(api.get).mockImplementation(rutasDemo({ periodos: [] }) as never);
-    fijarContexto(["client.read", "tax.settlements.calculate"]);
+    fijarContexto(["client.read", "tax.settlements.calculate", "tax.vouchers.read"]);
     renderLegajo();
     expect(await screen.findByText("Configurá un período fiscal")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Nuevo legajo" })).toBeDisabled();
+    const item = itemDelPeriodo(/Nuevo legajo/);
+    expect(item.getAttribute("aria-disabled")).toBe("true");
+    expect(
+      screen.getByText("Configurá un período fiscal para crear el legajo."),
+    ).toBeInTheDocument();
   });
 
   it("Nuevo legajo queda deshabilitado sin tax.settlements.calculate y se habilita con él", async () => {
-    fijarContexto(["client.read", "tax.vouchers.prepare"]);
+    fijarContexto(["client.read"]);
     renderLegajo();
-    await waitFor(() =>
-      expect(vi.mocked(api.get)).toHaveBeenCalledWith(
-        `/firms/${FIRMA_DEMO}/clients/${CLIENTE_DEMO}/tax-periods`,
-      ),
-    );
-    expect(await screen.findByRole("button", { name: "Nuevo legajo" })).toBeDisabled();
+    await esperarPeriodo();
+    expect(itemDelPeriodo(/Nuevo legajo/).getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByText("Tu rol no puede crear legajos.")).toBeInTheDocument();
     cleanup();
     fijarContexto(["client.read", "tax.settlements.calculate"]);
     renderLegajo();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Nuevo legajo" })).toBeEnabled());
+    await esperarPeriodo();
+    expect(itemDelPeriodo(/Nuevo legajo/).getAttribute("aria-disabled")).not.toBe("true");
   });
 
   it("Exportar libros no se dibuja sin tax.vouchers.read", async () => {
     fijarContexto(["client.read", "tax.settlements.calculate"]);
     renderLegajo();
-    expect(await screen.findByRole("button", { name: "Nuevo legajo" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Exportar libros" })).toBeNull();
+    await esperarPeriodo();
+    fireEvent.click(screen.getByRole("button", { name: "Acciones del período" }));
+    expect(screen.queryByRole("menuitem", { name: /Exportar libros/ })).toBeNull();
   });
 
   it("Exportar libros se habilita con tax.vouchers.read y período", async () => {
     fijarContexto(["client.read", "tax.vouchers.read"]);
     renderLegajo();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Exportar libros" })).toBeEnabled(),
-    );
+    await esperarPeriodo();
+    expect(itemDelPeriodo(/Exportar libros/).getAttribute("aria-disabled")).not.toBe("true");
   });
 
   it("Exportar libros queda deshabilitado sin período fiscal", async () => {
@@ -147,6 +164,10 @@ describe("Legajo · cabecera (K3)", () => {
     fijarContexto(["client.read", "tax.vouchers.read"]);
     renderLegajo();
     expect(await screen.findByText("Configurá un período fiscal")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Exportar libros" })).toBeDisabled();
+    const item = itemDelPeriodo(/Exportar libros/);
+    expect(item.getAttribute("aria-disabled")).toBe("true");
+    expect(
+      screen.getByText("Elegí un período fiscal para exportar sus libros."),
+    ).toBeInTheDocument();
   });
 });

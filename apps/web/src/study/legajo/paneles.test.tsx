@@ -109,12 +109,11 @@ async function abrirLibrosIva() {
   return screen.findByRole("dialog", { name: "Importar libros IVA" });
 }
 
-// La cobertura (fuentes) llega después de la lista de legajos y el botón Importar depende de ella.
+// La cobertura (fuentes) llega después de la lista de legajos: el botón Importar depende de ella.
+// vigente: cambia con A29 (la banda «Componentes» ya no existe; se espera el botón que depende de la cobertura)
 async function esperarCoberturaDemo() {
   await waitFor(() =>
-    expect(
-      screen.getByRole("group", { name: "Estado del legajo", hidden: true }),
-    ).toHaveTextContent(/Componentes\s*0/),
+    expect(screen.getAllByRole("button", { name: "Importar libro" }).length).toBeGreaterThan(0),
   );
 }
 
@@ -157,11 +156,11 @@ describe("Legajo · libros IVA (K4)", () => {
   });
 
   // Sin legajo del período no hay fila ARCA IVA: «Importar libro» no aparece y la lista ofrece crear el legajo (P1).
-  it("sin legajo del período no se ofrece Importar libro y la pantalla ofrece Crear legajo", async () => {
+  it("sin legajo del período no se ofrece Importar libro y la pantalla ofrece Nuevo legajo", async () => {
     vi.mocked(api.get).mockImplementation(rutasDemo({ legajos: [] }) as never);
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
-    expect(await screen.findByRole("button", { name: "Crear legajo" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Nuevo legajo" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Importar libro" })).toBeNull();
   });
 

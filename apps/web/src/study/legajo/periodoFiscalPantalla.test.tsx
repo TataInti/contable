@@ -179,7 +179,7 @@ describe("Legajo · selector de período fiscal (K15)", () => {
 
     expect(await screen.findByText("Configurá un período fiscal")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Abrir configuración fiscal" })).toBeTruthy();
-    expect(screen.getByText("Elegí un período fiscal")).toBeTruthy();
+    expect(screen.getByText("Sin períodos fiscales")).toBeTruthy(); // vigente: cambia con A29
     expect(llamadas("monthly-tax-workpapers?")).toBe(0);
   });
 });

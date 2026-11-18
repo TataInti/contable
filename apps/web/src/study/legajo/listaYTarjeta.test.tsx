@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -109,16 +109,16 @@ describe("Legajo · lista de legajos y tarjeta (K8)", () => {
     vi.mocked(api.get).mockImplementation(rutasDemo({ periodos: [] }) as never);
     renderPage();
 
-    expect(await screen.findByText("Elegí un período fiscal")).toBeTruthy();
+    expect(await screen.findByText("Configurá un período fiscal")).toBeTruthy();
     expect(llamadas("monthly-tax-workpapers?")).toBe(0);
   });
 
-  it("sin legajos ofrece Crear legajo y envía el alta del período", async () => {
+  it("sin legajos ofrece Nuevo legajo y envía el alta del período", async () => {
     vi.mocked(api.get).mockImplementation(rutasDemo({ legajos: [] }) as never);
     renderPage();
 
     expect(await screen.findByText("Sin legajos para este período")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Crear legajo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nuevo legajo" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(expect.stringMatching(/\/monthly-tax-workpapers$/), {
         periodStart: "2026-10-01",
@@ -127,28 +127,23 @@ describe("Legajo · lista de legajos y tarjeta (K8)", () => {
     );
   });
 
-  it("muestra la tarjeta con título, estado, etapas y pie de navegación", async () => {
+  it("muestra la barra con período, estado y etapas, y la etapa activa en el contenido", async () => {
     renderPage();
-
-    expect(
-      await screen.findByRole("heading", { level: 2, name: "octubre de 2026 · Revisión 1" }),
-    ).toBeTruthy();
-    expect(document.querySelector('[data-status="COLLECTING_INPUTS"]')).not.toBeNull();
-
-    const etapas = await screen.findAllByRole("tab");
-    expect(etapas).toHaveLength(6);
-    const seleccionadas = etapas.filter((tab) => tab.getAttribute("aria-selected") === "true");
-    expect(seleccionadas).toHaveLength(1);
-    expect(seleccionadas[0]?.textContent).toContain("Saldos");
-    for (const etapa of etapas) {
-      expect(etapa.getAttribute("aria-controls")).toBeTruthy();
-    }
-
-    expect(
-      (screen.getByRole("button", { name: "Inicio del proceso" }) as HTMLButtonElement).disabled,
-    ).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Ir a Fuentes" }));
-    expect(await screen.findByRole("button", { name: "Volver a Saldos" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Ir a Clasificación" })).toBeTruthy();
+    await screen.findByRole("tab", { name: "Saldos" });
+    const barra = screen.getByRole("region", {
+      name: "Legajo: período, revisión, etapas y acciones",
+    });
+    expect(barra.querySelector('[data-status="COLLECTING_INPUTS"]')).not.toBeNull(); // vigente: cambia con A29
+    const pestanas = within(barra).getAllByRole("tab");
+    expect(pestanas).toHaveLength(6);
+    expect(within(barra).getByRole("tab", { name: "Saldos" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    expect(pestanas[0]!.getAttribute("aria-controls")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Inicio del proceso" })).toBeNull();
+    fireEvent.click(within(barra).getByRole("tab", { name: "Fuentes" }));
+    expect(within(barra).getByRole("tab", { name: "Fuentes" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
   });
 });

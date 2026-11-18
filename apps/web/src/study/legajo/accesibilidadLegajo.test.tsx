@@ -100,14 +100,15 @@ afterEach(() => {
 describe("Legajo · accesibilidad mínima (Foco 2.3a)", () => {
   it("la pantalla tiene un solo h1", async () => {
     renderLegajos([legajoDemo("CALCULATED")]);
-    await screen.findByRole("heading", { level: 2, name: /Revisión 1/ });
+    await screen.findByRole("region", { name: "Legajo: período, revisión, etapas y acciones" }); // vigente: cambia con A29
     expect(document.querySelectorAll("h1")).toHaveLength(1);
   });
 
   it("la tarjeta muestra como máximo una acción primaria", async () => {
     const { container } = renderLegajos([legajoDemo("CALCULATED")]);
-    await screen.findByRole("heading", { level: 2, name: /Revisión 1/ });
-    expect(container.querySelectorAll(".workpaper-card .ds-button--primary")).toHaveLength(
+      await screen.findByRole("button", { name: "Enviar a revisión" });
+    await screen.findByRole("region", { name: "Legajo: período, revisión, etapas y acciones" }); // vigente: cambia con A29
+    expect(container.querySelectorAll(".work-bar .ds-button--primary")).toHaveLength(
       1,
     );
   });

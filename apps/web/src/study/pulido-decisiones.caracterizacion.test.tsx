@@ -6,7 +6,6 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { api } from "../lib/api";
-import { LegajoTarjeta } from "./legajo/Tarjeta/LegajoTarjeta";
 import { StudyExpedienteMensual } from "./StudyExpedienteMensual";
 import { StudyClientes } from "./StudyClientes";
 import {
@@ -77,8 +76,8 @@ function contexto(capacidades: string[]) {
   } as unknown as ClientContextValue;
 }
 
-function renderLegajo(legajo: unknown) {
-  vi.mocked(api.get).mockImplementation(rutasDemo({ legajos: [legajo] }) as never);
+function renderLegajo(legajo: unknown, opciones: Record<string, unknown> = {}) {
+  vi.mocked(api.get).mockImplementation(rutasDemo({ legajos: [legajo], ...opciones }) as never);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -102,25 +101,27 @@ describe("Caracterización del corte pulido-decisiones (sin cambios de comportam
     cleanup();
   });
 
-  it("el pedido de cambios del revisor queda en el aviso de advertencia, antes de la navegación de etapas", () => {
-    const { container } = render(
-      <LegajoTarjeta
-        wp={legajoDemo("CHANGES_REQUESTED") as never}
-        etapaActiva={0}
-        onCambiarEtapa={() => undefined}
-        pedidosDeCambios={["Falta el extracto bancario de octubre."]}
-        accionPrincipal={<button type="button">Recalcular</button>}
-      >
-        <p>cuerpo de la etapa</p>
-      </LegajoTarjeta>,
-    );
-    const aviso = container.querySelector(".workpaper-card__pedido");
-    const navegacion = container.querySelector(".workpaper-process");
+  it("el pedido de cambios del revisor es el primer bloque del contenido, debajo de la barra", async () => {
+    // vigente: cambia con A29
+    const { container } = renderLegajo(legajoDemo("CHANGES_REQUESTED"), {
+      calculo: [
+        {
+          settlement: {
+            differences: [
+              { code: "CHANGES_REQUESTED", message: "Falta el extracto bancario de octubre." },
+            ],
+          },
+        },
+      ],
+    });
+    await waitFor(() => expect(container.querySelector(".workpaper-pedido")).toBeTruthy());
+    const aviso = container.querySelector(".workpaper-pedido");
+    const barra = container.querySelector(".work-bar");
     expect(aviso?.textContent).toContain("Falta el extracto bancario de octubre.");
-    expect(navegacion).toBeTruthy();
-    expect(
-      aviso!.compareDocumentPosition(navegacion!) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    // El aviso va justo después del encabezado para lectores de pantalla, y la barra queda fuera del cuerpo.
+    expect(aviso?.previousElementSibling?.tagName).toBe("H1");
+    expect(container.querySelector(".work-page__body")?.contains(barra ?? null)).toBe(false);
+    expect(barra!.compareDocumentPosition(aviso!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("con cambios solicitados, Recalcular es el único camino para volver a enviar: no aparece Enviar a revisión", async () => {

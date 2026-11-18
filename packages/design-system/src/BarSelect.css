@@ -1,16 +1,30 @@
-/* Desplegable compacto de barra (BarSelect): campo de 32 px con el aspecto de .ds-field__input.
-   Tope de ancho con puntos suspensivos para textos largos; el nombre accesible va en aria-label. */
+/* Desplegable compacto de barra (BarSelect): mismo alto, superficie y borde que los botones de la barra
+   (secundario), sin el gris de campo. Crece hasta su contenido (el mes y el año van primero) y se achica
+   hasta un mínimo que deja el mes a la vista; el resto del rótulo se corta con puntos suspensivos.
+   El nombre accesible va en aria-label. */
 .ds-field__input.ds-bar-select {
   inline-size: auto;
-  max-inline-size: 320px;
-  min-block-size: var(--ds-control-height-sm);
+  min-inline-size: calc(var(--ds-space-16) * 3);
   block-size: var(--ds-control-height-sm);
+  min-block-size: var(--ds-control-height-sm);
   padding-block: 0;
+  background-color: var(--ds-color-surface);
+  border-color: var(--ds-color-border-strong);
+  box-shadow: var(--ds-shadow-control);
   font-size: var(--ds-text-sm);
   font-weight: var(--ds-font-weight-medium);
   line-height: var(--ds-leading-tight);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+/* Lectura nativa: un <select> cumple :read-only, y la regla de solo lectura de Field.css (0,3,0) le pondría
+   el gris --ds-color-surface-muted, sombra none y cursor por defecto. Esta regla (0,4,0) repone la superficie
+   y la sombra del botón secundario (Barra 2d; la causa está medida en el navegador). */
+.ds-field__input.ds-bar-select:read-only:not(:disabled) {
+  background-color: var(--ds-color-surface);
+  box-shadow: var(--ds-shadow-control);
   cursor: pointer;
 }

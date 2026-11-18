@@ -302,7 +302,11 @@ describe("Legajo · etapa Cálculo (K12)", () => {
         : rutas(path)) as never);
     renderLegajo();
     await abrirCalculo();
-    expect(await screen.findByText("Posición fiscal del período")).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        "Devengado fiscal, pagos e intereses sin mezclarlo con el resultado gerencial.",
+      ),
+    ).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Reintentar" })).toBeInTheDocument();
   });
   it("la carga de la determinación y de la posición se anuncia con role=status y la etapa tiene una sola acción primaria", async () => {
@@ -317,6 +321,6 @@ describe("Legajo · etapa Cálculo (K12)", () => {
     const determinacion = await screen.findByText("Cargando determinación…");
     expect(determinacion.closest("[role='status']")).not.toBeNull();
     expect(screen.getByText("Calculando posición…").closest("[role='status']")).not.toBeNull();
-    expect(document.querySelectorAll(".workpaper-card .ds-button--primary")).toHaveLength(1);
+    expect(document.querySelectorAll(".work-bar .ds-button--primary")).toHaveLength(1);
   });
 });

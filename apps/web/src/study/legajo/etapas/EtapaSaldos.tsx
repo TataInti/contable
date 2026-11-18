@@ -2,7 +2,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, Table } from "@contable/design-system";
-import { Icon } from "../../../ui/Icon";
 import { formatMoney } from "../formato";
 import { formatearFechaHora } from "../../../lib/formatoFechas";
 import type { CreditLot } from "../tipos";
@@ -17,7 +16,6 @@ export interface FormularioEditarSaldo {
 export interface EtapaSaldosProps {
   capabilities: ReadonlySet<string>;
   ledgerQuery: UseQueryResult<CreditLot[], Error>;
-  setShowOpening: Dispatch<SetStateAction<boolean>>;
   setEditingLot: Dispatch<SetStateAction<CreditLot | null>>;
   setEditForm: Dispatch<SetStateAction<FormularioEditarSaldo>>;
 }
@@ -25,42 +23,15 @@ export interface EtapaSaldosProps {
 export function EtapaSaldos({
   capabilities,
   ledgerQuery,
-  setShowOpening,
   setEditingLot,
   setEditForm,
 }: EtapaSaldosProps) {
   const puedeCargarSaldo = capabilities.has("tax.settlements.calculate");
   return (
     <div className="workpaper-stage">
-      <div className="workpaper-stage__heading">
-        <div>
-          <strong>Saldos a favor y arrastres</strong>
-          <small>
-            Disponibles por impuesto, régimen y jurisdicción. Cada saldo conserva su respaldo.
-          </small>
-        </div>
-        <span className="workpaper-stage__actions">
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={ledgerQuery.isFetching}
-            onClick={() => void ledgerQuery.refetch()}
-          >
-            {ledgerQuery.isFetching ? "Actualizando…" : "Actualizar"}
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!puedeCargarSaldo}
-            onClick={() => setShowOpening((visible) => !visible)}
-          >
-            <Icon name="plus" size={15} /> Cargar saldo inicial
-          </Button>
-          {!puedeCargarSaldo ? (
-            <small className="muted-copy">Tu rol no puede cargar saldos iniciales.</small>
-          ) : null}
-        </span>
-      </div>
+      <p className="muted-copy">
+        Disponibles por impuesto, régimen y jurisdicción. Cada saldo conserva su respaldo.
+      </p>
       {ledgerQuery.isError ? (
         <AsyncState
           loading={false}

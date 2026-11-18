@@ -100,8 +100,10 @@ describe("Páginas con el marco denso", () => {
   ])("%s mantiene su título y la estructura densa", async (title, element) => {
     renderPage(element);
     expect(await screen.findByRole("heading", { level: 1, name: title })).toBeTruthy();
-    await waitFor(() => expect(document.querySelector(".dense-page")).not.toBeNull());
-    expect(document.querySelector(".dense-head")).not.toBeNull();
+    // vigente: cambia con A29 (el Legajo es WorkPage con su WorkBar, no DensePage)
+    const esLegajo = title === "Legajo";
+    await waitFor(() => expect(document.querySelector(esLegajo ? ".work-page" : ".dense-page")).not.toBeNull());
+    expect(document.querySelector(esLegajo ? ".work-bar" : ".dense-head")).not.toBeNull();
   });
 
   it("Resumen del cliente no se rompe sin datos consolidados", async () => {
