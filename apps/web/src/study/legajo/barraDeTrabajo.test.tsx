@@ -10,6 +10,7 @@ import { ToastProvider } from "@contable/design-system";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { StudyExpedienteMensual } from "../StudyExpedienteMensual";
+import { fiscalBooksSummaryUrl } from "../fiscalBooksExport";
 import {
   CLIENTE_DEMO,
   FIRMA_DEMO,
@@ -297,6 +298,29 @@ describe("Legajo · acciones del período, revisión y solo lectura (Barra 2a)",
     const cajon = await screen.findByRole("dialog", { name: /Exportar libros/ });
     fireEvent.click(within(cajon).getByRole("button", { name: "Cancelar" }));
     await waitFor(() => expect(document.activeElement).toBe(boton));
+  });
+
+  it("«Exportar libros» desde el menú pide el resumen y habilita «Descargar libro»", async () => {
+    renderLegajo({ legajos: [legajoDemo("DRAFT")] });
+    fireEvent.click(await within(barra()).findByRole("button", { name: "Acciones del período" }));
+    const exportar = screen.getByRole("menuitem", { name: /Exportar libros/ });
+    await waitFor(() => expect(exportar.getAttribute("aria-disabled")).not.toBe("true"));
+    fireEvent.click(exportar);
+    const cajon = await screen.findByRole("dialog", { name: /Exportar libros/ });
+
+    // El Legajo abre el cajón desde afuera (modo controlado): el resumen se pide como con el botón propio.
+    const ruta = fiscalBooksSummaryUrl({
+      firmId: FIRMA_DEMO,
+      clientId: CLIENTE_DEMO,
+      periodId: PERIODO_ELEGIDO_DEMO,
+    });
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith(ruta));
+    expect(await within(cajon).findByText("Borrador: falta aprobarlo")).toBeTruthy();
+    const descargar = within(cajon).getByRole("button", { name: "Descargar libro" });
+    await waitFor(() => expect(descargar).toBeEnabled());
+    expect(
+      within(cajon).queryByText("Cargando el resumen: podrás descargar cuando termine."),
+    ).toBeNull();
   });
 
   it("la revisión más reciente se abre por defecto y el menú lista cada revisión con su estado", async () => {

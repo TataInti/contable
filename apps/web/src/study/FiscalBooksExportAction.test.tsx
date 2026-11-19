@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { ApiError, api, downloadFile } from "../lib/api";
 import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
+import { fiscalBooksSummaryUrl } from "./fiscalBooksExport";
 
 // Datos sintéticos rotulados (cliente, período y comprobantes de prueba del corte 7b).
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -303,3 +304,130 @@ describe("Exportar libros en el Legajo", () => {
 async function openPanelDialogCheck() {
   expect(await screen.findByRole("dialog", { name: "Exportar libros" })).toBeTruthy();
 }
+
+// Panel controlado desde afuera (menú «Acciones del período» del Legajo): `abierto` y `onCerrar`, sin botón
+// propio. El resumen sale por la red de verdad (`api.get` real con `fetch` simulado): si el panel no lo
+// pide, el texto «Cargando el resumen» no termina nunca y «Descargar libro» no se habilita.
+const RESUMEN_URL = fiscalBooksSummaryUrl({ firmId: FIRM, clientId: CLIENT, periodId: PERIOD });
+const RUTA_RESUMEN = `/api/v1${RESUMEN_URL}`;
+const TEXTO_DE_ESPERA = "Cargando el resumen: podrás descargar cuando termine.";
+
+interface RespuestaSimulada {
+  status: number;
+  cuerpo: unknown;
+}
+
+/** fetch simulado: el resumen responde lo que diga `respuesta`; cualquier otro pedido, 404. */
+function fetchSimulado(respuesta: () => RespuestaSimulada) {
+  const fetchMock = vi.fn(async (url: string) => {
+    const { status, cuerpo } = url === RUTA_RESUMEN ? respuesta() : { status: 404, cuerpo: {} };
+    return new Response(JSON.stringify(cuerpo), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+/** Pedidos del resumen del período (sin contar otros). */
+const pedidosDelResumen = (fetchMock: ReturnType<typeof fetchSimulado>) =>
+  fetchMock.mock.calls.filter(([url]) => url === RUTA_RESUMEN).length;
+
+function arbolControlado(client: QueryClient, abierto: boolean, onCerrar: () => void) {
+  return (
+    <QueryClientProvider client={client}>
+      <ToastProvider>
+        <MemoryRouter initialEntries={["/legajo"]}>
+          <Routes>
+            <Route
+              path="/legajo"
+              element={
+                <FiscalBooksExportAction
+                  periodId={PERIOD}
+                  periodLabel="IVA · 2026-10"
+                  abierto={abierto}
+                  onCerrar={onCerrar}
+                />
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </ToastProvider>
+    </QueryClientProvider>
+  );
+}
+
+/** Monta el panel como lo hace el Legajo: siempre presente, abierto o cerrado desde el padre. */
+function renderControlado(abierto: boolean) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const onCerrar = vi.fn();
+  const vista = render(arbolControlado(client, abierto, onCerrar));
+  return { abrir: () => vista.rerender(arbolControlado(client, true, onCerrar)) };
+}
+
+describe("Exportar libros con el panel abierto desde el Legajo (modo controlado)", () => {
+  beforeEach(async () => {
+    // api.get real: el pedido llega hasta `fetch`, que cada prueba simula.
+    const actual = await vi.importActual<typeof import("../lib/api")>("../lib/api");
+    vi.mocked(api.get).mockImplementation(actual.api.get);
+  });
+
+  it("pide el resumen del período al abrirse y habilita «Descargar libro» cuando llega", async () => {
+    const fetchMock = fetchSimulado(() => ({ status: 200, cuerpo: { data: summaryFixture } }));
+    renderControlado(true);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        RUTA_RESUMEN,
+        expect.objectContaining({ method: "GET" }),
+      ),
+    );
+    expect(await screen.findByText("Borrador: falta aprobarlo")).toBeTruthy();
+    await waitForDownloadEnabled();
+    expect(screen.getByText("Entran").parentElement?.textContent).toContain("4");
+    expect(screen.getByText("Quedan afuera").parentElement?.textContent).toContain("3");
+    expect(screen.queryByText(TEXTO_DE_ESPERA)).toBeNull();
+    expect(pedidosDelResumen(fetchMock)).toBe(1);
+  });
+
+  it("si el resumen falla muestra «No se pudo cargar el resumen» con «Reintentar» y al reintentar carga", async () => {
+    let respuesta: RespuestaSimulada = {
+      status: 500,
+      cuerpo: { error: { code: "INTERNAL_ERROR", message: "Falló la consulta" } },
+    };
+    const fetchMock = fetchSimulado(() => respuesta);
+    renderControlado(true);
+
+    expect(await screen.findByText("No se pudo cargar el resumen")).toBeTruthy();
+    expect(screen.getByText("El resumen no cargó: reintentá para poder descargar.")).toBeTruthy();
+    expect(downloadButton().disabled).toBe(true);
+
+    respuesta = { status: 200, cuerpo: { data: summaryFixture } };
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+
+    expect(await screen.findByText("Borrador: falta aprobarlo")).toBeTruthy();
+    await waitForDownloadEnabled();
+    expect(pedidosDelResumen(fetchMock)).toBe(2);
+  });
+
+  it("cerrado no pide el resumen; lo pide cuando el Legajo lo abre", async () => {
+    const fetchMock = fetchSimulado(() => ({ status: 200, cuerpo: { data: summaryFixture } }));
+    const { abrir } = renderControlado(false);
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    abrir();
+
+    expect(await screen.findByRole("dialog", { name: "Exportar libros" })).toBeTruthy();
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        RUTA_RESUMEN,
+        expect.objectContaining({ method: "GET" }),
+      ),
+    );
+    expect(await screen.findByText("Borrador: falta aprobarlo")).toBeTruthy();
+    await waitForDownloadEnabled();
+  });
+});
