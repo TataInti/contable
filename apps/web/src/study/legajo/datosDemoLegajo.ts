@@ -1,5 +1,6 @@
 // Datos sintéticos «Demo» para las pruebas de caracterización del Legajo (K3 a K7).
 // CUIT ficticios: ningún dato corresponde a un cliente real.
+import type { FiscalBooksSummary } from "../fiscalBooksExport";
 import type { CreditLot, EvidenceDocument, FiscalTaxPeriod, TaxRegime, TaxType } from "./tipos";
 
 export const FIRMA_DEMO = "firm-a";
@@ -150,6 +151,43 @@ export interface OpcionesDemo {
   jurisdicciones?: unknown[];
 }
 
+/** Resumen de libros del período para el cajón «Exportar libros»: compras con comprobantes y ventas vacías. */
+const totalesVacios = {
+  neto: "0",
+  iva21: "0",
+  iva105: "0",
+  iva27: "0",
+  exento: "0",
+  otrosTributos: "0",
+  total: "0",
+};
+
+export const resumenLibrosDemo: FiscalBooksSummary = {
+  period: {
+    id: PERIODO_ELEGIDO_DEMO,
+    label: "2026-10",
+    startDate: "2026-10-01",
+    endDate: "2026-10-31",
+  },
+  books: {
+    purchases: {
+      title: "Libro de compras",
+      included: {
+        count: 3,
+        totals: { ...totalesVacios, neto: "1000.00", iva21: "210.00", total: "1210.00" },
+      },
+      excluded: [{ reason: "DRAFT", label: "Borrador: falta aprobarlo", count: 1 }],
+      excludedCount: 1,
+    },
+    sales: {
+      title: "Libro de ventas",
+      included: { count: 0, totals: totalesVacios },
+      excluded: [],
+      excludedCount: 0,
+    },
+  },
+};
+
 /** Respuestas de lectura de la pantalla. Las rutas no previstas devuelven una lista vacía. */
 export function rutasDemo(opciones: OpcionesDemo = {}) {
   const periodos = opciones.periodos ?? [periodoIibbDemo, periodoIvaDemo];
@@ -181,6 +219,7 @@ export function rutasDemo(opciones: OpcionesDemo = {}) {
     if (path === "/tax/jurisdictions") {
       return Promise.resolve(opciones.jurisdicciones ?? jurisdiccionesDemo);
     }
+    if (path.includes("/fiscal-books/summary?")) return Promise.resolve(resumenLibrosDemo);
     if (path.endsWith(`/clients/${CLIENTE_DEMO}`)) {
       return Promise.resolve({ id: CLIENTE_DEMO, cuit: CUIT_CLIENTE_DEMO });
     }

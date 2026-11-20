@@ -163,7 +163,7 @@ export function FiscalBooksExportAction({ periodId, periodLabel, abierto, onCerr
   const summaryQuery = useQuery({
     queryKey: ["fiscal-books-summary", firmId, clientId, periodId],
     queryFn: () => api.get<FiscalBooksSummary>(fiscalBooksSummaryUrl(scope)),
-    enabled: open && scopeReady,
+    enabled: panelAbierto && scopeReady,
   });
 
   const downloadMutation = useMutation({
