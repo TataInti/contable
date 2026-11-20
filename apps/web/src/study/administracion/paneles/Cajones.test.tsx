@@ -42,6 +42,14 @@ vi.mock("../../../lib/api", async (importOriginal) => {
   };
 });
 
+async function abrirEdicionRevisora() {
+  const fila = await screen.findByRole("row", { name: /Revisora Demo/ });
+  fireEvent.click(within(fila).getByRole("button", { name: "Editar a Revisora Demo" }));
+  const panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
+  fireEvent.click(within(panel).getByRole("button", { name: "Editar a Revisora Demo" }));
+  return screen.findByRole("dialog", { name: "Editar usuario" });
+}
+
 describe("Cajones de alta y edición (caracterización K7)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -106,8 +114,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
   it("editar usuario: envía el nombre y el correo sin espacios sobrantes", async () => {
     vi.mocked(api.patch).mockResolvedValue({} as never);
     renderizarAdministracion();
-    fireEvent.click(await screen.findByRole("button", { name: "Editar a Revisora Demo" }));
-    const cajon = await screen.findByRole("dialog", { name: "Editar usuario" });
+    const cajon = await abrirEdicionRevisora();
     expect(within(cajon).getByText("Actualizá el nombre y el correo de la cuenta.")).toBeTruthy();
 
     fireEvent.change(within(cajon).getByLabelText("Nombre"), {
@@ -230,8 +237,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
 
   it("editar usuario: valida nombre y correo por campo y no guarda", async () => {
     renderizarAdministracion();
-    fireEvent.click(await screen.findByRole("button", { name: "Editar a Revisora Demo" }));
-    const cajon = await screen.findByRole("dialog", { name: "Editar usuario" });
+    const cajon = await abrirEdicionRevisora();
     fireEvent.change(within(cajon).getByLabelText("Nombre"), { target: { value: "   " } });
     fireEvent.change(within(cajon).getByLabelText("Correo"), { target: { value: "sin-arroba" } });
     fireEvent.submit(document.getElementById("member-edit-form") as HTMLFormElement);

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
@@ -46,7 +46,10 @@ const CORREO_VALIDO = "revisora@estudio.com";
 
 /** Abre la edición de identidad de la revisora Demo. */
 async function abrirEdicionRevisora() {
-  fireEvent.click(await screen.findByRole("button", { name: "Editar a Revisora Demo" }));
+  const fila = await screen.findByRole("row", { name: /Revisora Demo/ });
+  fireEvent.click(within(fila).getByRole("button", { name: "Editar a Revisora Demo" }));
+  const panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
+  fireEvent.click(within(panel).getByRole("button", { name: "Editar a Revisora Demo" }));
   return screen.findByRole("dialog", { name: "Editar usuario" });
 }
 
