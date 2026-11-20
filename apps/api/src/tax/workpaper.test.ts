@@ -1398,7 +1398,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
     });
     expect(rectificativa.id).not.toBe(original.id);
 
-    const ledger = await service.creditLedger(ctxOwner, CLIENT_WP, {});
+    const ledger = await service.creditLedger(ctxOwner, CLIENT_WP, { incluirReemplazados: true });
     const originalEntry = ledger.find((item) => item.id === original.id);
     const rectificativaEntry = ledger.find((item) => item.id === rectificativa.id);
     expect(originalEntry?.verificationStatus).toBe("SUPERSEDED");

@@ -4,6 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
 import { IngestionService } from "./ingestion-service.js";
 import { SettlementService, SettlementError } from "./settlement-service.js";
+import { monthlyWorkpaperService } from "./workpaper-service.js";
 import { computeRulesHashV3 } from "./rules-hash.js";
 
 /**
@@ -1618,3 +1619,208 @@ async function createPayment(amount: string) {
     method: "TRANSFERENCIA",
   });
 }
+
+// ---------------------------------------------------------------------------
+// Créditos vigentes: el cálculo, la posición («Disponible») y el cierre usan los mismos saldos.
+// Importes sintéticos. Caracterización del cálculo sobre `main` + pruebas del corte.
+// ---------------------------------------------------------------------------
+
+async function sembrarSaldosMezclados() {
+  const { diciembre, febrero } = await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => ({
+    diciembre: await tx.taxPeriod.create({
+      data: {
+        firmId: FIRM_ALFA,
+        clientId: CLIENT_SET,
+        taxTypeId,
+        startDate: new Date("2025-12-01"),
+        endDate: new Date("2025-12-31"),
+        label: "Diciembre 2025",
+      },
+    }),
+    febrero: await tx.taxPeriod.create({
+      data: {
+        firmId: FIRM_ALFA,
+        clientId: CLIENT_SET,
+        taxTypeId,
+        startDate: new Date("2026-02-01"),
+        endDate: new Date("2026-02-28"),
+        label: "Febrero 2026",
+      },
+    }),
+  }));
+  const base = {
+    firmId: FIRM_ALFA,
+    clientId: CLIENT_SET,
+    taxTypeId,
+    regimeId,
+    jurisdictionId,
+    createdByUserId: OWNER_A,
+  };
+  const verificado = {
+    verificationStatus: "VERIFIED" as const,
+    verifiedByUserId: OWNER_A,
+    verifiedAt: new Date(),
+  };
+  const lotes = await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+    const crear = (data: Record<string, unknown>) =>
+      tx.taxCreditLot.create({
+        data: { ...base, reference: "Sintético vigentes", ...data } as never,
+      });
+    const vigente = await crear({
+      kind: "IVA_TECNICO",
+      periodId: diciembre.id,
+      originalAmount: "5000.0000",
+      ...verificado,
+    });
+    const consumido = await crear({
+      kind: "IVA_TECNICO",
+      periodId: diciembre.id,
+      originalAmount: "1000.0000",
+      ...verificado,
+    });
+    await tx.taxCreditMovement.create({
+      data: {
+        firmId: FIRM_ALFA,
+        clientId: CLIENT_SET,
+        lotId: consumido.id,
+        kind: "ROLLED_FORWARD",
+        amount: "400.0000",
+        reference: "Consumo sintético",
+        createdByUserId: OWNER_A,
+      },
+    });
+    await crear({ kind: "IVA_LIBRE", periodId: null, originalAmount: "300.0000", ...verificado });
+    await crear({
+      kind: "IVA_TECNICO",
+      periodId: diciembre.id,
+      originalAmount: "5000.0000",
+      verificationStatus: "SUPERSEDED",
+      verifiedByUserId: OWNER_A,
+      verifiedAt: new Date(),
+    });
+    await crear({
+      kind: "IVA_TECNICO",
+      periodId: diciembre.id,
+      originalAmount: "700.0000",
+      verificationStatus: "PENDING_VERIFICATION",
+    });
+    await crear({
+      kind: "IVA_TECNICO",
+      periodId: diciembre.id,
+      originalAmount: "400.0000",
+      carryForward: false,
+      ...verificado,
+    });
+    await crear({
+      kind: "IVA_TECNICO",
+      periodId: febrero.id,
+      originalAmount: "900.0000",
+      ...verificado,
+    });
+    return { vigente, consumido };
+  });
+  return lotes;
+}
+
+describe("Créditos vigentes: cálculo, posición y cierre", () => {
+  it("caracterización: el cálculo aplica solo saldos verificados, que arrastran, del período y alcance, y descuenta los consumos", async () => {
+    await sembrarSaldosMezclados();
+    await createApprovedVouchers();
+    const { settlement } = await settlements.calculate(ctxPreparer, calculateParams());
+    const totals = settlement.totals as Record<string, string>;
+    expect(totals["SALDO_TECNICO_ANTERIOR"]).toBe("5600.00");
+    expect(totals["SALDO_LIBRE_ANTERIOR"]).toBe("300.00");
+  });
+
+  it("(g) «Disponible» de la posición coincide con el crédito que el cálculo aplica para ese período", async () => {
+    await sembrarSaldosMezclados();
+    await createApprovedVouchers();
+    const { settlement } = await settlements.calculate(ctxPreparer, calculateParams());
+    const totals = settlement.totals as Record<string, string>;
+    const aplicado = new Prisma.Decimal(totals["SALDO_TECNICO_ANTERIOR"] ?? "0").plus(
+      totals["SALDO_LIBRE_ANTERIOR"] ?? "0",
+    );
+    const posicion = await monthlyWorkpaperService.position(ctxOwner, CLIENT_SET, periodId);
+    const fila = posicion.find((item) => item.obligationId === obligationId);
+    expect(fila?.availableCredit).toBe(aplicado.toFixed(4));
+  });
+
+  it("(k) el cierre no duplica crédito cuando existe un lote reemplazado: el mes siguiente recibe un solo saldo", async () => {
+    await activateDetailedVatRules();
+    const { v3: compraDeEnero } = await createApprovedVouchers();
+    const { diciembre } = await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => ({
+      diciembre: await tx.taxPeriod.create({
+        data: {
+          firmId: FIRM_ALFA,
+          clientId: CLIENT_SET,
+          taxTypeId,
+          startDate: new Date("2025-12-01"),
+          endDate: new Date("2025-12-31"),
+          label: "Diciembre 2025",
+        },
+      }),
+    }));
+    const lotesBase = {
+      firmId: FIRM_ALFA,
+      clientId: CLIENT_SET,
+      taxTypeId,
+      regimeId,
+      jurisdictionId,
+      periodId: diciembre.id,
+      kind: "IVA_TECNICO",
+      originalAmount: "5000.0000",
+      reference: "Sintético cierre",
+      verifiedByUserId: OWNER_A,
+      verifiedAt: new Date(),
+      createdByUserId: OWNER_A,
+    };
+    await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      await tx.taxCreditLot.create({ data: { ...lotesBase, verificationStatus: "VERIFIED" } });
+      await tx.taxCreditLot.create({ data: { ...lotesBase, verificationStatus: "SUPERSEDED" } });
+    });
+    const cierre = await settlements.calculate(ctxPreparer, {
+      ...calculateParams(),
+      sourceScope: {
+        voucherIds: [compraDeEnero.id],
+        withholdingIds: [],
+        perceptionIds: [],
+        f931RunIds: [],
+        classifications: [
+          {
+            voucherId: compraDeEnero.id,
+            documentKind: "INVOICE",
+            activityCode: "COMPRAS",
+            categoryCode: "SUPER",
+            rateBuckets: [{ rate: "21", base: "40000.0000", amount: "8400.0000" }],
+            snapshotHash: "sha256:cierre-con-lote-reemplazado",
+          },
+        ],
+      },
+    });
+    const totales = cierre.settlement.totals as Record<string, string>;
+    expect(totales["SALDO_TECNICO_AFTER"]).toBe("13400.00");
+    await approveSettlement(cierre.settlement.id);
+
+    const lotes = await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) =>
+      tx.taxCreditLot.findMany({
+        where: { clientId: CLIENT_SET, kind: "IVA_TECNICO" },
+        include: { movements: true },
+      }),
+    );
+    const vigentes = lotes
+      .filter((lot) => lot.verificationStatus === "VERIFIED" && lot.carryForward)
+      .reduce(
+        (suma, lot) =>
+          suma.plus(
+            lot.originalAmount.minus(
+              lot.movements.reduce(
+                (usado, movement) => usado.plus(movement.amount),
+                new Prisma.Decimal(0),
+              ),
+            ),
+          ),
+        new Prisma.Decimal(0),
+      );
+    expect(vigentes.toFixed(4)).toBe("13400.0000");
+  });
+});

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { retirarLotesDeLaLiquidacionReemplazada } from "./declaration-credit-lots.js";
+import { filtroSaldosVigentes, lotesConDisponible, periodosElegibles } from "./credit-lots-vigentes.js";
 import { createHash } from "node:crypto";
 import {
   calculateCm03,
@@ -599,40 +600,22 @@ export class SettlementService {
       // F1.7: los lotes inmutables son la fuente de verdad. Sólo durante la
       // migración se admite un fallback legacy si todavía no se cargó ningún
       // lote del alcance fiscal; así nunca se suman ambos libros.
-      const eligiblePeriodIds = await tx.taxPeriod.findMany({
-        where: {
-          firmId: ctx.firmId,
-          clientId: input.clientId,
-          taxTypeId: input.taxTypeId,
-          endDate: { lte: period.endDate },
-        },
-        select: { id: true },
-      });
+      // P3/P5: «saldo vigente» se define en un solo lugar (credit-lots-vigentes.ts) y lo comparte la posición.
       const creditLots = await tx.taxCreditLot.findMany({
-        where: {
+        where: filtroSaldosVigentes({
           firmId: ctx.firmId,
           clientId: input.clientId,
           taxTypeId: input.taxTypeId,
-          // B1 (§3.1): un saldo no verificado nunca reduce un impuesto.
-          verificationStatus: "VERIFIED",
-          // Corte 6a: un saldo que no se arrastra (carryForward = false) no entra al cálculo.
-          carryForward: true,
-          OR: [
-            { periodId: null },
-            { periodId: { in: eligiblePeriodIds.map((item) => item.id) } },
-          ],
-          AND: {
-            OR:
-              isCmEngine
-                ? [{ regimeId: input.regimeId }, { regimeId: null }]
-                : [
-                    { regimeId: input.regimeId, jurisdictionId: input.jurisdictionId },
-                    { regimeId: input.regimeId, jurisdictionId: null },
-                    { regimeId: null, jurisdictionId: input.jurisdictionId },
-                    { regimeId: null, jurisdictionId: null },
-                  ],
-          },
-        },
+          regimeId: input.regimeId,
+          jurisdictionId: input.jurisdictionId,
+          periodIds: await periodosElegibles(tx, {
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            taxTypeId: input.taxTypeId,
+            hasta: period.endDate,
+          }),
+          ignorarJurisdiccion: isCmEngine,
+        }),
         include: { movements: true },
       });
       let rectificationOpening = (inProgressSettlement?.supersedes?.totals ?? null) as
@@ -672,9 +655,7 @@ export class SettlementService {
             _sum: { balanceAfter: true },
           })
         : null;
-      const availableLots = (rectificationOpening ? [] : creditLots)
-        .map((lot) => ({ lot, available: lot.originalAmount.minus(lot.movements.reduce((sum, movement) => sum.plus(movement.amount), new Prisma.Decimal(0))) }))
-        .filter((entry) => entry.available.isPositive());
+      const availableLots = lotesConDisponible(rectificationOpening ? [] : creditLots);
       const technicalPrevious = rectificationOpening
         ? new Prisma.Decimal(rectificationOpening["SALDO_TECNICO_ANTERIOR"] ?? "0")
         : availableLots
@@ -2427,14 +2408,11 @@ export class SettlementService {
     const closingEngine = await resolveSettlementTaxEngine(tx, settlement);
     const closesByJurisdiction = closingEngine?.family.closesByJurisdiction ?? false;
     const totals = (settlement.totals ?? {}) as Record<string, string>;
-    const eligiblePeriodIds = await tx.taxPeriod.findMany({
-      where: {
-        firmId: settlement.firmId,
-        clientId: settlement.clientId,
-        taxTypeId: settlement.taxTypeId,
-        endDate: { lte: currentPeriod.endDate },
-      },
-      select: { id: true },
+    const eligiblePeriodIds = await periodosElegibles(tx, {
+      firmId: settlement.firmId,
+      clientId: settlement.clientId,
+      taxTypeId: settlement.taxTypeId,
+      hasta: currentPeriod.endDate,
     });
     const [lots, workpaperLink] = await Promise.all([
       tx.taxCreditLot.findMany({
@@ -2445,7 +2423,7 @@ export class SettlementService {
           carryForward: true,
           OR: [
             { periodId: null },
-            { periodId: { in: eligiblePeriodIds.map((item) => item.id) } },
+            { periodId: { in: eligiblePeriodIds } },
           ],
           AND: {
             OR: closesByJurisdiction
@@ -2465,9 +2443,7 @@ export class SettlementService {
         select: { workpaperId: true },
       }),
     ]);
-    const available = lots
-      .map((lot) => ({ lot, available: lot.originalAmount.minus(lot.movements.reduce((sum, movement) => sum.plus(movement.amount), new Prisma.Decimal(0))) }))
-      .filter((entry) => entry.available.isPositive());
+    const available = lotesConDisponible(lots);
 
     const replaceKind = async (
       kind: string,
