@@ -141,6 +141,20 @@ function renderAdministracion() {
   );
 }
 
+async function abrirPanelUsuario(nombre: string) {
+  const fila = await screen.findByRole("row", { name: new RegExp(nombre) });
+  fireEvent.click(fila);
+  return screen.findByRole("complementary", { name: "Detalle del usuario" });
+}
+
+async function abrirEdicionUsuario(nombre: string) {
+  const fila = await screen.findByRole("row", { name: new RegExp(nombre) });
+  fireEvent.click(within(fila).getByRole("button", { name: `Editar a ${nombre}` }));
+  const panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
+  fireEvent.click(within(panel).getByRole("button", { name: `Editar a ${nombre}` }));
+  return screen.findByRole("dialog", { name: "Editar usuario" });
+}
+
 describe("StudyAdministracion — catálogo de normas contables", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -331,7 +345,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(within(detail).getByRole("button", { name: "Administrar clientes de Revisor Demo" })).toBeTruthy();
   });
 
-  it("agrupa las acciones secundarias de cada fila en Más acciones con nombres accesibles", async () => {
+  it("abre desde Editar el panel que concentra las acciones secundarias", async () => {
     mockApi(standardsFixture, membersFixture);
     renderAdministracion();
 
@@ -340,11 +354,14 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     const actionsHeader = within(table).getByRole("columnheader", { name: "Acciones" }) as HTMLElement;
     expect(actionsHeader.style.width).toBe("180px");
     expect(within(row).getByRole("button", { name: "Editar a Revisor Demo" })).toBeTruthy();
-    fireEvent.click(within(row).getByText("Más acciones"));
+    expect(within(row).getAllByRole("button")).toHaveLength(1);
+    fireEvent.click(within(row).getByRole("button", { name: "Editar a Revisor Demo" }));
+    const panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
 
-    expect(within(row).getByRole("button", { name: "Administrar clientes de Revisor Demo" })).toBeTruthy();
-    expect(within(row).getByRole("button", { name: "Suspender a Revisor Demo" })).toBeTruthy();
-    expect(within(row).getByRole("button", { name: "Recuperar acceso de Revisor Demo" })).toBeTruthy();
+    expect(within(row).queryByText("Más acciones")).toBeNull();
+    expect(within(panel).getByRole("button", { name: "Administrar clientes de Revisor Demo" })).toBeTruthy();
+    expect(within(panel).getByRole("button", { name: "Suspender a Revisor Demo" })).toBeTruthy();
+    expect(within(panel).getByRole("button", { name: "Recuperar acceso de Revisor Demo" })).toBeTruthy();
   });
 
   it("guarda el cambio a Titular sin pedir confirmación", async () => {
@@ -367,7 +384,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     vi.mocked(api.patch).mockResolvedValue({});
     renderAdministracion();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Editar a Revisor Demo" }));
+    await abrirEdicionUsuario("Revisor Demo");
     fireEvent.change(await screen.findByLabelText("Nombre"), { target: { value: "Revisor Nuevo" } });
     fireEvent.change(screen.getByLabelText("Correo"), {
       target: { value: "revisor.nuevo@example.com" },
@@ -387,7 +404,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     mockApi(standardsFixture, membersFixture);
     renderAdministracion();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Editar a Revisor Demo" }));
+    await abrirEdicionUsuario("Revisor Demo");
     const name = (await screen.findByLabelText("Nombre")) as HTMLInputElement;
     const email = screen.getByLabelText("Correo") as HTMLInputElement;
     fireEvent.change(name, { target: { value: " " } });
@@ -421,7 +438,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     );
     renderAdministracion();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Editar a Revisor Demo" }));
+    await abrirEdicionUsuario("Revisor Demo");
     fireEvent.change(await screen.findByLabelText("Correo"), {
       target: { value: "ocupado@example.com" },
     });
@@ -455,9 +472,8 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     vi.mocked(api.post).mockResolvedValue({} as never);
     renderAdministracion();
 
-    const row = await screen.findByRole("row", { name: /Revisor Demo/ });
-    fireEvent.click(within(row).getByText("Más acciones"));
-    fireEvent.click(within(row).getByRole("button", { name: "Suspender a Revisor Demo" }));
+    const panel = await abrirPanelUsuario("Revisor Demo");
+    fireEvent.click(within(panel).getByRole("button", { name: "Suspender a Revisor Demo" }));
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/firms/firm-a/members/u2/suspend", {}),
@@ -472,9 +488,8 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     );
     renderAdministracion();
 
-    const row = await screen.findByRole("row", { name: /Owner A/ });
-    fireEvent.click(within(row).getByText("Más acciones"));
-    fireEvent.click(within(row).getByRole("button", { name: "Suspender a Owner A" }));
+    const panel = await abrirPanelUsuario("Owner A");
+    fireEvent.click(within(panel).getByRole("button", { name: "Suspender a Owner A" }));
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/firms/firm-a/members/u1/suspend", {}),
@@ -491,9 +506,8 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     vi.mocked(api.post).mockResolvedValue({} as never);
     renderAdministracion();
 
-    const row = await screen.findByRole("row", { name: /Auditora Suspendida/ });
-    fireEvent.click(within(row).getByText("Más acciones"));
-    fireEvent.click(within(row).getByRole("button", { name: "Reactivar acceso de Auditora Suspendida" }));
+    const panel = await abrirPanelUsuario("Auditora Suspendida");
+    fireEvent.click(within(panel).getByRole("button", { name: "Reactivar acceso de Auditora Suspendida" }));
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/firms/firm-a/members/u3/reactivate", {}),
@@ -557,8 +571,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     vi.mocked(api.post).mockResolvedValue(assignmentFixture as never);
     renderAdministracion();
 
+    const panel = await abrirPanelUsuario("Revisor Demo");
     fireEvent.click(
-      await screen.findByRole("button", { name: "Administrar clientes de Revisor Demo" }),
+      within(panel).getByRole("button", { name: "Administrar clientes de Revisor Demo" }),
     );
     const drawer = await screen.findByRole("dialog", { name: "Clientes de Revisor Demo" });
     expect(within(drawer).getByText(/Los cambios se aplican al momento/)).toBeTruthy();
@@ -582,8 +597,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     vi.mocked(api.del).mockResolvedValue({} as never);
     renderAdministracion();
 
+    const panel = await abrirPanelUsuario("Revisor Demo");
     fireEvent.click(
-      await screen.findByRole("button", { name: "Administrar clientes de Revisor Demo" }),
+      within(panel).getByRole("button", { name: "Administrar clientes de Revisor Demo" }),
     );
     fireEvent.click(await screen.findByRole("button", {
       name: "Quitar cliente Cliente Alfa de Revisor Demo",

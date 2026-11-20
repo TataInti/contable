@@ -703,9 +703,6 @@ export function StudyAdministracion() {
           internalRoleDrafts={internalRoleDrafts}
           updateInternalRole={updateInternalRole}
           changeRole={changeRole}
-          openIdentityEdit={openIdentityEdit}
-          setAssigningMember={setAssigningMember}
-          memberActionButtons={memberActionButtons}
           effectiveStatus={effectiveStatus}
         />
       ));

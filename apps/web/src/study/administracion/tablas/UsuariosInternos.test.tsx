@@ -113,24 +113,48 @@ describe("Usuarios internos: tabla (caracterización K2)", () => {
     expect(within(activa).getByText("Activo")).toBeTruthy();
   });
 
-  it("ofrece por fila solo las acciones que corresponden al estado", async () => {
+  it("abre el panel completo desde Editar y mantiene allí las acciones", async () => {
     renderizarAdministracion();
 
     const revisora = await screen.findByRole("row", { name: /Revisora Demo/ });
-    fireEvent.click(within(revisora).getByText("Más acciones"));
-    expect(within(revisora).getByRole("button", { name: "Suspender a Revisora Demo" })).toBeTruthy();
+    fireEvent.click(within(revisora).getByRole("button", { name: "Editar a Revisora Demo" }));
+    const panelRevisora = await screen.findByRole("complementary", { name: "Detalle del usuario" });
+    expect(within(panelRevisora).getByRole("heading", { name: "Revisora Demo" })).toBeTruthy();
     expect(
-      within(revisora).getByRole("button", { name: "Recuperar acceso de Revisora Demo" }),
+      within(panelRevisora).getByRole("button", { name: "Administrar clientes de Revisora Demo" }),
     ).toBeTruthy();
-    expect(within(revisora).queryByRole("button", { name: /Reactivar/ })).toBeNull();
+    expect(within(panelRevisora).getByRole("button", { name: "Suspender a Revisora Demo" })).toBeTruthy();
+    expect(
+      within(panelRevisora).getByRole("button", { name: "Recuperar acceso de Revisora Demo" }),
+    ).toBeTruthy();
+    expect(within(panelRevisora).queryByRole("button", { name: /Reactivar/ })).toBeNull();
+    expect(within(revisora).queryByLabelText("Más acciones de Revisora Demo")).toBeNull();
 
     const auditor = screen.getByRole("row", { name: /Auditor Demo/ });
-    fireEvent.click(within(auditor).getByText("Más acciones"));
+    fireEvent.click(auditor);
+    const panelAuditor = await screen.findByRole("complementary", { name: "Detalle del usuario" });
     expect(
-      within(auditor).getByRole("button", { name: "Reactivar acceso de Auditor Demo" }),
+      within(panelAuditor).getByRole("button", { name: "Reactivar acceso de Auditor Demo" }),
     ).toBeTruthy();
-    expect(within(auditor).queryByRole("button", { name: /Suspender a/ })).toBeNull();
-    expect(within(auditor).queryByRole("button", { name: /Recuperar acceso/ })).toBeNull();
+    expect(within(panelAuditor).queryByRole("button", { name: /Suspender a/ })).toBeNull();
+    expect(within(panelAuditor).queryByRole("button", { name: /Recuperar acceso/ })).toBeNull();
+  });
+
+  it("la fila y el botón Editar abren el mismo panel lateral", async () => {
+    renderizarAdministracion();
+    const revisora = await screen.findByRole("row", { name: /Revisora Demo/ });
+
+    fireEvent.click(revisora);
+    let panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
+    expect(within(panel).getByRole("heading", { name: "Revisora Demo" })).toBeTruthy();
+
+    fireEvent.click(within(panel).getByRole("button", { name: "Cerrar detalle" }));
+    fireEvent.click(within(revisora).getByRole("button", { name: "Editar a Revisora Demo" }));
+    panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
+    expect(within(panel).getByRole("heading", { name: "Revisora Demo" })).toBeTruthy();
+    expect(
+      within(panel).getByRole("button", { name: "Administrar clientes de Revisora Demo" }),
+    ).toBeTruthy();
   });
 
   it("expone nombres accesibles, anchos de columna y la fila suspendida atenuada", async () => {
@@ -149,7 +173,7 @@ describe("Usuarios internos: tabla (caracterización K2)", () => {
     ).toBe("180px");
     expect(screen.getByRole("combobox", { name: "Rol de Revisora Demo" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Editar a Revisora Demo" })).toBeTruthy();
-    expect(screen.getByLabelText("Más acciones de Revisora Demo")).toBeTruthy();
+    expect(screen.queryByLabelText("Más acciones de Revisora Demo")).toBeNull();
     expect(screen.getByRole("row", { name: /Auditor Demo/ }).className).toContain("dense-row--muted");
     expect(
       screen.getByText("El estudio debe conservar al menos un titular o administrador activo."),

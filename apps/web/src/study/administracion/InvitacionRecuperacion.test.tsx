@@ -65,8 +65,9 @@ async function generarRecuperacion(sesionesCerradas: number) {
     recoveryToken: "rec-demo-456",
   } as never);
   const fila = await screen.findByRole("row", { name: /Revisora Demo/ });
-  fireEvent.click(within(fila).getByText("Más acciones"));
-  fireEvent.click(within(fila).getByRole("button", { name: "Recuperar acceso de Revisora Demo" }));
+  fireEvent.click(fila);
+  const panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
+  fireEvent.click(within(panel).getByRole("button", { name: "Recuperar acceso de Revisora Demo" }));
   const dialogo = await screen.findByRole("alertdialog", {
     name: "¿Generar enlace de recuperación para Revisora Demo?",
   });
@@ -146,8 +147,9 @@ describe("Invitación al portal y recuperación de acceso (caracterización K9)"
   it("recuperación: cancelar el diálogo no genera ningún enlace", async () => {
     renderizarAdministracion();
     const fila = await screen.findByRole("row", { name: /Revisora Demo/ });
-    fireEvent.click(within(fila).getByText("Más acciones"));
-    fireEvent.click(within(fila).getByRole("button", { name: "Recuperar acceso de Revisora Demo" }));
+    fireEvent.click(fila);
+    const panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Recuperar acceso de Revisora Demo" }));
     const dialogo = await screen.findByRole("alertdialog");
 
     fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
