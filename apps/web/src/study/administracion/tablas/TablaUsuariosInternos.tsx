@@ -15,13 +15,20 @@ type Props = {
   internalRoleDrafts: Record<string, string>;
   updateInternalRole: { isPending: boolean; variables?: { userId: string; role: string } };
   changeRole: (item: InternalMember, nextRole: string) => void;
-  openIdentityEdit: (item: InternalMember) => void;
-  setAssigningMember: (item: InternalMember) => void;
-  memberActionButtons: (item: InternalMember, variant: "ghost" | "secondary") => ReactNode;
   effectiveStatus: (item: InternalMember) => string;
 };
 
-export function TablaUsuariosInternos({ allMembers, visibleMembers, selectedUserId, setSelectedUserId, internalInspector, internalRoleDrafts, updateInternalRole, changeRole, openIdentityEdit, setAssigningMember, memberActionButtons, effectiveStatus }: Props) {
+export function TablaUsuariosInternos({
+  allMembers,
+  visibleMembers,
+  selectedUserId,
+  setSelectedUserId,
+  internalInspector,
+  internalRoleDrafts,
+  updateInternalRole,
+  changeRole,
+  effectiveStatus,
+}: Props) {
   const internalColumns: DenseColumn<InternalMember>[] = [
     {
       key: "person",
@@ -84,34 +91,13 @@ export function TablaUsuariosInternos({ allMembers, visibleMembers, selectedUser
             size="row"
             variant="secondary"
             aria-label={`Editar a ${item.user?.name ?? "este usuario"}`}
-            onClick={() => openIdentityEdit(item)}
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelectedUserId(item.userId);
+            }}
           >
             Editar
           </Button>
-          <details className="dense-inspector-actions__menu administration-user-actions">
-            <summary
-              className="dense-inspector-actions__trigger"
-              aria-label={`Más acciones de ${item.user?.name ?? "este usuario"}`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              Más acciones
-            </summary>
-            <div
-              className="dense-inspector-actions__items"
-              role="group"
-              aria-label={`Acciones de ${item.user?.name ?? "este usuario"}`}
-            >
-              <Button
-                size="row"
-                variant="ghost"
-                aria-label={`Administrar clientes de ${item.user?.name ?? "este usuario"}`}
-                onClick={() => setAssigningMember(item)}
-              >
-                Clientes
-              </Button>
-              {memberActionButtons(item, "ghost")}
-            </div>
-          </details>
         </span>
       ),
     },
