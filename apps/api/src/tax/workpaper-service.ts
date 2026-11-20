@@ -1,6 +1,12 @@
 import { derivePeriodStatus } from "./period-status.js";
 import { Prisma } from "@prisma/client";
 import { motivoSiLoteUsado, origenDelLote } from "./declaration-credit-lots.js";
+import {
+  FILTRO_SALDOS_SIN_REEMPLAZADOS,
+  filtroSaldosVigentes,
+  periodosElegibles,
+  sumaDisponible,
+} from "./credit-lots-vigentes.js";
 import { calculateLateInterest, taxHash } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { settlementService } from "./settlement-service.js";
@@ -2118,7 +2124,14 @@ export class MonthlyWorkpaperService {
   async creditLedger(
     ctx: TenantContext,
     clientId: string,
-    input: { taxTypeId?: string; jurisdictionId?: string; from?: string; to?: string },
+    input: {
+      taxTypeId?: string;
+      jurisdictionId?: string;
+      from?: string;
+      to?: string;
+      /** Auditoría: incluye los saldos reemplazados (SUPERSEDED), con su estado. Por defecto, solo los vigentes. */
+      incluirReemplazados?: boolean;
+    },
   ) {
     // El saldo disponible se calcula desde los movimientos confirmados, nunca
     // desde un campo mutable.
@@ -2127,6 +2140,9 @@ export class MonthlyWorkpaperService {
         where: {
           firmId: ctx.firmId,
           clientId,
+          // La lista de Saldos muestra solo saldos vigentes: un lote reemplazado por la declaración
+          // jurada no se vuelve a mostrar como disponible (su historial queda en el lote nuevo y en el libro).
+          ...(input.incluirReemplazados ? {} : FILTRO_SALDOS_SIN_REEMPLAZADOS),
           ...(input.taxTypeId ? { taxTypeId: input.taxTypeId } : {}),
           ...(input.jurisdictionId ? { jurisdictionId: input.jurisdictionId } : {}),
           ...(input.from ? { createdAt: { gte: new Date(input.from) } } : {}),
@@ -2685,10 +2701,40 @@ export class MonthlyWorkpaperService {
         where: { firmId: ctx.firmId, clientId, obligationId: { in: obligations.map((item) => item.id) } },
         orderBy: { createdAt: "desc" },
       });
-      const lots = await tx.taxCreditLot.findMany({
-        where: { firmId: ctx.firmId, clientId },
-        include: { movements: true },
+      // «Disponible» = el crédito que el cálculo aplicaría a la obligación (credit-lots-vigentes.ts).
+      const familias = await tx.calcFamily.findMany({
+        where: {
+          id: {
+            in: obligations
+              .map((item) => item.regime.calcFamilyId)
+              .filter((id): id is string => id !== null),
+          },
+        },
+        select: { id: true, closesByJurisdiction: true },
       });
+      const creditoDisponible = new Map<string, Prisma.Decimal>();
+      for (const obligation of obligations) {
+        const lots = await tx.taxCreditLot.findMany({
+          where: filtroSaldosVigentes({
+            firmId: ctx.firmId,
+            clientId,
+            taxTypeId: obligation.regime.taxTypeId,
+            regimeId: obligation.regimeId,
+            jurisdictionId: obligation.regime.jurisdictionId,
+            periodIds: await periodosElegibles(tx, {
+              firmId: ctx.firmId,
+              clientId,
+              taxTypeId: obligation.regime.taxTypeId,
+              hasta: obligation.period.endDate,
+            }),
+            ignorarJurisdiccion:
+              familias.find((item) => item.id === obligation.regime.calcFamilyId)
+                ?.closesByJurisdiction ?? false,
+          }),
+          include: { movements: true },
+        });
+        creditoDisponible.set(obligation.id, sumaDisponible(lots));
+      }
       // Legajo mensual por período (la revisión más alta primero): su estado entra en periodStatus.
       const workpapers = await tx.monthlyTaxWorkpaper.findMany({
         where: { firmId: ctx.firmId, clientId },
@@ -2715,22 +2761,7 @@ export class MonthlyWorkpaperService {
           (sum, payment) => sum.plus(payment.interestAmount),
           new Prisma.Decimal(0),
         );
-        const availableCredit = lots
-          .filter(
-            (lot) =>
-              lot.taxTypeId === obligation.regime.taxTypeId &&
-              (!lot.regimeId || lot.regimeId === obligation.regimeId) &&
-              (!lot.jurisdictionId || lot.jurisdictionId === obligation.regime.jurisdictionId),
-          )
-          .reduce(
-            (sum, lot) =>
-              sum.plus(
-                lot.originalAmount.minus(
-                  lot.movements.reduce((movementSum, movement) => movementSum.plus(movement.amount), new Prisma.Decimal(0)),
-                ),
-              ),
-            new Prisma.Decimal(0),
-          );
+        const availableCredit = creditoDisponible.get(obligation.id) ?? new Prisma.Decimal(0);
         const latestInterest = interest.find((item) => item.obligationId === obligation.id);
         const pending = Prisma.Decimal.max(accrued.minus(principalPaid), new Prisma.Decimal(0));
         const interestPending = Prisma.Decimal.max(

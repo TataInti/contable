@@ -75,8 +75,12 @@ function pedir(
   });
 }
 
-async function libro(token: string = TOKEN_OWNER): Promise<LoteLibro[]> {
-  const res = await pedir("GET", `${clienteUrl()}/tax-credit-ledger`, token);
+async function libro(
+  token: string = TOKEN_OWNER,
+  conReemplazados: boolean = false,
+): Promise<LoteLibro[]> {
+  const consulta = conReemplazados ? "?incluirReemplazados=true" : "";
+  const res = await pedir("GET", `${clienteUrl()}/tax-credit-ledger${consulta}`, token);
   expect(res.statusCode).toBe(200);
   return res.json().data as LoteLibro[];
 }
@@ -735,6 +739,32 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
     expect(res.json().error.message).toMatch(MOTIVO_YA_USADO);
   });
 
+  it("R16 la lista de Saldos oculta el cierre reemplazado por la DJ y el lote nuevo conserva en su historial qué reemplazó", async () => {
+    const e = await escenario();
+    const cierreTecnico = await cierre(e, "IVA_TECNICO", "48000.0000");
+    await declarar(e, { declarationDocumentId: await documento(DJ), ...CUERPO_DJ });
+    const tecnico = await loteVigente(e.filingId, "IVA_TECNICO");
+    const vigentes = new Map((await libro()).map((lote) => [lote.id, lote]));
+    expect(vigentes.has(cierreTecnico.id)).toBe(false);
+    expect(vigentes.get(tecnico.id)).toMatchObject({ verificationStatus: "VERIFIED" });
+    const reemplazo = vigentes
+      .get(tecnico.id)
+      ?.history.find((entrada) => "reemplaza" in entrada.changes);
+    expect(reemplazo?.changes).toMatchObject({
+      reemplaza: { from: cierreTecnico.id, to: tecnico.id },
+    });
+    const conHistorial = new Map((await libro(TOKEN_OWNER, true)).map((lote) => [lote.id, lote]));
+    expect(conHistorial.get(cierreTecnico.id)).toMatchObject({
+      verificationStatus: "SUPERSEDED",
+      origin: "CIERRE",
+    });
+    expect(
+      conHistorial
+        .get(cierreTecnico.id)
+        ?.history.some((h) => JSON.stringify(h.changes).includes("SUPERSEDED")),
+    ).toBe(true);
+  });
+
   it("R13 el libro informa el origen de cada lote (DJ, CIERRE o MANUAL), la presentación, el arrastre y la verificación", async () => {
     const e = await escenario();
     const cierreLibre = await cierre(e, "IVA_LIBRE", "10.0000");
@@ -749,7 +779,7 @@ describe("saldos de la DJ en el libro (corte 6a): pruebas nuevas", () => {
       kind: "IVA_TECNICO",
       amount: "77.00",
     });
-    const porId = new Map((await libro()).map((lote) => [lote.id, lote]));
+    const porId = new Map((await libro(TOKEN_OWNER, true)).map((lote) => [lote.id, lote]));
     expect(porId.get(tecnico.id)).toMatchObject({
       origin: "DJ",
       sourceFilingId: e.filingId,

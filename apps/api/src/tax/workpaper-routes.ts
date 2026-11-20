@@ -336,10 +336,12 @@ export function workpaperRoutes(app: FastifyInstance) {
         jurisdictionId: z.string().optional(),
         from: z.string().optional(),
         to: z.string().optional(),
+        incluirReemplazados: z.enum(["true", "false"]).optional(),
       })
       .parse(req.query);
     try {
       const data = await service.creditLedger(ctx, ctx.clientId!, {
+        ...(q.incluirReemplazados === "true" ? { incluirReemplazados: true } : {}),
         ...(q.taxTypeId ? { taxTypeId: q.taxTypeId } : {}),
         ...(q.jurisdictionId ? { jurisdictionId: q.jurisdictionId } : {}),
         ...(q.from ? { from: q.from } : {}),

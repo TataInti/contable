@@ -266,6 +266,7 @@ export async function aplicarLotesDeclaracion(
       : [];
 
   const deseados = new Map(a.plan.lotes.map((lote) => [claveDeLote(lote), lote] as const));
+  const cierrePorClave = new Map(cierres.map((lote) => [claveDeLote(lote), lote.id] as const));
   const sinCambios = new Map<string, string>();
   const reemplazan = new Map<string, string>();
   const retirar: typeof vigentes = [];
@@ -324,6 +325,7 @@ export async function aplicarLotesDeclaracion(
       resultados.push(resultado("SIN_CAMBIOS", deseado, existente, null));
       continue;
     }
+    const reemplazado = reemplazan.get(clave) ?? cierrePorClave.get(clave) ?? null;
     const creado = await tx.taxCreditLot.create({
       data: {
         firmId: a.firmId,
@@ -353,6 +355,8 @@ export async function aplicarLotesDeclaracion(
           origen: { from: null, to: "DJ" },
           verificationStatus: { from: null, to: "VERIFIED" },
           originalAmount: { from: null, to: deseado.amount },
+          // La lista de Saldos oculta el lote reemplazado: el lote nuevo guarda qué reemplazó.
+          ...(reemplazado ? { reemplaza: { from: reemplazado, to: creado.id } } : {}),
         } as unknown as Prisma.InputJsonValue,
       },
     });
