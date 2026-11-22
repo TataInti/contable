@@ -63,6 +63,12 @@ export interface IibbTucInput extends TaxEngineInput {
   };
   /** Mínimo global del período si corresponde (rule). */
   minimum?: DecimalValue;
+  /**
+   * Mínimo no imponible (simulador «Probar», corte 4C): se resta de la base antes de
+   * aplicar la alícuota, en orden de actividad hasta agotarse. Sin valor, el cálculo
+   * no cambia. La liquidación mensual no lo informa.
+   */
+  nonTaxableMinimum?: DecimalValue;
   /** Parámetros declarados por los archivos oficiales, usados como control. */
   declaredParameters?: readonly LocalTaxDeclaredParameter[];
   /**
@@ -104,6 +110,8 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
   const activityLines: Array<{
     activity: string;
     base: DecimalValue;
+    deducted: DecimalValue;
+    taxableBase: DecimalValue;
     rate: DecimalValue;
     tax: DecimalValue;
     determinedTax: DecimalValue;
@@ -111,6 +119,11 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
     minimum?: DecimalValue;
   }> = [];
   let totalBase = dec(0);
+  // Mínimo no imponible: se reparte en orden de actividad (solo sobre ingresos positivos).
+  let remainingNonTaxable: DecimalValue | undefined =
+    input.nonTaxableMinimum !== undefined ? dec(input.nonTaxableMinimum) : undefined;
+  let totalNonTaxableApplied = dec(0);
+  let totalTaxableBase = dec(0);
   const activityEntries = Object.entries(input.incomeByActivity);
   if (strict) activityEntries.sort(([left], [right]) => left.localeCompare(right));
   for (const [activity, incomeStr] of activityEntries) {
@@ -131,15 +144,27 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
       else warnings.push(message);
       continue;
     }
-    const tax = applyRate(income, rate);
+    const deducted =
+      remainingNonTaxable !== undefined && income.isPositive() && remainingNonTaxable.isPositive()
+        ? (income.lessThan(remainingNonTaxable) ? income : remainingNonTaxable)
+        : dec(0);
+    if (remainingNonTaxable !== undefined) {
+      remainingNonTaxable = remainingNonTaxable.minus(deducted);
+      totalNonTaxableApplied = totalNonTaxableApplied.plus(deducted);
+    }
+    const taxableBase = income.minus(deducted);
+    totalTaxableBase = totalTaxableBase.plus(taxableBase);
+    const tax = applyRate(taxableBase, rate);
     const activityMinimum = strict && !typed ? rule?.minimum : undefined;
     const determinedTax =
-      activityMinimum !== undefined && income.isPositive() && tax.lessThan(activityMinimum)
+      activityMinimum !== undefined && taxableBase.isPositive() && tax.lessThan(activityMinimum)
         ? activityMinimum
         : tax;
     activityLines.push({
       activity,
       base: income,
+      deducted,
+      taxableBase,
       rate,
       tax,
       determinedTax,
@@ -236,6 +261,17 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
 
   const subtotals: Record<string, string> = {};
   subtotals["BASE_TOTAL"] = fmtMoney(roundFor(totalBase, "base", rounding.base));
+  if (remainingNonTaxable !== undefined) {
+    subtotals["MINIMO_NO_IMPONIBLE"] = fmtMoney(
+      roundFor(totalNonTaxableApplied, "base", rounding.base),
+    );
+    subtotals["BASE_IMPONIBLE"] = fmtMoney(roundFor(totalTaxableBase, "base", rounding.base));
+    if (remainingNonTaxable.isPositive()) {
+      warnings.push(
+        "El mínimo no imponible supera la base del período: se resta hasta el total de la base y el impuesto queda en cero",
+      );
+    }
+  }
   subtotals["IMPUESTO_POR_ACTIVIDAD"] = fmtMoney(roundFor(totalByRate, "total", rounding.total));
   if (strict) {
     subtotals["IMPUESTO_DETERMINADO"] = fmtMoney(
@@ -267,16 +303,34 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
   subtotals["SALDO_A_FAVOR"] = fmtMoney(roundFor(remainingCredit, "saldos", rounding.saldos));
 
   // --- Renglones de traza ---
+  if (remainingNonTaxable !== undefined) {
+    lines.push({
+      concept: "MINIMO_NO_IMPONIBLE",
+      formula: `base ${fmtMoney(totalBase)} − mínimo no imponible ${fmtMoney(totalNonTaxableApplied)} = base imponible ${fmtMoney(totalTaxableBase)}`,
+      inputs: {
+        base: fmtMoney(totalBase),
+        nonTaxable: fmtMoney(totalNonTaxableApplied),
+        taxableBase: fmtMoney(totalTaxableBase),
+      },
+      result: fmtMoney(totalNonTaxableApplied),
+    });
+  }
   for (const line of activityLines) {
     const activityMinimumApplied = line.determinedTax.greaterThan(line.tax);
+    const taxableText = line.deducted.isPositive()
+      ? `(ingresos(${fmtMoney(line.base)}) − no imponible(${fmtMoney(line.deducted)}))`
+      : `ingresos(${fmtMoney(line.base)})`;
     lines.push({
       concept: `ACTIVIDAD_${line.activity}`,
       formula: activityMinimumApplied
-        ? `max(ingresos(${fmtMoney(line.base)}) × alícuota ${line.rate}, mínimo ${fmtMoney(line.minimum!)})`
-        : `ingresos(${fmtMoney(line.base)}) × alícuota ${line.rate} = ${fmtMoney(line.tax)}`,
+        ? `max(${taxableText} × alícuota ${line.rate}, mínimo ${fmtMoney(line.minimum!)})`
+        : `${taxableText} × alícuota ${line.rate} = ${fmtMoney(line.tax)}`,
       inputs: {
         activity: line.activity,
         base: fmtMoney(line.base),
+        ...(line.deducted.isPositive()
+          ? { nonTaxable: fmtMoney(line.deducted), taxableBase: fmtMoney(line.taxableBase) }
+          : {}),
         rate: line.rate.toString(),
         tax: fmtMoney(line.tax),
         ...(typed ? { defaultRuleApplied: String(line.defaultApplied) } : {}),
@@ -336,6 +390,9 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
     balances: input.balances ?? null,
     minimum: input.minimum?.toString() ?? null,
     declaredParameters: strict ? input.declaredParameters ?? [] : null,
+    ...(remainingNonTaxable !== undefined && input.nonTaxableMinimum !== undefined
+      ? { nonTaxableMinimum: input.nonTaxableMinimum.toString() }
+      : {}),
   });
   const outputHash = taxHash({
     inputHash,
