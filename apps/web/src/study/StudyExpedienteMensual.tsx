@@ -610,6 +610,7 @@ export function StudyExpedienteMensual() {
       api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${id}/submit-review`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId] });
     },
   });
 
@@ -620,6 +621,7 @@ export function StudyExpedienteMensual() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId] });
     },
   });
 
@@ -628,6 +630,7 @@ export function StudyExpedienteMensual() {
       api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${id}/finalize`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId] });
     },
   });
   const rectifyMutation = useMutation({
@@ -635,6 +638,7 @@ export function StudyExpedienteMensual() {
       api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${id}/rectify`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId] });
     },
   });
   const resolveControlMutation = useMutation({
