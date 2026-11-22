@@ -1,7 +1,7 @@
 // Etapa Cálculo del Legajo: determinación por obligación y posición fiscal del período, con sus acciones (Foco 2.3c).
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { AsyncState, Button, EmptyState, Table } from "@contable/design-system";
+import { AsyncState, Button, EmptyState, MoneyField, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { calculationLabel } from "../etiquetas";
 import { esPedidoDeCambios, formatMoney } from "../formato";
@@ -9,6 +9,13 @@ import { formatearFecha } from "../../../lib/formatoFechas";
 import type { PositionAction, TaxPosition, WorkpaperCalculationComponent } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
 import { pluralizar } from "../textos";
+import {
+  alternarImpuesto,
+  errorMinimo,
+  lineasDeFormula,
+  seleccionDeImpuesto,
+  type SeleccionCalculo,
+} from "./seleccionCalculo";
 
 export interface EtapaCalculoProps {
   capabilities: ReadonlySet<string>;
@@ -21,6 +28,9 @@ export interface EtapaCalculoProps {
     { workpaperId: string; obligationId: string }
   >;
   setPositionAction: Dispatch<SetStateAction<PositionAction>>;
+  /** Impuestos marcados para liquidar este mes y mínimos cargados. */
+  seleccion: SeleccionCalculo;
+  onSeleccionChange: (seleccion: SeleccionCalculo) => void;
 }
 
 export function EtapaCalculo({
@@ -30,6 +40,8 @@ export function EtapaCalculo({
   positionQuery,
   calculateInterestMutation,
   setPositionAction,
+  seleccion,
+  onSeleccionChange,
 }: EtapaCalculoProps) {
   const determinacion = calculationQuery.data ?? [];
 
@@ -38,6 +50,61 @@ export function EtapaCalculo({
       <p className="muted-copy">
         Devengado fiscal, pagos e intereses sin mezclarlo con el resultado gerencial.
       </p>
+      {calculationQuery.isSuccess && determinacion.length > 0 ? (
+        <section className="workpaper-calculation-selection">
+          <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
+            <div>
+              <strong>Impuestos a liquidar este mes</strong>
+              <small>
+                Por defecto, los que liquidaste el mes anterior. Los no marcados quedan sin calcular.
+              </small>
+            </div>
+          </div>
+          {determinacion.map((component) => {
+            const marcado = seleccionDeImpuesto(seleccion, component.obligationId);
+            const valor = seleccion.minimums[component.obligationId] ?? "";
+            const error = marcado ? errorMinimo(valor) : null;
+            return (
+              <div className="workpaper-calculation-selection__row" key={`sel-${component.obligationId}`}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={marcado}
+                    onChange={(event) =>
+                      onSeleccionChange(
+                        alternarImpuesto(seleccion, component.obligationId, event.target.checked),
+                      )
+                    }
+                  />
+                  <span>
+                    {component.obligation.taxTypeName} · {component.obligation.regimeName} ·{" "}
+                    {component.obligation.jurisdictionName}
+                  </span>
+                </label>
+                {marcado && component.usaMinimoDeclarado ? (
+                  <MoneyField
+                    label="Mínimo del mes"
+                    name={`minimo-${component.obligationId}`}
+                    value={valor}
+                    error={error ?? undefined}
+                    hint={
+                      component.minimoAnterior
+                        ? `El mes anterior usaste ${formatMoney(component.minimoAnterior.amount)}. No se aplica solo.`
+                        : "Dejalo vacío si no corresponde mínimo: en ese caso no se aplica ninguno."
+                    }
+                    onChange={(nuevo) =>
+                      onSeleccionChange({
+                        ...seleccion,
+                        minimums: { ...seleccion.minimums, [component.obligationId]: nuevo },
+                      })
+                    }
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
       <div className="workpaper-calculation-breakdown">
         <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
           <div>
@@ -89,7 +156,9 @@ export function EtapaCalculo({
                     <StatusBadge status="PENDING" />
                   )}
                 </div>
-                {component.settlement ? (
+                {!seleccionDeImpuesto(seleccion, component.obligationId) ? (
+                  <p className="muted-copy">No liquidado este mes.</p>
+                ) : component.settlement ? (
                   <>
                     <dl className="workpaper-calculation__totals">
                       {Object.entries(component.settlement.totals ?? {})
@@ -104,6 +173,11 @@ export function EtapaCalculo({
                           </div>
                         ))}
                     </dl>
+                    <ul className="workpaper-calculation__formula">
+                      {lineasDeFormula(component).map((linea) => (
+                        <li key={linea}>{linea}</li>
+                      ))}
+                    </ul>
                     {component.settlement.f931Inputs.length > 0 ? (
                       <p className="workpaper-calculation__source-note">
                         F.931 revisado · remuneración neta{" "}

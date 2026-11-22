@@ -492,8 +492,9 @@ describe("B8 — humo de liquidación completa por API", () => {
     expectB8(calculation[0]!.settlement.ruleVersionId, "el cálculo usa la versión recién activada por este flujo").toBe(testRuleVersionId);
     expectB8(totals["BASE_TOTAL"], "el cálculo suma $600.000,00 de base").toBe("600000.00");
     expectB8(totals["IMPUESTO_POR_ACTIVIDAD"], "el impuesto directo por actividad es $16.000,00").toBe("16000.00");
-    expectB8(totals["IMPUESTO_DETERMINADO"], "los mínimos llevan el impuesto determinado a $17.500,00").toBe("17500.00");
-    expectB8(totals["TOTAL_A_INGRESAR"], "el total a ingresar es $17.500,00").toBe("17500.00");
+    // Decisión de Inti (22-11-2026): el mínimo de la regla no se aplica a IIBB Tucumán; sin mínimo ingresado queda el impuesto por actividad.
+    expectB8(totals["IMPUESTO_DETERMINADO"], "sin mínimo ingresado el impuesto determinado es $16.000,00").toBe("16000.00");
+    expectB8(totals["TOTAL_A_INGRESAR"], "el total a ingresar es $16.000,00").toBe("16000.00");
     expectB8(totals["SALDO_A_FAVOR"], "el saldo a favor inicial es $0,00").toBe("0.00");
 
     const controlsResponse = await request("GET", `${sourceBase}/controls`);
