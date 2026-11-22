@@ -1079,6 +1079,27 @@
   max-height: none;
 }
 
+/* Revisión lado a lado (brief 5A): el PDF a la izquierda y la grilla editable a la derecha. */
+.calendario-revision {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.calendario-revision-pdf iframe {
+  width: 100%;
+  height: 72vh;
+  min-height: 420px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+}
+
+.calendario-revision .calendario-celdas {
+  min-width: 0;
+}
+
 /* Controles bloqueantes abiertos: punto y número junto a la pestaña «Controles» (sin píldora ni fondo). */
 .workpaper-bloqueos {
   display: inline-flex;

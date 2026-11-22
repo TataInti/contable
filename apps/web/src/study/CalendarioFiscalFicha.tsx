@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, useNotify } from "@contable/design-system";
 import { api } from "../lib/api";
 import { formatearFecha } from "../lib/formatoFechas";
@@ -53,6 +53,13 @@ const TABS_LABEL = "Secciones del calendario";
  * validación), Celdas (agrupadas por concepto) y Versiones del mismo alcance.
  * Cada fuente tiene su carga, su error y su reintento.
  */
+/** Enlace temporal al PDF original del calendario (GET …/tax-calendars/:id/source). */
+interface CalendarSourceLink {
+  url: string;
+  originalName: string | null;
+  mimeType: string;
+}
+
 export function CalendarioFiscalFicha({
   firmId,
   calendarId,
@@ -89,6 +96,14 @@ export function CalendarioFiscalFicha({
     Boolean(calendar),
   );
   const names = useMemberNames(firmId, canListMembers);
+  // PDF original del calendario (brief 5A): URL temporal para el visor junto a las celdas.
+  const source = useQuery({
+    queryKey: ["tax-calendar-source", firmId, calendarId],
+    queryFn: () => api.get<CalendarSourceLink | null>(`/firms/${firmId}/tax-calendars/${calendarId}/source`),
+    enabled: Boolean(firmId && calendar?.sourceId),
+  });
+  const pdfPage = calendar?.entries.find((entry) => entry.id === selectedEntryId)?.sourcePage ?? 1;
+  const celdasSinLectura = Boolean(source.data) && (calendar?.entries.length ?? 0) === 0;
 
   useEffect(() => {
     if (tab !== "celdas" || !focusEntryId) return;
@@ -482,7 +497,21 @@ export function CalendarioFiscalFicha({
                 <span>{`${celdasFiltradas.length} de ${resumen.total} ${resumen.total === 1 ? "celda" : "celdas"}`}</span>
               ) : null}
               {cellsNote ? <span>{cellsNote}</span> : null}
+              {source.data ? (
+                <a href={source.data.url} target="_blank" rel="noreferrer">
+                  Abrir PDF original
+                </a>
+              ) : null}
             </DenseToolbar>
+            <div className={source.data ? "calendario-revision" : undefined}>
+            {source.data ? (
+              <aside className="calendario-revision-pdf" aria-label="PDF del calendario">
+                <iframe
+                  title={`PDF del calendario: ${source.data.originalName ?? "calendario"}`}
+                  src={`${source.data.url}#page=${pdfPage}`}
+                />
+              </aside>
+            ) : null}
             <div className="calendario-celdas">
               <DenseTable<CalendarEntryRow>
                 label="Celdas del calendario"
@@ -511,11 +540,16 @@ export function CalendarioFiscalFicha({
                       kind="no-data"
                       size="inline"
                       title="Todavía no hay celdas"
-                      description="Agregá cada vencimiento con su grupo de terminaciones y su período de referencia."
+                      description={
+                        celdasSinLectura
+                          ? "La lectura automática no dejó celdas: completalas a mano sobre el PDF con «Agregar celda»."
+                          : "Agregá cada vencimiento con su grupo de terminaciones y su período de referencia."
+                      }
                     />
                   )
                 }
               />
+            </div>
             </div>
           </>
         ) : null}

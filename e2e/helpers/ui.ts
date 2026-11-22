@@ -41,7 +41,7 @@ export async function goTo(page: Page, label: string) {
   const menu = page.getByRole("button", { name: "Abrir navegación" });
   if (await menu.isVisible()) await menu.click();
   await dismissGuidedTour(page);
-  if (["Usuarios y accesos", "Módulos de estudios", "Reglas fiscales", "Catálogos fiscales"].includes(label)) {
+  if (["Usuarios y accesos", "Módulos de estudios", "Reglas fiscales", "Catálogos fiscales", "Calendarios fiscales"].includes(label)) {
     const settingsToggle = page.getByRole("button", { name: "Ajustes del estudio", exact: true });
     if ((await settingsToggle.isVisible()) && (await settingsToggle.getAttribute("aria-expanded")) === "false") {
       await settingsToggle.click();
