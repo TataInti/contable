@@ -1,29 +1,32 @@
 import { Buffer } from "node:buffer";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { RUN, SUFFIX, goTo, login, markGuidedTourSeen, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
+import { lineaPercepcionDgr, libroVentasXlsx, nombrePercepcionDgr } from "./helpers/fuentes-sinteticas";
 
 /** Elige una opción de desplegable (<select> o buscador con lista). En el buscador el clic va directo a la opción: la lista se vuelve a dibujar mientras se escribe y el clic con comprobaciones de estabilidad no llegaba. */
 async function pick(campo: Locator, texto: string) {
   if ((await campo.evaluate((elemento) => elemento.tagName)) === "SELECT") return pickOption(campo, texto);
-  await campo.fill(texto);
+  // Tipeo con teclas reales: un fill() recién abierto el cajón perdía la primera letra («estaurante») y no hallaba la opción.
+  await campo.click();
+  await campo.fill("");
+  await campo.pressSequentially(texto, { delay: 10 });
   const listboxId = await campo.getAttribute("aria-controls");
   const opcion = campo.page().locator(`#${listboxId}`).getByRole("option").filter({ hasText: texto }).first();
   await expect(opcion, `opción que contiene «${texto}»`).toBeVisible({ timeout: 10_000 });
   await opcion.evaluate((elemento: HTMLElement) => elemento.click());
 }
-import { lineaPercepcionDgr, libroVentasXlsx, nombrePercepcionDgr } from "./helpers/fuentes-sinteticas";
 
 /**
  * Recorrido completo de un Responsable Inscripto en San Miguel de Tucumán, operado como lo opera el contador.
  *
  *   1. Nuevo cliente en Tucumán (Responsable Inscripto, SRL).
- *   2. Configuración fiscal: perfil, inscripción en IIBB local Tucumán y TEM SMT, actividad de restaurante,
- *      categoría TEM 2026 «B», períodos y obligaciones de octubre de 2026.
+ *   2. Configuración fiscal: perfil, inscripción en los regímenes de sistema IIBB Tucumán y TEM SMT, actividad
+ *      de restaurante del catálogo 2026 para cada impuesto, categoría TEM 2026 «B», períodos y obligaciones.
  *   3. Legajo de octubre de 2026 (un mes anterior a la fecha del alta): ventas de ARCA (xlsx, 3 facturas por
  *      115.000) y percepciones de la DGR (TXT, 1.500,55).
  *   4. Cálculo sin mínimo: IIBB 4.025,00 − 1.500,55 = 2.524,45; TEM 690,00 < mínimo B → 10.028,00.
  *   5. Mínimo de IIBB 11.180 → aviso de desactualizado → Recalcular → 11.180,00 − 1.500,55 = 9.679,45.
- *   6. Controles, revisión (el titular aprueba) y cierre en pasos → saldo para el mes siguiente.
+ *   6. Controles, revisión con autorrevisión del titular (Administración → Controles) y cierre en pasos.
  *
  * Importes calculados a mano en este archivo (no salen de la función que se prueba):
  *   IIBB base 115.000 × 3,5 % = 4.025,00 ; percepciones 1.500,55 ; neto 2.524,45
@@ -31,7 +34,8 @@ import { lineaPercepcionDgr, libroVentasXlsx, nombrePercepcionDgr } from "./help
  *   IIBB con mínimo 11.180,00 − 1.500,55 = 9.679,45
  *
  * Todo sintético y con el sufijo de la corrida. Solo se opera por la interfaz (login, menús, formularios,
- * botones); la API se consulta únicamente para leer catálogos ya cargados y evitar duplicados.
+ * botones). Los regímenes, actividades y alícuotas de restaurante son los de sistema (seed del job E2E, que
+ * refleja el catálogo de producción 2026); el spec no crea catálogos.
  */
 
 const CLIENTE = {
@@ -49,33 +53,15 @@ const VENCIMIENTO = "2026-11-20";
 const IIBB = {
   taxName: "Ingresos Brutos",
   taxOption: "Ingresos Brutos",
-  jurisdiction: "(AR-T)",
-  module: "IIBB local Tucumán",
-  family: "IIBB local — Tucumán",
-  engine: "IIBB local Tucumán",
-  authority: { code: "DGR-TUC", name: "DGR Tucumán" },
-  regime: { code: `E2E-IIBB-${SUFFIX}`, name: `IIBB local Tucumán E2E ${SUFFIX}` },
-  pack: { code: `E2E-PACK-IIBB-${SUFFIX}`, name: `IIBB local Tucumán E2E ${SUFFIX}` },
-  activity: { code: `E2E-REST-TUC-${SUFFIX}`, name: `Restaurante Tucumán E2E ${SUFFIX}`, jurisdiction: "(AR-T)" },
-  rate: "3.5",
-  dueDay: "20",
-  source: "Ley Impositiva de Tucumán — alícuota general",
+  regime: "IIBB Contribuyente Local Tucumán",
+  activity: "Restaurante y bares (Tucumán)",
   label: `Octubre 2026 IIBB ${SUFFIX}`,
 };
 const TEM = {
   taxName: "Tributo Económico Municipal (TEM)",
   taxOption: "Tributo Económico Municipal",
-  jurisdiction: "(AR-SMT)",
-  module: "TEM San Miguel de Tucumán",
-  family: "Tasa de Espacios Municipales",
-  engine: "TEM San Miguel de Tucumán",
-  authority: { code: `SMT-TEM-${SUFFIX}`, name: `Municipalidad de San Miguel de Tucumán — TEM ${SUFFIX}` },
-  regime: { code: `E2E-TEM-${SUFFIX}`, name: `TEM SMT E2E ${SUFFIX}` },
-  pack: { code: `E2E-PACK-TEM-${SUFFIX}`, name: `TEM SMT E2E ${SUFFIX}` },
-  activity: { code: `E2E-REST-SMT-${SUFFIX}`, name: `Restaurante municipal E2E ${SUFFIX}`, jurisdiction: "(AR-SMT)" },
-  rate: "0.6",
-  dueDay: "15",
-  source: "Ordenanza tarifaria de San Miguel de Tucumán",
+  regime: "TEM San Miguel de Tucumán",
+  activity: "Restaurante y bares (San Miguel de Tucumán)",
   label: `Octubre 2026 TEM ${SUFFIX}`,
 };
 
@@ -89,88 +75,6 @@ const PERCEPCION = { importe: "1500.55", fecha: "15/10/2026" };
 
 /** Formato argentino de los importes en pantalla (4.025,00). */
 const importe = (texto: string) => new RegExp(texto.replace(/\./g, "\\.").replace(/,/g, ","));
-
-// ───────────── helpers de catálogo (mismo recorrido que el alta de impuestos, con códigos propios) ─────────────
-
-async function exists(page: Page, resource: "authorities" | "regimes" | "activities" | "rule-packs", code: string) {
-  const response = await page.request.get(`/api/v1/tax/${resource}`);
-  const body = (await response.json()) as { data: Array<{ code: string }> };
-  return body.data.some((item) => item.code === code);
-}
-
-async function createAuthority(page: Page, tax: typeof IIBB | typeof TEM) {
-  if (await exists(page, "authorities", tax.authority.code)) return;
-  await page.getByRole("tab", { name: /^Organismos recaudadores/ }).click();
-  await page.getByRole("button", { name: "Nuevo organismo" }).click();
-  await page.locator("#authority-code").fill(tax.authority.code);
-  await page.locator("#authority-name").fill(tax.authority.name);
-  await pick(page.locator("#authority-jurisdiction"), tax.jurisdiction);
-  await mutating(page, "/tax/authorities", () => page.getByRole("button", { name: "Crear organismo" }).click());
-}
-
-async function createActivity(page: Page, activity: typeof IIBB.activity) {
-  if (await exists(page, "activities", activity.code)) return;
-  await page.getByRole("tab", { name: /^Actividades/ }).click();
-  await page.getByRole("button", { name: "Nueva actividad" }).click();
-  await page.locator("#activity-code").fill(activity.code);
-  await page.locator("#activity-name").fill(activity.name);
-  await pick(page.locator("#activity-jurisdiction"), activity.jurisdiction);
-  await page.locator("#activity-valid-from").fill("2025-01-01");
-  await mutating(page, "/tax/activities", () => page.getByRole("button", { name: "Crear actividad" }).click());
-}
-
-async function createRegime(page: Page, tax: typeof IIBB | typeof TEM) {
-  if (await exists(page, "regimes", tax.regime.code)) return;
-  await page.getByRole("tab", { name: /^Regímenes/ }).click();
-  await page.getByRole("button", { name: "Nuevo régimen" }).click();
-  await page.locator("#regime-code").fill(tax.regime.code);
-  await page.locator("#regime-name").fill(tax.regime.name);
-  await pick(page.locator("#regime-tax-type"), tax.taxOption);
-  await pick(page.locator("#regime-calc-family"), tax.family);
-  await pick(page.locator("#regime-module"), tax.module);
-  await pick(page.locator("#regime-jurisdiction"), tax.jurisdiction);
-  await pick(page.locator("#regime-authority"), tax.authority.name);
-  await mutating(page, "/tax/regimes", () => page.getByRole("button", { name: "Crear régimen" }).click());
-}
-
-/** Paquete de reglas con alícuota del período, vencimiento y fuente, y activación. Sin mínimo: el mínimo lo carga el contador en el Legajo. */
-async function createRulePack(page: Page, tax: typeof IIBB | typeof TEM, allActivities: boolean) {
-  if (await exists(page, "rule-packs", tax.pack.code)) return;
-  await page.getByRole("button", { name: /^Nuevo paquete|^Cerrar alta/ }).first().click();
-  await page.locator("#new-rule-pack-code").fill(tax.pack.code);
-  await page.locator("#new-rule-pack-name").fill(tax.pack.name);
-  await pick(page.locator("#new-rule-pack-regime"), tax.regime.name);
-  await mutating(page, "/tax/rule-packs", () => page.getByRole("button", { name: "Crear paquete" }).click());
-
-  await page.getByRole("button", { name: /Crear primera versión/ }).first().click();
-  await page.locator("#first-rule-version-valid-from").fill("2025-01-01");
-  await pick(page.locator("#first-rule-version-engine"), tax.engine);
-  await mutating(page, "/versions", () =>
-    page.locator(".action-drawer").getByRole("button", { name: "Crear primera versión", exact: true }).click(),
-  );
-
-  await page.getByRole("tab", { name: /^Alícuotas/ }).click();
-  await page.getByRole("button", { name: /Agregar regla/ }).click();
-  await pick(page.locator('input[role="combobox"][aria-label^="Tipo de regla"]').first(), "Alícuota");
-  const actividad = page.locator('input[role="combobox"][aria-label^="Actividad"]').first();
-  await pick(actividad, allActivities ? "Todas las actividades" : tax.activity.name);
-  await page.locator('input[aria-label^="Alícuota"]').first().fill(tax.rate);
-  await mutating(page, "/rate-rules", () => page.getByRole("button", { name: "Guardar borrador" }).click());
-
-  await page.getByRole("tab", { name: /^Vencimientos/ }).click();
-  await page.getByRole("button", { name: "Agregar vencimiento" }).click();
-  await page.locator("#rule-due-day").fill(tax.dueDay);
-  await page.locator("#rule-due-valid-from").fill("2025-01-01");
-  await mutating(page, "/due-date-rules", () => page.getByRole("button", { name: "Guardar vencimiento" }).click());
-
-  await page.getByRole("tab", { name: /^Fuentes/ }).click();
-  await page.getByRole("button", { name: "Agregar fuente" }).click();
-  await page.locator("#rule-source-title").fill(tax.source);
-  await mutating(page, "/sources", () => page.getByRole("button", { name: /^Guardar fuente|^Agregar fuente$/ }).last().click());
-
-  await page.getByRole("button", { name: "Activar", exact: true }).click();
-  await mutating(page, "/activate", () => page.getByRole("button", { name: "Activar versión" }).click());
-}
 
 // ───────────── helpers de la configuración fiscal del cliente ─────────────
 
@@ -212,23 +116,6 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
 
   await test.step("Ingresar como Titular", () => login(page));
 
-  await test.step("Catálogos: organismo TEM, actividades de restaurante, regímenes de IIBB y TEM", async () => {
-    await goTo(page, "Catálogos fiscales");
-    await expect(page.getByRole("heading", { name: "Catálogos fiscales", exact: true })).toBeVisible();
-    for (const tax of [IIBB, TEM]) await createAuthority(page, tax);
-    await createActivity(page, IIBB.activity);
-    await createActivity(page, TEM.activity);
-    for (const tax of [IIBB, TEM]) await createRegime(page, tax);
-  });
-
-  await test.step("Reglas fiscales: alícuota de IIBB 3,5 % y de TEM 0,6 %, activadas", async () => {
-    await goTo(page, "Reglas fiscales");
-    await expect(page.getByRole("heading", { name: "Reglas fiscales", exact: true })).toBeVisible();
-    await createRulePack(page, IIBB, true);
-    await createRulePack(page, TEM, false);
-    await expect(seen(page, "Vigente")).toBeVisible();
-  });
-
   await test.step("Clientes: alta de un cliente nuevo en Tucumán", async () => {
     await goTo(page, "Clientes");
     await page.getByRole("button", { name: /^Nuevo cliente/ }).first().click();
@@ -259,10 +146,10 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await expect(page.getByRole("button", { name: "Crear nueva versión" })).toBeVisible();
   });
 
-  await test.step("Configuración fiscal: inscripción en IIBB local Tucumán y TEM SMT desde el inicio de la inscripción", async () => {
+  await test.step("Configuración fiscal: inscripción en IIBB Tucumán y TEM SMT (regímenes de sistema) desde el alta", async () => {
     for (const tax of [IIBB, TEM]) {
       await clickAdd(page, "Regímenes adheridos");
-      await pick(page.locator("#reg-regime"), tax.regime.name);
+      await pick(page.locator("#reg-regime"), tax.regime);
       await page.locator("#reg-from").fill(ALTA);
       await mutating(page, "/tax-registrations", () =>
         page.getByRole("button", { name: "Registrar inscripción", exact: true }).last().click(),
@@ -270,10 +157,10 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     }
   });
 
-  await test.step("Configuración fiscal: actividad de restaurante para cada impuesto (sin fecha: vale desde el alta)", async () => {
+  await test.step("Configuración fiscal: actividad de restaurante del catálogo 2026 para cada impuesto (sin fecha: vale desde el alta)", async () => {
     for (const tax of [IIBB, TEM]) {
       await clickAdd(page, "Actividades");
-      await pick(page.locator("#act-activity"), tax.activity.name);
+      await pick(page.locator("#act-activity"), tax.activity);
       // Vincular la actividad no pide fecha: vale desde el alta del cliente (4L). Sin campo «Desde» en el cajón.
       await expect(page.locator("#act-from")).toHaveCount(0);
       await mutating(page, "/activities", () =>
@@ -301,7 +188,7 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
 
       await page.getByRole("button", { name: /Completar obligaciones|Crear obligación/ }).first().click();
       await pick(page.locator("#obl-period"), tax.label);
-      await pick(page.locator("#obl-regime"), tax.regime.name);
+      await pick(page.locator("#obl-regime"), tax.regime);
       await page.locator("#obl-due-date").fill(VENCIMIENTO);
       await mutating(page, "/tax-obligations", () =>
         page.getByRole("button", { name: "Crear obligación", exact: true }).last().click(),
@@ -319,11 +206,6 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
   });
 
   await test.step("Fuentes: ventas de ARCA en xlsx (3 facturas por 115.000)", async () => {
-    // DEFECTO REAL (en rojo, sin arreglo en este PR; decisión de Ciro): el legajo asocia cada fuente (Libro IVA
-    // Ventas, retenciones y base de Ingresos Brutos Tucumán, TEM) por el código del régimen de catálogo
-    // (apps/api/src/tax/workpaper-source-policy.ts, regimeCode = obligation.regime.code). El régimen que el estudio
-    // crea en este spec tiene código E2E-IIBB-… / E2E-TEM-…, así que el legajo no ofrece ninguna fuente («No hay
-    // fuentes definidas para el legajo») y este paso no encuentra el botón. Los pasos siguientes quedan sin correr.
     await page.getByRole("tab", { name: /Fuentes/ }).first().click();
     await page.getByRole("button", { name: "Gestionar Ventas del período" }).click();
     await page.getByRole("button", { name: "Cargar archivo" }).click();
@@ -334,6 +216,9 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       buffer: Buffer.from(libroVentasXlsx(FACTURAS)),
     });
+    // Un .xlsx pasa por el análisis de alícuotas antes de importarse: «Importar» se habilita recién después.
+    await libro.getByRole("button", { name: "Analizar alícuotas", exact: true }).click();
+    await expect(libro.getByRole("button", { name: "Importar", exact: true })).toBeEnabled({ timeout: 60_000 });
     await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
     await expect(panel).toBeHidden({ timeout: 60_000 });
   });
@@ -350,19 +235,49 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     });
     await mutating(page, "/import-batches", () => panel.getByRole("button", { name: "Importar archivo" }).click());
     await expect(panel.getByText("Procesando…")).toHaveCount(0, { timeout: 60_000 });
+    await panel.getByRole("button", { name: "Cerrar", exact: true }).last().click();
+    await expect(panel).toBeHidden();
+  });
+
+  await test.step("Configuración del estudio: el Titular habilita la autorrevisión (Usuarios y accesos → Controles)", async () => {
+    await goTo(page, "Usuarios y accesos");
+    await page.getByRole("tab", { name: /^Controles/ }).click();
+    // Idempotente: la opción persiste en la base de la corrida; si ya está activada, no se vuelve a tocar.
+    const autorrevision = page.getByRole("checkbox", { name: "Permitir autorrevisión de fuentes y legajos" });
+    if (!(await autorrevision.isChecked())) {
+      await mutating(page, "/api/v1/", () => autorrevision.click());
+      await expect(autorrevision).toBeChecked();
+    }
+    await expect(seen(page, "Activada")).toBeVisible();
+  });
+
+  await test.step("Fuentes: el Titular revisa los dos lotes que importó", async () => {
+    await goTo(page, "Legajo");
+    await pick(page.getByRole("combobox", { name: "Período fiscal" }), rotuloDelPeriodo(IIBB));
+    await page.getByRole("tab", { name: /Fuentes/ }).first().click();
+    // La revisión del lote está en el panel «Gestionar» de cada fuente.
+    for (const fuente of ["Gestionar Ventas del período", "Gestionar Retenciones y percepciones IIBB Tucumán"]) {
+      await page.getByRole("button", { name: fuente }).click();
+      const revisar = page.getByRole("button", { name: "Revisar", exact: true });
+      await expect(revisar, `lote de «${fuente}» por revisar`).toBeVisible({ timeout: 20_000 });
+      await mutating(page, "/api/v1/", () => revisar.click());
+      await expect(revisar).toHaveCount(0);
+      await page.getByRole("button", { name: "Cerrar", exact: true }).last().click();
+    }
   });
 
   await test.step("Clasificación lista: las ventas quedan en la actividad del restaurante", async () => {
     await page.getByRole("tab", { name: /Clasificación/ }).click();
     await page.locator(".work-page").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
-    await expect(page.locator(".work-page").first().getByText(/pendientes?/i)).toHaveCount(0, { timeout: 20_000 });
+    await expect(page.getByText("Listo para calcular").first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/3 ventas asignadas automáticamente a la única actividad/).first()).toBeVisible();
   });
 
   await test.step("Cálculo sin mínimo: IIBB 4.025,00 y TEM 10.028,00 por el mínimo de la categoría B", async () => {
     await page.getByRole("tab", { name: /Cálculo/ }).click();
-    await page.getByRole("checkbox", { name: new RegExp(IIBB.taxName) }).check();
-    await page.getByRole("checkbox", { name: new RegExp(TEM.taxName) }).check();
-    await page.locator(".work-page").first().getByRole("button", { name: "Calcular", exact: true }).click();
+    await page.getByRole("checkbox", { name: IIBB.taxName }).check();
+    await page.getByRole("checkbox", { name: TEM.taxName }).check();
+    await page.getByRole("button", { name: "Calcular liquidación", exact: true }).click();
     await esperarImporte(page, "4.025,00");
     await esperarImporte(page, "1.500,55");
     await esperarImporte(page, "2.524,45");
@@ -372,12 +287,12 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
 
   await test.step("Mínimo de IIBB 11.180: aviso de desactualizado y Recalcular", async () => {
     await page.getByLabel("Mínimo del mes").first().fill("11180");
-    await expect(page.locator(".work-page").first().getByRole("status").filter({ hasText: /desactualiz|Recalcul/ })).toBeVisible();
+    await expect(page.locator(".work-page").first().getByRole("status").filter({ hasText: /recalcul|desactualiz/i })).toBeVisible();
     await page.locator(".work-page").first().getByRole("button", { name: "Recalcular", exact: true }).click();
     await esperarImporte(page, "9.679,45");
   });
 
-  await test.step("Controles y revisión: el titular aprueba su propia revisión", async () => {
+  await test.step("Controles y revisión: el titular habilita la autorrevisión y revisa su propio legajo", async () => {
     await page.getByRole("tab", { name: /Controles/ }).click();
     await page.getByRole("tab", { name: /Cierre/ }).click();
     await expect(page.locator(".work-page").first()).toBeVisible();

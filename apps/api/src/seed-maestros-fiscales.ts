@@ -16,7 +16,7 @@
 import { Prisma } from "@prisma/client";
 import {
   CM03_ENGINE_VERSION,
-  IIBB_TUC_ENGINE_VERSION,
+  IIBB_TUC_PREVIOUS_ENGINE_VERSION,
   TEM_SMT_ENGINE_VERSION,
 } from "@contable/tax-engine";
 import { prisma } from "./lib/prisma.js";
@@ -358,7 +358,8 @@ async function main() {
     // IIBB local: alícuota por actividad (nomenclador DGR Tucumán, muestra).
     const iibbVersion = await ensureActivePack(
       iibbPack.id,
-      IIBB_TUC_ENGINE_VERSION,
+      // Motor activo en producción (ar-iibb-tuc-local-v1.1.0): es el que habilita el mínimo declarado por el contador.
+      IIBB_TUC_PREVIOUS_ENGINE_VERSION,
       "sha256:ar-iibb-tuc-local-v1.1",
     );
     await tx.taxRateRule.createMany({
