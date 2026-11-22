@@ -1,5 +1,5 @@
 // Etapa Clasificación e imputación del Legajo: clasificación de comprobantes e imputación de retenciones y percepciones (Foco 2.3c).
-import type { Dispatch, SetStateAction } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
@@ -45,6 +45,12 @@ export function EtapaClasificacion({
   classifyVoucherMutation,
   reallocateInputMutation,
 }: EtapaClasificacionProps) {
+  const [filter, setFilter] = useState("ALL");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const visibleClassifications = useMemo(() => {
+    const items = classificationQuery.data?.items ?? [];
+    return filter === "PENDING" ? items.filter((item) => item.status !== "CLASSIFIED") : items;
+  }, [classificationQuery.data?.items, filter]);
   // Motivo visible junto a la tabla cuando la pantalla no deja clasificar ni imputar (P1).
   const motivoEditar = !capabilities.has("tax.vouchers.prepare")
     ? "Tu rol no puede clasificar comprobantes ni imputar retenciones."
@@ -107,8 +113,28 @@ export function EtapaClasificacion({
           {classificationQuery.isFetching ? (
             <small className="muted-copy">Dato del último corte; se está actualizando.</small>
           ) : null}
+          <div className="workpaper-stage__actions">
+            <label>
+              Filtrar comprobantes
+              <select aria-label="Filtrar comprobantes" value={filter} onChange={(event) => setFilter(event.target.value)}>
+                <option value="ALL">Todos</option>
+                <option value="PENDING">Sin clasificar</option>
+              </select>
+            </label>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={selectedIds.length === 0 || classifyVoucherMutation.isPending}
+              onClick={() => {
+                const selected = classificationQuery.data?.items.filter((item) => selectedIds.includes(item.id)) ?? [];
+                selected.forEach((item) => classifyVoucherMutation.mutate(item));
+              }}
+            >
+              Clasificar seleccionados
+            </Button>
+          </div>
           <Table<WorkpaperClassification>
-            rows={classificationQuery.data?.items ?? []}
+            rows={visibleClassifications}
             rowKey={(classification) => classification.id}
             empty={
               <EmptyState
@@ -117,6 +143,20 @@ export function EtapaClasificacion({
               />
             }
             columns={[
+              {
+                key: "selection",
+                header: "Seleccionar",
+                render: (classification) => (
+                  <input
+                    type="checkbox"
+                    aria-label={`Seleccionar comprobante ${classification.voucher.letter ?? classification.voucher.type} · ${String(classification.voucher.pointOfSale).padStart(4, "0")}-${String(classification.voucher.number).padStart(8, "0")}`}
+                    checked={selectedIds.includes(classification.id)}
+                    onChange={(event) => setSelectedIds((current) => event.target.checked
+                      ? [...new Set([...current, classification.id])]
+                      : current.filter((id) => id !== classification.id))}
+                  />
+                ),
+              },
               {
                 key: "voucher",
                 header: "Comprobante",

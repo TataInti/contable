@@ -204,6 +204,24 @@ afterEach(() => {
 });
 
 describe("Legajo · etapa Clasificación e imputación (K11)", () => {
+  it("permite filtrar sin clasificar y seleccionar varios comprobantes", async () => {
+    fijarContexto(PERMISOS_CLASIFICAR);
+    renderLegajo();
+    await abrirClasificacion();
+    expect(screen.getByRole("checkbox", { name: "Seleccionar comprobante A · 0001-00000001" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clasificar seleccionados" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Filtrar comprobantes" })).toBeInTheDocument();
+  });
+
+  it("filtra los comprobantes pendientes", async () => {
+    fijarContexto(PERMISOS_CLASIFICAR);
+    renderLegajo();
+    await abrirClasificacion();
+    fireEvent.change(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), { target: { value: "PENDING" } });
+    expect(screen.getByText("A · 0001-00000001")).toBeInTheDocument();
+    expect(screen.queryByText("A · 0001-00000002")).not.toBeInTheDocument();
+  });
+
   it("guardar una compra sin rubro muestra «Seleccioná el rubro de la compra» junto a su fila y no envía el PATCH", async () => {
     fijarContexto(PERMISOS_CLASIFICAR);
     renderLegajo();
