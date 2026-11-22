@@ -55,6 +55,7 @@ import {
 import { importarLoteFuente, LoteConFilasObservadas } from "./legajo/loteFuente";
 import { pluralizar } from "./legajo/textos";
 import { mensajesDePedidoDeCambios, selfReviewNote } from "./legajo/formato";
+import { calcularEstadosEtapas } from "./legajo/estadoEtapas";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
 import { PeriodoSinLegajo } from "./legajo/PeriodoSinLegajo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
@@ -780,6 +781,13 @@ export function StudyExpedienteMensual() {
   const bloqueantesAbiertos =
     vigente?.controls.filter((control) => control.severity === "BLOCKING" && control.status === "OPEN")
       .length ?? 0;
+  const estadosEtapas = calcularEstadosEtapas({
+    sources: coverageQuery.data?.sources,
+    classification: classificationQuery.data,
+    calculationCount: calculationQuery.data?.length,
+    blockingControls: bloqueantesAbiertos,
+    status: vigente?.status,
+  });
   const canCalculate = capabilities.has("tax.settlements.calculate");
   const textoSoloLectura =
     seleccionada && soloLectura && reemplazadaPor(seleccionada)
@@ -1147,24 +1155,20 @@ export function StudyExpedienteMensual() {
 
   const pestanas = WORKPAPER_STEPS.map((step, indice) => ({
     id: String(indice),
-    label:
-      indice === 4 && bloqueantesAbiertos > 0 ? (
-        <>
-          {step.title}
-          <span
-            className="workpaper-bloqueos"
-            title={pluralizar(bloqueantesAbiertos, "control bloqueante abierto", "controles bloqueantes abiertos")}
-          >
+    description: `Estado: ${estadosEtapas[indice]?.estado ?? "No disponible todavía"}`,
+    status: `${estadosEtapas[indice]?.estado === "Lista" ? "✓" : estadosEtapas[indice]?.estado === "Con pendientes" ? "!" : "·"} ${estadosEtapas[indice]?.estado ?? "No disponible todavía"}`,
+    label: (
+      <>
+        {step.title}
+        {indice === 4 && bloqueantesAbiertos > 0 ? (
+          <span className="workpaper-bloqueos" title={pluralizar(bloqueantesAbiertos, "control bloqueante abierto", "controles bloqueantes abiertos")}>
             <span className="workpaper-bloqueos__punto" aria-hidden="true" />
             {bloqueantesAbiertos}{" "}
-            <span className="sr-only">
-              {bloqueantesAbiertos === 1 ? "bloqueante abierto" : "bloqueantes abiertos"}
-            </span>
+            <span className="sr-only">{bloqueantesAbiertos === 1 ? "bloqueante abierto" : "bloqueantes abiertos"}</span>
           </span>
-        </>
-      ) : (
-        step.title
-      ),
+        ) : null}
+      </>
+    ),
   }));
 
   const barra = (
@@ -1284,6 +1288,16 @@ export function StudyExpedienteMensual() {
           aria-labelledby={`workpaper-${safeActiveStep}`}
           aria-live="polite"
         >
+          {safeActiveStep < 5 && estadosEtapas[safeActiveStep]?.mensaje ? (
+            <div className="workpaper-stage-guidance" role="status">
+              <p>{estadosEtapas[safeActiveStep]?.mensaje}.</p>
+              {estadosEtapas[safeActiveStep]?.accion ? (
+                <Button size="sm" variant="secondary" onClick={() => goToStep(estadosEtapas[safeActiveStep]!.destino)}>
+                  {estadosEtapas[safeActiveStep]!.accion}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           {renderEtapa(seleccionada, safeActiveStep)}
         </div>
       </>

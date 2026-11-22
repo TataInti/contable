@@ -37,6 +37,8 @@ export interface DenseTab<T extends string> {
   label: ReactNode;
   count?: number;
   warnCount?: number;
+  description?: string;
+  status?: string;
 }
 
 export function DenseTabs<T extends string>({
@@ -64,8 +66,8 @@ export function DenseTabs<T extends string>({
   return (
     <div className="dense-tabs" role="tablist" aria-label={label}>
       {tabs.map((tab, index) => (
+        <span className="dense-tab-item" key={tab.id}>
         <Button
-          key={tab.id}
           id={`${idPrefix}-${tab.id}`}
           type="button"
           variant="text"
@@ -73,6 +75,7 @@ export function DenseTabs<T extends string>({
           role="tab"
           aria-selected={active === tab.id}
           aria-controls={`${idPrefix}-panel`}
+          aria-description={tab.description}
           tabIndex={active === tab.id ? 0 : -1}
           className="dense-tab"
           onClick={() => onChange(tab.id)}
@@ -89,6 +92,8 @@ export function DenseTabs<T extends string>({
             </span>
           ) : null}
         </Button>
+        {tab.status ? <span className="dense-tab__status">{tab.status}</span> : null}
+        </span>
       ))}
     </div>
   );
