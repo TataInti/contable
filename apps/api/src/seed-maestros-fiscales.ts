@@ -62,7 +62,8 @@ async function main() {
       update: {},
       create: { code: "AR-T", name: "Provincia de Tucumán", kind: "PROVINCIAL", parentId: ar.id },
     });
-    await tx.jurisdiction.upsert({
+    // San Miguel de Tucumán es municipio dentro de la provincia: el TEM cuelga de este nivel, como en producción.
+    const sanMiguel = await tx.jurisdiction.upsert({
       where: { code: "AR-SMT" },
       update: {},
       create: { code: "AR-SMT", name: "San Miguel de Tucumán", kind: "MUNICIPAL", parentId: tucuman.id },
@@ -213,12 +214,13 @@ async function main() {
     await ensureRegimeModule(cm03Regime.id, "TAX_CM_ART2");
     const temRegime = await tx.taxRegime.upsert({
       where: { code: "TEM_SMT" },
-      update: {},
+      // Se fija también en filas ya sembradas con la jurisdicción provincial (AR-T): el nivel del TEM es AR-SMT.
+      update: { jurisdictionId: sanMiguel.id },
       create: {
         code: "TEM_SMT",
         name: "TEM San Miguel de Tucumán",
         taxTypeId: tem.id,
-        jurisdictionId: tucuman.id,
+        jurisdictionId: sanMiguel.id,
         authorityId: arca.id,
         moduleId: regimeModuleId("TAX_TEM_SMT"),
       },

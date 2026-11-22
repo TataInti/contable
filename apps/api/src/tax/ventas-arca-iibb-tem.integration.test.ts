@@ -359,9 +359,10 @@ describe("2C — un libro de ventas de ARCA alimenta Ingresos Brutos y TEM", () 
     // calculadora.py, base_ventas modo A: 65.000 + 55.000 − 5.000 = 115.000 para los dos impuestos.
     expect(iibb["BASE_TOTAL"]).toBe("115000.00");
     expect(tem["BASE_TOTAL"]).toBe("115000.00");
-    // Alícuotas de la regla «SERVICIOS» del catálogo sembrado: IIBB 4,5 % y TEM 3 %.
+    // Alícuotas del catálogo sembrado: IIBB 4,5 % (SERVICIOS). TEM: con la actividad municipal COMERCIO del nivel
+    // AR-SMT, 2 %; sin ella, la provincial SERVICIOS a 3 % (la base de este caso no cambia).
     expect(iibb["IMPUESTO_DETERMINADO"]).toBe("5175.00");
-    expect(tem["IMPUESTO_POR_ACTIVIDAD"]).toBe("3450.00");
+    expect(tem["IMPUESTO_POR_ACTIVIDAD"]).toBe(actividadMunicipal ? "2300.00" : "3450.00");
     // 3.450 < mínimo mensual de la categoría B (10.028): el determinado del TEM es el mínimo.
     expect(tem["IMPUESTO_DETERMINADO"]).toBe("10028.00");
   });
