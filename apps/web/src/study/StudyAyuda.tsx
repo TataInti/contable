@@ -117,7 +117,7 @@ export function StudyAyuda() {
           <li>Si el estudio tiene doble factor, cargá el código de verificación.</li>
           <li>Quedás en Inicio. El menú izquierdo muestra las secciones de tu rol.</li>
           <li>
-            <strong>Recorrer el estudio</strong> (abajo a la izquierda) ubica cada bloque del menú.
+            <strong>Ver recorrido</strong> (abajo a la izquierda) ubica cada bloque del menú.
             Esta página es el procedimiento de trabajo.
           </li>
         </ol>
