@@ -147,7 +147,7 @@ async function ensureActivity(code: string, jurisdictionCode: string) {
  * Pasa la versión activa del régimen a reglas tipadas con una sola alícuota por actividad del nivel.
  * Guarda las reglas y los campos de versión originales para restaurarlos en afterAll.
  */
-async function typeActiveVersion(regimeKey: string, jurisdictionCode: string, engineKey: string, activityId: string, activityCode: string, rate: string) {
+async function typeActiveVersion(regimeKey: string, engineKey: string, activityId: string, activityCode: string, rate: string) {
   const regime = await prisma.taxRegime.findFirstOrThrow({ where: { code: regimeKey } });
   const version = await prisma.taxRuleVersion.findFirstOrThrow({
     where: { status: "ACTIVE", pack: { regimeId: regime.id } },
@@ -155,10 +155,6 @@ async function typeActiveVersion(regimeKey: string, jurisdictionCode: string, en
   const originalRules = await prisma.taxRateRule.findMany({ where: { ruleVersionId: version.id } });
   const originalVersion = await prisma.taxRuleVersion.findUniqueOrThrow({ where: { id: version.id } });
   const originalFamilyId = regime.calcFamilyId;
-  const originalJurisdictionId = regime.jurisdictionId;
-  // Jurisdicción del régimen como en producción: el TEM vive en AR-SMT (la base sembrada lo deja en AR-T).
-  const jurisdiction = await prisma.jurisdiction.findFirstOrThrow({ where: { code: jurisdictionCode } });
-  // El motor que lee reglas tipadas con actividad por nivel es el de la clave indicada (su familia debe coincidir).
   const engine = await prisma.taxEngine.findUniqueOrThrow({ where: { engineKey } });
   restore.push(async () => {
     await prisma.taxRateRule.deleteMany({ where: { ruleVersionId: version.id } });
@@ -171,17 +167,11 @@ async function typeActiveVersion(regimeKey: string, jurisdictionCode: string, en
         rulesHash: originalVersion.rulesHash,
       },
     });
-    await prisma.taxRegime.update({
-      where: { id: regime.id },
-      data: { calcFamilyId: originalFamilyId, jurisdictionId: originalJurisdictionId },
-    });
+    await prisma.taxRegime.update({ where: { id: regime.id }, data: { calcFamilyId: originalFamilyId } });
   });
 
   const kind = await prisma.taxRuleKind.findUniqueOrThrow({ where: { key: "RATE" } });
-  await prisma.taxRegime.update({
-    where: { id: regime.id },
-    data: { calcFamilyId: engine.familyId, jurisdictionId: jurisdiction.id },
-  });
+  await prisma.taxRegime.update({ where: { id: regime.id }, data: { calcFamilyId: engine.familyId } });
   await prisma.taxRuleVersion.update({ where: { id: version.id }, data: { engineVersion: engine.engineVersion } });
   await prisma.taxRateRule.deleteMany({ where: { ruleVersionId: version.id } });
   await prisma.taxRateRule.create({
@@ -244,8 +234,8 @@ describe("4F — cada impuesto calcula con la actividad de su nivel (REST-TUC en
 
     const tucuman = await ensureActivity("REST-TUC", "AR-T");
     const santiago = await ensureActivity("REST-SMT", "AR-SMT");
-    await typeActiveVersion("IIBB_LOCAL_TUC", "AR-T", "iibb-local-tuc", tucuman.id, "REST-TUC", RATES.iibb);
-    await typeActiveVersion("TEM_SMT", "AR-SMT", "tem-smt", santiago.id, "REST-SMT", RATES.tem);
+    await typeActiveVersion("IIBB_LOCAL_TUC", "iibb-local-tuc", tucuman.id, "REST-TUC", RATES.iibb);
+    await typeActiveVersion("TEM_SMT", "tem-smt", santiago.id, "REST-SMT", RATES.tem);
   });
 
   afterAll(async () => {

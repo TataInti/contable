@@ -359,8 +359,13 @@ describe("Panel de trabajo: pantalla", () => {
         "No hay obligaciones asignadas a vos en esta vista: ves todo el estudio por tu rol.",
       ),
     ).toBeTruthy();
-    expect(ubicacion()).toBe("/panel-trabajo?responsable=todos&motivo=sin-asignaciones");
-    expect(ultimaRuta()).not.toContain("responsable=");
+    // El motivo llega con el cambio de URL; la consulta de «Todo el estudio» sale después de ese cambio.
+    // Se espera el estado final (URL, última consulta y tabla con sus filas), no el instante del mensaje.
+    await waitFor(() =>
+      expect(ubicacion()).toBe("/panel-trabajo?responsable=todos&motivo=sin-asignaciones"),
+    );
+    await waitFor(() => expect(ultimaRuta()).not.toContain("responsable="));
+    await tablaPanel();
   });
 
   it("«Cargar más» pide la página siguiente y el pie cuenta filas de obligaciones", async () => {
