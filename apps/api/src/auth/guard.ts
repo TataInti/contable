@@ -258,6 +258,7 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
       if (path.endsWith("/submit-review")) return "tax.settlements.submit_review";
       if (path.includes("/sources/") && path.endsWith("/review")) return "tax.vouchers.review";
       if (path.includes("/classifications/") && m !== "GET") return "tax.vouchers.prepare";
+      if (path.includes("/classification-rules") && m !== "GET") return "tax.vouchers.prepare";
       if (path.includes("/allocations/") && m !== "GET") return "tax.vouchers.prepare";
       if (path.endsWith("/review")) return "tax.settlements.review";
       if (path.endsWith("/finalize")) return "tax.settlements.finalize";

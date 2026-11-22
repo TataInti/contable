@@ -39,6 +39,7 @@ const mockState = vi.hoisted(() => ({
   rateRules: [] as Array<Record<string, unknown>>,
   fiscalVoucherLines: [] as Array<Record<string, unknown>>,
   workpaperVoucherClassifications: [] as Array<Record<string, unknown>>,
+  classificationRules: [] as Array<Record<string, unknown>>,
   supplierTaxProfiles: [] as Array<Record<string, unknown>>,
   clientProfiles: [] as Array<Record<string, unknown>>,
   auditEvents: [] as Array<Record<string, unknown>>,
@@ -252,6 +253,10 @@ function makeTransaction() {
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) =>
         updateRows(mockState.workpaperVoucherClassifications, where, data),
     },
+    classificationRule: {
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) =>
+        updateRows(mockState.classificationRules, where, data),
+    },
     supplierTaxProfile: {
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) =>
         updateRows(mockState.supplierTaxProfiles, where, data),
@@ -290,6 +295,7 @@ beforeEach(async () => {
   mockState.rateRules.length = 0;
   mockState.fiscalVoucherLines.length = 0;
   mockState.workpaperVoucherClassifications.length = 0;
+  mockState.classificationRules.length = 0;
   mockState.supplierTaxProfiles.length = 0;
   mockState.clientProfiles.length = 0;
   mockState.auditEvents.length = 0;
@@ -515,6 +521,7 @@ describe("catálogo de actividades: edición y estado", () => {
     mockState.rateRules.push(draftRule, activeRule, retiredRule);
     mockState.fiscalVoucherLines.push({ id: nextUuid(), activityCode: "COMERCIO" });
     mockState.workpaperVoucherClassifications.push({ id: nextUuid(), activityCode: "COMERCIO" });
+    mockState.classificationRules.push({ id: nextUuid(), activityCode: "COMERCIO", revokedAt: null });
     mockState.supplierTaxProfiles.push({ id: nextUuid(), activityCode: "COMERCIO" });
     mockState.clientProfiles.push({ id: nextUuid(), activity: "COMERCIO — Nombre histórico" });
 
@@ -545,7 +552,7 @@ describe("catálogo de actividades: edición y estado", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().data.codeChange).toEqual({
       previousCode: "COMERCIO",
-      updatedReferences: 6,
+      updatedReferences: 7,
       retainedReferences: 2,
     });
     expect(draftRule).toMatchObject({ concept: "COMERCIO-V2", activityCode: "COMERCIO-V2" });
@@ -553,6 +560,7 @@ describe("catálogo de actividades: edición y estado", () => {
     expect(retiredRule).toMatchObject({ concept: "RATE", activityCode: "COMERCIO" });
     expect(mockState.fiscalVoucherLines[0]).toMatchObject({ activityCode: "COMERCIO-V2" });
     expect(mockState.workpaperVoucherClassifications[0]).toMatchObject({ activityCode: "COMERCIO-V2" });
+    expect(mockState.classificationRules[0]).toMatchObject({ activityCode: "COMERCIO-V2" });
     expect(mockState.supplierTaxProfiles[0]).toMatchObject({ activityCode: "COMERCIO-V2" });
     expect(mockState.clientProfiles[0]).toMatchObject({ activity: "COMERCIO-V2 — Comercio ampliado" });
     expect(calculateDraftTax()).toBe(before);

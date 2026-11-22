@@ -393,6 +393,7 @@ async function catalogUsagePlaces(
         ["Reglas fiscales", tx.taxRateRule.count({ where: { activityCode: value.code } })],
         ["Líneas de comprobantes", tx.fiscalVoucherLine.count({ where: { activityCode: value.code } })],
         ["Clasificaciones fiscales", tx.workpaperVoucherClassification.count({ where: { activityCode: value.code } })],
+        ["Reglas de clasificación", tx.classificationRule.count({ where: { activityCode: value.code, revokedAt: null } })],
         ["Perfiles de proveedores", tx.supplierTaxProfile.count({ where: { activityCode: value.code } })],
         ["Fichas de clientes", tx.clientProfile.count({ where: { activity: `${value.code} — ${value.name}` } })],
       ];
@@ -1165,7 +1166,7 @@ export class FiscalMasterService {
           select: { ruleVersionId: true },
         });
         const draftRuleVersionIds = [...new Set(draftRules.map((rule) => rule.ruleVersionId))];
-        const [draftConcepts, draftActivityCodes, voucherLines, classifications, supplierProfiles, clientProfiles] =
+        const [draftConcepts, draftActivityCodes, voucherLines, classifications, classificationRules, supplierProfiles, clientProfiles] =
           await Promise.all([
             tx.taxRateRule.updateMany({
               where: {
@@ -1184,6 +1185,10 @@ export class FiscalMasterService {
             tx.fiscalVoucherLine.updateMany({ where: { activityCode: row.code }, data: { activityCode: code } }),
             tx.workpaperVoucherClassification.updateMany({
               where: { activityCode: row.code },
+              data: { activityCode: code },
+            }),
+            tx.classificationRule.updateMany({
+              where: { activityCode: row.code, revokedAt: null },
               data: { activityCode: code },
             }),
             tx.supplierTaxProfile.updateMany({ where: { activityCode: row.code }, data: { activityCode: code } }),
@@ -1238,6 +1243,7 @@ export class FiscalMasterService {
             draftActivityCodes.count +
             voucherLines.count +
             classifications.count +
+            classificationRules.count +
             supplierProfiles.count +
             clientProfiles.count,
           retainedReferences: retainedRuleConcepts + retainedRuleActivityCodes + retainedProfiles,

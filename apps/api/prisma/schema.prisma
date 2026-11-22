@@ -44,6 +44,9 @@ model User {
   biDashboards           BiDashboard[]           @relation("biDashboardCreatedBy")
   workpaperSourceMarked  WorkpaperSourceStatus[] @relation("workpaperSourceMarkedBy")
   workpaperSourceCleared WorkpaperSourceStatus[] @relation("workpaperSourceClearedBy")
+  classificationsExcluded WorkpaperVoucherClassification[] @relation("classificationExcludedBy")
+  classificationRulesCreated ClassificationRule[] @relation("classificationRuleCreatedBy")
+  classificationRulesRevoked ClassificationRule[] @relation("classificationRuleRevokedBy")
   portalMemberships      PortalMembership[]
   idempotencyRecords     IdempotencyRecord[]
   professionalCredentials ProfessionalCredential[]
@@ -302,6 +305,7 @@ model Client {
   workpaperImportBatches WorkpaperImportBatch[]
   workpaperSourceStatuses WorkpaperSourceStatus[]
   workpaperVoucherClassifications WorkpaperVoucherClassification[]
+  classificationRules ClassificationRule[]
   taxInputAllocations    TaxInputAllocation[]
   taxControlFindings     TaxControlFinding[]
   taxInterestSnapshots   TaxInterestSnapshot[]
@@ -3642,6 +3646,12 @@ model WorkpaperVoucherClassification {
   snapshotHash       String?
   classifiedByUserId String?
   classifiedAt       DateTime?
+  /// Crédito fiscal de IVA: false en compras con letra B o C (corte 3B); el motor no las toma como crédito.
+  ivaCredit          Boolean  @default(true)
+  /// Exclusión del cálculo con motivo obligatorio (corte 3B); reincluir vacía las tres columnas.
+  excludedAt         DateTime?
+  excludedByUserId   String?
+  excludedReason     String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -3649,11 +3659,36 @@ model WorkpaperVoucherClassification {
   workpaper       MonthlyTaxWorkpaper @relation(fields: [workpaperId], references: [id], onDelete: Cascade)
   voucher         FiscalVoucher       @relation(fields: [voucherId], references: [id])
   supplierProfile SupplierTaxProfile? @relation(fields: [supplierProfileId], references: [id], onDelete: SetNull)
+  excludedBy      User?               @relation("classificationExcludedBy", fields: [excludedByUserId], references: [id])
 
   @@unique([workpaperId, voucherId])
   @@index([firmId, clientId, workpaperId, status])
   @@index([firmId, clientId, counterpartyCuit])
   @@map("workpaper_voucher_classifications")
+}
+
+/// Regla «recordar» (corte 3B): la contraparte (CUIT) de un cliente queda asignada a un rubro o una actividad,
+/// y sus comprobantes nuevos llegan clasificados «por regla». Una regla vigente por cliente, sentido y CUIT
+/// (índice único parcial WHERE revokedAt IS NULL, solo en SQL). Borrar completa revokedAt; no se borran filas.
+model ClassificationRule {
+  id               String                 @id @default(uuid(7))
+  firmId           String
+  clientId         String
+  direction        FiscalVoucherDirection
+  counterpartyCuit String
+  categoryCode     String?
+  activityCode     String?
+  createdByUserId  String
+  createdAt        DateTime               @default(now())
+  revokedByUserId  String?
+  revokedAt        DateTime?
+
+  client    Client @relation(fields: [firmId, clientId], references: [firmId, id], onDelete: Cascade)
+  createdBy User   @relation("classificationRuleCreatedBy", fields: [createdByUserId], references: [id])
+  revokedBy User?  @relation("classificationRuleRevokedBy", fields: [revokedByUserId], references: [id])
+
+  @@index([firmId, clientId, direction, counterpartyCuit], map: "classification_rules_scope_idx")
+  @@map("classification_rules")
 }
 
 model TaxInputAllocation {
