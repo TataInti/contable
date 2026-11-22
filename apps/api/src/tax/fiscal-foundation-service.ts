@@ -3078,8 +3078,17 @@ export class TaxCalendarService {
           "El cliente no está inscripto en ningún régimen para ese mes. Registrá la inscripción antes de abrir el mes",
         );
       }
-      const steps: Array<{ regimeId: string; regimeName: string; periodId: string; periodCreated: boolean; hasObligation: boolean }> = [];
+      // Régimen sin rule pack (p. ej. Monotributo): todavía no tiene liquidación mensual en el sistema. No se abre
+      // período para él y se informa en la respuesta, sin error.
+      const withPack: typeof registrations = [];
+      const withoutPack: string[] = [];
       for (const registration of registrations) {
+        const pack = await tx.taxRulePack.findFirst({ where: { regimeId: registration.regime.id }, select: { id: true } });
+        if (pack) withPack.push(registration);
+        else withoutPack.push(registration.regime.name);
+      }
+      const steps: Array<{ regimeId: string; regimeName: string; periodId: string; periodCreated: boolean; hasObligation: boolean }> = [];
+      for (const registration of withPack) {
         const { regime } = registration;
         let period = await tx.taxPeriod.findFirst({
           where: { firmId: ctx.firmId, clientId: input.clientId, taxTypeId: regime.taxTypeId, startDate, endDate },
@@ -3117,11 +3126,14 @@ export class TaxCalendarService {
           hasObligation: Boolean(obligation),
         });
       }
-      return { profileVersionId: profile.id, steps };
+      return { profileVersionId: profile.id, steps, withoutPack };
     });
 
     let obligationsCreated = 0;
     const calendarNotices = new Set<string>();
+    for (const name of plan.withoutPack) {
+      calendarNotices.add(`${name} todavía no tiene liquidación mensual en el sistema: no se abrió período para ese régimen`);
+    }
     for (const step of plan.steps) {
       if (step.hasObligation) continue;
       const { calendarNotice } = await this.materializeWithDueDate(ctx, {

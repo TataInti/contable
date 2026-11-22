@@ -70,6 +70,7 @@ export type SettlementErrorCode =
   | "RULE_KIND_NOT_ALLOWED"
   | "RULE_SUBJECT_UNRESOLVED"
   | "ACTIVITY_RULE_UNRESOLVED"
+  | "ACTIVITY_UNCLASSIFIED"
   | "UNSUPPORTED_ENGINE_VERSION"
   | "PERIOD_NOT_FOUND"
   | "REGISTRATION_REQUIRED"
@@ -1048,6 +1049,26 @@ export class SettlementService {
         cutoff,
       };
 
+      // Una sola actividad en el nivel de este impuesto (la jurisdicción del régimen): todas las ventas
+      // del libro sin actividad propia se asignan a ella, sin clasificarlas una por una.
+      const singleLocalActivityCode = input.sourceScope
+        ? await (async () => {
+            const links = await tx.clientActivity.findMany({
+              where: {
+                firmId: ctx.firmId,
+                clientId: input.clientId,
+                validFrom: { lte: period.endDate },
+                OR: [{ validTo: null }, { validTo: { gte: period.startDate } }],
+                profile: { status: "ACTIVE" },
+                activity: { jurisdictionId: input.jurisdictionId },
+              },
+              include: { activity: { select: { code: true } } },
+            });
+            const codes = [...new Set(links.map((link) => link.activity.code))];
+            return codes.length === 1 ? codes[0]! : null;
+          })()
+        : null;
+
       // --- Ingresos por actividad (IIBB/TEM/CM) desde líneas de ventas ---
       // El cutoff se aplica aquí (hechos con fecha > cutoff se excluyen).
       const cutoffDate = `${cutoff}T23:59:59.999Z`;
@@ -1071,9 +1092,12 @@ export class SettlementService {
           ];
         }).filter((code): code is string => typeof code === "string" && code.trim().length > 0)
           .map((code) => code.trim().toUpperCase()))];
-        const activities = activityCodes.length > 0
+        const lookupCodes = singleLocalActivityCode
+          ? [...new Set([...activityCodes, singleLocalActivityCode])]
+          : activityCodes;
+        const activities = lookupCodes.length > 0
           ? await tx.economicActivity.findMany({
-              where: { code: { in: activityCodes } },
+              where: { code: { in: lookupCodes } },
               select: { id: true, code: true, jurisdictionId: true },
             })
           : [];
@@ -1096,25 +1120,25 @@ export class SettlementService {
         }
         return matches[0]!.id;
       };
-      // Una sola actividad en el nivel de este impuesto (la jurisdicción del régimen): todas las ventas
-      // del libro sin actividad propia se asignan a ella, sin clasificarlas una por una.
-      const singleLocalActivityCode = input.sourceScope
-        ? await (async () => {
-            const links = await tx.clientActivity.findMany({
-              where: {
-                firmId: ctx.firmId,
-                clientId: input.clientId,
-                validFrom: { lte: period.endDate },
-                OR: [{ validTo: null }, { validTo: { gte: period.startDate } }],
-                profile: { status: "ACTIVE" },
-                activity: { jurisdictionId: input.jurisdictionId },
-              },
-              include: { activity: { select: { code: true } } },
-            });
-            const codes = [...new Set(links.map((link) => link.activity.code))];
-            return codes.length === 1 ? codes[0]! : null;
-          })()
-        : null;
+      // Actividad del propio nivel para un código de hecho (línea, clasificación o import). Un código de otra
+      // jurisdicción no se usa en este impuesto: devuelve null y el llamador decide. Códigos desconocidos o
+      // ambiguos siguen fallando como antes.
+      const ownLevelActivity = (activityCode: string): { id: string; code: string } | null => {
+        const code = activityCode.trim().toUpperCase();
+        const all = activitiesByCode.get(code) ?? [];
+        const own = all.filter((activity) => activity.jurisdictionId === input.jurisdictionId);
+        if (own.length === 0 && all.length > 0) return null;
+        return { id: resolveActivityId(code), code };
+      };
+      const singleLocalActivity =
+        isTypedActivityEngine && singleLocalActivityCode ? ownLevelActivity(singleLocalActivityCode) : null;
+      // Actividad que toma un hecho en este impuesto: la suya del nivel. Si es de otro nivel o no trae código,
+      // la única actividad del cliente en el nivel (null si el nivel tiene más de una).
+      const levelActivity = (activityCode: string | null | undefined): { id: string; code: string } | null => {
+        const own = activityCode && activityCode.trim().length > 0 ? ownLevelActivity(activityCode) : null;
+        return own ?? singleLocalActivity;
+      };
+      const unclassifiedVoucherIds = new Set<string>();
       for (const v of vouchers) {
         if (v.direction !== "SALE") continue;
         if (v.issuedOn.toISOString() > cutoffDate) continue;
@@ -1129,12 +1153,14 @@ export class SettlementService {
           typeof importedParameters?.["activityCode"] === "string"
             ? importedParameters["activityCode"].trim().toUpperCase()
             : null;
-        if (v.importRow && importedActivity) {
+        const declaredOwn =
+          isTypedActivityEngine && importedActivity ? ownLevelActivity(importedActivity) : null;
+        if (v.importRow && importedActivity && (!isTypedActivityEngine || declaredOwn)) {
           const declaredRate = importedParameters?.["rate"];
           const declaredMinimum = importedParameters?.["minimum"];
           localTaxDeclaredParameters.push({
             sourceId: v.importRow.id,
-            activity: isTypedActivityEngine ? resolveActivityId(importedActivity) : importedActivity,
+            activity: isTypedActivityEngine ? declaredOwn!.id : importedActivity,
             ...(typeof declaredRate === "string" && declaredRate.length > 0
               ? { rate: declaredRate }
               : {}),
@@ -1146,11 +1172,19 @@ export class SettlementService {
         for (const line of v.lines) {
           const activityCode = line.activityCode;
           const legacyActivityCode = activityCode ?? "DEFAULT";
-          const activity = isTypedActivityEngine
-            ? !activityCode || activityCode.trim().length === 0
-              ? ""
-              : resolveActivityId(activityCode)
-            : legacyActivityCode;
+          let activity = legacyActivityCode;
+          let snapshotActivityCode = legacyActivityCode;
+          if (isTypedActivityEngine && activityCode && activityCode.trim().length > 0) {
+            const level = levelActivity(activityCode);
+            if (!level) {
+              unclassifiedVoucherIds.add(v.id);
+              continue;
+            }
+            activity = level.id;
+            snapshotActivityCode = level.code;
+          } else if (isTypedActivityEngine) {
+            activity = "";
+          }
           const net = (line.netAmount ?? new Prisma.Decimal(0)).abs().times(sign);
           incomeByActivity[activity] = dec(incomeByActivity[activity] ?? "0")
             .plus(net)
@@ -1166,7 +1200,7 @@ export class SettlementService {
               pointOfSale: v.pointOfSale,
               number: v.number,
               issuedOn: v.issuedOn.toISOString().slice(0, 10),
-              activityCode: legacyActivityCode,
+              activityCode: snapshotActivityCode,
               netAmount: net.toString(),
               declaredRate:
                 importedActivity === legacyActivityCode ? importedParameters?.["rate"] ?? null : null,
@@ -1182,10 +1216,20 @@ export class SettlementService {
         const bookActivityCode = classification
           ? (classification.activityCode ?? singleLocalActivityCode)
           : null;
-        if (v.lines.length === 0 && !hasExplicitActivityLines && bookActivityCode) {
-          const activity = isTypedActivityEngine
-            ? resolveActivityId(bookActivityCode)
-            : bookActivityCode;
+        const bookLevel =
+          isTypedActivityEngine && bookActivityCode && classification
+            ? levelActivity(classification.activityCode)
+            : null;
+        if (isTypedActivityEngine && bookActivityCode && !bookLevel && v.lines.length === 0 && !hasExplicitActivityLines) {
+          unclassifiedVoucherIds.add(v.id);
+        }
+        if (
+          v.lines.length === 0 &&
+          !hasExplicitActivityLines &&
+          bookActivityCode &&
+          (!isTypedActivityEngine || bookLevel)
+        ) {
+          const activity = isTypedActivityEngine ? bookLevel!.id : bookActivityCode;
           // Base por comprobante: neto gravado + no gravado + exentas, sin IVA ni otros tributos
           // (la Factura C trae su importe total como neto). Las notas de crédito restan.
           const baseParts = { NETO: new Prisma.Decimal(0), NO_GRAVADO: new Prisma.Decimal(0), EXENTO: new Prisma.Decimal(0) };
@@ -1210,7 +1254,7 @@ export class SettlementService {
               type: v.type,
               letter: v.letter,
               issuedOn: v.issuedOn.toISOString().slice(0, 10),
-              activityCode: bookActivityCode,
+              activityCode: bookLevel?.code ?? bookActivityCode,
               netAmount: net.toString(),
               baseComponents: {
                 neto: baseParts.NETO.toString(),
@@ -1224,6 +1268,12 @@ export class SettlementService {
         }
       }
 
+      if (unclassifiedVoucherIds.size > 0) {
+        throw new SettlementError(
+          "ACTIVITY_UNCLASSIFIED",
+          `${unclassifiedVoucherIds.size} venta(s) tienen una actividad de otro nivel y el cliente tiene más de una actividad en este impuesto. Asigná la actividad de cada venta en su clasificación y volvé a calcular.`,
+        );
+      }
       const minimumRules = await tx.taxMinimumRule.findMany({
         where: {
           ruleVersionId: activeVersion.id,
