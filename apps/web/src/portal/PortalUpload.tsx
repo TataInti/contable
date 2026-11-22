@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Notice, Table } from "@contable/design-system";
+import { Button, EmptyState, Notice, Table, SearchSelect } from "@contable/design-system";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, ApiError, type Document, uploadToSignedUrl } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -264,18 +264,22 @@ export function PortalUpload() {
               </label>
             </div>
 
-            <label className="portal-upload__category">
+            <div className="portal-upload__category">
               <span>Tipo de documento</span>
-              <select
+              <SearchSelect
+                hideLabel
+                label="Tipo de documento"
                 className="portal-upload__category-select"
                 value={category}
-                onChange={(event) => setCategory(event.target.value as "OTRO" | "ACUSE")}
+                onChange={(value) => setCategory(value as "OTRO" | "ACUSE")}
                 disabled={uploading}
-              >
-                <option value="OTRO">Documentación general</option>
-                <option value="ACUSE">Acuse de presentación</option>
-              </select>
-            </label>
+                allowEmpty={false}
+                options={[
+                  { value: "OTRO", label: "Documentación general" },
+                  { value: "ACUSE", label: "Acuse de presentación" },
+                ]}
+              />
+            </div>
 
             {file ? (
               <div className="portal-upload__file" aria-live="polite">

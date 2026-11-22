@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Button } from "@contable/design-system";
+import { Button, SearchSelect } from "@contable/design-system";
 import type { ExtractedField, VoucherData } from "../lib/api";
 import {
   EXTRACTION_SCALAR_FIELDS,
@@ -203,29 +203,25 @@ export function ManualExtractionFieldsDialog({
                       <label className="sr-only" htmlFor={`manual-field-key-${row.id}`}>
                         Campo de la fila {index + 1}
                       </label>
-                      <select
+                      <SearchSelect
                         id={`manual-field-key-${row.id}`}
-                        aria-label={`Campo de la fila ${index + 1}`}
+                        label={`Campo de la fila ${index + 1}`}
+                        hideLabel
                         value={row.key}
                         disabled={isSaving}
-                        onChange={(event) => updateRow(row.id, { key: event.target.value as ManualFiscalFieldKey | "" })}
-                      >
-                        <option value="">Seleccioná un campo</option>
-                        {EXTRACTION_SCALAR_FIELDS.map((definition) => {
+                        onChange={(next) => updateRow(row.id, { key: next as ManualFiscalFieldKey | "" })}
+                        placeholder="Seleccioná un campo"
+                        options={EXTRACTION_SCALAR_FIELDS.map((definition) => {
                           const alreadyHasValue = fiscalScalarHasValue(voucherData, fields, definition);
                           const selectedElsewhere = rows.some((other) => other.id !== row.id && other.key === definition.extractedKey);
                           const optionLabel = `${definition.field}${"optional" in definition && definition.optional ? " (opcional)" : ""}`;
-                          return (
-                            <option
-                              key={definition.extractedKey}
-                              value={definition.extractedKey}
-                              disabled={alreadyHasValue || selectedElsewhere}
-                            >
-                              {alreadyHasValue ? `${optionLabel} (ya tiene valor)` : optionLabel}
-                            </option>
-                          );
+                          return {
+                            value: definition.extractedKey,
+                            label: alreadyHasValue ? `${optionLabel} (ya tiene valor)` : optionLabel,
+                            disabled: alreadyHasValue || selectedElsewhere,
+                          };
                         })}
-                      </select>
+                      />
                     </td>
                     <td>
                       <ManualExtractionValueControl
