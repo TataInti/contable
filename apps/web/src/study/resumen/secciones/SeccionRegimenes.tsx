@@ -3,7 +3,7 @@ import { formatearFecha } from "../../../lib/formatoFechas";
 import { DenseSection } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { SalidaConfiguracionFiscal, SummarySectionEmpty } from "../Piezas";
-import { etiquetaRegimen } from "../../fiscal/etiquetaRegimen";
+import { nombreRegimen } from "../../fiscal/etiquetaRegimen";
 
 type Props = {
   fiscal: ClientSummary["fiscal"];
@@ -29,7 +29,7 @@ export function SeccionRegimenes({ fiscal }: Props) {
           {fiscal.registrations.map((registration) => (
             <li key={registration.id}>
               <div>
-                <strong>{etiquetaRegimen(registration.regime)}{!registration.regime.isActive ? " (oculto)" : ""}</strong>
+                <strong>{nombreRegimen(registration.regime)}{!registration.regime.isActive ? " (oculto)" : ""}</strong>
                 <small>
                   {registration.regime.taxType.name}{!registration.regime.taxType.isActive ? " (oculto)" : ""} · {registration.regime.jurisdiction.name}{!registration.regime.jurisdiction.isActive ? " (oculto)" : ""}
                 </small>

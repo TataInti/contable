@@ -15,8 +15,12 @@ function texto(valor: string | null | undefined): string {
   return valor?.trim() ?? "";
 }
 
+export function nombreRegimen(regimen: RegimenEtiqueta): string {
+  return texto(regimen.name);
+}
+
 export function etiquetaRegimen(regimen: RegimenEtiqueta): string {
-  const nombre = texto(regimen.name);
+  const nombre = nombreRegimen(regimen);
   const datos = [texto(regimen.taxType?.name), texto(regimen.jurisdiction?.name)].filter(Boolean);
   return nombre && datos.length ? `${nombre} — ${datos.join(" · ")}` : nombre || datos.join(" · ");
 }

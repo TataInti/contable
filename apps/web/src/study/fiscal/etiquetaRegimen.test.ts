@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { etiquetaRegimen, ordenarRegimenes } from "./etiquetaRegimen";
+import { etiquetaRegimen, nombreRegimen, ordenarRegimenes } from "./etiquetaRegimen";
 
 const completos = [
   { name: "IIBB Contribuyente Local Tucumán", taxType: { name: "Ingresos Brutos" }, jurisdiction: { name: "Provincia de Tucumán" } },
@@ -17,6 +17,16 @@ describe("etiquetaRegimen", () => {
     expect(etiquetaRegimen({ name: "Régimen", jurisdiction: { name: "Jurisdicción" } })).toBe("Régimen — Jurisdicción");
     expect(etiquetaRegimen({ name: "Régimen" })).toBe("Régimen");
     expect(etiquetaRegimen({ name: "Régimen", taxType: { name: " " }, jurisdiction: { name: undefined } })).toBe("Régimen");
+  });
+});
+
+describe("nombreRegimen", () => {
+  it("recorta espacios del nombre", () => {
+    expect(nombreRegimen({ name: "  Régimen general  " })).toBe("Régimen general");
+  });
+  it("devuelve vacío cuando no hay nombre", () => {
+    expect(nombreRegimen({ name: "   " })).toBe("");
+    expect(nombreRegimen({})).toBe("");
   });
 });
 

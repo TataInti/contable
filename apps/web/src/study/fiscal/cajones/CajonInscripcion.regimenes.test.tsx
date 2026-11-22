@@ -12,8 +12,6 @@ const regimenes = [
   { id: "ri", code: "RI", name: "Responsable Inscripto", isActive: true, taxType: { id: "iva", name: "IVA", isActive: true }, jurisdiction: { id: "ar", name: "Argentina", kind: "NATIONAL", isActive: true } },
   { id: "provincial", code: "IIBB_LOCAL_TUC", name: "IIBB Contribuyente Local Tucumán", isActive: true, taxType: { id: "iibb", name: "Ingresos Brutos", isActive: true }, jurisdiction: { id: "tuc", name: "Provincia de Tucumán", kind: "PROVINCIAL", isActive: true } },
 ];
-const etiqueta = "IIBB Contribuyente Local Tucumán — Ingresos Brutos · Provincia de Tucumán";
-
 function SelectorFixture() {
   const [regimeId, setRegimeId] = useState("");
   return <CajonInscripcion openFormStep="inscripcion" setOpenFormStep={() => undefined} regimeId={regimeId} setRegimeId={setRegimeId} addRegistration={{} as never} regimesQuery={{ data: regimenes, isLoading: false } as never} effectiveProfileId="perfil" />;
@@ -41,12 +39,12 @@ describe("regímenes legibles", () => {
     expect(screen.getByText("Impuesto: Ingresos Brutos · Jurisdicción: Provincia de Tucumán")).toBeTruthy();
   });
 
-  it("usa idéntica etiqueta en selector, tabla y resumen", () => {
+  it("usa la etiqueta completa en el selector y solo el nombre en tablas y resumen", () => {
     const registration = { id: "inscripcion", status: "ACTIVE", validFrom: "2026-01-01", validTo: null, regime: regimenes.find(({ id }) => id === "provincial") };
     render(<PestanaRegimenes canWrite={false} openStepForm={() => undefined} registrationsQuery={{ data: [registration], isLoading: false } as never} cancelRegistration={{} as never} confirm={{} as never} />);
-    expect(screen.getByText(etiqueta)).toBeTruthy();
+    expect(screen.getByText("IIBB Contribuyente Local Tucumán")).toBeTruthy();
     cleanup();
     render(<SeccionRegimenes fiscal={{ registrations: [registration] } as never} />);
-    expect(screen.getByText(etiqueta)).toBeTruthy();
+    expect(screen.getByText("IIBB Contribuyente Local Tucumán")).toBeTruthy();
   });
 });
