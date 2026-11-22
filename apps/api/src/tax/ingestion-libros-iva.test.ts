@@ -220,6 +220,16 @@ describe("A27-1 · importación de libros de ARCA en el servicio", () => {
     expect(state.writes).toEqual([]);
   });
 
+  it("un libro cuyo CUIT no es el del cliente se rechaza con CUIT_DISTINTO y no escribe nada", async () => {
+    await expect(
+      service.importSifereWorkbook(ctx, { ...entrada("SALE", libro("mis-comprobantes-emitidos.xlsx")), clientCuit: "30111111119" }),
+    ).rejects.toMatchObject({
+      code: "CUIT_DISTINTO",
+      message: "Este archivo es del CUIT 20-45427483-1, no del cliente (CUIT 30-11111111-9).",
+    });
+    expect(state.writes).toEqual([]);
+  });
+
   it("un libro de compras cargado en Ventas se rechaza con SHEET_DIRECTION_MISMATCH y no escribe nada", async () => {
     await expect(
       service.importSifereWorkbook(ctx, entrada("SALE", libro("mis-comprobantes-recibidos.xlsx"))),

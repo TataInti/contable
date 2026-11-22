@@ -563,7 +563,11 @@ export class IngestionService {
       workpaperId?: string;
     },
   ) {
-    const parsed = parseSifereWorkbook(input.raw, input.direction);
+    // El CUIT del libro se compara con el del cliente antes de crear el lote: si no coincide, no se escribe nada.
+    const parsed = parseSifereWorkbook(input.raw, input.direction, {
+      clientCuit: input.clientCuit,
+      fileName: input.fileName,
+    });
     const rows = parsed.rows
       .filter((row) => row.errors.length === 0)
       .map((row) => row.input as ArcaVoucherInput);

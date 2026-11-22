@@ -29,6 +29,10 @@ import {
  * «Recibidos»), las columnas «Denominación Receptor» o «Denominación Emisor» y,
  * en último término, el nombre de la hoja. Si el contenido contradice el sentido
  * pedido, se rechaza con SHEET_DIRECTION_MISMATCH y no se guarda nada.
+ *
+ * El CUIT del contribuyente sale del título («… - CUIT 20…») o, si el título no lo trae,
+ * del nombre del archivo. Si se indica el CUIT del cliente y el del libro es otro, se rechaza
+ * con CUIT_DISTINTO antes de leer filas.
  */
 
 export type SifereDirection = "SALE" | "PURCHASE";
@@ -68,9 +72,23 @@ export interface SifereMappedRow {
   errors: string[];
 }
 
+/** CUIT del contribuyente que trae el libro (11 dígitos); de dónde salió. */
+export interface SifereCuitDelLibro {
+  value: string;
+  source: "titulo" | "nombre";
+}
+
+/** Datos opcionales de la importación: el nombre del archivo y el CUIT del cliente activo. */
+export interface SifereOpciones {
+  fileName?: string | undefined;
+  clientCuit?: string | undefined;
+}
+
 export interface SifereWorkbookResult {
   /** Sentido pedido (y, si el libro lo declara, el mismo que surge del contenido). */
   direction: SifereDirection;
+  /** CUIT del contribuyente del libro; null si ni el título ni el nombre del archivo lo traen. */
+  cuit: SifereCuitDelLibro | null;
   /** Sentido que surge del contenido del libro; null si no se puede inferir. */
   detectedDirection: SifereDirection | null;
   directionSource: SifereDirectionSource | null;
@@ -97,7 +115,8 @@ export type SifereParseErrorCode =
   | "HEADER_NOT_FOUND"
   | "SHEET_NOT_FOUND"
   | "NO_DETAIL_ROWS"
-  | "SHEET_DIRECTION_MISMATCH";
+  | "SHEET_DIRECTION_MISMATCH"
+  | "CUIT_DISTINTO";
 
 export class SifereParseError extends Error {
   readonly code: SifereParseErrorCode;
@@ -304,6 +323,18 @@ function sentidoDeHoja(nombre: string): SifereDirection | null {
   return null;
 }
 
+/** CUIT de 11 dígitos que aparece después de la palabra «CUIT» (con o sin guiones), o null. */
+const CUIT_EN_TEXTO = /\bCUIT\s*:?\s*(\d{2}-?\d{8}-?\d)(?!\d)/i;
+
+function cuitDeTexto(texto: string): string | null {
+  const digitos = CUIT_EN_TEXTO.exec(texto)?.[1]?.replace(/\D/g, "") ?? "";
+  return digitos.length === 11 ? digitos : null;
+}
+
+function formatearCuit(cuit: string): string {
+  return `${cuit.slice(0, 2)}-${cuit.slice(2, 10)}-${cuit.slice(10)}`;
+}
+
 function mensajeSentido(detectado: SifereDirection, detalle: string): string {
   const libro = detectado === "SALE" ? "ventas" : "compras";
   const seccion = detectado === "SALE" ? "Ventas" : "Compras";
@@ -322,6 +353,7 @@ function mensajeSentido(detectado: SifereDirection, detalle: string): string {
 export function parseSifereWorkbook(
   raw: Uint8Array,
   direction: SifereDirection,
+  opciones: SifereOpciones = {},
 ): SifereWorkbookResult {
   let files: Record<string, Uint8Array>;
   try {
@@ -400,6 +432,22 @@ export function parseSifereWorkbook(
     throw new SifereParseError(
       "SHEET_DIRECTION_MISMATCH",
       mensajeSentido(detectado.direction, detectado.detalle),
+    );
+  }
+
+  // CUIT del contribuyente: título primero; si no lo trae, el nombre del archivo.
+  const cuitTitulo = cuitDeTexto(textosTitulo.join(" "));
+  const cuitNombre = cuitDeTexto(opciones.fileName ?? "");
+  const cuit: SifereCuitDelLibro | null = cuitTitulo
+    ? { value: cuitTitulo, source: "titulo" }
+    : cuitNombre
+      ? { value: cuitNombre, source: "nombre" }
+      : null;
+  const delCliente = (opciones.clientCuit ?? "").replace(/\D/g, "");
+  if (cuit && delCliente.length === 11 && delCliente !== cuit.value) {
+    throw new SifereParseError(
+      "CUIT_DISTINTO",
+      `Este archivo es del CUIT ${formatearCuit(cuit.value)}, no del cliente (CUIT ${formatearCuit(delCliente)}).`,
     );
   }
 
@@ -544,6 +592,7 @@ export function parseSifereWorkbook(
 
   return {
     direction,
+    cuit,
     detectedDirection: detectado?.direction ?? null,
     directionSource: detectado?.source ?? null,
     sheetName: sheet.name,
