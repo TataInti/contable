@@ -349,4 +349,11 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
       expect(capabilitiesForRole(role).has("data.delete")).toBe(false);
     }
   });
+
+  it("la categoría anual del TEM se lee y se elige con los permisos del perfil fiscal", () => {
+    const base = "/api/v1/firms/f/clients/c/tem-categories";
+    expect(requiredCapability("GET", base)).toBe("tax.profile.read");
+    expect(requiredCapability("PUT", `${base}/2026`)).toBe("tax.profile.write");
+    expect(capabilitiesForRole("AUDITOR_READONLY").has("tax.profile.write")).toBe(false);
+  });
 });

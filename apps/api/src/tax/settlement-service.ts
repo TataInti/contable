@@ -29,6 +29,11 @@ import { exportReport, type ExportReportResult } from "../reporting/report-expor
 import { voucherDocumentKind } from "./workpaper-classification.js";
 import { RULES_HASH_SCHEMA_VERSION_V3 } from "./rules-hash.js";
 import { buildEngineRules, EngineRulesError } from "./engine-rules.js";
+import {
+  TemCategoryService,
+  temCategoryMissingGuidance,
+  temCategoryMissingText,
+} from "./tem-category-service.js";
 
 /**
  * Servicio de liquidaciones fiscales (Puerta 3).
@@ -67,6 +72,7 @@ export type SettlementErrorCode =
   | "UNSUPPORTED_ENGINE_VERSION"
   | "PERIOD_NOT_FOUND"
   | "REGISTRATION_REQUIRED"
+  | "TEM_CATEGORY_REQUIRED"
   | "OBLIGATION_NOT_FOUND"
   | "BLOCKING_DIFFERENCES"
   | "FINALIZE_REQUIRES_REVIEW"
@@ -224,7 +230,8 @@ interface SettlementInputRow {
     | "PERCEPTION"
     | "CREDIT"
     | "F931"
-    | "CM03_COEFFICIENT";
+    | "CM03_COEFFICIENT"
+    | "TEM_CATEGORY";
   sourceId: string;
   sourceVersion?: number;
   snapshot: Record<string, unknown>;
@@ -263,6 +270,7 @@ export interface SettlementCalculationInput {
 
 export class SettlementService {
   private readonly storage: ObjectStorage;
+  private readonly temCategories = new TemCategoryService();
 
   constructor(storage?: ObjectStorage) {
     this.storage = storage ?? new ObjectStorage();
@@ -315,6 +323,17 @@ export class SettlementService {
         : null;
       if (obligation && obligation.status === "WAITING_INPUTS") {
         missing.push("La obligación está esperando entradas");
+      }
+      if (input.regimeId && (await this.temCategories.usesCategory(tx, input.regimeId, period))) {
+        const year = period.startDate.getUTCFullYear();
+        const minimum = await this.temCategories.resolveMinimum(tx, {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          year,
+        });
+        if (minimum.kind === "MISSING") {
+          missing.push(`${temCategoryMissingText(year)}: elegila en Configuración fiscal, Regímenes`);
+        }
       }
       const status = missing.length > 0 ? "WAITING_INPUTS" : "READY";
 
@@ -1189,9 +1208,35 @@ export class SettlementService {
           "La versión normativa tiene más de un mínimo global aplicable al período",
         );
       }
-      const minimum = applicableMinimums[0]?.amount
+      let minimum = applicableMinimums[0]?.amount
         ? dec(applicableMinimums[0].amount.toString())
         : undefined;
+      // TEM: el mínimo mensual sale de la categoría anual del cliente y pisa el del
+      // paquete de reglas. Un año sin mínimos cargados conserva el del paquete.
+      if (engineKey === "tem-smt" || engineKey === "tem-smt-legacy") {
+        const year = period.startDate.getUTCFullYear();
+        const byCategory = await this.temCategories.resolveMinimum(tx, {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          year,
+        });
+        if (byCategory.kind === "MISSING") {
+          throw new SettlementError("TEM_CATEGORY_REQUIRED", temCategoryMissingGuidance(year));
+        }
+        if (byCategory.kind === "CATEGORY") {
+          minimum = dec(byCategory.amount.toString());
+          inputs.push({
+            kind: "TEM_CATEGORY",
+            sourceId: `${year}:${byCategory.category}`,
+            snapshot: {
+              year,
+              category: byCategory.category,
+              label: byCategory.label,
+              minimum: byCategory.amount.toFixed(2),
+            },
+          });
+        }
+      }
       const ivaRestitution = adjustments
         .filter((adjustment) => adjustment.conceptRef?.behavior === "IVA_RESTITUTION")
         .reduce((sum, adjustment) => sum.plus(adjustment.amount), new Prisma.Decimal(0));

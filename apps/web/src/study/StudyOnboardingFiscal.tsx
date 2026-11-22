@@ -23,6 +23,8 @@ import { CajonInscripcion } from "./fiscal/cajones/CajonInscripcion";
 import { CajonActividad } from "./fiscal/cajones/CajonActividad";
 import { CajonPeriodo } from "./fiscal/cajones/CajonPeriodo";
 import { CajonObligacion } from "./fiscal/cajones/CajonObligacion";
+import { CajonCategoriaTem } from "./fiscal/cajones/CajonCategoriaTem";
+import { useCategoriaTem } from "./fiscal/categoriaTem";
 import { previousMonth, today, type ClientActivityLink, type EconomicActivity, type FiscalStep, type FiscalTab, type ProfileForm, type TaxObligation, type TaxPeriod, type TaxRegime, type TaxRegistration, type TaxType, type TaxpayerProfileVersion } from "./fiscal/utilidades";
 
 // Columna «Estado» de Actividades: el texto «Principal» se queda en este archivo (DesignCorrections lo lee aquí).
@@ -99,6 +101,7 @@ export function StudyOnboardingFiscal() {
     queryFn: () => api.get<TaxRegistration[]>(`/firms/${firmId}/clients/${clientId}/tax-registrations`),
     enabled: Boolean(firmId && clientId),
   });
+  const categoriaTem = useCategoriaTem(firmId, clientId);
   const clientActivitiesQuery = useQuery({
     queryKey: ["client-tax-activities", firmId, clientId],
     queryFn: () => api.get<ClientActivityLink[]>(`/firms/${firmId}/clients/${clientId}/activities`),
@@ -286,7 +289,7 @@ export function StudyOnboardingFiscal() {
         {failedQueries.length > 0 ? <AvisoConsultas failedQueries={failedQueries} /> : null}
 
         {tab === "resumen" ? <PestanaResumen nextRequiredStep={nextRequiredStep} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
-        {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} confirm={confirm} /> : null}
+        {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} confirm={confirm} categoriaTem={categoriaTem.fila} /> : null}
         {tab === "actividades" ? <PestanaActividades canWrite={canWrite} openStepForm={openStepForm} clientActivitiesQuery={clientActivitiesQuery} endActivity={endActivity} confirm={confirm} renderEstado={renderEstadoActividad} /> : null}
         {tab === "periodos" ? <PestanaPeriodos canWrite={canWrite} monthToOpen={monthToOpen} setMonthToOpen={setMonthToOpen} openMonth={openMonth} periodsQuery={periodsQuery} openStepForm={openStepForm} obligationByPeriod={obligationByPeriod} setObligationForm={setObligationForm} /> : null}
 
@@ -298,6 +301,8 @@ export function StudyOnboardingFiscal() {
       <CajonActividad openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} activityId={activityId} setActivityId={setActivityId} addActivity={addActivity} activitiesQuery={activitiesQuery} effectiveProfileId={effectiveProfileId} />
       <CajonPeriodo openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} periodForm={periodForm} setPeriodForm={setPeriodForm} createPeriod={createPeriod} typesQuery={typesQuery} />
       <CajonObligacion openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} obligationForm={obligationForm} setObligationForm={setObligationForm} createObligation={createObligation} selectablePeriods={selectablePeriods} eligibleRegistrations={eligibleRegistrations} effectiveProfileId={effectiveProfileId} />
+
+      <CajonCategoriaTem isOpen={categoriaTem.abierto} onClose={categoriaTem.cerrar} year={categoriaTem.year} estado={categoriaTem.query.data} cargando={categoriaTem.query.isLoading} guardar={categoriaTem.guardar} />
 
       <ConfirmDialog confirm={confirm} />
     

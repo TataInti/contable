@@ -1,0 +1,11 @@
+/* Categoría anual del TEM en Regímenes (corte 1E): solo tokens del sistema de diseño. */
+.fiscal-regime-category {
+  margin-top: var(--ds-space-1);
+}
+
+.fiscal-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ds-space-2);
+}
