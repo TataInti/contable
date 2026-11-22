@@ -7,6 +7,8 @@ import { CONTROL_LABELS, CONTROL_SEVERITY_LABELS } from "../etiquetas";
 import { formatMoney } from "../formato";
 import type { EvidenceDocument, Workpaper } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
+import { GrupoPerfilControl, type GrupoPerfilVariables } from "./GrupoPerfilControl";
+import { PREFIJO_CONTROL_PERFIL } from "../../fiscal/comprobantesPermitidos";
 
 export interface ResolverControlVariables {
   workpaperId: string;
@@ -32,6 +34,8 @@ export interface EtapaControlesProps {
   setControlEvidence: Dispatch<SetStateAction<Record<string, string>>>;
   documentsQuery: UseQueryResult<EvidenceDocument[], Error>;
   resolveControlMutation: UseMutationResult<unknown, Error, ResolverControlVariables>;
+  /** Excluir o aceptar un grupo «no corresponde al perfil» (corte 4B). */
+  grupoPerfilMutation?: UseMutationResult<unknown, Error, GrupoPerfilVariables>;
   confirmar: (solicitud: SolicitudConfirmacion) => void;
 }
 
@@ -46,6 +50,7 @@ export function EtapaControles({
   setControlEvidence,
   documentsQuery,
   resolveControlMutation,
+  grupoPerfilMutation,
   confirmar,
 }: EtapaControlesProps) {
   const eligibleEvidenceDocuments = (documentsQuery.data ?? []).filter((document) =>
@@ -84,6 +89,17 @@ export function EtapaControles({
         <EmptyState size="inline" title="No hay controles registrados para este legajo." />
       ) : (
         wp.controls.map((control) => {
+          if (control.code.startsWith(PREFIJO_CONTROL_PERFIL)) {
+            return (
+              <GrupoPerfilControl
+                key={control.id}
+                wp={wp}
+                control={control}
+                puedeResolver={puedeResolver}
+                mutation={grupoPerfilMutation}
+              />
+            );
+          }
           const nombre = CONTROL_LABELS[control.code] ?? control.code;
           const resolucion = controlResolutions[control.id]?.trim() ?? "";
           const motivoId = `${control.id}-motivo`;
