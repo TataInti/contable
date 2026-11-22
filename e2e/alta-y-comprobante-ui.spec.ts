@@ -361,7 +361,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Configuración fiscal: inscripción en los tres regímenes", async () => {
     for (const tax of Object.values(taxes)) {
       await clickAdd(page, "Regímenes adheridos");
-      await pickOption(page.locator("#reg-regime"), tax.regime.code);
+      await pickOption(page.locator("#reg-regime"), tax.regime.name);
       await mutating(page, "/tax-registrations", () =>
         page.getByRole("button", { name: "Registrar inscripción", exact: true }).last().click(),
       );

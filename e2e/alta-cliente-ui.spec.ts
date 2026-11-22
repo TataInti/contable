@@ -179,7 +179,7 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
 
   await test.step("Configuración fiscal: inscripción en el régimen", async () => {
     await page.getByRole("button", { name: /Registrar inscripción|Completar inscripción/ }).first().click();
-    await pickOption(page.locator("#reg-regime"), data.regime.code);
+    await pickOption(page.locator("#reg-regime"), data.regime.name);
     await page.getByRole("button", { name: "Registrar inscripción", exact: true }).last().click();
     await expect(seen(page, data.regime.name)).toBeVisible();
   });
