@@ -16,7 +16,7 @@
 import { Prisma } from "@prisma/client";
 import {
   CM03_ENGINE_VERSION,
-  IIBB_TUC_ENGINE_VERSION,
+  IIBB_TUC_PREVIOUS_ENGINE_VERSION,
   TEM_SMT_ENGINE_VERSION,
 } from "@contable/tax-engine";
 import { prisma } from "./lib/prisma.js";
@@ -85,6 +85,9 @@ async function main() {
     for (const activity of [
       { code: "COMERCIO", name: "Comercio", jurisdictionId: tucuman.id },
       { code: "SERVICIOS", name: "Servicios", jurisdictionId: tucuman.id },
+      // Restaurante del catálogo 2026 (producción): alícuota IIBB 3,5 % y TEM 0,6 %; el E2E de liquidación las usa.
+      { code: "RESTO-TUC", name: "Restaurante y bares (Tucumán)", jurisdictionId: tucuman.id },
+      { code: "RESTO-SMT", name: "Restaurante y bares (San Miguel de Tucumán)", jurisdictionId: sanMiguel.id },
     ]) {
       await tx.economicActivity.upsert({
         where: { code_jurisdictionId: { code: activity.code, jurisdictionId: activity.jurisdictionId } },
@@ -186,6 +189,14 @@ async function main() {
       },
     });
     await ensureRegimeModule(monotributoRegime.id, "TAX_MONOTRIBUTO");
+    // Producción tiene la familia de cálculo del Monotributo por la migración 20261112000000_p2_calc_family_tax_engine
+    // (backfill sobre catálogos ya existentes). En una base nueva el régimen se crea después de esa migración: se
+    // vincula aquí con la misma regla (solo donde está vacío), para que el Monotributo pueda elegir categoría.
+    const familiaMonotributo = await tx.calcFamily.findUnique({ where: { key: "MONOTRIBUTO" } });
+    if (familiaMonotributo) {
+      await tx.taxType.updateMany({ where: { id: monotributo.id, defaultFamilyId: null }, data: { defaultFamilyId: familiaMonotributo.id } });
+      await tx.taxRegime.updateMany({ where: { id: monotributoRegime.id, calcFamilyId: null }, data: { calcFamilyId: familiaMonotributo.id } });
+    }
     const iibbLocalRegime = await tx.taxRegime.upsert({
       where: { code: "IIBB_LOCAL_TUC" },
       update: {},
@@ -226,6 +237,17 @@ async function main() {
       },
     });
     await ensureRegimeModule(temRegime.id, "TAX_TEM_SMT");
+    // Familia de cálculo de los regímenes de sistema: la migración 20261112000000 la asigna a las filas existentes;
+    // en una base nueva el régimen se crea después, así que se vincula aquí con la misma regla, solo donde está vacía.
+    for (const [regimeId, familyKey] of [
+      [ri.id, "VAT_RI"],
+      [cm03Regime.id, "IIBB_CM03"],
+      [iibbLocalRegime.id, "IIBB_LOCAL"],
+      [temRegime.id, "TEM"],
+    ] as const) {
+      const familia = await tx.calcFamily.findUnique({ where: { key: familyKey } });
+      if (familia) await tx.taxRegime.updateMany({ where: { id: regimeId, calcFamilyId: null }, data: { calcFamilyId: familia.id } });
+    }
 
     // Feriados nacionales 2025-2026 (inamovibles + puente comunes, muestra).
     const feriadosNacionales = [
@@ -336,7 +358,8 @@ async function main() {
     // IIBB local: alícuota por actividad (nomenclador DGR Tucumán, muestra).
     const iibbVersion = await ensureActivePack(
       iibbPack.id,
-      IIBB_TUC_ENGINE_VERSION,
+      // Motor activo en producción (ar-iibb-tuc-local-v1.1.0): es el que habilita el mínimo declarado por el contador.
+      IIBB_TUC_PREVIOUS_ENGINE_VERSION,
       "sha256:ar-iibb-tuc-local-v1.1",
     );
     await tx.taxRateRule.createMany({
@@ -344,12 +367,13 @@ async function main() {
         { ruleVersionId: iibbVersion.id, concept: "COMERCIO", rate: new Prisma.Decimal("4"), validFrom: new Date("2026-01-01") },
         { ruleVersionId: iibbVersion.id, concept: "SERVICIOS", rate: new Prisma.Decimal("4.5"), validFrom: new Date("2026-01-01") },
         { ruleVersionId: iibbVersion.id, concept: "DEFAULT", rate: new Prisma.Decimal("4"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: iibbVersion.id, concept: "RESTO-TUC", rate: new Prisma.Decimal("3.5"), validFrom: new Date("2026-01-01") },
       ],
       skipDuplicates: true,
     });
     await tx.taxMinimumRule.createMany({
       data: [
-        { ruleVersionId: iibbVersion.id, concept: "MINIMO", amount: new Prisma.Decimal("5000"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: iibbVersion.id, concept: "MINIMO", amount: new Prisma.Decimal("1500"), validFrom: new Date("2026-01-01") },
       ],
       skipDuplicates: true,
     });
@@ -365,6 +389,7 @@ async function main() {
         { ruleVersionId: temVersion.id, concept: "COMERCIO", rate: new Prisma.Decimal("2"), validFrom: new Date("2026-01-01") },
         { ruleVersionId: temVersion.id, concept: "SERVICIOS", rate: new Prisma.Decimal("3"), validFrom: new Date("2026-01-01") },
         { ruleVersionId: temVersion.id, concept: "DEFAULT", rate: new Prisma.Decimal("2"), validFrom: new Date("2026-01-01") },
+        { ruleVersionId: temVersion.id, concept: "RESTO-SMT", rate: new Prisma.Decimal("0.6"), validFrom: new Date("2026-01-01") },
       ],
       skipDuplicates: true,
     });
