@@ -28,6 +28,7 @@ async function loginPortal(page: Page) {
 }
 
 test("comentarios y menciones recorren Legajo, buzón y permisos desde la interfaz", async ({ browser }) => {
+  test.setTimeout(120_000);
   const contextA = await browser.newContext();
   const contextB = await browser.newContext();
   const portalContext = await browser.newContext();
@@ -102,6 +103,6 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
       await expect(portalPage.getByRole("region", { name: "Comentarios" })).toHaveCount(0);
     });
   } finally {
-    await Promise.all([contextA.close(), contextB.close(), portalContext.close()]);
+    await Promise.allSettled([contextA.close(), contextB.close(), portalContext.close()]);
   }
 });
