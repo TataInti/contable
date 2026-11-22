@@ -464,6 +464,7 @@ export function StudyClientes() {
 
   const inspector = selectedClient ? (
     <InspectorCliente
+      firmId={firmId}
       selectedClient={selectedClient}
       capabilities={capabilities}
       canManage={canManage}

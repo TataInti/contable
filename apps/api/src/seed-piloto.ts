@@ -73,6 +73,29 @@ async function main(): Promise<void> {
     });
   }
 
+  // Mes sintético para que el recorrido de comentarios entre al Legajo desde la UI.
+  const iva = await prisma.taxType.findUnique({ where: { code: "IVA" } });
+  if (!iva) throw new Error("No existe el impuesto IVA; ejecutá seed:maestros-fiscales primero.");
+  await prisma.taxPeriod.upsert({
+    where: {
+      clientId_taxTypeId_startDate_endDate: {
+        clientId: E2E_CLIENTS[0].id,
+        taxTypeId: iva.id,
+        startDate: new Date("2026-11-01T00:00:00.000Z"),
+        endDate: new Date("2026-11-30T00:00:00.000Z"),
+      },
+    },
+    update: { label: "Noviembre 2026 E2E Comentarios" },
+    create: {
+      firmId: FIRM_ID,
+      clientId: E2E_CLIENTS[0].id,
+      taxTypeId: iva.id,
+      startDate: new Date("2026-11-01T00:00:00.000Z"),
+      endDate: new Date("2026-11-30T00:00:00.000Z"),
+      label: "Noviembre 2026 E2E Comentarios",
+    },
+  });
+
   const owner = await prisma.user.findFirst({
     where: { memberships: { some: { firmId: FIRM_ID, role: "OWNER", status: "ACTIVE" } } },
   });

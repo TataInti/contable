@@ -329,6 +329,7 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/obligations/, resolve: (m) => (m === "GET" ? "client.read" : "obligation.manage") },
   { match: /\/obligation-instances/, resolve: (m) => (m === "GET" ? "client.read" : "obligation.manage") },
   { match: /\/document-requests/, resolve: (m) => (m === "GET" ? "client.read" : "request.manage") },
+  { match: /\/firms\/[^/]+\/comments(?:\/|$)|\/clients\/[^/]+\/comments(?:\/|$)/, resolve: (m) => (m === "GET" ? "client.read" : "message.shared") },
   { match: /\/threads/, resolve: (m) => (m === "GET" ? "client.read" : "message.shared") },
   { match: /\/close-cycles/, resolve: (m) => (m === "GET" ? "client.read" : "period.soft_close") },
   { match: /\/report-publications/, resolve: (m) => (m === "GET" ? "client.read" : "report.publish") },
