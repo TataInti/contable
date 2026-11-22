@@ -116,6 +116,7 @@ const TABLE_GROUPS: Record<string, { group: DeletionGroupKey; label: string }> =
   workpaper_import_batches: { group: "fiscal", label: "Lotes importados al workpaper" },
   workpaper_settlements: { group: "fiscal", label: "Vínculos workpaper-liquidación" },
   workpaper_voucher_classifications: { group: "fiscal", label: "Clasificaciones de comprobantes" },
+  classification_rules: { group: "fiscal", label: "Reglas de clasificación" },
   fiscal_components: { group: "fiscal", label: "Componentes fiscales" },
   fiscal_vouchers: { group: "fiscal", label: "Comprobantes fiscales" },
   fiscal_voucher_lines: { group: "fiscal", label: "Líneas de comprobantes" },
