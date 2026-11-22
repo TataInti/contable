@@ -6,11 +6,14 @@ import { formatMoney } from "../formato";
 import { formatearFechaHora } from "../../../lib/formatoFechas";
 import type { CreditLot } from "../tipos";
 import { identificadorCorto, pluralizar } from "../textos";
+import { fraseDeArrastre, saldosDeMesesAnteriores } from "../saldosArrastre";
 
 export interface FormularioEditarSaldo {
   reference: string;
   evidenceDocumentId: string;
   originalAmount: string;
+  /** Motivo del cambio de importe: obligatorio cuando el importe cambia; queda en el historial. */
+  motivo: string;
 }
 
 export interface EtapaSaldosProps {
@@ -20,6 +23,12 @@ export interface EtapaSaldosProps {
   setEditForm: Dispatch<SetStateAction<FormularioEditarSaldo>>;
   /** Frase de guía de una revisión anterior: va en el mismo párrafo que la de Saldos (Barra 2e). */
   fraseRevision?: string;
+  /** Inicio del mes del legajo (ISO): los saldos de meses anteriores se muestran como arrastre. */
+  periodoInicio?: string;
+  /** Si el mes anterior tiene legajo finalizado. undefined mientras se consulta. */
+  mesAnteriorCerrado?: boolean;
+  /** El legajo del mes está finalizado: un saldo de ese mes se cambia rectificando la liquidación. */
+  legajoFinalizado?: boolean;
 }
 
 export function EtapaSaldos({
@@ -28,8 +37,15 @@ export function EtapaSaldos({
   setEditingLot,
   setEditForm,
   fraseRevision,
+  periodoInicio,
+  mesAnteriorCerrado,
+  legajoFinalizado = false,
 }: EtapaSaldosProps) {
   const puedeCargarSaldo = capabilities.has("tax.settlements.calculate");
+  const arrastrados =
+    periodoInicio && ledgerQuery.isSuccess
+      ? saldosDeMesesAnteriores(ledgerQuery.data, periodoInicio)
+      : [];
   return (
     <div className="workpaper-stage">
       <p className="muted-copy">
@@ -59,6 +75,25 @@ export function EtapaSaldos({
           {ledgerQuery.isFetching ? (
             <small className="muted-copy">Dato del último corte; se está actualizando.</small>
           ) : null}
+          {legajoFinalizado ? (
+            <p className="muted-copy">
+              Este mes está finalizado: para cambiar un saldo, rectificá la liquidación.
+            </p>
+          ) : null}
+          {arrastrados.length > 0 ? (
+            <ul className="workpaper-carry" aria-label="Saldos que vienen de meses anteriores">
+              {arrastrados.map((lot) => (
+                <li key={lot.id}>{fraseDeArrastre(lot)}</li>
+              ))}
+            </ul>
+          ) : null}
+          {mesAnteriorCerrado === false ? (
+            <p className="muted-copy">
+              El mes anterior no está cerrado: cargá el saldo a mano o cerralo primero.
+            </p>
+          ) : mesAnteriorCerrado === true && arrastrados.length === 0 ? (
+            <p className="muted-copy">Sin saldo a favor del mes anterior.</p>
+          ) : null}
           <Table<CreditLot>
             rows={ledgerQuery.data}
             rowKey={(lot) => lot.id}
@@ -82,9 +117,9 @@ export function EtapaSaldos({
               },
               {
                 key: "original",
-                header: "Original",
+                header: "Monto vigente",
                 align: "right",
-                render: (lot) => formatMoney(lot.originalAmount),
+                render: (lot) => formatMoney(lot.importeVigente ?? lot.originalAmount),
               },
               {
                 key: "available",
@@ -131,7 +166,7 @@ export function EtapaSaldos({
               },
               {
                 key: "log",
-                header: "Log",
+                header: "Historial",
                 render: (lot) =>
                   !lot.history || lot.history.length === 0 ? (
                     <span className="muted-copy">Sin cambios</span>
@@ -167,12 +202,14 @@ export function EtapaSaldos({
                     <Button
                       size="sm"
                       variant="ghost"
+                      disabled={legajoFinalizado}
                       onClick={() => {
                         setEditingLot(lot);
                         setEditForm({
                           reference: lot.reference ?? "",
                           evidenceDocumentId: lot.evidenceDocumentId ?? "",
-                          originalAmount: lot.originalAmount ?? "",
+                          originalAmount: lot.importeVigente ?? lot.originalAmount ?? "",
+                          motivo: "",
                         });
                       }}
                     >

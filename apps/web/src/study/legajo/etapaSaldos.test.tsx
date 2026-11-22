@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 // Caracterización de la etapa Saldos del Legajo (K9) con datos sintéticos «Demo».
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +13,7 @@ import {
   CLIENTE_DEMO,
   FIRMA_DEMO,
   PERIODO_ELEGIDO_DEMO,
+  legajoDemo,
   rutasDemo,
   saldoDemo,
 } from "./datosDemoLegajo";
@@ -154,5 +155,118 @@ describe("Legajo · etapa Saldos: respaldo de cierre con identificador corto (Fo
     renderLegajo();
     const respaldo = await screen.findByText("Cierre 01a1de63 · versión 2");
     expect(respaldo).toHaveAttribute("title", referencia);
+  });
+});
+
+const saldoDelMesAnterior = {
+  ...saldoDemo,
+  id: "lot-prev",
+  periodId: "period-sep",
+  period: {
+    id: "period-sep",
+    label: null,
+    startDate: "2026-09-01T00:00:00.000Z",
+    endDate: "2026-09-30T00:00:00.000Z",
+  },
+  taxType: { id: "tax-type-a", code: "IIBB", name: "Ingresos Brutos" },
+  origin: "CIERRE" as const,
+  verificationStatus: "VERIFIED",
+  carryForward: true,
+  originalAmount: "1234.0000",
+  available: "1234.0000",
+  reference: "Cierre 01a1de63-eb18-4c2a-9d3e-6f7a8b9c0d1e · versión 1",
+};
+
+/** Mes anterior: su legajo responde solo para el rango de septiembre; el resto, como en rutasDemo. */
+function conMesAnterior(estado: string | null, saldos: unknown[]) {
+  const rutas = rutasDemo({ saldos: saldos as never });
+  return ((path: string) =>
+    path.includes("from=2026-09-01")
+      ? Promise.resolve(estado ? [legajoDemo(estado)] : [])
+      : rutas(path)) as never;
+}
+
+describe("Legajo · etapa Saldos (3E): arrastre, mes anterior y cambios con motivo", () => {
+  it("dice de dónde viene el saldo arrastrado y que se aplica solo al calcular", async () => {
+    fijarContexto(PERMISOS_SALDOS);
+    vi.mocked(api.get).mockImplementation(conMesAnterior("FINALIZED", [saldoDelMesAnterior, saldoDemo]));
+    renderLegajo();
+    expect(
+      await screen.findByText(
+        /Viene del cierre de septiembre de 2026, Ingresos Brutos: .*1\.234,00; se aplica solo al calcular/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("con el mes anterior sin cerrar lo dice en una frase y no ofrece copiar el saldo", async () => {
+    fijarContexto(PERMISOS_SALDOS);
+    vi.mocked(api.get).mockImplementation(conMesAnterior(null, [saldoDemo]));
+    renderLegajo();
+    expect(
+      await screen.findByText("El mes anterior no está cerrado: cargá el saldo a mano o cerralo primero."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /copiar/i })).toBeNull();
+  });
+
+  it("con el mes anterior cerrado y sin saldo arrastrado lo dice", async () => {
+    fijarContexto(PERMISOS_SALDOS);
+    vi.mocked(api.get).mockImplementation(conMesAnterior("FINALIZED", [saldoDemo]));
+    renderLegajo();
+    expect(await screen.findByText("Sin saldo a favor del mes anterior.")).toBeInTheDocument();
+  });
+
+  it("un mes finalizado no deja cambiar saldos y dice cómo hacerlo", async () => {
+    fijarContexto(PERMISOS_SALDOS);
+    vi.mocked(api.get).mockImplementation(
+      rutasDemo({ saldos: [saldoDemo], legajos: [legajoDemo("FINALIZED")] }) as never,
+    );
+    renderLegajo();
+    expect(
+      await screen.findByText("Este mes está finalizado: para cambiar un saldo, rectificá la liquidación."),
+    ).toBeInTheDocument();
+    const editar = await screen.findAllByRole("button", { name: "Editar" });
+    expect(editar.every((boton) => boton.hasAttribute("disabled"))).toBe(true);
+  });
+
+  it("sin permiso de cálculo no aparece Editar", async () => {
+    fijarContexto(["client.read"]);
+    renderLegajo();
+    expect(await screen.findByText("Carga manual · Persona Demo")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Editar" })).toBeNull();
+  });
+
+  it("la columna del historial se llama Historial", async () => {
+    fijarContexto(PERMISOS_SALDOS);
+    renderLegajo();
+    expect(await screen.findByText("Historial")).toBeInTheDocument();
+  });
+
+  it("la columna Monto vigente muestra el monto con sus correcciones, y el original queda aparte", async () => {
+    fijarContexto(PERMISOS_SALDOS);
+    vi.mocked(api.get).mockImplementation(
+      rutasDemo({ saldos: [{ ...saldoDemo, originalAmount: "1000.00", importeVigente: "1500.00" }] }) as never,
+    );
+    renderLegajo();
+    expect(await screen.findByText("Monto vigente")).toBeInTheDocument();
+    expect(await screen.findByText(/1\.500,00/)).toBeInTheDocument();
+  });
+
+  it("cambiar solo la referencia no pide motivo ni registra una corrección", async () => {
+    fijarContexto(PERMISOS_SALDOS);
+    renderLegajo();
+    fireEvent.click((await screen.findAllByRole("button", { name: "Editar" }))[0]!);
+    const dialogo = await screen.findByRole("dialog", { name: "Editar saldo" });
+    fireEvent.change(within(dialogo).getByLabelText("Referencia"), {
+      target: { value: "Referencia Demo" },
+    });
+    expect(within(dialogo).queryByLabelText("Motivo del cambio de importe")).toBeNull();
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith(`/firms/${FIRMA_DEMO}/clients/${CLIENTE_DEMO}/tax-credit-ledger/lot-a`, {
+        reference: "Referencia Demo",
+        evidenceDocumentId: null,
+      }),
+    );
+    expect(api.post).not.toHaveBeenCalled();
   });
 });
