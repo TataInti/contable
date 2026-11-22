@@ -56,11 +56,27 @@ export function CargarDocumento({
   const [uploadRequestItemId, setUploadRequestItemId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [bookFileSelected, setBookFileSelected] = useState(false);
   const [dragging, setDragging] = useState(false);
 
   useImperativeHandle(ref, () => ({ limpiarError: () => setUploadError(null) }), []);
 
   const chooseFile = (selected: File | null) => {
+    const extension = selected?.name.toLocaleLowerCase("es-AR").split(".").pop();
+    if (selected && ["xlsx", "xls", "csv", "txt"].includes(extension ?? "")) {
+      setBookFileSelected(true);
+      setUploadError(null);
+      setFile(null);
+      return;
+    }
+    setBookFileSelected(false);
+    if (selected && extension === "pdf" && selected.size > 25 * 1024 * 1024) {
+      setFile(null);
+      setUploadError(
+        `Este PDF pesa ${fileSize(selected.size)} y el máximo es 25 MB. Si es un libro de ARCA, bajalo en Excel e importalo en el Legajo.`,
+      );
+      return;
+    }
     const error = validateFile(selected);
     setUploadError(error);
     setFile(error ? null : selected);
@@ -109,6 +125,7 @@ export function CargarDocumento({
       onClose={() => {
         onClose();
         setFile(null);
+        setBookFileSelected(false);
         setUploadError(null);
       }}
       title="Nuevo documento"
@@ -183,15 +200,31 @@ export function CargarDocumento({
           >
             <input
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv,.txt,application/pdf,image/jpeg,image/png,image/webp"
               onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
             />
             <span>
               <strong>{file ? file.name : "Arrastrá un archivo o elegilo desde tu equipo"}</strong>
-              <small>{file ? fileSize(file.size) : "PDF, JPG, PNG o WebP · máximo 25 MB"}</small>
+              <small>
+                {file
+                  ? fileSize(file.size)
+                  : "PDF o foto: los lee la IA · Excel, CSV o TXT de ARCA y la DGR: van al Legajo"}
+              </small>
             </span>
             <span className="upload-dropzone__action">Elegir archivo</span>
           </label>
+          {bookFileSelected ? (
+            <div role="status">
+              <p>Elegí el archivo de nuevo en Importar libro.</p>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => navigate("/expediente-mensual")}
+              >
+                Ir a Importar en el Legajo
+              </Button>
+            </div>
+          ) : null}
           {uploadError ? (
             <p className="form-error" role="alert">
               {uploadError}
@@ -212,6 +245,7 @@ export function CargarDocumento({
               onClick={() => {
                 onClose();
                 setFile(null);
+                setBookFileSelected(false);
                 setUploadError(null);
               }}
             >
