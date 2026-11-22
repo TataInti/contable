@@ -163,7 +163,7 @@ describe("Registrar inscripción pide «Desde»", () => {
     const desde = within(cajon).getByLabelText("Desde") as HTMLInputElement;
     expect(desde.type).toBe("date");
     expect(desde.value).toBe("2026-10-01");
-    expect(within(cajon).getByText("Desde cuándo está inscripto el cliente. Para liquidar un mes, la inscripción tiene que cubrirlo.")).toBeTruthy();
+    expect(within(cajon).getByText("Desde cuándo está inscripto el cliente. Es informativo: no impide abrir ni liquidar ningún mes.")).toBeTruthy();
     expect(within(cajon).getByText("01/10/2026 · 1 de octubre de 2026")).toBeTruthy();
   });
 
@@ -246,7 +246,7 @@ describe("«Abrir mes» guía cuando la inscripción no cubre el mes", () => {
     expect(within(aviso).getByText(/IIBB Contribuyente Local Tucumán · desde 21\/11\/2026/)).toBeTruthy();
     expect(within(aviso).getByText(/TEM San Miguel de Tucumán · desde 21\/11\/2026/)).toBeTruthy();
     expect(within(aviso).getAllByRole("button", { name: /Corregir fecha de inscripción/ })).toHaveLength(2);
-    expect(within(aviso).getByText(/Para liquidar un mes, la inscripción tiene que cubrirlo/)).toBeTruthy();
+    expect(within(aviso).getByText(/no impide abrir ni liquidar el mes/)).toBeTruthy();
   });
 
   it("el botón abre el cajón de la inscripción elegida, con su fecha actual", async () => {

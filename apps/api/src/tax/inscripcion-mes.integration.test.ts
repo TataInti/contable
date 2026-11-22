@@ -167,22 +167,26 @@ describe("1F · «Abrir mes» de un mes anterior con inscripción desde el pasad
     }
   });
 
-  it("con la inscripción de hoy no abre octubre: el mensaje nombra el régimen y su fecha «Desde»", async () => {
+  it("4L — con la inscripción de hoy también se abre octubre: la fecha «Desde» no bloquea el mes", async () => {
     const c = await clienteConPerfil();
     await inscribir(c, regimeIibb, "2026-11-21");
 
+    const abierto = await pedir("POST", `${c.base}/tax-periods/open-month`, { month: "2026-10" });
+    expect(abierto.statusCode, abierto.body).toBe(201);
+    expect(dato<Record<string, unknown>>(abierto)).toMatchObject({ periodsCreated: 1, obligationsCreated: 1 });
+  });
+
+  it("4L — un cliente sin inscripción en ningún régimen no abre el mes (REGISTRATION_REQUIRED con guía)", async () => {
+    const c = await clienteConPerfil();
     const rechazado = await pedir("POST", `${c.base}/tax-periods/open-month`, { month: "2026-10" });
     expect(rechazado.statusCode).toBe(409);
     expect(fallo(rechazado).code).toBe("REGISTRATION_REQUIRED");
-    expect(fallo(rechazado).message).toContain("Octubre 2026");
-    expect(fallo(rechazado).message).toContain("21/11/2026");
-    expect(fallo(rechazado).message).toMatch(/Ingresos Brutos|IIBB/);
+    expect(fallo(rechazado).message).toContain("Registrá la inscripción");
   });
 
-  it("corregir el «Desde» de la inscripción deja abrir octubre", async () => {
+  it("4L — la corrección del «Desde» sigue disponible y no cambia la apertura del mes", async () => {
     const c = await clienteConPerfil();
     const regId = await inscribir(c, regimeIibb, "2026-11-21");
-    expect((await pedir("POST", `${c.base}/tax-periods/open-month`, { month: "2026-10" })).statusCode).toBe(409);
 
     const corregida = await pedir("PATCH", `${c.base}/tax-registrations/${regId}`, { validFrom: "2026-10-01" });
     expect(corregida.statusCode, corregida.body).toBe(200);

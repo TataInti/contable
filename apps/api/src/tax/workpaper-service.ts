@@ -24,6 +24,8 @@ import {
   reviewedSourceFacts,
 } from "./workpaper-classification.js";
 import { activityIssuesForWorkpaper, conActividadPendiente } from "./workpaper-activity.js";
+import { gruposDeComprobantes, loadPerfilPermitido } from "./voucher-permissions-core.js";
+import { GRUPO_LABELS, PREFIJO_CONTROL_PERFIL, type GrupoPerfil } from "./voucher-profile.js";
 import {
   materializeWorkpaperAllocations,
   taxInputAllocationHash,
@@ -554,6 +556,8 @@ export class MonthlyWorkpaperService {
       components: Array<{ taxTypeCode: string; settlementId: string }>;
       allocationsReady: boolean;
       allocationsCount: number;
+      /** Año del período: las tildes de comprobantes del cliente se guardan por año (corte 4B). */
+      periodYear: number;
     },
   ) {
     const automaticCodes = [
@@ -565,7 +569,7 @@ export class MonthlyWorkpaperService {
     await tx.taxControlFinding.updateMany({
       where: {
         workpaperId: input.workpaperId,
-        code: { in: automaticCodes },
+        OR: [{ code: { in: automaticCodes } }, { code: { startsWith: PREFIJO_CONTROL_PERFIL } }],
         status: "OPEN",
         NOT: { sourceHash: input.sourceHash },
       },
@@ -612,7 +616,7 @@ export class MonthlyWorkpaperService {
 
     const classifications = await tx.workpaperVoucherClassification.findMany({
       where: { workpaperId: input.workpaperId, excludedAt: null },
-      include: { voucher: { include: { components: true } } },
+      include: { voucher: { include: { components: true, importRow: { select: { raw: true } } } } },
     });
     let bookExpected = new Prisma.Decimal(0);
     let bookActual = new Prisma.Decimal(0);
@@ -692,6 +696,22 @@ export class MonthlyWorkpaperService {
         new Prisma.Decimal(0),
       );
     const bankApplicable = billedSales.greaterThan(0);
+    // Comprobantes de venta que no corresponden al perfil del cliente (corte 4B): un control bloqueante por grupo.
+    const permitidoPerfil = await loadPerfilPermitido(tx, {
+      firmId: input.firmId,
+      clientId: input.clientId,
+      year: input.periodYear,
+    });
+    const gruposPerfil = gruposDeComprobantes(classifications, permitidoPerfil);
+    for (const [grupo, filas] of gruposPerfil) {
+      await ensure({
+        code: `${PREFIJO_CONTROL_PERFIL}${grupo}`,
+        severity: "BLOCKING",
+        status: "OPEN",
+        actual: new Prisma.Decimal(filas.length),
+      });
+    }
+
     await ensure({
       code: "BANK_CREDIT_RECONCILIATION",
       severity: bankApplicable ? "BLOCKING" : "INFO",
@@ -1175,12 +1195,18 @@ export class MonthlyWorkpaperService {
       }
 
       // Hash de entrada: combina los hashes de las liquidaciones hijas.
+      const permitidoCalculo = await loadPerfilPermitido(tx, {
+        firmId: ctx.firmId,
+        clientId: wp.clientId,
+        year: wp.periodStart.getUTCFullYear(),
+      });
       const inputHash = taxHash({
         workpaperId: wp.id,
         clientId: wp.clientId,
         periodStart: wp.periodStart.toISOString(),
         periodEnd: wp.periodEnd.toISOString(),
         revision: wp.revision,
+        voucherProfile: { clases: [...permitidoCalculo.clases], exentos: permitidoCalculo.exentos },
         settlements: results
           .map((result) => ({
             settlementId: result.settlementId,
@@ -1235,6 +1261,7 @@ export class MonthlyWorkpaperService {
         firmId: ctx.firmId,
         clientId: wp.clientId,
         sourceHash: inputHash,
+        periodYear: wp.periodStart.getUTCFullYear(),
         sources,
         components: results.map((result) => ({
           taxTypeCode: result.taxTypeCode,
@@ -2329,6 +2356,98 @@ export class MonthlyWorkpaperService {
   // ------------------------------------------------------------------
   // Controles tipados
   // ------------------------------------------------------------------
+
+  /** Cambio de tildes de comprobantes del cliente (corte 4B): reabre sus expedientes del año para recalcular. */
+  async reopenForVoucherPermissions(
+    tx: Prisma.TransactionClient,
+    input: { firmId: string; clientId: string; year: number },
+  ) {
+    const expedientes = await tx.monthlyTaxWorkpaper.findMany({
+      where: {
+        firmId: input.firmId,
+        clientId: input.clientId,
+        periodStart: {
+          gte: new Date(Date.UTC(input.year, 0, 1)),
+          lt: new Date(Date.UTC(input.year + 1, 0, 1)),
+        },
+      },
+    });
+    for (const wp of expedientes) {
+      await this.invalidateAfterSourceChange(tx, wp);
+    }
+  }
+
+  /** Excluye del cálculo, con motivo, los comprobantes de un grupo del perfil que no corresponde (corte 4B). */
+  async excludeProfileGroup(ctx: TenantContext, workpaperId: string, grupo: string, reason: string) {
+    const motivo = reason.trim();
+    if (!motivo) {
+      throw new WorkpaperError("CLASSIFICATION_INCOMPLETE", "Indicá el motivo de la exclusión");
+    }
+    return withTenantContext(ctx, async (tx) => {
+      const wp = await this.loadClassificationWorkpaper(tx, ctx, workpaperId);
+      const rows = await this.profileGroupRows(tx, ctx, wp, grupo);
+      const excludedAt = new Date();
+      for (const row of rows) {
+        await tx.workpaperVoucherClassification.update({
+          where: { id: row.id },
+          data: { excludedAt, excludedByUserId: ctx.userId, excludedReason: motivo },
+        });
+      }
+      await this.invalidateAfterSourceChange(tx, wp);
+      return { grupo, comprobantes: rows.length };
+    });
+  }
+
+  /** Acepta, con motivo, los comprobantes de un grupo del perfil: quedan registrados como del cliente (corte 4B). */
+  async acceptProfileGroup(ctx: TenantContext, workpaperId: string, grupo: string, reason: string) {
+    const motivo = reason.trim();
+    if (!motivo) {
+      throw new WorkpaperError("CLASSIFICATION_INCOMPLETE", "Indicá el motivo por el que lo aceptás");
+    }
+    return withTenantContext(ctx, async (tx) => {
+      const wp = await this.loadClassificationWorkpaper(tx, ctx, workpaperId);
+      const rows = await this.profileGroupRows(tx, ctx, wp, grupo);
+      const profileAcceptedAt = new Date();
+      for (const row of rows) {
+        await tx.workpaperVoucherClassification.update({
+          where: { id: row.id },
+          data: {
+            profileAcceptedAt,
+            profileAcceptedByUserId: ctx.userId,
+            profileAcceptedReason: motivo,
+          },
+        });
+      }
+      await this.invalidateAfterSourceChange(tx, wp);
+      return { grupo, comprobantes: rows.length };
+    });
+  }
+
+  /** Comprobantes pendientes de un grupo del perfil, según las tildes vigentes del año del expediente. */
+  private async profileGroupRows(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    wp: { id: string; clientId: string; periodStart: Date },
+    grupo: string,
+  ) {
+    if (!(grupo in GRUPO_LABELS)) {
+      throw new WorkpaperError("CLASSIFICATION_NOT_FOUND", "Grupo de comprobantes no reconocido");
+    }
+    const permitido = await loadPerfilPermitido(tx, {
+      firmId: ctx.firmId,
+      clientId: wp.clientId,
+      year: wp.periodStart.getUTCFullYear(),
+    });
+    const rows = await tx.workpaperVoucherClassification.findMany({
+      where: { workpaperId: wp.id, firmId: ctx.firmId, excludedAt: null },
+      include: { voucher: { include: { components: true, importRow: { select: { raw: true } } } } },
+    });
+    const filas = gruposDeComprobantes(rows, permitido).get(grupo as GrupoPerfil) ?? [];
+    if (filas.length === 0) {
+      throw new WorkpaperError("CLASSIFICATION_NOT_FOUND", "No quedan comprobantes pendientes en ese grupo");
+    }
+    return filas;
+  }
 
   async listControls(ctx: TenantContext, workpaperId: string) {
     return withTenantContext(ctx, (tx) =>

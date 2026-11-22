@@ -22,7 +22,7 @@ import { perfilInicial } from "./fiscal/cajones/perfilInicial";
 import { CajonInscripcion } from "./fiscal/cajones/CajonInscripcion";
 import { CajonCorregirInscripcion } from "./fiscal/cajones/CajonCorregirInscripcion";
 import { CajonCorregirActividad } from "./fiscal/cajones/CajonCorregirActividad";
-import { fechaDesdeActividad } from "./fiscal/cajones/fechaDesdeActividad";
+import { CajonCambioActividad } from "./fiscal/cajones/CajonCambioActividad";
 import { CajonCorregirPeriodo, type CorreccionPeriodo } from "./fiscal/cajones/CajonCorregirPeriodo";
 import { primerDiaMesAnterior } from "./fiscal/fechas";
 import { CajonActividad } from "./fiscal/cajones/CajonActividad";
@@ -32,6 +32,7 @@ import { CajonCategoriaTem } from "./fiscal/cajones/CajonCategoriaTem";
 import { CajonCategoriaMonotributo } from "./fiscal/cajones/CajonCategoriaMonotributo";
 import { mesActualMonotributo, useMonotributoMes, type FilaCategoriaMonotributo } from "./fiscal/monotributo";
 import { useCategoriaTem } from "./fiscal/categoriaTem";
+import { PestanaComprobantes } from "./fiscal/pestanas/PestanaComprobantes";
 import { periodName, previousMonth, today, type ClientActivityLink, type EconomicActivity, type FiscalStep, type FiscalTab, type ProfileForm, type TaxObligation, type TaxPeriod, type TaxRegime, type TaxRegistration, type TaxType, type TaxpayerProfileVersion } from "./fiscal/utilidades";
 
 // Columna «Estado» de Actividades: el texto «Principal» se queda en este archivo (DesignCorrections lo lee aquí).
@@ -74,7 +75,7 @@ export function StudyOnboardingFiscal() {
   const [monthToOpen, setMonthToOpen] = useState(previousMonth);
   const [registrationToEdit, setRegistrationToEdit] = useState<TaxRegistration | null>(null);
   const [activityToEdit, setActivityToEdit] = useState<ClientActivityLink | null>(null);
-  const [activityValidFrom, setActivityValidFrom] = useState(today);
+  const [changeOpen, setChangeOpen] = useState(false);
   const [periodToEdit, setPeriodToEdit] = useState<TaxPeriod | null>(null);
 
   const profileQuery = useQuery({
@@ -208,18 +209,22 @@ export function StudyOnboardingFiscal() {
     mutationFn: (id: string) => api.del(`/firms/${firmId}/clients/${clientId}/tax-periods/${id}`),
     onSuccess: () => { invalidateClientFiscal(); notify.success("Período anulado."); },
   });
-  // «Desde» propuesta al elegir la actividad: el inicio de la inscripción de su nivel (brief 4H).
-  useEffect(() => {
-    const actividad = activitiesQuery.data?.find((item) => item.id === activityId);
-    setActivityValidFrom(fechaDesdeActividad(actividad?.jurisdictionId, registrationsQuery.data ?? [], latestProfile?.validFrom ?? today));
-  }, [activityId, activitiesQuery.data, registrationsQuery.data, latestProfile?.validFrom]);
   const addActivity = useMutation({
-    mutationFn: () => api.post(`/firms/${firmId}/clients/${clientId}/activities`, { profileVersionId: effectiveProfileId, activityId, isPrimary: true, validFrom: activityValidFrom }),
+    mutationFn: () => api.post(`/firms/${firmId}/clients/${clientId}/activities`, { profileVersionId: effectiveProfileId, activityId, isPrimary: true }),
     onSuccess: () => { invalidateClientFiscal(); setActivityId(""); setOpenFormStep(null); },
   });
   const updateActivity = useMutation({
     mutationFn: ({ id, validFrom }: { id: string; validFrom: string }) => api.patch(`/firms/${firmId}/clients/${clientId}/activities/${id}`, { validFrom }),
     onSuccess: () => { invalidateClientFiscal(); setActivityToEdit(null); },
+  });
+  const registerChange = useMutation({
+    mutationFn: (valores: { activityId: string; validFrom: string; changeReason: string }) =>
+      api.post(`/firms/${firmId}/clients/${clientId}/activities/change`, {
+        activityId: valores.activityId,
+        validFrom: valores.validFrom,
+        ...(valores.changeReason ? { changeReason: valores.changeReason } : {}),
+      }),
+    onSuccess: () => { invalidateClientFiscal(); setChangeOpen(false); },
   });
   const cancelRegistration = useMutation({
     mutationFn: (id: string) => api.post(`/firms/${firmId}/clients/${clientId}/tax-registrations/${id}/cancel`, { validTo: today }),
@@ -329,6 +334,7 @@ export function StudyOnboardingFiscal() {
           { id: "regimenes", label: "Regímenes", count: registrationsQuery.data?.length ?? 0 },
           { id: "actividades", label: "Actividades", count: clientActivitiesQuery.data?.length ?? 0 },
           { id: "periodos", label: "Períodos y obligaciones", count: periodsQuery.data?.length ?? 0 },
+          { id: "comprobantes", label: "Comprobantes" },
         ]}
       />
 
@@ -341,8 +347,9 @@ export function StudyOnboardingFiscal() {
         {failedQueries.length > 0 ? <AvisoConsultas failedQueries={failedQueries} /> : null}
 
         {tab === "resumen" ? <PestanaResumen nextRequiredStep={nextRequiredStep} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
+        {tab === "comprobantes" && firmId && clientId ? <PestanaComprobantes firmId={firmId} clientId={clientId} canWrite={canWrite} /> : null}
         {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} corregirFecha={corregirInscripcion} confirm={confirm} categoriaTem={categoriaTem.fila} categoriaMonotributo={filaMonotributo} /> : null}
-        {tab === "actividades" ? <PestanaActividades canWrite={canWrite} openStepForm={openStepForm} clientActivitiesQuery={clientActivitiesQuery} endActivity={endActivity} corregirFecha={(row) => { updateActivity.reset(); setActivityToEdit(row); }} confirm={confirm} renderEstado={renderEstadoActividad} /> : null}
+        {tab === "actividades" ? <PestanaActividades canWrite={canWrite} openStepForm={openStepForm} clientActivitiesQuery={clientActivitiesQuery} endActivity={endActivity} corregirFecha={(row) => { updateActivity.reset(); setActivityToEdit(row); }} registrarCambio={() => { registerChange.reset(); setChangeOpen(true); }} confirm={confirm} renderEstado={renderEstadoActividad} /> : null}
         {tab === "periodos" ? <PestanaPeriodos canWrite={canWrite} monthToOpen={monthToOpen} setMonthToOpen={setMonthToOpen} openMonth={openMonth} periodsQuery={periodsQuery} openStepForm={openStepForm} obligationByPeriod={obligationByPeriod} setObligationForm={setObligationForm} registrations={registrationsQuery.data ?? []} corregirInscripcion={corregirInscripcion} corregirPeriodo={corregirPeriodo} anularPeriodo={anularPeriodo} /> : null}
 
         <MutationError error={mutationError} />
@@ -352,8 +359,9 @@ export function StudyOnboardingFiscal() {
       <CajonInscripcion openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} regimeId={regimeId} setRegimeId={setRegimeId} suggestedFrom={primerDiaMesAnterior()} addRegistration={addRegistration} regimesQuery={regimesQuery} effectiveProfileId={effectiveProfileId} />
       <CajonCorregirInscripcion registration={registrationToEdit} onClose={() => setRegistrationToEdit(null)} updateRegistration={updateRegistration} />
       <CajonCorregirActividad activity={activityToEdit} onClose={() => setActivityToEdit(null)} updateActivity={updateActivity} />
+      <CajonCambioActividad isOpen={changeOpen} onClose={() => setChangeOpen(false)} vigentes={(clientActivitiesQuery.data ?? []).filter((link) => !link.validTo)} activitiesQuery={activitiesQuery} registrar={registerChange} />
       <CajonCorregirPeriodo period={periodToEdit} onClose={() => setPeriodToEdit(null)} updatePeriod={updatePeriod} />
-      <CajonActividad openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} activityId={activityId} setActivityId={setActivityId} validFrom={activityValidFrom} setValidFrom={setActivityValidFrom} addActivity={addActivity} activitiesQuery={activitiesQuery} effectiveProfileId={effectiveProfileId} />
+      <CajonActividad openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} activityId={activityId} setActivityId={setActivityId} addActivity={addActivity} activitiesQuery={activitiesQuery} effectiveProfileId={effectiveProfileId} />
       <CajonPeriodo openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} periodForm={periodForm} setPeriodForm={setPeriodForm} createPeriod={createPeriod} typesQuery={typesQuery} />
       <CajonObligacion openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} obligationForm={obligationForm} setObligationForm={setObligationForm} createObligation={createObligation} selectablePeriods={selectablePeriods} eligibleRegistrations={eligibleRegistrations} effectiveProfileId={effectiveProfileId} />
 

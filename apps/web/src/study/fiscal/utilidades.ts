@@ -2,7 +2,7 @@ import { formatearRango } from "../../lib/formatoFechas";
 import type { useConfirmAction } from "../../ui/ConfirmAction";
 
 export type FiscalStep = "perfil" | "inscripcion" | "actividades" | "periodos" | "obligaciones";
-export type FiscalTab = "resumen" | "regimenes" | "actividades" | "periodos";
+export type FiscalTab = "resumen" | "regimenes" | "actividades" | "periodos" | "comprobantes";
 
 /** Pestaña donde vive cada paso de la configuración. */
 export const STEP_TAB: Record<FiscalStep, FiscalTab> = {
@@ -64,7 +64,10 @@ export interface ClientActivityLink {
   isPrimary: boolean;
   validFrom: string;
   validTo: string | null;
-  activity: { code: string; name: string; isActive: boolean; jurisdiction: { name: string; isActive: boolean } };
+  /** Cambio de actividad registrado (brief 4L): rige desde validFrom. Sin cambio, la actividad vale desde siempre. */
+  isChange?: boolean;
+  changeReason?: string | null;
+  activity: { id?: string; code: string; name: string; isActive: boolean; jurisdictionId?: string; jurisdiction: { name: string; isActive: boolean } };
 }
 
 export const today = new Date().toISOString().slice(0, 10);

@@ -81,6 +81,8 @@ import {
 
 type CuerpoCalculo = { obligationIds?: string[]; minimums?: Record<string, string> };
 import { EtapaClasificacion } from "./legajo/etapas/EtapaClasificacion";
+import { cambiosDeActividadDelMes } from "./fiscal/historialActividades";
+import type { ClientActivityLink } from "./fiscal/utilidades";
 import { EtapaControles } from "./legajo/etapas/EtapaControles";
 import { EtapaCierre } from "./legajo/etapas/EtapaCierre";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
@@ -363,11 +365,15 @@ export function StudyExpedienteMensual() {
   const clientActivitiesQuery = useQuery({
     queryKey: ["client-tax-activities", firmId, clientId],
     queryFn: () =>
-      api.get<Array<{ validTo: string | null; activity: { code: string; name: string } }>>(
+      api.get<ClientActivityLink[]>(
         `/firms/${firmId}/clients/${clientId}/activities`,
       ),
     enabled: Boolean(firmId && clientId),
   });
+  // Brief 4L: un cambio de actividad que empieza en el mes del legajo se avisa (informativo, no bloquea).
+  const cambiosDelMes = legajoSeleccionado
+    ? cambiosDeActividadDelMes(clientActivitiesQuery.data ?? [], legajoSeleccionado.periodStart)
+    : [];
   const activityOptions = (currentCode: string) => {
     const options = (clientActivitiesQuery.data ?? [])
       .filter((link) => !link.validTo)
@@ -659,6 +665,29 @@ export function StudyExpedienteMensual() {
       });
     },
   });
+  // Grupos «no corresponde al perfil» (corte 4B): excluir o aceptar con motivo, por grupo.
+  const grupoPerfilMutation = useMutation({
+    mutationFn: ({
+      workpaperId,
+      grupo,
+      accion,
+      reason,
+    }: {
+      workpaperId: string;
+      grupo: string;
+      accion: "exclude" | "accept";
+      reason: string;
+    }) =>
+      api.post(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${workpaperId}/classifications/profile-groups/${grupo}/${accion}`,
+        { reason },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpaper-coverage", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpaper-classifications", firmId, clientId] });
+    },
+  });
   const calculateInterestMutation = useMutation({
     mutationFn: ({
       workpaperId,
@@ -790,6 +819,12 @@ export function StudyExpedienteMensual() {
             motivoSinMovimientos={motivoSinMovimientos}
           />
         ) : step === 2 ? (
+          <div>
+          {cambiosDelMes.map((cambio) => (
+            <Notice key={`${cambio.de}-${cambio.a}`} tone="info" title={`Desde ${cambio.desde} cambió la actividad de ${cambio.de} a ${cambio.a}: cambia la alícuota`}>
+              <p className="muted-copy">Es informativo y no bloquea el cálculo. Revisá la clasificación de las ventas de ese mes.</p>
+            </Notice>
+          ))}
           <EtapaClasificacion
             capabilities={capabilities}
             canEditSources={canEditSources}
@@ -821,6 +856,7 @@ export function StudyExpedienteMensual() {
             includeMutation={includeMutation}
             deleteRuleMutation={deleteRuleMutation}
           />
+          </div>
         ) : step === 3 ? (
           <EtapaCalculo
             capabilities={capacidades}
@@ -847,6 +883,7 @@ export function StudyExpedienteMensual() {
             setControlEvidence={setControlEvidence}
             documentsQuery={documentsQuery}
             resolveControlMutation={resolveControlMutation}
+            grupoPerfilMutation={grupoPerfilMutation}
             confirmar={confirmar}
           />
         ) : (

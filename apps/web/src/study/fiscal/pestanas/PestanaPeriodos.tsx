@@ -56,8 +56,8 @@ export function PestanaPeriodos({ canWrite, monthToOpen, setMonthToOpen, openMon
         </form>
       ) : null}
       {sinCobertura.length > 0 ? (
-        <Notice tone="warning" title={`${mesLegible(monthToOpen)} no está cubierto por la inscripción`}>
-          <p className="muted-copy">Para liquidar un mes, la inscripción tiene que cubrirlo. Corregí la fecha «Desde» de estos regímenes para abrirlo:</p>
+        <Notice tone="info" title={`${mesLegible(monthToOpen)} no está cubierto por la inscripción`}>
+          <p className="muted-copy">La fecha «Desde» de la inscripción no impide abrir ni liquidar el mes: solo indica cuándo empezó. Si no es la real, podés corregirla:</p>
           <ul className="fiscal-open-month__uncovered">
             {sinCobertura.map((registration) => (
               <li key={registration.id}>

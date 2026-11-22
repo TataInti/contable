@@ -252,6 +252,32 @@ export function workpaperRoutes(app: FastifyInstance) {
     }
   });
 
+  // Comprobantes que no corresponden al perfil del cliente (corte 4B): excluir o aceptar un grupo con motivo.
+  const profileGroupBody = z.object({ reason: z.string().trim().min(1, "Indicá el motivo").max(500) }).strict();
+  app.post(`${classificationsBase}/profile-groups/:group/exclude`, async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { workpaperId, group } = req.params as { workpaperId: string; group: string };
+    try {
+      const body = profileGroupBody.parse(req.body);
+      const data = await service.excludeProfileGroup(ctx, workpaperId, group, body.reason);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post(`${classificationsBase}/profile-groups/:group/accept`, async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { workpaperId, group } = req.params as { workpaperId: string; group: string };
+    try {
+      const body = profileGroupBody.parse(req.body);
+      const data = await service.acceptProfileGroup(ctx, workpaperId, group, body.reason);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
   app.post(`${classificationsBase}/include`, async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { workpaperId } = req.params as { workpaperId: string };

@@ -1,6 +1,8 @@
-// Criterio único de actividades por venta (brief 4J). El cálculo (settlement-service) y la
-// clasificación del expediente (workpaper-activity) usan estas funciones: la web solo muestra
-// el resultado que devuelve la API. Módulo puro: sin acceso a la base.
+// Criterio único de actividades por venta (brief 4J, vigencia por cambio: brief 4L). El cálculo
+// (settlement-service), la clasificación del expediente (workpaper-activity) y la clasificación de
+// comprobantes (workpaper-classification) usan estas funciones: la web solo muestra el resultado
+// que devuelve la API. Módulo puro: sin acceso a la base (solo tipos de Prisma).
+import type { Prisma } from "@prisma/client";
 
 export const MESES_ES = [
   "enero",
@@ -22,18 +24,53 @@ export type ActivityLevelLink = {
   name: string;
   validFrom: Date;
   validTo: Date | null;
+  /** true: cambio de actividad registrado (rige desde validFrom). false o ausente: vale desde siempre. */
+  isChange?: boolean;
 };
+
+/**
+ * Vigencia de un vínculo en un rango de fechas (brief 4L). Sin cambio registrado, la actividad no tiene
+ * límite inferior: el período lo define el expediente, no la fecha del alta. Un cambio de actividad rige
+ * desde el mes en que se registra. En ambos casos `validTo` corta por arriba (la anterior queda hasta
+ * el mes previo al cambio).
+ */
+export function vigenteEnRango(
+  link: Pick<ActivityLevelLink, "validFrom" | "validTo" | "isChange">,
+  desde: Date,
+  hasta: Date,
+): boolean {
+  const iniciaAntesDelFin = !link.isChange || link.validFrom <= hasta;
+  const noTerminaAntesDelInicio = !link.validTo || link.validTo >= desde;
+  return iniciaAntesDelFin && noTerminaAntesDelInicio;
+}
+
+export function vigenteEnFecha(
+  link: Pick<ActivityLevelLink, "validFrom" | "validTo" | "isChange">,
+  fecha: Date,
+): boolean {
+  return vigenteEnRango(link, fecha, fecha);
+}
+
+/** Mismo criterio de `vigenteEnRango` como filtro de Prisma para `clientActivity` (sin fila sin límite inferior). */
+export function filtroVigenciaRango(desde: Date, hasta: Date): Prisma.ClientActivityWhereInput {
+  return {
+    AND: [
+      { OR: [{ isChange: false }, { validFrom: { lte: hasta } }] },
+      { OR: [{ validTo: null }, { validTo: { gte: desde } }] },
+    ],
+  };
+}
 
 export type LevelActivityContext = {
   periodStart: Date;
   periodEnd: Date;
-  /** Vínculos del cliente en el nivel del impuesto, sin filtro de fecha, por «Desde» ascendente. */
+  /** Vínculos del cliente en el nivel del impuesto, sin filtro de fecha, por fecha de vínculo ascendente. */
   levelLinks: ActivityLevelLink[];
   /** Vínculos vigentes en el período. */
   inForce: ActivityLevelLink[];
   /** Código de la única actividad vigente en el nivel, si hay exactamente una. */
   singleLocalCode: string | null;
-  /** true: actividad del nivel; false: de otro nivel; "UNKNOWN": fuera del catálogo o ambigua. */
+  /** true: actividad del nivel; false: de otro nivel; \"UNKNOWN\": fuera del catálogo o ambigua. */
   isOwnCode: (code: string) => boolean | "UNKNOWN";
 };
 
@@ -46,10 +83,7 @@ export function buildLevelActivityContext(input: {
   /** El cálculo sin fuentes no asigna la única actividad del nivel a las ventas sin código. */
   withSingleLocal: boolean;
 }): LevelActivityContext {
-  const inForce = input.levelLinks.filter(
-    (link) =>
-      link.validFrom <= input.periodEnd && (!link.validTo || link.validTo >= input.periodStart),
-  );
+  const inForce = input.levelLinks.filter((link) => vigenteEnRango(link, input.periodStart, input.periodEnd));
   const codesInForce = [...new Set(inForce.map((link) => link.code))];
   return {
     periodStart: input.periodStart,
@@ -69,19 +103,21 @@ export function buildLevelActivityContext(input: {
 
 export type LevelActivityResolution =
   | { kind: "OWN"; code: string }
-  | { kind: "NOT_IN_FORCE"; code: string; name: string; validFrom: Date }
+  | { kind: "NOT_IN_FORCE"; code: string; name: string; successor: ActivityLevelLink | null }
   | { kind: "NONE" }
   | { kind: "UNRESOLVED"; code: string };
 
 const normalizeCode = (code: string) => code.trim().toUpperCase();
 
-function notInForceOf(
-  ctx: LevelActivityContext,
-  code: string,
-): LevelActivityResolution | null {
+/** La actividad que rige en el período, si hay exactamente una: es la salida que se ofrece al reclasificar. */
+function successorOf(ctx: LevelActivityContext): ActivityLevelLink | null {
+  return ctx.inForce.length === 1 ? ctx.inForce[0]! : null;
+}
+
+function notInForceOf(ctx: LevelActivityContext, code: string): LevelActivityResolution | null {
   const links = ctx.levelLinks.filter((link) => link.code === code);
   if (links.length === 0 || ctx.inForce.some((link) => link.code === code)) return null;
-  return { kind: "NOT_IN_FORCE", code, name: links[0]!.name, validFrom: links[0]!.validFrom };
+  return { kind: "NOT_IN_FORCE", code, name: links[0]!.name, successor: successorOf(ctx) };
 }
 
 /**
@@ -102,7 +138,7 @@ export function resolveLevelActivity(
   if (ctx.singleLocalCode) return { kind: "OWN", code: ctx.singleLocalCode };
   if (ctx.inForce.length === 0 && ctx.levelLinks.length > 0) {
     const first = ctx.levelLinks[0]!;
-    return { kind: "NOT_IN_FORCE", code: first.code, name: first.name, validFrom: first.validFrom };
+    return { kind: "NOT_IN_FORCE", code: first.code, name: first.name, successor: null };
   }
   return { kind: "NONE" };
 }
@@ -121,7 +157,8 @@ export type ActivityIssue =
       kind: "NOT_IN_FORCE";
       activityCode: string;
       activityName: string;
-      validFrom: Date;
+      /** Actividad que rige en el período y a la que se reclasifica la venta; null si no hay una sola. */
+      successor: ActivityLevelLink | null;
     }
   | { voucherId: string; kind: "UNCLASSIFIED"; multipleInForce: boolean };
 
@@ -147,7 +184,7 @@ export function evaluateSaleActivities(
       kind: "NOT_IN_FORCE",
       activityCode: r.code,
       activityName: r.name,
-      validFrom: r.validFrom,
+      successor: r.successor,
     });
   };
   for (const fact of facts) {
@@ -179,14 +216,25 @@ export function evaluateSaleActivities(
   return issues;
 }
 
-/** Texto de ACTIVITY_NOT_IN_FORCE: una actividad (la primera por «Desde»). */
+/**
+ * Texto de ACTIVITY_NOT_IN_FORCE (brief 4L): dice qué actividad no rige ese mes y, si hay una sola
+ * que rige, a cuál reclasificar. Afirmativo y con salida, sin pedir cambiar fechas.
+ */
 export function mensajeActividadNoVigente(
-  issue: { activityName: string; validFrom: Date },
+  issue: { activityName: string; successor: { name: string; validFrom: Date; isChange?: boolean } | null },
   period: { startDate: Date },
 ): string {
   const mes = MESES_ES[period.startDate.getUTCMonth()];
-  const desde = issue.validFrom.toISOString().slice(0, 10).split("-").reverse().join("/");
-  return `La actividad ${issue.activityName} no está vigente en ${mes} ${period.startDate.getUTCFullYear()} para este cliente (vigente desde ${desde}). Corregí la fecha «Desde» en Configuración fiscal → Actividades.`;
+  const anio = period.startDate.getUTCFullYear();
+  const base = `La actividad ${issue.activityName} no rige en ${mes} ${anio}.`;
+  const sucesora = issue.successor;
+  if (!sucesora) {
+    return `${base} Vinculá la actividad que rige ese mes en Configuración fiscal → Actividades.`;
+  }
+  const desde = sucesora.isChange
+    ? `, vigente desde ${MESES_ES[sucesora.validFrom.getUTCMonth()]} ${sucesora.validFrom.getUTCFullYear()}`
+    : "";
+  return `${base} Reclasificá con ${sucesora.name}${desde}.`;
 }
 
 /** Texto de ACTIVITY_UNCLASSIFIED para una cantidad de ventas. */

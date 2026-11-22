@@ -102,6 +102,10 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(
       requiredCapability("POST", "/api/v1/firms/f/clients/c/activities"),
     ).toBe("tax.profile.write");
+    // Brief 4L: registrar un cambio de actividad exige el mismo permiso que vincular.
+    expect(
+      requiredCapability("POST", "/api/v1/firms/f/clients/c/activities/change"),
+    ).toBe("tax.profile.write");
   });
 
   it("crear una sucesora del perfil requiere permiso de escritura fiscal", () => {

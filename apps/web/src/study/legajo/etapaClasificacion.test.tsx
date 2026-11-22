@@ -96,7 +96,7 @@ const comprobantesDemo = [
     activityIssue: {
       kind: "NOT_IN_FORCE",
       message:
-        "La actividad REST no está vigente en octubre 2026 para este cliente (vigente desde 22/11/2026). Corregí la fecha «Desde» en Configuración fiscal → Actividades.",
+        "La actividad REST no rige en octubre 2026. Reclasificá con Actividad REST-NUEVA, vigente desde octubre 2026.",
     },
   }),
 ];
@@ -235,16 +235,16 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     expect(screen.queryByText("A · 0001-00000002")).not.toBeInTheDocument();
   });
 
-  it("4J — una venta con actividad no vigente queda pendiente con el texto del cálculo y el enlace a corregir «Desde»", async () => {
+  it("4L — una venta con actividad que ya no rige queda pendiente con el texto del cálculo y ofrece reclasificar", async () => {
     fijarContexto(PERMISOS_CLASIFICAR);
     renderLegajo();
     await abrirClasificacion();
     expect(
       screen.getByText(
-        "La actividad REST no está vigente en octubre 2026 para este cliente (vigente desde 22/11/2026). Corregí la fecha «Desde» en Configuración fiscal → Actividades.",
+        "La actividad REST no rige en octubre 2026. Reclasificá con Actividad REST-NUEVA, vigente desde octubre 2026.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Corregir la fecha «Desde»" })).toHaveAttribute("href", "/configuracion-fiscal");
+    expect(screen.getAllByRole("button", { name: "Reclasificar" }).length).toBeGreaterThan(0);
   });
 
   it("guardar una compra sin rubro muestra «Seleccioná el rubro de la compra» junto a su fila y no envía el PATCH", async () => {
