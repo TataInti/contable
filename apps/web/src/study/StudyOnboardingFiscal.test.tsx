@@ -188,6 +188,8 @@ describe("StudyOnboardingFiscal — acciones de la versión sucesora", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Crear perfil fiscal" }));
     fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Cliente sintético SA" } });
     fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20111111111" } });
+    fireEvent.change(screen.getByLabelText("Tipo de persona"), { target: { value: "JURIDICA" } });
+    fireEvent.change(screen.getByLabelText("Condición nacional"), { target: { value: "RESPONSABLE_INSCRIPTO" } });
     const addressInput = screen.getByLabelText("Domicilio fiscal") as HTMLInputElement;
     fireEvent.change(addressInput, { target: { value: "   " } });
     expect(addressInput.checkValidity()).toBe(false);
