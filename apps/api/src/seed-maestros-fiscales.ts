@@ -186,6 +186,14 @@ async function main() {
       },
     });
     await ensureRegimeModule(monotributoRegime.id, "TAX_MONOTRIBUTO");
+    // Producción tiene la familia de cálculo del Monotributo por la migración 20261112000000_p2_calc_family_tax_engine
+    // (backfill sobre catálogos ya existentes). En una base nueva el régimen se crea después de esa migración: se
+    // vincula aquí con la misma regla (solo donde está vacío), para que el Monotributo pueda elegir categoría.
+    const familiaMonotributo = await tx.calcFamily.findUnique({ where: { key: "MONOTRIBUTO" } });
+    if (familiaMonotributo) {
+      await tx.taxType.updateMany({ where: { id: monotributo.id, defaultFamilyId: null }, data: { defaultFamilyId: familiaMonotributo.id } });
+      await tx.taxRegime.updateMany({ where: { id: monotributoRegime.id, calcFamilyId: null }, data: { calcFamilyId: familiaMonotributo.id } });
+    }
     const iibbLocalRegime = await tx.taxRegime.upsert({
       where: { code: "IIBB_LOCAL_TUC" },
       update: {},
