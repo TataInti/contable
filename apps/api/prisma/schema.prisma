@@ -308,6 +308,7 @@ model Client {
   taxCreditLots          TaxCreditLot[]
   taxCreditMovements     TaxCreditMovement[]
   contacts               ClientContact[]
+  temCategories          ClientTemCategory[]
 
   @@unique([firmId, cuit])
   @@index([firmId])
@@ -2222,6 +2223,41 @@ model TaxRegistration {
   @@index([firmId, clientId, regimeId])
   @@index([profileVersionId])
   @@map("tax_registrations")
+}
+
+/// Catálogo de mínimos mensuales del TEM por categoría y año (DIM, categorización anual).
+model TemCategoryMinimum {
+  id        String   @id @default(uuid(7))
+  year      Int
+  category  String
+  label     String
+  sortOrder Int
+  amount    Decimal  @db.Decimal(20, 4)
+  source    String?
+  createdAt DateTime @default(now())
+
+  clientCategories ClientTemCategory[]
+
+  @@unique([year, category])
+  @@map("tem_category_minimums")
+}
+
+/// Categoría anual del TEM de un cliente: una por cliente y año.
+model ClientTemCategory {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  year            Int
+  category        String
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client  Client             @relation(fields: [firmId, clientId], references: [firmId, id], onDelete: Cascade)
+  minimum TemCategoryMinimum @relation(fields: [year, category], references: [year, category], onUpdate: Cascade, onDelete: Restrict)
+
+  @@unique([firmId, clientId, year])
+  @@map("client_tem_categories")
 }
 
 enum TaxRegistrationStatus {
