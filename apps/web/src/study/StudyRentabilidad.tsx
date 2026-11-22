@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, EmptyState, Notice, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Notice, useNotify, SearchSelect } from "@contable/design-system";
 import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
@@ -261,20 +261,17 @@ export function StudyRentabilidad() {
         actions={
           <>
           {availablePeriods.length > 0 ? (
-            <label className="period-select">
+            <div className="period-select">
               <span>Período</span>
-              <select
+              <SearchSelect
+                hideLabel
+                label="Seleccionar período de rentabilidad"
                 value={activePeriodId ?? ""}
-                onChange={(event) => selectPeriod(event.target.value)}
-                aria-label="Seleccionar período de rentabilidad"
-              >
-                {availablePeriods.map((period) => (
-                  <option key={period.id} value={period.id}>
-                    {period.label ?? period.startDate.slice(0, 7)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={(value) => selectPeriod(value)}
+                allowEmpty={false}
+                options={availablePeriods.map((period) => ({ value: period.id, label: period.label ?? period.startDate.slice(0, 7) }))}
+              />
+            </div>
           ) : null}
           <Button
             size="sm"

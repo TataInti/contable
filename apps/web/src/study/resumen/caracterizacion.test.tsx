@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api, type ClientSummary } from "../../lib/api";
 import { StudyResumenCliente } from "../StudyResumenCliente";
+import { abrirListado, cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -191,18 +192,18 @@ describe("Caracterización · Resumen del cliente: búsqueda (R1 y R2)", () => {
     montar({ datos: resumen({ perfiles: [] }) });
     const buscar = await screen.findByLabelText(/Buscar en este cliente/);
 
-    fireEvent.change(buscar, { target: { value: "20111111112" } });
+    cambiarValor(buscar, "20111111112");
     const porCuit = document.querySelectorAll(".client-summary__search-results li");
     expect(porCuit).toHaveLength(1);
     expect(porCuit[0]?.querySelector("strong")?.textContent).toBe("Cliente SINTÉTICO A");
     expect(porCuit[0]?.querySelector("small")?.textContent).toBe("CUIT 20111111112");
     expect(document.querySelector(".client-summary__search-status")?.textContent).toBe("1 coincidencia");
 
-    fireEvent.change(buscar, { target: { value: "noviembre" } });
+    cambiarValor(buscar, "noviembre");
     const titulos = Array.from(document.querySelectorAll(".client-summary__search-results strong"), (nodo) => nodo.textContent);
     expect(titulos).toContain("IVA · noviembre de 2026");
 
-    fireEvent.change(buscar, { target: { value: "zzz" } });
+    cambiarValor(buscar, "zzz");
     expect(await screen.findByText("No encontramos coincidencias")).toBeTruthy();
     expect(document.querySelector(".client-summary__search-status")?.textContent).toBe("Sin coincidencias");
   });
@@ -215,7 +216,7 @@ describe("Caracterización · Resumen del cliente: búsqueda (R1 y R2)", () => {
     }));
     montar({ datos: resumen({ perfiles: [], periodos: [], inscripciones: [], actividades: [], obligaciones }) });
 
-    fireEvent.change(await screen.findByLabelText(/Buscar en este cliente/), { target: { value: "IVA" } });
+    cambiarValor(await screen.findByLabelText(/Buscar en este cliente/), "IVA");
     expect(document.querySelectorAll(".client-summary__search-results li")).toHaveLength(8);
     // defecto 3.1.1 corregido en 7a.2: sin tope por sección; el contador es el total real
     expect(document.querySelector(".client-summary__search-status")?.textContent).toBe("8 coincidencias");
@@ -240,10 +241,10 @@ describe("Caracterización · Resumen del cliente: índice y secciones (R3 a R5)
 
   it("R4 · el selector de sección tiene 9 opciones y «Catálogos» muestra los tres conteos", async () => {
     montar();
-    const selector = (await screen.findByRole("combobox", { name: "Sección del cliente" })) as HTMLSelectElement;
-    expect(selector.querySelectorAll("option")).toHaveLength(9);
+    const selector = await screen.findByRole("combobox", { name: "Sección del cliente" });
+    expect(abrirListado("Sección del cliente").querySelectorAll('[role="option"]')).toHaveLength(9);
 
-    fireEvent.change(selector, { target: { value: "catalogs" } });
+    cambiarValor(selector, "catalogs");
     const seccion = await screen.findByRole("region", { name: "Catálogos del cliente" });
     const filas = Array.from(seccion.querySelectorAll(".client-summary__catalog-list li"), (fila) => fila.textContent);
     expect(filas).toEqual(["Plan de cuentas1", "Contrapartes2", "Centros de costo activos3"]);
@@ -390,11 +391,11 @@ describe("Caracterización · matriz §2.1 (13 filas): datos visibles con client
 
   it("M2 · búsqueda: con datos encuentra coincidencias; sin datos dice que no hay coincidencias", async () => {
     montar();
-    fireEvent.change(await screen.findByLabelText(/Buscar en este cliente/), { target: { value: "IVA" } });
+    cambiarValor(await screen.findByLabelText(/Buscar en este cliente/), "IVA");
     expect(document.querySelectorAll(".client-summary__search-results li").length).toBeGreaterThan(0);
     cleanup();
     montar({ datos: resumen(vacio) });
-    fireEvent.change(await screen.findByLabelText(/Buscar en este cliente/), { target: { value: "IVA" } });
+    cambiarValor(await screen.findByLabelText(/Buscar en este cliente/), "IVA");
     expect(await screen.findByText("No encontramos coincidencias")).toBeTruthy();
   });
 
@@ -411,7 +412,7 @@ describe("Caracterización · matriz §2.1 (13 filas): datos visibles con client
 
   it("M4 · resultados de búsqueda: cada resultado abre su sección", async () => {
     montar();
-    fireEvent.change(await screen.findByLabelText(/Buscar en este cliente/), { target: { value: "noviembre" } });
+    cambiarValor(await screen.findByLabelText(/Buscar en este cliente/), "noviembre");
     const resultados = document.querySelectorAll(".client-summary__search-results li");
     expect(resultados).toHaveLength(2);
     fireEvent.click(within(resultados[0] as HTMLElement).getByRole("button"));

@@ -17,6 +17,7 @@ import {
   rutasDemo,
 } from "./datosDemoLegajo";
 import type { EvidenceDocument, Workpaper } from "./tipos";
+import { abrirListado, cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -196,9 +197,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect(
       ((await screen.findByRole("button", { name: "Resolver" })) as HTMLButtonElement).disabled,
     ).toBe(true);
-    fireEvent.change(screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), {
-      target: { value: "Conciliado con el libro IVA Demo" },
-    });
+    cambiarValor(screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), "Conciliado con el libro IVA Demo");
     expect(
       ((await screen.findByRole("button", { name: "Resolver" })) as HTMLButtonElement).disabled,
     ).toBe(false);
@@ -226,22 +225,22 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
-    const evidencia = await screen.findByRole("combobox", {
+    await screen.findByRole("combobox", {
       name: "Evidencia BOOK_RATE_RECONCILIATION",
     });
     expect(
-      within(evidencia).getByRole("option", { name: "Sin documento de respaldo" }),
+      within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).getByRole("option", { name: "Sin documento de respaldo" }),
     ).toBeInTheDocument();
     expect(
-      within(evidencia).getByRole("option", { name: "revisado-demo.pdf · Revisado" }),
+      within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).getByRole("option", { name: "revisado-demo.pdf · Revisado" }),
     ).toBeInTheDocument();
     expect(
-      within(evidencia).getByRole("option", { name: "listo-demo.pdf · Listo" }),
+      within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).getByRole("option", { name: "listo-demo.pdf · Listo" }),
     ).toBeInTheDocument();
     expect(
-      within(evidencia).getByRole("option", { name: "aplicado-demo.pdf · Aplicado" }),
+      within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).getByRole("option", { name: "aplicado-demo.pdf · Aplicado" }),
     ).toBeInTheDocument();
-    expect(within(evidencia).queryByRole("option", { name: /extraido-demo/ })).toBeNull();
+    expect(within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).queryByRole("option", { name: /extraido-demo/ })).toBeNull();
   });
 
   it("Resolver con respaldo envía la resolución, RESOLVED y el documento elegido", async () => {
@@ -250,18 +249,8 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
-    fireEvent.change(
-      await screen.findByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }),
-      {
-        target: { value: "Conciliado con el libro IVA Demo" },
-      },
-    );
-    fireEvent.change(
-      await screen.findByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" }),
-      {
-        target: { value: "doc-listo" },
-      },
-    );
+    cambiarValor(await screen.findByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), "Conciliado con el libro IVA Demo");
+    cambiarValor(await screen.findByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" }), "doc-listo");
     fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
 
     await waitFor(() => expect(llamadasResolve()).toHaveLength(1));
@@ -281,12 +270,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
-    fireEvent.change(
-      await screen.findByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }),
-      {
-        target: { value: "Diferencia de redondeo" },
-      },
-    );
+    cambiarValor(await screen.findByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }), "Diferencia de redondeo");
     fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
 
     await waitFor(() => expect(llamadasResolve()).toHaveLength(1));
@@ -302,12 +286,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
-    fireEvent.change(
-      await screen.findByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }),
-      {
-        target: { value: "Diferencia menor aceptada" },
-      },
-    );
+    cambiarValor(await screen.findByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }), "Diferencia menor aceptada");
     fireEvent.click(screen.getByRole("button", { name: "Eximir" }));
     expect(await screen.findByText(CONFIRMACION_EXIMIR)).toBeInTheDocument();
     expect(llamadasResolve()).toHaveLength(0);
@@ -326,12 +305,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
-    fireEvent.change(
-      await screen.findByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }),
-      {
-        target: { value: "Diferencia menor aceptada" },
-      },
-    );
+    cambiarValor(await screen.findByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }), "Diferencia menor aceptada");
     const eximir = screen.getByRole("button", { name: "Eximir" });
     eximir.focus();
     fireEvent.click(eximir);
@@ -350,12 +324,7 @@ describe("Legajo · etapa Controles (K13)", () => {
 
     expect(await screen.findAllByText(MOTIVO_ACCIONES)).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Eximir" })).toHaveLength(1);
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }),
-      {
-        target: { value: "Diferencia menor" },
-      },
-    );
+    cambiarValor(screen.getByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }), "Diferencia menor");
     expect(screen.getAllByText(MOTIVO_ACCIONES)).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Eximir" })).toBeEnabled();
   });
@@ -367,12 +336,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
-    fireEvent.change(
-      await screen.findByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }),
-      {
-        target: { value: "Conciliado" },
-      },
-    );
+    cambiarValor(await screen.findByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), "Conciliado");
     const resolver = screen.getByRole("button", { name: "Resolver" });
     fireEvent.click(resolver);
 
@@ -482,9 +446,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     );
     expect(screen.getByText(MOTIVO_ACCIONES)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), {
-      target: { value: "Conciliado sin respaldo" },
-    });
+    cambiarValor(screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), "Conciliado sin respaldo");
     expect((screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled).toBe(
       false,
     );
@@ -688,7 +650,7 @@ describe("Legajo · Controles: motivo, lugar de las acciones y diálogo de Eximi
       "aria-describedby",
       motivo.id,
     );
-    fireEvent.change(campo, { target: { value: "Diferencia menor" } });
+    cambiarValor(campo, "Diferencia menor");
     expect(nombres()).toEqual(["Resolver", "Eximir"]);
     expect(within(grupo).queryByRole("note")).toBeNull();
   });
@@ -720,12 +682,7 @@ describe("Legajo · Controles: motivo, lugar de las acciones y diálogo de Eximi
     fijarRespuestas({ controles: [advertencia()] });
     renderLegajo();
     await abrirEtapa(/Controles/);
-    fireEvent.change(
-      await screen.findByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }),
-      {
-        target: { value: "Diferencia menor aceptada" },
-      },
-    );
+    cambiarValor(await screen.findByRole("textbox", { name: "Resolución PORTAL_IVA_RECONCILIATION" }), "Diferencia menor aceptada");
     fireEvent.click(screen.getByRole("button", { name: "Eximir" }));
     const cuerpo = await screen.findByText(CONFIRMACION_EXIMIR);
     expect(cuerpo.textContent).toContain("«Conciliación con Portal IVA»");

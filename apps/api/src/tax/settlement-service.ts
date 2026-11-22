@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { retirarLotesDeLaLiquidacionReemplazada } from "./declaration-credit-lots.js";
 import { filtroSaldosVigentes, lotesConDisponible, periodosElegibles } from "./credit-lots-vigentes.js";
+import { fuentesRetiradasOReemplazadas } from "./fuentes-vigentes.js";
 import { createHash } from "node:crypto";
 import {
   calculateCm03,
@@ -606,24 +607,33 @@ export class SettlementService {
       // certificado declara período, debe coincidir con el del cálculo; un
       // certificado sin período se conserva (atribución completa por régimen/
       // jurisdicción es Fase 1 con TaxInputAllocation).
-      const withholdings = await tx.withholdingCertificate.findMany({
-        where: {
-          firmId: ctx.firmId,
-          clientId: input.clientId,
-          status: "APPROVED",
-          ...(input.sourceScope ? { id: { in: input.sourceScope.withholdingIds } } : {}),
-          ...(period ? { OR: [{ taxPeriodId: null }, { taxPeriodId: input.periodId }] } : {}),
-        },
-      });
-      const perceptions = await tx.perceptionCertificate.findMany({
-        where: {
-          firmId: ctx.firmId,
-          clientId: input.clientId,
-          status: "APPROVED",
-          ...(input.sourceScope ? { id: { in: input.sourceScope.perceptionIds } } : {}),
-          ...(period ? { OR: [{ taxPeriodId: null }, { taxPeriodId: input.periodId }] } : {}),
-        },
-      });
+      // 4K: los certificados de un lote retirado o reemplazado no suman, ni siquiera los ya imputados.
+      const fuentesRetiradas = await fuentesRetiradasOReemplazadas(tx, input.clientId, [
+        "WITHHOLDING",
+        "PERCEPTION",
+      ]);
+      const withholdings = await tx.withholdingCertificate
+        .findMany({
+          where: {
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            status: "APPROVED",
+            ...(input.sourceScope ? { id: { in: input.sourceScope.withholdingIds } } : {}),
+            ...(period ? { OR: [{ taxPeriodId: null }, { taxPeriodId: input.periodId }] } : {}),
+          },
+        })
+        .then((items) => items.filter((item) => !fuentesRetiradas.has(item.id)));
+      const perceptions = await tx.perceptionCertificate
+        .findMany({
+          where: {
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            status: "APPROVED",
+            ...(input.sourceScope ? { id: { in: input.sourceScope.perceptionIds } } : {}),
+            ...(period ? { OR: [{ taxPeriodId: null }, { taxPeriodId: input.periodId }] } : {}),
+          },
+        })
+        .then((items) => items.filter((item) => !fuentesRetiradas.has(item.id)));
       const f931Runs = await tx.f931Run.findMany({
         where: {
           firmId: ctx.firmId,
@@ -647,7 +657,7 @@ export class SettlementService {
               status: "ALLOCATED",
               sourceType: { in: ["WITHHOLDING", "PERCEPTION"] },
             },
-          })
+          }).then((items) => items.filter((item) => !fuentesRetiradas.has(item.sourceId)))
         : [];
       // F1.7: los lotes inmutables son la fuente de verdad. Sólo durante la
       // migración se admite un fallback legacy si todavía no se cargó ningún

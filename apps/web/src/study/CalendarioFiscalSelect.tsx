@@ -1,3 +1,4 @@
+import { SearchSelect } from "@contable/design-system";
 /**
  * Select de formulario con el marcado de la guía (label.ds-field y .ds-field__input).
  * El paquete no trae un componente de select: se anota como pieza faltante en el PR.
@@ -28,22 +29,19 @@ export function CalendarioFiscalSelect({
         {label}
       </label>
       <div className="ds-field__control">
-        <select
+        <SearchSelect
           id={id}
-          className={`ds-field__input${error ? " ds-field__input--error" : ""}`}
+          label={label}
+          hideLabel
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={onChange}
           onBlur={onBlur}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={errorId}
-        >
-          {placeholder !== undefined ? <option value="">{placeholder}</option> : null}
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          invalid={Boolean(error)}
+          describedBy={error ? errorId : undefined}
+          allowEmpty={placeholder !== undefined}
+          placeholder={placeholder ?? "Elegí…"}
+          options={options}
+        />
       </div>
       {error ? (
         <span className="ds-field__error" id={errorId}>

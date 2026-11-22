@@ -1,7 +1,7 @@
 // Etapa Clasificación e imputación del Legajo: clasificación de comprobantes e imputación de retenciones y percepciones (Foco 2.3c).
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { AsyncState, Button, EmptyState, Field, Table, type TableColumn } from "@contable/design-system";
+import { AsyncState, Button, EmptyState, Field, Table, type TableColumn, SearchSelect } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { CLASSIFICATION_ORIGIN_LABELS } from "../etiquetas";
 import { formatMoney } from "../formato";
@@ -251,14 +251,21 @@ export function EtapaClasificacion({
             <p className="workpaper-stage__note">{motivoClasificacionBloqueada}</p>
           ) : null}
           <div className="workpaper-stage__actions">
-            <label>
+            <div>
               Filtrar comprobantes
-              <select aria-label="Filtrar comprobantes" value={filter} onChange={(event) => setFilter(event.target.value)}>
-                <option value="ALL">Todos</option>
-                <option value="PENDING">Sin clasificar</option>
-                <option value="EXCLUDED">Excluidos</option>
-              </select>
-            </label>
+              <SearchSelect
+                label="Filtrar comprobantes"
+                hideLabel
+                value={filter}
+                onChange={(value) => setFilter(value)}
+                allowEmpty={false}
+                options={[
+                  { value: "ALL", label: "Todos" },
+                  { value: "PENDING", label: "Sin clasificar" },
+                  { value: "EXCLUDED", label: "Excluidos" },
+                ]}
+              />
+            </div>
             {puedeClasificar ? (
               <label>
                 <input
@@ -276,29 +283,30 @@ export function EtapaClasificacion({
                 {seleccionados.length} {seleccionados.length === 1 ? "seleccionado" : "seleccionados"}
               </strong>
               {seleccionadosActivos.length > 0 && !sentidos.has("SALE") ? (
-                <select
-                  aria-label="Rubro de las compras seleccionadas"
+                <SearchSelect
+                  label="Rubro de las compras seleccionadas"
+                  hideLabel
                   value={bulkCategory}
-                  onChange={(event) => setBulkCategory(event.target.value)}
-                >
-                  <option value="">Rubro…</option>
-                  <option value="SUPER">SUPER · Minimercados</option>
-                  <option value="TRANSPORTE">TRANSPORTE</option>
-                </select>
+                  onChange={(value) => setBulkCategory(value)}
+                  placeholder="Rubro…"
+                  options={[
+                    { value: "SUPER", label: "SUPER · Minimercados" },
+                    { value: "TRANSPORTE", label: "TRANSPORTE" },
+                  ]}
+                />
               ) : null}
               {seleccionadosActivos.length > 0 && !sentidos.has("PURCHASE") ? (
-                <select
-                  aria-label="Actividad de las ventas seleccionadas"
+                <SearchSelect
+                  label="Actividad de las ventas seleccionadas"
+                  hideLabel
                   value={bulkActivity}
-                  onChange={(event) => setBulkActivity(event.target.value)}
-                >
-                  <option value="">Elegí la actividad…</option>
-                  {activityOptions(bulkActivity).map((activity) => (
-                    <option key={activity.code} value={activity.code}>
-                      {activity.name ? `${activity.code} · ${activity.name}` : activity.code}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setBulkActivity(value)}
+                  placeholder="Elegí la actividad…"
+                  options={activityOptions(bulkActivity).map((activity) => ({
+                    value: activity.code,
+                    label: activity.name ? `${activity.code} · ${activity.name}` : activity.code,
+                  }))}
+                />
               ) : null}
               <Button
                 size="sm"
@@ -498,49 +506,46 @@ export function EtapaClasificacion({
                         <StatusBadge status="INFO" label="Por regla" />
                       ) : null}
                       {classification.direction === "PURCHASE" ? (
-                        <select
-                          aria-label="Rubro del proveedor"
+                        <SearchSelect
+                          label="Rubro del proveedor"
+                          hideLabel
                           value={draft.categoryCode}
-                          onChange={(event) =>
+                          onChange={(value) =>
                             setClassificationDrafts((current) => ({
                               ...current,
                               [classification.id]: {
                                 ...draft,
-                                categoryCode: event.target.value,
+                                categoryCode: value,
                               },
                             }))
                           }
-                        >
-                          <option value="">Rubro…</option>
-                          <option value="SUPER">SUPER · Minimercados</option>
-                          <option value="TRANSPORTE">TRANSPORTE</option>
-                        </select>
+                          placeholder="Rubro…"
+                          options={[
+                            { value: "SUPER", label: "SUPER · Minimercados" },
+                            { value: "TRANSPORTE", label: "TRANSPORTE" },
+                          ]}
+                        />
                       ) : null}
-                      <select
+                      <SearchSelect
                         id={`actividad-${classification.id}`}
-                        aria-label="Actividad"
+                        label="Actividad"
+                        hideLabel
                         value={draft.activityCode}
-                        onChange={(event) =>
+                        onChange={(value) =>
                           setClassificationDrafts((current) => ({
                             ...current,
                             [classification.id]: {
                               ...draft,
-                              activityCode: event.target.value,
+                              activityCode: value,
                             },
                           }))
                         }
-                      >
-                        <option value="">
-                          {classification.direction === "SALE"
-                            ? "Elegí la actividad…"
-                            : "Sin actividad (opcional)"}
-                        </option>
-                        {activityOptions(draft.activityCode).map((activity) => (
-                          <option key={activity.code} value={activity.code}>
-                            {activity.name ? `${activity.code} · ${activity.name}` : activity.code}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder={classification.direction === "SALE" ? "Elegí la actividad…" : "Sin actividad (opcional)"}
+                        options={activityOptions(draft.activityCode).map((activity) => ({
+                          value: activity.code,
+                          label: activity.name ? `${activity.code} · ${activity.name}` : activity.code,
+                        }))}
+                      />
                     </div>
                   )}
                     </>
@@ -806,41 +811,29 @@ export function EtapaClasificacion({
                 header: "Jurisdicción imputada",
                 render: (allocation) =>
                   canEditSources && capabilities.has("tax.vouchers.prepare") ? (
-                    <select
+                    <SearchSelect
                       className="workpaper-allocation-select"
-                      aria-label="Jurisdicción de la imputación"
-                      value={
-                        allocationDrafts[allocation.id] ??
-                        allocation.allocatedJurisdiction?.code ??
-                        ""
-                      }
-                      onChange={(event) =>
+                      label="Jurisdicción de la imputación"
+                      hideLabel
+                      value={allocationDrafts[allocation.id] ?? allocation.allocatedJurisdiction?.code ?? ""}
+                      onChange={(value) =>
                         setAllocationDrafts((current) => ({
                           ...current,
-                          [allocation.id]: event.target.value,
+                          [allocation.id]: value,
                         }))
                       }
-                    >
-                      <option value="">Jurisdicción…</option>
-                      {[
-                        ...(jurisdictionsQuery.data ?? []).filter(
-                          (jurisdiction) => jurisdiction.isActive,
-                        ),
-                        ...(allocation.allocatedJurisdiction &&
-                        !allocation.allocatedJurisdiction.isActive
+                      placeholder="Jurisdicción…"
+                      options={[
+                        ...(jurisdictionsQuery.data ?? []).filter((jurisdiction) => jurisdiction.isActive),
+                        ...(allocation.allocatedJurisdiction && !allocation.allocatedJurisdiction.isActive
                           ? [allocation.allocatedJurisdiction]
                           : []),
-                      ].map((jurisdiction) => (
-                        <option
-                          key={jurisdiction.id}
-                          value={jurisdiction.code}
-                          disabled={!jurisdiction.isActive}
-                        >
-                          {jurisdiction.code} · {jurisdiction.name}
-                          {!jurisdiction.isActive ? " (oculto)" : ""}
-                        </option>
-                      ))}
-                    </select>
+                      ].map((jurisdiction) => ({
+                        value: jurisdiction.code,
+                        label: `${jurisdiction.code} · ${jurisdiction.name}${!jurisdiction.isActive ? " (oculto)" : ""}`,
+                        disabled: !jurisdiction.isActive,
+                      }))}
+                    />
                   ) : allocation.allocatedJurisdiction ? (
                     `${allocation.allocatedJurisdiction.name}${
                       !allocation.allocatedJurisdiction.isActive ? " (oculto)" : ""

@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import type { CatalogEconomicActivity, TaxRuleKindOption } from "@contable/contracts";
 import { MONOTRIBUTO_CATEGORY_CODES } from "@contable/contracts";
-import { Button, MoneyField, Table } from "@contable/design-system";
+import { Button, MoneyField, Table, SearchSelect } from "@contable/design-system";
 import { Icon } from "../../ui/Icon";
 import { ErrorConsulta } from "./Errores";
 import type { RuleJurisdictionOption, RulePackDetail, RuleRow, RuleVersion } from "./tipos";
@@ -181,23 +181,23 @@ export function AlicuotasEditor({
                         const error = rowFieldErrors[`${row.id}.kindId`];
                         return (
                           <div>
-                            <select
+                            <SearchSelect
+                              label={`Tipo de regla de la fila ${rowNumber(row)}`}
+                              hideLabel
                               className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Tipo de regla de la fila ${rowNumber(row)}`}
-                              aria-invalid={Boolean(error)}
+                              invalid={Boolean(error)}
                               value={row.kindId ?? ""}
-                              onChange={(event) => updateDraftRule(row.id, {
-                                kindId: event.target.value || null,
+                              onChange={(value) => updateDraftRule(row.id, {
+                                kindId: value || null,
                                 activityId: null,
                                 activityCode: null,
                                 jurisdictionId: null,
                                 categoryCode: null,
                                 isDefault: false,
                               })}
-                            >
-                              <option value="">Seleccioná un tipo…</option>
-                              {kinds.map((kind) => <option key={kind.id} value={kind.id}>{kind.label}</option>)}
-                            </select>
+                              placeholder="Seleccioná un tipo…"
+                              options={kinds.map((kind) => ({ value: kind.id, label: kind.label }))}
+                            />
                             {error ? <p className="fiscal-rule-row-error" role="alert">{error}</p> : null}
                           </div>
                         );
@@ -238,13 +238,13 @@ export function AlicuotasEditor({
                         const rowError = rowFieldErrors[`${row.id}.activityId`];
                         return (
                           <div>
-                            <select
+                            <SearchSelect
+                              label={`Actividad de la fila ${rowNumber(row)}`}
+                              hideLabel
                               className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Actividad de la fila ${rowNumber(row)}`}
-                              aria-invalid={Boolean(rowError)}
-                                  value={row.isDefault && kind.subject === "ACTIVITY_OR_DEFAULT" ? "__all__" : row.activityId ?? row.activityCode ?? ""}
-                              onChange={(event) => {
-                                const value = event.target.value;
+                              invalid={Boolean(rowError)}
+                              value={row.isDefault && kind.subject === "ACTIVITY_OR_DEFAULT" ? "__all__" : row.activityId ?? row.activityCode ?? ""}
+                              onChange={(value) => {
                                 const selected = options.find((activity) => activity.id === value);
                                 updateDraftRule(row.id, {
                                   activityId: selected?.id ?? null,
@@ -252,22 +252,21 @@ export function AlicuotasEditor({
                                   isDefault: kind.subject === "ACTIVITY_OR_DEFAULT" && value === "__all__",
                                 });
                               }}
-                            >
-                              <option value="">{kind.subject === "ACTIVITY" ? "Sin actividad específica" : "Seleccioná una actividad…"}</option>
-                              {kind.subject === "ACTIVITY_OR_DEFAULT" ? <option value="__all__">Todas las actividades</option> : null}
-                              {options.map((activity) => (
-                                <option key={activity.id} value={activity.id}>
-                                  {activity.code} · {activity.name}
-                                </option>
-                              ))}
-                              {isLegacyCode ? (
-                                <option value={row.activityId ?? row.activityCode ?? ""} disabled>
-                                  {currentActivity && !currentActivity.isActive
-                                    ? `${row.activityCode} (oculto)`
-                                    : `${row.activityCode} — código histórico fuera de la jurisdicción del paquete`}
-                                </option>
-                              ) : null}
-                            </select>
+                              placeholder={kind.subject === "ACTIVITY" ? "Sin actividad específica" : "Seleccioná una actividad…"}
+                              options={[
+                                ...(kind.subject === "ACTIVITY_OR_DEFAULT" ? [{ value: "__all__", label: "Todas las actividades" }] : []),
+                                ...options.map((activity) => ({ value: activity.id, label: `${activity.code} · ${activity.name}` })),
+                                ...(isLegacyCode
+                                  ? [{
+                                    value: row.activityId ?? row.activityCode ?? "",
+                                    label: currentActivity && !currentActivity.isActive
+                                      ? `${row.activityCode} (oculto)`
+                                      : `${row.activityCode} — código histórico fuera de la jurisdicción del paquete`,
+                                    disabled: true,
+                                  }]
+                                  : []),
+                              ]}
+                            />
                             {rowError ? (
                               <p className="fiscal-rule-row-error" role="alert">
                                 {rowError}
@@ -290,23 +289,23 @@ export function AlicuotasEditor({
                         if (!editable) return current?.name ?? row.jurisdictionId ?? "Sin jurisdicción";
                         return (
                           <div>
-                            <select
+                            <SearchSelect
+                              label={`Jurisdicción de la fila ${rowNumber(row)}`}
+                              hideLabel
                               className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Jurisdicción de la fila ${rowNumber(row)}`}
-                              aria-invalid={Boolean(error)}
+                              invalid={Boolean(error)}
                               value={row.isDefault && kind.subject === "JURISDICTION_OR_DEFAULT" ? "__all__" : row.jurisdictionId ?? ""}
-                              onChange={(event) => updateDraftRule(row.id, {
-                                jurisdictionId: event.target.value && event.target.value !== "__all__" ? event.target.value : null,
-                                isDefault: event.target.value === "__all__",
+                              onChange={(value) => updateDraftRule(row.id, {
+                                jurisdictionId: value && value !== "__all__" ? value : null,
+                                isDefault: value === "__all__",
                               })}
-                            >
-                              <option value="">Seleccioná una jurisdicción…</option>
-                              {kind.subject === "JURISDICTION_OR_DEFAULT" ? <option value="__all__">Todas las jurisdicciones</option> : null}
-                              {options.filter((option) => option.isActive).map((option) => (
-                                <option key={option.id} value={option.id}>{option.name}</option>
-                              ))}
-                              {current && !current.isActive ? <option value={current.id} disabled>{current.name} (oculta)</option> : null}
-                            </select>
+                              placeholder="Seleccioná una jurisdicción…"
+                              options={[
+                                ...(kind.subject === "JURISDICTION_OR_DEFAULT" ? [{ value: "__all__", label: "Todas las jurisdicciones" }] : []),
+                                ...options.filter((option) => option.isActive).map((option) => ({ value: option.id, label: option.name })),
+                                ...(current && !current.isActive ? [{ value: current.id, label: `${current.name} (oculta)`, disabled: true }] : []),
+                              ]}
+                            />
                             {error ? <p className="fiscal-rule-row-error" role="alert">{error}</p> : null}
                           </div>
                         );
@@ -322,16 +321,16 @@ export function AlicuotasEditor({
                         if (!editable) return row.categoryCode ?? "Sin categoría";
                         return (
                           <div>
-                            <select
+                            <SearchSelect
+                              label={`Categoría de la fila ${rowNumber(row)}`}
+                              hideLabel
                               className="fiscal-rule-input fiscal-rule-input--select"
-                              aria-label={`Categoría de la fila ${rowNumber(row)}`}
-                              aria-invalid={Boolean(error)}
+                              invalid={Boolean(error)}
                               value={row.categoryCode ?? ""}
-                              onChange={(event) => updateDraftRule(row.id, { categoryCode: event.target.value || null })}
-                            >
-                              <option value="">Seleccioná una categoría…</option>
-                              {MONOTRIBUTO_CATEGORY_CODES.map((code) => <option key={code} value={code}>Categoría {code}</option>)}
-                            </select>
+                              onChange={(value) => updateDraftRule(row.id, { categoryCode: value || null })}
+                              placeholder="Seleccioná una categoría…"
+                              options={MONOTRIBUTO_CATEGORY_CODES.map((code) => ({ value: code, label: `Categoría ${code}` }))}
+                            />
                             {error ? <p className="fiscal-rule-row-error" role="alert">{error}</p> : null}
                           </div>
                         );

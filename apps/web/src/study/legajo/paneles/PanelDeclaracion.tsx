@@ -8,6 +8,7 @@ import {
   MoneyField,
   Notice,
   useNotify,
+  SearchSelect,
 } from "@contable/design-system";
 import {
   FILING_DECLARATION_DOCUMENT_CATEGORY,
@@ -240,19 +241,16 @@ export function PanelDeclaracion({
                 <label className="ds-field__label" htmlFor="dj-documento">
                   Documento de respaldo
                 </label>
-                <select
+                <SearchSelect
                   id="dj-documento"
+                  label="Documento de respaldo"
+                  hideLabel
                   className="ds-field__input"
                   value={form.documentId}
-                  onChange={(event) => setForm((f) => ({ ...f, documentId: event.target.value }))}
-                >
-                  <option value="">Subir una declaración jurada nueva</option>
-                  {opciones.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setForm((f) => ({ ...f, documentId: value }))}
+                  placeholder="Subir una declaración jurada nueva"
+                  options={opciones.map((o) => ({ value: o.id, label: o.label }))}
+                />
                 <small className="ds-field__hint">
                   {declaraciones.length === 0 && !form.documentId
                     ? "Todavía no hay declaraciones juradas subidas para este cliente."

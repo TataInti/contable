@@ -1,4 +1,4 @@
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, SearchSelect } from "@contable/design-system";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { DenseTable, type DenseColumn } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
@@ -54,21 +54,17 @@ export function TablaUsuariosInternos({
           <label className="sr-only" htmlFor={`internal-role-${item.userId}`}>
             Rol de {item.user?.name ?? "usuario eliminado"}
           </label>
-          <select
+          <SearchSelect
             id={`internal-role-${item.userId}`}
+            label={`Rol de ${item.user?.name ?? "usuario eliminado"}`}
+            hideLabel
             className="dense-select dense-select--inline"
             value={internalRoleDrafts[item.userId] ?? item.role}
-            disabled={
-              updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId
-            }
-            onChange={(event) => changeRole(item, event.target.value)}
-          >
-            {INTERNAL_ROLE_OPTIONS.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+            disabled={updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId}
+            onChange={(value) => changeRole(item, value)}
+            allowEmpty={false}
+            options={INTERNAL_ROLE_OPTIONS.map(([value, label]) => ({ value, label }))}
+          />
         </>
       ),
     },

@@ -1,12 +1,14 @@
 // Etapa Controles del Legajo: hallazgos, resolución y evidencia por control (Foco 2.3d).
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { AsyncState, Button, EmptyState, getStatusBadgeMeta } from "@contable/design-system";
+import { AsyncState, Button, EmptyState, getStatusBadgeMeta, SearchSelect } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { CONTROL_LABELS, CONTROL_SEVERITY_LABELS } from "../etiquetas";
 import { formatMoney } from "../formato";
 import type { EvidenceDocument, Workpaper } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
+import { GrupoPerfilControl, type GrupoPerfilVariables } from "./GrupoPerfilControl";
+import { PREFIJO_CONTROL_PERFIL } from "../../fiscal/comprobantesPermitidos";
 
 export interface ResolverControlVariables {
   workpaperId: string;
@@ -32,6 +34,8 @@ export interface EtapaControlesProps {
   setControlEvidence: Dispatch<SetStateAction<Record<string, string>>>;
   documentsQuery: UseQueryResult<EvidenceDocument[], Error>;
   resolveControlMutation: UseMutationResult<unknown, Error, ResolverControlVariables>;
+  /** Excluir o aceptar un grupo «no corresponde al perfil» (corte 4B). */
+  grupoPerfilMutation?: UseMutationResult<unknown, Error, GrupoPerfilVariables>;
   confirmar: (solicitud: SolicitudConfirmacion) => void;
 }
 
@@ -46,6 +50,7 @@ export function EtapaControles({
   setControlEvidence,
   documentsQuery,
   resolveControlMutation,
+  grupoPerfilMutation,
   confirmar,
 }: EtapaControlesProps) {
   const eligibleEvidenceDocuments = (documentsQuery.data ?? []).filter((document) =>
@@ -84,6 +89,17 @@ export function EtapaControles({
         <EmptyState size="inline" title="No hay controles registrados para este legajo." />
       ) : (
         wp.controls.map((control) => {
+          if (control.code.startsWith(PREFIJO_CONTROL_PERFIL)) {
+            return (
+              <GrupoPerfilControl
+                key={control.id}
+                wp={wp}
+                control={control}
+                puedeResolver={puedeResolver}
+                mutation={grupoPerfilMutation}
+              />
+            );
+          }
           const nombre = CONTROL_LABELS[control.code] ?? control.code;
           const resolucion = controlResolutions[control.id]?.trim() ?? "";
           const motivoId = `${control.id}-motivo`;
@@ -132,26 +148,22 @@ export function EtapaControles({
                     }
                   />
                   {control.severity === "BLOCKING" && documentsQuery.isSuccess ? (
-                    <select
-                      aria-label={`Evidencia ${control.code}`}
+                    <SearchSelect
+                      label={`Evidencia ${control.code}`}
+                      hideLabel
                       value={controlEvidence[control.id] ?? ""}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setControlEvidence((values) => ({
                           ...values,
-                          [control.id]: event.target.value,
+                          [control.id]: value,
                         }))
                       }
-                    >
-                      <option value="">Sin documento de respaldo</option>
-                      {eligibleEvidenceDocuments.map((document) => (
-                        <option key={document.id} value={document.id}>
-                          {document.fileVersions?.[0]?.originalName ??
-                            document.category ??
-                            "Documento"}{" "}
-                          · {getStatusBadgeMeta(document.status).label}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Sin documento de respaldo"
+                      options={eligibleEvidenceDocuments.map((document) => ({
+                        value: document.id,
+                        label: `${document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento"} · ${getStatusBadgeMeta(document.status).label}`,
+                      }))}
+                    />
                   ) : null}
                   <span className="workpaper-control__acciones">
                     <Button

@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@contable/design-system";
+import { Button, SearchSelect } from "@contable/design-system";
 import { useClientContext } from "../../context/ClientContext";
 import { ApiError, api } from "../../lib/api";
 import { ActionDrawer } from "../../ui/ActionDrawer";
@@ -141,23 +141,20 @@ export function RechazarDocumento({
           reject.mutate({ documentId, endpoint, reason });
         }}
       >
-        <label className="ds-field" htmlFor="document-rejection-reason">
+        <div className="ds-field">
           <span className="ds-field__label">Motivo del rechazo</span>
-          <select
+          <SearchSelect
             id="document-rejection-reason"
+            label="Motivo del rechazo"
+            hideLabel
             className="ctxbar__input"
             value={rejectionReasonCode}
-            onChange={(event) => setRejectionReasonCode(event.target.value)}
+            onChange={(value) => setRejectionReasonCode(value)}
             required
-          >
-            <option value="">Elegí un motivo</option>
-            {REJECTION_REASONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            placeholder="Elegí un motivo"
+            options={REJECTION_REASONS.map((option) => ({ value: option.value, label: option.label }))}
+          />
+        </div>
         <label className="ds-field" htmlFor="document-rejection-note">
           <span className="ds-field__label">Detalle (opcional)</span>
           <textarea

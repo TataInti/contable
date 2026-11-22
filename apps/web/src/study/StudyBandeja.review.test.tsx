@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { api, ApiError } from "../lib/api";
 import { StudyBandeja } from "./StudyBandeja";
+import { cambiarValor } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 let testQueryClient: QueryClient | null = null;
@@ -213,7 +214,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     expect(screen.queryByLabelText("time")).toBeNull();
 
     const cuit = screen.getByLabelText("CUIT emisor");
-    fireEvent.change(cuit, { target: { value: "20123456780" } });
+    cambiarValor(cuit, "20123456780");
     fireEvent.blur(cuit);
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(
@@ -250,7 +251,7 @@ describe("StudyBandeja — revisión de extracción", () => {
 
       await openExtraction();
       const control = screen.getByLabelText(label);
-      fireEvent.change(control, { target: { value: input } });
+      cambiarValor(control, input);
       fireEvent.blur(control);
 
       await waitFor(() =>
@@ -282,7 +283,7 @@ describe("StudyBandeja — revisión de extracción", () => {
 
       await openExtraction();
       const control = screen.getByLabelText(label);
-      fireEvent.change(control, { target: { value: input } });
+      cambiarValor(control, input);
       if (error) expect(await screen.findByText(error)).toBeTruthy();
       fireEvent.blur(control);
 
@@ -307,7 +308,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     await openExtraction();
     const control = screen.getByLabelText("Alícuota de IVA") as HTMLInputElement;
     expect(control.type).toBe("text");
-    fireEvent.change(control, { target: { value: "21 por ciento" } });
+    cambiarValor(control, "21 por ciento");
     fireEvent.blur(control);
 
     await waitFor(() =>
@@ -325,9 +326,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     const confirm = within(dialog).getByRole("button", { name: "Confirmar rechazo" }) as HTMLButtonElement;
 
     expect(confirm.disabled).toBe(true);
-    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
-      target: { value: "ILLEGIBLE" },
-    });
+    cambiarValor(within(dialog).getByLabelText("Motivo del rechazo"), "ILLEGIBLE");
     expect(confirm.disabled).toBe(false);
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
@@ -363,12 +362,8 @@ describe("StudyBandeja — revisión de extracción", () => {
     await openExtraction();
     fireEvent.click(screen.getByRole("button", { name: "Rechazar" }));
     const dialog = await screen.findByRole("dialog", { name: "¿Rechazar este documento?" });
-    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
-      target: { value: "ILLEGIBLE" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Detalle (opcional)"), {
-      target: { value: "El número no se distingue" },
-    });
+    cambiarValor(within(dialog).getByLabelText("Motivo del rechazo"), "ILLEGIBLE");
+    cambiarValor(within(dialog).getByLabelText("Detalle (opcional)"), "El número no se distingue");
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar rechazo" }));
 
     await waitFor(() =>
@@ -391,9 +386,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     await openExtraction();
     fireEvent.click(screen.getByRole("button", { name: "Rechazar" }));
     const dialog = await screen.findByRole("dialog", { name: "¿Rechazar este documento?" });
-    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
-      target: { value: "OTHER" },
-    });
+    cambiarValor(within(dialog).getByLabelText("Motivo del rechazo"), "OTHER");
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar rechazo" }));
 
     const alert = await within(dialog).findByRole("alert");
@@ -446,7 +439,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     expect(
       (screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled,
     ).toBe(true);
-    fireEvent.change(screen.getByLabelText("Total"), { target: { value: "1210.00" } });
+    cambiarValor(screen.getByLabelText("Total"), "1210.00");
     await waitFor(() =>
       expect(
         (screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled,
@@ -500,12 +493,8 @@ describe("StudyBandeja — revisión de extracción", () => {
     expect(loadButtons).toHaveLength(2);
     fireEvent.click(loadButtons[0]!);
     const dialog = screen.getByRole("dialog", { name: "Cargar datos a mano" });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }), {
-      target: { value: "totalAmount" },
-    });
-    fireEvent.change(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "  1.234,56  " },
-    });
+    cambiarValor(within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }), "totalAmount");
+    cambiarValor(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), "  1.234,56  ");
     const extractionReadsBeforeSave = vi.mocked(api.get).mock.calls.filter(([path]) =>
       path.endsWith("/documents/document-a/extraction"),
     ).length;
@@ -539,12 +528,8 @@ describe("StudyBandeja — revisión de extracción", () => {
     await openExtraction();
     fireEvent.click(screen.getAllByRole("button", { name: "Cargar datos a mano" })[0]!);
     const dialog = screen.getByRole("dialog", { name: "Cargar datos a mano" });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }), {
-      target: { value: "totalAmount" },
-    });
-    fireEvent.change(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "123.00" },
-    });
+    cambiarValor(within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }), "totalAmount");
+    cambiarValor(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), "123.00");
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar" }));
 
     expect(await within(dialog).findByRole("alert")).toBeTruthy();

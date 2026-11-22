@@ -2,7 +2,7 @@ import { formatearRango } from "../../lib/formatoFechas";
 import type { useConfirmAction } from "../../ui/ConfirmAction";
 
 export type FiscalStep = "perfil" | "inscripcion" | "actividades" | "periodos" | "obligaciones";
-export type FiscalTab = "resumen" | "regimenes" | "actividades" | "periodos";
+export type FiscalTab = "resumen" | "regimenes" | "actividades" | "periodos" | "comprobantes";
 
 /** Pestaña donde vive cada paso de la configuración. */
 export const STEP_TAB: Record<FiscalStep, FiscalTab> = {

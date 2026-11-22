@@ -1,6 +1,6 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
-import { Button, Notice } from "@contable/design-system";
+import { Button, Notice, SearchSelect } from "@contable/design-system";
 import { DenseSection } from "../../ui/Dense";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { ErrorAccion } from "./Errores";
@@ -174,18 +174,15 @@ export function ResumenVersion({
             {detail.versions.length > 1 ? (
               <label className="ds-field">
                 <span className="ds-field__label">Versión del paquete</span>
-                <select
+                <SearchSelect
+                  label="Versión del paquete"
+                  hideLabel
                   className="ds-field__input"
-                  aria-label="Versión del paquete"
                   value={selectedVersion.id}
-                  onChange={(event) => setSelectedVersionId(event.target.value)}
-                >
-                  {detail.versions.map((version) => (
-                    <option key={version.id} value={version.id}>
-                      v{version.version} · {formatearFecha(version.validFrom)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setSelectedVersionId(value)}
+                  allowEmpty={false}
+                  options={detail.versions.map((version) => ({ value: version.id, label: `v${version.version} · ${formatearFecha(version.validFrom)}` }))}
+                />
               </label>
             ) : null}
             <span>

@@ -11,6 +11,7 @@ import type { ClientContextValue } from "../context/ClientContext";
 import { api } from "../lib/api";
 import { StudyAdministracion } from "./StudyAdministracion";
 import { readStudyStyles } from "./studyStyles.testutil";
+import { abrirListado, cambiarValor, valorElegido } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -239,7 +240,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     await openStandards();
     fireEvent.click(await screen.findByRole("button", { name: /Nueva norma/ }));
     const input = await screen.findByLabelText(/Nombre de la norma/);
-    fireEvent.change(input, { target: { value: "NCPP 2019" } });
+    cambiarValor(input, "NCPP 2019");
     fireEvent.click(screen.getByRole("button", { name: "Crear norma" }));
 
     await waitFor(() => expect(vi.mocked(api.post)).toHaveBeenCalled());
@@ -302,7 +303,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
       /\bUI\b|fuente de verdad|contexto superior|\bemail\b/i,
     );
 
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "revisor" } });
+    cambiarValor(screen.getByRole("searchbox"), "revisor");
     expect(screen.queryByText("Owner A")).toBeNull();
     expect(screen.getByText("Revisor Demo")).toBeTruthy();
   });
@@ -369,9 +370,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     vi.mocked(api.patch).mockResolvedValue({});
     renderAdministracion();
 
-    fireEvent.change(await screen.findByLabelText("Rol de Revisor Demo"), {
-      target: { value: "OWNER" },
-    });
+    cambiarValor(await screen.findByLabelText("Rol de Revisor Demo"), "OWNER");
 
     await waitFor(() =>
       expect(vi.mocked(api.patch)).toHaveBeenCalledWith("/firms/firm-a/members/u2", { role: "OWNER" }),
@@ -385,10 +384,8 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     await abrirEdicionUsuario("Revisor Demo");
-    fireEvent.change(await screen.findByLabelText("Nombre"), { target: { value: "Revisor Nuevo" } });
-    fireEvent.change(screen.getByLabelText("Correo"), {
-      target: { value: "revisor.nuevo@example.com" },
-    });
+    cambiarValor(await screen.findByLabelText("Nombre"), "Revisor Nuevo");
+    cambiarValor(screen.getByLabelText("Correo"), "revisor.nuevo@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() =>
@@ -407,8 +404,8 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     await abrirEdicionUsuario("Revisor Demo");
     const name = (await screen.findByLabelText("Nombre")) as HTMLInputElement;
     const email = screen.getByLabelText("Correo") as HTMLInputElement;
-    fireEvent.change(name, { target: { value: " " } });
-    fireEvent.change(email, { target: { value: "correo-invalido" } });
+    cambiarValor(name, " ");
+    cambiarValor(email, "correo-invalido");
 
     const drawer = screen.getByRole("dialog", { name: "Editar usuario" });
     const form = drawer.querySelector<HTMLFormElement>("#member-edit-form");
@@ -439,9 +436,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     await abrirEdicionUsuario("Revisor Demo");
-    fireEvent.change(await screen.findByLabelText("Correo"), {
-      target: { value: "ocupado@example.com" },
-    });
+    cambiarValor(await screen.findByLabelText("Correo"), "ocupado@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     expect(await screen.findByRole("alert")).toHaveProperty(
@@ -457,9 +452,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     );
     renderAdministracion();
 
-    fireEvent.change(await screen.findByLabelText("Rol de Owner A"), {
-      target: { value: "PREPARER" },
-    });
+    cambiarValor(await screen.findByLabelText("Rol de Owner A"), "PREPARER");
 
     expect(await screen.findByRole("alert")).toHaveProperty(
       "textContent",
@@ -521,9 +514,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
 
     fireEvent.click(await screen.findByRole("tab", { name: /Accesos del portal/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Editar acceso de Cliente Portal" }));
-    fireEvent.change(await screen.findByLabelText("Rol del portal"), {
-      target: { value: "COLLABORATOR" },
-    });
+    cambiarValor(await screen.findByLabelText("Rol del portal"), "COLLABORATOR");
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() =>
@@ -580,8 +571,8 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     const close = within(drawer).getByRole("button", { name: "Cerrar" });
     await waitFor(() => expect(document.activeElement).toBe(close));
     const clientSelect = await within(drawer).findByLabelText("Cliente");
-    expect(within(clientSelect).getByRole("option", { name: "Cliente Beta" })).toBeTruthy();
-    fireEvent.change(clientSelect, { target: { value: "client-b" } });
+    expect(within(abrirListado("Cliente", drawer)).getByRole("option", { name: "Cliente Beta" })).toBeTruthy();
+    cambiarValor(clientSelect, "client-b");
     fireEvent.click(screen.getByRole("button", { name: "Asignar cliente" }));
 
     await waitFor(() =>
@@ -633,23 +624,15 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     const studyStyles = readStudyStyles();
     expect(studyStyles).toMatch(/\.administration-profile__facts\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
     fireEvent.click(await screen.findByRole("button", { name: "Editar datos" }));
-    fireEvent.change(await screen.findByLabelText("Razón social"), {
-      target: { value: "Estudio Actualizado SRL" },
-    });
-    fireEvent.change(screen.getByLabelText("Nombre del estudio"), {
-      target: { value: "Estudio Actualizado" },
-    });
-    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "30987654321" } });
-    const timezone = (await screen.findByLabelText("Zona horaria")) as HTMLSelectElement;
-    expect(timezone.value).toBe("America/Argentina/Buenos_Aires");
-    const buenosAires = timezone.querySelector<HTMLOptionElement>(
-      'option[value="America/Argentina/Buenos_Aires"]',
-    );
-    expect(buenosAires?.textContent).toContain("Buenos Aires (GMT-3)");
-    expect(timezone.querySelector('optgroup[label="América"]')).not.toBeNull();
-    fireEvent.change(timezone, {
-      target: { value: "America/Argentina/Cordoba" },
-    });
+    cambiarValor(await screen.findByLabelText("Razón social"), "Estudio Actualizado SRL");
+    cambiarValor(screen.getByLabelText("Nombre del estudio"), "Estudio Actualizado");
+    cambiarValor(screen.getByLabelText("CUIT"), "30987654321");
+    const timezone = await screen.findByLabelText("Zona horaria");
+    expect(valorElegido("Zona horaria")).toBe("America/Argentina/Buenos_Aires");
+    const listado = abrirListado("Zona horaria");
+    expect(within(listado).getByRole("option", { name: "Buenos Aires (GMT-3) · Argentina" }).textContent).toContain("Buenos Aires (GMT-3)");
+    expect(within(listado).getByRole("group", { name: "América" })).toBeTruthy();
+    cambiarValor(timezone, "America/Argentina/Cordoba");
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() =>
@@ -675,11 +658,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     fireEvent.click(await screen.findByRole("button", { name: "Alta en lote" }));
-    fireEvent.change(await screen.findByLabelText(/Una persona por línea/), {
-      target: {
-        value: "Lucía Fernández, lucia@estudio.com, Revisor\nMartín Acosta, martin@estudio\nPaula Sosa, paula@estudio.com",
-      },
-    });
+    cambiarValor(await screen.findByLabelText(/Una persona por línea/), "Lucía Fernández, lucia@estudio.com, Revisor\nMartín Acosta, martin@estudio\nPaula Sosa, paula@estudio.com");
 
     // La línea con correo inválido se marca y no se crea.
     expect(await screen.findByText("Correo inválido o faltante.")).toBeTruthy();

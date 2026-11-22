@@ -106,6 +106,11 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/document-upload-sessions/, resolve: () => "document.upload" },
   { match: /\/extractions\//, resolve: (m) => (m === "GET" ? "document.prepare" : "document.review") },
   { match: /\/documents\/[^/]+\/reprocess$/, resolve: (m) => (m === "POST" ? "document.review" : null) },
+  // Control de CUIT (4A-2): aceptar con motivo o mover a otro cliente es revisión; va antes de /documents.
+  {
+    match: /\/documents\/[^/]+\/cuit\/(accept|move)$/,
+    resolve: (m) => (m === "POST" ? "document.review" : null),
+  },
   // Rechazo de un documento que falló (D23-1 a): es revisión, no carga; va antes de la regla general de /documents.
   {
     match: /\/documents\/[^/]+\/reject$/,
@@ -143,6 +148,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/tax-registrations/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
   // Categoría anual del TEM del cliente (corte 1E): se lee y se elige con los permisos del perfil fiscal.
   { match: /\/tem-categories/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
+  // Tipos de comprobante permitidos por cliente (corte 4B): mismos permisos que el perfil fiscal.
+  { match: /\/voucher-permissions/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
   // Cuota fija mensual del Monotributo (corte 3F): el pago usa el permiso de pagos; la categoría, el del perfil fiscal.
   { match: /\/monotributo\/payments$/, resolve: () => "tax.payments.record" },
   {

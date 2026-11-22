@@ -32,6 +32,7 @@ import { CajonCategoriaTem } from "./fiscal/cajones/CajonCategoriaTem";
 import { CajonCategoriaMonotributo } from "./fiscal/cajones/CajonCategoriaMonotributo";
 import { mesActualMonotributo, useMonotributoMes, type FilaCategoriaMonotributo } from "./fiscal/monotributo";
 import { useCategoriaTem } from "./fiscal/categoriaTem";
+import { PestanaComprobantes } from "./fiscal/pestanas/PestanaComprobantes";
 import { periodName, previousMonth, today, type ClientActivityLink, type EconomicActivity, type FiscalStep, type FiscalTab, type ProfileForm, type TaxObligation, type TaxPeriod, type TaxRegime, type TaxRegistration, type TaxType, type TaxpayerProfileVersion } from "./fiscal/utilidades";
 
 // Columna «Estado» de Actividades: el texto «Principal» se queda en este archivo (DesignCorrections lo lee aquí).
@@ -333,6 +334,7 @@ export function StudyOnboardingFiscal() {
           { id: "regimenes", label: "Regímenes", count: registrationsQuery.data?.length ?? 0 },
           { id: "actividades", label: "Actividades", count: clientActivitiesQuery.data?.length ?? 0 },
           { id: "periodos", label: "Períodos y obligaciones", count: periodsQuery.data?.length ?? 0 },
+          { id: "comprobantes", label: "Comprobantes" },
         ]}
       />
 
@@ -345,6 +347,7 @@ export function StudyOnboardingFiscal() {
         {failedQueries.length > 0 ? <AvisoConsultas failedQueries={failedQueries} /> : null}
 
         {tab === "resumen" ? <PestanaResumen nextRequiredStep={nextRequiredStep} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
+        {tab === "comprobantes" && firmId && clientId ? <PestanaComprobantes firmId={firmId} clientId={clientId} canWrite={canWrite} /> : null}
         {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} corregirFecha={corregirInscripcion} confirm={confirm} categoriaTem={categoriaTem.fila} categoriaMonotributo={filaMonotributo} /> : null}
         {tab === "actividades" ? <PestanaActividades canWrite={canWrite} openStepForm={openStepForm} clientActivitiesQuery={clientActivitiesQuery} endActivity={endActivity} corregirFecha={(row) => { updateActivity.reset(); setActivityToEdit(row); }} registrarCambio={() => { registerChange.reset(); setChangeOpen(true); }} confirm={confirm} renderEstado={renderEstadoActividad} /> : null}
         {tab === "periodos" ? <PestanaPeriodos canWrite={canWrite} monthToOpen={monthToOpen} setMonthToOpen={setMonthToOpen} openMonth={openMonth} periodsQuery={periodsQuery} openStepForm={openStepForm} obligationByPeriod={obligationByPeriod} setObligationForm={setObligationForm} registrations={registrationsQuery.data ?? []} corregirInscripcion={corregirInscripcion} corregirPeriodo={corregirPeriodo} anularPeriodo={anularPeriodo} /> : null}

@@ -13,6 +13,7 @@ import {
   respuestaApi,
   seleccionarCliente,
 } from "./clientes.testutil";
+import { abrirListado, cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -90,9 +91,7 @@ describe("StudyClientes — cajón de edición (K5)", () => {
     renderConRutas("/clientes", <StudyClientes />);
     const cajon = await abrirEdicion();
 
-    fireEvent.change(cajon.querySelector("#client-identity-legal-name") as HTMLInputElement, {
-      target: { value: "Sintético Alfa Editada S.A." },
-    });
+    cambiarValor(cajon.querySelector("#client-identity-legal-name") as HTMLInputElement, "Sintético Alfa Editada S.A.");
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(api.patch).toHaveBeenCalledTimes(2));
@@ -125,10 +124,10 @@ describe("StudyClientes — cajón de edición (K5)", () => {
     renderConRutas("/clientes", <StudyClientes />);
     const cajon = await abrirEdicion();
 
-    expect(within(cajon).getByRole("option", { name: "IVA_HISTORICO — valor histórico (conservado)" })).toBeTruthy();
+    expect(within(abrirListado("Condición frente al IVA", cajon)).getByRole("option", { name: "IVA_HISTORICO — valor histórico (conservado)" })).toBeTruthy();
     fireEvent.focus(cajon.querySelector("#client-profile-province") as HTMLInputElement);
     expect(within(cajon).getByRole("option", { name: "Provincia Histórica — valor histórico (conservado)" })).toBeTruthy();
-    expect(within(cajon).getByRole("option", { name: "Actividad Histórica — valor histórico (conservado)" })).toBeTruthy();
+    expect(within(abrirListado("Actividad principal", cajon)).getByRole("option", { name: "Actividad Histórica — valor histórico (conservado)" })).toBeTruthy();
     fireEvent.focus(cajon.querySelector("#client-profile-legal-form") as HTMLInputElement);
     expect(within(cajon).getByRole("option", { name: "Forma Histórica — valor histórico (conservado)" })).toBeTruthy();
     expect(cajon.querySelectorAll(".study-legacy-note")).toHaveLength(4);
@@ -157,9 +156,7 @@ describe("StudyClientes — cajón de edición (K5)", () => {
     const guardar = within(cajon).getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement;
     expect(guardar.disabled).toBe(true);
 
-    fireEvent.change(cajon.querySelector("#client-profile-currency") as HTMLSelectElement, {
-      target: { value: "USD" },
-    });
+    cambiarValor(cajon.querySelector("#client-profile-currency") as HTMLSelectElement, "USD");
     expect(guardar.disabled).toBe(false);
   });
 
@@ -172,9 +169,7 @@ describe("StudyClientes — cajón de edición (K5)", () => {
     const guardar = within(cajon).getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement;
     expect(guardar.disabled).toBe(true);
 
-    fireEvent.change(cajon.querySelector("#client-profile-standard") as HTMLSelectElement, {
-      target: { value: "RTIC" },
-    });
+    cambiarValor(cajon.querySelector("#client-profile-standard") as HTMLSelectElement, "RTIC");
     expect(guardar.disabled).toBe(false);
   });
 

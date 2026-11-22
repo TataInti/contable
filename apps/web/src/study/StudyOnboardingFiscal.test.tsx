@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { api } from "../lib/api";
 import { StudyOnboardingFiscal } from "./StudyOnboardingFiscal";
+import { cambiarValor } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -186,14 +187,14 @@ describe("StudyOnboardingFiscal — acciones de la versión sucesora", () => {
     renderOnboarding();
 
     fireEvent.click(await screen.findByRole("button", { name: "Crear perfil fiscal" }));
-    fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Cliente sintético SA" } });
-    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20111111111" } });
-    fireEvent.change(screen.getByLabelText("Tipo de persona"), { target: { value: "JURIDICA" } });
-    fireEvent.change(screen.getByLabelText("Condición nacional"), { target: { value: "RESPONSABLE_INSCRIPTO" } });
+    cambiarValor(screen.getByLabelText("Razón social"), "Cliente sintético SA");
+    cambiarValor(screen.getByLabelText("CUIT"), "20111111111");
+    cambiarValor(screen.getByLabelText("Tipo de persona"), "JURIDICA");
+    cambiarValor(screen.getByLabelText("Condición nacional"), "RESPONSABLE_INSCRIPTO");
     const addressInput = screen.getByLabelText("Domicilio fiscal") as HTMLInputElement;
-    fireEvent.change(addressInput, { target: { value: "   " } });
+    cambiarValor(addressInput, "   ");
     expect(addressInput.checkValidity()).toBe(false);
-    fireEvent.change(addressInput, { target: { value: "Av. Rivadavia 123" } });
+    cambiarValor(addressInput, "Av. Rivadavia 123");
     fireEvent.click(screen.getByRole("button", { name: "Crear perfil" }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(

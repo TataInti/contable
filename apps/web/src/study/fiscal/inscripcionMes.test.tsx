@@ -10,6 +10,7 @@ import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { StudyOnboardingFiscal } from "../StudyOnboardingFiscal";
 import { fechaLarga, inscripcionesSinCobertura, primerDiaMesAnterior } from "./fechas";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -169,8 +170,8 @@ describe("Registrar inscripción pide «Desde»", () => {
   it("envía el «Desde» elegido, no la vigencia del perfil", async () => {
     vi.mocked(api.post).mockResolvedValue({} as never);
     const cajon = await abrirCajon();
-    fireEvent.change(cajon.querySelector("#reg-regime") as HTMLSelectElement, { target: { value: "reg-iibb" } });
-    fireEvent.change(within(cajon).getByLabelText("Desde"), { target: { value: "2026-09-15" } });
+    cambiarValor(cajon.querySelector("#reg-regime") as HTMLSelectElement, "reg-iibb");
+    cambiarValor(within(cajon).getByLabelText("Desde"), "2026-09-15");
     expect(within(cajon).getByText("15/09/2026 · 15 de septiembre de 2026")).toBeTruthy();
     fireEvent.click(within(cajon).getByRole("button", { name: "Registrar inscripción" }));
     await waitFor(() =>
@@ -180,8 +181,8 @@ describe("Registrar inscripción pide «Desde»", () => {
 
   it("sin fecha no envía nada y lo dice junto al campo", async () => {
     const cajon = await abrirCajon();
-    fireEvent.change(cajon.querySelector("#reg-regime") as HTMLSelectElement, { target: { value: "reg-iibb" } });
-    fireEvent.change(within(cajon).getByLabelText("Desde"), { target: { value: "" } });
+    cambiarValor(cajon.querySelector("#reg-regime") as HTMLSelectElement, "reg-iibb");
+    cambiarValor(within(cajon).getByLabelText("Desde"), "");
     fireEvent.click(within(cajon).getByRole("button", { name: "Registrar inscripción" }));
     expect(await within(cajon).findByText("Indicá desde qué fecha está inscripto el cliente.")).toBeTruthy();
     expect(api.post).not.toHaveBeenCalled();
@@ -200,7 +201,7 @@ describe("Corregir la fecha «Desde» desde la tabla de Regímenes", () => {
     expect(desde.value).toBe("2026-11-21");
     expect(within(cajon).getByText("21/11/2026 · 21 de noviembre de 2026")).toBeTruthy();
 
-    fireEvent.change(desde, { target: { value: "2026-10-01" } });
+    cambiarValor(desde, "2026-10-01");
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar fecha" }));
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith(`${BASE}/tax-registrations/row-iibb`, { validFrom: "2026-10-01" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Corregir fecha de inscripción" })).toBeNull());
@@ -270,7 +271,7 @@ describe("«Abrir mes» guía cuando la inscripción no cubre el mes", () => {
   it("muestra el mes elegido en letras debajo del selector", async () => {
     await irAPeriodos({ inscripciones: [] });
     expect(screen.getByText("Octubre de 2026")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Mes a liquidar"), { target: { value: "2026-09" } });
+    cambiarValor(screen.getByLabelText("Mes a liquidar"), "2026-09");
     expect(screen.getByText("Septiembre de 2026")).toBeTruthy();
   });
 });
@@ -303,8 +304,8 @@ describe("Períodos sin obligación: corregir o anular", () => {
     const cajon = await screen.findByRole("dialog", { name: "Corregir período fiscal" });
     expect((within(cajon).getByLabelText("Desde") as HTMLInputElement).value).toBe("2026-11-21");
     expect((within(cajon).getByLabelText("Hasta") as HTMLInputElement).value).toBe("2026-11-21");
-    fireEvent.change(within(cajon).getByLabelText("Desde"), { target: { value: "2026-10-01" } });
-    fireEvent.change(within(cajon).getByLabelText("Hasta"), { target: { value: "2026-10-31" } });
+    cambiarValor(within(cajon).getByLabelText("Desde"), "2026-10-01");
+    cambiarValor(within(cajon).getByLabelText("Hasta"), "2026-10-31");
     expect(within(cajon).getByText("01/10/2026 · 1 de octubre de 2026")).toBeTruthy();
     expect(within(cajon).getByText("31/10/2026 · 31 de octubre de 2026")).toBeTruthy();
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar período" }));
@@ -317,7 +318,7 @@ describe("Períodos sin obligación: corregir o anular", () => {
     await irAPeriodos();
     fireEvent.click(screen.getByRole("button", { name: "Corregir" }));
     const cajon = await screen.findByRole("dialog", { name: "Corregir período fiscal" });
-    fireEvent.change(within(cajon).getByLabelText("Hasta"), { target: { value: "2026-11-01" } });
+    cambiarValor(within(cajon).getByLabelText("Hasta"), "2026-11-01");
     expect(within(cajon).getByText("El «Hasta» no puede ser anterior al «Desde».")).toBeTruthy();
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar período" }));
     expect(api.patch).not.toHaveBeenCalled();

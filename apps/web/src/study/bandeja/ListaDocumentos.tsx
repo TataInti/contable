@@ -13,6 +13,9 @@ import {
 } from "../../ui/Dense";
 import { nombreVisibleDelEstado } from "./colaDeDocumentos";
 import { documentFileName, documentTypeLabel } from "./utilidades";
+import { ControlCuitBloque } from "./ControlCuit";
+import { etiquetaCuitEstado } from "./cuitControlTexto";
+import { useClientContext } from "../../context/ClientContext";
 
 interface ListaDocumentosProps {
   /** Todos los documentos de la consulta: distinguen «Bandeja vacía» de «sin coincidencias». */
@@ -40,6 +43,11 @@ const COLUMNAS: ReadonlyArray<DenseColumn<Document>> = [
       <span className="bandeja-documento">
         <strong>{documentFileName(row)}</strong>
         <small>{`${documentTypeLabel(row)} · ${formatearFechaHora(row.createdAt)}`}</small>
+        {row.cuitControl?.pendiente ? (
+          <small className="bandeja-cuit" role="note">
+            {etiquetaCuitEstado(row.cuitControl.estado)}
+          </small>
+        ) : null}
       </span>
     ),
   },
@@ -68,6 +76,7 @@ export function ListaDocumentos({
 }: ListaDocumentosProps) {
   const busquedaRef = useRef<HTMLInputElement>(null);
   useDenseShortcuts({ searchRef: busquedaRef });
+  const { firmId, clientId, capabilities } = useClientContext();
   const total = todos.length;
 
   return (
@@ -81,6 +90,14 @@ export function ListaDocumentos({
           inputRef={busquedaRef}
         />
       </DenseToolbar>
+      {!cargando && !error && firmId && clientId ? (
+        <ControlCuitBloque
+          documentos={visibles}
+          firmId={firmId}
+          clientId={clientId}
+          puedeRevisar={capabilities.has("document.review")}
+        />
+      ) : null}
       {cargando || error ? (
         <AsyncState
           loading={cargando}

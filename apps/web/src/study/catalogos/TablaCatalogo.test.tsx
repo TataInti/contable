@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { StudyCatalogosFiscales } from "../StudyCatalogosFiscales";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -271,7 +272,7 @@ function renderCatalogos() {
 
 const openTab = async (name: RegExp) => fireEvent.click(await screen.findByRole("tab", { name }));
 const buscar = (texto: string) =>
-  fireEvent.change(screen.getByPlaceholderText("Buscar código o nombre…"), { target: { value: texto } });
+  cambiarValor(screen.getByPlaceholderText("Buscar código o nombre…"), texto);
 const muestra = (texto: string) => screen.queryAllByText(texto).length > 0;
 
 beforeEach(() => {
@@ -323,7 +324,7 @@ describe("Tabla de Catálogos fiscales (K2)", () => {
     await screen.findByText("3 de 3");
     expect(screen.getByText("DEMO-CIU").closest("tr")?.className).toContain("dense-row--muted");
     expect(screen.getByText("DEMO-NAC").closest("tr")?.className).not.toContain("dense-row--muted");
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "inactive" } });
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "inactive");
     expect(await screen.findByText("1 de 3")).toBeTruthy();
     expect(muestra("DEMO-CIU")).toBe(true);
     expect(muestra("DEMO-PBA")).toBe(false);
@@ -367,7 +368,7 @@ describe("Tabla de Catálogos fiscales (K2)", () => {
     datos.organismos = [organismoOculto];
     renderCatalogos();
     expect(await screen.findByText("1 de 1")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "active" } });
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "active");
     expect(await screen.findByText("Todavía no hay organismos recaudadores")).toBeTruthy();
   });
 
@@ -464,10 +465,10 @@ describe("Filtros y resumen de Catálogos fiscales (K3)", () => {
     renderCatalogos();
     await openTab(/^Jurisdicciones/);
     await screen.findByText("3 de 3");
-    fireEvent.change(screen.getByLabelText("Filtrar por jurisdicción"), { target: { value: "jur-prov" } });
+    cambiarValor(screen.getByLabelText("Filtrar por jurisdicción"), "jur-prov");
     expect(await screen.findByText("1 de 3")).toBeTruthy();
     expect(muestra("DEMO-PBA")).toBe(true);
-    fireEvent.change(screen.getByLabelText("Filtrar por jurisdicción"), { target: { value: "jur-nacion" } });
+    cambiarValor(screen.getByLabelText("Filtrar por jurisdicción"), "jur-nacion");
     expect(await screen.findByText("3 de 3")).toBeTruthy();
   });
 

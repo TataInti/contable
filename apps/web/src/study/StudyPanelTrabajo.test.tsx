@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaxPanelResponse, TaxPanelRow } from "@contable/contracts";
 import type { ClientContextValue } from "../context/ClientContext";
 import { StudyPanelTrabajo } from "./StudyPanelTrabajo";
+import { cambiarValor, textoElegido } from "../test/elegirOpcion";
 
 // Datos sintéticos rotulados: no son clientes ni obligaciones reales.
 const apiMock = vi.hoisted(() => ({ get: vi.fn(), getEnvelope: vi.fn() }));
@@ -169,9 +170,7 @@ describe("Panel de trabajo: pantalla", () => {
   it("guarda los filtros en la URL y «Quitar filtros» vuelve a la vista inicial", async () => {
     renderPanel();
     await tablaPanel();
-    fireEvent.change(screen.getByRole("combobox", { name: "Responsable" }), {
-      target: { value: "todos" },
-    });
+    cambiarValor(screen.getByRole("combobox", { name: "Responsable" }), "todos");
     await waitFor(() => expect(ubicacion()).toBe("/panel-trabajo?responsable=todos"));
     expect(ultimaRuta()).not.toContain("responsable=");
     fireEvent.click(screen.getByRole("button", { name: "Quitar filtros" }));
@@ -406,8 +405,7 @@ describe("Panel de trabajo: pantalla", () => {
     expect(within(segunda).getByLabelText("Vencimiento desde")).toBeTruthy();
     expect(within(segunda).getByLabelText("Vencimiento hasta")).toBeTruthy();
     expect(within(segunda).getByRole("button", { name: "Quitar filtros" })).toBeTruthy();
-    const estado = screen.getByRole("combobox", { name: "Estado" }) as HTMLSelectElement;
-    expect(estado.selectedOptions[0]?.textContent).toBe("Estado: DJ pendiente");
+    expect(textoElegido("Estado")).toBe("Estado: DJ pendiente");
     expect(screen.queryByRole("button", { name: "Quitar el filtro Mis obligaciones" })).toBeNull();
   });
 

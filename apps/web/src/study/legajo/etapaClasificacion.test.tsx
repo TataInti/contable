@@ -10,6 +10,7 @@ import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { StudyExpedienteMensual } from "../StudyExpedienteMensual";
 import { CLIENTE_DEMO, FIRMA_DEMO, legajoDemo, PERIODO_ELEGIDO_DEMO, rutasDemo } from "./datosDemoLegajo";
+import { abrirListado, cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -229,7 +230,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     fijarContexto(PERMISOS_CLASIFICAR);
     renderLegajo();
     await abrirClasificacion();
-    fireEvent.change(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), { target: { value: "PENDING" } });
+    cambiarValor(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), "PENDING");
     expect(screen.getByText("A · 0001-00000001")).toBeInTheDocument();
     expect(screen.queryByText("A · 0001-00000002")).not.toBeInTheDocument();
   });
@@ -273,12 +274,8 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     renderLegajo();
     await abrirClasificacion();
     const fila = filaCon("A · 0001-00000001");
-    fireEvent.change(within(fila).getByRole("combobox", { name: "Rubro del proveedor" }), {
-      target: { value: "SUPER" },
-    });
-    fireEvent.change(within(fila).getByRole("combobox", { name: "Actividad" }), {
-      target: { value: "REST" },
-    });
+    cambiarValor(within(fila).getByRole("combobox", { name: "Rubro del proveedor" }), "SUPER");
+    cambiarValor(within(fila).getByRole("combobox", { name: "Actividad" }), "REST");
     fireEvent.click(within(fila).getByRole("button", { name: "Guardar" }));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(`${LEGAJO}/classifications/compra-a`, {
@@ -294,9 +291,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     renderLegajo();
     await abrirClasificacion();
     const fila = filaCon("B · 0001-00000003");
-    fireEvent.change(within(fila).getByRole("combobox", { name: "Actividad" }), {
-      target: { value: "REST" },
-    });
+    cambiarValor(within(fila).getByRole("combobox", { name: "Actividad" }), "REST");
     fireEvent.click(within(fila).getByRole("button", { name: "Guardar" }));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(`${LEGAJO}/classifications/venta-a`, {
@@ -309,15 +304,12 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     fijarContexto(PERMISOS_CLASIFICAR);
     renderLegajo();
     await abrirClasificacion();
-    const actividad = within(filaCon("B · 0001-00000004")).getByRole("combobox", {
-      name: "Actividad",
-    });
     expect(
-      within(actividad).getByRole("option", { name: "REST · Restaurante" }),
+      within(abrirListado("Actividad", filaCon("B · 0001-00000004"))).getByRole("option", { name: "REST · Restaurante" }),
     ).toBeInTheDocument();
-    expect(within(actividad).getByRole("option", { name: "VIEJA" })).toBeInTheDocument();
+    expect(within(abrirListado("Actividad", filaCon("B · 0001-00000004"))).getByRole("option", { name: "VIEJA" })).toBeInTheDocument();
     expect(
-      within(actividad).queryByRole("option", { name: "VIEJA · Actividad vencida" }),
+      within(abrirListado("Actividad", filaCon("B · 0001-00000004"))).queryByRole("option", { name: "VIEJA · Actividad vencida" }),
     ).toBeNull();
   });
 
@@ -338,10 +330,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     renderLegajo();
     await abrirClasificacion();
     const fila = filaCon(/CERT-1/);
-    fireEvent.change(
-      within(fila).getByRole("combobox", { name: "Jurisdicción de la imputación" }),
-      { target: { value: "CBA" } },
-    );
+    cambiarValor(within(fila).getByRole("combobox", { name: "Jurisdicción de la imputación" }), "CBA");
     fireEvent.click(within(fila).getByRole("button", { name: "Reimputar" }));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(`${LEGAJO}/allocations/allocation-a`, {
@@ -417,9 +406,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       await abrirClasificacion();
       marcar("B · 0001-00000003");
       marcar("B · 0001-00000004");
-      fireEvent.change(screen.getByRole("combobox", { name: "Actividad de las ventas seleccionadas" }), {
-        target: { value: "REST" },
-      });
+      cambiarValor(screen.getByRole("combobox", { name: "Actividad de las ventas seleccionadas" }), "REST");
       fireEvent.click(screen.getByRole("button", { name: "Clasificar seleccionados" }));
       await waitFor(() =>
         expect(api.post).toHaveBeenCalledWith(`${LEGAJO}/classifications/bulk`, {
@@ -437,9 +424,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       fireEvent.click(screen.getByRole("checkbox", { name: "Recordar para este proveedor/cliente" }));
       marcar("A · 0001-00000001");
       marcar("A · 0001-00000002");
-      fireEvent.change(screen.getByRole("combobox", { name: "Rubro de las compras seleccionadas" }), {
-        target: { value: "TRANSPORTE" },
-      });
+      cambiarValor(screen.getByRole("combobox", { name: "Rubro de las compras seleccionadas" }), "TRANSPORTE");
       fireEvent.click(screen.getByRole("button", { name: "Clasificar seleccionados" }));
       await waitFor(() =>
         expect(api.post).toHaveBeenCalledWith(`${LEGAJO}/classifications/bulk`, {
@@ -450,7 +435,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       );
 
       const fila = filaCon("B · 0001-00000003");
-      fireEvent.change(within(fila).getByRole("combobox", { name: "Actividad" }), { target: { value: "REST" } });
+      cambiarValor(within(fila).getByRole("combobox", { name: "Actividad" }), "REST");
       fireEvent.click(within(fila).getByRole("button", { name: "Guardar" }));
       await waitFor(() =>
         expect(api.patch).toHaveBeenCalledWith(`${LEGAJO}/classifications/venta-a`, {
@@ -496,7 +481,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       expect(
         screen.getByText(/1 venta asignada a REST automáticamente/),
       ).toBeInTheDocument();
-      fireEvent.change(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), { target: { value: "PENDING" } });
+      cambiarValor(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), "PENDING");
       expect(screen.queryByText("B · 0001-00000006")).not.toBeInTheDocument();
       expect(screen.queryByText("B · 0001-00000007")).not.toBeInTheDocument();
       expect(screen.getByText("B · 0001-00000003")).toBeInTheDocument();
@@ -507,7 +492,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       fijarContexto(PERMISOS_CLASIFICAR);
       renderLegajo();
       await abrirClasificacion();
-      fireEvent.change(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), { target: { value: "EXCLUDED" } });
+      cambiarValor(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), "EXCLUDED");
       expect(screen.getByText("B · 0001-00000007")).toBeInTheDocument();
       expect(screen.queryByText("B · 0001-00000003")).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Reincluir el comprobante B · 0001-00000007" }));
@@ -529,7 +514,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       fireEvent.click(screen.getByRole("button", { name: "Confirmar exclusión" }));
       expect(await screen.findByText("Indicá el motivo de la exclusión")).toBeInTheDocument();
       expect(api.post).not.toHaveBeenCalled();
-      fireEvent.change(screen.getByLabelText("Motivo de la exclusión"), { target: { value: "Factura duplicada" } });
+      cambiarValor(screen.getByLabelText("Motivo de la exclusión"), "Factura duplicada");
       fireEvent.click(screen.getByRole("button", { name: "Confirmar exclusión" }));
       await waitFor(() =>
         expect(api.post).toHaveBeenCalledWith(`${LEGAJO}/classifications/exclude`, {
