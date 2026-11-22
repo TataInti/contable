@@ -1,13 +1,14 @@
 // Etapa Clasificación e imputación del Legajo: clasificación de comprobantes e imputación de retenciones y percepciones (Foco 2.3c).
-import type { Dispatch, SetStateAction } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { AsyncState, Button, EmptyState, Table } from "@contable/design-system";
+import { AsyncState, Button, EmptyState, Field, Table, type TableColumn } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { CLASSIFICATION_ORIGIN_LABELS } from "../etiquetas";
 import { formatMoney } from "../formato";
 import type {
   AllocationCoverage,
   ClassificationCoverage,
+  ClassificationRule,
   TaxJurisdiction,
   WorkpaperAllocation,
   WorkpaperClassification,
@@ -29,7 +30,33 @@ export interface EtapaClasificacionProps {
   setAllocationDrafts: Dispatch<SetStateAction<Record<string, string>>>;
   classifyVoucherMutation: UseMutationResult<unknown, Error, WorkpaperClassification>;
   reallocateInputMutation: UseMutationResult<unknown, Error, WorkpaperAllocation>;
+  /** Corte 3B: clasificar, excluir y reglas «recordar». Las reglas se leen aparte de la cobertura. */
+  canEditClassifications: boolean;
+  /** Por qué el mes no admite cambios de clasificación (cerrado o en revisión); null si los admite. */
+  motivoClasificacionBloqueada: string | null;
+  rememberRule: boolean;
+  setRememberRule: Dispatch<SetStateAction<boolean>>;
+  rulesQuery: UseQueryResult<ClassificationRule[], Error>;
+  bulkClassifyMutation: UseMutationResult<unknown, Error, BloqueClasificacion>;
+  excludeMutation: UseMutationResult<unknown, Error, { ids: string[]; reason: string }>;
+  includeMutation: UseMutationResult<unknown, Error, { ids: string[] }>;
+  deleteRuleMutation: UseMutationResult<unknown, Error, ClassificationRule>;
 }
+
+/** Un mismo rubro (compras) o una misma actividad (ventas) para varios comprobantes. */
+export type BloqueClasificacion = {
+  ids: string[];
+  categoryCode: string;
+  activityCode: string;
+};
+
+// Asignaciones que hace el sistema solo cuando el cliente tiene una única actividad (por cliente o por nivel).
+const ORIGENES_AUTOMATICOS = ["SINGLE_CLIENT_ACTIVITY", "SINGLE_ACTIVITY_PER_LEVEL"];
+
+const numeroComprobante = (classification: WorkpaperClassification) =>
+  `${classification.voucher.letter ?? classification.voucher.type} · ${String(classification.voucher.pointOfSale).padStart(4, "0")}-${String(classification.voucher.number).padStart(8, "0")}`;
+
+const fechaCorta = (value: string) => new Date(value).toLocaleDateString("es-AR", { timeZone: "UTC" });
 
 export function EtapaClasificacion({
   capabilities,
@@ -44,11 +71,94 @@ export function EtapaClasificacion({
   setAllocationDrafts,
   classifyVoucherMutation,
   reallocateInputMutation,
+  canEditClassifications,
+  motivoClasificacionBloqueada,
+  rememberRule,
+  setRememberRule,
+  rulesQuery,
+  bulkClassifyMutation,
+  excludeMutation,
+  includeMutation,
+  deleteRuleMutation,
 }: EtapaClasificacionProps) {
+  const [filter, setFilter] = useState("ALL");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [bulkActivity, setBulkActivity] = useState("");
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [excluyendo, setExcluyendo] = useState(false);
+  const [motivoExclusion, setMotivoExclusion] = useState("");
+  const [motivoError, setMotivoError] = useState<string | null>(null);
+  const visibleClassifications = useMemo(() => {
+    const items = classificationQuery.data?.items ?? [];
+    if (filter === "PENDING") {
+      return items.filter((item) => !item.excludedAt && item.status !== "CLASSIFIED");
+    }
+    return filter === "EXCLUDED" ? items.filter((item) => item.excludedAt) : items;
+  }, [classificationQuery.data?.items, filter]);
+  const seleccionados = useMemo(
+    () => (classificationQuery.data?.items ?? []).filter((item) => selectedIds.includes(item.id)),
+    [classificationQuery.data?.items, selectedIds],
+  );
+  const seleccionadosActivos = seleccionados.filter((item) => !item.excludedAt);
+  const seleccionadosExcluidos = seleccionados.filter((item) => item.excludedAt);
+  const sentidos = new Set(seleccionadosActivos.map((item) => item.direction));
+  // Ventas asignadas solas por tener una única actividad: se muestran y no cuentan como pendientes.
+  const asignadasSolas = useMemo(() => {
+    const porActividad = new Map<string, number>();
+    for (const item of classificationQuery.data?.items ?? []) {
+      if (item.excludedAt || !ORIGENES_AUTOMATICOS.includes(item.origin ?? "")) continue;
+      const clave = item.activityCode ?? "";
+      porActividad.set(clave, (porActividad.get(clave) ?? 0) + 1);
+    }
+    return [...porActividad.entries()];
+  }, [classificationQuery.data?.items]);
+  const puedeClasificar = canEditClassifications && capabilities.has("tax.vouchers.prepare");
+
+  const clasificarSeleccionados = () => {
+    setBulkError(null);
+    if (seleccionadosActivos.length === 0) {
+      setBulkError("Elegí al menos un comprobante sin excluir");
+      return;
+    }
+    if (sentidos.size > 1) {
+      setBulkError("Elegí solo compras o solo ventas: cada grupo lleva su propio rubro o actividad");
+      return;
+    }
+    if (seleccionadosActivos[0]!.direction === "PURCHASE" && !bulkCategory) {
+      setBulkError("Seleccioná el rubro de las compras elegidas");
+      return;
+    }
+    if (seleccionadosActivos[0]!.direction === "SALE" && !bulkActivity) {
+      setBulkError("Indicá la actividad fiscal de las ventas elegidas");
+      return;
+    }
+    bulkClassifyMutation.mutate(
+      { ids: seleccionadosActivos.map((item) => item.id), categoryCode: bulkCategory, activityCode: bulkActivity },
+      { onSuccess: () => setSelectedIds([]) },
+    );
+  };
+  const confirmarExclusion = () => {
+    if (!motivoExclusion.trim()) {
+      setMotivoError("Indicá el motivo de la exclusión");
+      return;
+    }
+    setMotivoError(null);
+    excludeMutation.mutate(
+      { ids: seleccionadosActivos.map((item) => item.id), reason: motivoExclusion.trim() },
+      {
+        onSuccess: () => {
+          setSelectedIds([]);
+          setExcluyendo(false);
+          setMotivoExclusion("");
+        },
+      },
+    );
+  };
   // Motivo visible junto a la tabla cuando la pantalla no deja clasificar ni imputar (P1).
   const motivoEditar = !capabilities.has("tax.vouchers.prepare")
     ? "Tu rol no puede clasificar comprobantes ni imputar retenciones."
-    : !canEditSources
+    : !canEditSources && !canEditClassifications
       ? "El legajo no admite cambios de fuentes en su estado actual."
       : null;
   // Antes de responder, el indicador dice «pendiente»; si la consulta falla, «no disponible» (C03).
@@ -74,6 +184,10 @@ export function EtapaClasificacion({
         <span>
           <strong>{indicador(classificationQuery.data?.pending)}</strong>
           <small>Pendientes</small>
+        </span>
+        <span>
+          <strong>{indicador(classificationQuery.data?.excluded)}</strong>
+          <small>Excluidos</small>
         </span>
         <span>
           {classificationQuery.isSuccess ? (
@@ -107,8 +221,140 @@ export function EtapaClasificacion({
           {classificationQuery.isFetching ? (
             <small className="muted-copy">Dato del último corte; se está actualizando.</small>
           ) : null}
+          {asignadasSolas.length > 0 ? (
+            <p className="workpaper-stage__note">
+              {asignadasSolas
+                .map(([actividad, cantidad]) =>
+                  actividad
+                    ? `${cantidad} ${cantidad === 1 ? "venta asignada" : "ventas asignadas"} a ${actividad} automáticamente`
+                    : `${cantidad} ${cantidad === 1 ? "venta asignada" : "ventas asignadas"} automáticamente a la única actividad de cada nivel`,
+                )
+                .join(" · ")}
+              . No cuentan como pendientes.
+            </p>
+          ) : null}
+          {motivoClasificacionBloqueada ? (
+            <p className="workpaper-stage__note">{motivoClasificacionBloqueada}</p>
+          ) : null}
+          <div className="workpaper-stage__actions">
+            <label>
+              Filtrar comprobantes
+              <select aria-label="Filtrar comprobantes" value={filter} onChange={(event) => setFilter(event.target.value)}>
+                <option value="ALL">Todos</option>
+                <option value="PENDING">Sin clasificar</option>
+                <option value="EXCLUDED">Excluidos</option>
+              </select>
+            </label>
+            {puedeClasificar ? (
+              <label>
+                <input
+                  type="checkbox"
+                  checked={rememberRule}
+                  onChange={(event) => setRememberRule(event.target.checked)}
+                />{" "}
+                Recordar para este proveedor/cliente
+              </label>
+            ) : null}
+          </div>
+          {puedeClasificar ? (
+            <div className="workpaper-stage__actions" role="group" aria-label="Acciones sobre los comprobantes seleccionados">
+              <strong>
+                {seleccionados.length} {seleccionados.length === 1 ? "seleccionado" : "seleccionados"}
+              </strong>
+              {seleccionadosActivos.length > 0 && !sentidos.has("SALE") ? (
+                <select
+                  aria-label="Rubro de las compras seleccionadas"
+                  value={bulkCategory}
+                  onChange={(event) => setBulkCategory(event.target.value)}
+                >
+                  <option value="">Rubro…</option>
+                  <option value="SUPER">SUPER · Minimercados</option>
+                  <option value="TRANSPORTE">TRANSPORTE</option>
+                </select>
+              ) : null}
+              {seleccionadosActivos.length > 0 && !sentidos.has("PURCHASE") ? (
+                <select
+                  aria-label="Actividad de las ventas seleccionadas"
+                  value={bulkActivity}
+                  onChange={(event) => setBulkActivity(event.target.value)}
+                >
+                  <option value="">Elegí la actividad…</option>
+                  {activityOptions(bulkActivity).map((activity) => (
+                    <option key={activity.code} value={activity.code}>
+                      {activity.name ? `${activity.code} · ${activity.name}` : activity.code}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={bulkClassifyMutation.isPending}
+                onClick={clasificarSeleccionados}
+              >
+                Clasificar seleccionados
+              </Button>
+              {seleccionadosActivos.length > 0 ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setExcluyendo((current) => !current)}
+                >
+                  Excluir seleccionados
+                </Button>
+              ) : null}
+              {seleccionadosExcluidos.length > 0 ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={includeMutation.isPending}
+                  onClick={() =>
+                    includeMutation.mutate(
+                      { ids: seleccionadosExcluidos.map((item) => item.id) },
+                      { onSuccess: () => setSelectedIds([]) },
+                    )
+                  }
+                >
+                  Reincluir seleccionados
+                </Button>
+              ) : null}
+              {seleccionados.length > 0 && seleccionadosActivos.length === 0 ? (
+                <small className="muted-copy">Los comprobantes excluidos se reincluyen para clasificarlos.</small>
+              ) : null}
+              {bulkError ? (
+                <p className="form-error" role="alert">
+                  {bulkError}
+                </p>
+              ) : null}
+              <WorkpaperActionError error={bulkClassifyMutation.error} />
+              <WorkpaperActionError error={includeMutation.error} />
+            </div>
+          ) : null}
+          {puedeClasificar && excluyendo && seleccionadosActivos.length > 0 ? (
+            <div className="workpaper-stage__actions" role="group" aria-label="Excluir del cálculo">
+              <Field
+                id="clasificacion-motivo-exclusion"
+                label="Motivo de la exclusión"
+                value={motivoExclusion}
+                maxLength={500}
+                placeholder="Por ejemplo: factura duplicada"
+                error={motivoError ?? undefined}
+                onChange={(event) => {
+                  setMotivoExclusion(event.target.value);
+                  if (event.target.value.trim()) setMotivoError(null);
+                }}
+              />
+              <Button size="sm" variant="secondary" disabled={excludeMutation.isPending} onClick={confirmarExclusion}>
+                Confirmar exclusión
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setExcluyendo(false)}>
+                Cancelar
+              </Button>
+              <WorkpaperActionError error={excludeMutation.error} />
+            </div>
+          ) : null}
           <Table<WorkpaperClassification>
-            rows={classificationQuery.data?.items ?? []}
+            rows={visibleClassifications}
             rowKey={(classification) => classification.id}
             empty={
               <EmptyState
@@ -117,6 +363,24 @@ export function EtapaClasificacion({
               />
             }
             columns={[
+              ...(puedeClasificar
+                ? ([
+                    {
+                  key: "selection",
+                  header: "Seleccionar",
+                  render: (classification) => (
+                    <input
+                      type="checkbox"
+                      aria-label={`Seleccionar comprobante ${classification.voucher.letter ?? classification.voucher.type} · ${String(classification.voucher.pointOfSale).padStart(4, "0")}-${String(classification.voucher.number).padStart(8, "0")}`}
+                      checked={selectedIds.includes(classification.id)}
+                      onChange={(event) => setSelectedIds((current) => event.target.checked
+                        ? [...new Set([...current, classification.id])]
+                        : current.filter((id) => id !== classification.id))}
+                    />
+                  ),
+                },
+                  ] satisfies TableColumn<WorkpaperClassification>[])
+                : []),
               {
                 key: "voucher",
                 header: "Comprobante",
@@ -132,6 +396,23 @@ export function EtapaClasificacion({
                       {classification.direction === "PURCHASE" ? "Compra" : "Venta"} ·{" "}
                       {classification.counterpartyCuit}
                     </small>
+                    {classification.direction === "PURCHASE" && classification.ivaCredit === false ? (
+                      <>
+                        <br />
+                        <StatusBadge status="INFO" label="Sin crédito de IVA" />
+                      </>
+                    ) : null}
+                    {classification.excludedAt ? (
+                      <>
+                        <br />
+                        <StatusBadge status="WAIVED" label="Excluido" />
+                        <br />
+                        <small>
+                          {classification.excludedBy?.name ?? "Usuario"} ·{" "}
+                          {fechaCorta(classification.excludedAt)} · {classification.excludedReason}
+                        </small>
+                      </>
+                    ) : null}
                   </>
                 ),
               },
@@ -164,7 +445,10 @@ export function EtapaClasificacion({
                     categoryCode: classification.categoryCode ?? "",
                     activityCode: classification.activityCode ?? "",
                   };
-                  return !canEditSources || !capabilities.has("tax.vouchers.prepare") ? (
+                  if (classification.excludedAt) {
+                    return <small>Fuera del cálculo</small>;
+                  }
+                  return !puedeClasificar ? (
                     <>
                       <strong>{classification.categoryCode ?? classification.activityCode}</strong>
                       {classification.categoryCode && classification.activityCode ? (
@@ -178,6 +462,9 @@ export function EtapaClasificacion({
                     </>
                   ) : (
                     <div className="workpaper-classification-fields">
+                      {classification.origin === "RULE" ? (
+                        <StatusBadge status="INFO" label="Por regla" />
+                      ) : null}
                       {classification.direction === "PURCHASE" ? (
                         <select
                           aria-label="Rubro del proveedor"
@@ -229,8 +516,31 @@ export function EtapaClasificacion({
                 key: "state",
                 header: "Estado",
                 render: (classification) =>
-                  classification.status === "CLASSIFIED" ? (
-                    canEditSources && capabilities.has("tax.vouchers.prepare") ? (
+                  classification.excludedAt ? (
+                    puedeClasificar ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={includeMutation.isPending}
+                          aria-label={`Reincluir el comprobante ${numeroComprobante(classification)}`}
+                          onClick={() => includeMutation.mutate({ ids: [classification.id] })}
+                        >
+                          Reincluir
+                        </Button>
+                        <WorkpaperActionError
+                          error={
+                            includeMutation.variables?.ids.includes(classification.id)
+                              ? includeMutation.error
+                              : null
+                          }
+                        />
+                      </>
+                    ) : (
+                      <StatusBadge status="WAIVED" label="Excluido" />
+                    )
+                  ) : classification.status === "CLASSIFIED" ? (
+                    puedeClasificar ? (
                       <>
                         <Button
                           size="sm"
@@ -252,7 +562,7 @@ export function EtapaClasificacion({
                     ) : (
                       <StatusBadge status="READY" />
                     )
-                  ) : canEditSources && capabilities.has("tax.vouchers.prepare") ? (
+                  ) : puedeClasificar ? (
                     <>
                       <Button
                         size="sm"
@@ -279,8 +589,95 @@ export function EtapaClasificacion({
           <p className="workpaper-stage__note">
             El cálculo queda bloqueado mientras exista una compra sin rubro o una venta sin
             actividad. El rubro manual se guarda en el maestro del proveedor para los próximos
-            períodos.
+            períodos. Los comprobantes excluidos quedan fuera del cálculo hasta que los reincluyas.
           </p>
+          <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
+            <div>
+              <strong>Reglas recordadas</strong>
+              <small>
+                Cada regla clasifica sola los comprobantes nuevos de un mismo proveedor o cliente; los
+                ya clasificados no cambian.
+              </small>
+            </div>
+          </div>
+          {rulesQuery.isError ? (
+            <AsyncState
+              loading={false}
+              error
+              errorTitle="No se pudieron leer las reglas"
+              errorDescription="Reintentá la lectura. Hasta que responda, la etapa no muestra reglas."
+              onRetry={() => void rulesQuery.refetch()}
+              loadingLabel="Leyendo reglas…"
+            />
+          ) : (
+            <Table<ClassificationRule>
+              rows={rulesQuery.data ?? []}
+              rowKey={(rule) => rule.id}
+              empty={
+                <EmptyState
+                  size="inline"
+                  title="Todavía no hay reglas. Marcá «Recordar para este proveedor/cliente» al clasificar."
+                />
+              }
+              columns={[
+                {
+                  key: "counterparty",
+                  header: "Proveedor / cliente",
+                  render: (rule) => (
+                    <>
+                      <strong>{rule.counterpartyCuit}</strong>
+                      <br />
+                      <small>{rule.direction === "PURCHASE" ? "Compras" : "Ventas"}</small>
+                    </>
+                  ),
+                },
+                {
+                  key: "target",
+                  header: "Rubro / actividad",
+                  render: (rule) => (
+                    <>
+                      <strong>{rule.categoryCode ?? rule.activityCode}</strong>
+                      {rule.categoryCode && rule.activityCode ? <small> · {rule.activityCode}</small> : null}
+                    </>
+                  ),
+                },
+                {
+                  key: "createdBy",
+                  header: "Creada por",
+                  render: (rule) => (
+                    <>
+                      {rule.createdByName}
+                      <br />
+                      <small>{fechaCorta(rule.createdAt)}</small>
+                    </>
+                  ),
+                },
+                {
+                  key: "delete",
+                  header: "Acciones",
+                  render: (rule) =>
+                    capabilities.has("tax.vouchers.prepare") ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={deleteRuleMutation.isPending}
+                          aria-label={`Borrar la regla de ${rule.counterpartyCuit}`}
+                          onClick={() => deleteRuleMutation.mutate(rule)}
+                        >
+                          Borrar
+                        </Button>
+                        <WorkpaperActionError
+                          error={
+                            deleteRuleMutation.variables?.id === rule.id ? deleteRuleMutation.error : null
+                          }
+                        />
+                      </>
+                    ) : null,
+                },
+              ]}
+            />
+          )}
         </>
       )}
       <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
