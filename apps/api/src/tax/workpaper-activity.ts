@@ -113,6 +113,7 @@ export async function activityIssuesForWorkpaper(
         name: link.activity.name,
         validFrom: link.validFrom,
         validTo: link.validTo,
+        isChange: link.isChange,
       })),
       catalog,
       withSingleLocal: true,
@@ -126,7 +127,7 @@ export async function activityIssuesForWorkpaper(
         message:
           issue.kind === "NOT_IN_FORCE"
             ? mensajeActividadNoVigente(
-                { activityName: issue.activityName, validFrom: issue.validFrom },
+                { activityName: issue.activityName, successor: issue.successor },
                 { startDate: wp.periodStart },
               )
             : mensajeActividadSinClasificar(1, issue.multipleInForce),

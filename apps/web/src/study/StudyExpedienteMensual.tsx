@@ -81,6 +81,8 @@ import {
 
 type CuerpoCalculo = { obligationIds?: string[]; minimums?: Record<string, string> };
 import { EtapaClasificacion } from "./legajo/etapas/EtapaClasificacion";
+import { cambiosDeActividadDelMes } from "./fiscal/historialActividades";
+import type { ClientActivityLink } from "./fiscal/utilidades";
 import { EtapaControles } from "./legajo/etapas/EtapaControles";
 import { EtapaCierre } from "./legajo/etapas/EtapaCierre";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
@@ -363,11 +365,15 @@ export function StudyExpedienteMensual() {
   const clientActivitiesQuery = useQuery({
     queryKey: ["client-tax-activities", firmId, clientId],
     queryFn: () =>
-      api.get<Array<{ validTo: string | null; activity: { code: string; name: string } }>>(
+      api.get<ClientActivityLink[]>(
         `/firms/${firmId}/clients/${clientId}/activities`,
       ),
     enabled: Boolean(firmId && clientId),
   });
+  // Brief 4L: un cambio de actividad que empieza en el mes del legajo se avisa (informativo, no bloquea).
+  const cambiosDelMes = legajoSeleccionado
+    ? cambiosDeActividadDelMes(clientActivitiesQuery.data ?? [], legajoSeleccionado.periodStart)
+    : [];
   const activityOptions = (currentCode: string) => {
     const options = (clientActivitiesQuery.data ?? [])
       .filter((link) => !link.validTo)
@@ -813,6 +819,12 @@ export function StudyExpedienteMensual() {
             motivoSinMovimientos={motivoSinMovimientos}
           />
         ) : step === 2 ? (
+          <div>
+          {cambiosDelMes.map((cambio) => (
+            <Notice key={`${cambio.de}-${cambio.a}`} tone="info" title={`Desde ${cambio.desde} cambió la actividad de ${cambio.de} a ${cambio.a}: cambia la alícuota`}>
+              <p className="muted-copy">Es informativo y no bloquea el cálculo. Revisá la clasificación de las ventas de ese mes.</p>
+            </Notice>
+          ))}
           <EtapaClasificacion
             capabilities={capabilities}
             canEditSources={canEditSources}
@@ -844,6 +856,7 @@ export function StudyExpedienteMensual() {
             includeMutation={includeMutation}
             deleteRuleMutation={deleteRuleMutation}
           />
+          </div>
         ) : step === 3 ? (
           <EtapaCalculo
             capabilities={capacidades}

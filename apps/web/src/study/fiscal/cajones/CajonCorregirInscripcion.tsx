@@ -48,7 +48,7 @@ export function CajonCorregirInscripcion({ registration, onClose, updateRegistra
           id="reg-edit-from"
           value={validFrom}
           onChange={(event) => setValidFrom(event.target.value)}
-          hint="Desde cuándo está inscripto el cliente. Para liquidar un mes, la inscripción tiene que cubrirlo."
+          hint="Desde cuándo está inscripto el cliente. Es informativo: no impide abrir ni liquidar ningún mes."
           error={errorDeApi ?? faltaFecha}
           required
         />
