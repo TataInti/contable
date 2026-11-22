@@ -246,6 +246,7 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await page.getByRole("tab", { name: /^Controles/ }).click();
     // Idempotente: la opción persiste en la base de la corrida; si ya está activada, no se vuelve a tocar.
     const autorrevision = page.getByRole("checkbox", { name: "Permitir autorrevisión de fuentes y legajos" });
+    await expect(autorrevision, "casilla de autorrevisión en Controles").toBeVisible({ timeout: 30_000 });
     if (!(await autorrevision.isChecked())) {
       await mutating(page, "/api/v1/", () => autorrevision.click());
       await expect(autorrevision).toBeChecked();
