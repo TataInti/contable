@@ -167,8 +167,8 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await page.locator("#pf-legal-name").fill(data.client.legalName);
     await page.locator("#pf-cuit").fill(data.client.cuit);
     await page.locator("#pf-fiscal-address").fill(data.client.fiscalAddress);
-    await page.locator("#pf-person-type").selectOption("JURIDICA");
-    await page.locator("#pf-condition").selectOption("RESPONSABLE_INSCRIPTO");
+    await pickOption(page.locator("#pf-person-type"), "Jurídica");
+    await pickOption(page.locator("#pf-condition"), "Responsable Inscripto");
     await page.locator("#pf-valid-from").fill(data.validFrom);
     await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
     await page.getByRole("button", { name: "Enviar a revisión" }).click();
