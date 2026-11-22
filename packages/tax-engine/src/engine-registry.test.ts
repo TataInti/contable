@@ -50,6 +50,7 @@ describe("registro de motores fiscales", () => {
   it("resuelve el respaldo por texto de una versión histórica sin engineId", () => {
     expect(taxEngineKeyForVersion("ar-iibb-cm-art2-v1.0.0")).toBe("iibb-cm-art2-legacy");
     expect(taxEngineKeyForVersion("ar-tem-smt-v1.1.0")).toBe("tem-smt");
+    expect(taxEngineKeyForVersion("ar-tem-smt-v2.0.0")).toBe("tem-smt-v2");
     expect(taxEngineKeyForVersion("tax-engine-v1")).toBeUndefined();
   });
 

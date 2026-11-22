@@ -259,6 +259,7 @@ describe("G1-02 maestros (integración DB)", () => {
     });
     const engines = await masters.listEnginesForRegime(ctxOwner, regime.id);
     expect(engines.map((engine) => engine.engineVersion)).toEqual([
+      "ar-iibb-tuc-local-v1.2.0",
       "ar-iibb-tuc-local-v1.1.0",
       "ar-iibb-tuc-local-v1.0.0",
     ]);
@@ -299,8 +300,8 @@ describe("G1-02 maestros (integración DB)", () => {
     })).rejects.toMatchObject({ code: "ENGINE_FAMILY_MISMATCH", path: ["engineId"] });
     expect(await prisma.taxRuleVersion.count({ where: { packId: pack.id } })).toBe(0);
 
-    const selectedEngine = engines[0];
-    if (!selectedEngine) throw new Error("La familia IIBB_LOCAL no tiene motores activos");
+    const selectedEngine = engines.find((engine) => engine.engineVersion === "ar-iibb-tuc-local-v1.1.0");
+    if (!selectedEngine) throw new Error("La familia IIBB_LOCAL no tiene el motor ar-iibb-tuc-local-v1.1.0 activo");
     const version = await rules.createVersion(ctxOwner, {
       packId: pack.id,
       validFrom: "2026-01-01",

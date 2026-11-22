@@ -57,6 +57,10 @@ const IVA_RI_ENGINES: readonly LegacyTaxEngineOption[] = [
 
 const IIBB_TUC_ENGINES: readonly LegacyTaxEngineOption[] = [
   {
+    engineVersion: "ar-iibb-tuc-local-v1.2.0",
+    label: "IIBB local Tucumán (ar-iibb-tuc-local-v1.2.0)",
+  },
+  {
     engineVersion: "ar-iibb-tuc-local-v1.1.0",
     label: "IIBB local Tucumán (ar-iibb-tuc-local-v1.1.0)",
   },
@@ -78,6 +82,10 @@ const CM03_ENGINES: readonly LegacyTaxEngineOption[] = [
 ];
 
 const TEM_SMT_ENGINES: readonly LegacyTaxEngineOption[] = [
+  {
+    engineVersion: "ar-tem-smt-v2.0.0",
+    label: "TEM San Miguel de Tucumán, Ordenanza 4.536 (ar-tem-smt-v2.0.0)",
+  },
   {
     engineVersion: "ar-tem-smt-v1.1.0",
     label: "TEM San Miguel de Tucumán (ar-tem-smt-v1.1.0)",

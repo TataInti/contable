@@ -7,10 +7,12 @@ export interface TaxEngineDeclaration {
 export const TAX_ENGINE_DECLARATIONS = [
   { engineKey: "vat-ri", engineVersion: "ar-vat-ri-v2.1.0", label: "IVA RI por alícuota" },
   { engineKey: "vat-ri-legacy", engineVersion: "ar-vat-ri-v1.0.0", label: "IVA RI legacy" },
+  { engineKey: "iibb-local-tuc-v2", engineVersion: "ar-iibb-tuc-local-v1.2.0", label: "IIBB local Tucumán (base negativa)" },
   { engineKey: "iibb-local-tuc", engineVersion: "ar-iibb-tuc-local-v1.1.0", label: "IIBB local Tucumán" },
   { engineKey: "iibb-local-tuc-legacy", engineVersion: "ar-iibb-tuc-local-v1.0.0", label: "IIBB local Tucumán legacy" },
   { engineKey: "iibb-cm-art2", engineVersion: "ar-iibb-cm-art2-v1.1.0", label: "IIBB CM03 artículo 2" },
   { engineKey: "iibb-cm-art2-legacy", engineVersion: "ar-iibb-cm-art2-v1.0.0", label: "IIBB CM03 artículo 2 legacy" },
+  { engineKey: "tem-smt-v2", engineVersion: "ar-tem-smt-v2.0.0", label: "TEM San Miguel de Tucumán (Ordenanza 4.536)" },
   { engineKey: "tem-smt", engineVersion: "ar-tem-smt-v1.1.0", label: "TEM San Miguel de Tucumán" },
   { engineKey: "tem-smt-legacy", engineVersion: "ar-tem-smt-v1.0.0", label: "TEM San Miguel de Tucumán legacy" },
   { engineKey: "monotributo", engineVersion: "ar-monotributo-v1.0.0", label: "Monotributo" },
