@@ -341,7 +341,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await pickOption(page.locator("#client-legal-form"), "Sociedad de responsabilidad limitada (SRL)");
     await page.locator(".action-drawer").getByRole("button", { name: "Guardar cliente" }).click(); // vigente: cambia con decisión de Inti (16-nov)
     await expect(page).toHaveURL(/\/configuracion-fiscal/);
-    await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" }).locator("option:checked")).toContainText(data.client.legalName);
+    await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" })).toHaveValue(new RegExp(data.client.legalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 
   await test.step("Configuración fiscal: perfil activo", async () => {
