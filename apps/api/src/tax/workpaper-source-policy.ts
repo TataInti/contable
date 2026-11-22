@@ -17,6 +17,16 @@ export interface WorkpaperSourcePolicy {
   voucherDirection?: "SALE" | "PURCHASE";
   allocationJurisdiction?: "OBLIGATION" | "ROW_REQUIRED";
   expectedColumns: readonly string[];
+  /**
+   * Otras obligaciones que se alimentan de esta misma fuente: un libro, varios impuestos.
+   * Las ventas importadas una vez de ARCA sirven a IVA, Ingresos Brutos y TEM del mismo mes.
+   */
+  alsoFeeds?: ReadonlyArray<{ taxTypeCode: string; regimeCode: string }>;
+  /**
+   * Fuentes que, ya revisadas, cubren el requisito de esta. La base de Ingresos Brutos y TEM sale
+   * por defecto del libro de ventas; la tabla por actividad queda como carga a mano alternativa.
+   */
+  satisfiedBy?: readonly string[];
 }
 
 export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
@@ -29,9 +39,13 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     adapterVersion: "ARCA_LIBRO_IVA_V1",
     required: true,
     voucherDirection: "SALE",
+    alsoFeeds: [
+      { taxTypeCode: "IIBB", regimeCode: "IIBB_LOCAL_TUC" },
+      { taxTypeCode: "TEM", regimeCode: "TEM_SMT" },
+    ],
     expectedColumns: [
       "direction", "letter", "pointOfSale", "numberFrom", "numberTo", "cuit",
-      "issuedOn", "net", "hasIva", "iva21", "iva105", "iva27", "exempt",
+      "issuedOn", "net", "nonTaxed", "hasIva", "iva21", "iva105", "iva27", "exempt",
       "otherTaxes", "currency",
     ],
   },
@@ -82,6 +96,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     origin: "DGR_IIBB",
     adapterVersion: "DGR_IIBB_V1",
     required: true,
+    satisfiedBy: ["ARCA_IVA_SALES"],
     expectedColumns: ["activityCode", "description", "income", "rate", "minimum", "exemption"],
   },
   {
@@ -130,6 +145,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     origin: "SMT_TEM",
     adapterVersion: "SMT_TEM_V1",
     required: true,
+    satisfiedBy: ["ARCA_IVA_SALES"],
     expectedColumns: ["activityCode", "description", "income", "rate", "minimum", "exemption"],
   },
   {
@@ -152,14 +168,98 @@ export function getWorkpaperSourcePolicy(code: string) {
   return WORKPAPER_SOURCE_POLICIES.find((policy) => policy.code === code);
 }
 
-export function policiesForObligations(
-  obligations: ReadonlyArray<{ taxTypeCode: string; regimeCode: string }>,
-) {
+type ObligationRef = { taxTypeCode: string; regimeCode: string };
+
+const matchesObligation = (
+  target: { taxTypeCode: string; regimeCode?: string | undefined },
+  obligation: ObligationRef,
+) =>
+  target.taxTypeCode === obligation.taxTypeCode &&
+  (!target.regimeCode || obligation.regimeCode === target.regimeCode);
+
+/** La obligación para la que la política es una fuente propia (no la que solo se alimenta de ella). */
+const isPrimaryFor = (policy: WorkpaperSourcePolicy, obligation: ObligationRef) =>
+  matchesObligation(policy, obligation);
+
+const feedsObligation = (policy: WorkpaperSourcePolicy, obligation: ObligationRef) =>
+  (policy.alsoFeeds ?? []).some((target) => matchesObligation(target, obligation));
+
+/** Obligaciones a las que sirve la fuente: la propia primero, después las que solo se alimentan de ella. */
+export function consumersOfPolicy(policy: WorkpaperSourcePolicy): Array<{ taxTypeCode: string; regimeCode?: string }> {
+  return [
+    { taxTypeCode: policy.taxTypeCode, ...(policy.regimeCode ? { regimeCode: policy.regimeCode } : {}) },
+    ...(policy.alsoFeeds ?? []),
+  ];
+}
+
+/** La obligación donde se carga la fuente: la propia si existe; si no, la primera que se alimenta de ella. */
+export function obligationForPolicy<T extends ObligationRef>(
+  policy: WorkpaperSourcePolicy,
+  obligations: readonly T[],
+): T | undefined {
+  for (const target of consumersOfPolicy(policy)) {
+    const found = obligations.find((obligation) => matchesObligation(target, obligation));
+    if (found) return found;
+  }
+  return undefined;
+}
+
+export function policiesForObligations(obligations: readonly ObligationRef[]) {
   return WORKPAPER_SOURCE_POLICIES.filter((policy) =>
     obligations.some(
-      (obligation) =>
-        obligation.taxTypeCode === policy.taxTypeCode &&
-        (!policy.regimeCode || obligation.regimeCode === policy.regimeCode),
+      (obligation) => isPrimaryFor(policy, obligation) || feedsObligation(policy, obligation),
     ),
   );
+}
+
+/**
+ * ¿La fuente es obligatoria para estas obligaciones, dado lo ya revisado?
+ *
+ * - Fuente propia con alternativa (tabla por actividad de Ingresos Brutos o TEM): obligatoria hasta
+ *   que el libro de ventas revisado cubra la base.
+ * - Fuente que solo alimenta a otras obligaciones (el libro de ventas para un cliente sin IVA):
+ *   obligatoria mientras alguna de esas obligaciones no tenga base revisada de ninguna de las dos fuentes.
+ */
+export function isSourceRequired(
+  policy: WorkpaperSourcePolicy,
+  obligations: readonly ObligationRef[],
+  reviewedCodes: ReadonlySet<string>,
+): boolean {
+  if (!policy.required) return false;
+  if (obligations.some((obligation) => isPrimaryFor(policy, obligation))) {
+    return !(policy.satisfiedBy ?? []).some((code) => reviewedCodes.has(code));
+  }
+  return obligations
+    .filter((obligation) => feedsObligation(policy, obligation))
+    .some((obligation) => {
+      if (reviewedCodes.has(policy.code)) return false;
+      const alternatives = WORKPAPER_SOURCE_POLICIES.filter(
+        (candidate) =>
+          candidate.satisfiedBy?.includes(policy.code) && isPrimaryFor(candidate, obligation),
+      );
+      return !alternatives.some((candidate) => reviewedCodes.has(candidate.code));
+    });
+}
+
+/**
+ * Fuentes cuyos hechos entran al cálculo de una obligación. Si Ingresos Brutos o TEM tiene su tabla
+ * por actividad revisada (carga a mano), esa manda y las ventas del libro no se suman: una base,
+ * una sola vez.
+ */
+export function sourceCodesForCalculation(
+  obligation: ObligationRef,
+  reviewedCodes: ReadonlySet<string>,
+): string[] {
+  const candidates = policiesForObligations([obligation]);
+  return candidates
+    .filter((policy) => {
+      if (isPrimaryFor(policy, obligation)) return true;
+      return !candidates.some(
+        (other) =>
+          isPrimaryFor(other, obligation) &&
+          other.satisfiedBy?.includes(policy.code) &&
+          reviewedCodes.has(other.code),
+      );
+    })
+    .map((policy) => policy.code);
 }

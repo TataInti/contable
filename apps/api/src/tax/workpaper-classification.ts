@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { taxHash } from "@contable/tax-engine";
+import { arcaTipoClase, taxHash } from "@contable/tax-engine";
 
 export type ClassificationWorkpaper = {
   id: string;
@@ -13,11 +13,17 @@ type VoucherForClassification = Prisma.FiscalVoucherGetPayload<{
   include: { components: true; lines: true };
 }>;
 
+/**
+ * Clase de documento de un comprobante. `type` guarda la letra del libro («NC», «ND») o, en
+ * comprobantes cargados a mano, el código de ARCA: en ambos casos se decide por la tabla oficial
+ * de tipos de comprobante (la misma del importador), no por códigos sueltos: el 6 es Factura B.
+ */
 export function voucherDocumentKind(voucher: { type: string; letter: string | null }) {
   const value = `${voucher.type}:${voucher.letter ?? ""}`.trim().toUpperCase();
+  const clase = /^\s*\d+/.test(voucher.type) ? arcaTipoClase(voucher.type) : null;
   if (
     voucher.letter?.toUpperCase() === "NC" ||
-    ["3", "6", "8"].includes(voucher.type) ||
+    clase === "NC" ||
     value.includes("NOTA_CREDITO") ||
     value.includes("NOTA DE CREDITO")
   ) {
@@ -25,6 +31,7 @@ export function voucherDocumentKind(voucher: { type: string; letter: string | nu
   }
   if (
     voucher.letter?.toUpperCase() === "ND" ||
+    clase === "ND" ||
     value.includes("NOTA_DEBITO") ||
     value.includes("NOTA DE DEBITO")
   ) {
@@ -182,17 +189,21 @@ export async function materializeWorkpaperClassifications(
     const lineActivities = [
       ...new Set(voucher.lines.map((line) => line.activityCode).filter(Boolean) as string[]),
     ];
-    const validClientActivities = [
-      ...new Set(
-        clientActivities
-          .filter(
-            (link) =>
-              link.validFrom <= voucher.issuedOn &&
-              (!link.validTo || link.validTo >= voucher.issuedOn),
-          )
-          .map((link) => link.activity.code),
-      ),
-    ];
+    const validLinks = clientActivities.filter(
+      (link) =>
+        link.validFrom <= voucher.issuedOn && (!link.validTo || link.validTo >= voucher.issuedOn),
+    );
+    const validClientActivities = [...new Set(validLinks.map((link) => link.activity.code))];
+    // Una actividad por nivel (provincial, municipal): cada impuesto toma la suya al liquidar.
+    const activitiesByJurisdiction = new Map<string, Set<string>>();
+    for (const link of validLinks) {
+      const codes = activitiesByJurisdiction.get(link.activity.jurisdictionId) ?? new Set<string>();
+      codes.add(link.activity.code);
+      activitiesByJurisdiction.set(link.activity.jurisdictionId, codes);
+    }
+    const onePerLevel =
+      activitiesByJurisdiction.size > 1 &&
+      [...activitiesByJurisdiction.values()].every((codes) => codes.size === 1);
 
     let categoryCode: string | null = null;
     let activityCode: string | null = null;
@@ -207,6 +218,9 @@ export async function materializeWorkpaperClassifications(
     } else if (voucher.direction === "SALE" && validClientActivities.length === 1) {
       activityCode = validClientActivities[0]!;
       origin = "SINGLE_CLIENT_ACTIVITY";
+    } else if (voucher.direction === "SALE" && onePerLevel) {
+      // Sin código único: cada impuesto asigna la venta a la única actividad de su nivel al calcular.
+      origin = "SINGLE_ACTIVITY_PER_LEVEL";
     }
 
     const status =
@@ -214,7 +228,7 @@ export async function materializeWorkpaperClassifications(
         ? categoryCode
           ? "CLASSIFIED"
           : "PENDING"
-        : activityCode
+        : activityCode || origin === "SINGLE_ACTIVITY_PER_LEVEL"
           ? "CLASSIFIED"
           : "PENDING";
     const buckets = rateBuckets(voucher);

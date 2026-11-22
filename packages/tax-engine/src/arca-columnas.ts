@@ -81,15 +81,42 @@ const HEADER_RULES: readonly HeaderRule[] = [
   { key: "actividad", test: /actividad/ },
 ];
 
+/**
+ * Notas de crédito y de débito según la tabla oficial de ARCA («Libro IVA Digital - Tablas del
+ * Sistema», apartado «Tipo de Comprobante»). Es la única fuente: el importador y la liquidación
+ * (voucherDocumentKind) deciden por estas listas, no por la letra ni por un código suelto.
+ */
+export const ARCA_NOTA_CREDITO_CODES: ReadonlySet<number> = new Set([
+  3, 8, 13, 21, 38, 43, 44, 48, 53, 90, 110, 112, 113, 114, 119, 197, 203, 208, 213,
+]);
+export const ARCA_NOTA_DEBITO_CODES: ReadonlySet<number> = new Set([
+  2, 7, 12, 20, 37, 45, 46, 47, 52, 115, 116, 117, 120, 196, 202, 207, 212,
+]);
+
+// Facturas con letra propia. Los recibos y los tiques no entran: sin letra, la fila se informa con su motivo.
 const TYPE_TO_LETTER: Readonly<Record<string, string>> = {
-  "1": "A", "2": "ND", "3": "NC",
-  "6": "B", "7": "ND", "8": "NC",
-  "11": "C", "12": "ND", "13": "NC",
-  "51": "M", "52": "ND", "53": "NC",
+  "1": "A",
+  "6": "B",
+  "11": "C",
+  "51": "M",
   // Liquidaciones de ARCA: 63 = Liquidación A, 64 = Liquidación B (decisión de Ciro, A27-1).
   "63": "A",
   "64": "B",
+  // Facturas de crédito electrónica MiPyME (FCE): sus notas (203, 208, 213) ya están en la tabla oficial.
+  "201": "A",
+  "206": "B",
+  "211": "C",
 };
+
+/** Clase de comprobante desde el código de ARCA («13», «013», «13 - Nota de Crédito C»). Null si no es un código. */
+export function arcaTipoClase(value: string | number | null | undefined): "NC" | "ND" | "FACTURA" | null {
+  const code = /^\s*(\d+)/.exec(String(value ?? ""))?.[1];
+  if (code === undefined) return null;
+  const numero = Number(code);
+  if (ARCA_NOTA_CREDITO_CODES.has(numero)) return "NC";
+  if (ARCA_NOTA_DEBITO_CODES.has(numero)) return "ND";
+  return "FACTURA";
+}
 
 const EXCEL_EPOCH_MS = 25569 * 86400000; // 1899-12-30 en ms desde epoch
 
@@ -141,7 +168,10 @@ export function resolveArcaColumns(
 /** Letra del comprobante desde el tipo de ARCA («6», «6 - Factura B»). Vacío si no se reconoce. */
 export function arcaTipoLetter(value: string | null | undefined): string {
   const code = /^\s*(\d+)/.exec(value ?? "")?.[1];
-  return code === undefined ? "" : (TYPE_TO_LETTER[code] ?? "");
+  if (code === undefined) return "";
+  const clase = arcaTipoClase(code);
+  if (clase === "NC" || clase === "ND") return clase;
+  return TYPE_TO_LETTER[String(Number(code))] ?? "";
 }
 
 /** Fecha ISO (AAAA-MM-DD) desde «dd/mm/aaaa», ISO o número de serie de Excel. Null si no es válida. */

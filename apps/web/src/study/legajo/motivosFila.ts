@@ -7,6 +7,8 @@ const MOTIVOS_DE_FILA: Readonly<Record<string, string>> = {
   CUIT_INVALID: "El CUIT o el documento de la contraparte no es válido.",
   DATE_INVALID: "La fecha no es válida. Usá el formato dd/mm/aaaa.",
   NET_INVALID: "El neto gravado no es un importe válido.",
+  AMOUNTS_MISSING: "La fila no trae importes: el neto, el no gravado, las exentas y el total están vacíos o en cero.",
+  AMOUNT_INVALID: "Un importe de la fila (no gravado, exentas o total) no es un número válido.",
   IVA_MISSING: "Discrimina IVA pero no trae importes de IVA.",
   ALICUOTA_NO_SOPORTADA: "Tiene IVA al 2,5% o al 5%, que el sistema no liquida.",
   PERIOD_MISMATCH: "La fecha está fuera del período del lote.",
