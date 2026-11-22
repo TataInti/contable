@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
-import { goTo, login, pickOption, SUFFIX } from "./helpers/ui";
+import { goTo, login, pickOption, SUFFIX, syntheticCuit } from "./helpers/ui";
 
 /*
  * Calendario fiscal desde PDF (brief 5A). Recorrido del contador en la app real, por la interfaz:
@@ -91,4 +91,111 @@ test("el calendario se arma desde su PDF, el contador corrige la celda dudosa y 
     await expect(page.getByText(/Publicada la versión \d+\./)).toBeVisible();
     await expect(page.getByText("Publicado", { exact: true }).first()).toBeVisible();
   });
+
+  const cliente = `SINTÉTICO CALENDARIO ${SUFFIX} S.A.`;
+
+  await test.step("Un cliente sintético inscripto en IVA, con CUIT terminado en 6, tiene su período de octubre 2027", async () => {
+    const { base, cuit } = await crearClienteSintetico(page, cliente, "6");
+    await crearVencimientoDesdeCalendario(page, base, cliente, cuit);
+  });
+
+  await test.step("El contador abre el Legajo del cliente y ve el vencimiento corregido, también en el Panel de trabajo", async () => {
+    await page.reload();
+    await pickOption(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), cliente);
+    await goTo(page, "Legajo");
+    await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Período fiscal" }).locator("option:checked")).toContainText(
+      `Octubre de 2027 · IVA`,
+    );
+    await expect(page.getByRole("combobox", { name: "Período fiscal" }).locator("option:checked")).toContainText(
+      `Oct 2027 E2E ${SUFFIX}`,
+    );
+    await goTo(page, "Trabajo");
+    const obligacion = page.getByRole("row").filter({ hasText: `Oct 2027 E2E ${SUFFIX}` });
+    await expect(obligacion).toContainText("IVA");
+    await expect(obligacion).toContainText("18/11/2027");
+    await expect(page.getByText("19/11/2027", { exact: true })).toHaveCount(0);
+    await goTo(page, "Panel de trabajo");
+    await expect(page.getByText(cliente).first()).toBeVisible();
+    await expect(page.getByText("18/11/2027", { exact: true }).first()).toBeVisible();
+  });
 });
+
+const API = process.env.E2E_API_URL ?? "http://127.0.0.1:3000";
+
+/** Sesión del navegador: el mismo token CSRF que el front envía en cada mutación. */
+async function encabezados(page: Page): Promise<Record<string, string>> {
+  const csrf = (await page.context().cookies()).find((cookie) => cookie.name === "csrf_token");
+  return { "X-CSRF-Token": csrf ? decodeURIComponent(csrf.value) : "" };
+}
+
+async function codigoId(page: Page, ruta: string, codigo: string): Promise<string> {
+  const response = await page.request.get(`${API}${ruta}`);
+  expect(response.status()).toBe(200);
+  const body = (await response.json()) as { data?: Array<{ id: string; code: string }> };
+  const found = (body.data ?? []).find((item) => item.code === codigo);
+  expect(found, `${ruta} ${codigo}`).toBeTruthy();
+  return found!.id;
+}
+
+/** CUIT sintético (dígito verificador válido) cuya última cifra es `digito`. */
+function cuitTerminadoEn(digito: string): string {
+  for (let seed = 40_000_000 + (parseInt(SUFFIX, 36) % 50_000_000); ; seed += 1) {
+    const cuit = syntheticCuit(seed);
+    if (cuit.endsWith(digito)) return cuit;
+  }
+}
+
+/** Datos sintéticos por API (como el spec del Legajo): el cliente nuevo queda en el estudio demo. */
+async function crearClienteSintetico(
+  page: Page,
+  legalName: string,
+  terminacion: string,
+): Promise<{ base: string; cuit: string }> {
+  const me = await page.request.get(`${API}/api/v1/me/contexts`);
+  expect(me.status()).toBe(200);
+  const firmId = ((await me.json()) as { data: { firms: Array<{ firmId: string }> } }).data.firms[0]!.firmId;
+  const cuit = cuitTerminadoEn(terminacion);
+  const created = await page.request.post(`${API}/api/v1/firms/${firmId}/clients`, {
+    headers: await encabezados(page),
+    data: { legalName, cuit },
+  });
+  expect(created.status(), `alta del cliente ${await created.text().catch(() => "")}`).toBe(201);
+  const clientId = ((await created.json()) as { data: { id: string } }).data.id;
+  return { base: `${API}/api/v1/firms/${firmId}/clients/${clientId}`, cuit };
+}
+
+/** Período de octubre 2027, perfil, inscripción en IVA régimen general y obligación desde el calendario publicado. */
+async function crearVencimientoDesdeCalendario(page: Page, base: string, legalName: string, cuit: string): Promise<void> {
+  const headers = await encabezados(page);
+  const impuesto = await codigoId(page, "/api/v1/tax/types", "IVA");
+  const regimen = await codigoId(page, "/api/v1/tax/regimes", "RI");
+  const period = await page.request.post(`${base}/tax-periods`, {
+    headers,
+    data: { taxTypeId: impuesto, startDate: "2027-10-01", endDate: "2027-10-31", label: `Oct 2027 E2E ${SUFFIX}` },
+  });
+  expect(period.status()).toBe(201);
+  const periodId = ((await period.json()) as { data: { id: string } }).data.id;
+  const perfil = await page.request.post(`${base}/tax-profile-versions`, {
+    headers,
+    data: {
+      legalName,
+      cuit,
+      personType: "JURIDICA",
+      nationalCondition: "RESPONSABLE_INSCRIPTO",
+      validFrom: "2026-01-01",
+    },
+  });
+  expect(perfil.status()).toBe(201);
+  const perfilId = ((await perfil.json()) as { data: { id: string } }).data.id;
+  const inscripcion = await page.request.post(`${base}/tax-registrations`, {
+    headers,
+    data: { profileVersionId: perfilId, regimeId: regimen, validFrom: "2020-01-01" },
+  });
+  expect(inscripcion.status()).toBe(201);
+  const obligacion = await page.request.post(`${base}/tax-obligations/from-calendar`, {
+    headers,
+    data: { profileVersionId: perfilId, regimeId: regimen, periodId },
+  });
+  expect(obligacion.status(), `vencimiento desde calendario ${await obligacion.text().catch(() => "")}`).toBe(201);
+}
