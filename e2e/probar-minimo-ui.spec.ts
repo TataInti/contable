@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { goTo, login, mutating } from "./helpers/ui";
+import { pick } from "./helpers/liquidacion-ui";
 
 /**
  * «Probar liquidación» de Reglas fiscales con el mínimo no imponible de Ingresos Brutos Tucumán, operado como lo
@@ -46,6 +47,10 @@ test("Probar liquidación de Ingresos Brutos Tucumán: el aviso de mínimo solo 
     await goTo(page, "Reglas fiscales");
     await page.getByRole("row").filter({ hasText: PAQUETE }).first().click();
     await expect(page.getByRole("heading", { name: PAQUETE, exact: true })).toBeVisible({ timeout: 15_000 });
+    // El paquete puede tener un borrador más nuevo (otro spec de la misma base): se prueba la versión vigente, no el borrador.
+    const versiones = page.getByRole("combobox", { name: "Versión del paquete" });
+    if ((await versiones.count()) > 0) await pick(versiones, "v1 ·");
+    await expect(page.locator(".fiscal-rule-summary__meta")).toContainText("Versión v1", { timeout: 15_000 });
     await page.getByRole("tab", { name: "Probar", exact: true }).click();
     await expect(page.locator("#rule-simulator").getByLabel(ALICUOTA)).toBeVisible();
   });

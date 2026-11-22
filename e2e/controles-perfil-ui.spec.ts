@@ -126,12 +126,17 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     const controlAbierto = () =>
       panel.locator(".workpaper-control").filter({ has: page.getByRole("textbox", { name: /^Motivo / }) }).first();
 
+    // Cada acción espera a que el refetch termine (el grupo sale de la lista de abiertos) y a que el motivo quede escrito,
+    // así el clic no cae sobre un control re-montado con el campo vacío.
     const primero = controlAbierto();
     await primero.getByRole("textbox", { name: /^Motivo / }).fill(MOTIVO_ACEPTAR);
+    await expect(primero.getByRole("textbox", { name: /^Motivo / })).toHaveValue(MOTIVO_ACEPTAR);
     await mutating(page, "/profile-groups/", () => primero.getByRole("button", { name: "Aceptar con motivo", exact: true }).click());
+    await expect(motivos, "un grupo de perfil sigue abierto").toHaveCount(1);
 
     const segundo = controlAbierto();
     await segundo.getByRole("textbox", { name: /^Motivo / }).fill(MOTIVO_EXCLUIR);
+    await expect(segundo.getByRole("textbox", { name: /^Motivo / })).toHaveValue(MOTIVO_EXCLUIR);
     await mutating(page, "/profile-groups/", () => segundo.getByRole("button", { name: "Excluir del cálculo", exact: true }).click());
 
     // Ambos grupos resueltos: no quedan campos de motivo, ni la leyenda de bloqueo del perfil, y cada control figura «Resuelto».
