@@ -28,7 +28,10 @@ import {
  */
 
 export const IIBB_TUC_LEGACY_ENGINE_VERSION = "ar-iibb-tuc-local-v1.0.0";
-export const IIBB_TUC_ENGINE_VERSION = "ar-iibb-tuc-local-v1.1.0";
+/** Versión 1.1.0: liquidaciones ya calculadas; conserva su comportamiento. */
+export const IIBB_TUC_PREVIOUS_ENGINE_VERSION = "ar-iibb-tuc-local-v1.1.0";
+/** Versión vigente: base negativa con tributo 0 y sin saldo a favor (brief 4E, regla 3). */
+export const IIBB_TUC_ENGINE_VERSION = "ar-iibb-tuc-local-v1.2.0";
 
 export interface LocalTaxDeclaredParameter {
   sourceId: string;
@@ -66,10 +69,13 @@ export interface IibbTucInput extends TaxEngineInput {
 
 export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
   const engineVersion =
-    input.engineVersion === IIBB_TUC_LEGACY_ENGINE_VERSION
-      ? IIBB_TUC_LEGACY_ENGINE_VERSION
+    input.engineVersion === IIBB_TUC_LEGACY_ENGINE_VERSION ||
+    input.engineVersion === IIBB_TUC_PREVIOUS_ENGINE_VERSION
+      ? input.engineVersion
       : IIBB_TUC_ENGINE_VERSION;
-  const strict = engineVersion === IIBB_TUC_ENGINE_VERSION;
+  const strict = engineVersion !== IIBB_TUC_LEGACY_ENGINE_VERSION;
+  // Regla 3 del brief 4E: solo la versión vigente anula el tributo por base negativa.
+  const floorsNegativeBase = engineVersion === IIBB_TUC_ENGINE_VERSION;
   const typed = input.ruleMode === "TYPED";
   const rounding = input.rounding ?? {};
   const rules = new Map(input.rules.map((r) => [r.concept, r]));
@@ -161,7 +167,12 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
   let amountDue: DecimalValue;
   let appliedMinimum = false;
   const amountBeforeGlobalMinimum = strict ? totalAfterActivityMinimums : totalByRate;
-  if (minimum !== undefined && amountBeforeGlobalMinimum.lessThan(minimum)) {
+  if (floorsNegativeBase && totalBase.isNegative()) {
+    warnings.push(
+      "Base negativa: las notas de crédito superan las ventas del período; el tributo queda en 0 y el excedente no pasa a saldo a favor",
+    );
+    amountDue = dec(0);
+  } else if (minimum !== undefined && amountBeforeGlobalMinimum.lessThan(minimum)) {
     amountDue = minimum;
     appliedMinimum = true;
   } else {
