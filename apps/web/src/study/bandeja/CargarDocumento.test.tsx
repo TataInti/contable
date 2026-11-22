@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api, ApiError, uploadToSignedUrl } from "../../lib/api";
@@ -105,10 +105,16 @@ function renderBandeja() {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
+        <UbicacionActual />
         <StudyBandeja />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+function UbicacionActual() {
+  const location = useLocation();
+  return <output data-testid="ubicacion-actual">{location.pathname}</output>;
 }
 
 const selectorItem = () => document.querySelector<HTMLSelectElement>("#upload-request-item");
@@ -158,6 +164,51 @@ afterEach(() => {
 });
 
 describe("Caracterización K3 · validación del archivo", () => {
+  it("acepta en el selector los formatos para la Bandeja y explica a dónde va cada uno", async () => {
+    await abrirCajonConPedidos();
+    expect(inputArchivo().accept).toContain(".xlsx");
+    expect(inputArchivo().accept).toContain(".xls");
+    expect(inputArchivo().accept).toContain(".csv");
+    expect(inputArchivo().accept).toContain(".txt");
+    expect(
+      screen.getByText(
+        "PDF o foto: los lee la IA · Excel, CSV o TXT de ARCA y la DGR: van al Legajo",
+      ),
+    ).toBeTruthy();
+  });
+
+  it.each([
+    {
+      extension: "xlsx",
+      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+    { extension: "xls", mime: "application/vnd.ms-excel" },
+    { extension: "csv", mime: "text/csv" },
+    { extension: "txt", mime: "text/plain" },
+  ])("dirige un .$extension al Legajo sin iniciar la subida", async ({ extension, mime }) => {
+    await abrirCajonConPedidos();
+    fireEvent.change(inputArchivo(), {
+      target: { files: [archivo(`libro.${extension}`, mime)] },
+    });
+    expect(await screen.findByText("Elegí el archivo de nuevo en Importar libro.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Ir a Importar en el Legajo" }));
+    expect(screen.getByTestId("ubicacion-actual").textContent).toBe("/expediente-mensual");
+    expect(api.post).not.toHaveBeenCalled();
+    expect(uploadToSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("rechaza un PDF mayor a 25 MB antes de subirlo con el camino alternativo visible", async () => {
+    await abrirCajonConPedidos();
+    const pdf = archivo("libro.pdf", "application/pdf", undefined, 26 * 1024 * 1024);
+    fireEvent.change(inputArchivo(), { target: { files: [pdf] } });
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Este PDF pesa 26 MB y el máximo es 25 MB. Si es un libro de ARCA, bajalo en Excel e importalo en el Legajo.",
+    );
+    expect(botonSubir().disabled).toBe(true);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(uploadToSignedUrl).not.toHaveBeenCalled();
+  });
+
   it("sin archivo comunica «Elegí un archivo para continuar.» y no habilita la subida", async () => {
     await abrirCajonConPedidos();
     fireEvent.change(inputArchivo(), { target: { files: [] } });
@@ -166,10 +217,10 @@ describe("Caracterización K3 · validación del archivo", () => {
   });
 
   it.each([
-    { caso: "un tipo no admitido", crear: () => archivo("nota.txt", "text/plain") },
+    { caso: "un tipo no admitido", crear: () => archivo("nota.docx", "application/octet-stream") },
     {
-      caso: "más de 25 MB",
-      crear: () => archivo("escaneo.pdf", "application/pdf", undefined, 25 * 1024 * 1024 + 1),
+      caso: "una imagen de más de 25 MB",
+      crear: () => archivo("escaneo.jpg", "image/jpeg", undefined, 25 * 1024 * 1024 + 1),
     },
   ])("rechaza $caso con el formato permitido y no lo elige", async ({ crear }) => {
     await abrirCajonConPedidos();
@@ -191,6 +242,17 @@ describe("Caracterización K3 · validación del archivo", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("una foto pequeña sigue seleccionada para el flujo de documentos", async () => {
+    await abrirCajonConPedidos();
+    seleccionarItem("item-a");
+    fireEvent.change(inputArchivo(), {
+      target: { files: [archivo("ticket.jpg", "image/jpeg", [255, 216, 255])] },
+    });
+    expect(screen.getByText("ticket.jpg")).toBeTruthy();
+    expect(botonSubir().disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Ir a Importar en el Legajo" })).toBeNull();
+  });
+
   it("un archivo válido queda elegido con nombre y tamaño; uno inválido descarta el elegido", async () => {
     await abrirCajonConPedidos();
     fireEvent.change(inputArchivo(), {
@@ -198,7 +260,9 @@ describe("Caracterización K3 · validación del archivo", () => {
     });
     expect(screen.getByText("ticket-compra.pdf")).toBeTruthy();
     expect(screen.getByText("1 KB")).toBeTruthy();
-    fireEvent.change(inputArchivo(), { target: { files: [archivo("nota.txt", "text/plain")] } });
+    fireEvent.change(inputArchivo(), {
+      target: { files: [archivo("nota.docx", "application/octet-stream")] },
+    });
     expect(screen.queryByText("ticket-compra.pdf")).toBeNull();
     expect(screen.getByRole("alert").textContent).toBe(
       "Elegí un PDF, JPG, PNG o WebP de hasta 25 MB.",
