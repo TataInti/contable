@@ -16,8 +16,9 @@ export type ProfileForm = {
   legalName: string;
   cuit: string;
   fiscalAddress: string;
-  personType: "FISICA" | "JURIDICA";
-  nationalCondition: keyof typeof CONDITION_LABELS;
+  /** Vacío = «Elegí…» (sin propuesta): el perfil no se guarda hasta elegirlo. */
+  personType: "FISICA" | "JURIDICA" | "";
+  nationalCondition: keyof typeof CONDITION_LABELS | "";
   validFrom: string;
 };
 
