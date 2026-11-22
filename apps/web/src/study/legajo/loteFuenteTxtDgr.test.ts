@@ -77,6 +77,32 @@ function importar(
 }
 
 describe("importarLoteFuente con TXT de la DGR de Tucumán", () => {
+  it("un archivo ya vigente no pasa en silencio: avisa que ya está cargado y no escribe nada", async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ id: "lote-vigente", status: "COMMITTED", errorRows: 0 } as never);
+    const file = archivo(
+      `per${CUIT_CLIENTE}_F611_221120261015.txt`,
+      `${lineaPercepcion("01/10/2026", "1")}\r\n`,
+    );
+
+    await expect(importar(FUENTE_IIBB, file)).rejects.toThrow(
+      "Este archivo ya está cargado y vigente en Archivos: no hay nada nuevo que importar.",
+    );
+    expect(vi.mocked(api.post)).toHaveBeenCalledTimes(1);
+  });
+
+  it("reemplazar con el mismo archivo que el vigente avisa en una frase y no confirma el reemplazo", async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ id: "lote-anterior", status: "COMMITTED", errorRows: 0 } as never);
+    const file = archivo(
+      `per${CUIT_CLIENTE}_F611_221120261015.txt`,
+      `${lineaPercepcion("01/10/2026", "1")}\r\n`,
+    );
+
+    await expect(importar(FUENTE_IIBB, file, { replacesBatchId: "lote-anterior" })).rejects.toThrow(
+      "Este archivo es idéntico al que ya está vigente",
+    );
+    expect(vi.mocked(api.post)).toHaveBeenCalledTimes(1);
+  });
+
   it("carga las líneas como filas del lote en la fuente de Ingresos Brutos de Tucumán", async () => {
     vi.mocked(api.post)
       .mockResolvedValueOnce({ id: "lote-1", status: "UPLOADED", errorRows: 0 } as never)

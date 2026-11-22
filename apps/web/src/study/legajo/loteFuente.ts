@@ -99,6 +99,14 @@ export async function importarLoteFuente({
       sourceCode: source.code,
     },
   );
+  // El servidor devuelve el lote vigente cuando el archivo ya está cargado: se avisa, no se da por importado.
+  if (batch.status === "COMMITTED") {
+    throw new Error(
+      replacesBatchId
+        ? "Este archivo es idéntico al que ya está vigente: no hay cambios para reemplazarlo. Cargá una versión corregida."
+        : "Este archivo ya está cargado y vigente en Archivos: no hay nada nuevo que importar.",
+    );
+  }
 
   let status = batch.status;
   let errorRows = batch.errorRows;
