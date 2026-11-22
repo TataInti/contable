@@ -280,6 +280,20 @@
   gap: var(--ds-space-3);
 }
 
+.workpaper-stage-guidance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-3);
+  margin-bottom: var(--ds-space-3);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+}
+
+.workpaper-stage-guidance p {
+  margin: 0;
+}
+
 .workpaper-stage__heading strong,
 .workpaper-stage__heading small {
   display: block;
