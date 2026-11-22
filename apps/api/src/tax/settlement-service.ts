@@ -876,6 +876,8 @@ export class SettlementService {
       for (const v of vouchers) {
         const concept = v.direction === "SALE" ? "VENTAS" : "COMPRAS";
         const classification = classificationByVoucher.get(v.id);
+        // Compra con letra B o C: sin crédito fiscal de IVA, no entra como compra del cálculo (corte 3B).
+        if (v.direction === "PURCHASE" && classification?.ivaCredit === false) continue;
         const documentKind = classification?.documentKind ?? voucherDocumentKind(v);
         const sign = documentKind === "CREDIT_NOTE" ? -1 : 1;
         for (const c of v.components) {
