@@ -143,6 +143,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/tax-registrations/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
   // Categoría anual del TEM del cliente (corte 1E): se lee y se elige con los permisos del perfil fiscal.
   { match: /\/tem-categories/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
+  // Tipos de comprobante permitidos por cliente (corte 4B): mismos permisos que el perfil fiscal.
+  { match: /\/voucher-permissions/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
   // Cuota fija mensual del Monotributo (corte 3F): el pago usa el permiso de pagos; la categoría, el del perfil fiscal.
   { match: /\/monotributo\/payments$/, resolve: () => "tax.payments.record" },
   {
