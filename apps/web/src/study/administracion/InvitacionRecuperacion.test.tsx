@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { contextoDemo, miembrosDemo, mockApiDemo, renderizarAdministracion } from "./pruebas/entornoDemo";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contexto = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -51,7 +52,7 @@ async function invitarAlPortal() {
   fireEvent.change(await screen.findByLabelText("Correo"), {
     target: { value: "invitado@example.com" },
   });
-  fireEvent.change(screen.getByLabelText("Rol"), { target: { value: "READONLY" } });
+  cambiarValor(screen.getByLabelText("Rol"), "READONLY");
   fireEvent.click(screen.getByRole("button", { name: /Enviar invitación/ }));
   await screen.findByLabelText("Enlace de invitación");
 }

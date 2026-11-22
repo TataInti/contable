@@ -1129,6 +1129,8 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
           perception: amount.optional(),
           collected: amount.optional(),
           previousCredit: amount.optional(),
+          nonTaxableMinimum: amount.optional(),
+          taxMinimum: amount.optional(),
         })
         .strict()
         .parse(req.body);

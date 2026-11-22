@@ -1,4 +1,4 @@
-import { Button, Field } from "@contable/design-system";
+import { Button, Field, SearchSelect } from "@contable/design-system";
 import type { Dispatch, SetStateAction } from "react";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { Icon } from "../../../ui/Icon";
@@ -41,18 +41,21 @@ export function PanelInvitarPortal({ showInviteForm, setShowInviteForm, email, s
             required
           />
         </div>
-        <label className="ds-field dense-form__full">
+        <div className="ds-field dense-form__full">
           <span className="ds-field__label">Rol</span>
-          <select
-            className="ds-field__input"
+          <SearchSelect
+            hideLabel
+            label="Rol"
             value={role}
-            onChange={(event) => setRole(event.target.value)}
-          >
-            <option value="OWNER">Titular</option>
-            <option value="COLLABORATOR">Colaborador</option>
-            <option value="READONLY">Sólo lectura</option>
-          </select>
-        </label>
+            onChange={(value) => setRole(value)}
+            allowEmpty={false}
+            options={[
+              { value: "OWNER", label: "Titular" },
+              { value: "COLLABORATOR", label: "Colaborador" },
+              { value: "READONLY", label: "Sólo lectura" },
+            ]}
+          />
+        </div>
         {invite.isError && actionError ? (
           <p className="form-error" role="alert">
             {actionError}

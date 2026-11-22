@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Button, DensitySwitch, useDensity } from "@contable/design-system";
+import { Button, DensitySwitch, useDensity, SearchSelect } from "@contable/design-system";
 import { ContextBar } from "./ContextBar";
 import { logout } from "../lib/auth";
 import { useSession } from "../session/SessionContext";
@@ -210,24 +210,19 @@ export function StudyShell() {
             <p className="study__nav-label" id="study-navigation-client-label">
               Cliente
             </p>
-            <label className="study__client-switcher" data-tour="client-switcher">
+            <div className="study__client-switcher" data-tour="client-switcher">
               <span className="study__client-switcher-label">Cliente en el que estás trabajando</span>
-              <select
+              <SearchSelect
+                hideLabel
+                label="Cliente en el que estás trabajando"
                 className="study__client-select"
                 value={clientId ?? ""}
                 disabled={clients.length === 0}
-                onChange={(event) => setClientId(event.target.value || null)}
-              >
-                <option value="">
-                  {clients.length === 0 ? "Sin clientes asignados" : "Elegí un cliente…"}
-                </option>
-                {clients.map((client) => (
-                  <option key={client.clientId} value={client.clientId}>
-                    {client.clientName}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={(value) => setClientId(value || null)}
+                placeholder={clients.length === 0 ? "Sin clientes asignados" : "Elegí un cliente…"}
+                options={clients.map((client) => ({ value: client.clientId, label: client.clientName }))}
+              />
+            </div>
             {clientModules.map((item) => (
               <StudyNavLink
                 item={item}

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { ApiError, api } from "../lib/api";
 import { StudyExpedienteMensual } from "./StudyExpedienteMensual";
+import { abrirListado, cambiarValor } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -294,15 +295,12 @@ describe("StudyExpedienteMensual", () => {
       name: "Evidencia BOOK_RATE_RECONCILIATION",
     });
     expect(
-      within(evidence).getByRole("option", { name: "factura-revisada.pdf · Revisado" }),
+      within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).getByRole("option", { name: "factura-revisada.pdf · Revisado" }),
     ).toBeTruthy();
-    expect(within(evidence).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
+    expect(within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
 
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }),
-      { target: { value: "Respaldo revisado y conciliado" } },
-    );
-    fireEvent.change(evidence, { target: { value: "document-reviewed" } });
+    cambiarValor(screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), "Respaldo revisado y conciliado");
+    cambiarValor(evidence, "document-reviewed");
     const resolveButton = screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement;
     expect(resolveButton.disabled).toBe(false);
     fireEvent.click(resolveButton);
@@ -353,8 +351,8 @@ describe("StudyExpedienteMensual", () => {
     const explanation = await screen.findByText(
       "El respaldo es opcional. Para adjuntar uno, aprobá la extracción del documento en Bandeja.",
     );
-    expect(evidence.parentElement?.contains(explanation)).toBe(true);
-    expect(within(evidence).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
+    expect(evidence.closest(".ds-field")?.parentElement?.contains(explanation)).toBe(true);
+    expect(within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
     expect(
       (screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled,
     ).toBe(true);
@@ -488,5 +486,77 @@ describe("StudyExpedienteMensual", () => {
     const allocationError = await screen.findByText("Seleccioná una jurisdicción para la imputación");
     expect(reallocateButton.closest("tr")?.contains(allocationError)).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(allocationError.closest(".workpaper-action-error")));
+  });
+
+  // 4K: el resultado calculado no se queda con un mínimo que ya no es el que se cargó.
+  const componenteCalculado = {
+    role: "PRINCIPAL",
+    required: true,
+    obligationId: "obligation-a",
+    habitual: true,
+    usaMinimoDeclarado: true,
+    minimoAnterior: null,
+    obligation: {
+      regimeCode: "IIBB_LOCAL_TUC",
+      regimeName: "Contribuyente Local Tucumán",
+      taxTypeCode: "IIBB",
+      taxTypeName: "Ingresos Brutos",
+      jurisdictionName: "Tucumán",
+    },
+    settlement: {
+      id: "settlement-a",
+      status: "CALCULATED",
+      version: 1,
+      totals: { BASE_TOTAL: "115000.00", IMPUESTO_POR_ACTIVIDAD: "4025.00", TOTAL_A_INGRESAR: "4025.00" },
+      lines: [],
+      differences: [],
+      f931Inputs: [],
+      minimo: null,
+    },
+  };
+
+  function calculoConEstado(estadoInicial: string, alCalcular: string | null) {
+    let estado = estadoInicial;
+    mockPageApi({ status: estado });
+    const base = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation(((path: string) => {
+      if (path.includes("/monthly-tax-workpapers?")) return Promise.resolve([workpaper(estado)]);
+      if (path.endsWith("/calculation")) return Promise.resolve([componenteCalculado]);
+      return base(path);
+    }) as never);
+    vi.mocked(api.post).mockImplementation(((path: string) => {
+      if (path.endsWith("/calculate") && alCalcular) estado = alCalcular;
+      return Promise.resolve({});
+    }) as never);
+  }
+
+  it("después de calcular, cambiar el mínimo marca el resultado desactualizado y bloquea Enviar a revisión hasta recalcular", async () => {
+    calculoConEstado("CHANGES_REQUESTED", "CALCULATED");
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /Cálculo/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Recalcular" }));
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "Enviar a revisión" }) as HTMLButtonElement).disabled).toBe(false),
+    );
+
+    fireEvent.change(await screen.findByLabelText("Mínimo del mes"), { target: { value: "11180" } });
+
+    expect(await screen.findByText("Cambiaste el mínimo: recalculá para actualizar el resultado.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Enviar a revisión" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Recalcular" }));
+    await waitFor(() =>
+      expect(screen.queryByText("Cambiaste el mínimo: recalculá para actualizar el resultado.")).toBeNull(),
+    );
+    expect((screen.getByRole("button", { name: "Enviar a revisión" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("en revisión, el mínimo y los impuestos no se modifican y se explica cómo hacerlo", async () => {
+    calculoConEstado("IN_REVIEW", null);
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /Cálculo/ }));
+
+    const minimo = (await screen.findByLabelText("Mínimo del mes")) as HTMLInputElement;
+    expect(minimo.disabled).toBe(true);
+    expect(screen.getByText(/Está en revisión: solicitá cambios para modificar/)).toBeTruthy();
   });
 });

@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { StudyRentabilidad } from "./StudyRentabilidad";
+import { valorElegido, abrirListado } from "../test/elegirOpcion";
 
 // A27 D27-2 (a). Rentabilidad sin período contable: el cliente no tiene AccountingPeriod, así que la
 // barra no trae período y la pantalla resuelve el suyo con sus obligaciones fiscales. `fetch` simulado;
@@ -117,11 +118,11 @@ describe("Rentabilidad sin período contable (A27 D27-2 a)", () => {
   it("lista los períodos fiscales en su selector y muestra el saldo de caja fiscal", async () => {
     renderizarRentabilidad();
 
-    const selector = await screen.findByRole("combobox", {
+    await screen.findByRole("combobox", {
       name: "Seleccionar período de rentabilidad",
     });
-    expect((selector as HTMLSelectElement).value).toBe(OCTUBRE.id);
-    expect(within(selector).getAllByRole("option").map((opcion) => opcion.textContent)).toEqual([
+    expect(valorElegido("Seleccionar período de rentabilidad")).toBe(OCTUBRE.id);
+    expect(within(abrirListado("Seleccionar período de rentabilidad")).getAllByRole("option").map((opcion) => opcion.textContent)).toEqual([
       "10/2026",
       "11/2026",
     ]);

@@ -29,6 +29,7 @@ import { StatusBadge } from "../../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../../ui/ConfirmAction";
 import { formatearFechaHora } from "../../lib/formatoFechas";
 import { RechazarDocumento } from "./RechazarDocumento";
+import { ControlCuitPanel } from "./ControlCuit";
 import { sinRespuesta } from "../clientes/consultas";
 
 const FIELD_LABELS: Record<string, string> = {
@@ -215,6 +216,7 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
     setManualFieldsSavedCount(null);
     setShowManualFieldsDialog(true);
   };
+  const cuitPendiente = Boolean(detail.data?.cuitControl?.pendiente);
   const approve = useMutation({
     // 7b-3: el error de aprobar se avisa con el mensaje de la API si es legible; el diálogo ya se cerró al confirmar.
     onError: (error) =>
@@ -559,6 +561,15 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                     No se pudo guardar una corrección. Volvé a intentarlo.
                   </p>
                 ) : null}
+                {detail.data && firmId && clientId ? (
+                  <ControlCuitPanel
+                    documento={detail.data}
+                    firmId={firmId}
+                    clientId={clientId}
+                    puedeRevisar={capabilities.has("document.review")}
+                    onMovido={() => setSelectedId(rows.find((r) => r.id !== selectedId)?.id ?? "")}
+                  />
+                ) : null}
                 {capabilities.has("document.review") && extraction.data.status !== "REVIEWED" ? (
                   <div className="review-actions">
                     <div className="review-actions__copy">
@@ -611,7 +622,7 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                           })
                         }
                         loading={approve.isPending}
-                        disabled={!canApproveExtraction}
+                        disabled={!canApproveExtraction || cuitPendiente}
                       >
                         Aprobar extracción
                       </Button>

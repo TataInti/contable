@@ -30,6 +30,11 @@
   background: var(--ds-color-selected);
 }
 
+.ds-search-select__option.is-disabled {
+  color: var(--ds-color-text-muted);
+  cursor: not-allowed;
+}
+
 .ds-search-select__option[aria-selected="true"] {
   font-weight: var(--ds-font-weight-bold);
 }

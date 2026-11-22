@@ -106,6 +106,11 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   { match: /\/document-upload-sessions/, resolve: () => "document.upload" },
   { match: /\/extractions\//, resolve: (m) => (m === "GET" ? "document.prepare" : "document.review") },
   { match: /\/documents\/[^/]+\/reprocess$/, resolve: (m) => (m === "POST" ? "document.review" : null) },
+  // Control de CUIT (4A-2): aceptar con motivo o mover a otro cliente es revisión; va antes de /documents.
+  {
+    match: /\/documents\/[^/]+\/cuit\/(accept|move)$/,
+    resolve: (m) => (m === "POST" ? "document.review" : null),
+  },
   // Rechazo de un documento que falló (D23-1 a): es revisión, no carga; va antes de la regla general de /documents.
   {
     match: /\/documents\/[^/]+\/reject$/,

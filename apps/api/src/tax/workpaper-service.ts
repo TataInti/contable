@@ -32,6 +32,7 @@ import {
   workpaperAllocationCoverage,
   WorkpaperAllocationError,
 } from "./workpaper-allocation.js";
+import { retirarImputacionesDelLote, ESTADO_IMPUTACION_RETIRADA } from "./fuentes-vigentes.js";
 
 /**
  * Servicio del expediente mensual de liquidación (Fase 1, PLAN §5.6).
@@ -1476,6 +1477,8 @@ export class MonthlyWorkpaperService {
         where: { id: link.id },
         data: { status: "RETIRED", retiredByUserId: ctx.userId, retiredAt, retireReason: reason },
       });
+      // 4K: un lote retirado no aporta imputaciones al cálculo (fuentes-vigentes.ts).
+      await retirarImputacionesDelLote(tx, { workpaperId, importBatchId: batchId });
       await tx.monthlyTaxWorkpaper.update({
         where: { id: workpaperId },
         data: {
@@ -2145,6 +2148,13 @@ export class MonthlyWorkpaperService {
       });
       if (!allocation) {
         throw new WorkpaperError("ALLOCATION_NOT_FOUND", "Imputación no encontrada");
+      }
+      // 4K: una imputación de un archivo retirado o reemplazado no vuelve a contar.
+      if (allocation.status === ESTADO_IMPUTACION_RETIRADA) {
+        throw new WorkpaperError(
+          "INVALID_TRANSITION",
+          "Esta imputación ya no está vigente: su archivo fue retirado o reemplazado",
+        );
       }
       if (!allocation.workpaper || !allocation.obligation) {
         throw new WorkpaperError(

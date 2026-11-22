@@ -61,8 +61,19 @@ function money(value: string | undefined | null): string {
 
 /** "TOTAL_A_INGRESAR" → "Total a ingresar". */
 function readableConcept(concept: string): string {
+  const names: Record<string, string> = {
+    MINIMO: "Impuesto mínimo",
+    MINIMO_NO_IMPONIBLE: "Mínimo no imponible",
+  };
+  if (names[concept]) return names[concept];
   const text = concept.replaceAll("_", " ").toLocaleLowerCase("es-AR");
   return text ? `${text.charAt(0).toLocaleUpperCase("es-AR")}${text.slice(1)}` : concept;
+}
+
+/** Mínimos del caso: solo Ingresos Brutos Tucumán, opcionales. */
+interface MinimumsCase {
+  nonTaxableMinimum: string;
+  taxMinimum: string;
 }
 
 function ruleLabel(rule: SimulatorRule): string {
@@ -88,9 +99,10 @@ export function RuleSimulator({
   const rateRules = rules.filter((rule) => rule.rate !== null);
   const [incomes, setIncomes] = useState<Record<string, string>>({});
   const [credits, setCredits] = useState({ withholding: "", perception: "", collected: "", previousCredit: "" });
+  const [minimums, setMinimums] = useState<MinimumsCase>({ nonTaxableMinimum: "", taxMinimum: "" });
 
   const simulation = useMutation({
-    mutationFn: () =>
+    mutationFn: (extras: MinimumsCase) =>
       api.post<SimulationResponse>(`/tax/rule-versions/${versionId}/simulate`, {
         incomes: rateRules
           .filter((rule) => incomes[rule.id])
@@ -99,11 +111,21 @@ export function RuleSimulator({
         ...(credits.perception ? { perception: credits.perception } : {}),
         ...(credits.collected ? { collected: credits.collected } : {}),
         ...(credits.previousCredit ? { previousCredit: credits.previousCredit } : {}),
+        ...(extras.nonTaxableMinimum ? { nonTaxableMinimum: extras.nonTaxableMinimum } : {}),
+        ...(extras.taxMinimum ? { taxMinimum: extras.taxMinimum } : {}),
       }),
   });
 
   const hasIncome = rateRules.some((rule) => incomes[rule.id]);
   const data = simulation.data;
+  const sentTaxMinimum = simulation.variables?.taxMinimum;
+  const minimumApplied = data?.result.subtotals["MINIMO_APLICADO"] !== undefined;
+  const taxByActivity = data?.result.subtotals["IMPUESTO_POR_ACTIVIDAD"];
+  const minimumComparison = sentTaxMinimum && taxByActivity !== undefined
+    ? minimumApplied
+      ? `Se paga el impuesto mínimo de ${money(sentTaxMinimum)}: el impuesto por actividad da ${money(taxByActivity)}.`
+      : `El impuesto por actividad (${money(taxByActivity)}) es igual o mayor que el impuesto mínimo de ${money(sentTaxMinimum)}: se paga el impuesto por actividad.`
+    : null;
   const comparedByConcept = new Map((data?.comparison?.lines ?? []).map((line) => [line.concept, line.result]));
   const steps: StepRow[] = (data?.result.lines ?? []).map((line) => ({
     concept: line.concept,
@@ -140,7 +162,7 @@ export function RuleSimulator({
           className="rule-simulator__form"
           onSubmit={(event) => {
             event.preventDefault();
-            simulation.mutate();
+            simulation.mutate(minimums);
           }}
         >
           <fieldset className="rule-simulator__group">
@@ -181,6 +203,23 @@ export function RuleSimulator({
               label="Saldo a favor anterior"
               value={credits.previousCredit}
               onChange={(value) => setCredits((current) => ({ ...current, previousCredit: value }))}
+            />
+          </fieldset>
+          <fieldset className="rule-simulator__group">
+            <legend>Mínimos del caso (opcional, solo Ingresos Brutos Tucumán)</legend>
+            <MoneyField
+              id="simulator-non-taxable-minimum"
+              label="Mínimo no imponible"
+              hint="Se resta de la base antes de aplicar la alícuota"
+              value={minimums.nonTaxableMinimum}
+              onChange={(value) => setMinimums((current) => ({ ...current, nonTaxableMinimum: value }))}
+            />
+            <MoneyField
+              id="simulator-tax-minimum"
+              label="Impuesto mínimo del mes"
+              hint="Si el impuesto por actividad da menos, se paga este monto"
+              value={minimums.taxMinimum}
+              onChange={(value) => setMinimums((current) => ({ ...current, taxMinimum: value }))}
             />
           </fieldset>
           <div className="study-form__actions">
@@ -245,6 +284,7 @@ export function RuleSimulator({
             <span>Total a ingresar</span>
             <strong className="tabular-copy">{money(total)}</strong>
           </p>
+          {minimumComparison ? <p className="muted-copy">{minimumComparison}</p> : null}
           {difference !== null ? (
             <p className="muted-copy">
               {difference === 0

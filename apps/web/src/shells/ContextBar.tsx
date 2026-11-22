@@ -4,6 +4,7 @@ import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import "./ContextBar.css";
+import { SearchSelect } from "@contable/design-system";
 
 const ROLE_LABELS: Record<string, string> = {
   OWNER: "Titular",
@@ -74,24 +75,21 @@ export function ContextBar({ only }: { only?: "period" } = {}) {
 
       <div className="ctxbar__selectors">
         {periodOnly ? null : showFirmSelector ? (
-          <label className="ctxbar__item">
+          <div className="ctxbar__item">
             <span className="ctxbar__label">Estudio</span>
             <span className="ctxbar__select-wrap">
-              <select
+              <SearchSelect
+                hideLabel
+                label="Estudio"
                 className="ctxbar__input"
                 value={firmId ?? ""}
-                onChange={(event) => setFirmId(event.target.value || null)}
-              >
-                {!firmId ? <option value="">Elegí un estudio</option> : null}
-                {firms.length === 0 ? <option value="">Sin estudios disponibles</option> : null}
-                {firms.map((firm) => (
-                  <option key={firm.firmId} value={firm.firmId}>
-                    {firm.firmName}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setFirmId(value || null)}
+                placeholder={firms.length === 0 ? "Sin estudios disponibles" : "Elegí un estudio"}
+                allowEmpty={!firmId}
+                options={firms.map((firm) => ({ value: firm.firmId, label: firm.firmName }))}
+              />
             </span>
-          </label>
+          </div>
         ) : (
           <div className="ctxbar__item">
             <span className="ctxbar__label">Estudio</span>
@@ -99,51 +97,39 @@ export function ContextBar({ only }: { only?: "period" } = {}) {
           </div>
         )}
         {periodOnly ? null : (
-        <label className="ctxbar__item">
+        <div className="ctxbar__item">
           <span className="ctxbar__label">Cliente</span>
           <span className="ctxbar__select-wrap">
-            <select
+            <SearchSelect
+              hideLabel
+              label="Cliente"
               className="ctxbar__input"
               value={clientId ?? ""}
               disabled={!firmId || clients.length === 0}
-              onChange={(event) => setClientId(event.target.value || null)}
-            >
-              {!clientId ? (
-                <option value="">{firmId ? "Elegí un cliente" : "Primero elegí estudio"}</option>
-              ) : null}
-              {clients.length === 0 && firmId ? (
-                <option value="">Sin clientes asignados</option>
-              ) : null}
-              {clients.map((client) => (
-                <option key={client.clientId} value={client.clientId}>
-                  {client.clientName}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setClientId(value || null)}
+              placeholder={!firmId ? "Primero elegí estudio" : clients.length === 0 ? "Sin clientes asignados" : "Elegí un cliente"}
+              allowEmpty={!clientId}
+              options={clients.map((client) => ({ value: client.clientId, label: client.clientName }))}
+            />
           </span>
-        </label>
+        </div>
         )}
-        <label className="ctxbar__item ctxbar__item--period">
+        <div className="ctxbar__item ctxbar__item--period">
           <span className="ctxbar__label">Período</span>
           <span className="ctxbar__select-wrap">
-            <select
+            <SearchSelect
+              hideLabel
+              label="Período"
               className="ctxbar__input ctxbar__input--period"
               value={periodId ?? ""}
               disabled={!clientId || periods.length === 0}
-              onChange={(event) => setPeriodId(event.target.value || null)}
-            >
-              {!periodId ? (
-                <option value="">{clientId ? "Elegí un período" : "Sin cliente"}</option>
-              ) : null}
-              {periods.length === 0 && clientId ? <option value="">Sin períodos</option> : null}
-              {periods.map((period) => (
-                <option key={period.periodId} value={period.periodId}>
-                  {period.label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setPeriodId(value || null)}
+              placeholder={!clientId ? "Sin cliente" : periods.length === 0 ? "Sin períodos" : "Elegí un período"}
+              allowEmpty={!periodId}
+              options={periods.map((period) => ({ value: period.periodId, label: period.label }))}
+            />
           </span>
-        </label>
+        </div>
       </div>
 
       {selectedPeriod ? (

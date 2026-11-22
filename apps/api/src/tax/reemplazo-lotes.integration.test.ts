@@ -1,6 +1,6 @@
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../lib/prisma.js";
 import { IngestionService } from "./ingestion-service.js";
 import { MonthlyWorkpaperService } from "./workpaper-service.js";
@@ -65,7 +65,7 @@ async function crearEscenario(): Promise<Escenario> {
   const cuit = `20${String(randomInt(900_000_000) + 100_000_000)}`;
   await prisma.$executeRawUnsafe(`
     INSERT INTO users ("id", "emailNormalized", name, "passwordHash", "updatedAt")
-    VALUES ('${userId}', 'titular.rl.${RUN}@test.local', 'Titular RL', 'x', now())
+    VALUES ('${userId}', 'titular.rl.${randomBytes(4).toString("hex")}@test.local', 'Titular RL', 'x', now())
   `);
   await prisma.$executeRawUnsafe(`
     INSERT INTO firms ("id", "legalName", "displayName", "updatedAt")
@@ -337,5 +337,108 @@ describe("reemplazo y recarga de lotes de fuentes", () => {
     });
     expect((await enlaceDe(corregido.id)).status).toBe("PENDING_REVIEW");
     expect(await enlaceDe(conError.id)).toMatchObject({ status: "REPLACED", replacedByBatchId: (await enlaceDe(corregido.id)).id });
+  });
+});
+
+/**
+ * 4K: percepciones de un lote retirado o reemplazado no suman al cálculo. Cada prueba tiene su
+ * estudio y expediente. La revisión la hace otro usuario (quien importa no revisa lo propio) y el
+ * cálculo se pide solo para IIBB, como en la pantalla.
+ */
+const PERC_ROWS = [
+  { kind: "PERCEPCION", cuitResponsable: "20111111111", cuitAgente: "20222222223", concept: "IIBB", base: "50018.33", amount: "1500.55", rate: "3.0", issuedOn: "2026-03-10", certificateNumber: "0001-000001", documentKind: "INVOICE" },
+];
+const PERC_ROWS_V2 = [
+  { kind: "PERCEPCION", cuitResponsable: "20111111111", cuitAgente: "20222222223", concept: "IIBB", base: "30000.00", amount: "900.00", rate: "3.0", issuedOn: "2026-03-14", certificateNumber: "0001-000002", documentKind: "INVOICE" },
+];
+
+describe("percepciones de un TXT retirado o reemplazado no suman al cálculo (4K)", () => {
+  let revisor: { userId: string; firmId: string; clientId: string; actorKind: "USER" };
+
+  beforeEach(async () => {
+    e = await crearEscenario();
+    const revisorId = randomUUID();
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO users ("id", "emailNormalized", name, "passwordHash", "updatedAt")
+      VALUES ('${revisorId}', 'revisor.4k.${RUN}.${randomBytes(3).toString("hex")}@test.local', 'Revisor 4K', 'x', now())
+    `);
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO firm_memberships ("id", "firmId", "userId", role, status, "acceptedAt")
+      VALUES (gen_random_uuid()::text, '${e.firmId}', '${revisorId}', 'OWNER', 'ACTIVE', now())
+    `);
+    revisor = { userId: revisorId, firmId: e.firmId, clientId: e.clientId, actorKind: "USER" };
+    // Inscripción en los regímenes del mes (invariante: sin inscripción no hay liquidación).
+    const perfil = await prisma.taxpayerProfileVersion.findFirstOrThrow({ where: { clientId: e.clientId } });
+    for (const codigo of ["RI", "IIBB_LOCAL_TUC"]) {
+      const regimen = await prisma.taxRegime.findUniqueOrThrow({ where: { code: codigo } });
+      await prisma.taxRegistration.create({
+        data: {
+          firmId: e.firmId,
+          clientId: e.clientId,
+          profileVersionId: perfil.id,
+          regimeId: regimen.id,
+          status: "ACTIVE",
+          validFrom: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      });
+    }
+    // El cálculo exige las fuentes obligatorias del mes; estas pruebas no las ejercitan.
+    await workpapers.setNoMovements(e.ctx, e.workpaperId, "ARCA_IVA_SALES");
+    await workpapers.setNoMovements(e.ctx, e.workpaperId, "DGR_IIBB_TUC");
+  });
+
+  async function revisarPorOtro(batchId: string) {
+    const enlace = await enlaceDe(batchId);
+    await workpapers.reviewSource(revisor, e.workpaperId, enlace.id);
+  }
+
+  /** Percepciones que deduce el cálculo de IIBB del mes (totals.PERCEPCIONES del liquidado). */
+  async function percepcionesDelCalculo(): Promise<string> {
+    const obligacion = await prisma.taxObligation.findFirstOrThrow({
+      where: { firmId: e.firmId, clientId: e.clientId, periodId: e.iibbPeriodId },
+    });
+    const resultado = await workpapers.calculate(e.ctx, e.workpaperId, { obligationIds: [obligacion.id] });
+    const liquidado = await prisma.taxSettlement.findUniqueOrThrow({
+      where: { id: resultado.settlements[0]!.settlementId },
+    });
+    return (liquidado.totals as Record<string, string>)["PERCEPCIONES"]!;
+  }
+
+  async function imputacionesVigentesDePercepciones() {
+    return prisma.taxInputAllocation.count({
+      where: { workpaperId: e.workpaperId, sourceType: "PERCEPTION", status: "ALLOCATED" },
+    });
+  }
+
+  it("retirar un TXT revisado y volver a cargar el mismo archivo: el cálculo deduce el certificado una sola vez", async () => {
+    const v1 = await cargarLote({ ...PERC(), fileHash: "sha256:per-4k", fileName: "per.txt", rows: PERC_ROWS });
+    await revisarPorOtro(v1.id);
+    expect(await percepcionesDelCalculo()).toBe("1500.55");
+
+    await workpapers.retireBatch(e.ctx, e.workpaperId, v1.id, "Archivo cargado por error");
+    const v2 = await cargarLote({ ...PERC(), fileHash: "sha256:per-4k", fileName: "per.txt", rows: PERC_ROWS });
+    expect(v2.id).not.toBe(v1.id);
+    await revisarPorOtro(v2.id);
+
+    expect(await percepcionesDelCalculo()).toBe("1500.55");
+    expect(await imputacionesVigentesDePercepciones()).toBe(1);
+  });
+
+  it("reemplazar el TXT de percepciones revisado por otro distinto: solo cuenta el nuevo", async () => {
+    const v1 = await cargarLote({ ...PERC(), fileHash: "sha256:per-4k-v1", fileName: "per-v1.txt", rows: PERC_ROWS });
+    await revisarPorOtro(v1.id);
+    expect(await percepcionesDelCalculo()).toBe("1500.55");
+
+    const v2 = await cargarLote({
+      ...PERC(),
+      fileHash: "sha256:per-4k-v2",
+      fileName: "per-v2.txt",
+      rows: PERC_ROWS_V2,
+      replacesBatchId: v1.id,
+    });
+    await revisarPorOtro(v2.id);
+
+    expect(await percepcionesDelCalculo()).toBe("900.00");
+    expect(await imputacionesVigentesDePercepciones()).toBe(1);
   });
 });

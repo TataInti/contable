@@ -17,6 +17,7 @@ import {
   periodoIibbDemo,
   rutasDemo,
 } from "./datosDemoLegajo";
+import { cambiarValor, valorElegido } from "../../test/elegirOpcion";
 
 const ctx = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 vi.mock("../../context/ClientContext", () => ({ useClientContext: () => ctx.current }));
@@ -165,12 +166,10 @@ function completar(dialogo: HTMLElement, documento: string | null = DJ) {
     "Total a pagar": "1300,5",
   };
   for (const [etiqueta, valor] of Object.entries(importes)) {
-    fireEvent.change(within(dialogo).getByLabelText(etiqueta), { target: { value: valor } });
+    cambiarValor(within(dialogo).getByLabelText(etiqueta), valor);
   }
   if (documento)
-    fireEvent.change(within(dialogo).getByLabelText("Documento de respaldo"), {
-      target: { value: documento },
-    });
+    cambiarValor(within(dialogo).getByLabelText("Documento de respaldo"), documento);
 }
 
 beforeEach(() => {
@@ -220,7 +219,7 @@ describe("Legajo · declaración jurada (5b-4a)", () => {
     const dialogo = await abrirDeclaracion("Corregir declaración jurada");
     expect(within(dialogo).getByLabelText("Impuesto determinado")).toHaveValue("1.500,5");
     expect(within(dialogo).getByLabelText("Total a pagar")).toHaveValue("1.300,5");
-    expect(within(dialogo).getByLabelText("Documento de respaldo")).toHaveValue(DJ);
+    expect(valorElegido("Documento de respaldo", dialogo)).toBe(DJ);
     expect(pie(dialogo).getByRole("button", { name: "Guardar corrección" })).toBeEnabled();
   });
 
@@ -366,7 +365,7 @@ describe("Legajo · declaración jurada (5b-4a)", () => {
     const campo = within(await abrirDeclaracion()).getByLabelText("Impuesto determinado");
     // Tecleo real: el campo agrupa al cuarto dígito y el siguiente carácter llega como «1.3125».
     for (const tecleado of ["1", "13", "131", "1312", "1.3125"]) {
-      fireEvent.change(campo, { target: { value: tecleado } });
+      cambiarValor(campo, tecleado);
     }
     expect(campo).toHaveValue("13.125");
   });

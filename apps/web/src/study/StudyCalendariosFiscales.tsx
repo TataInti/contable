@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { AsyncState, Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
+import { AsyncState, Button, EmptyState, Field, Notice, useNotify, SearchSelect } from "@contable/design-system";
 import { useClientContext } from "../context/ClientContext";
 import { api } from "../lib/api";
 import { formatearFecha } from "../lib/formatoFechas";
@@ -196,47 +196,33 @@ export function StudyCalendariosFiscales() {
       ) : (
         <>
           <DenseToolbar>
-            <select
+            <SearchSelect
+              hideLabel
+              label="Año"
               className="dense-select"
-              aria-label="Año"
               value={filters.year === null ? "" : String(filters.year)}
-              onChange={(event) =>
-                updateFilters({ ...filters, year: event.target.value === "" ? null : Number(event.target.value) })
-              }
-            >
-              <option value="">Todos los años</option>
-              {yearOptions.map((year) => (
-                <option key={year} value={String(year)}>
-                  {year}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={(value) => updateFilters({ ...filters, year: value === "" ? null : Number(value) })}
+              placeholder="Todos los años"
+              options={yearOptions.map((year) => ({ value: String(year), label: String(year) }))}
+            />
+            <SearchSelect
+              hideLabel
+              label="Organismo"
               className="dense-select"
-              aria-label="Organismo"
               value={filters.taxAuthorityId ?? ""}
-              onChange={(event) => updateFilters({ ...filters, taxAuthorityId: event.target.value || null })}
-            >
-              <option value="">Todos los organismos</option>
-              {authorityOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={(value) => updateFilters({ ...filters, taxAuthorityId: value || null })}
+              placeholder="Todos los organismos"
+              options={authorityOptions}
+            />
+            <SearchSelect
+              hideLabel
+              label="Jurisdicción"
               className="dense-select"
-              aria-label="Jurisdicción"
               value={filters.jurisdictionId ?? ""}
-              onChange={(event) => updateFilters({ ...filters, jurisdictionId: event.target.value || null })}
-            >
-              <option value="">Todas las jurisdicciones</option>
-              {jurisdictionOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => updateFilters({ ...filters, jurisdictionId: value || null })}
+              placeholder="Todas las jurisdicciones"
+              options={jurisdictionOptions}
+            />
             <DenseToggleGroup
               label="Estado"
               options={STATUS_OPTIONS}

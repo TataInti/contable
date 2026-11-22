@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Switch, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Switch, useNotify, SearchSelect } from "@contable/design-system";
 import { api, type FeatureFlag } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
@@ -115,16 +115,18 @@ export function StudyAdministracionPlataforma() {
           placeholder="Buscar módulo…"
           label="Buscar módulos"
         />
-        <select
+        <SearchSelect
+          hideLabel
+          label="Filtrar por estado"
           className="dense-select"
-          aria-label="Filtrar por estado"
           value={stateFilter}
-          onChange={(event) => setStateFilter(event.target.value as "" | "on" | "off")}
-        >
-          <option value="">Estado: todos</option>
-          <option value="on">Habilitados</option>
-          <option value="off">Deshabilitados</option>
-        </select>
+          onChange={(value) => setStateFilter(value as "" | "on" | "off")}
+          placeholder="Estado: todos"
+          options={[
+            { value: "on", label: "Habilitados" },
+            { value: "off", label: "Deshabilitados" },
+          ]}
+        />
       </DenseToolbar>
 
       {flags.isLoading ? (

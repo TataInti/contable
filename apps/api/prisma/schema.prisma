@@ -824,6 +824,11 @@ model Document {
   uploadedByUserId     String?
   uploadOrigin         String         @default("FIRM")
   requestId            String?
+  /// Control de CUIT (corte 4A-2): aceptación del CUIT ajeno, con motivo, para una extracción concreta.
+  cuitAcceptedExtractionId String?
+  cuitAcceptedByUserId     String?
+  cuitAcceptedAt           DateTime?
+  cuitAcceptedReason       String?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 

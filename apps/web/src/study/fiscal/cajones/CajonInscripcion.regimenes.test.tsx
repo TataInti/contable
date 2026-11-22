@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { CajonInscripcion } from "./CajonInscripcion";
 import { PestanaRegimenes } from "../pestanas/PestanaRegimenes";
 import { SeccionRegimenes } from "../../resumen/secciones/SeccionRegimenes";
+import { abrirListado, cambiarValor } from "../../../test/elegirOpcion";
 
 const regimenes = [
   { id: "municipal", code: "TEM_SMT", name: "TEM San Miguel de Tucumán", isActive: true, taxType: { id: "tem", name: "Tasa de Actividades Económicas (TEM)", isActive: true }, jurisdiction: { id: "smt", name: "San Miguel de Tucumán", kind: "MUNICIPAL", isActive: true } },
@@ -22,11 +23,11 @@ afterEach(cleanup);
 describe("regímenes legibles", () => {
   it("ordena y agrupa las opciones por nivel jurisdiccional, sin mostrar códigos", () => {
     render(<SelectorFixture />);
-    const select = screen.getByLabelText("Régimen");
-    expect(select.textContent).not.toMatch(/IIBB_LOCAL_TUC|TEM_SMT|\bMT\b|\bRI\b/);
-    const groups = [...select.querySelectorAll("optgroup")];
-    expect(groups.map((group) => group.label)).toEqual(["Nacional", "Provincial", "Municipal"]);
-    expect(groups.map((group) => [...group.querySelectorAll("option")].map((option) => option.textContent))).toEqual([
+    const listado = abrirListado("Régimen");
+    expect(listado.textContent).not.toMatch(/IIBB_LOCAL_TUC|TEM_SMT|\bMT\b|\bRI\b/);
+    const groups = [...listado.querySelectorAll<HTMLElement>('[role="group"]')];
+    expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual(["Nacional", "Provincial", "Municipal"]);
+    expect(groups.map((group) => [...group.querySelectorAll('[role="option"]')].map((option) => option.textContent))).toEqual([
       ["Monotributo — Montributo · Argentina", "Responsable Inscripto — IVA · Argentina"],
       ["IIBB Contribuyente Local Tucumán — Ingresos Brutos · Provincia de Tucumán"],
       ["TEM San Miguel de Tucumán — Tasa de Actividades Económicas (TEM) · San Miguel de Tucumán"],
@@ -35,7 +36,7 @@ describe("regímenes legibles", () => {
 
   it("muestra la ayuda del régimen seleccionado", () => {
     render(<SelectorFixture />);
-    fireEvent.change(screen.getByLabelText("Régimen"), { target: { value: "provincial" } });
+    cambiarValor(screen.getByLabelText("Régimen"), "provincial");
     expect(screen.getByText("Impuesto: Ingresos Brutos · Jurisdicción: Provincia de Tucumán")).toBeTruthy();
   });
 

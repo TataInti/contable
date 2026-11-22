@@ -9,6 +9,7 @@ import type { ClientContextValue } from "../context/ClientContext";
 import { ApiError, api, downloadFile } from "../lib/api";
 import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
 import { fiscalBooksSummaryUrl } from "./fiscalBooksExport";
+import { cambiarValor, valorElegido } from "../test/elegirOpcion";
 
 // Datos sintéticos rotulados (cliente, período y comprobantes de prueba del corte 7b).
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -138,10 +139,10 @@ describe("Exportar libros en el Legajo", () => {
     renderAction();
     await openPanel();
 
-    expect((screen.getByLabelText("Libro") as HTMLSelectElement).value).toBe("purchases");
-    expect((screen.getByLabelText("Formato") as HTMLSelectElement).value).toBe("xlsx");
-    expect((screen.getByLabelText("Ordenar por") as HTMLSelectElement).value).toBe("issuedOn");
-    expect((screen.getByLabelText("Sentido del orden") as HTMLSelectElement).value).toBe("asc");
+    expect(valorElegido("Libro")).toBe("purchases");
+    expect(valorElegido("Formato")).toBe("xlsx");
+    expect(valorElegido("Ordenar por")).toBe("issuedOn");
+    expect(valorElegido("Sentido del orden")).toBe("asc");
     const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
     expect(boxes).toHaveLength(FISCAL_BOOK_COLUMNS.length);
     expect(boxes.every((box) => box.checked)).toBe(true);
@@ -154,9 +155,9 @@ describe("Exportar libros en el Legajo", () => {
     await openPanel();
     await waitForDownloadEnabled();
 
-    fireEvent.change(screen.getByLabelText("Formato"), { target: { value: "csv" } });
-    fireEvent.change(screen.getByLabelText("Ordenar por"), { target: { value: "total" } });
-    fireEvent.change(screen.getByLabelText("Sentido del orden"), { target: { value: "desc" } });
+    cambiarValor(screen.getByLabelText("Formato"), "csv");
+    cambiarValor(screen.getByLabelText("Ordenar por"), "total");
+    cambiarValor(screen.getByLabelText("Sentido del orden"), "desc");
     fireEvent.click(screen.getByLabelText("Exento"));
     fireEvent.click(downloadButton());
 
@@ -204,7 +205,7 @@ describe("Exportar libros en el Legajo", () => {
     renderAction();
     await openPanel();
 
-    fireEvent.change(screen.getByLabelText("Libro"), { target: { value: "sales" } });
+    cambiarValor(screen.getByLabelText("Libro"), "sales");
 
     expect(await screen.findByText("No hay comprobantes aprobados para este libro")).toBeTruthy();
     expect(downloadButton().disabled).toBe(true);
@@ -231,8 +232,8 @@ describe("Exportar libros en el Legajo", () => {
     fireEvent.click(downloadButton());
 
     const message = await screen.findByText("format: indicá «xlsx» o «csv»");
-    const field = screen.getByLabelText("Formato").closest(".ds-field");
-    expect(field?.contains(message)).toBe(true);
+    const campo = screen.getByLabelText("Formato").closest(".ds-field")?.parentElement;
+    expect(campo?.contains(message)).toBe(true);
   });
 
   it("si la red falla sin respuesta del servidor, conserva el aviso con su paso siguiente", async () => {

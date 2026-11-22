@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, Table, useNotify, SearchSelect } from "@contable/design-system";
 import { api, downloadFile, type Account, type ReportRun, type ReportTemplate } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
@@ -216,20 +216,18 @@ export function StudyReportes() {
           />
         ) : (
           <div className="study-inline-form">
-            <label className="ds-field">
+            <div className="ds-field">
               <span className="ds-field__label">Plantilla</span>
-              <select
+              <SearchSelect
+                hideLabel
+                label="Plantilla"
                 className="ctxbar__input"
                 value={selectedTemplateId}
-                onChange={(event) => setTemplateId(event.target.value)}
-              >
-                {(templates.data ?? []).map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name} · v{template.version}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={(value) => setTemplateId(value)}
+                allowEmpty={false}
+                options={(templates.data ?? []).map((template) => ({ value: template.id, label: `${template.name} · v${template.version}` }))}
+              />
+            </div>
             <Field
               id="report-cutoff"
               label="Fecha de corte"

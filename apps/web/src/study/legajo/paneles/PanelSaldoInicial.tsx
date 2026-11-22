@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, MoneyField } from "@contable/design-system";
+import { Button, MoneyField, SearchSelect } from "@contable/design-system";
 import { api } from "../../../lib/api";
 import { formatearPeriodo } from "../../../lib/formatoFechas";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
@@ -117,101 +117,92 @@ export function PanelSaldoInicial({
           <label className="ds-field__label" htmlFor="opening-tax-type">
             Impuesto
           </label>
-          <select
+          <SearchSelect
             id="opening-tax-type"
+            label="Impuesto"
+            hideLabel
             className="ds-field__input"
             value={opening.taxTypeId}
-            onChange={(event) =>
-              setOpening((value) => ({
-                ...value,
-                taxTypeId: event.target.value,
+            onChange={(value) =>
+              setOpening((current) => ({
+                ...current,
+                taxTypeId: value,
                 taxPeriodId: "",
                 regimeId: "",
                 jurisdictionId: "",
                 kind:
-                  event.target.value &&
-                  tiposImpuesto?.find((type) => type.id === event.target.value)?.code === "IVA"
-                    ? "IVA_LIBRE"
-                    : "SALDO_A_FAVOR",
+                  value && tiposImpuesto?.find((type) => type.id === value)?.code === "IVA" ? "IVA_LIBRE" : "SALDO_A_FAVOR",
               }))
             }
             required
-          >
-            <option value="">Seleccioná…</option>
-            {(tiposImpuesto ?? [])
-              .filter((type) => type.isActive)
-              .map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-          </select>
+            placeholder="Seleccioná…"
+            options={(tiposImpuesto ?? []).filter((type) => type.isActive).map((type) => ({ value: type.id, label: type.name }))}
+          />
         </div>
         <div className="ds-field">
           <label className="ds-field__label" htmlFor="opening-tax-period">
             Período fiscal
           </label>
-          <select
+          <SearchSelect
             id="opening-tax-period"
+            label="Período fiscal"
+            hideLabel
             className="ds-field__input"
             value={opening.taxPeriodId}
-            onChange={(event) =>
-              setOpening((value) => ({ ...value, taxPeriodId: event.target.value }))
-            }
+            onChange={(value) => setOpening((current) => ({ ...current, taxPeriodId: value }))}
             required
             disabled={!opening.taxTypeId}
-          >
-            <option value="">Seleccioná…</option>
-            {openingTaxPeriods.map((taxPeriod) => (
-              <option key={taxPeriod.id} value={taxPeriod.id}>
-                {taxPeriod.label ?? formatearPeriodo(taxPeriod.startDate, taxPeriod.endDate)}
-              </option>
-            ))}
-          </select>
+            placeholder="Seleccioná…"
+            options={openingTaxPeriods.map((taxPeriod) => ({
+              value: taxPeriod.id,
+              label: taxPeriod.label ?? formatearPeriodo(taxPeriod.startDate, taxPeriod.endDate),
+            }))}
+          />
         </div>
         <div className="ds-field">
           <label className="ds-field__label" htmlFor="opening-regime">
             Régimen
           </label>
-          <select
+          <SearchSelect
             id="opening-regime"
+            label="Régimen"
+            hideLabel
             className="ds-field__input"
             value={opening.regimeId}
-            onChange={(event) => {
-              const regime = openingRegimes.find((item) => item.id === event.target.value);
-              setOpening((value) => ({
-                ...value,
-                regimeId: event.target.value,
+            onChange={(value) => {
+              const regime = openingRegimes.find((item) => item.id === value);
+              setOpening((current) => ({
+                ...current,
+                regimeId: value,
                 jurisdictionId: regime?.jurisdictionId ?? "",
               }));
             }}
-          >
-            <option value="">Sin régimen específico</option>
-            {openingRegimes.map((regime) => (
-              <option key={regime.id} value={regime.id}>
-                {regime.name} · {regime.jurisdiction.name}
-              </option>
-            ))}
-          </select>
+            placeholder="Sin régimen específico"
+            options={openingRegimes.map((regime) => ({ value: regime.id, label: `${regime.name} · ${regime.jurisdiction.name}` }))}
+          />
         </div>
         <div className="ds-field">
           <label className="ds-field__label" htmlFor="opening-kind">
             Naturaleza
           </label>
-          <select
+          <SearchSelect
             id="opening-kind"
+            label="Naturaleza"
+            hideLabel
             className="ds-field__input"
             value={opening.kind}
-            onChange={(event) => setOpening((value) => ({ ...value, kind: event.target.value }))}
-          >
-            <option value="SALDO_A_FAVOR">Saldo a favor</option>
-            {tiposImpuesto?.find((type) => type.id === opening.taxTypeId)?.code === "IVA" ? (
-              <>
-                <option value="IVA_TECNICO">IVA · saldo técnico</option>
-                <option value="IVA_LIBRE">IVA · libre disponibilidad</option>
-              </>
-            ) : null}
-          </select>
+            onChange={(value) => setOpening((current) => ({ ...current, kind: value }))}
+            allowEmpty={false}
+            options={[
+              { value: "SALDO_A_FAVOR", label: "Saldo a favor" },
+              ...(tiposImpuesto?.find((type) => type.id === opening.taxTypeId)?.code === "IVA"
+                ? [
+                  { value: "IVA_TECNICO", label: "IVA · saldo técnico" },
+                  { value: "IVA_LIBRE", label: "IVA · libre disponibilidad" },
+                ]
+                : []),
+            ]}
+          />
         </div>
         <MoneyField
           label="Importe"
@@ -224,21 +215,19 @@ export function PanelSaldoInicial({
           <label className="ds-field__label" htmlFor="opening-evidence">
             Documento de respaldo
           </label>
-          <select
+          <SearchSelect
             id="opening-evidence"
+            label="Documento de respaldo"
+            hideLabel
             className="ds-field__input"
             value={opening.evidenceDocumentId}
-            onChange={(event) =>
-              setOpening((value) => ({ ...value, evidenceDocumentId: event.target.value }))
-            }
-          >
-            <option value="">Sin documento (carga manual)</option>
-            {documentos?.map((document) => (
-              <option key={document.id} value={document.id}>
-                {document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento"}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => setOpening((current) => ({ ...current, evidenceDocumentId: value }))}
+            placeholder="Sin documento (carga manual)"
+            options={(documentos ?? []).map((document) => ({
+              value: document.id,
+              label: document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento",
+            }))}
+          />
         </div>
         <WorkpaperActionError error={openingMutation.error} />
       </form>

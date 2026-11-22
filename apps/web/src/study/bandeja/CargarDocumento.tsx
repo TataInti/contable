@@ -1,6 +1,6 @@
 import { useImperativeHandle, useState, type Ref } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, useNotify } from "@contable/design-system";
+import { Button, EmptyState, useNotify, SearchSelect } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { ApiError, api, uploadToSignedUrl, type DocumentRequest } from "../../lib/api";
 import { useClientContext } from "../../context/ClientContext";
@@ -168,23 +168,20 @@ export function CargarDocumento({
             upload.mutate();
           }}
         >
-          <label className="ds-field" htmlFor="upload-request-item">
+          <div className="ds-field">
             <span className="ds-field__label">Corresponde a</span>
-            <select
+            <SearchSelect
               id="upload-request-item"
+              label="Corresponde a"
+              hideLabel
               className="ctxbar__input"
               value={uploadRequestItemId}
-              onChange={(event) => setUploadRequestItemId(event.target.value)}
+              onChange={(value) => setUploadRequestItemId(value)}
               required
-            >
-              <option value="">Elegí el ítem solicitado</option>
-              {pendingRequestItems.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.requestTitle} · {item.description}
-                </option>
-              ))}
-            </select>
-          </label>
+              placeholder="Elegí el ítem solicitado"
+              options={pendingRequestItems.map((item) => ({ value: item.id, label: `${item.requestTitle} · ${item.description}` }))}
+            />
+          </div>
           <label
             className={`upload-dropzone${dragging ? " upload-dropzone--dragging" : ""}`}
             onDragOver={(event) => {
