@@ -49,6 +49,7 @@ export type FiscalErrorCode =
   | "REGISTRATION_VALIDITY_INVALID"
   | "REGISTRATION_IN_USE"
   | "ACTIVITY_LINK_NOT_FOUND"
+  | "ACTIVITY_IN_USE"
   | "REGIME_NOT_FOUND"
   | "REGIME_MODULE_NOT_FOUND"
   | "CALC_FAMILY_NOT_FOUND"
@@ -1786,6 +1787,61 @@ export class TaxpayerProfileService {
       return tx.clientActivity.update({ where: { id: link.id }, data: { validTo } });
     });
   }
+
+  /**
+   * Corrige la fecha «Desde» de una actividad vinculada (brief 4H). No cambia meses ya finalizados: si el cambio
+   * alcanza un período finalizado del mismo nivel, se rechaza con el período que lo impide.
+   */
+  async updateClientActivity(ctx: TenantContext, input: { clientActivityId: string; validFrom: string }) {
+    return withTenantContext(ctx, async (tx) => {
+      const link = await tx.clientActivity.findFirst({
+        where: { id: input.clientActivityId, firmId: ctx.firmId, clientId: ctx.clientId! },
+        include: { activity: { select: { name: true, jurisdictionId: true } } },
+      });
+      if (!link) throw new FiscalError("ACTIVITY_LINK_NOT_FOUND", "Actividad del cliente no encontrada");
+      const validFrom = new Date(input.validFrom);
+      if (link.validFrom.getTime() === validFrom.getTime()) return link;
+      if (link.validTo && validFrom > link.validTo) {
+        throw new FiscalError(
+          "INVALID_TRANSITION",
+          `El «Desde» no puede ser posterior al «Hasta» de la actividad (${fechaDiaMes(link.validTo)})`,
+          ["validFrom"],
+        );
+      }
+      const desde = link.validFrom < validFrom ? link.validFrom : validFrom;
+      const hasta = link.validFrom < validFrom ? validFrom : link.validFrom;
+      const finalized = await tx.taxSettlement.findFirst({
+        where: {
+          firmId: ctx.firmId,
+          clientId: link.clientId,
+          status: "FINALIZED",
+          regime: { jurisdictionId: link.activity.jurisdictionId },
+          period: { startDate: { lt: hasta }, endDate: { gte: desde } },
+        },
+        include: { period: { select: { endDate: true } } },
+        orderBy: { period: { startDate: "asc" } },
+      });
+      if (finalized) {
+        throw new FiscalError(
+          "ACTIVITY_IN_USE",
+          `El período que termina el ${fechaDiaMes(finalized.period.endDate)} ya está finalizado: la fecha «Desde» de ${link.activity.name} no puede cambiar para ese mes`,
+          ["validFrom"],
+        );
+      }
+      const updated = await tx.clientActivity.update({ where: { id: link.id }, data: { validFrom } });
+      await recordAudit(tx, {
+        firmId: ctx.firmId,
+        userId: ctx.userId,
+        action: "tax.client_activity.updated",
+        entityType: "ClientActivity",
+        entityId: link.id,
+        before: { validFrom: link.validFrom.toISOString() },
+        after: { validFrom: updated.validFrom.toISOString() },
+      });
+      return updated;
+    });
+  }
+
 
   /**
    * Matrículas de un miembro del estudio, para la ficha del profesional (A4-2a).

@@ -59,6 +59,11 @@ import {
  *   subledger aprobados y del ledger de créditos.
  */
 
+const MESES_ES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+] as const;
+
 export type SettlementErrorCode =
   | "SETTLEMENT_NOT_FOUND"
   | "SETTLEMENT_IMMUTABLE"
@@ -71,6 +76,7 @@ export type SettlementErrorCode =
   | "RULE_SUBJECT_UNRESOLVED"
   | "ACTIVITY_RULE_UNRESOLVED"
   | "ACTIVITY_UNCLASSIFIED"
+  | "ACTIVITY_NOT_IN_FORCE"
   | "UNSUPPORTED_ENGINE_VERSION"
   | "PERIOD_NOT_FOUND"
   | "REGISTRATION_REQUIRED"
@@ -1140,9 +1146,37 @@ export class SettlementService {
         isTypedActivityEngine && singleLocalActivityCode ? ownLevelActivity(singleLocalActivityCode) : null;
       // Actividad que toma un hecho en este impuesto: la suya del nivel. Si es de otro nivel o no trae código,
       // la única actividad del cliente en el nivel (null si el nivel tiene más de una).
+      // Vínculos del cliente en este nivel sin filtrar por fecha, para distinguir «no está vigente en el período»
+      // de «hay varias actividades vigentes del nivel» (brief 4H). Solo importan en motores tipados.
+      const levelLinks = isTypedActivityEngine
+        ? await tx.clientActivity.findMany({
+            where: {
+              firmId: ctx.firmId,
+              clientId: input.clientId,
+              profile: { status: "ACTIVE" },
+              activity: { jurisdictionId: input.jurisdictionId },
+            },
+            include: { activity: { select: { code: true, name: true } } },
+            orderBy: [{ validFrom: "asc" }],
+          })
+        : [];
+      const inForceLinks = levelLinks.filter(
+        (link) => link.validFrom <= period.endDate && (!link.validTo || link.validTo >= period.startDate),
+      );
+      const notInForceActivities = new Map<string, { name: string; validFrom: Date }>();
+      const noteIfNotInForce = (code: string): boolean => {
+        const links = levelLinks.filter((link) => link.activity.code === code);
+        if (links.length === 0 || inForceLinks.some((link) => link.activity.code === code)) return false;
+        notInForceActivities.set(code, { name: links[0]!.activity.name, validFrom: links[0]!.validFrom });
+        return true;
+      };
       const levelActivity = (activityCode: string | null | undefined): { id: string; code: string } | null => {
         const own = activityCode && activityCode.trim().length > 0 ? ownLevelActivity(activityCode) : null;
-        return own ?? singleLocalActivity;
+        if (own) return noteIfNotInForce(own.code) ? null : own;
+        if (singleLocalActivity) return singleLocalActivity;
+        // Sin actividad vigente en el nivel: si el cliente tiene actividades del nivel fuera de vigencia, se nombra la primera.
+        if (inForceLinks.length === 0 && levelLinks.length > 0) noteIfNotInForce(levelLinks[0]!.activity.code);
+        return null;
       };
       const unclassifiedVoucherIds = new Set<string>();
       for (const v of vouchers) {
@@ -1274,10 +1308,23 @@ export class SettlementService {
         }
       }
 
+      if (notInForceActivities.size > 0) {
+        const [primera] = [...notInForceActivities.values()].sort(
+          (a, b) => a.validFrom.getTime() - b.validFrom.getTime(),
+        );
+        const mes = MESES_ES[period.startDate.getUTCMonth()];
+        const desde = primera!.validFrom.toISOString().slice(0, 10).split("-").reverse().join("/");
+        throw new SettlementError(
+          "ACTIVITY_NOT_IN_FORCE",
+          `La actividad ${primera!.name} no está vigente en ${mes} ${period.startDate.getUTCFullYear()} para este cliente (vigente desde ${desde}). Corregí la fecha «Desde» en Configuración fiscal → Actividades.`,
+        );
+      }
       if (unclassifiedVoucherIds.size > 0) {
         throw new SettlementError(
           "ACTIVITY_UNCLASSIFIED",
-          `${unclassifiedVoucherIds.size} venta(s) tienen una actividad de otro nivel y el cliente tiene más de una actividad en este impuesto. Asigná la actividad de cada venta en su clasificación y volvé a calcular.`,
+          inForceLinks.length > 1
+            ? `${unclassifiedVoucherIds.size} venta(s) tienen una actividad de otro nivel y el cliente tiene más de una actividad vigente en este impuesto. Asigná la actividad de cada venta en su clasificación y volvé a calcular.`
+            : `${unclassifiedVoucherIds.size} venta(s) tienen una actividad que el cliente no tiene vinculada en este impuesto. Vinculala en Configuración fiscal → Actividades y volvé a calcular.`,
         );
       }
       const minimumRules = await tx.taxMinimumRule.findMany({
