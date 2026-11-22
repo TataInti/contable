@@ -490,7 +490,8 @@ describe("Fase 4.1 — IIBB Tucumán local: cálculo", () => {
     });
     await ingestion.reviewVoucher(ctxReviewer, v.id, true);
 
-    const result = await settlements.calculate(ctxOwner, calculateParams());
+    // Decisión de Inti (22-11-2026): el mínimo es libre y lo ingresa el contador.
+    const result = await settlements.calculate(ctxOwner, { ...calculateParams(), declaredMinimum: "5000" });
     const totals = result.settlement.totals as Record<string, string>;
     expect(totals["MINIMO_APLICADO"]).toBe("5000.00");
     expect(totals["TOTAL_A_INGRESAR"]).toBe("5000.00");
@@ -580,7 +581,7 @@ describe("Fase 4.1 — IIBB Tucumán local: cálculo", () => {
     expect(totals["TOTAL_A_INGRESAR"]).toBe("1250.00");
   });
 
-  it("aplica el mínimo configurado por actividad", async () => {
+  it("ignora el mínimo por actividad de la regla: IIBB Tucumán solo usa el mínimo ingresado", async () => {
     await createApprovedVouchersWithLines();
     await prisma.taxMinimumRule.deleteMany({ where: { ruleVersionId } });
     await prisma.taxRateRule.updateMany({
@@ -591,8 +592,8 @@ describe("Fase 4.1 — IIBB Tucumán local: cálculo", () => {
     const result = await settlements.calculate(ctxOwner, calculateParams());
     const totals = result.settlement.totals as Record<string, string>;
     expect(totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("6250.00");
-    expect(totals["IMPUESTO_DETERMINADO"]).toBe("9250.00");
-    expect(totals["TOTAL_A_INGRESAR"]).toBe("9250.00");
+    expect(totals["IMPUESTO_DETERMINADO"]).toBe("6250.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("6250.00");
   });
 
   it("separa SIRCREB/recaudaciones bancarias de las retenciones comunes", async () => {

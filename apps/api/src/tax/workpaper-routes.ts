@@ -282,10 +282,21 @@ export function workpaperRoutes(app: FastifyInstance) {
   app.post("/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers/:workpaperId/calculate", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { workpaperId } = req.params as { workpaperId: string };
-    const body = z.object({ cutoff: z.string().date().optional() }).strict().parse(req.body ?? {});
+    const body = z
+      .object({
+        cutoff: z.string().date().optional(),
+        obligationIds: z.array(z.string().min(1)).optional(),
+        minimums: z
+          .record(z.string().min(1), z.string().regex(/^\d+(\.\d{1,2})?$/))
+          .optional(),
+      })
+      .strict()
+      .parse(req.body ?? {});
     try {
       const data = await service.calculate(ctx, workpaperId, {
         ...(body.cutoff ? { cutoff: body.cutoff } : {}),
+        ...(body.obligationIds ? { obligationIds: body.obligationIds } : {}),
+        ...(body.minimums ? { minimums: body.minimums } : {}),
       });
       return reply.send({ data });
     } catch (err) {

@@ -257,7 +257,8 @@ describe("Legajo · etapa Cálculo (K12)", () => {
     fijarRespuestas({ fuentes: fuentesPresentes, legajos: [legajoDemo("READY_TO_CALCULATE")] });
     renderLegajo();
     fireEvent.click(await screen.findByRole("button", { name: "Calcular liquidación" })); // vigente: cambia con decisión de Ciro (16-nov, 49a)
-    await waitFor(() => expect(api.post).toHaveBeenCalledWith(`${LEGAJO}/calculate`));
+    // Brief 3C: el pedido lleva el cuerpo de la selección de impuestos (vacío o con ids).
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(`${LEGAJO}/calculate`, expect.any(Object)));
   });
 
   it("Calcular mora aparece con liquidación finalizada, impuesto vencido y saldo pendiente", async () => {
