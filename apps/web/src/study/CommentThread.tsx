@@ -39,13 +39,14 @@ export function CommentThread({ firmId, clientId, periodLabel, compact = false }
     }
   }, [location.pathname, location.search, query.data]);
   if (!firmId || !clientId) return null;
-  const matchingMembers = members.data ?? [];
+  const matchingMembers = Array.isArray(members.data) ? members.data : [];
+  const comments = Array.isArray(query.data) ? query.data : [];
   return <section className="comment-thread" aria-label="Comentarios">
     <h2>{compact ? "Comentarios" : "Comentarios del mes"}</h2>
     {query.isError ? <Notice tone="error">No se pudieron cargar los comentarios. Actualizá la pantalla para volver a intentar.</Notice> : null}
     {query.isPending ? <p role="status">Cargando comentarios…</p> : null}
     <ol className="comment-thread__list">
-      {(query.data ?? []).map((item) => <li key={item.id} id={`comentario-${item.id}`} className="comment-thread__item">
+      {comments.map((item) => <li key={item.id} id={`comentario-${item.id}`} className="comment-thread__item">
         <p><strong>{item.authorName}</strong> · <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("es-AR")}</time>
           {item.isEdited ? <span> · editado</span> : null}{item.periodLabel ? <span> · {item.periodLabel}</span> : null}</p>
         {item.archivedAt ? <p>Comentario archivado</p> : editingId === item.id ? <form onSubmit={(event) => { event.preventDefault(); edit.mutate({ id: item.id, text: editingBody }); }}>
@@ -73,7 +74,7 @@ export function CommentThread({ firmId, clientId, periodLabel, compact = false }
       {mentionedUserId ? <p>Se notificará en «Pendientes para mí».</p> : search.startsWith("@") ? <p role="status">Elegí una persona del estudio para completar la mención.</p> : null}
       <label><input type="checkbox" checked={isPersonal} onChange={(event) => { setIsPersonal(event.target.checked); if (event.target.checked) { setMentionedUserId(null); setSearch(""); } }} /> Solo para mí</label>
       {create.isError ? <p role="alert">No se pudo guardar el comentario. Revisá el texto y volvé a intentar.</p> : null}
-      <Button type="submit" loading={create.isPending}>Comentar</Button>
+      <Button type="submit" variant="secondary" loading={create.isPending}>Comentar</Button>
     </form>
   </section>;
 }

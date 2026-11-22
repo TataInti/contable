@@ -8,6 +8,7 @@ import { sha256 } from "../auth/sessions.js";
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const PREPARER = "33333333-3333-4333-8333-333333333333";
 const OWNER_BETA = "22222222-2222-4222-8222-222222222222";
+const FOREIGN_USER = randomUUID();
 const FIRM_BETA = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const FIRM = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT = "11111111-2222-4333-8444-555555555555";
@@ -24,6 +25,8 @@ async function request(method: "GET" | "POST" | "PATCH", token: string, url: str
 beforeAll(async () => {
   app = await buildServer({ postgres: async () => true, valkey: async () => true, minio: async () => true, ai: async () => true });
   await app.ready();
+  await prisma.user.create({ data: { id: FOREIGN_USER, emailNormalized: `foreign-${FOREIGN_USER}@example.com`, name: "Owner Beta sintético", passwordHash: "hash", status: "ACTIVE" } });
+  await prisma.firmMembership.create({ data: { id: randomUUID(), firmId: FIRM_BETA, userId: FOREIGN_USER, role: "OWNER", status: "ACTIVE", acceptedAt: new Date() } });
   ownerToken = randomBytes(32).toString("base64url");
   preparerToken = randomBytes(32).toString("base64url");
   await prisma.deviceSession.createMany({ data: [[OWNER, ownerToken], [PREPARER, preparerToken]].map(([userId, token]) => ({
@@ -33,6 +36,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (madeIds.length) await prisma.studyComment.deleteMany({ where: { id: { in: madeIds } } });
+  await prisma.firmMembership.deleteMany({ where: { firmId: FIRM_BETA, userId: FOREIGN_USER } });
+  await prisma.user.delete({ where: { id: FOREIGN_USER } });
   await prisma.deviceSession.deleteMany({ where: { refreshTokenHash: { in: [ownerToken, preparerToken].filter(Boolean).map(sha256) } } });
   await app?.close(); app = null;
 });
@@ -43,7 +48,7 @@ describe("comentarios internos por API", () => {
     const members = await request("GET", ownerToken, `${path}/members?search=Preparer`);
     expect(members.statusCode).toBe(200);
     expect(members.json().data).toContainEqual({ id: PREPARER, name: "Preparer A" });
-    const otherStudy = await request("POST", ownerToken, path, { body: "Mención ajena", mentionedUserId: OWNER_BETA });
+    const otherStudy = await request("POST", ownerToken, path, { body: "Mención ajena", mentionedUserId: FOREIGN_USER });
     expect(otherStudy.statusCode).toBe(422);
     expect(otherStudy.json().error.details.path).toEqual(["mentionedUserId"]);
 

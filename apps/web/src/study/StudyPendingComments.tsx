@@ -40,7 +40,7 @@ export function StudyPendingComments() {
     <ol>{items.map((item) => <li key={item.id}>
       <strong>{item.clientName}</strong>{item.periodLabel ? <span> · {item.periodLabel}</span> : null}
       <p>{item.body.length > 180 ? `${item.body.slice(0, 180)}…` : item.body}</p>
-      {tab === "pending" ? <Button loading={resolve.isPending} onClick={() => resolve.mutate(item.id)}>Marcar como resuelto</Button> : null}
+      {tab === "pending" ? <Button variant="secondary" loading={resolve.isPending} onClick={() => resolve.mutate(item.id)}>Marcar como resuelto</Button> : null}
       <Button variant="secondary" onClick={() => openThread(item.clientId, item.id)}>Abrir comentario</Button>
     </li>)}</ol>
   </main>;
