@@ -245,6 +245,8 @@ export function clientRoutes(app: FastifyInstance) {
               isPrimary: true,
               validFrom: true,
               validTo: true,
+              isChange: true,
+              changeReason: true,
               profile: { select: { version: true } },
               activity: {
                 select: {

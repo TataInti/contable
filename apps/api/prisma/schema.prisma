@@ -2418,8 +2418,12 @@ model ClientActivity {
   profileVersionId  String
   activityId        String
   isPrimary         Boolean  @default(false)
+  /// Vigencia: sin cambio registrado, la actividad vale para cualquier período (brief 4L).
+  /// Un cambio de actividad (isChange) rige desde validFrom (mes del cambio).
   validFrom         DateTime
   validTo           DateTime?
+  isChange          Boolean  @default(false)
+  changeReason      String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

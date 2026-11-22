@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { MESES_ES } from "./activity-coverage.js";
 import { calculateDueDate, resolveDueDate } from "@contable/tax-engine";
 import {
   computeLegacyRulesHashSchemaV1,
@@ -50,6 +51,9 @@ export type FiscalErrorCode =
   | "REGISTRATION_IN_USE"
   | "ACTIVITY_LINK_NOT_FOUND"
   | "ACTIVITY_IN_USE"
+  | "ACTIVITY_CHANGE_NO_PREVIOUS"
+  | "ACTIVITY_CHANGE_SAME"
+  | "ACTIVITY_CHANGE_CONFLICT"
   | "REGIME_NOT_FOUND"
   | "REGIME_MODULE_NOT_FOUND"
   | "CALC_FAMILY_NOT_FOUND"
@@ -142,7 +146,6 @@ export async function requireRegistrationForPeriod(
       clientId: input.clientId,
       regimeId: input.regimeId,
       status: "ACTIVE",
-      validFrom: { lte: input.period.endDate },
       OR: [{ validTo: null }, { validTo: { gte: input.period.startDate } }],
     },
   });
@@ -1748,10 +1751,10 @@ export class TaxpayerProfileService {
     });
   }
 
-  /** Vincula una actividad económica al cliente. */
+  /** Vincula una actividad económica al cliente. Sin cambio registrado vale para cualquier período (brief 4L). */
   async addClientActivity(
     ctx: TenantContext,
-    input: { clientId: string; profileVersionId: string; activityId: string; isPrimary?: boolean; validFrom: string },
+    input: { clientId: string; profileVersionId: string; activityId: string; isPrimary?: boolean; validFrom?: string },
   ) {
     return withTenantContext(ctx, async (tx) => {
       // Coherencia ficha ↔ catálogo: el vínculo se hace contra una actividad
@@ -1774,9 +1777,92 @@ export class TaxpayerProfileService {
           profileVersionId: input.profileVersionId,
           activityId: input.activityId,
           isPrimary: input.isPrimary ?? false,
-          validFrom: new Date(input.validFrom),
+          // Fecha de alta del vínculo (informativa): no limita la vigencia de una actividad sin cambio.
+          validFrom: input.validFrom ? new Date(input.validFrom) : new Date(new Date().toISOString().slice(0, 10)),
+          isChange: false,
         },
       });
+    });
+  }
+
+  /**
+   * Registra un cambio de actividad (brief 4L): la actividad nueva rige desde el mes indicado y la anterior
+   * del mismo nivel (jurisdicción) rige hasta el mes previo. Nada se borra: el historial queda en los vínculos.
+   */
+  async registerActivityChange(
+    ctx: TenantContext,
+    input: { clientId: string; activityId: string; validFrom: string; changeReason?: string | undefined },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const activity = await tx.economicActivity.findUnique({ where: { id: input.activityId } });
+      if (!activity) throw new FiscalError("ACTIVITY_NOT_FOUND", "Actividad económica no encontrada");
+      if (!activity.isActive) {
+        throw new FiscalError(
+          "ACTIVITY_INACTIVE",
+          "La actividad está desactivada en el catálogo: no admite nuevos vínculos",
+        );
+      }
+      const [anio, mes] = input.validFrom.split("-").map(Number);
+      const desde = new Date(Date.UTC(anio!, mes! - 1, 1));
+      const delNivel = await tx.clientActivity.findMany({
+        where: {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          profile: { status: "ACTIVE" },
+          activity: { jurisdictionId: activity.jurisdictionId },
+        },
+        include: { activity: { select: { code: true, name: true } } },
+        orderBy: [{ validFrom: "desc" }],
+      });
+      if (delNivel.length === 0) {
+        throw new FiscalError(
+          "ACTIVITY_CHANGE_NO_PREVIOUS",
+          "Primero vinculá la actividad que tiene el cliente en este impuesto: un cambio reemplaza una actividad vinculada",
+        );
+      }
+      const rigeEseMes = delNivel.filter((link) => !link.validTo || link.validTo >= desde);
+      if (rigeEseMes.some((link) => link.activityId === activity.id)) {
+        throw new FiscalError(
+          "ACTIVITY_CHANGE_SAME",
+          `${activity.name} ya rige en ese mes: elegí otra actividad o cambiá el mes`,
+          ["activityId"],
+        );
+      }
+      const cambioPosterior = delNivel.find((link) => link.isChange && link.validFrom >= desde);
+      if (cambioPosterior) {
+        throw new FiscalError(
+          "ACTIVITY_CHANGE_CONFLICT",
+          `Ya hay un cambio de actividad registrado desde ${MESES_ES[cambioPosterior.validFrom.getUTCMonth()]} ${cambioPosterior.validFrom.getUTCFullYear()} o posterior: registrá este cambio a partir de ese mes`,
+          ["validFrom"],
+        );
+      }
+      // La anterior deja de regir el mes previo al cambio; el historial no se borra.
+      const hastaMesAnterior = new Date(desde.getTime() - 24 * 60 * 60 * 1000);
+      for (const link of rigeEseMes) {
+        await tx.clientActivity.update({ where: { id: link.id }, data: { validTo: hastaMesAnterior } });
+      }
+      const created = await tx.clientActivity.create({
+        data: {
+          firmId: ctx.firmId,
+          clientId: input.clientId,
+          profileVersionId: delNivel[0]!.profileVersionId,
+          activityId: activity.id,
+          isPrimary: rigeEseMes.some((link) => link.isPrimary),
+          validFrom: desde,
+          isChange: true,
+          changeReason: input.changeReason?.trim() || null,
+        },
+      });
+      await recordAudit(tx, {
+        firmId: ctx.firmId,
+        userId: ctx.userId,
+        action: "tax.client_activity.change_registered",
+        entityType: "ClientActivity",
+        entityId: created.id,
+        before: { cierres: rigeEseMes.map((link) => ({ id: link.id, activity: link.activity.code, validTo: link.validTo?.toISOString() ?? null })) },
+        after: { activity: activity.code, validFrom: desde.toISOString(), isChange: true },
+      });
+      return created;
     });
   }
 
@@ -1787,7 +1873,7 @@ export class TaxpayerProfileService {
       });
       if (!link) throw new FiscalError("ACTIVITY_LINK_NOT_FOUND", "Actividad del cliente no encontrada");
       const validTo = new Date(input.validTo);
-      if (validTo < link.validFrom) {
+      if (link.isChange && validTo < link.validFrom) {
         throw new FiscalError("INVALID_TRANSITION", "La baja no puede ser anterior al inicio de vigencia");
       }
       return tx.clientActivity.update({ where: { id: link.id }, data: { validTo } });
@@ -3116,25 +3202,12 @@ export class TaxCalendarService {
           firmId: ctx.firmId,
           clientId: input.clientId,
           status: "ACTIVE",
-          validFrom: { lte: endDate },
           OR: [{ validTo: null }, { validTo: { gte: startDate } }],
         },
         include: { regime: { select: { id: true, name: true, taxTypeId: true } } },
       });
       if (registrations.length === 0) {
-        // Inscripciones vigentes que empiezan después del mes: se nombran para que el contador corrija su «Desde».
-        const later = await tx.taxRegistration.findMany({
-          where: { firmId: ctx.firmId, clientId: input.clientId, status: "ACTIVE", validFrom: { gt: endDate } },
-          include: { regime: { select: { name: true } } },
-          orderBy: { validFrom: "asc" },
-        });
-        if (later.length > 0) {
-          const detail = later.map((row) => `${row.regime.name} (desde ${fechaDiaMes(row.validFrom)})`).join(", ");
-          throw new FiscalError(
-            "REGISTRATION_REQUIRED",
-            `${label} no está cubierto por ninguna inscripción del cliente: ${detail}. Corregí la fecha «Desde» de la inscripción para abrir el mes`,
-          );
-        }
+        // Brief 4L: la fecha «Desde» de una inscripción no impide abrir el mes; solo la falta de inscripción lo impide.
         throw new FiscalError(
           "REGISTRATION_REQUIRED",
           "El cliente no está inscripto en ningún régimen para ese mes. Registrá la inscripción antes de abrir el mes",

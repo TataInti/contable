@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { arcaTipoClase, taxHash } from "@contable/tax-engine";
+import { filtroVigenciaRango, vigenteEnFecha } from "./activity-coverage.js";
 
 export type ClassificationWorkpaper = {
   id: string;
@@ -189,8 +190,7 @@ export async function materializeWorkpaperClassifications(
       where: {
         firmId: workpaper.firmId,
         clientId: workpaper.clientId,
-        validFrom: { lte: workpaper.periodEnd },
-        OR: [{ validTo: null }, { validTo: { gte: workpaper.periodStart } }],
+        ...filtroVigenciaRango(workpaper.periodStart, workpaper.periodEnd),
         profile: { status: "ACTIVE" },
       },
       include: { activity: true },
@@ -219,10 +219,7 @@ export async function materializeWorkpaperClassifications(
     const lineActivities = [
       ...new Set(voucher.lines.map((line) => line.activityCode).filter(Boolean) as string[]),
     ];
-    const validLinks = clientActivities.filter(
-      (link) =>
-        link.validFrom <= voucher.issuedOn && (!link.validTo || link.validTo >= voucher.issuedOn),
-    );
+    const validLinks = clientActivities.filter((link) => vigenteEnFecha(link, voucher.issuedOn));
     const validClientActivities = [...new Set(validLinks.map((link) => link.activity.code))];
     // Una actividad por nivel (provincial, municipal): cada impuesto toma la suya al liquidar.
     const activitiesByJurisdiction = new Map<string, Set<string>>();
