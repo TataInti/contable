@@ -660,6 +660,29 @@ export function StudyExpedienteMensual() {
       });
     },
   });
+  // Grupos «no corresponde al perfil» (corte 4B): excluir o aceptar con motivo, por grupo.
+  const grupoPerfilMutation = useMutation({
+    mutationFn: ({
+      workpaperId,
+      grupo,
+      accion,
+      reason,
+    }: {
+      workpaperId: string;
+      grupo: string;
+      accion: "exclude" | "accept";
+      reason: string;
+    }) =>
+      api.post(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${workpaperId}/classifications/profile-groups/${grupo}/${accion}`,
+        { reason },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpaper-coverage", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpaper-classifications", firmId, clientId] });
+    },
+  });
   const calculateInterestMutation = useMutation({
     mutationFn: ({
       workpaperId,
@@ -848,6 +871,7 @@ export function StudyExpedienteMensual() {
             setControlEvidence={setControlEvidence}
             documentsQuery={documentsQuery}
             resolveControlMutation={resolveControlMutation}
+            grupoPerfilMutation={grupoPerfilMutation}
             confirmar={confirmar}
           />
         ) : (

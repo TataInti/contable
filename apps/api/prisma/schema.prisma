@@ -45,6 +45,7 @@ model User {
   workpaperSourceMarked  WorkpaperSourceStatus[] @relation("workpaperSourceMarkedBy")
   workpaperSourceCleared WorkpaperSourceStatus[] @relation("workpaperSourceClearedBy")
   classificationsExcluded WorkpaperVoucherClassification[] @relation("classificationExcludedBy")
+  classificationsProfileAccepted WorkpaperVoucherClassification[] @relation("classificationProfileAcceptedBy")
   classificationRulesCreated ClassificationRule[] @relation("classificationRuleCreatedBy")
   classificationRulesRevoked ClassificationRule[] @relation("classificationRuleRevokedBy")
   portalMemberships      PortalMembership[]
@@ -316,6 +317,7 @@ model Client {
   taxCreditMovements     TaxCreditMovement[]
   contacts               ClientContact[]
   temCategories          ClientTemCategory[]
+  voucherPermissions     ClientVoucherPermission[]
   monotributoCategories  ClientMonotributoCategory[]
   monotributoPayments    ClientMonotributoPayment[]
 
@@ -2307,6 +2309,27 @@ model ClientTemCategory {
   @@map("client_tem_categories")
 }
 
+/// Tipos de comprobante que el cliente puede emitir (corte 4B), por año, como la categoría TEM.
+/// Las clases (catálogo de sistema) van en `allowedClasses`; `exemptAllowed` es el tilde de exentos.
+/// Sin fila para el año, rige la propuesta de su condición frente al IVA.
+model ClientVoucherPermission {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  year            Int
+  allowedClasses  String[] @default([])
+  exemptAllowed   Boolean  @default(false)
+  createdByUserId String?
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client Client @relation(fields: [firmId, clientId], references: [firmId, id], onDelete: Cascade)
+
+  @@unique([firmId, clientId, year])
+  @@map("client_voucher_permissions")
+}
+
 /// Escala de cuotas fijas mensuales del Monotributo (ARCA): categoría A a K y tipo de actividad, con vigencia.
 model MonotributoCuota {
   id        String    @id @default(uuid(7))
@@ -3690,6 +3713,11 @@ model WorkpaperVoucherClassification {
   excludedAt         DateTime?
   excludedByUserId   String?
   excludedReason     String?
+  /// Aceptado por el estudio como comprobante del cliente aunque no corresponda al perfil (corte 4B).
+  /// Las tres columnas van juntas; el motivo es obligatorio.
+  profileAcceptedAt       DateTime?
+  profileAcceptedByUserId String?
+  profileAcceptedReason   String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -3698,6 +3726,7 @@ model WorkpaperVoucherClassification {
   voucher         FiscalVoucher       @relation(fields: [voucherId], references: [id])
   supplierProfile SupplierTaxProfile? @relation(fields: [supplierProfileId], references: [id], onDelete: SetNull)
   excludedBy      User?               @relation("classificationExcludedBy", fields: [excludedByUserId], references: [id])
+  profileAcceptedBy User?             @relation("classificationProfileAcceptedBy", fields: [profileAcceptedByUserId], references: [id])
 
   @@unique([workpaperId, voucherId])
   @@index([firmId, clientId, workpaperId, status])
