@@ -11,12 +11,14 @@ type Props = {
   openStepForm: (paso: FiscalStep) => void;
   registrationsQuery: UseQueryResult<TaxRegistration[]>;
   cancelRegistration: MutacionConValor;
+  /** Abre el cajón que corrige el «Desde» de la inscripción. */
+  corregirFecha: (registration: TaxRegistration) => void;
   confirm: ConfirmApi;
   /** Categoría anual del TEM: la fila del régimen que la usa muestra la elegida o lo que falta. */
   categoriaTem?: FilaCategoriaTem;
 };
 
-export function PestanaRegimenes({ canWrite, openStepForm, registrationsQuery, cancelRegistration, confirm, categoriaTem }: Props) {
+export function PestanaRegimenes({ canWrite, openStepForm, registrationsQuery, cancelRegistration, corregirFecha, confirm, categoriaTem }: Props) {
   const usaCategoriaTem = (row: TaxRegistration) => Boolean(categoriaTem && row.status === "ACTIVE" && categoriaTem.regimeIds.includes(row.regime.id));
   return (
     <section className="fiscal-section" aria-labelledby="fiscal-regimes-title">
@@ -27,7 +29,7 @@ export function PestanaRegimenes({ canWrite, openStepForm, registrationsQuery, c
         { key: "jurisdiction", header: "Jurisdicción", render: (row) => <>{row.regime.jurisdiction.name}{!row.regime.jurisdiction.isActive ? " (oculto)" : ""}</> },
         { key: "from", header: "Desde", render: (row) => <span className="tabular-copy">{formatearFecha(row.validFrom)}</span> },
         { key: "status", header: "Estado", render: (row) => <StatusBadge status={row.status} /> },
-        { key: "actions", header: "", align: "right", render: (row) => canWrite && row.status === "ACTIVE" ? <span className="fiscal-row-actions">{usaCategoriaTem(row) && categoriaTem ? <Button size="sm" variant="ghost" onClick={categoriaTem.abrir}>{categoriaTem.category ? "Cambiar categoría" : "Elegir categoría"}</Button> : null}<Button size="sm" variant="ghost" loading={cancelRegistration.isPending} onClick={() => confirm.ask({ title: `¿Dar de baja ${row.regime.name}?`, description: "La adhesión al régimen quedará cancelada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Dar de baja", tone: "danger", onConfirm: () => cancelRegistration.mutate(row.id) })}>Dar de baja</Button></span> : null },
+        { key: "actions", header: "", align: "right", render: (row) => canWrite && row.status === "ACTIVE" ? <div className="table-actions">{usaCategoriaTem(row) && categoriaTem ? <Button size="sm" variant="ghost" onClick={categoriaTem.abrir}>{categoriaTem.category ? "Cambiar categoría" : "Elegir categoría"}</Button> : null}<Button size="sm" variant="ghost" onClick={() => corregirFecha(row)}>Corregir fecha</Button><Button size="sm" variant="ghost" loading={cancelRegistration.isPending} onClick={() => confirm.ask({ title: `¿Dar de baja ${row.regime.name}?`, description: "La adhesión al régimen quedará cancelada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Dar de baja", tone: "danger", onConfirm: () => cancelRegistration.mutate(row.id) })}>Dar de baja</Button></div> : null },
       ]} />}
     </section>
   );

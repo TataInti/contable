@@ -118,6 +118,7 @@ describe("TEM San Miguel de Tucumán (AR_TEM_SMT_V1)", () => {
         { concept: "CANA", rate: "0.0125", minimum: "900" },
       ]),
       incomeByActivity: { TRANSPORTE: "10000", CANA: "10000" },
+      minimumMode: "SUM_BY_ACTIVITY",
     });
     expect(result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("250.00");
     expect(result.subtotals["IMPUESTO_DETERMINADO"]).toBe("1600.00");
@@ -290,6 +291,7 @@ describe("TEM San Miguel de Tucumán — reglas tipadas", () => {
       ruleMode: "TYPED",
       rules: rulesWithMinimums,
       incomeByActivity,
+      minimumMode: "SUM_BY_ACTIVITY",
     });
     expect(byActivity.subtotals["IMPUESTO_DETERMINADO"]).toBe("1600.00"); // 700 + 900
 
@@ -305,5 +307,119 @@ describe("TEM San Miguel de Tucumán — reglas tipadas", () => {
     expect(highest.subtotals["IMPUESTO_DETERMINADO"]).toBe("900.00"); // mayor mínimo
     expect(highest.subtotals["MINIMO_APLICADO"]).toBe("900.00");
     expect(highest.lines.some((line) => line.formula.includes("mayor rendimiento fiscal"))).toBe(true);
+  });
+});
+
+/**
+ * Ordenanza 4.536 (ar-tem-smt-v2.0.0): mayor rendimiento fiscal por defecto
+ * (art. 139), mes sin ingresos paga el mínimo (art. 137) y base negativa sin
+ * arrastre de saldo. La versión 1.1.0 conserva su comportamiento anterior.
+ */
+describe("TEM San Miguel de Tucumán — Ordenanza 4.536 (v2.0.0)", () => {
+  const CAT_B = [
+    { concept: "A1", rate: "0.01", minimum: "10028" },
+    { concept: "A2", rate: "0.005", minimum: "10028" },
+  ];
+
+  it("usa el mínimo de mayor rendimiento fiscal por defecto (caso T3)", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules(CAT_B),
+      incomeByActivity: { A1: "500000", A2: "300000" }, // 5.000 + 1.500 < 10.028
+    });
+    expect(result.subtotals["IMPUESTO_DETERMINADO"]).toBe("10028.00");
+    expect(result.subtotals["TOTAL_A_INGRESAR"]).toBe("10028.00");
+    expect(result.subtotals["MINIMO_APLICADO"]).toBe("10028.00");
+  });
+
+  it("suma los mínimos por actividad solo si se elige SUM_BY_ACTIVITY (caso T3c)", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules(CAT_B),
+      incomeByActivity: { A1: "500000", A2: "300000" },
+      minimumMode: "SUM_BY_ACTIVITY",
+    });
+    expect(result.subtotals["IMPUESTO_DETERMINADO"]).toBe("20056.00");
+  });
+
+  it("un mes sin ingresos declarados paga el mínimo del régimen (caso T4)", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules([{ concept: "X", rate: "0.01", minimum: "6210" }]),
+      incomeByActivity: {},
+    });
+    expect(result.subtotals["TOTAL_A_INGRESAR"]).toBe("6210.00");
+    expect(result.subtotals["MINIMO_APLICADO"]).toBe("6210.00");
+    expect(result.blocks).toHaveLength(0);
+  });
+
+  it("sin ingresos y con mínimos distintos por actividad bloquea y dice qué falta", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules([
+        { concept: "TRANSPORTE", rate: "0.0125", minimum: "700" },
+        { concept: "CANA", rate: "0.0125", minimum: "900" },
+      ]),
+      incomeByActivity: {},
+    });
+    expect(result.blocks.some((block) => block.includes("cargá los ingresos por actividad"))).toBe(
+      true,
+    );
+  });
+
+  it("base negativa con mínimo: tributo igual al mínimo y sin saldo a favor (caso T6)", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules([{ concept: "X", rate: "0.01", minimum: "6210" }]),
+      incomeByActivity: { X: "-2000" },
+    });
+    expect(result.subtotals["TOTAL_A_INGRESAR"]).toBe("6210.00");
+    expect(result.subtotals["SALDO_A_FAVOR"]).toBe("0.00");
+    expect(result.warnings.some((w) => w.includes("Base negativa"))).toBe(true);
+  });
+
+  it("base negativa sin mínimo: tributo 0 y el excedente no se convierte en saldo a favor", () => {
+    const result = calculateTemSmt({
+      engineVersion: TEM_SMT_ENGINE_VERSION,
+      period,
+      facts: [],
+      rules: rules([{ concept: "X", rate: "0.01" }]),
+      incomeByActivity: { X: "-2000" },
+    });
+    expect(result.subtotals["IMPUESTO_DETERMINADO"]).toBe("0.00");
+    expect(result.subtotals["TOTAL_A_INGRESAR"]).toBe("0.00");
+    expect(result.subtotals["SALDO_A_FAVOR"]).toBe("0.00");
+    expect(result.warnings.some((w) => w.includes("Base negativa"))).toBe(true);
+  });
+
+  it("la versión 1.1.0 conserva la suma por defecto y el arrastre de base negativa", () => {
+    const sum = calculateTemSmt({
+      engineVersion: "ar-tem-smt-v1.1.0",
+      period,
+      facts: [],
+      rules: rules(CAT_B),
+      incomeByActivity: { A1: "500000", A2: "300000" },
+    });
+    expect(sum.subtotals["IMPUESTO_DETERMINADO"]).toBe("20056.00");
+
+    const negative = calculateTemSmt({
+      engineVersion: "ar-tem-smt-v1.1.0",
+      period,
+      facts: [],
+      rules: rules([{ concept: "X", rate: "0.01", minimum: "6210" }]),
+      incomeByActivity: { X: "-2000" },
+    });
+    expect(negative.subtotals["SALDO_A_FAVOR"]).toBe("20.00");
+    expect(negative.subtotals["TOTAL_A_INGRESAR"]).toBe("0.00");
   });
 });

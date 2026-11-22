@@ -34,7 +34,12 @@ export interface TemCategoryOption {
 
 /** Claves del catálogo de sistema que identifican al TEM: familia de cálculo y motores. */
 const TEM_FAMILY_KEY = "TEM";
-const TEM_ENGINE_KEYS: ReadonlySet<string> = new Set(["tem-smt", "tem-smt-legacy"]);
+const TEM_ENGINE_KEYS: ReadonlySet<string> = new Set(["tem-smt", "tem-smt-legacy", "tem-smt-v2"]);
+
+/** ¿El motor del catálogo de sistema es uno de los del TEM? Toda versión del TEM toma su mínimo de la categoría. */
+export function isTemEngineKey(engineKey: string): boolean {
+  return TEM_ENGINE_KEYS.has(engineKey);
+}
 
 export interface TemCategoryState {
   year: number;
@@ -234,6 +239,6 @@ export class TemCategoryService {
         })
       : null;
     const engineKey = engine?.engineKey ?? taxEngineKeyForVersion(version.engineVersion);
-    return engineKey !== null && engineKey !== undefined && TEM_ENGINE_KEYS.has(engineKey);
+    return engineKey !== null && engineKey !== undefined && isTemEngineKey(engineKey);
   }
 }

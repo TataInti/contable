@@ -68,7 +68,7 @@ const taxes = {
     source: "Ley Impositiva de Tucumán — alícuota general",
   },
   tem: {
-    taxType: { code: "TEM", name: "Tasa de Actividades Económicas (TEM)", family: "Tasa de Espacios Municipales" },
+    taxType: { code: "TEM", name: "Tributo Económico Municipal (TEM)", family: "Tasa de Espacios Municipales" },
     taxTypeOption: "(TEM)",
     jurisdiction: "(AR-SMT)",
     module: "TEM San Miguel de Tucumán",
@@ -362,6 +362,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     for (const tax of Object.values(taxes)) {
       await clickAdd(page, "Regímenes adheridos");
       await pickOption(page.locator("#reg-regime"), tax.regime.name);
+      await page.locator("#reg-from").fill(data.validFrom);
       await mutating(page, "/tax-registrations", () =>
         page.getByRole("button", { name: "Registrar inscripción", exact: true }).last().click(),
       );

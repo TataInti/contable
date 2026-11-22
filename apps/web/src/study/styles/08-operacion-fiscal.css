@@ -902,11 +902,37 @@
   gap: var(--ds-space-3);
 }
 
+.fiscal-open-month__control {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+}
+
+.fiscal-open-month__control > button {
+  flex: none;
+}
+
 .fiscal-open-month__field {
   display: grid;
   gap: var(--ds-space-1);
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-xs);
+}
+
+/* Corte 1F: regímenes que no cubren el mes a abrir, cada uno con su acción de corregir la fecha. */
+.fiscal-open-month__uncovered {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: var(--ds-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fiscal-open-month__uncovered li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
 }
 
 /* Foco 2.8: relleno vertical de las filas de la lista de paquetes (nombre y código en dos renglones). */

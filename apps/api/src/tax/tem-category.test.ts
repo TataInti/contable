@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { prisma } from "../lib/prisma.js";
-import { TemCategoryError, TemCategoryService } from "./tem-category-service.js";
+import { TAX_ENGINE_DECLARATIONS } from "@contable/tax-engine";
+import { TemCategoryError, TemCategoryService, isTemEngineKey } from "./tem-category-service.js";
 
 /**
  * Categoría anual del TEM por cliente (corte 1E): se elige una vez por año
@@ -248,6 +249,18 @@ describe("Categoría anual del TEM: qué regímenes la usan", () => {
     }
     const state = await service.get(ctxA, { clientId: CLIENT_A, year: 2026 });
     expect([...state.regimeIds].sort()).toEqual([porFamilia.id, porMotor.id].sort());
+  });
+});
+
+describe("Categoría anual del TEM: motores del TEM", () => {
+  it("todo motor del registro cuya clave es del TEM toma el mínimo de la categoría (también v2)", () => {
+    const delTem = TAX_ENGINE_DECLARATIONS.filter((engine) => engine.engineKey.startsWith("tem-"));
+    expect(delTem.map((engine) => engine.engineKey)).toContain("tem-smt-v2");
+    for (const engine of TAX_ENGINE_DECLARATIONS) {
+      expect(isTemEngineKey(engine.engineKey), engine.engineKey).toBe(
+        engine.engineKey.startsWith("tem-"),
+      );
+    }
   });
 });
 

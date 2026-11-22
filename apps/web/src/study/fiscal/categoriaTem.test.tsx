@@ -99,6 +99,7 @@ describe("Regímenes: fila del TEM con su categoría anual", () => {
         openStepForm={() => undefined}
         registrationsQuery={{ data: [inscripcion("fila-tem", regimenTem, status), inscripcion("fila-iva", regimenIva)], isLoading: false } as never}
         cancelRegistration={{ isPending: false } as never}
+        corregirFecha={() => undefined}
         confirm={{} as never}
         categoriaTem={categoriaTem}
       />,
@@ -146,6 +147,7 @@ describe("Regímenes: fila del TEM con su categoría anual", () => {
         openStepForm={() => undefined}
         registrationsQuery={{ data: [inscripcion("fila-tem", regimenTem)], isLoading: false } as never}
         cancelRegistration={{ isPending: false } as never}
+        corregirFecha={() => undefined}
         confirm={{} as never}
       />,
     );

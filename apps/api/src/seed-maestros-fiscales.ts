@@ -118,7 +118,7 @@ async function main() {
     const tem = await tx.taxType.upsert({
       where: { code: "TEM" },
       update: {},
-      create: { code: "TEM", name: "Tasa de Actividades Económicas (TEM)" },
+      create: { code: "TEM", name: "Tributo Económico Municipal (TEM)" },
     });
     const monotributo = await tx.taxType.upsert({
       where: { code: "MONOTRIBUTO" },

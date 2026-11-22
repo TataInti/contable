@@ -638,6 +638,22 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  // Corrige la fecha «Desde» de una inscripción vigente.
+  app.patch(
+    "/api/v1/firms/:firmId/clients/:clientId/tax-registrations/:registrationId",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { registrationId } = req.params as { registrationId: string };
+      try {
+        const body = z.object({ validFrom: z.string().date() }).strict().parse(req.body);
+        const data = await profiles.updateRegistration(ctx, { registrationId, validFrom: body.validFrom });
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
+
   app.get("/api/v1/firms/:firmId/clients/:clientId/tax-registrations", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     try {
@@ -756,6 +772,38 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
         .parse(req.body);
       const data = await periods.createPeriod(ctx, pickDefined({ clientId: ctx.clientId!, ...body }) as { clientId: string; taxTypeId: string; startDate: string; endDate: string; label?: string });
       return reply.code(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // Corrige o anula un período que todavía no tiene obligación ni documentos asociados.
+  app.patch("/api/v1/firms/:firmId/clients/:clientId/tax-periods/:periodId", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { periodId } = req.params as { periodId: string };
+    try {
+      const body = z
+        .object({
+          startDate: z.string().date().optional(),
+          endDate: z.string().date().optional(),
+          label: z.string().max(120).nullable().optional(),
+        })
+        .strict()
+        .refine((value) => Object.keys(value).length > 0, "Indicá qué corregir: fechas o etiqueta")
+        .parse(req.body);
+      const data = await periods.updatePeriod(ctx, pickDefined({ periodId, ...body }) as { periodId: string; startDate?: string; endDate?: string; label?: string | null });
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.delete("/api/v1/firms/:firmId/clients/:clientId/tax-periods/:periodId", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { periodId } = req.params as { periodId: string };
+    try {
+      const data = await periods.deletePeriod(ctx, { periodId });
+      return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
     }

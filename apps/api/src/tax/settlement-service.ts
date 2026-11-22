@@ -31,6 +31,7 @@ import { RULES_HASH_SCHEMA_VERSION_V3 } from "./rules-hash.js";
 import { buildEngineRules, EngineRulesError } from "./engine-rules.js";
 import {
   TemCategoryService,
+  isTemEngineKey,
   temCategoryMissingGuidance,
   temCategoryMissingText,
 } from "./tem-category-service.js";
@@ -489,7 +490,9 @@ export class SettlementService {
           }
           const isActivitySubjectEngine =
             engineKey === "iibb-local-tuc" ||
+            engineKey === "iibb-local-tuc-v2" ||
             engineKey === "tem-smt" ||
+            engineKey === "tem-smt-v2" ||
             engineKey === "tem-smt-legacy";
           const needsActivity = isActivitySubjectEngine && rule.kind.key === "RATE";
           const isCm03 = engineKey === "iibb-cm-art2" || engineKey === "iibb-cm-art2-legacy";
@@ -1249,7 +1252,7 @@ export class SettlementService {
         : undefined;
       // TEM: el mínimo mensual sale de la categoría anual del cliente y pisa el del
       // paquete de reglas. Un año sin mínimos cargados conserva el del paquete.
-      if (engineKey === "tem-smt" || engineKey === "tem-smt-legacy") {
+      if (isTemEngineKey(engineKey)) {
         const year = period.startDate.getUTCFullYear();
         const byCategory = await this.temCategories.resolveMinimum(tx, {
           firmId: ctx.firmId,
@@ -1584,10 +1587,12 @@ export class SettlementService {
             },
           }),
         "iibb-local-tuc": async () => iibbTuc(true),
+        "iibb-local-tuc-v2": async () => iibbTuc(true),
         "iibb-local-tuc-legacy": async () => iibbTuc(false),
         "iibb-cm-art2": async () => cm03(),
         "iibb-cm-art2-legacy": async () => cm03(),
         "tem-smt": async () => temSmt(),
+        "tem-smt-v2": async () => temSmt(),
         "tem-smt-legacy": async () => temSmt(),
         monotributo: async () => monotributo(),
       };

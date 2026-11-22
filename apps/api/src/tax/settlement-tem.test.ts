@@ -615,6 +615,22 @@ describe("Corte 1E — categoría anual del TEM: mínimo mensual", () => {
     expect(totals["TOTAL_A_INGRESAR"]).toBe("10028.00");
   });
 
+  it("el motor v2 de la Ordenanza 4.536 también toma el mínimo de la categoría", async () => {
+    await createApprovedSale(605, "COMERCIO", "10000");
+    await prisma.taxRuleVersion.update({
+      where: { id: ruleVersionId },
+      data: { engineVersion: "ar-tem-smt-v2.0.0" },
+    });
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    expect(result.settlement.engineVersion).toBe("ar-tem-smt-v2.0.0");
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("10028.00");
+    await prisma.clientTemCategory.deleteMany({ where: { clientId: CLIENT_TEM } });
+    await expect(settlements.calculate(ctxOwner, calculateParams())).rejects.toMatchObject({
+      code: "TEM_CATEGORY_REQUIRED",
+    });
+  });
+
   it("sin categoría del año bloquea el cálculo y dice cómo resolverlo", async () => {
     await createApprovedSale(604, "COMERCIO", "10000");
     await prisma.clientTemCategory.deleteMany({ where: { clientId: CLIENT_TEM } });
