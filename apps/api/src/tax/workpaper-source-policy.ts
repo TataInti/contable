@@ -5,12 +5,18 @@
  * la fuente que espera el proceso real y el adaptador que normaliza sus filas.
  * Las políticas se amplían junto con los formatos oficiales; no se infieren
  * desde nombres de archivo ni desde datos cargados por el usuario.
+ *
+ * Una obligación se reconoce por atributos fiables: el impuesto (código de
+ * tipo) y la familia de cálculo de su régimen (clave del catálogo de sistema).
+ * El código del régimen es solo una etiqueta: un régimen que el estudio crea con
+ * la misma familia recibe las mismas fuentes que el régimen de sistema.
  */
 export interface WorkpaperSourcePolicy {
   code: string;
   label: string;
   taxTypeCode: string;
-  regimeCode?: string;
+  /** Clave de la familia de cálculo del régimen (catálogo `calc_families`). */
+  calcFamilyKey: string;
   origin: string;
   adapterVersion: string;
   required: boolean;
@@ -21,7 +27,7 @@ export interface WorkpaperSourcePolicy {
    * Otras obligaciones que se alimentan de esta misma fuente: un libro, varios impuestos.
    * Las ventas importadas una vez de ARCA sirven a IVA, Ingresos Brutos y TEM del mismo mes.
    */
-  alsoFeeds?: ReadonlyArray<{ taxTypeCode: string; regimeCode: string }>;
+  alsoFeeds?: ReadonlyArray<{ taxTypeCode: string; calcFamilyKey: string }>;
   /**
    * Fuentes que, ya revisadas, cubren el requisito de esta. La base de Ingresos Brutos y TEM sale
    * por defecto del libro de ventas; la tabla por actividad queda como carga a mano alternativa.
@@ -34,14 +40,14 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     code: "ARCA_IVA_SALES",
     label: "Libro IVA Ventas",
     taxTypeCode: "IVA",
-    regimeCode: "RI",
+    calcFamilyKey: "VAT_RI",
     origin: "ARCA",
     adapterVersion: "ARCA_LIBRO_IVA_V1",
     required: true,
     voucherDirection: "SALE",
     alsoFeeds: [
-      { taxTypeCode: "IIBB", regimeCode: "IIBB_LOCAL_TUC" },
-      { taxTypeCode: "TEM", regimeCode: "TEM_SMT" },
+      { taxTypeCode: "IIBB", calcFamilyKey: "IIBB_LOCAL" },
+      { taxTypeCode: "TEM", calcFamilyKey: "TEM" },
     ],
     expectedColumns: [
       "direction", "letter", "pointOfSale", "numberFrom", "numberTo", "cuit",
@@ -53,7 +59,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     code: "ARCA_IVA_PURCHASES",
     label: "Libro IVA Compras",
     taxTypeCode: "IVA",
-    regimeCode: "RI",
+    calcFamilyKey: "VAT_RI",
     origin: "ARCA",
     adapterVersion: "ARCA_LIBRO_IVA_V1",
     required: true,
@@ -68,7 +74,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     code: "SICORE_IVA",
     label: "Retenciones y percepciones IVA",
     taxTypeCode: "IVA",
-    regimeCode: "RI",
+    calcFamilyKey: "VAT_RI",
     origin: "ARCA_RET",
     adapterVersion: "ARCA_RET_V1",
     required: false,
@@ -82,7 +88,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     code: "F931",
     label: "F.931 remuneraciones y contribuciones",
     taxTypeCode: "IVA",
-    regimeCode: "RI",
+    calcFamilyKey: "VAT_RI",
     origin: "F931",
     adapterVersion: "F931_V1",
     required: false,
@@ -92,7 +98,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     code: "DGR_IIBB_TUC",
     label: "Ingresos Brutos Tucumán",
     taxTypeCode: "IIBB",
-    regimeCode: "IIBB_LOCAL_TUC",
+    calcFamilyKey: "IIBB_LOCAL",
     origin: "DGR_IIBB",
     adapterVersion: "DGR_IIBB_V1",
     required: true,
@@ -103,7 +109,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     code: "SIFERE_CM03",
     label: "SIFERE Convenio Multilateral CM03",
     taxTypeCode: "IIBB",
-    regimeCode: "CM_ART2",
+    calcFamilyKey: "IIBB_CM03",
     origin: "CM03",
     adapterVersion: "CM03_V1",
     required: true,
@@ -113,7 +119,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     code: "IIBB_RPI_TUC",
     label: "Retenciones y percepciones IIBB Tucumán",
     taxTypeCode: "IIBB",
-    regimeCode: "IIBB_LOCAL_TUC",
+    calcFamilyKey: "IIBB_LOCAL",
     origin: "DGR_RPI_TUC",
     adapterVersion: "ARCA_RET_V1",
     required: false,
@@ -127,7 +133,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     code: "SIFERE_RPI_CM",
     label: "SIRCAR, SIRTAC y SIRCREB por jurisdicción",
     taxTypeCode: "IIBB",
-    regimeCode: "CM_ART2",
+    calcFamilyKey: "IIBB_CM03",
     origin: "SIFERE_RPI",
     adapterVersion: "ARCA_RET_V1",
     required: false,
@@ -141,7 +147,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     code: "SMT_TEM",
     label: "TEM San Miguel de Tucumán",
     taxTypeCode: "TEM",
-    regimeCode: "TEM_SMT",
+    calcFamilyKey: "TEM",
     origin: "SMT_TEM",
     adapterVersion: "SMT_TEM_V1",
     required: true,
@@ -152,7 +158,7 @@ export const WORKPAPER_SOURCE_POLICIES: readonly WorkpaperSourcePolicy[] = [
     code: "SMT_RPI_TEM",
     label: "Retenciones y percepciones TEM",
     taxTypeCode: "TEM",
-    regimeCode: "TEM_SMT",
+    calcFamilyKey: "TEM",
     origin: "SMT_RPI",
     adapterVersion: "ARCA_RET_V1",
     required: false,
@@ -168,14 +174,15 @@ export function getWorkpaperSourcePolicy(code: string) {
   return WORKPAPER_SOURCE_POLICIES.find((policy) => policy.code === code);
 }
 
-type ObligationRef = { taxTypeCode: string; regimeCode: string };
+/** Atributos fiables de una obligación: impuesto y familia de cálculo de su régimen. */
+export type ObligationRef = { taxTypeCode: string; calcFamilyKey: string | null | undefined };
 
 const matchesObligation = (
-  target: { taxTypeCode: string; regimeCode?: string | undefined },
+  target: { taxTypeCode: string; calcFamilyKey: string },
   obligation: ObligationRef,
 ) =>
   target.taxTypeCode === obligation.taxTypeCode &&
-  (!target.regimeCode || obligation.regimeCode === target.regimeCode);
+  obligation.calcFamilyKey === target.calcFamilyKey;
 
 /** La obligación para la que la política es una fuente propia (no la que solo se alimenta de ella). */
 const isPrimaryFor = (policy: WorkpaperSourcePolicy, obligation: ObligationRef) =>
@@ -185,9 +192,11 @@ const feedsObligation = (policy: WorkpaperSourcePolicy, obligation: ObligationRe
   (policy.alsoFeeds ?? []).some((target) => matchesObligation(target, obligation));
 
 /** Obligaciones a las que sirve la fuente: la propia primero, después las que solo se alimentan de ella. */
-export function consumersOfPolicy(policy: WorkpaperSourcePolicy): Array<{ taxTypeCode: string; regimeCode?: string }> {
+export function consumersOfPolicy(
+  policy: WorkpaperSourcePolicy,
+): Array<{ taxTypeCode: string; calcFamilyKey: string }> {
   return [
-    { taxTypeCode: policy.taxTypeCode, ...(policy.regimeCode ? { regimeCode: policy.regimeCode } : {}) },
+    { taxTypeCode: policy.taxTypeCode, calcFamilyKey: policy.calcFamilyKey },
     ...(policy.alsoFeeds ?? []),
   ];
 }

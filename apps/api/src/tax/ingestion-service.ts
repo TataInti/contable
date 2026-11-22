@@ -318,7 +318,7 @@ export class IngestionService {
             status: { not: "NOT_APPLICABLE" },
             regime: {
               taxTypeId: input.taxTypeId,
-              ...(consumer.regimeCode ? { code: consumer.regimeCode } : {}),
+              calcFamily: { key: consumer.calcFamilyKey },
             },
           },
         });

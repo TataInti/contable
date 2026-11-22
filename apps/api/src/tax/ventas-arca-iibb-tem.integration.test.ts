@@ -369,9 +369,9 @@ describe("2C — un libro de ventas de ARCA alimenta Ingresos Brutos y TEM", () 
 });
 
 describe("2C — política de fuentes y clase de documento", () => {
-  const iibb = { taxTypeCode: "IIBB", regimeCode: "IIBB_LOCAL_TUC" };
-  const tem = { taxTypeCode: "TEM", regimeCode: "TEM_SMT" };
-  const iva = { taxTypeCode: "IVA", regimeCode: "RI" };
+  const iibb = { taxTypeCode: "IIBB", calcFamilyKey: "IIBB_LOCAL" };
+  const tem = { taxTypeCode: "TEM", calcFamilyKey: "TEM" };
+  const iva = { taxTypeCode: "IVA", calcFamilyKey: "VAT_RI" };
   const book = getWorkpaperSourcePolicy("ARCA_IVA_SALES")!;
   const manualIibb = getWorkpaperSourcePolicy("DGR_IIBB_TUC")!;
 

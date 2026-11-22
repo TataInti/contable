@@ -76,7 +76,7 @@ export async function materializeWorkpaperAllocations(
           endDate: { lte: workpaper.periodEnd },
         },
       },
-      include: { period: true, regime: { include: { taxType: true, jurisdiction: true } } },
+      include: { period: true, regime: { include: { taxType: true, jurisdiction: true, calcFamily: true } } },
     }),
   ]);
 
@@ -86,7 +86,7 @@ export async function materializeWorkpaperAllocations(
     const matching = obligations.filter(
       (obligation) =>
         obligation.regime.taxType.code === policy.taxTypeCode &&
-        (!policy.regimeCode || obligation.regime.code === policy.regimeCode),
+        obligation.regime.calcFamily?.key === policy.calcFamilyKey,
     );
     if (matching.length !== 1) {
       throw new WorkpaperAllocationError(
@@ -224,7 +224,7 @@ export async function workpaperAllocationCoverage(
     where: { workpaperId },
     include: {
       obligation: {
-        include: { period: true, regime: { include: { taxType: true, jurisdiction: true } } },
+        include: { period: true, regime: { include: { taxType: true, jurisdiction: true, calcFamily: true } } },
       },
     },
     orderBy: { createdAt: "asc" },

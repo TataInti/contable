@@ -470,9 +470,9 @@ describe("2A — «Sin movimientos» por fuente y mes", () => {
     expect(iibb["BASE_TOTAL"]).toBe("0.00");
     expect(tem["BASE_TOTAL"]).toBe("0.00");
     // Base cero: ninguna actividad aporta impuesto. El IIBB determina el mínimo vigente de Tucumán
-    // (tax_minimum_rules, 5.000 desde 01-01-2026): la regla no cambia por esta marca.
+    // (tax_minimum_rules, 1.500 desde 01-01-2026: mínimo de producción; antes 5.000): la regla no cambia por esta marca.
     expect(iibb["IMPUESTO_POR_ACTIVIDAD"]).toBe("0.00");
-    expect(iibb["IMPUESTO_DETERMINADO"]).toBe("5000.00");
+    expect(iibb["IMPUESTO_DETERMINADO"]).toBe("1500.00");
     expect(tem["IMPUESTO_DETERMINADO"]).toBe("10028.00");
     const wp = data<{ status: string }>(await request("GET", sourceBase));
     expect(wp.status).toBe("CALCULATED");

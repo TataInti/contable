@@ -293,12 +293,12 @@ export class MonthlyWorkpaperService {
     workpaper: { id: string },
     obligations: Array<{
       periodId: string;
-      regime: { code: string; taxTypeId: string; taxType: { code: string } };
+      regime: { code: string; taxTypeId: string; taxType: { code: string }; calcFamily: { key: string } | null };
     }>,
   ) {
     const obligationRefs = obligations.map((obligation) => ({
       taxTypeCode: obligation.regime.taxType.code,
-      regimeCode: obligation.regime.code,
+      calcFamilyKey: obligation.regime.calcFamily?.key ?? null,
     }));
     const policies = policiesForObligations(obligationRefs);
     const evidence = await tx.workpaperImportBatch.findMany({
@@ -338,7 +338,7 @@ export class MonthlyWorkpaperService {
         policy,
         obligations.map((item) => ({
           taxTypeCode: item.regime.taxType.code,
-          regimeCode: item.regime.code,
+          calcFamilyKey: item.regime.calcFamily?.key ?? null,
           item,
         })),
       )?.item;
@@ -422,7 +422,7 @@ export class MonthlyWorkpaperService {
           endDate: { lte: workpaper.periodEnd },
         },
       },
-      include: { regime: { include: { taxType: true } } },
+      include: { regime: { include: { taxType: true, calcFamily: true } } },
     });
     const [sources, classifications, allocations] = await Promise.all([
       this.sourceCoverage(tx, workpaper, obligations),
@@ -470,7 +470,7 @@ export class MonthlyWorkpaperService {
       },
       include: {
         period: true,
-        regime: { include: { taxType: true, jurisdiction: true } },
+        regime: { include: { taxType: true, jurisdiction: true, calcFamily: true } },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -533,7 +533,7 @@ export class MonthlyWorkpaperService {
         obligation: {
           include: {
             period: true,
-            regime: { include: { taxType: true, jurisdiction: true } },
+            regime: { include: { taxType: true, jurisdiction: true, calcFamily: true } },
           },
         },
       },
@@ -877,7 +877,7 @@ export class MonthlyWorkpaperService {
           settlements: {
             include: {
               settlement: {
-                include: { regime: { include: { taxType: true, jurisdiction: true } }, period: true },
+                include: { regime: { include: { taxType: true, jurisdiction: true, calcFamily: true } }, period: true },
               },
               obligation: true,
             },
@@ -912,7 +912,7 @@ export class MonthlyWorkpaperService {
             endDate: { lte: wp.periodEnd },
           },
         },
-        include: { regime: { include: { taxType: true } } },
+        include: { regime: { include: { taxType: true, calcFamily: true } } },
       });
 
       const components = obligations.map((ob) => {
@@ -1104,7 +1104,7 @@ export class MonthlyWorkpaperService {
             sourceCodesForCalculation(
               {
                 taxTypeCode: link.obligation.regime.taxType.code,
-                regimeCode: link.obligation.regime.code,
+                calcFamilyKey: link.obligation.regime.calcFamily?.key ?? null,
               },
               new Set(Object.keys(sourceFacts.bySourceCode)),
             ),
@@ -1539,7 +1539,7 @@ export class MonthlyWorkpaperService {
         status: { not: "NOT_APPLICABLE" },
         period: { startDate: { gte: wp.periodStart }, endDate: { lte: wp.periodEnd } },
       },
-      include: { regime: { include: { taxType: true } } },
+      include: { regime: { include: { taxType: true, calcFamily: true } } },
     });
     const sources = await this.sourceCoverage(tx, wp, obligations);
     const source = sources.find((item) => item.code === sourceCode);
@@ -2236,7 +2236,7 @@ export class MonthlyWorkpaperService {
           settlements: {
             include: {
               obligation: {
-                include: { regime: { include: { taxType: true, jurisdiction: true } } },
+                include: { regime: { include: { taxType: true, jurisdiction: true, calcFamily: true } } },
               },
               settlement: {
                 include: {
@@ -3562,7 +3562,7 @@ export class MonthlyWorkpaperService {
         where: { firmId: ctx.firmId, clientId, periodId },
         include: {
           period: true,
-          regime: { include: { taxType: true, jurisdiction: true } },
+          regime: { include: { taxType: true, jurisdiction: true, calcFamily: true } },
           payments: { where: { status: "PAID" } },
           filings: { where: { status: "FILED" }, orderBy: { filedAt: "desc" } },
         },
