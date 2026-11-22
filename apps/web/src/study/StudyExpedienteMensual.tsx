@@ -597,7 +597,7 @@ export function StudyExpedienteMensual() {
     return indice >= 0 ? indice : null;
   })();
   const safeActiveStep = Math.min(
-    Math.max(vigente ? (etapaPorLegajo[vigente.id] ?? etapaDesdeUrl ?? 0) : 0, 0),
+    Math.max(vigente ? (etapaDesdeUrl ?? etapaPorLegajo[vigente.id] ?? 0) : 0, 0),
     WORKPAPER_STEPS.length - 1,
   );
   const goToStep = (index: number) => {
