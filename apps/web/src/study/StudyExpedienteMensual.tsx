@@ -75,6 +75,7 @@ import { EtapaCalculo } from "./legajo/etapas/EtapaCalculo";
 import {
   cuerpoCalculo,
   motivoSeleccionCalculo,
+  cambiosDesdeCalculo,
   seleccionHabitual,
   type SeleccionCalculo,
 } from "./legajo/etapas/seleccionCalculo";
@@ -162,6 +163,11 @@ export function StudyExpedienteMensual() {
   const [seleccionCalculo, setSeleccionCalculo] = useState<{
     workpaperId: string;
     seleccion: SeleccionCalculo;
+  } | null>(null);
+  // 4K: el pedido con el que se calculó por última vez (en esta pantalla). Si la selección cambia, el resultado queda desactualizado.
+  const [calculoAplicado, setCalculoAplicado] = useState<{
+    workpaperId: string;
+    cuerpo: CuerpoCalculo;
   } | null>(null);
   const [sourceCode, setSourceCode] = useState("");
   const [sourceFile, setSourceFile] = useState<File | null>(null);
@@ -409,7 +415,8 @@ export function StudyExpedienteMensual() {
   const calculateMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: CuerpoCalculo }) =>
       api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${id}/calculate`, body),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      setCalculoAplicado({ workpaperId: variables.id, cuerpo: variables.body });
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
       void queryClient.invalidateQueries({
         queryKey: ["monthly-workpaper-coverage", firmId, clientId],
@@ -825,6 +832,11 @@ export function StudyExpedienteMensual() {
             setPositionAction={setPositionAction}
             seleccion={seleccionDe(wp.id)}
             onSeleccionChange={(seleccion) => actualizarSeleccion(wp.id, seleccion)}
+            bloqueoSeleccion={
+              wp.status === "IN_REVIEW"
+                ? "Está en revisión: solicitá cambios para modificar los impuestos o el mínimo."
+                : null
+            }
           />
         ) : step === 4 ? (
           <EtapaControles
@@ -982,6 +994,11 @@ export function StudyExpedienteMensual() {
         : null;
     const motivos: ReactNode[] = [];
     let accion: ReactNode = null;
+    // 4K: cambios del mínimo o de los impuestos respecto del último cálculo aplicado.
+    const cambios = cambiosDesdeCalculo(
+      cuerpoDe(wp.id),
+      calculoAplicado?.workpaperId === wp.id ? calculoAplicado.cuerpo : null,
+    );
 
     if (["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE"].includes(wp.status)) {
       accion = (
@@ -1024,7 +1041,66 @@ export function StudyExpedienteMensual() {
       }
       motivos.push(errorDe(calculateMutation.variables?.id === wp.id ? calculateMutation.error : null, "error-recalcular"));
     }
-    if (wp.status === "CALCULATED") {
+    if (wp.status === "CALCULATED" && cambios.hayCambios) {
+      const cambio =
+        cambios.minimo && cambios.impuestos
+          ? "Cambiaste el mínimo y los impuestos a liquidar"
+          : cambios.minimo
+            ? "Cambiaste el mínimo"
+            : "Cambiaste los impuestos a liquidar";
+      accion = (
+        <>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={calculateMutation.isPending || !canCalculate || seleccionReason !== null}
+            title="Recalcular la liquidación"
+            onClick={() => calculateMutation.mutate({ id: wp.id, body: cuerpoDe(wp.id) })}
+          >
+            Recalcular
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled
+            title="Recalculá para habilitar el envío a revisión"
+          >
+            Enviar a revisión
+          </Button>
+        </>
+      );
+      motivos.push(
+        <small className="muted-copy" role="status" key="motivo-desactualizado">
+          {cambio}: recalculá para actualizar el resultado.
+        </small>,
+      );
+      motivos.push(
+        <small className="muted-copy" key="motivo-enviar-recalculo">
+          Enviar a revisión se habilita al recalcular.
+        </small>,
+      );
+      if (seleccionReason) {
+        motivos.push(
+          <small className="muted-copy" role="status" key="motivo-seleccion-recalculo">
+            {seleccionReason}
+          </small>,
+        );
+      }
+      if (!canCalculate) {
+        motivos.push(
+          <small className="muted-copy" role="status" key="motivo-recalcular-permiso">
+            Tu perfil no tiene permiso para recalcular este legajo.
+          </small>,
+        );
+      }
+      motivos.push(
+        errorDe(
+          calculateMutation.variables?.id === wp.id ? calculateMutation.error : null,
+          "error-recalcular-desactualizado",
+        ),
+      );
+    }
+    if (wp.status === "CALCULATED" && !cambios.hayCambios) {
       accion = (
         <Button
           size="sm"

@@ -31,6 +31,8 @@ export interface EtapaCalculoProps {
   /** Impuestos marcados para liquidar este mes y mínimos cargados. */
   seleccion: SeleccionCalculo;
   onSeleccionChange: (seleccion: SeleccionCalculo) => void;
+  /** 4K: motivo por el que la selección no puede cambiar (p. ej. en revisión); deshabilita los campos. */
+  bloqueoSeleccion?: string | null;
 }
 
 export function EtapaCalculo({
@@ -42,6 +44,7 @@ export function EtapaCalculo({
   setPositionAction,
   seleccion,
   onSeleccionChange,
+  bloqueoSeleccion = null,
 }: EtapaCalculoProps) {
   const determinacion = calculationQuery.data ?? [];
 
@@ -60,6 +63,11 @@ export function EtapaCalculo({
               </small>
             </div>
           </div>
+          {bloqueoSeleccion ? (
+            <small className="muted-copy" role="status">
+              {bloqueoSeleccion}
+            </small>
+          ) : null}
           {determinacion.map((component) => {
             const marcado = seleccionDeImpuesto(seleccion, component.obligationId);
             const valor = seleccion.minimums[component.obligationId] ?? "";
@@ -69,6 +77,7 @@ export function EtapaCalculo({
                 <label>
                   <input
                     type="checkbox"
+                    disabled={Boolean(bloqueoSeleccion)}
                     checked={marcado}
                     onChange={(event) =>
                       onSeleccionChange(
@@ -85,6 +94,7 @@ export function EtapaCalculo({
                   <MoneyField
                     label="Mínimo del mes"
                     name={`minimo-${component.obligationId}`}
+                    disabled={Boolean(bloqueoSeleccion)}
                     value={valor}
                     error={error ?? undefined}
                     hint={

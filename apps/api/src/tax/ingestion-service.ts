@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { taxHash } from "@contable/tax-engine";
+import { retirarImputacionesDelLote } from "./fuentes-vigentes.js";
 import {
   mapArcaCsvRow,
   normalizeArcaVoucherBatch,
@@ -608,6 +609,11 @@ export class IngestionService {
         await tx.workpaperImportBatch.update({
           where: { id: replacementTarget.linkId },
           data: { status: "REPLACED", replacedByBatchId: replacementTarget.newLinkId, replacedAt: replacementAt },
+        });
+        // 4K: el lote reemplazado no aporta imputaciones; las del nuevo se crean al revisarlo.
+        await retirarImputacionesDelLote(tx, {
+          workpaperId: replacementTarget.workpaperId,
+          importBatchId: replacesBatchId!,
         });
         await tx.monthlyTaxWorkpaper.update({
           where: { id: replacementTarget.workpaperId },

@@ -104,6 +104,38 @@ export function seleccionDeImpuesto(seleccion: SeleccionCalculo, obligationId: s
   return seleccion.obligationIds.includes(obligationId);
 }
 
+/** Forma del pedido de cálculo (impuestos marcados y mínimos cargados). */
+export interface CuerpoDeCalculo {
+  obligationIds?: string[];
+  minimums?: Record<string, string>;
+}
+
+/** Forma comparable de un mínimo: el mismo importe escrito con o sin decimales es el mismo valor. */
+function minimoNormalizado(valor: string | undefined): string | null {
+  if (!valor || errorMinimo(valor) !== null) return null;
+  return Number(valor).toFixed(2);
+}
+
+/**
+ * Qué cambió entre el pedido del último cálculo aplicado y la selección actual (4K). Si no hay
+ * cálculo aplicado (la pantalla no lo conoce), no hay nada que señalar.
+ */
+export function cambiosDesdeCalculo(
+  actual: CuerpoDeCalculo,
+  aplicado: CuerpoDeCalculo | null,
+): { hayCambios: boolean; minimo: boolean; impuestos: boolean } {
+  if (!aplicado) return { hayCambios: false, minimo: false, impuestos: false };
+  const impuestosActual = [...(actual.obligationIds ?? [])].sort().join("|");
+  const impuestosAplicado = [...(aplicado.obligationIds ?? [])].sort().join("|");
+  const ids = new Set([...Object.keys(actual.minimums ?? {}), ...Object.keys(aplicado.minimums ?? {})]);
+  const minimo = [...ids].some(
+    (id) =>
+      minimoNormalizado(actual.minimums?.[id]) !== minimoNormalizado(aplicado.minimums?.[id]),
+  );
+  const impuestos = impuestosActual !== impuestosAplicado;
+  return { hayCambios: minimo || impuestos, minimo, impuestos };
+}
+
 /** Líneas de la fórmula de un impuesto liquidado, en lenguaje del contador. */
 export function lineasDeFormula(component: WorkpaperCalculationComponent): string[] {
   const settlement = component.settlement;

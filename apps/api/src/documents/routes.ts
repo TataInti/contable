@@ -9,6 +9,12 @@ import { DocumentService } from "./document-service.js";
 import { DocumentReprocessError, DocumentReprocessService } from "./reprocess-service.js";
 import { DocumentRejectError, DocumentRejectService } from "./document-reject-service.js";
 import {
+  CuitControlError,
+  adjuntarControlCuit,
+  aceptarCuit,
+  moverDocumentoACliente,
+} from "./cuit-control-service.js";
+import {
   ExtractionError,
   ExtractionService,
   InvalidCorrectionError,
@@ -86,6 +92,9 @@ export function documentRoutes(app: FastifyInstance) {
   const service = new DocumentService(storage);
   const reprocessService = new DocumentReprocessService();
   const documentRejectService = new DocumentRejectService();
+  const cuitControl = { aceptar: aceptarCuit, mover: moverDocumentoACliente };
+  const cuitAceptarSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+  const cuitMoverSchema = z.object({ clientId: z.string().min(1).max(64) }).strict();
   const extractionService = new ExtractionService();
 
   // Crear sesión de upload (G2-07: el body valida requestItemId obligatorio)
@@ -153,18 +162,65 @@ export function documentRoutes(app: FastifyInstance) {
   // Listar documentos
   app.get("/api/v1/firms/:firmId/clients/:clientId/documents", async (req, reply) => {
     const { firmId, clientId } = req.params as { firmId: string; clientId: string };
-    const documents = await service.listDocuments(firmId, clientId, tenantContextFromRequest(req));
+    const ctx = tenantContextFromRequest(req);
+    const documents = await adjuntarControlCuit(
+      ctx,
+      clientId,
+      await service.listDocuments(firmId, clientId, ctx),
+    );
     return reply.send({ data: documents });
   });
 
   // Obtener documento
   app.get("/api/v1/firms/:firmId/clients/:clientId/documents/:documentId", async (req, reply) => {
     const { firmId, clientId, documentId } = req.params as { firmId: string; clientId: string; documentId: string };
-    const document = await service.getDocument(firmId, clientId, documentId, tenantContextFromRequest(req));
+    const ctx = tenantContextFromRequest(req);
+    const document = await service.getDocument(firmId, clientId, documentId, ctx);
     if (!document) {
       return reply.status(404).send({ error: { code: "DOCUMENT_NOT_FOUND", message: "Documento no encontrado" } });
     }
-    return reply.send({ data: document });
+    const [conControl] = await adjuntarControlCuit(ctx, clientId, [document]);
+    return reply.send({ data: conControl });
+  });
+
+  // Control de CUIT (4A-2): aceptar el CUIT ajeno con motivo.
+  app.post("/api/v1/firms/:firmId/clients/:clientId/documents/:documentId/cuit/accept", async (req, reply) => {
+    const { clientId, documentId } = req.params as { clientId: string; documentId: string };
+    const parsed = cuitAceptarSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "MOTIVO_REQUERIDO", message: "Indicá el motivo para aceptar el CUIT (entre 3 y 500 caracteres)" },
+      });
+    }
+    try {
+      const result = await cuitControl.aceptar(tenantContextFromRequest(req), clientId, documentId, parsed.data.reason);
+      return reply.send({ data: result });
+    } catch (err) {
+      if (err instanceof CuitControlError) {
+        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } });
+      }
+      throw err;
+    }
+  });
+
+  // Control de CUIT (4A-2): «Mover a» otro cliente del estudio.
+  app.post("/api/v1/firms/:firmId/clients/:clientId/documents/:documentId/cuit/move", async (req, reply) => {
+    const { clientId, documentId } = req.params as { clientId: string; documentId: string };
+    const parsed = cuitMoverSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "CLIENTE_REQUERIDO", message: "Elegí a qué cliente corresponde el comprobante" },
+      });
+    }
+    try {
+      const result = await cuitControl.mover(tenantContextFromRequest(req), clientId, documentId, parsed.data.clientId);
+      return reply.send({ data: result });
+    } catch (err) {
+      if (err instanceof CuitControlError) {
+        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } });
+      }
+      throw err;
+    }
   });
 
   // Preview/descarga de un documento subido (URL firmada reautorizada por RLS).
@@ -370,6 +426,9 @@ export function documentRoutes(app: FastifyInstance) {
       await extractionService.approve(firmId, clientId, extractionId, userId, tenantContextFromRequest(req));
       return reply.send({ data: { status: "REVIEWED" } });
     } catch (err) {
+      if (err instanceof CuitControlError) {
+        return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } });
+      }
       if (err instanceof ExtractionError) {
         return reply.status(409).send({ error: { code: err.code, message: err.message } });
       }

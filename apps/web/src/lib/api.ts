@@ -368,8 +368,20 @@ export interface ClientSummary {
   counts: { accounts: number; counterparties: number; costCenters: number };
 }
 
+export interface DocumentCuitControl {
+  estado: "CORRECTO" | "OTRO_CLIENTE" | "NO_LEIDO";
+  pendiente: boolean;
+  aceptado: boolean;
+  motivo: string | null;
+  emisor: string | null;
+  receptor: string | null;
+  mensaje: string | null;
+  sugerido: { clientId: string; legalName: string; cuit: string } | null;
+}
+
 export interface Document {
   id: string;
+  cuitControl?: DocumentCuitControl | null;
   category?: string | null;
   direction?: string | null;
   status: string;
