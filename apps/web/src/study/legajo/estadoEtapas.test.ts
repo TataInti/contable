@@ -29,4 +29,24 @@ describe("estado por etapa del Legajo", () => {
     expect(conControl[5]).toMatchObject({ destino: 4, accion: "Ir a Controles" });
     expect(calcularEstadosEtapas({ sources: [], status: "FINALIZED", calculationCount: 1 })[5]?.estado).toBe("Lista");
   });
+  it("4J — ventas con actividad no vigente o de otro nivel no dejan Clasificación ni Cálculo en «Lista»", () => {
+    const base = { sources: [], calculationCount: 0, status: "COLLECTING_INPUTS" as const };
+    const pendiente = calcularEstadosEtapas({
+      ...base,
+      classification: { total: 3, classified: 2, pending: 0, activityPending: 1, ready: true },
+    });
+    expect(pendiente[2]).toMatchObject({
+      estado: "Con pendientes",
+      destino: 2,
+      mensaje: "Hay 1 venta con actividad no vigente o de otro nivel",
+      accion: "Ir a Clasificación",
+    });
+    expect(pendiente[3]).toMatchObject({ estado: "No disponible todavía", destino: 2, accion: "Ir a Clasificación" });
+    const corregida = calcularEstadosEtapas({
+      ...base,
+      classification: { total: 3, classified: 3, pending: 0, activityPending: 0, ready: true },
+    });
+    expect(corregida[2]).toMatchObject({ estado: "Lista", destino: 2 });
+    expect(corregida[3]).toMatchObject({ estado: "Con pendientes", destino: 3, mensaje: "Falta calcular" });
+  });
 });

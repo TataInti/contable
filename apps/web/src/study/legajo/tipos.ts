@@ -222,6 +222,8 @@ export interface WorkpaperSource {
 }
 export interface WorkpaperClassification {
   id: string;
+  /** Hallazgo de actividad: mismo código y texto que el cálculo; null si no hay. */
+  activityIssue?: { kind: "NOT_IN_FORCE" | "UNCLASSIFIED"; message: string } | null;
   voucherId: string;
   direction: "PURCHASE" | "SALE";
   counterpartyCuit: string;
@@ -251,6 +253,8 @@ export interface ClassificationCoverage {
   classified: number;
   pending: number;
   excluded?: number;
+  /** Ventas clasificadas con actividad que el cálculo no admite (no vigente o de otro nivel). */
+  activityPending?: number;
   ready: boolean;
   items: WorkpaperClassification[];
 }

@@ -27,6 +27,16 @@ import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { ObjectStorage, BUCKETS } from "../storage/object-storage.js";
 import { exportReport, type ExportReportResult } from "../reporting/report-export.js";
 import { voucherDocumentKind } from "./workpaper-classification.js";
+import {
+  buildLevelActivityContext,
+  esMotorConActividadTipada,
+  evaluateSaleActivities,
+  mensajeActividadNoVigente,
+  mensajeActividadSinClasificar,
+  resolveLevelActivity,
+  type ActivityIssue,
+  type LevelActivityContext,
+} from "./activity-coverage.js";
 import { RULES_HASH_SCHEMA_VERSION_V3 } from "./rules-hash.js";
 import { buildEngineRules, EngineRulesError } from "./engine-rules.js";
 import {
@@ -59,10 +69,6 @@ import {
  *   subledger aprobados y del ledger de créditos.
  */
 
-const MESES_ES = [
-  "enero", "febrero", "marzo", "abril", "mayo", "junio",
-  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-] as const;
 
 export type SettlementErrorCode =
   | "SETTLEMENT_NOT_FOUND"
@@ -165,6 +171,26 @@ const resolvedTaxEngineSelect = {
   familyId: true,
   family: { select: { allowsAdvancePayment: true, closesByJurisdiction: true } },
 } as const;
+
+/** Versión normativa que cubre íntegramente el período (las retiradas siguen siendo fuente histórica). */
+export async function findActiveRuleVersion(
+  tx: Tx,
+  packId: string,
+  period: { startDate: Date; endDate: Date },
+) {
+  return tx.taxRuleVersion.findFirst({
+    where: {
+      packId,
+      // Las versiones retiradas siguen siendo la fuente válida para
+      // períodos históricos. La versión seleccionada debe cubrir el mes
+      // completo; nunca se aplica retroactivamente una regla futura.
+      status: { in: ["ACTIVE", "RETIRED"] },
+      validFrom: { lte: period.startDate },
+      OR: [{ validTo: null }, { validTo: { gte: period.endDate } }],
+    },
+    orderBy: [{ validFrom: "desc" }, { version: "desc" }],
+  });
+}
 
 /**
  * Resuelve el motor de una versión de reglas por id (catálogo `tax_engines`).
@@ -420,18 +446,7 @@ export class SettlementService {
         },
       });
       if (!pack) throw new SettlementError("RULE_VERSION_NOT_FOUND", "No existe rule pack para el régimen");
-      const activeVersion = await tx.taxRuleVersion.findFirst({
-        where: {
-          packId: pack.id,
-          // Las versiones retiradas siguen siendo la fuente válida para
-          // períodos históricos. La versión seleccionada debe cubrir el mes
-          // completo; nunca se aplica retroactivamente una regla futura.
-          status: { in: ["ACTIVE", "RETIRED"] },
-          validFrom: { lte: period.startDate },
-          OR: [{ validTo: null }, { validTo: { gte: period.endDate } }],
-        },
-        orderBy: [{ validFrom: "desc" }, { version: "desc" }],
-      });
+      const activeVersion = await findActiveRuleVersion(tx, pack.id, period);
       if (!activeVersion) {
         throw new SettlementError(
           "NO_ACTIVE_RULES",
@@ -1097,8 +1112,7 @@ export class SettlementService {
           voucher.direction === "SALE" &&
           voucher.lines.some((line) => line.activityCode && line.netAmount),
       );
-      const isTypedActivityEngine =
-        isTypedRuleVersion && (engineKey === "iibb-local-tuc" || engineKey === "tem-smt");
+      const isTypedActivityEngine = esMotorConActividadTipada(isTypedRuleVersion, engineKey);
       const activitiesByCode = new Map<string, Array<{ id: string; jurisdictionId: string }>>();
       if (isTypedActivityEngine) {
         const activityCodes = [...new Set(vouchers.flatMap((voucher) => {
@@ -1148,8 +1162,6 @@ export class SettlementService {
         if (own.length === 0 && all.length > 0) return null;
         return { id: resolveActivityId(code), code };
       };
-      const singleLocalActivity =
-        isTypedActivityEngine && singleLocalActivityCode ? ownLevelActivity(singleLocalActivityCode) : null;
       // Actividad que toma un hecho en este impuesto: la suya del nivel. Si es de otro nivel o no trae código,
       // la única actividad del cliente en el nivel (null si el nivel tiene más de una).
       // Vínculos del cliente en este nivel sin filtrar por fecha, para distinguir «no está vigente en el período»
@@ -1166,25 +1178,54 @@ export class SettlementService {
             orderBy: [{ validFrom: "asc" }],
           })
         : [];
-      const inForceLinks = levelLinks.filter(
-        (link) => link.validFrom <= period.endDate && (!link.validTo || link.validTo >= period.startDate),
-      );
-      const notInForceActivities = new Map<string, { name: string; validFrom: Date }>();
-      const noteIfNotInForce = (code: string): boolean => {
-        const links = levelLinks.filter((link) => link.activity.code === code);
-        if (links.length === 0 || inForceLinks.some((link) => link.activity.code === code)) return false;
-        notInForceActivities.set(code, { name: links[0]!.activity.name, validFrom: links[0]!.validFrom });
-        return true;
+      // Criterio único de actividades (activity-coverage.ts): el cálculo y la clasificación del expediente
+      // usan las mismas reglas. Aquí solo se consume su resultado.
+      const activityCtx: LevelActivityContext | null = isTypedActivityEngine
+        ? buildLevelActivityContext({
+            periodStart: period.startDate,
+            periodEnd: period.endDate,
+            jurisdictionId: input.jurisdictionId,
+            levelLinks: levelLinks.map((link) => ({
+              code: link.activity.code,
+              name: link.activity.name,
+              validFrom: link.validFrom,
+              validTo: link.validTo,
+            })),
+            catalog: [...activitiesByCode.entries()].flatMap(([code, matches]) =>
+              matches.map((match) => ({ code, jurisdictionId: match.jurisdictionId })),
+            ),
+            withSingleLocal: input.sourceScope !== undefined && input.sourceScope !== null,
+          })
+        : null;
+      const activityIssues: ActivityIssue[] = activityCtx
+        ? evaluateSaleActivities(
+            activityCtx,
+            vouchers
+              .filter((voucher) => voucher.direction === "SALE")
+              .map((voucher) => {
+                const classification = classificationByVoucher.get(voucher.id);
+                return {
+                  voucherId: voucher.id,
+                  issuedOn: voucher.issuedOn,
+                  lines: voucher.lines.map((line) => ({
+                    activityCode: line.activityCode,
+                    hasNetAmount: line.netAmount != null,
+                  })),
+                  classification: classification ? { activityCode: classification.activityCode } : null,
+                };
+              }),
+            cutoffDate,
+          )
+        : [];
+      // Actividad del nivel que toma un hecho. Un código fuera del catálogo lanza el mismo error de siempre.
+      const resolveOwnActivity = (
+        activityCode: string | null | undefined,
+      ): { id: string; code: string } | null => {
+        if (!activityCtx) return null;
+        const r = resolveLevelActivity(activityCtx, activityCode);
+        if (r.kind === "UNRESOLVED") resolveActivityId(r.code);
+        return r.kind === "OWN" ? { id: resolveActivityId(r.code), code: r.code } : null;
       };
-      const levelActivity = (activityCode: string | null | undefined): { id: string; code: string } | null => {
-        const own = activityCode && activityCode.trim().length > 0 ? ownLevelActivity(activityCode) : null;
-        if (own) return noteIfNotInForce(own.code) ? null : own;
-        if (singleLocalActivity) return singleLocalActivity;
-        // Sin actividad vigente en el nivel: si el cliente tiene actividades del nivel fuera de vigencia, se nombra la primera.
-        if (inForceLinks.length === 0 && levelLinks.length > 0) noteIfNotInForce(levelLinks[0]!.activity.code);
-        return null;
-      };
-      const unclassifiedVoucherIds = new Set<string>();
       for (const v of vouchers) {
         if (v.direction !== "SALE") continue;
         if (v.issuedOn.toISOString() > cutoffDate) continue;
@@ -1221,11 +1262,9 @@ export class SettlementService {
           let activity = legacyActivityCode;
           let snapshotActivityCode = legacyActivityCode;
           if (isTypedActivityEngine && activityCode && activityCode.trim().length > 0) {
-            const level = levelActivity(activityCode);
-            if (!level) {
-              unclassifiedVoucherIds.add(v.id);
-              continue;
-            }
+            const level = resolveOwnActivity(activityCode);
+            // Sin actividad del nivel vigente: la venta figura en activityIssues y el cálculo se detiene.
+            if (!level) continue;
             activity = level.id;
             snapshotActivityCode = level.code;
           } else if (isTypedActivityEngine) {
@@ -1264,11 +1303,8 @@ export class SettlementService {
           : null;
         const bookLevel =
           isTypedActivityEngine && bookActivityCode && classification
-            ? levelActivity(classification.activityCode)
+            ? resolveOwnActivity(classification.activityCode)
             : null;
-        if (isTypedActivityEngine && bookActivityCode && !bookLevel && v.lines.length === 0 && !hasExplicitActivityLines) {
-          unclassifiedVoucherIds.add(v.id);
-        }
         if (
           v.lines.length === 0 &&
           !hasExplicitActivityLines &&
@@ -1314,23 +1350,27 @@ export class SettlementService {
         }
       }
 
-      if (notInForceActivities.size > 0) {
-        const [primera] = [...notInForceActivities.values()].sort(
+      const notInForceIssues = activityIssues.filter(
+        (issue): issue is Extract<ActivityIssue, { kind: "NOT_IN_FORCE" }> =>
+          issue.kind === "NOT_IN_FORCE",
+      );
+      if (notInForceIssues.length > 0) {
+        const [primera] = [...notInForceIssues].sort(
           (a, b) => a.validFrom.getTime() - b.validFrom.getTime(),
         );
-        const mes = MESES_ES[period.startDate.getUTCMonth()];
-        const desde = primera!.validFrom.toISOString().slice(0, 10).split("-").reverse().join("/");
         throw new SettlementError(
           "ACTIVITY_NOT_IN_FORCE",
-          `La actividad ${primera!.name} no está vigente en ${mes} ${period.startDate.getUTCFullYear()} para este cliente (vigente desde ${desde}). Corregí la fecha «Desde» en Configuración fiscal → Actividades.`,
+          mensajeActividadNoVigente({ activityName: primera!.activityName, validFrom: primera!.validFrom }, period),
         );
       }
-      if (unclassifiedVoucherIds.size > 0) {
+      const unclassifiedIssues = activityIssues.filter((issue) => issue.kind === "UNCLASSIFIED");
+      if (unclassifiedIssues.length > 0) {
         throw new SettlementError(
           "ACTIVITY_UNCLASSIFIED",
-          inForceLinks.length > 1
-            ? `${unclassifiedVoucherIds.size} venta(s) tienen una actividad de otro nivel y el cliente tiene más de una actividad vigente en este impuesto. Asigná la actividad de cada venta en su clasificación y volvé a calcular.`
-            : `${unclassifiedVoucherIds.size} venta(s) tienen una actividad que el cliente no tiene vinculada en este impuesto. Vinculala en Configuración fiscal → Actividades y volvé a calcular.`,
+          mensajeActividadSinClasificar(
+            new Set(unclassifiedIssues.map((issue) => issue.voucherId)).size,
+            unclassifiedIssues.some((issue) => issue.multipleInForce),
+          ),
         );
       }
       const minimumRules = await tx.taxMinimumRule.findMany({

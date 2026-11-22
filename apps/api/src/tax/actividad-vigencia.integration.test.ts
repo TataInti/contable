@@ -464,4 +464,100 @@ describe("4H — actividades vigentes en el período", () => {
       expect(componente.settlement.totals["BASE_TOTAL"]).toBe("115000.00");
     }
   });
+
+  it("4J — la clasificación marca como pendientes las ventas con actividad no vigente, con el texto del cálculo", async () => {
+    const { ruta } = await prepararLibro({
+      caso: "clasificacion-pendiente",
+      vinculos: [
+        { code: "REST-TUC", jurisdictionCode: "AR-T", validFrom: "2026-11-22" },
+        { code: "REST-SMT", jurisdictionCode: "AR-SMT", validFrom: "2026-11-22" },
+      ],
+      inscripcionDesde: "2026-10-01",
+      actividadVentas: "REST-TUC",
+    });
+    const clasificaciones = ruta.replace(/\/calculate$/, "/classifications");
+    const cobertura = data<ClasificacionCobertura>(await request("GET", clasificaciones));
+    const pendientes = cobertura.items.filter((item) => item.activityIssue);
+    expect(pendientes.length).toBeGreaterThan(0);
+    expect(cobertura.activityPending).toBe(pendientes.length);
+    expect(cobertura.classified + cobertura.pending + cobertura.excluded + cobertura.activityPending).toBe(
+      cobertura.total,
+    );
+    for (const item of pendientes) {
+      expect(item.activityIssue!.kind).toBe("NOT_IN_FORCE");
+      expect(item.activityIssue!.message).toMatch(
+        /^La actividad Actividad sintética REST-(TUC|SMT) no está vigente en octubre 2026 para este cliente \(vigente desde 22\/11\/2026\)\. Corregí la fecha «Desde» en Configuración fiscal → Actividades\.$/,
+      );
+    }
+    const calculo = await request("POST", ruta, { cutoff: END });
+    const error = (calculo.json() as { error: { code: string; message: string } }).error;
+    expect(error.code).toBe("ACTIVITY_NOT_IN_FORCE");
+    expect(pendientes.map((item) => item.activityIssue!.message)).toContain(error.message);
+  });
+
+  it("4J — con la «Desde» corregida, la clasificación deja de marcar pendientes y el cálculo corre", async () => {
+    const { clientBase, ruta, vinculoIds } = await prepararLibro({
+      caso: "clasificacion-corregida",
+      vinculos: [
+        { code: "REST-TUC", jurisdictionCode: "AR-T", validFrom: "2026-11-22" },
+        { code: "REST-SMT", jurisdictionCode: "AR-SMT", validFrom: "2026-11-22" },
+      ],
+      inscripcionDesde: "2026-10-01",
+      actividadVentas: "REST-TUC",
+    });
+    for (const id of Object.values(vinculoIds)) {
+      ok(
+        await request("PATCH", `${clientBase}/activities/${id}`, { validFrom: "2026-10-01" }),
+        200,
+        "corrección de la fecha «Desde» de la actividad",
+      );
+    }
+    const cobertura = data<ClasificacionCobertura>(
+      await request("GET", ruta.replace(/\/calculate$/, "/classifications")),
+    );
+    expect(cobertura.activityPending).toBe(0);
+    expect(cobertura.items.every((item) => item.activityIssue === null)).toBe(true);
+    ok(await request("POST", ruta, { cutoff: END }), 200, "cálculo con actividades vigentes");
+  });
+
+  it("4J — corregir la «Desde» de una actividad usada en un período finalizado responde ACTIVITY_IN_USE", async () => {
+    const { clientBase, ruta, vinculoIds } = await prepararLibro({
+      caso: "actividad-en-uso",
+      vinculos: [
+        { code: "REST-TUC", jurisdictionCode: "AR-T", validFrom: "2026-11-22" },
+        { code: "REST-SMT", jurisdictionCode: "AR-SMT", validFrom: "2026-11-22" },
+      ],
+      inscripcionDesde: "2026-10-01",
+      actividadVentas: "REST-TUC",
+    });
+    for (const id of Object.values(vinculoIds)) {
+      ok(
+        await request("PATCH", `${clientBase}/activities/${id}`, { validFrom: "2026-10-01" }),
+        200,
+        "corrección de la fecha «Desde» de la actividad",
+      );
+    }
+    ok(await request("POST", ruta, { cutoff: END }), 200, "cálculo de octubre");
+    await prisma.taxSettlement.updateMany({
+      where: { clientId: clientBase.split("/").pop()! },
+      data: { status: "FINALIZED" },
+    });
+    const response = await request("PATCH", `${clientBase}/activities/${vinculoIds["REST-TUC"]}`, {
+      validFrom: "2026-10-15",
+    });
+    expect(response.statusCode).toBeGreaterThanOrEqual(400);
+    expect((response.json() as { error: { code: string } }).error.code).toBe("ACTIVITY_IN_USE");
+  });
 });
+
+type ClasificacionCobertura = {
+  total: number;
+  classified: number;
+  pending: number;
+  excluded: number;
+  activityPending: number;
+  items: Array<{
+    id: string;
+    activityIssue: { kind: string; message: string } | null;
+  }>;
+};

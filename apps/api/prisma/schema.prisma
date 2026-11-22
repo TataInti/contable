@@ -316,6 +316,8 @@ model Client {
   taxCreditMovements     TaxCreditMovement[]
   contacts               ClientContact[]
   temCategories          ClientTemCategory[]
+  monotributoCategories  ClientMonotributoCategory[]
+  monotributoPayments    ClientMonotributoPayment[]
 
   @@unique([firmId, cuit])
   @@index([firmId])
@@ -2265,6 +2267,57 @@ model ClientTemCategory {
 
   @@unique([firmId, clientId, year])
   @@map("client_tem_categories")
+}
+
+/// Escala de cuotas fijas mensuales del Monotributo (ARCA): categoría A a K y tipo de actividad, con vigencia.
+model MonotributoCuota {
+  id        String    @id @default(uuid(7))
+  validFrom DateTime  @db.Date
+  validTo   DateTime? @db.Date
+  category  String
+  activity  String
+  amount    Decimal   @db.Decimal(20, 2)
+  source    String?
+  createdAt DateTime  @default(now())
+
+  @@unique([validFrom, category, activity])
+  @@map("monotributo_cuotas")
+}
+
+/// Categoría de Monotributo y tipo de actividad del cliente, desde un mes (recategorizaciones).
+model ClientMonotributoCategory {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  validFrom       DateTime @db.Date
+  category        String
+  activity        String
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client Client @relation(fields: [firmId, clientId], references: [firmId, id], onDelete: Cascade)
+
+  @@unique([firmId, clientId, validFrom])
+  @@map("client_monotributo_categories")
+}
+
+/// Pago de la cuota mensual de Monotributo del cliente (historial; admite varios pagos por mes).
+model ClientMonotributoPayment {
+  id              String   @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  period          DateTime @db.Date
+  paidAt          DateTime @db.Date
+  amount          Decimal  @db.Decimal(20, 2)
+  comprobante     String?
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  client Client @relation(fields: [firmId, clientId], references: [firmId, id], onDelete: Cascade)
+
+  @@index([firmId, clientId, period])
+  @@map("client_monotributo_payments")
 }
 
 enum TaxRegistrationStatus {

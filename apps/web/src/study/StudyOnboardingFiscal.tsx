@@ -29,6 +29,8 @@ import { CajonActividad } from "./fiscal/cajones/CajonActividad";
 import { CajonPeriodo } from "./fiscal/cajones/CajonPeriodo";
 import { CajonObligacion } from "./fiscal/cajones/CajonObligacion";
 import { CajonCategoriaTem } from "./fiscal/cajones/CajonCategoriaTem";
+import { CajonCategoriaMonotributo } from "./fiscal/cajones/CajonCategoriaMonotributo";
+import { mesActualMonotributo, useMonotributoMes, type FilaCategoriaMonotributo } from "./fiscal/monotributo";
 import { useCategoriaTem } from "./fiscal/categoriaTem";
 import { periodName, previousMonth, today, type ClientActivityLink, type EconomicActivity, type FiscalStep, type FiscalTab, type ProfileForm, type TaxObligation, type TaxPeriod, type TaxRegime, type TaxRegistration, type TaxType, type TaxpayerProfileVersion } from "./fiscal/utilidades";
 
@@ -111,6 +113,17 @@ export function StudyOnboardingFiscal() {
     enabled: Boolean(firmId && clientId),
   });
   const categoriaTem = useCategoriaTem(firmId, clientId);
+  const monotributo = useMonotributoMes(firmId, clientId, mesActualMonotributo());
+  const [monotributoAbierto, setMonotributoAbierto] = useState(false);
+  const filaMonotributo: FilaCategoriaMonotributo = {
+    regimeIds: monotributo.query.data?.regimeIds ?? [],
+    categoria: monotributo.query.data?.category ?? null,
+    loading: monotributo.query.isLoading,
+    abrir: () => {
+      monotributo.guardarCategoria.reset();
+      setMonotributoAbierto(true);
+    },
+  };
   const clientActivitiesQuery = useQuery({
     queryKey: ["client-tax-activities", firmId, clientId],
     queryFn: () => api.get<ClientActivityLink[]>(`/firms/${firmId}/clients/${clientId}/activities`),
@@ -328,7 +341,7 @@ export function StudyOnboardingFiscal() {
         {failedQueries.length > 0 ? <AvisoConsultas failedQueries={failedQueries} /> : null}
 
         {tab === "resumen" ? <PestanaResumen nextRequiredStep={nextRequiredStep} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
-        {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} corregirFecha={corregirInscripcion} confirm={confirm} categoriaTem={categoriaTem.fila} /> : null}
+        {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} corregirFecha={corregirInscripcion} confirm={confirm} categoriaTem={categoriaTem.fila} categoriaMonotributo={filaMonotributo} /> : null}
         {tab === "actividades" ? <PestanaActividades canWrite={canWrite} openStepForm={openStepForm} clientActivitiesQuery={clientActivitiesQuery} endActivity={endActivity} corregirFecha={(row) => { updateActivity.reset(); setActivityToEdit(row); }} confirm={confirm} renderEstado={renderEstadoActividad} /> : null}
         {tab === "periodos" ? <PestanaPeriodos canWrite={canWrite} monthToOpen={monthToOpen} setMonthToOpen={setMonthToOpen} openMonth={openMonth} periodsQuery={periodsQuery} openStepForm={openStepForm} obligationByPeriod={obligationByPeriod} setObligationForm={setObligationForm} registrations={registrationsQuery.data ?? []} corregirInscripcion={corregirInscripcion} corregirPeriodo={corregirPeriodo} anularPeriodo={anularPeriodo} /> : null}
 
@@ -345,6 +358,7 @@ export function StudyOnboardingFiscal() {
       <CajonObligacion openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} obligationForm={obligationForm} setObligationForm={setObligationForm} createObligation={createObligation} selectablePeriods={selectablePeriods} eligibleRegistrations={eligibleRegistrations} effectiveProfileId={effectiveProfileId} />
 
       <CajonCategoriaTem isOpen={categoriaTem.abierto} onClose={categoriaTem.cerrar} year={categoriaTem.year} estado={categoriaTem.query.data} cargando={categoriaTem.query.isLoading} guardar={categoriaTem.guardar} />
+      <CajonCategoriaMonotributo isOpen={monotributoAbierto} onClose={() => setMonotributoAbierto(false)} estado={monotributo.query.data} cargando={monotributo.query.isLoading} guardar={monotributo.guardarCategoria} />
 
       <ConfirmDialog confirm={confirm} />
     

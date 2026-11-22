@@ -356,4 +356,12 @@ describe("requiredCapability (mapeo ruta → capacidad)", () => {
     expect(requiredCapability("PUT", `${base}/2026`)).toBe("tax.profile.write");
     expect(capabilitiesForRole("AUDITOR_READONLY").has("tax.profile.write")).toBe(false);
   });
+
+  it("la cuota fija del Monotributo: lectura y categoría con el perfil fiscal; el pago con el permiso de pagos", () => {
+    const base = "/api/v1/firms/f/clients/c/monotributo";
+    expect(requiredCapability("GET", base)).toBe("tax.profile.read");
+    expect(requiredCapability("PUT", `${base}-categories/2026-08`)).toBe("tax.profile.write");
+    expect(requiredCapability("POST", `${base}/payments`)).toBe("tax.payments.record");
+    expect(capabilitiesForRole("AUDITOR_READONLY").has("tax.profile.write")).toBe(false);
+  });
 });
