@@ -470,12 +470,13 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     // Libros y archivos de marzo. Del ticket salen fecha, neto, IVA 21 % y número de la única compra; el CUIT
     // del proveedor y la letra A son inventados (el ticket no los trae). Ventas, IIBB y TEM son sintéticos.
     await page.getByRole("tab", { name: /Fuentes/ }).first().click();
-    const sourcePanel = page.locator(".workpaper-source-import");
     for (const { source, file } of sourceFiles) {
       if (source.startsWith("Libro IVA")) {
-        // D2a: los libros IVA se importan desde su fila («Importar libro») en el panel de libros; el JSON sigue sirviendo.
+        // Brief 2B: «Gestionar» abre el panel de fuente y conserva el importador IVA existente.
         const seccion = source.endsWith("Ventas") ? "Libro de ventas" : "Libro de compras";
-        await page.getByRole("row", { name: new RegExp(source) }).getByRole("button", { name: "Importar libro" }).click();
+        const nombreFuente = source.endsWith("Ventas") ? "Ventas del período" : "Compras del período";
+        await page.getByRole("button", { name: `Gestionar ${nombreFuente}` }).click();
+        await page.getByRole("button", { name: "Cargar archivo" }).click();
         const panel = page.getByRole("dialog", { name: "Importar libros IVA" });
         const libro = panel.locator(`section[aria-label="${seccion}"]`);
         await libro.locator('input[type="file"]').setInputFiles(file);
@@ -483,10 +484,12 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
         await expect(panel).toBeHidden({ timeout: 60_000 });
         continue;
       }
-      await pickOption(sourcePanel.locator("select"), source);
-      await sourcePanel.locator('input[type="file"]').setInputFiles(file);
-      await mutating(page, "/import-batches", () => sourcePanel.getByRole("button", { name: "Importar lote" }).click());
-      await expect(page.getByText("Procesando…")).toHaveCount(0, { timeout: 60_000 });
+      await page.getByRole("button", { name: `Gestionar ${source}` }).click();
+      await page.getByRole("button", { name: "Cargar archivo" }).click();
+      const panel = page.getByRole("dialog", { name: "Gestionar fuente" });
+      await panel.locator('input[type="file"]').setInputFiles(file);
+      await mutating(page, "/import-batches", () => panel.getByRole("button", { name: "Importar archivo" }).click());
+      await expect(panel.getByText("Procesando…")).toHaveCount(0, { timeout: 60_000 });
     }
     test.info().annotations.push({
       type: "legajo · Fuentes tras importar",

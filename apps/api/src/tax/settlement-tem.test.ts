@@ -328,6 +328,7 @@ async function cleanupTEM() {
     await tx.$executeRawUnsafe(`DELETE FROM fiscal_vouchers WHERE "clientId" = '${CLIENT_TEM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM withholding_certificates WHERE "clientId" = '${CLIENT_TEM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM perception_certificates WHERE "clientId" = '${CLIENT_TEM}'`);
+    await tx.$executeRawUnsafe(`DELETE FROM client_tem_categories WHERE "clientId" = '${CLIENT_TEM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_registrations WHERE "clientId" = '${CLIENT_TEM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_obligations WHERE "clientId" = '${CLIENT_TEM}'`);
     await tx.$executeRawUnsafe(`DELETE FROM tax_periods WHERE "clientId" = '${CLIENT_TEM}'`);
@@ -358,6 +359,48 @@ async function cleanupTEM() {
   });
 }
 
+/** Categoría TEM del año del cliente de prueba (catálogo DIM 2026: B = 10.028). */
+async function setTemCategory(category: string, year = 2026) {
+  await prisma.clientTemCategory.upsert({
+    where: { firmId_clientId_year: { firmId: FIRM_TEM, clientId: CLIENT_TEM, year } },
+    update: { category },
+    create: { firmId: FIRM_TEM, clientId: CLIENT_TEM, year, category },
+  });
+}
+
+/** Venta aprobada de una actividad con su neto (mismo formato que las ventas de las otras pruebas). */
+async function createApprovedSale(number: number, activityCode: string, net: string) {
+  const iva = new Prisma.Decimal(net).times("0.21");
+  const v = await ingestion.createVoucher(ctxOwner, {
+    clientId: CLIENT_TEM,
+    direction: "SALE",
+    type: "A",
+    letter: "A",
+    pointOfSale: 1,
+    number,
+    issuerCuit: "20999999995",
+    receiverCuit: "20111111111",
+    issuedOn: "2026-01-10",
+    total: new Prisma.Decimal(net).plus(iva).toFixed(2),
+    components: [
+      { concept: "NETO", base: net, amount: net },
+      { concept: "IVA_21", base: net, rate: "0.21", amount: iva.toFixed(2) },
+    ],
+  });
+  await prisma.fiscalVoucherLine.create({
+    data: {
+      firmId: FIRM_TEM,
+      clientId: CLIENT_TEM,
+      voucherId: v.id,
+      position: 1,
+      activityCode,
+      netAmount: new Prisma.Decimal(net),
+    },
+  });
+  await ingestion.reviewVoucher(ctxReviewer, v.id, true);
+  return v;
+}
+
 beforeEach(async () => {
   await setupMembership();
   await cleanupTEM();
@@ -370,6 +413,7 @@ beforeEach(async () => {
   periodId = period.id;
   obligationId = obligation.id;
   ruleVersionId = rules.version.id;
+  await setTemCategory("B");
 });
 
 describe("Fase 4.2 — TEM San Miguel de Tucumán: cálculo", () => {
@@ -384,7 +428,9 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: cálculo", () => {
     expect(totals["BASE_TOTAL"]).toBe("150000.00");
     // COMERCIO: 100000 × 2% = 2000; SERVICIOS: 50000 × 3% = 1500
     expect(totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("3500.00");
-    expect(totals["TOTAL_A_INGRESAR"]).toBe("3500.00");
+    // 3500 < mínimo de la categoría B (10.028): el mínimo mensual manda.
+    expect(totals["MINIMO_APLICADO"]).toBe("10028.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("10028.00");
   });
 
   it("aplica mínimo si el cálculo por alícuota es menor", async () => {
@@ -419,11 +465,12 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: cálculo", () => {
 
     const result = await settlements.calculate(ctxOwner, calculateParams());
     const totals = result.settlement.totals as Record<string, string>;
-    expect(totals["MINIMO_APLICADO"]).toBe("3000.00");
-    expect(totals["TOTAL_A_INGRESAR"]).toBe("3000.00");
+    // El paquete trae 3.000, pero el mínimo mensual lo fija la categoría B del cliente (10.028).
+    expect(totals["MINIMO_APLICADO"]).toBe("10028.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("10028.00");
   });
 
-  it("mapea el caso real documentado: 1,25% y mínimo mensual 61.446", async () => {
+  it("mapea el caso real documentado: 1,25%; el mínimo lo fija la categoría y no el 61.446 del paquete", async () => {
     await createApprovedVouchersWithLines();
     await prisma.taxRateRule.updateMany({
       where: { ruleVersionId, concept: { in: ["COMERCIO", "SERVICIOS"] } },
@@ -437,8 +484,8 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: cálculo", () => {
     const result = await settlements.calculate(ctxOwner, calculateParams());
     const totals = result.settlement.totals as Record<string, string>;
     expect(totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("1875.00");
-    expect(totals["MINIMO_APLICADO"]).toBe("61446.00");
-    expect(totals["TOTAL_A_INGRESAR"]).toBe("61446.00");
+    expect(totals["MINIMO_APLICADO"]).toBe("10028.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("10028.00");
   });
 
   it("deduce retenciones y percepciones (créditos)", async () => {
@@ -478,8 +525,8 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: cálculo", () => {
     const totals = result.settlement.totals as Record<string, string>;
     expect(totals["RETENCIONES"]).toBe("1000.00");
     expect(totals["PERCEPCIONES"]).toBe("600.00");
-    // 3500 - 1000 - 600 = 1900
-    expect(totals["TOTAL_A_INGRESAR"]).toBe("1900.00");
+    // mínimo de la categoría B 10028 - 1000 - 600 = 8428 (el calculado, 3500, queda por debajo del mínimo)
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("8428.00");
   });
 
   it("aplica saldo a favor anterior", async () => {
@@ -491,18 +538,18 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: cálculo", () => {
         taxTypeId,
         jurisdictionId,
         kind: "FREE_AVAILABILITY",
-        amount: new Prisma.Decimal("4000"),
-        balanceAfter: new Prisma.Decimal("4000"),
+        amount: new Prisma.Decimal("12000"),
+        balanceAfter: new Prisma.Decimal("12000"),
         createdByUserId: OWNER_TEM,
       },
     });
 
     const result = await settlements.calculate(ctxOwner, calculateParams());
     const totals = result.settlement.totals as Record<string, string>;
-    expect(totals["SALDO_ANTERIOR"]).toBe("4000.00");
-    // 3500 - 4000 = -500 → saldo a favor
+    expect(totals["SALDO_ANTERIOR"]).toBe("12000.00");
+    // mínimo de la categoría B 10028 - 12000 = -1972 → saldo a favor
     expect(totals["TOTAL_A_INGRESAR"]).toBe("0.00");
-    expect(totals["SALDO_A_FAVOR"]).toBe("500.00");
+    expect(totals["SALDO_A_FAVOR"]).toBe("1972.00");
   });
 
   it("V-004: reejecutar produce mismo hash", async () => {
@@ -523,6 +570,96 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: cálculo", () => {
     const totals = result.settlement.totals as Record<string, string>;
     expect(totals["BASE_TOTAL"]).toBe("100000.00");
     expect(totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("2000.00");
+  });
+});
+
+describe("Corte 1E — categoría anual del TEM: mínimo mensual", () => {
+  // Valores del caso testigo: calculadora de referencia (liquidar_tem, categoría B = 10.028).
+  it("categoría B con ventas bajas toma el mínimo de la categoría (10.028)", async () => {
+    await createApprovedSale(600, "COMERCIO", "10000");
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("200.00");
+    expect(totals["MINIMO_APLICADO"]).toBe("10028.00");
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("10028.00");
+  });
+
+  it("con ventas altas rige el calculado y no el mínimo de la categoría", async () => {
+    await createApprovedSale(601, "COMERCIO", "1000000");
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("20000.00");
+    expect(totals["MINIMO_APLICADO"]).toBeUndefined();
+  });
+
+  it("cambiar la categoría cambia el mínimo: A toma 6.210 y Grande 67.298", async () => {
+    await createApprovedSale(602, "COMERCIO", "10000");
+    await setTemCategory("A");
+    const a = await settlements.calculate(ctxOwner, calculateParams());
+    expect((a.settlement.totals as Record<string, string>)["TOTAL_A_INGRESAR"]).toBe("6210.00");
+    await setTemCategory("GRANDE");
+    const grande = await settlements.calculate(ctxOwner, calculateParams());
+    expect((grande.settlement.totals as Record<string, string>)["TOTAL_A_INGRESAR"]).toBe(
+      "67298.00",
+    );
+  });
+
+  it("si el paquete de reglas trae un mínimo propio, gana el de la categoría", async () => {
+    await createApprovedSale(603, "COMERCIO", "10000");
+    await prisma.taxMinimumRule.updateMany({
+      where: { ruleVersionId, concept: "MINIMO" },
+      data: { amount: new Prisma.Decimal("61446") },
+    });
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("10028.00");
+  });
+
+  it("el motor v2 de la Ordenanza 4.536 también toma el mínimo de la categoría", async () => {
+    await createApprovedSale(605, "COMERCIO", "10000");
+    await prisma.taxRuleVersion.update({
+      where: { id: ruleVersionId },
+      data: { engineVersion: "ar-tem-smt-v2.0.0" },
+    });
+    const result = await settlements.calculate(ctxOwner, calculateParams());
+    expect(result.settlement.engineVersion).toBe("ar-tem-smt-v2.0.0");
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["TOTAL_A_INGRESAR"]).toBe("10028.00");
+    await prisma.clientTemCategory.deleteMany({ where: { clientId: CLIENT_TEM } });
+    await expect(settlements.calculate(ctxOwner, calculateParams())).rejects.toMatchObject({
+      code: "TEM_CATEGORY_REQUIRED",
+    });
+  });
+
+  it("sin categoría del año bloquea el cálculo y dice cómo resolverlo", async () => {
+    await createApprovedSale(604, "COMERCIO", "10000");
+    await prisma.clientTemCategory.deleteMany({ where: { clientId: CLIENT_TEM } });
+    const error = await settlements.calculate(ctxOwner, calculateParams()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SettlementError);
+    expect(error).toMatchObject({
+      code: "TEM_CATEGORY_REQUIRED",
+      message: expect.stringContaining("Falta la categoría TEM 2026"),
+    });
+    expect((error as Error).message).toContain("Configuración fiscal");
+    expect(await prisma.taxSettlement.count({ where: { clientId: CLIENT_TEM } })).toBe(0);
+  });
+
+  it("la cobertura del período informa la categoría faltante y deja de hacerlo al elegirla", async () => {
+    await prisma.clientTemCategory.deleteMany({ where: { clientId: CLIENT_TEM } });
+    const sin = await settlements.coverage(ctxOwner, {
+      clientId: CLIENT_TEM,
+      periodId,
+      regimeId,
+    });
+    expect(sin.missing.some((item) => item.startsWith("Falta la categoría TEM 2026"))).toBe(true);
+    expect(sin.status).toBe("WAITING_INPUTS");
+    await setTemCategory("B");
+    const con = await settlements.coverage(ctxOwner, {
+      clientId: CLIENT_TEM,
+      periodId,
+      regimeId,
+    });
+    expect(con.missing.some((item) => item.startsWith("Falta la categoría TEM"))).toBe(false);
   });
 });
 
@@ -585,7 +722,7 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: presentación y pago", () => 
       obligationId,
       settlementId: settlement.id,
       filedAt: "2026-02-05",
-      amountFiled: "3500.00",
+      amountFiled: "10028.00",
       externalId: "TEM-001",
       evidenceDocumentId: await createEvidenceDocument(),
     });
@@ -595,7 +732,7 @@ describe("Fase 4.2 — TEM San Miguel de Tucumán: presentación y pago", () => 
       obligationId,
       settlementId: settlement.id,
       paidAt: "2026-02-10",
-      amount: "3500.00",
+      amount: "10028.00",
       method: "TRANSFERENCIA",
     });
     const ob = await prisma.taxObligation.findUnique({ where: { id: obligationId } });
@@ -666,7 +803,8 @@ describe("Fase 4.2 — TEM con reglas tipadas", () => {
     const typedTotals = typed.settlement.totals as Record<string, string>;
     expect(typedTotals).toMatchObject(legacyTotals);
     expect(typedTotals["IMPUESTO_POR_ACTIVIDAD"]).toBe("3500.00");
-    expect(typedTotals["TOTAL_A_INGRESAR"]).toBe("3500.00");
+    // el mínimo de la categoría B (10.028) rige igual con reglas tipadas y legacy
+    expect(typedTotals["TOTAL_A_INGRESAR"]).toBe("10028.00");
     expect(typed.result.blocks).toHaveLength(0);
   });
 });
@@ -694,7 +832,10 @@ describe("Simulador de liquidación — TEM", () => {
 
     expect(simulated.result.subtotals["BASE_TOTAL"]).toBe(realTotals["BASE_TOTAL"]);
     expect(simulated.result.subtotals["IMPUESTO_POR_ACTIVIDAD"]).toBe(realTotals["IMPUESTO_POR_ACTIVIDAD"]);
-    expect(simulated.result.subtotals["TOTAL_A_INGRESAR"]).toBe(realTotals["TOTAL_A_INGRESAR"]);
+    // El simulador trabaja sobre el paquete de reglas, sin cliente: no conoce la categoría anual.
+    // La liquidación real toma el mínimo de la categoría B (10.028) y el simulador el del paquete (3.000).
+    expect(realTotals["TOTAL_A_INGRESAR"]).toBe("10028.00");
+    expect(simulated.result.subtotals["TOTAL_A_INGRESAR"]).toBe("3500.00");
     expect(simulated.result.lines.length).toBeGreaterThan(0);
     // La versión simulada es la activa: no hay contra qué comparar.
     expect(simulated.comparison).toBeNull();

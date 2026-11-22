@@ -219,7 +219,7 @@ export function CargarDocumento({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => navigate("/expediente-mensual")}
+                onClick={() => navigate("/expediente-mensual?etapa=fuentes")}
               >
                 Ir a Importar en el Legajo
               </Button>

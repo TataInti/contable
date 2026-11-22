@@ -101,19 +101,20 @@ function renderLegajo() {
   );
 }
 
-// «Importar libro» vive en la fila ARCA IVA de Fuentes: se abre esa pestaña y se usa la fila de ventas.
+// La gestión de libros IVA empieza en el cajón de la fuente y continúa en el panel existente.
 async function abrirLibrosIva() {
   fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
   await esperarCoberturaDemo();
-  fireEvent.click((await screen.findAllByRole("button", { name: "Importar libro" }))[0]!);
+  fireEvent.click(await screen.findByRole("button", { name: "Gestionar Ventas del período" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Cargar archivo" }));
   return screen.findByRole("dialog", { name: "Importar libros IVA" });
 }
 
-// La cobertura (fuentes) llega después de la lista de legajos: el botón Importar depende de ella.
+// La cobertura (fuentes) llega después de la lista de legajos: Gestionar depende de ella.
 // vigente: cambia con A29 (la banda «Componentes» ya no existe; se espera el botón que depende de la cobertura)
 async function esperarCoberturaDemo() {
   await waitFor(() =>
-    expect(screen.getAllByRole("button", { name: "Importar libro" }).length).toBeGreaterThan(0),
+    expect(screen.getAllByRole("button", { name: "Gestionar Ventas del período" }).length).toBeGreaterThan(0),
   );
 }
 

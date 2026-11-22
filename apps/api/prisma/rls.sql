@@ -352,6 +352,47 @@ GRANT SELECT, INSERT, UPDATE ON "client_contacts" TO contable_runtime;
 REVOKE DELETE ON "client_contacts" FROM contable_runtime;
 
 -- ------------------------------------------------------------
+-- 9d. Categoría anual del TEM: catálogo de mínimos (lectura para miembros del
+-- estudio) y categoría por cliente y año (tenant + cliente asignado, sin borrado físico).
+-- ------------------------------------------------------------
+ALTER TABLE "tem_category_minimums" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tem_category_minimums" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tem_category_minimums_select ON "tem_category_minimums";
+CREATE POLICY tem_category_minimums_select ON "tem_category_minimums" FOR SELECT
+  USING (app_is_firm_member(current_setting('app.firm_id', true), current_setting('app.user_id', true)));
+
+GRANT SELECT ON "tem_category_minimums" TO contable_runtime;
+
+ALTER TABLE "client_tem_categories" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "client_tem_categories" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS client_tem_categories_select ON "client_tem_categories";
+CREATE POLICY client_tem_categories_select ON "client_tem_categories" FOR SELECT
+  USING (app_can_access_tenant("firmId", "clientId"));
+
+DROP POLICY IF EXISTS client_tem_categories_insert ON "client_tem_categories";
+CREATE POLICY client_tem_categories_insert ON "client_tem_categories" FOR INSERT
+  WITH CHECK (
+    current_setting('app.actor_kind', true) <> 'PORTAL'
+    AND app_can_access_tenant("firmId", "clientId")
+  );
+
+DROP POLICY IF EXISTS client_tem_categories_update ON "client_tem_categories";
+CREATE POLICY client_tem_categories_update ON "client_tem_categories" FOR UPDATE
+  USING (
+    current_setting('app.actor_kind', true) <> 'PORTAL'
+    AND app_can_access_tenant("firmId", "clientId")
+  )
+  WITH CHECK (
+    current_setting('app.actor_kind', true) <> 'PORTAL'
+    AND app_can_access_tenant("firmId", "clientId")
+  );
+
+GRANT SELECT, INSERT, UPDATE ON "client_tem_categories" TO contable_runtime;
+REVOKE DELETE ON "client_tem_categories" FROM contable_runtime;
+
+-- ------------------------------------------------------------
 -- 10. Fase 4 — documents, document_file_versions, document_processing_jobs, upload_sessions
 -- ------------------------------------------------------------
 ALTER TABLE "documents" ENABLE ROW LEVEL SECURITY;
