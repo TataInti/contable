@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api, type ClientSummary } from "../../lib/api";
 import { StudyResumenCliente } from "../StudyResumenCliente";
-import { cambiarValor } from "../../test/elegirOpcion";
+import { abrirListado, cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -241,8 +241,8 @@ describe("Caracterización · Resumen del cliente: índice y secciones (R3 a R5)
 
   it("R4 · el selector de sección tiene 9 opciones y «Catálogos» muestra los tres conteos", async () => {
     montar();
-    const selector = (await screen.findByRole("combobox", { name: "Sección del cliente" })) as HTMLSelectElement;
-    expect(selector.querySelectorAll("option")).toHaveLength(9);
+    const selector = await screen.findByRole("combobox", { name: "Sección del cliente" });
+    expect(abrirListado("Sección del cliente").querySelectorAll('[role="option"]')).toHaveLength(9);
 
     cambiarValor(selector, "catalogs");
     const seccion = await screen.findByRole("region", { name: "Catálogos del cliente" });

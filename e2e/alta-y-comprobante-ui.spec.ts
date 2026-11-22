@@ -240,8 +240,8 @@ async function createRulePack(page: Page, tax: Tax) {
   // La pestaña activa se conserva al pasar de un paquete a otro (queda la última usada).
   await page.getByRole("tab", { name: /^Alícuotas/ }).click();
   await page.getByRole("button", { name: /Agregar regla/ }).click();
-  await pickOption(page.locator('select[aria-label^="Tipo de regla"]').first(), "Alícuota");
-  const activity = page.locator('select[aria-label^="Actividad"]').first();
+  await pickOption(page.locator('input[role="combobox"][aria-label^="Tipo de regla"]').first(), "Alícuota");
+  const activity = page.locator('input[role="combobox"][aria-label^="Actividad"]').first();
   await pickOption(activity, tax.allActivities ? "Todas las actividades" : tax.activity.code);
   await page.locator('input[aria-label^="Alícuota"]').first().fill(tax.rate);
   if (tax.minimum) await page.locator('input[aria-label^="Mínimo"]').first().fill(tax.minimum);
@@ -469,7 +469,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Legajo: crear el legajo de marzo 2025 y recorrer sus etapas", async () => {
     await goTo(page, "Legajo");
     await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
-    await pickOption(page.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await pickOption(page.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await mutating(page, "/monthly-tax-workpapers", () => page.getByRole("button", { name: "Nuevo legajo", exact: true }).click());
     // Libros y archivos de marzo. Del ticket salen fecha, neto, IVA 21 % y número de la única compra; el CUIT
     // del proveedor y la letra A son inventados (el ticket no los trae). Ventas, IIBB y TEM son sintéticos.
@@ -546,7 +546,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await login(reviewer, "revisor@contable.local", "revisor1234");
     await pickOption(reviewer.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), data.client.legalName);
     await goTo(reviewer, "Legajo");
-    await pickOption(reviewer.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await pickOption(reviewer.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await reviewer.getByRole("tab", { name: /Fuentes/ }).first().click();
     const pending = reviewer.getByRole("button", { name: "Revisar", exact: true });
     test.info().annotations.push({ type: "revisor · lotes por revisar", description: String(await pending.count()) });
@@ -561,7 +561,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Legajo: clasificación, cálculo y controles tras la revisión", async () => {
     await goTo(page, "Liquidaciones");
     await goTo(page, "Legajo");
-    await pickOption(page.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await pickOption(page.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await expect(page.getByRole("tab", { name: /Saldos/ })).toBeVisible();
     for (const stage of ["Saldos", "Fuentes", "Clasificación", "Cálculo", "Controles", "Cierre"]) {
       await page.getByRole("tab", { name: new RegExp(stage) }).click();
@@ -647,7 +647,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await login(reviewer, "revisor@contable.local", "revisor1234");
     await pickOption(reviewer.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), data.client.legalName);
     await goTo(reviewer, "Legajo");
-    await pickOption(reviewer.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await pickOption(reviewer.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     const rcard = reviewer.locator(".work-page").first();
     await reviewer.getByRole("tab", { name: /Cierre/ }).click();
     await reviewer.waitForTimeout(1500);
@@ -699,7 +699,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.waitForTimeout(31_000);
     await goTo(page, "Liquidaciones");
     await goTo(page, "Legajo");
-    await pickOption(page.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await pickOption(page.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await page.getByRole("tab", { name: /Cálculo/ }).click();
     const card = page.locator(".work-page").first();
     await card.getByRole("button", { name: "Registrar presentación" }).first().click();

@@ -11,7 +11,7 @@ import {
   mockDemoApi,
   renderDemoReglas,
 } from "./datosDemoReglas";
-import { cambiarValor } from "../../test/elegirOpcion";
+import { abrirListado, cambiarValor, valorElegido } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -55,9 +55,9 @@ describe("Reglas fiscales — control profesional (K8)", () => {
     renderDemoReglas();
 
     fireEvent.click(await screen.findByRole("tab", { name: /^Control profesional/ }));
-    const matricula = (await screen.findByLabelText("Matrícula para aprobar")) as HTMLSelectElement;
-    expect(within(matricula).getByRole("option", { name: "DEMO-MAT-001 · Demo CABA" })).toBeTruthy();
-    expect(matricula.value).toBe("");
+    const matricula = await screen.findByLabelText("Matrícula para aprobar");
+    expect(within(abrirListado("Matrícula para aprobar")).getByRole("option", { name: "DEMO-MAT-001 · Demo CABA" })).toBeTruthy();
+    expect(valorElegido("Matrícula para aprobar")).toBe("");
     const aprobar = screen.getByRole("button", { name: "Aprobar" }) as HTMLButtonElement;
     expect(aprobar.disabled).toBe(true);
     expect(screen.getByText("Seleccioná la matrícula profesional para habilitar la aprobación.")).toBeTruthy();

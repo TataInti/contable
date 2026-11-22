@@ -210,13 +210,13 @@ describe("StudyShell", () => {
     const selector = document.querySelector(".study__client-select") as HTMLSelectElement;
 
     expect(selector.disabled).toBe(true);
-    expect(selector.textContent?.trim()).toBe("Sin clientes asignados");
+    expect(selector.getAttribute("placeholder")).toBe("Sin clientes asignados");
   });
 
   it("con client.manage y sin clientes, el selector del menú usa la misma frase, sin variantes", () => {
     renderShell("/trabajo", null, { clientes: [], capacidades: ["client.manage"] });
     const selector = document.querySelector(".study__client-select") as HTMLSelectElement;
 
-    expect(selector.textContent?.trim()).toBe("Sin clientes asignados");
+    expect(selector.getAttribute("placeholder")).toBe("Sin clientes asignados");
   });
 });

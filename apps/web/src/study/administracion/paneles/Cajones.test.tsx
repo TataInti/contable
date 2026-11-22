@@ -81,9 +81,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
     expect(enviar.disabled).toBe(true);
     expect(within(cajon).getByText("Ingresá nombre y correo para poder crear el usuario.")).toBeTruthy();
     cambiarValor(within(cajon).getByLabelText("Nombre"), "Demo Uno");
-    fireEvent.change(within(cajon).getByLabelText("Correo"), {
-      target: { value: "demo.uno@example.com" },
-    });
+    cambiarValor(within(cajon).getByLabelText("Correo"), "demo.uno@example.com");
     expect(enviar.disabled).toBe(false);
 
     fireEvent.click(enviar);
@@ -118,9 +116,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
     const cajon = await abrirEdicionRevisora();
     expect(within(cajon).getByText("Actualizá el nombre y el correo de la cuenta.")).toBeTruthy();
 
-    fireEvent.change(within(cajon).getByLabelText("Nombre"), {
-      target: { value: "  Revisora Nueva  " },
-    });
+    cambiarValor(within(cajon).getByLabelText("Nombre"), "  Revisora Nueva  ");
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith("/firms/firm-a/users/u2", {
@@ -138,9 +134,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
     const cajon = await screen.findByRole("dialog", { name: "Editar acceso" });
     expect(within(cajon).getByText("Cambiar el rol de Cliente Demo.")).toBeTruthy();
 
-    fireEvent.change(within(cajon).getByLabelText("Rol del portal"), {
-      target: { value: "COLLABORATOR" },
-    });
+    cambiarValor(within(cajon).getByLabelText("Rol del portal"), "COLLABORATOR");
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(
@@ -183,9 +177,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
 
     const enviar = within(cajon).getByRole("button", { name: /Enviar invitación/ }) as HTMLButtonElement;
     expect(enviar.disabled).toBe(true);
-    fireEvent.change(within(cajon).getByLabelText("Correo"), {
-      target: { value: "invitado@example.com" },
-    });
+    cambiarValor(within(cajon).getByLabelText("Correo"), "invitado@example.com");
     expect(enviar.disabled).toBe(false);
     cambiarValor(within(cajon).getByLabelText("Rol"), "READONLY");
     fireEvent.click(enviar);
@@ -210,9 +202,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
 
     const crear = within(cajon).getByRole("button", { name: "Crear norma" }) as HTMLButtonElement;
     expect(crear.disabled).toBe(true);
-    fireEvent.change(within(cajon).getByLabelText("Nombre de la norma"), {
-      target: { value: "Norma Demo Gamma" },
-    });
+    cambiarValor(within(cajon).getByLabelText("Nombre de la norma"), "Norma Demo Gamma");
     expect(crear.disabled).toBe(false);
   });
 
@@ -222,9 +212,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
     fireEvent.click(await screen.findByRole("tab", { name: "Datos del estudio" }));
     fireEvent.click(await screen.findByRole("button", { name: "Editar datos" }));
     const cajon = await screen.findByRole("dialog", { name: "Editar datos del estudio" });
-    fireEvent.change(within(cajon).getByLabelText("Razón social"), {
-      target: { value: "  Estudio Demo Nuevo SRL " },
-    });
+    cambiarValor(within(cajon).getByLabelText("Razón social"), "  Estudio Demo Nuevo SRL ");
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith("/firms/firm-a/profile", {
@@ -255,9 +243,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
     fireEvent.click(await screen.findByRole("tab", { name: /Normas contables/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Nueva norma/ }));
     const cajon = await screen.findByRole("dialog", { name: "Nueva norma contable" });
-    fireEvent.change(within(cajon).getByLabelText("Nombre de la norma"), {
-      target: { value: "  Norma Demo Gamma " },
-    });
+    cambiarValor(within(cajon).getByLabelText("Nombre de la norma"), "  Norma Demo Gamma ");
     fireEvent.click(within(cajon).getByRole("button", { name: "Crear norma" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/firms/firm-a/accounting-standards", {

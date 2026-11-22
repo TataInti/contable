@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExtractedField } from "../lib/api";
 import { ManualExtractionFieldsDialog } from "./ManualExtractionFieldsDialog";
-import { cambiarValor } from "../test/elegirOpcion";
+import { abrirListado, cambiarValor, opcionesDe, valorElegido } from "../test/elegirOpcion";
 
 function renderDialog(fields: ExtractedField[] = [], error: string | null = null) {
   const onSave = vi.fn();
@@ -30,16 +30,16 @@ describe("ManualExtractionFieldsDialog", () => {
   it("abre un diálogo accesible con los 17 campos escalares y CAE al final como opcional", () => {
     renderDialog();
     const dialog = screen.getByRole("dialog", { name: "Cargar datos a mano" });
-    const select = within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }) as HTMLSelectElement;
-    const options = Array.from(select.options).filter((option) => option.value);
+    const select = within(dialog).getByRole("combobox", { name: "Campo de la fila 1" });
+    const options = opcionesDe("Campo de la fila 1", dialog);
 
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(options).toHaveLength(17);
-    expect(options.slice(-2).map((option) => option.textContent)).toEqual([
+    expect(options.slice(-2)).toEqual([
       "CAE (opcional)",
       "Vencimiento del CAE (opcional)",
     ]);
-    expect(options.map((option) => option.textContent)).toEqual([
+    expect(options).toEqual([
       "Tipo de documento",
       "Letra",
       "Punto de venta",
@@ -63,34 +63,23 @@ describe("ManualExtractionFieldsDialog", () => {
 
   it("agrega y quita filas, y evita elegir dos veces el mismo campo", () => {
     renderDialog();
-    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 1" }), {
-      target: { value: "voucherType" },
-    });
+    cambiarValor(screen.getByRole("combobox", { name: "Campo de la fila 1" }), "voucherType");
     fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
-    const secondSelect = screen.getByRole("combobox", { name: "Campo de la fila 2" }) as HTMLSelectElement;
-    const repeated = within(secondSelect).getByRole("option", { name: "Tipo de documento" }) as HTMLOptionElement;
+    const repeated = within(abrirListado("Campo de la fila 2")).getByRole("option", { name: "Tipo de documento" });
 
     expect(screen.getAllByRole("combobox", { name: /Campo de la fila/ })).toHaveLength(2);
-    expect(repeated.disabled).toBe(true);
+    expect(repeated.getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Quitar fila 2" }));
     expect(screen.getAllByRole("combobox", { name: /Campo de la fila/ })).toHaveLength(1);
   });
 
   it("Quitar descarta solo el borrador y envía las filas que quedan", () => {
     const { onSave } = renderDialog();
-    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 1" }), {
-      target: { value: "totalAmount" },
-    });
-    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "1,00" },
-    });
+    cambiarValor(screen.getByRole("combobox", { name: "Campo de la fila 1" }), "totalAmount");
+    cambiarValor(screen.getByRole("textbox", { name: "Valor de la fila 1" }), "1,00");
     fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 2" }), {
-      target: { value: "currency" },
-    });
-    fireEvent.change(screen.getByRole("combobox", { name: "Valor de la fila 2" }), {
-      target: { value: "USD" },
-    });
+    cambiarValor(screen.getByRole("combobox", { name: "Campo de la fila 2" }), "currency");
+    cambiarValor(screen.getByRole("combobox", { name: "Valor de la fila 2" }), "USD");
     fireEvent.click(screen.getByRole("button", { name: "Quitar fila 2" }));
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
 
@@ -111,9 +100,8 @@ describe("ManualExtractionFieldsDialog", () => {
         status: "ACCEPTED",
       },
     ]);
-    const select = screen.getByRole("combobox", { name: "Campo de la fila 1" });
-    const total = within(select).getByRole("option", { name: "Total (ya tiene valor)" }) as HTMLOptionElement;
-    expect(total.disabled).toBe(true);
+    const total = within(abrirListado("Campo de la fila 1")).getByRole("option", { name: "Total (ya tiene valor)" });
+    expect(total.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("deshabilita Guardar y la edición mientras la petición está en curso", () => {
@@ -134,21 +122,13 @@ describe("ManualExtractionFieldsDialog", () => {
 
   it("normaliza importes, recorta espacios y descarta filas incompletas", () => {
     const { onSave } = renderDialog();
-    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 1" }), {
-      target: { value: "totalAmount" },
-    });
-    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "  1.234,56  " },
-    });
+    cambiarValor(screen.getByRole("combobox", { name: "Campo de la fila 1" }), "totalAmount");
+    cambiarValor(screen.getByRole("textbox", { name: "Valor de la fila 1" }), "  1.234,56  ");
     fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 2" }), {
-      target: { value: "currency" },
-    });
+    cambiarValor(screen.getByRole("combobox", { name: "Campo de la fila 2" }), "currency");
     expect(screen.getByRole("combobox", { name: "Valor de la fila 2" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 3" }), {
-      target: { value: "sin campo" },
-    });
+    cambiarValor(screen.getByRole("textbox", { name: "Valor de la fila 3" }), "sin campo");
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
 
     expect(onSave).toHaveBeenCalledWith([{ key: "totalAmount", value: "1234.56" }]);
@@ -156,9 +136,7 @@ describe("ManualExtractionFieldsDialog", () => {
 
   it("muestra el error del importe asociado al campo y bloquea Guardar hasta corregirlo", () => {
     const { onSave } = renderDialog();
-    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 1" }), {
-      target: { value: "totalAmount" },
-    });
+    cambiarValor(screen.getByRole("combobox", { name: "Campo de la fila 1" }), "totalAmount");
     const value = screen.getByRole("textbox", { name: "Valor de la fila 1" }) as HTMLInputElement;
     expect(value.inputMode).toBe("decimal");
     cambiarValor(value, "no es un importe");
@@ -177,15 +155,12 @@ describe("ManualExtractionFieldsDialog", () => {
   it("usa controles de fecha, numéricos y listas del catálogo con etiquetas accesibles", () => {
     const { onSave } = renderDialog();
     const chooseField = (row: number, key: string) => {
-      fireEvent.change(screen.getByRole("combobox", { name: `Campo de la fila ${row}` }), {
-        target: { value: key },
-      });
+      cambiarValor(screen.getByRole("combobox", { name: `Campo de la fila ${row}` }), key);
     };
     const addRow = () => fireEvent.click(screen.getByRole("button", { name: "+ Agregar fila" }));
 
     chooseField(1, "voucherType");
-    const documentType = screen.getByRole("combobox", { name: "Valor de la fila 1" }) as HTMLSelectElement;
-    expect(Array.from(documentType.options).map((option) => option.textContent)).toEqual([
+        expect(Array.from(abrirListado("Valor de la fila 1").querySelectorAll<HTMLElement>('[role="option"]'), (option) => option.textContent)).toEqual([
       "Seleccioná una opción",
       "Factura",
       "Ticket no fiscal",
@@ -197,16 +172,13 @@ describe("ManualExtractionFieldsDialog", () => {
     ]);
     addRow();
     chooseField(2, "letter");
-    expect(Array.from((screen.getByRole("combobox", { name: "Valor de la fila 2" }) as HTMLSelectElement).options)
-      .slice(1).map((option) => option.value)).toEqual(["A", "B", "C", "M", "E", "X"]);
+    expect(Array.from(abrirListado("Valor de la fila 2").querySelectorAll<HTMLElement>('[role="option"]'), (opcion) => opcion.getAttribute("data-value")).slice(1)).toEqual(["A", "B", "C", "M", "E", "X"]);
     addRow();
     chooseField(3, "currency");
-    expect(Array.from((screen.getByRole("combobox", { name: "Valor de la fila 3" }) as HTMLSelectElement).options)
-      .slice(1).map((option) => option.value)).toEqual(["ARS", "USD"]);
+    expect(Array.from(abrirListado("Valor de la fila 3").querySelectorAll<HTMLElement>('[role="option"]'), (opcion) => opcion.getAttribute("data-value")).slice(1)).toEqual(["ARS", "USD"]);
     addRow();
     chooseField(4, "vatCondition");
-    expect(Array.from((screen.getByRole("combobox", { name: "Valor de la fila 4" }) as HTMLSelectElement).options)
-      .slice(1).map((option) => option.value)).toEqual([
+    expect(Array.from(abrirListado("Valor de la fila 4").querySelectorAll<HTMLElement>('[role="option"]'), (opcion) => opcion.getAttribute("data-value")).slice(1)).toEqual([
       "RESPONSABLE_INSCRIPTO",
       "MONOTRIBUTISTA",
       "EXENTO",
@@ -251,16 +223,12 @@ describe("ManualExtractionFieldsDialog", () => {
 
   it("mantiene el error visible y conserva lo escrito", () => {
     renderDialog([], "No se pudo conectar con el servidor");
-    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 1" }), {
-      target: { value: "totalAmount" },
-    });
-    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "valor pendiente" },
-    });
+    cambiarValor(screen.getByRole("combobox", { name: "Campo de la fila 1" }), "totalAmount");
+    cambiarValor(screen.getByRole("textbox", { name: "Valor de la fila 1" }), "valor pendiente");
 
     expect(screen.getByText("No se pudo conectar con el servidor").textContent).toBe("No se pudo conectar con el servidor");
     expect((screen.getByRole("textbox", { name: "Valor de la fila 1" }) as HTMLInputElement).value).toBe("valor pendiente");
-    expect((screen.getByRole("combobox", { name: "Campo de la fila 1" }) as HTMLSelectElement).value).toBe("totalAmount");
+    expect(valorElegido("Campo de la fila 1")).toBe("totalAmount");
   });
 
   it("cierra sin cambios directamente y pide confirmación para descartar cambios", () => {
@@ -278,9 +246,7 @@ describe("ManualExtractionFieldsDialog", () => {
 
   it("al cancelar con cambios permite seguir editando o descartar", () => {
     const { onClose } = renderDialog();
-    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "borrador" },
-    });
+    cambiarValor(screen.getByRole("textbox", { name: "Valor de la fila 1" }), "borrador");
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     const confirmation = screen.getByRole("alertdialog", { name: "¿Descartar los datos cargados?" });
     fireEvent.click(within(confirmation).getByRole("button", { name: "Seguir editando" }));
@@ -294,9 +260,7 @@ describe("ManualExtractionFieldsDialog", () => {
 
   it("Escape y el clic fuera piden confirmación cuando hay cambios", () => {
     const { onClose } = renderDialog();
-    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "borrador" },
-    });
+    cambiarValor(screen.getByRole("textbox", { name: "Valor de la fila 1" }), "borrador");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByRole("alertdialog", { name: "¿Descartar los datos cargados?" })).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
@@ -309,12 +273,8 @@ describe("ManualExtractionFieldsDialog", () => {
 
   it("mantiene el foco dentro del diálogo", () => {
     renderDialog();
-    fireEvent.change(screen.getByRole("combobox", { name: "Campo de la fila 1" }), {
-      target: { value: "totalAmount" },
-    });
-    fireEvent.change(screen.getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "100" },
-    });
+    cambiarValor(screen.getByRole("combobox", { name: "Campo de la fila 1" }), "totalAmount");
+    cambiarValor(screen.getByRole("textbox", { name: "Valor de la fila 1" }), "100");
     const first = screen.getByRole("button", { name: "Cerrar" });
     const save = screen.getByRole("button", { name: "Guardar" });
     first.focus();

@@ -10,7 +10,7 @@ import {
   mockDemoApi,
   renderDemoReglas,
 } from "./datosDemoReglas";
-import { cambiarValor } from "../../test/elegirOpcion";
+import { cambiarValor, opcionesDe, valorElegido } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -111,15 +111,10 @@ describe("Reglas fiscales — frecuencia de vencimientos y precedencia (D-R3-A, 
     renderDemoReglas();
 
     const dialog = await abrirAltaDeVencimiento();
-    const campo = within(dialog).getByLabelText("Frecuencia") as HTMLSelectElement;
-    expect(campo.tagName).toBe("SELECT");
-    expect([...campo.options].map((opcion) => opcion.textContent)).toEqual([
-      "Mensual",
-      "Trimestral",
-      "Anual",
-      "Única",
-    ]);
-    expect(campo.value).toBe("MONTHLY");
+    const campo = within(dialog).getByLabelText("Frecuencia");
+    expect(campo.getAttribute("role")).toBe("combobox");
+    expect(opcionesDe("Frecuencia", dialog)).toEqual(["Mensual", "Trimestral", "Anual", "Única"]);
+    expect(valorElegido("Frecuencia", dialog)).toBe("MONTHLY");
   });
 
   it("al guardar, el alta envía MONTHLY por defecto", async () => {
@@ -164,15 +159,11 @@ describe("Reglas fiscales — frecuencia de vencimientos y precedencia (D-R3-A, 
 
     const dialog = await abrirAltaDeVencimiento();
     cambiarValor(within(dialog).getByLabelText("Día del mes"), "20");
-    fireEvent.change(within(dialog).getByLabelText("Frecuencia"), {
-      target: { value: "QUARTERLY" },
-    });
+    cambiarValor(within(dialog).getByLabelText("Frecuencia"), "QUARTERLY");
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar vencimiento" }));
     expect(await screen.findByText("El vencimiento quedó agregado al borrador.")).toBeTruthy();
 
     const reabierto = await abrirAltaDeVencimiento();
-    expect((within(reabierto).getByLabelText("Frecuencia") as HTMLSelectElement).value).toBe(
-      "MONTHLY",
-    );
+    expect(valorElegido("Frecuencia", reabierto)).toBe("MONTHLY");
   });
 });

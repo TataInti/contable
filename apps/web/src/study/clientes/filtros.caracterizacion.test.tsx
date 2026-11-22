@@ -116,9 +116,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     cambiarValor(screen.getByLabelText("Filtrar por estado"), "ACTIVE");
     expect(filasClave()).toEqual(["c1", "c2", "c4"]);
 
-    fireEvent.change(screen.getByLabelText("Filtrar por condición IVA"), {
-      target: { value: "RESPONSABLE_INSCRIPTO" },
-    });
+    cambiarValor(screen.getByLabelText("Filtrar por condición IVA"), "RESPONSABLE_INSCRIPTO");
     expect(filasClave()).toEqual(["c1", "c4"]);
 
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
@@ -159,9 +157,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
 
     cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "zzz");
     cambiarValor(screen.getByLabelText("Filtrar por estado"), "INACTIVE");
-    fireEvent.change(screen.getByLabelText("Filtrar por condición IVA"), {
-      target: { value: "RESPONSABLE_INSCRIPTO" },
-    });
+    cambiarValor(screen.getByLabelText("Filtrar por condición IVA"), "RESPONSABLE_INSCRIPTO");
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
     await screen.findByText("Ningún cliente coincide");
 
@@ -187,9 +183,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
 
     cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "alfa");
     cambiarValor(screen.getByLabelText("Filtrar por estado"), "INACTIVE");
-    fireEvent.change(screen.getByLabelText("Filtrar por condición IVA"), {
-      target: { value: "RESPONSABLE_INSCRIPTO" },
-    });
+    cambiarValor(screen.getByLabelText("Filtrar por condición IVA"), "RESPONSABLE_INSCRIPTO");
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
     expect(parametrosUrl().toString()).toBe("");
 

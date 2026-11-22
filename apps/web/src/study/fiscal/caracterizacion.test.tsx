@@ -11,7 +11,7 @@ import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { formatearRango } from "../../lib/formatoFechas";
 import { StudyOnboardingFiscal } from "../StudyOnboardingFiscal";
-import { cambiarValor } from "../../test/elegirOpcion";
+import { abrirListado, cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -403,7 +403,7 @@ describe("Caracterización · Configuración fiscal: cajones y utilidades (F12 a
     fireEvent.click(await screen.findByRole("tab", { name: /Períodos y obligaciones/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Crear obligación" }));
     const cajon = await screen.findByRole("dialog", { name: "Crear obligación" });
-    const opciones = Array.from(cajon.querySelectorAll("#obl-regime option"), (opcion) => opcion.textContent);
+    const opciones = Array.from(abrirListado("Régimen adherido", cajon).querySelectorAll('[role="option"]'), (opcion) => opcion.textContent);
     expect(opciones).toEqual(["Elegí…", "Régimen IVA · Argentina"]);
   });
 

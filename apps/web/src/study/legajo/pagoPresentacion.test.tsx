@@ -183,9 +183,7 @@ describe("Legajo · registrar pago (K7)", () => {
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPago();
-    fireEvent.change(within(dialogo).getByLabelText("Referencia (opcional)"), {
-      target: { value: "Transferencia Demo 001" },
-    });
+    cambiarValor(within(dialogo).getByLabelText("Referencia (opcional)"), "Transferencia Demo 001");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar pago" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(
@@ -242,9 +240,7 @@ describe("Legajo · registrar presentación (K7)", () => {
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
     expect(within(dialogo).getByRole("button", { name: "Registrar presentación" })).toBeDisabled();
-    fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
-      target: { value: "doc-a" },
-    });
+    cambiarValor(within(dialogo).getByLabelText("Acuse de presentación"), "doc-a");
     expect(within(dialogo).getByRole("button", { name: "Registrar presentación" })).toBeEnabled();
   });
 
@@ -266,9 +262,7 @@ describe("Legajo · registrar presentación (K7)", () => {
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
-    fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
-      target: { value: "doc-a" },
-    });
+    cambiarValor(within(dialogo).getByLabelText("Acuse de presentación"), "doc-a");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar presentación" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(`${BASE}/tax-obligations/${OBLIGACION}/filings`, {
@@ -285,12 +279,8 @@ describe("Legajo · registrar presentación (K7)", () => {
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
-    fireEvent.change(within(dialogo).getByLabelText("Identificador externo (opcional)"), {
-      target: { value: "ARCA-DEMO-0001" },
-    });
-    fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
-      target: { value: "doc-a" },
-    });
+    cambiarValor(within(dialogo).getByLabelText("Identificador externo (opcional)"), "ARCA-DEMO-0001");
+    cambiarValor(within(dialogo).getByLabelText("Acuse de presentación"), "doc-a");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar presentación" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(
@@ -305,9 +295,7 @@ describe("Legajo · registrar presentación (K7)", () => {
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
-    fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
-      target: { value: "doc-a" },
-    });
+    cambiarValor(within(dialogo).getByLabelText("Acuse de presentación"), "doc-a");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar presentación" }));
     expect(await screen.findByText("Presentación registrada con su acuse.")).toBeInTheDocument();
   });
@@ -320,9 +308,7 @@ describe("Legajo · registrar presentación (K7)", () => {
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPresentacion();
-    fireEvent.change(within(dialogo).getByLabelText("Acuse de presentación"), {
-      target: { value: "doc-a" },
-    });
+    cambiarValor(within(dialogo).getByLabelText("Acuse de presentación"), "doc-a");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar presentación" }));
     expect(await within(dialogo).findByRole("alert")).toHaveTextContent(
       "La liquidación cambió. Actualizá el legajo.",

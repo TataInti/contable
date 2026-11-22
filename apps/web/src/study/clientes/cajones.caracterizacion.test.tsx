@@ -13,7 +13,7 @@ import {
   rutaActual,
   seleccionarCliente,
 } from "./clientes.testutil";
-import { cambiarValor } from "../../test/elegirOpcion";
+import { abrirListado, cambiarValor, valorElegido } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -96,12 +96,8 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
     const cajon = await screen.findByRole("dialog", { name: "Nuevo cliente" }); // vigente: cambia con decisión de Inti (16-nov)
 
-    fireEvent.change(cajon.querySelector("#client-legal-name") as HTMLInputElement, {
-      target: { value: "Sintético Nuevo S.A." },
-    });
-    fireEvent.change(cajon.querySelector("#client-cuit") as HTMLInputElement, {
-      target: { value: "20000000112" },
-    });
+    cambiarValor(cajon.querySelector("#client-legal-name") as HTMLInputElement, "Sintético Nuevo S.A.");
+    cambiarValor(cajon.querySelector("#client-cuit") as HTMLInputElement, "20000000112");
     expect(cajon.querySelector(".action-drawer__hint")).toBeNull();
 
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
@@ -127,15 +123,9 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo cliente" }));
     const cajon = await screen.findByRole("dialog", { name: "Nuevo cliente" }); // vigente: cambia con decisión de Inti (16-nov)
 
-    fireEvent.change(cajon.querySelector("#client-legal-name") as HTMLInputElement, {
-      target: { value: "Sintético Nuevo S.A." },
-    });
-    fireEvent.change(cajon.querySelector("#client-cuit") as HTMLInputElement, {
-      target: { value: "20000000112" },
-    });
-    fireEvent.change(cajon.querySelector("#client-create-contact-email") as HTMLInputElement, {
-      target: { value: "contacto@example.com" },
-    });
+    cambiarValor(cajon.querySelector("#client-legal-name") as HTMLInputElement, "Sintético Nuevo S.A.");
+    cambiarValor(cajon.querySelector("#client-cuit") as HTMLInputElement, "20000000112");
+    cambiarValor(cajon.querySelector("#client-create-contact-email") as HTMLInputElement, "contacto@example.com");
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
 
     await waitFor(() =>
@@ -156,15 +146,20 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
     fireEvent.click(within(detalle).getByText("Más acciones"));
     fireEvent.click(within(detalle).getByRole("button", { name: "Cambiar estado" }));
     const cajon = await screen.findByRole("dialog", { name: "Cambiar estado" });
-    const estado = within(cajon).getByLabelText("Estado") as HTMLSelectElement;
+    const estado = within(cajon).getByLabelText("Estado");
 
-    expect(Array.from(estado.options).map((opcion) => [opcion.value, opcion.textContent])).toEqual([
+    expect(
+      within(abrirListado("Estado", cajon))
+        .getAllByRole("option")
+        .filter((opcion) => opcion.getAttribute("data-value") !== "")
+        .map((opcion) => [opcion.getAttribute("data-value"), opcion.textContent]),
+    ).toEqual([
       ["ONBOARDING", "En configuración"],
       ["ACTIVE", "Activo"],
       ["INACTIVE", "Inactivo"],
       ["ARCHIVED", "Archivado"],
     ]);
-    expect(estado.value).toBe("ACTIVE");
+    expect(valorElegido("Estado", cajon)).toBe("ACTIVE");
 
     cambiarValor(estado, "ARCHIVED");
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar estado" }));
@@ -188,16 +183,10 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
     const guardar = within(cajon).getByRole("button", { name: "Guardar contacto" }) as HTMLButtonElement;
     expect(guardar.disabled).toBe(true);
 
-    fireEvent.change(cajon.querySelector("#client-contact-name") as HTMLInputElement, {
-      target: { value: "Sintético Persona" },
-    });
+    cambiarValor(cajon.querySelector("#client-contact-name") as HTMLInputElement, "Sintético Persona");
     expect(guardar.disabled).toBe(false);
-    fireEvent.change(cajon.querySelector("#client-contact-function") as HTMLInputElement, {
-      target: { value: "   " },
-    });
-    fireEvent.change(cajon.querySelector("#client-contact-phone") as HTMLInputElement, {
-      target: { value: "+54 11 0000-0000" },
-    });
+    cambiarValor(cajon.querySelector("#client-contact-function") as HTMLInputElement, "   ");
+    cambiarValor(cajon.querySelector("#client-contact-phone") as HTMLInputElement, "+54 11 0000-0000");
     fireEvent.click(within(cajon).getByLabelText("Contacto principal"));
     fireEvent.click(guardar);
 

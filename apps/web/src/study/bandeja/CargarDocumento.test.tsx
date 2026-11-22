@@ -365,10 +365,11 @@ describe("Caracterización K5 · cajón de carga: pedidos, error, vacío y botó
   it("ofrece en «Corresponde a» solo los ítems pendientes, como «pedido · ítem»", async () => {
     await abrirCajonConPedidos();
     const select = selectorItem()!;
-    const opciones = Array.from(select.options).map((option) => option.textContent);
+    fireEvent.focus(select);
+    const opciones = Array.from(select.parentElement!.querySelectorAll<HTMLElement>('[role="option"]'), (option) => option.textContent);
     // vigente: cambia con I7B-5
     expect(opciones).toEqual(["Elegí el ítem solicitado", "Marzo 2026 · Factura de compra"]);
-    expect(select.required).toBe(true);
+    expect(select.getAttribute("aria-required")).toBe("true");
   });
 
   it("con error de pedidos muestra «No se pudieron cargar los pedidos» y Reintentar vuelve a pedirlos", async () => {

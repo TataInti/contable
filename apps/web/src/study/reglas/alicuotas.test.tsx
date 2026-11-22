@@ -121,9 +121,7 @@ describe("Reglas fiscales — editor de alícuotas (K6)", () => {
     );
     renderDemoReglas();
 
-    fireEvent.change(await screen.findByLabelText("Tipo de regla de la fila 1"), {
-      target: { value: "kind-activity" },
-    });
+    cambiarValor(await screen.findByLabelText("Tipo de regla de la fila 1"), "kind-activity");
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
 
     await waitFor(() =>

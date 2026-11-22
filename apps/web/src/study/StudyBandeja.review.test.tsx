@@ -326,9 +326,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     const confirm = within(dialog).getByRole("button", { name: "Confirmar rechazo" }) as HTMLButtonElement;
 
     expect(confirm.disabled).toBe(true);
-    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
-      target: { value: "ILLEGIBLE" },
-    });
+    cambiarValor(within(dialog).getByLabelText("Motivo del rechazo"), "ILLEGIBLE");
     expect(confirm.disabled).toBe(false);
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
@@ -364,12 +362,8 @@ describe("StudyBandeja — revisión de extracción", () => {
     await openExtraction();
     fireEvent.click(screen.getByRole("button", { name: "Rechazar" }));
     const dialog = await screen.findByRole("dialog", { name: "¿Rechazar este documento?" });
-    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
-      target: { value: "ILLEGIBLE" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Detalle (opcional)"), {
-      target: { value: "El número no se distingue" },
-    });
+    cambiarValor(within(dialog).getByLabelText("Motivo del rechazo"), "ILLEGIBLE");
+    cambiarValor(within(dialog).getByLabelText("Detalle (opcional)"), "El número no se distingue");
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar rechazo" }));
 
     await waitFor(() =>
@@ -392,9 +386,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     await openExtraction();
     fireEvent.click(screen.getByRole("button", { name: "Rechazar" }));
     const dialog = await screen.findByRole("dialog", { name: "¿Rechazar este documento?" });
-    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
-      target: { value: "OTHER" },
-    });
+    cambiarValor(within(dialog).getByLabelText("Motivo del rechazo"), "OTHER");
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar rechazo" }));
 
     const alert = await within(dialog).findByRole("alert");
@@ -501,12 +493,8 @@ describe("StudyBandeja — revisión de extracción", () => {
     expect(loadButtons).toHaveLength(2);
     fireEvent.click(loadButtons[0]!);
     const dialog = screen.getByRole("dialog", { name: "Cargar datos a mano" });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }), {
-      target: { value: "totalAmount" },
-    });
-    fireEvent.change(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "  1.234,56  " },
-    });
+    cambiarValor(within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }), "totalAmount");
+    cambiarValor(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), "  1.234,56  ");
     const extractionReadsBeforeSave = vi.mocked(api.get).mock.calls.filter(([path]) =>
       path.endsWith("/documents/document-a/extraction"),
     ).length;
@@ -540,12 +528,8 @@ describe("StudyBandeja — revisión de extracción", () => {
     await openExtraction();
     fireEvent.click(screen.getAllByRole("button", { name: "Cargar datos a mano" })[0]!);
     const dialog = screen.getByRole("dialog", { name: "Cargar datos a mano" });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }), {
-      target: { value: "totalAmount" },
-    });
-    fireEvent.change(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), {
-      target: { value: "123.00" },
-    });
+    cambiarValor(within(dialog).getByRole("combobox", { name: "Campo de la fila 1" }), "totalAmount");
+    cambiarValor(within(dialog).getByRole("textbox", { name: "Valor de la fila 1" }), "123.00");
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar" }));
 
     expect(await within(dialog).findByRole("alert")).toBeTruthy();

@@ -78,9 +78,7 @@ describe("Usuarios internos: tabla (caracterización K2)", () => {
     expect(screen.queryByText("Auditor Demo")).toBeNull();
 
     cambiarValor(screen.getByLabelText("Filtrar por rol"), "");
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), {
-      target: { value: "SUSPENDED" },
-    });
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "SUSPENDED");
     expect(screen.getByText("Auditor Demo")).toBeTruthy();
     expect(screen.queryByText("Revisora Demo")).toBeNull();
   });

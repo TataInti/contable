@@ -129,9 +129,9 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
 
     // Alícuota general del IVA para la actividad sintética.
     await page.getByRole("button", { name: /Agregar regla/ }).click();
-    const kind = page.locator('select[aria-label^="Tipo de regla"]').first();
+    const kind = page.locator('input[role="combobox"][aria-label^="Tipo de regla"]').first();
     await pickOption(kind, "Alícuota");
-    const activity = page.locator('select[aria-label^="Actividad"]').first();
+    const activity = page.locator('input[role="combobox"][aria-label^="Actividad"]').first();
     await pickOption(activity, data.activity.code);
     await page.locator('input[aria-label^="Alícuota"]').first().fill(data.rate);
     await page.getByRole("button", { name: "Guardar borrador" }).click();

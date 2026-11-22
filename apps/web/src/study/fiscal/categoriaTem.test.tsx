@@ -10,7 +10,7 @@ import { StudyOnboardingFiscal } from "../StudyOnboardingFiscal";
 import { PestanaRegimenes } from "./pestanas/PestanaRegimenes";
 import { CajonCategoriaTem } from "./cajones/CajonCategoriaTem";
 import { importeEnPesos, type CategoriaTemEstado, type FilaCategoriaTem } from "./categoriaTem";
-import { cambiarValor } from "../../test/elegirOpcion";
+import { abrirListado, cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -167,14 +167,13 @@ describe("Cajón de la categoría TEM", () => {
   it("lista las categorías con su mínimo y explica el mínimo de la elegida", () => {
     montar();
     const dialogo = screen.getByRole("dialog", { name: `Categoría TEM ${ANIO}` });
-    const select = within(dialogo).getByLabelText(`Categoría ${ANIO}`);
-    expect([...select.querySelectorAll("option")].map((option) => option.textContent)).toEqual([
+    expect([...abrirListado(`Categoría ${ANIO}`, dialogo).querySelectorAll('[role="option"]')].map((option) => option.textContent)).toEqual([
       "Elegí una categoría…",
       "A — mínimo mensual $ 6.210",
       "B — mínimo mensual $ 10.028",
       "Grande — mínimo mensual $ 67.298",
     ]);
-    cambiarValor(select, "B");
+    cambiarValor(within(dialogo).getByLabelText(`Categoría ${ANIO}`), "B");
     expect(screen.getByText("Categoría anual según la DIM. Define el mínimo mensual: $ 10.028 en B.")).toBeTruthy();
   });
 

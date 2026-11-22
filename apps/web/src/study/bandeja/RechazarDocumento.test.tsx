@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { StudyBandeja } from "../StudyBandeja";
-import { cambiarValor } from "../../test/elegirOpcion";
+import { abrirListado, cambiarValor, valorElegido } from "../../test/elegirOpcion";
 
 // Caracterización del cajón «¿Rechazar este documento?» (Foco 7b.1, prueba K12).
 // Fija lo que hace hoy la pantalla antes y después de mover el rechazo a su archivo.
@@ -161,9 +161,9 @@ afterEach(() => {
 describe("Caracterización K12 · rechazo: motivo, cancelar, motivo compuesto y error", () => {
   it("ofrece los cinco motivos después de «Elegí un motivo» y no confirma hasta elegir uno", async () => {
     const dialog = await abrirRechazo();
-    const opciones = within(dialog)
+    const opciones = within(abrirListado("Motivo del rechazo", dialog))
       .getAllByRole("option")
-      .map((option) => [option.getAttribute("value"), option.textContent]);
+      .map((option) => [option.getAttribute("data-value"), option.textContent]);
     expect(opciones).toEqual([
       ["", "Elegí un motivo"],
       ["ILLEGIBLE", "Ilegible"],
@@ -225,7 +225,7 @@ describe("Caracterización K12 · rechazo: motivo, cancelar, motivo compuesto y 
     expect((await within(dialog).findByRole("alert")).textContent).toBe(
       "No se pudo rechazar el documento. Volvé a intentarlo.",
     );
-    expect(motivo(dialog).value).toBe("OTHER");
+    expect(valorElegido("Motivo del rechazo", dialog)).toBe("OTHER");
     expect(detalle(dialog).value).toBe("Revisar con el cliente");
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
