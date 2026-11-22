@@ -10,6 +10,7 @@ import {
 import { prisma } from "../lib/prisma.js";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { apiReviewIssues, extractionForApi } from "./extraction-contract.js";
+import { assertCuitResueltoEnAprobacion } from "./cuit-control-service.js";
 
 type ExtractionTransactionRunner = <T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
@@ -326,6 +327,8 @@ export class ExtractionService {
       if (!REVIEWABLE_EXTRACTION_STATUSES.includes(extraction.status)) {
         throw new ExtractionError("El estado de la extracción cambió durante la operación");
       }
+      // Control de CUIT (4A-2): un comprobante de otro CUIT no se aprueba sin resolverlo.
+      await assertCuitResueltoEnAprobacion(tx, firmId, clientId, extraction.documentId, extraction);
       const existingSnapshot = await tx.extractionApprovedSnapshot.findUnique({ where: { extractionId } });
       if (existingSnapshot) {
         throw new ExtractionError("El estado de la extracción cambió durante la operación");

@@ -131,6 +131,15 @@ const extractionContext = {
   actorKind: "USER" as const,
 };
 
+/** CUIT del cliente sembrado de la fixture: el comprobante sintético lo usa como emisor (control de CUIT, 4A-2). */
+async function cuitDelClienteDeLaFixture(tx: Prisma.TransactionClient): Promise<string> {
+  const cliente = await tx.client.findUniqueOrThrow({
+    where: { id: EXTRACTION_TEST_CLIENT },
+    select: { cuit: true },
+  });
+  return cliente.cuit;
+}
+
 async function createExtractionFixture(status: ExtractionFixtureStatus): Promise<ExtractionFixture> {
   const fixture = await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
     const document = await tx.document.create({
@@ -157,6 +166,7 @@ async function createExtractionFixture(status: ExtractionFixtureStatus): Promise
         antivirusStatus: "CLEAN",
       },
     });
+    const cuitCliente = await cuitDelClienteDeLaFixture(tx);
     const extraction = await tx.documentExtraction.create({
       data: {
         firmId: FIRM_ALFA,
@@ -165,6 +175,8 @@ async function createExtractionFixture(status: ExtractionFixtureStatus): Promise
         fileVersionId: fileVersion.id,
         schemaVersion: "voucher-ar-v1",
         status,
+        // CUIT del cliente como emisor: el control de CUIT de la Bandeja (4A-2) no frena la aprobación.
+        voucherData: { cuit_emisor: cuitCliente } as Prisma.InputJsonValue,
         ...(status === "REVIEWED" || status === "FAILED"
           ? { reviewedByUserId: OWNER_A, reviewedAt: new Date("2026-01-01T00:00:00.000Z") }
           : {}),
@@ -440,6 +452,7 @@ describe("foto fija de aprobación", () => {
             { reason: "percepción no reconocida", sourcePath: "percepciones[0].categoria" },
           ] as Prisma.InputJsonValue,
           voucherData: {
+            cuit_emisor: await cuitDelClienteDeLaFixture(tx),
             iva: [
               { alicuota: "21.00", importe: "21.00" },
               { alicuota: "10.50", importe: "7.00" },
@@ -1256,6 +1269,7 @@ describe("compare-and-set de aprobación", () => {
             clientId: EXTRACTION_TEST_CLIENT,
             documentId: "document-test",
             status: extractionStatus,
+            voucherData: { cuit_emisor: "20111111112" },
           };
           // Simula que un rechazo concurrente confirma antes del UPDATE de aprobación.
           extractionStatus = "FAILED";
@@ -1266,7 +1280,8 @@ describe("compare-and-set de aprobación", () => {
         updateMany,
       },
       extractionApprovedSnapshot: { findUnique: async () => null },
-      document: { update: documentUpdate },
+      client: { findFirst: async () => ({ legalName: "Cliente de prueba", cuit: "20111111112" }) },
+      document: { findFirst: async () => ({ cuitAcceptedExtractionId: null }), update: documentUpdate },
       auditEvent: { create: approvalAudit },
     } as unknown as Prisma.TransactionClient;
     const racedService = new ExtractionService(async (fn) => fn(fakeTx));
