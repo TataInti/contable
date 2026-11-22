@@ -708,6 +708,22 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
     }
   });
 
+  // Corrige la fecha «Desde» de una actividad vinculada (brief 4H).
+  app.patch(
+    "/api/v1/firms/:firmId/clients/:clientId/activities/:clientActivityId",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { clientActivityId } = req.params as { clientActivityId: string };
+      try {
+        const body = z.object({ validFrom: z.string().date() }).strict().parse(req.body);
+        const data = await profiles.updateClientActivity(ctx, { clientActivityId, validFrom: body.validFrom });
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
+
   app.post(
     "/api/v1/firms/:firmId/clients/:clientId/activities/:clientActivityId/end",
     async (req, reply) => {
