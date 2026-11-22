@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { SUFFIX, goTo, login, markGuidedTourSeen, mutating, syntheticCuit, RUN } from "./helpers/ui";
+import { SUFFIX, goTo, login, mutating, syntheticCuit, RUN } from "./helpers/ui";
 
 /**
  * Monotributista categoría A servicios, operado como lo opera el contador (cliente nuevo y sintético).
@@ -35,7 +35,7 @@ async function pick(campo: Locator, texto: string) {
     .filter({ hasText: new RegExp(`^${texto}\\b`) })
     .first();
   await expect(opcion, `opción que empieza por «${texto}»`).toBeVisible({ timeout: 10_000 });
-  await opcion.evaluate((elemento: HTMLElement) => elemento.click());
+  await opcion.click();
 }
 
 const importe = (texto: string) => new RegExp(texto.replace(/\./g, "\\.").replace(/,/g, ","));
@@ -43,7 +43,6 @@ const importe = (texto: string) => new RegExp(texto.replace(/\./g, "\\.").replac
 test("monotributo: categoría A servicios, cuota en el Legajo y pago registrado, desde la interfaz", async ({ page }) => {
   test.setTimeout(300_000);
   page.setDefaultTimeout(15_000);
-  await markGuidedTourSeen(page);
 
   await test.step("Ingresar como Titular", () => login(page));
 

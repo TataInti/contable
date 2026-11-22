@@ -1,9 +1,9 @@
 import { Buffer } from "node:buffer";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { RUN, SUFFIX, goTo, login, markGuidedTourSeen, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
+import { RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
 import { lineaPercepcionDgr, libroVentasXlsx, nombrePercepcionDgr } from "./helpers/fuentes-sinteticas";
 
-/** Elige una opción de desplegable (<select> o buscador con lista). En el buscador el clic va directo a la opción: la lista se vuelve a dibujar mientras se escribe y el clic con comprobaciones de estabilidad no llegaba. */
+/** Elige una opción de desplegable (<select> o buscador con lista). En el buscador se tipea con teclas reales y se hace clic en la opción que aparece filtrada. */
 async function pick(campo: Locator, texto: string) {
   if ((await campo.evaluate((elemento) => elemento.tagName)) === "SELECT") return pickOption(campo, texto);
   // Tipeo con teclas reales: un fill() recién abierto el cajón perdía la primera letra («estaurante») y no hallaba la opción.
@@ -13,7 +13,7 @@ async function pick(campo: Locator, texto: string) {
   const listboxId = await campo.getAttribute("aria-controls");
   const opcion = campo.page().locator(`#${listboxId}`).getByRole("option").filter({ hasText: texto }).first();
   await expect(opcion, `opción que contiene «${texto}»`).toBeVisible({ timeout: 10_000 });
-  await opcion.evaluate((elemento: HTMLElement) => elemento.click());
+  await opcion.click();
 }
 
 /**
@@ -120,7 +120,6 @@ async function esperarImporte(page: Page, texto: string) {
 test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la interfaz", async ({ page }) => {
   test.setTimeout(900_000);
   page.setDefaultTimeout(15_000);
-  await markGuidedTourSeen(page);
 
   const errores: string[] = [];
   page.on("response", (response) => {

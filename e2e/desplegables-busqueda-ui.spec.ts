@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { goTo, login, markGuidedTourSeen } from "./helpers/ui";
+import { goTo, login } from "./helpers/ui";
 
 /**
  * Desplegables con búsqueda en tres pantallas del estudio, operados como el contador: escribe en el campo,
@@ -23,15 +23,13 @@ async function buscarYElegir(campo: Locator, escrito: string, opcion: string) {
     textos.some((texto) => texto.toLowerCase().includes(escrito.toLowerCase())),
     `alguna opción contiene «${escrito}» (se ven: ${textos.join(" | ")})`,
   ).toBe(true);
-  // Clic directo sobre la opción: la lista se vuelve a dibujar al filtrar y el clic con estabilidad no llegaba.
-  await opciones.filter({ hasText: opcion }).first().evaluate((elemento: HTMLElement) => elemento.click());
+  await opciones.filter({ hasText: opcion }).first().click();
   await expect(campo).toHaveValue(new RegExp(opcion));
 }
 
 test("desplegables con búsqueda en alta de cliente, configuración fiscal y reglas", async ({ page }) => {
   test.setTimeout(240_000);
   page.setDefaultTimeout(15_000);
-  await markGuidedTourSeen(page);
 
   await test.step("Ingresar como Titular", () => login(page));
 
