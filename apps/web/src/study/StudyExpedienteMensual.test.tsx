@@ -55,7 +55,8 @@ function workpaper(status: string, controls: unknown[] = []) {
     periodEnd: "2026-10-31",
     revision: 1,
     status,
-    inputHash: null,
+    // Un mes calculado tiene huella de entradas (el cálculo la genera); sin ella el cálculo figura desactualizado.
+    inputHash: status === "CALCULATED" ? "hash-demo" : null,
     outputHash: null,
     settlements: [],
     controls,
