@@ -33,6 +33,8 @@ describe("parser XLSX libro IVA digital", () => {
     expect(first.input.cuit).toBe("30658650242");
     expect(first.input.issuedOn).toBe("2026-06-04");
     expect(first.input.direction).toBe("SALE");
+    // El código ARCA del renglón viaja con la fila: de ahí sale la clase de las notas (A, B, C o E).
+    expect(first.input.typeCode).toBe("1");
   });
 
   it("parsea la hoja de Compras y captura el rubro del proveedor", () => {

@@ -81,7 +81,7 @@ function codigoArca(value: unknown): number | null {
   return digitos === undefined ? null : Number(digitos);
 }
 
-/** Código ARCA del renglón original (columna «Tipo» o «Tipo de comprobante») si la importación lo guardó. */
+/** Código ARCA del renglón original (columna «Tipo» o «Tipo de Comprobante») si la importación lo guardó. */
 function codigoDesdeRenglon(raw: unknown): number | null {
   if (!raw || typeof raw !== "object") return null;
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
@@ -91,7 +91,8 @@ function codigoDesdeRenglon(raw: unknown): number | null {
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
-    if (encabezado === "tipo" || encabezado === "tipo de comprobante") {
+    // «typeCode» es el campo que deja el importador de libros IVA (.xlsx) con el código del renglón.
+    if (encabezado === "tipo" || encabezado === "tipo de comprobante" || encabezado === "typecode") {
       const code = codigoArca(value);
       if (code !== null) return code;
     }

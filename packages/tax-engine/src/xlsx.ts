@@ -546,6 +546,7 @@ export function parseSifereWorkbook(
     const input: ArcaVoucherInput = {
       direction,
       letter,
+      typeCode: typeRaw,
       pointOfSale: posRaw,
       numberFrom: numRaw,
       cuit,

@@ -122,6 +122,9 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     const motivos = panel.getByRole("textbox", { name: /^Motivo / });
     await expect(motivos, "grupos de perfil abiertos").toHaveCount(2, { timeout: 20_000 });
     await expect(panel.getByText("Facturas C: 2 comprobantes")).toBeVisible();
+    // La nota de crédito C (código 13) va a su grupo de notas C, no a «Tipo no reconocido».
+    await expect(panel.getByText("Notas de crédito y débito C: 1 comprobante")).toBeVisible();
+    await expect(panel.getByText("Tipo no reconocido")).toHaveCount(0);
 
     const controlAbierto = () =>
       panel.locator(".workpaper-control").filter({ has: page.getByRole("textbox", { name: /^Motivo / }) }).first();
