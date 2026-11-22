@@ -8,11 +8,11 @@ import { PREFIJO_CONTROL_PERFIL, propuestaPerfil } from "./voucher-profile.js";
 
 /**
  * Corte 4B: tipos de comprobante permitidos por cliente y grupos «no corresponde al perfil».
- * Datos sembrados (seed:piloto): cliente monotributista con expediente de octubre 2026 en READY_TO_CALCULATE.
- * Los comprobantes de la prueba son inventados, se marcan con RUN y se borran al terminar.
+ * La prueba crea sus propios datos en beforeAll: estudio, usuario Titular, cliente sintético con perfil
+ * (condición Responsable Inscripto) y expediente de octubre 2026 en READY_TO_CALCULATE. No depende del seed
+ * ni del orden en que corren las demás pruebas. Los comprobantes son inventados, se marcan con RUN y se borran al terminar.
  */
 
-// Los IDs los descubre beforeAll: el seed no deja los mismos en cada base (local y CI).
 let FIRM = "";
 let CLIENT = "";
 let WORKPAPER = "";
@@ -105,19 +105,52 @@ async function materializar(sourceHash: string) {
 }
 
 beforeAll(async () => {
-  const expediente = await prisma.monthlyTaxWorkpaper.findFirst({
-    where: { status: "READY_TO_CALCULATE" },
-    orderBy: { periodStart: "desc" },
+  USER = randomUUID();
+  FIRM = randomUUID();
+  CLIENT = randomUUID();
+  YEAR = 2026;
+  await prisma.$executeRaw`
+    INSERT INTO users ("id", "emailNormalized", name, "passwordHash", "updatedAt")
+    VALUES (${USER}, ${`titular.4b.${RUN}@test.local`}, 'Titular 4B', 'x', now())
+  `;
+  await prisma.$executeRaw`
+    INSERT INTO firms ("id", "legalName", "displayName", "updatedAt")
+    VALUES (${FIRM}, ${`Estudio 4B ${RUN}`}, 'Estudio 4B', now())
+  `;
+  await prisma.$executeRaw`
+    INSERT INTO clients ("id", "firmId", "legalName", cuit, "updatedAt")
+    VALUES (${CLIENT}, ${FIRM}, 'Cliente 4B', ${CUIT_CLIENTE_SINTETICO}, now())
+  `;
+  await prisma.$executeRaw`
+    INSERT INTO firm_memberships ("id", "firmId", "userId", role, status, "acceptedAt")
+    VALUES (gen_random_uuid()::text, ${FIRM}, ${USER}, 'OWNER', 'ACTIVE', now())
+  `;
+  await prisma.taxpayerProfileVersion.create({
+    data: {
+      firmId: FIRM,
+      clientId: CLIENT,
+      version: 1,
+      legalName: "Cliente 4B",
+      cuit: CUIT_CLIENTE_SINTETICO,
+      personType: "JURIDICA",
+      nationalCondition: "RESPONSABLE_INSCRIPTO",
+      validFrom: new Date("2026-01-01T00:00:00.000Z"),
+      status: "ACTIVE",
+      createdByUserId: USER,
+    },
   });
-  const usuario = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!expediente || !usuario) throw new Error("El seed no trae un expediente mutable ni un usuario para la prueba");
-  FIRM = expediente.firmId;
-  CLIENT = expediente.clientId;
+  const expediente = await prisma.monthlyTaxWorkpaper.create({
+    data: {
+      firmId: FIRM,
+      clientId: CLIENT,
+      periodStart: new Date("2026-10-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-10-31T00:00:00.000Z"),
+      revision: 1,
+      status: "READY_TO_CALCULATE",
+    },
+  });
   WORKPAPER = expediente.id;
-  USER = usuario.id;
-  YEAR = expediente.periodStart.getUTCFullYear();
   Object.assign(CTX, { userId: USER, firmId: FIRM, clientId: CLIENT });
-  await prisma.clientVoucherPermission.deleteMany({ where: { clientId: CLIENT, year: YEAR } });
 });
 
 afterAll(async () => {
