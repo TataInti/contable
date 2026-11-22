@@ -94,9 +94,12 @@ export function ingestionRoutes(app: FastifyInstance) {
   app.post("/api/v1/firms/:firmId/clients/:clientId/import-batches/:batchId/commit", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);
     const { batchId } = req.params as { batchId: string };
-    const body = z.object({ clientCuit: z.string().regex(/^\d{11}$/) }).strict().parse(req.body ?? {});
+    const body = z.object({
+      clientCuit: z.string().regex(/^\d{11}$/),
+      replacesBatchId: z.string().uuid().optional(),
+    }).strict().parse(req.body ?? {});
     try {
-      const data = await ingestion.commitBatch(ctx, batchId, body.clientCuit);
+      const data = await ingestion.commitBatch(ctx, batchId, body.clientCuit, body.replacesBatchId);
       return reply.send({ data });
     } catch (err) {
       return handleError(reply, err);
@@ -193,6 +196,7 @@ export function ingestionRoutes(app: FastifyInstance) {
         periodId: z.string().uuid(),
         clientCuit: z.string().regex(/^\d{11}$/),
         workpaperId: z.string().uuid().optional(),
+        replacesBatchId: z.string().uuid().optional(),
       })
       .strict()
       .parse(req.body);
@@ -216,6 +220,7 @@ export function ingestionRoutes(app: FastifyInstance) {
         taxTypeId: body.taxTypeId,
         periodId: body.periodId,
         ...(body.workpaperId ? { workpaperId: body.workpaperId } : {}),
+        ...(body.replacesBatchId ? { replacesBatchId: body.replacesBatchId } : {}),
       });
       return reply.code(201).send({ data });
     } catch (err) {

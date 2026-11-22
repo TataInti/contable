@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ActionDrawer, Button } from "@contable/design-system";
+import { api } from "../../../lib/api";
 import { useClientContext } from "../../../context/ClientContext";
 import { WorkpaperSourceReviewAction } from "../../WorkpaperSourceReviewAction";
 import { formatearFechaHora } from "../../../lib/formatoFechas";
@@ -17,10 +19,11 @@ const NOMBRES_TIPO_DGR = {
   RECAUDACION: "recaudaciones bancarias",
 } as const;
 
-type Vista = "archivos" | "errores" | "cargar" | "historial" | "ayuda";
+type Vista = "archivos" | "errores" | "cargar" | "historial" | "ayuda" | "retirar";
 
 export function PanelGestionarFuente({
   source,
+  workpaperId,
   isOpen,
   onClose,
   onAbrirLibroIva,
@@ -38,12 +41,13 @@ export function PanelGestionarFuente({
   onCambiarFuente,
 }: {
   source: WorkpaperSource | null;
+  workpaperId: string | null;
   isOpen: boolean;
   onClose: () => void;
-  onAbrirLibroIva: (lado: "SALE" | "PURCHASE") => void;
+  onAbrirLibroIva: (lado: "SALE" | "PURCHASE", replacesBatchId?: string) => void;
   sourceFile: File | null;
   setSourceFile: (file: File | null) => void;
-  sourceUploadMutation: UseMutationResult<ResultadoImportacionLote, Error, void>;
+  sourceUploadMutation: UseMutationResult<ResultadoImportacionLote, Error, { replacesBatchId?: string }>;
   sources: WorkpaperSource[];
   canEdit: boolean;
   currentUserId: string | null;
@@ -55,16 +59,36 @@ export function PanelGestionarFuente({
   onCambiarFuente: (sourceCode: string) => void;
 }) {
   const { firmId, clientId } = useClientContext();
+  const queryClient = useQueryClient();
   const [vista, setVista] = useState<Vista>("archivos");
   const [reconocimiento, setReconocimiento] = useState("");
   const [avisoFuente, setAvisoFuente] = useState<string | null>(null);
   const [loteId, setLoteId] = useState<string | null>(null);
+  const [replacesBatchId, setReplacesBatchId] = useState<string | null>(null);
+  const [retireBatchId, setRetireBatchId] = useState<string | null>(null);
+  const [retireReason, setRetireReason] = useState("");
+  const retireMutation = useMutation({
+    mutationFn: (input: { batchId: string; reason: string }) => api.post(
+      `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${workpaperId}/batches/${input.batchId}/retire`,
+      { reason: input.reason },
+    ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpaper-coverage", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      setVista("archivos");
+      setRetireBatchId(null);
+      setRetireReason("");
+    },
+  });
   const detalleTituloRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setVista("archivos");
     setLoteId(null);
+    setReplacesBatchId(null);
+    setRetireBatchId(null);
+    setRetireReason("");
     setSourceFile(null);
     sourceUploadMutation.reset();
   }, [isOpen, source?.code]);
@@ -79,6 +103,10 @@ export function PanelGestionarFuente({
     setLoteId(error.batchId);
     setVista("errores");
   }, [sourceUploadMutation.error]);
+
+  useEffect(() => {
+    if (sourceUploadMutation.isSuccess) setReplacesBatchId(null);
+  }, [sourceUploadMutation.isSuccess]);
 
   useEffect(() => {
     let activo = true;
@@ -107,6 +135,7 @@ export function PanelGestionarFuente({
   }, [source, sourceFile, sources]);
 
   if (!source) return null;
+  const activeBatches = source.batches.filter((batch) => !["RETIRED", "REPLACED"].includes(batch.reviewStatus));
   const lado = ladoDeLibroIva(source.code);
   const cargarArchivo = () => {
     if (lado) {
@@ -114,6 +143,16 @@ export function PanelGestionarFuente({
       onAbrirLibroIva(lado);
       return;
     }
+    setVista("cargar");
+  };
+  const reemplazarArchivo = (batchId: string) => {
+    if (lado) {
+      onClose();
+      onAbrirLibroIva(lado, batchId);
+      return;
+    }
+    setReplacesBatchId(batchId);
+    setLoteId(batchId);
     setVista("cargar");
   };
   const aceptarArchivo = (file: File | null) => {
@@ -154,9 +193,9 @@ export function PanelGestionarFuente({
           <p>{nombreEstado}</p>
           {canEdit ? <Button variant="primary" onClick={cargarArchivo}>Cargar archivo</Button> : null}
           {!canEdit && editReason ? <p role="status">{editReason}</p> : null}
-          {source.batches.length === 0 ? <p>No hay archivos cargados.</p> : null}
+          {activeBatches.length === 0 ? <p>No hay archivos vigentes. Cargá uno para que la fuente cuente en el cálculo.</p> : null}
           <ul className="workpaper-source-file-list">
-            {source.batches.map((batch) => (
+            {activeBatches.map((batch) => (
               <li key={batch.id}>
                 <strong>{batch.fileName ?? "Archivo sin nombre"}</strong>{" "}
                 <span>{estadoDeLote(batch).label ?? (batch.reviewStatus === "REVIEWED" ? "Revisado" : batch.errorRows ? "Con errores" : batch.batchStatus === "VALIDATED" ? "Pendiente de revisión" : "Cargado")}</span>
@@ -164,6 +203,12 @@ export function PanelGestionarFuente({
                   <Button variant="text" onClick={() => { setLoteId(batch.importBatchId); setVista("errores"); }}>
                     Ver errores
                   </Button>
+                ) : null}
+                {canEdit && workpaperId ? (
+                  <>
+                    <Button variant="text" onClick={() => reemplazarArchivo(batch.importBatchId)}>Reemplazar</Button>
+                    <Button variant="text" onClick={() => { setRetireBatchId(batch.importBatchId); setRetireReason(""); setVista("retirar"); }}>Retirar</Button>
+                  </>
                 ) : null}
                 <WorkpaperSourceReviewAction
                   batch={batch}
@@ -188,13 +233,14 @@ export function PanelGestionarFuente({
           <h3 ref={detalleTituloRef} tabIndex={-1}>Errores del archivo</h3>
           <WorkpaperActionError error={sourceUploadMutation.error} />
           {firmId && clientId && loteId ? <DetalleFilasLote firmId={firmId} clientId={clientId} batchId={loteId} /> : null}
-          {canEdit ? <Button variant="secondary" onClick={cargarArchivo}>Cargar otro archivo</Button> : null}
+          {canEdit ? <Button variant="secondary" onClick={() => reemplazarArchivo(replacesBatchId ?? loteId ?? "")}>Corregir y volver a cargar</Button> : null}
         </section>
       ) : null}
       {vista === "cargar" ? (
         <section aria-label="Cargar archivo">
           <Button variant="text" onClick={() => setVista("archivos")}>← Archivos</Button>
-          <h3>Cargar archivo</h3>
+          <h3>{replacesBatchId ? "Reemplazar archivo" : "Cargar archivo"}</h3>
+          {replacesBatchId ? <p>Corregí las filas indicadas y volvé a cargar el archivo para que cuente en el cálculo.</p> : null}
           {lado ? (
             <p>El libro de IVA se importa desde el archivo de ARCA.</p>
           ) : (
@@ -220,9 +266,9 @@ export function PanelGestionarFuente({
                 <Button
                   variant="primary"
                   disabled={!sourceFile || archivoEquivocado || sourceUploadMutation.isPending}
-                  onClick={() => { setVista("archivos"); sourceUploadMutation.mutate(); }}
+                  onClick={() => { setVista("archivos"); sourceUploadMutation.mutate(replacesBatchId ? { replacesBatchId } : {}); }}
                 >
-                  {sourceUploadMutation.isPending ? "Procesando…" : "Importar archivo"}
+                  {sourceUploadMutation.isPending ? "Procesando…" : replacesBatchId ? "Reemplazar archivo" : "Importar archivo"}
                 </Button>
               ) : null}
             </>
@@ -233,7 +279,27 @@ export function PanelGestionarFuente({
         <section aria-label="Historial">
           <Button variant="text" onClick={() => setVista("archivos")}>← Archivos</Button>
           <h3>Historial</h3>
-          {source.batches.length ? source.batches.map((batch) => <p key={batch.id}>{formatearFechaHora(batch.createdAt)} · {batch.fileName ?? "Archivo sin nombre"} · {batch.errorRows ? "con errores" : batch.reviewStatus === "REVIEWED" ? "revisado" : "cargado"}</p>) : <p>Todavía no hay actividad registrada.</p>}
+          {source.batches.length ? source.batches.map((batch) => (
+            <div key={batch.id}>
+              <p>{formatearFechaHora(batch.createdAt)} · {batch.fileName ?? "Archivo sin nombre"} · Cargado por {batch.createdByName ?? "usuario"}.</p>
+              {batch.reviewedAt ? <p>{formatearFechaHora(batch.reviewedAt)} · Revisado por {batch.reviewedByName ?? "usuario"}.</p> : null}
+              {batch.reviewStatus === "RETIRED" ? <p>{formatearFechaHora(batch.retiredAt ?? batch.createdAt)} · Retirado por {batch.retiredByName ?? "usuario"}. Motivo: {batch.retireReason ?? ""}</p> : null}
+              {batch.reviewStatus === "REPLACED" ? <p>{formatearFechaHora(batch.replacedAt ?? batch.createdAt)} · Reemplazado por {source.batches.find((next) => next.id === batch.replacedByBatchId)?.createdByName ?? "usuario"}.</p> : null}
+              {batch.errorRows > 0 && batch.reviewStatus !== "RETIRED" && batch.reviewStatus !== "REPLACED" ? <p>El archivo tiene filas con errores.</p> : null}
+            </div>
+          )) : <p>Todavía no hay actividad registrada.</p>}
+        </section>
+      ) : null}
+      {vista === "retirar" ? (
+        <section aria-label="Retirar archivo">
+          <Button variant="text" onClick={() => setVista("archivos")}>← Archivos</Button>
+          <h3>Retirar archivo</h3>
+          <p>El archivo dejará de contar en el cálculo y quedará en el historial.</p>
+          <label htmlFor="retire-reason">Motivo</label>
+          <textarea id="retire-reason" value={retireReason} maxLength={240} onChange={(event) => setRetireReason(event.target.value)} />
+          {!retireReason.trim() ? <small>Indicá por qué retirás este archivo.</small> : null}
+          <WorkpaperActionError error={retireMutation.error} />
+          <Button variant="danger-solid" disabled={!retireReason.trim() || retireMutation.isPending || !retireBatchId} onClick={() => retireBatchId && retireMutation.mutate({ batchId: retireBatchId, reason: retireReason.trim() })}>Confirmar retiro</Button>
         </section>
       ) : null}
       {vista === "ayuda" ? (

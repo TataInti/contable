@@ -148,7 +148,7 @@ export function StudyExpedienteMensual() {
   >({});
   const [allocationDrafts, setAllocationDrafts] = useState<Record<string, string>>({});
   // Panel de libros IVA: lado de la fila desde la que se abrió (null = cerrado).
-  const [libroIvaAbierto, setLibroIvaAbierto] = useState<"SALE" | "PURCHASE" | null>(null);
+  const [libroIvaAbierto, setLibroIvaAbierto] = useState<{ lado: "SALE" | "PURCHASE"; replacesBatchId?: string } | null>(null);
   // Revisión elegida en el menú «Revisión» (null = la más reciente) y cajón «Exportar libros».
   const [revisionElegidaId, setRevisionElegidaId] = useState<string | null>(null);
   const [exportarAbierto, setExportarAbierto] = useState(false);
@@ -362,7 +362,7 @@ export function StudyExpedienteMensual() {
   });
 
   const sourceUploadMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ replacesBatchId }: { replacesBatchId?: string }) => {
       const source = coverageQuery.data?.sources.find((item) => item.code === sourceCode);
       if (!source || !sourceFile || !activeWorkpaperId || !clientQuery.data) {
         throw new Error("Seleccioná una fuente y un archivo antes de importar");
@@ -378,6 +378,7 @@ export function StudyExpedienteMensual() {
         workpaperId: activeWorkpaperId,
         clientCuit: clientQuery.data.cuit,
         fuentes: coverageQuery.data?.sources ?? [],
+        ...(replacesBatchId ? { replacesBatchId } : {}),
         ...(periodoDeLaFuente
           ? {
               periodo: {
@@ -640,12 +641,13 @@ export function StudyExpedienteMensual() {
         ) : step === 1 ? (
           <EtapaFuentes
             coverageQuery={coverageQuery}
+            workpaperId={activeWorkpaperId ?? null}
             capabilities={capacidades}
             canEditSources={canEditSources}
             currentUserId={currentUserId}
             soloLectura={soloLectura}
             motivoImportarLibro={motivoImportarLibro}
-            onAbrirLibroIva={setLibroIvaAbierto}
+            onAbrirLibroIva={(lado, replacesBatchId) => setLibroIvaAbierto({ lado, ...(replacesBatchId ? { replacesBatchId } : {}) })}
             sourceCode={sourceCode}
             setSourceCode={setSourceCode}
             sourceFile={sourceFile}
@@ -1245,7 +1247,8 @@ export function StudyExpedienteMensual() {
 
       <PanelLibrosIva
         abierto={libroIvaAbierto !== null}
-        ladoInicial={libroIvaAbierto}
+        ladoInicial={libroIvaAbierto?.lado ?? null}
+        replacesBatchId={libroIvaAbierto?.replacesBatchId}
         onCerrar={() => setLibroIvaAbierto(null)}
         firmId={firmId}
         clientId={clientId}

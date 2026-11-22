@@ -53,6 +53,7 @@ import {
 export type WorkpaperErrorCode =
   | "WORKPAPER_NOT_FOUND"
   | "WORKPAPER_IMMUTABLE"
+  | "WORKPAPER_FINALIZED"
   | "INVALID_TRANSITION"
   | "MAKER_CHECKER_VIOLATION"
   | "PERIOD_NOT_FOUND"
@@ -260,6 +261,15 @@ export class MonthlyWorkpaperService {
       include: { importBatch: true },
       orderBy: { createdAt: "asc" },
     });
+    const actorIds = [...new Set(evidence.flatMap((item) => [
+      item.importBatch.createdByUserId,
+      item.reviewedByUserId,
+      item.retiredByUserId,
+    ]).filter((id): id is string => Boolean(id)))];
+    const actors = actorIds.length
+      ? await tx.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true } })
+      : [];
+    const actorName = (id: string | null) => actors.find((actor) => actor.id === id)?.name ?? null;
     const reviewedCodes = new Set(
       evidence
         .filter((item) => item.status === "REVIEWED" && item.importBatch.status === "COMMITTED")
@@ -303,8 +313,16 @@ export class MonthlyWorkpaperService {
           snapshotHash: item.snapshotHash,
           reviewedAt: item.reviewedAt,
           reviewedByUserId: item.reviewedByUserId,
+          reviewedByName: actorName(item.reviewedByUserId),
           createdByUserId: item.importBatch.createdByUserId,
+          createdByName: actorName(item.importBatch.createdByUserId),
           createdAt: item.createdAt,
+          retiredByUserId: item.retiredByUserId,
+          retiredByName: actorName(item.retiredByUserId),
+          retiredAt: item.retiredAt,
+          retireReason: item.retireReason,
+          replacedByBatchId: item.replacedByBatchId,
+          replacedAt: item.replacedAt,
         })),
       };
     });
@@ -1151,7 +1169,7 @@ export class MonthlyWorkpaperService {
       });
       if (!link) throw new WorkpaperError("WORKPAPER_NOT_FOUND", "Fuente no encontrada");
       if (
-        !["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE", "CHANGES_REQUESTED"].includes(
+        !["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE", "CHANGES_REQUESTED", "CALCULATED"].includes(
           link.workpaper.status,
         )
       ) {
@@ -1271,6 +1289,13 @@ export class MonthlyWorkpaperService {
         },
       });
 
+      if (link.workpaper.status === "CALCULATED") {
+        await tx.monthlyTaxWorkpaper.update({
+          where: { id: workpaperId },
+          data: { status: "COLLECTING_INPUTS", inputHash: null, outputHash: null, reviewedByUserId: null },
+        });
+      }
+
       await materializeWorkpaperClassifications(tx, link.workpaper, voucherIds);
       await this.ensureAllocations(tx, workpaperId);
       await this.refreshPreparationStatus(tx, link.workpaper);
@@ -1279,6 +1304,53 @@ export class MonthlyWorkpaperService {
       }
 
       return reviewed;
+    });
+  }
+
+  async retireBatch(ctx: TenantContext, workpaperId: string, batchId: string, reason: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const link = await tx.workpaperImportBatch.findFirst({
+        where: { importBatchId: batchId, workpaperId, firmId: ctx.firmId },
+        include: { workpaper: true, importBatch: true },
+      });
+      if (!link) throw new WorkpaperError("WORKPAPER_NOT_FOUND", "Archivo no encontrado");
+      const finalizedSettlement = await tx.taxSettlement.findFirst({
+        where: {
+          firmId: ctx.firmId,
+          clientId: link.clientId,
+          periodId: link.importBatch.periodId,
+          status: "FINALIZED",
+        },
+        select: { id: true },
+      });
+      if (link.workpaper.status === "FINALIZED" || finalizedSettlement) {
+        throw new WorkpaperError(
+          "WORKPAPER_FINALIZED",
+          "Para cambiar un mes cerrado, rectificá la liquidación.",
+        );
+      }
+      if (!["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE", "CHANGES_REQUESTED", "CALCULATED"].includes(link.workpaper.status)) {
+        throw new WorkpaperError("WORKPAPER_IMMUTABLE", "El expediente no admite cambios en su estado actual");
+      }
+      if (["RETIRED", "REPLACED"].includes(link.status)) {
+        throw new WorkpaperError("INVALID_TRANSITION", "Este archivo ya no está vigente");
+      }
+      const retiredAt = new Date();
+      const retired = await tx.workpaperImportBatch.update({
+        where: { id: link.id },
+        data: { status: "RETIRED", retiredByUserId: ctx.userId, retiredAt, retireReason: reason },
+      });
+      await tx.monthlyTaxWorkpaper.update({
+        where: { id: workpaperId },
+        data: {
+          ...(link.workpaper.status === "CALCULATED" ? { status: "COLLECTING_INPUTS" } : {}),
+          inputHash: null,
+          outputHash: null,
+          reviewedByUserId: null,
+        },
+      });
+      await this.refreshPreparationStatus(tx, link.workpaper);
+      return retired;
     });
   }
 

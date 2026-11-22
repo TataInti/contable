@@ -55,6 +55,9 @@ export type ImportErrorCode =
   | "NO_ROWS"
   | "WORKPAPER_NOT_FOUND"
   | "SOURCE_POLICY_INVALID"
+  | "WORKPAPER_FINALIZED"
+  | "WORKPAPER_IMMUTABLE"
+  | "REPLACEMENT_SCOPE_INVALID"
   | "UNKNOWN_ADAPTER"
   | "INVALID_TRANSITION";
 
@@ -285,7 +288,7 @@ export class IngestionService {
             firmId: ctx.firmId,
             clientId: input.clientId,
             status: {
-              in: ["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE", "CHANGES_REQUESTED"],
+              in: ["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE", "CHANGES_REQUESTED", "CALCULATED"],
             },
             periodStart: { lte: period.startDate },
             periodEnd: { gte: period.endDate },
@@ -472,7 +475,7 @@ export class IngestionService {
    *   con las filas que quedaron fuera (nunca se oculta un error).
    * - Idempotente: un lote ya COMMITTED no se vuelve a comitear.
    */
-  async commitBatch(ctx: TenantContext, batchId: string, clientCuit: string) {
+  async commitBatch(ctx: TenantContext, batchId: string, clientCuit: string, replacesBatchId?: string) {
     return withTenantContext(ctx, async (tx) => {
       const batch = await tx.importBatch.findFirst({
         where: { id: batchId, firmId: ctx.firmId },
@@ -488,6 +491,45 @@ export class IngestionService {
       }
       if (batch.errorRows > 0) {
         throw new ImportError("BATCH_HAS_ERRORS", `El lote tiene ${batch.errorRows} filas con error`);
+      }
+
+      let replacementTarget: { linkId: string; newLinkId: string; workpaperId: string; workpaperStatus: string } | null = null;
+      if (replacesBatchId) {
+        const newLink = await tx.workpaperImportBatch.findFirst({
+          where: { importBatchId: batchId, firmId: ctx.firmId },
+          include: { workpaper: true },
+        });
+        const oldLink = await tx.workpaperImportBatch.findFirst({
+          where: { importBatchId: replacesBatchId, firmId: ctx.firmId },
+          include: { importBatch: true },
+        });
+        if (!newLink || !oldLink || newLink.workpaperId !== oldLink.workpaperId || newLink.sourceCode !== oldLink.sourceCode) {
+          throw new ImportError("REPLACEMENT_SCOPE_INVALID", "El archivo a reemplazar debe pertenecer a la misma fuente y período");
+        }
+        if (["RETIRED", "REPLACED"].includes(oldLink.status)) {
+          throw new ImportError("INVALID_TRANSITION", "El archivo anterior ya no está vigente");
+        }
+        const finalized = await tx.taxSettlement.findFirst({
+          where: {
+            firmId: ctx.firmId,
+            clientId: oldLink.clientId,
+            periodId: oldLink.importBatch.periodId,
+            status: "FINALIZED",
+          },
+          select: { id: true },
+        });
+        if (newLink.workpaper.status === "FINALIZED" || finalized) {
+          throw new ImportError("WORKPAPER_FINALIZED", "Para cambiar un mes cerrado, rectificá la liquidación.");
+        }
+        if (!["DRAFT", "COLLECTING_INPUTS", "READY_TO_CALCULATE", "CHANGES_REQUESTED", "CALCULATED"].includes(newLink.workpaper.status)) {
+          throw new ImportError("WORKPAPER_IMMUTABLE", "El expediente no admite cambios en su estado actual");
+        }
+        replacementTarget = {
+          linkId: oldLink.id,
+          newLinkId: newLink.id,
+          workpaperId: oldLink.workpaperId,
+          workpaperStatus: newLink.workpaper.status,
+        };
       }
 
       const adapter = await this.sourceAdapterForBatch(tx, ctx, batch);
@@ -540,6 +582,23 @@ export class IngestionService {
         data: { status: "COMMITTED" },
       });
 
+      if (replacementTarget) {
+        const replacementAt = new Date();
+        await tx.workpaperImportBatch.update({
+          where: { id: replacementTarget.linkId },
+          data: { status: "REPLACED", replacedByBatchId: replacementTarget.newLinkId, replacedAt: replacementAt },
+        });
+        await tx.monthlyTaxWorkpaper.update({
+          where: { id: replacementTarget.workpaperId },
+          data: {
+            ...(replacementTarget.workpaperStatus === "CALCULATED" ? { status: "COLLECTING_INPUTS" } : {}),
+            inputHash: null,
+            outputHash: null,
+            reviewedByUserId: null,
+          },
+        });
+      }
+
       return { batch, committed, duplicates, errors: [] as string[] };
     });
   }
@@ -561,6 +620,7 @@ export class IngestionService {
       taxTypeId: string;
       periodId: string;
       workpaperId?: string;
+      replacesBatchId?: string;
     },
   ) {
     // El CUIT del libro se compara con el del cliente antes de crear el lote: si no coincide, no se escribe nada.
@@ -589,7 +649,7 @@ export class IngestionService {
     });
 
     const validated = await this.validateBatch(ctx, batch.id, rows);
-    const committed = await this.commitBatch(ctx, batch.id, input.clientCuit);
+    const committed = await this.commitBatch(ctx, batch.id, input.clientCuit, input.replacesBatchId);
 
     // Persiste el análisis derivado (alícuotas, tributos, hoja) en el lote.
     // El lote ya asocia firmId/clientId/createdByUserId/createdAt.

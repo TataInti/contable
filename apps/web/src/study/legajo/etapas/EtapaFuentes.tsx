@@ -9,17 +9,18 @@ import type { ResultadoImportacionLote } from "../loteFuente";
 
 export interface EtapaFuentesProps {
   coverageQuery: UseQueryResult<CoberturaLegajo, Error>;
+  workpaperId: string | null;
   capabilities: ReadonlySet<string>;
   canEditSources: boolean;
   currentUserId: string | null;
   soloLectura?: boolean;
   motivoImportarLibro: string | null;
-  onAbrirLibroIva: (lado: "SALE" | "PURCHASE") => void;
+  onAbrirLibroIva: (lado: "SALE" | "PURCHASE", replacesBatchId?: string) => void;
   sourceCode: string;
   setSourceCode: Dispatch<SetStateAction<string>>;
   sourceFile: File | null;
   setSourceFile: Dispatch<SetStateAction<File | null>>;
-  sourceUploadMutation: UseMutationResult<ResultadoImportacionLote, Error, void>;
+  sourceUploadMutation: UseMutationResult<ResultadoImportacionLote, Error, { replacesBatchId?: string }>;
   reviewSourceMutation: UseMutationResult<unknown, Error, string>;
 }
 
@@ -42,6 +43,7 @@ function estadoFuente(source: CoberturaLegajo["sources"][number]) {
 
 export function EtapaFuentes({
   coverageQuery,
+  workpaperId,
   canEditSources,
   capabilities,
   currentUserId,
@@ -59,6 +61,7 @@ export function EtapaFuentes({
   const fuentes = coverageQuery.data?.sources ?? [];
   const fuenteSeleccionada = fuentes.find((source) => source.code === fuenteAbierta) ?? null;
   const faltantes = fuentes.filter((source) => source.required && !source.present).map(nombreFuente);
+  const puedeCargar = canEditSources && !soloLectura && capabilities.has("tax.vouchers.prepare");
 
   return (
     <div className="workpaper-stage">
@@ -97,6 +100,7 @@ export function EtapaFuentes({
           />
           <PanelGestionarFuente
             source={fuenteSeleccionada}
+            workpaperId={workpaperId}
             isOpen={Boolean(fuenteSeleccionada)}
             onClose={() => setFuenteAbierta(null)}
             onAbrirLibroIva={onAbrirLibroIva}
@@ -104,13 +108,13 @@ export function EtapaFuentes({
             setSourceFile={setSourceFile}
             sourceUploadMutation={sourceUploadMutation}
             sources={fuentes}
-            canEdit={canEditSources && !soloLectura && !motivoImportarLibro}
+            canEdit={puedeCargar && !motivoImportarLibro}
             currentUserId={currentUserId}
             allowSelfReview={coverageQuery.data.allowSelfReview}
             canReview={capabilities.has("tax.vouchers.review")}
-            canEditSources={canEditSources && !soloLectura}
+            canEditSources={puedeCargar}
             reviewSourceMutation={reviewSourceMutation}
-            editReason={soloLectura ? "Esta revisión se consulta en solo lectura." : motivoImportarLibro ?? (!canEditSources ? "El legajo no admite cambios en su estado actual." : null)}
+            editReason={soloLectura ? "Esta revisión se consulta en solo lectura." : motivoImportarLibro ?? (!capabilities.has("tax.vouchers.prepare") ? "No tenés permiso para cargar archivos." : !canEditSources ? "El legajo no admite cambios en su estado actual." : null)}
             onCambiarFuente={(codigo) => {
               setSourceCode(codigo);
               setSourceFile(null);

@@ -59,7 +59,7 @@ const PERIODO = { startDate: "2026-10-01T00:00:00.000Z", endDate: "2026-10-31T00
 function importar(
   source: WorkpaperSource,
   file: File,
-  extra: { fuentes?: WorkpaperSource[]; clientCuit?: string } = {},
+  extra: { fuentes?: WorkpaperSource[]; clientCuit?: string; replacesBatchId?: string } = {},
 ) {
   return importarLoteFuente({
     firmId: "firma-1",
@@ -68,6 +68,7 @@ function importar(
     file,
     workpaperId: "legajo-1",
     clientCuit: extra.clientCuit ?? CUIT_CLIENTE,
+    ...(extra.replacesBatchId ? { replacesBatchId: extra.replacesBatchId } : {}),
     periodo: PERIODO,
     fuentes: extra.fuentes ?? [FUENTE_IIBB, FUENTE_TEM, FUENTE_LIBRO],
   });
@@ -151,5 +152,18 @@ describe("importarLoteFuente con TXT de la DGR de Tucumán", () => {
     const resultado = await importar(FUENTE_TEM, file);
     expect(resultado.avisos).toEqual([]);
     expect(vi.mocked(api.post)).toHaveBeenCalledTimes(3);
+  });
+
+  it("confirma el reemplazo vinculado al lote anterior", async () => {
+    vi.mocked(api.post)
+      .mockResolvedValueOnce({ id: "lote-nuevo", status: "UPLOADED", errorRows: 0 } as never)
+      .mockResolvedValueOnce({ totals: { errorRows: 0 } } as never)
+      .mockResolvedValueOnce({} as never);
+
+    await importar(FUENTE_IIBB, archivo("corregido.csv", "fecha;importe\n2026-10-01;100"), {
+      replacesBatchId: "lote-anterior",
+    });
+
+    expect(vi.mocked(api.post).mock.calls[2]?.[1]).toMatchObject({ replacesBatchId: "lote-anterior" });
   });
 });

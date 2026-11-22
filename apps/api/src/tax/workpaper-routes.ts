@@ -96,6 +96,21 @@ export function workpaperRoutes(app: FastifyInstance) {
   });
 
   app.post(
+    "/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers/:workpaperId/batches/:batchId/retire",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { workpaperId, batchId } = req.params as { workpaperId: string; batchId: string };
+      const body = z.object({ reason: z.string().trim().min(1).max(240) }).strict().parse(req.body);
+      try {
+        const data = await service.retireBatch(ctx, workpaperId, batchId, body.reason);
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
+
+  app.post(
     "/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers/:workpaperId/sources/:sourceLinkId/review",
     async (req, reply) => {
       const ctx = tenantContextFromRequest(req);
