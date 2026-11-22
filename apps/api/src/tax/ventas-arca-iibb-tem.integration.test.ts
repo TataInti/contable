@@ -78,14 +78,17 @@ async function resolveMaster(path: string, code: string) {
 
 type Celda = string | number;
 
-/** «Mis Comprobantes Emitidos»: título en la fila 1, encabezados en la fila 2, datos desde la fila 3. */
-function libroEmitidos(encabezados: string[], filas: Array<Record<string, Celda>>): Uint8Array {
+/**
+ * «Mis Comprobantes Emitidos»: título en la fila 1 (con el CUIT del contribuyente), encabezados en la fila 2,
+ * datos desde la fila 3. El CUIT del título debe ser el del cliente: si no, la importación se rechaza (CUIT_DISTINTO).
+ */
+function libroEmitidos(cuitTitulo: string, encabezados: string[], filas: Array<Record<string, Celda>>): Uint8Array {
   const celda = (ref: string, valor: Celda) =>
     typeof valor === "number"
       ? `<c r="${ref}"><v>${valor}</v></c>`
       : `<c r="${ref}" t="inlineStr"><is><t>${valor}</t></is></c>`;
   const matriz: Celda[][] = [
-    ["Mis Comprobantes Emitidos - CUIT 20000000001"],
+    [`Mis Comprobantes Emitidos - CUIT ${cuitTitulo}`],
     encabezados,
     ...filas.map((fila) => encabezados.map((h) => fila[h] ?? "")),
   ];
@@ -278,11 +281,37 @@ describe("2C — un libro de ventas de ARCA alimenta Ingresos Brutos y TEM", () 
     expect(bookBefore).toMatchObject({ required: true, present: false, taxTypeId: iibbTypeId });
     expect(before.sources.some((source) => source.code === "ARCA_IVA_PURCHASES")).toBe(false);
 
-    const libro = libroEmitidos(ENCABEZADOS, [
+    const libro = libroEmitidos(cuit, ENCABEZADOS, [
       { ...CLIENTE, "Fecha": "03/10/2026", "Tipo": "1 - Factura A", "Punto de Venta": 1, "Número Desde": 1, "Número Hasta": 1, "Neto Gravado Total": 50000, "Neto No Gravado": 10000, "Op. Exentas": 5000, "Otros Tributos": 1500, "Total IVA": 10500, "Imp. Total": 77000 },
       { ...CLIENTE, "Fecha": "10/10/2026", "Tipo": "11 - Factura C", "Punto de Venta": 2, "Número Desde": 1, "Número Hasta": 1, "Imp. Total": 55000 },
       { ...CLIENTE, "Fecha": "24/10/2026", "Tipo": "13 - Nota de Crédito C", "Punto de Venta": 2, "Número Desde": 2, "Número Hasta": 2, "Imp. Total": 5000 },
     ]);
+    // Un libro cuyo CUIT no es el del cliente activo se rechaza antes de crear el lote: no queda nada guardado.
+    const otroCuit = validTestCuit();
+    const ajeno = await request("POST", `${clientBase}/sifere/import`, {
+      direction: "SALE",
+      base64: Buffer.from(libro).toString("base64"),
+      fileName: `T-Emitidos-ajeno-${RUN}.xlsx`,
+      fileHash: `sha256:T-2C-ajeno-${RUN}`,
+      taxTypeId: bookBefore!.taxTypeId,
+      periodId: bookBefore!.periodId,
+      clientCuit: otroCuit,
+      workpaperId: workpaper.id,
+    });
+    const conGuiones = (digitos: string) => `${digitos.slice(0, 2)}-${digitos.slice(2, 10)}-${digitos.slice(10)}`;
+    expect(ajeno.statusCode, `rechazo por CUIT distinto; respuesta: ${ajeno.body}`).toBe(422);
+    expect(ajeno.json()).toMatchObject({
+      error: {
+        code: "CUIT_DISTINTO",
+        message: `Este archivo es del CUIT ${conGuiones(cuit)}, no del cliente (CUIT ${conGuiones(otroCuit)}).`,
+      },
+    });
+    const afterRejected = data<Coverage>(await request("GET", `${sourceBase}/coverage`));
+    expect(afterRejected.sources.find((source) => source.code === "ARCA_IVA_SALES")).toMatchObject({
+      present: false,
+      batches: [],
+    });
+
     const imported = await request("POST", `${clientBase}/sifere/import`, {
       direction: "SALE",
       base64: Buffer.from(libro).toString("base64"),

@@ -262,3 +262,92 @@ describe("sentido del libro: casos de borde", () => {
     });
   });
 });
+
+describe("CUIT del libro: lectura y control contra el cliente (brief 4A)", () => {
+  const FILA = [VENTAS_FICTICIAS[0]!];
+
+  it("lee el CUIT del título (fila 1) del libro", () => {
+    const libro = libroArca({
+      titulo: "Mis Comprobantes Emitidos - CUIT 20000000001",
+      encabezados: ENCABEZADOS_EMITIDOS,
+      filas: FILA,
+    });
+    expect(parseSifereWorkbook(libro, "SALE").cuit).toEqual({ value: "20000000001", source: "titulo" });
+  });
+
+  it("acepta el CUIT del título con guiones y lo devuelve sin ellos", () => {
+    const libro = libroArca({
+      titulo: "Mis Comprobantes Emitidos - CUIT 20-00000000-1",
+      encabezados: ENCABEZADOS_EMITIDOS,
+      filas: FILA,
+    });
+    expect(parseSifereWorkbook(libro, "SALE").cuit).toEqual({ value: "20000000001", source: "titulo" });
+  });
+
+  it("si el título no trae CUIT, lo toma del nombre del archivo", () => {
+    const libro = libroArca({
+      titulo: "Mis Comprobantes Emitidos",
+      encabezados: ENCABEZADOS_EMITIDOS,
+      filas: FILA,
+    });
+    const result = parseSifereWorkbook(libro, "SALE", {
+      fileName: "Mis Comprobantes Emitidos - CUIT 20000000001.xlsx",
+    });
+    expect(result.cuit).toEqual({ value: "20000000001", source: "nombre" });
+  });
+
+  it("si el título y el nombre traen CUIT distinto, prevalece el del título", () => {
+    const libro = libroArca({
+      titulo: "Mis Comprobantes Emitidos - CUIT 20000000001",
+      encabezados: ENCABEZADOS_EMITIDOS,
+      filas: FILA,
+    });
+    const result = parseSifereWorkbook(libro, "SALE", {
+      fileName: "Mis Comprobantes Emitidos - CUIT 27000000009.xlsx",
+    });
+    expect(result.cuit).toEqual({ value: "20000000001", source: "titulo" });
+  });
+
+  it("sin CUIT ni en el título ni en el nombre, el libro se lee igual y cuit queda en null", () => {
+    const libro = libroArca({
+      titulo: "Mis Comprobantes Emitidos",
+      encabezados: ENCABEZADOS_EMITIDOS,
+      filas: FILA,
+    });
+    const result = parseSifereWorkbook(libro, "SALE", { fileName: "libro.xlsx" });
+    expect(result.cuit).toBeNull();
+    expect(result.validRows).toBe(1);
+  });
+
+  it("con el CUIT del cliente igual al del libro importa sin error", () => {
+    const libro = libroArca({
+      titulo: "Mis Comprobantes Emitidos - CUIT 20000000001",
+      encabezados: ENCABEZADOS_EMITIDOS,
+      filas: FILA,
+    });
+    const result = parseSifereWorkbook(libro, "SALE", { clientCuit: "20000000001" });
+    expect(result.validRows).toBe(1);
+  });
+
+  it("con otro CUIT del cliente rechaza con CUIT_DISTINTO, el motivo y sin filas", () => {
+    const libro = libroArca({
+      titulo: "Mis Comprobantes Emitidos - CUIT 20000000001",
+      encabezados: ENCABEZADOS_EMITIDOS,
+      filas: FILA,
+    });
+    expect(codigoDeError(() => parseSifereWorkbook(libro, "SALE", { clientCuit: "30111111119" }))).toEqual({
+      code: "CUIT_DISTINTO",
+      message: "Este archivo es del CUIT 20-00000000-1, no del cliente (CUIT 30-11111111-9).",
+    });
+  });
+
+  it("un libro sin CUIT no bloquea aunque se indique el CUIT del cliente", () => {
+    const libro = libroArca({
+      titulo: "Mis Comprobantes Emitidos",
+      encabezados: ENCABEZADOS_EMITIDOS,
+      filas: FILA,
+    });
+    const result = parseSifereWorkbook(libro, "SALE", { clientCuit: "30111111119", fileName: "libro.xlsx" });
+    expect(result.validRows).toBe(1);
+  });
+});
