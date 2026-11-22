@@ -150,17 +150,42 @@ export const TAX_CALENDAR_IMPORT_REQUIRED_COLUMNS = [
 export const TAX_CALENDAR_IMPORT_MAX_BYTES = 1024 * 1024;
 export const TAX_CALENDAR_IMPORT_MAX_ROWS = 2000;
 
-/** Cuerpo de la importación: con dryRun true valida y no escribe nada. */
+/** Cuerpo de la importación: con dryRun true valida y no escribe nada. taxTypeId (opcional) asigna el impuesto a todas las celdas que se importan. */
 export const importTaxCalendarEntriesSchema = z
   .object({
     csv: z.string({ message: "Falta el contenido del archivo (csv)" }),
     dryRun: z.boolean({
       message: "Indicá si es una prueba (dryRun: true) o una importación real (dryRun: false)",
     }),
+    taxTypeId: z.string().uuid("El impuesto no es válido").nullable().optional(),
   })
   .strict();
 
 export type ImportTaxCalendarEntriesInput = z.infer<typeof importTaxCalendarEntriesSchema>;
+
+/** PDF del calendario que lee la IA: tope de tamaño (viaja en base64 dentro del JSON). */
+export const TAX_CALENDAR_PDF_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Alta de un calendario desde un PDF: crea el borrador con su fuente, lee el PDF con IA y
+ * importa las celdas propuestas con el impuesto elegido. Si la lectura no funciona, el borrador
+ * queda vacío y se completa a mano sobre el PDF.
+ */
+export const createTaxCalendarFromPdfSchema = z
+  .object({
+    taxAuthorityId: z.string({ message: "Indicá el organismo" }).uuid("El organismo no es válido"),
+    jurisdictionId: z.string({ message: "Indicá la jurisdicción" }).uuid("La jurisdicción no es válida"),
+    year: calendarYear,
+    title: calendarTitle,
+    taxTypeId: z
+      .string({ message: "Indicá el impuesto al que aplica el calendario" })
+      .uuid("El impuesto no es válido"),
+    pdfBase64: z.string({ message: "Falta el archivo PDF" }).min(1, "Falta el archivo PDF"),
+    originalName: z.string().trim().max(200, "El nombre del archivo no puede superar los 200 caracteres").nullable().optional(),
+  })
+  .strict();
+
+export type CreateTaxCalendarFromPdfInput = z.infer<typeof createTaxCalendarFromPdfSchema>;
 
 /** Fila que no se importa. `fila` es el número de la hoja (el encabezado es la 1); `columna` null si afecta a toda la fila. */
 export interface TaxCalendarImportRejection {

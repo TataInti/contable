@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import {
+  createTaxCalendarFromPdfSchema,
   createTaxCalendarSchema,
   importTaxCalendarEntriesSchema,
   taxCalendarEntryInputSchema,
@@ -10,6 +11,7 @@ import {
 } from "@contable/contracts";
 import { tenantContextFromRequest } from "../auth/tenant.js";
 import { TaxCalendarError, TaxCalendarRegistryService } from "./tax-calendar-service.js";
+import { TaxCalendarPdfService } from "./tax-calendar-pdf-service.js";
 
 /**
  * Rutas de calendarios fiscales del estudio (corte 2a-i). Las capacidades las
@@ -17,9 +19,12 @@ import { TaxCalendarError, TaxCalendarRegistryService } from "./tax-calendar-ser
  */
 
 const calendars = new TaxCalendarRegistryService();
+const calendarsPdf = new TaxCalendarPdfService();
 
 /** El CSV pesa hasta 1 MB; en JSON las comillas y los saltos se escapan y el cuerpo puede crecer. El tope de 1 MB lo aplica el servicio. */
 const IMPORT_BODY_LIMIT = 4 * 1024 * 1024;
+/** Cuerpo del alta desde PDF: el PDF (tope 5 MB) viaja en base64. */
+const PDF_BODY_LIMIT = 8 * 1024 * 1024;
 
 function handleError(app: FastifyInstance, reply: FastifyReply, err: unknown) {
   if (err instanceof z.ZodError) {
@@ -54,6 +59,33 @@ export function taxCalendarRoutes(app: FastifyInstance) {
     try {
       const query = taxCalendarListQuerySchema.parse(req.query ?? {});
       const data = await calendars.list(ctx, query);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(app, reply, err);
+    }
+  });
+
+  // Alta desde PDF (brief 5A): el PDF viaja en base64; 5 MB de archivo son ~6,7 MB de base64 más el resto del JSON.
+  app.post(
+    "/api/v1/firms/:firmId/tax-calendars/from-pdf",
+    { bodyLimit: PDF_BODY_LIMIT },
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      try {
+        const body = createTaxCalendarFromPdfSchema.parse(req.body);
+        const data = await calendarsPdf.createFromPdf(ctx, body);
+        return reply.code(201).send({ data });
+      } catch (err) {
+        return handleError(app, reply, err);
+      }
+    },
+  );
+
+  app.get("/api/v1/firms/:firmId/tax-calendars/:calendarId/source", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const { calendarId } = req.params as { calendarId: string };
+      const data = await calendarsPdf.sourceUrl(ctx, calendarId);
       return reply.send({ data });
     } catch (err) {
       return handleError(app, reply, err);

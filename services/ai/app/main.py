@@ -7,6 +7,12 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from .assistant import run_assistant
 from .auth import ServiceAuth
 from .bi import BiPlanRequest, BiPlanResponse, plan_bi
+from .calendar_extraction import (
+    CalendarExtractionRequest,
+    CalendarExtractionResponse,
+    decode_source,
+    run_calendar_extraction,
+)
 from .contracts import (
     AssistantRunRequest,
     AssistantRunResponse,
@@ -68,6 +74,24 @@ async def start_extraction(
         payload.source.mimeType,
         payload.options.maxPages,
     )
+
+
+@app.post(
+    "/internal/v1/calendar-extractions",
+    response_model=CalendarExtractionResponse,
+    dependencies=[Depends(auth.verify)],
+)
+async def start_calendar_extraction(
+    payload: CalendarExtractionRequest, request: Request
+) -> CalendarExtractionResponse:
+    """Lee el PDF de un calendario fiscal (brief 5A). Misma compuerta de datos de cliente que los comprobantes."""
+    if not _customer_document_extraction_enabled():
+        raise HTTPException(status_code=503, detail="CUSTOMER_DATA_EXTRACTION_DISABLED")
+    try:
+        data = decode_source(payload.source.pdfBase64, payload.source.sizeBytes, payload.source.sha256)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return await run_calendar_extraction(data, payload.source.mimeType, payload.calendar)
 
 
 @app.post(

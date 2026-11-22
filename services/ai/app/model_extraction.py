@@ -101,8 +101,11 @@ def _image_as_jpeg(data: bytes, *, max_edge: int | None = None) -> bytes:
     return output.getvalue()
 
 
-def _prepare_page_images(data: bytes, mime_type: str, max_pages: int) -> list[bytes]:
-    if max_pages < 1 or max_pages > MAX_PAGES:
+def _prepare_page_images(
+    data: bytes, mime_type: str, max_pages: int, *, ceiling: int = MAX_PAGES
+) -> list[bytes]:
+    """Renderiza las páginas. `ceiling` es el tope absoluto (comprobantes: 3; calendarios: más)."""
+    if max_pages < 1 or max_pages > ceiling:
         raise ValueError("PAGE_LIMIT_INVALID")
     if mime_type == "application/pdf":
         from pdf2image import convert_from_bytes

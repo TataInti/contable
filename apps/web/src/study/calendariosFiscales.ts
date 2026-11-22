@@ -65,6 +65,8 @@ export interface CalendarEntryRow {
   noteRef: string | null;
   noteText: string | null;
   reviewState: ReviewStateKey | null;
+  /** Página del PDF fuente de la celda (null si se cargó a mano). */
+  sourcePage: number | null;
   sortOrder: number;
 }
 

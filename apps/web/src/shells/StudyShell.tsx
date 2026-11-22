@@ -277,7 +277,7 @@ export function StudyShell() {
               <GuidedTour onNavigationRequired={openNavigationForTour}>
                 {({ startTour }) => (
                   <Button type="button" className="study__help-action" variant="ghost" size="row" onClick={startTour}>
-                    Recorrer el estudio
+                    Ver recorrido
                   </Button>
                 )}
               </GuidedTour>
