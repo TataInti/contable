@@ -9,6 +9,7 @@ import {
   normalizeManualExtractionAmount,
 } from "@contable/contracts";
 import type { ManualExtractionFieldKey } from "@contable/contracts";
+import { SearchSelect } from "@contable/design-system";
 
 const VOUCHER_TYPE_LABELS: Record<(typeof VOUCHER_DOCUMENT_TYPES)[number], string> = {
   factura: "Factura",
@@ -108,17 +109,19 @@ export function ManualExtractionValueControl({
         {label}
       </label>
       {options ? (
-        <select
-          {...controlProps}
+        <SearchSelect
+          id={id}
+          label={label}
+          hideLabel
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={onChange}
           onBlur={onBlur}
-        >
-          <option value="">Seleccioná una opción</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
+          disabled={disabled}
+          invalid={Boolean(message)}
+          describedBy={describedBy}
+          placeholder="Seleccioná una opción"
+          options={options}
+        />
       ) : (
         <input
           {...controlProps}

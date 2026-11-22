@@ -10,6 +10,7 @@ import {
   perfilDemo,
   renderizarAdministracion,
 } from "./pruebas/entornoDemo";
+import { abrirListado, cambiarValor, valorElegido } from "../../test/elegirOpcion";
 
 const contexto = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -70,14 +71,14 @@ describe("Usuarios y accesos: utilidades (caracterización K1)", () => {
     renderizarAdministracion();
     await abrirEdicionRevisora();
 
-    fireEvent.change(screen.getByLabelText("Correo"), { target: { value: "revisora@estudio" } });
+    cambiarValor(screen.getByLabelText("Correo"), "revisora@estudio");
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(
       await screen.findByText("Ingresá un correo válido, por ejemplo nombre@estudio.com"),
     ).toBeTruthy();
     expect(api.patch).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText("Correo"), { target: { value: CORREO_VALIDO } });
+    cambiarValor(screen.getByLabelText("Correo"), CORREO_VALIDO);
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith("/firms/firm-a/users/u2", {
@@ -167,11 +168,10 @@ describe("Usuarios y accesos: utilidades (caracterización K1)", () => {
     expect(await screen.findByText("Demo Local")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Editar datos" }));
-    const zona = (await screen.findByLabelText("Zona horaria")) as HTMLSelectElement;
-    expect(zona.value).toBe("America/Demo_Local");
-    const opcion = zona.querySelector<HTMLOptionElement>(
-      'optgroup[label="América"] option[value="America/Demo_Local"]',
-    );
-    expect(opcion?.textContent).toBe("Demo Local");
+    await screen.findByLabelText("Zona horaria");
+    expect(valorElegido("Zona horaria")).toBe("America/Demo_Local");
+    const opcion = within(abrirListado("Zona horaria")).getByRole("option", { name: "Demo Local" });
+    expect(within(abrirListado("Zona horaria")).getByRole("group", { name: "América" }).contains(opcion)).toBe(true);
+    expect(opcion.textContent).toBe("Demo Local");
   });
 });

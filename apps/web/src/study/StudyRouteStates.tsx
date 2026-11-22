@@ -7,7 +7,7 @@ import type { StudyModule } from "./moduleRegistry";
 import "./study.css";
 
 function focusContext() {
-  document.querySelector<HTMLSelectElement>("#context-bar select:not(:disabled)")?.focus();
+  document.querySelector<HTMLElement>("#context-bar select:not(:disabled), #context-bar input[role=\"combobox\"]:not(:disabled)")?.focus();
 }
 
 function ContextRequired({

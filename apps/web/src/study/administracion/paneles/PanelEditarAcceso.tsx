@@ -1,4 +1,4 @@
-import { Button } from "@contable/design-system";
+import { Button, SearchSelect } from "@contable/design-system";
 import type { Dispatch, SetStateAction } from "react";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { PORTAL_ROLE_LABELS, type PortalMembership } from "../tipos";
@@ -32,18 +32,17 @@ export function PanelEditarAcceso({ portalEditing, setPortalEditing, portalRoleD
           });
         }}
       >
-        <label className="ds-field">
+        <div className="ds-field">
           <span className="ds-field__label">Rol del portal</span>
-          <select
-            className="ds-field__input"
+          <SearchSelect
+            hideLabel
+            label="Rol del portal"
             value={portalRoleDraft}
-            onChange={(event) => setPortalRoleDraft(event.target.value)}
-          >
-            {Object.entries(PORTAL_ROLE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>
+            onChange={(value) => setPortalRoleDraft(value)}
+            allowEmpty={false}
+            options={Object.entries(PORTAL_ROLE_LABELS).map(([value, label]) => ({ value, label }))}
+          />
+        </div>
         {updatePortalMembership.isError && actionError ? (
           <p className="form-error" role="alert">{actionError}</p>
         ) : null}

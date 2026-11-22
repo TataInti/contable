@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, Field } from "@contable/design-system";
+import { Button, Field, SearchSelect } from "@contable/design-system";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import type { RulePack, RuleRegimeOption } from "../tipos";
 import { ErrorAccion, ErrorConsulta } from "../Errores";
@@ -83,20 +83,19 @@ export function PanelNuevoPaquete({
             <label className="ds-field__label" htmlFor="new-rule-pack-regime">
               Régimen
             </label>
-            <select
+            <SearchSelect
               id="new-rule-pack-regime"
-              className="ds-field__input"
+              label="Régimen"
+              hideLabel
               value={newPack.regimeId}
-              onChange={(event) => setNewPack({ ...newPack, regimeId: event.target.value })}
+              onChange={(value) => setNewPack({ ...newPack, regimeId: value })}
               required
-            >
-              <option value="">Seleccioná un régimen…</option>
-              {regimesQuery.data?.map((regime) => (
-                <option key={regime.id} value={regime.id}>
-                  {regime.name} · {regime.taxType.name} · {regime.jurisdiction.name}
-                </option>
-              ))}
-            </select>
+              placeholder="Seleccioná un régimen…"
+              options={(regimesQuery.data ?? []).map((regime) => ({
+                value: regime.id,
+                label: `${regime.name} · ${regime.taxType.name} · ${regime.jurisdiction.name}`,
+              }))}
+            />
             {regimesQuery.isError ? (
               <ErrorConsulta
                 titulo="No pudimos consultar los regímenes"

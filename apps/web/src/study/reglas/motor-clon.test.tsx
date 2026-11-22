@@ -10,6 +10,7 @@ import {
   mockDemoApi,
   renderDemoReglas,
 } from "./datosDemoReglas";
+import { cambiarValor, valorElegido } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -120,9 +121,8 @@ describe("Reglas fiscales — motor al crear un borrador desde una versión (D-R
     renderDemoReglas();
 
     const dialog = await abrirCajonClon();
-    expect(
-      ((await within(dialog).findByLabelText("Opción de cálculo")) as HTMLSelectElement).value,
-    ).toBe("eng-vat-1");
+    await within(dialog).findByLabelText("Opción de cálculo");
+    expect(valorElegido("Opción de cálculo", dialog)).toBe("eng-vat-1");
   });
 
   it("elegir otro motor envía engineId del motor elegido", async () => {
@@ -139,9 +139,7 @@ describe("Reglas fiscales — motor al crear un borrador desde una versión (D-R
     renderDemoReglas();
 
     const dialog = await abrirCajonClon();
-    fireEvent.change(await within(dialog).findByLabelText("Opción de cálculo"), {
-      target: { value: "eng-vat-2" },
-    });
+    cambiarValor(await within(dialog).findByLabelText("Opción de cálculo"), "eng-vat-2");
     fireEvent.click(within(dialog).getByRole("button", { name: "Crear borrador y editar" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(

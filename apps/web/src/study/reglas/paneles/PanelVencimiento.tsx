@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
-import { Button, Field } from "@contable/design-system";
+import { Button, Field, SearchSelect } from "@contable/design-system";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ErrorAccion } from "../Errores";
 import { esFrecuencia, OPCIONES_FRECUENCIA, type DueDateFrequency } from "../frecuencias";
@@ -62,23 +62,19 @@ export function PanelVencimiento({
             <label className="ds-field__label" htmlFor="rule-due-frequency">
               Frecuencia
             </label>
-            <select
+            <SearchSelect
               id="rule-due-frequency"
+              label="Frecuencia"
+              hideLabel
               className="ds-field__input"
               value={newDueDate.frequency}
-              onChange={(event) => {
-                const frecuencia = event.target.value;
-                if (esFrecuencia(frecuencia))
-                  setNewDueDate({ ...newDueDate, frequency: frecuencia });
+              onChange={(value) => {
+                if (esFrecuencia(value)) setNewDueDate({ ...newDueDate, frequency: value });
               }}
               required
-            >
-              {OPCIONES_FRECUENCIA.map((opcion) => (
-                <option key={opcion.value} value={opcion.value}>
-                  {opcion.label}
-                </option>
-              ))}
-            </select>
+              allowEmpty={false}
+              options={OPCIONES_FRECUENCIA.map((opcion) => ({ value: opcion.value, label: opcion.label }))}
+            />
           </div>
           <Field
             label="Día del mes"
