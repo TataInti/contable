@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { VoucherPermissionsError, VoucherPermissionsService } from "./voucher-permissions-service.js";
 import { MonthlyWorkpaperService, WorkpaperError } from "./workpaper-service.js";
 import { gruposDeComprobantes, loadPerfilPermitido } from "./voucher-permissions-core.js";
-import { PREFIJO_CONTROL_PERFIL } from "./voucher-profile.js";
+import { PREFIJO_CONTROL_PERFIL, propuestaPerfil } from "./voucher-profile.js";
 
 /**
  * Corte 4B: tipos de comprobante permitidos por cliente y grupos «no corresponde al perfil».
@@ -12,13 +12,14 @@ import { PREFIJO_CONTROL_PERFIL } from "./voucher-profile.js";
  * Los comprobantes de la prueba son inventados, se marcan con RUN y se borran al terminar.
  */
 
-const FIRM = "3a1a835e-aedb-4575-9cd5-a57db1383345";
-const CLIENT = "01a203bc-3e51-73eb-87d6-9810715441ef";
-const WORKPAPER = "01a203bc-3f07-7639-83d9-7b4a3e1d8b1c";
-const USER = "11111111-1111-4111-8111-111111111111";
-const YEAR = 2026;
+// Los IDs los descubre beforeAll: el seed no deja los mismos en cada base (local y CI).
+let FIRM = "";
+let CLIENT = "";
+let WORKPAPER = "";
+let USER = "";
+let YEAR = 0;
 const RUN = randomUUID().slice(0, 8);
-const CTX = { userId: USER, firmId: FIRM, clientId: CLIENT, actorKind: "USER" as const };
+const CTX = { userId: "", firmId: "", clientId: "", actorKind: "USER" as const };
 const CUIT_CLIENTE_SINTETICO = "20999999993";
 const CUIT_CONTRAPARTE_SINTETICA = "27888888883";
 
@@ -94,6 +95,18 @@ async function materializar(sourceHash: string) {
 }
 
 beforeAll(async () => {
+  const expediente = await prisma.monthlyTaxWorkpaper.findFirst({
+    where: { status: "READY_TO_CALCULATE" },
+    orderBy: { periodStart: "desc" },
+  });
+  const usuario = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
+  if (!expediente || !usuario) throw new Error("El seed no trae un expediente mutable ni un usuario para la prueba");
+  FIRM = expediente.firmId;
+  CLIENT = expediente.clientId;
+  WORKPAPER = expediente.id;
+  USER = usuario.id;
+  YEAR = expediente.periodStart.getUTCFullYear();
+  Object.assign(CTX, { userId: USER, firmId: FIRM, clientId: CLIENT });
   await prisma.clientVoucherPermission.deleteMany({ where: { clientId: CLIENT, year: YEAR } });
 });
 
@@ -109,11 +122,16 @@ afterAll(async () => {
 });
 
 describe("tildes de comprobantes por cliente (corte 4B)", () => {
-  it("sin fila guardada, rige la propuesta de la condición (monotributista: C y sus notas)", async () => {
+  it("sin fila guardada, rige la propuesta de la condición del cliente", async () => {
+    const perfil = await prisma.taxpayerProfileVersion.findFirst({
+      where: { firmId: FIRM, clientId: CLIENT, status: "ACTIVE" },
+      orderBy: { version: "desc" },
+    });
+    const condicion = perfil?.nationalCondition ?? null;
     const estado = await permisos.get(CTX, { clientId: CLIENT, year: YEAR });
     expect(estado.origen).toBe("PROPUESTA");
-    expect(estado.condicion).toBe("MONOTRIBUTISTA");
-    expect(estado.allowedClasses).toEqual(["FACTURA_C", "NOTAS_C"]);
+    expect(estado.condicion).toBe(condicion);
+    expect(estado.allowedClasses).toEqual(propuestaPerfil(condicion).clases);
     expect(estado.exemptAllowed).toBe(false);
     expect(estado.offered).toContain("FACTURA_E");
     expect(estado.savedAt).toBeNull();
