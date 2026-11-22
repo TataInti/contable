@@ -160,7 +160,7 @@ describe("4F — abrir mes con un régimen sin rule pack", () => {
     }
 
     const response = await request("POST", `${clientBase}/tax-periods/open-month`, { month: "2026-10" });
-    ok(response, 200, "abrir mes sin error");
+    ok(response, 201, "abrir mes sin error");
     const opened = data<{
       regimes: number;
       periodsCreated: number;

@@ -221,8 +221,18 @@ describe("2C — un libro de ventas de ARCA alimenta Ingresos Brutos y TEM", () 
     );
     if (actividadMunicipal) {
       // Una por nivel: no hace falta clasificar ninguna venta, cada impuesto toma la de su nivel.
-      const municipal = await prisma.economicActivity.findFirstOrThrow({
-        where: { code: "COMERCIO", jurisdiction: { code: "AR-SMT" } },
+      // La actividad municipal la crea esta prueba si no existe: no depende de que otra prueba la haya dejado.
+      const smtJurisdiction = await prisma.jurisdiction.findFirstOrThrow({ where: { code: "AR-SMT" } });
+      const municipal = await prisma.economicActivity.upsert({
+        where: { code_jurisdictionId: { code: "COMERCIO", jurisdictionId: smtJurisdiction.id } },
+        update: { isActive: true },
+        create: {
+          code: "COMERCIO",
+          name: "Comercio",
+          jurisdictionId: smtJurisdiction.id,
+          validFrom: new Date("2026-01-01"),
+          source: "Prueba 2C",
+        },
       });
       ok(
         await request("POST", `${clientBase}/activities`, {
