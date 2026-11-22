@@ -490,3 +490,50 @@ describe("StudyExpedienteMensual", () => {
     await waitFor(() => expect(document.activeElement).toBe(allocationError.closest(".workpaper-action-error")));
   });
 });
+
+describe("StudyExpedienteMensual — aviso de cambio de actividad (brief 4L)", () => {
+  const jurisdiccion = { name: "Tucumán", isActive: true };
+  // Período del legajo: octubre 2026. La actividad anterior cierra el 30-09; la nueva rige desde el 01-10.
+  const anterior = {
+    id: "link-a",
+    isPrimary: true,
+    validFrom: "2026-01-01",
+    validTo: "2026-09-30",
+    activity: { id: "act-a", code: "101", name: "Venta de mercaderías", isActive: true, jurisdictionId: "jur-tuc", jurisdiction: jurisdiccion },
+  };
+  const cambio = (validFrom: string) => ({
+    id: "link-b",
+    isPrimary: true,
+    validFrom,
+    validTo: null,
+    isChange: true,
+    changeReason: "Suma de servicios",
+    activity: { id: "act-b", code: "202", name: "Servicios de consultoría", isActive: true, jurisdictionId: "jur-tuc", jurisdiction: jurisdiccion },
+  });
+
+  function conActividades(links: unknown[]) {
+    const base = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.endsWith("/activities") ? Promise.resolve(links) : base(path)) as never);
+  }
+
+  it("avisa en Clasificación el cambio que empieza en el mes del legajo, sin bloquear", async () => {
+    conActividades([anterior, cambio("2026-10-01")]);
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /Clasificación/ }));
+    expect(
+      await screen.findByText("Desde octubre 2026 cambió la actividad de Venta de mercaderías a Servicios de consultoría: cambia la alícuota"),
+    ).toBeTruthy();
+    expect(screen.getByText("Es informativo y no bloquea el cálculo. Revisá la clasificación de las ventas de ese mes.")).toBeTruthy();
+  });
+
+  it("no avisa cuando el cambio empieza en otro mes", async () => {
+    conActividades([anterior, cambio("2026-11-01")]);
+    renderPage();
+    const tab = await screen.findByRole("tab", { name: /Clasificación/ });
+    fireEvent.click(tab);
+    // Control: la etapa quedó abierta; así la ausencia del aviso no es por una pantalla sin renderizar.
+    await waitFor(() => expect(tab.getAttribute("aria-selected")).toBe("true"));
+    expect(screen.queryByText(/cambió la actividad de/)).toBeNull();
+  });
+});
