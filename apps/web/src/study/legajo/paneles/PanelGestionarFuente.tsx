@@ -207,7 +207,7 @@ export function PanelGestionarFuente({
                 {canEdit && workpaperId ? (
                   <>
                     <Button variant="text" onClick={() => reemplazarArchivo(batch.importBatchId)}>Reemplazar</Button>
-                    <Button variant="text" onClick={() => { setRetireBatchId(batch.importBatchId); setRetireReason(""); setVista("retirar"); }}>Retirar</Button>
+                    <Button variant="danger" onClick={() => { setRetireBatchId(batch.importBatchId); setRetireReason(""); setVista("retirar"); }}>Retirar</Button>
                   </>
                 ) : null}
                 <WorkpaperSourceReviewAction
@@ -299,7 +299,7 @@ export function PanelGestionarFuente({
           <textarea id="retire-reason" value={retireReason} maxLength={240} onChange={(event) => setRetireReason(event.target.value)} />
           {!retireReason.trim() ? <small>Indicá por qué retirás este archivo.</small> : null}
           <WorkpaperActionError error={retireMutation.error} />
-          <Button variant="danger-solid" disabled={!retireReason.trim() || retireMutation.isPending || !retireBatchId} onClick={() => retireBatchId && retireMutation.mutate({ batchId: retireBatchId, reason: retireReason.trim() })}>Confirmar retiro</Button>
+          <Button variant="danger" disabled={!retireReason.trim() || retireMutation.isPending || !retireBatchId} onClick={() => retireBatchId && retireMutation.mutate({ batchId: retireBatchId, reason: retireReason.trim() })}>Confirmar retiro</Button>
         </section>
       ) : null}
       {vista === "ayuda" ? (
