@@ -46,6 +46,8 @@ export type FiscalErrorCode =
   | "REGISTRATION_OVERLAP"
   | "REGISTRATION_NOT_FOUND"
   | "REGISTRATION_REQUIRED"
+  | "REGISTRATION_VALIDITY_INVALID"
+  | "REGISTRATION_IN_USE"
   | "ACTIVITY_LINK_NOT_FOUND"
   | "REGIME_NOT_FOUND"
   | "REGIME_MODULE_NOT_FOUND"
@@ -66,6 +68,8 @@ export type FiscalErrorCode =
   | "CATALOG_STATE_UNCHANGED"
   | "PERIOD_OVERLAP"
   | "PERIOD_NOT_FOUND"
+  | "PERIOD_IN_USE"
+  | "PERIOD_DATES_INVALID"
   | "OBLIGATION_EXISTS"
   | "OBLIGATION_NOT_FOUND"
   | "RULE_PACK_NOT_FOUND"
@@ -253,6 +257,12 @@ async function recordAudit(
       after: input.after,
     },
   });
+}
+
+/** Fecha calendario (UTC) como la lee el contador: dd/mm/aaaa. */
+function fechaDiaMes(date: Date): string {
+  const [year, month, day] = date.toISOString().slice(0, 10).split("-");
+  return `${day}/${month}/${year}`;
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
@@ -1651,6 +1661,86 @@ export class TaxpayerProfileService {
     });
   }
 
+  /**
+   * Corrige la fecha «Desde» de una inscripción vigente. Una obligación solo existe dentro de una
+   * inscripción que la cubre, así que la nueva fecha no puede dejar afuera una obligación ya creada.
+   */
+  async updateRegistration(
+    ctx: TenantContext,
+    input: { registrationId: string; validFrom: string },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const registration = await tx.taxRegistration.findFirst({
+        where: { id: input.registrationId, firmId: ctx.firmId, clientId: ctx.clientId! },
+        include: { regime: { select: { name: true } } },
+      });
+      if (!registration) {
+        throw new FiscalError("REGISTRATION_NOT_FOUND", "Inscripción fiscal no encontrada");
+      }
+      if (registration.status !== "ACTIVE") {
+        throw new FiscalError("INVALID_TRANSITION", "Solo se puede corregir la fecha de una inscripción vigente");
+      }
+      const validFrom = new Date(input.validFrom);
+      if (registration.validFrom.getTime() === validFrom.getTime()) return registration;
+      if (registration.validTo && validFrom > registration.validTo) {
+        throw new FiscalError(
+          "REGISTRATION_VALIDITY_INVALID",
+          `El «Desde» no puede ser posterior al «Hasta» de la inscripción (${fechaDiaMes(registration.validTo)})`,
+          ["validFrom"],
+        );
+      }
+      const uncovered = await tx.taxObligation.findFirst({
+        where: {
+          firmId: ctx.firmId,
+          clientId: registration.clientId,
+          regimeId: registration.regimeId,
+          period: { endDate: { lt: validFrom } },
+        },
+        include: { period: { select: { startDate: true, endDate: true } } },
+        orderBy: { period: { startDate: "asc" } },
+      });
+      if (uncovered) {
+        throw new FiscalError(
+          "REGISTRATION_IN_USE",
+          `Ya hay una obligación de ${registration.regime.name} para el período que termina el ${fechaDiaMes(uncovered.period.endDate)}. Elegí esa fecha o una anterior`,
+          ["validFrom"],
+        );
+      }
+      const overlap = await tx.taxRegistration.findFirst({
+        where: {
+          firmId: ctx.firmId,
+          clientId: registration.clientId,
+          regimeId: registration.regimeId,
+          status: "ACTIVE",
+          id: { not: registration.id },
+          ...(registration.validTo ? { validFrom: { lte: registration.validTo } } : {}),
+          OR: [{ validTo: null }, { validTo: { gte: validFrom } }],
+        },
+      });
+      if (overlap) {
+        throw new FiscalError(
+          "REGISTRATION_OVERLAP",
+          `Esa fecha se superpone con otra inscripción vigente del mismo régimen (desde ${fechaDiaMes(overlap.validFrom)})`,
+          ["validFrom"],
+        );
+      }
+      const updated = await tx.taxRegistration.update({
+        where: { id: registration.id },
+        data: { validFrom },
+      });
+      await recordAudit(tx, {
+        firmId: ctx.firmId,
+        userId: ctx.userId,
+        action: "tax.registration.updated",
+        entityType: "TaxRegistration",
+        entityId: registration.id,
+        before: { validFrom: registration.validFrom.toISOString() },
+        after: { validFrom: updated.validFrom.toISOString() },
+      });
+      return updated;
+    });
+  }
+
   /** Vincula una actividad económica al cliente. */
   async addClientActivity(
     ctx: TenantContext,
@@ -1796,6 +1886,114 @@ export class TaxPeriodService {
           ...(input.label ? { label: input.label } : {}),
         },
       });
+    });
+  }
+
+  /**
+   * Qué cuelga de un período: obligaciones, importaciones, comprobantes, ajustes, liquidaciones,
+   * instantáneas de rentabilidad y certificados. Con algo asociado, el período ya es parte de un
+   * trabajo en curso y no se toca desde acá.
+   */
+  private async periodAttachments(tx: Prisma.TransactionClient, periodId: string): Promise<string[]> {
+    const byPeriod = { periodId };
+    const byTaxPeriod = { taxPeriodId: periodId };
+    const counts = await Promise.all([
+      tx.taxObligation.count({ where: byPeriod }),
+      tx.importBatch.count({ where: byPeriod }),
+      tx.fiscalVoucher.count({ where: byPeriod }),
+      tx.taxAdjustment.count({ where: byPeriod }),
+      tx.taxSettlement.count({ where: byPeriod }),
+      tx.profitabilitySnapshot.count({ where: byPeriod }),
+      tx.withholdingCertificate.count({ where: byTaxPeriod }),
+      tx.perceptionCertificate.count({ where: byTaxPeriod }),
+    ]);
+    const names = ["una obligación", "importaciones", "comprobantes", "ajustes", "liquidaciones", "datos de rentabilidad", "certificados de retención", "certificados de percepción"];
+    return names.filter((_, index) => (counts[index] ?? 0) > 0);
+  }
+
+  private async requireFreePeriod(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    periodId: string,
+    action: "corregir" | "anular",
+  ) {
+    const period = await tx.taxPeriod.findFirst({
+      where: { id: periodId, firmId: ctx.firmId, clientId: ctx.clientId! },
+    });
+    if (!period) throw new FiscalError("PERIOD_NOT_FOUND", "Período fiscal no encontrado");
+    const attachments = await this.periodAttachments(tx, periodId);
+    if (attachments.length > 0) {
+      throw new FiscalError(
+        "PERIOD_IN_USE",
+        `El período ya tiene ${attachments.join(", ")}: no se puede ${action}. Solo se ${action === "anular" ? "anulan" : "corrigen"} períodos sin obligación ni documentos asociados`,
+      );
+    }
+    return period;
+  }
+
+  /** Corrige fechas o etiqueta de un período que todavía no tiene obligación ni documentos. */
+  async updatePeriod(
+    ctx: TenantContext,
+    input: { periodId: string; startDate?: string; endDate?: string; label?: string | null },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const period = await this.requireFreePeriod(tx, ctx, input.periodId, "corregir");
+      const startDate = input.startDate ? new Date(input.startDate) : period.startDate;
+      const endDate = input.endDate ? new Date(input.endDate) : period.endDate;
+      if (endDate < startDate) {
+        throw new FiscalError("PERIOD_DATES_INVALID", "El «Hasta» no puede ser anterior al «Desde»", ["endDate"]);
+      }
+      const overlap = await tx.taxPeriod.findFirst({
+        where: {
+          firmId: ctx.firmId,
+          clientId: period.clientId,
+          taxTypeId: period.taxTypeId,
+          id: { not: period.id },
+          startDate: { lte: endDate },
+          endDate: { gte: startDate },
+        },
+      });
+      if (overlap) {
+        throw new FiscalError("PERIOD_OVERLAP", "El período se solapa con uno existente para el mismo impuesto");
+      }
+      const label = input.label === undefined ? period.label : input.label?.trim() || null;
+      const updated = await tx.taxPeriod.update({
+        where: { id: period.id },
+        data: { startDate, endDate, label },
+      });
+      await recordAudit(tx, {
+        firmId: ctx.firmId,
+        userId: ctx.userId,
+        action: "tax.period.updated",
+        entityType: "TaxPeriod",
+        entityId: period.id,
+        before: { startDate: period.startDate.toISOString(), endDate: period.endDate.toISOString(), label: period.label },
+        after: { startDate: updated.startDate.toISOString(), endDate: updated.endDate.toISOString(), label: updated.label },
+      });
+      return updated;
+    });
+  }
+
+  /** Anula (elimina) un período sin obligación ni documentos asociados; queda en la auditoría. */
+  async deletePeriod(ctx: TenantContext, input: { periodId: string }) {
+    return withTenantContext(ctx, async (tx) => {
+      const period = await this.requireFreePeriod(tx, ctx, input.periodId, "anular");
+      await tx.taxPeriod.delete({ where: { id: period.id } });
+      await recordAudit(tx, {
+        firmId: ctx.firmId,
+        userId: ctx.userId,
+        action: "tax.period.deleted",
+        entityType: "TaxPeriod",
+        entityId: period.id,
+        before: {
+          taxTypeId: period.taxTypeId,
+          startDate: period.startDate.toISOString(),
+          endDate: period.endDate.toISOString(),
+          label: period.label,
+        },
+        after: { deleted: true },
+      });
+      return { id: period.id };
     });
   }
 
@@ -2862,6 +3060,19 @@ export class TaxCalendarService {
         include: { regime: { select: { id: true, name: true, taxTypeId: true } } },
       });
       if (registrations.length === 0) {
+        // Inscripciones vigentes que empiezan después del mes: se nombran para que el contador corrija su «Desde».
+        const later = await tx.taxRegistration.findMany({
+          where: { firmId: ctx.firmId, clientId: input.clientId, status: "ACTIVE", validFrom: { gt: endDate } },
+          include: { regime: { select: { name: true } } },
+          orderBy: { validFrom: "asc" },
+        });
+        if (later.length > 0) {
+          const detail = later.map((row) => `${row.regime.name} (desde ${fechaDiaMes(row.validFrom)})`).join(", ");
+          throw new FiscalError(
+            "REGISTRATION_REQUIRED",
+            `${label} no está cubierto por ninguna inscripción del cliente: ${detail}. Corregí la fecha «Desde» de la inscripción para abrir el mes`,
+          );
+        }
         throw new FiscalError(
           "REGISTRATION_REQUIRED",
           "El cliente no está inscripto en ningún régimen para ese mes. Registrá la inscripción antes de abrir el mes",

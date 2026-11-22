@@ -184,6 +184,14 @@ test("ciclo TEM San Miguel de Tucumán de punta a punta (Fase 4.2)", async ({ re
     expect(reviewed.status()).toBe(200);
   }
 
+  // 5b. Categoría anual del TEM (corte 1E): el mínimo mensual sale de la categoría del año.
+  //     B = $ 10.028 en el catálogo de la DIM 2026.
+  const category = await request.put(
+    `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tem-categories/2026`,
+    { headers, data: { category: "B" } },
+  );
+  expect(category.status()).toBe(200);
+
   // 6. Calcular TEM. Si la corrida anterior ya finalizó, el recálculo da 409
   //    (V-003 inmutable) y se reutiliza la existente finalizada.
   const calculated = await request.post(
@@ -201,7 +209,8 @@ test("ciclo TEM San Miguel de Tucumán de punta a punta (Fase 4.2)", async ({ re
     settlement = calcBody.data.settlement;
     expect(settlement.status).toBe("CALCULATED");
     expect(settlement.totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("3500.00");
-    expect(settlement.totals["TOTAL_A_INGRESAR"]).toBe("3500.00");
+    // 3.500 calculado < mínimo de la categoría B: rige el mínimo.
+    expect(settlement.totals["TOTAL_A_INGRESAR"]).toBe("10028.00");
   } else {
     const prev = await request.get(
       `${apiBaseUrl}/api/v1/firms/${firmId}/clients/${clientId}/tax-settlements`,
@@ -230,7 +239,8 @@ test("ciclo TEM San Miguel de Tucumán de punta a punta (Fase 4.2)", async ({ re
       totals: existing!.totals ?? {},
     };
     expect(settlement.totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("3500.00");
-    expect(settlement.totals["TOTAL_A_INGRESAR"]).toBe("3500.00");
+    // 3.500 calculado < mínimo de la categoría B: rige el mínimo.
+    expect(settlement.totals["TOTAL_A_INGRESAR"]).toBe("10028.00");
   }
 
   // 7. Revisión (maker-checker) y finalización (sólo si no está finalizada).
@@ -266,7 +276,7 @@ const filing = await request.post(
       data: {
         settlementId: settlement.id,
         filedAt: "2026-02-05",
-        amountFiled: "3500.00",
+        amountFiled: "10028.00",
         externalId: "TEM-E2E-001",
         evidenceDocumentId: acuseDocumentId,
       },
@@ -281,7 +291,7 @@ const filing = await request.post(
       data: {
         settlementId: settlement.id,
         paidAt: "2026-02-10",
-        amount: "3500.00",
+        amount: "10028.00",
         method: "TRANSFERENCIA",
       },
     },

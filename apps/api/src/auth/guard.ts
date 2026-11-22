@@ -141,6 +141,8 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
     resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write"),
   },
   { match: /\/tax-registrations/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
+  // Categoría anual del TEM del cliente (corte 1E): se lee y se elige con los permisos del perfil fiscal.
+  { match: /\/tem-categories/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
   { match: /\/tax-periods/, resolve: (m) => (m === "GET" ? "tax.profile.read" : "tax.profile.write") },
   // G5 fix: filings/payments de una obligación se mapean a sus capacidades
   // específicas ANTES del catch-all de /tax-obligations.

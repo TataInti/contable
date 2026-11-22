@@ -48,7 +48,7 @@ function ok(response: ApiResponse, status: number, what: string) {
   expect(response.statusCode, `${what}; respuesta: ${response.body}`).toBe(status);
 }
 
-async function request(method: "GET" | "POST" | "PATCH", url: string, payload?: Record<string, unknown>) {
+async function request(method: "GET" | "POST" | "PATCH" | "PUT", url: string, payload?: Record<string, unknown>) {
   return app!.inject({
     method,
     url,
@@ -201,6 +201,9 @@ describe("2C — un libro de ventas de ARCA alimenta Ingresos Brutos y TEM", () 
     ok(await request("POST", `${clientBase}/tax-profile-versions/${profile.id}/submit-review`), 200, "perfil a revisión");
     ok(await request("POST", `${clientBase}/tax-profile-versions/${profile.id}/activate`), 200, "perfil activo");
 
+    // El TEM toma su mínimo mensual de la categoría anual del cliente (corte 1E): sin ella el cálculo se bloquea.
+    ok(await request("PUT", `${clientBase}/tem-categories/2026`, { category: "B" }), 200, "categoría TEM 2026");
+
     // Una sola actividad: todas las ventas del libro se asignan a ella sin clasificarlas una por una.
     const activity = await prisma.economicActivity.findFirstOrThrow({ where: { code: "SERVICIOS", jurisdictionId } });
     ok(
@@ -319,7 +322,9 @@ describe("2C — un libro de ventas de ARCA alimenta Ingresos Brutos y TEM", () 
     expect(tem["BASE_TOTAL"]).toBe("115000.00");
     // Alícuotas de la regla «SERVICIOS» del catálogo sembrado: IIBB 4,5 % y TEM 3 %.
     expect(iibb["IMPUESTO_DETERMINADO"]).toBe("5175.00");
-    expect(tem["TRIBUTO_DETERMINADO"] ?? tem["IMPUESTO_DETERMINADO"]).toBe("3450.00");
+    expect(tem["IMPUESTO_POR_ACTIVIDAD"]).toBe("3450.00");
+    // 3.450 < mínimo mensual de la categoría B (10.028): el determinado del TEM es el mínimo.
+    expect(tem["IMPUESTO_DETERMINADO"]).toBe("10028.00");
   });
 });
 
