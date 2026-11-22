@@ -64,7 +64,10 @@ export interface ClientActivityLink {
   isPrimary: boolean;
   validFrom: string;
   validTo: string | null;
-  activity: { code: string; name: string; isActive: boolean; jurisdiction: { name: string; isActive: boolean } };
+  /** Cambio de actividad registrado (brief 4L): rige desde validFrom. Sin cambio, la actividad vale desde siempre. */
+  isChange?: boolean;
+  changeReason?: string | null;
+  activity: { id?: string; code: string; name: string; isActive: boolean; jurisdictionId?: string; jurisdiction: { name: string; isActive: boolean } };
 }
 
 export const today = new Date().toISOString().slice(0, 10);

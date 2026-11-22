@@ -31,6 +31,7 @@ import {
   buildLevelActivityContext,
   esMotorConActividadTipada,
   evaluateSaleActivities,
+  filtroVigenciaRango,
   mensajeActividadNoVigente,
   mensajeActividadSinClasificar,
   resolveLevelActivity,
@@ -420,7 +421,6 @@ export class SettlementService {
           clientId: input.clientId,
           regimeId: input.regimeId,
           status: "ACTIVE",
-          validFrom: { lte: period.endDate },
           OR: [{ validTo: null }, { validTo: { gte: period.startDate } }],
         },
       });
@@ -1090,10 +1090,9 @@ export class SettlementService {
               where: {
                 firmId: ctx.firmId,
                 clientId: input.clientId,
-                validFrom: { lte: period.endDate },
-                OR: [{ validTo: null }, { validTo: { gte: period.startDate } }],
                 profile: { status: "ACTIVE" },
                 activity: { jurisdictionId: input.jurisdictionId },
+                ...filtroVigenciaRango(period.startDate, period.endDate),
               },
               include: { activity: { select: { code: true } } },
             });
@@ -1190,6 +1189,7 @@ export class SettlementService {
               name: link.activity.name,
               validFrom: link.validFrom,
               validTo: link.validTo,
+              isChange: link.isChange,
             })),
             catalog: [...activitiesByCode.entries()].flatMap(([code, matches]) =>
               matches.map((match) => ({ code, jurisdictionId: match.jurisdictionId })),
@@ -1355,12 +1355,11 @@ export class SettlementService {
           issue.kind === "NOT_IN_FORCE",
       );
       if (notInForceIssues.length > 0) {
-        const [primera] = [...notInForceIssues].sort(
-          (a, b) => a.validFrom.getTime() - b.validFrom.getTime(),
-        );
+        // Primera venta en orden de emisión (brief 4L): el mensaje dice qué actividad no rige y a cuál reclasificar.
+        const [primera] = [...notInForceIssues];
         throw new SettlementError(
           "ACTIVITY_NOT_IN_FORCE",
-          mensajeActividadNoVigente({ activityName: primera!.activityName, validFrom: primera!.validFrom }, period),
+          mensajeActividadNoVigente({ activityName: primera!.activityName, successor: primera!.successor }, period),
         );
       }
       const unclassifiedIssues = activityIssues.filter((issue) => issue.kind === "UNCLASSIFIED");

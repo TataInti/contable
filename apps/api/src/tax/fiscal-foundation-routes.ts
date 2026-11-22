@@ -687,11 +687,30 @@ export function fiscalFoundationRoutes(app: FastifyInstance) {
           profileVersionId: z.string().uuid(),
           activityId: z.string().uuid(),
           isPrimary: z.boolean().optional(),
-          validFrom: z.string().date(),
+          validFrom: z.string().date().optional(),
         })
         .strict()
         .parse(req.body);
-      const data = await profiles.addClientActivity(ctx, pickDefined({ clientId: ctx.clientId!, ...body }) as { clientId: string; profileVersionId: string; activityId: string; isPrimary?: boolean; validFrom: string });
+      const data = await profiles.addClientActivity(ctx, pickDefined({ clientId: ctx.clientId!, ...body }) as { clientId: string; profileVersionId: string; activityId: string; isPrimary?: boolean; validFrom?: string });
+      return reply.code(201).send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // Registra un cambio de actividad (brief 4L): la actividad nueva rige desde el mes indicado.
+  app.post("/api/v1/firms/:firmId/clients/:clientId/activities/change", async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    try {
+      const body = z
+        .object({
+          activityId: z.string().uuid(),
+          validFrom: z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/, "Indicá el mes desde el que rige (AAAA-MM)"),
+          changeReason: z.string().trim().max(200).optional(),
+        })
+        .strict()
+        .parse(req.body);
+      const data = await profiles.registerActivityChange(ctx, { clientId: ctx.clientId!, ...body });
       return reply.code(201).send({ data });
     } catch (err) {
       return handleError(reply, err);

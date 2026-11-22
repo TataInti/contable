@@ -226,7 +226,9 @@ async function typeActiveVersion(
 type Escenario = {
   caso: string;
   /** Actividades vinculadas: código, nivel (jurisdicción) y fecha «Desde» de cada vínculo. */
-  vinculos: Array<{ code: string; jurisdictionCode: "AR-T" | "AR-SMT"; validFrom: string }>;
+  vinculos: Array<{ code: string; jurisdictionCode: "AR-T" | "AR-SMT"; validFrom?: string }>;
+  /** Cambio de actividad registrado tras vincular (brief 4L): actividad nueva y mes desde el que rige. */
+  cambio?: { code: string; jurisdictionCode: "AR-T" | "AR-SMT"; from: string };
   /** Fecha «Desde» de las inscripciones IIBB Tucumán y TEM San Miguel. */
   inscripcionDesde: string;
   /** Actividad con que se clasifican todas las ventas tras revisar el libro. */
@@ -275,10 +277,22 @@ async function prepararLibro(escenario: Escenario): Promise<Preparado> {
       profileVersionId: profile.id,
       activityId: activity.id,
       isPrimary: index === 0,
-      validFrom: vinculo.validFrom,
+      ...(vinculo.validFrom ? { validFrom: vinculo.validFrom } : {}),
     });
     ok(creado, 201, `vínculo de la actividad ${vinculo.code}`);
     vinculoIds[vinculo.code] = data<{ id: string }>(creado).id;
+  }
+  if (escenario.cambio) {
+    const nueva = await ensureActivity(escenario.cambio.code, escenario.cambio.jurisdictionCode);
+    ok(
+      await request("POST", `${clientBase}/activities/change`, {
+        activityId: nueva.id,
+        validFrom: escenario.cambio.from,
+        changeReason: "Cambio de prueba 4L",
+      }),
+      201,
+      `cambio de actividad a ${escenario.cambio.code}`,
+    );
   }
 
   const periods: Record<string, string> = {};
@@ -420,23 +434,57 @@ describe("4H — actividades vigentes en el período", () => {
     }
   });
 
-  it("caso E2E: actividades vinculadas desde 22/11 y ventas de octubre en REST-TUC → ACTIVITY_NOT_IN_FORCE con el mensaje de vigencia", async () => {
-    const { ruta, vinculoIds } = await prepararLibro({
-      caso: "vigencia-22nov",
+  it("4L — alta hoy sin fechas: actividades vinculadas y la inscripción desde el 22/11 liquidan octubre con base 115.000", async () => {
+    const { ruta, lectura, vinculoIds } = await prepararLibro({
+      caso: "alta-sin-fecha",
       vinculos: [
-        { code: "REST-TUC", jurisdictionCode: "AR-T", validFrom: "2026-11-22" },
-        { code: "REST-SMT", jurisdictionCode: "AR-SMT", validFrom: "2026-11-22" },
+        { code: "REST-TUC", jurisdictionCode: "AR-T" },
+        { code: "REST-SMT", jurisdictionCode: "AR-SMT" },
       ],
-      inscripcionDesde: "2026-10-01",
+      inscripcionDesde: "2026-11-22",
       actividadVentas: "REST-TUC",
     });
     expect(Object.keys(vinculoIds)).toEqual(["REST-TUC", "REST-SMT"]);
+    const calculo = await request("POST", ruta, { cutoff: END });
+    ok(calculo, 200, "cálculo de octubre con la actividad vinculada sin fecha y la inscripción posterior");
+    const componentes = data<Array<{ settlement: { totals: Record<string, string> } }>>(await request("GET", lectura));
+    expect(componentes).toHaveLength(2);
+    for (const componente of componentes) {
+      expect(componente.settlement.totals["BASE_TOTAL"]).toBe("115000.00");
+    }
+  });
+
+  it("4L — un cambio de actividad registrado para el 01/10 deja las ventas de octubre con la anterior: ACTIVITY_NOT_IN_FORCE con salida a la nueva", async () => {
+    const { ruta } = await prepararLibro({
+      caso: "cambio-octubre",
+      vinculos: [{ code: "REST-TUC", jurisdictionCode: "AR-T" }],
+      cambio: { code: "REST-TUC-NUEVA", jurisdictionCode: "AR-T", from: "2026-10-01" },
+      inscripcionDesde: "2026-11-22",
+      actividadVentas: "REST-TUC",
+    });
     const response = await request("POST", ruta, { cutoff: END });
     expect(response.statusCode).toBeGreaterThanOrEqual(400);
     const error = (response.json() as { error: { code: string; message: string } }).error;
     expect(error.code).toBe("ACTIVITY_NOT_IN_FORCE");
-    expect(error.message).toMatch(/^La actividad Actividad sintética REST-(TUC|SMT) no está vigente en octubre 2026 para este cliente \(vigente desde 22\/11\/2026\)\. Corregí la fecha «Desde» en Configuración fiscal → Actividades\.$/);
-    expect(error.message).not.toMatch(/otro nivel|más de una/);
+    expect(error.message).toBe(
+      "La actividad Actividad sintética REST-TUC no rige en octubre 2026. Reclasificá con Actividad sintética REST-TUC-NUEVA, vigente desde octubre 2026.",
+    );
+  });
+
+  it("4L — cambiar a una actividad de un nivel sin actividad vinculada responde ACTIVITY_CHANGE_NO_PREVIOUS", async () => {
+    const { clientBase } = await prepararLibro({
+      caso: "cambio-sin-previa",
+      vinculos: [{ code: "REST-TUC", jurisdictionCode: "AR-T" }],
+      inscripcionDesde: "2026-11-22",
+      actividadVentas: "REST-TUC",
+    });
+    const smt = await ensureActivity("REST-SMT", "AR-SMT");
+    const response = await request("POST", `${clientBase}/activities/change`, {
+      activityId: smt.id,
+      validFrom: "2026-10-01",
+    });
+    expect(response.statusCode).toBe(409);
+    expect((response.json() as { error: { code: string } }).error.code).toBe("ACTIVITY_CHANGE_NO_PREVIOUS");
   });
 
   it("con la fecha «Desde» corregida a 01/10 por el endpoint nuevo, IIBB y TEM calculan con base 115.000", async () => {
@@ -465,34 +513,21 @@ describe("4H — actividades vigentes en el período", () => {
     }
   });
 
-  it("4J — la clasificación marca como pendientes las ventas con actividad no vigente, con el texto del cálculo", async () => {
+  it("4L — vinculadas sin cambio registrado, la clasificación no marca pendientes por la fecha del alta y el cálculo corre", async () => {
     const { ruta } = await prepararLibro({
-      caso: "clasificacion-pendiente",
+      caso: "clasificacion-sin-fecha",
       vinculos: [
-        { code: "REST-TUC", jurisdictionCode: "AR-T", validFrom: "2026-11-22" },
-        { code: "REST-SMT", jurisdictionCode: "AR-SMT", validFrom: "2026-11-22" },
+        { code: "REST-TUC", jurisdictionCode: "AR-T" },
+        { code: "REST-SMT", jurisdictionCode: "AR-SMT" },
       ],
-      inscripcionDesde: "2026-10-01",
+      inscripcionDesde: "2026-11-22",
       actividadVentas: "REST-TUC",
     });
     const clasificaciones = ruta.replace(/\/calculate$/, "/classifications");
     const cobertura = data<ClasificacionCobertura>(await request("GET", clasificaciones));
-    const pendientes = cobertura.items.filter((item) => item.activityIssue);
-    expect(pendientes.length).toBeGreaterThan(0);
-    expect(cobertura.activityPending).toBe(pendientes.length);
-    expect(cobertura.classified + cobertura.pending + cobertura.excluded + cobertura.activityPending).toBe(
-      cobertura.total,
-    );
-    for (const item of pendientes) {
-      expect(item.activityIssue!.kind).toBe("NOT_IN_FORCE");
-      expect(item.activityIssue!.message).toMatch(
-        /^La actividad Actividad sintética REST-(TUC|SMT) no está vigente en octubre 2026 para este cliente \(vigente desde 22\/11\/2026\)\. Corregí la fecha «Desde» en Configuración fiscal → Actividades\.$/,
-      );
-    }
-    const calculo = await request("POST", ruta, { cutoff: END });
-    const error = (calculo.json() as { error: { code: string; message: string } }).error;
-    expect(error.code).toBe("ACTIVITY_NOT_IN_FORCE");
-    expect(pendientes.map((item) => item.activityIssue!.message)).toContain(error.message);
+    expect(cobertura.activityPending).toBe(0);
+    expect(cobertura.items.every((item) => item.activityIssue === null)).toBe(true);
+    ok(await request("POST", ruta, { cutoff: END }), 200, "cálculo sin hallazgos de actividad");
   });
 
   it("4J — con la «Desde» corregida, la clasificación deja de marcar pendientes y el cálculo corre", async () => {

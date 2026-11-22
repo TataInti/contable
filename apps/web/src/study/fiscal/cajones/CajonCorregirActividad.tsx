@@ -14,7 +14,7 @@ type Props = {
   updateActivity: { isPending: boolean; error: Error | null; mutate: (valores: { id: string; validFrom: string }) => void };
 };
 
-/** Corrige la fecha «Desde» de una actividad vinculada (brief 4H). Mismo patrón que la de inscripciones. */
+/** Corrige el mes en que rige un cambio de actividad (brief 4L): solo para los cambios registrados. */
 export function CajonCorregirActividad({ activity, onClose, updateActivity }: Props) {
   const [validFrom, setValidFrom] = useState("");
   const [intento, setIntento] = useState(false);
@@ -25,13 +25,13 @@ export function CajonCorregirActividad({ activity, onClose, updateActivity }: Pr
     setIntento(false);
   }, [activityId, validFromActual]);
   const errorDeApi = campoDelError(updateActivity.error) === "validFrom" ? updateActivity.error?.message : undefined;
-  const faltaFecha = intento && !validFrom ? "Indicá desde qué fecha rige la actividad." : undefined;
+  const faltaFecha = intento && !validFrom ? "Indicá desde qué mes rige el cambio." : undefined;
   return (
     <ActionDrawer
       isOpen={activity !== null}
       onClose={onClose}
-      title="Corregir fecha de la actividad"
-      description={activity ? `${activity.activity.name}. Hoy figura desde el ${formatearFecha(activity.validFrom)}.` : ""}
+      title="Corregir mes del cambio de actividad"
+      description={activity ? `${activity.activity.name}. Hoy rige desde el ${formatearFecha(activity.validFrom)}.` : ""}
     >
       <form
         className="study-form study-form--compact"
@@ -44,11 +44,11 @@ export function CajonCorregirActividad({ activity, onClose, updateActivity }: Pr
         }}
       >
         <CampoFecha
-          label="Desde"
+          label="Rige desde (mes)"
           id="act-edit-from"
           value={validFrom}
           onChange={(event) => setValidFrom(event.target.value)}
-          hint="Desde cuándo rige la actividad en su nivel. Los meses ya finalizados no cambian."
+          hint="Cuenta el mes de esta fecha. Los meses ya finalizados no cambian."
           error={errorDeApi ?? faltaFecha}
           required
         />
