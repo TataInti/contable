@@ -26,7 +26,9 @@ async function pick(campo: Locator, texto: string) {
  *      115.000) y percepciones de la DGR (TXT, 1.500,55).
  *   4. Cálculo sin mínimo: IIBB 4.025,00 − 1.500,55 = 2.524,45; TEM 690,00 < mínimo B → 10.028,00.
  *   5. Mínimo de IIBB 11.180 → aviso de desactualizado → Recalcular → 11.180,00 − 1.500,55 = 9.679,45.
- *   6. Controles, revisión con autorrevisión del titular (Administración → Controles) y cierre en pasos.
+ *   6. Autorrevisión del titular (Usuarios y accesos → Controles) y revisión de los lotes. Controles: se verifican
+ *      los 2 bloqueantes abiertos; su resolución con motivo y el cierre en pasos con el saldo del mes siguiente
+ *      QUEDAN PENDIENTES en este spec (no verificados).
  *
  * Importes calculados a mano en este archivo (no salen de la función que se prueba):
  *   IIBB base 115.000 × 3,5 % = 4.025,00 ; percepciones 1.500,55 ; neto 2.524,45
@@ -292,10 +294,16 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await esperarImporte(page, "9.679,45");
   });
 
-  await test.step("Controles y revisión: el titular habilita la autorrevisión y revisa su propio legajo", async () => {
-    await page.getByRole("tab", { name: /Controles/ }).click();
-    await page.getByRole("tab", { name: /Cierre/ }).click();
-    await expect(page.locator(".work-page").first()).toBeVisible();
+  await test.step("Controles: los bloqueantes abiertos quedan a la vista (su resolución queda pendiente de este spec)", async () => {
+    await page.getByRole("tab", { name: /^Controles/ }).click();
+    // Estado verificado: 2 bloqueantes abiertos («Acreditaciones bancarias vs. facturación», «Caja e imputaciones del período»).
+    // El flujo para aceptarlos con motivo no se pudo operar aún desde el E2E: ver el informe del PR.
+    await expect(page.locator(".work-page").first().getByText("bloqueantes abiertos").first()).toBeVisible();
+  });
+
+  await test.step("Cierre: estado del paso a paso registrado (no verificado aún: cierre bloqueado por los controles)", async () => {
+    await page.getByRole("tab", { name: /^Cierre/ }).click();
+    console.log("CIERRE >>>", (await page.locator(".work-page").first().innerText()).slice(0, 2500));
   });
 
   test.info().annotations.push({ type: "errores de mutación", description: errores.join(" | ") || "ninguno" });
