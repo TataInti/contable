@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button } from "@contable/design-system";
+import { Button, SearchSelect } from "@contable/design-system";
 import { DenseSection } from "../../ui/Dense";
 import type { Credential, RuleVersion } from "./tipos";
 import { ErrorAccion, ErrorConsulta } from "./Errores";
@@ -56,19 +56,18 @@ export function TabControlProfesional({
                       ) : credentialQuery.data?.length === 0 ? (
                         <p className="muted-copy">No hay matrículas profesionales cargadas para el estudio; sin una no se puede aprobar esta versión.</p>
                       ) : (
-                      <select
+                      <SearchSelect
+                        label="Matrícula para aprobar"
+                        hideLabel
                         className="ds-field__input"
-                        aria-label="Matrícula para aprobar"
                         value={credentialId}
-                        onChange={(event) => setCredentialId(event.target.value)}
-                      >
-                        <option value="">Seleccioná matrícula…</option>
-                        {credentialQuery.data?.map((credential) => (
-                          <option key={credential.id} value={credential.id}>
-                            {credential.registrationNumber} · {credential.jurisdiction.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(value) => setCredentialId(value)}
+                        placeholder="Seleccioná matrícula…"
+                        options={(credentialQuery.data ?? []).map((credential) => ({
+                          value: credential.id,
+                          label: `${credential.registrationNumber} · ${credential.jurisdiction.name}`,
+                        }))}
+                      />
                       )}
                       <Button
                         variant="secondary"

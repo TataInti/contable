@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { Button, Field } from "@contable/design-system";
+import { Button, Field, SearchSelect } from "@contable/design-system";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { MutationError } from "../MutationError";
 import { CONDITION_LABELS, type FiscalStep, type Mutacion, type ProfileForm, type TaxpayerProfileVersion } from "../utilidades";
@@ -47,20 +47,32 @@ export function CajonPerfil({ openFormStep, setOpenFormStep, latestProfile, crea
         <Field label="Domicilio fiscal" id="pf-fiscal-address" value={form.fiscalAddress} onChange={(event) => setForm({ ...form, fiscalAddress: event.target.value })} pattern=".*\S.*" title="Ingresá un domicilio fiscal o dejá el campo vacío." />
         <div className="ds-field">
           <label className="ds-field__label" htmlFor="pf-person-type">Tipo de persona</label>
-          <select id="pf-person-type" className="ds-field__input" value={form.personType} onChange={(event) => setForm({ ...form, personType: event.target.value as ProfileForm["personType"] })}>
-            <option value="">Elegí…</option>
-            <option value="JURIDICA">Jurídica</option>
-            <option value="FISICA">Física</option>
-          </select>
+          <SearchSelect
+            id="pf-person-type"
+            label="Tipo de persona"
+            hideLabel
+            value={form.personType}
+            onChange={(value) => setForm({ ...form, personType: value as ProfileForm["personType"] })}
+            placeholder="Elegí…"
+            options={[
+              { value: "JURIDICA", label: "Jurídica" },
+              { value: "FISICA", label: "Física" },
+            ]}
+          />
           {ayudaTipo ? <p className="ds-field__hint">{ayudaTipo}</p> : null}
           {aviso ? <p className="ds-field__hint">{aviso}</p> : null}
         </div>
         <div className="ds-field">
           <label className="ds-field__label" htmlFor="pf-condition">Condición nacional</label>
-          <select id="pf-condition" className="ds-field__input" value={form.nationalCondition} onChange={(event) => setForm({ ...form, nationalCondition: event.target.value as ProfileForm["nationalCondition"] })}>
-            <option value="">Elegí…</option>
-            {Object.entries(CONDITION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
+          <SearchSelect
+            id="pf-condition"
+            label="Condición nacional"
+            hideLabel
+            value={form.nationalCondition}
+            onChange={(value) => setForm({ ...form, nationalCondition: value as ProfileForm["nationalCondition"] })}
+            placeholder="Elegí…"
+            options={Object.entries(CONDITION_LABELS).map(([value, label]) => ({ value, label }))}
+          />
         </div>
         <Field label="Vigencia desde" id="pf-valid-from" type="date" value={form.validFrom} onChange={(event) => setForm({ ...form, validFrom: event.target.value })} required />
         <MutationError error={createProfile.error} />

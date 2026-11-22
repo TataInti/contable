@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Button, EmptyState, Field, Notice, Table, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, Table, useNotify, SearchSelect } from "@contable/design-system";
 import { api, downloadFile } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -286,42 +286,32 @@ export function StudyLiquidaciones() {
             <label className="ds-field__label" htmlFor="settlement-tax-period">
               Período fiscal
             </label>
-            <select
+            <SearchSelect
               id="settlement-tax-period"
-              className="ds-field__input"
+              label="Período fiscal"
+              hideLabel
               value={calculation.periodId}
-              onChange={(event) =>
-                setCalculation({ ...calculation, periodId: event.target.value, regimeId: "" })
-              }
+              onChange={(value) => setCalculation({ ...calculation, periodId: value, regimeId: "" })}
               required
-            >
-              <option value="">Seleccioná un período…</option>
-              {selectableTaxPeriods.map((period) => (
-                <option key={period.id} value={period.id}>
-                  {period.taxType.name} · {taxPeriodLabel(period)}
-                </option>
-              ))}
-            </select>
+              placeholder="Seleccioná un período…"
+              options={selectableTaxPeriods.map((period) => ({ value: period.id, label: `${period.taxType.name} · ${taxPeriodLabel(period)}` }))}
+            />
           </div>
           <div className="ds-field">
             <label className="ds-field__label" htmlFor="settlement-regime">
               Régimen
             </label>
-            <select
+            <SearchSelect
               id="settlement-regime"
-              className="ds-field__input"
+              label="Régimen"
+              hideLabel
               value={calculation.regimeId}
-              onChange={(event) => setCalculation({ ...calculation, regimeId: event.target.value })}
+              onChange={(value) => setCalculation({ ...calculation, regimeId: value })}
               required
               disabled={!calculation.periodId}
-            >
-              <option value="">Seleccioná un régimen…</option>
-              {availableRegimes.map((regime) => (
-                <option key={regime.id} value={regime.id}>
-                  {regime.name} · {regime.jurisdiction.name}{!regime.jurisdiction.isActive ? " (oculto)" : ""}
-                </option>
-              ))}
-            </select>
+              placeholder="Seleccioná un régimen…"
+              options={availableRegimes.map((regime) => ({ value: regime.id, label: `${regime.name} · ${regime.jurisdiction.name}${!regime.jurisdiction.isActive ? " (oculto)" : ""}` }))}
+            />
           </div>
           <Field
             label="Fecha de corte"

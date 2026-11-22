@@ -202,44 +202,38 @@ export function PanelEdicion({
               setProfileForm({ ...profileForm, serviceStartDate: event.target.value })
             }
           />
-          <label className="ds-field">
+          <div className="ds-field">
             <span className="ds-field__label">Moneda funcional</span>
-            <select
+            <SearchSelect
               id="client-profile-currency"
+              label="Moneda funcional"
+              hideLabel
               className="ctxbar__input"
               value={profileForm.functionalCurrency}
-              onChange={(event) =>
-                setProfileForm({ ...profileForm, functionalCurrency: event.target.value })
-              }
+              onChange={(value) => setProfileForm({ ...profileForm, functionalCurrency: value })}
               required
-            >
-              {BACKED_CURRENCIES.map((code) => (
-                <option key={code} value={code}>
-                  {code}
-                </option>
-              ))}
-              {currencyNotBacked ? (
-                <option value={profileForm.functionalCurrency}>
-                  {profileForm.functionalCurrency} — fuera de catálogo
-                </option>
-              ) : null}
-            </select>
-          </label>
+              allowEmpty={false}
+              options={[
+                ...BACKED_CURRENCIES.map((code) => ({ value: code, label: code })),
+                ...(currencyNotBacked ? [{ value: profileForm.functionalCurrency, label: `${profileForm.functionalCurrency} — fuera de catálogo` }] : []),
+              ]}
+            />
+          </div>
           {currencyNotBacked ? (
             <Notice tone="warning">
               La moneda guardada no está respaldada por el sistema. Elegí {BACKED_CURRENCIES.join(" o ")} para guardar la ficha.
             </Notice>
           ) : null}
-          <label className="ds-field">
+          <div className="ds-field">
             <span className="ds-field__label">Cierre de ejercicio</span>
-            <select
+            <SearchSelect
+              hideLabel
+              label="Cierre de ejercicio"
               className="ctxbar__input"
-              value={profileForm.fiscalYearEndMonth}
-              onChange={(event) =>
-                setProfileForm({ ...profileForm, fiscalYearEndMonth: event.target.value })
-              }
-            >
-              {[
+              value={String(profileForm.fiscalYearEndMonth)}
+              onChange={(value) => setProfileForm({ ...profileForm, fiscalYearEndMonth: value })}
+              allowEmpty={false}
+              options={[
                 "Enero",
                 "Febrero",
                 "Marzo",
@@ -252,41 +246,27 @@ export function PanelEdicion({
                 "Octubre",
                 "Noviembre",
                 "Diciembre",
-              ].map((month, index) => (
-                <option key={month} value={index + 1}>
-                  {month}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="ds-field">
+              ].map((month, index) => ({ value: String(index + 1), label: month }))}
+            />
+          </div>
+          <div className="ds-field">
             <span className="ds-field__label">Condición frente al IVA</span>
-            <select
+            <SearchSelect
               id="client-profile-vat"
+              label="Condición frente al IVA"
+              hideLabel
               className="ctxbar__input"
               value={profileForm.vatCondition}
-              onChange={(event) =>
-                setProfileForm({ ...profileForm, vatCondition: event.target.value })
-              }
-            >
-              <option value="">Sin especificar</option>
-              {CLIENT_VAT_CONDITIONS.map((condition) => (
-                <option key={condition} value={condition}>
-                  {CLIENT_VAT_CONDITION_LABELS[condition]}
-                </option>
-              ))}
-              {vatConditionIsLegacy ? (
-                <option value={profileForm.vatCondition}>
-                  {profileForm.vatCondition} — valor histórico (conservado)
-                </option>
-              ) : null}
-            </select>
+              onChange={(value) => setProfileForm({ ...profileForm, vatCondition: value })}
+              placeholder="Sin especificar"
+              options={CLIENT_VAT_CONDITIONS.map((condition) => ({ value: condition, label: CLIENT_VAT_CONDITION_LABELS[condition] }))}
+            />
             {vatConditionIsLegacy ? (
               <small className="study-legacy-note">
                 El valor histórico sigue visible y se conserva si no lo reemplazás.
               </small>
             ) : null}
-          </label>
+          </div>
           <div>
             <SearchSelect id="client-profile-province" name="province" className="ctxbar__input" label="Provincia" value={profileForm.province} onChange={(province) => setProfileForm({ ...profileForm, province })} options={[...ARGENTINA_PROVINCES.map((province) => ({ value: province, label: province })), ...(provinceIsLegacy ? [{ value: profileForm.province, label: `${profileForm.province} — valor histórico (conservado)` }] : [])]} />
             {provinceIsLegacy ? (
@@ -381,39 +361,26 @@ export function PanelEdicion({
               </p>
             ) : null}
           </fieldset>
-          <label className="ds-field">
+          <div className="ds-field">
             <span className="ds-field__label">Norma contable</span>
-            <select
+            <SearchSelect
               id="client-profile-standard"
+              label="Norma contable"
+              hideLabel
               className="ctxbar__input"
               value={standardValue}
-              onChange={(event) =>
-                setProfileForm({ ...profileForm, accountingStandard: event.target.value })
-              }
-            >
-              <option value="">Sin definir</option>
-              {standardCatalogUnavailable && standardValue ? (
-                <option value={standardValue}>{standardValue}</option>
-              ) : null}
-              {standardCatalog
-                .filter((entry) => entry.isActive)
-                .map((entry) => (
-                  <option key={entry.id} value={entry.name}>
-                    {entry.name}
-                  </option>
-                ))}
-              {standardCatalog
-                .filter((entry) => !entry.isActive && entry.name === standardValue)
-                .map((entry) => (
-                  <option key={entry.id} value={entry.name}>
-                    {entry.name} — desactivada en el catálogo
-                  </option>
-                ))}
-              {standardUnknown ? (
-                <option value={standardValue}>{standardValue} — fuera de catálogo</option>
-              ) : null}
-            </select>
-          </label>
+              onChange={(value) => setProfileForm({ ...profileForm, accountingStandard: value })}
+              placeholder="Sin definir"
+              options={[
+                ...(standardCatalogUnavailable && standardValue ? [{ value: standardValue, label: standardValue }] : []),
+                ...standardCatalog.filter((entry) => entry.isActive).map((entry) => ({ value: entry.name, label: entry.name })),
+                ...standardCatalog
+                  .filter((entry) => !entry.isActive && entry.name === standardValue)
+                  .map((entry) => ({ value: entry.name, label: `${entry.name} — desactivada en el catálogo` })),
+                ...(standardUnknown ? [{ value: standardValue, label: `${standardValue} — fuera de catálogo` }] : []),
+              ]}
+            />
+          </div>
           {standardCatalogLoading ? <small role="status">Cargando normas contables…</small> : null}
           {standardCatalogUnavailable ? (
             <Notice

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, Field, MoneyField } from "@contable/design-system";
+import { Button, Field, MoneyField, SearchSelect } from "@contable/design-system";
 import { api } from "../../../lib/api";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { formatMoney } from "../formato";
@@ -95,17 +95,21 @@ export function PanelPago({ posicion, onCerrar, firmId, clientId }: PanelPagoPro
           <label className="ds-field__label" htmlFor="tax-payment-method">
             Medio
           </label>
-          <select
+          <SearchSelect
             id="tax-payment-method"
+            label="Medio"
+            hideLabel
             className="ds-field__input"
             value={paymentForm.method}
-            onChange={(event) => setPaymentForm({ ...paymentForm, method: event.target.value })}
-          >
-            <option value="TRANSFERENCIA">Transferencia</option>
-            <option value="VEP">VEP</option>
-            <option value="EFECTIVO">Efectivo</option>
-            <option value="OTRO">Otro</option>
-          </select>
+            onChange={(value) => setPaymentForm({ ...paymentForm, method: value })}
+            allowEmpty={false}
+            options={[
+              { value: "TRANSFERENCIA", label: "Transferencia" },
+              { value: "VEP", label: "VEP" },
+              { value: "EFECTIVO", label: "Efectivo" },
+              { value: "OTRO", label: "Otro" },
+            ]}
+          />
         </div>
         <Field
           label="Referencia (opcional)"

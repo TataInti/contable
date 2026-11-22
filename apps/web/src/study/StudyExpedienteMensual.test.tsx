@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { ApiError, api } from "../lib/api";
 import { StudyExpedienteMensual } from "./StudyExpedienteMensual";
+import { abrirListado, cambiarValor } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -294,15 +295,12 @@ describe("StudyExpedienteMensual", () => {
       name: "Evidencia BOOK_RATE_RECONCILIATION",
     });
     expect(
-      within(evidence).getByRole("option", { name: "factura-revisada.pdf · Revisado" }),
+      within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).getByRole("option", { name: "factura-revisada.pdf · Revisado" }),
     ).toBeTruthy();
-    expect(within(evidence).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
+    expect(within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
 
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }),
-      { target: { value: "Respaldo revisado y conciliado" } },
-    );
-    fireEvent.change(evidence, { target: { value: "document-reviewed" } });
+    cambiarValor(screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), "Respaldo revisado y conciliado");
+    cambiarValor(evidence, "document-reviewed");
     const resolveButton = screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement;
     expect(resolveButton.disabled).toBe(false);
     fireEvent.click(resolveButton);
@@ -353,8 +351,8 @@ describe("StudyExpedienteMensual", () => {
     const explanation = await screen.findByText(
       "El respaldo es opcional. Para adjuntar uno, aprobá la extracción del documento en Bandeja.",
     );
-    expect(evidence.parentElement?.contains(explanation)).toBe(true);
-    expect(within(evidence).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
+    expect(evidence.closest(".ds-field")?.parentElement?.contains(explanation)).toBe(true);
+    expect(within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
     expect(
       (screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled,
     ).toBe(true);

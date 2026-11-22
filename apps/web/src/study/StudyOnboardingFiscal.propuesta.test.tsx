@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { api } from "../lib/api";
 import { StudyOnboardingFiscal } from "./StudyOnboardingFiscal";
+import { valorElegido } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -85,8 +86,8 @@ describe("StudyOnboardingFiscal · perfil nuevo precargado desde el alta", () =>
 
     await waitFor(() => expect((within(dialogo).getByLabelText("Razón social") as HTMLInputElement).value).toBe("Cliente SINTÉTICO persona humana"));
     expect((within(dialogo).getByLabelText("CUIT") as HTMLInputElement).value).toBe("20111111112");
-    expect((within(dialogo).getByLabelText("Tipo de persona") as HTMLSelectElement).value).toBe("FISICA");
-    expect((within(dialogo).getByLabelText("Condición nacional") as HTMLSelectElement).value).toBe("RESPONSABLE_INSCRIPTO");
+    expect(valorElegido("Tipo de persona", dialogo)).toBe("FISICA");
+    expect(valorElegido("Condición nacional", dialogo)).toBe("RESPONSABLE_INSCRIPTO");
     expect(within(dialogo).getByText("Propuesto según la forma jurídica del alta")).toBeTruthy();
 
     const guardar = within(dialogo.querySelector(".action-drawer__footer") as HTMLElement).getByRole("button", { name: "Crear perfil" }) as HTMLButtonElement;

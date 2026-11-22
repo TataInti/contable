@@ -31,7 +31,7 @@
     {"file":"apps/api/src/tax/workpaper-service.ts","rule":"EQ","property":"code","snippetHash":"ddf0d6653d6a973933b522421b3caf73069e40eaafff0386dcec970d546f0506","closesIn":"corte 8 (A4)"},
     {"file":"apps/api/src/tax/workpaper-service.ts","rule":"EQ","property":"concept","snippetHash":"d20b78fe52dd0d1e3c612fca8c2423d473fc9a70e412e59ecafae3499c1dfc20","closesIn":"cortes 4a-i/4a-ii"},
     {"file":"apps/api/src/tax/workpaper-service.ts","rule":"EQ","property":"taxTypeCode","snippetHash":"c291527d832cea5a4cc2bb712397aad7fa0b31ab13202e2f0f7525d2d0cf5205","closesIn":"corte 8 (A4)"},
-    {"file":"apps/web/src/study/legajo/paneles/PanelSaldoInicial.tsx","rule":"EQ","property":"code","snippetHash":"88284ada6d4ca64966df4106534266619a345bc6f2b275b0b7716d980ab55c2b","closesIn":"corte 8"},
+    {"file":"apps/web/src/study/legajo/paneles/PanelSaldoInicial.tsx","rule":"EQ","property":"code","snippetHash":"d4e98873032c5273e12fc4ac57f5da2f844efe4b121b3ee63336cf1a978c86b6","closesIn":"corte 8"},
     {"file":"apps/web/src/study/legajo/paneles/PanelSaldoInicial.tsx","rule":"EQ","property":"code","snippetHash":"469e7bd440e95841f1296fbb40ca6787d46531353f211219a7e3b8d8c5b0c5aa","closesIn":"corte 8"},
     {"file":"apps/web/src/study/legajo/etapas/EtapaCalculo.tsx","rule":"EQ","property":"concept","snippetHash":"e1b999a94fa60cee9091fbd27bc0168693c75460b80937cfc3fffaca605d31d4","closesIn":"corte 8"},
     {"file":"apps/web/src/study/legajo/etapas/EtapaControles.tsx","rule":"MAP_INDEX","property":"code","snippetHash":"c9610ded94cf42ccec86ba3e163d3f69e95b75185404d24ae82b8ae64ef94bab","closesIn":"corte 8"},

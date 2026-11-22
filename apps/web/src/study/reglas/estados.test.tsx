@@ -17,6 +17,7 @@ import {
   mockDemoApi,
   renderDemoReglas,
 } from "./datosDemoReglas";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 // Foco 3.2a: estados y errores de Reglas fiscales (R03; D-R3-3 y D-R3-9).
 // Cada prueba cubre un punto de la sección 7d del informe: el estado antes de responder,
@@ -162,9 +163,7 @@ describe("Reglas fiscales — estados de la lista y de la banda (7d-1, 7d-4, 7d-
     mockDemoApi(makeDemoDetail());
     renderDemoReglas();
     await tablaPaquetes();
-    fireEvent.change(screen.getByRole("searchbox", { name: /Buscar paquetes/ }), {
-      target: { value: "zzz-sin-coincidencias" },
-    });
+    cambiarValor(screen.getByRole("searchbox", { name: /Buscar paquetes/ }), "zzz-sin-coincidencias");
     expect(await screen.findByText("Ningún paquete coincide")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Quitar filtros" }));
     expect(await tablaPaquetes()).toBeTruthy();
@@ -290,9 +289,7 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     mockDemoApi(makeDemoDetail());
     vi.mocked(api.put).mockRejectedValue(new Error("Error de guardado Demo"));
     renderDemoReglas();
-    fireEvent.change(await screen.findByLabelText("Concepto de la fila 1"), {
-      target: { value: "Cambio Demo" },
-    });
+    cambiarValor(await screen.findByLabelText("Concepto de la fila 1"), "Cambio Demo");
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
     // D-R3-3: el error de guardar va junto a «Guardar borrador», en el encabezado del resumen.
     const resumen = (await screen.findByRole("heading", { level: 2, name: "Demo · IVA Responsable Inscripto" })).closest("section") as HTMLElement;
@@ -335,13 +332,9 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     renderDemoReglas();
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo paquete" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Código"), {
-      target: { value: "DEMO-NUEVO" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Nombre"), {
-      target: { value: "Demo nuevo" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Régimen"), { target: { value: "regime-1" } });
+    cambiarValor(within(dialog).getByLabelText("Código"), "DEMO-NUEVO");
+    cambiarValor(within(dialog).getByLabelText("Nombre"), "Demo nuevo");
+    cambiarValor(within(dialog).getByLabelText("Régimen"), "regime-1");
     fireEvent.click(within(dialog).getByRole("button", { name: "Crear paquete" }));
     expect(await within(dialog).findByText("Error de paquete Demo")).toBeTruthy();
   });
@@ -353,7 +346,7 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     fireEvent.click(await pestana(/Vencimientos/));
     fireEvent.click(await screen.findByRole("button", { name: "Agregar vencimiento" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Día del mes"), { target: { value: "20" } });
+    cambiarValor(within(dialog).getByLabelText("Día del mes"), "20");
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar vencimiento" }));
     expect(await within(dialog).findByText("Error de vencimiento Demo")).toBeTruthy();
   });
@@ -365,9 +358,7 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     fireEvent.click(await pestana(/Fuentes/));
     fireEvent.click(await screen.findByRole("button", { name: "Agregar fuente" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Título"), {
-      target: { value: "Fuente Demo" },
-    });
+    cambiarValor(within(dialog).getByLabelText("Título"), "Fuente Demo");
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar fuente" }));
     expect(await within(dialog).findByText("Error de fuente Demo")).toBeTruthy();
   });
@@ -390,9 +381,7 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     vi.mocked(api.post).mockRejectedValue(new Error("Error de aprobación Demo"));
     renderDemoReglas();
     fireEvent.click(await pestana(/Control profesional/));
-    fireEvent.change(await screen.findByLabelText("Matrícula para aprobar"), {
-      target: { value: "cred-1" },
-    });
+    cambiarValor(await screen.findByLabelText("Matrícula para aprobar"), "cred-1");
     fireEvent.click(screen.getByRole("button", { name: "Aprobar" }));
     const panel = await seccion("Flujo de revisión anterior");
     expect(await within(panel).findByText("Error de aprobación Demo")).toBeTruthy();

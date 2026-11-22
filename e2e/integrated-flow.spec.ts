@@ -19,23 +19,20 @@ async function ensureStudyContext(page: Page) {
   // El cliente se elige en el menú lateral; el período, sólo en las pantallas
   // que lo necesitan, en la barra superior.
   const clientSelect = page.getByRole("combobox", { name: "Cliente en el que estás trabajando" });
-  if ((await clientSelect.inputValue()) === "") {
-    const clientOptions = await clientSelect.locator("option").evaluateAll((options) =>
-      options
-        .map((option) => option.getAttribute("value") ?? "")
-        .filter((value) => value.length > 0),
-    );
-    if (clientOptions.length > 0) await clientSelect.selectOption(clientOptions[0]!);
+  if ((await clientSelect.isEnabled()) && (await clientSelect.inputValue()) === "") {
+    await clientSelect.click();
+    const clientChoices = page.getByRole("listbox").getByRole("option");
+    // La primera opción es el «vacío» (placeholder); la segunda, el primer cliente.
+    if ((await clientChoices.count()) > 1) await clientChoices.nth(1).click();
+    else await page.keyboard.press("Escape");
   }
 
   const periodSelect = page.locator("#context-bar").getByRole("combobox", { name: /^Período/ });
-  if ((await periodSelect.count()) > 0 && (await periodSelect.inputValue()) === "") {
-    const periodOptions = await periodSelect.locator("option").evaluateAll((options) =>
-      options
-        .map((option) => option.getAttribute("value") ?? "")
-        .filter((value) => value.length > 0),
-    );
-    if (periodOptions.length > 0) await periodSelect.selectOption(periodOptions[0]!);
+  if ((await periodSelect.count()) > 0 && (await periodSelect.isEnabled()) && (await periodSelect.inputValue()) === "") {
+    await periodSelect.click();
+    const periodChoices = page.getByRole("listbox").getByRole("option");
+    if ((await periodChoices.count()) > 1) await periodChoices.nth(1).click();
+    else await page.keyboard.press("Escape");
   }
 }
 

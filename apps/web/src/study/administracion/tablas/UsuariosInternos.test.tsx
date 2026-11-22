@@ -10,6 +10,7 @@ import {
   mockApiDemo,
   renderizarAdministracion,
 } from "../pruebas/entornoDemo";
+import { cambiarValor } from "../../../test/elegirOpcion";
 
 const contexto = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -63,23 +64,21 @@ describe("Usuarios internos: tabla (caracterización K2)", () => {
     await screen.findByText("Titular Demo");
     const buscar = screen.getByRole("searchbox");
 
-    fireEvent.change(buscar, { target: { value: "titular" } });
+    cambiarValor(buscar, "titular");
     expect(screen.getByText("Titular Demo")).toBeTruthy();
     expect(screen.queryByText("Revisora Demo")).toBeNull();
 
-    fireEvent.change(buscar, { target: { value: "auditor@example.com" } });
+    cambiarValor(buscar, "auditor@example.com");
     expect(screen.getByText("Auditor Demo")).toBeTruthy();
     expect(screen.queryByText("Titular Demo")).toBeNull();
 
-    fireEvent.change(buscar, { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("Filtrar por rol"), { target: { value: "REVIEWER" } });
+    cambiarValor(buscar, "");
+    cambiarValor(screen.getByLabelText("Filtrar por rol"), "REVIEWER");
     expect(screen.getByText("Revisora Demo")).toBeTruthy();
     expect(screen.queryByText("Auditor Demo")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Filtrar por rol"), { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), {
-      target: { value: "SUSPENDED" },
-    });
+    cambiarValor(screen.getByLabelText("Filtrar por rol"), "");
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "SUSPENDED");
     expect(screen.getByText("Auditor Demo")).toBeTruthy();
     expect(screen.queryByText("Revisora Demo")).toBeNull();
   });
@@ -192,7 +191,7 @@ describe("Usuarios internos: tabla (caracterización K2)", () => {
   it("muestra el vacío de filtros cuando ningún usuario coincide", async () => {
     renderizarAdministracion();
     await screen.findByText("Titular Demo");
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz" } });
+    cambiarValor(screen.getByRole("searchbox"), "zzz");
     expect(screen.getByText("Ningún usuario coincide con los filtros")).toBeTruthy();
     expect(screen.getByText("Probá con otro nombre o correo, o quitá filtros.")).toBeTruthy();
   });

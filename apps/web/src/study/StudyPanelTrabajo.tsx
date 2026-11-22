@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, EmptyState, Notice } from "@contable/design-system";
+import { Button, EmptyState, Notice, SearchSelect } from "@contable/design-system";
 import {
   TAX_PANEL_DEFAULT_LOOKBACK_DAYS,
   type TaxPanelResponse,
@@ -456,22 +456,19 @@ export function StudyPanelTrabajo() {
       <DenseToolbar>
         <div className="panel-trabajo__fila">
           <div className="panel-trabajo__filtro panel-trabajo__filtro--responsable">
-            <select
+            <SearchSelect
+              hideLabel
+              label="Responsable"
               className="dense-select"
-              aria-label="Responsable"
               value={filtros.responsable}
-              onChange={(evento) =>
-                cambiarFiltros((actual) => ({ ...actual, responsable: evento.target.value }))
-              }
-            >
-              <option value={RESPONSABLE_MIS}>Responsable: Mis obligaciones</option>
-              <option value={RESPONSABLE_TODOS}>Responsable: Todo el estudio</option>
-              {responsables.map((opcion) => (
-                <option key={opcion.value} value={opcion.value}>
-                  {`Responsable: ${opcion.label}`}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => cambiarFiltros((actual) => ({ ...actual, responsable: value }))}
+              allowEmpty={false}
+              options={[
+                { value: RESPONSABLE_MIS, label: "Responsable: Mis obligaciones" },
+                { value: RESPONSABLE_TODOS, label: "Responsable: Todo el estudio" },
+                ...responsables.map((opcion) => ({ value: opcion.value, label: `Responsable: ${opcion.label}` })),
+              ]}
+            />
           </div>
           <div className="panel-trabajo__filtro panel-trabajo__filtro--terminacion">
             <span className="dense-dim">Terminación de CUIT</span>
@@ -485,57 +482,39 @@ export function StudyPanelTrabajo() {
             />
           </div>
           <div className="panel-trabajo__filtro panel-trabajo__filtro--impuesto">
-            <select
+            <SearchSelect
+              hideLabel
+              label="Impuesto"
               className="dense-select"
-              aria-label="Impuesto"
               value={filtros.impuesto}
-              onChange={(evento) =>
-                cambiarFiltros((actual) => ({ ...actual, impuesto: evento.target.value }))
-              }
-            >
-              <option value="">Impuesto: todos</option>
-              {impuestos.map((opcion) => (
-                <option key={opcion.value} value={opcion.value}>
-                  {`Impuesto: ${opcion.label}`}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => cambiarFiltros((actual) => ({ ...actual, impuesto: value }))}
+              placeholder="Impuesto: todos"
+              options={impuestos.map((opcion) => ({ value: opcion.value, label: `Impuesto: ${opcion.label}` }))}
+            />
           </div>
         </div>
         <div className="panel-trabajo__fila">
           <div className="panel-trabajo__filtro panel-trabajo__filtro--estado">
-            <select
+            <SearchSelect
+              hideLabel
+              label="Estado"
               className="dense-select"
-              aria-label="Estado"
               value={filtros.estado}
-              onChange={(evento) =>
-                cambiarFiltros((actual) => ({ ...actual, estado: evento.target.value }))
-              }
-            >
-              <option value="">Estado: todos</option>
-              {opcionesEstado().map((opcion) => (
-                <option key={opcion.value} value={opcion.value}>
-                  {`Estado: ${opcion.label}`}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => cambiarFiltros((actual) => ({ ...actual, estado: value }))}
+              placeholder="Estado: todos"
+              options={opcionesEstado().map((opcion) => ({ value: opcion.value, label: `Estado: ${opcion.label}` }))}
+            />
           </div>
           <div className="panel-trabajo__filtro panel-trabajo__filtro--periodo">
-            <select
+            <SearchSelect
+              hideLabel
+              label="Período fiscal"
               className="dense-select"
-              aria-label="Período fiscal"
               value={filtros.periodo}
-              onChange={(evento) =>
-                cambiarFiltros((actual) => ({ ...actual, periodo: evento.target.value }))
-              }
-            >
-              <option value="">Período fiscal: todos</option>
-              {periodos.map((opcion) => (
-                <option key={opcion.value} value={opcion.value}>
-                  {`Período fiscal: ${opcion.label}`}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => cambiarFiltros((actual) => ({ ...actual, periodo: value }))}
+              placeholder="Período fiscal: todos"
+              options={periodos.map((opcion) => ({ value: opcion.value, label: `Período fiscal: ${opcion.label}` }))}
+            />
           </div>
           <div className="panel-trabajo__fechas">
             <div className="panel-trabajo__fechas-campos">

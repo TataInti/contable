@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, useNotify, SearchSelect } from "@contable/design-system";
 import {
   ACTIVITY_CODE_PATTERN,
   normalizeActivityCode,
@@ -1232,41 +1232,41 @@ export function StudyCatalogosFiscales() {
           onChange={setSearch}
           placeholder="Buscar código o nombre…"
         />
-        <select
+        <SearchSelect
+          hideLabel
+          label="Filtrar por jurisdicción"
           className="dense-select"
-          aria-label="Filtrar por jurisdicción"
           value={jurisdictionFilter}
-          onChange={(event) => setJurisdictionFilter(event.target.value)}
-        >
-          <option value="">Jurisdicción: todas</option>
-          {jurisdictions.map((jurisdiction) => (
-            <option key={jurisdiction.id} value={jurisdiction.id}>
-              {jurisdictionLabel(jurisdiction)}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => setJurisdictionFilter(value)}
+          placeholder="Jurisdicción: todas"
+          options={jurisdictions.map((jurisdiction) => ({ value: jurisdiction.id, label: jurisdictionLabel(jurisdiction) }))}
+        />
         {originKnown ? (
-          <select
+          <SearchSelect
+            hideLabel
+            label="Filtrar por origen"
             className="dense-select"
-            aria-label="Filtrar por origen"
             value={originFilter}
-            onChange={(event) => setOriginFilter(event.target.value as "" | "REFERENCE" | "UI")}
-          >
-            <option value="">Origen: todos</option>
-            <option value="REFERENCE">Referencia</option>
-            <option value="UI">Del estudio</option>
-          </select>
+            onChange={(value) => setOriginFilter(value as "" | "REFERENCE" | "UI")}
+            placeholder="Origen: todos"
+            options={[
+              { value: "REFERENCE", label: "Referencia" },
+              { value: "UI", label: "Del estudio" },
+            ]}
+          />
         ) : null}
-        <select
+        <SearchSelect
+          hideLabel
+          label="Filtrar por estado"
           className="dense-select"
-          aria-label="Filtrar por estado"
           value={stateFilter}
-          onChange={(event) => setStateFilter(event.target.value as "" | "active" | "inactive")}
-        >
-          <option value="">Estado: todos</option>
-          <option value="active">Activos</option>
-          <option value="inactive">Ocultos</option>
-        </select>
+          onChange={(value) => setStateFilter(value as "" | "active" | "inactive")}
+          placeholder="Estado: todos"
+          options={[
+            { value: "active", label: "Activos" },
+            { value: "inactive", label: "Ocultos" },
+          ]}
+        />
         {tab === "regimes" ? (
           <Button
             type="button"
@@ -1340,20 +1340,20 @@ export function StudyCatalogosFiscales() {
           />
           <div className="ds-field dense-form__full">
             <label className="ds-field__label" htmlFor="authority-jurisdiction">Jurisdicción</label>
-            <select
+            <SearchSelect
               id="authority-jurisdiction"
-              className="ds-field__input"
+              label="Jurisdicción"
+              hideLabel
               value={authorityForm.jurisdictionId}
-              onChange={(event) => setAuthorityForm({ ...authorityForm, jurisdictionId: event.target.value })}
+              onChange={(value) => setAuthorityForm({ ...authorityForm, jurisdictionId: value })}
               required
-            >
-              <option value="">Seleccioná una jurisdicción…</option>
-              {selectionOptions<JurisdictionOption>(jurisdictions, authorityForm.jurisdictionId).map((jurisdiction) => (
-                <option key={jurisdiction.id} value={jurisdiction.id} disabled={!jurisdiction.isActive}>
-                  {jurisdictionLabel(jurisdiction)}{!jurisdiction.isActive ? " (oculto)" : ""}
-                </option>
-              ))}
-            </select>
+              placeholder="Seleccioná una jurisdicción…"
+              options={selectionOptions<JurisdictionOption>(jurisdictions, authorityForm.jurisdictionId).map((jurisdiction) => ({
+                value: jurisdiction.id,
+                label: `${jurisdictionLabel(jurisdiction)}${!jurisdiction.isActive ? " (oculto)" : ""}`,
+                disabled: !jurisdiction.isActive,
+              }))}
+            />
           </div>
           <MutationError error={editingAuthority ? updateAuthority.error : createAuthority.error} />
           <div className="study-form__actions">
@@ -1405,45 +1405,44 @@ export function StudyCatalogosFiscales() {
           />
           <div className="ds-field">
             <label className="ds-field__label" htmlFor="regime-tax-type">Impuesto</label>
-            <select
+            <SearchSelect
               id="regime-tax-type"
-              className="ds-field__input"
+              label="Impuesto"
+              hideLabel
               value={regimeForm.taxTypeId}
-              onChange={(event) => {
-                const taxTypeId = event.target.value;
-                const selectedTaxType = taxTypes.find((item) => item.id === taxTypeId);
+              onChange={(value) => {
+                const selectedTaxType = taxTypes.find((item) => item.id === value);
                 setRegimeForm({
                   ...regimeForm,
-                  taxTypeId,
+                  taxTypeId: value,
                   calcFamilyId: selectedTaxType?.defaultFamilyId ?? "",
                 });
               }}
               required
-            >
-              <option value="">Seleccioná un impuesto…</option>
-              {selectionOptions<TaxTypeOption>(taxTypes, regimeForm.taxTypeId).map((taxType) => (
-                <option key={taxType.id} value={taxType.id} disabled={!taxType.isActive}>
-                  {taxType.name} ({taxType.code}){!taxType.isActive ? " (oculto)" : ""}
-                </option>
-              ))}
-            </select>
+              placeholder="Seleccioná un impuesto…"
+              options={selectionOptions<TaxTypeOption>(taxTypes, regimeForm.taxTypeId).map((taxType) => ({
+                value: taxType.id,
+                label: `${taxType.name} (${taxType.code})${!taxType.isActive ? " (oculto)" : ""}`,
+                disabled: !taxType.isActive,
+              }))}
+            />
           </div>
           <div className="ds-field">
             <label className="ds-field__label" htmlFor="regime-calc-family">Familia de cálculo</label>
-            <select
+            <SearchSelect
               id="regime-calc-family"
-              className="ds-field__input"
+              label="Familia de cálculo"
+              hideLabel
               value={regimeForm.calcFamilyId}
-              onChange={(event) => setRegimeForm({ ...regimeForm, calcFamilyId: event.target.value })}
+              onChange={(value) => setRegimeForm({ ...regimeForm, calcFamilyId: value })}
               required
-            >
-              <option value="">Seleccioná una familia…</option>
-              {selectionOptions<CalcFamilyOption>(calcFamilies, regimeForm.calcFamilyId).map((family) => (
-                <option key={family.id} value={family.id} disabled={!family.isActive}>
-                  {family.label}{!family.isActive ? " (oculta)" : ""}
-                </option>
-              ))}
-            </select>
+              placeholder="Seleccioná una familia…"
+              options={selectionOptions<CalcFamilyOption>(calcFamilies, regimeForm.calcFamilyId).map((family) => ({
+                value: family.id,
+                label: `${family.label}${!family.isActive ? " (oculta)" : ""}`,
+                disabled: !family.isActive,
+              }))}
+            />
             <p className="muted-copy">
               {regimeForm.calcFamilyId
                 ? "La familia determina las opciones de cálculo de este régimen."
@@ -1469,20 +1468,20 @@ export function StudyCatalogosFiscales() {
           </div>
           <div className="ds-field">
             <label className="ds-field__label" htmlFor="regime-module">Módulo</label>
-            <select
+            <SearchSelect
               id="regime-module"
-              className="ds-field__input"
+              label="Módulo"
+              hideLabel
               value={regimeForm.moduleId}
-              onChange={(event) => setRegimeForm({ ...regimeForm, moduleId: event.target.value })}
+              onChange={(value) => setRegimeForm({ ...regimeForm, moduleId: value })}
               required
-            >
-              <option value="">Seleccioná un módulo…</option>
-              {selectionOptions<TaxRegimeModuleOption>(regimeModules, regimeForm.moduleId).map((module) => (
-                <option key={module.id} value={module.id} disabled={!module.isActive}>
-                  {module.label}{!module.isActive ? " (oculto)" : ""}
-                </option>
-              ))}
-            </select>
+              placeholder="Seleccioná un módulo…"
+              options={selectionOptions<TaxRegimeModuleOption>(regimeModules, regimeForm.moduleId).map((module) => ({
+                value: module.id,
+                label: `${module.label}${!module.isActive ? " (oculto)" : ""}`,
+                disabled: !module.isActive,
+              }))}
+            />
             <p className="muted-copy">
               {regimeForm.moduleId
                 ? "El módulo elegido habilita el régimen según sus permisos."
@@ -1505,38 +1504,38 @@ export function StudyCatalogosFiscales() {
           </div>
           <div className="ds-field">
             <label className="ds-field__label" htmlFor="regime-jurisdiction">Jurisdicción</label>
-            <select
+            <SearchSelect
               id="regime-jurisdiction"
-              className="ds-field__input"
+              label="Jurisdicción"
+              hideLabel
               value={regimeForm.jurisdictionId}
-              onChange={(event) => setRegimeForm({ ...regimeForm, jurisdictionId: event.target.value, authorityId: "" })}
+              onChange={(value) => setRegimeForm({ ...regimeForm, jurisdictionId: value, authorityId: "" })}
               required
-            >
-              <option value="">Seleccioná una jurisdicción…</option>
-              {selectionOptions<JurisdictionOption>(jurisdictions, regimeForm.jurisdictionId).map((jurisdiction) => (
-                <option key={jurisdiction.id} value={jurisdiction.id} disabled={!jurisdiction.isActive}>
-                  {jurisdictionLabel(jurisdiction)}{!jurisdiction.isActive ? " (oculto)" : ""}
-                </option>
-              ))}
-            </select>
+              placeholder="Seleccioná una jurisdicción…"
+              options={selectionOptions<JurisdictionOption>(jurisdictions, regimeForm.jurisdictionId).map((jurisdiction) => ({
+                value: jurisdiction.id,
+                label: `${jurisdictionLabel(jurisdiction)}${!jurisdiction.isActive ? " (oculto)" : ""}`,
+                disabled: !jurisdiction.isActive,
+              }))}
+            />
           </div>
           <div className="ds-field dense-form__full">
             <label className="ds-field__label" htmlFor="regime-authority">Organismo recaudador</label>
-            <select
+            <SearchSelect
               id="regime-authority"
-              className="ds-field__input"
+              label="Organismo recaudador"
+              hideLabel
               value={regimeForm.authorityId}
-              onChange={(event) => setRegimeForm({ ...regimeForm, authorityId: event.target.value })}
+              onChange={(value) => setRegimeForm({ ...regimeForm, authorityId: value })}
               required
               disabled={!regimeForm.jurisdictionId}
-            >
-              <option value="">Seleccioná un organismo…</option>
-              {matchingAuthorities.map((authority) => (
-                <option key={authority.id} value={authority.id} disabled={!authority.isActive}>
-                  {authority.name} ({authority.code}){!authority.isActive ? " (oculto)" : ""}
-                </option>
-              ))}
-            </select>
+              placeholder="Seleccioná un organismo…"
+              options={matchingAuthorities.map((authority) => ({
+                value: authority.id,
+                label: `${authority.name} (${authority.code})${!authority.isActive ? " (oculto)" : ""}`,
+                disabled: !authority.isActive,
+              }))}
+            />
             {regimeForm.jurisdictionId && matchingAuthorities.length === 0 ? (
               <p className="muted-copy">Creá primero un organismo para esta jurisdicción.</p>
             ) : null}
@@ -1612,22 +1611,20 @@ export function StudyCatalogosFiscales() {
           />
           <div className="ds-field dense-form__full">
             <label className="ds-field__label" htmlFor="activity-jurisdiction">Jurisdicción</label>
-            <select
+            <SearchSelect
               id="activity-jurisdiction"
-              className="ds-field__input"
+              label="Jurisdicción"
+              hideLabel
               value={activityForm.jurisdictionId}
-              onChange={(event) =>
-                setActivityForm({ ...activityForm, jurisdictionId: event.target.value })
-              }
+              onChange={(value) => setActivityForm({ ...activityForm, jurisdictionId: value })}
               required
-            >
-              <option value="">Seleccioná una jurisdicción…</option>
-              {selectionOptions<JurisdictionOption>(jurisdictions, activityForm.jurisdictionId).map((jurisdiction) => (
-                <option key={jurisdiction.id} value={jurisdiction.id} disabled={!jurisdiction.isActive}>
-                  {jurisdictionLabel(jurisdiction)}{!jurisdiction.isActive ? " (oculto)" : ""}
-                </option>
-              ))}
-            </select>
+              placeholder="Seleccioná una jurisdicción…"
+              options={selectionOptions<JurisdictionOption>(jurisdictions, activityForm.jurisdictionId).map((jurisdiction) => ({
+                value: jurisdiction.id,
+                label: `${jurisdictionLabel(jurisdiction)}${!jurisdiction.isActive ? " (oculto)" : ""}`,
+                disabled: !jurisdiction.isActive,
+              }))}
+            />
           </div>
           <div className="dense-form__full">
             <Field
@@ -1723,19 +1720,20 @@ export function StudyCatalogosFiscales() {
               <label className="ds-field__label" htmlFor="activity-edit-jurisdiction">
                 Jurisdicción
               </label>
-              <select
+              <SearchSelect
                 id="activity-edit-jurisdiction"
-                className="ds-field__input"
+                label="Jurisdicción"
+                hideLabel
                 value={activityForm.jurisdictionId}
-                onChange={(event) => setActivityForm({ ...activityForm, jurisdictionId: event.target.value })}
+                onChange={(value) => setActivityForm({ ...activityForm, jurisdictionId: value })}
                 required
-              >
-                {selectionOptions<JurisdictionOption>(jurisdictions, activityForm.jurisdictionId).map((jurisdiction) => (
-                  <option key={jurisdiction.id} value={jurisdiction.id} disabled={!jurisdiction.isActive}>
-                    {jurisdictionLabel(jurisdiction)}{!jurisdiction.isActive ? " (oculto)" : ""}
-                  </option>
-                ))}
-              </select>
+                allowEmpty={false}
+                options={selectionOptions<JurisdictionOption>(jurisdictions, activityForm.jurisdictionId).map((jurisdiction) => ({
+                  value: jurisdiction.id,
+                  label: `${jurisdictionLabel(jurisdiction)}${!jurisdiction.isActive ? " (oculto)" : ""}`,
+                  disabled: !jurisdiction.isActive,
+                }))}
+              />
             </div>
             <div className="dense-form__full">
               <Field
@@ -1888,37 +1886,44 @@ export function StudyCatalogosFiscales() {
             />
             <div className="ds-field">
               <label className="ds-field__label" htmlFor="jurisdiction-kind">Nivel</label>
-              <select
+              <SearchSelect
                 id="jurisdiction-kind"
-                className="ds-field__input"
+                label="Nivel"
+                hideLabel
                 value={jurisdictionForm.kind}
-                onChange={(event) => setJurisdictionForm({
+                onChange={(value) => setJurisdictionForm({
                   ...jurisdictionForm,
-                  kind: event.target.value as JurisdictionOption["kind"],
+                  kind: value as JurisdictionOption["kind"],
                   parentId: "",
                 })}
-              >
-                <option value="NATIONAL">Nación</option>
-                <option value="PROVINCIAL">Provincia</option>
-                <option value="MUNICIPAL">Municipio</option>
-              </select>
+                allowEmpty={false}
+                options={[
+                  { value: "NATIONAL", label: "Nación" },
+                  { value: "PROVINCIAL", label: "Provincia" },
+                  { value: "MUNICIPAL", label: "Municipio" },
+                ]}
+              />
             </div>
             {jurisdictionForm.kind !== "NATIONAL" ? (
               <div className="ds-field dense-form__full">
                 <label className="ds-field__label" htmlFor="jurisdiction-parent">Jurisdicción padre</label>
-                <select
+                <SearchSelect
                   id="jurisdiction-parent"
-                  className="ds-field__input"
+                  label="Jurisdicción padre"
+                  hideLabel
                   value={jurisdictionForm.parentId}
-                  onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, parentId: event.target.value })}
+                  onChange={(value) => setJurisdictionForm({ ...jurisdictionForm, parentId: value })}
                   required
-                >
-                  <option value="">Seleccioná una jurisdicción padre…</option>
-                  {selectionOptions<JurisdictionOption>(
+                  placeholder="Seleccioná una jurisdicción padre…"
+                  options={selectionOptions<JurisdictionOption>(
                     jurisdictions.filter((row) => row.kind === (jurisdictionForm.kind === "PROVINCIAL" ? "NATIONAL" : "PROVINCIAL")),
                     jurisdictionForm.parentId,
-                  ).map((row) => <option key={row.id} value={row.id} disabled={!row.isActive}>{jurisdictionLabel(row)}{!row.isActive ? " (oculto)" : ""}</option>)}
-                </select>
+                  ).map((row) => ({
+                    value: row.id,
+                    label: `${jurisdictionLabel(row)}${!row.isActive ? " (oculto)" : ""}`,
+                    disabled: !row.isActive,
+                  }))}
+                />
                 <p className="ds-field__hint">
                   {jurisdictionForm.kind === "PROVINCIAL" ? "Una provincia requiere una jurisdicción de nivel Nación." : "Un municipio requiere una jurisdicción de nivel Provincia."}
                 </p>
@@ -1977,37 +1982,44 @@ export function StudyCatalogosFiscales() {
               />
               <div className="ds-field">
                 <label className="ds-field__label" htmlFor="jurisdiction-edit-kind">Nivel</label>
-                <select
+                <SearchSelect
                   id="jurisdiction-edit-kind"
-                  className="ds-field__input"
+                  label="Nivel"
+                  hideLabel
                   value={jurisdictionForm.kind}
-                  onChange={(event) => setJurisdictionForm({
+                  onChange={(value) => setJurisdictionForm({
                     ...jurisdictionForm,
-                    kind: event.target.value as JurisdictionOption["kind"],
+                    kind: value as JurisdictionOption["kind"],
                     parentId: "",
                   })}
-                >
-                  <option value="NATIONAL">Nación</option>
-                  <option value="PROVINCIAL">Provincia</option>
-                  <option value="MUNICIPAL">Municipio</option>
-                </select>
+                  allowEmpty={false}
+                  options={[
+                    { value: "NATIONAL", label: "Nación" },
+                    { value: "PROVINCIAL", label: "Provincia" },
+                    { value: "MUNICIPAL", label: "Municipio" },
+                  ]}
+                />
               </div>
               {jurisdictionForm.kind !== "NATIONAL" ? (
                 <div className="ds-field dense-form__full">
                   <label className="ds-field__label" htmlFor="jurisdiction-edit-parent">Jurisdicción padre</label>
-                  <select
+                  <SearchSelect
                     id="jurisdiction-edit-parent"
-                    className="ds-field__input"
+                    label="Jurisdicción padre"
+                    hideLabel
                     value={jurisdictionForm.parentId}
-                    onChange={(event) => setJurisdictionForm({ ...jurisdictionForm, parentId: event.target.value })}
+                    onChange={(value) => setJurisdictionForm({ ...jurisdictionForm, parentId: value })}
                     required
-                  >
-                    <option value="">Seleccioná una jurisdicción padre…</option>
-                    {selectionOptions<JurisdictionOption>(
+                    placeholder="Seleccioná una jurisdicción padre…"
+                    options={selectionOptions<JurisdictionOption>(
                       jurisdictions.filter((row) => row.kind === (jurisdictionForm.kind === "PROVINCIAL" ? "NATIONAL" : "PROVINCIAL")),
                       jurisdictionForm.parentId,
-                    ).map((row) => <option key={row.id} value={row.id} disabled={!row.isActive}>{jurisdictionLabel(row)}{!row.isActive ? " (oculto)" : ""}</option>)}
-                  </select>
+                    ).map((row) => ({
+                      value: row.id,
+                      label: `${jurisdictionLabel(row)}${!row.isActive ? " (oculto)" : ""}`,
+                      disabled: !row.isActive,
+                    }))}
+                  />
                 </div>
               ) : null}
               <MutationError error={updateJurisdiction.error} />
@@ -2048,17 +2060,15 @@ export function StudyCatalogosFiscales() {
           />
           <div className="ds-field">
             <label className="ds-field__label" htmlFor="tax-type-default-family">Familia por defecto</label>
-            <select
+            <SearchSelect
               id="tax-type-default-family"
-              className="ds-field__input"
+              label="Familia por defecto"
+              hideLabel
               value={taxTypeForm.defaultFamilyId}
-              onChange={(event) => setTaxTypeForm({ ...taxTypeForm, defaultFamilyId: event.target.value })}
-            >
-              <option value="">Sin familia predeterminada</option>
-              {calcFamilies.filter((family) => family.isActive).map((family) => (
-                <option key={family.id} value={family.id}>{family.label}</option>
-              ))}
-            </select>
+              onChange={(value) => setTaxTypeForm({ ...taxTypeForm, defaultFamilyId: value })}
+              placeholder="Sin familia predeterminada"
+              options={calcFamilies.filter((family) => family.isActive).map((family) => ({ value: family.id, label: family.label }))}
+            />
             <p className="muted-copy">Esta familia se propone al crear regímenes; cada régimen puede tener otra.</p>
             {calcFamiliesQuery.isLoading ? <p className="muted-copy">Cargando familias…</p> : null}
             {calcFamiliesQuery.isError ? (

@@ -16,6 +16,7 @@ import {
   renderBandeja,
   type Respuesta,
 } from "./StudyBandeja.pruebas";
+import { cambiarValor, valorElegido } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -118,12 +119,8 @@ describe("Rechazo de un documento que falló · D23-1 (a), etapa 1", () => {
       name: "Confirmar rechazo",
     }) as HTMLButtonElement;
     expect(confirmar.disabled).toBe(true);
-    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
-      target: { value: "ILLEGIBLE" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Detalle (opcional)"), {
-      target: { value: "   Archivo cortado   " },
-    });
+    cambiarValor(within(dialog).getByLabelText("Motivo del rechazo"), "ILLEGIBLE");
+    cambiarValor(within(dialog).getByLabelText("Detalle (opcional)"), "   Archivo cortado   ");
     fireEvent.click(confirmar);
     await waitFor(() => expect(envios(fetchMock)).toHaveLength(1));
     expect(JSON.parse(String(envios(fetchMock)[0]?.[1]?.body))).toEqual({
@@ -168,24 +165,18 @@ describe("Rechazo de un documento que falló · D23-1 (a), etapa 1", () => {
     });
     const fetchMock = fetchSimulado(servidor);
     const dialog = await abrirRechazo();
-    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
-      target: { value: "DUPLICATE" },
-    });
+    cambiarValor(within(dialog).getByLabelText("Motivo del rechazo"), "DUPLICATE");
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirmar rechazo" }));
     expect((await within(dialog).findByRole("alert")).textContent).toBe(TAREA_ACTIVA);
     expect(envios(fetchMock)).toHaveLength(1);
-    expect((within(dialog).getByLabelText("Motivo del rechazo") as HTMLSelectElement).value).toBe(
-      "DUPLICATE",
-    );
+    expect(valorElegido("Motivo del rechazo", dialog)).toBe("DUPLICATE");
   });
 
   it("mientras el rechazo se envía el cajón dice «Rechazando…» y no hay un segundo envío", async () => {
     respuestaRechazo = () => PENDIENTE;
     const fetchMock = fetchSimulado(servidor);
     const dialog = await abrirRechazo();
-    fireEvent.change(within(dialog).getByLabelText("Motivo del rechazo"), {
-      target: { value: "OTHER" },
-    });
+    cambiarValor(within(dialog).getByLabelText("Motivo del rechazo"), "OTHER");
     const confirmar = within(dialog).getByRole("button", {
       name: "Confirmar rechazo",
     }) as HTMLButtonElement;

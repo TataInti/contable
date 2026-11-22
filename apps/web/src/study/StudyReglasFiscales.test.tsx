@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { ApiError, api } from "../lib/api";
 import { StudyReglasFiscales } from "./StudyReglasFiscales";
+import { abrirListado, cambiarValor, valorElegido } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -229,13 +230,13 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     renderReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }, { timeout: 5000 }));
-    const select = (await screen.findByLabelText("Opción de cálculo")) as HTMLSelectElement;
-    expect(select.value).toBe("engine-vat-current");
-    expect(within(select).getByRole("option", { name: "IVA RI legacy" })).toBeTruthy();
-    expect(within(select).queryByRole("option", { name: "IIBB local Tucumán" })).toBeNull();
+    const select = await screen.findByLabelText("Opción de cálculo");
+    expect(valorElegido("Opción de cálculo")).toBe("engine-vat-current");
+    expect(within(abrirListado("Opción de cálculo")).getByRole("option", { name: "IVA RI legacy" })).toBeTruthy();
+    expect(within(abrirListado("Opción de cálculo")).queryByRole("option", { name: "IIBB local Tucumán" })).toBeNull();
     expect(api.get).toHaveBeenCalledWith("/tax/regimes/regime-1/engines");
 
-    fireEvent.change(select, { target: { value: "engine-vat-legacy" } });
+    cambiarValor(select, "engine-vat-legacy");
     // El envío vive en el pie fijo del cajón (fuera del formulario, por form=): se busca en el cajón.
     const dialog = screen.getByRole("dialog");
     expect(select.closest('[role="dialog"]')).toBe(dialog);
@@ -261,9 +262,9 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     renderReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
-    const select = (await screen.findByLabelText("Opción de cálculo")) as HTMLSelectElement;
-    expect(select.value).toBe("engine-vat-current");
-    expect(within(select).getByRole("option", { name: "IVA RI legacy" })).toBeTruthy();
+    await screen.findByLabelText("Opción de cálculo");
+    expect(valorElegido("Opción de cálculo")).toBe("engine-vat-current");
+    expect(within(abrirListado("Opción de cálculo")).getByRole("option", { name: "IVA RI legacy" })).toBeTruthy();
   });
 
   it("muestra únicamente las opciones que devuelve la familia del régimen", async () => {
@@ -277,10 +278,10 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     renderReglas();
 
     fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
-    const select = (await screen.findByLabelText("Opción de cálculo")) as HTMLSelectElement;
-    expect(select.value).toBe("engine-iibb-local");
-    expect(within(select).getByRole("option", { name: "IIBB local Tucumán" })).toBeTruthy();
-    expect(within(select).queryByRole("option", { name: "IVA RI por alícuota" })).toBeNull();
+    await screen.findByLabelText("Opción de cálculo");
+    expect(valorElegido("Opción de cálculo")).toBe("engine-iibb-local");
+    expect(within(abrirListado("Opción de cálculo")).getByRole("option", { name: "IIBB local Tucumán" })).toBeTruthy();
+    expect(within(abrirListado("Opción de cálculo")).queryByRole("option", { name: "IVA RI por alícuota" })).toBeNull();
   });
 
   it("guía a editar el régimen cuando falta la familia de cálculo", async () => {
@@ -310,7 +311,7 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     const date = (await screen.findByLabelText("Vigencia desde")) as HTMLInputElement;
     expect(date.min).toBe("1900-01-01");
     expect(date.max).toBe("2100-12-31");
-    fireEvent.change(date, { target: { value: "61001-02-02" } });
+    cambiarValor(date, "61001-02-02");
     const form = date.closest("form");
     expect(form).not.toBeNull();
     fireEvent.submit(form!);
@@ -324,15 +325,16 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     mockApi(makeDetail(null));
     renderReglas();
 
-    expect((await screen.findByLabelText("Tipo de regla de la fila 1") as HTMLSelectElement).value).toBe("kind-rate-vat");
-    const select = (await screen.findByLabelText("Actividad de la fila 1")) as HTMLSelectElement;
-    expect(within(select).getByRole("option", { name: "Sin actividad específica" })).toBeTruthy();
+    await screen.findByLabelText("Tipo de regla de la fila 1");
+    expect(valorElegido("Tipo de regla de la fila 1")).toBe("kind-rate-vat");
+    const select = await screen.findByLabelText("Actividad de la fila 1");
+    expect(within(abrirListado("Actividad de la fila 1")).getByRole("option", { name: "Sin actividad específica" })).toBeTruthy();
     expect(
-      within(select).getByRole("option", { name: "CM03-02 · Comercio mayorista" }),
+      within(abrirListado("Actividad de la fila 1")).getByRole("option", { name: "CM03-02 · Comercio mayorista" }),
     ).toBeTruthy();
-    expect(select.value).toBe("");
+    expect(valorElegido("Actividad de la fila 1")).toBe("");
 
-    fireEvent.change(select, { target: { value: "act-1" } });
+    cambiarValor(select, "act-1");
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
 
     await waitFor(() =>
@@ -355,13 +357,13 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     mockApi(makeDetail(null));
     renderReglas();
 
-    const select = (await screen.findByLabelText("Actividad de la fila 1")) as HTMLSelectElement;
+    await screen.findByLabelText("Actividad de la fila 1");
     // El paquete es de jur-ar: SERV4 (jur-ba) no debe ofrecerse.
     expect(
-      within(select).getByRole("option", { name: "CM03-02 · Comercio mayorista" }),
+      within(abrirListado("Actividad de la fila 1")).getByRole("option", { name: "CM03-02 · Comercio mayorista" }),
     ).toBeTruthy();
     expect(
-      within(select).queryByRole("option", { name: "SERV4 · Servicios profesionales" }),
+      within(abrirListado("Actividad de la fila 1")).queryByRole("option", { name: "SERV4 · Servicios profesionales" }),
     ).toBeNull();
   });
 
@@ -369,11 +371,11 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
     mockApi(makeDetail("CM03-OLD"));
     renderReglas();
 
-    const select = (await screen.findByLabelText("Actividad de la fila 1")) as HTMLSelectElement;
-    expect(select.value).toBe("act-hidden");
-    const hiddenOption = within(select).getByRole("option", { name: "CM03-OLD (oculto)" }) as HTMLOptionElement;
-    expect(hiddenOption.disabled).toBe(true);
-    expect(within(select).getByRole("option", { name: "CM03-02 · Comercio mayorista" })).toBeTruthy();
+    await screen.findByLabelText("Actividad de la fila 1");
+    expect(valorElegido("Actividad de la fila 1")).toBe("act-hidden");
+    const hiddenOption = within(abrirListado("Actividad de la fila 1")).getByRole("option", { name: "CM03-OLD (oculto)" });
+    expect(hiddenOption.getAttribute("aria-disabled")).toBe("true");
+    expect(within(abrirListado("Actividad de la fila 1")).getByRole("option", { name: "CM03-02 · Comercio mayorista" })).toBeTruthy();
   });
 
   it("ofrece las categorías cerradas A–K y envía el código elegido", async () => {
@@ -391,10 +393,10 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
         : originalGet?.(path) ?? Promise.resolve([])) as never);
     renderReglas();
 
-    const category = (await screen.findByLabelText("Categoría de la fila 1")) as HTMLSelectElement;
-    expect(within(category).getAllByRole("option")).toHaveLength(12);
-    expect(within(category).getByRole("option", { name: "Categoría K" })).toBeTruthy();
-    fireEvent.change(category, { target: { value: "K" } });
+    const category = await screen.findByLabelText("Categoría de la fila 1");
+    expect(within(abrirListado("Categoría de la fila 1")).getAllByRole("option")).toHaveLength(12);
+    expect(within(abrirListado("Categoría de la fila 1")).getByRole("option", { name: "Categoría K" })).toBeTruthy();
+    cambiarValor(category, "K");
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
 
     await waitFor(() => expect(api.put).toHaveBeenCalledWith(
@@ -425,7 +427,7 @@ describe("StudyReglasFiscales — selector de actividad del catálogo", () => {
       return found;
     });
     expect(inlineError.getAttribute("role")).toBe("alert");
-    expect(inlineError.parentElement?.querySelector("select[aria-label='Tipo de regla de la fila 1']")).toBeTruthy();
+    expect(inlineError.parentElement?.querySelector("input[role='combobox'][aria-label='Tipo de regla de la fila 1']")).toBeTruthy();
   });
 });
 
@@ -731,9 +733,7 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     mockApi(makeDetail(null));
     renderReglas();
 
-    fireEvent.change(await screen.findByLabelText("Concepto de la fila 1"), {
-      target: { value: "Operaciones modificadas" },
-    });
+    cambiarValor(await screen.findByLabelText("Concepto de la fila 1"), "Operaciones modificadas");
     const activateButton = (await screen.findByRole("button", { name: /^Activar$/ })) as HTMLButtonElement;
 
     // D-R3-1 y P4: con cambios sin guardar, Activar queda deshabilitado y el aviso se ve junto al botón.
@@ -755,7 +755,7 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     renderReglas();
 
     const versionSelect = await screen.findByLabelText("Versión del paquete");
-    fireEvent.change(versionSelect, { target: { value: "version-review" } });
+    cambiarValor(versionSelect, "version-review");
     fireEvent.click(await screen.findByRole("button", { name: /^Activar$/ }));
     const confirmation = await screen.findByRole("dialog");
     fireEvent.click(within(confirmation).getByRole("button", { name: "Activar versión" }));
@@ -796,11 +796,11 @@ describe("StudyReglasFiscales — activación directa por Administrador", () => 
     renderReglas();
 
     const concept = await screen.findByLabelText("Concepto de la fila 1");
-    fireEvent.change(concept, { target: { value: "Cambio temporal" } });
+    cambiarValor(concept, "Cambio temporal");
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
     expect(await screen.findByText("Error viejo de guardado")).toBeTruthy();
 
-    fireEvent.change(concept, { target: { value: "Operaciones generales" } });
+    cambiarValor(concept, "Operaciones generales");
     const activateButton = await screen.findByRole("button", { name: /^Activar$/ });
     fireEvent.click(activateButton);
     const confirmation = await screen.findByRole("dialog");
@@ -863,7 +863,7 @@ describe("StudyReglasFiscales — validación del tipo de regla", () => {
     mockApi(makeDetail(null));
     renderReglas();
 
-    fireEvent.change(await screen.findByLabelText("Tipo de regla de la fila 1"), { target: { value: "" } });
+    cambiarValor(await screen.findByLabelText("Tipo de regla de la fila 1"), "");
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
 
     const error = await screen.findByText("Seleccioná un tipo de regla.");
