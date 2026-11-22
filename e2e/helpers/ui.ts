@@ -26,6 +26,20 @@ export async function dismissGuidedTour(page: Page) {
   if (await skipTour.isVisible().catch(() => false)) await skipTour.click();
 }
 
+/**
+ * El tour guiado se abre 650 ms después de montar el estudio mientras su marca no exista en el almacenamiento
+ * local. Abierto encima de un formulario roba el foco del campo y cierra su lista: el recorrido queda detrás
+ * de un popover que aparece a destiempo según la velocidad de la corrida. Se deja la marca como la deja
+ * «Saltar tour» (un contador que ya vio el tour); los specs que prueban el tour no usan este helper.
+ */
+export async function markGuidedTourSeen(page: Page) {
+  await page.addInitScript(() => {
+    if (window.localStorage.getItem("contable-study-navigation-tour-v1") === null) {
+      window.localStorage.setItem("contable-study-navigation-tour-v1", "dismissed");
+    }
+  });
+}
+
 export async function login(page: Page, email = "demo@contable.local", password = "demo1234") {
   await page.goto("/login");
   await page.getByLabel("Correo electrónico").fill(email);

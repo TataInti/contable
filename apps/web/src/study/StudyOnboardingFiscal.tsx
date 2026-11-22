@@ -175,6 +175,10 @@ export function StudyOnboardingFiscal() {
       queryClient.invalidateQueries({ queryKey: ["client-tax-activities", firmId, clientId] }),
       queryClient.invalidateQueries({ queryKey: ["tax-periods", firmId, clientId] }),
       queryClient.invalidateQueries({ queryKey: ["tax-obligations", firmId, clientId] }),
+      // La categoría TEM y la cuota de Monotributo dependen de las inscripciones: sin esto la fila del régimen
+      // nuevo no ofrece «Elegir categoría» hasta recargar la pantalla.
+      queryClient.invalidateQueries({ queryKey: ["tem-category", firmId, clientId] }),
+      queryClient.invalidateQueries({ queryKey: ["monotributo", firmId, clientId] }),
     ]);
   };
 

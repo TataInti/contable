@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
+import { RUN, SUFFIX, goTo, login, markGuidedTourSeen, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
 
 /** Elige una opción de desplegable (<select> o buscador con lista). En el buscador el clic va directo a la opción: la lista se vuelve a dibujar mientras se escribe y el clic con comprobaciones de estabilidad no llegaba. */
 async function pick(campo: Locator, texto: string) {
@@ -200,6 +200,7 @@ async function esperarImporte(page: Page, texto: string) {
 test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la interfaz", async ({ page }) => {
   test.setTimeout(900_000);
   page.setDefaultTimeout(15_000);
+  await markGuidedTourSeen(page);
 
   const errores: string[] = [];
   page.on("response", (response) => {
@@ -269,12 +270,12 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     }
   });
 
-  await test.step("Configuración fiscal: actividad de restaurante para cada impuesto", async () => {
+  await test.step("Configuración fiscal: actividad de restaurante para cada impuesto (sin fecha: vale desde el alta)", async () => {
     for (const tax of [IIBB, TEM]) {
       await clickAdd(page, "Actividades");
       await pick(page.locator("#act-activity"), tax.activity.name);
-      // La fecha «Desde» se propone con el inicio de la inscripción: queda como la propone la pantalla.
-      await expect(page.locator("#act-from")).toHaveValue(ALTA);
+      // Vincular la actividad no pide fecha: vale desde el alta del cliente (4L). Sin campo «Desde» en el cajón.
+      await expect(page.locator("#act-from")).toHaveCount(0);
       await mutating(page, "/activities", () =>
         page.getByRole("button", { name: "Vincular actividad", exact: true }).last().click(),
       );
@@ -282,19 +283,11 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
   });
 
   await test.step("Configuración fiscal: categoría TEM 2026 «B» del cliente", async () => {
-    // DEFECTO reproducido: GET /tem-categories?year=2026 responde 500 para un cliente con TEM. Se registra y el
-    // recorrido sigue, para verificar el resto del cálculo; el spec queda en rojo hasta que se corrija.
     await page.getByRole("tab", { name: /^Regímenes/ }).click();
-    const elegir = page.getByRole("button", { name: /Elegir categoría|Cambiar categoría/ }).first();
-    try {
-      await expect(elegir, "botón «Elegir categoría» de la fila TEM").toBeVisible({ timeout: 8_000 });
-      await elegir.click();
-      await pick(page.locator("#categoria-tem"), "B");
-      await mutating(page, "/tem-categories", () => page.getByRole("button", { name: "Guardar categoría" }).click());
-    } catch (error) {
-      test.info().annotations.push({ type: "defecto", description: `categoría TEM 2026 no se puede elegir: ${String(error).slice(0, 300)}` });
-      expect.soft(false, "DEFECTO: la categoría TEM 2026 no se puede elegir (GET tem-categories responde 500)").toBe(true);
-    }
+    await page.getByRole("button", { name: /Elegir categoría|Cambiar categoría/ }).first().click();
+    await pick(page.locator("#categoria-tem"), "B");
+    await mutating(page, "/tem-categories", () => page.getByRole("button", { name: "Guardar categoría" }).click());
+    await expect(page.getByText(/Categoría 2026: B/).first()).toBeVisible();
   });
 
   await test.step("Configuración fiscal: período de octubre de 2026 y obligación por impuesto", async () => {
@@ -326,6 +319,11 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
   });
 
   await test.step("Fuentes: ventas de ARCA en xlsx (3 facturas por 115.000)", async () => {
+    // DEFECTO REAL (en rojo, sin arreglo en este PR; decisión de Ciro): el legajo asocia cada fuente (Libro IVA
+    // Ventas, retenciones y base de Ingresos Brutos Tucumán, TEM) por el código del régimen de catálogo
+    // (apps/api/src/tax/workpaper-source-policy.ts, regimeCode = obligation.regime.code). El régimen que el estudio
+    // crea en este spec tiene código E2E-IIBB-… / E2E-TEM-…, así que el legajo no ofrece ninguna fuente («No hay
+    // fuentes definidas para el legajo») y este paso no encuentra el botón. Los pasos siguientes quedan sin correr.
     await page.getByRole("tab", { name: /Fuentes/ }).first().click();
     await page.getByRole("button", { name: "Gestionar Ventas del período" }).click();
     await page.getByRole("button", { name: "Cargar archivo" }).click();
