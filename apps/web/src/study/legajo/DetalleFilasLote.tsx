@@ -22,7 +22,7 @@ function comprobanteDe(raw: Record<string, unknown> | null): string {
   return partes.length > 0 ? ` · ${partes.join(" ")}` : "";
 }
 
-/** Filas con error de un lote del libro IVA, con el motivo de cada una (GET …/import-batches/:id/rows). */
+/** Filas observadas de cualquier fuente, con contenido y motivo (GET …/import-batches/:id/rows). */
 export function DetalleFilasLote({
   firmId,
   clientId,
@@ -59,6 +59,7 @@ export function DetalleFilasLote({
           <li key={fila.id}>
             <strong>Fila {fila.position + 1}</strong>
             {comprobanteDe(fila.raw)}: {fila.errors.map(motivoDeFila).join(" ")}
+            {fila.raw ? <pre>{JSON.stringify(fila.raw)}</pre> : null}
           </li>
         ))}
       </ul>

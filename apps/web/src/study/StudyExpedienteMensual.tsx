@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   AsyncState,
   BarSelect,
@@ -52,7 +52,7 @@ import {
   WORKPAPER_STEPS,
   calculationDisabledMessage,
 } from "./legajo/etiquetas";
-import { importarLoteFuente } from "./legajo/loteFuente";
+import { importarLoteFuente, LoteConFilasObservadas } from "./legajo/loteFuente";
 import { pluralizar } from "./legajo/textos";
 import { mensajesDePedidoDeCambios, selfReviewNote } from "./legajo/formato";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
@@ -121,6 +121,7 @@ export function StudyExpedienteMensual() {
   const currentUserId = me?.userId ?? null;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const taxPeriodStorageKey =
     firmId && clientId ? fiscalTaxPeriodSelectionKey(firmId, clientId) : null;
   const [taxPeriodSelection, setTaxPeriodSelection] = useState<{
@@ -393,6 +394,13 @@ export function StudyExpedienteMensual() {
         queryKey: ["monthly-workpaper-coverage", firmId, clientId],
       });
     },
+    onError: (error) => {
+      if (error instanceof LoteConFilasObservadas) {
+        void queryClient.invalidateQueries({
+          queryKey: ["monthly-workpaper-coverage", firmId, clientId],
+        });
+      }
+    },
   });
 
   const reviewSourceMutation = useMutation({
@@ -577,8 +585,19 @@ export function StudyExpedienteMensual() {
     const indice = workpapers.findIndex((item) => item.id === wp.id);
     return indice > 0 ? workpapers[indice - 1] : undefined;
   };
+  const etapaDesdeUrl = (() => {
+    const valor = new URLSearchParams(location.search)
+      .get("etapa")
+      ?.normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("es-AR");
+    const indice = WORKPAPER_STEPS.findIndex((step) =>
+      step.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-AR") === valor,
+    );
+    return indice >= 0 ? indice : null;
+  })();
   const safeActiveStep = Math.min(
-    Math.max(vigente ? (etapaPorLegajo[vigente.id] ?? 0) : 0, 0),
+    Math.max(vigente ? (etapaDesdeUrl ?? etapaPorLegajo[vigente.id] ?? 0) : 0, 0),
     WORKPAPER_STEPS.length - 1,
   );
   const goToStep = (index: number) => {
@@ -587,6 +606,9 @@ export function StudyExpedienteMensual() {
       ...values,
       [vigente.id]: Math.min(Math.max(index, 0), WORKPAPER_STEPS.length - 1),
     }));
+    const search = new URLSearchParams(location.search);
+    search.set("etapa", WORKPAPER_STEPS[index]?.title.toLocaleLowerCase("es-AR") ?? "saldos");
+    navigate({ search: `?${search.toString()}` }, { replace: true });
   };
 
   const renderEtapa = (wp: Workpaper, step: number) => {
@@ -620,8 +642,8 @@ export function StudyExpedienteMensual() {
             coverageQuery={coverageQuery}
             capabilities={capacidades}
             canEditSources={canEditSources}
-            soloLectura={soloLectura}
             currentUserId={currentUserId}
+            soloLectura={soloLectura}
             motivoImportarLibro={motivoImportarLibro}
             onAbrirLibroIva={setLibroIvaAbierto}
             sourceCode={sourceCode}
