@@ -199,6 +199,9 @@ export interface WorkpaperSource {
   label: string;
   required: boolean;
   present: boolean;
+  /** Pendiente, con lote revisado (cargada) o marcada «Sin movimientos» (corte 2A). */
+  status: "PENDING" | "LOADED" | "NO_MOVEMENTS";
+  noMovements: { byUserId: string; byName: string; at: string } | null;
   count: number;
   taxTypeId: string | null;
   periodId: string | null;

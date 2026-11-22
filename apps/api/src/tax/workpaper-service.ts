@@ -70,7 +70,19 @@ export type WorkpaperErrorCode =
   | "NO_SETTLEMENTS"
   | "DUE_DATE_NOT_FOUND"
   | "INTEREST_RULE_NOT_FOUND"
-  | "DUPLICATE_WORKPAPER";
+  | "DUPLICATE_WORKPAPER"
+  | "SOURCE_NOT_FOUND"
+  | "SOURCE_HAS_REVIEWED_BATCH"
+  | "WORKPAPER_FINALIZED"
+  | "NO_MOVEMENTS_NOT_FOUND";
+
+/** Estado de cobertura de una fuente: el lote revisado o la marca «Sin movimientos» la cubren para el cálculo (corte 2A). */
+export type WorkpaperSourceStatusCode = "PENDING" | "LOADED" | "NO_MOVEMENTS";
+
+/** Una fuente cuenta como cubierta si tiene un lote revisado o está marcada sin movimientos. */
+export function isSourceCovered(source: { present: boolean; status: WorkpaperSourceStatusCode }): boolean {
+  return source.present || source.status === "NO_MOVEMENTS";
+}
 
 /** Problema de origen de un saldo a favor, compartido por el saldo inicial y el detalle de la DJ (D13-4 a). */
 export type CreditOriginProblem =
@@ -275,8 +287,20 @@ export class MonthlyWorkpaperService {
         .filter((item) => item.status === "REVIEWED" && item.importBatch.status === "COMMITTED")
         .map((item) => item.sourceCode),
     );
+    const activeMarks = await tx.workpaperSourceStatus.findMany({
+      where: { workpaperId: workpaper.id, clearedAt: null },
+      include: { markedBy: { select: { name: true } } },
+    });
+    // Una marca «Sin movimientos» vigente cubre la base para las fuentes que se satisfacen con ella (satisfiedBy),
+    // igual que un lote revisado. No cambia `present` ni los lotes.
+    const markedCodes = new Set(
+      activeMarks
+        .filter((item) => item.status === "NO_MOVEMENTS")
+        .map((item) => item.sourceCode),
+    );
 
     return policies.map((policy) => {
+      const mark = activeMarks.find((item) => item.sourceCode === policy.code) ?? null;
       const obligation = obligationForPolicy(
         policy,
         obligations.map((item) => ({
@@ -289,11 +313,17 @@ export class MonthlyWorkpaperService {
       const reviewed = batches.filter(
         (item) => item.status === "REVIEWED" && item.importBatch.status === "COMMITTED",
       );
+      const present = reviewed.length > 0;
       return {
         code: policy.code,
         label: policy.label,
-        required: isSourceRequired(policy, obligationRefs, reviewedCodes),
-        present: reviewed.length > 0,
+        required: isSourceRequired(policy, obligationRefs, reviewedCodes, markedCodes),
+        present,
+        status: (present ? "LOADED" : mark ? "NO_MOVEMENTS" : "PENDING") as WorkpaperSourceStatusCode,
+        noMovements:
+          !present && mark
+            ? { byUserId: mark.markedByUserId, byName: mark.markedBy.name, at: mark.markedAt }
+            : null,
         count: reviewed.reduce((sum, item) => sum + item.importBatch.validRows, 0),
         taxTypeId: obligation?.regime.taxTypeId ?? null,
         periodId: obligation?.periodId ?? null,
@@ -367,7 +397,7 @@ export class MonthlyWorkpaperService {
       workpaperAllocationCoverage(tx, workpaper.id),
     ]);
     const ready =
-      sources.every((source) => !source.required || source.present) &&
+      sources.every((source) => !source.required || isSourceCovered(source)) &&
       classifications.ready &&
       allocations.ready;
     await tx.monthlyTaxWorkpaper.updateMany({
@@ -905,7 +935,7 @@ export class MonthlyWorkpaperService {
         wp,
         links.map((link) => link.obligation),
       );
-      const missingSources = sources.filter((source) => source.required && !source.present);
+      const missingSources = sources.filter((source) => source.required && !isSourceCovered(source));
       if (missingSources.length > 0) {
         throw new WorkpaperError(
           "SOURCE_NOT_REVIEWED",
@@ -1299,6 +1329,11 @@ export class MonthlyWorkpaperService {
       await materializeWorkpaperClassifications(tx, link.workpaper, voucherIds);
       await this.ensureAllocations(tx, workpaperId);
       await this.refreshPreparationStatus(tx, link.workpaper);
+      // Un lote revisado manda: la marca «Sin movimientos» de la fuente se limpia sola, con historial (corte 2A).
+      await tx.workpaperSourceStatus.updateMany({
+        where: { workpaperId, sourceCode: link.sourceCode, clearedAt: null },
+        data: { clearedAt: reviewedAt, clearedByUserId: ctx.userId, clearReason: "BATCH_REVIEWED" },
+      });
       if (isSelfReview) {
         await this.auditSelfReview(tx, ctx, "WorkpaperImportBatch", link.id, "SOURCE_REVIEW");
       }
@@ -1351,6 +1386,141 @@ export class MonthlyWorkpaperService {
       });
       await this.refreshPreparationStatus(tx, link.workpaper);
       return retired;
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Sin movimientos (corte 2A, D2): la fuente de un mes queda cubierta sin lote revisado.
+  // La marca no cuenta como lote revisado (present sigue en false) y se deshace con historial.
+  // ------------------------------------------------------------------
+
+  /** Mes cerrado o en revisión: no se cambian sus fuentes. Con preparación, calculado o con cambios pedidos, sí. */
+  private assertNoMovementsEditable(status: string) {
+    if (status === "FINALIZED" || status === "SUPERSEDED") {
+      throw new WorkpaperError(
+        "WORKPAPER_FINALIZED",
+        "Para cambiar un mes cerrado, rectificá la liquidación",
+      );
+    }
+    if (status === "IN_REVIEW" || status === "REVIEWED") {
+      throw new WorkpaperError(
+        "WORKPAPER_IMMUTABLE",
+        "El mes está en revisión. Pedí cambios para modificar sus fuentes.",
+      );
+    }
+  }
+
+  private async loadNoMovementsWorkpaper(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    workpaperId: string,
+  ) {
+    const wp = await tx.monthlyTaxWorkpaper.findFirst({
+      where: { id: workpaperId, firmId: ctx.firmId },
+    });
+    if (!wp) throw new WorkpaperError("WORKPAPER_NOT_FOUND", "Expediente no encontrado");
+    this.assertNoMovementsEditable(wp.status);
+    return wp;
+  }
+
+  private async sourceFromCoverage(
+    tx: Prisma.TransactionClient,
+    wp: { id: string; firmId: string; clientId: string; periodStart: Date; periodEnd: Date },
+    sourceCode: string,
+  ) {
+    const obligations = await tx.taxObligation.findMany({
+      where: {
+        firmId: wp.firmId,
+        clientId: wp.clientId,
+        status: { not: "NOT_APPLICABLE" },
+        period: { startDate: { gte: wp.periodStart }, endDate: { lte: wp.periodEnd } },
+      },
+      include: { regime: { include: { taxType: true } } },
+    });
+    const sources = await this.sourceCoverage(tx, wp, obligations);
+    const source = sources.find((item) => item.code === sourceCode);
+    if (!source) {
+      throw new WorkpaperError(
+        "SOURCE_NOT_FOUND",
+        "La fuente no corresponde a las obligaciones de este mes",
+      );
+    }
+    return source;
+  }
+
+  /**
+   * Cambiar una marca cambia el cálculo: igual que al cargar o revisar un lote, el mes vuelve a
+   * preparación (READY_TO_CALCULATE o COLLECTING_INPUTS) y hay que recalcular. Un mes ya calculado
+   * o con cambios pedidos pasa por el mismo camino.
+   */
+  private async invalidateAfterSourceChange(
+    tx: Prisma.TransactionClient,
+    wp: {
+      id: string;
+      firmId: string;
+      clientId: string;
+      periodStart: Date;
+      periodEnd: Date;
+    },
+  ) {
+    const { ready } = await this.refreshPreparationStatus(tx, wp);
+    await tx.monthlyTaxWorkpaper.updateMany({
+      where: { id: wp.id, status: { in: ["CALCULATED", "CHANGES_REQUESTED"] } },
+      data: { status: ready ? "READY_TO_CALCULATE" : "COLLECTING_INPUTS" },
+    });
+  }
+
+  /**
+   * Marca la fuente como «Sin movimientos». Rechaza si ya tiene un lote revisado (el lote manda).
+   * Repetir la marca vigente no cambia nada.
+   */
+  async setNoMovements(ctx: TenantContext, workpaperId: string, sourceCode: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const wp = await this.loadNoMovementsWorkpaper(tx, ctx, workpaperId);
+      const source = await this.sourceFromCoverage(tx, wp, sourceCode);
+      if (source.present) {
+        throw new WorkpaperError(
+          "SOURCE_HAS_REVIEWED_BATCH",
+          "La fuente tiene un archivo revisado: el archivo manda y no puede marcarse sin movimientos",
+        );
+      }
+      if (source.status === "NO_MOVEMENTS") return source;
+
+      await tx.workpaperSourceStatus.create({
+        data: {
+          firmId: wp.firmId,
+          clientId: wp.clientId,
+          workpaperId: wp.id,
+          sourceCode,
+          status: "NO_MOVEMENTS",
+          markedByUserId: ctx.userId,
+          markedAt: new Date(),
+        },
+      });
+      await this.invalidateAfterSourceChange(tx, wp);
+      return this.sourceFromCoverage(tx, wp, sourceCode);
+    });
+  }
+
+  /** Deshace la marca «Sin movimientos»: completa clearedAt (la fila queda como historial). */
+  async clearNoMovements(ctx: TenantContext, workpaperId: string, sourceCode: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const wp = await this.loadNoMovementsWorkpaper(tx, ctx, workpaperId);
+      const active = await tx.workpaperSourceStatus.findFirst({
+        where: { workpaperId: wp.id, sourceCode, clearedAt: null },
+      });
+      if (!active) {
+        throw new WorkpaperError(
+          "NO_MOVEMENTS_NOT_FOUND",
+          "La fuente no está marcada sin movimientos",
+        );
+      }
+      await tx.workpaperSourceStatus.update({
+        where: { id: active.id },
+        data: { clearedAt: new Date(), clearedByUserId: ctx.userId, clearReason: "MANUAL" },
+      });
+      await this.invalidateAfterSourceChange(tx, wp);
+      return this.sourceFromCoverage(tx, wp, sourceCode);
     });
   }
 

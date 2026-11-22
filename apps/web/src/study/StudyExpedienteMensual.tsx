@@ -216,11 +216,14 @@ export function StudyExpedienteMensual() {
     (listQuery.data ?? []).find((wp) => wp.id === revisionElegidaId) ?? listQuery.data?.[0];
   const activeWorkpaperId = legajoSeleccionado?.id;
   // Importar un libro IVA exige el permiso y un legajo editable; el motivo se muestra junto a la acción.
+  // En un mes calculado sí se puede marcar o deshacer «Sin movimientos» (vuelve a preparación): la leyenda lo dice.
   const legajoDelPeriodo = legajoSeleccionado;
   const motivoImportarLibro = !capabilities.has("tax.vouchers.prepare")
     ? "Tu rol no puede importar libros IVA."
     : !legajoDelPeriodo || !ESTADOS_EDITABLES_FUENTES.includes(legajoDelPeriodo.status)
-      ? "El legajo no admite cambios de fuentes en su estado actual."
+      ? legajoDelPeriodo?.status === "CALCULATED"
+        ? "En un mes calculado no se cargan archivos; marcar o deshacer «Sin movimientos» invalida el cálculo y vuelve el mes a preparación."
+        : "El legajo no admite cambios de fuentes en su estado actual."
       : null;
   const coverageQuery = useQuery({
     queryKey: ["monthly-workpaper-coverage", firmId, clientId, activeWorkpaperId],
@@ -423,6 +426,18 @@ export function StudyExpedienteMensual() {
     },
   });
 
+  const noMovementsMutation = useMutation({
+    mutationFn: ({ sourceCode, marcar }: { sourceCode: string; marcar: boolean }) => {
+      const ruta = `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/sources/${sourceCode}/no-movements`;
+      return marcar ? api.put(ruta) : api.del(ruta);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpaper-coverage", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      void queryClient.invalidateQueries({ queryKey: ["monthly-workpaper-calculation", firmId, clientId] });
+    },
+  });
+
   const classifyVoucherMutation = useMutation({
     mutationFn: (classification: WorkpaperClassification) => {
       const draft = classificationDrafts[classification.id] ?? {
@@ -616,6 +631,14 @@ export function StudyExpedienteMensual() {
     const canEditSources = !soloLectura && ESTADOS_EDITABLES_FUENTES.includes(wp.status);
     // En solo lectura, ninguna etapa conserva un permiso que escriba: la revisión anterior no ofrece acciones que escriban (A29).
     const capacidades = soloLectura ? sinPermisosDeEscritura(capabilities) : capabilities;
+    // Sin movimientos (corte 2A): además de los estados de cargar archivos, se marca con el mes ya calculado (vuelve a preparación).
+    const motivoSinMovimientos = soloLectura
+      ? "Esta revisión se consulta en solo lectura."
+      : !capacidades.has("tax.vouchers.prepare")
+        ? "Tu rol no puede cargar archivos ni marcar fuentes."
+        : ![...ESTADOS_EDITABLES_FUENTES, "CALCULATED"].includes(wp.status)
+          ? "El legajo no admite cambios de fuentes en su estado actual."
+          : null;
     // Saldos consulta por cliente y por período (tax-credit-ledger, tax-position): la revisión anterior muestra la misma tabla, en solo lectura.
     if (soloLectura && step === 0) {
       return (
@@ -654,6 +677,8 @@ export function StudyExpedienteMensual() {
             setSourceFile={setSourceFile}
             sourceUploadMutation={sourceUploadMutation}
             reviewSourceMutation={reviewSourceMutation}
+            noMovementsMutation={noMovementsMutation}
+            motivoSinMovimientos={motivoSinMovimientos}
           />
         ) : step === 2 ? (
           <EtapaClasificacion

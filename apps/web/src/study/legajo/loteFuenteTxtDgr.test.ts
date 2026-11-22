@@ -20,6 +20,8 @@ function fuente(code: string, label: string): WorkpaperSource {
     label,
     required: false,
     present: false,
+    status: "PENDING",
+    noMovements: null,
     count: 0,
     taxTypeId: "tipo-iibb",
     periodId: "periodo-oct",

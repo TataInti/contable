@@ -221,8 +221,18 @@ describe("2C — un libro de ventas de ARCA alimenta Ingresos Brutos y TEM", () 
     );
     if (actividadMunicipal) {
       // Una por nivel: no hace falta clasificar ninguna venta, cada impuesto toma la de su nivel.
-      const municipal = await prisma.economicActivity.findFirstOrThrow({
-        where: { code: "COMERCIO", jurisdiction: { code: "AR-SMT" } },
+      // La actividad municipal la crea esta prueba si no existe: no depende de que otra prueba la haya dejado.
+      const smtJurisdiction = await prisma.jurisdiction.findFirstOrThrow({ where: { code: "AR-SMT" } });
+      const municipal = await prisma.economicActivity.upsert({
+        where: { code_jurisdictionId: { code: "COMERCIO", jurisdictionId: smtJurisdiction.id } },
+        update: { isActive: true },
+        create: {
+          code: "COMERCIO",
+          name: "Comercio",
+          jurisdictionId: smtJurisdiction.id,
+          validFrom: new Date("2026-01-01"),
+          source: "Prueba 2C",
+        },
       });
       ok(
         await request("POST", `${clientBase}/activities`, {
@@ -378,6 +388,10 @@ describe("2C — política de fuentes y clase de documento", () => {
     expect(isSourceRequired(book, [iibb], new Set(["DGR_IIBB_TUC"]))).toBe(false);
     expect(isSourceRequired(book, [iibb, tem], new Set(["DGR_IIBB_TUC"]))).toBe(true); // TEM sigue sin base
     expect(isSourceRequired(book, [iva, iibb], new Set(["DGR_IIBB_TUC"]))).toBe(true);
+    // Una marca «Sin movimientos» del libro satisface las tablas manuales; la marca del propio libro no lo exime.
+    expect(isSourceRequired(manualIibb, [iibb], none, new Set(["ARCA_IVA_SALES"]))).toBe(false);
+    expect(isSourceRequired(book, [iibb], none, new Set(["ARCA_IVA_SALES"]))).toBe(true);
+    expect(isSourceRequired(manualIibb, [iibb], none, none)).toBe(true);
   });
 
   it("si la tabla manual está revisada, manda: el libro no se suma a la base de esa obligación", () => {

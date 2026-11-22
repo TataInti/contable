@@ -12,6 +12,10 @@ vi.mock("@contable/design-system", () => ({
   ActionDrawer: ({ isOpen, children, footer }: { isOpen: boolean; children: React.ReactNode; footer?: React.ReactNode }) => isOpen ? <div>{children}{footer}</div> : null,
   Button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }) => <button {...props}>{children}</button>,
 }));
+vi.mock("../../../ui/ConfirmAction", () => ({
+  ConfirmDialog: () => null,
+  useConfirmAction: () => ({ ask: vi.fn() }),
+}));
 vi.mock("../DetalleFilasLote", () => ({ DetalleFilasLote: () => <p>Detalle de filas</p> }));
 vi.mock("../../../lib/api", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 
@@ -45,6 +49,8 @@ const source: WorkpaperSource = {
   label: "Ventas del período",
   required: true,
   present: true,
+  status: "LOADED",
+  noMovements: null,
   count: 1,
   taxTypeId: "tax-id",
   periodId: "period-id",
@@ -79,6 +85,9 @@ function renderPanel({ canEdit = true, initialSource = source }: { canEdit?: boo
       reviewSourceMutation={{ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null } as never}
       editReason={canEdit ? null : "No tenés permiso para modificar esta fuente."}
       onCambiarFuente={vi.fn()}
+      noMovementsMutation={{ mutate: vi.fn(), isPending: false, error: null } as never}
+      puedeMarcarSinMovimientos
+      motivoSinMovimientos={null}
     />;
   }
   render(<QueryClientProvider client={queryClient}><Harness /></QueryClientProvider>);
