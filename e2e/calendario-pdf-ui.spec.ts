@@ -110,6 +110,7 @@ test("el calendario se arma desde su PDF, el contador corrige la celda dudosa y 
     await expect(page.getByRole("combobox", { name: "Período fiscal" }).locator("option:checked")).toContainText(
       `Oct 2027 E2E ${SUFFIX}`,
     );
+    await expect(page.getByText("Vence el 18/11/2027", { exact: true })).toBeVisible();
     await goTo(page, "Trabajo");
     const obligacion = page.getByRole("row").filter({ hasText: `Oct 2027 E2E ${SUFFIX}` });
     await expect(obligacion).toContainText("IVA");
