@@ -124,7 +124,7 @@ export function EtapaClasificacion({
             <Button
               size="sm"
               variant="secondary"
-              disabled={selectedIds.length === 0 || classifyVoucherMutation.isPending}
+              disabled={!canEditSources || !capabilities.has("tax.vouchers.prepare") || selectedIds.length === 0 || classifyVoucherMutation.isPending}
               onClick={() => {
                 const selected = classificationQuery.data?.items.filter((item) => selectedIds.includes(item.id)) ?? [];
                 selected.forEach((item) => classifyVoucherMutation.mutate(item));
