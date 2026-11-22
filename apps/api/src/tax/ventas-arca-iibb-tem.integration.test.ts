@@ -48,7 +48,7 @@ function ok(response: ApiResponse, status: number, what: string) {
   expect(response.statusCode, `${what}; respuesta: ${response.body}`).toBe(status);
 }
 
-async function request(method: "GET" | "POST" | "PATCH", url: string, payload?: Record<string, unknown>) {
+async function request(method: "GET" | "POST" | "PATCH" | "PUT", url: string, payload?: Record<string, unknown>) {
   return app!.inject({
     method,
     url,
