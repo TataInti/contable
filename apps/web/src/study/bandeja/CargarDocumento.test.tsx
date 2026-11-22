@@ -114,7 +114,7 @@ function renderBandeja() {
 
 function UbicacionActual() {
   const location = useLocation();
-  return <output data-testid="ubicacion-actual">{location.pathname}</output>;
+  return <output data-testid="ubicacion-actual">{location.pathname}{location.search}</output>;
 }
 
 const selectorItem = () => document.querySelector<HTMLSelectElement>("#upload-request-item");
@@ -192,7 +192,7 @@ describe("Caracterización K3 · validación del archivo", () => {
     });
     expect(await screen.findByText("Elegí el archivo de nuevo en Importar libro.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Ir a Importar en el Legajo" }));
-    expect(screen.getByTestId("ubicacion-actual").textContent).toBe("/expediente-mensual");
+    expect(screen.getByTestId("ubicacion-actual").textContent).toBe("/expediente-mensual?etapa=fuentes");
     expect(api.post).not.toHaveBeenCalled();
     expect(uploadToSignedUrl).not.toHaveBeenCalled();
   });

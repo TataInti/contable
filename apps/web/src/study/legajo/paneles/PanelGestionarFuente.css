@@ -1,0 +1,36 @@
+.workpaper-source-file-list {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: var(--ds-space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workpaper-source-file-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-3);
+  padding-block: var(--ds-space-2);
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+}
+
+.workpaper-source-file-list > li > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workpaper-source-file-drop {
+  display: grid;
+  gap: var(--ds-space-2);
+  justify-items: start;
+  padding: var(--ds-space-4);
+  border: 1px dashed var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface-muted);
+}
+
+.workpaper-source-file-drop:focus-within {
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: var(--ds-focus-offset);
+}

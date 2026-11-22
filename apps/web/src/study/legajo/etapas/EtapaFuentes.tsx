@@ -1,21 +1,18 @@
-// Etapa Fuentes del Legajo: cobertura, lotes y libros IVA desde su fila (Foco 2.3b-2).
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
-import { WorkpaperSourceReviewAction } from "../../WorkpaperSourceReviewAction";
-import { estadoDeLote, ladoDeLibroIva, type ResultadoImportacionLote } from "../loteFuente";
-import { FilasConErrorDeLote } from "../DetalleFilasLote";
+
+import { PanelGestionarFuente } from "../paneles/PanelGestionarFuente";
 import type { CoberturaLegajo } from "../tipos";
-import { WorkpaperActionError } from "../WorkpaperActionError";
+import type { ResultadoImportacionLote } from "../loteFuente";
 
 export interface EtapaFuentesProps {
   coverageQuery: UseQueryResult<CoberturaLegajo, Error>;
   capabilities: ReadonlySet<string>;
   canEditSources: boolean;
-  /** Revisión anterior en solo lectura: no se ofrece importar ni revisar (A29). */
-  soloLectura?: boolean;
   currentUserId: string | null;
+  soloLectura?: boolean;
   motivoImportarLibro: string | null;
   onAbrirLibroIva: (lado: "SALE" | "PURCHASE") => void;
   sourceCode: string;
@@ -26,12 +23,32 @@ export interface EtapaFuentesProps {
   reviewSourceMutation: UseMutationResult<unknown, Error, string>;
 }
 
+const NOMBRES_FUENTES: Record<string, string> = {
+  ARCA_IVA_SALES: "Ventas del período",
+  ARCA_IVA_PURCHASES: "Compras del período",
+  IIBB_RPI_TUC: "Ingresos Brutos Tucumán",
+  IIBB_LOCAL_TUC: "Ingresos Brutos Tucumán",
+  DGR_IIBB_TUC: "Ingresos Brutos Tucumán",
+};
+
+function nombreFuente(source: CoberturaLegajo["sources"][number]) {
+  return NOMBRES_FUENTES[source.code] ?? source.label.replace(/\b(?:DGR_IIBB_TUC|IIBB_RPI_TUC|IIBB_LOCAL_TUC|ARCA_IVA_SALES|ARCA_IVA_PURCHASES)\b/g, "").trim();
+}
+
+function estadoFuente(source: CoberturaLegajo["sources"][number]) {
+  if (source.batches.some((batch) => batch.errorRows > 0)) return { status: "ERROR", label: "Con errores" };
+  if (source.present) return { status: "READY", label: `Cargada · ${source.count} filas` };
+  return source.required
+    ? { status: "WAITING_INPUTS", label: "Pendiente" }
+    : { status: "PENDING", label: "Opcional" };
+}
+
 export function EtapaFuentes({
   coverageQuery,
-  capabilities,
   canEditSources,
-  soloLectura = false,
+  capabilities,
   currentUserId,
+  soloLectura = false,
   motivoImportarLibro,
   onAbrirLibroIva,
   sourceCode,
@@ -41,234 +58,67 @@ export function EtapaFuentes({
   sourceUploadMutation,
   reviewSourceMutation,
 }: EtapaFuentesProps) {
+  const [fuenteAbierta, setFuenteAbierta] = useState<string | null>(null);
   const fuentes = coverageQuery.data?.sources ?? [];
-  const fuentesLote = fuentes.filter((source) => !ladoDeLibroIva(source.code));
-  const fuenteElegida = fuentesLote.find((source) => source.code === sourceCode);
-  const motivoLote =
-    !sourceCode || !sourceFile ? "Elegí una fuente y un archivo para importar el lote." : null;
+  const fuenteSeleccionada = fuentes.find((source) => source.code === fuenteAbierta) ?? null;
+  const faltantes = fuentes.filter((source) => source.required && !source.present).map(nombreFuente);
+
   return (
     <div className="workpaper-stage">
-      <p className="muted-copy">El legajo declara qué llegó y qué todavía bloquea el cálculo.</p>
       {coverageQuery.isError ? (
-        <AsyncState
-          loading={false}
-          error
-          errorTitle="No se pudo verificar la cobertura"
-          errorDescription="Reintentá la lectura. Hasta que responda, la etapa no muestra fuentes ni lotes."
-          onRetry={() => void coverageQuery.refetch()}
-          loadingLabel="Verificando cobertura…"
-        />
+        <AsyncState loading={false} error errorTitle="No se pudo verificar la cobertura" errorDescription="Reintentá la lectura. Hasta que responda, la etapa no muestra fuentes ni lotes." onRetry={() => void coverageQuery.refetch()} loadingLabel="Verificando cobertura…" />
       ) : !coverageQuery.isSuccess ? (
-        <AsyncState
-          loading
-          error={false}
-          errorTitle=""
-          errorDescription=""
-          onRetry={() => void coverageQuery.refetch()}
-          loadingLabel="Verificando cobertura…"
-        />
+        <AsyncState loading error={false} errorTitle="" errorDescription="" onRetry={() => void coverageQuery.refetch()} loadingLabel="Verificando cobertura…" />
       ) : (
         <>
-          {coverageQuery.isFetching ? (
-            <small className="muted-copy">Dato del último corte; se está actualizando.</small>
-          ) : null}
-          {canEditSources && capabilities.has("tax.vouchers.prepare") && fuentesLote.length > 0 ? (
-            <div className="workpaper-source-import">
-              <label>
-                <span>Fuente</span>
-                <select
-                  value={sourceCode}
-                  onChange={(event) => {
-                    setSourceCode(event.target.value);
-                    setSourceFile(null);
-                  }}
-                >
-                  <option value="">Seleccionar…</option>
-                  {fuentesLote.map((source) => (
-                    <option key={source.code} value={source.code}>
-                      {source.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Archivo CSV, TXT o JSON</span>
-                <input
-                  type="file"
-                  accept=".csv,.txt,.json,text/csv,text/plain,application/json"
-                  onChange={(event) => {
-                    setSourceFile(event.target.files?.[0] ?? null);
-                    sourceUploadMutation.reset();
-                  }}
-                />
-              </label>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={!sourceCode || !sourceFile || sourceUploadMutation.isPending}
-                onClick={() => sourceUploadMutation.mutate()}
-              >
-                {sourceUploadMutation.isPending ? "Procesando…" : "Importar lote"}
-              </Button>
-              {motivoLote && !sourceUploadMutation.isPending ? (
-                <small className="muted-copy">{motivoLote}</small>
-              ) : null}
-              <WorkpaperActionError error={sourceUploadMutation.error} />
-              {sourceUploadMutation.data?.avisos.map((aviso) => (
-                <small key={aviso} className="muted-copy" role="status">
-                  {aviso}
-                </small>
-              ))}
-              {sourceCode ? (
-                <small>Columnas esperadas: {fuenteElegida?.expectedColumns.join(", ")}</small>
-              ) : null}
-            </div>
-          ) : null}
+          <p className="workpaper-source-readiness" role="status">
+            {faltantes.length ? <>Para calcular falta: <strong>{faltantes.join(", ")}</strong></> : "Todo listo para calcular"}
+          </p>
+          {coverageQuery.isFetching ? <small className="muted-copy">Dato del último corte; se está actualizando.</small> : null}
           <Table
             rows={fuentes}
             rowKey={(source) => source.code}
             empty="No hay fuentes definidas para el legajo."
             columns={[
+              { key: "source", header: "Fuente", render: (source) => <strong>{nombreFuente(source)}</strong> },
+              { key: "state", header: "Estado", render: (source) => <StatusBadge status={estadoFuente(source).status} label={estadoFuente(source).label} /> },
               {
-                key: "source",
-                header: "Fuente",
-                render: (source) => (
-                  <>
-                    <strong>{source.label}</strong>
-                    <br />
-                    <small>{source.code}</small>
-                  </>
-                ),
-              },
-              {
-                key: "records",
-                header: "Registros",
+                key: "manage",
+                header: "",
                 align: "right",
-                render: (source) => source.count,
-              },
-              {
-                key: "required",
-                header: "Tipo",
-                render: (source) => (source.required ? "Obligatoria" : "Opcional"),
-              },
-              {
-                key: "batches",
-                header: "Lotes",
-                render: (source) =>
-                  source.batches.length === 0 ? (
-                    "Sin lotes"
-                  ) : (
-                    <div className="workpaper-source-batches">
-                      {source.batches.map((batch) => (
-                        <div key={batch.id}>
-                          <span>
-                            {batch.fileName ?? "Lote sin nombre"} · {batch.validRows}/
-                            {batch.totalRows} filas
-                          </span>
-                          <StatusBadge {...estadoDeLote(batch)} />
-                          {ladoDeLibroIva(source.code) !== null && batch.errorRows > 0 ? (
-                            <FilasConErrorDeLote batchId={batch.importBatchId} />
-                          ) : null}
-                          <WorkpaperSourceReviewAction
-                            batch={batch}
-                            currentUserId={currentUserId}
-                            allowSelfReview={coverageQuery.data?.allowSelfReview === true}
-                            canEditSources={canEditSources}
-                            canReview={capabilities.has("tax.vouchers.review")}
-                            pending={reviewSourceMutation.isPending}
-                            error={
-                              reviewSourceMutation.variables === batch.id
-                                ? reviewSourceMutation.error
-                                : null
-                            }
-                            onReview={(sourceLinkId) => reviewSourceMutation.mutate(sourceLinkId)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ),
-              },
-              {
-                key: "state",
-                header: "Estado",
                 render: (source) => (
-                  <StatusBadge
-                    status={
-                      source.present ? "READY" : source.required ? "WAITING_INPUTS" : "PENDING"
-                    }
-                  />
+                  <Button size="sm" variant="secondary" aria-label={`Gestionar ${nombreFuente(source)}`} onClick={() => {
+                    setSourceCode(source.code);
+                    setSourceFile(null);
+                    setFuenteAbierta(source.code);
+                  }}>
+                    Gestionar
+                  </Button>
                 ),
               },
-              ...(soloLectura
-                ? []
-                : [
-                    {
-                      key: "accion",
-                      header: "Acción",
-                      render: (source: CoberturaLegajo["sources"][number]) => {
-                        const lado = ladoDeLibroIva(source.code);
-                        if (!lado) return null;
-                        return (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              disabled={Boolean(motivoImportarLibro)}
-                              onClick={() => onAbrirLibroIva(lado)}
-                            >
-                              Importar libro
-                            </Button>
-                            {motivoImportarLibro ? (
-                              <small className="muted-copy">{motivoImportarLibro}</small>
-                            ) : null}
-                          </>
-                        );
-                      },
-                    },
-                  ]),
             ]}
           />
-          {fuentes.some((source) => source.required && !source.present && source.count === 0) ? (
-            <p className="workpaper-stage__note">
-              La cobertura cuenta solo lotes revisados. Los lotes pendientes de revisión mantienen
-              el conteo en 0 registros.
-            </p>
-          ) : null}
-          <WorkpaperActionError
-            error={
-              fuentes.some((source) =>
-                source.batches.some((batch) => batch.id === reviewSourceMutation.variables),
-              )
-                ? reviewSourceMutation.error
-                : null
-            }
-          />
-          <Table
-            rows={coverageQuery.data?.components ?? []}
-            rowKey={(component) => component.obligationId}
-            empty="No hay obligaciones vinculadas."
-            columns={[
-              {
-                key: "regime",
-                header: "Componente",
-                render: (component) => `${component.taxTypeCode} · ${component.regimeCode}`,
-              },
-              {
-                key: "required",
-                header: "Requerido",
-                render: (component) => (component.required ? "Sí" : "No"),
-              },
-              {
-                key: "state",
-                header: "Liquidación",
-                render: (component) =>
-                  component.settlementStatus ? (
-                    <StatusBadge status={component.settlementStatus} />
-                  ) : (
-                    "Sin liquidación calculada"
-                  ),
-              },
-            ]}
+          <PanelGestionarFuente
+            source={fuenteSeleccionada}
+            isOpen={Boolean(fuenteSeleccionada)}
+            onClose={() => setFuenteAbierta(null)}
+            onAbrirLibroIva={onAbrirLibroIva}
+            sourceFile={sourceCode === fuenteAbierta ? sourceFile : null}
+            setSourceFile={setSourceFile}
+            sourceUploadMutation={sourceUploadMutation}
+            sources={fuentes}
+            canEdit={canEditSources && !soloLectura && !motivoImportarLibro}
+            currentUserId={currentUserId}
+            allowSelfReview={coverageQuery.data.allowSelfReview}
+            canReview={capabilities.has("tax.vouchers.review")}
+            canEditSources={canEditSources && !soloLectura}
+            reviewSourceMutation={reviewSourceMutation}
+            editReason={soloLectura ? "Esta revisión se consulta en solo lectura." : motivoImportarLibro ?? (!canEditSources ? "El legajo no admite cambios en su estado actual." : null)}
+            onCambiarFuente={(codigo) => {
+              setSourceCode(codigo);
+              setSourceFile(null);
+              setFuenteAbierta(codigo);
+            }}
           />
         </>
       )}

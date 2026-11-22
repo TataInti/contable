@@ -72,14 +72,14 @@ function fijarContexto(permisos: string[]) {
   };
 }
 
-function renderLegajo() {
+function renderLegajo(initialEntry = "/expediente-mensual") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <StudyExpedienteMensual />
         </MemoryRouter>
       </ToastProvider>
@@ -107,13 +107,12 @@ function llamadasA(sufijo: string) {
 // Abre la etapa Fuentes, elige la fuente de retenciones y el CSV, y pulsa Importar lote.
 async function importarLoteDemo() {
   fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-  fireEvent.change(await screen.findByRole("combobox", { name: /^Fuente/ }), {
-    target: { value: "RETENCIONES_IIBB_DEMO" },
-  });
-  fireEvent.change(screen.getByLabelText(/Archivo CSV, TXT o JSON/), {
+  fireEvent.click(await screen.findByRole("button", { name: "Gestionar Retenciones IIBB Demo" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Cargar archivo" }));
+  fireEvent.change(screen.getByLabelText(/Elegir archivo/), {
     target: { files: [new File([CSV_DEMO], "retenciones-demo.csv", { type: "text/csv" })] },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Importar lote" }));
+  fireEvent.click(screen.getByRole("button", { name: "Importar archivo" }));
 }
 
 beforeEach(() => {
@@ -133,11 +132,73 @@ afterEach(() => {
 });
 
 describe("Legajo · etapa Fuentes (K10)", () => {
-  it("Importar lote queda deshabilitado hasta elegir fuente y archivo", async () => {
+  it("muestra una fila por fuente sin códigos internos y señala qué falta para calcular", async () => {
+    fijarContexto(PERMISOS_FUENTES);
+    renderLegajo("/expediente-mensual?etapa=fuentes");
+    expect(await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).toHaveTextContent(/Para calcular falta:.*Ventas del período, Compras del período/);
+    expect(screen.getByRole("button", { name: "Gestionar Ventas del período" })).toBeInTheDocument();
+    expect(screen.queryByText("ARCA_IVA_SALES")).toBeNull();
+    expect(screen.getAllByRole("row")).toHaveLength(4);
+  });
+
+  it("abre Gestionar en Archivos y permite ver errores de una fuente que no es IVA", async () => {
+    const loteObservado = { ...loteVentasConErrores, fileName: "percepciones-demo.csv" };
+    responderLoteConErrores(() => [
+      { id: "fila-per", position: 2, status: "ERROR", errors: ["DATE_INVALID"], raw: { fecha: "mal" } },
+    ]);
+    vi.mocked(api.get).mockImplementation(((path: string) => {
+      const idLote = /\/import-batches\/([^/]+)\/rows$/.exec(path)?.[1];
+      if (idLote) return Promise.resolve([{ id: "fila-per", position: 2, status: "ERROR", errors: ["DATE_INVALID"], raw: { fecha: "mal" } }]);
+      return rutasDemo({ fuentes: [fuenteRetencionesDemo, { ...fuenteRetencionesDemo, code: "RETENCIONES_IIBB_DEMO_2", label: "Otras retenciones Demo", batches: [loteObservado] }] })(path);
+    }) as never);
+    fijarContexto(PERMISOS_FUENTES);
+    renderLegajo("/expediente-mensual?etapa=fuentes");
+    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Otras retenciones Demo" }));
+    expect(await screen.findByRole("dialog", { name: "Gestionar fuente" })).toBeInTheDocument();
+    expect(screen.getByText("Archivos")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ver errores" }));
+    expect(await screen.findByText(/La fecha no es válida/)).toBeInTheDocument();
+  });
+
+  it("reconoce un TXT de percepciones y avisa si corresponde a otra fuente", async () => {
+    const fuentes = [
+      fuenteRetencionesDemo,
+      { ...fuenteRetencionesDemo, code: "IIBB_RPI_TUC", label: "Ingresos Brutos Tucumán" },
+    ];
+    vi.mocked(api.get).mockImplementation(rutasDemo({ fuentes }) as never);
+    fijarContexto(PERMISOS_FUENTES);
+    renderLegajo("/expediente-mensual?etapa=fuentes");
+    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Retenciones IIBB Demo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cargar archivo" }));
+    fireEvent.change(screen.getByLabelText(/Elegir archivo/), {
+      target: { files: [new File([LINEA_PERCEPCION_DEMO], "per20999999998_F611_011020260900.txt", { type: "text/plain" })] },
+    });
+    expect(await screen.findByText(/Es un archivo de percepciones sufridas/)).toBeInTheDocument();
+    expect(screen.getByText(/va en la fuente «Ingresos Brutos Tucumán»/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar a Ingresos Brutos Tucumán" }));
+    expect(screen.getByRole("dialog", { name: "Gestionar fuente" })).toHaveTextContent("Ingresos Brutos Tucumán");
+  });
+
+  it("abre Fuentes desde ?etapa=fuentes", async () => {
+    fijarContexto(PERMISOS_FUENTES);
+    renderLegajo("/expediente-mensual?etapa=fuentes");
+    expect(await screen.findByRole("tab", { name: /Fuentes/ })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("abre otras etapas por su nombre normalizado en la URL", async () => {
+    fijarContexto(PERMISOS_FUENTES);
+    renderLegajo("/expediente-mensual?etapa=clasificacion");
+    expect(await screen.findByRole("tab", { name: /Clasificación/ })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("Gestionar abre Archivos y ofrece la carga dentro del cajón", async () => {
     fijarContexto(PERMISOS_FUENTES);
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-    expect(await screen.findByRole("button", { name: "Importar lote" })).toBeDisabled();
+    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Retenciones IIBB Demo" }));
+    expect(await screen.findByRole("dialog", { name: "Gestionar fuente" })).toBeInTheDocument();
+    expect(screen.getByText("Archivos")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cargar archivo" })).toBeEnabled();
   });
 
   it("envía el lote con fileHash en formato sha256:, workpaperId y sourceCode", async () => {
@@ -179,12 +240,16 @@ describe("Legajo · etapa Fuentes (K10)", () => {
 
   it("con filas observadas no confirma el lote y dice cuántas son", async () => {
     responderLote(2);
+    const rutas = rutasDemo({ fuentes: [...fuentesDemo, fuenteRetencionesDemo] });
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.endsWith("/import-batches/batch-demo/rows")
+        ? Promise.resolve([{ id: "fila-error-demo", position: 1, status: "ERROR", errors: ["DATE_INVALID"], raw: { fecha: "31/02/2026" } }])
+        : rutas(path)) as never);
     fijarContexto(PERMISOS_FUENTES);
     renderLegajo();
     await importarLoteDemo();
-    expect(
-      await screen.findByText(/El lote tiene 2 de 2 filas con error/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/La fecha no es válida/)).toBeInTheDocument();
+    expect(screen.getByText(/\{"fecha":"31\/02\/2026"\}/)).toBeInTheDocument();
     expect(llamadasA("/commit")).toHaveLength(0);
   });
 
@@ -200,11 +265,11 @@ describe("Legajo · etapa Fuentes (K10)", () => {
     );
   });
 
-  it("explica que la cobertura cuenta solo lotes revisados cuando una fuente requerida tiene cero registros", async () => {
+  it("muestra en la pantalla de estado las fuentes obligatorias que faltan", async () => {
     fijarContexto(PERMISOS_FUENTES);
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-    expect(await screen.findByText(/La cobertura cuenta solo lotes revisados/)).toBeInTheDocument();
+    expect(await screen.findByText(/Para calcular falta:/)).toBeInTheDocument();
   });
 
   it("un TXT de la DGR en otra fuente no se importa y nombra la fuente correcta", async () => {
@@ -219,13 +284,12 @@ describe("Legajo · etapa Fuentes (K10)", () => {
     fijarContexto(PERMISOS_FUENTES);
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-    fireEvent.change(await screen.findByRole("combobox", { name: /^Fuente/ }), {
-      target: { value: "RETENCIONES_IIBB_DEMO" },
-    });
-    fireEvent.change(screen.getByLabelText(/Archivo CSV, TXT o JSON/), {
+    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Retenciones IIBB Demo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cargar archivo" }));
+    fireEvent.change(screen.getByLabelText(/Elegir archivo/), {
       target: { files: [new File(["x"], "per20111111112_F611_221120261015.txt", { type: "text/plain" })] },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Importar lote" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/va en la fuente/);
     expect(
       await screen.findByText(
         /va en la fuente «Retenciones y percepciones IIBB Tucumán», no en «Retenciones IIBB Demo»/,
@@ -242,13 +306,12 @@ describe("Legajo · etapa Fuentes (K10)", () => {
     fijarContexto(PERMISOS_FUENTES);
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-    fireEvent.change(await screen.findByRole("combobox", { name: /^Fuente/ }), {
-      target: { value: "IIBB_RPI_TUC" },
-    });
-    fireEvent.change(screen.getByLabelText(/Archivo CSV, TXT o JSON/), {
+    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Ingresos Brutos Tucumán" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cargar archivo" }));
+    fireEvent.change(screen.getByLabelText(/Elegir archivo/), {
       target: { files: [new File([LINEA_PERCEPCION_DEMO], "per20111111112_F611_221120261015.txt", { type: "text/plain" })] },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Importar lote" }));
+    fireEvent.click(screen.getByRole("button", { name: "Importar archivo" }));
     expect(
       await screen.findByText(
         "Este archivo es del CUIT 20-11111111-2, no del cliente (CUIT 20-99999999-8).",
@@ -338,7 +401,8 @@ describe("Legajo · etapa Fuentes: «Ver filas con error» de un lote de libro I
     fijarContexto(PERMISOS_FUENTES);
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Ver filas con error" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Ventas del período" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ver errores" }));
     await waitFor(() => expect(rutasDeLotesPedidas()).not.toHaveLength(0));
     expect(rutasDeLotesPedidas()).toEqual([`${BASE}/import-batches/${ID_LOTE_IMPORTADO}/rows`]);
     expect(rutasDeLotesPedidas().some((ruta) => ruta.includes(ID_VINCULO_LOTE))).toBe(false);
@@ -353,7 +417,8 @@ describe("Legajo · etapa Fuentes: «Ver filas con error» de un lote de libro I
     fijarContexto(PERMISOS_FUENTES);
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-    const abrir = await screen.findByRole("button", { name: "Ver filas con error" });
+    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Ventas del período" }));
+    const abrir = await screen.findByRole("button", { name: "Ver errores" });
     abrir.focus();
     expect(abrir).toHaveFocus();
     // Con Enter el navegador entrega un clic al botón enfocado; jsdom no lo convierte solo.
@@ -361,7 +426,7 @@ describe("Legajo · etapa Fuentes: «Ver filas con error» de un lote de libro I
     fireEvent.click(abrir);
     const motivo = await screen.findByText(/El punto de venta no es un número válido\./);
     expect(document.activeElement?.tagName).not.toBe("BODY");
-    const detalle = screen.getByRole("group", { name: "Detalle de filas con error" });
+    const detalle = screen.getByRole("dialog", { name: "Gestionar fuente" });
     expect(detalle).toContainElement(motivo);
     expect(detalle.contains(document.activeElement)).toBe(true);
   });

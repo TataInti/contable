@@ -448,28 +448,24 @@ describe("StudyExpedienteMensual", () => {
     expect(explanation.closest('[data-renglon="avisos"]')).not.toBeNull(); // vigente: cambia con A29
   });
 
-  it("describe la acción pendiente como una liquidación sin calcular", async () => {
+  it("muestra en Fuentes qué falta para calcular", async () => {
     mockPageApi({ status: "COLLECTING_INPUTS", sourcePresent: false });
     renderPage();
     await openSourcesStage();
 
-    expect(await screen.findByText("Sin liquidación calculada")).toBeTruthy();
-    expect(screen.queryByText("Pendiente de vincular")).toBeNull();
+    expect((await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).textContent).toContain("Para calcular falta: Ingresos Brutos Tucumán");
+    expect(screen.getByRole("button", { name: "Gestionar Ingresos Brutos Tucumán" })).toBeTruthy();
   });
 
-  it("explica que Waiting inputs con cero registros cuenta solo lotes revisados", async () => {
+  it("muestra el estado Pendiente sin códigos ni conteos técnicos", async () => {
     mockPageApi({ status: "COLLECTING_INPUTS", sourcePresent: false });
     renderPage();
     await openSourcesStage();
 
     const sourceTable = (await screen.findAllByRole("table"))[0]!;
-    expect(within(sourceTable).getByText("Esperando datos")).toBeTruthy();
-    expect(within(sourceTable).getByText("0")).toBeTruthy();
-    expect(
-      screen.getByText(
-        "La cobertura cuenta solo lotes revisados. Los lotes pendientes de revisión mantienen el conteo en 0 registros.",
-      ),
-    ).toBeTruthy();
+    expect(within(sourceTable).getByText("Pendiente")).toBeTruthy();
+    expect(within(sourceTable).queryByText("IIBB_RPI_TUC")).toBeNull();
+    expect(within(sourceTable).queryByText("0")).toBeNull();
   });
 
   it("presenta los errores de clasificación e imputación junto a cada botón", async () => {

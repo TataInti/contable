@@ -268,14 +268,15 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     expect(document.querySelector(".work-page__content p")?.textContent).toBe(PARRAFO_SALDOS_RO);
   });
 
-  it("Fuentes: sin Importar libro, Importar lote ni Revisar", async () => {
+  it("Fuentes: la revisión anterior conserva Gestión de lectura sin acciones de carga", async () => {
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: "Fuentes" }));
-    expect(
-      (await screen.findAllByRole("button", { name: "Importar libro" })).length,
-    ).toBeGreaterThan(0);
+    expect(await screen.findByRole("button", { name: "Gestionar Ventas del período" })).toBeTruthy();
     elegirRevision(1);
-    expect(await screen.findByText(/ARCA IVA ventas/)).toBeTruthy();
+    expect(await screen.findByText("Ventas del período")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Gestionar Ventas del período" }));
+    expect(await screen.findByText("Esta revisión se consulta en solo lectura.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Cargar archivo" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Importar libro" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Importar lote" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Revisar" })).toBeNull();
