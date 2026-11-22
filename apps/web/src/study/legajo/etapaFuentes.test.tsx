@@ -163,7 +163,7 @@ describe("Legajo · etapa Fuentes (K10)", () => {
   it("reconoce un TXT de percepciones y avisa si corresponde a otra fuente", async () => {
     const fuentes = [
       fuenteRetencionesDemo,
-      { ...fuenteRetencionesDemo, code: "IIBB_RPI_TUC", label: "Ingresos Brutos Tucumán" },
+      { ...fuenteRetencionesDemo, code: "IIBB_RPI_TUC", label: "Ingresos Brutos Tucumán", origin: "DGR_RPI_TUC" },
     ];
     vi.mocked(api.get).mockImplementation(rutasDemo({ fuentes }) as never);
     fijarContexto(PERMISOS_FUENTES);
@@ -210,7 +210,7 @@ describe("Legajo · etapa Fuentes (K10)", () => {
       expect(api.post).toHaveBeenCalledWith(
         `${BASE}/import-batches`,
         expect.objectContaining({
-          origin: "ARCA",
+          origin: "CSV",
           taxTypeId: "tax-type-a",
           periodId: "period-a",
           adapterVersion: "RET_V1",
@@ -277,6 +277,7 @@ describe("Legajo · etapa Fuentes (K10)", () => {
       ...fuenteRetencionesDemo,
       code: "IIBB_RPI_TUC",
       label: "Retenciones y percepciones IIBB Tucumán",
+      origin: "DGR_RPI_TUC",
     };
     vi.mocked(api.get).mockImplementation(
       rutasDemo({ fuentes: [...fuentesDemo, fuenteRetencionesDemo, fuenteIibbTucuman] }) as never,
@@ -299,14 +300,14 @@ describe("Legajo · etapa Fuentes (K10)", () => {
   });
 
   it("un TXT de la DGR de otro CUIT se rechaza con el CUIT del archivo y el del cliente", async () => {
-    const fuenteIibbTucuman = { ...fuenteRetencionesDemo, code: "IIBB_RPI_TUC", label: "IIBB Tucumán" };
+    const fuenteIibbTucuman = { ...fuenteRetencionesDemo, code: "IIBB_RPI_TUC", label: "IIBB Tucumán", origin: "DGR_RPI_TUC" };
     vi.mocked(api.get).mockImplementation(
       rutasDemo({ fuentes: [...fuentesDemo, fuenteIibbTucuman] }) as never,
     );
     fijarContexto(PERMISOS_FUENTES);
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Ingresos Brutos Tucumán" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Retenciones y percepciones IIBB Tucumán" }));
     fireEvent.click(await screen.findByRole("button", { name: "Cargar archivo" }));
     fireEvent.change(screen.getByLabelText(/Elegir archivo/), {
       target: { files: [new File([LINEA_PERCEPCION_DEMO], "per20111111112_F611_221120261015.txt", { type: "text/plain" })] },

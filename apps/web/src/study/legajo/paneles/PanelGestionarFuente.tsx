@@ -94,7 +94,7 @@ export function PanelGestionarFuente({
         setAvisoFuente(null);
         return;
       }
-      const destino = sources.find((item) => item.code === "IIBB_RPI_TUC");
+      const destino = sources.find((item) => item.origin === "DGR_RPI_TUC");
       const deOtraFuente = avisoDeFuenteEquivocada(sourceFile.name, source, sources);
       const texto = await sourceFile.text();
       if (!activo) return;

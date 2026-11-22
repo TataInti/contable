@@ -23,16 +23,13 @@ export interface EtapaFuentesProps {
   reviewSourceMutation: UseMutationResult<unknown, Error, string>;
 }
 
-const NOMBRES_FUENTES: Record<string, string> = {
-  ARCA_IVA_SALES: "Ventas del período",
-  ARCA_IVA_PURCHASES: "Compras del período",
-  IIBB_RPI_TUC: "Ingresos Brutos Tucumán",
-  IIBB_LOCAL_TUC: "Ingresos Brutos Tucumán",
-  DGR_IIBB_TUC: "Ingresos Brutos Tucumán",
-};
-
 function nombreFuente(source: CoberturaLegajo["sources"][number]) {
-  return NOMBRES_FUENTES[source.code] ?? source.label.replace(/\b(?:DGR_IIBB_TUC|IIBB_RPI_TUC|IIBB_LOCAL_TUC|ARCA_IVA_SALES|ARCA_IVA_PURCHASES)\b/g, "").trim();
+  if (source.origin === "ARCA") {
+    return source.expectedColumns.includes("nonTaxed") ? "Ventas del período" : "Compras del período";
+  }
+  if (source.origin === "DGR_RPI_TUC") return "Retenciones y percepciones IIBB Tucumán";
+  if (source.origin === "DGR_IIBB") return "Ingresos Brutos Tucumán";
+  return source.label;
 }
 
 function estadoFuente(source: CoberturaLegajo["sources"][number]) {

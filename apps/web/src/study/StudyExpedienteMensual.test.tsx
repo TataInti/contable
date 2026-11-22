@@ -64,14 +64,14 @@ function workpaper(status: string, controls: unknown[] = []) {
 function sourceCoverage(present: boolean) {
   return {
     code: "DGR_IIBB_TUC",
-    label: "DGR IIBB Tucumán",
+    label: "Ingresos Brutos Tucumán",
     required: true,
     present,
     count: present ? 4 : 0,
     taxTypeId: "tax-type-a",
     periodId: "period-a",
-    origin: "DGR",
-    adapterVersion: "CSV_V1",
+    origin: "DGR_IIBB",
+    adapterVersion: "DGR_IIBB_V1",
     expectedColumns: ["fecha", "importe"],
     batches: [
       {
