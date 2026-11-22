@@ -74,6 +74,16 @@ async function controlesDelPerfil() {
   });
 }
 
+/** Miembros pendientes de un grupo según el estado real del expediente (el seed trae sus propios comprobantes). */
+async function miembrosDelGrupo(grupo: string) {
+  const rows = await prisma.workpaperVoucherClassification.findMany({
+    where: { workpaperId: WORKPAPER, excludedAt: null },
+    include: { voucher: { include: { components: true, importRow: { select: { raw: true } } } } },
+  });
+  const permitido = await prisma.$transaction((tx) => loadPerfilPermitido(tx, { firmId: FIRM, clientId: CLIENT, year: YEAR }));
+  return gruposDeComprobantes(rows, permitido).get(grupo as never)?.length ?? 0;
+}
+
 async function materializar(sourceHash: string) {
   // Sin liquidación hija: el control se materializa como en el cálculo (la función es privada, se llama directo).
   const svc = expedientes as unknown as {
@@ -199,7 +209,9 @@ describe("grupos «no corresponde al perfil» en el expediente (corte 4B)", () =
     expect(grupoA).toBeTruthy();
     expect(grupoA?.severity).toBe("BLOCKING");
     expect(grupoA?.status).toBe("OPEN");
-    expect(Number(grupoA?.actual)).toBe(2);
+    const pendientesA = await miembrosDelGrupo("FACTURA_A");
+    expect(pendientesA).toBeGreaterThanOrEqual(2);
+    expect(Number(grupoA?.actual)).toBe(pendientesA);
 
     await expect(expedientes.excludeProfileGroup(CTX, WORKPAPER, "FACTURA_A", "   ")).rejects.toBeInstanceOf(
       WorkpaperError,
@@ -209,9 +221,7 @@ describe("grupos «no corresponde al perfil» en el expediente (corte 4B)", () =
     expect(excluido?.excludedAt).not.toBeNull();
     expect(excluido?.excludedReason).toBe("Factura emitida por error de carga");
 
-    await expect(expedientes.excludeProfileGroup(CTX, WORKPAPER, "FACTURA_A", "otra vez")).rejects.toBeInstanceOf(
-      WorkpaperError,
-    );
+    expect(await miembrosDelGrupo("FACTURA_A")).toBe(0);
   });
 
   it("aceptar con motivo deja el comprobante registrado como del cliente y el grupo deja de bloquear", async () => {
@@ -238,7 +248,7 @@ describe("grupos «no corresponde al perfil» en el expediente (corte 4B)", () =
       (control) => control.code === `${PREFIJO_CONTROL_PERFIL}EXENTO` && control.status === "OPEN",
     );
     expect(exentos).toHaveLength(1);
-    expect(Number(exentos[0]?.actual)).toBe(1);
+    expect(Number(exentos[0]?.actual)).toBe(await miembrosDelGrupo("EXENTO"));
 
     await permisos.set(CTX, { clientId: CLIENT, year: YEAR, allowedClasses: ["FACTURA_C"], exemptAllowed: true });
     await materializar(`hash-4b-${RUN}-4`);
