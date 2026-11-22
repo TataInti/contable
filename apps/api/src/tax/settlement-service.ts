@@ -1351,8 +1351,8 @@ export class SettlementService {
       }
 
       const notInForceIssues = activityIssues.filter(
-        (issue): issue is Extract<ActivityIssue, { code: "ACTIVITY_NOT_IN_FORCE" }> =>
-          issue.code === "ACTIVITY_NOT_IN_FORCE",
+        (issue): issue is Extract<ActivityIssue, { kind: "NOT_IN_FORCE" }> =>
+          issue.kind === "NOT_IN_FORCE",
       );
       if (notInForceIssues.length > 0) {
         const [primera] = [...notInForceIssues].sort(
@@ -1363,7 +1363,7 @@ export class SettlementService {
           mensajeActividadNoVigente({ activityName: primera!.activityName, validFrom: primera!.validFrom }, period),
         );
       }
-      const unclassifiedIssues = activityIssues.filter((issue) => issue.code === "ACTIVITY_UNCLASSIFIED");
+      const unclassifiedIssues = activityIssues.filter((issue) => issue.kind === "UNCLASSIFIED");
       if (unclassifiedIssues.length > 0) {
         throw new SettlementError(
           "ACTIVITY_UNCLASSIFIED",

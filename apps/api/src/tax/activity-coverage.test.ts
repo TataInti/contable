@@ -39,7 +39,7 @@ describe("4J — criterio único de actividades por venta", () => {
   it("de otro nivel con más de una actividad vigente en el nivel → ACTIVITY_UNCLASSIFIED con varias vigentes", () => {
     const ctx = contexto([link("A", "2026-01-01"), link("B", "2026-01-01")]);
     expect(evaluateSaleActivities(ctx, [venta([{ activityCode: "X", hasNetAmount: true }])], cutoff)).toEqual([
-      { voucherId: "v1", code: "ACTIVITY_UNCLASSIFIED", multipleInForce: true },
+      { voucherId: "v1", kind: "UNCLASSIFIED", multipleInForce: true },
     ]);
   });
 
@@ -54,7 +54,7 @@ describe("4J — criterio único de actividades por venta", () => {
     const hallazgos = evaluateSaleActivities(sinCorregir, [venta([{ activityCode: "A", hasNetAmount: true }])], cutoff);
     expect(hallazgos).toContainEqual({
       voucherId: "v1",
-      code: "ACTIVITY_NOT_IN_FORCE",
+      kind: "NOT_IN_FORCE",
       activityCode: "A",
       activityName: "Actividad A",
       validFrom: new Date("2026-11-22"),

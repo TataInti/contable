@@ -484,7 +484,7 @@ describe("4H — actividades vigentes en el período", () => {
       cobertura.total,
     );
     for (const item of pendientes) {
-      expect(item.activityIssue!.code).toBe("ACTIVITY_NOT_IN_FORCE");
+      expect(item.activityIssue!.kind).toBe("NOT_IN_FORCE");
       expect(item.activityIssue!.message).toMatch(
         /^La actividad Actividad sintética REST-(TUC|SMT) no está vigente en octubre 2026 para este cliente \(vigente desde 22\/11\/2026\)\. Corregí la fecha «Desde» en Configuración fiscal → Actividades\.$/,
       );
@@ -558,6 +558,6 @@ type ClasificacionCobertura = {
   activityPending: number;
   items: Array<{
     id: string;
-    activityIssue: { code: string; message: string } | null;
+    activityIssue: { kind: string; message: string } | null;
   }>;
 };

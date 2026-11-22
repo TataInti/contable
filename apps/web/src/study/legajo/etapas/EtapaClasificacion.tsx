@@ -467,7 +467,7 @@ export function EtapaClasificacion({
                   const aviso = classification.activityIssue ? (
                     <div className="workpaper-classification-issue">
                       <small>{classification.activityIssue.message}</small>{" "}
-                      {classification.activityIssue.code === "ACTIVITY_NOT_IN_FORCE" ? (
+                      {classification.activityIssue.kind === "NOT_IN_FORCE" ? (
                         <Link to="/configuracion-fiscal">Corregir la fecha «Desde»</Link>
                       ) : puedeClasificar ? (
                         <button

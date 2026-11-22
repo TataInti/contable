@@ -93,7 +93,7 @@ const comprobantesDemo = [
     activityCode: "REST",
     origin: "VOUCHER_LINE",
     activityIssue: {
-      code: "ACTIVITY_NOT_IN_FORCE",
+      kind: "NOT_IN_FORCE",
       message:
         "La actividad REST no está vigente en octubre 2026 para este cliente (vigente desde 22/11/2026). Corregí la fecha «Desde» en Configuración fiscal → Actividades.",
     },

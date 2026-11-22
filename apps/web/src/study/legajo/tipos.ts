@@ -223,7 +223,7 @@ export interface WorkpaperSource {
 export interface WorkpaperClassification {
   id: string;
   /** Hallazgo de actividad: mismo código y texto que el cálculo; null si no hay. */
-  activityIssue?: { code: "ACTIVITY_NOT_IN_FORCE" | "ACTIVITY_UNCLASSIFIED"; message: string } | null;
+  activityIssue?: { kind: "NOT_IN_FORCE" | "UNCLASSIFIED"; message: string } | null;
   voucherId: string;
   direction: "PURCHASE" | "SALE";
   counterpartyCuit: string;

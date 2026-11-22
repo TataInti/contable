@@ -12,7 +12,7 @@ import { RULES_HASH_SCHEMA_VERSION_V3 } from "./rules-hash.js";
 import { findActiveRuleVersion, resolveTaxEngineForVersion } from "./settlement-service.js";
 
 /** Lo que la clasificación muestra por comprobante: el mismo código y texto que el cálculo. */
-export type ActivityIssueView = { code: ActivityIssue["code"]; message: string };
+export type ActivityIssueView = { kind: ActivityIssue["kind"]; message: string };
 
 type Tx = Prisma.TransactionClient;
 
@@ -120,11 +120,11 @@ export async function activityIssuesForWorkpaper(
     for (const issue of evaluateSaleActivities(ctx, facts, cutoffDate)) {
       // Primer hallazgo por obligación (el del cálculo); «no vigente» prevalece sobre «sin clasificar».
       const previo = result.get(issue.voucherId);
-      if (previo && (previo.code === "ACTIVITY_NOT_IN_FORCE" || issue.code === "ACTIVITY_UNCLASSIFIED")) continue;
+      if (previo && (previo.kind === "NOT_IN_FORCE" || issue.kind === "UNCLASSIFIED")) continue;
       result.set(issue.voucherId, {
-        code: issue.code,
+        kind: issue.kind,
         message:
-          issue.code === "ACTIVITY_NOT_IN_FORCE"
+          issue.kind === "NOT_IN_FORCE"
             ? mensajeActividadNoVigente(
                 { activityName: issue.activityName, validFrom: issue.validFrom },
                 { startDate: wp.periodStart },

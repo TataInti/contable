@@ -118,12 +118,12 @@ export type SaleActivityFact = {
 export type ActivityIssue =
   | {
       voucherId: string;
-      code: "ACTIVITY_NOT_IN_FORCE";
+      kind: "NOT_IN_FORCE";
       activityCode: string;
       activityName: string;
       validFrom: Date;
     }
-  | { voucherId: string; code: "ACTIVITY_UNCLASSIFIED"; multipleInForce: boolean };
+  | { voucherId: string; kind: "UNCLASSIFIED"; multipleInForce: boolean };
 
 /**
  * Qué ventas el cálculo no puede asignar a una actividad del nivel. Las reglas son las del
@@ -144,7 +144,7 @@ export function evaluateSaleActivities(
     if (r.kind !== "NOT_IN_FORCE") return;
     issues.push({
       voucherId,
-      code: "ACTIVITY_NOT_IN_FORCE",
+      kind: "NOT_IN_FORCE",
       activityCode: r.code,
       activityName: r.name,
       validFrom: r.validFrom,
@@ -173,7 +173,7 @@ export function evaluateSaleActivities(
       }
     }
     if (unclassified) {
-      issues.push({ voucherId: fact.voucherId, code: "ACTIVITY_UNCLASSIFIED", multipleInForce });
+      issues.push({ voucherId: fact.voucherId, kind: "UNCLASSIFIED", multipleInForce });
     }
   }
   return issues;
