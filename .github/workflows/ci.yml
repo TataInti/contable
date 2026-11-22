@@ -167,6 +167,16 @@ jobs:
           AI_SERVICE_SECRET: dev-secret
           MFA_CHALLENGE_SECRET: e2e-mfa-challenge-secret-with-32-characters
 
+      - name: Publicar trazas y capturas del E2E
+        # Trazas (trace.zip) y capturas de los specs que fallan: para revisar el recorrido sin volver a correrlo.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-trazas-y-capturas
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
   python:
     name: Python (lint, typecheck, test)
     runs-on: ubuntu-latest
