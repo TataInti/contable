@@ -343,11 +343,12 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     expect(screen.queryByRole("textbox", { name: /^Resolución / })).toBeNull();
   });
 
-  it("Cierre: solo texto y hashes, sin botones", async () => {
+  it("Cierre de una revisión anterior: muestra pasos en solo lectura y deja las huellas plegadas", async () => {
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: "Cierre" }));
     elegirRevision(1);
-    expect(await screen.findByText(/Finalizar congela los hashes/)).toBeTruthy();
+    expect(await screen.findByText("Paso 1 · Finalizar")).toBeTruthy();
+    expect(screen.getByText("Detalle técnico").closest("details")?.hasAttribute("open")).toBe(false);
     const contenido = document.querySelector(".work-page__content") as HTMLElement;
     expect(within(contenido).queryAllByRole("button")).toHaveLength(0);
   });

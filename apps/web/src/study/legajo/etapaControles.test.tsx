@@ -583,7 +583,7 @@ describe("Legajo · etapa Controles (K13)", () => {
 });
 
 describe("Legajo · etapa Cierre (K13)", () => {
-  it("muestra el texto de cierre, los hashes de 16 caracteres y los controles bloqueantes abiertos", async () => {
+  it("muestra los pasos y mantiene las huellas dentro del detalle técnico plegado", async () => {
     fijarContexto(PERMISOS_REVISION);
     fijarRespuestas({
       legajo: { status: "FINALIZED", inputHash: HASH_ENTRADA, outputHash: HASH_SALIDA },
@@ -597,20 +597,15 @@ describe("Legajo · etapa Cierre (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Cierre/);
 
-    expect(
-      await screen.findByText(
-        "Finalizar congela los hashes y genera los saldos de cierre para el siguiente período.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Finalizar congela los hashes y genera los saldos de cierre para el siguiente período.",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Paso 1 · Finalizar")).toBeInTheDocument();
+    expect(screen.getByText("Paso 4 · Pago (opcional)")).toBeInTheDocument();
+    const detalle = screen.getByText("Detalle técnico");
+    expect(detalle.closest("details")).not.toHaveAttribute("open");
+    fireEvent.click(detalle);
     const valor = (etiqueta: string) =>
       screen.getByText(etiqueta).parentElement?.querySelector("dd")?.textContent;
-    expect(valor("Hash de entrada")).toBe("a1b2c3d4e5f60718…");
-    expect(valor("Hash de salida")).toBe("ffeeddccbbaa9988…");
+    expect(valor("Huella de entrada")).toBe(HASH_ENTRADA);
+    expect(valor("Huella de salida")).toBe(HASH_SALIDA);
     expect(valor("Controles bloqueantes")).toBe("2");
   });
 
@@ -620,15 +615,12 @@ describe("Legajo · etapa Cierre (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Cierre/);
 
-    expect(
-      await screen.findByText(
-        "Finalizar congela los hashes y genera los saldos de cierre para el siguiente período.",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Paso 1 · Finalizar")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Detalle técnico"));
     const valor = (etiqueta: string) =>
       screen.getByText(etiqueta).parentElement?.querySelector("dd")?.textContent;
-    expect(valor("Hash de entrada")).toBe("Se genera al calcular");
-    expect(valor("Hash de salida")).toBe("Se genera al finalizar");
+    expect(valor("Huella de entrada")).toBe("Se genera al calcular");
+    expect(valor("Huella de salida")).toBe("Se genera al finalizar");
     expect(valor("Controles bloqueantes")).toBe("0");
   });
 });

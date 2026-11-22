@@ -730,6 +730,7 @@ export function StudyExpedienteMensual() {
             paymentNotRequired={(positionQuery.data ?? []).some((position) => Number(position.totalPayable) <= 0)}
             nextPeriod={new Date(new Date(wp.periodEnd).getTime() + 86400000).toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: "UTC" })}
             nextBalance={positionQuery.data?.find((position) => position.saldoFavorTecnico || position.saldoLibreDisponibilidad)?.saldoFavorTecnico ?? null}
+            readOnly={soloLectura}
             onGoToCalculation={() => goToStep(3)}
             onFinalize={() => confirmar({
               title: "Finalizar el legajo",
