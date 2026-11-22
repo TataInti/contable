@@ -111,8 +111,14 @@ export function PanelLibrosIva({
     },
     onSuccess: (data) => {
       limpiarPanel();
+      const ventasOCompras = data.analysis.direction === "SALE" ? "ventas" : "compras";
+      const { committed, duplicates } = data.batch;
       notify.success(
-        `${data.batch.committed === 1 ? "Se importó" : "Se importaron"} ${pluralizar(data.batch.committed, "comprobante", "comprobantes")} de ${data.analysis.direction === "SALE" ? "ventas" : "compras"}. ${data.batch.committed === 1 ? "Quedó asociado" : "Quedaron asociados"} al cliente y al período activo.`,
+        committed === 0 && duplicates > 0
+          ? `El libro de ${ventasOCompras} quedó asociado al cliente y al período activo: ${
+              duplicates === 1 ? "su comprobante ya estaba cargado" : `sus ${duplicates} comprobantes ya estaban cargados`
+            }.`
+          : `${committed === 1 ? "Se importó" : "Se importaron"} ${pluralizar(committed, "comprobante", "comprobantes")} de ${ventasOCompras}. ${committed === 1 ? "Quedó asociado" : "Quedaron asociados"} al cliente y al período activo.`,
       );
       invalidarCobertura();
     },

@@ -59,7 +59,16 @@ export type ImportErrorCode =
   | "WORKPAPER_IMMUTABLE"
   | "REPLACEMENT_SCOPE_INVALID"
   | "UNKNOWN_ADAPTER"
-  | "INVALID_TRANSITION";
+  | "INVALID_TRANSITION"
+  | "REPLACEMENT_SAME_FILE";
+
+/** Estados de vínculo que ya no cuentan: el lote queda como historial (retirado o reemplazado). */
+const HISTORICAL_LINK_STATUSES = ["RETIRED", "REPLACED"] as const;
+
+/** Un lote sin vínculos vigentes (solo retirado o reemplazado en sus expedientes) no bloquea la recarga del archivo. */
+function isHistoricalOnly(links: readonly { status: string }[]): boolean {
+  return links.length > 0 && links.every((link) => (HISTORICAL_LINK_STATUSES as readonly string[]).includes(link.status));
+}
 
 export class ImportError extends Error {
   readonly code: ImportErrorCode;
@@ -320,21 +329,27 @@ export class IngestionService {
         }
       }
 
-      // Idempotencia: mismo lote (mismo origen/impuesto/período/hash) ya existe.
-      let existing = null;
+      // Idempotencia: el mismo archivo (origen, impuesto, período y hash) devuelve su lote vigente.
+      // Un lote retirado o reemplazado queda como historial: no cuenta para la deduplicación y el
+      // mismo archivo vuelve a cargarse como lote nuevo (con su hash versionado, único por ley).
+      let existing: { id: string; status: string; fileHash: string | null } | null = null;
+      let storedFileHash = input.fileHash;
       if (input.fileHash) {
-        existing = await tx.importBatch.findUnique({
+        const sameFile = await tx.importBatch.findMany({
           where: {
-            firmId_clientId_origin_taxTypeId_periodId_fileHash: {
-              firmId: ctx.firmId,
-              clientId: input.clientId,
-              origin: input.origin,
-              taxTypeId: input.taxTypeId,
-              periodId: input.periodId,
-              fileHash: input.fileHash,
-            },
+            firmId: ctx.firmId,
+            clientId: input.clientId,
+            origin: input.origin,
+            taxTypeId: input.taxTypeId,
+            periodId: input.periodId,
+            OR: [{ fileHash: input.fileHash }, { fileHash: { startsWith: `${input.fileHash}#` } }],
           },
+          include: { workpapers: { select: { status: true } } },
         });
+        existing = sameFile.find((candidate) => !isHistoricalOnly(candidate.workpapers)) ?? null;
+        if (!existing && sameFile.length > 0) {
+          storedFileHash = `${input.fileHash}#${sameFile.length}`;
+        }
       }
 
       const batch =
@@ -349,7 +364,7 @@ export class IngestionService {
             adapterVersion: input.adapterVersion,
             status: "UPLOADED",
             ...(input.fileName ? { fileName: input.fileName } : {}),
-            ...(input.fileHash ? { fileHash: input.fileHash } : {}),
+            ...(storedFileHash ? { fileHash: storedFileHash } : {}),
             createdByUserId: ctx.userId,
           },
         }));
@@ -413,6 +428,12 @@ export class IngestionService {
         include: { period: true },
       });
       if (!batch) throw new ImportError("BATCH_NOT_FOUND", "Lote no encontrado");
+      if (batch.status === "COMMITTED") {
+        throw new ImportError(
+          "BATCH_ALREADY_COMMITTED",
+          "Este archivo ya está cargado y vigente en Archivos: no hay nada nuevo que importar.",
+        );
+      }
       if (batch.status !== "UPLOADED") {
         throw new ImportError("INVALID_TRANSITION", `No se puede validar un lote en estado ${batch.status}`);
       }
@@ -647,6 +668,13 @@ export class IngestionService {
       ...(input.workpaperId ? { workpaperId: input.workpaperId } : {}),
       sourceCode,
     });
+    // El mismo archivo que el lote a reemplazar: no hay cambios que confirmar. Se dice en una frase y no se crea nada.
+    if (batch.status === "COMMITTED" && input.replacesBatchId === batch.id) {
+      throw new ImportError(
+        "REPLACEMENT_SAME_FILE",
+        "Este archivo es idéntico al que ya está vigente: no hay cambios para reemplazarlo. Cargá una versión corregida.",
+      );
+    }
 
     const validated = await this.validateBatch(ctx, batch.id, rows);
     const committed = await this.commitBatch(ctx, batch.id, input.clientCuit, input.replacesBatchId);
