@@ -23,11 +23,12 @@ export type ProfileForm = {
 };
 
 export interface TaxRegime { id: string; code: string; name: string; isActive: boolean }
-export interface EconomicActivity { id: string; code: string; name: string; isActive: boolean }
+export interface EconomicActivity { id: string; code: string; name: string; isActive: boolean; jurisdictionId?: string }
 export interface TaxType { id: string; code: string; name: string; isActive: boolean }
 export interface TaxpayerProfileVersion {
   id: string;
   version: number;
+  validFrom?: string;
   legalName: string;
   cuit: string;
   personType: "FISICA" | "JURIDICA";
@@ -56,7 +57,7 @@ export interface TaxRegistration {
   validFrom: string;
   validTo: string | null;
   registrationNumber: string | null;
-  regime: { id: string; code: string; name: string; isActive: boolean; taxType: { id: string; name: string; isActive: boolean }; jurisdiction: { name: string; isActive: boolean } };
+  regime: { id: string; code: string; name: string; isActive: boolean; taxType: { id: string; name: string; isActive: boolean }; jurisdiction: { name: string; isActive: boolean }; jurisdictionId?: string };
 }
 export interface ClientActivityLink {
   id: string;

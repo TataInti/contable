@@ -8,11 +8,13 @@ type Props = {
   openStepForm: (paso: FiscalStep) => void;
   clientActivitiesQuery: UseQueryResult<ClientActivityLink[]>;
   endActivity: MutacionConValor;
+  /** Abre el cajón para corregir la fecha «Desde» de la actividad vinculada (brief 4H). */
+  corregirFecha: (row: ClientActivityLink) => void;
   confirm: ConfirmApi;
   renderEstado: (row: ClientActivityLink) => ReactNode;
 };
 
-export function PestanaActividades({ canWrite, openStepForm, clientActivitiesQuery, endActivity, confirm, renderEstado }: Props) {
+export function PestanaActividades({ canWrite, openStepForm, clientActivitiesQuery, endActivity, corregirFecha, confirm, renderEstado }: Props) {
   return (
     <section className="fiscal-section" aria-labelledby="fiscal-activities-title">
       <div className="fiscal-client-overview__heading"><h3 id="fiscal-activities-title">Actividades</h3>{canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("actividades")}>Agregar</Button> : null}</div>
@@ -21,7 +23,7 @@ export function PestanaActividades({ canWrite, openStepForm, clientActivitiesQue
         { key: "activity", header: "Actividad", render: (row) => <>{row.activity.name}</> },
         { key: "jurisdiction", header: "Jurisdicción", render: (row) => <>{row.activity.jurisdiction.name}{!row.activity.jurisdiction.isActive ? " (oculto)" : ""}</> },
         { key: "status", header: "Estado", render: renderEstado },
-        { key: "actions", header: "", align: "right", render: (row) => canWrite && !row.validTo ? <Button size="sm" variant="ghost" loading={endActivity.isPending} onClick={() => confirm.ask({ title: `¿Finalizar ${row.activity.name}?`, description: "La actividad quedará finalizada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Finalizar", tone: "danger", onConfirm: () => endActivity.mutate(row.id) })}>Finalizar</Button> : null },
+        { key: "actions", header: "", align: "right", render: (row) => canWrite && !row.validTo ? <><Button size="sm" variant="ghost" onClick={() => corregirFecha(row)}>Corregir fecha</Button><Button size="sm" variant="ghost" loading={endActivity.isPending} onClick={() => confirm.ask({ title: `¿Finalizar ${row.activity.name}?`, description: "La actividad quedará finalizada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Finalizar", tone: "danger", onConfirm: () => endActivity.mutate(row.id) })}>Finalizar</Button></> : null },
       ]} />}
     </section>
   );
