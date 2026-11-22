@@ -53,6 +53,9 @@ vi.mock("../../lib/api", async (importOriginal) => {
 const BASE = `/firms/${FIRMA_DEMO}/clients/${CLIENTE_DEMO}`;
 const PERMISOS_FUENTES = ["client.read", "tax.vouchers.prepare"];
 // CSV ficticio «Demo» con separador «;» y encabezado.
+// Línea sintética de percepción de la DGR (ancho fijo de 108).
+const LINEA_PERCEPCION_DEMO =
+  "30555555551" + "AGENTE DEMO SINTETICO".padEnd(50) + "01/10/2026" + "11 C 0001" + "1234567" + " ".repeat(11) + "1500.55P11";
 const CSV_DEMO = "fecha;comprobante;importe\n2026-10-03;RET-0001;1500\n2026-10-04;RET-0002;2300\n";
 
 function fijarContexto(permisos: string[]) {
@@ -202,6 +205,56 @@ describe("Legajo · etapa Fuentes (K10)", () => {
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
     expect(await screen.findByText(/La cobertura cuenta solo lotes revisados/)).toBeInTheDocument();
+  });
+
+  it("un TXT de la DGR en otra fuente no se importa y nombra la fuente correcta", async () => {
+    const fuenteIibbTucuman = {
+      ...fuenteRetencionesDemo,
+      code: "IIBB_RPI_TUC",
+      label: "Retenciones y percepciones IIBB Tucumán",
+    };
+    vi.mocked(api.get).mockImplementation(
+      rutasDemo({ fuentes: [...fuentesDemo, fuenteRetencionesDemo, fuenteIibbTucuman] }) as never,
+    );
+    fijarContexto(PERMISOS_FUENTES);
+    renderLegajo();
+    fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
+    fireEvent.change(await screen.findByRole("combobox", { name: /^Fuente/ }), {
+      target: { value: "RETENCIONES_IIBB_DEMO" },
+    });
+    fireEvent.change(screen.getByLabelText(/Archivo CSV, TXT o JSON/), {
+      target: { files: [new File(["x"], "per20111111112_F611_221120261015.txt", { type: "text/plain" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Importar lote" }));
+    expect(
+      await screen.findByText(
+        /va en la fuente «Retenciones y percepciones IIBB Tucumán», no en «Retenciones IIBB Demo»/,
+      ),
+    ).toBeInTheDocument();
+    expect(llamadasA("/import-batches")).toHaveLength(0);
+  });
+
+  it("un TXT de la DGR de otro CUIT se rechaza con el CUIT del archivo y el del cliente", async () => {
+    const fuenteIibbTucuman = { ...fuenteRetencionesDemo, code: "IIBB_RPI_TUC", label: "IIBB Tucumán" };
+    vi.mocked(api.get).mockImplementation(
+      rutasDemo({ fuentes: [...fuentesDemo, fuenteIibbTucuman] }) as never,
+    );
+    fijarContexto(PERMISOS_FUENTES);
+    renderLegajo();
+    fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
+    fireEvent.change(await screen.findByRole("combobox", { name: /^Fuente/ }), {
+      target: { value: "IIBB_RPI_TUC" },
+    });
+    fireEvent.change(screen.getByLabelText(/Archivo CSV, TXT o JSON/), {
+      target: { files: [new File([LINEA_PERCEPCION_DEMO], "per20111111112_F611_221120261015.txt", { type: "text/plain" })] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Importar lote" }));
+    expect(
+      await screen.findByText(
+        "Este archivo es del CUIT 20-11111111-2, no del cliente (CUIT 20-99999999-8).",
+      ),
+    ).toBeInTheDocument();
+    expect(llamadasA("/import-batches")).toHaveLength(0);
   });
 });
 
