@@ -17,6 +17,7 @@ import {
   type DenseColumn,
 } from "../ui/Dense";
 import { CalendarioFiscalFicha } from "./CalendarioFiscalFicha";
+import { CalendarioFiscalPdfDrawer } from "./CalendarioFiscalPdfDrawer";
 import { CalendarioFiscalSelect } from "./CalendarioFiscalSelect";
 import {
   STATUS_FILTERS,
@@ -81,6 +82,7 @@ export function StudyCalendariosFiscales() {
   const calendarId = searchParams.get("calendario");
   const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
   const [newOpen, setNewOpen] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
   const catalogs = useCalendarCatalogs(firmId, canRead);
   const list = useCalendarList(firmId, filters, canRead && calendarId === null);
   const rows = useMemo(
@@ -165,9 +167,14 @@ export function StudyCalendariosFiscales() {
       Volver a la lista
     </Button>
   ) : canManage ? (
-    <Button type="button" variant="primary" onClick={() => setNewOpen(true)}>
-      Nuevo calendario
-    </Button>
+    <>
+      <Button type="button" variant="secondary" onClick={() => setPdfOpen(true)}>
+        Cargar desde PDF
+      </Button>
+      <Button type="button" variant="primary" onClick={() => setNewOpen(true)}>
+        Nuevo calendario
+      </Button>
+    </>
   ) : undefined;
 
   return (
@@ -275,9 +282,14 @@ export function StudyCalendariosFiscales() {
                 description="Creá el primero para cargar los vencimientos de un organismo y una jurisdicción."
                 action={
                   canManage ? (
-                    <Button type="button" variant="secondary" onClick={() => setNewOpen(true)}>
-                      Nuevo calendario
-                    </Button>
+                    <>
+                      <Button type="button" variant="secondary" onClick={() => setPdfOpen(true)}>
+                        Cargar desde PDF
+                      </Button>
+                      <Button type="button" variant="secondary" onClick={() => setNewOpen(true)}>
+                        Nuevo calendario
+                      </Button>
+                    </>
                   ) : undefined
                 }
               />
@@ -300,6 +312,17 @@ export function StudyCalendariosFiscales() {
           ) : null}
         </>
       )}
+      <CalendarioFiscalPdfDrawer
+        isOpen={pdfOpen}
+        onClose={() => setPdfOpen(false)}
+        firmId={firmId}
+        authorities={catalogs.authorities}
+        jurisdictions={catalogs.jurisdictions}
+        onCreated={(id) => {
+          setPdfOpen(false);
+          openCalendar(id);
+        }}
+      />
       <NuevoCalendarioDrawer
         isOpen={newOpen}
         onClose={() => setNewOpen(false)}
