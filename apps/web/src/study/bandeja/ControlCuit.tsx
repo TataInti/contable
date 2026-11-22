@@ -38,7 +38,7 @@ export function ControlCuitPanel({
   clientId,
   puedeRevisar,
   onMovido,
-}: ControlCuitProps & { documento: Document; onMovido: () => void }) {
+}: ControlCuitProps & { documento: Document; onMovido: (documentoId: string) => void }) {
   const control = documento.cuitControl;
   const refrescar = useRefrescarBandeja({ firmId, clientId });
   const base = `/firms/${firmId}/clients/${clientId}`;
@@ -62,8 +62,11 @@ export function ControlCuitPanel({
     setError(null);
     try {
       await api.post(`${base}/documents/${documento.id}/cuit/move`, { clientId: destinoId });
+      // La selección se resuelve con la respuesta del movimiento, no después del refresco: el refresco espera
+      // consultas del documento ya movido (con reintentos). Si cerrara la selección tarde, pisaría el comprobante
+      // que el usuario eligió mientras tanto (p. ej. el recién subido).
+      onMovido(documento.id);
       await refrescar(documento.id);
-      onMovido();
     } catch (err) {
       setError(`No se pudo mover a ${nombre}. ${mensajeDeError(err)}`);
     } finally {

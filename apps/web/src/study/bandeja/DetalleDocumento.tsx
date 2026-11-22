@@ -83,6 +83,9 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReceipts, setRejectionReceipts] = useState<Record<string, string>>({});
   const base = firmId && clientId ? `/firms/${firmId}/clients/${clientId}` : null;
+  // Lo que el usuario tiene elegido ahora: una acción asíncrona que suelta la selección no debe pisarla.
+  const seleccionadoRef = useRef(selectedId);
+  seleccionadoRef.current = selectedId;
   const detail = useQuery({
     queryKey: ["document", firmId, clientId, selectedId],
     queryFn: () => api.get<Document>(`${base}/documents/${selectedId}`),
@@ -567,7 +570,12 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                     firmId={firmId}
                     clientId={clientId}
                     puedeRevisar={capabilities.has("document.review")}
-                    onMovido={() => setSelectedId(rows.find((r) => r.id !== selectedId)?.id ?? "")}
+                    onMovido={(movidoId) => {
+                      // Solo se suelta la selección si sigue siendo el comprobante movido: si el usuario eligió
+                      // otro después del movimiento, esa elección se conserva.
+                      if (seleccionadoRef.current !== movidoId) return;
+                      setSelectedId(rows.find((r) => r.id !== movidoId)?.id ?? "");
+                    }}
                   />
                 ) : null}
                 {capabilities.has("document.review") && extraction.data.status !== "REVIEWED" ? (
