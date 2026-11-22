@@ -60,7 +60,11 @@ export function buildEngineRules(
   }
   const typedRuleSubjects = new Set<string>();
   const activitySubjectEngine =
-    options.engineKey === "iibb-local-tuc" || options.engineKey === "tem-smt" || options.engineKey === "tem-smt-legacy";
+    options.engineKey === "iibb-local-tuc" ||
+    options.engineKey === "iibb-local-tuc-v2" ||
+    options.engineKey === "tem-smt" ||
+    options.engineKey === "tem-smt-v2" ||
+    options.engineKey === "tem-smt-legacy";
   const vatSubjectEngine = options.engineKey === "vat-ri";
   const rules = rateRules.map((r) => {
     if (options.isTyped) {

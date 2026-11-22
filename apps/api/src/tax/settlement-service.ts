@@ -470,7 +470,9 @@ export class SettlementService {
           }
           const isActivitySubjectEngine =
             engineKey === "iibb-local-tuc" ||
+            engineKey === "iibb-local-tuc-v2" ||
             engineKey === "tem-smt" ||
+            engineKey === "tem-smt-v2" ||
             engineKey === "tem-smt-legacy";
           const needsActivity = isActivitySubjectEngine && rule.kind.key === "RATE";
           const isCm03 = engineKey === "iibb-cm-art2" || engineKey === "iibb-cm-art2-legacy";
@@ -1503,10 +1505,12 @@ export class SettlementService {
             },
           }),
         "iibb-local-tuc": async () => iibbTuc(true),
+        "iibb-local-tuc-v2": async () => iibbTuc(true),
         "iibb-local-tuc-legacy": async () => iibbTuc(false),
         "iibb-cm-art2": async () => cm03(),
         "iibb-cm-art2-legacy": async () => cm03(),
         "tem-smt": async () => temSmt(),
+        "tem-smt-v2": async () => temSmt(),
         "tem-smt-legacy": async () => temSmt(),
         monotributo: async () => monotributo(),
       };

@@ -68,7 +68,7 @@ const taxes = {
     source: "Ley Impositiva de Tucumán — alícuota general",
   },
   tem: {
-    taxType: { code: "TEM", name: "Tasa de Actividades Económicas (TEM)", family: "Tasa de Espacios Municipales" },
+    taxType: { code: "TEM", name: "Tributo Económico Municipal (TEM)", family: "Tasa de Espacios Municipales" },
     taxTypeOption: "(TEM)",
     jurisdiction: "(AR-SMT)",
     module: "TEM San Miguel de Tucumán",

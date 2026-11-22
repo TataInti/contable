@@ -64,7 +64,14 @@ export interface RuleSimulationResult {
   unmatchedInComparison: string[];
 }
 
-const ACTIVITY_ENGINES = new Set(["tem-smt", "tem-smt-legacy", "iibb-local-tuc", "iibb-local-tuc-legacy"]);
+const ACTIVITY_ENGINES = new Set([
+  "tem-smt",
+  "tem-smt-v2",
+  "tem-smt-legacy",
+  "iibb-local-tuc",
+  "iibb-local-tuc-v2",
+  "iibb-local-tuc-legacy",
+]);
 
 const versionInclude = {
   pack: { include: { regime: { select: { jurisdictionId: true, calcFamilyId: true } } } },

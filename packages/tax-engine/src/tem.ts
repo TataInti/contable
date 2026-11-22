@@ -11,8 +11,8 @@ import {
 import type { LocalTaxDeclaredParameter } from "./iibb.js";
 
 /**
- * Motor TEM — Tasa de Actividades Económicas, San Miguel de Tucumán
- * (AR_TEM_SMT_V1).
+ * Motor TEM — Tributo Económico Municipal (TEM), San Miguel de Tucumán
+ * (AR_TEM_SMT_V1). Versión vigente: Ordenanza 4.536 (v2.0.0).
  *
  * Determinista y puro: recibe ingresos por actividad, alícuotas, mínimo,
  * retenciones/percepciones y saldo anterior; devuelve renglones, subtotales,
@@ -28,17 +28,20 @@ import type { LocalTaxDeclaredParameter } from "./iibb.js";
  */
 
 export const TEM_SMT_LEGACY_ENGINE_VERSION = "ar-tem-smt-v1.0.0";
-export const TEM_SMT_ENGINE_VERSION = "ar-tem-smt-v1.1.0";
+/** Liquidaciones ya calculadas con la versión 1.1.0: conservan su comportamiento. */
+export const TEM_SMT_PREVIOUS_ENGINE_VERSION = "ar-tem-smt-v1.1.0";
+/** Versión vigente: Ordenanza 4.536 (arts. 137 y 139; base negativa sin arrastre). */
+export const TEM_SMT_ENGINE_VERSION = "ar-tem-smt-v2.0.0";
 
 export interface TemSmtInput extends TaxEngineInput {
   /** Ingresos por actividad (código del nomenclador → neto gravado). */
   incomeByActivity: Record<string, string>;
   /**
-   * Modo de aplicación del mínimo. El modo vigente suma el mínimo de cada
-   * actividad y después aplica el mínimo global ("SUM_BY_ACTIVITY"). La
-   * hipótesis alternativa de la ordenanza (total de actividades no inferior
-   * al mínimo de mayor rendimiento fiscal) se expresa con "HIGHEST_YIELD".
-   * El valor por defecto conserva el comportamiento existente.
+   * Modo de aplicación del mínimo. La versión vigente (Ordenanza 4.536, art.
+   * 139) aplica el mínimo de mayor rendimiento fiscal: el total no es inferior
+   * al mayor mínimo de las actividades. La versión 1.1.0 suma el mínimo de cada
+   * actividad y luego aplica el global. "SUM_BY_ACTIVITY" sigue disponible si se
+   * elige explícitamente.
    */
   minimumMode?: TemMinimumMode;
   /** Saldos y créditos previos del municipio. */
@@ -63,12 +66,16 @@ export type TemMinimumMode = "SUM_BY_ACTIVITY" | "HIGHEST_YIELD";
 
 export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
   const engineVersion =
-    input.engineVersion === TEM_SMT_LEGACY_ENGINE_VERSION
-      ? TEM_SMT_LEGACY_ENGINE_VERSION
+    input.engineVersion === TEM_SMT_LEGACY_ENGINE_VERSION ||
+    input.engineVersion === TEM_SMT_PREVIOUS_ENGINE_VERSION
+      ? input.engineVersion
       : TEM_SMT_ENGINE_VERSION;
-  const strict = engineVersion === TEM_SMT_ENGINE_VERSION;
+  const strict = engineVersion !== TEM_SMT_LEGACY_ENGINE_VERSION;
+  // Reglas de la Ordenanza 4.536 (v2.0.0): ver `ordinance` abajo.
+  const ordinance = engineVersion === TEM_SMT_ENGINE_VERSION;
   const typed = input.ruleMode === "TYPED";
-  const minimumMode = input.minimumMode ?? "SUM_BY_ACTIVITY";
+  const minimumMode =
+    input.minimumMode ?? (ordinance ? "HIGHEST_YIELD" : "SUM_BY_ACTIVITY");
   const rounding = input.rounding ?? {};
   const rules = new Map(input.rules.map((r) => [r.concept, r]));
   const typedRulesByActivity = new Map(
@@ -119,7 +126,7 @@ export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
     const determinedTax =
       appliesActivityMinimum &&
       activityMinimum !== undefined &&
-      income.isPositive() &&
+      (ordinance || income.isPositive()) &&
       tax.lessThan(activityMinimum)
         ? activityMinimum
         : tax;
@@ -164,11 +171,50 @@ export function calculateTemSmt(input: TemSmtInput): TaxEngineResult {
           : highest;
       }, minimum)
     : minimum;
-  const effectiveMinimum = highestYieldMinimum;
+  // Ordenanza 4.536 (art. 137): sin ingresos declarados el mes paga el mínimo
+  // del régimen. Sin ventas no hay actividades que lo identifiquen: se toma el
+  // mínimo de las reglas de actividad solo si es único; si hay varios, se bloquea
+  // y se pide cargar los ingresos por actividad.
+  let noIncomeMinimum: DecimalValue | undefined;
+  if (ordinance && activityLines.length === 0) {
+    const ruleMinimums = input.rules
+      .filter((rule) =>
+        rule.minimum !== undefined &&
+        (typed
+          ? rule.kind === "RATE" && rule.activityId !== undefined && rule.activityId !== null
+          : rule.rate !== undefined),
+      )
+      .map((rule) => rule.minimum!);
+    const distinctMinimums = ruleMinimums.filter(
+      (value, index) => ruleMinimums.findIndex((other) => other.equals(value)) === index,
+    );
+    if (distinctMinimums.length === 1) {
+      noIncomeMinimum = distinctMinimums[0];
+    } else if (distinctMinimums.length > 1) {
+      blocks.push(
+        "Hay mínimos distintos por actividad y no hay ingresos declarados: cargá los ingresos por actividad para saber cuál mínimo aplica",
+      );
+    }
+  }
+  const effectiveMinimum =
+    noIncomeMinimum !== undefined &&
+    (highestYieldMinimum === undefined || noIncomeMinimum.greaterThan(highestYieldMinimum))
+      ? noIncomeMinimum
+      : highestYieldMinimum;
   let amountDue: DecimalValue;
   let appliedMinimum = false;
-  const amountBeforeGlobalMinimum =
+  let amountBeforeGlobalMinimum =
     strict && minimumMode === "SUM_BY_ACTIVITY" ? totalAfterActivityMinimums : totalByRate;
+  // Ordenanza 4.536: una base negativa no genera impuesto ni arrastra saldo; el
+  // tributo queda en el mínimo (o en 0 si no hay mínimo).
+  if (ordinance && totalBase.isNegative()) {
+    warnings.push(
+      "Base negativa: las notas de crédito superan las ventas del período; el tributo queda en el mínimo (o en 0 si no hay mínimo) y el excedente no pasa a saldo a favor",
+    );
+  }
+  if (ordinance && amountBeforeGlobalMinimum.isNegative()) {
+    amountBeforeGlobalMinimum = dec(0);
+  }
   if (effectiveMinimum !== undefined && amountBeforeGlobalMinimum.lessThan(effectiveMinimum)) {
     amountDue = effectiveMinimum;
     appliedMinimum = true;
