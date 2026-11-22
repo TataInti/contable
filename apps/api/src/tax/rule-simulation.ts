@@ -39,6 +39,10 @@ export interface RuleSimulationInput {
   /** Recaudaciones bancarias (sólo Ingresos Brutos). */
   collected?: string;
   previousCredit?: string;
+  /** Mínimo no imponible (sólo Ingresos Brutos Tucumán): se resta de la base antes de la alícuota. */
+  nonTaxableMinimum?: string;
+  /** Impuesto mínimo del mes (sólo Ingresos Brutos Tucumán): reemplaza el mínimo de la versión en este caso. */
+  taxMinimum?: string;
 }
 
 export interface RuleSimulationRun {
@@ -130,6 +134,15 @@ export class RuleSimulationService {
         );
       }
       const isTyped = version.rulesHashSchemaVersion === RULES_HASH_SCHEMA_VERSION_V3;
+      if (
+        engine.engineKey.startsWith("tem-smt") &&
+        (input.nonTaxableMinimum !== undefined || input.taxMinimum !== undefined)
+      ) {
+        throw new RuleSimulationError(
+          "SIMULATION_INPUT_INVALID",
+          "El mínimo no imponible y el impuesto mínimo del mes solo se prueban en Ingresos Brutos Tucumán.",
+        );
+      }
       const rulesById = new Map(version.rateRules.map((rule) => [rule.id, rule]));
 
       // Ingresos del caso, traducidos a la clave que usa el motor.
@@ -229,7 +242,9 @@ export class RuleSimulationService {
         "La versión tiene más de un mínimo global aplicable",
       );
     }
-    const minimum = applicable[0]?.amount ? dec(applicable[0].amount.toString()) : undefined;
+    const versionMinimum = applicable[0]?.amount ? dec(applicable[0].amount.toString()) : undefined;
+    // Impuesto mínimo del mes (Probar): reemplaza el de la versión sólo en este caso.
+    const minimum = input.taxMinimum !== undefined ? dec(input.taxMinimum) : versionMinimum;
 
     const common = {
       engineVersion: version.engineVersion,
@@ -251,6 +266,9 @@ export class RuleSimulationService {
       : calculateIIbbTuc({
           ...common,
           credits: { withholding, perception, collected: dec(input.collected ?? "0") },
+          ...(input.nonTaxableMinimum !== undefined
+            ? { nonTaxableMinimum: dec(input.nonTaxableMinimum) }
+            : {}),
         });
 
     return {
