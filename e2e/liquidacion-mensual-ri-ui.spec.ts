@@ -316,11 +316,19 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await page.getByRole("tab", { name: /^Controles/ }).click();
     const panel = page.locator(".work-page").first();
     for (const nombre of ["Acreditaciones bancarias vs. facturación", "Caja e imputaciones del período"]) {
-      const control = panel.locator(".workpaper-control").filter({ hasText: nombre });
-      await expect(control, `control «${nombre}»`).toBeVisible({ timeout: 20_000 });
-      await control.getByRole("textbox", { name: /^Resolución / }).fill(MOTIVO_CONTROL);
-      await mutating(page, "/resolve", () => control.getByRole("button", { name: "Resolver", exact: true }).click());
-      await expect(control.getByRole("button", { name: "Resolver", exact: true })).toHaveCount(0);
+      // Un mismo control puede repetirse por impuesto del legajo: se resuelven todos los abiertos de ese nombre.
+      const abiertos = panel
+        .locator(".workpaper-control")
+        .filter({ hasText: nombre })
+        .filter({ has: page.getByRole("textbox", { name: /^Resolución / }) });
+      await expect(abiertos.first(), `control «${nombre}»`).toBeVisible({ timeout: 20_000 });
+      for (let intento = 0; intento < 4 && (await abiertos.count()) > 0; intento++) {
+        const control = abiertos.first();
+        await control.getByRole("textbox", { name: /^Resolución / }).fill(MOTIVO_CONTROL);
+        await mutating(page, "/resolve", () => control.getByRole("button", { name: "Resolver", exact: true }).click());
+        await expect(control.getByRole("button", { name: "Resolver", exact: true })).toHaveCount(0);
+      }
+      await expect(abiertos, `«${nombre}» sin abiertos`).toHaveCount(0);
     }
     await expect(page.getByText("bloqueantes abiertos")).toHaveCount(0);
   });
