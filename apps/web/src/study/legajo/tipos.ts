@@ -231,6 +231,12 @@ export interface WorkpaperClassification {
   rateBuckets: Array<{ rate: string; base: string; amount: string }>;
   status: "PENDING" | "CLASSIFIED";
   origin: string | null;
+  /** Falso en compras con letra B o C: su IVA no es crédito fiscal. */
+  ivaCredit?: boolean;
+  /** Excluido del cálculo: cuándo, quién y por qué (null si está incluido). */
+  excludedAt?: string | null;
+  excludedReason?: string | null;
+  excludedBy?: { id: string; name: string } | null;
   voucher: {
     type: string;
     letter: string | null;
@@ -244,8 +250,19 @@ export interface ClassificationCoverage {
   total: number;
   classified: number;
   pending: number;
+  excluded?: number;
   ready: boolean;
   items: WorkpaperClassification[];
+}
+/** Regla «recordar»: la contraparte (CUIT) de un cliente queda asignada a un rubro o una actividad. */
+export interface ClassificationRule {
+  id: string;
+  direction: "PURCHASE" | "SALE";
+  counterpartyCuit: string;
+  categoryCode: "SUPER" | "TRANSPORTE" | null;
+  activityCode: string | null;
+  createdByName: string;
+  createdAt: string;
 }
 export interface WorkpaperAllocation {
   id: string;

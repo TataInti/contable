@@ -27,6 +27,7 @@ import { StatusBadge } from "../ui/StatusBadge";
 import type {
   AllocationCoverage,
   ClassificationCoverage,
+  ClassificationRule,
   CoberturaLegajo,
   CreditLot,
   EvidenceDocument,
@@ -100,6 +101,9 @@ const ESTADOS_EDITABLES_FUENTES = [
   "CHANGES_REQUESTED",
 ];
 
+// Clasificar y excluir: además de preparar, se admite con el mes calculado (vuelve a preparación).
+const ESTADOS_EDITABLES_CLASIFICACION = [...ESTADOS_EDITABLES_FUENTES, "CALCULATED"];
+
 /** Error de una acción: solo ocupa lugar en la barra si hay un error que mostrar (P4). */
 function errorDe(error: Error | null | undefined, clave: string) {
   return error ? <WorkpaperActionError key={clave} error={error} /> : null;
@@ -162,6 +166,8 @@ export function StudyExpedienteMensual() {
     Record<string, { categoryCode: string; activityCode: string }>
   >({});
   const [allocationDrafts, setAllocationDrafts] = useState<Record<string, string>>({});
+  // «Recordar para este proveedor/cliente»: vale para el próximo guardado de la etapa Clasificación.
+  const [rememberRule, setRememberRule] = useState(false);
   // Panel de libros IVA: lado de la fila desde la que se abrió (null = cerrado).
   const [libroIvaAbierto, setLibroIvaAbierto] = useState<{ lado: "SALE" | "PURCHASE"; replacesBatchId?: string } | null>(null);
   // Revisión elegida en el menú «Revisión» (null = la más reciente) y cajón «Exportar libros».
@@ -271,6 +277,14 @@ export function StudyExpedienteMensual() {
     queryFn: () =>
       api.get<ClassificationCoverage>(
         `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/classifications`,
+      ),
+    enabled: Boolean(firmId && clientId && activeWorkpaperId),
+  });
+  const rulesQuery = useQuery({
+    queryKey: ["monthly-workpaper-classification-rules", firmId, clientId, activeWorkpaperId],
+    queryFn: () =>
+      api.get<ClassificationRule[]>(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/classification-rules`,
       ),
     enabled: Boolean(firmId && clientId && activeWorkpaperId),
   });
@@ -479,6 +493,19 @@ export function StudyExpedienteMensual() {
     },
   });
 
+  // Cambiar clasificaciones o exclusiones puede devolver el mes calculado a preparación: se releen
+  // legajo, cobertura, cálculo y reglas.
+  const invalidarClasificacion = () => {
+    for (const clave of [
+      "monthly-workpaper-classifications",
+      "monthly-workpaper-classification-rules",
+      "monthly-workpaper-coverage",
+      "monthly-workpapers",
+      "monthly-workpaper-calculation",
+    ]) {
+      void queryClient.invalidateQueries({ queryKey: [clave, firmId, clientId] });
+    }
+  };
   const classifyVoucherMutation = useMutation({
     mutationFn: (classification: WorkpaperClassification) => {
       const draft = classificationDrafts[classification.id] ?? {
@@ -501,18 +528,44 @@ export function StudyExpedienteMensual() {
                 saveSupplierProfile: true,
               }
             : { activityCode: draft.activityCode.trim() }),
+          ...(rememberRule ? { rememberRule: true } : {}),
         },
       );
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["monthly-workpaper-classifications", firmId, clientId],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["monthly-workpaper-coverage", firmId, clientId],
-      });
-      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
-    },
+    onSuccess: () => invalidarClasificacion(),
+  });
+
+  const rutaClasificaciones = `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/classifications`;
+
+  const bulkClassifyMutation = useMutation({
+    mutationFn: (bloque: { ids: string[]; categoryCode: string; activityCode: string }) =>
+      api.post(`${rutaClasificaciones}/bulk`, {
+        classificationIds: bloque.ids,
+        ...(bloque.categoryCode ? { categoryCode: bloque.categoryCode } : {}),
+        ...(bloque.activityCode ? { activityCode: bloque.activityCode } : {}),
+        ...(rememberRule ? { rememberRule: true } : {}),
+      }),
+    onSuccess: () => invalidarClasificacion(),
+  });
+
+  const excludeMutation = useMutation({
+    mutationFn: ({ ids, reason }: { ids: string[]; reason: string }) =>
+      api.post(`${rutaClasificaciones}/exclude`, { classificationIds: ids, reason }),
+    onSuccess: () => invalidarClasificacion(),
+  });
+
+  const includeMutation = useMutation({
+    mutationFn: ({ ids }: { ids: string[] }) =>
+      api.post(`${rutaClasificaciones}/include`, { classificationIds: ids }),
+    onSuccess: () => invalidarClasificacion(),
+  });
+
+  const deleteRuleMutation = useMutation({
+    mutationFn: (rule: ClassificationRule) =>
+      api.del(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${activeWorkpaperId}/classification-rules/${rule.id}`,
+      ),
+    onSuccess: () => invalidarClasificacion(),
   });
 
   const reallocateInputMutation = useMutation({
@@ -741,6 +794,23 @@ export function StudyExpedienteMensual() {
             setAllocationDrafts={setAllocationDrafts}
             classifyVoucherMutation={classifyVoucherMutation}
             reallocateInputMutation={reallocateInputMutation}
+            canEditClassifications={!soloLectura && ESTADOS_EDITABLES_CLASIFICACION.includes(wp.status)}
+            motivoClasificacionBloqueada={
+              soloLectura
+                ? null
+                : wp.status === "FINALIZED" || wp.status === "SUPERSEDED"
+                  ? "Para cambiar un mes cerrado, rectificá la liquidación."
+                  : wp.status === "IN_REVIEW" || wp.status === "REVIEWED"
+                    ? "El mes está en revisión. Pedí cambios para modificar sus clasificaciones."
+                    : null
+            }
+            rememberRule={rememberRule}
+            setRememberRule={setRememberRule}
+            rulesQuery={rulesQuery}
+            bulkClassifyMutation={bulkClassifyMutation}
+            excludeMutation={excludeMutation}
+            includeMutation={includeMutation}
+            deleteRuleMutation={deleteRuleMutation}
           />
         ) : step === 3 ? (
           <EtapaCalculo

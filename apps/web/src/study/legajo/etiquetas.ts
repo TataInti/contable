@@ -104,6 +104,10 @@ export const CLASSIFICATION_ORIGIN_LABELS: Record<string, string> = {
   MANUAL: "Elegida a mano",
   VOUCHER_LINE: "Tomada del archivo importado",
   SUPPLIER_MASTER: "Tomada del proveedor",
+  SUPPLIER_PROFILE: "Tomada del proveedor",
+  RULE: "Por regla",
+  SINGLE_CLIENT_ACTIVITY: "Asignada automáticamente (única actividad)",
+  SINGLE_ACTIVITY_PER_LEVEL: "Asignada automáticamente (única actividad del nivel)",
 };
 
 export const CONTROL_SEVERITY_LABELS: Record<string, string> = {

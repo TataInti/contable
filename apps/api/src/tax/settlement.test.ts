@@ -657,6 +657,48 @@ describe("G3-1 cobertura y cálculo determinista", () => {
     expect(result.result.blocks).toHaveLength(0);
   });
 
+  it("una compra marcada sin crédito (letra B o C) no suma crédito fiscal ni entra como insumo de IVA", async () => {
+    await activateDetailedVatRules();
+    const { v1, v2, v3 } = await createApprovedVouchers();
+    const classifications = [v1, v2, v3].map((voucher) => ({
+      voucherId: voucher.id,
+      documentKind: "INVOICE",
+      activityCode: voucher.direction === "SALE" ? "VENTA_GENERAL" : "COMPRAS",
+      categoryCode: voucher.direction === "PURCHASE" ? "SUPER" : null,
+      ...(voucher.direction === "PURCHASE" ? { ivaCredit: false } : {}),
+      rateBuckets: [
+        {
+          rate: "21",
+          base: voucher.direction === "SALE" ? "100000.0000" : "40000.0000",
+          amount: voucher.direction === "SALE" ? "21000.0000" : "8400.0000",
+        },
+      ],
+      snapshotHash: `sha256:classification-sin-credito-${voucher.id}`,
+    }));
+
+    const result = await settlements.calculate(ctxOwner, {
+      ...calculateParams(),
+      sourceScope: {
+        voucherIds: [v1.id, v2.id, v3.id],
+        withholdingIds: [],
+        perceptionIds: [],
+        f931RunIds: [],
+        classifications,
+      },
+    });
+    const totals = result.settlement.totals as Record<string, string>;
+    expect(totals["DEBITO_FISCAL"]).toBe("42000.00");
+    expect(totals["CREDITO_FISCAL"]).toBe("0.00");
+    expect(
+      result.inputs.some(
+        (input) =>
+          input.kind === "VOUCHER_COMPONENT" &&
+          (input.snapshot as { voucherId?: string }).voucherId === v3.id,
+      ),
+    ).toBe(false);
+    expect(result.result.blocks).toHaveLength(0);
+  });
+
   it("caracterización (vigente): el cierre crea su lote VERIFIED con usuario y fecha, y su referencia nombra la liquidación", async () => {
     await activateDetailedVatRules();
     const { v3: januaryPurchase } = await createApprovedVouchers();

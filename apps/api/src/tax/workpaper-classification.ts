@@ -40,6 +40,30 @@ export function voucherDocumentKind(voucher: { type: string; letter: string | nu
   return "INVOICE";
 }
 
+// Facturas, notas de crédito y notas de débito con letra B o C según la tabla oficial de ARCA
+// («Libro IVA Digital - Tablas del Sistema»): el IVA de estos comprobantes no es crédito fiscal.
+const ARCA_CODES_LETRA_B: ReadonlySet<number> = new Set([6, 7, 8, 206, 207, 208]);
+const ARCA_CODES_LETRA_C: ReadonlySet<number> = new Set([11, 12, 13, 15, 211, 212, 213]);
+
+/**
+ * Una compra con factura (o nota) B o C no genera crédito fiscal de IVA. La letra se toma de `letter`
+ * cuando guarda «B» o «C» y, si el tipo es un código de ARCA (en notas `letter` guarda «NC» o «ND»),
+ * de la tabla oficial de códigos. Una venta nunca es «sin crédito»: el crédito es de las compras.
+ */
+export function voucherGivesIvaCredit(voucher: {
+  direction: string;
+  type: string;
+  letter: string | null;
+}): boolean {
+  if (voucher.direction !== "PURCHASE") return true;
+  const letter = voucher.letter?.trim().toUpperCase() ?? "";
+  if (letter === "B" || letter === "C") return false;
+  const code = /^\s*(\d+)/.exec(voucher.type)?.[1];
+  if (code === undefined) return true;
+  const numero = Number(code);
+  return !(ARCA_CODES_LETRA_B.has(numero) || ARCA_CODES_LETRA_C.has(numero));
+}
+
 function rateBuckets(voucher: VoucherForClassification) {
   const labels: Record<string, string> = {
     IVA_21: "21",
@@ -65,6 +89,7 @@ function snapshotHash(input: {
   activityCode: string | null;
   buckets: Array<{ rate: string; base: string; amount: string }>;
   supplierProfileId: string | null;
+  ivaCredit?: boolean;
 }) {
   return taxHash({
     voucherId: input.voucher.id,
@@ -76,6 +101,8 @@ function snapshotHash(input: {
     activityCode: input.activityCode,
     rateBuckets: input.buckets,
     supplierProfileId: input.supplierProfileId,
+    // Solo cuando no hay crédito: los hashes de las clasificaciones anteriores no cambian.
+    ...(input.ivaCredit === false ? { ivaCredit: false } : {}),
   });
 }
 
@@ -139,7 +166,7 @@ export async function materializeWorkpaperClassifications(
   const voucherIds = sourceFacts.voucherIds;
   if (voucherIds.length === 0) return [];
 
-  const [vouchers, profiles, clientActivities] = await Promise.all([
+  const [vouchers, profiles, clientActivities, rules] = await Promise.all([
     tx.fiscalVoucher.findMany({
       where: {
         id: { in: voucherIds },
@@ -167,6 +194,9 @@ export async function materializeWorkpaperClassifications(
         profile: { status: "ACTIVE" },
       },
       include: { activity: true },
+    }),
+    tx.classificationRule.findMany({
+      where: { firmId: workpaper.firmId, clientId: workpaper.clientId, revokedAt: null },
     }),
   ]);
 
@@ -208,7 +238,15 @@ export async function materializeWorkpaperClassifications(
     let categoryCode: string | null = null;
     let activityCode: string | null = null;
     let origin: string | null = null;
-    if (voucher.direction === "PURCHASE" && supplierProfile?.categoryCode) {
+    // La regla «recordar» del cliente manda sobre el maestro del proveedor y sobre la actividad única.
+    const rule = rules.find(
+      (item) => item.direction === voucher.direction && item.counterpartyCuit === counterpartyCuit,
+    );
+    if (rule && (voucher.direction === "PURCHASE" ? rule.categoryCode : rule.activityCode)) {
+      categoryCode = voucher.direction === "PURCHASE" ? rule.categoryCode : null;
+      activityCode = rule.activityCode;
+      origin = "RULE";
+    } else if (voucher.direction === "PURCHASE" && supplierProfile?.categoryCode) {
       categoryCode = supplierProfile.categoryCode;
       activityCode = supplierProfile.activityCode;
       origin = "SUPPLIER_PROFILE";
@@ -234,6 +272,7 @@ export async function materializeWorkpaperClassifications(
     const buckets = rateBuckets(voucher);
     const documentKind = voucherDocumentKind(voucher);
     const profileId = supplierProfile?.id ?? null;
+    const ivaCredit = voucherGivesIvaCredit(voucher);
 
     await tx.workpaperVoucherClassification.create({
       data: {
@@ -250,6 +289,7 @@ export async function materializeWorkpaperClassifications(
         rateBuckets: buckets,
         status,
         origin,
+        ivaCredit,
         snapshotHash: snapshotHash({
           voucher,
           documentKind,
@@ -257,6 +297,7 @@ export async function materializeWorkpaperClassifications(
           activityCode,
           buckets,
           supplierProfileId: profileId,
+          ivaCredit,
         }),
         ...(status === "CLASSIFIED" ? { classifiedAt: new Date() } : {}),
       },
@@ -288,14 +329,20 @@ export async function classificationCoverage(
           total: true,
         },
       },
+      excludedBy: { select: { id: true, name: true } },
     },
     orderBy: [{ status: "asc" }, { createdAt: "asc" }],
   });
-  const pending = items.filter((item) => item.status !== "CLASSIFIED").length;
+  // Un comprobante excluido no se clasifica ni se calcula: no cuenta como pendiente ni como clasificado.
+  const excluded = items.filter((item) => item.excludedAt !== null).length;
+  const pending = items.filter(
+    (item) => item.excludedAt === null && item.status !== "CLASSIFIED",
+  ).length;
   return {
     total: items.length,
-    classified: items.length - pending,
+    classified: items.length - pending - excluded,
     pending,
+    excluded,
     ready: pending === 0,
     items,
   };
@@ -308,6 +355,7 @@ export function classificationHash(input: {
   activityCode: string | null;
   rateBuckets: Prisma.JsonValue;
   supplierProfileId: string | null;
+  ivaCredit?: boolean;
 }) {
   return taxHash({
     voucherId: input.voucher.id,
@@ -319,5 +367,6 @@ export function classificationHash(input: {
     activityCode: input.activityCode,
     rateBuckets: input.rateBuckets,
     supplierProfileId: input.supplierProfileId,
+    ...(input.ivaCredit === false ? { ivaCredit: false } : {}),
   });
 }
