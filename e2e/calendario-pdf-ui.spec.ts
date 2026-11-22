@@ -24,12 +24,12 @@ test("el calendario se arma desde su PDF, el contador corrige la celda dudosa y 
   await test.step("Entra a Calendarios fiscales desde Ajustes del estudio", async () => {
     await login(page);
     await goTo(page, "Calendarios fiscales");
-    await expect(page.getByRole("button", { name: "Cargar desde PDF" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cargar desde PDF" }).first()).toBeVisible();
   });
 
   await test.step("Sin datos completos, la lectura queda deshabilitada y el motivo dice qué falta", async () => {
-    await page.getByRole("button", { name: "Cargar desde PDF" }).click();
-    await expect(page.getByRole("heading", { name: "Cargar calendario desde PDF" })).toBeVisible();
+    await page.getByRole("button", { name: "Cargar desde PDF" }).first().click();
+    await expect(page.getByText("Cargar calendario desde PDF", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Leer PDF y armar borrador" })).toBeDisabled();
     await expect(
       page.getByText("Completá organismo, jurisdicción, año, título, impuesto y PDF del calendario."),
