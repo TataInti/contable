@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaxPanelResponse, TaxPanelRow } from "@contable/contracts";
 import type { ClientContextValue } from "../context/ClientContext";
 import { StudyPanelTrabajo } from "./StudyPanelTrabajo";
+import { abrirListado } from "../test/elegirOpcion";
 
 // Regresión del corte 4b (corrección): estas pruebas mockean `fetch` y no `api`, así que pasan por el
 // cliente real. Si la pantalla recibe solo el arreglo `data` y pierde `meta`, fallan.
@@ -183,12 +184,12 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
   it("las opciones de Responsable e Impuesto salen de meta.options de la respuesta", async () => {
     renderPanel();
     await tablaPanel();
-    const responsable = screen.getByRole("combobox", { name: "Responsable" });
+    expect(screen.getByRole("combobox", { name: "Responsable" })).toBeTruthy();
     expect(
-      within(responsable).getByRole("option", { name: "Responsable: Beto Demo" }),
+      within(abrirListado("Responsable")).getByRole("option", { name: "Responsable: Beto Demo" }),
     ).toBeTruthy();
-    const impuesto = screen.getByRole("combobox", { name: "Impuesto" });
-    expect(within(impuesto).getByRole("option", { name: "Impuesto: IVA" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Impuesto" })).toBeTruthy();
+    expect(within(abrirListado("Impuesto")).getByRole("option", { name: "Impuesto: IVA" })).toBeTruthy();
   });
 
   it("«Cargar más» pide la página siguiente por la red y suma sus filas al pie", async () => {

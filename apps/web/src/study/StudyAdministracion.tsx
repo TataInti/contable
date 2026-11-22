@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, useNotify } from "@contable/design-system";
+import { Button, EmptyState, useNotify, SearchSelect } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { buildPortalInvitationLink } from "../lib/portalInvitationLink";
@@ -1021,29 +1021,27 @@ export function StudyAdministracion() {
           />
           {tab === "internal" ? (
             <>
-              <select
+              <SearchSelect
+                hideLabel
+                label="Filtrar por rol"
                 className="dense-select"
-                aria-label="Filtrar por rol"
                 value={roleFilter}
-                onChange={(event) => setRoleFilter(event.target.value)}
-              >
-                <option value="">Rol: todos</option>
-                {INTERNAL_ROLE_OPTIONS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <select
+                onChange={(value) => setRoleFilter(value)}
+                placeholder="Rol: todos"
+                options={INTERNAL_ROLE_OPTIONS.map(([value, label]) => ({ value, label }))}
+              />
+              <SearchSelect
+                hideLabel
+                label="Filtrar por estado"
                 className="dense-select"
-                aria-label="Filtrar por estado"
                 value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as "" | "ACTIVE" | "SUSPENDED")}
-              >
-                <option value="">Estado: todos</option>
-                <option value="ACTIVE">Activos</option>
-                <option value="SUSPENDED">Suspendidos</option>
-              </select>
+                onChange={(value) => setStatusFilter(value as "" | "ACTIVE" | "SUSPENDED")}
+                placeholder="Estado: todos"
+                options={[
+                  { value: "ACTIVE", label: "Activos" },
+                  { value: "SUSPENDED", label: "Suspendidos" },
+                ]}
+              />
               <Button
                 type="button"
                 variant="secondary"

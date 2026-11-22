@@ -1,10 +1,12 @@
-import { useId, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import "./Field.css";
 import "./SearchSelect.css";
 
 export interface SearchSelectOption {
   value: string;
   label: string;
+  /** La opción se ve pero no se puede elegir (por ejemplo, un registro oculto). */
+  disabled?: boolean;
 }
 
 export interface SearchSelectGroup {
@@ -14,8 +16,8 @@ export interface SearchSelectGroup {
 
 export interface SearchSelectProps {
   label: string;
-  options?: SearchSelectOption[];
-  groups?: SearchSelectGroup[];
+  options?: readonly SearchSelectOption[];
+  groups?: readonly SearchSelectGroup[];
   value: string;
   onChange: (value: string) => void;
   id?: string;
@@ -24,6 +26,14 @@ export interface SearchSelectProps {
   className?: string;
   disabled?: boolean;
   required?: boolean;
+  /** false: el valor siempre es una opción y la lista no ofrece «vacío». Por defecto, sí. */
+  allowEmpty?: boolean;
+  /** Oculta el rótulo visible; el combobox conserva la etiqueta accesible (filtros de barra). */
+  hideLabel?: boolean;
+  /** Campo con error: se marca el control y se enlaza con su mensaje. */
+  invalid?: boolean;
+  describedBy?: string;
+  onBlur?: () => void;
 }
 
 function normalize(value: string) {
@@ -42,43 +52,32 @@ export function SearchSelect({
   className,
   disabled,
   required,
+  allowEmpty = true,
+  hideLabel,
+  invalid,
+  describedBy,
+  onBlur,
 }: SearchSelectProps) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const listboxId = `${inputId}-listbox`;
   const allOptions = useMemo(() => [...options, ...groups.flatMap((group) => group.options)], [options, groups]);
   const selected = allOptions.find((option) => option.value === value);
-  const historicalOption = value && !selected
+  const historicalOption: SearchSelectOption | null = value && !selected
     ? { value, label: `${value} — valor histórico (conservado)` }
     : null;
-  const availableOptions = historicalOption ? [...options, historicalOption] : options;
+  const availableOptions: readonly SearchSelectOption[] = historicalOption ? [...options, historicalOption] : options;
   const selectedLabel = selected?.label ?? historicalOption?.label;
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const searchable = allOptions.length > 7;
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  if (!searchable) {
-    return (
-      <div className="ds-field">
-        <label className="ds-field__label" htmlFor={inputId}>{label}</label>
-        <select
-          id={inputId}
-          name={name}
-          className={`ds-field__input${className ? ` ${className}` : ""}`}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          disabled={disabled}
-          required={required}
-          aria-label={label}
-        >
-          <option value="">{placeholder}</option>
-          {availableOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          {groups.map((group) => <optgroup key={group.label} label={group.label}>{group.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</optgroup>)}
-        </select>
-      </div>
-    );
-  }
+  // La validez sigue al valor elegido, no al texto del buscador: mientras el desplegable está
+  // abierto el campo muestra la búsqueda (vacía al enfocar) y no debe bloquear el envío.
+  useEffect(() => {
+    inputRef.current?.setCustomValidity(required && !value ? "Elegí una opción." : "");
+  }, [required, value]);
 
   const filteredGroups = groups.map((group) => ({
     ...group,
@@ -101,16 +100,22 @@ export function SearchSelect({
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       setOpen(true);
+      const step = event.key === "ArrowDown" ? 1 : -1;
       setActiveIndex((current) => {
-        if (!visibleOptions.length) return -1;
-        return event.key === "ArrowDown"
-          ? (current + 1) % visibleOptions.length
-          : (current <= 0 ? visibleOptions.length - 1 : current - 1);
+        const count = visibleOptions.length;
+        if (!count) return -1;
+        // Recorre en círculo y saltea las opciones deshabilitadas.
+        let index = current < 0 ? (step > 0 ? -1 : count) : current;
+        for (let attempt = 0; attempt < count; attempt += 1) {
+          index = (index + step + count) % count;
+          if (!visibleOptions[index]?.disabled) return index;
+        }
+        return -1;
       });
     } else if (event.key === "Enter" && open && activeIndex >= 0) {
       event.preventDefault();
       const option = visibleOptions[activeIndex];
-      if (option) select(option.value);
+      if (option && !option.disabled) select(option.value);
     } else if (event.key === "Escape") {
       setOpen(false);
       setQuery("");
@@ -122,10 +127,14 @@ export function SearchSelect({
       id={`${listboxId}-option-${index}`}
       key={option.value}
       role="option"
+      data-value={option.value}
       aria-selected={option.value === value}
-      className={`ds-search-select__option${activeIndex === index ? " is-active" : ""}`}
+      aria-disabled={option.disabled || undefined}
+      className={`ds-search-select__option${option.disabled ? " is-disabled" : ""}${activeIndex === index ? " is-active" : ""}`}
       onMouseDown={(event) => event.preventDefault()}
-      onClick={() => select(option.value)}
+      onClick={() => {
+        if (!option.disabled) select(option.value);
+      }}
     >{option.label}</li>
   );
   let optionIndex = 0;
@@ -137,10 +146,11 @@ export function SearchSelect({
 
   return (
     <div className="ds-field ds-search-select">
-      <label className="ds-field__label" htmlFor={inputId}>{label}</label>
+      {hideLabel ? null : <label className="ds-field__label" htmlFor={inputId}>{label}</label>}
       <input
+        ref={inputRef}
         id={inputId}
-        className={`ds-field__input${className ? ` ${className}` : ""}`}
+        className={`ds-field__input${invalid ? " ds-field__input--error" : ""}${className ? ` ${className}` : ""}`}
         role="combobox"
         aria-label={label}
         aria-autocomplete="list"
@@ -148,21 +158,22 @@ export function SearchSelect({
         aria-controls={listboxId}
         aria-activedescendant={open && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
         aria-required={required || undefined}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         aria-haspopup="listbox"
-        required={required}
         value={open ? query : selectedLabel ?? ""}
         placeholder={placeholder}
         disabled={disabled}
         autoComplete="off"
         onFocus={() => setOpen(true)}
-        onBlur={() => { setOpen(false); setQuery(""); setActiveIndex(-1); }}
+        onBlur={() => { setOpen(false); setQuery(""); setActiveIndex(-1); onBlur?.(); }}
         onChange={onInputChange}
         onKeyDown={onKeyDown}
       />
       <input type="hidden" name={name} value={value} />
       {open ? (
         <ul id={listboxId} role="listbox" className="ds-search-select__listbox">
-          <li role="option" aria-selected={!value} className="ds-search-select__option" onMouseDown={(event) => event.preventDefault()} onClick={() => select("")}>{placeholder}</li>
+          {allowEmpty ? <li role="option" data-value="" aria-selected={!value} className="ds-search-select__option" onMouseDown={(event) => event.preventDefault()} onClick={() => select("")}>{placeholder}</li> : null}
           {flatOptions}
           {groupedOptions}
           {!visibleOptions.length ? <li className="ds-search-select__empty">No hay opciones que coincidan.</li> : null}

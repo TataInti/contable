@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 import type { ClientContextValue } from "../context/ClientContext";
 import { ApiError, api } from "../lib/api";
 import { StudyCalendariosFiscales } from "./StudyCalendariosFiscales";
+import { cambiarValor } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -365,7 +366,7 @@ describe("lista de calendarios", () => {
     setCapabilities(CAP_READ);
     renderAt(listUrl);
     await screen.findByRole("table", { name: "Calendarios fiscales" });
-    fireEvent.change(screen.getByRole("combobox", { name: "Año" }), { target: { value: "2026" } });
+    cambiarValor(screen.getByRole("combobox", { name: "Año" }), "2026");
     expect(lastSearch).toContain("anio=2026");
     fireEvent.click(screen.getByRole("button", { name: "Oculto" }));
     expect(lastSearch).toContain("estado=oculto");
@@ -394,13 +395,13 @@ describe("alta de calendario", () => {
     renderAt(listUrl);
     fireEvent.click((await screen.findAllByRole("button", { name: "Nuevo calendario" }))[0]!);
     const dialog = await screen.findByRole("dialog", { name: "Nuevo calendario" });
-    fireEvent.change(within(dialog).getByLabelText("Año"), { target: { value: "1999" } });
+    cambiarValor(within(dialog).getByLabelText("Año"), "1999");
     expect(within(dialog).getByText("El año debe estar entre 2000 y 2100")).toBeTruthy();
 
-    fireEvent.change(within(dialog).getByLabelText("Organismo"), { target: { value: AUTH } });
-    fireEvent.change(within(dialog).getByLabelText("Jurisdicción"), { target: { value: JUR } });
-    fireEvent.change(within(dialog).getByLabelText("Año"), { target: { value: "2026" } });
-    fireEvent.change(within(dialog).getByLabelText("Título"), { target: { value: "Calendario sintético 2026" } });
+    cambiarValor(within(dialog).getByLabelText("Organismo"), AUTH);
+    cambiarValor(within(dialog).getByLabelText("Jurisdicción"), JUR);
+    cambiarValor(within(dialog).getByLabelText("Año"), "2026");
+    cambiarValor(within(dialog).getByLabelText("Título"), "Calendario sintético 2026");
     post.mockImplementationOnce(() =>
       Promise.reject(
         new ApiError("CALENDAR_REFERENCE_NOT_FOUND", "El organismo no existe en el catálogo", 422, null, {
@@ -420,10 +421,10 @@ describe("alta de calendario", () => {
     renderAt(listUrl);
     fireEvent.click((await screen.findAllByRole("button", { name: "Nuevo calendario" }))[0]!);
     const dialog = await screen.findByRole("dialog", { name: "Nuevo calendario" });
-    fireEvent.change(within(dialog).getByLabelText("Organismo"), { target: { value: AUTH } });
-    fireEvent.change(within(dialog).getByLabelText("Jurisdicción"), { target: { value: JUR } });
-    fireEvent.change(within(dialog).getByLabelText("Año"), { target: { value: "2026" } });
-    fireEvent.change(within(dialog).getByLabelText("Título"), { target: { value: "Calendario sintético 2026" } });
+    cambiarValor(within(dialog).getByLabelText("Organismo"), AUTH);
+    cambiarValor(within(dialog).getByLabelText("Jurisdicción"), JUR);
+    cambiarValor(within(dialog).getByLabelText("Año"), "2026");
+    cambiarValor(within(dialog).getByLabelText("Título"), "Calendario sintético 2026");
     fireEvent.submit(document.getElementById("nuevo-calendario-form")!);
     expect(await screen.findByText("Calendario creado: versión 1 en borrador.")).toBeTruthy();
     await waitFor(() => expect(lastSearch).toBe(`?calendario=${CAL_NEW}`));
@@ -673,12 +674,12 @@ describe("pulido de Calendarios fiscales (Foco 2.7c)", () => {
     const crear = within(dialog).getByRole("button", { name: "Crear calendario" }) as HTMLButtonElement;
     expect(crear.disabled).toBe(true);
     expect(within(dialog).getByRole("note").textContent).toBe("Completá organismo, jurisdicción, año y título.");
-    fireEvent.change(within(dialog).getByLabelText("Organismo"), { target: { value: AUTH } });
-    fireEvent.change(within(dialog).getByLabelText("Jurisdicción"), { target: { value: JUR } });
-    fireEvent.change(within(dialog).getByLabelText("Año"), { target: { value: "1999" } });
-    fireEvent.change(within(dialog).getByLabelText("Título"), { target: { value: "Calendario sintético 2026" } });
+    cambiarValor(within(dialog).getByLabelText("Organismo"), AUTH);
+    cambiarValor(within(dialog).getByLabelText("Jurisdicción"), JUR);
+    cambiarValor(within(dialog).getByLabelText("Año"), "1999");
+    cambiarValor(within(dialog).getByLabelText("Título"), "Calendario sintético 2026");
     expect(within(dialog).getByRole("note").textContent).toBe("Revisá el año.");
-    fireEvent.change(within(dialog).getByLabelText("Año"), { target: { value: "2026" } });
+    cambiarValor(within(dialog).getByLabelText("Año"), "2026");
     expect(crear.disabled).toBe(false);
     expect(within(dialog).queryByRole("note")).toBeNull();
   });

@@ -15,6 +15,7 @@ import { StudyRentabilidad } from "./StudyRentabilidad";
 import { StudyReportes } from "./StudyReportes";
 import { StudyResumenCliente } from "./StudyResumenCliente";
 import { StudyTrabajo } from "./StudyTrabajo";
+import { cambiarValor } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -117,12 +118,12 @@ describe("Páginas con el marco denso", () => {
     expect(within(table).getByText("Bandeja documental")).toBeTruthy();
     expect(within(table).getByText("Módulo fiscal")).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "off" } });
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "off");
     expect(within(screen.getByRole("table")).queryByText("Bandeja documental")).toBeNull();
     expect(within(screen.getByRole("table")).getByText("Módulo fiscal")).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText(/Buscar módulos/), { target: { value: "reportes" } });
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "");
+    cambiarValor(screen.getByLabelText(/Buscar módulos/), "reportes");
     expect(within(screen.getByRole("table")).getByText("Reportes")).toBeTruthy();
     expect(within(screen.getByRole("table")).queryByText("Módulo fiscal")).toBeNull();
   });

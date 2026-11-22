@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CajonPerfil } from "./CajonPerfil";
 import type { PerfilInicial } from "./perfilInicial";
 import type { FiscalStep, ProfileForm, TaxpayerProfileVersion } from "../utilidades";
+import { cambiarValor, valorElegido } from "../../../test/elegirOpcion";
 
 const propuestaSrl: PerfilInicial = {
   legalName: "Cliente SINTÉTICO SRL",
@@ -47,8 +48,8 @@ describe("CajonPerfil · creación con propuesta del alta", () => {
     const dialogo = await screen.findByRole("dialog", { name: "Crear perfil fiscal" });
     expect((within(dialogo).getByLabelText("Razón social") as HTMLInputElement).value).toBe("Cliente SINTÉTICO SRL");
     expect((within(dialogo).getByLabelText("CUIT") as HTMLInputElement).value).toBe("30111111119");
-    expect((within(dialogo).getByLabelText("Tipo de persona") as HTMLSelectElement).value).toBe("JURIDICA");
-    expect((within(dialogo).getByLabelText("Condición nacional") as HTMLSelectElement).value).toBe("MONOTRIBUTISTA");
+    expect(valorElegido("Tipo de persona", dialogo)).toBe("JURIDICA");
+    expect(valorElegido("Condición nacional", dialogo)).toBe("MONOTRIBUTISTA");
     expect(within(dialogo).getByText("Propuesto según la forma jurídica del alta")).toBeTruthy();
     expect((within(pie()).getByRole("button", { name: "Crear perfil" }) as HTMLButtonElement).disabled).toBe(false);
   });
@@ -56,16 +57,16 @@ describe("CajonPerfil · creación con propuesta del alta", () => {
   it("la ayuda «Propuesto…» desaparece cuando el usuario cambia el tipo", async () => {
     render(<Montaje inicial={propuesto} />);
     const dialogo = await screen.findByRole("dialog", { name: "Crear perfil fiscal" });
-    fireEvent.change(within(dialogo).getByLabelText("Tipo de persona"), { target: { value: "FISICA" } });
+    cambiarValor(within(dialogo).getByLabelText("Tipo de persona"), "FISICA");
     expect(within(dialogo).queryByText(/Propuesto según/)).toBeNull();
   });
 
   it("sin propuesta, el tipo y la condición arrancan en «Elegí…» y «Crear perfil» queda deshabilitado con el motivo visible", async () => {
     render(<Montaje inicial={vacio} />);
     const dialogo = await screen.findByRole("dialog", { name: "Crear perfil fiscal" });
-    expect((within(dialogo).getByLabelText("Tipo de persona") as HTMLSelectElement).value).toBe("");
-    expect((within(dialogo).getByLabelText("Condición nacional") as HTMLSelectElement).value).toBe("");
-    expect((within(dialogo).getByLabelText("Tipo de persona") as HTMLSelectElement).querySelector("option")?.textContent).toBe("Elegí…");
+    expect(valorElegido("Tipo de persona", dialogo)).toBe("");
+    expect(valorElegido("Condición nacional", dialogo)).toBe("");
+    expect(within(dialogo).getByLabelText("Tipo de persona").getAttribute("placeholder")).toBe("Elegí…");
     expect((within(pie()).getByRole("button", { name: "Crear perfil" }) as HTMLButtonElement).disabled).toBe(true);
     expect(within(pie()).getByText("Falta elegir el tipo de persona y la condición nacional para guardar.")).toBeTruthy();
   });
@@ -103,8 +104,8 @@ describe("CajonPerfil · nueva versión (valores guardados, sin propuesta)", () 
     } as TaxpayerProfileVersion;
     render(<Montaje inicial={{ ...vacio, legalName: latest.legalName, cuit: latest.cuit, personType: "FISICA", nationalCondition: "EXENTO" }} latestProfile={latest} />);
     const dialogo = await screen.findByRole("dialog", { name: "Crear nueva versión del perfil" });
-    expect((within(dialogo).getByLabelText("Tipo de persona") as HTMLSelectElement).value).toBe("FISICA");
-    expect((within(dialogo).getByLabelText("Condición nacional") as HTMLSelectElement).value).toBe("EXENTO");
+    expect(valorElegido("Tipo de persona", dialogo)).toBe("FISICA");
+    expect(valorElegido("Condición nacional", dialogo)).toBe("EXENTO");
     expect(within(dialogo).queryByText(/Propuesto según/)).toBeNull();
   });
 });

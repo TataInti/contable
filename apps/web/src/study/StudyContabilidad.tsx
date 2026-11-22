@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Field, MoneyField, Notice, Table, useNotify } from "@contable/design-system";
+import { Button, EmptyState, Field, MoneyField, Notice, Table, useNotify, SearchSelect } from "@contable/design-system";
 import { api, type Account, type FiscalYear, type TrialBalance } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { ActionDrawer } from "../ui/ActionDrawer";
@@ -364,40 +364,34 @@ export function StudyContabilidad() {
             onChange={(event) => setDraft({ ...draft, reference: event.target.value })}
             placeholder="Opcional"
           />
-          <label className="ds-field" htmlFor="entry-debit-account">
+          <div className="ds-field">
             <span className="ds-field__label">Cuenta deudora</span>
-            <select
+            <SearchSelect
               id="entry-debit-account"
+              label="Cuenta deudora"
+              hideLabel
               className="ctxbar__input"
               value={draft.debitAccountId}
-              onChange={(event) => setDraft({ ...draft, debitAccountId: event.target.value })}
+              onChange={(value) => setDraft({ ...draft, debitAccountId: value })}
               required
-            >
-              <option value="">Elegí una cuenta</option>
-              {postingAccounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.code} · {account.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="ds-field" htmlFor="entry-credit-account">
+              placeholder="Elegí una cuenta"
+              options={postingAccounts.map((account) => ({ value: account.id, label: `${account.code} · ${account.name}` }))}
+            />
+          </div>
+          <div className="ds-field">
             <span className="ds-field__label">Cuenta acreedora</span>
-            <select
+            <SearchSelect
               id="entry-credit-account"
+              label="Cuenta acreedora"
+              hideLabel
               className="ctxbar__input"
               value={draft.creditAccountId}
-              onChange={(event) => setDraft({ ...draft, creditAccountId: event.target.value })}
+              onChange={(value) => setDraft({ ...draft, creditAccountId: value })}
               required
-            >
-              <option value="">Elegí una cuenta</option>
-              {postingAccounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.code} · {account.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              placeholder="Elegí una cuenta"
+              options={postingAccounts.map((account) => ({ value: account.id, label: `${account.code} · ${account.name}` }))}
+            />
+          </div>
           <MoneyField
             id="entry-amount"
             label="Importe ARS"
@@ -485,17 +479,17 @@ export function StudyContabilidad() {
           </label>
         ) : null}
         {view === "ledger" ? (
-          <label className="ledger-account-filter">
+          <div className="ledger-account-filter">
             <span>Cuenta</span>
-            <select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
-              <option value="">Todas las cuentas</option>
-              {(accounts.data ?? []).map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.code} · {account.name}
-                </option>
-              ))}
-            </select>
-          </label>
+            <SearchSelect
+              hideLabel
+              label="Cuenta"
+              value={accountId}
+              onChange={(value) => setAccountId(value)}
+              placeholder="Todas las cuentas"
+              options={(accounts.data ?? []).map((account) => ({ value: account.id, label: `${account.code} · ${account.name}` }))}
+            />
+          </div>
         ) : null}
       </div>
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, Notice } from "@contable/design-system";
+import { Button, EmptyState, Notice, SearchSelect } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError, type AssistantTurn } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -191,21 +191,17 @@ export function StudyAsistente() {
         </div>
         {firmId && clientId && periodId ? (
           <div className="study-page__actions">
-            <label className="period-select">
+            <div className="period-select">
               <span className="sr-only">Conversación</span>
-              <select
+              <SearchSelect
+                hideLabel
+                label="Conversación del período"
                 value={selectedConversationId ?? ""}
-                onChange={(event) => selectConversation(event.target.value)}
-                aria-label="Conversación del período"
-              >
-                <option value="">Nueva conversación</option>
-                {periodConversations.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.title ?? "Consulta sin título"}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={(value) => selectConversation(value)}
+                placeholder="Nueva conversación"
+                options={periodConversations.map((item) => ({ value: item.id, label: item.title ?? "Consulta sin título" }))}
+              />
+            </div>
             <Button type="button" variant="ghost" onClick={startNewConversation}>
               <Icon name="plus" size={16} /> Nueva
             </Button>

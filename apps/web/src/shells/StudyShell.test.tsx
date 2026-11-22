@@ -7,6 +7,7 @@ import { STUDY_MODULES } from "../study/moduleRegistry";
 import type { ReactNode } from "react";
 import { StudyShell } from "./StudyShell";
 import { ContextBar } from "./ContextBar";
+import { cambiarValor } from "../test/elegirOpcion";
 
 const state = vi.hoisted(() => ({
   context: null as unknown as ClientContextValue,
@@ -136,7 +137,7 @@ describe("StudyShell", () => {
     const switcher = screen.getByRole("combobox", { name: "Cliente en el que estás trabajando" });
 
     expect((switcher as HTMLSelectElement).value).toBe("");
-    fireEvent.change(switcher, { target: { value: "client-a" } });
+    cambiarValor(switcher, "client-a");
     expect(state.context.setClientId).toHaveBeenCalledWith("client-a");
   });
 
@@ -209,13 +210,13 @@ describe("StudyShell", () => {
     const selector = document.querySelector(".study__client-select") as HTMLSelectElement;
 
     expect(selector.disabled).toBe(true);
-    expect(selector.textContent?.trim()).toBe("Sin clientes asignados");
+    expect(selector.getAttribute("placeholder")).toBe("Sin clientes asignados");
   });
 
   it("con client.manage y sin clientes, el selector del menú usa la misma frase, sin variantes", () => {
     renderShell("/trabajo", null, { clientes: [], capacidades: ["client.manage"] });
     const selector = document.querySelector(".study__client-select") as HTMLSelectElement;
 
-    expect(selector.textContent?.trim()).toBe("Sin clientes asignados");
+    expect(selector.getAttribute("placeholder")).toBe("Sin clientes asignados");
   });
 });

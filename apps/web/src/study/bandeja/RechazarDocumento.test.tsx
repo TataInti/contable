@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { StudyBandeja } from "../StudyBandeja";
+import { abrirListado, cambiarValor, valorElegido } from "../../test/elegirOpcion";
 
 // Caracterización del cajón «¿Rechazar este documento?» (Foco 7b.1, prueba K12).
 // Fija lo que hace hoy la pantalla antes y después de mover el rechazo a su archivo.
@@ -160,9 +161,9 @@ afterEach(() => {
 describe("Caracterización K12 · rechazo: motivo, cancelar, motivo compuesto y error", () => {
   it("ofrece los cinco motivos después de «Elegí un motivo» y no confirma hasta elegir uno", async () => {
     const dialog = await abrirRechazo();
-    const opciones = within(dialog)
+    const opciones = within(abrirListado("Motivo del rechazo", dialog))
       .getAllByRole("option")
-      .map((option) => [option.getAttribute("value"), option.textContent]);
+      .map((option) => [option.getAttribute("data-value"), option.textContent]);
     expect(opciones).toEqual([
       ["", "Elegí un motivo"],
       ["ILLEGIBLE", "Ilegible"],
@@ -172,13 +173,13 @@ describe("Caracterización K12 · rechazo: motivo, cancelar, motivo compuesto y 
       ["OTHER", "Otro"],
     ]);
     expect(confirmar(dialog).disabled).toBe(true);
-    fireEvent.change(motivo(dialog), { target: { value: "OTHER" } });
+    cambiarValor(motivo(dialog), "OTHER");
     expect(confirmar(dialog).disabled).toBe(false);
   });
 
   it("sin detalle, envía solo el rótulo del motivo y lo muestra como recibo en el detalle", async () => {
     const dialog = await abrirRechazo();
-    fireEvent.change(motivo(dialog), { target: { value: "ILLEGIBLE" } });
+    cambiarValor(motivo(dialog), "ILLEGIBLE");
     fireEvent.click(confirmar(dialog));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith(RECHAZO, { reason: "Ilegible" }));
     expect(await screen.findByText("Motivo: Ilegible")).toBeTruthy();
@@ -188,8 +189,8 @@ describe("Caracterización K12 · rechazo: motivo, cancelar, motivo compuesto y 
   it("recorta el detalle, admite hasta 450 caracteres y lo une al motivo con « — »", async () => {
     const dialog = await abrirRechazo();
     expect(detalle(dialog).maxLength).toBe(450);
-    fireEvent.change(motivo(dialog), { target: { value: "ILLEGIBLE" } });
-    fireEvent.change(detalle(dialog), { target: { value: "   El número no se distingue   " } });
+    cambiarValor(motivo(dialog), "ILLEGIBLE");
+    cambiarValor(detalle(dialog), "   El número no se distingue   ");
     fireEvent.click(confirmar(dialog));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(RECHAZO, {
@@ -201,8 +202,8 @@ describe("Caracterización K12 · rechazo: motivo, cancelar, motivo compuesto y 
 
   it("cancelar no envía; al volver a abrir, motivo y detalle empiezan en blanco", async () => {
     let dialog = await abrirRechazo();
-    fireEvent.change(motivo(dialog), { target: { value: "OTHER" } });
-    fireEvent.change(detalle(dialog), { target: { value: "Dato sin confirmar" } });
+    cambiarValor(motivo(dialog), "OTHER");
+    cambiarValor(detalle(dialog), "Dato sin confirmar");
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
     expect(screen.queryByRole("dialog", { name: "¿Rechazar este documento?" })).toBeNull();
     expect(api.post).not.toHaveBeenCalled();
@@ -217,14 +218,14 @@ describe("Caracterización K12 · rechazo: motivo, cancelar, motivo compuesto y 
   it("un error de la API deja el cajón abierto con motivo y detalle escritos; al reabrir, el aviso desaparece", async () => {
     vi.mocked(api.post).mockRejectedValueOnce(new Error("Falla de red"));
     let dialog = await abrirRechazo();
-    fireEvent.change(motivo(dialog), { target: { value: "OTHER" } });
-    fireEvent.change(detalle(dialog), { target: { value: "Revisar con el cliente" } });
+    cambiarValor(motivo(dialog), "OTHER");
+    cambiarValor(detalle(dialog), "Revisar con el cliente");
     fireEvent.click(confirmar(dialog));
 
     expect((await within(dialog).findByRole("alert")).textContent).toBe(
       "No se pudo rechazar el documento. Volvé a intentarlo.",
     );
-    expect(motivo(dialog).value).toBe("OTHER");
+    expect(valorElegido("Motivo del rechazo", dialog)).toBe("OTHER");
     expect(detalle(dialog).value).toBe("Revisar con el cliente");
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
@@ -236,7 +237,7 @@ describe("Caracterización K12 · rechazo: motivo, cancelar, motivo compuesto y 
   it("mientras el rechazo se envía, «Confirmar rechazo» sigue enfocable y marcado como ocupado", async () => {
     vi.mocked(api.post).mockImplementation((() => new Promise(() => {})) as never);
     const dialog = await abrirRechazo();
-    fireEvent.change(motivo(dialog), { target: { value: "DUPLICATE" } });
+    cambiarValor(motivo(dialog), "DUPLICATE");
     fireEvent.click(confirmar(dialog));
     // vigente: cambia con 7b.3c correcciones (D1): antes el botón se deshabilitaba y el foco caía en BODY
     await waitFor(() => expect(confirmar(dialog).getAttribute("aria-busy")).toBe("true"));

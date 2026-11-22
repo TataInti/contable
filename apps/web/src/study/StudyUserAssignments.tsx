@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, SearchSelect } from "@contable/design-system";
 import { ActionDrawer } from "../ui/ActionDrawer";
 import { api, type Client } from "../lib/api";
 
@@ -132,22 +132,18 @@ export function StudyUserAssignments({
           />
         ) : (
           <>
-            <label className="ds-field">
+            <div className="ds-field">
               <span className="ds-field__label">Cliente</span>
-              <select
-                className="ds-field__input"
+              <SearchSelect
+                hideLabel
+                label="Cliente"
                 value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
+                onChange={(value) => setClientId(value)}
                 disabled={availableClients.length === 0 || addAssignment.isPending}
-              >
-                <option value="">Seleccioná un cliente</option>
-                {availableClients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.legalName}
-                  </option>
-                ))}
-              </select>
-            </label>
+                placeholder="Seleccioná un cliente"
+                options={availableClients.map((client) => ({ value: client.id, label: client.legalName }))}
+              />
+            </div>
             <div className="study-form__actions">
               <Button
                 type="button"

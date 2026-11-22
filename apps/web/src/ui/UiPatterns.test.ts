@@ -102,6 +102,12 @@ const RULES: Rule[] = [
     pattern: /<DenseHeader\s+eyebrow=/g,
     allowed: {},
   },
+  {
+    name: "desplegable nativo",
+    why: "Todo desplegable es SearchSelect del design-system (búsqueda por texto, sin scroll). No se escribe <select> en una pantalla.",
+    pattern: /<select\b/g,
+    allowed: {},
+  },
 ];
 
 describe("patrones de interfaz centralizados", () => {

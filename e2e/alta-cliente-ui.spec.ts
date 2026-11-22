@@ -66,7 +66,7 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await page.getByRole("button", { name: "Nueva jurisdicción" }).click();
     await page.locator("#jurisdiction-code").fill(data.jurisdiction.code);
     await page.locator("#jurisdiction-name").fill(data.jurisdiction.name);
-    await page.locator("#jurisdiction-kind").selectOption("NATIONAL");
+    await pickOption(page.locator("#jurisdiction-kind"), "Nación");
     await page.getByRole("button", { name: "Crear jurisdicción", exact: true }).click();
     await expect(seen(page, data.jurisdiction.code)).toBeVisible();
   });
@@ -129,9 +129,9 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
 
     // Alícuota general del IVA para la actividad sintética.
     await page.getByRole("button", { name: /Agregar regla/ }).click();
-    const kind = page.locator('select[aria-label^="Tipo de regla"]').first();
+    const kind = page.locator('input[role="combobox"][aria-label^="Tipo de regla"]').first();
     await pickOption(kind, "Alícuota");
-    const activity = page.locator('select[aria-label^="Actividad"]').first();
+    const activity = page.locator('input[role="combobox"][aria-label^="Actividad"]').first();
     await pickOption(activity, data.activity.code);
     await page.locator('input[aria-label^="Alícuota"]').first().fill(data.rate);
     await page.getByRole("button", { name: "Guardar borrador" }).click();
@@ -150,14 +150,14 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await page.locator("#client-legal-name").fill(data.client.legalName);
     await page.locator("#client-trade-name").fill(data.client.tradeName);
     await page.locator("#client-cuit").fill(data.client.cuit);
-    await page.locator("#client-vat-condition").selectOption({ index: 1 });
+    await pickOption(page.locator("#client-vat-condition"), "Responsable inscripto");
     await pickOption(page.locator("#client-province"), "Tucumán");
     await pickOption(page.locator("#client-legal-form"), "Sociedad de responsabilidad limitada (SRL)");
     await page.getByRole("button", { name: "Guardar cliente" }).click(); // vigente: cambia con decisión de Inti (16-nov)
     // Al crearlo, la app lo deja seleccionado y lleva a su configuración fiscal.
     await expect(page).toHaveURL(/\/configuracion-fiscal/);
     await expect(page.getByRole("combobox", { name: /^Cliente/ })).toHaveValue(/.+/);
-    await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" }).locator("option:checked")).toContainText(data.client.legalName);
+    await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" })).toHaveValue(new RegExp(data.client.legalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 
   // ───────────────────────── Configuración fiscal ─────────────────────────
@@ -167,8 +167,8 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await page.locator("#pf-legal-name").fill(data.client.legalName);
     await page.locator("#pf-cuit").fill(data.client.cuit);
     await page.locator("#pf-fiscal-address").fill(data.client.fiscalAddress);
-    await page.locator("#pf-person-type").selectOption("JURIDICA");
-    await page.locator("#pf-condition").selectOption("RESPONSABLE_INSCRIPTO");
+    await pickOption(page.locator("#pf-person-type"), "Jurídica");
+    await pickOption(page.locator("#pf-condition"), "Responsable Inscripto");
     await page.locator("#pf-valid-from").fill(data.validFrom);
     await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
     await page.getByRole("button", { name: "Enviar a revisión" }).click();

@@ -1,4 +1,4 @@
-import { Button, Field } from "@contable/design-system";
+import { Button, Field, SearchSelect } from "@contable/design-system";
 import type { Dispatch, SetStateAction } from "react";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import type { FirmProfile } from "../tipos";
@@ -51,25 +51,17 @@ export function PanelEditarDatosEstudio({ setShowProfileForm, profileDraft, setP
           value={profileDraft.taxId ?? ""}
           onChange={(event) => setProfileDraft({ ...profileDraft, taxId: event.target.value })}
         />
-        <label className="ds-field">
+        <div className="ds-field">
           <span className="ds-field__label">Zona horaria</span>
-          <select
+          <SearchSelect
             id="firm-profile-timezone"
-            className="ds-field__input"
+            label="Zona horaria"
+            hideLabel
             value={profileDraft.timezone}
-            onChange={(event) => setProfileDraft({ ...profileDraft, timezone: event.target.value })}
-          >
-            {profileTimeZoneGroups.map((group) => (
-              <optgroup key={group.key} label={group.label}>
-                {group.options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </label>
+            onChange={(value) => setProfileDraft({ ...profileDraft, timezone: value })}
+            groups={profileTimeZoneGroups.map((group) => ({ label: group.label, options: group.options }))}
+          />
+        </div>
         {updateFirmProfile.isError && actionError ? (
           <p className="form-error" role="alert">{actionError}</p>
         ) : null}

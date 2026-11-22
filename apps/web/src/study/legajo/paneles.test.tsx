@@ -10,6 +10,7 @@ import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { StudyExpedienteMensual } from "../StudyExpedienteMensual";
 import { CLIENTE_DEMO, FIRMA_DEMO, PERIODO_ELEGIDO_DEMO, rutasDemo } from "./datosDemoLegajo";
+import { cambiarValor, valorElegido } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -249,14 +250,10 @@ describe("Legajo · cargar saldo inicial (K5)", () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirSaldoInicial();
-    fireEvent.change(within(dialogo).getByLabelText("Impuesto"), {
-      target: { value: "tax-type-iva" },
-    });
-    expect(within(dialogo).getByLabelText("Naturaleza")).toHaveValue("IVA_LIBRE");
-    fireEvent.change(within(dialogo).getByLabelText("Período fiscal"), {
-      target: { value: "period-iva" },
-    });
-    fireEvent.change(within(dialogo).getByLabelText("Importe"), { target: { value: "1500" } });
+    cambiarValor(within(dialogo).getByLabelText("Impuesto"), "tax-type-iva");
+    expect(valorElegido("Naturaleza", dialogo)).toBe("IVA_LIBRE");
+    cambiarValor(within(dialogo).getByLabelText("Período fiscal"), "period-iva");
+    cambiarValor(within(dialogo).getByLabelText("Importe"), "1500");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar saldo" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(`${BASE}/tax-credit-ledger/opening`, {
@@ -272,19 +269,11 @@ describe("Legajo · cargar saldo inicial (K5)", () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirSaldoInicial();
-    fireEvent.change(within(dialogo).getByLabelText("Impuesto"), {
-      target: { value: "tax-type-a" },
-    });
-    fireEvent.change(within(dialogo).getByLabelText("Período fiscal"), {
-      target: { value: "period-a" },
-    });
-    fireEvent.change(within(dialogo).getByLabelText("Régimen"), {
-      target: { value: "regime-a" },
-    });
-    fireEvent.change(within(dialogo).getByLabelText("Importe"), { target: { value: "250" } });
-    fireEvent.change(within(dialogo).getByLabelText("Documento de respaldo"), {
-      target: { value: "doc-b" },
-    });
+    cambiarValor(within(dialogo).getByLabelText("Impuesto"), "tax-type-a");
+    cambiarValor(within(dialogo).getByLabelText("Período fiscal"), "period-a");
+    cambiarValor(within(dialogo).getByLabelText("Régimen"), "regime-a");
+    cambiarValor(within(dialogo).getByLabelText("Importe"), "250");
+    cambiarValor(within(dialogo).getByLabelText("Documento de respaldo"), "doc-b");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar saldo" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(`${BASE}/tax-credit-ledger/opening`, {
@@ -305,10 +294,8 @@ describe("Legajo · editar saldo (K6)", () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirEditarSaldo();
-    fireEvent.change(within(dialogo).getByLabelText("Monto vigente"), {
-      target: { value: "" },
-    });
-    fireEvent.change(within(dialogo).getByLabelText("Referencia"), { target: { value: "" } });
+    cambiarValor(within(dialogo).getByLabelText("Monto vigente"), "");
+    cambiarValor(within(dialogo).getByLabelText("Referencia"), "");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(`${BASE}/tax-credit-ledger/lot-a`, {
@@ -322,15 +309,9 @@ describe("Legajo · editar saldo (K6)", () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirEditarSaldo();
-    fireEvent.change(within(dialogo).getByLabelText("Monto vigente"), {
-      target: { value: "1200" },
-    });
-    fireEvent.change(within(dialogo).getByLabelText("Motivo del cambio de importe"), {
-      target: { value: "Ajuste Demo del importe" },
-    });
-    fireEvent.change(within(dialogo).getByLabelText("Referencia"), {
-      target: { value: "Ajuste Demo" },
-    });
+    cambiarValor(within(dialogo).getByLabelText("Monto vigente"), "1200");
+    cambiarValor(within(dialogo).getByLabelText("Motivo del cambio de importe"), "Ajuste Demo del importe");
+    cambiarValor(within(dialogo).getByLabelText("Referencia"), "Ajuste Demo");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(`${BASE}/tax-credit-ledger/lot-a/corrections`, {
@@ -348,9 +329,7 @@ describe("Legajo · editar saldo (K6)", () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirEditarSaldo();
-    fireEvent.change(within(dialogo).getByLabelText("Monto vigente"), {
-      target: { value: "1200" },
-    });
+    cambiarValor(within(dialogo).getByLabelText("Monto vigente"), "1200");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Guardar cambios" }));
     expect(
       await within(dialogo).findByText("Escribí el motivo: queda en el historial del saldo"),

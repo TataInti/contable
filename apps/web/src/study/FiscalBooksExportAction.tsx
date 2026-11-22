@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { AsyncState, Button, EmptyState, Table, useNotify, type TableColumn } from "@contable/design-system";
+import { AsyncState, Button, EmptyState, Table, useNotify, type TableColumn, SearchSelect } from "@contable/design-system";
 import {
   FISCAL_BOOK_TITLES,
   type FiscalBookColumnKey,
@@ -106,20 +106,17 @@ function ExportSelect<T extends string>({ id, label, value, options, error, onCh
       <label className="ds-field__label" htmlFor={id}>
         {label}
       </label>
-      <select
+      <SearchSelect
         id={id}
-        className={error ? "ds-field__input ds-field__input--error" : "ds-field__input"}
+        label={label}
+        hideLabel
         value={value}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
-        onChange={(event) => onChange(event.target.value as T)}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        onChange={(next) => onChange(next as T)}
+        invalid={Boolean(error)}
+        describedBy={error ? errorId : undefined}
+        allowEmpty={false}
+        options={options.map((option) => ({ value: option.value, label: option.label }))}
+      />
       {error ? (
         <span className="ds-field__error" id={errorId} role="alert">
           {error}

@@ -13,6 +13,7 @@ import {
   renderConRutas,
   respuestaApi,
 } from "./clientes.testutil";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -97,13 +98,13 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     await screen.findByRole("table", { name: "Cartera de clientes" });
     const buscar = screen.getByPlaceholderText("Buscar por nombre o CUIT…");
 
-    fireEvent.change(buscar, { target: { value: "BETA COM" } });
+    cambiarValor(buscar, "BETA COM");
     await waitFor(() => expect(filasClave()).toEqual(["c2"]));
 
-    fireEvent.change(buscar, { target: { value: "20-00000005-2" } });
+    cambiarValor(buscar, "20-00000005-2");
     await waitFor(() => expect(filasClave()).toEqual(["c3"]));
 
-    fireEvent.change(buscar, { target: { value: "zzz" } });
+    cambiarValor(buscar, "zzz");
     await screen.findByText("Ningún cliente coincide");
   });
 
@@ -112,18 +113,16 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     await screen.findByRole("table", { name: "Cartera de clientes" });
     expect(filasClave()).toEqual(["c1", "c2", "c3", "c4"]);
 
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "ACTIVE" } });
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "ACTIVE");
     expect(filasClave()).toEqual(["c1", "c2", "c4"]);
 
-    fireEvent.change(screen.getByLabelText("Filtrar por condición IVA"), {
-      target: { value: "RESPONSABLE_INSCRIPTO" },
-    });
+    cambiarValor(screen.getByLabelText("Filtrar por condición IVA"), "RESPONSABLE_INSCRIPTO");
     expect(filasClave()).toEqual(["c1", "c4"]);
 
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
     expect(filasClave()).toEqual(["c4"]);
 
-    fireEvent.change(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), { target: { value: "alfa" } });
+    cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "alfa");
     await screen.findByText("Ningún cliente coincide");
   });
 
@@ -156,11 +155,9 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
 
-    fireEvent.change(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), { target: { value: "zzz" } });
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "INACTIVE" } });
-    fireEvent.change(screen.getByLabelText("Filtrar por condición IVA"), {
-      target: { value: "RESPONSABLE_INSCRIPTO" },
-    });
+    cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "zzz");
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "INACTIVE");
+    cambiarValor(screen.getByLabelText("Filtrar por condición IVA"), "RESPONSABLE_INSCRIPTO");
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
     await screen.findByText("Ningún cliente coincide");
 
@@ -184,11 +181,9 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
 
-    fireEvent.change(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), { target: { value: "alfa" } });
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "INACTIVE" } });
-    fireEvent.change(screen.getByLabelText("Filtrar por condición IVA"), {
-      target: { value: "RESPONSABLE_INSCRIPTO" },
-    });
+    cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "alfa");
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "INACTIVE");
+    cambiarValor(screen.getByLabelText("Filtrar por condición IVA"), "RESPONSABLE_INSCRIPTO");
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
     expect(parametrosUrl().toString()).toBe("");
 

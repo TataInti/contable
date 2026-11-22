@@ -153,7 +153,7 @@ async function createJurisdiction(page: Page, jurisdiction: { code: string; name
   await page.getByRole("button", { name: "Nueva jurisdicción" }).click();
   await page.locator("#jurisdiction-code").fill(jurisdiction.code);
   await page.locator("#jurisdiction-name").fill(jurisdiction.name);
-  await page.locator("#jurisdiction-kind").selectOption(jurisdiction.kind);
+  await pickOption(page.locator("#jurisdiction-kind"), "Municipio");
   await pickOption(page.locator("#jurisdiction-parent"), jurisdiction.parent);
   await mutating(page, "/tax/jurisdictions", () => page.getByRole("button", { name: "Crear jurisdicción", exact: true }).click());
 }
@@ -240,8 +240,8 @@ async function createRulePack(page: Page, tax: Tax) {
   // La pestaña activa se conserva al pasar de un paquete a otro (queda la última usada).
   await page.getByRole("tab", { name: /^Alícuotas/ }).click();
   await page.getByRole("button", { name: /Agregar regla/ }).click();
-  await pickOption(page.locator('select[aria-label^="Tipo de regla"]').first(), "Alícuota");
-  const activity = page.locator('select[aria-label^="Actividad"]').first();
+  await pickOption(page.locator('input[role="combobox"][aria-label^="Tipo de regla"]').first(), "Alícuota");
+  const activity = page.locator('input[role="combobox"][aria-label^="Actividad"]').first();
   await pickOption(activity, tax.allActivities ? "Todas las actividades" : tax.activity.code);
   await page.locator('input[aria-label^="Alícuota"]').first().fill(tax.rate);
   if (tax.minimum) await page.locator('input[aria-label^="Mínimo"]').first().fill(tax.minimum);
@@ -336,12 +336,12 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.locator("#client-legal-name").fill(data.client.legalName);
     await page.locator("#client-trade-name").fill(data.client.tradeName);
     await page.locator("#client-cuit").fill(data.client.cuit);
-    await page.locator("#client-vat-condition").selectOption({ index: 1 });
+    await pickOption(page.locator("#client-vat-condition"), "Responsable inscripto");
     await pickOption(page.locator("#client-province"), "Tucumán");
     await pickOption(page.locator("#client-legal-form"), "Sociedad de responsabilidad limitada (SRL)");
     await page.locator(".action-drawer").getByRole("button", { name: "Guardar cliente" }).click(); // vigente: cambia con decisión de Inti (16-nov)
     await expect(page).toHaveURL(/\/configuracion-fiscal/);
-    await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" }).locator("option:checked")).toContainText(data.client.legalName);
+    await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" })).toHaveValue(new RegExp(data.client.legalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 
   await test.step("Configuración fiscal: perfil activo", async () => {
@@ -349,8 +349,8 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.locator("#pf-legal-name").fill(data.client.legalName);
     await page.locator("#pf-cuit").fill(data.client.cuit);
     await page.locator("#pf-fiscal-address").fill(data.client.fiscalAddress);
-    await page.locator("#pf-person-type").selectOption("JURIDICA");
-    await page.locator("#pf-condition").selectOption("RESPONSABLE_INSCRIPTO");
+    await pickOption(page.locator("#pf-person-type"), "Jurídica");
+    await pickOption(page.locator("#pf-condition"), "Responsable Inscripto");
     await page.locator("#pf-valid-from").fill(data.validFrom);
     await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
     await page.getByRole("button", { name: "Enviar a revisión" }).click();
@@ -438,7 +438,11 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.getByRole("button", { name: /Cargar datos a mano/ }).first().click();
     const dialog = page.getByRole("dialog", { name: "Cargar datos a mano" });
     // Qué datos admite la carga manual (para comparar con lo que dice el ticket: neto, IVA 21 %, total).
-    const offered = await dialog.getByLabel("Campo de la fila 1").locator("option").allTextContents();
+    const campo = dialog.getByLabel("Campo de la fila 1");
+    await campo.click();
+    await expect(dialog.getByRole("listbox")).toBeVisible();
+    const offered = await dialog.getByRole("listbox").getByRole("option").allTextContents();
+    await campo.press("Escape");
     test.info().annotations.push({ type: "campos de la carga manual", description: offered.filter(Boolean).join(" | ") });
     const rows: Array<[string, string]> = [
       ["Fecha", data.ticket.isoDate],
@@ -450,7 +454,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
       if (index > 0) await dialog.getByRole("button", { name: /Agregar fila/ }).click();
       await pickOption(dialog.getByLabel(`Campo de la fila ${index + 1}`), field);
       const control = dialog.getByLabel(`Valor de la fila ${index + 1}`);
-      if ((await control.evaluate((element) => element.tagName)) === "SELECT") await control.selectOption(value);
+      if ((await control.getAttribute("role")) === "combobox") await pickOption(control, value);
       else await control.fill(value);
     }
     await mutating(page, "/extraction", () => dialog.getByRole("button", { name: "Guardar", exact: true }).click());
@@ -465,7 +469,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Legajo: crear el legajo de marzo 2025 y recorrer sus etapas", async () => {
     await goTo(page, "Legajo");
     await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
-    await pickOption(page.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await pickOption(page.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await mutating(page, "/monthly-tax-workpapers", () => page.getByRole("button", { name: "Nuevo legajo", exact: true }).click());
     // Libros y archivos de marzo. Del ticket salen fecha, neto, IVA 21 % y número de la única compra; el CUIT
     // del proveedor y la letra A son inventados (el ticket no los trae). Ventas, IIBB y TEM son sintéticos.
@@ -542,7 +546,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await login(reviewer, "revisor@contable.local", "revisor1234");
     await pickOption(reviewer.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), data.client.legalName);
     await goTo(reviewer, "Legajo");
-    await pickOption(reviewer.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await pickOption(reviewer.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await reviewer.getByRole("tab", { name: /Fuentes/ }).first().click();
     const pending = reviewer.getByRole("button", { name: "Revisar", exact: true });
     test.info().annotations.push({ type: "revisor · lotes por revisar", description: String(await pending.count()) });
@@ -557,7 +561,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Legajo: clasificación, cálculo y controles tras la revisión", async () => {
     await goTo(page, "Liquidaciones");
     await goTo(page, "Legajo");
-    await pickOption(page.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await pickOption(page.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await expect(page.getByRole("tab", { name: /Saldos/ })).toBeVisible();
     for (const stage of ["Saldos", "Fuentes", "Clasificación", "Cálculo", "Controles", "Cierre"]) {
       await page.getByRole("tab", { name: new RegExp(stage) }).click();
@@ -643,7 +647,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await login(reviewer, "revisor@contable.local", "revisor1234");
     await pickOption(reviewer.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), data.client.legalName);
     await goTo(reviewer, "Legajo");
-    await pickOption(reviewer.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await pickOption(reviewer.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     const rcard = reviewer.locator(".work-page").first();
     await reviewer.getByRole("tab", { name: /Cierre/ }).click();
     await reviewer.waitForTimeout(1500);
@@ -684,7 +688,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await expect(portal).toHaveURL(/\/portal/);
     await portal.goto("/portal/upload");
     await portal.locator('input[type="file"]').setInputFiles(fixture);
-    await portal.locator(".portal-upload__category-select").selectOption("ACUSE");
+    await pickOption(portal.locator(".portal-upload__category-select"), "Acuse de presentación");
     await mutating(portal, "/complete", () => portal.getByRole("button", { name: "Subir documento" }).click());
     await portalContext.close();
   });
@@ -695,7 +699,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.waitForTimeout(31_000);
     await goTo(page, "Liquidaciones");
     await goTo(page, "Legajo");
-    await pickOption(page.locator('select[aria-label="Período fiscal"]'), periodLabel(taxes.iva));
+    await pickOption(page.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
     await page.getByRole("tab", { name: /Cálculo/ }).click();
     const card = page.locator(".work-page").first();
     await card.getByRole("button", { name: "Registrar presentación" }).first().click();

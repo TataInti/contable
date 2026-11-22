@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState } from "@contable/design-system";
+import { Button, EmptyState, SearchSelect } from "@contable/design-system";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type FiscalYear } from "../lib/api";
 import { formatearPeriodo } from "../lib/formatoFechas";
@@ -500,18 +500,15 @@ export function StudyDashboard() {
           surface="integrated"
           actions={
             <>
-              <select
+              <SearchSelect
+                hideLabel
+                label="Filtrar por estado"
                 className="dense-select"
-                aria-label="Filtrar por estado"
                 value={worklistFilter}
-                onChange={(event) => setWorklistFilter(event.target.value)}
-              >
-                {statusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setWorklistFilter(value)}
+                placeholder="Estado: todos"
+                options={statusOptions.filter((option) => option.value !== "")}
+              />
               {clientId && canReadTaxWorklist ? (
                 <Link className="dense-link" to="/liquidaciones">
                   Ver todas
