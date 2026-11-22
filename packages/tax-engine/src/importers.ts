@@ -10,6 +10,9 @@ import {
   type ArcaColumnKey,
 } from "./arca-columnas.js";
 
+// La liquidación y el importador deciden por la misma tabla oficial de tipos de comprobante.
+export { arcaTipoClase, ARCA_NOTA_CREDITO_CODES, ARCA_NOTA_DEBITO_CODES } from "./arca-columnas.js";
+
 /**
  * Adaptadores de importación fiscal (G2-02 / G2-03).
  *
@@ -84,7 +87,10 @@ export interface ArcaVoucherRow {
   numberTo: number;
   counterpartyCuit: string;
   issuedOn: string;
+  /** Neto gravado. En una venta sin neto discriminado (Factura C) es el importe total sin otros tributos. */
   net: string;
+  /** Neto no gravado. */
+  nonTaxed: string;
   hasIva: boolean;
   iva21: string;
   iva105: string;
@@ -94,6 +100,11 @@ export interface ArcaVoucherRow {
   exchangeRate: string | null;
   currency: string;
   total: string;
+  /**
+   * Aporte del comprobante a la base de Ingresos Brutos y TEM: neto gravado + no gravado + exentas,
+   * sin IVA ni otros tributos. Las notas de crédito restan (valor negativo).
+   */
+  base: string;
 }
 
 export type ArcaVoucherError =
@@ -104,6 +115,8 @@ export type ArcaVoucherError =
   | "CUIT_INVALID"
   | "DATE_INVALID"
   | "NET_INVALID"
+  | "AMOUNT_INVALID"
+  | "AMOUNTS_MISSING"
   | "IVA_MISSING"
   | "ALICUOTA_NO_SOPORTADA"
   | "TOTAL_MISMATCH";
@@ -126,6 +139,10 @@ export interface ArcaVoucherInput {
   issuedOn?: unknown;
   /** Importe neto. */
   net?: unknown;
+  /** Importe neto no gravado. */
+  nonTaxed?: unknown;
+  /** Importe total del comprobante («Imp. Total»). */
+  total?: unknown;
   /** Indica si el comprobante discrimina IVA. */
   hasIva?: unknown;
   /** IVA 21% (o valor por alícuota). */
@@ -182,8 +199,32 @@ export function normalizeArcaVoucherRow(input: ArcaVoucherInput): NormalizedRow<
 
   if (!isDateString(input.issuedOn)) errors.push("DATE_INVALID");
 
-  const net = isDecimalString(input.net) ? new Decimal(input.net) : null;
-  if (!net) errors.push("NET_INVALID");
+  // Importes. Un campo vacío no es un importe inválido: en una venta puede faltar el neto discriminado.
+  const isSale = direction === "SALE";
+  const given = (value: unknown): boolean =>
+    !(value === undefined || value === null || (typeof value === "string" && value.trim() === ""));
+  const parseAmount = (value: unknown): Decimal | null => {
+    if (typeof value === "number") return Number.isFinite(value) ? new Decimal(value) : null;
+    return isDecimalString(value) ? new Decimal(value) : null;
+  };
+
+  const netParsed = parseAmount(input.net);
+  const nonTaxedParsed = parseAmount(input.nonTaxed);
+  const exemptParsed = parseAmount(input.exempt);
+  const totalParsed = parseAmount(input.total);
+  let amountsOk = true;
+  if (given(input.net) ? !netParsed : !isSale) {
+    errors.push("NET_INVALID");
+    amountsOk = false;
+  }
+  if (
+    (given(input.nonTaxed) && !nonTaxedParsed) ||
+    (given(input.exempt) && !exemptParsed) ||
+    (given(input.total) && !totalParsed)
+  ) {
+    errors.push("AMOUNT_INVALID");
+    amountsOk = false;
+  }
 
   const hasIva = input.hasIva === true || input.hasIva === "true" || input.hasIva === "SI" || input.hasIva === "S";
   const ivaRaw = isDecimalString(input.iva) ? (input.iva as string) : undefined;
@@ -198,15 +239,41 @@ export function normalizeArcaVoucherRow(input: ArcaVoucherInput): NormalizedRow<
     errors.push("ALICUOTA_NO_SOPORTADA");
   }
 
-  const exempt = isDecimalString(input.exempt) ? new Decimal(input.exempt) : new Decimal(0);
+  const nonTaxed = nonTaxedParsed ?? new Decimal(0);
+  const exempt = exemptParsed ?? new Decimal(0);
   const otherTaxes = isDecimalString(input.otherTaxes) ? new Decimal(input.otherTaxes) : new Decimal(0);
   const exchangeRate = isDecimalString(input.exchangeRate) ? new Decimal(input.exchangeRate) : null;
   const currency = typeof input.currency === "string" && input.currency.length === 3 ? input.currency : "ARS";
 
-  // Total = neto + IVA + exento + otros tributos
+  // Neto de la venta: el discriminado; si el comprobante no discrimina nada (Factura C) y trae solo el
+  // «Imp. Total», el neto es ese total sin IVA ni otros tributos (caso testigo: modo A de la calculadora).
+  let net: Decimal | null = netParsed ?? (isSale ? new Decimal(0) : null);
+  if (isSale && amountsOk && net) {
+    const sinNeto = net.isZero() && nonTaxed.isZero() && exempt.isZero();
+    if (sinNeto && (!totalParsed || totalParsed.isZero())) {
+      errors.push("AMOUNTS_MISSING");
+    } else if (sinNeto && totalParsed) {
+      net = totalParsed
+        .minus(iva21 ?? 0)
+        .minus(iva105 ?? 0)
+        .minus(iva27 ?? 0)
+        .minus(otherTaxes);
+    }
+  }
+
+  // Total = neto + no gravado + IVA + exento + otros tributos
   let total: Decimal | null = null;
+  let base: Decimal | null = null;
   if (net) {
-    total = net.plus(iva21 ?? 0).plus(iva105 ?? 0).plus(iva27 ?? 0).plus(exempt).plus(otherTaxes);
+    total = net
+      .plus(nonTaxed)
+      .plus(iva21 ?? 0)
+      .plus(iva105 ?? 0)
+      .plus(iva27 ?? 0)
+      .plus(exempt)
+      .plus(otherTaxes);
+    const aporte = net.plus(nonTaxed).plus(exempt);
+    base = letter.ok && letter.letter === "NC" ? aporte.abs().negated() : aporte;
   }
 
   if (errors.length > 0) {
@@ -224,6 +291,7 @@ export function normalizeArcaVoucherRow(input: ArcaVoucherInput): NormalizedRow<
       counterpartyCuit: input.cuit as string,
       issuedOn: input.issuedOn as string,
       net: (net as Decimal).toFixed(4),
+      nonTaxed: nonTaxed.toFixed(4),
       hasIva,
       iva21: (iva21 ?? new Decimal(0)).toFixed(4),
       iva105: (iva105 ?? new Decimal(0)).toFixed(4),
@@ -233,6 +301,7 @@ export function normalizeArcaVoucherRow(input: ArcaVoucherInput): NormalizedRow<
       exchangeRate: exchangeRate ? exchangeRate.toFixed(8) : null,
       currency,
       total: (total as Decimal).toFixed(4),
+      base: (base as Decimal).toFixed(4),
     },
   };
 }
@@ -307,6 +376,8 @@ export function mapArcaCsvRow(
   if (cols.cuit !== undefined) set("cuit", arcaCuit(texto("cuit")));
   set("issuedOn", arcaIsoDate(texto("issuedOn")) ?? undefined);
   set("net", arcaAmount(raw("netoGravado")));
+  set("nonTaxed", arcaAmount(raw("noGravado")));
+  set("total", arcaAmount(raw("total")));
   const iva21 = arcaAmount(raw("iva21"));
   const iva105 = arcaAmount(raw("iva105"));
   const iva27 = arcaAmount(raw("iva27"));
