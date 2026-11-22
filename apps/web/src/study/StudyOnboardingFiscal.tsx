@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, useNotify } from "@contable/design-system";
 import { api } from "../lib/api";
 import { formatCuit } from "../lib/cuit";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
+import type { ClientWithProfile } from "./clientes/tipos";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import { DenseHeader, DensePage, DenseTabs, useDensity } from "../ui/Dense";
 import "./study.css";
@@ -17,6 +18,7 @@ import { PestanaRegimenes } from "./fiscal/pestanas/PestanaRegimenes";
 import { PestanaActividades } from "./fiscal/pestanas/PestanaActividades";
 import { PestanaPeriodos } from "./fiscal/pestanas/PestanaPeriodos";
 import { CajonPerfil } from "./fiscal/cajones/CajonPerfil";
+import { perfilInicial } from "./fiscal/cajones/perfilInicial";
 import { CajonInscripcion } from "./fiscal/cajones/CajonInscripcion";
 import { CajonActividad } from "./fiscal/cajones/CajonActividad";
 import { CajonPeriodo } from "./fiscal/cajones/CajonPeriodo";
@@ -37,7 +39,7 @@ export function StudyOnboardingFiscal() {
   const { firmId, clientId, capabilities } = useClientContext();
   const clientQuery = useQuery({
     queryKey: ["clients", firmId, clientId],
-    queryFn: () => api.get<{ cuit: string; cuitEnding: string | null }>(`/firms/${firmId}/clients/${clientId}`),
+    queryFn: () => api.get<ClientWithProfile>(`/firms/${firmId}/clients/${clientId}`),
     enabled: Boolean(firmId && clientId),
   });
   const queryClient = useQueryClient();
@@ -49,8 +51,8 @@ export function StudyOnboardingFiscal() {
     legalName: "",
     cuit: "",
     fiscalAddress: "",
-    personType: "JURIDICA",
-    nationalCondition: "RESPONSABLE_INSCRIPTO",
+    personType: "",
+    nationalCondition: "",
     validFrom: today,
   });
   const [profileId, setProfileId] = useState<string | null>(null);
@@ -112,6 +114,14 @@ export function StudyOnboardingFiscal() {
     [profileQuery.data],
   );
   const effectiveProfileId = profileId ?? latestProfile?.id;
+  const propuestaPerfil = useMemo(() => perfilInicial(clientQuery.data), [clientQuery.data]);
+  // Primer perfil: el formulario arranca con lo que ya cargó el alta. Se reaplica si el alta llega después de abrir el cajón;
+  // una nueva versión conserva los valores guardados (la pestaña Resumen los carga antes de abrirlo).
+  const { legalName: propuestaRazon, cuit: propuestaCuit, personType: propuestaTipo, nationalCondition: propuestaCondicion } = propuestaPerfil;
+  useEffect(() => {
+    if (openFormStep !== "perfil" || latestProfile) return;
+    setForm((actual) => ({ ...actual, legalName: propuestaRazon, cuit: propuestaCuit, personType: propuestaTipo, nationalCondition: propuestaCondicion }));
+  }, [openFormStep, latestProfile, propuestaRazon, propuestaCuit, propuestaTipo, propuestaCondicion]);
   const selectablePeriods = (periodsQuery.data ?? []).filter((period) => period.taxType.isActive);
   const selectedPeriod = periodsQuery.data?.find((period) => period.id === obligationForm.periodId);
   const eligibleRegistrations = (registrationsQuery.data ?? []).filter(
@@ -283,7 +293,7 @@ export function StudyOnboardingFiscal() {
         <MutationError error={mutationError} />
       </div>
 
-      <CajonPerfil openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} latestProfile={latestProfile} createProfile={createProfile} form={form} setForm={setForm} />
+      <CajonPerfil openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} latestProfile={latestProfile} createProfile={createProfile} form={form} setForm={setForm} propuesta={latestProfile ? null : propuestaPerfil} />
       <CajonInscripcion openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} regimeId={regimeId} setRegimeId={setRegimeId} addRegistration={addRegistration} regimesQuery={regimesQuery} effectiveProfileId={effectiveProfileId} />
       <CajonActividad openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} activityId={activityId} setActivityId={setActivityId} addActivity={addActivity} activitiesQuery={activitiesQuery} effectiveProfileId={effectiveProfileId} />
       <CajonPeriodo openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} periodForm={periodForm} setPeriodForm={setPeriodForm} createPeriod={createPeriod} typesQuery={typesQuery} />
