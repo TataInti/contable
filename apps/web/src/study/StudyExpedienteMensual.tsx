@@ -14,6 +14,7 @@ import {
   type MenuActionItem,
 } from "@contable/design-system";
 import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
+import { CommentThread } from "./CommentThread";
 import { Icon } from "../ui/Icon";
 import { api, type Client } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
@@ -1444,6 +1445,11 @@ export function StudyExpedienteMensual() {
             />
           ) : null}
           {cuerpo}
+          <CommentThread
+            firmId={firmId}
+            clientId={clientId}
+            periodLabel={selectedTaxPeriod ? fiscalTaxPeriodLabel(selectedTaxPeriod) : null}
+          />
         </DensePage>
       </WorkPage>
 

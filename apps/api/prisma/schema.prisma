@@ -325,6 +325,39 @@ model Client {
   @@map("clients")
 }
 
+model StudyComment {
+  id                String   @id
+  firmId            String
+  clientId          String
+  authorUserId      String
+  body              String
+  isPersonal        Boolean  @default(false)
+  periodLabel       String?
+  mentionedUserId   String?
+  resolvedAt        DateTime?
+  resolvedByUserId  String?
+  archivedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  edits             StudyCommentEdit[]
+  @@unique([firmId, id])
+  @@index([firmId, clientId, createdAt])
+  @@index([firmId, mentionedUserId, resolvedAt])
+  @@map("study_comments")
+}
+
+model StudyCommentEdit {
+  id           String   @id
+  firmId       String
+  commentId    String
+  editorUserId String
+  previousBody String
+  editedAt     DateTime @default(now())
+  comment      StudyComment @relation(fields: [firmId, commentId], references: [firmId, id], onDelete: Cascade)
+  @@index([firmId, commentId, editedAt])
+  @@map("study_comment_edits")
+}
+
 model ClientContact {
   id        String   @id @default(uuid(7))
   firmId    String

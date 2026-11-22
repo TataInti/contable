@@ -71,6 +71,17 @@ export const STUDY_MODULES: readonly StudyModule[] = [
     ),
   },
   {
+    id: "pendientes-para-mi",
+    path: "/pendientes-para-mi",
+    label: "Pendientes para mí",
+    icon: "inbox",
+    navigationGroup: "General",
+    requiredCapability: "client.read",
+    requirements: { firm: true },
+    status: "released",
+    component: lazy(() => import("./StudyPendingComments").then((module) => ({ default: module.StudyPendingComments }))),
+  },
+  {
     id: "resumen-cliente",
     path: "/resumen-cliente",
     label: "Resumen del cliente",

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Button, DensitySwitch, useDensity, SearchSelect } from "@contable/design-system";
 import { ContextBar } from "./ContextBar";
 import { logout } from "../lib/auth";
 import { useSession } from "../session/SessionContext";
 import { useClientContext } from "../context/ClientContext";
+import { api } from "../lib/api";
 import { Icon } from "../ui/Icon";
 import { GuidedTour } from "../ui/GuidedTour";
 import {
@@ -31,7 +33,7 @@ const NAV_ITEM_TOUR_IDS: Partial<Record<StudyModule["id"], string>> = {
 
 // Dos niveles: lo que es de toda la cartera y lo que pertenece al cliente
 // elegido. Dentro del cliente, el orden sigue el trabajo del mes.
-const STUDY_NAVIGATION_IDS = ["inicio", "clientes", "panel-trabajo"] as const;
+const STUDY_NAVIGATION_IDS = ["inicio", "clientes", "pendientes-para-mi", "panel-trabajo"] as const;
 const CLIENT_NAVIGATION_IDS = [
   "resumen-cliente",
   "bandeja",
@@ -74,7 +76,7 @@ const NAV_LABEL_OVERRIDES: Partial<Record<StudyModule["id"], string>> = {
   "resumen-cliente": "Resumen",
 };
 
-function StudyNavLink({ item, disabledReason }: { item: StudyModule; disabledReason?: string }) {
+function StudyNavLink({ item, disabledReason, badge }: { item: StudyModule; disabledReason?: string; badge?: number }) {
   const label = NAV_LABEL_OVERRIDES[item.id] ?? item.label;
   if (disabledReason) {
     // Sin cliente elegido el ítem se ve, para mostrar el recorrido completo,
@@ -102,7 +104,7 @@ function StudyNavLink({ item, disabledReason }: { item: StudyModule; disabledRea
       }
     >
       <Icon name={item.icon} size={17} />
-      <span>{label}</span>
+      <span>{label}{badge ? ` (${badge})` : ""}</span>
     </NavLink>
   );
 }
@@ -112,6 +114,11 @@ export function StudyShell() {
   const location = useLocation();
   const session = useSession();
   const { firmId, clientId, capabilities, setClientId } = useClientContext();
+  const inbox = useQuery({
+    queryKey: ["comments-inbox", firmId],
+    queryFn: () => api.get<{ id: string }[]>(`/firms/${firmId}/comments/inbox`),
+    enabled: Boolean(firmId && capabilities.has("client.read")),
+  });
   const [menuOpen, setMenuOpen] = useState(false);
   const [density, setDensity] = useDensity();
   const firm = session.me?.firms.find((item) => item.firmId === firmId);
@@ -198,7 +205,7 @@ export function StudyShell() {
               Estudio
             </p>
             {studyModules.map((item) => (
-              <StudyNavLink item={item} key={item.id} />
+              <StudyNavLink item={item} key={item.id} badge={item.id === "pendientes-para-mi" ? inbox.data?.length : undefined} />
             ))}
           </div>
 
