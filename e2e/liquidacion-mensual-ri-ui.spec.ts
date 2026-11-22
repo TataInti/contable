@@ -26,9 +26,11 @@ async function pick(campo: Locator, texto: string) {
  *      115.000) y percepciones de la DGR (TXT, 1.500,55).
  *   4. Cálculo sin mínimo: IIBB 4.025,00 − 1.500,55 = 2.524,45; TEM 690,00 < mínimo B → 10.028,00.
  *   5. Mínimo de IIBB 11.180 → aviso de desactualizado → Recalcular → 11.180,00 − 1.500,55 = 9.679,45.
- *   6. Autorrevisión del titular (Usuarios y accesos → Controles) y revisión de los lotes. Controles: se verifican
- *      los 2 bloqueantes abiertos; su resolución con motivo y el cierre en pasos con el saldo del mes siguiente
- *      QUEDAN PENDIENTES en este spec (no verificados).
+ *   6. Controles: los 2 bloqueantes se resuelven con motivo desde la pantalla.
+ *   7. Autorrevisión del titular: Enviar a revisión → Aprobar revisión (casilla activada en Usuarios y accesos → Controles).
+ *   8. Cierre en pasos: Finalizar con confirmación; presentación con acuse, declaración jurada y pago de IIBB y TEM.
+ *   9. No verificado en este spec: el saldo que pasa al mes siguiente. La declaración jurada de IIBB y TEM no origina
+ *      saldo a favor arrastrable en la pantalla (solo IVA y el detalle por jurisdicción); ver el PR.
  *
  * Importes calculados a mano en este archivo (no salen de la función que se prueba):
  *   IIBB base 115.000 × 3,5 % = 4.025,00 ; percepciones 1.500,55 ; neto 2.524,45
@@ -74,6 +76,18 @@ const FACTURAS = [
   { fecha: "2026-10-20", tipo: "1", numero: "3", docTipo: "80", docNumero: syntheticCuit(Number.parseInt(RUN, 36) + 4_003), denominacion: "Comensal E2E 3", neto: "25000.00", iva: "5250.00" },
 ];
 const PERCEPCION = { importe: "1500.55", fecha: "15/10/2026" };
+const MOTIVO_CONTROL = `E2E ${SUFFIX}: extracto bancario sintético no aportado en la corrida; se resuelve con motivo y queda registrado.`;
+/** Respaldos sintéticos (PDF mínimo) para el acuse y la declaración jurada; el contenido distinto evita el duplicado por hash. */
+const acuseSintetico = (etiqueta: string) => ({
+  name: `acuse-${etiqueta}-${SUFFIX}.pdf`,
+  mimeType: "application/pdf",
+  buffer: Buffer.from(`%PDF-1.4\n% acuse sintético ${SUFFIX} ${etiqueta}\n%%EOF\n`, "binary"),
+});
+const declaracionSintetica = (etiqueta: string) => ({
+  name: `dj-${etiqueta}-${SUFFIX}.pdf`,
+  mimeType: "application/pdf",
+  buffer: Buffer.from(`%PDF-1.4\n% declaración jurada sintética ${SUFFIX} ${etiqueta}\n%%EOF\n`, "binary"),
+});
 
 /** Formato argentino de los importes en pantalla (4.025,00). */
 const importe = (texto: string) => new RegExp(texto.replace(/\./g, "\\.").replace(/,/g, ","));
@@ -242,7 +256,12 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
   });
 
   await test.step("Configuración del estudio: el Titular habilita la autorrevisión (Usuarios y accesos → Controles)", async () => {
-    await goTo(page, "Usuarios y accesos");
+    // Navegación con reintento: en la corrida del CI (45057154807) el primer clic en el menú no llevó a
+    // Usuarios y accesos después del panel de fuentes; el reintento deja la URL en el mensaje si vuelve a fallar.
+    await expect(async () => {
+      await goTo(page, "Usuarios y accesos");
+      await expect(page, "pantalla Usuarios y accesos").toHaveURL(/\/administracion/, { timeout: 5_000 });
+    }).toPass({ timeout: 30_000 });
     await page.getByRole("tab", { name: /^Controles/ }).click();
     // Idempotente: la opción persiste en la base de la corrida; si ya está activada, no se vuelve a tocar.
     const autorrevision = page.getByRole("checkbox", { name: "Permitir autorrevisión de fuentes y legajos" });
@@ -295,16 +314,83 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await esperarImporte(page, "9.679,45");
   });
 
-  await test.step("Controles: los bloqueantes abiertos quedan a la vista (su resolución queda pendiente de este spec)", async () => {
+  await test.step("Controles: los dos bloqueantes se resuelven con motivo desde la pantalla", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
-    // Estado verificado: 2 bloqueantes abiertos («Acreditaciones bancarias vs. facturación», «Caja e imputaciones del período»).
-    // El flujo para aceptarlos con motivo no se pudo operar aún desde el E2E: ver el informe del PR.
-    await expect(page.locator(".work-page").first().getByText("bloqueantes abiertos").first()).toBeVisible();
+    const panel = page.locator(".work-page").first();
+    for (const nombre of ["Acreditaciones bancarias vs. facturación", "Caja e imputaciones del período"]) {
+      const control = panel.locator(".workpaper-control").filter({ hasText: nombre });
+      await expect(control, `control «${nombre}»`).toBeVisible({ timeout: 20_000 });
+      await control.getByRole("textbox", { name: /^Resolución / }).fill(MOTIVO_CONTROL);
+      await mutating(page, "/resolve", () => control.getByRole("button", { name: "Resolver", exact: true }).click());
+      await expect(control.getByRole("button", { name: "Resolver", exact: true })).toHaveCount(0);
+    }
+    await expect(panel.getByText("bloqueantes abiertos")).toHaveCount(0);
   });
 
-  await test.step("Cierre: estado del paso a paso registrado (no verificado aún: cierre bloqueado por los controles)", async () => {
+  await test.step("Revisión: Enviar a revisión y aprobación del propio Titular (autorrevisión activada)", async () => {
+    await mutating(page, "/submit-review", () =>
+      page.getByRole("button", { name: "Enviar a revisión", exact: true }).click(),
+    );
+    await mutating(page, "/review", () => page.getByRole("button", { name: "Aprobar revisión", exact: true }).click());
+  });
+
+  await test.step("Cierre: finalizar con confirmación; el mes queda congelado", async () => {
     await page.getByRole("tab", { name: /^Cierre/ }).click();
-    console.log("CIERRE >>>", (await page.locator(".work-page").first().innerText()).slice(0, 2500));
+    const pasos = page.getByRole("list", { name: "Pasos para cerrar el período" });
+    await pasos.getByRole("button", { name: "Finalizar", exact: true }).click();
+    await mutating(page, "/finalize", () => page.getByRole("button", { name: "Sí, finalizar" }).click());
+    await expect(pasos.locator("li").nth(0).getByRole("status")).toHaveText("Hecho");
+  });
+
+  await test.step("Cálculo: presentación con acuse, declaración jurada y pago de IIBB y TEM", async () => {
+    await page.getByRole("tab", { name: /Cálculo/ }).click();
+    const cargas = [
+      { tax: IIBB, total: "2524.45", determinado: "4025.00" },
+      { tax: TEM, total: "10028.00", determinado: "10028.00" },
+    ];
+    for (const { tax, total, determinado } of cargas) {
+      const etiqueta = tax === IIBB ? "iibb" : "tem";
+      const fila = page.getByRole("row").filter({ hasText: tax.taxName });
+      const drawer = page.locator(".action-drawer");
+
+      await fila.getByRole("button", { name: "Registrar presentación", exact: true }).click();
+      await drawer.getByLabel("Importe presentado").fill(total);
+      await drawer.getByLabel("Archivo del acuse").setInputFiles(acuseSintetico(etiqueta));
+      await mutating(page, "/filings", () =>
+        drawer.getByRole("button", { name: "Registrar presentación", exact: true }).click(),
+      );
+      await expect(drawer).toBeHidden({ timeout: 60_000 });
+
+      await fila.getByRole("button", { name: /Cargar declaración jurada|Corregir declaración jurada/ }).click();
+      await drawer.getByLabel("Impuesto determinado", { exact: true }).fill(determinado);
+      await drawer.getByLabel("Saldo a favor técnico", { exact: true }).fill("0.00");
+      await drawer.getByLabel("Saldo a favor de libre disponibilidad", { exact: true }).fill("0.00");
+      await drawer.getByLabel("Total a pagar", { exact: true }).fill(total);
+      await drawer.getByLabel("Archivo de la declaración jurada").setInputFiles(declaracionSintetica(etiqueta));
+      await mutating(page, "/declaration", () =>
+        drawer.getByRole("button", { name: /Guardar declaración jurada|Guardar corrección/ }).click(),
+      );
+      // Las diferencias informan y no bloquean: se leen y se cierra el cajón.
+      if (await drawer.getByText("Declaración jurada cargada con diferencias").isVisible().catch(() => false)) {
+        await drawer.getByRole("button", { name: "Cerrar", exact: true }).click();
+      }
+      await expect(drawer).toBeHidden({ timeout: 60_000 });
+
+      await fila.getByRole("button", { name: "Registrar pago", exact: true }).click();
+      await drawer.getByLabel("Importe", { exact: true }).fill(total);
+      await drawer.getByLabel("Fecha de pago").fill("2026-11-20");
+      await mutating(page, "/payments", () => drawer.getByRole("button", { name: "Registrar pago", exact: true }).click());
+      await expect(drawer).toBeHidden({ timeout: 60_000 });
+    }
+  });
+
+  await test.step("Cierre: los cuatro pasos quedan hechos y el saldo se informa para el mes siguiente", async () => {
+    await page.getByRole("tab", { name: /^Cierre/ }).click();
+    const pasos = page.getByRole("list", { name: "Pasos para cerrar el período" });
+    for (let i = 0; i < 4; i++) {
+      await expect(pasos.locator("li").nth(i).getByRole("status")).toHaveText("Hecho");
+    }
+    await expect(page.getByRole("region", { name: "Saldo para el mes siguiente" })).toContainText("noviembre de 2026");
   });
 
   test.info().annotations.push({ type: "errores de mutación", description: errores.join(" | ") || "ninguno" });
