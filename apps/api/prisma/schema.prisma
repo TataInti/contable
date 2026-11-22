@@ -42,6 +42,8 @@ model User {
   pubRevoked             ReportPublication[]     @relation("pubRevokedBy")
   assistantConversations AssistantConversation[] @relation("assistantCreatedBy")
   biDashboards           BiDashboard[]           @relation("biDashboardCreatedBy")
+  workpaperSourceMarked  WorkpaperSourceStatus[] @relation("workpaperSourceMarkedBy")
+  workpaperSourceCleared WorkpaperSourceStatus[] @relation("workpaperSourceClearedBy")
   portalMemberships      PortalMembership[]
   idempotencyRecords     IdempotencyRecord[]
   professionalCredentials ProfessionalCredential[]
@@ -298,6 +300,7 @@ model Client {
   monthlyWorkpapers      MonthlyTaxWorkpaper[]
   workpaperSettlements   WorkpaperSettlement[]
   workpaperImportBatches WorkpaperImportBatch[]
+  workpaperSourceStatuses WorkpaperSourceStatus[]
   workpaperVoucherClassifications WorkpaperVoucherClassification[]
   taxInputAllocations    TaxInputAllocation[]
   taxControlFindings     TaxControlFinding[]
@@ -3478,6 +3481,7 @@ model MonthlyTaxWorkpaper {
   supersededBy MonthlyTaxWorkpaper[] @relation("workpaperSupersedes")
   settlements WorkpaperSettlement[]
   sources     WorkpaperImportBatch[]
+  sourceStatuses WorkpaperSourceStatus[]
   classifications WorkpaperVoucherClassification[]
   inputAllocations TaxInputAllocation[]
   controls    TaxControlFinding[]
@@ -3531,6 +3535,32 @@ model WorkpaperImportBatch {
   @@unique([workpaperId, importBatchId])
   @@index([firmId, clientId, workpaperId, sourceCode])
   @@map("workpaper_import_batches")
+}
+
+/// Fuente «Sin movimientos» de un expediente (corte 2A). Una marca vigente por fuente (índice único parcial
+/// WHERE clearedAt IS NULL, solo en SQL). Deshacer completa clearedAt; no se borran filas.
+model WorkpaperSourceStatus {
+  id              String    @id @default(uuid(7))
+  firmId          String
+  clientId        String
+  workpaperId     String
+  sourceCode      String
+  status          String
+  markedByUserId  String
+  markedAt        DateTime
+  clearedByUserId String?
+  clearedAt       DateTime?
+  clearReason     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  client     Client              @relation(fields: [firmId, clientId], references: [firmId, id], onDelete: Cascade)
+  workpaper  MonthlyTaxWorkpaper @relation(fields: [workpaperId], references: [id], onDelete: Cascade)
+  markedBy   User                @relation("workpaperSourceMarkedBy", fields: [markedByUserId], references: [id])
+  clearedBy  User?               @relation("workpaperSourceClearedBy", fields: [clearedByUserId], references: [id])
+
+  @@index([firmId, clientId, workpaperId, sourceCode], map: "workpaper_source_statuses_scope_idx")
+  @@map("workpaper_source_statuses")
 }
 
 model WorkpaperVoucherClassification {

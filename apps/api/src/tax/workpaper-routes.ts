@@ -112,6 +112,35 @@ export function workpaperRoutes(app: FastifyInstance) {
     },
   );
 
+  // Sin movimientos (corte 2A): marcar y deshacer la marca de una fuente del mes. Mismo permiso que cargar lotes.
+  app.put(
+    "/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers/:workpaperId/sources/:sourceCode/no-movements",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { workpaperId, sourceCode } = req.params as { workpaperId: string; sourceCode: string };
+      try {
+        const data = await service.setNoMovements(ctx, workpaperId, sourceCode);
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
+
+  app.delete(
+    "/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers/:workpaperId/sources/:sourceCode/no-movements",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { workpaperId, sourceCode } = req.params as { workpaperId: string; sourceCode: string };
+      try {
+        const data = await service.clearNoMovements(ctx, workpaperId, sourceCode);
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
+
   app.get(
     "/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers/:workpaperId/classifications",
     async (req, reply) => {

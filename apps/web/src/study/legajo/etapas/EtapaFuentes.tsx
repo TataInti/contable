@@ -21,6 +21,9 @@ export interface EtapaFuentesProps {
   setSourceFile: Dispatch<SetStateAction<File | null>>;
   sourceUploadMutation: UseMutationResult<ResultadoImportacionLote, Error, void>;
   reviewSourceMutation: UseMutationResult<unknown, Error, string>;
+  noMovementsMutation: UseMutationResult<unknown, Error, { sourceCode: string; marcar: boolean }>;
+  /** Motivo por el que no se puede marcar «Sin movimientos»; null si se puede (corte 2A). */
+  motivoSinMovimientos: string | null;
 }
 
 function nombreFuente(source: CoberturaLegajo["sources"][number]) {
@@ -35,6 +38,7 @@ function nombreFuente(source: CoberturaLegajo["sources"][number]) {
 function estadoFuente(source: CoberturaLegajo["sources"][number]) {
   if (source.batches.some((batch) => batch.errorRows > 0)) return { status: "ERROR", label: "Con errores" };
   if (source.present) return { status: "READY", label: `Cargada · ${source.count} filas` };
+  if (source.status === "NO_MOVEMENTS") return { status: "NO_MOVEMENTS", label: "Sin movimientos" };
   return source.required
     ? { status: "WAITING_INPUTS", label: "Pendiente" }
     : { status: "PENDING", label: "Opcional" };
@@ -54,11 +58,15 @@ export function EtapaFuentes({
   setSourceFile,
   sourceUploadMutation,
   reviewSourceMutation,
+  noMovementsMutation,
+  motivoSinMovimientos,
 }: EtapaFuentesProps) {
   const [fuenteAbierta, setFuenteAbierta] = useState<string | null>(null);
   const fuentes = coverageQuery.data?.sources ?? [];
   const fuenteSeleccionada = fuentes.find((source) => source.code === fuenteAbierta) ?? null;
-  const faltantes = fuentes.filter((source) => source.required && !source.present).map(nombreFuente);
+  const faltantes = fuentes
+    .filter((source) => source.required && !source.present && source.status !== "NO_MOVEMENTS")
+    .map(nombreFuente);
 
   return (
     <div className="workpaper-stage">
@@ -111,6 +119,9 @@ export function EtapaFuentes({
             canEditSources={canEditSources && !soloLectura}
             reviewSourceMutation={reviewSourceMutation}
             editReason={soloLectura ? "Esta revisión se consulta en solo lectura." : motivoImportarLibro ?? (!canEditSources ? "El legajo no admite cambios en su estado actual." : null)}
+            noMovementsMutation={noMovementsMutation}
+            puedeMarcarSinMovimientos={!motivoSinMovimientos}
+            motivoSinMovimientos={motivoSinMovimientos}
             onCambiarFuente={(codigo) => {
               setSourceCode(codigo);
               setSourceFile(null);
