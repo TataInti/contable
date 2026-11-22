@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { goTo, login, pickOption, SUFFIX } from "./helpers/ui";
 
 /*
@@ -18,10 +18,25 @@ import { goTo, login, pickOption, SUFFIX } from "./helpers/ui";
 const PDF = fileURLToPath(new URL("./fixtures/calendario-arca-2027-sintetico.pdf", import.meta.url));
 const TITULO = `Calendario nacional 2027 E2E ${SUFFIX}`;
 
+/**
+ * El tour guiado se abre 650 ms después de montar el estudio mientras su marca no exista en el
+ * almacenamiento local, y mueve el foco al popover: cierra el desplegable del organismo a mitad de
+ * la elección. Este recorrido no prueba el tour, así que se deja la misma marca que escribe «Saltar
+ * tour» (criterio de integrated-flow.spec.ts).
+ */
+async function markGuidedTourSeen(page: Page) {
+  await page.addInitScript(() => {
+    if (window.localStorage.getItem("contable-study-navigation-tour-v1") === null) {
+      window.localStorage.setItem("contable-study-navigation-tour-v1", "dismissed");
+    }
+  });
+}
+
 test("el calendario se arma desde su PDF, el contador corrige la celda dudosa y lo publica", async ({ page }) => {
   test.setTimeout(180_000);
 
   await test.step("Entra a Calendarios fiscales desde Ajustes del estudio", async () => {
+    await markGuidedTourSeen(page);
     await login(page);
     await goTo(page, "Calendarios fiscales");
     await expect(page.getByRole("button", { name: "Cargar desde PDF" }).first()).toBeVisible();
