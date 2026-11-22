@@ -65,6 +65,7 @@ import { PanelPresentacion } from "./legajo/paneles/PanelPresentacion";
 import { PanelDeclaracion } from "./legajo/paneles/PanelDeclaracion";
 import { EtapaFuentes } from "./legajo/etapas/EtapaFuentes";
 import { EtapaSaldos } from "./legajo/etapas/EtapaSaldos";
+import { rangoMesAnterior } from "./legajo/saldosArrastre";
 import { EtapaCalculo } from "./legajo/etapas/EtapaCalculo";
 import { EtapaClasificacion } from "./legajo/etapas/EtapaClasificacion";
 import { EtapaControles } from "./legajo/etapas/EtapaControles";
@@ -137,6 +138,7 @@ export function StudyExpedienteMensual() {
     reference: "",
     evidenceDocumentId: "",
     originalAmount: "",
+    motivo: "",
   });
   const [controlResolutions, setControlResolutions] = useState<Record<string, string>>({});
   const [controlEvidence, setControlEvidence] = useState<Record<string, string>>({});
@@ -215,6 +217,19 @@ export function StudyExpedienteMensual() {
   const legajoSeleccionado =
     (listQuery.data ?? []).find((wp) => wp.id === revisionElegidaId) ?? listQuery.data?.[0];
   const activeWorkpaperId = legajoSeleccionado?.id;
+  // Mes anterior del legajo: si está finalizado, sus saldos son el arrastre de este mes (etapa Saldos, corte 3E).
+  const rangoAnterior = legajoSeleccionado ? rangoMesAnterior(legajoSeleccionado.periodStart) : null;
+  const mesAnteriorQuery = useQuery({
+    queryKey: ["monthly-workpapers", firmId, clientId, "mes-anterior", rangoAnterior?.desde],
+    queryFn: () =>
+      api.get<Workpaper[]>(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers?from=${rangoAnterior?.desde ?? ""}&to=${rangoAnterior?.hasta ?? ""}`,
+      ),
+    enabled: Boolean(firmId && clientId && rangoAnterior),
+  });
+  const mesAnteriorCerrado = mesAnteriorQuery.isSuccess
+    ? mesAnteriorQuery.data.some((wp) => wp.status === "FINALIZED")
+    : undefined;
   // Importar un libro IVA exige el permiso y un legajo editable; el motivo se muestra junto a la acción.
   // En un mes calculado sí se puede marcar o deshacer «Sin movimientos» (vuelve a preparación): la leyenda lo dice.
   const legajoDelPeriodo = legajoSeleccionado;
@@ -648,6 +663,9 @@ export function StudyExpedienteMensual() {
           setEditingLot={setEditingLot}
           setEditForm={setEditForm}
           fraseRevision="Saldos vigentes del cliente y del período; no se guardan por revisión."
+          periodoInicio={wp.periodStart}
+          mesAnteriorCerrado={mesAnteriorCerrado}
+          legajoFinalizado={wp.status === "FINALIZED"}
         />
       );
     }
@@ -660,6 +678,9 @@ export function StudyExpedienteMensual() {
             ledgerQuery={ledgerQuery}
             setEditingLot={setEditingLot}
             setEditForm={setEditForm}
+            periodoInicio={wp.periodStart}
+            mesAnteriorCerrado={mesAnteriorCerrado}
+            legajoFinalizado={wp.status === "FINALIZED"}
           />
         ) : step === 1 ? (
           <EtapaFuentes

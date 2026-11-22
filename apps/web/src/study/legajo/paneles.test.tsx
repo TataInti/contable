@@ -305,7 +305,7 @@ describe("Legajo · editar saldo (K6)", () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirEditarSaldo();
-    fireEvent.change(within(dialogo).getByLabelText("Monto original"), {
+    fireEvent.change(within(dialogo).getByLabelText("Monto vigente"), {
       target: { value: "" },
     });
     fireEvent.change(within(dialogo).getByLabelText("Referencia"), { target: { value: "" } });
@@ -318,24 +318,45 @@ describe("Legajo · editar saldo (K6)", () => {
     );
   });
 
-  it("envía el monto original y la referencia cuando se cargan", async () => {
+  it("envía la corrección del importe con motivo y la referencia por separado (sin importe en el PATCH)", async () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirEditarSaldo();
-    fireEvent.change(within(dialogo).getByLabelText("Monto original"), {
+    fireEvent.change(within(dialogo).getByLabelText("Monto vigente"), {
       target: { value: "1200" },
+    });
+    fireEvent.change(within(dialogo).getByLabelText("Motivo del cambio de importe"), {
+      target: { value: "Ajuste Demo del importe" },
     });
     fireEvent.change(within(dialogo).getByLabelText("Referencia"), {
       target: { value: "Ajuste Demo" },
     });
     fireEvent.click(within(dialogo).getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() =>
-      expect(api.patch).toHaveBeenCalledWith(`${BASE}/tax-credit-ledger/lot-a`, {
-        reference: "Ajuste Demo",
-        evidenceDocumentId: null,
-        originalAmount: "1200",
+      expect(api.post).toHaveBeenCalledWith(`${BASE}/tax-credit-ledger/lot-a/corrections`, {
+        newAmount: "1200",
+        reason: "Ajuste Demo del importe",
       }),
     );
+    expect(api.patch).toHaveBeenCalledWith(`${BASE}/tax-credit-ledger/lot-a`, {
+      reference: "Ajuste Demo",
+      evidenceDocumentId: null,
+    });
+  });
+
+  it("cambiar el importe sin motivo no guarda y lo señala junto al campo", async () => {
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    const dialogo = await abrirEditarSaldo();
+    fireEvent.change(within(dialogo).getByLabelText("Monto vigente"), {
+      target: { value: "1200" },
+    });
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Guardar cambios" }));
+    expect(
+      await within(dialogo).findByText("Escribí el motivo: queda en el historial del saldo"),
+    ).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.patch).not.toHaveBeenCalled();
   });
 });
 

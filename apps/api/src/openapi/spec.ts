@@ -106,14 +106,14 @@ export function fiscalPaths(): OpenApiPath[] {
     {
       method: "post",
       path: "/api/v1/firms/{firmId}/clients/{clientId}/tax-credit-ledger/{lotId}/corrections",
-      summary: "Corrección de monto vía movimiento compensatorio",
+      summary: "Corrección de monto vía movimiento compensatorio (motivo obligatorio; en un mes calculado vuelve a preparación y en uno finalizado se rechaza)",
       capability: "tax.settlements.calculate",
     },
     {
       method: "patch",
       path: "/api/v1/firms/{firmId}/clients/{clientId}/tax-credit-ledger/{lotId}",
       summary:
-        "Edita referencia, respaldo, importe o arrastre (carryForward) de un lote; cada cambio queda en el historial",
+        "Edita referencia, respaldo o arrastre (carryForward) de un lote; el importe se corrige con /corrections (con motivo). Cada cambio queda en el historial",
       capability: "tax.settlements.calculate",
     },
     {

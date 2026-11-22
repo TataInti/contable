@@ -445,12 +445,18 @@ export function workpaperRoutes(app: FastifyInstance) {
       .strict()
       .parse(req.body);
     try {
+      // El importe se corrige con movimiento compensatorio y motivo (POST …/corrections).
+      if (body.originalAmount !== undefined) {
+        throw new WorkpaperError(
+          "INVALID_TRANSITION",
+          "Para cambiar el importe usá la corrección con motivo",
+        );
+      }
       const data = await service.updateCreditLot(ctx, ctx.clientId!, lotId, {
         ...(body.reference !== undefined ? { reference: body.reference } : {}),
         ...(body.evidenceDocumentId !== undefined
           ? { evidenceDocumentId: body.evidenceDocumentId }
           : {}),
-        ...(body.originalAmount !== undefined ? { originalAmount: body.originalAmount } : {}),
         ...(body.carryForward !== undefined ? { carryForward: body.carryForward } : {}),
       });
       return reply.send({ data });
