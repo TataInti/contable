@@ -7,6 +7,7 @@ interface EtapaCierreProps {
   onFinalize?: () => void;
   onRectify?: () => void;
   onGoToCalculation?: () => void;
+  onGoToControls?: () => void;
   onPresentation?: () => void;
   onDeclaration?: () => void;
   onPayment?: () => void;
@@ -29,6 +30,7 @@ export function EtapaCierre({
   onFinalize,
   onRectify,
   onGoToCalculation,
+  onGoToControls,
   onPresentation,
   onDeclaration,
   onPayment,
@@ -65,7 +67,7 @@ export function EtapaCierre({
       <ol aria-label="Pasos para cerrar el período">
         {paso(1, "Finalizar", "Congela la liquidación y genera los saldos de cierre.", finalized,
           readyToFinalize ? readOnly ? null : <>{control("Finalizar", canFinalize, onFinalize)}{canFinalize ? null : <p>Tu perfil no tiene permiso para finalizar este legajo.</p>}</> :
-            !finalized ? <><p>{blocking.length ? "Falta resolver los controles bloqueantes." : "Falta revisar la liquidación."}</p><Button variant="secondary" onClick={onGoToCalculation}>Ir a Cálculo</Button></> : null)}
+            !finalized ? <><p>{blocking.length ? "Falta resolver los controles bloqueantes." : "Falta revisar la liquidación."}</p><Button variant="secondary" onClick={blocking.length ? onGoToControls : onGoToCalculation}>{blocking.length ? "Ir a Controles" : "Ir a Cálculo"}</Button></> : null)}
         {paso(2, "Registrar presentación y acuse", "Guardá la fecha, el número y el acuse emitido por el organismo.", hasFiling,
           finalized ? readOnly ? null : <>{control("Registrar presentación y acuse", canFile, onPresentation)}{canFile ? null : <p>Tu perfil no tiene permiso para registrar la presentación.</p>}</> : <p>Falta finalizar la liquidación.</p>)}
         {paso(3, "Cargar la declaración jurada", "Adjuntá la declaración y registrá los saldos que informa.", hasDeclaration,

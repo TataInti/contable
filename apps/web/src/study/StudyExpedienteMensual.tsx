@@ -732,6 +732,7 @@ export function StudyExpedienteMensual() {
             nextBalance={positionQuery.data?.find((position) => position.saldoFavorTecnico || position.saldoLibreDisponibilidad)?.saldoFavorTecnico ?? null}
             readOnly={soloLectura}
             onGoToCalculation={() => goToStep(3)}
+            onGoToControls={() => goToStep(4)}
             onFinalize={() => confirmar({
               title: "Finalizar el legajo",
               description: "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",

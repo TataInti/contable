@@ -583,6 +583,45 @@ describe("Legajo · etapa Controles (K13)", () => {
 });
 
 describe("Legajo · etapa Cierre (K13)", () => {
+  it("un control bloqueante abierto guía desde Cierre a Controles y no ofrece Finalizar", async () => {
+    fijarContexto([...PERMISOS_REVISION, "tax.settlements.finalize"]);
+    fijarRespuestas({
+      legajo: { status: "CALCULATED" },
+      controles: [bloqueante()],
+    });
+    renderLegajo();
+    await abrirEtapa(/Cierre/);
+
+    expect(await screen.findByText("Falta resolver los controles bloqueantes.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Finalizar" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ir a Controles" }));
+    expect(screen.getByRole("tab", { name: /Controles/ })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("sin controles abiertos y sin revisión guía desde Cierre a Cálculo", async () => {
+    fijarContexto(PERMISOS_REVISION);
+    fijarRespuestas({ legajo: { status: "CALCULATED" }, controles: [] });
+    renderLegajo();
+    await abrirEtapa(/Cierre/);
+
+    expect(await screen.findByText("Falta revisar la liquidación.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Finalizar" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ir a Cálculo" }));
+    expect(screen.getByRole("tab", { name: "Cálculo" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("con la liquidación revisada ofrece Finalizar y pide confirmación antes de finalizar", async () => {
+    fijarContexto([...PERMISOS_REVISION, "tax.settlements.finalize"]);
+    fijarRespuestas({ legajo: { status: "REVIEWED" }, controles: [] });
+    renderLegajo();
+    await abrirEtapa(/Cierre/);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Finalizar" }));
+    expect(await screen.findByText(/Finalizar congela los datos del período/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sí, finalizar" })).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalledWith(expect.stringContaining("/finalize"), expect.anything());
+  });
+
   it("muestra los pasos y mantiene las huellas dentro del detalle técnico plegado", async () => {
     fijarContexto(PERMISOS_REVISION);
     fijarRespuestas({
