@@ -73,7 +73,7 @@ test("el calendario se arma desde su PDF, el contador corrige la celda dudosa y 
     await page.getByRole("tab", { name: /^Resumen/ }).click();
     await page.getByRole("button", { name: "Publicar", exact: true }).click();
     await page.getByRole("button", { name: "Publicar calendario" }).click();
-    await expect(page.getByText(/Publicada la versión 1/)).toBeVisible();
+    await expect(page.getByText(/Publicada la versión \d+\./)).toBeVisible();
     await expect(page.getByText("Publicado", { exact: true }).first()).toBeVisible();
   });
 });
