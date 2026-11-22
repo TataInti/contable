@@ -2393,6 +2393,7 @@ export class MonthlyWorkpaperService {
           data: { excludedAt, excludedByUserId: ctx.userId, excludedReason: motivo },
         });
       }
+      await this.sincronizarControlesDePerfil(tx, ctx, wp);
       await this.invalidateAfterSourceChange(tx, wp);
       return { grupo, comprobantes: rows.length };
     });
@@ -2418,6 +2419,7 @@ export class MonthlyWorkpaperService {
           },
         });
       }
+      await this.sincronizarControlesDePerfil(tx, ctx, wp);
       await this.invalidateAfterSourceChange(tx, wp);
       return { grupo, comprobantes: rows.length };
     });
@@ -2433,6 +2435,19 @@ export class MonthlyWorkpaperService {
     if (!(grupo in GRUPO_LABELS)) {
       throw new WorkpaperError("CLASSIFICATION_NOT_FOUND", "Grupo de comprobantes no reconocido");
     }
+    const filas = (await this.gruposPerfilPendientes(tx, ctx, wp)).get(grupo as GrupoPerfil) ?? [];
+    if (filas.length === 0) {
+      throw new WorkpaperError("CLASSIFICATION_NOT_FOUND", "No quedan comprobantes pendientes en ese grupo");
+    }
+    return filas;
+  }
+
+  /** Comprobantes de venta pendientes del perfil por grupo: la misma consulta para el control y para la acción. */
+  private async gruposPerfilPendientes(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    wp: { id: string; clientId: string; periodStart: Date },
+  ) {
     const permitido = await loadPerfilPermitido(tx, {
       firmId: ctx.firmId,
       clientId: wp.clientId,
@@ -2442,11 +2457,47 @@ export class MonthlyWorkpaperService {
       where: { workpaperId: wp.id, firmId: ctx.firmId, excludedAt: null },
       include: { voucher: { include: { components: true, importRow: { select: { raw: true } } } } },
     });
-    const filas = gruposDeComprobantes(rows, permitido).get(grupo as GrupoPerfil) ?? [];
-    if (filas.length === 0) {
-      throw new WorkpaperError("CLASSIFICATION_NOT_FOUND", "No quedan comprobantes pendientes en ese grupo");
+    return gruposDeComprobantes(rows, permitido);
+  }
+
+  /**
+   * Tras aceptar o excluir un grupo, los controles de perfil abiertos siguen a los comprobantes: un grupo sin
+   * pendientes queda resuelto y los demás muestran su cantidad actual. Sin esto, el control seguía abierto
+   * hasta el próximo cálculo y una segunda acción sobre él respondía «No quedan comprobantes pendientes».
+   */
+  private async sincronizarControlesDePerfil(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    wp: { id: string; clientId: string; periodStart: Date },
+  ) {
+    const abiertos = await tx.taxControlFinding.findMany({
+      where: {
+        firmId: ctx.firmId,
+        workpaperId: wp.id,
+        status: "OPEN",
+        code: { startsWith: PREFIJO_CONTROL_PERFIL },
+      },
+    });
+    if (abiertos.length === 0) return;
+    const grupos = await this.gruposPerfilPendientes(tx, ctx, wp);
+    for (const control of abiertos) {
+      const filas = grupos.get(control.code.slice(PREFIJO_CONTROL_PERFIL.length) as GrupoPerfil) ?? [];
+      if (filas.length === 0) {
+        await tx.taxControlFinding.update({
+          where: { id: control.id },
+          data: {
+            status: "RESOLVED",
+            resolution: "Resuelto con motivo: los comprobantes del grupo se aceptaron o se excluyeron del cálculo",
+            resolvedByUserId: ctx.userId,
+          },
+        });
+      } else {
+        await tx.taxControlFinding.update({
+          where: { id: control.id },
+          data: { actual: new Prisma.Decimal(filas.length) },
+        });
+      }
     }
-    return filas;
   }
 
   async listControls(ctx: TenantContext, workpaperId: string) {
