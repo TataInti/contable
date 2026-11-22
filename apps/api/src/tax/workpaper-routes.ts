@@ -183,6 +183,7 @@ export function workpaperRoutes(app: FastifyInstance) {
           categoryCode: z.enum(["SUPER", "TRANSPORTE"]).optional(),
           activityCode: z.string().trim().min(1).max(40).optional(),
           saveSupplierProfile: z.boolean().optional(),
+          rememberRule: z.boolean().optional(),
         })
         .strict()
         .parse(req.body);
@@ -193,7 +194,98 @@ export function workpaperRoutes(app: FastifyInstance) {
           ...(body.saveSupplierProfile !== undefined
             ? { saveSupplierProfile: body.saveSupplierProfile }
             : {}),
+          ...(body.rememberRule !== undefined ? { rememberRule: body.rememberRule } : {}),
         });
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
+
+  const classificationIds = z.array(z.string().uuid()).min(1, "Elegí al menos un comprobante").max(500);
+  const classificationsBase =
+    "/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers/:workpaperId/classifications";
+
+  // Una actividad o un rubro para varios comprobantes a la vez.
+  app.post(`${classificationsBase}/bulk`, async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { workpaperId } = req.params as { workpaperId: string };
+    const body = z
+      .object({
+        classificationIds,
+        categoryCode: z.enum(["SUPER", "TRANSPORTE"]).optional(),
+        activityCode: z.string().trim().min(1).max(40).optional(),
+        rememberRule: z.boolean().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await service.classifyVouchers(ctx, workpaperId, {
+        classificationIds: body.classificationIds,
+        ...(body.categoryCode ? { categoryCode: body.categoryCode } : {}),
+        ...(body.activityCode ? { activityCode: body.activityCode } : {}),
+        ...(body.rememberRule !== undefined ? { rememberRule: body.rememberRule } : {}),
+      });
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // Excluir del cálculo con motivo obligatorio; reincluir lo devuelve al cálculo.
+  app.post(`${classificationsBase}/exclude`, async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { workpaperId } = req.params as { workpaperId: string };
+    const body = z
+      .object({
+        classificationIds,
+        reason: z.string().trim().min(1, "Indicá el motivo de la exclusión").max(500),
+      })
+      .strict()
+      .parse(req.body);
+    try {
+      const data = await service.excludeVouchers(ctx, workpaperId, body);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  app.post(`${classificationsBase}/include`, async (req, reply) => {
+    const ctx = tenantContextFromRequest(req);
+    const { workpaperId } = req.params as { workpaperId: string };
+    const body = z.object({ classificationIds }).strict().parse(req.body);
+    try {
+      const data = await service.includeVouchers(ctx, workpaperId, body);
+      return reply.send({ data });
+    } catch (err) {
+      return handleError(reply, err);
+    }
+  });
+
+  // Reglas «recordar» del cliente: se ven y se borran desde la etapa Clasificación.
+  app.get(
+    "/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers/:workpaperId/classification-rules",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { workpaperId } = req.params as { workpaperId: string };
+      try {
+        const data = await service.listClassificationRules(ctx, workpaperId);
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
+
+  app.delete(
+    "/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers/:workpaperId/classification-rules/:ruleId",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { workpaperId, ruleId } = req.params as { workpaperId: string; ruleId: string };
+      try {
+        const data = await service.deleteClassificationRule(ctx, workpaperId, ruleId);
         return reply.send({ data });
       } catch (err) {
         return handleError(reply, err);
