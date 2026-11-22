@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import { goTo, login, pickOption, SUFFIX } from "./helpers/ui";
+import { goTo, login, mutating, pickOption, SUFFIX } from "./helpers/ui";
 
 const CLIENT = "Cliente E2E IIBB";
 const MONTH = "Noviembre 2026";
@@ -13,6 +13,7 @@ async function openClientLegajo(page: Page) {
   await goTo(page, "Legajo");
   await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
   const period = page.getByLabel("Período fiscal");
+  await pickOption(period, MONTH);
   await expect.poll(() => period.locator("option:checked").innerText()).toContain(MONTH);
 }
 
@@ -60,20 +61,23 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
       await expect(pageA.getByRole("listbox", { name: "Personas del estudio" })).toBeVisible();
       await pageA.getByRole("option", { name: "Revisor Demo" }).getByRole("button", { name: "Revisor Demo" }).click();
       await expect(pageA.getByText("Se notificará en «Pendientes para mí»." )).toBeVisible();
-      await pageA.getByRole("button", { name: "Comentar", exact: true }).click();
-      await expect(pageA.getByText(mentionText.trim(), { exact: false }).first()).toBeVisible();
+      // Se espera la respuesta del POST: el texto del textarea también coincide con getByText
+      // mientras la mención viaja, y el formulario se vacía al guardar.
+      await mutating(pageA, "/comments", () => pageA.getByRole("button", { name: "Comentar", exact: true }).click());
+      const thread = pageA.getByRole("region", { name: "Comentarios" });
+      await expect(thread.getByRole("listitem").filter({ hasText: mentionText.trim() })).toBeVisible();
 
       await comment.fill(personalText);
       await pageA.getByRole("checkbox", { name: "Solo para mí" }).check();
-      await pageA.getByRole("button", { name: "Comentar", exact: true }).click();
-      await expect(pageA.getByText(personalText, { exact: true })).toBeVisible();
+      await mutating(pageA, "/comments", () => pageA.getByRole("button", { name: "Comentar", exact: true }).click());
+      await expect(thread.getByRole("listitem").filter({ hasText: personalText })).toBeVisible();
     });
 
     await test.step("B ve una mención, abre su hilo y no ve la nota personal", async () => {
       await markGuidedTourSeen(pageB);
       await login(pageB, "revisor@contable.local", "revisor1234");
       await expect(pageB.getByRole("link", { name: "Pendientes para mí (1)" })).toBeVisible();
-      await goTo(pageB, "Pendientes para mí");
+      await pageB.getByRole("link", { name: "Pendientes para mí (1)" }).click();
       await expect(pageB.getByRole("heading", { name: "Pendientes para mí" })).toBeVisible();
       await expect(pageB.getByText(CLIENT, { exact: false }).first()).toBeVisible();
       await expect(pageB.getByText(MONTH, { exact: false }).first()).toBeVisible();
@@ -82,7 +86,9 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
       await expect(pageB).toHaveURL(/\/expediente-mensual\?comentario=/);
       await expect(pageB.getByRole("region", { name: "Comentarios" }).getByText(mentionText.trim(), { exact: false })).toBeVisible();
       await expect(pageB.getByText(personalText, { exact: true })).toHaveCount(0);
-      await pageB.getByRole("button", { name: "Marcar como resuelto" }).click();
+      // Resolver se ofrece en el buzón «Pendientes para mí» (no en el hilo): se vuelve desde el menú.
+      await pageB.getByRole("link", { name: "Pendientes para mí (1)" }).click();
+      await mutating(pageB, "/resolve", () => pageB.getByRole("button", { name: "Marcar como resuelto" }).click());
       await expect(pageB.getByText("No tenés menciones pendientes.")).toBeVisible();
       await expect(pageB.getByRole("link", { name: "Pendientes para mí" })).toBeVisible();
     });
@@ -93,17 +99,19 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
       const mainComment = pageA.getByRole("listitem").filter({ hasText: mentionText.trim() });
       await mainComment.getByRole("button", { name: "Editar comentario" }).click();
       await pageA.getByLabel("Editar comentario").fill(editedText);
-      await pageA.getByRole("button", { name: "Guardar cambios" }).click();
+      await mutating(pageA, "/comments/", () => pageA.getByRole("button", { name: "Guardar cambios" }).click());
       const editedComment = pageA.getByRole("listitem").filter({ hasText: editedText });
-      await expect(editedComment.getByText("editado", { exact: true })).toBeVisible();
+      await expect(editedComment.locator("p").first()).toContainText("· editado");
       await expect(pageA.getByText(editedText, { exact: true })).toBeVisible();
 
       const archiveComment = pageA.getByRole("listitem").filter({ hasText: archiveText });
       await pageA.getByLabel("Escribí un comentario").fill(archiveText);
-      await pageA.getByRole("button", { name: "Comentar", exact: true }).click();
+      await mutating(pageA, "/comments", () => pageA.getByRole("button", { name: "Comentar", exact: true }).click());
       await expect(archiveComment).toBeVisible();
-      await archiveComment.getByRole("button", { name: "Archivar" }).click();
-      await expect(archiveComment.getByText("Comentario archivado", { exact: true })).toBeVisible();
+      // Al archivar, el hilo reemplaza el texto por «Comentario archivado»: se sigue al mismo ítem por su id.
+      const archivedItemId = await archiveComment.getAttribute("id");
+      await mutating(pageA, "/archive", () => archiveComment.getByRole("button", { name: "Archivar" }).click());
+      await expect(pageA.locator(`#${archivedItemId}`).getByText("Comentario archivado", { exact: true })).toBeVisible();
     });
 
     await test.step("el usuario del portal no accede a comentarios ni al buzón", async () => {

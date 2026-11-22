@@ -26,9 +26,9 @@ export function commentsRoutes(app: FastifyInstance) {
     const { firmId, clientId } = paramsSchema.parse(req.params);
     const ctx = await requireAuth(req); assertInternal(ctx, firmId);
     const rows = await withTenantContext({ userId: ctx.userId, firmId, clientId, actorKind: "USER" }, (tx) => tx.$queryRaw<Record<string, unknown>[]>`
-      SELECT c."id", c."clientId", c."authorUserId", u."name" AS "authorName", c."body", c."isPersonal", c."periodLabel", c."mentionedUserId", mu."name" AS "mentionedName", c."resolvedAt", c."resolvedByUserId", ru."name" AS "resolvedByName", c."archivedAt", c."createdAt", c."updatedAt",
+      SELECT c."id", c."clientId", c."authorUserId", app_firm_member_name(c."firmId", c."authorUserId") AS "authorName", c."body", c."isPersonal", c."periodLabel", c."mentionedUserId", app_firm_member_name(c."firmId", c."mentionedUserId") AS "mentionedName", c."resolvedAt", c."resolvedByUserId", app_firm_member_name(c."firmId", c."resolvedByUserId") AS "resolvedByName", c."archivedAt", c."createdAt", c."updatedAt",
         EXISTS (SELECT 1 FROM "study_comment_edits" e WHERE e."commentId" = c."id") AS "isEdited"
-      FROM "study_comments" c JOIN "users" u ON u."id" = c."authorUserId" LEFT JOIN "users" mu ON mu."id" = c."mentionedUserId" LEFT JOIN "users" ru ON ru."id" = c."resolvedByUserId"
+      FROM "study_comments" c
       WHERE c."firmId" = ${firmId} AND c."clientId" = ${clientId}
         AND (NOT c."isPersonal" OR c."authorUserId" = ${ctx.userId})
       ORDER BY c."createdAt" ASC
@@ -41,10 +41,12 @@ export function commentsRoutes(app: FastifyInstance) {
     const ctx = await requireAuth(req); assertInternal(ctx, firmId);
     const query = z.object({ search: z.string().trim().max(100).default("") }).parse(req.query);
     const rows = await withTenantContext({ userId: ctx.userId, firmId, actorKind: "USER" }, (tx) => tx.$queryRaw<{ id: string; name: string }[]>`
-      SELECT u.id, u.name FROM "firm_memberships" fm JOIN "users" u ON u.id = fm."userId"
-      WHERE fm."firmId" = ${firmId} AND fm.status = 'ACTIVE'
-        AND (${query.search} = '' OR u.name ILIKE ${`%${query.search}%`} OR u."emailNormalized" ILIKE ${`%${query.search}%`})
-      ORDER BY u.name LIMIT 20
+      SELECT m.id, m.name FROM (
+        SELECT fm."userId" AS id, app_firm_member_name(fm."firmId", fm."userId") AS name
+        FROM "firm_memberships" fm WHERE fm."firmId" = ${firmId} AND fm.status = 'ACTIVE'
+      ) m
+      WHERE m.name IS NOT NULL AND (${query.search} = '' OR m.name ILIKE ${`%${query.search}%`})
+      ORDER BY m.name LIMIT 20
     `);
     return { data: rows };
   });
@@ -98,8 +100,8 @@ export function commentsRoutes(app: FastifyInstance) {
     const { firmId } = z.object({ firmId: z.string().min(1) }).parse(req.params);
     const ctx = await requireAuth(req); assertInternal(ctx, firmId);
     const rows = await withTenantContext({ userId: ctx.userId, firmId, actorKind: "USER" }, (tx) => tx.$queryRaw<Record<string, unknown>[]>`
-      SELECT c.id, c."clientId", cl."legalName" AS "clientName", c."periodLabel", c.body, c."authorUserId", u.name AS "authorName", c."createdAt"
-      FROM "study_comments" c JOIN "clients" cl ON cl.id = c."clientId" AND cl."firmId" = c."firmId" JOIN "users" u ON u.id = c."authorUserId"
+      SELECT c.id, c."clientId", cl."legalName" AS "clientName", c."periodLabel", c.body, c."authorUserId", app_firm_member_name(c."firmId", c."authorUserId") AS "authorName", c."createdAt"
+      FROM "study_comments" c JOIN "clients" cl ON cl.id = c."clientId" AND cl."firmId" = c."firmId"
       WHERE c."firmId" = ${firmId} AND c."mentionedUserId" = ${ctx.userId} AND c."resolvedAt" IS NULL AND c."archivedAt" IS NULL ORDER BY c."createdAt" DESC
     `);
     return { data: rows };
