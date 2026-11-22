@@ -28,6 +28,12 @@ async function loginPortal(page: Page) {
   await expect(page).not.toHaveURL(/\/login/);
 }
 
+async function markGuidedTourSeen(page: Page) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("contable-study-navigation-tour-v1", "dismissed");
+  });
+}
+
 test("comentarios y menciones recorren Legajo, buzón y permisos desde la interfaz", async ({ browser }) => {
   test.setTimeout(120_000);
   const contextA = await browser.newContext();
@@ -43,6 +49,7 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
 
   try {
     await test.step("A abre la ficha del cliente y su Legajo de noviembre", async () => {
+      await markGuidedTourSeen(pageA);
       await login(pageA);
       await openClientLegajo(pageA);
     });
@@ -63,6 +70,7 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
     });
 
     await test.step("B ve una mención, abre su hilo y no ve la nota personal", async () => {
+      await markGuidedTourSeen(pageB);
       await login(pageB, "revisor@contable.local", "revisor1234");
       await expect(pageB.getByRole("link", { name: "Pendientes para mí (1)" })).toBeVisible();
       await goTo(pageB, "Pendientes para mí");
