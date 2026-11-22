@@ -144,6 +144,12 @@ test("fuentes del Legajo: retirar y volver a cargar una percepción, y reemplaza
     await revisarLotesDe(page, "Gestionar Retenciones y percepciones IIBB Tucumán");
   });
 
+  await test.step("Clasificación: la percepción recargada figura una sola vez; el lote retirado no aparece", async () => {
+    await page.getByRole("tab", { name: /Clasificación/ }).click();
+    const percepciones = page.locator(".work-page").first().getByRole("row").filter({ hasText: "0001-00000123" });
+    await expect(percepciones, "percepción 0001-00000123 en Clasificación").toHaveCount(1, { timeout: 20_000 });
+  });
+
   await test.step("Cálculo de octubre: IIBB 4.025,00 − 1.500,55 = 2.524,45, descontado una sola vez", async () => {
     await clasificarListo(page);
     await calcularIIBB(page);
