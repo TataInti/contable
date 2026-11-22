@@ -117,4 +117,9 @@ describe("exentos según los componentes del comprobante", () => {
     expect(esExento([{ concept: "NETO", amount: "100" }, { concept: "EXENTO", amount: "0.0000" }])).toBe(false);
     expect(esExento([])).toBe(false);
   });
+
+  it("un resumen de ingresos (letra R) no es un comprobante emitido: no entra al control", () => {
+    const responsable = propuestaPerfil("RESPONSABLE_INSCRIPTO");
+    expect(grupoPerfil({ type: "IIBB_RESUMEN", letter: "R", exento: false }, responsable)).toBeNull();
+  });
 });

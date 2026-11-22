@@ -50,6 +50,9 @@ export const GRUPO_LABELS: Record<GrupoPerfil, string> = {
   TIPO_NO_RECONOCIDO: "Tipo no reconocido",
 };
 
+/** Letra que el importador da a los resúmenes de ingresos (no son comprobantes). */
+export const LETRA_RESUMEN = "R";
+
 /** Prefijo del código del control materializado: `PERFIL_COMPROBANTE:<grupo>`. */
 export const PREFIJO_CONTROL_PERFIL = "PERFIL_COMPROBANTE:";
 
@@ -113,12 +116,7 @@ export function clasePerfil(comprobante: ComprobanteParaPerfil): ClaseComprobant
   const codigo = codigoArca(comprobante.type) ?? codigoDesdeRenglon(comprobante.raw);
   const claseArca = codigo === null ? null : clasePorCodigo(codigo);
   const letraColumna = comprobante.letter?.trim().toUpperCase() ?? "";
-  const esNota =
-    claseArca === "NC" ||
-    claseArca === "ND" ||
-    letraColumna === "NC" ||
-    letraColumna === "ND" ||
-    /NOTA/i.test(comprobante.type);
+  const esNota = claseArca === "NC" || claseArca === "ND" || letraColumna === "NC" || letraColumna === "ND";
   const letra =
     letraColumna === "A" || letraColumna === "B" || letraColumna === "C" || letraColumna === "E"
       ? letraColumna
@@ -129,10 +127,13 @@ export function clasePerfil(comprobante: ComprobanteParaPerfil): ClaseComprobant
   return `${esNota ? "NOTAS" : "FACTURA"}_${letra}` as ClaseComprobante;
 }
 
+/** Código del componente que el importador genera para el importe exento (código del sistema, no texto del usuario). */
+export const CONCEPTO_EXENTO = "EXENTO";
+
 /** Hay exento cuando el comprobante trae un componente EXENTO con importe distinto de cero. */
 export function esExento(components: ReadonlyArray<{ concept: string; amount: unknown }>): boolean {
   return components.some((component) => {
-    if (component.concept !== "EXENTO") return false;
+    if (component.concept !== CONCEPTO_EXENTO) return false;
     const importe = Number(String(component.amount));
     return Number.isFinite(importe) && importe !== 0;
   });
@@ -168,6 +169,8 @@ export function grupoPerfil(
   comprobante: ComprobanteParaPerfil & { exento: boolean },
   permitido: PermitidoPerfil,
 ): GrupoPerfil | null {
+  // Los resúmenes de ingresos (IIBB, TEM, CM03) llevan letra «R»: son base del cálculo, no comprobantes emitidos.
+  if (comprobante.letter?.trim().toUpperCase() === LETRA_RESUMEN) return null;
   const clase = clasePerfil(comprobante);
   if (clase === null) return GRUPO_TIPO_NO_RECONOCIDO;
   if (!permitido.clases.includes(clase)) return clase;
