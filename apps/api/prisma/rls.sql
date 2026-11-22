@@ -393,6 +393,64 @@ GRANT SELECT, INSERT, UPDATE ON "client_tem_categories" TO contable_runtime;
 REVOKE DELETE ON "client_tem_categories" FROM contable_runtime;
 
 -- ------------------------------------------------------------
+-- 9e. Monotributo (corte 3F): escala de cuotas (lectura para miembros del estudio),
+-- categoría por vigencia y pagos de la cuota (tenant + cliente asignado, sin borrado).
+-- ------------------------------------------------------------
+ALTER TABLE "monotributo_cuotas" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "monotributo_cuotas" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS monotributo_cuotas_select ON "monotributo_cuotas";
+CREATE POLICY monotributo_cuotas_select ON "monotributo_cuotas" FOR SELECT
+  USING (app_is_firm_member(current_setting('app.firm_id', true), current_setting('app.user_id', true)));
+
+GRANT SELECT ON "monotributo_cuotas" TO contable_runtime;
+
+ALTER TABLE "client_monotributo_categories" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "client_monotributo_categories" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS client_monotributo_categories_select ON "client_monotributo_categories";
+CREATE POLICY client_monotributo_categories_select ON "client_monotributo_categories" FOR SELECT
+  USING (app_can_access_tenant("firmId", "clientId"));
+
+DROP POLICY IF EXISTS client_monotributo_categories_insert ON "client_monotributo_categories";
+CREATE POLICY client_monotributo_categories_insert ON "client_monotributo_categories" FOR INSERT
+  WITH CHECK (
+    current_setting('app.actor_kind', true) <> 'PORTAL'
+    AND app_can_access_tenant("firmId", "clientId")
+  );
+
+DROP POLICY IF EXISTS client_monotributo_categories_update ON "client_monotributo_categories";
+CREATE POLICY client_monotributo_categories_update ON "client_monotributo_categories" FOR UPDATE
+  USING (
+    current_setting('app.actor_kind', true) <> 'PORTAL'
+    AND app_can_access_tenant("firmId", "clientId")
+  )
+  WITH CHECK (
+    current_setting('app.actor_kind', true) <> 'PORTAL'
+    AND app_can_access_tenant("firmId", "clientId")
+  );
+
+GRANT SELECT, INSERT, UPDATE ON "client_monotributo_categories" TO contable_runtime;
+REVOKE DELETE ON "client_monotributo_categories" FROM contable_runtime;
+
+ALTER TABLE "client_monotributo_payments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "client_monotributo_payments" FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS client_monotributo_payments_select ON "client_monotributo_payments";
+CREATE POLICY client_monotributo_payments_select ON "client_monotributo_payments" FOR SELECT
+  USING (app_can_access_tenant("firmId", "clientId"));
+
+DROP POLICY IF EXISTS client_monotributo_payments_insert ON "client_monotributo_payments";
+CREATE POLICY client_monotributo_payments_insert ON "client_monotributo_payments" FOR INSERT
+  WITH CHECK (
+    current_setting('app.actor_kind', true) <> 'PORTAL'
+    AND app_can_access_tenant("firmId", "clientId")
+  );
+
+GRANT SELECT, INSERT ON "client_monotributo_payments" TO contable_runtime;
+REVOKE DELETE, UPDATE ON "client_monotributo_payments" FROM contable_runtime;
+
+-- ------------------------------------------------------------
 -- 10. Fase 4 — documents, document_file_versions, document_processing_jobs, upload_sessions
 -- ------------------------------------------------------------
 ALTER TABLE "documents" ENABLE ROW LEVEL SECURITY;
