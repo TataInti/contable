@@ -717,7 +717,47 @@ export function StudyExpedienteMensual() {
             confirmar={confirmar}
           />
         ) : (
-          <EtapaCierre wp={wp} />
+          <EtapaCierre
+            wp={wp}
+            canFinalize={capacidades.has("tax.settlements.finalize") && !(currentUserId && wp.preparedByUserId === currentUserId && coverageQuery.data?.allowSelfReview === false)}
+            canRectify={capacidades.has("tax.settlements.rectify")}
+            canFile={capacidades.has("tax.filings.record")}
+            canDeclare={capacidades.has("tax.filings.record")}
+            canPay={capacidades.has("tax.payments.record")}
+            hasFiling={(positionQuery.data ?? []).some((position) => Boolean(position.filingId))}
+            hasDeclaration={(positionQuery.data ?? []).some((position) => Boolean(position.hasDeclaration))}
+            hasPayment={(positionQuery.data ?? []).some((position) => Number(position.paid) > 0)}
+            paymentNotRequired={(positionQuery.data ?? []).some((position) => Number(position.totalPayable) <= 0)}
+            nextPeriod={new Date(new Date(wp.periodEnd).getTime() + 86400000).toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: "UTC" })}
+            nextBalance={positionQuery.data?.find((position) => position.saldoFavorTecnico || position.saldoLibreDisponibilidad)?.saldoFavorTecnico ?? null}
+            readOnly={soloLectura}
+            onGoToCalculation={() => goToStep(3)}
+            onGoToControls={() => goToStep(4)}
+            onFinalize={() => confirmar({
+              title: "Finalizar el legajo",
+              description: "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",
+              confirmLabel: "Sí, finalizar",
+              onConfirm: () => finalizeMutation.mutate(wp.id),
+            })}
+            onRectify={() => confirmar({
+              title: "Crear rectificativa",
+              description: "Abre una revisión nueva del período. La revisión actual queda finalizada y sin cambios.",
+              confirmLabel: "Sí, crear rectificativa",
+              onConfirm: () => rectifyMutation.mutate(wp.id),
+            })}
+            onPresentation={() => {
+              const position = positionQuery.data?.find((item) => item.settlement?.status === "FINALIZED");
+              if (position) setPositionAction({ kind: "FILING", position });
+            }}
+            onDeclaration={() => {
+              const position = positionQuery.data?.find((item) => item.filingId);
+              if (position) setPositionAction({ kind: "DECLARATION", position });
+            }}
+            onPayment={() => {
+              const position = positionQuery.data?.find((item) => item.settlement?.status === "FINALIZED");
+              if (position) setPositionAction({ kind: "PAYMENT", position });
+            }}
+          />
         )}
       </>
     );
@@ -904,7 +944,7 @@ export function StudyExpedienteMensual() {
       );
       motivos.push(errorDe(reviewMutation.variables?.id === wp.id ? reviewMutation.error : null, "error-revision"));
     }
-    if (wp.status === "REVIEWED") {
+    if (wp.status === "REVIEWED" && safeActiveStep !== 5) {
       accion = (
         <Button
           size="sm"
@@ -936,7 +976,7 @@ export function StudyExpedienteMensual() {
       }
       motivos.push(errorDe(finalizeMutation.variables === wp.id ? finalizeMutation.error : null, "error-finalizar"));
     }
-    if (wp.status === "FINALIZED" && capabilities.has("tax.settlements.rectify")) {
+    if (wp.status === "FINALIZED" && safeActiveStep !== 5 && capabilities.has("tax.settlements.rectify")) {
       accion = (
         <Button
           size="sm"
