@@ -503,6 +503,8 @@ export function parseSifereWorkbook(
       cuit,
       issuedOn: issuedOn ?? "",
       net: netoGravado.toFixed(4),
+      nonTaxed: noGravado.toFixed(4),
+      total: importeTotal.toFixed(4),
       ...(hasIva ? { hasIva: true } : {}),
       iva21: iva21.toFixed(4),
       iva105: iva105.toFixed(4),

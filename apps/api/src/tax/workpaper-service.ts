@@ -12,7 +12,10 @@ import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { settlementService } from "./settlement-service.js";
 import {
   getWorkpaperSourcePolicy,
+  isSourceRequired,
+  obligationForPolicy,
   policiesForObligations,
+  sourceCodesForCalculation,
 } from "./workpaper-source-policy.js";
 import {
   classificationCoverage,
@@ -247,24 +250,31 @@ export class MonthlyWorkpaperService {
       regime: { code: string; taxTypeId: string; taxType: { code: string } };
     }>,
   ) {
-    const policies = policiesForObligations(
-      obligations.map((obligation) => ({
-        taxTypeCode: obligation.regime.taxType.code,
-        regimeCode: obligation.regime.code,
-      })),
-    );
+    const obligationRefs = obligations.map((obligation) => ({
+      taxTypeCode: obligation.regime.taxType.code,
+      regimeCode: obligation.regime.code,
+    }));
+    const policies = policiesForObligations(obligationRefs);
     const evidence = await tx.workpaperImportBatch.findMany({
       where: { workpaperId: workpaper.id },
       include: { importBatch: true },
       orderBy: { createdAt: "asc" },
     });
+    const reviewedCodes = new Set(
+      evidence
+        .filter((item) => item.status === "REVIEWED" && item.importBatch.status === "COMMITTED")
+        .map((item) => item.sourceCode),
+    );
 
     return policies.map((policy) => {
-      const obligation = obligations.find(
-        (item) =>
-          item.regime.taxType.code === policy.taxTypeCode &&
-          (!policy.regimeCode || item.regime.code === policy.regimeCode),
-      );
+      const obligation = obligationForPolicy(
+        policy,
+        obligations.map((item) => ({
+          taxTypeCode: item.regime.taxType.code,
+          regimeCode: item.regime.code,
+          item,
+        })),
+      )?.item;
       const batches = evidence.filter((item) => item.sourceCode === policy.code);
       const reviewed = batches.filter(
         (item) => item.status === "REVIEWED" && item.importBatch.status === "COMMITTED",
@@ -272,7 +282,7 @@ export class MonthlyWorkpaperService {
       return {
         code: policy.code,
         label: policy.label,
-        required: policy.required,
+        required: isSourceRequired(policy, obligationRefs, reviewedCodes),
         present: reviewed.length > 0,
         count: reviewed.reduce((sum, item) => sum + item.importBatch.validRows, 0),
         taxTypeId: obligation?.regime.taxTypeId ?? null,
@@ -952,12 +962,13 @@ export class MonthlyWorkpaperService {
           const cutoff =
             requestedCutoff ?? link.obligation.period.endDate.toISOString().slice(0, 10);
           const sourceCodes = new Set(
-            policiesForObligations([
+            sourceCodesForCalculation(
               {
                 taxTypeCode: link.obligation.regime.taxType.code,
                 regimeCode: link.obligation.regime.code,
               },
-            ]).map((policy) => policy.code),
+              new Set(Object.keys(sourceFacts.bySourceCode)),
+            ),
           );
           const relevantFacts = [...sourceCodes].flatMap(
             (sourceCode) => sourceFacts.bySourceCode[sourceCode] ?? [],

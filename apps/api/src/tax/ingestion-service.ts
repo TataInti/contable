@@ -19,7 +19,11 @@ import {
   type SifereDirection,
 } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
-import { getWorkpaperSourcePolicy, WORKPAPER_SOURCE_POLICIES } from "./workpaper-source-policy.js";
+import {
+  consumersOfPolicy,
+  getWorkpaperSourcePolicy,
+  WORKPAPER_SOURCE_POLICIES,
+} from "./workpaper-source-policy.js";
 
 /**
  * Servicio de ingestión fiscal (Puerta 2).
@@ -261,9 +265,12 @@ export class IngestionService {
 
       if (input.workpaperId && input.sourceCode) {
         const policy = getWorkpaperSourcePolicy(input.sourceCode);
+        // Un libro, varios impuestos: el lote puede cargarse desde cualquiera de las obligaciones que lo usan.
+        const consumers = policy ? consumersOfPolicy(policy) : [];
+        const consumer = consumers.find((target) => target.taxTypeCode === taxType.code);
         if (
           !policy ||
-          policy.taxTypeCode !== taxType.code ||
+          !consumer ||
           policy.origin !== input.origin ||
           policy.adapterVersion !== input.adapterVersion
         ) {
@@ -298,7 +305,7 @@ export class IngestionService {
             status: { not: "NOT_APPLICABLE" },
             regime: {
               taxTypeId: input.taxTypeId,
-              ...(policy.regimeCode ? { code: policy.regimeCode } : {}),
+              ...(consumer.regimeCode ? { code: consumer.regimeCode } : {}),
             },
           },
         });
@@ -679,6 +686,8 @@ export class IngestionService {
     const iva105 = n["iva105"] as string;
     const iva27 = n["iva27"] as string;
     const exempt = n["exempt"] as string;
+    // Lotes anteriores a este campo no lo traen: se toma como cero.
+    const nonTaxed = (n["nonTaxed"] as string | undefined) ?? "0";
     const otherTaxes = n["otherTaxes"] as string;
     const exchangeRate = n["exchangeRate"] as string | null;
     const currency = n["currency"] as string;
@@ -735,6 +744,9 @@ export class IngestionService {
               : []),
             ...(Number(iva27) !== 0
               ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "IVA_27", base: new Prisma.Decimal(iva27).div("0.27"), rate: new Prisma.Decimal("0.27"), amount: new Prisma.Decimal(iva27) }]
+              : []),
+            ...(Number(nonTaxed) !== 0
+              ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "NO_GRAVADO", base: new Prisma.Decimal(nonTaxed), amount: new Prisma.Decimal(nonTaxed) }]
               : []),
             ...(Number(exempt) !== 0
               ? [{ firmId: ctx.firmId, clientId: ctx.clientId!, concept: "EXENTO", base: new Prisma.Decimal(exempt), amount: new Prisma.Decimal(exempt) }]

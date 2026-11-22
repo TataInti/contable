@@ -1074,6 +1074,25 @@ export class SettlementService {
         }
         return matches[0]!.id;
       };
+      // Una sola actividad en el nivel de este impuesto (la jurisdicción del régimen): todas las ventas
+      // del libro sin actividad propia se asignan a ella, sin clasificarlas una por una.
+      const singleLocalActivityCode = input.sourceScope
+        ? await (async () => {
+            const links = await tx.clientActivity.findMany({
+              where: {
+                firmId: ctx.firmId,
+                clientId: input.clientId,
+                validFrom: { lte: period.endDate },
+                OR: [{ validTo: null }, { validTo: { gte: period.startDate } }],
+                profile: { status: "ACTIVE" },
+                activity: { jurisdictionId: input.jurisdictionId },
+              },
+              include: { activity: { select: { code: true } } },
+            });
+            const codes = [...new Set(links.map((link) => link.activity.code))];
+            return codes.length === 1 ? codes[0]! : null;
+          })()
+        : null;
       for (const v of vouchers) {
         if (v.direction !== "SALE") continue;
         if (v.issuedOn.toISOString() > cutoffDate) continue;
@@ -1138,14 +1157,23 @@ export class SettlementService {
             },
           });
         }
-        if (v.lines.length === 0 && !hasExplicitActivityLines && classification?.activityCode) {
+        const bookActivityCode = classification
+          ? (classification.activityCode ?? singleLocalActivityCode)
+          : null;
+        if (v.lines.length === 0 && !hasExplicitActivityLines && bookActivityCode) {
           const activity = isTypedActivityEngine
-            ? resolveActivityId(classification.activityCode)
-            : classification.activityCode;
-          const net = v.components
-            .filter((component) => component.concept === "NETO")
-            .reduce((sum, component) => sum.plus(component.base.abs()), new Prisma.Decimal(0))
-            .times(sign);
+            ? resolveActivityId(bookActivityCode)
+            : bookActivityCode;
+          // Base por comprobante: neto gravado + no gravado + exentas, sin IVA ni otros tributos
+          // (la Factura C trae su importe total como neto). Las notas de crédito restan.
+          const baseParts = { NETO: new Prisma.Decimal(0), NO_GRAVADO: new Prisma.Decimal(0), EXENTO: new Prisma.Decimal(0) };
+          for (const component of v.components) {
+            if (component.concept in baseParts) {
+              const key = component.concept as keyof typeof baseParts;
+              baseParts[key] = baseParts[key].plus(component.base.abs());
+            }
+          }
+          const net = baseParts.NETO.plus(baseParts.NO_GRAVADO).plus(baseParts.EXENTO).times(sign);
           incomeByActivity[activity] = dec(
             incomeByActivity[activity] ?? "0",
           )
@@ -1157,10 +1185,18 @@ export class SettlementService {
             sourceVersion: v.version,
             snapshot: {
               voucherId: v.id,
-              activityCode: classification.activityCode,
+              type: v.type,
+              letter: v.letter,
+              issuedOn: v.issuedOn.toISOString().slice(0, 10),
+              activityCode: bookActivityCode,
               netAmount: net.toString(),
+              baseComponents: {
+                neto: baseParts.NETO.toString(),
+                noGravado: baseParts.NO_GRAVADO.toString(),
+                exento: baseParts.EXENTO.toString(),
+              },
               documentKind,
-              classificationHash: classification.snapshotHash,
+              classificationHash: classification!.snapshotHash,
             },
           });
         }
