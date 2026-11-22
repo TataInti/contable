@@ -13,6 +13,7 @@ import {
   renderBandeja,
   rutaBandeja,
 } from "../StudyBandeja.pruebas";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -48,7 +49,7 @@ function fallido() {
 }
 
 function elegirMotivo(dialog: HTMLElement) {
-  fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "ILLEGIBLE" } });
+  cambiarValor(within(dialog).getByRole("combobox"), "ILLEGIBLE");
 }
 
 afterEach(() => {

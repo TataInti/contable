@@ -16,6 +16,7 @@ import {
   periodoIibbDemo,
   rutasDemo,
 } from "./datosDemoLegajo";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -199,7 +200,7 @@ describe("Legajo · registrar pago (K7)", () => {
     renderLegajo();
     await abrirCalculo();
     const dialogo = await abrirPago();
-    fireEvent.change(within(dialogo).getByLabelText("Importe"), { target: { value: "" } });
+    cambiarValor(within(dialogo).getByLabelText("Importe"), "");
     expect(within(dialogo).getByRole("button", { name: "Registrar pago" })).toBeDisabled();
   });
 
@@ -345,7 +346,7 @@ describe("Legajo · pago y presentación, accesibilidad mínima (Foco 2.2b)", ()
     await abrirCalculo();
     const dialogo = await abrirPago();
     expect(dialogo.querySelectorAll(".ds-button--primary")).toHaveLength(1);
-    fireEvent.change(within(dialogo).getByLabelText("Importe"), { target: { value: "" } });
+    cambiarValor(within(dialogo).getByLabelText("Importe"), "");
     expect(within(dialogo).getByRole("button", { name: "Registrar pago" })).toBeDisabled();
     expect(within(dialogo).getByText("Indicá el importe del pago.")).toBeInTheDocument();
   });

@@ -13,6 +13,7 @@ import {
   rutaActual,
   seleccionarCliente,
 } from "./clientes.testutil";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -165,7 +166,7 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
     ]);
     expect(estado.value).toBe("ACTIVE");
 
-    fireEvent.change(estado, { target: { value: "ARCHIVED" } });
+    cambiarValor(estado, "ARCHIVED");
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar estado" }));
 
     await waitFor(() =>

@@ -5,6 +5,7 @@ import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { demoContext, makeDemoDetail, makeDemoVersion, mockDemoApi, renderDemoReglas } from "./datosDemoReglas";
 import type { RuleVersion } from "./tipos";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -131,8 +132,8 @@ describe("Reglas fiscales — vencimientos y fuentes (K7)", () => {
     const section = await seccion("Vencimientos");
     fireEvent.click(within(section).getByRole("button", { name: "Agregar vencimiento" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Día del mes"), { target: { value: "20" } });
-    fireEvent.change(within(dialog).getByLabelText("Terminación de CUIT"), { target: { value: " 9 " } });
+    cambiarValor(within(dialog).getByLabelText("Día del mes"), "20");
+    cambiarValor(within(dialog).getByLabelText("Terminación de CUIT"), " 9 ");
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar vencimiento" }));
 
     await waitFor(() =>
@@ -156,8 +157,8 @@ describe("Reglas fiscales — vencimientos y fuentes (K7)", () => {
     const section = await seccion("Fuentes normativas");
     fireEvent.click(within(section).getByRole("button", { name: "Agregar fuente" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Título"), { target: { value: "  Demo · Ley 1  " } });
-    fireEvent.change(within(dialog).getByLabelText("URL"), { target: { value: "https://demo.invalid/ley" } });
+    cambiarValor(within(dialog).getByLabelText("Título"), "  Demo · Ley 1  ");
+    cambiarValor(within(dialog).getByLabelText("URL"), "https://demo.invalid/ley");
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar fuente" }));
 
     await waitFor(() =>

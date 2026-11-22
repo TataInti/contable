@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { api, ApiError } from "../lib/api";
 import { StudyBandeja } from "./StudyBandeja";
+import { cambiarValor } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 let testQueryClient: QueryClient | null = null;
@@ -213,7 +214,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     expect(screen.queryByLabelText("time")).toBeNull();
 
     const cuit = screen.getByLabelText("CUIT emisor");
-    fireEvent.change(cuit, { target: { value: "20123456780" } });
+    cambiarValor(cuit, "20123456780");
     fireEvent.blur(cuit);
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(
@@ -250,7 +251,7 @@ describe("StudyBandeja — revisión de extracción", () => {
 
       await openExtraction();
       const control = screen.getByLabelText(label);
-      fireEvent.change(control, { target: { value: input } });
+      cambiarValor(control, input);
       fireEvent.blur(control);
 
       await waitFor(() =>
@@ -282,7 +283,7 @@ describe("StudyBandeja — revisión de extracción", () => {
 
       await openExtraction();
       const control = screen.getByLabelText(label);
-      fireEvent.change(control, { target: { value: input } });
+      cambiarValor(control, input);
       if (error) expect(await screen.findByText(error)).toBeTruthy();
       fireEvent.blur(control);
 
@@ -307,7 +308,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     await openExtraction();
     const control = screen.getByLabelText("Alícuota de IVA") as HTMLInputElement;
     expect(control.type).toBe("text");
-    fireEvent.change(control, { target: { value: "21 por ciento" } });
+    cambiarValor(control, "21 por ciento");
     fireEvent.blur(control);
 
     await waitFor(() =>
@@ -446,7 +447,7 @@ describe("StudyBandeja — revisión de extracción", () => {
     expect(
       (screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled,
     ).toBe(true);
-    fireEvent.change(screen.getByLabelText("Total"), { target: { value: "1210.00" } });
+    cambiarValor(screen.getByLabelText("Total"), "1210.00");
     await waitFor(() =>
       expect(
         (screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled,

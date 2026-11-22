@@ -11,6 +11,7 @@ import {
   mockDemoApi,
   renderDemoReglas,
 } from "./datosDemoReglas";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -61,7 +62,7 @@ describe("Reglas fiscales — control profesional (K8)", () => {
     expect(aprobar.disabled).toBe(true);
     expect(screen.getByText("Seleccioná la matrícula profesional para habilitar la aprobación.")).toBeTruthy();
 
-    fireEvent.change(matricula, { target: { value: "cred-1" } });
+    cambiarValor(matricula, "cred-1");
     expect(aprobar.disabled).toBe(false);
     fireEvent.click(aprobar);
 

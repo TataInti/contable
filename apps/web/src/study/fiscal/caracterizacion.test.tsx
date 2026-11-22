@@ -11,6 +11,7 @@ import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { formatearRango } from "../../lib/formatoFechas";
 import { StudyOnboardingFiscal } from "../StudyOnboardingFiscal";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -263,14 +264,14 @@ describe("Caracterización · Configuración fiscal: acciones y cajones (F3 a F7
       montar({ datos: { perfiles: [perfilActivo], regimenes: [regimenIva] } });
       fireEvent.click(await screen.findByRole("button", { name: "Crear nueva versión" }));
       const perfil = await screen.findByRole("dialog", { name: "Crear nueva versión del perfil" });
-      fireEvent.change(await screen.findByLabelText("Vigencia desde"), { target: { value: "2026-09-15" } });
+      cambiarValor(await screen.findByLabelText("Vigencia desde"), "2026-09-15");
       fireEvent.click(within(perfil).getByRole("button", { name: "Cancelar" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
       fireEvent.click(pestana(/Regímenes/));
       fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
       const cajon = await screen.findByRole("dialog", { name: "Registrar inscripción" });
-      fireEvent.change(cajon.querySelector("#reg-regime") as HTMLSelectElement, { target: { value: "reg-iva" } });
+      cambiarValor(cajon.querySelector("#reg-regime") as HTMLSelectElement, "reg-iva");
       fireEvent.click(within(cajon).getByRole("button", { name: "Registrar inscripción" }));
       // cambió con D7A-5 / corte 1F (vigencia propia en el cajón de inscripción)
       await waitFor(() =>
@@ -290,7 +291,7 @@ describe("Caracterización · Configuración fiscal: acciones y cajones (F3 a F7
       .mockResolvedValueOnce({ label: "Octubre 2026", regimes: 3, periodsCreated: 0, obligationsCreated: 0 } as never);
     montar({ toasts: true });
     fireEvent.click(await screen.findByRole("tab", { name: /Períodos y obligaciones/ }));
-    fireEvent.change(document.querySelector("input[type='month']") as HTMLInputElement, { target: { value: "2026-10" } });
+    cambiarValor(document.querySelector("input[type='month']") as HTMLInputElement, "2026-10");
     fireEvent.click(screen.getByRole("button", { name: "Abrir mes" }));
     // vigente: cambia con D7A-3 (confirmación de «Abrir mes»)
     await waitFor(() =>
@@ -413,9 +414,9 @@ describe("Caracterización · Configuración fiscal: cajones y utilidades (F12 a
     fireEvent.click(await screen.findByRole("tab", { name: /Períodos y obligaciones/ }));
     fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
     const cajon = await screen.findByRole("dialog", { name: "Crear período fiscal" });
-    fireEvent.change(cajon.querySelector("#per-tax-type") as HTMLSelectElement, { target: { value: "tax-1" } });
-    fireEvent.change(cajon.querySelector("#per-start") as HTMLInputElement, { target: { value: "2026-10-01" } });
-    fireEvent.change(cajon.querySelector("#per-end") as HTMLInputElement, { target: { value: "2026-10-31" } });
+    cambiarValor(cajon.querySelector("#per-tax-type") as HTMLSelectElement, "tax-1");
+    cambiarValor(cajon.querySelector("#per-start") as HTMLInputElement, "2026-10-01");
+    cambiarValor(cajon.querySelector("#per-end") as HTMLInputElement, "2026-10-31");
     fireEvent.click(within(cajon).getByRole("button", { name: "Crear período" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(

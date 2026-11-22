@@ -12,6 +12,7 @@ import {
   mockDemoApi,
   renderDemoReglas,
 } from "./datosDemoReglas";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -147,7 +148,7 @@ describe("Reglas fiscales — editor de alícuotas (K6)", () => {
     );
     renderDemoReglas();
 
-    fireEvent.change(await screen.findByLabelText("Actividad de la fila 1"), { target: { value: "__all__" } });
+    cambiarValor(await screen.findByLabelText("Actividad de la fila 1"), "__all__");
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
 
     await waitFor(() =>
@@ -172,7 +173,7 @@ describe("Reglas fiscales — editor de alícuotas (K6)", () => {
     );
     renderDemoReglas();
 
-    fireEvent.change(await screen.findByLabelText("Jurisdicción de la fila 1"), { target: { value: "__all__" } });
+    cambiarValor(await screen.findByLabelText("Jurisdicción de la fila 1"), "__all__");
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
 
     await waitFor(() =>
@@ -236,7 +237,7 @@ describe("Reglas fiscales — editor de alícuotas (K6)", () => {
     mockDemoApi(makeDemoDetail(), conTipos([kindActivity]));
     renderDemoReglas();
 
-    fireEvent.change(await screen.findByLabelText("Tipo de regla de la fila 1"), { target: { value: "" } });
+    cambiarValor(await screen.findByLabelText("Tipo de regla de la fila 1"), "");
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
 
     const error = await screen.findByText("Seleccioná un tipo de regla.");

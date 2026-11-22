@@ -9,6 +9,7 @@ import type { ClientContextValue } from "../context/ClientContext";
 import { ApiError, api, downloadFile } from "../lib/api";
 import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
 import { fiscalBooksSummaryUrl } from "./fiscalBooksExport";
+import { cambiarValor } from "../test/elegirOpcion";
 
 // Datos sintéticos rotulados (cliente, período y comprobantes de prueba del corte 7b).
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -154,9 +155,9 @@ describe("Exportar libros en el Legajo", () => {
     await openPanel();
     await waitForDownloadEnabled();
 
-    fireEvent.change(screen.getByLabelText("Formato"), { target: { value: "csv" } });
-    fireEvent.change(screen.getByLabelText("Ordenar por"), { target: { value: "total" } });
-    fireEvent.change(screen.getByLabelText("Sentido del orden"), { target: { value: "desc" } });
+    cambiarValor(screen.getByLabelText("Formato"), "csv");
+    cambiarValor(screen.getByLabelText("Ordenar por"), "total");
+    cambiarValor(screen.getByLabelText("Sentido del orden"), "desc");
     fireEvent.click(screen.getByLabelText("Exento"));
     fireEvent.click(downloadButton());
 
@@ -204,7 +205,7 @@ describe("Exportar libros en el Legajo", () => {
     renderAction();
     await openPanel();
 
-    fireEvent.change(screen.getByLabelText("Libro"), { target: { value: "sales" } });
+    cambiarValor(screen.getByLabelText("Libro"), "sales");
 
     expect(await screen.findByText("No hay comprobantes aprobados para este libro")).toBeTruthy();
     expect(downloadButton().disabled).toBe(true);

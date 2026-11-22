@@ -12,6 +12,7 @@ import {
   mockDemoApi,
   renderDemoReglas,
 } from "./datosDemoReglas";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -60,10 +61,10 @@ describe("Reglas fiscales — cajón Nuevo paquete (K4)", () => {
     expect(submit.disabled).toBe(true);
     expect(within(dialog).getByText(/Completá código, nombre y régimen/)).toBeTruthy();
 
-    fireEvent.change(within(dialog).getByLabelText("Código"), { target: { value: "  demo-ri " } });
-    fireEvent.change(within(dialog).getByLabelText("Nombre"), { target: { value: "  Demo · Paquete de prueba  " } });
+    cambiarValor(within(dialog).getByLabelText("Código"), "  demo-ri ");
+    cambiarValor(within(dialog).getByLabelText("Nombre"), "  Demo · Paquete de prueba  ");
     expect(submit.disabled).toBe(true);
-    fireEvent.change(within(dialog).getByLabelText("Régimen"), { target: { value: "regime-1" } });
+    cambiarValor(within(dialog).getByLabelText("Régimen"), "regime-1");
     expect(submit.disabled).toBe(false);
     expect(within(dialog).queryByText(/Completá código, nombre y régimen/)).toBeNull();
 
@@ -136,7 +137,7 @@ describe("Reglas fiscales — cajones de versión (K5)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Crear primera versión" }));
     const dialog = await screen.findByRole("dialog");
     const date = within(dialog).getByLabelText("Vigencia desde") as HTMLInputElement;
-    fireEvent.change(date, { target: { value: "1800-01-01" } });
+    cambiarValor(date, "1800-01-01");
     fireEvent.submit(date.closest("form")!);
 
     expect(await within(dialog).findByText("El año debe estar entre 1900 y 2100.")).toBeTruthy();
@@ -221,7 +222,7 @@ describe("Reglas fiscales — cajones de versión (K5)", () => {
     const dialog = await screen.findByRole("dialog");
     const select = (await within(dialog).findByLabelText("Opción de cálculo")) as HTMLSelectElement;
     expect(select.value).toBe("engine-demo-current");
-    fireEvent.change(select, { target: { value: "engine-demo-legacy" } });
+    cambiarValor(select, "engine-demo-legacy");
     fireEvent.click(within(dialog).getByRole("button", { name: "Crear primera versión" }));
 
     await waitFor(() =>
@@ -246,7 +247,7 @@ describe("Reglas fiscales — cajones de versión (K5)", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Crear a partir de este" }));
     const dialog = await screen.findByRole("dialog");
     const date = within(dialog).getByLabelText("Nueva vigencia desde") as HTMLInputElement;
-    fireEvent.change(date, { target: { value: "2027-03-01" } });
+    cambiarValor(date, "2027-03-01");
     fireEvent.click(within(dialog).getByRole("button", { name: "Crear borrador y editar" }));
 
     expect(await within(dialog).findByText("No se pudo crear el borrador demo.")).toBeTruthy();
@@ -286,9 +287,9 @@ describe("Reglas fiscales — pie de los cajones (Foco 2.7a)", () => {
     const dialog = await screen.findByRole("dialog");
     expectPieDelCajon(dialog, "Crear paquete", /Completá código, nombre y régimen/);
 
-    fireEvent.change(within(dialog).getByLabelText("Código"), { target: { value: "DEMO" } });
-    fireEvent.change(within(dialog).getByLabelText("Nombre"), { target: { value: "Demo" } });
-    fireEvent.change(within(dialog).getByLabelText("Régimen"), { target: { value: "regime-1" } });
+    cambiarValor(within(dialog).getByLabelText("Código"), "DEMO");
+    cambiarValor(within(dialog).getByLabelText("Nombre"), "Demo");
+    cambiarValor(within(dialog).getByLabelText("Régimen"), "regime-1");
     expectPieDelCajon(dialog, "Crear paquete", null);
     expect(within(dialog).queryByText(/Completá código, nombre y régimen/)).toBeNull();
   });
@@ -377,7 +378,7 @@ describe("Reglas fiscales — opción de cálculo al copiar (Foco 2.7a)", () => 
     }
     expect(within(dialog).queryByText(/La nueva versión va a calcular con/)).toBeNull();
 
-    fireEvent.change(select, { target: { value: "engine-demo-legacy" } });
+    cambiarValor(select, "engine-demo-legacy");
     const consecuencia = within(dialog).getByText(
       "La nueva versión va a calcular con Demo · IVA RI anterior en lugar de Demo · IVA RI vigente.",
     );

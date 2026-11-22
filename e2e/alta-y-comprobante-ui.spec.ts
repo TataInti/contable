@@ -153,7 +153,7 @@ async function createJurisdiction(page: Page, jurisdiction: { code: string; name
   await page.getByRole("button", { name: "Nueva jurisdicción" }).click();
   await page.locator("#jurisdiction-code").fill(jurisdiction.code);
   await page.locator("#jurisdiction-name").fill(jurisdiction.name);
-  await page.locator("#jurisdiction-kind").selectOption(jurisdiction.kind);
+  await pickOption(page.locator("#jurisdiction-kind"), "Municipio");
   await pickOption(page.locator("#jurisdiction-parent"), jurisdiction.parent);
   await mutating(page, "/tax/jurisdictions", () => page.getByRole("button", { name: "Crear jurisdicción", exact: true }).click());
 }
@@ -336,7 +336,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.locator("#client-legal-name").fill(data.client.legalName);
     await page.locator("#client-trade-name").fill(data.client.tradeName);
     await page.locator("#client-cuit").fill(data.client.cuit);
-    await page.locator("#client-vat-condition").selectOption({ index: 1 });
+    await pickOption(page.locator("#client-vat-condition"), "Responsable inscripto");
     await pickOption(page.locator("#client-province"), "Tucumán");
     await pickOption(page.locator("#client-legal-form"), "Sociedad de responsabilidad limitada (SRL)");
     await page.locator(".action-drawer").getByRole("button", { name: "Guardar cliente" }).click(); // vigente: cambia con decisión de Inti (16-nov)
@@ -438,7 +438,11 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.getByRole("button", { name: /Cargar datos a mano/ }).first().click();
     const dialog = page.getByRole("dialog", { name: "Cargar datos a mano" });
     // Qué datos admite la carga manual (para comparar con lo que dice el ticket: neto, IVA 21 %, total).
-    const offered = await dialog.getByLabel("Campo de la fila 1").locator("option").allTextContents();
+    const campo = dialog.getByLabel("Campo de la fila 1");
+    await campo.click();
+    await expect(dialog.getByRole("listbox")).toBeVisible();
+    const offered = await dialog.getByRole("listbox").getByRole("option").allTextContents();
+    await campo.press("Escape");
     test.info().annotations.push({ type: "campos de la carga manual", description: offered.filter(Boolean).join(" | ") });
     const rows: Array<[string, string]> = [
       ["Fecha", data.ticket.isoDate],
@@ -450,7 +454,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
       if (index > 0) await dialog.getByRole("button", { name: /Agregar fila/ }).click();
       await pickOption(dialog.getByLabel(`Campo de la fila ${index + 1}`), field);
       const control = dialog.getByLabel(`Valor de la fila ${index + 1}`);
-      if ((await control.evaluate((element) => element.tagName)) === "SELECT") await control.selectOption(value);
+      if ((await control.getAttribute("role")) === "combobox") await pickOption(control, value);
       else await control.fill(value);
     }
     await mutating(page, "/extraction", () => dialog.getByRole("button", { name: "Guardar", exact: true }).click());
@@ -684,7 +688,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await expect(portal).toHaveURL(/\/portal/);
     await portal.goto("/portal/upload");
     await portal.locator('input[type="file"]').setInputFiles(fixture);
-    await portal.locator(".portal-upload__category-select").selectOption("ACUSE");
+    await pickOption(portal.locator(".portal-upload__category-select"), "Acuse de presentación");
     await mutating(portal, "/complete", () => portal.getByRole("button", { name: "Subir documento" }).click());
     await portalContext.close();
   });

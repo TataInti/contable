@@ -17,6 +17,7 @@ import {
   mockDemoApi,
   renderDemoReglas,
 } from "./datosDemoReglas";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 // Foco 3.2a: estados y errores de Reglas fiscales (R03; D-R3-3 y D-R3-9).
 // Cada prueba cubre un punto de la sección 7d del informe: el estado antes de responder,
@@ -341,7 +342,7 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     fireEvent.change(within(dialog).getByLabelText("Nombre"), {
       target: { value: "Demo nuevo" },
     });
-    fireEvent.change(within(dialog).getByLabelText("Régimen"), { target: { value: "regime-1" } });
+    cambiarValor(within(dialog).getByLabelText("Régimen"), "regime-1");
     fireEvent.click(within(dialog).getByRole("button", { name: "Crear paquete" }));
     expect(await within(dialog).findByText("Error de paquete Demo")).toBeTruthy();
   });
@@ -353,7 +354,7 @@ describe("Reglas fiscales — errores de acción junto a su botón, sin error al
     fireEvent.click(await pestana(/Vencimientos/));
     fireEvent.click(await screen.findByRole("button", { name: "Agregar vencimiento" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText("Día del mes"), { target: { value: "20" } });
+    cambiarValor(within(dialog).getByLabelText("Día del mes"), "20");
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar vencimiento" }));
     expect(await within(dialog).findByText("Error de vencimiento Demo")).toBeTruthy();
   });

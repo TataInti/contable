@@ -10,6 +10,7 @@ import {
   mockApiDemo,
   renderizarAdministracion,
 } from "../pruebas/entornoDemo";
+import { cambiarValor } from "../../../test/elegirOpcion";
 
 const contexto = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -79,7 +80,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
     const enviar = within(cajon).getByRole("button", { name: "Crear usuario" }) as HTMLButtonElement;
     expect(enviar.disabled).toBe(true);
     expect(within(cajon).getByText("Ingresá nombre y correo para poder crear el usuario.")).toBeTruthy();
-    fireEvent.change(within(cajon).getByLabelText("Nombre"), { target: { value: "Demo Uno" } });
+    cambiarValor(within(cajon).getByLabelText("Nombre"), "Demo Uno");
     fireEvent.change(within(cajon).getByLabelText("Correo"), {
       target: { value: "demo.uno@example.com" },
     });
@@ -186,7 +187,7 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
       target: { value: "invitado@example.com" },
     });
     expect(enviar.disabled).toBe(false);
-    fireEvent.change(within(cajon).getByLabelText("Rol"), { target: { value: "READONLY" } });
+    cambiarValor(within(cajon).getByLabelText("Rol"), "READONLY");
     fireEvent.click(enviar);
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/firms/firm-a/clients/client-a/portal-invitations", {
@@ -238,8 +239,8 @@ describe("Cajones de alta y edición (caracterización K7)", () => {
   it("editar usuario: valida nombre y correo por campo y no guarda", async () => {
     renderizarAdministracion();
     const cajon = await abrirEdicionRevisora();
-    fireEvent.change(within(cajon).getByLabelText("Nombre"), { target: { value: "   " } });
-    fireEvent.change(within(cajon).getByLabelText("Correo"), { target: { value: "sin-arroba" } });
+    cambiarValor(within(cajon).getByLabelText("Nombre"), "   ");
+    cambiarValor(within(cajon).getByLabelText("Correo"), "sin-arroba");
     fireEvent.submit(document.getElementById("member-edit-form") as HTMLFormElement);
     expect(await within(cajon).findByText("Ingresá el nombre")).toBeTruthy();
     expect(

@@ -16,8 +16,8 @@ export interface SearchSelectGroup {
 
 export interface SearchSelectProps {
   label: string;
-  options?: SearchSelectOption[];
-  groups?: SearchSelectGroup[];
+  options?: readonly SearchSelectOption[];
+  groups?: readonly SearchSelectGroup[];
   value: string;
   onChange: (value: string) => void;
   id?: string;
@@ -63,10 +63,10 @@ export function SearchSelect({
   const listboxId = `${inputId}-listbox`;
   const allOptions = useMemo(() => [...options, ...groups.flatMap((group) => group.options)], [options, groups]);
   const selected = allOptions.find((option) => option.value === value);
-  const historicalOption = value && !selected
+  const historicalOption: SearchSelectOption | null = value && !selected
     ? { value, label: `${value} — valor histórico (conservado)` }
     : null;
-  const availableOptions = historicalOption ? [...options, historicalOption] : options;
+  const availableOptions: readonly SearchSelectOption[] = historicalOption ? [...options, historicalOption] : options;
   const selectedLabel = selected?.label ?? historicalOption?.label;
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -120,6 +120,7 @@ export function SearchSelect({
       id={`${listboxId}-option-${index}`}
       key={option.value}
       role="option"
+      data-value={option.value}
       aria-selected={option.value === value}
       aria-disabled={option.disabled || undefined}
       className={`ds-search-select__option${option.disabled ? " is-disabled" : ""}${activeIndex === index ? " is-active" : ""}`}
@@ -165,7 +166,7 @@ export function SearchSelect({
       <input type="hidden" name={name} value={value} />
       {open ? (
         <ul id={listboxId} role="listbox" className="ds-search-select__listbox">
-          {allowEmpty ? <li role="option" aria-selected={!value} className="ds-search-select__option" onMouseDown={(event) => event.preventDefault()} onClick={() => select("")}>{placeholder}</li> : null}
+          {allowEmpty ? <li role="option" data-value="" aria-selected={!value} className="ds-search-select__option" onMouseDown={(event) => event.preventDefault()} onClick={() => select("")}>{placeholder}</li> : null}
           {flatOptions}
           {groupedOptions}
           {!visibleOptions.length ? <li className="ds-search-select__empty">No hay opciones que coincidan.</li> : null}

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api, ApiError, uploadToSignedUrl } from "../../lib/api";
 import { StudyBandeja } from "../StudyBandeja";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 // Caracterización del cajón «Nuevo documento» (Foco 7b.1, pruebas K3, K4 y K5).
 // Fija lo que hace hoy la pantalla antes y después de mover la carga a su archivo.
@@ -129,7 +130,7 @@ function archivo(nombre: string, tipo: string, bytes = [37, 80, 68, 70], tamanio
 }
 
 function seleccionarItem(id: string) {
-  fireEvent.change(selectorItem()!, { target: { value: id } });
+  cambiarValor(selectorItem()!, id);
 }
 
 async function abrirCajonDeCarga() {

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { api } from "../lib/api";
 import { StudyCatalogosFiscales } from "./StudyCatalogosFiscales";
+import { cambiarValor } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -305,9 +306,9 @@ describe("StudyCatalogosFiscales", () => {
     renderCatalogs();
 
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo organismo" }));
-    fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "E2E_SYN_AUTH" } });
-    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Autoridad sintética E2E" } });
-    fireEvent.change(screen.getByLabelText("Jurisdicción"), { target: { value: jurisdiction.id } });
+    cambiarValor(await screen.findByLabelText("Código"), "E2E_SYN_AUTH");
+    cambiarValor(screen.getByLabelText("Nombre"), "Autoridad sintética E2E");
+    cambiarValor(screen.getByLabelText("Jurisdicción"), jurisdiction.id);
     fireEvent.click(screen.getByRole("button", { name: "Crear organismo" }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/tax/authorities", {
@@ -319,18 +320,18 @@ describe("StudyCatalogosFiscales", () => {
 
     await openTab(/^Regímenes/);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo régimen" }));
-    fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "E2E_SYN_REGIME" } });
-    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Régimen sintético E2E" } });
-    fireEvent.change(screen.getByLabelText("Impuesto"), { target: { value: taxType.id } });
+    cambiarValor(await screen.findByLabelText("Código"), "E2E_SYN_REGIME");
+    cambiarValor(screen.getByLabelText("Nombre"), "Régimen sintético E2E");
+    cambiarValor(screen.getByLabelText("Impuesto"), taxType.id);
     expect((screen.getByLabelText("Familia de cálculo") as HTMLSelectElement).value).toBe(family.id);
-    fireEvent.change(screen.getByLabelText("Jurisdicción"), { target: { value: jurisdiction.id } });
-    fireEvent.change(screen.getByLabelText("Organismo recaudador"), { target: { value: "authority-e2e" } });
+    cambiarValor(screen.getByLabelText("Jurisdicción"), jurisdiction.id);
+    cambiarValor(screen.getByLabelText("Organismo recaudador"), "authority-e2e");
     // La coherencia organismo ↔ jurisdicción se confirma en vivo, antes de enviar.
     expect(await screen.findByText(/Coherente:/)).toBeTruthy();
     const moduleSelect = screen.getByLabelText("Módulo") as HTMLSelectElement;
     expect(moduleSelect.value).toBe("");
     expect(within(moduleSelect).getByRole("option", { name: "Siempre habilitado" })).toBeTruthy();
-    fireEvent.change(moduleSelect, { target: { value: taxRegimeModules[1]!.id } });
+    cambiarValor(moduleSelect, taxRegimeModules[1]!.id);
     fireEvent.click(screen.getByRole("button", { name: "Crear régimen" }));
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/tax/regimes", {
@@ -374,7 +375,7 @@ describe("StudyCatalogosFiscales", () => {
     expect(moduleSelect.value).toBe("");
     const save = screen.getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
-    fireEvent.change(moduleSelect, { target: { value: taxRegimeModules[0]!.id } });
+    cambiarValor(moduleSelect, taxRegimeModules[0]!.id);
     expect(save.disabled).toBe(false);
     fireEvent.click(save);
     await waitFor(() =>
@@ -392,10 +393,10 @@ describe("StudyCatalogosFiscales", () => {
     expect(screen.getByRole("tab", { name: /Tipos de impuesto/ })).toBeTruthy();
     await openTab(/^Jurisdicciones/);
     fireEvent.click(await screen.findByRole("button", { name: "Nueva jurisdicción" }));
-    fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "AR-UI-P" } });
-    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Provincia UI" } });
-    fireEvent.change(screen.getByLabelText("Nivel"), { target: { value: "PROVINCIAL" } });
-    fireEvent.change(screen.getByLabelText("Jurisdicción padre"), { target: { value: jurisdiction.id } });
+    cambiarValor(await screen.findByLabelText("Código"), "AR-UI-P");
+    cambiarValor(screen.getByLabelText("Nombre"), "Provincia UI");
+    cambiarValor(screen.getByLabelText("Nivel"), "PROVINCIAL");
+    cambiarValor(screen.getByLabelText("Jurisdicción padre"), jurisdiction.id);
     fireEvent.click(screen.getByRole("button", { name: "Crear jurisdicción" }));
 
     await waitFor(() =>
@@ -420,12 +421,12 @@ describe("StudyCatalogosFiscales", () => {
 
     await openTab(/^Tipos de impuesto/);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo tipo de impuesto" }));
-    fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "UI-IIBB" } });
-    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Impuesto provincial propio" } });
+    cambiarValor(await screen.findByLabelText("Código"), "UI-IIBB");
+    cambiarValor(screen.getByLabelText("Nombre"), "Impuesto provincial propio");
     const familySelect = await screen.findByLabelText("Familia por defecto") as HTMLSelectElement;
     expect(familySelect.required).toBe(false);
     expect(within(familySelect).getByRole("option", { name: family.label })).toBeTruthy();
-    fireEvent.change(familySelect, { target: { value: family.id } });
+    cambiarValor(familySelect, family.id);
     fireEvent.click(screen.getByRole("button", { name: "Crear tipo de impuesto" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/tax/types", {
@@ -441,8 +442,8 @@ describe("StudyCatalogosFiscales", () => {
     renderCatalogs();
     await openTab(/^Tipos de impuesto/);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo tipo de impuesto" }));
-    fireEvent.change(await screen.findByLabelText("Código"), { target: { value: "UI-SIN-FAMILIA" } });
-    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Impuesto sin familia predeterminada" } });
+    cambiarValor(await screen.findByLabelText("Código"), "UI-SIN-FAMILIA");
+    cambiarValor(screen.getByLabelText("Nombre"), "Impuesto sin familia predeterminada");
     expect((await screen.findByLabelText("Familia por defecto") as HTMLSelectElement).value).toBe("");
     fireEvent.click(screen.getByRole("button", { name: "Crear tipo de impuesto" }));
 
@@ -651,9 +652,9 @@ describe("StudyCatalogosFiscales", () => {
     await openTab(/^Actividades económicas/);
 
     const stateFilter = await screen.findByRole("combobox", { name: "Filtrar por estado" }) as HTMLSelectElement;
-    fireEvent.change(stateFilter, { target: { value: "inactive" } });
+    cambiarValor(stateFilter, "inactive");
     const search = screen.getByRole("searchbox") as HTMLInputElement;
-    fireEvent.change(search, { target: { value: "sin coincidencia" } });
+    cambiarValor(search, "sin coincidencia");
 
     expect(await screen.findByText("Ninguna actividad coincide con el filtro")).toBeTruthy();
     expect(screen.queryByText("Todavía no hay actividades económicas")).toBeNull();
@@ -764,7 +765,7 @@ describe("StudyCatalogosFiscales", () => {
     renderCatalogs();
 
     expect(await screen.findByText("Organismo beta")).toBeTruthy();
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "alfa" } });
+    cambiarValor(screen.getByRole("searchbox"), "alfa");
     expect(screen.queryByText("Organismo beta")).toBeNull();
 
     fireEvent.click(screen.getByText("Organismo alfa"));
@@ -998,14 +999,14 @@ describe("StudyCatalogosFiscales", () => {
 
     fireEvent.click(await screen.findByText("Comercio mayorista"));
     fireEvent.click(await screen.findByRole("button", { name: "Editar" }));
-    fireEvent.change(screen.getByLabelText("Código"), { target: { value: "CM03-02-V2" } });
+    cambiarValor(screen.getByLabelText("Código"), "CM03-02-V2");
     fireEvent.change(document.getElementById("activity-edit-jurisdiction") as HTMLSelectElement, {
       target: { value: anotherJurisdiction.id },
     });
     fireEvent.change(await screen.findByLabelText("Nombre"), {
       target: { value: "Comercio mayorista ampliado" },
     });
-    fireEvent.change(screen.getByLabelText("Fuente"), { target: { value: "" } });
+    cambiarValor(screen.getByLabelText("Fuente"), "");
     fireEvent.change(screen.getByLabelText("Vigencia hasta"), {
       target: { value: "2027-06-30" },
     });

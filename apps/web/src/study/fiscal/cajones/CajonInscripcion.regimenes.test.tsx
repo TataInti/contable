@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { CajonInscripcion } from "./CajonInscripcion";
 import { PestanaRegimenes } from "../pestanas/PestanaRegimenes";
 import { SeccionRegimenes } from "../../resumen/secciones/SeccionRegimenes";
+import { cambiarValor } from "../../../test/elegirOpcion";
 
 const regimenes = [
   { id: "municipal", code: "TEM_SMT", name: "TEM San Miguel de Tucumán", isActive: true, taxType: { id: "tem", name: "Tasa de Actividades Económicas (TEM)", isActive: true }, jurisdiction: { id: "smt", name: "San Miguel de Tucumán", kind: "MUNICIPAL", isActive: true } },
@@ -35,7 +36,7 @@ describe("regímenes legibles", () => {
 
   it("muestra la ayuda del régimen seleccionado", () => {
     render(<SelectorFixture />);
-    fireEvent.change(screen.getByLabelText("Régimen"), { target: { value: "provincial" } });
+    cambiarValor(screen.getByLabelText("Régimen"), "provincial");
     expect(screen.getByText("Impuesto: Ingresos Brutos · Jurisdicción: Provincia de Tucumán")).toBeTruthy();
   });
 

@@ -17,6 +17,7 @@ import {
   periodoIibbDemo,
   rutasDemo,
 } from "./datosDemoLegajo";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const ctx = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 vi.mock("../../context/ClientContext", () => ({ useClientContext: () => ctx.current }));
@@ -165,7 +166,7 @@ function completar(dialogo: HTMLElement, documento: string | null = DJ) {
     "Total a pagar": "1300,5",
   };
   for (const [etiqueta, valor] of Object.entries(importes)) {
-    fireEvent.change(within(dialogo).getByLabelText(etiqueta), { target: { value: valor } });
+    cambiarValor(within(dialogo).getByLabelText(etiqueta), valor);
   }
   if (documento)
     fireEvent.change(within(dialogo).getByLabelText("Documento de respaldo"), {
@@ -366,7 +367,7 @@ describe("Legajo · declaración jurada (5b-4a)", () => {
     const campo = within(await abrirDeclaracion()).getByLabelText("Impuesto determinado");
     // Tecleo real: el campo agrupa al cuarto dígito y el siguiente carácter llega como «1.3125».
     for (const tecleado of ["1", "13", "131", "1312", "1.3125"]) {
-      fireEvent.change(campo, { target: { value: tecleado } });
+      cambiarValor(campo, tecleado);
     }
     expect(campo).toHaveValue("13.125");
   });

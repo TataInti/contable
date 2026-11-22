@@ -66,7 +66,7 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await page.getByRole("button", { name: "Nueva jurisdicción" }).click();
     await page.locator("#jurisdiction-code").fill(data.jurisdiction.code);
     await page.locator("#jurisdiction-name").fill(data.jurisdiction.name);
-    await page.locator("#jurisdiction-kind").selectOption("NATIONAL");
+    await pickOption(page.locator("#jurisdiction-kind"), "Nación");
     await page.getByRole("button", { name: "Crear jurisdicción", exact: true }).click();
     await expect(seen(page, data.jurisdiction.code)).toBeVisible();
   });
@@ -150,7 +150,7 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await page.locator("#client-legal-name").fill(data.client.legalName);
     await page.locator("#client-trade-name").fill(data.client.tradeName);
     await page.locator("#client-cuit").fill(data.client.cuit);
-    await page.locator("#client-vat-condition").selectOption({ index: 1 });
+    await pickOption(page.locator("#client-vat-condition"), "Responsable inscripto");
     await pickOption(page.locator("#client-province"), "Tucumán");
     await pickOption(page.locator("#client-legal-form"), "Sociedad de responsabilidad limitada (SRL)");
     await page.getByRole("button", { name: "Guardar cliente" }).click(); // vigente: cambia con decisión de Inti (16-nov)

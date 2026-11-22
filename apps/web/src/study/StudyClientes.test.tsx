@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { ApiError, api, type ClientContact } from "../lib/api";
 import { StudyClientes } from "./StudyClientes";
+import { cambiarValor } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -178,7 +179,7 @@ describe("StudyClientes — ficha con catálogos", () => {
     const input = await screen.findByRole("textbox", {
       name: "Escribí la razón social exacta para confirmar",
     });
-    fireEvent.change(input, { target: { value: "Alfa Uno S.A." } });
+    cambiarValor(input, "Alfa Uno S.A.");
     fireEvent.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
 
     await waitFor(() =>
@@ -417,10 +418,10 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     for (const control of [vat, province, activity, legalForm]) {
       expect(control.tagName === "SELECT" || control.getAttribute("role") === "combobox").toBe(true);
     }
-    fireEvent.change(vat, { target: { value: "RESPONSABLE_INSCRIPTO" } });
+    cambiarValor(vat, "RESPONSABLE_INSCRIPTO");
     fireEvent.focus(province);
     fireEvent.click(screen.getByRole("option", { name: "Tucumán" }));
-    fireEvent.change(activity, { target: { value: "COMERCIO — Comercio" } });
+    cambiarValor(activity, "COMERCIO — Comercio");
     fireEvent.focus(legalForm);
     fireEvent.click(screen.getByRole("option", { name: "Sociedad anónima (SA)" }));
     fireEvent.click(screen.getByText("Guardar cambios"));
@@ -495,8 +496,8 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     renderClientes();
     fireEvent.click(screen.getByRole("button", { name: "Nuevo cliente" }));
 
-    fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Alta libre S.A." } });
-    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20111111112" } });
+    cambiarValor(screen.getByLabelText("Razón social"), "Alta libre S.A.");
+    cambiarValor(screen.getByLabelText("CUIT"), "20111111112");
     fireEvent.change(screen.getByLabelText("Condición frente al IVA"), {
       target: { value: "RESPONSABLE_INSCRIPTO" },
     });
@@ -537,13 +538,13 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     renderClientes();
     fireEvent.click(screen.getByRole("button", { name: "Nuevo cliente" }));
 
-    fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Alta libre S.A." } });
-    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20111111112" } });
+    cambiarValor(screen.getByLabelText("Razón social"), "Alta libre S.A.");
+    cambiarValor(screen.getByLabelText("CUIT"), "20111111112");
     const emailInput = screen.getByLabelText("Correo de contacto") as HTMLInputElement;
     expect(emailInput.type).toBe("email");
-    fireEvent.change(emailInput, { target: { value: "correo-inválido" } });
+    cambiarValor(emailInput, "correo-inválido");
     expect(emailInput.validity.typeMismatch).toBe(true);
-    fireEvent.change(emailInput, { target: { value: "contacto@example.com" } });
+    cambiarValor(emailInput, "contacto@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
 
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
@@ -582,9 +583,9 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     }) as never);
     renderClientes();
     fireEvent.click(screen.getByRole("button", { name: "Nuevo cliente" }));
-    fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Alta libre S.A." } });
-    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20111111112" } });
-    fireEvent.change(screen.getByLabelText("Correo de contacto"), { target: { value: "contacto@example.com" } });
+    cambiarValor(screen.getByLabelText("Razón social"), "Alta libre S.A.");
+    cambiarValor(screen.getByLabelText("CUIT"), "20111111112");
+    cambiarValor(screen.getByLabelText("Correo de contacto"), "contacto@example.com");
     fireEvent.click(screen.getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
 
     const alert = await screen.findByRole("alert");
@@ -735,11 +736,11 @@ describe("StudyClientes — cartera densa", () => {
     renderClientes();
     await screen.findByRole("table");
 
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "INACTIVE" } });
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "INACTIVE");
     expect(within(screen.getByRole("table")).getByText("Gamma Tres S.A.")).toBeTruthy();
     expect(within(screen.getByRole("table")).queryByText("Alfa Uno S.A.")).toBeNull();
 
-    fireEvent.change(screen.getByLabelText("Filtrar por estado"), { target: { value: "" } });
+    cambiarValor(screen.getByLabelText("Filtrar por estado"), "");
     fireEvent.change(screen.getByLabelText("Filtrar por condición IVA"), {
       target: { value: "RESPONSABLE_INSCRIPTO" },
     });
@@ -794,7 +795,7 @@ describe("StudyClientes — cartera densa", () => {
     fireEvent.change(screen.getByLabelText("Nombre comercial"), {
       target: { value: "Alfa Comercial" },
     });
-    fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20333333334" } });
+    cambiarValor(screen.getByLabelText("CUIT"), "20333333334");
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() =>
@@ -815,7 +816,7 @@ describe("StudyClientes — cartera densa", () => {
     fireEvent.click(within(detail).getByText("Más acciones"));
     fireEvent.click(within(detail).getByRole("button", { name: "Cambiar estado" }));
 
-    fireEvent.change(screen.getByLabelText("Estado"), { target: { value: "INACTIVE" } });
+    cambiarValor(screen.getByLabelText("Estado"), "INACTIVE");
     fireEvent.click(screen.getByRole("button", { name: "Guardar estado" }));
 
     await waitFor(() =>
@@ -876,23 +877,23 @@ describe("StudyClientes — cartera densa", () => {
     const detail = await screen.findByRole("complementary", { name: "Detalle de Alfa Uno S.A." });
 
     fireEvent.click(within(detail).getByRole("button", { name: "Nuevo contacto" }));
-    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Contacto Uno" } });
-    fireEvent.change(screen.getByLabelText("Función"), { target: { value: "Administración" } });
-    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "uno@example.com" } });
-    fireEvent.change(screen.getByLabelText("Teléfono"), { target: { value: "+54 11 1234-5678" } });
+    cambiarValor(screen.getByLabelText("Nombre"), "Contacto Uno");
+    cambiarValor(screen.getByLabelText("Función"), "Administración");
+    cambiarValor(screen.getByLabelText("Email"), "uno@example.com");
+    cambiarValor(screen.getByLabelText("Teléfono"), "+54 11 1234-5678");
     fireEvent.click(screen.getByLabelText("Contacto principal"));
     fireEvent.click(screen.getByRole("button", { name: "Guardar contacto" }));
     await screen.findByText("Contacto Uno");
 
     fireEvent.click(within(detail).getByRole("button", { name: "Nuevo contacto" }));
-    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Contacto Dos" } });
+    cambiarValor(screen.getByLabelText("Nombre"), "Contacto Dos");
     fireEvent.click(screen.getByLabelText("Contacto principal"));
     fireEvent.click(screen.getByRole("button", { name: "Guardar contacto" }));
     await screen.findByText("Contacto Dos");
     expect(within(detail).getAllByText("Principal")).toHaveLength(1);
 
     fireEvent.click(within(detail).getByRole("button", { name: "Editar contacto de Contacto Uno" }));
-    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Contacto Uno Editado" } });
+    cambiarValor(screen.getByLabelText("Nombre"), "Contacto Uno Editado");
     fireEvent.click(screen.getByRole("button", { name: "Guardar contacto" }));
     await screen.findByText("Contacto Uno Editado");
 

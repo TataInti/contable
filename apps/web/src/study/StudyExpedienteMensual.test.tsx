@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
 import { ApiError, api } from "../lib/api";
 import { StudyExpedienteMensual } from "./StudyExpedienteMensual";
+import { cambiarValor } from "../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -302,7 +303,7 @@ describe("StudyExpedienteMensual", () => {
       screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }),
       { target: { value: "Respaldo revisado y conciliado" } },
     );
-    fireEvent.change(evidence, { target: { value: "document-reviewed" } });
+    cambiarValor(evidence, "document-reviewed");
     const resolveButton = screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement;
     expect(resolveButton.disabled).toBe(false);
     fireEvent.click(resolveButton);

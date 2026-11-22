@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExtractedField } from "../lib/api";
 import { ManualExtractionFieldsDialog } from "./ManualExtractionFieldsDialog";
+import { cambiarValor } from "../test/elegirOpcion";
 
 function renderDialog(fields: ExtractedField[] = [], error: string | null = null) {
   const onSave = vi.fn();
@@ -160,13 +161,13 @@ describe("ManualExtractionFieldsDialog", () => {
     });
     const value = screen.getByRole("textbox", { name: "Valor de la fila 1" }) as HTMLInputElement;
     expect(value.inputMode).toBe("decimal");
-    fireEvent.change(value, { target: { value: "no es un importe" } });
+    cambiarValor(value, "no es un importe");
 
     const error = screen.getByText("Ingresá un importe, por ejemplo 1.234,56");
     expect(value.getAttribute("aria-describedby")).toBe(error.id);
     expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(true);
 
-    fireEvent.change(value, { target: { value: "1.234,56" } });
+    cambiarValor(value, "1.234,56");
     expect(screen.queryByText("Ingresá un importe, por ejemplo 1.234,56")).toBeNull();
     expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
@@ -215,29 +216,29 @@ describe("ManualExtractionFieldsDialog", () => {
     chooseField(5, "issueDate");
     const issueDate = screen.getByLabelText("Valor de la fila 5") as HTMLInputElement;
     expect(issueDate.type).toBe("date");
-    fireEvent.change(issueDate, { target: { value: "2026-11-12" } });
+    cambiarValor(issueDate, "2026-11-12");
     addRow();
     chooseField(6, "issuerTaxId");
     const issuerTaxId = screen.getByLabelText("Valor de la fila 6") as HTMLInputElement;
     expect(issuerTaxId.inputMode).toBe("numeric");
-    fireEvent.change(issuerTaxId, { target: { value: "30-12345678-9" } });
+    cambiarValor(issuerTaxId, "30-12345678-9");
     expect(issuerTaxId.value).toBe("30123456789");
     addRow();
     chooseField(7, "pointOfSale");
     const pointOfSale = screen.getByLabelText("Valor de la fila 7") as HTMLInputElement;
-    fireEvent.change(pointOfSale, { target: { value: "00a04" } });
+    cambiarValor(pointOfSale, "00a04");
     expect(pointOfSale.value).toBe("0004");
     addRow();
     chooseField(8, "cae");
     const cae = screen.getByLabelText("Valor de la fila 8") as HTMLInputElement;
-    fireEvent.change(cae, { target: { value: "75123456789012" } });
+    cambiarValor(cae, "75123456789012");
     expect(cae.inputMode).toBe("numeric");
     addRow();
     chooseField(9, "issuerName");
     const issuerName = screen.getByLabelText("Valor de la fila 9") as HTMLInputElement;
     expect(issuerName.type).toBe("text");
     expect(issuerName.inputMode).toBe("");
-    fireEvent.change(issuerName, { target: { value: "Proveedor S.A." } });
+    cambiarValor(issuerName, "Proveedor S.A.");
     fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(onSave).toHaveBeenCalledWith([
       { key: "issueDate", value: "2026-11-12" },

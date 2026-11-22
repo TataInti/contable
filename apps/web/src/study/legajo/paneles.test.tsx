@@ -10,6 +10,7 @@ import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { StudyExpedienteMensual } from "../StudyExpedienteMensual";
 import { CLIENTE_DEMO, FIRMA_DEMO, PERIODO_ELEGIDO_DEMO, rutasDemo } from "./datosDemoLegajo";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -256,7 +257,7 @@ describe("Legajo · cargar saldo inicial (K5)", () => {
     fireEvent.change(within(dialogo).getByLabelText("Período fiscal"), {
       target: { value: "period-iva" },
     });
-    fireEvent.change(within(dialogo).getByLabelText("Importe"), { target: { value: "1500" } });
+    cambiarValor(within(dialogo).getByLabelText("Importe"), "1500");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar saldo" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(`${BASE}/tax-credit-ledger/opening`, {
@@ -281,7 +282,7 @@ describe("Legajo · cargar saldo inicial (K5)", () => {
     fireEvent.change(within(dialogo).getByLabelText("Régimen"), {
       target: { value: "regime-a" },
     });
-    fireEvent.change(within(dialogo).getByLabelText("Importe"), { target: { value: "250" } });
+    cambiarValor(within(dialogo).getByLabelText("Importe"), "250");
     fireEvent.change(within(dialogo).getByLabelText("Documento de respaldo"), {
       target: { value: "doc-b" },
     });
@@ -308,7 +309,7 @@ describe("Legajo · editar saldo (K6)", () => {
     fireEvent.change(within(dialogo).getByLabelText("Monto vigente"), {
       target: { value: "" },
     });
-    fireEvent.change(within(dialogo).getByLabelText("Referencia"), { target: { value: "" } });
+    cambiarValor(within(dialogo).getByLabelText("Referencia"), "");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(`${BASE}/tax-credit-ledger/lot-a`, {

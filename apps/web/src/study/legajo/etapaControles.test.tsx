@@ -17,6 +17,7 @@ import {
   rutasDemo,
 } from "./datosDemoLegajo";
 import type { EvidenceDocument, Workpaper } from "./tipos";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -688,7 +689,7 @@ describe("Legajo · Controles: motivo, lugar de las acciones y diálogo de Eximi
       "aria-describedby",
       motivo.id,
     );
-    fireEvent.change(campo, { target: { value: "Diferencia menor" } });
+    cambiarValor(campo, "Diferencia menor");
     expect(nombres()).toEqual(["Resolver", "Eximir"]);
     expect(within(grupo).queryByRole("note")).toBeNull();
   });

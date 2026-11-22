@@ -10,6 +10,7 @@ import {
   mockDemoApi,
   renderDemoReglas,
 } from "./datosDemoReglas";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
@@ -127,7 +128,7 @@ describe("Reglas fiscales — frecuencia de vencimientos y precedencia (D-R3-A, 
     renderDemoReglas();
 
     const dialog = await abrirAltaDeVencimiento();
-    fireEvent.change(within(dialog).getByLabelText("Día del mes"), { target: { value: "20" } });
+    cambiarValor(within(dialog).getByLabelText("Día del mes"), "20");
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar vencimiento" }));
 
     await waitFor(() =>
@@ -150,7 +151,7 @@ describe("Reglas fiscales — frecuencia de vencimientos y precedencia (D-R3-A, 
     renderDemoReglas();
 
     const dialog = await abrirAltaDeVencimiento();
-    fireEvent.change(within(dialog).getByLabelText("Día del mes"), { target: { value: "20" } });
+    cambiarValor(within(dialog).getByLabelText("Día del mes"), "20");
     fireEvent.click(within(dialog).getByRole("button", { name: "Guardar vencimiento" }));
 
     expect(await within(dialog).findByText(`Frecuencia: ${MENSAJE_FRECUENCIA}`)).toBeTruthy();
@@ -162,7 +163,7 @@ describe("Reglas fiscales — frecuencia de vencimientos y precedencia (D-R3-A, 
     renderDemoReglas();
 
     const dialog = await abrirAltaDeVencimiento();
-    fireEvent.change(within(dialog).getByLabelText("Día del mes"), { target: { value: "20" } });
+    cambiarValor(within(dialog).getByLabelText("Día del mes"), "20");
     fireEvent.change(within(dialog).getByLabelText("Frecuencia"), {
       target: { value: "QUARTERLY" },
     });
