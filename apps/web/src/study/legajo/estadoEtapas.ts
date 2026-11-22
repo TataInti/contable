@@ -11,7 +11,7 @@ type Fuente = Pick<CoberturaLegajo["sources"][number], "required" | "present" | 
 type EntradaEstadoEtapas = {
   sources?: Fuente[];
   noMovements?: boolean;
-  classification?: Pick<ClassificationCoverage, "total" | "classified" | "pending" | "ready">;
+  classification?: Pick<ClassificationCoverage, "total" | "classified" | "pending" | "ready" | "activityPending">;
   calculationCount?: number;
   blockingControls?: number;
   status?: Workpaper["status"];
@@ -21,6 +21,8 @@ export function calcularEstadosEtapas(input: EntradaEstadoEtapas): EstadoEtapa[]
   const faltantes = (input.sources ?? []).filter((source) => source.required && !source.present && source.status !== "NO_MOVEMENTS");
   const fuentesListas = faltantes.length === 0 || input.noMovements === true;
   const sinClasificar = input.classification?.pending ?? 0;
+  const sinActividad = input.classification?.activityPending ?? 0;
+  const mensajeSinActividad = `Hay ${sinActividad} ${sinActividad === 1 ? "venta" : "ventas"} con actividad no vigente o de otro nivel`;
   const calculado = (input.calculationCount ?? 0) > 0 || ["CALCULATED", "IN_REVIEW", "CHANGES_REQUESTED", "REVIEWED", "FINALIZED"].includes(input.status ?? "");
   const bloqueos = input.blockingControls ?? 0;
   const finalizado = input.status === "FINALIZED";
@@ -33,12 +35,16 @@ export function calcularEstadosEtapas(input: EntradaEstadoEtapas): EstadoEtapa[]
       ? { estado: "No disponible todavía", mensaje: "Faltan fuentes obligatorias", destino: 1, accion: "Ir a Fuentes" }
       : sinClasificar > 0
         ? { estado: "Con pendientes", mensaje: `Hay ${sinClasificar} comprobantes sin clasificar`, destino: 2, accion: "Ir a Clasificación" }
-        : { estado: "Lista", mensaje: null, destino: 2, accion: null },
+        : sinActividad > 0
+          ? { estado: "Con pendientes", mensaje: mensajeSinActividad, destino: 2, accion: "Ir a Clasificación" }
+          : { estado: "Lista", mensaje: null, destino: 2, accion: null },
     !fuentesListas
       ? { estado: "No disponible todavía", mensaje: "Faltan fuentes obligatorias", destino: 1, accion: "Ir a Fuentes" }
       : sinClasificar > 0
         ? { estado: "No disponible todavía", mensaje: `Hay ${sinClasificar} comprobantes sin clasificar`, destino: 2, accion: "Ir a Clasificación" }
-        : !calculado
+        : sinActividad > 0
+          ? { estado: "No disponible todavía", mensaje: mensajeSinActividad, destino: 2, accion: "Ir a Clasificación" }
+          : !calculado
           ? { estado: "Con pendientes", mensaje: "Falta calcular", destino: 3, accion: "Ir a Cálculo" }
           : { estado: "Lista", mensaje: null, destino: 3, accion: null },
     !calculado

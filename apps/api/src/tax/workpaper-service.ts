@@ -23,6 +23,7 @@ import {
   materializeWorkpaperClassifications,
   reviewedSourceFacts,
 } from "./workpaper-classification.js";
+import { activityIssuesForWorkpaper, conActividadPendiente } from "./workpaper-activity.js";
 import {
   materializeWorkpaperAllocations,
   taxInputAllocationHash,
@@ -1658,7 +1659,9 @@ export class MonthlyWorkpaperService {
       if (this.mutablePreparationStates.includes(workpaper.status as (typeof this.mutablePreparationStates)[number])) {
         await materializeWorkpaperClassifications(tx, workpaper);
       }
-      return classificationCoverage(tx, workpaperId);
+      const coverage = await classificationCoverage(tx, workpaperId);
+      // Hallazgo de actividad por venta: el mismo criterio que el cálculo (activity-coverage.ts).
+      return conActividadPendiente(coverage, await activityIssuesForWorkpaper(tx, workpaper));
     });
   }
 

@@ -87,12 +87,24 @@ const comprobantesDemo = [
   comprobante("venta-a", "SALE", 3),
   // Código guardado que ya no está vigente: la etapa lo conserva como opción.
   comprobante("venta-b", "SALE", 4, { activityCode: "VIEJA" }),
+  // 4J: clasificada con una actividad que no está vigente en el período; el cálculo la rechaza.
+  comprobante("venta-c", "SALE", 5, {
+    status: "CLASSIFIED",
+    activityCode: "REST",
+    origin: "VOUCHER_LINE",
+    activityIssue: {
+      code: "ACTIVITY_NOT_IN_FORCE",
+      message:
+        "La actividad REST no está vigente en octubre 2026 para este cliente (vigente desde 22/11/2026). Corregí la fecha «Desde» en Configuración fiscal → Actividades.",
+    },
+  }),
 ];
 
 const clasificacionesDemo = {
-  total: 4,
+  total: 5,
   classified: 1,
   pending: 3,
+  activityPending: 1,
   ready: false,
   items: comprobantesDemo,
 };
@@ -220,6 +232,18 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), { target: { value: "PENDING" } });
     expect(screen.getByText("A · 0001-00000001")).toBeInTheDocument();
     expect(screen.queryByText("A · 0001-00000002")).not.toBeInTheDocument();
+  });
+
+  it("4J — una venta con actividad no vigente queda pendiente con el texto del cálculo y el enlace a corregir «Desde»", async () => {
+    fijarContexto(PERMISOS_CLASIFICAR);
+    renderLegajo();
+    await abrirClasificacion();
+    expect(
+      screen.getByText(
+        "La actividad REST no está vigente en octubre 2026 para este cliente (vigente desde 22/11/2026). Corregí la fecha «Desde» en Configuración fiscal → Actividades.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Corregir la fecha «Desde»" })).toHaveAttribute("href", "/configuracion-fiscal");
   });
 
   it("guardar una compra sin rubro muestra «Seleccioná el rubro de la compra» junto a su fila y no envía el PATCH", async () => {

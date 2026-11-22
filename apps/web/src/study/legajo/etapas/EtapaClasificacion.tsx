@@ -2,6 +2,7 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, Field, Table, type TableColumn } from "@contable/design-system";
+import { Link } from "react-router-dom";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { CLASSIFICATION_ORIGIN_LABELS } from "../etiquetas";
 import { formatMoney } from "../formato";
@@ -92,7 +93,9 @@ export function EtapaClasificacion({
   const visibleClassifications = useMemo(() => {
     const items = classificationQuery.data?.items ?? [];
     if (filter === "PENDING") {
-      return items.filter((item) => !item.excludedAt && item.status !== "CLASSIFIED");
+      return items.filter(
+        (item) => !item.excludedAt && (item.status !== "CLASSIFIED" || Boolean(item.activityIssue)),
+      );
     }
     return filter === "EXCLUDED" ? items.filter((item) => item.excludedAt) : items;
   }, [classificationQuery.data?.items, filter]);
@@ -182,7 +185,13 @@ export function EtapaClasificacion({
           <small>Clasificados</small>
         </span>
         <span>
-          <strong>{indicador(classificationQuery.data?.pending)}</strong>
+          <strong>
+            {indicador(
+              classificationQuery.data
+                ? classificationQuery.data.pending + (classificationQuery.data.activityPending ?? 0)
+                : undefined,
+            )}
+          </strong>
           <small>Pendientes</small>
         </span>
         <span>
@@ -191,7 +200,13 @@ export function EtapaClasificacion({
         </span>
         <span>
           {classificationQuery.isSuccess ? (
-            <StatusBadge status={classificationQuery.data.ready ? "READY" : "WAITING_INPUTS"} />
+            <StatusBadge
+              status={
+                classificationQuery.data.ready && (classificationQuery.data.activityPending ?? 0) === 0
+                  ? "READY"
+                  : "WAITING_INPUTS"
+              }
+            />
           ) : (
             <strong>{classificationQuery.isError ? "no disponible" : "pendiente"}</strong>
           )}
@@ -448,7 +463,27 @@ export function EtapaClasificacion({
                   if (classification.excludedAt) {
                     return <small>Fuera del cálculo</small>;
                   }
-                  return !puedeClasificar ? (
+                  // Mismo texto que el cálculo; «Desde» se corrige en Configuración fiscal y la venta se reclasifica aquí.
+                  const aviso = classification.activityIssue ? (
+                    <div className="workpaper-classification-issue">
+                      <small>{classification.activityIssue.message}</small>{" "}
+                      {classification.activityIssue.code === "ACTIVITY_NOT_IN_FORCE" ? (
+                        <Link to="/configuracion-fiscal">Corregir la fecha «Desde»</Link>
+                      ) : puedeClasificar ? (
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() => document.getElementById(`actividad-${classification.id}`)?.focus()}
+                        >
+                          Reclasificar
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null;
+                  return (
+                    <>
+                      {aviso}
+                      {!puedeClasificar ? (
                     <>
                       <strong>{classification.categoryCode ?? classification.activityCode}</strong>
                       {classification.categoryCode && classification.activityCode ? (
@@ -485,6 +520,7 @@ export function EtapaClasificacion({
                         </select>
                       ) : null}
                       <select
+                        id={`actividad-${classification.id}`}
                         aria-label="Actividad"
                         value={draft.activityCode}
                         onChange={(event) =>
@@ -509,6 +545,8 @@ export function EtapaClasificacion({
                         ))}
                       </select>
                     </div>
+                  )}
+                    </>
                   );
                 },
               },
