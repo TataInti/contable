@@ -66,33 +66,33 @@ export function DenseTabs<T extends string>({
   return (
     <div className="dense-tabs" role="tablist" aria-label={label}>
       {tabs.map((tab, index) => (
-        <span className="dense-tab-item" key={tab.id}>
-        <Button
-          id={`${idPrefix}-${tab.id}`}
-          type="button"
-          variant="text"
-          size="row"
-          role="tab"
-          aria-selected={active === tab.id}
-          aria-controls={`${idPrefix}-panel`}
-          aria-description={tab.description}
-          tabIndex={active === tab.id ? 0 : -1}
-          className="dense-tab"
-          onClick={() => onChange(tab.id)}
-          onKeyDown={(event) => onKeyDown(event, index)}
-        >
-          {tab.label}
-          {tab.count !== undefined ? <span className="dense-count">{tab.count}</span> : null}
-          {tab.warnCount ? (
-            <span
-              className="dense-count dense-count--warn"
-              title={`${tab.warnCount} con alertas`}
-            >
-              <Icon name="alert" size={11} /> {tab.warnCount}
-            </span>
-          ) : null}
-        </Button>
-        {tab.status ? <span className="dense-tab__status">{tab.status}</span> : null}
+        <span className="dense-tab-item" role="presentation" key={tab.id}>
+          <Button
+            id={`${idPrefix}-${tab.id}`}
+            type="button"
+            variant="text"
+            size="row"
+            role="tab"
+            aria-selected={active === tab.id}
+            aria-controls={`${idPrefix}-panel`}
+            aria-description={tab.description ?? tab.status}
+            tabIndex={active === tab.id ? 0 : -1}
+            className="dense-tab"
+            onClick={() => onChange(tab.id)}
+            onKeyDown={(event) => onKeyDown(event, index)}
+          >
+            {tab.label}
+            {tab.count !== undefined ? <span className="dense-count">{tab.count}</span> : null}
+            {tab.warnCount ? (
+              <span
+                className="dense-count dense-count--warn"
+                title={`${tab.warnCount} con alertas`}
+              >
+                <Icon name="alert" size={11} /> {tab.warnCount}
+              </span>
+            ) : null}
+          </Button>
+          {tab.status ? <span className="dense-tab__status">{tab.status}</span> : null}
         </span>
       ))}
     </div>

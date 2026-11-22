@@ -159,6 +159,56 @@ afterEach(() => {
 });
 
 describe("Legajo · etapa Cálculo (K12)", () => {
+  it("muestra el estado accesible de cada etapa y guía a Fuentes desde Clasificación", async () => {
+    fijarContexto(PERMISOS_CALCULO);
+    fijarRespuestas({ fuentes: fuentesDemo });
+    renderLegajo();
+
+    await screen.findAllByRole("tab");
+    expect(screen.getByRole("tab", { name: "Saldos" })).toHaveAttribute("aria-description", "Estado: Lista");
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Fuentes" })).toHaveAttribute("aria-description", "Estado: Con pendientes"));
+    expect(screen.getByRole("tab", { name: "Cálculo" })).toHaveAttribute("aria-description", "Estado: No disponible todavía");
+    fireEvent.click(screen.getByRole("tab", { name: /Clasificación/ }));
+    expect(await screen.findByText("Faltan fuentes obligatorias.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ir a Fuentes" }));
+    expect(screen.getByRole("tab", { name: /Fuentes/ })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("guía desde Cálculo a Clasificación y desde Controles o Cierre a Cálculo", async () => {
+    fijarContexto(PERMISOS_CALCULO);
+    fijarRespuestas({
+      fuentes: fuentesPresentes,
+      clasificaciones: clasificacionesPendientes,
+    });
+    renderLegajo();
+    fireEvent.click(await screen.findByRole("tab", { name: /Cálculo/ }));
+    expect(await screen.findByText("Hay 1 comprobantes sin clasificar.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ir a Clasificación" }));
+    expect(screen.getByRole("tab", { name: /Clasificación/ })).toHaveAttribute("aria-selected", "true");
+
+    cleanup();
+    fijarContexto(PERMISOS_CALCULO);
+    fijarRespuestas({ fuentes: fuentesPresentes });
+    renderLegajo();
+    for (const etapa of [/Controles/, /Cierre/]) {
+      fireEvent.click(await screen.findByRole("tab", { name: etapa }));
+      expect(await screen.findByRole("button", { name: "Ir a Cálculo" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Ir a Cálculo" }));
+      expect(screen.getByRole("tab", { name: "Cálculo" })).toHaveAttribute("aria-selected", "true");
+    }
+  });
+
+  it("no muestra guía cuando todas las etapas están listas", async () => {
+    fijarContexto(PERMISOS_CALCULO);
+    fijarRespuestas({
+      fuentes: fuentesPresentes,
+      legajos: [legajoDemo("FINALIZED")],
+    });
+    renderLegajo();
+    expect(await screen.findByRole("tab", { name: "Cierre" })).toHaveAttribute("aria-description", "Estado: Lista");
+    expect(document.querySelector(".workpaper-stage-guidance")).toBeNull();
+  });
+
   it("Calcular explica qué fuentes, clasificaciones e imputaciones faltan, en ese orden", async () => {
     fijarContexto(PERMISOS_CALCULO);
     fijarRespuestas({
