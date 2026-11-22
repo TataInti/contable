@@ -14,7 +14,7 @@ const regimenes = [
 ];
 function SelectorFixture() {
   const [regimeId, setRegimeId] = useState("");
-  return <CajonInscripcion openFormStep="inscripcion" setOpenFormStep={() => undefined} regimeId={regimeId} setRegimeId={setRegimeId} addRegistration={{} as never} regimesQuery={{ data: regimenes, isLoading: false } as never} effectiveProfileId="perfil" />;
+  return <CajonInscripcion openFormStep="inscripcion" setOpenFormStep={() => undefined} regimeId={regimeId} setRegimeId={setRegimeId} suggestedFrom="2026-10-01" addRegistration={{} as never} regimesQuery={{ data: regimenes, isLoading: false } as never} effectiveProfileId="perfil" />;
 }
 
 afterEach(cleanup);
@@ -41,7 +41,7 @@ describe("regímenes legibles", () => {
 
   it("usa la etiqueta completa en el selector y solo el nombre en tablas y resumen", () => {
     const registration = { id: "inscripcion", status: "ACTIVE", validFrom: "2026-01-01", validTo: null, regime: regimenes.find(({ id }) => id === "provincial") };
-    render(<PestanaRegimenes canWrite={false} openStepForm={() => undefined} registrationsQuery={{ data: [registration], isLoading: false } as never} cancelRegistration={{} as never} confirm={{} as never} />);
+    render(<PestanaRegimenes canWrite={false} openStepForm={() => undefined} registrationsQuery={{ data: [registration], isLoading: false } as never} cancelRegistration={{} as never} corregirFecha={() => undefined} confirm={{} as never} />);
     expect(screen.getByText("IIBB Contribuyente Local Tucumán")).toBeTruthy();
     cleanup();
     render(<SeccionRegimenes fiscal={{ registrations: [registration] } as never} />);

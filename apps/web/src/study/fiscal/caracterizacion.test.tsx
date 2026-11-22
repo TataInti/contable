@@ -255,27 +255,33 @@ describe("Caracterización · Configuración fiscal: acciones y cajones (F3 a F7
     expect(api.post).not.toHaveBeenCalled();
   });
 
-  it("F6 · documenta: la inscripción toma la «Vigencia desde» del formulario de perfil, aunque se haya cancelado", async () => {
-    vi.mocked(api.post).mockImplementation((() => Promise.resolve({})) as never);
-    montar({ datos: { perfiles: [perfilActivo], regimenes: [regimenIva] } });
-    fireEvent.click(await screen.findByRole("button", { name: "Crear nueva versión" }));
-    const perfil = await screen.findByRole("dialog", { name: "Crear nueva versión del perfil" });
-    fireEvent.change(await screen.findByLabelText("Vigencia desde"), { target: { value: "2026-10-01" } });
-    fireEvent.click(within(perfil).getByRole("button", { name: "Cancelar" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  it("F6 · la inscripción tiene su propio «Desde» (primer día del mes anterior) y no toma la «Vigencia desde» del perfil", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-22T15:00:00Z"));
+    try {
+      vi.mocked(api.post).mockImplementation((() => Promise.resolve({})) as never);
+      montar({ datos: { perfiles: [perfilActivo], regimenes: [regimenIva] } });
+      fireEvent.click(await screen.findByRole("button", { name: "Crear nueva versión" }));
+      const perfil = await screen.findByRole("dialog", { name: "Crear nueva versión del perfil" });
+      fireEvent.change(await screen.findByLabelText("Vigencia desde"), { target: { value: "2026-09-15" } });
+      fireEvent.click(within(perfil).getByRole("button", { name: "Cancelar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
-    fireEvent.click(pestana(/Regímenes/));
-    fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
-    const cajon = await screen.findByRole("dialog", { name: "Registrar inscripción" });
-    fireEvent.change(cajon.querySelector("#reg-regime") as HTMLSelectElement, { target: { value: "reg-iva" } });
-    fireEvent.click(within(cajon).getByRole("button", { name: "Registrar inscripción" }));
-    // vigente: cambia con D7A-5 (vigencia propia en cada cajón)
-    await waitFor(() =>
-      expect(api.post).toHaveBeenCalledWith(
-        "/firms/firm-a/clients/client-synthetic/tax-registrations",
-        expect.objectContaining({ profileVersionId: "profile-1", regimeId: "reg-iva", validFrom: "2026-10-01" }),
-      ),
-    );
+      fireEvent.click(pestana(/Regímenes/));
+      fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
+      const cajon = await screen.findByRole("dialog", { name: "Registrar inscripción" });
+      fireEvent.change(cajon.querySelector("#reg-regime") as HTMLSelectElement, { target: { value: "reg-iva" } });
+      fireEvent.click(within(cajon).getByRole("button", { name: "Registrar inscripción" }));
+      // cambió con D7A-5 / corte 1F (vigencia propia en el cajón de inscripción)
+      await waitFor(() =>
+        expect(api.post).toHaveBeenCalledWith(
+          "/firms/firm-a/clients/client-synthetic/tax-registrations",
+          expect.objectContaining({ profileVersionId: "profile-1", regimeId: "reg-iva", validFrom: "2026-10-01" }),
+        ),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("F7 · «Abrir mes» envía {month} y el aviso cuenta las obligaciones creadas o dice que ya estaba abierto", async () => {
