@@ -77,21 +77,13 @@ async function subirComprobante(page: Page, archivo: { name: string; buffer: Buf
   await page.locator(".action-drawer").getByRole("button", { name: "Cerrar", exact: true }).click();
 }
 
-/** Abre el comprobante en la Bandeja y espera su control de CUIT. Tras subirlo, la lista lo selecciona y a veces lo suelta
- *  al refrescarse (hallazgo para Ciro): como haría el contador, se vuelve a abrir la fila hasta que su detalle esté visible.
- *  El clic sobre una fila ya abierta la cerraría, así que solo se hace clic cuando no está seleccionada. */
-async function abrirComprobante(page: Page, nombre: string) {
+/** Espera el comprobante recién subido en la Bandeja y su control de CUIT. La subida lo deja seleccionado y la
+ *  lista conserva esa selección al refrescarse: el spec no vuelve a abrir la fila. */
+async function esperarComprobanteSeleccionado(page: Page, nombre: string) {
   const fila = page.getByRole("row", { name: new RegExp(nombre.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first();
   await expect(fila).toBeVisible({ timeout: 30_000 });
-  await expect
-    .poll(
-      async () => {
-        if ((await fila.getAttribute("aria-current")) !== "true") await fila.click();
-        return page.locator('section[aria-label="Control de CUIT"]').count();
-      },
-      { message: `control de CUIT de «${nombre}» abierto`, timeout: 60_000, intervals: [1_500] },
-    )
-    .toBeGreaterThan(0);
+  await expect(fila, `«${nombre}» seleccionado tras subirlo`).toHaveAttribute("aria-current", "true", { timeout: 60_000 });
+  await expect(page.locator('section[aria-label="Control de CUIT"]').first(), `control de CUIT de «${nombre}»`).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("Procesando comprobante")).toHaveCount(0, { timeout: 120_000 });
 }
 
@@ -122,7 +114,7 @@ test("control de CUIT en la Bandeja: CUIT de otro cliente, mover a otro cliente 
 
   await test.step("Bandeja de A: comprobante del CUIT de B → «CUIT de otro cliente», Aprobar bloqueado y «Mover a» B", async () => {
     await subirComprobante(page, { name: COMPROBANTE_DE_B, buffer: comprobante("de B", CLIENTE_B.cuit, TERCERO_1) });
-    await abrirComprobante(page, COMPROBANTE_DE_B);
+    await esperarComprobanteSeleccionado(page, COMPROBANTE_DE_B);
     const control = page.locator('section[aria-label="Control de CUIT"]');
     await expect(control.getByText("CUIT de otro cliente")).toBeVisible();
     await expect(control.getByText(new RegExp(`corresponde a ${CLIENTE_B.legalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`))).toBeVisible();
@@ -144,7 +136,7 @@ test("control de CUIT en la Bandeja: CUIT de otro cliente, mover a otro cliente 
   await test.step("Bandeja de A: comprobante de terceros → «CUIT de otro cliente», se acepta con motivo y queda aprobable", async () => {
     await cambiarCliente(page, CLIENTE_A);
     await subirComprobante(page, { name: COMPROBANTE_DE_TERCEROS, buffer: comprobante("de terceros", TERCERO_2, TERCERO_3) });
-    await abrirComprobante(page, COMPROBANTE_DE_TERCEROS);
+    await esperarComprobanteSeleccionado(page, COMPROBANTE_DE_TERCEROS);
     const control = page.locator('section[aria-label="Control de CUIT"]');
     await expect(control.getByText("CUIT de otro cliente")).toBeVisible();
     await expect(page.getByRole("button", { name: "Aprobar extracción", exact: true })).toBeDisabled();
