@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../context/ClientContext";
@@ -8,6 +9,9 @@ import type { ReactNode } from "react";
 import { StudyShell } from "./StudyShell";
 import { ContextBar } from "./ContextBar";
 import { cambiarValor } from "../test/elegirOpcion";
+import { api } from "../lib/api";
+
+vi.mock("../lib/api", () => ({ api: { get: vi.fn().mockResolvedValue([]) } }));
 
 const state = vi.hoisted(() => ({
   context: null as unknown as ClientContextValue,
@@ -82,14 +86,17 @@ function renderShell(
     refresh: vi.fn(),
   };
 
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route element={<StudyShell />}>
-          <Route path="*" element={<p>Contenido de la sección</p>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route element={<StudyShell />}>
+            <Route path="*" element={<p>Contenido de la sección</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -107,7 +114,7 @@ describe("StudyShell", () => {
       within(group).getAllByRole("link").map((link) => link.textContent?.trim());
 
     expect(within(nav).getAllByRole("group")).toHaveLength(3);
-    expect(labels(studyGroup)).toEqual(["Inicio", "Clientes", "Panel de trabajo"]);
+    expect(labels(studyGroup)).toEqual(["Inicio", "Clientes", "Pendientes para mí", "Panel de trabajo"]);
     // Dentro del cliente, el orden sigue el trabajo del mes.
     expect(labels(clientGroup)).toEqual([
       "Resumen",
@@ -130,6 +137,12 @@ describe("StudyShell", () => {
     expect(within(clientGroup).getByRole("link", { name: "Trabajo" }).getAttribute("aria-current")).toBe(
       "page",
     );
+  });
+
+  it("muestra en la navegación cuántas menciones siguen pendientes", async () => {
+    vi.mocked(api.get).mockResolvedValue([{ id: "comment-1" }, { id: "comment-2" }] as never);
+    renderShell("/trabajo");
+    expect(await screen.findByRole("link", { name: "Pendientes para mí (2)" })).toBeTruthy();
   });
 
   it("elige el cliente desde el menú", () => {

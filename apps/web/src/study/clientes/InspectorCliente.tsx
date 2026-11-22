@@ -5,6 +5,7 @@ import { formatCuit } from "../../lib/cuit";
 import { formatearFecha } from "../../lib/formatoFechas";
 import { Inspector, InspectorFacts, InspectorSection } from "../../ui/Dense";
 import { StatusBadge } from "../../ui/StatusBadge";
+import { CommentThread } from "../CommentThread";
 import { sinRespuesta } from "./consultas";
 import { MONTH_LONG, profileGaps, vatLabel } from "./etiquetas";
 import type { ClientWithProfile } from "./tipos";
@@ -12,6 +13,7 @@ import type { ClientWithProfile } from "./tipos";
 const missingProfileFields = profileGaps;
 
 interface InspectorClienteProps {
+  firmId: string | null;
   selectedClient: ClientWithProfile;
   capabilities: ReadonlySet<string>;
   canManage: boolean;
@@ -27,6 +29,7 @@ interface InspectorClienteProps {
 }
 
 export function InspectorCliente({
+  firmId,
   selectedClient,
   capabilities,
   canManage,
@@ -229,6 +232,7 @@ export function InspectorCliente({
         </InspectorSection>
         </div>
       ) : null}
+      <CommentThread firmId={firmId} clientId={selectedClient.id} compact />
     </Inspector>
   );
 }
