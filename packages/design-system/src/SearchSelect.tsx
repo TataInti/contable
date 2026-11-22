@@ -48,6 +48,11 @@ export function SearchSelect({
   const listboxId = `${inputId}-listbox`;
   const allOptions = useMemo(() => [...options, ...groups.flatMap((group) => group.options)], [options, groups]);
   const selected = allOptions.find((option) => option.value === value);
+  const historicalOption = value && !selected
+    ? { value, label: `${value} — valor histórico (conservado)` }
+    : null;
+  const availableOptions = historicalOption ? [...options, historicalOption] : options;
+  const selectedLabel = selected?.label ?? historicalOption?.label;
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -68,7 +73,7 @@ export function SearchSelect({
           aria-label={label}
         >
           <option value="">{placeholder}</option>
-          {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          {availableOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           {groups.map((group) => <optgroup key={group.label} label={group.label}>{group.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</optgroup>)}
         </select>
       </div>
@@ -79,7 +84,7 @@ export function SearchSelect({
     ...group,
     options: group.options.filter((option) => normalize(option.label).includes(normalize(query))),
   })).filter((group) => group.options.length > 0);
-  const filteredOptions = options.filter((option) => normalize(option.label).includes(normalize(query)));
+  const filteredOptions = availableOptions.filter((option) => normalize(option.label).includes(normalize(query)));
   const visibleOptions = [...filteredOptions, ...filteredGroups.flatMap((group) => group.options)];
   const select = (nextValue: string) => {
     onChange(nextValue);
@@ -145,7 +150,7 @@ export function SearchSelect({
         aria-required={required || undefined}
         aria-haspopup="listbox"
         required={required}
-        value={open ? query : selected?.label ?? ""}
+        value={open ? query : selectedLabel ?? ""}
         placeholder={placeholder}
         disabled={disabled}
         autoComplete="off"

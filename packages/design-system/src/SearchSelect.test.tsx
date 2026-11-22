@@ -18,6 +18,32 @@ const options = [
 ];
 
 describe("SearchSelect", () => {
+  it("asocia la etiqueta al combobox visible", () => {
+    render(<SearchSelect id="province" name="province" label="Provincia" options={options} value="tucuman" onChange={() => {}} />);
+    const labeledControl = screen.getByLabelText("Provincia");
+    expect(labeledControl).toHaveAttribute("id", "province");
+    expect(labeledControl).toHaveAttribute("role", "combobox");
+    expect(screen.getByRole("combobox", { name: "Provincia" })).toBe(labeledControl);
+  });
+
+  it("muestra y envía el valor guardado que ya no está en el catálogo", () => {
+    const onChange = vi.fn();
+    render(
+      <form aria-label="Ficha">
+        <SearchSelect id="province" name="province" label="Provincia" options={options} value="Provincia de Tucumán" onChange={onChange} />
+      </form>,
+    );
+    const combobox = screen.getByRole("combobox", { name: "Provincia" });
+    expect(combobox).toHaveValue("Provincia de Tucumán — valor histórico (conservado)");
+    fireEvent.focus(combobox);
+    const historicalOption = screen.getByRole("option", { name: "Provincia de Tucumán — valor histórico (conservado)" });
+    expect(historicalOption).toBeInTheDocument();
+    fireEvent.click(historicalOption);
+    expect(onChange).toHaveBeenCalledWith("Provincia de Tucumán");
+    expect(new FormData(screen.getByRole("form", { name: "Ficha" }) as HTMLFormElement).get("province"))
+      .toBe("Provincia de Tucumán");
+  });
+
   it("filtra ignorando mayúsculas y tildes y conserva id/name y opción vacía", () => {
     const onChange = vi.fn();
     const view = render(<SearchSelect id="province" name="province" label="Provincia" options={options} value="" onChange={onChange} />);
