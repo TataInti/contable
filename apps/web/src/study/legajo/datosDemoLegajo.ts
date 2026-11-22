@@ -96,7 +96,7 @@ export function legajoDemo(status = "COLLECTING_INPUTS") {
   };
 }
 
-function fuenteDemo(code: string, label: string) {
+function fuenteDemo(code: string, label: string, direction: "SALE" | "PURCHASE") {
   return {
     code,
     label,
@@ -106,15 +106,15 @@ function fuenteDemo(code: string, label: string) {
     taxTypeId: "tax-type-iva",
     periodId: "period-iva",
     origin: "ARCA",
-    adapterVersion: "IVA_V1",
-    expectedColumns: [],
+    adapterVersion: "ARCA_LIBRO_IVA_V1",
+    expectedColumns: direction === "SALE" ? ["nonTaxed"] : ["direction"],
     batches: [],
   };
 }
 
 export const fuentesDemo = [
-  fuenteDemo("ARCA_IVA_SALES", "ARCA IVA ventas"),
-  fuenteDemo("ARCA_IVA_PURCHASES", "ARCA IVA compras"),
+  fuenteDemo("ARCA_IVA_SALES", "ARCA IVA ventas", "SALE"),
+  fuenteDemo("ARCA_IVA_PURCHASES", "ARCA IVA compras", "PURCHASE"),
 ];
 
 // Fuente que no es de IVA: su lote se importa con «Importar lote».
@@ -126,7 +126,7 @@ export const fuenteRetencionesDemo = {
   count: 0,
   taxTypeId: "tax-type-a",
   periodId: "period-a",
-  origin: "ARCA",
+  origin: "CSV",
   adapterVersion: "RET_V1",
   expectedColumns: ["fecha", "comprobante", "importe"],
   batches: [],

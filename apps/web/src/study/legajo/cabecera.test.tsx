@@ -86,22 +86,21 @@ afterEach(() => {
 });
 
 describe("Legajo · cabecera (K3)", () => {
-  // «Importar libro» salió de la cabecera: vive en la fila ARCA IVA de Fuentes (D2a); sus permisos y motivo se afirman allí.
-  it("Importar libro queda deshabilitado sin tax.vouchers.prepare y dice el motivo", async () => {
+  it("Gestionar explica que no se puede cargar sin tax.vouchers.prepare", async () => {
     fijarContexto(["client.read", "tax.settlements.calculate"]);
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-    const [libroVentas] = await screen.findAllByRole("button", { name: "Importar libro" });
-    expect(libroVentas).toBeDisabled();
-    expect(screen.getAllByText("Tu rol no puede importar libros IVA.").length).toBeGreaterThan(0);
+    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Ventas del período" }));
+    expect(await screen.findByText("Tu rol no puede importar libros IVA.")).toBeInTheDocument();
   });
 
-  it("Importar libro se habilita con tax.vouchers.prepare", async () => {
+  it("Gestionar conserva la carga de libros IVA con tax.vouchers.prepare", async () => {
     fijarContexto(["client.read", "tax.vouchers.prepare"]);
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-    const [libroVentas] = await screen.findAllByRole("button", { name: "Importar libro" });
-    expect(libroVentas).toBeEnabled();
+    fireEvent.click(await screen.findByRole("button", { name: "Gestionar Ventas del período" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cargar archivo" }));
+    expect(await screen.findByRole("dialog", { name: "Importar libros IVA" })).toBeInTheDocument();
   });
 
   /** Espera a que la barra tenga el período elegido, para que los ítems del menú reflejen el período. */
