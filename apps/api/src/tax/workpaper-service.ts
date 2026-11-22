@@ -1,5 +1,5 @@
 import { derivePeriodStatus } from "./period-status.js";
-import { Prisma } from "@prisma/client";
+import { Prisma, type MonthlyTaxWorkpaperStatus } from "@prisma/client";
 import { motivoSiLoteUsado, origenDelLote } from "./declaration-credit-lots.js";
 import {
   FILTRO_SALDOS_SIN_REEMPLAZADOS,
@@ -1463,11 +1463,59 @@ export class MonthlyWorkpaperService {
       periodEnd: Date;
     },
   ) {
+    await this.reabrirPreparacion(tx, wp, ["CALCULATED", "CHANGES_REQUESTED"]);
+  }
+
+  /** Núcleo compartido: recalcula la preparación y devuelve a preparación los estados indicados. */
+  private async reabrirPreparacion(
+    tx: Prisma.TransactionClient,
+    wp: {
+      id: string;
+      firmId: string;
+      clientId: string;
+      periodStart: Date;
+      periodEnd: Date;
+    },
+    estados: string[],
+  ) {
     const { ready } = await this.refreshPreparationStatus(tx, wp);
     await tx.monthlyTaxWorkpaper.updateMany({
-      where: { id: wp.id, status: { in: ["CALCULATED", "CHANGES_REQUESTED"] } },
+      where: { id: wp.id, status: { in: estados as MonthlyTaxWorkpaperStatus[] } },
       data: { status: ready ? "READY_TO_CALCULATE" : "COLLECTING_INPUTS" },
     });
+  }
+
+  /**
+   * Un saldo que cambia de importe o de arrastre cambia el cálculo del período donde aplica y de los
+   * posteriores del mismo impuesto. Si alguno de esos meses está finalizado, el cambio se rechaza con
+   * guía; los que están calculados y no finalizados vuelven a preparación (mismo núcleo que las fuentes).
+   */
+  private async invalidarPorCambioDeSaldo(
+    tx: Prisma.TransactionClient,
+    lote: { firmId: string; clientId: string; taxTypeId: string; periodId: string | null },
+  ) {
+    const periodoDelLote = lote.periodId
+      ? await tx.taxPeriod.findUnique({ where: { id: lote.periodId }, select: { endDate: true } })
+      : null;
+    const candidatos = await tx.monthlyTaxWorkpaper.findMany({
+      where: {
+        firmId: lote.firmId,
+        clientId: lote.clientId,
+        status: { not: "SUPERSEDED" },
+        ...(periodoDelLote ? { periodEnd: { gte: periodoDelLote.endDate } } : {}),
+        settlements: { some: { obligation: { regime: { taxTypeId: lote.taxTypeId } } } },
+      },
+      select: { id: true, firmId: true, clientId: true, periodStart: true, periodEnd: true, status: true },
+    });
+    if (candidatos.some((wp) => wp.status === "FINALIZED")) {
+      throw new WorkpaperError(
+        "WORKPAPER_FINALIZED",
+        "Para cambiar un mes cerrado, rectificá la liquidación",
+      );
+    }
+    for (const wp of candidatos) {
+      await this.reabrirPreparacion(tx, wp, ["CALCULATED", "IN_REVIEW", "REVIEWED", "CHANGES_REQUESTED"]);
+    }
   }
 
   /**
@@ -2411,6 +2459,24 @@ export class MonthlyWorkpaperService {
         take: 200,
       });
 
+      // Período e impuesto de cada saldo: la etapa Saldos dice de dónde viene («Viene del cierre de …»).
+      const periodIds = [
+        ...new Set(lots.map((lot) => lot.periodId).filter((id): id is string => id !== null)),
+      ];
+      const taxTypeIds = [...new Set(lots.map((lot) => lot.taxTypeId))];
+      const [periodos, tiposDeImpuesto] = await Promise.all([
+        tx.taxPeriod.findMany({
+          where: { id: { in: periodIds } },
+          select: { id: true, label: true, startDate: true, endDate: true },
+        }),
+        tx.taxType.findMany({
+          where: { id: { in: taxTypeIds } },
+          select: { id: true, code: true, name: true },
+        }),
+      ]);
+      const periodoPorId = new Map(periodos.map((periodo) => [periodo.id, periodo] as const));
+      const tipoPorId = new Map(tiposDeImpuesto.map((tipo) => [tipo.id, tipo] as const));
+
       return lots.map((lot) => {
         const applied = lot.movements.reduce(
           (acc, m) => acc.plus(m.amount),
@@ -2419,11 +2485,21 @@ export class MonthlyWorkpaperService {
         return {
           id: lot.id,
           taxTypeId: lot.taxTypeId,
+          taxType: tipoPorId.get(lot.taxTypeId) ?? null,
           jurisdictionId: lot.jurisdictionId,
           regimeId: lot.regimeId,
           periodId: lot.periodId,
+          period: lot.periodId ? (periodoPorId.get(lot.periodId) ?? null) : null,
           kind: lot.kind,
           originalAmount: lot.originalAmount.toFixed(4),
+          // Monto vigente: el original con sus correcciones compensatorias (el disponible descuenta los usos).
+          importeVigente: lot.originalAmount
+            .minus(
+              lot.movements
+                .filter((m) => m.kind === "AMOUNT_CORRECTION")
+                .reduce((sum, m) => sum.plus(m.amount), new Prisma.Decimal(0)),
+            )
+            .toFixed(4),
           available: lot.originalAmount.minus(applied).toFixed(4),
           verificationStatus: lot.verificationStatus,
           origin: origenDelLote(lot),
@@ -2558,8 +2634,10 @@ export class MonthlyWorkpaperService {
     input: { newAmount: string; reason: string },
   ) {
     return withTenantContext(ctx, async (tx) => {
-      const lot = await tx.$queryRaw<Array<{ id: string; originalAmount: Prisma.Decimal }>>`
-        SELECT "id", "originalAmount"
+      const lot = await tx.$queryRaw<
+        Array<{ id: string; originalAmount: Prisma.Decimal; taxTypeId: string; periodId: string | null }>
+      >`
+        SELECT "id", "originalAmount", "taxTypeId", "periodId"
         FROM "tax_credit_lots"
         WHERE "id" = ${lotId} AND "firmId" = ${ctx.firmId} AND "clientId" = ${clientId}
         FOR UPDATE
@@ -2574,20 +2652,34 @@ export class MonthlyWorkpaperService {
       }
       const movements = await tx.taxCreditMovement.findMany({
         where: { lotId },
-        select: { amount: true },
+        select: { amount: true, kind: true },
       });
-      const applied = movements.reduce((sum, m) => sum.plus(m.amount), new Prisma.Decimal(0));
-      const delta = newAmount.minus(locked.originalAmount);
+      // El importe vigente del saldo es el original más las correcciones ya registradas (no el original a secas).
+      const correcciones = movements
+        .filter((m) => m.kind === "AMOUNT_CORRECTION")
+        .reduce((sum, m) => sum.plus(m.amount), new Prisma.Decimal(0));
+      const otrosUsos = movements
+        .filter((m) => m.kind !== "AMOUNT_CORRECTION")
+        .reduce((sum, m) => sum.plus(m.amount), new Prisma.Decimal(0));
+      const importeVigente = locked.originalAmount.minus(correcciones);
+      const delta = newAmount.minus(importeVigente);
       if (delta.isZero()) {
         return { id: locked.id, changed: false, delta: "0.0000" };
       }
       // La corrección no puede dejar el disponible en negativo.
-      if (newAmount.minus(applied).lessThan(0)) {
+      if (newAmount.minus(otrosUsos).lessThan(0)) {
         throw new WorkpaperError(
           "INVALID_TRANSITION",
           "La corrección dejaría el disponible en negativo",
         );
       }
+      // Corrección con invalidación: un mes finalizado rechaza el cambio; los calculados vuelven a preparación.
+      await this.invalidarPorCambioDeSaldo(tx, {
+        firmId: ctx.firmId,
+        clientId,
+        taxTypeId: locked.taxTypeId,
+        periodId: locked.periodId,
+      });
       const movement = await tx.taxCreditMovement.create({
         data: {
           firmId: ctx.firmId,
@@ -2608,7 +2700,7 @@ export class MonthlyWorkpaperService {
           clientId,
           createdByUserId: ctx.userId,
           changes: {
-            originalAmount: { from: locked.originalAmount.toFixed(4), to: newAmount.toFixed(4) },
+            originalAmount: { from: importeVigente.toFixed(4), to: newAmount.toFixed(4) },
             reason: { from: null, to: input.reason },
           } as unknown as Prisma.InputJsonValue,
         },
@@ -2726,11 +2818,11 @@ export class MonthlyWorkpaperService {
   }
 
   /**
-   * Edita los metadatos de un lote de crédito (referencia y/o documento de
-   * respaldo). El importe original NO se edita: una corrección de monto se
-   * registra como movimiento compensatorio para preservar la inmutabilidad
-   * del libro de créditos. Cada edición queda auditada en TaxCreditLotHistory
-   * con el usuario, la fecha y el diff de campos modificados.
+   * Edita los metadatos de un lote de crédito: referencia y documento de respaldo, y el arrastre.
+   * El importe NO se edita aquí: una corrección de monto se registra como movimiento compensatorio
+   * con motivo (`correctCreditLotAmount`). Cada edición queda auditada en TaxCreditLotHistory con el
+   * usuario, la fecha y el diff de campos modificados. Un cambio de arrastre altera el cálculo y sigue
+   * la misma invalidación que una corrección.
    */
   async updateCreditLot(
     ctx: TenantContext,
@@ -2739,7 +2831,6 @@ export class MonthlyWorkpaperService {
     input: {
       reference?: string | null;
       evidenceDocumentId?: string | null;
-      originalAmount?: string;
       carryForward?: boolean;
     },
   ) {
@@ -2770,9 +2861,12 @@ export class MonthlyWorkpaperService {
 
       // Construir el diff de campos modificados para la auditoría.
       const changes: Record<string, { from: unknown; to: unknown }> = {};
-      const nextReference = input.reference ?? null;
-      const nextEvidence = input.evidenceDocumentId ?? null;
-      const nextAmount = input.originalAmount ?? null;
+      // Un campo que no viene en el PATCH conserva su valor: solo cambia lo que se envía.
+      const nextReference = input.reference !== undefined ? input.reference : (lot.reference ?? null);
+      const nextEvidence =
+        input.evidenceDocumentId !== undefined
+          ? input.evidenceDocumentId
+          : (lot.evidenceDocumentId ?? null);
 
       if ((lot.reference ?? null) !== nextReference) {
         changes.reference = { from: lot.reference ?? null, to: nextReference };
@@ -2783,19 +2877,14 @@ export class MonthlyWorkpaperService {
           to: nextEvidence,
         };
       }
-      if (nextAmount !== null) {
-        const currentAmount = lot.originalAmount.toFixed(4);
-        const normalizedNext = new Prisma.Decimal(nextAmount).toFixed(4);
-        if (currentAmount !== normalizedNext) {
-          changes.originalAmount = { from: currentAmount, to: normalizedNext };
-        }
-      }
 
       // Corte 6a: el arrastre se cambia con historial y no si el saldo ya se usó en un cierre.
       if (input.carryForward !== undefined && input.carryForward !== lot.carryForward) {
         const motivo = await motivoSiLoteUsado(tx, lot);
         if (motivo) throw new WorkpaperError("INVALID_TRANSITION", motivo);
         changes.carryForward = { from: lot.carryForward, to: input.carryForward };
+        // El arrastre cambia el cálculo del período donde aplica y de los posteriores.
+        await this.invalidarPorCambioDeSaldo(tx, lot);
       }
       if (Object.keys(changes).length === 0) {
         // Sin cambios reales: no se registra historial ni se toca la BD.
@@ -2812,7 +2901,6 @@ export class MonthlyWorkpaperService {
       const updateData: Prisma.TaxCreditLotUpdateInput = {};
       if (nextReference !== undefined) updateData.reference = nextReference;
       if (nextEvidence !== undefined) updateData.evidenceDocumentId = nextEvidence;
-      if (changes.originalAmount && nextAmount != null) updateData.originalAmount = nextAmount;
       if (changes.carryForward && input.carryForward !== undefined) {
         updateData.carryForward = input.carryForward;
       }

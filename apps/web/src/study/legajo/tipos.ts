@@ -35,10 +35,20 @@ export interface CreditLot {
   regimeId: string | null;
   periodId: string | null;
   kind: string;
+  /** Monto original del saldo (no cambia con las correcciones). */
   originalAmount: string;
+  /** Monto vigente: el original con sus correcciones compensatorias. Es el que se ve y se edita. */
+  importeVigente?: string;
   available: string;
   evidenceDocumentId: string | null;
   reference: string | null;
+  /** Origen del saldo en el libro (la API lo calcula). */
+  origin?: "DJ" | "CIERRE" | "MANUAL";
+  verificationStatus?: string;
+  carryForward?: boolean;
+  /** Período del saldo (su mes de origen) y su impuesto. */
+  period?: { id: string; label: string | null; startDate: string; endDate: string } | null;
+  taxType?: { id: string; code: string; name: string } | null;
   createdBy: { id: string; name: string } | null;
   createdAt: string;
   history: Array<{
