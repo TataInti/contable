@@ -487,4 +487,76 @@ describe("StudyExpedienteMensual", () => {
     expect(reallocateButton.closest("tr")?.contains(allocationError)).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(allocationError.closest(".workpaper-action-error")));
   });
+
+  // 4K: el resultado calculado no se queda con un mínimo que ya no es el que se cargó.
+  const componenteCalculado = {
+    role: "PRINCIPAL",
+    required: true,
+    obligationId: "obligation-a",
+    habitual: true,
+    usaMinimoDeclarado: true,
+    minimoAnterior: null,
+    obligation: {
+      regimeCode: "IIBB_LOCAL_TUC",
+      regimeName: "Contribuyente Local Tucumán",
+      taxTypeCode: "IIBB",
+      taxTypeName: "Ingresos Brutos",
+      jurisdictionName: "Tucumán",
+    },
+    settlement: {
+      id: "settlement-a",
+      status: "CALCULATED",
+      version: 1,
+      totals: { BASE_TOTAL: "115000.00", IMPUESTO_POR_ACTIVIDAD: "4025.00", TOTAL_A_INGRESAR: "4025.00" },
+      lines: [],
+      differences: [],
+      f931Inputs: [],
+      minimo: null,
+    },
+  };
+
+  function calculoConEstado(estadoInicial: string, alCalcular: string | null) {
+    let estado = estadoInicial;
+    mockPageApi({ status: estado });
+    const base = vi.mocked(api.get).getMockImplementation()!;
+    vi.mocked(api.get).mockImplementation(((path: string) => {
+      if (path.includes("/monthly-tax-workpapers?")) return Promise.resolve([workpaper(estado)]);
+      if (path.endsWith("/calculation")) return Promise.resolve([componenteCalculado]);
+      return base(path);
+    }) as never);
+    vi.mocked(api.post).mockImplementation(((path: string) => {
+      if (path.endsWith("/calculate") && alCalcular) estado = alCalcular;
+      return Promise.resolve({});
+    }) as never);
+  }
+
+  it("después de calcular, cambiar el mínimo marca el resultado desactualizado y bloquea Enviar a revisión hasta recalcular", async () => {
+    calculoConEstado("CHANGES_REQUESTED", "CALCULATED");
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /Cálculo/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Recalcular" }));
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "Enviar a revisión" }) as HTMLButtonElement).disabled).toBe(false),
+    );
+
+    fireEvent.change(await screen.findByLabelText("Mínimo del mes"), { target: { value: "11180" } });
+
+    expect(await screen.findByText("Cambiaste el mínimo: recalculá para actualizar el resultado.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Enviar a revisión" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Recalcular" }));
+    await waitFor(() =>
+      expect(screen.queryByText("Cambiaste el mínimo: recalculá para actualizar el resultado.")).toBeNull(),
+    );
+    expect((screen.getByRole("button", { name: "Enviar a revisión" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("en revisión, el mínimo y los impuestos no se modifican y se explica cómo hacerlo", async () => {
+    calculoConEstado("IN_REVIEW", null);
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /Cálculo/ }));
+
+    const minimo = (await screen.findByLabelText("Mínimo del mes")) as HTMLInputElement;
+    expect(minimo.disabled).toBe(true);
+    expect(screen.getByText(/Está en revisión: solicitá cambios para modificar/)).toBeTruthy();
+  });
 });
