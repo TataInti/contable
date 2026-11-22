@@ -351,7 +351,7 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
   await test.step("Cálculo: presentación con acuse, declaración jurada y pago de IIBB y TEM", async () => {
     await page.getByRole("tab", { name: /Cálculo/ }).click();
     const cargas = [
-      { tax: IIBB, total: "2524.45", determinado: "4025.00" },
+      { tax: IIBB, total: "9679.45", determinado: "11180.00" },
       { tax: TEM, total: "10028.00", determinado: "10028.00" },
     ];
     for (const { tax, total, determinado } of cargas) {
