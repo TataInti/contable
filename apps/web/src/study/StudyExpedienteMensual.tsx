@@ -59,6 +59,8 @@ import { mensajesDePedidoDeCambios, selfReviewNote } from "./legajo/formato";
 import { calcularEstadosEtapas } from "./legajo/estadoEtapas";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
 import { PeriodoSinLegajo } from "./legajo/PeriodoSinLegajo";
+import { TarjetaMonotributo } from "./legajo/TarjetaMonotributo";
+import { mesActualMonotributo } from "./fiscal/monotributo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
 import { PanelLibrosIva } from "./legajo/paneles/PanelLibrosIva";
 import { PanelSaldoInicial } from "./legajo/paneles/PanelSaldoInicial";
@@ -1433,6 +1435,14 @@ export function StudyExpedienteMensual() {
       <WorkPage bar={barra}>
         <DensePage density={density}>
           <h1 className="sr-only">Legajo</h1>
+          {firmId && clientId ? (
+            <TarjetaMonotributo
+              firmId={firmId}
+              clientId={clientId}
+              month={selectedTaxPeriod?.startDate ? selectedTaxPeriod.startDate.slice(0, 7) : mesActualMonotributo()}
+              puedePagar={capabilities.has("tax.payments.record") && !soloLectura}
+            />
+          ) : null}
           {cuerpo}
         </DensePage>
       </WorkPage>
