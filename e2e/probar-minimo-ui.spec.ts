@@ -44,7 +44,8 @@ test("Probar liquidación de Ingresos Brutos Tucumán: el aviso de mínimo solo 
 
   await test.step("Reglas fiscales: abrir el paquete de Ingresos Brutos Tucumán y su pestaña Probar", async () => {
     await goTo(page, "Reglas fiscales");
-    await page.getByText(PAQUETE, { exact: true }).first().click();
+    await page.getByRole("row").filter({ hasText: PAQUETE }).first().click();
+    await expect(page.getByRole("heading", { name: PAQUETE, exact: true })).toBeVisible({ timeout: 15_000 });
     await page.getByRole("tab", { name: "Probar", exact: true }).click();
     await expect(page.locator("#rule-simulator").getByLabel(ALICUOTA)).toBeVisible();
   });
