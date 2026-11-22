@@ -256,12 +256,10 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
   });
 
   await test.step("Configuración del estudio: el Titular habilita la autorrevisión (Usuarios y accesos → Controles)", async () => {
-    // Navegación con reintento: en la corrida del CI (45057154807) el primer clic en el menú no llevó a
-    // Usuarios y accesos después del panel de fuentes; el reintento deja la URL en el mensaje si vuelve a fallar.
-    await expect(async () => {
-      await goTo(page, "Usuarios y accesos");
-      await expect(page, "pantalla Usuarios y accesos").toHaveURL(/\/administracion/, { timeout: 5_000 });
-    }).toPass({ timeout: 30_000 });
+    await goTo(page, "Usuarios y accesos");
+    // La URL cambia antes de que la pantalla nueva reemplace a la del Legajo: se espera una pestaña propia de
+    // Usuarios y accesos. Sin esa espera, el clic en «Controles» caía sobre la pestaña del Legajo (CI 22-nov).
+    await expect(page.getByRole("tab", { name: /^Usuarios internos/ })).toBeVisible({ timeout: 30_000 });
     await page.getByRole("tab", { name: /^Controles/ }).click();
     // Idempotente: la opción persiste en la base de la corrida; si ya está activada, no se vuelve a tocar.
     const autorrevision = page.getByRole("checkbox", { name: "Permitir autorrevisión de fuentes y legajos" });
@@ -324,7 +322,7 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
       await mutating(page, "/resolve", () => control.getByRole("button", { name: "Resolver", exact: true }).click());
       await expect(control.getByRole("button", { name: "Resolver", exact: true })).toHaveCount(0);
     }
-    await expect(panel.getByText("bloqueantes abiertos")).toHaveCount(0);
+    await expect(page.getByText("bloqueantes abiertos")).toHaveCount(0);
   });
 
   await test.step("Revisión: Enviar a revisión y aprobación del propio Titular (autorrevisión activada)", async () => {
