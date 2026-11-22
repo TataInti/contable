@@ -187,7 +187,8 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
 
   await test.step("Configuración fiscal: actividad principal", async () => {
     await page.getByRole("button", { name: /Vincular actividad|Completar actividades/ }).first().click();
-    await pickOption(page.locator("#act-activity"), data.activity.code);
+    await page.getByRole("searchbox", { name: "Buscar actividad" }).fill(data.activity.code);
+    await page.getByRole("checkbox", { name: data.activity.code }).check();
     await page.getByRole("button", { name: "Vincular actividad", exact: true }).last().click();
     await expect(seen(page, data.activity.code)).toBeVisible();
   });

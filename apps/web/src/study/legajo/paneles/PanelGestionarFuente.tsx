@@ -204,9 +204,9 @@ export function PanelGestionarFuente({
           <h3>Archivos</h3>
           <p>{nombreEstado}</p>
           {canEdit && calculado ? (
-            <p role="status">En un mes calculado no se cargan archivos nuevos. Reemplazá o retirá un archivo vigente: el cálculo queda desactualizado y hay que recalcular. Marcar o deshacer «Sin movimientos» también invalida el cálculo.</p>
+            <p role="status">En un mes calculado, cargar, reemplazar o retirar un archivo deja el cálculo desactualizado: hay que recalcular. Marcar o deshacer «Sin movimientos» también lo invalida.</p>
           ) : null}
-          {canEdit && !calculado ? <Button variant="primary" onClick={cargarArchivo}>Cargar archivo</Button> : null}
+          {canEdit ? <Button variant="primary" onClick={cargarArchivo}>Cargar archivo</Button> : null}
           {!canEdit && editReason ? <p role="status">{editReason}</p> : null}
           {activeBatches.length === 0 ? <p>No hay archivos vigentes.{calculado ? "" : " Cargá uno para que la fuente cuente en el cálculo."}</p> : null}
           {!source.present ? (

@@ -67,7 +67,7 @@ export function StudyOnboardingFiscal() {
   });
   const [profileId, setProfileId] = useState<string | null>(null);
   const [regimeId, setRegimeId] = useState("");
-  const [activityId, setActivityId] = useState("");
+  const [activityIds, setActivityIds] = useState<string[]>([]);
   const [periodForm, setPeriodForm] = useState({ taxTypeId: "", startDate: today, endDate: today, label: "" });
   const [obligationForm, setObligationForm] = useState({ regimeId: "", periodId: "", dueDate: "" });
   const confirm = useConfirmAction();
@@ -91,6 +91,11 @@ export function StudyOnboardingFiscal() {
   const activitiesQuery = useQuery({
     queryKey: ["tax-activities"],
     queryFn: () => api.get<EconomicActivity[]>("/tax/activities"),
+    enabled: Boolean(firmId),
+  });
+  const jurisdictionsQuery = useQuery({
+    queryKey: ["tax-jurisdictions", "configuracion-fiscal"],
+    queryFn: () => api.get<{ id: string; name: string }[]>("/tax/jurisdictions"),
     enabled: Boolean(firmId),
   });
   const typesQuery = useQuery({
@@ -214,8 +219,14 @@ export function StudyOnboardingFiscal() {
     onSuccess: () => { invalidateClientFiscal(); notify.success("Período anulado."); },
   });
   const addActivity = useMutation({
-    mutationFn: () => api.post(`/firms/${firmId}/clients/${clientId}/activities`, { profileVersionId: effectiveProfileId, activityId, isPrimary: true }),
-    onSuccess: () => { invalidateClientFiscal(); setActivityId(""); setOpenFormStep(null); },
+    // Una casilla por actividad elegida: cada vínculo se crea aparte. Si una falla, las anteriores quedan vinculadas y se muestra el motivo.
+    mutationFn: async (ids: string[]) => {
+      for (const activityId of ids) {
+        await api.post(`/firms/${firmId}/clients/${clientId}/activities`, { profileVersionId: effectiveProfileId, activityId, isPrimary: true });
+      }
+    },
+    onSuccess: () => { invalidateClientFiscal(); setActivityIds([]); setOpenFormStep(null); },
+    onError: () => invalidateClientFiscal(),
   });
   const updateActivity = useMutation({
     mutationFn: ({ id, validFrom }: { id: string; validFrom: string }) => api.patch(`/firms/${firmId}/clients/${clientId}/activities/${id}`, { validFrom }),
@@ -365,7 +376,7 @@ export function StudyOnboardingFiscal() {
       <CajonCorregirActividad activity={activityToEdit} onClose={() => setActivityToEdit(null)} updateActivity={updateActivity} />
       <CajonCambioActividad isOpen={changeOpen} onClose={() => setChangeOpen(false)} vigentes={(clientActivitiesQuery.data ?? []).filter((link) => !link.validTo)} activitiesQuery={activitiesQuery} registrar={registerChange} />
       <CajonCorregirPeriodo period={periodToEdit} onClose={() => setPeriodToEdit(null)} updatePeriod={updatePeriod} />
-      <CajonActividad openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} activityId={activityId} setActivityId={setActivityId} addActivity={addActivity} activitiesQuery={activitiesQuery} effectiveProfileId={effectiveProfileId} />
+      <CajonActividad openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} activityIds={activityIds} setActivityIds={setActivityIds} addActivity={addActivity} activitiesQuery={activitiesQuery} jurisdictionsQuery={jurisdictionsQuery} effectiveProfileId={effectiveProfileId} />
       <CajonPeriodo openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} periodForm={periodForm} setPeriodForm={setPeriodForm} createPeriod={createPeriod} typesQuery={typesQuery} />
       <CajonObligacion openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} obligationForm={obligationForm} setObligationForm={setObligationForm} createObligation={createObligation} selectablePeriods={selectablePeriods} eligibleRegistrations={eligibleRegistrations} effectiveProfileId={effectiveProfileId} />
 

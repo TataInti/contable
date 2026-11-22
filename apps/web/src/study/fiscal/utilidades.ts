@@ -109,6 +109,7 @@ export const FISCAL_STEPS: Array<{ key: FiscalStep; label: string }> = [
 
 export type ConfirmApi = ReturnType<typeof useConfirmAction>;
 export type Mutacion = { isPending: boolean; error: Error | null; mutate: () => void };
+export type MutacionConLista = { isPending: boolean; error: Error | null; mutate: (ids: string[]) => void };
 export type MutacionConValor = { isPending: boolean; error: Error | null; mutate: (valor: string) => void };
 export type PeriodoForm = { taxTypeId: string; startDate: string; endDate: string; label: string };
 export type ObligacionForm = { regimeId: string; periodId: string; dueDate: string };

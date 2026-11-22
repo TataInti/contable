@@ -372,7 +372,8 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Configuración fiscal: actividades del cliente", async () => {
     for (const tax of Object.values(taxes)) {
       await clickAdd(page, "Actividades");
-      await pickOption(page.locator("#act-activity"), tax.activity.code);
+      await page.getByRole("searchbox", { name: "Buscar actividad" }).fill(tax.activity.code);
+      await page.getByRole("checkbox", { name: tax.activity.code }).check();
       await mutating(page, "/activities", () =>
         page.getByRole("button", { name: "Vincular actividad", exact: true }).last().click(),
       );

@@ -626,6 +626,21 @@ export class IngestionService {
         });
       }
 
+      // Un lote nuevo que entra a un mes calculado deja el cálculo desactualizado, igual que el reemplazo:
+      // el mes sigue calculado y hay que recalcular para que cuente.
+      if (!replacementTarget) {
+        const vinculo = await tx.workpaperImportBatch.findFirst({
+          where: { importBatchId: batchId, firmId: ctx.firmId },
+          include: { workpaper: { select: { status: true } } },
+        });
+        if (vinculo?.workpaper.status === "CALCULATED") {
+          await tx.monthlyTaxWorkpaper.update({
+            where: { id: vinculo.workpaperId },
+            data: { inputHash: null, outputHash: null, reviewedByUserId: null },
+          });
+        }
+      }
+
       return { batch, committed, duplicates, errors: [] as string[] };
     });
   }

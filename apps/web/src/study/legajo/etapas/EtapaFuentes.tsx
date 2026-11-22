@@ -25,7 +25,7 @@ export interface EtapaFuentesProps {
   noMovementsMutation: UseMutationResult<unknown, Error, { sourceCode: string; marcar: boolean }>;
   /** Motivo por el que no se puede marcar «Sin movimientos»; null si se puede (corte 2A). */
   motivoSinMovimientos: string | null;
-  /** El mes está calculado: se reemplazan o retiran archivos vigentes, pero no se cargan nuevos. */
+  /** El mes está calculado: cargar, reemplazar o retirar un archivo deja el cálculo desactualizado y hay que recalcular. */
   calculado?: boolean;
 }
 
