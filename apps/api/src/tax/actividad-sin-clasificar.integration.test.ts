@@ -513,8 +513,46 @@ describe("4G — ventas sin clasificar: el cálculo se detiene con un mensaje qu
     const [liquidacion] = data<Array<{ settlement: { totals: Record<string, string> } }>>(calculo);
     // Base = neto de las dos facturas (50.000 + 30.000); IVA y otros tributos quedan afuera.
     expect(liquidacion!.settlement.totals["BASE_TOTAL"]).toBe("80000.00");
-    // IIBB: REST-TUC 4,5 % sobre 80.000 = 3.600; el mínimo del régimen (5.000) rige.
+    // IIBB: REST-TUC 4,5 % sobre 80.000 = 3.600. El mínimo es libre (decisión de Inti 22-11-2026):
+    // sin mínimo ingresado no se aplica el del régimen.
     expect(liquidacion!.settlement.totals["IMPUESTO_POR_ACTIVIDAD"]).toBe("3600.00");
-    expect(liquidacion!.settlement.totals["IMPUESTO_DETERMINADO"]).toBe("5000.00");
+    expect(liquidacion!.settlement.totals["IMPUESTO_DETERMINADO"]).toBe("3600.00");
+  });
+
+  it("IIBB Tucumán: el mínimo que ingresa el contador entra en la fórmula y queda registrado", async () => {
+    const ruta = await prepararLibro({
+      caso: "iibb-minimo-libre",
+      taxTypeCode: "IIBB",
+      regimeCode: "IIBB_LOCAL_TUC",
+      activityCodes: ["REST-TUC"],
+    });
+    const lectura = ruta.replace(/\/calculate$/, "/calculation");
+    const primera = await request("POST", ruta, { cutoff: END });
+    ok(primera, 200, "cálculo inicial de IIBB sin mínimo ingresado");
+    const [componente] = data<Array<{ obligationId: string; usaMinimoDeclarado: boolean; habitual: boolean; settlement: { totals: Record<string, string>; minimo: unknown } }>>(
+      await request("GET", lectura),
+    );
+    expect(componente!.usaMinimoDeclarado).toBe(true);
+    expect(componente!.habitual).toBe(true);
+    // Sin mínimo ingresado no se aplica el de la regla: el impuesto es el de la actividad.
+    expect(componente!.settlement.totals["MINIMO_APLICADO"]).toBeUndefined();
+    expect(componente!.settlement.minimo).toBeNull();
+
+    const sinImpuestos = await request("POST", ruta, { cutoff: END, obligationIds: [] });
+    expect(sinImpuestos.statusCode).toBeGreaterThanOrEqual(400);
+    expect(sinImpuestos.body).toContain("Elegí al menos un impuesto para liquidar este mes");
+
+    const conMinimo = await request("POST", ruta, {
+      cutoff: END,
+      obligationIds: [componente!.obligationId],
+      minimums: { [componente!.obligationId]: "5000" },
+    });
+    ok(conMinimo, 200, "cálculo de IIBB con mínimo ingresado");
+    const [liquidado] = data<Array<{ settlement: { totals: Record<string, string>; minimo: { amount: string; origen: string } | null } }>>(
+      await request("GET", lectura),
+    );
+    expect(liquidado!.settlement.totals["MINIMO_APLICADO"]).toBe("5000.00");
+    expect(liquidado!.settlement.totals["TOTAL_A_INGRESAR"]).toBe("5000.00");
+    expect(liquidado!.settlement.minimo).toMatchObject({ amount: "5000.00", origen: "CAMPO" });
   });
 });

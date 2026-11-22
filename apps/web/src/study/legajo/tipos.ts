@@ -305,6 +305,12 @@ export interface WorkpaperCalculationComponent {
   role: string;
   required: boolean;
   obligationId: string;
+  /** Perfil habitual: se liquidó en el expediente anterior (o es el primero del cliente). */
+  habitual: boolean;
+  /** El motor vigente usa el mínimo que ingresa el contador (IIBB Tucumán). */
+  usaMinimoDeclarado: boolean;
+  /** Último mínimo que usó el cliente en este impuesto, sin contar la liquidación actual. */
+  minimoAnterior: { amount: string } | null;
   obligation: {
     regimeCode: string;
     regimeName: string;
@@ -339,6 +345,8 @@ export interface WorkpaperCalculationComponent {
       sourceId: string;
       snapshot: Record<string, unknown>;
     }>;
+    /** Mínimo aplicado a esta liquidación: el que ingresó el contador o el de la categoría. */
+    minimo: { amount: string; origen: "CAMPO" | "CATEGORIA"; declaredAt: string | null } | null;
   } | null;
 }
 export type PositionAction = {

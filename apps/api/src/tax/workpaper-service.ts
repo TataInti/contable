@@ -9,7 +9,7 @@ import {
 } from "./credit-lots-vigentes.js";
 import { calculateLateInterest, taxHash } from "@contable/tax-engine";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
-import { settlementService } from "./settlement-service.js";
+import { resolveTaxEngineForVersion, settlementService } from "./settlement-service.js";
 import {
   getWorkpaperSourcePolicy,
   isSourceRequired,
@@ -145,6 +145,33 @@ const OPENING_CREDIT_ORIGIN_ERRORS: Record<
     message: "La jurisdicción del saldo no existe o está inactiva",
   },
 };
+
+/**
+ * Indica si el motor vigente del régimen usa el mínimo declarado por el contador (IIBB Tucumán).
+ * Se decide por el id del motor del paquete de reglas, nunca por el nombre del impuesto.
+ */
+async function regimeUsaMinimoDeclarado(
+  tx: Prisma.TransactionClient,
+  regimeId: string,
+  periodStart: Date,
+  periodEnd: Date,
+): Promise<boolean> {
+  const pack = await tx.taxRulePack.findFirst({ where: { regimeId }, select: { id: true } });
+  if (!pack) return false;
+  const version = await tx.taxRuleVersion.findFirst({
+    where: {
+      packId: pack.id,
+      status: { in: ["ACTIVE", "RETIRED"] },
+      validFrom: { lte: periodStart },
+      OR: [{ validTo: null }, { validTo: { gte: periodEnd } }],
+    },
+    orderBy: [{ validFrom: "desc" }, { version: "desc" }],
+    select: { engineId: true, engineVersion: true },
+  });
+  if (!version) return false;
+  const engine = await resolveTaxEngineForVersion(tx, version);
+  return engine?.engineKey === "iibb-local-tuc";
+}
 
 export class WorkpaperError extends Error {
   readonly code: WorkpaperErrorCode;
@@ -909,7 +936,17 @@ export class MonthlyWorkpaperService {
   // Cálculo: orquesta los motores por régimen
   // ------------------------------------------------------------------
 
-  async calculate(ctx: TenantContext, workpaperId: string, input?: { cutoff?: string }) {
+  async calculate(
+    ctx: TenantContext,
+    workpaperId: string,
+    input?: {
+      cutoff?: string;
+      /** Impuestos a liquidar este mes (ids de obligación). Ausente = todos los del expediente. */
+      obligationIds?: string[];
+      /** Mínimo del mes por obligación de IIBB Tucumán (id de obligación → importe). */
+      minimums?: Record<string, string>;
+    },
+  ) {
     return withTenantContext(ctx, async (tx) => {
       const wp = await tx.monthlyTaxWorkpaper.findFirst({
         where: { id: workpaperId, firmId: ctx.firmId },
@@ -933,10 +970,30 @@ export class MonthlyWorkpaperService {
         );
       }
 
+      const seleccion = input?.obligationIds ? new Set(input.obligationIds) : null;
+      if (seleccion) {
+        const conocidas = new Set(links.map((link) => link.obligation.id));
+        if ([...seleccion].some((id) => !conocidas.has(id))) {
+          throw new WorkpaperError(
+            "INVALID_TRANSITION",
+            "Hay impuestos elegidos que no pertenecen a este expediente. Recargá la etapa y volvé a elegir.",
+          );
+        }
+        if (seleccion.size === 0) {
+          throw new WorkpaperError(
+            "INVALID_TRANSITION",
+            "Elegí al menos un impuesto para liquidar este mes.",
+          );
+        }
+      }
+      const liquidables = seleccion
+        ? links.filter((link) => seleccion.has(link.obligation.id))
+        : links;
+
       const sources = await this.sourceCoverage(
         tx,
         wp,
-        links.map((link) => link.obligation),
+        liquidables.map((link) => link.obligation),
       );
       const missingSources = sources.filter((source) => source.required && !isSourceCovered(source));
       if (missingSources.length > 0) {
@@ -1006,7 +1063,7 @@ export class MonthlyWorkpaperService {
         version: number;
       }> = [];
 
-      for (const link of links) {
+      for (const link of liquidables) {
         let settlement = link.settlement;
         if (settlement?.status === "IN_REVIEW") {
           throw new WorkpaperError(
@@ -1062,6 +1119,9 @@ export class MonthlyWorkpaperService {
             jurisdictionId: link.obligation.regime.jurisdictionId,
             periodId: link.obligation.periodId,
             cutoff,
+            ...(input?.minimums?.[link.obligation.id]
+              ? { declaredMinimum: input.minimums[link.obligation.id]! }
+              : {}),
             sourceScope: {
               workpaperId: wp.id,
               obligationId: link.obligation.id,
@@ -2142,7 +2202,10 @@ export class MonthlyWorkpaperService {
                 include: {
                   lines: { orderBy: { position: "asc" } },
                   differences: { orderBy: { createdAt: "asc" } },
-                  inputs: { where: { kind: "F931" }, orderBy: { createdAt: "asc" } },
+                  inputs: {
+                    where: { kind: { in: ["F931", "IIBB_MINIMUM_DECLARED", "TEM_CATEGORY"] } },
+                    orderBy: { createdAt: "asc" },
+                  },
                 },
               },
             },
@@ -2153,31 +2216,100 @@ export class MonthlyWorkpaperService {
       if (!workpaper) {
         throw new WorkpaperError("WORKPAPER_NOT_FOUND", "Expediente no encontrado");
       }
-      return workpaper.settlements.map((component) => ({
-        role: component.role,
-        required: component.required,
-        obligationId: component.obligationId,
-        obligation: {
-          regimeCode: component.obligation.regime.code,
-          regimeName: component.obligation.regime.name,
-          taxTypeCode: component.obligation.regime.taxType.code,
-          taxTypeName: component.obligation.regime.taxType.name,
-          jurisdictionName: component.obligation.regime.jurisdiction.name,
+      // Perfil habitual: los regímenes liquidados en el expediente anterior del cliente. Si no hay
+      // uno previo con liquidaciones, todos los inscriptos del mes cuentan como habituales.
+      const anterior = await tx.monthlyTaxWorkpaper.findFirst({
+        where: {
+          firmId: ctx.firmId,
+          clientId: workpaper.clientId,
+          periodStart: { lt: workpaper.periodStart },
+          settlements: { some: { settlementId: { not: null } } },
         },
-        settlement: component.settlement
-          ? {
-              id: component.settlement.id,
-              status: component.settlement.status,
-              engineVersion: component.settlement.engineVersion,
-              ruleVersionId: component.settlement.ruleVersionId,
-              rulesHash: component.settlement.rulesHash,
-              totals: component.settlement.totals,
-              lines: component.settlement.lines,
-              differences: component.settlement.differences,
-              f931Inputs: component.settlement.inputs,
-            }
-          : null,
-      }));
+        orderBy: { periodStart: "desc" },
+        include: {
+          settlements: {
+            where: { settlementId: { not: null } },
+            include: { obligation: { select: { regimeId: true } } },
+          },
+        },
+      });
+      const regimenesAnteriores = new Set(
+        anterior?.settlements.map((link) => link.obligation.regimeId) ?? [],
+      );
+      return Promise.all(
+        workpaper.settlements.map(async (component) => {
+          const regimeId = component.obligation.regimeId;
+          const usaMinimoDeclarado = await regimeUsaMinimoDeclarado(
+            tx,
+            regimeId,
+            workpaper.periodStart,
+            workpaper.periodEnd,
+          );
+          const minimoDelMes = component.settlement?.inputs.find(
+            (input) => input.kind === "IIBB_MINIMUM_DECLARED",
+          );
+          const minimoCategoria = component.settlement?.inputs.find(
+            (input) => input.kind === "TEM_CATEGORY",
+          );
+          // Último mínimo que usó el cliente en este impuesto, sin contar la liquidación actual.
+          const ultimo = usaMinimoDeclarado
+            ? await tx.settlementInput.findFirst({
+                where: {
+                  firmId: ctx.firmId,
+                  clientId: workpaper.clientId,
+                  kind: "IIBB_MINIMUM_DECLARED",
+                  settlement: { regimeId },
+                  ...(component.settlement ? { settlementId: { not: component.settlement.id } } : {}),
+                },
+                orderBy: { createdAt: "desc" },
+                select: { snapshot: true },
+              })
+            : null;
+          return {
+            role: component.role,
+            required: component.required,
+            obligationId: component.obligationId,
+            habitual: !anterior || regimenesAnteriores.has(regimeId),
+            usaMinimoDeclarado,
+            minimoAnterior: ultimo
+              ? { amount: String((ultimo.snapshot as Record<string, unknown>)["amount"] ?? "") }
+              : null,
+            obligation: {
+              regimeCode: component.obligation.regime.code,
+              regimeName: component.obligation.regime.name,
+              taxTypeCode: component.obligation.regime.taxType.code,
+              taxTypeName: component.obligation.regime.taxType.name,
+              jurisdictionName: component.obligation.regime.jurisdiction.name,
+            },
+            settlement: component.settlement
+              ? {
+                  id: component.settlement.id,
+                  status: component.settlement.status,
+                  engineVersion: component.settlement.engineVersion,
+                  ruleVersionId: component.settlement.ruleVersionId,
+                  rulesHash: component.settlement.rulesHash,
+                  totals: component.settlement.totals,
+                  lines: component.settlement.lines,
+                  differences: component.settlement.differences,
+                  f931Inputs: component.settlement.inputs.filter((input) => input.kind === "F931"),
+                  minimo: minimoDelMes
+                    ? {
+                        amount: String((minimoDelMes.snapshot as Record<string, unknown>)["amount"] ?? ""),
+                        origen: "CAMPO" as const,
+                        declaredAt: String((minimoDelMes.snapshot as Record<string, unknown>)["declaredAt"] ?? ""),
+                      }
+                    : minimoCategoria
+                      ? {
+                          amount: String((minimoCategoria.snapshot as Record<string, unknown>)["minimum"] ?? ""),
+                          origen: "CATEGORIA" as const,
+                          declaredAt: null,
+                        }
+                      : null,
+                }
+              : null,
+          };
+        }),
+      );
     });
   }
 

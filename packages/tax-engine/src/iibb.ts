@@ -65,6 +65,13 @@ export interface IibbTucInput extends TaxEngineInput {
   minimum?: DecimalValue;
   /** Parámetros declarados por los archivos oficiales, usados como control. */
   declaredParameters?: readonly LocalTaxDeclaredParameter[];
+  /**
+   * Reglas versionadas contra las que se controlan los parámetros declarados.
+   * Si faltan, el control usa `rules`. El mínimo libre del mes no entra en el control.
+   */
+  controlRules?: IibbTucInput["rules"];
+  /** Mínimo versionado para el control (null: el paquete no tiene). Si falta, el control usa `minimum`. */
+  controlMinimum?: DecimalValue | null;
 }
 
 export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
@@ -181,12 +188,22 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
 
   if (strict) {
     const mismatches = new Set<string>();
+    const controlList = input.controlRules ?? input.rules;
+    const controlRules = new Map(controlList.map((r) => [r.concept, r]));
+    const controlTypedByActivity = new Map(
+      controlList
+        .filter((rule) => rule.kind === "RATE" && rule.activityId)
+        .map((rule) => [rule.activityId!, rule]),
+    );
+    const controlTypedDefault = controlList.find((rule) => rule.kind === "RATE" && rule.isDefault);
+    const versionedMinimum =
+      input.controlMinimum !== undefined ? input.controlMinimum ?? undefined : minimum;
     for (const declared of [...(input.declaredParameters ?? [])].sort((left, right) =>
       `${left.activity}:${left.sourceId}`.localeCompare(`${right.activity}:${right.sourceId}`),
     )) {
       const rule = typed
-        ? typedRulesByActivity.get(declared.activity) ?? typedDefaultRule
-        : rules.get(declared.activity) ?? rules.get("DEFAULT");
+        ? controlTypedByActivity.get(declared.activity) ?? controlTypedDefault
+        : controlRules.get(declared.activity) ?? controlRules.get("DEFAULT");
       if (declared.rate !== undefined) {
         const sourceRate = dec(declared.rate).div(100);
         if (rule?.rate === undefined || !sourceRate.equals(rule.rate)) {
@@ -196,7 +213,7 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
         }
       }
       if (declared.minimum !== undefined) {
-        const configuredMinimum = rule?.minimum ?? minimum;
+        const configuredMinimum = rule?.minimum ?? versionedMinimum;
         if (
           configuredMinimum === undefined ||
           !dec(declared.minimum).equals(configuredMinimum)

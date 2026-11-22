@@ -233,7 +233,8 @@ interface SettlementInputRow {
     | "CREDIT"
     | "F931"
     | "CM03_COEFFICIENT"
-    | "TEM_CATEGORY";
+    | "TEM_CATEGORY"
+    | "IIBB_MINIMUM_DECLARED";
   sourceId: string;
   sourceVersion?: number;
   snapshot: Record<string, unknown>;
@@ -246,6 +247,11 @@ export interface SettlementCalculationInput {
   jurisdictionId: string;
   periodId: string;
   cutoff: string;
+  /**
+   * Mínimo del mes que ingresa el contador (solo IIBB Tucumán, decisión de Inti 22-11-2026).
+   * Ausente = sin mínimo. Queda en settlement_inputs con quién y cuándo.
+   */
+  declaredMinimum?: string;
   sourceScope?: {
     workpaperId?: string;
     obligationId?: string;
@@ -1332,6 +1338,37 @@ export class SettlementService {
           });
         }
       }
+      // IIBB Tucumán: el mínimo es libre y lo ingresa el contador en cada liquidación. El mínimo del
+      // paquete de reglas no se aplica; queda como referencia para el control de parámetros declarados.
+      const isIibbTucEngine = engineKey === "iibb-local-tuc";
+      const versionedMinimum = minimum;
+      if (!isIibbTucEngine && input.declaredMinimum !== undefined) {
+        throw new SettlementError(
+          "INVALID_TRANSITION",
+          "El mínimo declarado solo aplica al Ingresos Brutos de Tucumán",
+        );
+      }
+      if (isIibbTucEngine) {
+        minimum = input.declaredMinimum !== undefined ? dec(input.declaredMinimum) : undefined;
+        if (minimum !== undefined) {
+          inputs.push({
+            kind: "IIBB_MINIMUM_DECLARED",
+            sourceId: "declared",
+            snapshot: {
+              amount: minimum.toFixed(2),
+              declaredByUserId: ctx.userId,
+              declaredAt: new Date().toISOString(),
+            },
+          });
+        }
+      }
+      const rulesSinMinimo = isIibbTucEngine
+        ? rules.map((rule) => {
+            const copy = { ...rule };
+            delete copy.minimum;
+            return copy;
+          })
+        : rules;
       const ivaRestitution = adjustments
         .filter((adjustment) => adjustment.conceptRef?.behavior === "IVA_RESTITUTION")
         .reduce((sum, adjustment) => sum.plus(adjustment.amount), new Prisma.Decimal(0));
@@ -1350,10 +1387,12 @@ export class SettlementService {
           engineVersion: activeVersion.engineVersion,
           period: periodRange,
           facts: facts as TaxFact[],
-          rules,
+          rules: rulesSinMinimo,
           ...(isTypedRuleVersion ? { ruleMode: "TYPED" as const } : {}),
           incomeByActivity,
           ...(minimum !== undefined ? { minimum } : {}),
+          controlRules: rules,
+          controlMinimum: versionedMinimum ?? null,
           credits: {
             withholding: ordinaryWithholdingTotal,
             perception: perceptionTotal,

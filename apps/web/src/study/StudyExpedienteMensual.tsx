@@ -69,6 +69,14 @@ import { EtapaFuentes } from "./legajo/etapas/EtapaFuentes";
 import { EtapaSaldos } from "./legajo/etapas/EtapaSaldos";
 import { rangoMesAnterior } from "./legajo/saldosArrastre";
 import { EtapaCalculo } from "./legajo/etapas/EtapaCalculo";
+import {
+  cuerpoCalculo,
+  motivoSeleccionCalculo,
+  seleccionHabitual,
+  type SeleccionCalculo,
+} from "./legajo/etapas/seleccionCalculo";
+
+type CuerpoCalculo = { obligationIds?: string[]; minimums?: Record<string, string> };
 import { EtapaClasificacion } from "./legajo/etapas/EtapaClasificacion";
 import { EtapaControles } from "./legajo/etapas/EtapaControles";
 import { EtapaCierre } from "./legajo/etapas/EtapaCierre";
@@ -148,6 +156,10 @@ export function StudyExpedienteMensual() {
   const [controlResolutions, setControlResolutions] = useState<Record<string, string>>({});
   const [controlEvidence, setControlEvidence] = useState<Record<string, string>>({});
   const [positionAction, setPositionAction] = useState<PositionAction>(null);
+  const [seleccionCalculo, setSeleccionCalculo] = useState<{
+    workpaperId: string;
+    seleccion: SeleccionCalculo;
+  } | null>(null);
   const [sourceCode, setSourceCode] = useState("");
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [classificationDrafts, setClassificationDrafts] = useState<
@@ -378,9 +390,22 @@ export function StudyExpedienteMensual() {
   });
 
 
+  // Impuestos marcados para liquidar este mes: por defecto el perfil habitual (Brief 3C).
+  const seleccionDe = (workpaperId: string): SeleccionCalculo =>
+    seleccionCalculo?.workpaperId === workpaperId
+      ? seleccionCalculo.seleccion
+      : seleccionHabitual(calculationQuery.data ?? []);
+  const actualizarSeleccion = (workpaperId: string, seleccion: SeleccionCalculo) =>
+    setSeleccionCalculo({ workpaperId, seleccion });
+  // Sin impuestos cargados todavía, el pedido va sin selección: calcula todos (comportamiento anterior).
+  const cuerpoDe = (workpaperId: string): CuerpoCalculo =>
+    calculationQuery.isSuccess
+      ? cuerpoCalculo(calculationQuery.data ?? [], seleccionDe(workpaperId))
+      : {};
+
   const calculateMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${id}/calculate`),
+    mutationFn: ({ id, body }: { id: string; body: CuerpoCalculo }) =>
+      api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${id}/calculate`, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
       void queryClient.invalidateQueries({
@@ -795,6 +820,8 @@ export function StudyExpedienteMensual() {
             positionQuery={positionQuery}
             calculateInterestMutation={calculateInterestMutation}
             setPositionAction={setPositionAction}
+            seleccion={seleccionDe(wp.id)}
+            onSeleccionChange={(seleccion) => actualizarSeleccion(wp.id, seleccion)}
           />
         ) : step === 4 ? (
           <EtapaControles
@@ -917,8 +944,14 @@ export function StudyExpedienteMensual() {
 
   // Acciones del legajo según su estado: la misma matriz de hoy, con sus permisos, confirmaciones y textos.
   const armarAccionesLegajo = (wp: Workpaper) => {
+    const seleccionReason = calculationQuery.isSuccess
+      ? motivoSeleccionCalculo(calculationQuery.data ?? [], seleccionDe(wp.id))
+      : null;
     const calculateDisabled =
-      calculateMutation.isPending || wp.status !== "READY_TO_CALCULATE" || !canCalculate;
+      calculateMutation.isPending ||
+      wp.status !== "READY_TO_CALCULATE" ||
+      !canCalculate ||
+      seleccionReason !== null;
     const calculateDisabledReason = calculateDisabled
       ? calculationDisabledMessage({
           status: wp.status,
@@ -927,7 +960,7 @@ export function StudyExpedienteMensual() {
           allocations: allocationQuery.data,
           canCalculate,
           isPending: calculateMutation.isPending,
-        })
+        }) ?? seleccionReason
       : null;
     const selfReviewBlocked = Boolean(
       currentUserId &&
@@ -954,7 +987,7 @@ export function StudyExpedienteMensual() {
           variant="primary"
           disabled={calculateDisabled}
           title={calculateDisabledReason ?? "Calcular liquidación"}
-          onClick={() => void calculateMutation.mutate(wp.id)}
+          onClick={() => void calculateMutation.mutate({ id: wp.id, body: cuerpoDe(wp.id) })}
         >
           Calcular liquidación
         </Button>
@@ -966,7 +999,7 @@ export function StudyExpedienteMensual() {
           </small>,
         );
       }
-      motivos.push(errorDe(calculateMutation.variables === wp.id ? calculateMutation.error : null, "error-calcular"));
+      motivos.push(errorDe(calculateMutation.variables?.id === wp.id ? calculateMutation.error : null, "error-calcular"));
     }
     if (wp.status === "CHANGES_REQUESTED") {
       accion = (
@@ -974,7 +1007,7 @@ export function StudyExpedienteMensual() {
           size="sm"
           variant="primary"
           disabled={calculateMutation.isPending || !canCalculate}
-          onClick={() => calculateMutation.mutate(wp.id)}
+          onClick={() => calculateMutation.mutate({ id: wp.id, body: cuerpoDe(wp.id) })}
         >
           Recalcular
         </Button>
@@ -986,7 +1019,7 @@ export function StudyExpedienteMensual() {
           </small>,
         );
       }
-      motivos.push(errorDe(calculateMutation.variables === wp.id ? calculateMutation.error : null, "error-recalcular"));
+      motivos.push(errorDe(calculateMutation.variables?.id === wp.id ? calculateMutation.error : null, "error-recalcular"));
     }
     if (wp.status === "CALCULATED") {
       accion = (
