@@ -199,6 +199,86 @@ describe("G2-03 adaptador ARCA retenciones/percepciones", () => {
     expect(result.errors).toContain("KIND_INVALID");
   });
 
+  it("una percepción de un archivo que no trae base (TXT de la DGR) es válida con base en cero", () => {
+    const result = normalizeWithholdingRow({
+      cuitResponsable: "20111111112",
+      cuitAgente: "30555555551",
+      concept: "IIBB",
+      amount: "1500.5",
+      kind: "PERCEPCION",
+      issuedOn: "2026-10-01",
+      baseNoInformada: true,
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.base).toBe("0.0000");
+      expect(result.data.amount).toBe("1500.5000");
+      expect(result.data.kind).toBe("PERCEPCION");
+    }
+  });
+
+  it("sin la marca de base no informada, la base sigue siendo obligatoria", () => {
+    const result = normalizeWithholdingRow({
+      cuitResponsable: "20111111112",
+      cuitAgente: "30555555551",
+      concept: "IIBB",
+      amount: "1500.5",
+      kind: "PERCEPCION",
+      issuedOn: "2026-10-01",
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("BASE_INVALID");
+  });
+
+  it("una base informada pero inválida se rechaza aunque la fila marque base no informada", () => {
+    const result = normalizeWithholdingRow({
+      cuitResponsable: "20111111112",
+      cuitAgente: "30555555551",
+      concept: "IIBB",
+      base: "abc",
+      amount: "1500.5",
+      kind: "RETENCION",
+      issuedOn: "2026-10-01",
+      baseNoInformada: true,
+    });
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toContain("BASE_INVALID");
+  });
+
+  it("una base informada se respeta aunque la fila marque base no informada", () => {
+    const result = normalizeWithholdingRow({
+      cuitResponsable: "20111111112",
+      cuitAgente: "30555555551",
+      concept: "IIBB",
+      base: "1000",
+      amount: "50",
+      kind: "RETENCION",
+      issuedOn: "2026-10-01",
+      baseNoInformada: true,
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") expect(result.data.base).toBe("1000.0000");
+  });
+
+  it("una recaudación bancaria de la DGR (importe con ceros a la izquierda, sin base) es válida", () => {
+    const result = normalizeWithholdingRow({
+      kind: "RETENCION",
+      cuitResponsable: "20111111112",
+      cuitAgente: "30707070702",
+      concept: "RECAUDACION_BANCARIA",
+      amount: "000123.45",
+      issuedOn: "2026-10-01",
+      certificateNumber: "00000000000000000001",
+      baseNoInformada: true,
+    });
+    expect(result.status).toBe("VALID");
+    if (result.status === "VALID") {
+      expect(result.data.amount).toBe("123.4500");
+      expect(result.data.concept).toBe("RECAUDACION_BANCARIA");
+      expect(result.data.documentKind).toBe("INVOICE");
+    }
+  });
+
   it("un lote separa totales de retenciones y percepciones", () => {
     const batch = normalizeWithholdingBatch([
       {

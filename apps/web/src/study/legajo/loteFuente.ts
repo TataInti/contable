@@ -1,5 +1,6 @@
 import { api } from "../../lib/api";
-import { hashSourceFile, parseSourceFile } from "./archivoFuente";
+import { hashSourceFile, leerArchivoFuente } from "./archivoFuente";
+import { avisoDeFuenteEquivocada } from "./txtDgrTucuman";
 import type { WorkpaperSource } from "./tipos";
 
 // Los libros IVA se importan desde su fila de ARCA IVA («Importar libro»); «Importar lote» queda para las demás fuentes.
@@ -45,7 +46,14 @@ export function estadoDeLote(lote: {
   return { status: lote.batchStatus };
 }
 
+/** Resultado de una importación confirmada: lo que el contador debería mirar aunque el lote se haya cargado. */
+export interface ResultadoImportacionLote {
+  avisos: string[];
+}
+
 // Lote de una fuente (CSV, TXT o JSON): crea el lote, lo valida y, sin filas observadas, lo confirma.
+// Los TXT de la DGR de Tucumán (per…, ret…, reca…) se leen con su propio lector y se comprueban contra
+// el CUIT del cliente, el período y la fuente elegida.
 export async function importarLoteFuente({
   firmId,
   clientId,
@@ -53,6 +61,8 @@ export async function importarLoteFuente({
   file,
   workpaperId,
   clientCuit,
+  periodo,
+  fuentes,
 }: {
   firmId: string | null;
   clientId: string | null;
@@ -60,12 +70,18 @@ export async function importarLoteFuente({
   file: File;
   workpaperId: string;
   clientCuit: string;
-}): Promise<void> {
+  /** Período de la fuente: las fechas del archivo fuera de este rango se avisan. */
+  periodo?: { startDate: string; endDate: string };
+  /** Fuentes del legajo, para nombrar la correcta cuando el archivo se sube a otra. */
+  fuentes?: readonly WorkpaperSource[];
+}): Promise<ResultadoImportacionLote> {
   if (!source.taxTypeId || !source.periodId) {
     throw new Error("La fuente no tiene una obligación fiscal materializada");
   }
+  const fuenteEquivocada = avisoDeFuenteEquivocada(file.name, source, fuentes);
+  if (fuenteEquivocada) throw new Error(fuenteEquivocada);
   const content = await file.text();
-  const rows = parseSourceFile(file.name, content);
+  const { rows, avisos } = leerArchivoFuente(file.name, content, { clientCuit, ...(periodo ? { periodo } : {}) });
   if (rows.length > 20_000) throw new Error("El lote supera el máximo de 20.000 filas");
   const fileHash = await hashSourceFile(content);
   const batch = await api.post<{ id: string; status: string; errorRows: number }>(
@@ -100,4 +116,5 @@ export async function importarLoteFuente({
       clientCuit,
     });
   }
+  return { avisos };
 }

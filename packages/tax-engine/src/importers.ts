@@ -375,6 +375,12 @@ export interface WithholdingInput {
   documentType?: unknown;
   descripcionComprobante?: unknown;
   jurisdiction?: unknown;
+  /**
+   * El archivo de origen no trae base imponible, solo el importe (TXT de la DGR de Tucumán).
+   * Con la marca en `true` y sin `base`, la fila es válida y la base queda en cero; una base
+   * informada se valida igual que siempre. Sin la marca, la base sigue siendo obligatoria.
+   */
+  baseNoInformada?: unknown;
 }
 
 /**
@@ -391,7 +397,13 @@ export function normalizeWithholdingRow(input: WithholdingInput): NormalizedRow<
     : null;
   if (!concept) errors.push("CONCEPT_INVALID");
 
-  const base = isDecimalString(input.base) ? new Decimal(input.base) : null;
+  const baseAusente = input.base === undefined || input.base === null || input.base === "";
+  const base =
+    baseAusente && input.baseNoInformada === true
+      ? new Decimal(0)
+      : isDecimalString(input.base)
+        ? new Decimal(input.base)
+        : null;
   if (!base) errors.push("BASE_INVALID");
   else if (base.isNegative()) errors.push("BASE_INVALID");
 

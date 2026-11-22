@@ -4,7 +4,7 @@ import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { WorkpaperSourceReviewAction } from "../../WorkpaperSourceReviewAction";
-import { estadoDeLote, ladoDeLibroIva } from "../loteFuente";
+import { estadoDeLote, ladoDeLibroIva, type ResultadoImportacionLote } from "../loteFuente";
 import { FilasConErrorDeLote } from "../DetalleFilasLote";
 import type { CoberturaLegajo } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
@@ -22,7 +22,7 @@ export interface EtapaFuentesProps {
   setSourceCode: Dispatch<SetStateAction<string>>;
   sourceFile: File | null;
   setSourceFile: Dispatch<SetStateAction<File | null>>;
-  sourceUploadMutation: UseMutationResult<void, Error, void>;
+  sourceUploadMutation: UseMutationResult<ResultadoImportacionLote, Error, void>;
   reviewSourceMutation: UseMutationResult<unknown, Error, string>;
 }
 
@@ -96,7 +96,10 @@ export function EtapaFuentes({
                 <input
                   type="file"
                   accept=".csv,.txt,.json,text/csv,text/plain,application/json"
-                  onChange={(event) => setSourceFile(event.target.files?.[0] ?? null)}
+                  onChange={(event) => {
+                    setSourceFile(event.target.files?.[0] ?? null);
+                    sourceUploadMutation.reset();
+                  }}
                 />
               </label>
               <Button
@@ -111,6 +114,11 @@ export function EtapaFuentes({
                 <small className="muted-copy">{motivoLote}</small>
               ) : null}
               <WorkpaperActionError error={sourceUploadMutation.error} />
+              {sourceUploadMutation.data?.avisos.map((aviso) => (
+                <small key={aviso} className="muted-copy" role="status">
+                  {aviso}
+                </small>
+              ))}
               {sourceCode ? (
                 <small>Columnas esperadas: {fuenteElegida?.expectedColumns.join(", ")}</small>
               ) : null}

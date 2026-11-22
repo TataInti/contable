@@ -1,3 +1,9 @@
+import {
+  esArchivoTxtDgrTucuman,
+  leerTxtDgrTucuman,
+  type OpcionesLecturaTxtDgr,
+} from "./txtDgrTucuman";
+
 function parseDelimitedRow(line: string, delimiter: string): string[] {
   const cells: string[] = [];
   let current = "";
@@ -22,7 +28,58 @@ function parseDelimitedRow(line: string, delimiter: string): string[] {
   return cells;
 }
 
-export function parseSourceFile(fileName: string, content: string): Record<string, unknown>[] {
+export type OpcionesLecturaFuente = OpcionesLecturaTxtDgr;
+
+export interface LecturaFuente {
+  rows: Record<string, unknown>[];
+  /** Observaciones que no impiden la carga (por ejemplo, fechas fuera del período). */
+  avisos: string[];
+}
+
+const MAXIMO_ERRORES_VISIBLES = 5;
+
+/** Un archivo con errores por línea: el mensaje lista los primeros y cuenta el resto. */
+export class ArchivoConErrores extends Error {
+  readonly errores: string[];
+
+  constructor(errores: string[]) {
+    const visibles = errores.slice(0, MAXIMO_ERRORES_VISIBLES).join(" ");
+    const resto = errores.length - MAXIMO_ERRORES_VISIBLES;
+    super(
+      errores.length === 1
+        ? errores[0]!
+        : `El archivo tiene ${errores.length} errores. ${visibles}${
+            resto > 0 ? ` Hay ${resto} ${resto === 1 ? "error más" : "errores más"}.` : ""
+          }`,
+    );
+    this.name = "ArchivoConErrores";
+    this.errores = errores;
+  }
+}
+
+/** Lee el archivo y devuelve sus filas con los avisos. Los TXT de la DGR de Tucumán tienen su propio lector. */
+export function leerArchivoFuente(
+  fileName: string,
+  content: string,
+  opciones: OpcionesLecturaFuente = {},
+): LecturaFuente {
+  if (!fileName.toLowerCase().endsWith(".json") && esArchivoTxtDgrTucuman(fileName)) {
+    const lectura = leerTxtDgrTucuman(fileName, content, opciones);
+    if (lectura.errores.length > 0) throw new ArchivoConErrores(lectura.errores);
+    return { rows: lectura.filas, avisos: lectura.avisos };
+  }
+  return { rows: leerFilasGenericas(fileName, content), avisos: [] };
+}
+
+export function parseSourceFile(
+  fileName: string,
+  content: string,
+  opciones?: OpcionesLecturaFuente,
+): Record<string, unknown>[] {
+  return leerArchivoFuente(fileName, content, opciones).rows;
+}
+
+function leerFilasGenericas(fileName: string, content: string): Record<string, unknown>[] {
   if (fileName.toLowerCase().endsWith(".json")) {
     const parsed = JSON.parse(content) as unknown;
     if (!Array.isArray(parsed) || parsed.some((row) => !row || typeof row !== "object")) {

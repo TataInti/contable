@@ -366,13 +366,25 @@ export function StudyExpedienteMensual() {
       if (!source || !sourceFile || !activeWorkpaperId || !clientQuery.data) {
         throw new Error("Seleccioná una fuente y un archivo antes de importar");
       }
-      await importarLoteFuente({
+      // Las fechas del archivo se comparan con el período de la fuente (no con el de otro impuesto).
+      const periodoDeLaFuente =
+        taxPeriodsQuery.data?.find((taxPeriod) => taxPeriod.id === source.periodId) ?? selectedTaxPeriod;
+      return importarLoteFuente({
         firmId,
         clientId,
         source,
         file: sourceFile,
         workpaperId: activeWorkpaperId,
         clientCuit: clientQuery.data.cuit,
+        fuentes: coverageQuery.data?.sources ?? [],
+        ...(periodoDeLaFuente
+          ? {
+              periodo: {
+                startDate: periodoDeLaFuente.startDate,
+                endDate: periodoDeLaFuente.endDate,
+              },
+            }
+          : {}),
       });
     },
     onSuccess: () => {
