@@ -329,7 +329,10 @@ export async function moverDocumentoACliente(
         "Solo se mueve un documento que todavía no se aprobó",
       );
     }
-    const vinculos = Object.values(documento._count).reduce((total, n) => total + n, 0);
+    // El vínculo con un ítem de pedido lo crea la subida, antes de conocer el CUIT: no impide mover (se libera abajo).
+    const vinculos = Object.entries(documento._count)
+      .filter(([vinculo]) => vinculo !== "requestItems")
+      .reduce((total, [, n]) => total + n, 0);
     if (vinculos > 0) {
       throw new CuitControlError(
         "DOCUMENT_LINKED",
@@ -381,6 +384,8 @@ export async function moverDocumentoACliente(
       );
     }
     const filas = { firmId: ctx.firmId, clientId };
+    // El ítem de pedido vinculado vuelve a pendiente en el cliente de origen: el comprobante ya no es suyo.
+    await tx.documentRequestItem.updateMany({ where: { ...filas, documentId }, data: { documentId: null, status: "PENDING" } });
     await tx.documentFileVersion.updateMany({ where: { ...filas, documentId }, data: { clientId: clienteDestinoId } });
     await tx.documentProcessingJob.updateMany({ where: { ...filas, documentId }, data: { clientId: clienteDestinoId } });
     await tx.documentExtraction.updateMany({ where: { ...filas, documentId }, data: { clientId: clienteDestinoId } });
