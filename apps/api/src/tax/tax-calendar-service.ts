@@ -44,6 +44,7 @@ export type TaxCalendarErrorCode =
   | "CALENDAR_NOT_PUBLISHED"
   | "CALENDAR_NOT_HIDDEN"
   | "CALENDAR_VALIDATION_FAILED"
+  | "CALENDAR_SOURCE_INVALID"
   | "CALENDAR_VERSION_CONFLICT";
 
 /** Estado HTTP de cada error: 404 no existe; 422 el contenido no cumple; 409 el estado no admite la acción. */
@@ -52,6 +53,7 @@ const CALENDAR_ERROR_HTTP_STATUS: Readonly<Record<TaxCalendarErrorCode, number>>
   CALENDAR_ENTRY_NOT_FOUND: 404,
   CALENDAR_REFERENCE_NOT_FOUND: 422,
   CALENDAR_VALIDATION_FAILED: 422,
+  CALENDAR_SOURCE_INVALID: 422,
   CALENDAR_NOT_DRAFT: 409,
   CALENDAR_NOT_PUBLISHED: 409,
   CALENDAR_NOT_HIDDEN: 409,
@@ -493,8 +495,18 @@ export class TaxCalendarRegistryService {
           (max, entry) => Math.max(max, entry.sortOrder),
           -1,
         );
+        if (input.taxTypeId) {
+          const impuesto = await tx.taxType.findUnique({ where: { id: input.taxTypeId }, select: { id: true } });
+          if (!impuesto) {
+            throw new TaxCalendarError("CALENDAR_REFERENCE_NOT_FOUND", "El impuesto elegido no existe en el catálogo", {
+              path: ["taxTypeId"],
+            });
+          }
+        }
         const filas = resultado.celdas.map((celda, indice) => ({
           ...importedEntryFields(ctx, celda, ultimoOrden + 1 + indice),
+          // Sin impuesto elegido, la celda queda sin impuesto (como hasta ahora) y no liga obligaciones.
+          taxTypeId: input.taxTypeId ?? null,
           firmId: ctx.firmId,
           calendarId,
         }));
