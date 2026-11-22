@@ -81,8 +81,49 @@ describe("SearchSelect", () => {
     expect(screen.getByText("Elegí…")).toBeInTheDocument();
   });
 
-  it("usa una lista nativa sin búsqueda cuando hay siete opciones o menos", () => {
-    render(<SearchSelect label="Condición" options={options.slice(0, 7)} value="" onChange={() => {}} />);
-    expect(screen.getByRole("combobox", { name: "Condición" }).tagName).toBe("SELECT");
+  it("ofrece búsqueda también con pocas opciones (ya no cae a un select nativo)", () => {
+    render(<SearchSelect label="Condición" options={options.slice(0, 3)} value="" onChange={() => {}} />);
+    const combobox = screen.getByRole("combobox", { name: "Condición" });
+    expect(combobox.tagName).toBe("INPUT");
+    fireEvent.focus(combobox);
+    fireEvent.change(combobox, { target: { value: "cord" } });
+    expect(screen.queryByRole("option", { name: "Tucumán" })).toBeNull();
+  });
+
+  it("no permite elegir una opción deshabilitada y la saltea con las flechas", () => {
+    const onChange = vi.fn();
+    const withDisabled = [
+      { value: "a", label: "Activa" },
+      { value: "b", label: "Oculta (oculto)", disabled: true },
+      { value: "c", label: "Otra" },
+    ];
+    render(<SearchSelect label="Registro" options={withDisabled} value="" onChange={onChange} />);
+    const input = screen.getByRole("combobox", { name: "Registro" });
+    fireEvent.focus(input);
+    fireEvent.click(screen.getByRole("option", { name: "Oculta (oculto)" }));
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).toHaveBeenCalledWith("c");
+  });
+
+  it("sin opción vacía no ofrece «vacío» en la lista y oculta el rótulo visible si se pide", () => {
+    render(<SearchSelect label="Filtrar por estado" hideLabel allowEmpty={false} options={options.slice(0, 2)} value="tucuman" onChange={() => {}} />);
+    expect(screen.queryByText("Elegí…")).toBeNull();
+    expect(screen.queryByText("Filtrar por estado")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Filtrar por estado" })).toHaveValue("Tucumán");
+  });
+
+  it("marca el error y lo enlaza con su mensaje", () => {
+    render(
+      <>
+        <SearchSelect id="province" label="Provincia" options={options} value="" invalid describedBy="province-error" onChange={() => {}} />
+        <p id="province-error">Elegí una provincia.</p>
+      </>,
+    );
+    const combobox = screen.getByRole("combobox", { name: "Provincia" });
+    expect(combobox).toHaveAttribute("aria-invalid", "true");
+    expect(combobox).toHaveAttribute("aria-describedby", "province-error");
   });
 });
