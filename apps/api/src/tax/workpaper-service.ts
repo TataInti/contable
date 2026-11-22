@@ -64,6 +64,8 @@ export type WorkpaperErrorCode =
   | "SOURCE_NOT_REVIEWED"
   | "CLASSIFICATION_INCOMPLETE"
   | "CLASSIFICATION_NOT_FOUND"
+  | "CLASSIFICATION_EXCLUDED"
+  | "CLASSIFICATION_RULE_NOT_FOUND"
   | "ALLOCATION_INCOMPLETE"
   | "ALLOCATION_NOT_FOUND"
   | "ALLOCATION_SCOPE_INVALID"
@@ -607,7 +609,7 @@ export class MonthlyWorkpaperService {
     };
 
     const classifications = await tx.workpaperVoucherClassification.findMany({
-      where: { workpaperId: input.workpaperId },
+      where: { workpaperId: input.workpaperId, excludedAt: null },
       include: { voucher: { include: { components: true } } },
     });
     let bookExpected = new Prisma.Decimal(0);
@@ -917,6 +919,7 @@ export class MonthlyWorkpaperService {
           total: classifications.total,
           classified: classifications.classified,
           pending: classifications.pending,
+          excluded: classifications.excluded,
           ready: classifications.ready,
         },
         allocations: {
@@ -1017,11 +1020,20 @@ export class MonthlyWorkpaperService {
         );
       }
       const sourceFacts = await reviewedSourceFacts(tx, wp.id);
-      const classificationScope = classifications.items.map((classification) => ({
+      // Los comprobantes excluidos con motivo quedan fuera del cálculo y de su hash de entrada.
+      const excludedVoucherIds = new Set(
+        classifications.items
+          .filter((classification) => classification.excludedAt !== null)
+          .map((classification) => classification.voucherId),
+      );
+      const classificationScope = classifications.items
+        .filter((classification) => classification.excludedAt === null)
+        .map((classification) => ({
         voucherId: classification.voucherId,
         documentKind: classification.documentKind,
         activityCode: classification.activityCode,
         categoryCode: classification.categoryCode,
+        ivaCredit: classification.ivaCredit,
         rateBuckets: classification.rateBuckets as Array<{
           rate: string;
           base: string;
@@ -1085,7 +1097,7 @@ export class MonthlyWorkpaperService {
                 .map((fact) => fact.sourceId),
             ),
           ];
-          const voucherIds = idsFor("FISCAL_VOUCHER");
+          const voucherIds = idsFor("FISCAL_VOUCHER").filter((id) => !excludedVoucherIds.has(id));
           const cm03CoefficientRows = cm03CoefficientSourceRowsFromFacts(relevantFacts);
           const cm03Jurisdictions = cm03CoefficientRows.length > 0
             ? await tx.jurisdiction.findMany({
@@ -1124,6 +1136,7 @@ export class MonthlyWorkpaperService {
                 documentKind: classification.documentKind,
                 activityCode: classification.activityCode,
                 categoryCode: classification.categoryCode,
+                ivaCredit: classification.ivaCredit,
                 rateBuckets: classification.rateBuckets as Array<{
                   rate: string;
                   base: string;
@@ -1649,6 +1662,38 @@ export class MonthlyWorkpaperService {
     });
   }
 
+  /**
+   * Cambiar clasificaciones o exclusiones cambia el cálculo: igual que las fuentes, un mes calculado vuelve
+   * a preparación y uno cerrado se rechaza con guía; en revisión se pide cambios primero.
+   */
+  private async loadClassificationWorkpaper(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    workpaperId: string,
+  ) {
+    const wp = await tx.monthlyTaxWorkpaper.findFirst({ where: { id: workpaperId, firmId: ctx.firmId } });
+    if (!wp) throw new WorkpaperError("WORKPAPER_NOT_FOUND", "Expediente no encontrado");
+    this.assertNoMovementsEditable(wp.status);
+    return wp;
+  }
+
+  private async loadClassificationsForChange(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    workpaperId: string,
+    classificationIds: readonly string[],
+  ) {
+    const ids = [...new Set(classificationIds)];
+    const rows = await tx.workpaperVoucherClassification.findMany({
+      where: { id: { in: ids }, workpaperId, firmId: ctx.firmId },
+      include: { workpaper: true, voucher: { include: { components: true, lines: true } } },
+    });
+    if (rows.length !== ids.length) {
+      throw new WorkpaperError("CLASSIFICATION_NOT_FOUND", "Clasificación no encontrada");
+    }
+    return rows;
+  }
+
   async classifyVoucher(
     ctx: TenantContext,
     workpaperId: string,
@@ -1657,160 +1702,385 @@ export class MonthlyWorkpaperService {
       categoryCode?: "SUPER" | "TRANSPORTE";
       activityCode?: string;
       saveSupplierProfile?: boolean;
+      rememberRule?: boolean;
     },
   ) {
     return withTenantContext(ctx, async (tx) => {
-      const classification = await tx.workpaperVoucherClassification.findFirst({
-        where: { id: classificationId, workpaperId, firmId: ctx.firmId },
-        include: {
-          workpaper: true,
-          voucher: { include: { components: true, lines: true } },
-        },
-      });
-      if (!classification) {
-        throw new WorkpaperError("CLASSIFICATION_NOT_FOUND", "Clasificación no encontrada");
+      const workpaper = await this.loadClassificationWorkpaper(tx, ctx, workpaperId);
+      const [classification] = await this.loadClassificationsForChange(tx, ctx, workpaperId, [
+        classificationId,
+      ]);
+      await this.applyClassification(tx, ctx, classification!, input);
+      if (input.rememberRule) {
+        await this.rememberClassificationRule(tx, ctx, workpaper, [classification!], input);
       }
-      if (
-        !this.mutablePreparationStates.includes(
-          classification.workpaper.status as (typeof this.mutablePreparationStates)[number],
-        )
-      ) {
-        throw new WorkpaperError(
-          "WORKPAPER_IMMUTABLE",
-          "El expediente no admite cambios de clasificación en su estado actual",
-        );
-      }
-      if (classification.direction === "PURCHASE" && !input.categoryCode) {
-        throw new WorkpaperError(
-          "CLASSIFICATION_INCOMPLETE",
-          "Las compras requieren un rubro SUPER o TRANSPORTE",
-        );
-      }
-      const activityCode = input.activityCode?.trim() || null;
-      if (classification.direction === "SALE" && !activityCode) {
-        throw new WorkpaperError(
-          "CLASSIFICATION_INCOMPLETE",
-          "Las ventas requieren una actividad fiscal",
-        );
-      }
+      await this.invalidateAfterSourceChange(tx, workpaper);
+      return classificationCoverage(tx, workpaperId);
+    });
+  }
 
-      let supplierProfileId: string | null = classification.supplierProfileId;
+  /** Una misma actividad o rubro para varios comprobantes (todos compras o todos ventas). */
+  async classifyVouchers(
+    ctx: TenantContext,
+    workpaperId: string,
+    input: {
+      classificationIds: string[];
+      categoryCode?: "SUPER" | "TRANSPORTE";
+      activityCode?: string;
+      rememberRule?: boolean;
+    },
+  ) {
+    return withTenantContext(ctx, async (tx) => {
+      const workpaper = await this.loadClassificationWorkpaper(tx, ctx, workpaperId);
+      const rows = await this.loadClassificationsForChange(tx, ctx, workpaperId, input.classificationIds);
+      if (new Set(rows.map((row) => row.direction)).size > 1) {
+        throw new WorkpaperError(
+          "CLASSIFICATION_INCOMPLETE",
+          "Elegí solo compras o solo ventas: cada grupo se clasifica con su propio rubro o actividad",
+        );
+      }
+      for (const row of rows) {
+        await this.applyClassification(tx, ctx, row, { ...input, saveSupplierProfile: false });
+      }
+      if (input.rememberRule) {
+        await this.rememberClassificationRule(tx, ctx, workpaper, rows, input);
+      }
+      await this.invalidateAfterSourceChange(tx, workpaper);
+      return classificationCoverage(tx, workpaperId);
+    });
+  }
+
+  private async applyClassification(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    classification: Prisma.WorkpaperVoucherClassificationGetPayload<{
+      include: { workpaper: true; voucher: { include: { components: true; lines: true } } };
+    }>,
+    input: {
+      categoryCode?: "SUPER" | "TRANSPORTE";
+      activityCode?: string;
+      saveSupplierProfile?: boolean;
+    },
+  ) {
+    const workpaperId = classification.workpaperId;
+    if (classification.excludedAt) {
+      throw new WorkpaperError(
+        "CLASSIFICATION_EXCLUDED",
+        "El comprobante está excluido del cálculo. Reincluilo para clasificarlo",
+      );
+    }
+    if (classification.direction === "PURCHASE" && !input.categoryCode) {
+      throw new WorkpaperError(
+        "CLASSIFICATION_INCOMPLETE",
+        "Las compras requieren un rubro SUPER o TRANSPORTE",
+      );
+    }
+    const activityCode = input.activityCode?.trim() || null;
+    if (classification.direction === "SALE" && !activityCode) {
+      throw new WorkpaperError(
+        "CLASSIFICATION_INCOMPLETE",
+        "Las ventas requieren una actividad fiscal",
+      );
+    }
+
+    let supplierProfileId: string | null = classification.supplierProfileId;
+    if (
+      classification.direction === "PURCHASE" &&
+      input.categoryCode &&
+      input.saveSupplierProfile !== false
+    ) {
+      const current = await tx.supplierTaxProfile.findFirst({
+        where: {
+          firmId: ctx.firmId,
+          clientId: classification.clientId,
+          cuitNormalized: classification.counterpartyCuit,
+          status: "ACTIVE",
+          validFrom: { lte: classification.workpaper.periodEnd },
+          OR: [{ validTo: null }, { validTo: { gte: classification.workpaper.periodStart } }],
+        },
+        orderBy: { version: "desc" },
+      });
       if (
-        classification.direction === "PURCHASE" &&
-        input.categoryCode &&
-        input.saveSupplierProfile !== false
+        current?.categoryCode === input.categoryCode &&
+        (current.activityCode ?? null) === activityCode
       ) {
-        const current = await tx.supplierTaxProfile.findFirst({
-          where: {
-            firmId: ctx.firmId,
-            clientId: classification.clientId,
-            cuitNormalized: classification.counterpartyCuit,
-            status: "ACTIVE",
-            validFrom: { lte: classification.workpaper.periodEnd },
-            OR: [
-              { validTo: null },
-              { validTo: { gte: classification.workpaper.periodStart } },
-            ],
-          },
-          orderBy: { version: "desc" },
-        });
+        supplierProfileId = current.id;
+      } else {
         if (
-          current?.categoryCode === input.categoryCode &&
-          (current.activityCode ?? null) === activityCode
+          current &&
+          current.validFrom.getTime() === classification.workpaper.periodStart.getTime()
         ) {
-          supplierProfileId = current.id;
+          const updated = await tx.supplierTaxProfile.update({
+            where: { id: current.id },
+            data: {
+              categoryCode: input.categoryCode,
+              activityCode,
+              createdByUserId: ctx.userId,
+            },
+          });
+          supplierProfileId = updated.id;
         } else {
-          if (
-            current &&
-            current.validFrom.getTime() === classification.workpaper.periodStart.getTime()
-          ) {
-            const updated = await tx.supplierTaxProfile.update({
+          const latest = await tx.supplierTaxProfile.findFirst({
+            where: {
+              firmId: ctx.firmId,
+              clientId: classification.clientId,
+              cuitNormalized: classification.counterpartyCuit,
+            },
+            orderBy: { version: "desc" },
+          });
+          if (current) {
+            await tx.supplierTaxProfile.update({
               where: { id: current.id },
               data: {
-                categoryCode: input.categoryCode,
-                activityCode,
-                createdByUserId: ctx.userId,
+                status: "SUPERSEDED",
+                validTo: new Date(classification.workpaper.periodStart.getTime() - 1),
               },
             });
-            supplierProfileId = updated.id;
-          } else {
-            const latest = await tx.supplierTaxProfile.findFirst({
-              where: {
-                firmId: ctx.firmId,
-                clientId: classification.clientId,
-                cuitNormalized: classification.counterpartyCuit,
-              },
-              orderBy: { version: "desc" },
-            });
-            if (current) {
-              await tx.supplierTaxProfile.update({
-                where: { id: current.id },
-                data: {
-                  status: "SUPERSEDED",
-                  validTo: new Date(classification.workpaper.periodStart.getTime() - 1),
-                },
-              });
-            }
-            const created = await tx.supplierTaxProfile.create({
-              data: {
-                firmId: ctx.firmId,
-                clientId: classification.clientId,
-                cuitNormalized: classification.counterpartyCuit,
-                validFrom: classification.workpaper.periodStart,
-                categoryCode: input.categoryCode,
-                activityCode,
-                status: "ACTIVE",
-                version: (latest?.version ?? 0) + 1,
-                createdByUserId: ctx.userId,
-              },
-            });
-            supplierProfileId = created.id;
           }
+          const created = await tx.supplierTaxProfile.create({
+            data: {
+              firmId: ctx.firmId,
+              clientId: classification.clientId,
+              cuitNormalized: classification.counterpartyCuit,
+              validFrom: classification.workpaper.periodStart,
+              categoryCode: input.categoryCode,
+              activityCode,
+              status: "ACTIVE",
+              version: (latest?.version ?? 0) + 1,
+              createdByUserId: ctx.userId,
+            },
+          });
+          supplierProfileId = created.id;
         }
       }
+    }
 
-      const candidates =
-        classification.direction === "PURCHASE" && supplierProfileId
-          ? await tx.workpaperVoucherClassification.findMany({
-              where: {
-                workpaperId,
-                direction: "PURCHASE",
-                counterpartyCuit: classification.counterpartyCuit,
-              },
-              include: { voucher: { include: { components: true, lines: true } } },
-            })
-          : [classification];
-      const classifiedAt = new Date();
-      for (const candidate of candidates) {
-        const categoryCode =
-          candidate.direction === "PURCHASE"
-            ? (input.categoryCode ?? candidate.categoryCode)
-            : candidate.categoryCode;
-        const candidateActivity =
-          candidate.direction === "SALE" ? activityCode : (activityCode ?? candidate.activityCode);
-        await tx.workpaperVoucherClassification.update({
-          where: { id: candidate.id },
-          data: {
-            supplierProfileId,
+    const candidates =
+      classification.direction === "PURCHASE" && supplierProfileId
+        ? await tx.workpaperVoucherClassification.findMany({
+            where: {
+              workpaperId,
+              direction: "PURCHASE",
+              counterpartyCuit: classification.counterpartyCuit,
+              excludedAt: null,
+            },
+            include: { voucher: { include: { components: true, lines: true } } },
+          })
+        : [classification];
+    const classifiedAt = new Date();
+    for (const candidate of candidates) {
+      const categoryCode =
+        candidate.direction === "PURCHASE"
+          ? (input.categoryCode ?? candidate.categoryCode)
+          : candidate.categoryCode;
+      const candidateActivity =
+        candidate.direction === "SALE" ? activityCode : (activityCode ?? candidate.activityCode);
+      await tx.workpaperVoucherClassification.update({
+        where: { id: candidate.id },
+        data: {
+          supplierProfileId,
+          categoryCode,
+          activityCode: candidateActivity,
+          status: "CLASSIFIED",
+          origin: "MANUAL",
+          classifiedByUserId: ctx.userId,
+          classifiedAt,
+          snapshotHash: classificationHash({
+            voucher: candidate.voucher,
+            documentKind: candidate.documentKind,
             categoryCode,
             activityCode: candidateActivity,
+            rateBuckets: candidate.rateBuckets,
+            supplierProfileId,
+            ivaCredit: candidate.ivaCredit,
+          }),
+        },
+      });
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // «Recordar para este proveedor/cliente» (corte 3B): una regla vigente por cliente, sentido y CUIT.
+  // ------------------------------------------------------------------
+
+  /**
+   * Guarda una regla por cada contraparte de los comprobantes recién clasificados y la aplica a los
+   * pendientes del mismo CUIT en este mes (marcados «por regla»). Cambiar el destino de una regla
+   * revoca la anterior y deja la nueva: la fila revocada queda como historial.
+   */
+  private async rememberClassificationRule(
+    tx: Prisma.TransactionClient,
+    ctx: TenantContext,
+    workpaper: { id: string; firmId: string; clientId: string },
+    rows: Array<{ direction: "PURCHASE" | "SALE"; counterpartyCuit: string }>,
+    input: { categoryCode?: "SUPER" | "TRANSPORTE"; activityCode?: string },
+  ) {
+    const activityCode = input.activityCode?.trim() || null;
+    const targets = new Map<string, { direction: "PURCHASE" | "SALE"; cuit: string }>();
+    for (const row of rows) {
+      targets.set(`${row.direction}:${row.counterpartyCuit}`, {
+        direction: row.direction,
+        cuit: row.counterpartyCuit,
+      });
+    }
+    for (const target of targets.values()) {
+      const categoryCode = target.direction === "PURCHASE" ? (input.categoryCode ?? null) : null;
+      const current = await tx.classificationRule.findFirst({
+        where: {
+          clientId: workpaper.clientId,
+          direction: target.direction,
+          counterpartyCuit: target.cuit,
+          revokedAt: null,
+        },
+      });
+      if (
+        !current ||
+        current.categoryCode !== categoryCode ||
+        (current.activityCode ?? null) !== activityCode
+      ) {
+        if (current) {
+          await tx.classificationRule.update({
+            where: { id: current.id },
+            data: { revokedAt: new Date(), revokedByUserId: ctx.userId },
+          });
+        }
+        await tx.classificationRule.create({
+          data: {
+            firmId: workpaper.firmId,
+            clientId: workpaper.clientId,
+            direction: target.direction,
+            counterpartyCuit: target.cuit,
+            categoryCode,
+            activityCode,
+            createdByUserId: ctx.userId,
+          },
+        });
+      }
+      const pending = await tx.workpaperVoucherClassification.findMany({
+        where: {
+          workpaperId: workpaper.id,
+          direction: target.direction,
+          counterpartyCuit: target.cuit,
+          excludedAt: null,
+          status: { not: "CLASSIFIED" },
+        },
+        include: { voucher: { include: { components: true, lines: true } } },
+      });
+      const classifiedAt = new Date();
+      for (const item of pending) {
+        await tx.workpaperVoucherClassification.update({
+          where: { id: item.id },
+          data: {
+            categoryCode,
+            activityCode,
             status: "CLASSIFIED",
-            origin: "MANUAL",
+            origin: "RULE",
             classifiedByUserId: ctx.userId,
             classifiedAt,
             snapshotHash: classificationHash({
-              voucher: candidate.voucher,
-              documentKind: candidate.documentKind,
+              voucher: item.voucher,
+              documentKind: item.documentKind,
               categoryCode,
-              activityCode: candidateActivity,
-              rateBuckets: candidate.rateBuckets,
-              supplierProfileId,
+              activityCode,
+              rateBuckets: item.rateBuckets,
+              supplierProfileId: item.supplierProfileId,
+              ivaCredit: item.ivaCredit,
             }),
           },
         });
       }
+    }
+  }
 
-      await this.refreshPreparationStatus(tx, classification.workpaper);
+  /** Reglas vigentes del cliente del expediente, con quién y cuándo las creó. */
+  async listClassificationRules(ctx: TenantContext, workpaperId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const workpaper = await tx.monthlyTaxWorkpaper.findFirst({
+        where: { id: workpaperId, firmId: ctx.firmId },
+        select: { clientId: true },
+      });
+      if (!workpaper) throw new WorkpaperError("WORKPAPER_NOT_FOUND", "Expediente no encontrado");
+      const rules = await tx.classificationRule.findMany({
+        where: { firmId: ctx.firmId, clientId: workpaper.clientId, revokedAt: null },
+        include: { createdBy: { select: { name: true } } },
+        orderBy: [{ direction: "asc" }, { counterpartyCuit: "asc" }],
+      });
+      return rules.map((rule) => ({
+        id: rule.id,
+        direction: rule.direction,
+        counterpartyCuit: rule.counterpartyCuit,
+        categoryCode: rule.categoryCode,
+        activityCode: rule.activityCode,
+        createdByName: rule.createdBy.name,
+        createdAt: rule.createdAt,
+      }));
+    });
+  }
+
+  /**
+   * Borra una regla (queda revocada, con quién y cuándo). Los comprobantes ya clasificados conservan su
+   * clasificación: la regla solo decide los comprobantes que lleguen después.
+   */
+  async deleteClassificationRule(ctx: TenantContext, workpaperId: string, ruleId: string) {
+    return withTenantContext(ctx, async (tx) => {
+      const workpaper = await tx.monthlyTaxWorkpaper.findFirst({
+        where: { id: workpaperId, firmId: ctx.firmId },
+        select: { clientId: true },
+      });
+      if (!workpaper) throw new WorkpaperError("WORKPAPER_NOT_FOUND", "Expediente no encontrado");
+      const rule = await tx.classificationRule.findFirst({
+        where: { id: ruleId, firmId: ctx.firmId, clientId: workpaper.clientId, revokedAt: null },
+      });
+      if (!rule) {
+        throw new WorkpaperError("CLASSIFICATION_RULE_NOT_FOUND", "La regla no existe o ya se borró");
+      }
+      await tx.classificationRule.update({
+        where: { id: rule.id },
+        data: { revokedAt: new Date(), revokedByUserId: ctx.userId },
+      });
+      return { id: rule.id };
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Exclusión con motivo (corte 3B): el comprobante queda visible, fuera del cálculo, y se puede reincluir.
+  // ------------------------------------------------------------------
+
+  async excludeVouchers(
+    ctx: TenantContext,
+    workpaperId: string,
+    input: { classificationIds: string[]; reason: string },
+  ) {
+    const reason = input.reason.trim();
+    if (!reason) {
+      throw new WorkpaperError("CLASSIFICATION_INCOMPLETE", "Indicá el motivo de la exclusión");
+    }
+    return withTenantContext(ctx, async (tx) => {
+      const workpaper = await this.loadClassificationWorkpaper(tx, ctx, workpaperId);
+      const rows = await this.loadClassificationsForChange(tx, ctx, workpaperId, input.classificationIds);
+      const excludedAt = new Date();
+      for (const row of rows) {
+        await tx.workpaperVoucherClassification.update({
+          where: { id: row.id },
+          data: { excludedAt, excludedByUserId: ctx.userId, excludedReason: reason },
+        });
+      }
+      await this.invalidateAfterSourceChange(tx, workpaper);
+      return classificationCoverage(tx, workpaperId);
+    });
+  }
+
+  async includeVouchers(ctx: TenantContext, workpaperId: string, input: { classificationIds: string[] }) {
+    return withTenantContext(ctx, async (tx) => {
+      const workpaper = await this.loadClassificationWorkpaper(tx, ctx, workpaperId);
+      const rows = await this.loadClassificationsForChange(tx, ctx, workpaperId, input.classificationIds);
+      for (const row of rows) {
+        await tx.workpaperVoucherClassification.update({
+          where: { id: row.id },
+          data: { excludedAt: null, excludedByUserId: null, excludedReason: null },
+        });
+      }
+      await this.invalidateAfterSourceChange(tx, workpaper);
       return classificationCoverage(tx, workpaperId);
     });
   }

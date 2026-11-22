@@ -149,6 +149,8 @@ export interface OpcionesDemo {
   posiciones?: unknown[];
   fuentes?: unknown[];
   clasificaciones?: unknown;
+  /** Reglas «recordar» del cliente (etapa Clasificación). */
+  reglas?: unknown[];
   imputaciones?: unknown;
   calculo?: unknown[];
   actividades?: unknown[];
@@ -208,6 +210,7 @@ export function rutasDemo(opciones: OpcionesDemo = {}) {
         opciones.fuentes ? { ...coberturaDemo, sources: opciones.fuentes } : coberturaDemo,
       );
     }
+    if (path.endsWith("/classification-rules")) return Promise.resolve(opciones.reglas ?? []);
     if (path.endsWith("/classifications")) {
       return Promise.resolve(opciones.clasificaciones ?? sinClasificaciones);
     }

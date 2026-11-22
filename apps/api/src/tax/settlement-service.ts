@@ -264,6 +264,8 @@ export interface SettlementCalculationInput {
       documentKind: string;
       activityCode: string | null;
       categoryCode: string | null;
+      /** Falso en compras con letra B o C: su IVA no es crédito fiscal (corte 3B). */
+      ivaCredit?: boolean;
       rateBuckets?: Array<{ rate: string; base: string; amount: string }>;
       snapshotHash: string | null;
     }>;
@@ -757,6 +759,8 @@ export class SettlementService {
         const classification = classificationByVoucher.get(voucher.id);
         const documentKind = classification?.documentKind ?? voucherDocumentKind(voucher);
         const isCreditNote = documentKind === "CREDIT_NOTE";
+        // Compra con letra B o C: sin crédito fiscal de IVA (marcada en la clasificación).
+        if (voucher.direction === "PURCHASE" && classification?.ivaCredit === false) continue;
         const buckets = classification?.rateBuckets
           ? classification.rateBuckets.map((bucket, index) => ({
               id: `${voucher.id}:CLASSIFICATION:${index}:${bucket.rate}`,
@@ -878,6 +882,8 @@ export class SettlementService {
       for (const v of vouchers) {
         const concept = v.direction === "SALE" ? "VENTAS" : "COMPRAS";
         const classification = classificationByVoucher.get(v.id);
+        // Compra con letra B o C: sin crédito fiscal de IVA, no entra como compra del cálculo (corte 3B).
+        if (v.direction === "PURCHASE" && classification?.ivaCredit === false) continue;
         const documentKind = classification?.documentKind ?? voucherDocumentKind(v);
         const sign = documentKind === "CREDIT_NOTE" ? -1 : 1;
         for (const c of v.components) {
