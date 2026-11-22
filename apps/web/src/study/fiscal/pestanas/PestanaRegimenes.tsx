@@ -10,10 +10,12 @@ type Props = {
   openStepForm: (paso: FiscalStep) => void;
   registrationsQuery: UseQueryResult<TaxRegistration[]>;
   cancelRegistration: MutacionConValor;
+  /** Abre el cajón que corrige el «Desde» de la inscripción. */
+  corregirFecha: (registration: TaxRegistration) => void;
   confirm: ConfirmApi;
 };
 
-export function PestanaRegimenes({ canWrite, openStepForm, registrationsQuery, cancelRegistration, confirm }: Props) {
+export function PestanaRegimenes({ canWrite, openStepForm, registrationsQuery, cancelRegistration, corregirFecha, confirm }: Props) {
   return (
     <section className="fiscal-section" aria-labelledby="fiscal-regimes-title">
       <div className="fiscal-client-overview__heading"><h3 id="fiscal-regimes-title">Regímenes adheridos</h3>{canWrite ? <Button size="sm" variant="secondary" onClick={() => openStepForm("inscripcion")}>Agregar</Button> : null}</div>
@@ -23,7 +25,7 @@ export function PestanaRegimenes({ canWrite, openStepForm, registrationsQuery, c
         { key: "jurisdiction", header: "Jurisdicción", render: (row) => <>{row.regime.jurisdiction.name}{!row.regime.jurisdiction.isActive ? " (oculto)" : ""}</> },
         { key: "from", header: "Desde", render: (row) => <span className="tabular-copy">{formatearFecha(row.validFrom)}</span> },
         { key: "status", header: "Estado", render: (row) => <StatusBadge status={row.status} /> },
-        { key: "actions", header: "", align: "right", render: (row) => canWrite && row.status === "ACTIVE" ? <Button size="sm" variant="ghost" loading={cancelRegistration.isPending} onClick={() => confirm.ask({ title: `¿Dar de baja ${row.regime.name}?`, description: "La adhesión al régimen quedará cancelada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Dar de baja", tone: "danger", onConfirm: () => cancelRegistration.mutate(row.id) })}>Dar de baja</Button> : null },
+        { key: "actions", header: "", align: "right", render: (row) => canWrite && row.status === "ACTIVE" ? <div className="table-actions"><Button size="sm" variant="ghost" onClick={() => corregirFecha(row)}>Corregir fecha</Button><Button size="sm" variant="ghost" loading={cancelRegistration.isPending} onClick={() => confirm.ask({ title: `¿Dar de baja ${row.regime.name}?`, description: "La adhesión al régimen quedará cancelada desde hoy. Esta acción queda registrada en la auditoría.", confirmLabel: "Dar de baja", tone: "danger", onConfirm: () => cancelRegistration.mutate(row.id) })}>Dar de baja</Button></div> : null },
       ]} />}
     </section>
   );

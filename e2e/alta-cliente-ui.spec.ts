@@ -169,7 +169,6 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await page.locator("#pf-fiscal-address").fill(data.client.fiscalAddress);
     await page.locator("#pf-person-type").selectOption("JURIDICA");
     await page.locator("#pf-condition").selectOption("RESPONSABLE_INSCRIPTO");
-    // La vigencia del perfil es también la de la inscripción: debe cubrir el período.
     await page.locator("#pf-valid-from").fill(data.validFrom);
     await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
     await page.getByRole("button", { name: "Enviar a revisión" }).click();
@@ -180,6 +179,8 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
   await test.step("Configuración fiscal: inscripción en el régimen", async () => {
     await page.getByRole("button", { name: /Registrar inscripción|Completar inscripción/ }).first().click();
     await pickOption(page.locator("#reg-regime"), data.regime.name);
+    // La inscripción tiene su propio «Desde» (por defecto, el mes anterior): debe cubrir el período.
+    await page.locator("#reg-from").fill(data.validFrom);
     await page.getByRole("button", { name: "Registrar inscripción", exact: true }).last().click();
     await expect(seen(page, data.regime.name)).toBeVisible();
   });
