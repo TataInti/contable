@@ -1,5 +1,5 @@
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, SearchSelect } from "@contable/design-system";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { sinRespuesta } from "../consultas";
 import { ApiError, type Client } from "../../../lib/api";
@@ -130,36 +130,11 @@ export function PanelAlta({
             ))}
           </select>
         </label>
-        <label className="ds-field">
-          <span className="ds-field__label">Provincia</span>
-          <select
-            id="client-province"
-            className="ctxbar__input"
-            value={form.province}
-            onChange={(event) => setForm({ ...form, province: event.target.value })}
-          >
-            <option value="">Sin especificar</option>
-            {ARGENTINA_PROVINCES.map((province) => (
-              <option key={province} value={province}>{province}</option>
-            ))}
-          </select>
-        </label>
-        <label className="ds-field">
-          <span className="ds-field__label">Actividad principal</span>
-          <select
-            id="client-activity"
-            className="ctxbar__input"
-            value={form.activity}
-            onChange={(event) => setForm({ ...form, activity: event.target.value })}
-          >
-            <option value="">Sin especificar</option>
-            {activeActivityEntries.map((activity) => {
-              const value = clientEconomicActivityValue(activity);
-              return <option key={`${activity.code}:${activity.name}`} value={value}>{value}</option>;
-            })}
-          </select>
+        <SearchSelect id="client-province" name="province" className="ctxbar__input" label="Provincia" value={form.province} onChange={(province) => setForm({ ...form, province })} options={ARGENTINA_PROVINCES.map((province) => ({ value: province, label: province }))} />
+        <div>
+          <SearchSelect id="client-activity" name="activity" className="ctxbar__input" label="Actividad principal" value={form.activity} onChange={(activity) => setForm({ ...form, activity })} options={activeActivityEntries.map((activity) => { const value = clientEconomicActivityValue(activity); return { value, label: value }; })} />
           {sinRespuesta(clientActivityCatalog) ? <small role="status">Cargando catálogo de actividades…</small> : null}
-        </label>
+        </div>
         {clientActivityCatalog.isError ? (
           <Notice
             tone="error"
@@ -179,20 +154,7 @@ export function PanelAlta({
             description="Pedí a quien administra el estudio que las cargue en Catálogos fiscales."
           />
         ) : null}
-        <label className="ds-field">
-          <span className="ds-field__label">Forma jurídica</span>
-          <select
-            id="client-legal-form"
-            className="ctxbar__input"
-            value={form.legalForm}
-            onChange={(event) => setForm({ ...form, legalForm: event.target.value })}
-          >
-            <option value="">Sin especificar</option>
-            {CLIENT_LEGAL_FORMS.map((legalForm) => (
-              <option key={legalForm} value={legalForm}>{legalForm}</option>
-            ))}
-          </select>
-        </label>
+        <SearchSelect id="client-legal-form" name="legalForm" className="ctxbar__input" label="Forma jurídica" value={form.legalForm} onChange={(legalForm) => setForm({ ...form, legalForm })} options={CLIENT_LEGAL_FORMS.map((legalForm) => ({ value: legalForm, label: legalForm }))} />
         {create.isError ? (
           <Notice tone="error" className="study-inline-form__feedback">
             {create.error instanceof ApiError

@@ -1,6 +1,6 @@
 import { useEffect, useRef, type FormEvent } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice } from "@contable/design-system";
+import { Button, EmptyState, Field, Notice, SearchSelect } from "@contable/design-system";
 import { Link } from "react-router-dom";
 import { moduleById } from "../../moduleRegistry";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
@@ -287,61 +287,23 @@ export function PanelEdicion({
               </small>
             ) : null}
           </label>
-          <label className="ds-field">
-            <span className="ds-field__label">Provincia</span>
-            <select
-              id="client-profile-province"
-              className="ctxbar__input"
-              value={profileForm.province}
-              onChange={(event) => setProfileForm({ ...profileForm, province: event.target.value })}
-            >
-              <option value="">Sin especificar</option>
-              {ARGENTINA_PROVINCES.map((province) => (
-                <option key={province} value={province}>{province}</option>
-              ))}
-              {provinceIsLegacy ? (
-                <option value={profileForm.province}>
-                  {profileForm.province} — valor histórico (conservado)
-                </option>
-              ) : null}
-            </select>
+          <div>
+            <SearchSelect id="client-profile-province" name="province" className="ctxbar__input" label="Provincia" value={profileForm.province} onChange={(province) => setProfileForm({ ...profileForm, province })} options={[...ARGENTINA_PROVINCES.map((province) => ({ value: province, label: province })), ...(provinceIsLegacy ? [{ value: profileForm.province, label: `${profileForm.province} — valor histórico (conservado)` }] : [])]} />
             {provinceIsLegacy ? (
               <small className="study-legacy-note">
                 El valor histórico sigue visible y se conserva si no lo reemplazás.
               </small>
             ) : null}
-          </label>
-          <label className="ds-field">
-            <span className="ds-field__label">Actividad principal</span>
-            <select
-              id="client-profile-activity"
-              className="ctxbar__input"
-              value={profileForm.activity}
-              onChange={(event) => setProfileForm({ ...profileForm, activity: event.target.value })}
-            >
-              <option value="">Sin especificar</option>
-              {activeActivityEntries.map((activity) => {
-                const value = clientEconomicActivityValue(activity);
-                return <option key={`${activity.code}:${activity.name}`} value={value}>{value}</option>;
-              })}
-              {activityIsInactive ? (
-                <option value={profileForm.activity} disabled>
-                  {profileForm.activity} — (oculto) en el catálogo (conservado)
-                </option>
-              ) : null}
-              {activityIsLegacy ? (
-                <option value={profileForm.activity}>
-                  {profileForm.activity} — valor histórico (conservado)
-                </option>
-              ) : null}
-            </select>
+          </div>
+          <div>
+            <SearchSelect id="client-profile-activity" name="activity" className="ctxbar__input" label="Actividad principal" value={profileForm.activity} onChange={(activity) => setProfileForm({ ...profileForm, activity })} options={[...activeActivityEntries.map((activity) => { const value = clientEconomicActivityValue(activity); return { value, label: value }; }), ...(activityIsInactive ? [{ value: profileForm.activity, label: `${profileForm.activity} — (oculto) en el catálogo (conservado)` }] : []), ...(activityIsLegacy ? [{ value: profileForm.activity, label: `${profileForm.activity} — valor histórico (conservado)` }] : [])]} />
             {sinRespuesta(clientActivityCatalog) ? <small role="status">Cargando catálogo de actividades…</small> : null}
             {activityIsLegacy || activityIsInactive ? (
               <small className="study-legacy-note">
                 El valor guardado sigue visible y se conserva si no lo reemplazás.
               </small>
             ) : null}
-          </label>
+          </div>
           {clientActivityCatalog.isError ? (
             <Notice
               tone="error"
@@ -361,32 +323,14 @@ export function PanelEdicion({
               description="Pedí a quien administra el estudio que las cargue en Catálogos fiscales."
             />
           ) : null}
-          <label className="ds-field">
-            <span className="ds-field__label">Forma jurídica</span>
-            <select
-              id="client-profile-legal-form"
-              className="ctxbar__input"
-              value={profileForm.legalForm}
-              onChange={(event) =>
-                setProfileForm({ ...profileForm, legalForm: event.target.value })
-              }
-            >
-              <option value="">Sin especificar</option>
-              {CLIENT_LEGAL_FORMS.map((legalForm) => (
-                <option key={legalForm} value={legalForm}>{legalForm}</option>
-              ))}
-              {legalFormIsLegacy ? (
-                <option value={profileForm.legalForm}>
-                  {profileForm.legalForm} — valor histórico (conservado)
-                </option>
-              ) : null}
-            </select>
+          <div>
+            <SearchSelect id="client-profile-legal-form" name="legalForm" className="ctxbar__input" label="Forma jurídica" value={profileForm.legalForm} onChange={(legalForm) => setProfileForm({ ...profileForm, legalForm })} options={[...CLIENT_LEGAL_FORMS.map((legalForm) => ({ value: legalForm, label: legalForm })), ...(legalFormIsLegacy ? [{ value: profileForm.legalForm, label: `${profileForm.legalForm} — valor histórico (conservado)` }] : [])]} />
             {legalFormIsLegacy ? (
               <small className="study-legacy-note">
-                El valor histórico sigue visible y se conserva si no lo reemplazás.
+                El valor guardado sigue visible y se conserva si no lo reemplazás.
               </small>
             ) : null}
-          </label>
+          </div>
           <fieldset className="ds-field" id="client-profile-iibb">
             <legend className="ds-field__label">Jurisdicciones IIBB</legend>
             {sinRespuesta(jurisdictionCatalog) ? (

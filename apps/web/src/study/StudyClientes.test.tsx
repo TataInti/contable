@@ -410,14 +410,19 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     renderClientes();
     await openFirstProfileDrawer();
 
-    const vat = await screen.findByLabelText("Condición frente al IVA", { selector: "select" });
-    const province = screen.getByLabelText("Provincia", { selector: "select" });
-    const activity = screen.getByLabelText("Actividad principal", { selector: "select" });
-    const legalForm = screen.getByLabelText("Forma jurídica", { selector: "select" });
+    const vat = await screen.findByLabelText("Condición frente al IVA");
+    const province = screen.getByLabelText("Provincia");
+    const activity = screen.getByLabelText("Actividad principal");
+    const legalForm = screen.getByLabelText("Forma jurídica");
+    for (const control of [vat, province, activity, legalForm]) {
+      expect(control.tagName === "SELECT" || control.getAttribute("role") === "combobox").toBe(true);
+    }
     fireEvent.change(vat, { target: { value: "RESPONSABLE_INSCRIPTO" } });
-    fireEvent.change(province, { target: { value: "Tucumán" } });
+    fireEvent.focus(province);
+    fireEvent.click(screen.getByRole("option", { name: "Tucumán" }));
     fireEvent.change(activity, { target: { value: "COMERCIO — Comercio" } });
-    fireEvent.change(legalForm, { target: { value: "Sociedad anónima (SA)" } });
+    fireEvent.focus(legalForm);
+    fireEvent.click(screen.getByRole("option", { name: "Sociedad anónima (SA)" }));
     fireEvent.click(screen.getByText("Guardar cambios"));
 
     await waitFor(() => expect(vi.mocked(api.patch)).toHaveBeenCalled());
@@ -448,6 +453,14 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     renderClientes();
     await openFirstProfileDrawer();
 
+    const vat = screen.getByLabelText("Condición frente al IVA", { exact: false });
+    const province = screen.getByLabelText("Provincia");
+    const activity = screen.getByLabelText("Actividad principal");
+    const legalForm = screen.getByLabelText("Forma jurídica");
+    for (const control of [vat, province, activity, legalForm]) {
+      expect(control.tagName === "SELECT" || control.getAttribute("role") === "combobox").toBe(true);
+      fireEvent.focus(control);
+    }
     expect(screen.getByRole("option", { name: /Responsable inscripto — valor histórico/ })).toBeTruthy();
     expect(screen.getByRole("option", { name: /Provincia de Tucumán — valor histórico/ })).toBeTruthy();
     expect(screen.getByRole("option", { name: /Servicios — valor histórico/ })).toBeTruthy();
@@ -484,19 +497,21 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
 
     fireEvent.change(screen.getByLabelText("Razón social"), { target: { value: "Alta libre S.A." } });
     fireEvent.change(screen.getByLabelText("CUIT"), { target: { value: "20111111112" } });
-    fireEvent.change(screen.getByLabelText("Condición frente al IVA", { selector: "select" }), {
+    fireEvent.change(screen.getByLabelText("Condición frente al IVA"), {
       target: { value: "RESPONSABLE_INSCRIPTO" },
     });
-    fireEvent.change(screen.getByLabelText("Provincia", { selector: "select" }), {
-      target: { value: "Tucumán" },
-    });
+    const province = screen.getByLabelText("Provincia");
+    expect(province.tagName === "SELECT" || province.getAttribute("role") === "combobox").toBe(true);
+    fireEvent.focus(province);
+    fireEvent.click(screen.getByRole("option", { name: "Tucumán" }));
     await screen.findByRole("option", { name: "COMERCIO — Comercio" });
-    fireEvent.change(screen.getByLabelText(/Actividad principal/, { selector: "select" }), {
+    fireEvent.change(screen.getByLabelText(/Actividad principal/), {
       target: { value: "COMERCIO — Comercio" },
     });
-    fireEvent.change(screen.getByLabelText("Forma jurídica", { selector: "select" }), {
-      target: { value: "Sociedad anónima (SA)" },
-    });
+    const legalForm = screen.getByLabelText("Forma jurídica");
+    expect(legalForm.tagName === "SELECT" || legalForm.getAttribute("role") === "combobox").toBe(true);
+    fireEvent.focus(legalForm);
+    fireEvent.click(screen.getByRole("option", { name: "Sociedad anónima (SA)" }));
     fireEvent.click(screen.getByRole("button", { name: "Guardar cliente" })); // vigente: cambia con decisión de Inti (16-nov)
 
     await waitFor(() => expect(vi.mocked(api.post)).toHaveBeenCalled());

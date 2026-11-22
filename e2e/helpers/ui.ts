@@ -57,6 +57,14 @@ export function seen(page: Page, text: string | RegExp) {
 
 /** Elige la opción de un <select> cuyo texto contiene `text` (las etiquetas llevan códigos extra). Espera a que las opciones carguen. */
 export async function pickOption(select: Locator, text: string) {
+  if ((await select.evaluate((element) => element.tagName)) !== "SELECT") {
+    await select.fill(text);
+    const listboxId = await select.getAttribute("aria-controls");
+    const option = select.page().locator(`#${listboxId}`).getByRole("option").filter({ hasText: text }).first();
+    await expect(option, `opción que contiene «${text}»`).toBeVisible({ timeout: 10_000 });
+    await option.click();
+    return;
+  }
   let value: string | null = null;
   await expect
     .poll(

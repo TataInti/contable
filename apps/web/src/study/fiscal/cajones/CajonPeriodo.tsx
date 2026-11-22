@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { Button, Field } from "@contable/design-system";
+import { Button, Field, SearchSelect } from "@contable/design-system";
 import { CampoFecha } from "../CampoFecha";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { MutationError } from "../MutationError";
@@ -25,7 +25,7 @@ export function CajonPeriodo({ openFormStep, setOpenFormStep, periodForm, setPer
       size="wide"
     >
       <form className="study-form" onSubmit={(event) => { event.preventDefault(); createPeriod.mutate(); }}>
-        <div className="ds-field"><label className="ds-field__label" htmlFor="per-tax-type">Impuesto</label><select id="per-tax-type" className="ds-field__input" value={periodForm.taxTypeId} onChange={(event) => setPeriodForm({ ...periodForm, taxTypeId: event.target.value })} required><option value="">Seleccioná un impuesto…</option>{typesQuery.data?.map((type) => <option key={type.id} value={type.id}>{type.name} ({type.code})</option>)}</select></div>
+        <SearchSelect id="per-tax-type" name="taxTypeId" label="Impuesto" value={periodForm.taxTypeId} onChange={(taxTypeId) => setPeriodForm({ ...periodForm, taxTypeId })} required placeholder="Elegí…" options={typesQuery.data?.map((type) => ({ value: type.id, label: `${type.name} (${type.code})` })) ?? []} />
         <CampoFecha label="Desde" id="per-start" value={periodForm.startDate} onChange={(event) => setPeriodForm({ ...periodForm, startDate: event.target.value })} required />
         <CampoFecha label="Hasta" id="per-end" value={periodForm.endDate} onChange={(event) => setPeriodForm({ ...periodForm, endDate: event.target.value })} required />
         <Field label="Etiqueta (opcional)" id="per-label" value={periodForm.label} onChange={(event) => setPeriodForm({ ...periodForm, label: event.target.value })} placeholder="Ej. Agosto 2026" />
