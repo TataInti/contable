@@ -17,6 +17,7 @@ import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
 import { CommentThread } from "./CommentThread";
 import { Icon } from "../ui/Icon";
 import { api, type Client } from "../lib/api";
+import { formatearFecha } from "../lib/formatoFechas";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import {
@@ -352,6 +353,13 @@ export function StudyExpedienteMensual() {
     },
     enabled: Boolean(firmId && clientId && selectedTaxPeriod && monthTaxPeriodIds.length > 0),
   });
+  const dueDateForSelectedTax = selectedTaxPeriod
+    ? (positionQuery.data ?? [])
+        .filter((position) => position.regime.taxType.id === selectedTaxPeriod.taxTypeId)
+        .map((position) => position.dueDate)
+        .filter((dueDate): dueDate is string => dueDate !== null)
+        .sort()[0] ?? null
+    : null;
   const taxTypesQuery = useQuery({
     queryKey: ["tax-types"],
     queryFn: () => api.get<TaxType[]>("/tax/types"),
@@ -1364,6 +1372,22 @@ export function StudyExpedienteMensual() {
           value={selectedTaxPeriodId}
           onChange={(event) => cambiarPeriodo(event.target.value)}
         />
+      ) : null}
+      {selectedTaxPeriod ? (
+        <span className="muted-copy" aria-live="polite">
+          {positionQuery.isLoading ? (
+            "Cargando vencimiento…"
+          ) : dueDateForSelectedTax ? (
+            `Vence el ${formatearFecha(dueDateForSelectedTax)}`
+          ) : (
+            <>
+              Sin vencimiento cargado{" "}
+              <Button size="sm" variant="text" onClick={() => navigate("/calendarios-fiscales")}>
+                Calendarios
+              </Button>
+            </>
+          )}
+        </span>
       ) : null}
       <Menu kind="actions" label="Acciones del período" trigger="Acciones del período" items={accionesDelPeriodo} />
       {seleccionada ? (

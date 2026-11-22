@@ -214,7 +214,7 @@ describe("StudyShell", () => {
     fireEvent.click(summary);
     expect(help.open).toBe(true);
     expect(screen.getByRole("link", { name: "Ayuda paso a paso" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Recorrer el estudio" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Ver recorrido" })).toBeTruthy();
   });
 
   // A27 D27-3: sin clientes, el selector del menú dice lo mismo que la barra de contexto.

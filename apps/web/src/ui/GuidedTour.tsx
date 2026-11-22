@@ -91,14 +91,6 @@ function targetForStep(step: TourStep) {
   return document.querySelector(step.selector) as HTMLElement | null;
 }
 
-function readTourState() {
-  try {
-    return window.localStorage.getItem(TOUR_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
 function writeTourState(value: "completed" | "dismissed") {
   try {
     window.localStorage.setItem(TOUR_STORAGE_KEY, value);
@@ -129,12 +121,6 @@ export function GuidedTour({ children, onNavigationRequired }: GuidedTourProps) 
     setIsOpen(true);
     onNavigationRequired?.();
   }, [onNavigationRequired]);
-
-  useEffect(() => {
-    if (readTourState()) return undefined;
-    const timer = window.setTimeout(startTour, 650);
-    return () => window.clearTimeout(timer);
-  }, [startTour]);
 
   useEffect(() => {
     if (!isOpen || !currentStep) return undefined;
