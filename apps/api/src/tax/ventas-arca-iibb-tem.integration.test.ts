@@ -378,6 +378,10 @@ describe("2C — política de fuentes y clase de documento", () => {
     expect(isSourceRequired(book, [iibb], new Set(["DGR_IIBB_TUC"]))).toBe(false);
     expect(isSourceRequired(book, [iibb, tem], new Set(["DGR_IIBB_TUC"]))).toBe(true); // TEM sigue sin base
     expect(isSourceRequired(book, [iva, iibb], new Set(["DGR_IIBB_TUC"]))).toBe(true);
+    // Una marca «Sin movimientos» del libro satisface las tablas manuales; la marca del propio libro no lo exime.
+    expect(isSourceRequired(manualIibb, [iibb], none, new Set(["ARCA_IVA_SALES"]))).toBe(false);
+    expect(isSourceRequired(book, [iibb], none, new Set(["ARCA_IVA_SALES"]))).toBe(true);
+    expect(isSourceRequired(manualIibb, [iibb], none, none)).toBe(true);
   });
 
   it("si la tabla manual está revisada, manda: el libro no se suma a la base de esa obligación", () => {

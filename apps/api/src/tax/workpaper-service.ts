@@ -281,6 +281,13 @@ export class MonthlyWorkpaperService {
       where: { workpaperId: workpaper.id, clearedAt: null },
       include: { markedBy: { select: { name: true } } },
     });
+    // Una marca «Sin movimientos» vigente cubre la base para las fuentes que se satisfacen con ella (satisfiedBy),
+    // igual que un lote revisado. No cambia `present` ni los lotes.
+    const markedCodes = new Set(
+      activeMarks
+        .filter((item) => item.status === "NO_MOVEMENTS")
+        .map((item) => item.sourceCode),
+    );
 
     return policies.map((policy) => {
       const mark = activeMarks.find((item) => item.sourceCode === policy.code) ?? null;
@@ -300,7 +307,7 @@ export class MonthlyWorkpaperService {
       return {
         code: policy.code,
         label: policy.label,
-        required: isSourceRequired(policy, obligationRefs, reviewedCodes),
+        required: isSourceRequired(policy, obligationRefs, reviewedCodes, markedCodes),
         present,
         status: (present ? "LOADED" : mark ? "NO_MOVEMENTS" : "PENDING") as WorkpaperSourceStatusCode,
         noMovements:

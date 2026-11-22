@@ -423,22 +423,19 @@ describe("2A — «Sin movimientos» por fuente y mes", () => {
       status: "NO_MOVEMENTS",
       required: true,
     });
-    // Ventas en cero no reemplaza las tablas manuales de IIBB y TEM: cada fuente obligatoria se responde por separado.
+    // El libro «Sin movimientos» cubre también las tablas manuales de IIBB y TEM (satisfiedBy): una sola marca alcanza.
     const pendientes = coverage.sources
       .filter((source) => source.required && !source.present && source.status !== "NO_MOVEMENTS")
-      .map((source) => source.code)
-      .sort();
-    expect(pendientes).toEqual(["DGR_IIBB_TUC", "SMT_TEM"]);
-    const aunPendiente = data<{ status: string }>(await request("GET", sourceBase));
-    expect(aunPendiente.status).toBe("COLLECTING_INPUTS");
+      .map((source) => source.code);
+    expect(pendientes).toEqual([]);
     for (const code of ["DGR_IIBB_TUC", "SMT_TEM"]) {
-      ok(
-        await request("PUT", `${sourceBase}/sources/${code}/no-movements`),
-        200,
-        `sin movimientos ${code}`,
-      );
+      expect(coverage.sources.find((source) => source.code === code)).toMatchObject({
+        required: false,
+        present: false,
+        status: "PENDING",
+      });
     }
-    // Con las tres fuentes obligatorias cubiertas y sin lote revisado, el mes queda listo para calcular.
+    // Sin lotes revisados ni marcas en las tablas manuales, el mes ya queda listo para calcular.
     const wp = data<{ status: string }>(await request("GET", sourceBase));
     expect(wp.status).toBe("READY_TO_CALCULATE");
   });
@@ -492,6 +489,15 @@ describe("2A — «Sin movimientos» por fuente y mes", () => {
 
     const wp = data<{ status: string }>(await request("GET", sourceBase));
     expect(wp.status).toBe("COLLECTING_INPUTS");
+    // Al deshacer, el libro deja de cubrir las tablas manuales: vuelven a ser obligatorias.
+    const tras = data<Coverage>(await request("GET", `${sourceBase}/coverage`));
+    for (const code of ["DGR_IIBB_TUC", "SMT_TEM"]) {
+      expect(tras.sources.find((source) => source.code === code)).toMatchObject({
+        required: true,
+        present: false,
+        status: "PENDING",
+      });
+    }
     const row = await prisma.workpaperSourceStatus.findFirstOrThrow({
       where: { workpaperId, sourceCode: "ARCA_IVA_SALES" },
       orderBy: { markedAt: "desc" },

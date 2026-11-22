@@ -216,11 +216,14 @@ export function StudyExpedienteMensual() {
     (listQuery.data ?? []).find((wp) => wp.id === revisionElegidaId) ?? listQuery.data?.[0];
   const activeWorkpaperId = legajoSeleccionado?.id;
   // Importar un libro IVA exige el permiso y un legajo editable; el motivo se muestra junto a la acción.
+  // En un mes calculado sí se puede marcar o deshacer «Sin movimientos» (vuelve a preparación): la leyenda lo dice.
   const legajoDelPeriodo = legajoSeleccionado;
   const motivoImportarLibro = !capabilities.has("tax.vouchers.prepare")
     ? "Tu rol no puede importar libros IVA."
     : !legajoDelPeriodo || !ESTADOS_EDITABLES_FUENTES.includes(legajoDelPeriodo.status)
-      ? "El legajo no admite cambios de fuentes en su estado actual."
+      ? legajoDelPeriodo?.status === "CALCULATED"
+        ? "En un mes calculado no se cargan archivos; marcar o deshacer «Sin movimientos» invalida el cálculo y vuelve el mes a preparación."
+        : "El legajo no admite cambios de fuentes en su estado actual."
       : null;
   const coverageQuery = useQuery({
     queryKey: ["monthly-workpaper-coverage", firmId, clientId, activeWorkpaperId],

@@ -138,4 +138,22 @@ describe("Sin movimientos por fuente (corte 2A)", () => {
     expect((botones("Sin movimientos")[0] as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Tu rol no puede cargar archivos ni marcar fuentes.")).toBeTruthy();
   });
+
+  it("con el libro sin movimientos, las tablas manuales de IIBB y TEM no figuran como faltantes", () => {
+    // La API no las marca como obligatorias cuando el libro está cubierto (satisfiedBy).
+    const libro: WorkpaperSource = { ...sinMovimientos, code: "ARCA_IVA_SALES", label: "Libro IVA Ventas" };
+    const tablaIibb: WorkpaperSource = { ...pendiente, code: "DGR_IIBB_TUC", label: "Ingresos Brutos Tucumán", required: false };
+    const tablaTem: WorkpaperSource = { ...pendiente, code: "SMT_TEM", label: "TEM San Miguel de Tucumán", required: false };
+    renderEtapa({
+      coverageQuery: {
+        isError: false,
+        isSuccess: true,
+        isFetching: false,
+        data: { ...cobertura, sources: [libro, tablaIibb, tablaTem] },
+        refetch: vi.fn(),
+      } as unknown as UseQueryResult<CoberturaLegajo, Error>,
+    });
+    expect(screen.getByText("Todo listo para calcular")).toBeTruthy();
+    expect(screen.queryByText(/Para calcular falta/)).toBeNull();
+  });
 });
