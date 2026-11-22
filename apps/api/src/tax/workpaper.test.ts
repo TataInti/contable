@@ -549,7 +549,7 @@ describe("F1.1 expediente mensual de liquidación", () => {
     expect(oldAfter).toMatchObject({ status: "REPLACED", replacedByBatchId: newLink.id });
     expect(oldAfter.replacedAt).toBeInstanceOf(Date);
     expect(newAfter.status).toBe("PENDING_REVIEW");
-    expect(workpaperAfter).toMatchObject({ status: "COLLECTING_INPUTS", inputHash: null });
+    expect(workpaperAfter).toMatchObject({ status: "CALCULATED", inputHash: null });
 
     const wrongSourceOld = await prisma.importBatch.create({
       data: { firmId: FIRM_WP, clientId: CLIENT_WP, origin: "ARCA", taxTypeId, periodId: PERIOD_WP, adapterVersion: "ARCA_LIBRO_IVA_V1", status: "COMMITTED" },

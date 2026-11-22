@@ -94,11 +94,20 @@ export async function inscribirIIBB(page: Page) {
 
 /** Vincula una actividad del catálogo (sin fecha: vale desde el alta del cliente). */
 export async function vincularActividad(page: Page, actividad: string) {
+  await vincularActividades(page, [actividad]);
+}
+
+/** Vincula varias actividades del catálogo en un solo alta: cada una se busca y se marca con su casilla; un solo «Vincular». */
+export async function vincularActividades(page: Page, actividades: string[]) {
   await clickAdd(page, "Actividades");
-  await pick(page.locator("#act-activity"), actividad);
+  const cajon = page.getByRole("dialog", { name: "Vincular actividad económica" });
+  for (const actividad of actividades) {
+    await cajon.getByRole("searchbox", { name: "Buscar actividad" }).fill(actividad);
+    await cajon.getByRole("checkbox", { name: actividad }).check();
+  }
   await expect(page.locator("#act-from")).toHaveCount(0);
   await mutating(page, "/activities", () =>
-    page.getByRole("button", { name: "Vincular actividad", exact: true }).last().click(),
+    cajon.getByRole("button", { name: "Vincular actividad", exact: true }).click(),
   );
 }
 

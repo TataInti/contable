@@ -110,6 +110,8 @@ const ESTADOS_EDITABLES_FUENTES = [
 
 // Clasificar y excluir: además de preparar, se admite con el mes calculado (vuelve a preparación).
 const ESTADOS_EDITABLES_CLASIFICACION = [...ESTADOS_EDITABLES_FUENTES, "CALCULATED"];
+// Reemplazar, retirar o revisar un archivo: también con el mes calculado. El cálculo queda desactualizado y hay que recalcular.
+const ESTADOS_CON_FUENTES_VIGENTES = [...ESTADOS_EDITABLES_FUENTES, "CALCULATED"];
 
 /** Error de una acción: solo ocupa lugar en la barra si hay un error que mostrar (P4). */
 function errorDe(error: Error | null | undefined, clave: string) {
@@ -266,10 +268,12 @@ export function StudyExpedienteMensual() {
   const legajoDelPeriodo = legajoSeleccionado;
   const motivoImportarLibro = !capabilities.has("tax.vouchers.prepare")
     ? "Tu rol no puede importar libros IVA."
-    : !legajoDelPeriodo || !ESTADOS_EDITABLES_FUENTES.includes(legajoDelPeriodo.status)
-      ? legajoDelPeriodo?.status === "CALCULATED"
-        ? "En un mes calculado no se cargan archivos; marcar o deshacer «Sin movimientos» invalida el cálculo y vuelve el mes a preparación."
-        : "El legajo no admite cambios de fuentes en su estado actual."
+    : !legajoDelPeriodo || !ESTADOS_CON_FUENTES_VIGENTES.includes(legajoDelPeriodo.status)
+      ? legajoDelPeriodo?.status === "IN_REVIEW" || legajoDelPeriodo?.status === "REVIEWED"
+        ? "El mes está en revisión. Pedí cambios para modificar sus fuentes."
+        : legajoDelPeriodo?.status === "FINALIZED" || legajoDelPeriodo?.status === "SUPERSEDED"
+          ? "Para cambiar un mes cerrado, rectificá la liquidación."
+          : "El legajo no admite cambios de fuentes en su estado actual."
       : null;
   const coverageQuery = useQuery({
     queryKey: ["monthly-workpaper-coverage", firmId, clientId, activeWorkpaperId],
@@ -774,6 +778,7 @@ export function StudyExpedienteMensual() {
 
   const renderEtapa = (wp: Workpaper, step: number) => {
     const canEditSources = !soloLectura && ESTADOS_EDITABLES_FUENTES.includes(wp.status);
+    const canEditFuentes = !soloLectura && ESTADOS_CON_FUENTES_VIGENTES.includes(wp.status);
     // En solo lectura, ninguna etapa conserva un permiso que escriba: la revisión anterior no ofrece acciones que escriban (A29).
     const capacidades = soloLectura ? sinPermisosDeEscritura(capabilities) : capabilities;
     // Sin movimientos (corte 2A): además de los estados de cargar archivos, se marca con el mes ya calculado (vuelve a preparación).
@@ -817,7 +822,8 @@ export function StudyExpedienteMensual() {
             coverageQuery={coverageQuery}
             workpaperId={activeWorkpaperId ?? null}
             capabilities={capacidades}
-            canEditSources={canEditSources}
+            canEditSources={canEditFuentes}
+            calculado={wp.status === "CALCULATED"}
             currentUserId={currentUserId}
             soloLectura={soloLectura}
             motivoImportarLibro={motivoImportarLibro}
@@ -1090,9 +1096,11 @@ export function StudyExpedienteMensual() {
       }
       motivos.push(errorDe(calculateMutation.variables?.id === wp.id ? calculateMutation.error : null, "error-recalcular"));
     }
-    if (wp.status === "CALCULATED" && cambios.hayCambios) {
-      const cambio =
-        cambios.minimo && cambios.impuestos
+    const fuentesCambiaron = wp.status === "CALCULATED" && wp.inputHash === null;
+    if (wp.status === "CALCULATED" && (cambios.hayCambios || fuentesCambiaron)) {
+      const cambio = !cambios.hayCambios
+        ? "Cambió una fuente del mes"
+        : cambios.minimo && cambios.impuestos
           ? "Cambiaste el mínimo y los impuestos a liquidar"
           : cambios.minimo
             ? "Cambiaste el mínimo"
@@ -1149,7 +1157,7 @@ export function StudyExpedienteMensual() {
         ),
       );
     }
-    if (wp.status === "CALCULATED" && !cambios.hayCambios) {
+    if (wp.status === "CALCULATED" && !cambios.hayCambios && !fuentesCambiaron) {
       accion = (
         <Button
           size="sm"

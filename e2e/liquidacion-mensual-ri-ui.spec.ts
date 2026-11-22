@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
 import { lineaPercepcionDgr, libroVentasXlsx, nombrePercepcionDgr } from "./helpers/fuentes-sinteticas";
+import { vincularActividades } from "./helpers/liquidacion-ui";
 
 /** Elige una opción de desplegable (<select> o buscador con lista). En el buscador se tipea con teclas reales y se hace clic en la opción que aparece filtrada. */
 async function pick(campo: Locator, texto: string) {
@@ -172,17 +173,11 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     }
   });
 
-  await test.step("Configuración fiscal: actividad de restaurante del catálogo 2026 para cada impuesto (sin fecha: vale desde el alta)", async () => {
-    for (const tax of [IIBB, TEM]) {
-      await clickAdd(page, "Actividades");
-      await pick(page.locator("#act-activity"), tax.activity);
-      // Vincular la actividad no pide fecha: vale desde el alta del cliente (4L). Sin campo «Desde» en el cajón.
-      await expect(page.locator("#act-from")).toHaveCount(0);
-      await mutating(page, "/activities", () =>
-        page.getByRole("button", { name: "Vincular actividad", exact: true }).last().click(),
-      );
-    }
+  await test.step("Configuración fiscal: actividades de restaurante del catálogo (Tucumán y San Miguel de Tucumán) en un solo alta", async () => {
+    // Selección múltiple: las dos casillas van en un solo «Vincular». Cada actividad conserva su jurisdicción del catálogo y vale desde el alta (sin fecha).
+    await vincularActividades(page, [IIBB.activity, TEM.activity]);
   });
+
 
   await test.step("Configuración fiscal: categoría TEM 2026 «B» del cliente", async () => {
     await page.getByRole("tab", { name: /^Regímenes/ }).click();
