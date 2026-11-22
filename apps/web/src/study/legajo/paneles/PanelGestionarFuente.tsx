@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ActionDrawer, Button } from "@contable/design-system";
+import { ConfirmDialog, useConfirmAction } from "../../../ui/ConfirmAction";
 import { useClientContext } from "../../../context/ClientContext";
 import { WorkpaperSourceReviewAction } from "../../WorkpaperSourceReviewAction";
 import { formatearFechaHora } from "../../../lib/formatoFechas";
@@ -36,6 +37,9 @@ export function PanelGestionarFuente({
   reviewSourceMutation,
   editReason,
   onCambiarFuente,
+  noMovementsMutation,
+  puedeMarcarSinMovimientos,
+  motivoSinMovimientos,
 }: {
   source: WorkpaperSource | null;
   isOpen: boolean;
@@ -53,6 +57,9 @@ export function PanelGestionarFuente({
   reviewSourceMutation: UseMutationResult<unknown, Error, string>;
   editReason: string | null;
   onCambiarFuente: (sourceCode: string) => void;
+  noMovementsMutation: UseMutationResult<unknown, Error, { sourceCode: string; marcar: boolean }>;
+  puedeMarcarSinMovimientos: boolean;
+  motivoSinMovimientos: string | null;
 }) {
   const { firmId, clientId } = useClientContext();
   const [vista, setVista] = useState<Vista>("archivos");
@@ -60,6 +67,7 @@ export function PanelGestionarFuente({
   const [avisoFuente, setAvisoFuente] = useState<string | null>(null);
   const [loteId, setLoteId] = useState<string | null>(null);
   const detalleTituloRef = useRef<HTMLHeadingElement>(null);
+  const confirm = useConfirmAction();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -122,7 +130,9 @@ export function PanelGestionarFuente({
   };
   const nombreEstado = source.batches.some((batch) => batch.errorRows > 0)
     ? "Hay archivos con errores. Corregí las filas indicadas y volvé a cargar el archivo para que cuente en el cálculo."
-    : source.present
+    : source.status === "NO_MOVEMENTS" && source.noMovements
+      ? `Sin movimientos este mes · marcado por ${source.noMovements.byName} el ${formatearFechaHora(source.noMovements.at)}`
+      : source.present
       ? "La fuente está cargada y cuenta para el cálculo."
       : source.required
         ? "Todavía falta cargar un archivo para que esta fuente cuente en el cálculo."
@@ -154,6 +164,38 @@ export function PanelGestionarFuente({
           <p>{nombreEstado}</p>
           {canEdit ? <Button variant="primary" onClick={cargarArchivo}>Cargar archivo</Button> : null}
           {!canEdit && editReason ? <p role="status">{editReason}</p> : null}
+          {!source.present ? (
+            source.status === "NO_MOVEMENTS" ? (
+              <Button
+                variant="secondary"
+                disabled={!puedeMarcarSinMovimientos || noMovementsMutation.isPending}
+                onClick={() => noMovementsMutation.mutate({ sourceCode: source.code, marcar: false })}
+              >
+                Deshacer sin movimientos
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                disabled={!puedeMarcarSinMovimientos || noMovementsMutation.isPending}
+                onClick={() =>
+                  confirm.ask({
+                    title: "¿Marcar esta fuente sin movimientos?",
+                    description:
+                      "La fuente queda cubierta para el cálculo con importes en cero. Si después cargás y revisás un archivo, el archivo manda y la marca se quita.",
+                    confirmLabel: "Marcar sin movimientos",
+                    onConfirm: () => noMovementsMutation.mutate({ sourceCode: source.code, marcar: true }),
+                  })
+                }
+              >
+                Sin movimientos
+              </Button>
+            )
+          ) : null}
+          {/* El motivo no se repite si ya lo muestra la fila de «Cargar archivo» (editReason). */}
+          {!source.present && !puedeMarcarSinMovimientos && motivoSinMovimientos && motivoSinMovimientos !== editReason ? (
+            <p role="status">{motivoSinMovimientos}</p>
+          ) : null}
+          <WorkpaperActionError error={noMovementsMutation.error} />
           {source.batches.length === 0 ? <p>No hay archivos cargados.</p> : null}
           <ul className="workpaper-source-file-list">
             {source.batches.map((batch) => (
@@ -250,6 +292,7 @@ export function PanelGestionarFuente({
           )}
         </section>
       ) : null}
+      <ConfirmDialog confirm={confirm} />
     </ActionDrawer>
   );
 }

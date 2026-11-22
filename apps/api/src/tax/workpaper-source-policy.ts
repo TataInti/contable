@@ -224,10 +224,15 @@ export function isSourceRequired(
   policy: WorkpaperSourcePolicy,
   obligations: readonly ObligationRef[],
   reviewedCodes: ReadonlySet<string>,
+  markedCodes: ReadonlySet<string> = new Set(),
 ): boolean {
   if (!policy.required) return false;
+  // Una base cubierta (lote revisado o marca «Sin movimientos» vigente) satisface a la fuente que la sirve.
+  // La marca no cambia la obligatoriedad de la propia fuente: solo cuenta para satisfiedBy.
+  const covered = (codes: readonly string[]) =>
+    codes.some((code) => reviewedCodes.has(code) || markedCodes.has(code));
   if (obligations.some((obligation) => isPrimaryFor(policy, obligation))) {
-    return !(policy.satisfiedBy ?? []).some((code) => reviewedCodes.has(code));
+    return !covered(policy.satisfiedBy ?? []);
   }
   return obligations
     .filter((obligation) => feedsObligation(policy, obligation))
@@ -237,7 +242,7 @@ export function isSourceRequired(
         (candidate) =>
           candidate.satisfiedBy?.includes(policy.code) && isPrimaryFor(candidate, obligation),
       );
-      return !alternatives.some((candidate) => reviewedCodes.has(candidate.code));
+      return !covered(alternatives.map((candidate) => candidate.code));
     });
 }
 
