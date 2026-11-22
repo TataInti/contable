@@ -1,4 +1,4 @@
-import { Button } from "@contable/design-system";
+import { Button, SearchSelect } from "@contable/design-system";
 import type { SummarySectionDefinition, SummarySectionId } from "./busqueda";
 
 type Props = {
@@ -20,20 +20,20 @@ export function IndiceSecciones({ secciones, activeSection, hayBusqueda, onSelec
     <>
       <label className="client-summary__index-select-control">
         <span className="sr-only">Sección del cliente</span>
-        <select
+        <SearchSelect
+          label="Sección del cliente"
+          hideLabel
           className="client-summary__index-select"
-          aria-label="Sección del cliente"
           value={activeSection}
-          onChange={(event) => {
-            onSelect(event.target.value as SummarySectionId);
+          onChange={(value) => {
+            onSelect(value as SummarySectionId);
           }}
-        >
-          {secciones.map((section) => (
-            <option key={section.id} value={section.id}>
-              {section.group === section.label ? section.label : `${section.group} · ${section.label}`}
-            </option>
-          ))}
-        </select>
+          allowEmpty={false}
+          options={secciones.map((section) => ({
+            value: section.id,
+            label: section.group === section.label ? section.label : `${section.group} · ${section.label}`,
+          }))}
+        />
       </label>
       <nav className="client-summary__section-index" aria-label="Secciones internas del cliente">
         <div className="client-summary__index-heading">

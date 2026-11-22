@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, Field, getStatusBadgeMeta, MoneyField, useNotify } from "@contable/design-system";
+import { Button, Field, getStatusBadgeMeta, MoneyField, useNotify, SearchSelect } from "@contable/design-system";
 import { api } from "../../../lib/api";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { RECEIPT_ACCEPT, uploadFilingReceipt, waitForReceiptReady } from "../../filingReceipt";
@@ -126,22 +126,19 @@ export function PanelPresentacion({
           <label className="ds-field__label" htmlFor="tax-filing-evidence">
             Acuse de presentación
           </label>
-          <select
+          <SearchSelect
             id="tax-filing-evidence"
+            label="Acuse de presentación"
+            hideLabel
             className="ds-field__input"
             value={filingForm.evidenceDocumentId}
-            onChange={(event) =>
-              setFilingForm({ ...filingForm, evidenceDocumentId: event.target.value })
-            }
-          >
-            <option value="">Subir un acuse nuevo</option>
-            {filingReceiptDocuments.map((document) => (
-              <option key={document.id} value={document.id}>
-                {document.fileVersions?.[0]?.originalName ?? "Acuse"} ·{" "}
-                {getStatusBadgeMeta(document.status).label}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => setFilingForm({ ...filingForm, evidenceDocumentId: value })}
+            placeholder="Subir un acuse nuevo"
+            options={filingReceiptDocuments.map((document) => ({
+              value: document.id,
+              label: `${document.fileVersions?.[0]?.originalName ?? "Acuse"} · ${getStatusBadgeMeta(document.status).label}`,
+            }))}
+          />
           <small className="ds-field__hint">
             Es el comprobante que emite el organismo. Sin acuse la presentación no queda registrada.
           </small>

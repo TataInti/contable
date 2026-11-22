@@ -1,5 +1,5 @@
 import type { UseMutationResult } from "@tanstack/react-query";
-import { Button, Notice } from "@contable/design-system";
+import { Button, Notice, SearchSelect } from "@contable/design-system";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ApiError, type Client } from "../../../lib/api";
 import type { ClientWithProfile } from "../tipos";
@@ -54,20 +54,24 @@ export function PanelEstado({
             updateStatus.mutate();
           }}
         >
-          <label className="ds-field">
+          <div className="ds-field">
             <span className="ds-field__label">Estado</span>
-            <select
+            <SearchSelect
               id="client-status"
+              label="Estado"
+              hideLabel
               className="ctxbar__input"
               value={statusForm}
-              onChange={(event) => setStatusForm(event.target.value)}
-            >
-              <option value="ONBOARDING">En configuración</option>
-              <option value="ACTIVE">Activo</option>
-              <option value="INACTIVE">Inactivo</option>
-              <option value="ARCHIVED">Archivado</option>
-            </select>
-          </label>
+              onChange={(value) => setStatusForm(value)}
+              allowEmpty={false}
+              options={[
+                { value: "ONBOARDING", label: "En configuración" },
+                { value: "ACTIVE", label: "Activo" },
+                { value: "INACTIVE", label: "Inactivo" },
+                { value: "ARCHIVED", label: "Archivado" },
+              ]}
+            />
+          </div>
           {updateStatus.isError ? (
             <Notice tone="error" className="study-inline-form__feedback">
               {updateStatus.error instanceof ApiError

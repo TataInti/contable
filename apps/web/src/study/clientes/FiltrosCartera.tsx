@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 import { CLIENT_VAT_CONDITION_LABELS, CLIENT_VAT_CONDITIONS } from "@contable/contracts";
 import { DenseSearch, DenseToggleGroup, DenseToolbar } from "../../ui/Dense";
 import { CUIT_ENDINGS } from "./terminacion";
+import { SearchSelect } from "@contable/design-system";
 
 /** Criterios de la barra que, activos, reducen la cartera o cambian sus filas. */
 export interface FiltrosActivos {
@@ -52,29 +53,27 @@ export function FiltrosCartera({
         placeholder="Buscar por nombre o CUIT…"
         label="Buscar clientes"
       />
-      <select
+      <SearchSelect
+        hideLabel
+        label="Filtrar por estado"
         className="dense-select"
-        aria-label="Filtrar por estado"
         value={statusFilter}
-        onChange={(event) => setStatusFilter(event.target.value)}
-      >
-        <option value="">Estado: todos</option>
-        <option value="ACTIVE">Activos</option>
-        <option value="INACTIVE">Inactivos</option>
-      </select>
-      <select
+        onChange={(value) => setStatusFilter(value)}
+        placeholder="Estado: todos"
+        options={[
+          { value: "ACTIVE", label: "Activos" },
+          { value: "INACTIVE", label: "Inactivos" },
+        ]}
+      />
+      <SearchSelect
+        hideLabel
+        label="Filtrar por condición IVA"
         className="dense-select"
-        aria-label="Filtrar por condición IVA"
         value={vatFilter}
-        onChange={(event) => setVatFilter(event.target.value)}
-      >
-        <option value="">IVA: todas</option>
-        {CLIENT_VAT_CONDITIONS.map((value) => (
-          <option key={value} value={value}>
-            {CLIENT_VAT_CONDITION_LABELS[value]}
-          </option>
-        ))}
-      </select>
+        onChange={(value) => setVatFilter(value)}
+        placeholder="IVA: todas"
+        options={CLIENT_VAT_CONDITIONS.map((value) => ({ value, label: CLIENT_VAT_CONDITION_LABELS[value] }))}
+      />
       <span className="dense-dim">Terminación de CUIT</span>
       <DenseToggleGroup
         label="Terminación de CUIT"

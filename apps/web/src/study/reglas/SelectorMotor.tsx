@@ -1,6 +1,6 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { TaxEngineOption } from "@contable/contracts";
-import { EmptyState } from "@contable/design-system";
+import { EmptyState, SearchSelect } from "@contable/design-system";
 import { ErrorConsulta } from "./Errores";
 
 interface SelectorMotorProps {
@@ -88,20 +88,17 @@ export function SelectorMotor({
       <label className="ds-field__label" htmlFor={id}>
         Opción de cálculo
       </label>
-      <select
+      <SearchSelect
         id={id}
+        label="Opción de cálculo"
+        hideLabel
         className="ds-field__input"
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(next) => onChange(next)}
         required
-      >
-        <option value="">Seleccioná una opción…</option>
-        {enginesQuery.data.map((engine) => (
-          <option key={engine.id} value={engine.id}>
-            {engine.label}
-          </option>
-        ))}
-      </select>
+        placeholder="Seleccioná una opción…"
+        options={enginesQuery.data.map((engine) => ({ value: engine.id, label: engine.label }))}
+      />
       {consecuencia ? (
         <p className="form-submit-hint selector-motor-consecuencia" role="note">
           {consecuencia}

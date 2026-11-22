@@ -1,7 +1,7 @@
 // Etapa Controles del Legajo: hallazgos, resolución y evidencia por control (Foco 2.3d).
 import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { AsyncState, Button, EmptyState, getStatusBadgeMeta } from "@contable/design-system";
+import { AsyncState, Button, EmptyState, getStatusBadgeMeta, SearchSelect } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { CONTROL_LABELS, CONTROL_SEVERITY_LABELS } from "../etiquetas";
 import { formatMoney } from "../formato";
@@ -132,26 +132,22 @@ export function EtapaControles({
                     }
                   />
                   {control.severity === "BLOCKING" && documentsQuery.isSuccess ? (
-                    <select
-                      aria-label={`Evidencia ${control.code}`}
+                    <SearchSelect
+                      label={`Evidencia ${control.code}`}
+                      hideLabel
                       value={controlEvidence[control.id] ?? ""}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setControlEvidence((values) => ({
                           ...values,
-                          [control.id]: event.target.value,
+                          [control.id]: value,
                         }))
                       }
-                    >
-                      <option value="">Sin documento de respaldo</option>
-                      {eligibleEvidenceDocuments.map((document) => (
-                        <option key={document.id} value={document.id}>
-                          {document.fileVersions?.[0]?.originalName ??
-                            document.category ??
-                            "Documento"}{" "}
-                          · {getStatusBadgeMeta(document.status).label}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Sin documento de respaldo"
+                      options={eligibleEvidenceDocuments.map((document) => ({
+                        value: document.id,
+                        label: `${document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento"} · ${getStatusBadgeMeta(document.status).label}`,
+                      }))}
+                    />
                   ) : null}
                   <span className="workpaper-control__acciones">
                     <Button

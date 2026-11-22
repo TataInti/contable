@@ -1,6 +1,6 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, Field, MoneyField } from "@contable/design-system";
+import { Button, Field, MoneyField, SearchSelect } from "@contable/design-system";
 import { api } from "../../../lib/api";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { formatMoney } from "../formato";
@@ -141,21 +141,19 @@ export function PanelEditarSaldo({
             <label className="ds-field__label" htmlFor="edit-lot-evidence">
               Documento de respaldo
             </label>
-            <select
+            <SearchSelect
               id="edit-lot-evidence"
+              label="Documento de respaldo"
+              hideLabel
               className="ds-field__input"
               value={editForm.evidenceDocumentId}
-              onChange={(event) =>
-                setEditForm((form) => ({ ...form, evidenceDocumentId: event.target.value }))
-              }
-            >
-              <option value="">Sin documento (carga manual)</option>
-              {documentos?.map((document) => (
-                <option key={document.id} value={document.id}>
-                  {document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento"}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setEditForm((form) => ({ ...form, evidenceDocumentId: value }))}
+              placeholder="Sin documento (carga manual)"
+              options={(documentos ?? []).map((document) => ({
+                value: document.id,
+                label: document.fileVersions?.[0]?.originalName ?? document.category ?? "Documento",
+              }))}
+            />
           </div>
           <WorkpaperActionError error={editLotMutation.error} />
         </form>
