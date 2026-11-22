@@ -245,6 +245,7 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
   {
     match: /\/monthly-tax-workpapers/,
     resolve: (m, path) => {
+      if (/\/batches\/[^/]+\/retire$/.test(path)) return "tax.vouchers.prepare";
       // Sin movimientos (corte 2A): quien carga archivos en la fuente marca o deshace la marca.
       if (path.includes("/sources/") && path.endsWith("/no-movements")) return "tax.vouchers.prepare";
       if (path.endsWith("/calculate")) return "tax.settlements.calculate";

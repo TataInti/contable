@@ -3525,15 +3525,23 @@ model WorkpaperImportBatch {
   snapshotHash     String?
   reviewedByUserId String?
   reviewedAt       DateTime?
+  retiredByUserId  String?
+  retiredAt        DateTime?
+  retireReason     String?  @db.VarChar(240)
+  replacedByBatchId String?
+  replacedAt       DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   client      Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
   workpaper   MonthlyTaxWorkpaper @relation(fields: [workpaperId], references: [id], onDelete: Cascade)
   importBatch ImportBatch         @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  replacedBy  WorkpaperImportBatch? @relation("WorkpaperBatchReplacement", fields: [replacedByBatchId], references: [id], onDelete: SetNull)
+  replaces    WorkpaperImportBatch[] @relation("WorkpaperBatchReplacement")
 
   @@unique([workpaperId, importBatchId])
   @@index([firmId, clientId, workpaperId, sourceCode])
+  @@index([replacedByBatchId])
   @@map("workpaper_import_batches")
 }
 

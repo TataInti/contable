@@ -7,6 +7,8 @@ import { buildServer } from "../server.js";
 import { sha256 } from "../auth/sessions.js";
 import { prisma } from "../lib/prisma.js";
 import { MonthlyWorkpaperService, WorkpaperError } from "./workpaper-service.js";
+import { reviewedSourceFacts } from "./workpaper-classification.js";
+import { IngestionService } from "./ingestion-service.js";
 
 /**
  * F1.1: tests de integración del expediente mensual de liquidación.
@@ -417,6 +419,153 @@ describe("F1.1 expediente mensual de liquidación", () => {
       periodEnd: "2026-01-31",
     });
     expect(again.id).toBe(wp.id);
+  });
+
+  it("retirar un lote conserva el motivo y excluye sus importes de los hechos de cálculo", async () => {
+    const wp = await service.create(ctxOwner, {
+      clientId: CLIENT_WP,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+    });
+    const batch = await prisma.importBatch.create({
+      data: {
+        firmId: FIRM_WP,
+        clientId: CLIENT_WP,
+        origin: "ARCA",
+        taxTypeId,
+        periodId: PERIOD_WP,
+        adapterVersion: "ARCA_IVA_V1",
+        status: "COMMITTED",
+        fileName: "ventas-sinteticas.csv",
+        totalRows: 1,
+        validRows: 1,
+        createdByUserId: OWNER_WP,
+      },
+    });
+    const voucherId = randomUUID();
+    await prisma.importRow.create({
+      data: {
+        firmId: FIRM_WP,
+        clientId: CLIENT_WP,
+        batchId: batch.id,
+        position: 0,
+        raw: { importe: "125000.00" },
+        normalized: { net: "125000.00", total: "125000.00" },
+        status: "VALID",
+        sourceType: "FISCAL_VOUCHER",
+        sourceId: voucherId,
+      },
+    });
+    const link = await prisma.workpaperImportBatch.create({
+      data: {
+        firmId: FIRM_WP,
+        clientId: CLIENT_WP,
+        workpaperId: wp.id,
+        importBatchId: batch.id,
+        sourceCode: "ARCA_IVA_SALES",
+        status: "REVIEWED",
+        reviewedByUserId: REVIEWER_WP,
+        reviewedAt: new Date(),
+      },
+    });
+    const before = await runAsRuntime(OWNER_WP, FIRM_WP, (tx) => reviewedSourceFacts(tx, wp.id));
+    expect(before.voucherIds).toContain(voucherId);
+
+    const retired = await service.retireBatch(ctxOwner, wp.id, batch.id, "Archivo cargado por error");
+    expect(retired).toMatchObject({
+      id: link.id,
+      status: "RETIRED",
+      retiredByUserId: OWNER_WP,
+      retireReason: "Archivo cargado por error",
+    });
+    expect(retired.retiredAt).toBeInstanceOf(Date);
+
+    const facts = await runAsRuntime(OWNER_WP, FIRM_WP, (tx) => reviewedSourceFacts(tx, wp.id));
+    expect(facts.voucherIds).not.toContain(voucherId);
+    expect(facts.bySourceCode["ARCA_IVA_SALES"]).toBeUndefined();
+
+    const otherFirmRead = await runAsRuntime(OWNER_WP, OTHER_FIRM_WP, (tx) =>
+      tx.workpaperImportBatch.findFirst({ where: { id: link.id } }),
+    );
+    const otherFirmWrite = await runAsRuntime(OWNER_WP, OTHER_FIRM_WP, (tx) =>
+      tx.workpaperImportBatch.updateMany({ where: { id: link.id }, data: { retireReason: "No autorizado" } }),
+    );
+    const runtimeDelete = await runAsRuntime(OWNER_WP, FIRM_WP, (tx) =>
+      tx.$queryRaw<Array<{ allowed: boolean }>>`SELECT has_table_privilege(current_user, 'workpaper_import_batches', 'DELETE') AS allowed`,
+    );
+    expect(otherFirmRead).toBeNull();
+    expect(otherFirmWrite.count).toBe(0);
+    expect(runtimeDelete[0]?.allowed).toBe(false);
+
+    const closedBatch = await prisma.importBatch.create({
+      data: { firmId: FIRM_WP, clientId: CLIENT_WP, origin: "ARCA", taxTypeId, periodId: PERIOD_WP, adapterVersion: "ARCA_LIBRO_IVA_V1", status: "COMMITTED", fileName: "ventas-cerradas.csv" },
+    });
+    await prisma.workpaperImportBatch.create({
+      data: { firmId: FIRM_WP, clientId: CLIENT_WP, workpaperId: wp.id, importBatchId: closedBatch.id, sourceCode: "ARCA_IVA_SALES" },
+    });
+    await prisma.monthlyTaxWorkpaper.update({ where: { id: wp.id }, data: { status: "FINALIZED" } });
+    await expect(service.retireBatch(ctxOwner, wp.id, closedBatch.id, "Cambio tardío")).rejects.toMatchObject({
+      code: "WORKPAPER_FINALIZED",
+      message: "Para cambiar un mes cerrado, rectificá la liquidación.",
+    });
+  });
+
+  it("confirma el reemplazo solo dentro de la misma fuente y workpaper; deja la nueva carga pendiente", async () => {
+    const wp = await service.create(ctxOwner, {
+      clientId: CLIENT_WP,
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+    });
+    await prisma.monthlyTaxWorkpaper.update({ where: { id: wp.id }, data: { status: "CALCULATED", inputHash: "hash-anterior" } });
+    const oldBatch = await prisma.importBatch.create({
+      data: {
+        firmId: FIRM_WP, clientId: CLIENT_WP, origin: "ARCA", taxTypeId, periodId: PERIOD_WP,
+        adapterVersion: "ARCA_LIBRO_IVA_V1", status: "COMMITTED", fileName: "ventas-viejas.csv",
+        totalRows: 1, validRows: 1, createdByUserId: OWNER_WP,
+      },
+    });
+    const newBatch = await prisma.importBatch.create({
+      data: {
+        firmId: FIRM_WP, clientId: CLIENT_WP, origin: "ARCA", taxTypeId, periodId: PERIOD_WP,
+        adapterVersion: "ARCA_LIBRO_IVA_V1", status: "VALIDATED", fileName: "ventas-nuevas.csv",
+        totalRows: 0, validRows: 0, createdByUserId: PREPARER_WP,
+      },
+    });
+    const oldLink = await prisma.workpaperImportBatch.create({
+      data: { firmId: FIRM_WP, clientId: CLIENT_WP, workpaperId: wp.id, importBatchId: oldBatch.id, sourceCode: "ARCA_IVA_SALES", status: "REVIEWED" },
+    });
+    const newLink = await prisma.workpaperImportBatch.create({
+      data: { firmId: FIRM_WP, clientId: CLIENT_WP, workpaperId: wp.id, importBatchId: newBatch.id, sourceCode: "ARCA_IVA_SALES" },
+    });
+
+    const ingestion = new IngestionService();
+    await ingestion.commitBatch(ctxOwner, newBatch.id, "20999999977", oldBatch.id);
+
+    const [oldAfter, newAfter, workpaperAfter] = await Promise.all([
+      prisma.workpaperImportBatch.findUniqueOrThrow({ where: { id: oldLink.id } }),
+      prisma.workpaperImportBatch.findUniqueOrThrow({ where: { workpaperId_importBatchId: { workpaperId: wp.id, importBatchId: newBatch.id } } }),
+      prisma.monthlyTaxWorkpaper.findUniqueOrThrow({ where: { id: wp.id } }),
+    ]);
+    expect(oldAfter).toMatchObject({ status: "REPLACED", replacedByBatchId: newLink.id });
+    expect(oldAfter.replacedAt).toBeInstanceOf(Date);
+    expect(newAfter.status).toBe("PENDING_REVIEW");
+    expect(workpaperAfter).toMatchObject({ status: "COLLECTING_INPUTS", inputHash: null });
+
+    const wrongSourceOld = await prisma.importBatch.create({
+      data: { firmId: FIRM_WP, clientId: CLIENT_WP, origin: "ARCA", taxTypeId, periodId: PERIOD_WP, adapterVersion: "ARCA_LIBRO_IVA_V1", status: "COMMITTED" },
+    });
+    const wrongSourceNew = await prisma.importBatch.create({
+      data: { firmId: FIRM_WP, clientId: CLIENT_WP, origin: "ARCA", taxTypeId, periodId: PERIOD_WP, adapterVersion: "ARCA_LIBRO_IVA_V1", status: "VALIDATED" },
+    });
+    await prisma.workpaperImportBatch.create({
+      data: { firmId: FIRM_WP, clientId: CLIENT_WP, workpaperId: wp.id, importBatchId: wrongSourceOld.id, sourceCode: "ARCA_IVA_PURCHASES" },
+    });
+    await prisma.workpaperImportBatch.create({
+      data: { firmId: FIRM_WP, clientId: CLIENT_WP, workpaperId: wp.id, importBatchId: wrongSourceNew.id, sourceCode: "ARCA_IVA_SALES" },
+    });
+    await expect(ingestion.commitBatch(ctxOwner, wrongSourceNew.id, "20999999977", wrongSourceOld.id)).rejects.toMatchObject({
+      code: "REPLACEMENT_SCOPE_INVALID",
+    });
   });
 
   it("lista expedientes del cliente", async () => {

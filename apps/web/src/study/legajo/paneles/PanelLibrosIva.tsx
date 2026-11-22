@@ -23,6 +23,7 @@ interface PanelLibrosIvaProps {
   cuitCliente: string | undefined;
   /** Lado de la fila desde la que se abrió: va primero y recibe el foco. */
   ladoInicial: Lado | null;
+  replacesBatchId?: string;
   /** Motivo por el que no se puede importar (permiso o legajo cerrado); null si se puede. */
   motivoBloqueo: string | null;
 }
@@ -40,6 +41,7 @@ export function PanelLibrosIva({
   fuentes,
   cuitCliente,
   ladoInicial,
+  replacesBatchId,
   motivoBloqueo,
 }: PanelLibrosIvaProps) {
   const queryClient = useQueryClient();
@@ -104,6 +106,7 @@ export function PanelLibrosIva({
         periodId: source.periodId,
         clientCuit: cuitCliente,
         ...(activeWorkpaperId ? { workpaperId: activeWorkpaperId } : {}),
+        ...(replacesBatchId ? { replacesBatchId } : {}),
       });
     },
     onSuccess: (data) => {
@@ -128,6 +131,7 @@ export function PanelLibrosIva({
         file,
         workpaperId: activeWorkpaperId,
         clientCuit: cuitCliente,
+        ...(replacesBatchId ? { replacesBatchId } : {}),
       });
     },
     onSuccess: (_data, variables) => {
@@ -172,7 +176,7 @@ export function PanelLibrosIva({
     <ActionDrawer
       isOpen={abierto}
       onClose={onCerrar}
-      title="Importar libros IVA"
+      title={replacesBatchId ? "Reemplazar libro IVA" : "Importar libros IVA"}
       description="Elegí el libro de ventas o de compras. Un .xlsx pasa por el análisis de alícuotas antes de importarse; un .csv, .txt o .json se importa como lote de su fuente ARCA IVA."
       size="wide"
     >

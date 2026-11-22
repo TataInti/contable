@@ -63,6 +63,7 @@ export async function importarLoteFuente({
   clientCuit,
   periodo,
   fuentes,
+  replacesBatchId,
 }: {
   firmId: string | null;
   clientId: string | null;
@@ -74,6 +75,7 @@ export async function importarLoteFuente({
   periodo?: { startDate: string; endDate: string };
   /** Fuentes del legajo, para nombrar la correcta cuando el archivo se sube a otra. */
   fuentes?: readonly WorkpaperSource[];
+  replacesBatchId?: string;
 }): Promise<ResultadoImportacionLote> {
   if (!source.taxTypeId || !source.periodId) {
     throw new Error("La fuente no tiene una obligación fiscal materializada");
@@ -114,6 +116,7 @@ export async function importarLoteFuente({
   if (status === "VALIDATED") {
     await api.post(`/firms/${firmId}/clients/${clientId}/import-batches/${batch.id}/commit`, {
       clientCuit,
+      ...(replacesBatchId ? { replacesBatchId } : {}),
     });
   }
   return { avisos };

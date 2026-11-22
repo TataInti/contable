@@ -183,6 +183,14 @@ interface WorkpaperSourceBatch {
   snapshotHash: string | null;
   reviewedAt: string | null;
   reviewedByUserId: string | null;
+  reviewedByName?: string | null;
+  createdByName?: string | null;
+  retiredByUserId?: string | null;
+  retiredByName?: string | null;
+  retiredAt?: string | null;
+  retireReason?: string | null;
+  replacedByBatchId?: string | null;
+  replacedAt?: string | null;
   createdByUserId: string | null;
   createdAt: string;
 }

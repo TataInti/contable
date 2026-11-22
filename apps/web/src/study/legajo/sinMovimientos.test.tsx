@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, type UseMutationResult, type UseQueryResult } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EtapaFuentes, type EtapaFuentesProps } from "./etapas/EtapaFuentes";
 import type { CoberturaLegajo, WorkpaperSource } from "./tipos";
@@ -59,6 +59,7 @@ function fakeMutation() {
 function renderEtapa(overrides: Partial<EtapaFuentesProps> = {}) {
   const noMovementsMutation = fakeMutation();
   const props: EtapaFuentesProps = {
+    workpaperId: "workpaper-1",
     coverageQuery: {
       isError: false,
       isSuccess: true,
@@ -81,7 +82,8 @@ function renderEtapa(overrides: Partial<EtapaFuentesProps> = {}) {
     motivoSinMovimientos: null,
     ...overrides,
   };
-  render(<EtapaFuentes {...props} />);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={queryClient}><EtapaFuentes {...props} /></QueryClientProvider>);
   return { noMovementsMutation };
 }
 

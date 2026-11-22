@@ -163,7 +163,7 @@ type Coverage = {
     noMovements: { byUserId: string; byName: string; at: string } | null;
     taxTypeId: string | null;
     periodId: string | null;
-    batches: Array<{ id: string }>;
+    batches: Array<{ id: string; importBatchId: string }>;
   }>;
 };
 
@@ -606,6 +606,37 @@ describe("2A — «Sin movimientos» por fuente y mes", () => {
     const iibb = calculation.find((item) => item.obligation.taxTypeCode === "IIBB")!.settlement
       .totals;
     expect(iibb["BASE_TOTAL"]).toBe("115000.00");
+  });
+
+  it("retirar el último lote revisado deja la fuente pendiente y permite marcarla sin movimientos", async () => {
+    const coverage = data<Coverage>(await request("GET", `${sourceBase}/coverage`));
+    const batch = coverage.sources.find((source) => source.code === "ARCA_IVA_SALES")!.batches[0]!;
+    ok(
+      await request("POST", `${sourceBase}/batches/${batch.importBatchId}/retire`, {
+        reason: "Carga duplicada de prueba",
+      }),
+      200,
+      "retirar el último lote revisado",
+    );
+
+    const pending = data<Coverage>(await request("GET", `${sourceBase}/coverage`));
+    expect(pending.sources.find((source) => source.code === "ARCA_IVA_SALES")).toMatchObject({
+      required: true,
+      present: false,
+      status: "PENDING",
+    });
+    ok(
+      await request("PUT", `${sourceBase}/sources/ARCA_IVA_SALES/no-movements`),
+      200,
+      "marcar fuente pendiente sin movimientos",
+    );
+    const covered = data<Coverage>(await request("GET", `${sourceBase}/coverage`));
+    expect(covered.sources.find((source) => source.code === "ARCA_IVA_SALES")).toMatchObject({
+      required: true,
+      present: false,
+      status: "NO_MOVEMENTS",
+    });
+    ok(await request("POST", `${sourceBase}/calculate`, { cutoff: END }), 200, "recalcular con la marca vigente");
   });
 
   it("mes en revisión: no se cambia la fuente; mes finalizado: se rechaza con guía de rectificación", async () => {
