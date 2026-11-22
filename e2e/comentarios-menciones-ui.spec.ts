@@ -60,12 +60,12 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
       await expect(pageA.getByRole("listbox", { name: "Personas del estudio" })).toBeVisible();
       await pageA.getByRole("option", { name: "Revisor Demo" }).getByRole("button", { name: "Revisor Demo" }).click();
       await expect(pageA.getByText("Se notificará en «Pendientes para mí»." )).toBeVisible();
-      await pageA.getByRole("button", { name: "Comentar" }).click();
+      await pageA.getByRole("button", { name: "Comentar", exact: true }).click();
       await expect(pageA.getByText(mentionText.trim(), { exact: false }).first()).toBeVisible();
 
       await comment.fill(personalText);
       await pageA.getByRole("checkbox", { name: "Solo para mí" }).check();
-      await pageA.getByRole("button", { name: "Comentar" }).click();
+      await pageA.getByRole("button", { name: "Comentar", exact: true }).click();
       await expect(pageA.getByText(personalText, { exact: true })).toBeVisible();
     });
 
@@ -100,7 +100,7 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
 
       const archiveComment = pageA.getByRole("listitem").filter({ hasText: archiveText });
       await pageA.getByLabel("Escribí un comentario").fill(archiveText);
-      await pageA.getByRole("button", { name: "Comentar" }).click();
+      await pageA.getByRole("button", { name: "Comentar", exact: true }).click();
       await expect(archiveComment).toBeVisible();
       await archiveComment.getByRole("button", { name: "Archivar" }).click();
       await expect(archiveComment.getByText("Comentario archivado", { exact: true })).toBeVisible();
