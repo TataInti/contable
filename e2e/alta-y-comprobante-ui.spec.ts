@@ -338,7 +338,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await page.locator("#client-cuit").fill(data.client.cuit);
     await page.locator("#client-vat-condition").selectOption({ index: 1 });
     await pickOption(page.locator("#client-province"), "Tucumán");
-    await page.locator("#client-legal-form").selectOption({ index: 1 });
+    await pickOption(page.locator("#client-legal-form"), "Sociedad de responsabilidad limitada (SRL)");
     await page.locator(".action-drawer").getByRole("button", { name: "Guardar cliente" }).click(); // vigente: cambia con decisión de Inti (16-nov)
     await expect(page).toHaveURL(/\/configuracion-fiscal/);
     await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" }).locator("option:checked")).toContainText(data.client.legalName);

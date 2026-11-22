@@ -23,3 +23,4 @@ export * from "./WorkPage.js";
 export * from "./WorkBar.js";
 export * from "./Menu.js";
 export * from "./BarSelect.js";
+export * from "./SearchSelect.js";

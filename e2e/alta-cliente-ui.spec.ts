@@ -151,8 +151,8 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await page.locator("#client-trade-name").fill(data.client.tradeName);
     await page.locator("#client-cuit").fill(data.client.cuit);
     await page.locator("#client-vat-condition").selectOption({ index: 1 });
-    await page.locator("#client-province").selectOption({ index: 1 });
-    await page.locator("#client-legal-form").selectOption({ index: 1 });
+    await pickOption(page.locator("#client-province"), "Tucumán");
+    await pickOption(page.locator("#client-legal-form"), "Sociedad de responsabilidad limitada (SRL)");
     await page.getByRole("button", { name: "Guardar cliente" }).click(); // vigente: cambia con decisión de Inti (16-nov)
     // Al crearlo, la app lo deja seleccionado y lleva a su configuración fiscal.
     await expect(page).toHaveURL(/\/configuracion-fiscal/);

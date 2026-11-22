@@ -403,7 +403,7 @@ describe("Caracterización · Configuración fiscal: cajones y utilidades (F12 a
     fireEvent.click(await screen.findByRole("button", { name: "Crear obligación" }));
     const cajon = await screen.findByRole("dialog", { name: "Crear obligación" });
     const opciones = Array.from(cajon.querySelectorAll("#obl-regime option"), (opcion) => opcion.textContent);
-    expect(opciones).toEqual(["Seleccioná un régimen…", "Régimen IVA · Argentina"]);
+    expect(opciones).toEqual(["Elegí…", "Régimen IVA · Argentina"]);
   });
 
   it("F14 · crear período envía el alta, cierra su cajón y no abre el de obligación", async () => {
