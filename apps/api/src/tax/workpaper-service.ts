@@ -1421,10 +1421,11 @@ export class MonthlyWorkpaperService {
         },
       });
 
+      // Revisar un archivo después de calcular deja el cálculo desactualizado: el mes sigue calculado y se recalcula.
       if (link.workpaper.status === "CALCULATED") {
         await tx.monthlyTaxWorkpaper.update({
           where: { id: workpaperId },
-          data: { status: "COLLECTING_INPUTS", inputHash: null, outputHash: null, reviewedByUserId: null },
+          data: { inputHash: null, outputHash: null, reviewedByUserId: null },
         });
       }
 
@@ -1479,10 +1480,11 @@ export class MonthlyWorkpaperService {
       });
       // 4K: un lote retirado no aporta imputaciones al cálculo (fuentes-vigentes.ts).
       await retirarImputacionesDelLote(tx, { workpaperId, importBatchId: batchId });
+      // Después de calcular, retirar deja el cálculo desactualizado (inputHash nulo): el mes sigue calculado
+      // y hay que recalcular. El estado no vuelve a preparación.
       await tx.monthlyTaxWorkpaper.update({
         where: { id: workpaperId },
         data: {
-          ...(link.workpaper.status === "CALCULATED" ? { status: "COLLECTING_INPUTS" } : {}),
           inputHash: null,
           outputHash: null,
           reviewedByUserId: null,
@@ -2537,6 +2539,13 @@ export class MonthlyWorkpaperService {
         throw new WorkpaperError(
           "INVALID_TRANSITION",
           `No se puede enviar a revisión desde ${wp.status}`,
+        );
+      }
+      // Un cambio de fuentes después de calcular (retirar, reemplazar o revisar) deja el cálculo sin huella: hay que recalcular.
+      if (wp.status === "CALCULATED" && wp.inputHash === null) {
+        throw new WorkpaperError(
+          "INVALID_TRANSITION",
+          "El cálculo quedó desactualizado por un cambio en las fuentes. Recalculá antes de enviar a revisión.",
         );
       }
 

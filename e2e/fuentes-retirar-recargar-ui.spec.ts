@@ -22,8 +22,8 @@ import { libroVentasXlsx, type FacturaSintetica } from "./helpers/fuentes-sintet
 
 /**
  * Fuentes del Legajo, operadas como las opera el contador. Retirar, volver a cargar y reemplazar un archivo
- * solo se puede antes de calcular el mes («En un mes calculado no se cargan archivos»), así que el recorrido
- * usa dos meses del mismo cliente:
+ * funcionan antes y después de calcular: lo reemplazado o retirado deja de contar y el cálculo queda
+ * desactualizado hasta «Recalcular». El recorrido usa dos meses del mismo cliente:
  *
  *   Octubre de 2026 (retiro y recarga de la percepción):
  *   1. Cliente Responsable Inscripto en Tucumán, IIBB con actividad de restaurante, períodos de octubre y septiembre.
@@ -31,10 +31,13 @@ import { libroVentasXlsx, type FacturaSintetica } from "./helpers/fuentes-sintet
  *   3. Retirar la percepción con motivo → «No hay archivos vigentes» → volver a cargar el mismo TXT y revisarlo.
  *   4. Cálculo: 115.000 × 3,5 % = 4.025,00 ; − 1.500,55 = 2.524,45 (sin mínimo). El descuento cuenta una sola vez.
  *
- *   Septiembre de 2026 (reemplazos del libro de ventas, antes de calcular):
+ *   Septiembre de 2026 (reemplazos del libro de ventas):
  *   5. Libro de septiembre (neto 115.000) revisado; reemplazarlo con el mismo archivo → «idéntico al que ya está vigente»,
  *      sin lote nuevo.
- *   6. Reemplazarlo con otro libro (neto 100.000) y revisarlo → el cálculo usa solo el nuevo: 100.000 × 3,5 % = 3.500,00.
+ *   6. Calcular: 115.000 × 3,5 % = 4.025,00.
+ *   7. Reemplazarlo después de calcular con otro libro (neto 100.000) y revisarlo → «Cambió una fuente del mes»,
+ *      «Enviar a revisión» deshabilitado.
+ *   8. Recalcular → 100.000 × 3,5 % = 3.500,00; el 4.025,00 anterior ya no figura.
  *
  * Todo sintético y con el sufijo de la corrida. Importes calculados a mano en este archivo.
  */
@@ -184,15 +187,29 @@ test("fuentes del Legajo: retirar y volver a cargar una percepción, y reemplaza
     await page.keyboard.press("Escape");
   });
 
-  await test.step("Reemplazar con otra base (100.000) y calcular solo con el nuevo: 100.000 × 3,5 % = 3.500,00", async () => {
+  await test.step("Calcular septiembre con el libro de 115.000: 115.000 × 3,5 % = 4.025,00", async () => {
+    await clasificarListo(page);
+    await calcularIIBB(page);
+    await esperarImporte(page, "4.025,00");
+  });
+
+  await test.step("Reemplazar el libro después de calcular, con otra base (100.000): el cálculo queda desactualizado", async () => {
+    await page.getByRole("tab", { name: /Fuentes/ }).first().click();
     const { libro } = await cargarLibroVentas(page, LIBRO_SEPTIEMBRE_NUEVA_BASE, `ventas-sept-nueva-base-${SUFFIX}.xlsx`, true);
     await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
     await expect(page.getByRole("dialog", { name: "Reemplazar libro IVA" })).toBeHidden({ timeout: 60_000 });
     await revisarLotesDe(page, "Gestionar Ventas del período");
+    await page.getByRole("tab", { name: /Cálculo/ }).click();
+    await expect(page.getByText("Cambió una fuente del mes")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: "Enviar a revisión", exact: true })).toBeDisabled();
+  });
+
+  await test.step("Recalcular con el libro nuevo: 100.000 × 3,5 % = 3.500,00; el 4.025,00 anterior ya no figura", async () => {
     await clasificarListo(page);
     await calcularIIBB(page);
     await esperarImporte(page, "3.500,00");
     await importeAusente(page, "4.025,00");
+    await expect(page.getByText("Cambió una fuente del mes")).toHaveCount(0);
   });
 
   test.info().annotations.push({ type: "errores de mutación", description: errores.join(" | ") || "ninguno" });

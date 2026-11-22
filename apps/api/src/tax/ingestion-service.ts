@@ -618,7 +618,7 @@ export class IngestionService {
         await tx.monthlyTaxWorkpaper.update({
           where: { id: replacementTarget.workpaperId },
           data: {
-            ...(replacementTarget.workpaperStatus === "CALCULATED" ? { status: "COLLECTING_INPUTS" } : {}),
+            // Reemplazar después de calcular deja el cálculo desactualizado: el mes sigue calculado y se recalcula.
             inputHash: null,
             outputHash: null,
             reviewedByUserId: null,

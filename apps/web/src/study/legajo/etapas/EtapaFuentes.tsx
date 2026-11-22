@@ -25,6 +25,8 @@ export interface EtapaFuentesProps {
   noMovementsMutation: UseMutationResult<unknown, Error, { sourceCode: string; marcar: boolean }>;
   /** Motivo por el que no se puede marcar «Sin movimientos»; null si se puede (corte 2A). */
   motivoSinMovimientos: string | null;
+  /** El mes está calculado: se reemplazan o retiran archivos vigentes, pero no se cargan nuevos. */
+  calculado?: boolean;
 }
 
 function nombreFuente(source: CoberturaLegajo["sources"][number]) {
@@ -62,6 +64,7 @@ export function EtapaFuentes({
   reviewSourceMutation,
   noMovementsMutation,
   motivoSinMovimientos,
+  calculado = false,
 }: EtapaFuentesProps) {
   const [fuenteAbierta, setFuenteAbierta] = useState<string | null>(null);
   const fuentes = coverageQuery.data?.sources ?? [];
@@ -115,6 +118,7 @@ export function EtapaFuentes({
             sourceUploadMutation={sourceUploadMutation}
             sources={fuentes}
             canEdit={puedeCargar && !motivoImportarLibro}
+            calculado={calculado}
             currentUserId={currentUserId}
             allowSelfReview={coverageQuery.data.allowSelfReview}
             canReview={capabilities.has("tax.vouchers.review")}

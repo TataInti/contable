@@ -43,6 +43,7 @@ export function PanelGestionarFuente({
   noMovementsMutation,
   puedeMarcarSinMovimientos,
   motivoSinMovimientos,
+  calculado = false,
 }: {
   source: WorkpaperSource | null;
   workpaperId: string | null;
@@ -64,6 +65,7 @@ export function PanelGestionarFuente({
   noMovementsMutation: UseMutationResult<unknown, Error, { sourceCode: string; marcar: boolean }>;
   puedeMarcarSinMovimientos: boolean;
   motivoSinMovimientos: string | null;
+  calculado?: boolean;
 }) {
   const { firmId, clientId } = useClientContext();
   const queryClient = useQueryClient();
@@ -201,9 +203,12 @@ export function PanelGestionarFuente({
         <section aria-label="Archivos">
           <h3>Archivos</h3>
           <p>{nombreEstado}</p>
-          {canEdit ? <Button variant="primary" onClick={cargarArchivo}>Cargar archivo</Button> : null}
+          {canEdit && calculado ? (
+            <p role="status">En un mes calculado no se cargan archivos nuevos. Reemplazá o retirá un archivo vigente: el cálculo queda desactualizado y hay que recalcular. Marcar o deshacer «Sin movimientos» también invalida el cálculo.</p>
+          ) : null}
+          {canEdit && !calculado ? <Button variant="primary" onClick={cargarArchivo}>Cargar archivo</Button> : null}
           {!canEdit && editReason ? <p role="status">{editReason}</p> : null}
-          {activeBatches.length === 0 ? <p>No hay archivos vigentes. Cargá uno para que la fuente cuente en el cálculo.</p> : null}
+          {activeBatches.length === 0 ? <p>No hay archivos vigentes.{calculado ? "" : " Cargá uno para que la fuente cuente en el cálculo."}</p> : null}
           {!source.present ? (
             source.status === "NO_MOVEMENTS" ? (
               <Button
