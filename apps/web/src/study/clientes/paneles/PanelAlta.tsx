@@ -114,19 +114,15 @@ export function PanelAlta({
           hint="11 dígitos, sin guiones"
           required
         />
-        <div className="ds-field">
-          <span className="ds-field__label">Condición frente al IVA</span>
-          <SearchSelect
-            id="client-vat-condition"
-            label="Condición frente al IVA"
-            hideLabel
-            className="ctxbar__input"
-            value={form.vatCondition}
-            onChange={(value) => setForm({ ...form, vatCondition: value })}
-            placeholder="Sin especificar"
-            options={CLIENT_VAT_CONDITIONS.map((condition) => ({ value: condition, label: CLIENT_VAT_CONDITION_LABELS[condition] }))}
-          />
-        </div>
+        <SearchSelect
+          id="client-vat-condition"
+          label="Condición frente al IVA"
+          className="ctxbar__input"
+          value={form.vatCondition}
+          onChange={(value) => setForm({ ...form, vatCondition: value })}
+          placeholder="Sin especificar"
+          options={CLIENT_VAT_CONDITIONS.map((condition) => ({ value: condition, label: CLIENT_VAT_CONDITION_LABELS[condition] }))}
+        />
         <SearchSelect id="client-province" name="province" className="ctxbar__input" label="Provincia" value={form.province} onChange={(province) => setForm({ ...form, province })} options={ARGENTINA_PROVINCES.map((province) => ({ value: province, label: province }))} />
         <div>
           <SearchSelect id="client-activity" name="activity" className="ctxbar__input" label="Actividad principal" value={form.activity} onChange={(activity) => setForm({ ...form, activity })} options={activeActivityEntries.map((activity) => { const value = clientEconomicActivityValue(activity); return { value, label: value }; })} />

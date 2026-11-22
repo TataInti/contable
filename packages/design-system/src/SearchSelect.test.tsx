@@ -126,4 +126,16 @@ describe("SearchSelect", () => {
     expect(combobox).toHaveAttribute("aria-invalid", "true");
     expect(combobox).toHaveAttribute("aria-describedby", "province-error");
   });
+
+  it("un campo obligatorio se valida por el valor elegido, no por el texto del buscador", () => {
+    const { rerender } = render(<SearchSelect label="Provincia" options={options} value="" required onChange={() => {}} />);
+    const combobox = screen.getByRole("combobox", { name: "Provincia" }) as HTMLInputElement;
+    expect(combobox).toHaveAttribute("aria-required", "true");
+    expect(combobox.checkValidity()).toBe(false);
+
+    rerender(<SearchSelect label="Provincia" options={options} value="tucuman" required onChange={() => {}} />);
+    fireEvent.focus(combobox); // abierto: el buscador queda vacío y el valor sigue elegido
+    expect(combobox.value).toBe("");
+    expect(combobox.checkValidity()).toBe(true);
+  });
 });

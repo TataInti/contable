@@ -88,7 +88,7 @@ export function ManualExtractionFieldsDialog({
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
-      ".manual-fields-dialog__table select:not(:disabled)",
+      ".manual-fields-dialog__table select:not(:disabled), .manual-fields-dialog__table input[role=\"combobox\"]:not(:disabled)",
     ) ?? dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
     firstFocusable?.focus();
 

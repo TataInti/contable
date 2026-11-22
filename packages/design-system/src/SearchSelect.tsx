@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import "./Field.css";
 import "./SearchSelect.css";
 
@@ -71,6 +71,13 @@ export function SearchSelect({
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // La validez sigue al valor elegido, no al texto del buscador: mientras el desplegable está
+  // abierto el campo muestra la búsqueda (vacía al enfocar) y no debe bloquear el envío.
+  useEffect(() => {
+    inputRef.current?.setCustomValidity(required && !value ? "Elegí una opción." : "");
+  }, [required, value]);
 
   const filteredGroups = groups.map((group) => ({
     ...group,
@@ -141,6 +148,7 @@ export function SearchSelect({
     <div className="ds-field ds-search-select">
       {hideLabel ? null : <label className="ds-field__label" htmlFor={inputId}>{label}</label>}
       <input
+        ref={inputRef}
         id={inputId}
         className={`ds-field__input${invalid ? " ds-field__input--error" : ""}${className ? ` ${className}` : ""}`}
         role="combobox"
@@ -153,7 +161,6 @@ export function SearchSelect({
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         aria-haspopup="listbox"
-        required={required}
         value={open ? query : selectedLabel ?? ""}
         placeholder={placeholder}
         disabled={disabled}
