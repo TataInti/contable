@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import calendar_extraction as ce
-from app.auth import sign, sha256_hex
+from app.auth import sha256_hex, sign
 from app.main import app
 
 client = TestClient(app)

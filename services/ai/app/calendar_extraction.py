@@ -259,12 +259,12 @@ async def run_calendar_extraction(
     if not pages:
         return _unreadable("NO_RENDERED_PAGES", model=model)
 
-    decoded, provider, reason = await _consultar_modelo(model, pages, scope)
+    decoded, provider_modelo, motivo_falla = await _consultar_modelo(model, pages, scope)
     if decoded is None:
-        return _unreadable(reason or "MODEL_CALL_FAILED", model=model, page_count=len(pages))
+        return _unreadable(motivo_falla or "MODEL_CALL_FAILED", model=model, page_count=len(pages))
     filas = decoded.get("filas")
     if not isinstance(filas, list) or not filas:
-        return _unreadable("NO_CALENDAR_ROWS", model=model, provider=provider, page_count=len(pages))
+        return _unreadable("NO_CALENDAR_ROWS", model=model, provider=provider_modelo, page_count=len(pages))
 
     csv_text, cantidad = filas_a_csv(filas, scope.titulo)
     return CalendarExtractionResponse(
@@ -273,5 +273,5 @@ async def run_calendar_extraction(
         pageCount=len(pages),
         rowCount=cantidad,
         model=model,
-        provider=provider,
+        provider=provider_modelo,
     )

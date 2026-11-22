@@ -44,6 +44,7 @@ function entry(overrides: Partial<CalendarEntryRow>): CalendarEntryRow {
     noteRef: null,
     noteText: null,
     reviewState: "REVIEWED",
+    sourcePage: null,
     sortOrder: 0,
     ...overrides,
   };
