@@ -156,6 +156,45 @@
   color: var(--ds-color-warning);
 }
 
+.dense-stats--strip {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.dense-stats--strip .dense-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ds-space-1);
+  padding-inline: var(--ds-space-4);
+  white-space: normal;
+}
+
+.dense-stats--strip .dense-stat:first-child {
+  padding-inline-start: 0;
+}
+
+.dense-stats--strip .dense-stat + .dense-stat {
+  border-inline-start: var(--ds-border-width) solid var(--ds-color-border-subtle);
+}
+
+.dense-stats--strip .dense-stat__value {
+  order: -1;
+  font-size: var(--ds-text-xl);
+}
+
+.dense-stats--strip .dense-stat__detail {
+  order: 0;
+}
+
+.dense-stats--strip .dense-stat.ds-button > .ds-button__content {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .dense-catalog-summary {
   display: flex;
   flex-wrap: wrap;

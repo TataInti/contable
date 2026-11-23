@@ -69,8 +69,10 @@ export function ObjectPage({
       <Breadcrumb items={breadcrumb} />
       <header className="object-page__cabecera">
         <div className="object-page__identidad">
-          <h1 className="object-page__titulo">{title}</h1>
-          {status ? <div className="object-page__estado">{status}</div> : null}
+          <div className="object-page__titulo-fila">
+            <h1 className="object-page__titulo">{title}</h1>
+            {status ? <div className="object-page__estado">{status}</div> : null}
+          </div>
           {description ? <p className="object-page__descripcion">{description}</p> : null}
         </div>
         {actions ? <div className="object-page__acciones">{actions}</div> : null}

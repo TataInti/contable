@@ -59,6 +59,14 @@
   min-inline-size: 0;
 }
 
+.object-page__titulo-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+
 .object-page__titulo {
   margin: 0;
   font-size: var(--ds-text-2xl);

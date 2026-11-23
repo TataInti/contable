@@ -63,9 +63,11 @@ export function DocumentTriage({
       <div className="document-triage__trabajo">
         <div className="document-triage__cuerpo">
           {viewer}
-          {fields}
+          <div className="document-triage__datos">
+            {fields}
+            <div className="document-triage__decision">{decision}</div>
+          </div>
         </div>
-        <div className="document-triage__decision">{decision}</div>
       </div>
     </div>
   );

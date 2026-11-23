@@ -14,7 +14,7 @@ import {
 describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
   afterEach(() => cleanup());
 
-  it("panel de control: abre con ?panel=, cierra con Escape y devuelve el foco a la fila", () => {
+  it("panel de control: abre el detalle, cierra con Escape, devuelve el foco y no imprime la ruta", () => {
     render(<ControlesPanelDemo />);
     const fila = screen.getByRole("button", { name: "Abrir Facturas C: 2 comprobantes" });
     fila.focus();
@@ -23,14 +23,12 @@ describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
     expect(
       screen.getByRole("dialog", { name: "Facturas C: 2 comprobantes" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("/clientes/1/legajo/2026-10/controles?panel=control-1"),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/\/clientes\/1\/legajo\/2026-10\/controles/)).toBeNull();
 
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByText("/clientes/1/legajo/2026-10/controles")).toBeInTheDocument();
+    expect(screen.queryByText(/\/clientes\/1\/legajo\/2026-10\/controles/)).toBeNull();
     expect(document.activeElement).toBe(fila);
   });
 

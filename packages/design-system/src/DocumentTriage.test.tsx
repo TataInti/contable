@@ -66,7 +66,12 @@ describe("DocumentTriage", () => {
 
   it("pliega la cola con un botón que informa su estado y controla la lista", () => {
     const onToggle = vi.fn();
-    const { rerender } = render(<Triage onToggle={onToggle} />);
+    const { container, rerender } = render(<Triage onToggle={onToggle} />);
+    const layout = container.querySelector(".document-triage__cuerpo");
+    const datos = container.querySelector(".document-triage__datos");
+    expect(datos?.querySelector(".document-triage__decision")).toBeInTheDocument();
+    expect(layout?.lastElementChild).toBe(datos);
+    expect(layout?.querySelector(".document-viewer")?.contains(datos)).toBe(false);
 
     const boton = screen.getByRole("button", { name: "Ocultar cola" });
     expect(boton).toHaveAttribute("aria-expanded", "true");

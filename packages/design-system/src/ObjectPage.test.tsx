@@ -58,7 +58,9 @@ describe("ObjectPage", () => {
       screen.getByRole("heading", { level: 1, name: "Cliente sintético A" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Ubicación" })).toBeInTheDocument();
-    expect(screen.getByText("Configurada")).toBeInTheDocument();
+    expect(screen.getByText("Configurada").parentElement?.parentElement?.parentElement).toBe(
+      screen.getByRole("heading", { level: 1, name: "Cliente sintético A" }).parentElement,
+    );
     expect(screen.getByRole("link", { name: "Configuración fiscal" })).toHaveAttribute(
       "href",
       "/clientes/1/configuracion-fiscal",

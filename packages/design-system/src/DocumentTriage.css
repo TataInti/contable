@@ -58,9 +58,15 @@
   min-inline-size: 0;
 }
 
+.document-triage__datos {
+  display: grid;
+  align-content: start;
+  gap: var(--ds-space-3);
+  min-inline-size: 0;
+}
+
 .document-triage__decision {
-  border-block-start: 1px solid var(--ds-color-border-subtle);
-  padding-block-start: var(--ds-space-3);
+  min-inline-size: 0;
 }
 
 .document-viewer {

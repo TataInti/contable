@@ -22,6 +22,7 @@ import {
   type ObjectActivityEntry,
 } from "./ObjectActivity.js";
 import { ObjectPage } from "./ObjectPage.js";
+import { Notice } from "./Notice.js";
 import { ObjectPanel, withObjectPanel, withoutObjectPanel } from "./ObjectPanel.js";
 import { MonthSummary } from "./MonthSummary.js";
 import { StatusBadge } from "./StatusBadge.js";
@@ -84,7 +85,6 @@ export function ControlesPanelDemo({ initiallyOpen = false }: { initiallyOpen?: 
 
   return (
     <div className="patrones-demo">
-      <p className="patrones-demo__url">{urlActual}</p>
       <WorkQueue label="Controles bloqueantes">
         {controles.map((control) => (
           <WorkQueueRow
@@ -92,9 +92,7 @@ export function ControlesPanelDemo({ initiallyOpen = false }: { initiallyOpen?: 
             id={control.id}
             title={control.titulo}
             decision={control.decision}
-            subtitle={control.contexto}
             status={control.estado}
-            {...(control.fecha ? { date: control.fecha } : {})}
             amount={control.importe}
             onOpen={() => abrir(control, document.activeElement as HTMLElement)}
           />
@@ -286,6 +284,9 @@ export function TriageDemo() {
         <div className="patrones-demo__triage-fields">
           <h1 className="ds-title-page">Revisar comprobante</h1>
           <p className="ds-text-help">PDF recibido el 04/11/2026</p>
+          <Notice tone="warning" title="CUIT de otro cliente" action={<Button type="button" variant="secondary" size="row">Mover a…</Button>}>
+            El CUIT extraído no coincide con el cliente del legajo.
+          </Notice>
           <DocumentFields
             fields={campos}
             onChange={(id, value) => setCampos((previos) => previos.map((campo) => (campo.id === id ? { ...campo, value } : campo)))}
@@ -302,6 +303,9 @@ export function TriageDemo() {
               </Button>
               <Button type="button" variant="ghost">
                 Rechazar
+              </Button>
+              <Button type="button" variant="ghost">
+                Mover
               </Button>
             </>
           }
@@ -348,7 +352,7 @@ export function PaginaClienteDemo() {
   return (
     <div className="patrones-demo">
       <ObjectPage
-        breadcrumb={[{ label: "Clientes", href: "#clientes" }, { label: "ZZ-AYUDA Restaurante Nuevo" }]}
+        breadcrumb={[{ label: "← Clientes", href: "#clientes" }]}
         title="ZZ-AYUDA Restaurante Nuevo"
         status={<StatusBadge status="ACTIVE" variant="pill" />}
         description="CUIT 30-23456789-1 · Restaurante · San Miguel de Tucumán"
@@ -366,6 +370,7 @@ export function PaginaClienteDemo() {
       >
         <StatStrip
           label="Resumen del cliente"
+          variant="strip"
           items={[
             { key: "abiertos", label: "períodos abiertos", value: "2" },
             { key: "vencimiento", label: "próximo vencimiento", value: "20/11" },
@@ -378,7 +383,7 @@ export function PaginaClienteDemo() {
           <Button type="button" variant="text">Actividad</Button>
           <Button type="button" variant="text">Configuración fiscal</Button>
         </nav>
-        <DenseSection id="periodos" title="Períodos" count={periodos.length}>
+        <DenseSection id="periodos" title="Períodos">
           <Table columns={columnasPeriodos} rows={periodos} rowKey={(fila) => fila.id} />
         </DenseSection>
         {comentariosAbiertos ? (

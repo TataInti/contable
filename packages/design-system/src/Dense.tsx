@@ -197,9 +197,9 @@ export interface StatItem {
   onSelect?: () => void;
 }
 
-export function StatStrip({ items, label }: { items: StatItem[]; label: string }) {
+export function StatStrip({ items, label, variant = "inline" }: { items: StatItem[]; label: string; variant?: "inline" | "strip" }) {
   return (
-    <div className="dense-stats" role="group" aria-label={label}>
+    <div className={`dense-stats${variant === "strip" ? " dense-stats--strip" : ""}`} role="group" aria-label={label}>
       {items.map((item) => {
         const content = (
           <>
