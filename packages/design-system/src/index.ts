@@ -21,6 +21,7 @@ export * from "./Switch.js";
 // Página de trabajo: la barra vive fuera del área que se desplaza (P5, Barra 1).
 export * from "./WorkPage.js";
 export * from "./WorkBar.js";
+export * from "./MarcoTrabajo.js";
 export * from "./Menu.js";
 export * from "./BarSelect.js";
 export * from "./SearchSelect.js";

@@ -28,6 +28,7 @@ import { StatusBadge } from "./StatusBadge.js";
 import { StepFlow, type FlowStep } from "./StepFlow.js";
 import { Table, type TableColumn } from "./Table.js";
 import { WorkQueue, WorkQueueRow } from "./WorkQueue.js";
+import { MarcoTrabajo } from "./MarcoTrabajo.js";
 
 interface ControlSintetico {
   id: string;
@@ -409,5 +410,14 @@ export function ColaVaciaDemo() {
         {null}
       </WorkQueue>
     </div>
+  );
+}
+
+/** Portada con el marco común del demo para capturas de referencia visual. */
+export function PortadaPantallaDemo() {
+  return (
+    <MarcoTrabajo>
+      <PortadaDemo />
+    </MarcoTrabajo>
   );
 }
