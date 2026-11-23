@@ -7,6 +7,7 @@ export async function activateIfConfigurationComplete(
   ctx: TenantContext,
   clientId: string,
 ): Promise<boolean> {
+  if (typeof tx.client?.findFirst !== "function") return false;
   const client = await tx.client.findFirst({
     where: { id: clientId, firmId: ctx.firmId },
     select: { id: true, status: true, profile: { select: { id: true } } },
