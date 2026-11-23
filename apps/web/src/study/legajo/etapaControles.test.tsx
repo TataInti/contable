@@ -173,7 +173,7 @@ async function abrirEtapa(nombre: RegExp) {
         abrir = screen.queryAllByRole("button", { name: /^Abrir / });
       }
     }
-    if (abrir.length) fireEvent.click(abrir[0]);
+    if (abrir[0]) fireEvent.click(abrir[0]);
   }
 }
 
