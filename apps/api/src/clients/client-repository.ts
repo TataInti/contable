@@ -14,6 +14,7 @@ import type {
 } from "@contable/contracts";
 import { cuitEnding } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import { isPrismaUniqueViolation } from "../lib/prisma-errors.js";
 
 /** Agrega la terminación de CUIT: dato derivado del CUIT, no se guarda (supuesto S2). */
 function withCuitEnding<T extends { cuit: string }>(client: T) {
@@ -334,6 +335,15 @@ export class ClientRepository {
       });
 
       return client;
+    }).catch((error: unknown) => {
+      if (isPrismaUniqueViolation(error)) {
+        throw new ClientMutationError(
+          409,
+          "CLIENT_CUIT_DUPLICATE",
+          "Ya existe un cliente con ese CUIT en el estudio.",
+        );
+      }
+      throw error;
     });
   }
 

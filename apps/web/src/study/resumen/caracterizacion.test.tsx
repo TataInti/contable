@@ -271,12 +271,20 @@ describe("Caracterización · Resumen del cliente: índice y secciones (R3 a R5)
 });
 
 describe("Caracterización · Resumen del cliente: estados y datos (R6 a R9)", () => {
-  it("R6 · documenta: con perfil contable y configuración fiscal pendiente, «Ficha contable» dice «Configurada» y «Configuración fiscal» dice «Pendiente»", async () => {
+  it("R6 · documenta: con perfil contable y configuración fiscal completa (perfil, regímenes, actividades, períodos y obligaciones), «Ficha contable» dice «Configurada» y «Configuración fiscal» dice «Completado»", async () => {
     montar();
     const resumenSeccion = await screen.findByRole("region", { name: "Resumen" });
     const valorDe = (etiqueta: string) => within(resumenSeccion).getByText(etiqueta, { selector: "dt" }).parentElement?.textContent;
     expect(valorDe("Ficha contable")).toContain("Configurada");
-    // D7A-12: el nombre pasa a «Configuración fiscal»; el estado sigue igual (D7A-1 es de Configuración fiscal)
+    // D4: «Configuración fiscal» del Resumen usa el mismo criterio que Configuración fiscal (pasos.ts), no el flag
+    // «onboarding» que nadie actualiza. Con la configuración completa, dice «Completado».
+    expect(valorDe("Configuración fiscal")).toContain("Completado");
+  });
+
+  it("R6b · D4: sin regímenes adheridos, «Configuración fiscal» del Resumen dice «Pendiente» aunque el flag «onboarding» diga otra cosa", async () => {
+    montar({ datos: resumen({ inscripciones: [] }) });
+    const resumenSeccion = await screen.findByRole("region", { name: "Resumen" });
+    const valorDe = (etiqueta: string) => within(resumenSeccion).getByText(etiqueta, { selector: "dt" }).parentElement?.textContent;
     expect(valorDe("Configuración fiscal")).toContain("Pendiente");
   });
 

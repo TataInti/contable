@@ -128,6 +128,8 @@ export interface ArcaVoucherInput {
   direction?: unknown;
   /** Letra o tipo del comprobante. */
   letter?: unknown;
+  /** Código ARCA del tipo (renglón original, p. ej. «13»). Con la letra NC/ND, de ahí sale la clase (A, B, C o E). */
+  typeCode?: unknown;
   /** Punto de venta. */
   pointOfSale?: unknown;
   /** Número (o rango "desde-hasta"). */

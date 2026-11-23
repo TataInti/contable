@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { taxHash } from "@contable/tax-engine";
 import { getWorkpaperSourcePolicy } from "./workpaper-source-policy.js";
+import { ESTADO_IMPUTACION_RETIRADA } from "./fuentes-vigentes.js";
 
 export class WorkpaperAllocationError extends Error {
   constructor(message: string) {
@@ -221,7 +222,8 @@ export async function workpaperAllocationCoverage(
   });
   const expectedKeys = new Set(expected.map((item) => `${item.sourceType}:${item.sourceId}`));
   const allocations = await tx.taxInputAllocation.findMany({
-    where: { workpaperId },
+    // Una imputación de un archivo retirado o reemplazado (RETIRED) no se lista: la recargada es la vigente (4K).
+    where: { workpaperId, status: { not: ESTADO_IMPUTACION_RETIRADA } },
     include: {
       obligation: {
         include: { period: true, regime: { include: { taxType: true, jurisdiction: true, calcFamily: true } } },

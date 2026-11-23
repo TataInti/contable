@@ -266,7 +266,7 @@ export function calculateIIbbTuc(input: IibbTucInput): TaxEngineResult {
       roundFor(totalNonTaxableApplied, "base", rounding.base),
     );
     subtotals["BASE_IMPONIBLE"] = fmtMoney(roundFor(totalTaxableBase, "base", rounding.base));
-    if (remainingNonTaxable.isPositive()) {
+    if (remainingNonTaxable.greaterThan(0)) {
       warnings.push(
         "El mínimo no imponible supera la base del período: se resta hasta el total de la base y el impuesto queda en cero",
       );

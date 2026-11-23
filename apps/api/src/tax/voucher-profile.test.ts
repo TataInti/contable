@@ -26,6 +26,14 @@ describe("clase de comprobante para el perfil (corte 4B)", () => {
     expect(clasePerfil({ type: "NC", letter: "NC", raw: { Tipo: 21 } })).toBe("NOTAS_E");
   });
 
+  it("una nota del libro .xlsx toma la clase del código ARCA que trae el renglón (typeCode)", () => {
+    // Forma que deja el importador de libros IVA (.xlsx): la letra de la nota es NC/ND y el código va en typeCode.
+    expect(clasePerfil({ type: "NC", letter: "NC", raw: { typeCode: "13", pointOfSale: "1" } })).toBe("NOTAS_C");
+    expect(clasePerfil({ type: "NC", letter: "NC", raw: { typeCode: "3" } })).toBe("NOTAS_A");
+    expect(clasePerfil({ type: "NC", letter: "NC", raw: { typeCode: "8" } })).toBe("NOTAS_B");
+    expect(clasePerfil({ type: "ND", letter: "ND", raw: { typeCode: "12" } })).toBe("NOTAS_C");
+  });
+
   it("una nota sin código de ARCA no tiene clase: queda para revisar", () => {
     expect(clasePerfil({ type: "NC", letter: "NC", raw: null })).toBeNull();
     expect(clasePerfil({ type: "NC", letter: "NC", raw: { Tipo: "38 - Nota de Crédito Otros" } })).toBeNull();
