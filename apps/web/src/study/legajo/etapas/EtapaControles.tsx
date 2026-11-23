@@ -77,7 +77,9 @@ export function EtapaControles({ capabilities, wp, controlResolutions, setContro
     if (!selected || !grupo || !grupoPerfilMutation || !motivo.trim()) return;
     grupoPerfilMutation.mutate({ workpaperId: wp.id, grupo, accion: action, reason: motivo.trim() }, { onSuccess: closePanel });
   };
-  const primary = selected?.status === "OPEN" && puedeResolver && !grupo ? (
+  const primary = selected?.status === "OPEN" && puedeResolver ? grupo ? accionGrupo ? (
+    <Button variant="primary" disabled={!motivo.trim()} loading={grupoPerfilMutation?.isPending} onClick={() => actionGroup(accionGrupo)}>{accionGrupo === "accept" ? "Confirmar aceptación" : "Confirmar exclusión"}</Button>
+  ) : undefined : (
     <Button variant="primary" disabled={!motivo.trim()} loading={resolveControlMutation.isPending} onClick={() => resolveControlMutation.mutate({ workpaperId: wp.id, findingId: selected.id, status: "RESOLVED", ...(controlEvidence[selected.id] ? { evidenceDocumentId: controlEvidence[selected.id] } : {}) }, { onSuccess: closePanel })}>Resolver</Button>
   ) : undefined;
   const pideRespaldo = puedeResolver && open.some((control) => control.severity === "BLOCKING");
@@ -106,7 +108,6 @@ export function EtapaControles({ capabilities, wp, controlResolutions, setContro
           {accionGrupo ? <>
             <label className="ds-field__label" htmlFor={motivoId}>Motivo</label>
             <textarea className="study-textarea" id={motivoId} value={motivo} placeholder="Escribí el motivo." onChange={(event) => selectReason(event.target.value)} />
-            <Button size="sm" variant="primary" disabled={!motivo.trim()} onClick={() => actionGroup(accionGrupo)}>{accionGrupo === "accept" ? "Confirmar aceptación" : "Confirmar exclusión"}</Button>
             {!motivo.trim() ? <small role="note">Falta escribir el motivo.</small> : null}
           </> : null}
           <WorkpaperActionError error={grupoPerfilMutation?.variables?.grupo === grupo ? grupoPerfilMutation.error : null} />
