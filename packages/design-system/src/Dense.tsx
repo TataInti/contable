@@ -11,6 +11,7 @@ import {
   type RefObject,
 } from "react";
 import { Button } from "./Button.js";
+import "./Dense.css";
 
 /**
  * Primitivas de vistas administrativas densas (tabla + detalle lateral).
@@ -146,11 +147,13 @@ export function DenseSection({
       aria-labelledby={headingId}
     >
       <header className="dense-block__head">
-        <h2 id={headingId}>
-          {title}
-          {count !== undefined ? <span className="dense-count">{count}</span> : null}
-        </h2>
-        {description ? <p>{description}</p> : null}
+        <div className="dense-block__copy">
+          <h2 id={headingId}>
+            {title}
+            {count !== undefined ? <span className="dense-count">{count}</span> : null}
+          </h2>
+          {description ? <p>{description}</p> : null}
+        </div>
         {actions ? <div className="dense-block__actions">{actions}</div> : null}
       </header>
       <div className="dense-block__body">{children}</div>
@@ -234,8 +237,8 @@ export function StatStrip({ items, label }: { items: StatItem[]; label: string }
   );
 }
 
-export function DenseToolbar({ children }: { children: ReactNode }) {
-  return <div className="dense-toolbar">{children}</div>;
+export function DenseToolbar({ children, split = false }: { children: ReactNode; split?: boolean }) {
+  return <div className={`dense-toolbar${split ? " dense-toolbar--split" : ""}`}>{children}</div>;
 }
 
 export function DensitySwitch({

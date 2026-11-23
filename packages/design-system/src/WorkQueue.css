@@ -48,7 +48,7 @@
 
 .work-queue-row__decision {
   font-size: var(--ds-text-sm);
-  color: var(--ds-color-text);
+  color: var(--ds-color-text-muted);
 }
 
 .work-queue-row__contexto {

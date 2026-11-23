@@ -26,7 +26,7 @@ import { ObjectPanel, withObjectPanel, withoutObjectPanel } from "./ObjectPanel.
 import { MonthSummary } from "./MonthSummary.js";
 import { StatusBadge } from "./StatusBadge.js";
 import { StepFlow, type FlowStep } from "./StepFlow.js";
-import { Table, type TableColumn } from "./Table.js";
+import { Table, TableCellStack, type TableColumn } from "./Table.js";
 import { WorkQueue, WorkQueueRow } from "./WorkQueue.js";
 import { MarcoTrabajo } from "./MarcoTrabajo.js";
 
@@ -172,7 +172,7 @@ const filasClasificacion: FilaClasificacion[] = Array.from({ length: 12 }, (_, i
   estado: index < 6 ? "NEEDS_REVIEW" : "READY",
 }));
 const columnasClasificacion: TableColumn<FilaClasificacion>[] = [
-  { key: "comprobante", header: "Comprobante", render: (row) => <span><strong>{row.id}</strong><span className="ds-text-help">Venta · actividad Restaurante</span></span> },
+  { key: "comprobante", header: "Comprobante", render: (row) => <TableCellStack primary={<strong>{row.id}</strong>} secondary="Venta · actividad Restaurante" /> },
   { key: "emisor", header: "Emisor", render: (row) => row.emisor },
   { key: "fecha", header: "Fecha", render: (row) => row.fecha },
   { key: "importe", header: "Importe", align: "right", render: (row) => row.importe },
@@ -183,7 +183,7 @@ const columnasClasificacion: TableColumn<FilaClasificacion>[] = [
 export function ClasificacionDemo() {
   return (
     <div className="patrones-demo">
-      <DenseToolbar>
+      <DenseToolbar split>
         <Field aria-label="Buscar comprobante" placeholder="Buscar comprobante" />
         <span className="ds-text-help">6 para revisar</span>
       </DenseToolbar>
@@ -323,7 +323,7 @@ export function TriageDemo() {
 
 interface PeriodoCliente { id: string; periodo: string; detalle: string; estado: string; etiquetaEstado: string; importe: string; accion: string }
 const columnasPeriodos: TableColumn<PeriodoCliente>[] = [
-  { key: "periodo", header: "Período", render: (fila) => <span><strong>{fila.periodo}</strong><span className="ds-text-help">{fila.detalle}</span></span> },
+  { key: "periodo", header: "Período", render: (fila) => <TableCellStack primary={fila.periodo} secondary={fila.detalle} /> },
   { key: "estado", header: "Estado", render: (fila) => <StatusBadge status={fila.estado} label={fila.etiquetaEstado} /> },
   { key: "importe", header: "Importe", align: "right", render: (fila) => fila.importe },
   { key: "accion", header: "Acción", render: (fila) => <Button type="button" variant="text" size="row" href={`#${fila.id}`}>{fila.accion}</Button> },
