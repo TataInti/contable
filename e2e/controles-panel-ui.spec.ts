@@ -137,11 +137,12 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await expect(firstDrawer.getByText("C · 0001-00000001")).toBeVisible();
     await expect(firstDrawer.getByText("C · 0001-00000002")).toBeVisible();
     await expect(firstDrawer.getByRole("button", { name: "Abrir en Clasificación" })).toHaveCount(2);
+    await firstDrawer.getByRole("button", { name: "Aceptar con motivo", exact: true }).click();
+    await expect(firstDrawer.getByLabel("Motivo")).toBeVisible();
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.screenshot({ path: testInfo.outputPath("control-panel-1440x900.png") });
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.screenshot({ path: testInfo.outputPath("control-panel-1280x720.png") });
-    await firstDrawer.getByRole("button", { name: "Aceptar con motivo", exact: true }).click();
     await firstDrawer.getByLabel("Motivo").fill(MOTIVO_ACEPTAR);
     await mutating(page, "/profile-groups/", () => firstDrawer.getByRole("button", { name: "Confirmar aceptación" }).click());
     await expect(firstDrawer).toBeHidden();
