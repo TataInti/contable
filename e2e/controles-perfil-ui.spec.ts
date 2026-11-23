@@ -130,8 +130,8 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     await panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ }).click();
     const firstDrawer = page.getByRole("dialog");
     await expect(firstDrawer.getByRole("list", { name: "Comprobantes afectados" })).toBeVisible();
-    await expect(firstDrawer.getByText("C · 0000-00000001")).toBeVisible();
-    await expect(firstDrawer.getByText("C · 0000-00000002")).toBeVisible();
+    await expect(firstDrawer.getByText("C · 0001-00000001")).toBeVisible();
+    await expect(firstDrawer.getByText("C · 0001-00000002")).toBeVisible();
     await firstDrawer.getByRole("button", { name: "Aceptar con motivo", exact: true }).click();
     await firstDrawer.getByLabel("Motivo").fill(MOTIVO_ACEPTAR);
     await mutating(page, "/profile-groups/", () => firstDrawer.getByRole("button", { name: "Confirmar aceptación" }).click());
