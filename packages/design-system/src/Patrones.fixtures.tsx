@@ -3,6 +3,7 @@
  * sintéticos. Los usan las pruebas y las capturas de DS-0; no son pantallas de la aplicación.
  */
 import { useState } from "react";
+import "./Patrones.fixtures.css";
 import { SearchSelect } from "./SearchSelect.js";
 import { Button } from "./Button.js";
 import {
