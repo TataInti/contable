@@ -301,7 +301,7 @@ describe("StudyExpedienteMensual", () => {
     ).toBeTruthy();
     expect(within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
 
-    cambiarValor(screen.getByRole("textbox", { name: "Resolución BOOK_RATE_RECONCILIATION" }), "Respaldo revisado y conciliado");
+    cambiarValor(screen.getByRole("textbox", { name: "Motivo" }), "Respaldo revisado y conciliado");
     cambiarValor(evidence, "document-reviewed");
     const resolveButton = screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement;
     expect(resolveButton.disabled).toBe(false);
