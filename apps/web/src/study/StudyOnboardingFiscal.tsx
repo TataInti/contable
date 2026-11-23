@@ -12,7 +12,7 @@ import "./study.css";
 import { PasosFiscales } from "./fiscal/Pasos";
 import { MutationError } from "./fiscal/MutationError";
 import { AvisoConsultas } from "./fiscal/AvisoConsultas";
-import { nextRequiredStepFor, stepCompletionFor, stepStatusLabelFor } from "./fiscal/pasos";
+import { nextRequiredStepFor, stepCompletionFor, stepStatusLabelFor, fiscalConfigurationCompleteFor } from "./fiscal/pasos";
 import { PestanaResumen } from "./fiscal/pestanas/PestanaResumen";
 import { PestanaRegimenes } from "./fiscal/pestanas/PestanaRegimenes";
 import { PestanaActividades } from "./fiscal/pestanas/PestanaActividades";
@@ -160,6 +160,14 @@ export function StudyOnboardingFiscal() {
       (!selectedPeriod || registration.regime.taxType.id === selectedPeriod.taxTypeId),
   );
   const stepCompletion = stepCompletionFor({ latestProfile, registrationsQuery, clientActivitiesQuery, periodsQuery, obligationsQuery });
+  const configuracionCompleta = fiscalConfigurationCompleteFor({
+    hasAccountingProfile: Boolean(clientQuery.data?.profile),
+    latestProfile,
+    registrations: registrationsQuery.data ?? [],
+    activities: clientActivitiesQuery.data ?? [],
+    periods: periodsQuery.data ?? [],
+    obligations: obligationsQuery.data ?? [],
+  });
   const nextRequiredStep = nextRequiredStepFor(stepCompletion);
   const fiscalQueries = [
     { key: "perfil", label: "el perfil fiscal", query: profileQuery },
@@ -180,6 +188,8 @@ export function StudyOnboardingFiscal() {
       queryClient.invalidateQueries({ queryKey: ["client-tax-activities", firmId, clientId] }),
       queryClient.invalidateQueries({ queryKey: ["tax-periods", firmId, clientId] }),
       queryClient.invalidateQueries({ queryKey: ["tax-obligations", firmId, clientId] }),
+      queryClient.invalidateQueries({ queryKey: ["clients", firmId] }),
+      queryClient.invalidateQueries({ queryKey: ["client-summary", firmId, clientId] }),
       // La categoría TEM y la cuota de Monotributo dependen de las inscripciones: sin esto la fila del régimen
       // nuevo no ofrece «Elegir categoría» hasta recargar la pantalla.
       queryClient.invalidateQueries({ queryKey: ["tem-category", firmId, clientId] }),
@@ -361,7 +371,7 @@ export function StudyOnboardingFiscal() {
       >
         {failedQueries.length > 0 ? <AvisoConsultas failedQueries={failedQueries} /> : null}
 
-        {tab === "resumen" ? <PestanaResumen nextRequiredStep={nextRequiredStep} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
+        {tab === "resumen" ? <PestanaResumen configuracionCompleta={configuracionCompleta} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
         {tab === "comprobantes" && firmId && clientId ? <PestanaComprobantes firmId={firmId} clientId={clientId} canWrite={canWrite} /> : null}
         {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} corregirFecha={corregirInscripcion} confirm={confirm} categoriaTem={categoriaTem.fila} categoriaMonotributo={filaMonotributo} /> : null}
         {tab === "actividades" ? <PestanaActividades canWrite={canWrite} openStepForm={openStepForm} clientActivitiesQuery={clientActivitiesQuery} endActivity={endActivity} corregirFecha={(row) => { updateActivity.reset(); setActivityToEdit(row); }} registrarCambio={() => { registerChange.reset(); setChangeOpen(true); }} confirm={confirm} renderEstado={renderEstadoActividad} /> : null}

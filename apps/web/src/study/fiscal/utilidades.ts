@@ -50,6 +50,7 @@ export interface TaxObligation {
   dueDate: string | null;
   regime: { id: string; code: string; name: string; isActive: boolean; taxType: { name: string; isActive: boolean }; jurisdiction: { name: string; isActive: boolean } };
   period: { id: string; label: string | null; startDate: string; endDate: string };
+  profile?: { version: number };
 }
 export interface TaxRegistration {
   id: string;
@@ -57,11 +58,13 @@ export interface TaxRegistration {
   validFrom: string;
   validTo: string | null;
   registrationNumber: string | null;
+  profile?: { version: number };
   regime: { id: string; code: string; name: string; isActive: boolean; taxType: { id: string; name: string; isActive: boolean }; jurisdiction: { name: string; isActive: boolean }; jurisdictionId?: string };
 }
 export interface ClientActivityLink {
   id: string;
   isPrimary: boolean;
+  profile?: { version: number };
   validFrom: string;
   validTo: string | null;
   /** Cambio de actividad registrado (brief 4L): rige desde validFrom. Sin cambio, la actividad vale desde siempre. */

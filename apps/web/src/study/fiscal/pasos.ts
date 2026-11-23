@@ -1,3 +1,4 @@
+import { isClientConfigurationComplete } from "@contable/contracts";
 import { FISCAL_STEPS, type FiscalStep } from "./utilidades";
 
 /** Lista con datos: basta con que exponga `data` (las consultas de react-query lo cumplen). */
@@ -31,27 +32,28 @@ export function nextRequiredStepFor(stepCompletion: Record<FiscalStep, boolean>)
 }
 
 export function fiscalConfigurationCompleteFor({
+  hasAccountingProfile,
   latestProfile,
   registrations,
   activities,
   periods,
   obligations,
 }: {
-  latestProfile: unknown;
-  registrations: readonly unknown[];
-  activities: readonly unknown[];
+  hasAccountingProfile: boolean;
+  latestProfile: { version: number; status: string } | undefined;
+  registrations: readonly { status: string; profile?: { version: number } }[];
+  activities: readonly { validTo: unknown; profile?: { version: number } }[];
   periods: readonly unknown[];
-  obligations: readonly unknown[];
+  obligations: readonly { profile?: { version: number } }[];
 }) {
-  return !nextRequiredStepFor(
-    stepCompletionFor({
-      latestProfile,
-      registrationsQuery: { data: registrations },
-      clientActivitiesQuery: { data: activities },
-      periodsQuery: { data: periods },
-      obligationsQuery: { data: obligations },
-    }),
-  );
+  return isClientConfigurationComplete({
+    hasAccountingProfile,
+    hasActiveFiscalProfile: latestProfile?.status === "ACTIVE",
+    hasActiveRegistration: registrations.some((registration) => registration.status === "ACTIVE" && registration.profile?.version === latestProfile?.version),
+    hasActiveActivity: activities.some((activity) => activity.validTo === null && activity.profile?.version === latestProfile?.version),
+    hasTaxPeriod: periods.length > 0,
+    hasObligation: obligations.some((obligation) => obligation.profile?.version === latestProfile?.version),
+  });
 }
 
 // Un perfil cargado pero sin activar no está terminado: se dice, en lugar de darlo por completo.

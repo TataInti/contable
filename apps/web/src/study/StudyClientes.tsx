@@ -390,7 +390,10 @@ export function StudyClientes() {
       updateIdentity.mutateAsync(),
       updateProfile.mutateAsync(),
     ]);
-    await queryClient.invalidateQueries({ queryKey: ["clients", firmId] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["clients", firmId] }),
+      queryClient.invalidateQueries({ queryKey: ["client-summary", firmId, editingClient.id] }),
+    ]);
     if (identidad.status === "fulfilled" && ficha.status === "fulfilled") {
       setEditingClient(null);
       notify.success(`La ficha de ${clientName} quedó actualizada.`);

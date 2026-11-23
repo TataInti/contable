@@ -64,7 +64,7 @@ function summaryFixture(
       legalName: "Alfa Uno S.A.",
       tradeName: "Alfa",
       cuit: "20111111112",
-      status: "ONBOARDING",
+      status: "ACTIVE",
       createdAt: date,
       updatedAt: "2026-11-09T00:00:00.000Z",
       profile: includeAccountingProfile ? profile : null,

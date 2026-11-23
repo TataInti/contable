@@ -23,13 +23,13 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
     undefined,
   );
   const configuracionCompleta = fiscalConfigurationCompleteFor({
+    hasAccountingProfile: Boolean(profile),
     latestProfile: ultimoPerfil,
     registrations: fiscal.registrations,
     activities: fiscal.activities,
     periods: fiscal.periods,
     obligations: fiscal.obligations,
   });
-  const estadoResumen = client.status === "ONBOARDING" && client.profile && configuracionCompleta ? "ACTIVE" : client.status;
   return (
     <DenseSection
       id="rc-resumen"
@@ -40,7 +40,7 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
         <div className="client-summary__overview-meta">
           <span className="client-summary__overview-status">
             <span>Estado</span>
-            <StatusBadge status={estadoResumen} variant="pill" />
+            <StatusBadge status={client.status} variant="pill" />
           </span>
           <span className="client-summary__overview-created">
             Alta en el estudio {formatearFecha(client.createdAt)}

@@ -19,6 +19,7 @@ import {
   type TaxRegimeEngineScope,
 } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import { activateIfConfigurationComplete } from "../clients/client-status.js";
 
 const calendarIsoDay = (date: Date): string => date.toISOString().slice(0, 10);
 
@@ -1601,10 +1602,12 @@ export class TaxpayerProfileService {
         where: { firmId: profile.firmId, clientId: profile.clientId, status: "ACTIVE" },
         data: { status: "SUPERSEDED" },
       });
-      return tx.taxpayerProfileVersion.update({
+      const activated = await tx.taxpayerProfileVersion.update({
         where: { id: profileVersionId },
         data: { status: "ACTIVE", activatedAt: new Date(), reviewedByUserId: ctx.userId, reviewedAt: new Date() },
       });
+      await activateIfConfigurationComplete(tx, ctx, clientId);
+      return activated;
     });
   }
 
@@ -1633,7 +1636,7 @@ export class TaxpayerProfileService {
       if (overlap) {
         throw new FiscalError("REGISTRATION_OVERLAP", "Ya existe una inscripción activa para ese régimen");
       }
-      return tx.taxRegistration.create({
+      const registration = await tx.taxRegistration.create({
         data: {
           firmId: ctx.firmId,
           clientId: input.clientId,
@@ -1645,6 +1648,8 @@ export class TaxpayerProfileService {
           createdByUserId: ctx.userId,
         },
       });
+      await activateIfConfigurationComplete(tx, ctx, input.clientId);
+      return registration;
     });
   }
 
@@ -1747,6 +1752,7 @@ export class TaxpayerProfileService {
         before: { validFrom: registration.validFrom.toISOString() },
         after: { validFrom: updated.validFrom.toISOString() },
       });
+      await activateIfConfigurationComplete(tx, ctx, registration.clientId);
       return updated;
     });
   }
@@ -1770,7 +1776,7 @@ export class TaxpayerProfileService {
           "La actividad está desactivada en el catálogo: no admite nuevos vínculos",
         );
       }
-      return tx.clientActivity.create({
+      const clientActivity = await tx.clientActivity.create({
         data: {
           firmId: ctx.firmId,
           clientId: input.clientId,
@@ -1782,6 +1788,8 @@ export class TaxpayerProfileService {
           isChange: false,
         },
       });
+      await activateIfConfigurationComplete(tx, ctx, input.clientId);
+      return clientActivity;
     });
   }
 
@@ -1862,6 +1870,7 @@ export class TaxpayerProfileService {
         before: { cierres: rigeEseMes.map((link) => ({ id: link.id, activity: link.activity.code, validTo: link.validTo?.toISOString() ?? null })) },
         after: { activity: activity.code, validFrom: desde.toISOString(), isChange: true },
       });
+      await activateIfConfigurationComplete(tx, ctx, input.clientId);
       return created;
     });
   }
@@ -1930,6 +1939,7 @@ export class TaxpayerProfileService {
         before: { validFrom: link.validFrom.toISOString() },
         after: { validFrom: updated.validFrom.toISOString() },
       });
+      await activateIfConfigurationComplete(tx, ctx, link.clientId);
       return updated;
     });
   }
@@ -2024,7 +2034,7 @@ export class TaxPeriodService {
       if (overlap) {
         throw new FiscalError("PERIOD_OVERLAP", "El período se solapa con uno existente para el mismo impuesto");
       }
-      return tx.taxPeriod.create({
+      const period = await tx.taxPeriod.create({
         data: {
           firmId: ctx.firmId,
           clientId: input.clientId,
@@ -2034,6 +2044,8 @@ export class TaxPeriodService {
           ...(input.label ? { label: input.label } : {}),
         },
       });
+      await activateIfConfigurationComplete(tx, ctx, input.clientId);
+      return period;
     });
   }
 
@@ -2179,7 +2191,7 @@ export class TaxPeriodService {
         regimeId: input.regimeId,
         period,
       });
-      return tx.taxObligation.create({
+      const obligation = await tx.taxObligation.create({
         data: {
           firmId: ctx.firmId,
           clientId: input.clientId,
@@ -2191,6 +2203,8 @@ export class TaxPeriodService {
           materializedBy: ctx.userId,
         },
       });
+      await activateIfConfigurationComplete(tx, ctx, input.clientId);
+      return obligation;
     });
   }
 
@@ -2198,7 +2212,11 @@ export class TaxPeriodService {
     return withTenantContext(ctx, (tx) =>
       tx.taxObligation.findMany({
         where: { firmId: ctx.firmId, clientId },
-        include: { regime: { include: { taxType: true, jurisdiction: true } }, period: true },
+        include: {
+          regime: { include: { taxType: true, jurisdiction: true } },
+          period: true,
+          profile: { select: { version: true } },
+        },
         orderBy: { createdAt: "desc" },
         take: 300,
       }),
@@ -3261,6 +3279,7 @@ export class TaxCalendarService {
           hasObligation: Boolean(obligation),
         });
       }
+      await activateIfConfigurationComplete(tx, ctx, input.clientId);
       return { profileVersionId: profile.id, steps, withoutPack };
     });
 
@@ -3406,6 +3425,7 @@ export class TaxCalendarService {
               materializedBy: ctx.userId,
             },
           });
+          await activateIfConfigurationComplete(tx, ctx, input.clientId);
           return { obligation, calendarNotice: null };
         }
         if (resolution.source === null) calendarNotice = resolution.message;
@@ -3455,6 +3475,7 @@ export class TaxCalendarService {
             materializedBy: ctx.userId,
           },
         });
+        await activateIfConfigurationComplete(tx, ctx, input.clientId);
         return { obligation, calendarNotice };
       }
 
@@ -3495,6 +3516,7 @@ export class TaxCalendarService {
           materializedBy: ctx.userId,
         },
       });
+      await activateIfConfigurationComplete(tx, ctx, input.clientId);
       return { obligation, calendarNotice };
     });
   }

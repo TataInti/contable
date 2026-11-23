@@ -46,4 +46,11 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
     const encabezado = `${CLIENTE.legalName} · ${CLIENTE.tradeName} · CUIT ${CLIENTE.cuit.slice(0, 2)}-${CLIENTE.cuit.slice(2, 10)}-${CLIENTE.cuit.slice(10)}`;
     await expect(page.getByText(encabezado, { exact: true })).toBeVisible();
   });
+
+  await test.step("La lista de Clientes también muestra el estado persistido", async () => {
+    await goTo(page, "Clientes");
+    const filaCliente = page.getByRole("row").filter({ hasText: CLIENTE.legalName });
+    await expect(filaCliente).toContainText("Activo");
+    await expect(filaCliente).not.toContainText("En configuración");
+  });
 });

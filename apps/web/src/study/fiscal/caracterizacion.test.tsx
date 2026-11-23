@@ -61,13 +61,14 @@ const perfilActivo = {
   fiscalAddress: "Av. Sintética 100",
   status: "ACTIVE",
 };
-const inscripcionIva = { id: "reg-row-iva", status: "ACTIVE", validFrom: "2026-11-01", validTo: null, registrationNumber: null, regime: regimenIva };
-const inscripcionGan = { id: "reg-row-gan", status: "ACTIVE", validFrom: "2026-11-01", validTo: null, registrationNumber: null, regime: regimenGan };
+const inscripcionIva = { id: "reg-row-iva", status: "ACTIVE", validFrom: "2026-11-01", validTo: null, registrationNumber: null, profile: { version: 1 }, regime: regimenIva };
+const inscripcionGan = { id: "reg-row-gan", status: "ACTIVE", validFrom: "2026-11-01", validTo: null, registrationNumber: null, profile: { version: 1 }, regime: regimenGan };
 const actividadVigente = {
   id: "act-row-1",
   isPrimary: true,
   validFrom: "2026-11-01",
   validTo: null,
+  profile: { version: 1 },
   activity: { code: "620100", name: "Desarrollo de software", isActive: true, jurisdiction: { name: "Argentina", isActive: true } },
 };
 const periodoIva = { id: "period-1", taxTypeId: "tax-1", startDate: "2026-11-01", endDate: "2026-11-30", label: "Noviembre 2026", taxType: IVA };
@@ -76,6 +77,7 @@ const obligacion = {
   id: "obl-1",
   status: "PENDING",
   dueDate: "2026-12-20",
+  profile: { version: 1 },
   regime: regimenIva,
   period: { id: "period-1", label: "Noviembre 2026", startDate: "2026-11-01", endDate: "2026-11-30" },
 };
@@ -194,10 +196,11 @@ describe("Caracterización · Configuración fiscal: pasos y estado (F1, F2, F10
     expect(within(pie).getByRole("button", { name: "Cancelar" })).toBeTruthy();
   });
 
-  it("F2 · documenta: perfil DRAFT y cuatro listas con datos dan «Configuración completa», sin stepper ni «Falta activar»", async () => {
+  it("F2 · una ficha y una configuración fiscal activas completas dan «Configuración completa»", async () => {
     montar({
       datos: {
-        perfiles: [{ ...perfilActivo, status: "DRAFT" }],
+        cliente: { cuit: "20111111112", cuitEnding: "2", profile: {} },
+        perfiles: [perfilActivo],
         inscripciones: [inscripcionIva],
         actividadesCliente: [actividadVigente],
         periodos: [periodoIva],
@@ -205,9 +208,22 @@ describe("Caracterización · Configuración fiscal: pasos y estado (F1, F2, F10
       },
     });
     expect(await screen.findByText("Configuración completa")).toBeTruthy();
-    // vigente: cambia con D7A-1 (cuándo se dice «Configuración completa»)
     expect(screen.queryByRole("navigation", { name: "Pasos del onboarding fiscal" })).toBeNull();
-    expect(screen.queryByText("Falta activar")).toBeNull();
+  });
+
+  it("no marca completa la configuración cuando el perfil fiscal todavía es borrador", async () => {
+    montar({
+      datos: {
+        cliente: { cuit: "20111111112", cuitEnding: "2", profile: {} },
+        perfiles: [{ ...perfilActivo, status: "DRAFT" }],
+        inscripciones: [inscripcionIva],
+        actividadesCliente: [actividadVigente],
+        periodos: [periodoIva],
+        obligaciones: [obligacion],
+      },
+    });
+    await screen.findByRole("heading", { level: 1, name: "Configuración fiscal" });
+    expect(screen.queryByText("Configuración completa")).toBeNull();
   });
 
   it("F10 · documenta: con consultas pendientes, la pestaña dice 0 y los pasos dicen «Pendiente»", async () => {
