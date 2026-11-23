@@ -25,7 +25,11 @@ export * from "./Menu.js";
 export * from "./BarSelect.js";
 export * from "./SearchSelect.js";
 
-// Patrones de objeto y cola (DS-0, C10–C12): sin consumidores todavía; las pantallas los migran por corte.
+// Patrones de objeto y cola (DS-0, C10–C16): sin consumidores todavía; las pantallas los migran por corte.
 export * from "./ObjectPanel.js";
 export * from "./ObjectActivity.js";
 export * from "./WorkQueue.js";
+export * from "./MonthSummary.js";
+export * from "./DocumentTriage.js";
+export * from "./ObjectPage.js";
+export * from "./StepFlow.js";

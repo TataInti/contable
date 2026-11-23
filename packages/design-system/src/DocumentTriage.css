@@ -1,0 +1,140 @@
+/* Triage de documento (C14): cola angosta plegable, visor, datos y barra de decisión. Solo tokens --ds-*. */
+
+.document-triage {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--ds-space-4);
+  min-inline-size: 0;
+  font-family: var(--ds-font-sans);
+  color: var(--ds-color-text);
+}
+
+.document-triage[data-queue-open="true"] {
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+}
+
+.document-triage__cola {
+  display: grid;
+  align-content: start;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+
+.document-triage__plegar {
+  justify-self: start;
+  min-block-size: var(--ds-control-height-sm);
+  padding-inline: var(--ds-space-2);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  cursor: pointer;
+}
+
+.document-triage__plegar:focus-visible {
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.document-triage__queue {
+  border-inline-end: 1px solid var(--ds-color-border-subtle);
+  padding-inline-end: var(--ds-space-3);
+  min-inline-size: 0;
+}
+
+.document-triage__trabajo {
+  display: grid;
+  gap: var(--ds-space-4);
+  min-inline-size: 0;
+}
+
+.document-triage__cuerpo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+  gap: var(--ds-space-4);
+  min-inline-size: 0;
+}
+
+.document-triage__decision {
+  border-block-start: 1px solid var(--ds-color-border-subtle);
+  padding-block-start: var(--ds-space-3);
+}
+
+.document-viewer {
+  display: grid;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+
+.document-viewer__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+
+.document-viewer__titulo {
+  margin: 0;
+  font-size: var(--ds-text-base);
+  font-weight: var(--ds-font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.document-viewer__posicion {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.document-viewer__hoja {
+  display: grid;
+  place-items: center;
+  min-block-size: 24rem;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface-muted);
+  overflow: hidden;
+}
+
+.document-fields {
+  display: grid;
+  align-content: start;
+  gap: var(--ds-space-3);
+  min-inline-size: 0;
+}
+
+.document-fields__campo {
+  min-inline-size: 0;
+}
+
+.decision-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+}
+
+.decision-bar__secundarias,
+.decision-bar__principal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.decision-bar__principal {
+  margin-inline-start: auto;
+  justify-content: flex-end;
+}
+
+.decision-bar__motivo {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}

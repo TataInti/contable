@@ -1,0 +1,92 @@
+/* Portada del Legajo (C13). Tres bloques en una grilla; solo tokens --ds-*. */
+
+.month-summary {
+  display: grid;
+  gap: var(--ds-space-4);
+  min-inline-size: 0;
+  font-family: var(--ds-font-sans);
+  color: var(--ds-color-text);
+}
+
+.month-summary__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+
+.month-summary__cabecera h2 {
+  margin: 0;
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.month-summary__vence {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}
+
+.month-summary__bloques {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--ds-space-6);
+  border-block-start: 1px solid var(--ds-color-border-subtle);
+  padding-block-start: var(--ds-space-4);
+}
+
+.month-summary__bloque {
+  display: grid;
+  align-content: start;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+
+.month-summary__bloque h3 {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  color: var(--ds-color-text-muted);
+}
+
+.month-summary__lista {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--ds-text-base);
+}
+
+.month-summary__enlace {
+  color: var(--ds-color-primary);
+  text-decoration: underline;
+  text-underline-offset: var(--ds-space-0-5);
+  overflow-wrap: anywhere;
+}
+
+.month-summary__enlace:focus-visible {
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: var(--ds-focus-offset);
+  border-radius: var(--ds-radius-sm);
+}
+
+.month-summary__nada {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}
+
+.month-summary__importe {
+  margin: 0;
+  font-size: var(--ds-text-2xl);
+  font-weight: var(--ds-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.month-summary__nota {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}
