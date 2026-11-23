@@ -433,9 +433,11 @@ export function StudyExpedienteMensual() {
   const calculateMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: CuerpoCalculo }) =>
       api.post(`/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${id}/calculate`, body),
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
       setCalculoAplicado({ workpaperId: variables.id, cuerpo: variables.body });
-      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      // El legajo (controles y estado) se refresca primero y el pedido sigue pendiente hasta que llega:
+      // así un importe recalculado nunca se muestra junto a los controles de la corrida anterior.
+      await queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
       void queryClient.invalidateQueries({
         queryKey: ["monthly-workpaper-coverage", firmId, clientId],
       });
