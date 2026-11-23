@@ -165,12 +165,12 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
         .locator(".workpaper-control")
         .filter({ hasText: nombre })
         .filter({ has: page.getByRole("textbox", { name: /^Resolución / }) });
-      for (let intento = 0; intento < 4 && (await abiertos.count()) > 0; intento++) {
-        const control = abiertos.first();
-        await control.getByRole("textbox", { name: /^Resolución / }).fill(MOTIVO_CONTROL);
-        await mutating(page, "/resolve", () => control.getByRole("button", { name: "Resolver", exact: true }).click());
-        await expect(control.getByRole("button", { name: "Resolver", exact: true })).toHaveCount(0);
-      }
+      // Cada recálculo vuelve a abrir una vez cada control automático: se espera a verlo abierto en la lista
+      // ya refrescada (no se cuenta a ciegas) y después se resuelve.
+      await expect(abiertos, `«${nombre}» abierto tras el recálculo`).toHaveCount(1);
+      const control = abiertos.first();
+      await control.getByRole("textbox", { name: /^Resolución / }).fill(MOTIVO_CONTROL);
+      await mutating(page, "/resolve", () => control.getByRole("button", { name: "Resolver", exact: true }).click());
       await expect(abiertos, `«${nombre}» sin abiertos`).toHaveCount(0);
     }
   });
