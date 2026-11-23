@@ -120,36 +120,27 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
   await test.step("Controles: aceptar un grupo con motivo y excluir el otro del cálculo", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
     const panel = page.locator(".work-page").first();
-    const motivos = panel.getByRole("textbox", { name: /^Motivo / });
-    await expect(motivos, "grupos de perfil abiertos").toHaveCount(2, { timeout: 20_000 });
-    await expect(panel.getByText("Facturas C: 2 comprobantes")).toBeVisible();
+    await expect(panel.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem")).toHaveCount(2, { timeout: 20_000 });
+    await expect(panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ })).toBeVisible();
     // La nota de crédito C (código 13) va a su grupo de notas C, no a «Tipo no reconocido».
-    await expect(panel.getByText("Notas de crédito y débito C: 1 comprobante")).toBeVisible();
+    await expect(panel.getByRole("button", { name: /Abrir Notas de crédito y débito C: 1 comprobante/ })).toBeVisible();
     await expect(panel.getByText("Tipo no reconocido")).toHaveCount(0);
 
-    const controlAbierto = () =>
-      panel.locator(".workpaper-control").filter({ has: page.getByRole("textbox", { name: /^Motivo / }) }).first();
+    await panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ }).click();
+    const firstDrawer = page.getByRole("dialog");
+    await expect(firstDrawer.getByText("2 comprobantes afectados por este control.")).toBeVisible();
+    await firstDrawer.getByRole("button", { name: "Aceptar con motivo", exact: true }).click();
+    await firstDrawer.getByLabel("Motivo").fill(MOTIVO_ACEPTAR);
+    await mutating(page, "/profile-groups/", () => firstDrawer.getByRole("button", { name: "Confirmar aceptación" }).click());
+    await expect(firstDrawer).toBeHidden();
 
-    // Cada acción espera a que el refetch termine (el grupo sale de la lista de abiertos) y a que el motivo quede escrito,
-    // así el clic no cae sobre un control re-montado con el campo vacío.
-    const primero = controlAbierto();
-    await primero.getByRole("textbox", { name: /^Motivo / }).fill(MOTIVO_ACEPTAR);
-    await expect(primero.getByRole("textbox", { name: /^Motivo / })).toHaveValue(MOTIVO_ACEPTAR);
-    await mutating(page, "/profile-groups/", () => primero.getByRole("button", { name: "Aceptar con motivo", exact: true }).click());
-    await expect(motivos, "un grupo de perfil sigue abierto").toHaveCount(1);
-
-    const segundo = controlAbierto();
-    await segundo.getByRole("textbox", { name: /^Motivo / }).fill(MOTIVO_EXCLUIR);
-    await expect(segundo.getByRole("textbox", { name: /^Motivo / })).toHaveValue(MOTIVO_EXCLUIR);
-    await mutating(page, "/profile-groups/", () => segundo.getByRole("button", { name: "Excluir del cálculo", exact: true }).click());
-
-    // Ambos grupos resueltos: no quedan campos de motivo, ni la leyenda de bloqueo del perfil, y cada control figura «Resuelto».
-    await expect(motivos, "no quedan grupos de perfil abiertos").toHaveCount(0);
-    await expect(panel.getByText("No quedan comprobantes pendientes en ese grupo")).toHaveCount(0);
-    const controlesDePerfil = panel.locator(".workpaper-control").filter({ hasText: "No corresponde al perfil del cliente" });
-    await expect(controlesDePerfil).toHaveCount(2);
-    await expect(controlesDePerfil.nth(0)).toContainText("Resuelto");
-    await expect(controlesDePerfil.nth(1)).toContainText("Resuelto");
+    await panel.getByRole("button", { name: /Abrir Notas de crédito y débito C: 1 comprobante/ }).click();
+    const secondDrawer = page.getByRole("dialog");
+    await secondDrawer.getByRole("button", { name: "Excluir del cálculo con motivo", exact: true }).click();
+    await secondDrawer.getByLabel("Motivo").fill(MOTIVO_EXCLUIR);
+    await mutating(page, "/profile-groups/", () => secondDrawer.getByRole("button", { name: "Confirmar exclusión" }).click());
+    await expect(secondDrawer).toBeHidden();
+    await expect(panel.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem")).toHaveCount(0);
   });
 
   await test.step("Recalcular con los grupos resueltos: la NC excluida no entra en la base; 90.000 × 3,5 % = 3.150,00", async () => {
@@ -159,19 +150,17 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
 
   await test.step("Controles automáticos: acreditaciones bancarias y caja, resueltas con motivo", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
-    const panel = page.locator(".work-page").first();
     for (const nombre of ["Acreditaciones bancarias vs. facturación", "Caja e imputaciones del período"]) {
-      const abiertos = panel
-        .locator(".workpaper-control")
-        .filter({ hasText: nombre })
-        .filter({ has: page.getByRole("textbox", { name: /^Resolución / }) });
-      for (let intento = 0; intento < 4 && (await abiertos.count()) > 0; intento++) {
-        const control = abiertos.first();
-        await control.getByRole("textbox", { name: /^Resolución / }).fill(MOTIVO_CONTROL);
-        await mutating(page, "/resolve", () => control.getByRole("button", { name: "Resolver", exact: true }).click());
-        await expect(control.getByRole("button", { name: "Resolver", exact: true })).toHaveCount(0);
+      const queue = page.getByRole("list", { name: "Controles abiertos" });
+      const row = queue.getByRole("listitem").filter({ hasText: nombre }).first();
+      while (await row.count()) {
+        await row.getByRole("button", { name: /Abrir/ }).click();
+        const drawer = page.getByRole("dialog");
+        await drawer.getByLabel("Motivo").fill(MOTIVO_CONTROL);
+        await mutating(page, "/resolve", () => drawer.getByRole("button", { name: "Resolver", exact: true }).click());
+        await expect(drawer).toBeHidden();
       }
-      await expect(abiertos, `«${nombre}» sin abiertos`).toHaveCount(0);
+      await expect(queue.getByRole("listitem").filter({ hasText: nombre }), `«${nombre}» sin abiertos`).toHaveCount(0);
     }
   });
 

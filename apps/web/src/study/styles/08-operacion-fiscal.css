@@ -349,6 +349,27 @@
   gap: var(--ds-space-3);
 }
 
+.object-panel .workpaper-control__affected {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workpaper-control__affected li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--ds-space-3);
+  min-block-size: var(--ds-row-height);
+  border-block-end: 1px solid var(--ds-color-border-subtle);
+}
+
+.workpaper-control__affected li > span {
+  color: var(--ds-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .workpaper-control {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto auto;

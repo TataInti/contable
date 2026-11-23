@@ -291,6 +291,7 @@ describe("StudyExpedienteMensual", () => {
     });
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: /Controles/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Diferencias de libro por alícuota/ }));
 
     const evidence = await screen.findByRole("combobox", {
       name: "Evidencia BOOK_RATE_RECONCILIATION",
@@ -345,6 +346,7 @@ describe("StudyExpedienteMensual", () => {
     });
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: /Controles/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Abrir Diferencias de libro por alícuota/ }));
 
     const evidence = await screen.findByRole("combobox", {
       name: "Evidencia BOOK_RATE_RECONCILIATION",

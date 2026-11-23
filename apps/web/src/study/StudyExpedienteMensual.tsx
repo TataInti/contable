@@ -675,10 +675,10 @@ export function StudyExpedienteMensual() {
           ...(evidenceDocumentId ? { evidenceDocumentId } : {}),
         },
       ),
-    onSuccess: (_, variables) => {
+    onSuccess: async (_, variables) => {
       setControlResolutions((values) => ({ ...values, [variables.findingId]: "" }));
       setControlEvidence((values) => ({ ...values, [variables.findingId]: "" }));
-      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      await queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
       void queryClient.invalidateQueries({
         queryKey: ["monthly-workpaper-coverage", firmId, clientId],
       });
@@ -701,8 +701,8 @@ export function StudyExpedienteMensual() {
         `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${workpaperId}/classifications/profile-groups/${grupo}/${accion}`,
         { reason },
       ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpaper-coverage", firmId, clientId] });
       void queryClient.invalidateQueries({ queryKey: ["monthly-workpaper-classifications", firmId, clientId] });
     },
@@ -903,6 +903,8 @@ export function StudyExpedienteMensual() {
             controlEvidence={controlEvidence}
             setControlEvidence={setControlEvidence}
             documentsQuery={documentsQuery}
+            affectedVouchers={classificationQuery.data?.items ?? []}
+            onGoToClassification={() => goToStep(2)}
             resolveControlMutation={resolveControlMutation}
             grupoPerfilMutation={grupoPerfilMutation}
             confirmar={confirmar}

@@ -308,21 +308,19 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
 
   await test.step("Controles: los dos bloqueantes se resuelven con motivo desde la pantalla", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
-    const panel = page.locator(".work-page").first();
     for (const nombre of ["Acreditaciones bancarias vs. facturación", "Caja e imputaciones del período"]) {
       // Un mismo control puede repetirse por impuesto del legajo: se resuelven todos los abiertos de ese nombre.
-      const abiertos = panel
-        .locator(".workpaper-control")
-        .filter({ hasText: nombre })
-        .filter({ has: page.getByRole("textbox", { name: /^Resolución / }) });
-      await expect(abiertos.first(), `control «${nombre}»`).toBeVisible({ timeout: 20_000 });
-      for (let intento = 0; intento < 4 && (await abiertos.count()) > 0; intento++) {
-        const control = abiertos.first();
-        await control.getByRole("textbox", { name: /^Resolución / }).fill(MOTIVO_CONTROL);
-        await mutating(page, "/resolve", () => control.getByRole("button", { name: "Resolver", exact: true }).click());
-        await expect(control.getByRole("button", { name: "Resolver", exact: true })).toHaveCount(0);
+      const queue = page.getByRole("list", { name: "Controles abiertos" });
+      const row = queue.getByRole("listitem").filter({ hasText: nombre }).first();
+      await expect(row, `control «${nombre}»`).toBeVisible({ timeout: 20_000 });
+      while (await row.count()) {
+        await row.getByRole("button", { name: /Abrir/ }).click();
+        const drawer = page.getByRole("dialog");
+        await drawer.getByLabel("Motivo").fill(MOTIVO_CONTROL);
+        await mutating(page, "/resolve", () => drawer.getByRole("button", { name: "Resolver", exact: true }).click());
+        await expect(drawer).toBeHidden();
       }
-      await expect(abiertos, `«${nombre}» sin abiertos`).toHaveCount(0);
+      await expect(queue.getByRole("listitem").filter({ hasText: nombre }), `«${nombre}» sin abiertos`).toHaveCount(0);
     }
     await expect(page.getByText("bloqueantes abiertos")).toHaveCount(0);
   });
