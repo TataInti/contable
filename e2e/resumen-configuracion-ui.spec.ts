@@ -56,7 +56,7 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
 
   await test.step("Norma contable opcional (A57): ni el detalle de la ficha ni el Resumen la cuentan como faltante", async () => {
     const fila = page.getByRole("row").filter({ hasText: CLIENTE.legalName });
-    await fila.getByRole("button", { name: CLIENTE.legalName }).click();
+    await fila.getByRole("button", { name: CLIENTE.legalName, exact: true }).click();
     await expect(page.getByText(/falta[^.]*norma contable/i)).toHaveCount(0);
 
     await goTo(page, "Resumen");
