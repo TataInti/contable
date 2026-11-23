@@ -387,7 +387,7 @@ describe("Caracterización · matriz §2.1 (13 filas): datos visibles con client
       montar({ datos });
       expect(await screen.findByRole("region", { name: "Resumen" })).toBeTruthy();
       const encabezado = document.querySelector(".dense-head") as HTMLElement;
-      expect(encabezado.textContent).toContain("Cliente SINTÉTICO A · SINTÉTICO · CUIT 20111111112");
+      expect(encabezado.textContent).toContain("Cliente SINTÉTICO A · SINTÉTICO · CUIT 20-11111111-2");
       expect(within(encabezado).getAllByRole("button").map((boton) => boton.textContent?.trim())).toEqual([
         "Volver a clientes",
         "Actualizar",
