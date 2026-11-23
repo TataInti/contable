@@ -69,10 +69,16 @@ describe("familia Dense", () => {
             },
           ]}
         />
+        <StatStrip
+          label="Resumen en franja"
+          variant="strip"
+          items={[{ key: "abiertos", label: "períodos abiertos", value: 2 }]}
+        />
         <DensitySwitch value={32} onChange={onChange} />
       </>,
     );
 
+    expect(screen.getByRole("group", { name: "Resumen en franja" })).toHaveClass("dense-stats--strip");
     const pending = screen.getByRole("button", { name: /Pendientes/ });
     expect(pending).toHaveClass("dense-stat", "dense-stat--warn", "dense-stat--active");
     fireEvent.click(pending);

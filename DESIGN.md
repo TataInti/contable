@@ -563,7 +563,7 @@ El primero arma una barra pegada a mano; el segundo tiene dos acciones primarias
 | Propósito y límite | Agrupar contenido con espacio y líneas. La sección ordena la lectura; los datos se leen sobre el lienzo |
 | Entradas | `id?`, `title`, `count?`, `description?`, `actions?`, `children` |
 | Variantes | `surface="integrated"` aplica Foco; `surface="outlined"` queda para límites operables justificados. La migración es explícita, consumidor por consumidor |
-| Anatomía | Título `h2` asociado a la sección, conteo junto al título y contenido sobre el lienzo. La altura se ajusta al contenido |
+| Anatomía | Título `h2` asociado a la sección, conteo opcional sin concatenarlo al título, descripción agrupada con el título a la izquierda y acciones a la derecha en la misma cabecera. Contenido sobre el lienzo; la altura se ajusta al contenido |
 | Estados | Datos, carga inicial, vacío confirmado, error local o parcial, actualización con datos previos identificados, contenido extenso |
 | Interacción | Agrupa contenido. La consulta de datos y la interpretación de una lista vacía son de la pantalla |
 | Accesibilidad | `id` estable y `aria-labelledby`; cada título de sección es distinguible por su texto |
@@ -582,8 +582,8 @@ El primero arma una barra pegada a mano; el segundo tiene dos acciones primarias
 |---|---|
 | Propósito y límite | Resumir datos conocidos y decir su alcance. Cada indicador proviene de una fuente con respuesta; un estado global se muestra cuando todas sus fuentes respondieron |
 | Entradas | `StatStrip`: `items` y `label`. Cada ítem: `key`, `label`, `value`, `detail?`, `tone?`, `active?`, `onSelect?`. La pantalla calcula los valores |
-| Variantes | Lectura, navegación y filtro. `pressed` identifica al ítem que alterna un filtro; el ítem que navega es un enlace |
-| Anatomía | Una línea discreta de cifras, valor y etiqueta separados, sin caja ni mayúsculas. Si filtran la lista, viven como botones en el renglón de secciones de la barra de trabajo; si solo informan, quedan en el contenido bajo la barra. Cada dato aparece una sola vez en la pantalla |
+| Variantes | Lectura, navegación y filtro. `pressed` identifica al ítem que alterna un filtro; el ítem que navega es un enlace. `variant="strip"` apila valor sobre etiqueta y separa los ítems con divisores |
+| Anatomía | En `inline`, una línea discreta de cifras, valor y etiqueta separados, sin caja ni mayúsculas. En `strip`, cada cifra va arriba de su etiqueta en columnas separadas por divisores. Si filtran la lista, viven como botones en el renglón de secciones de la barra de trabajo; si solo informan, quedan en el contenido bajo la barra. Cada dato aparece una sola vez en la pantalla |
 | Estados | Datos, carga inicial, vacío confirmado, error local o parcial, actualización con datos previos identificados, contenido extenso |
 | Interacción | `onSelect` aplica el filtro o navega; las reglas de dominio se calculan en la pantalla. Un filtro seleccionado se puede restablecer |
 | Accesibilidad | `aria-pressed` en los ítems que alternan un filtro; el grupo tiene `role="group"` y nombre. Un valor desconocido se expresa con texto |
@@ -605,7 +605,7 @@ Solo van cifras de la lista que se ve (cantidades, pendientes); el estudio, el c
 | Propósito y límite | Comparar registros y actuar conservando identidad, orden y acceso a la información |
 | Entradas | `label`, `columns`, `rows`, `rowKey` y las capacidades existentes: selección, orden, `footer`, `inspectorOpen`. `groupBy(row)` devuelve `key`, `label` y `order` |
 | Variantes | `Table` para leer; `DenseTable` para listas con selección, orden y detalle lateral. `surface="integrated"` / `"outlined"` sobre la misma tabla, con la densidad compartida y `groupBy` |
-| Anatomía | Filas separadas por líneas, números a la derecha con cifras tabulares, nombre largo legible. La tabla ocupa el alto de su contenido |
+| Anatomía | Filas separadas por líneas, números a la derecha con cifras tabulares, nombre largo legible. Una celda con dos niveles usa `TableCellStack`: dato principal arriba y detalle secundario debajo en el mismo ancho de celda. La tabla ocupa el alto de su contenido |
 | Estados | Datos, carga inicial, vacío confirmado, sin coincidencias, error local o parcial, restricción de acceso, actualización con datos previos identificados, contenido extenso |
 | Interacción | Ordenar y seleccionar conservan la identidad de la fila. Agrupar conserva resultados y totales |
 | Accesibilidad | Tabla semántica con `aria-sort`; las flechas saltan los encabezados de grupo y seleccionan filas. Las acciones de fila quedan a la vista |
@@ -623,7 +623,7 @@ Solo van cifras de la lista que se ve (cantidades, pendientes); el estudio, el c
 #### Table
 
 - **Propósito:** tabla semántica con cabecera, alineación opcional y estado vacío.
-- **Props/variantes:** `columns`, `rows`, `rowKey`, `empty`; cada columna lleva `key`, `header`, `align` (`left`, `right`, `center`), `render` o `accessor`. Conserva atributos nativos de `table`.
+- **Props/variantes:** `columns`, `rows`, `rowKey`, `empty`; cada columna lleva `key`, `header`, `align` (`left`, `right`, `center`), `render` o `accessor`. `TableCellStack` recibe `primary` y `secondary` para una celda de dos líneas. Conserva atributos nativos de `table`.
 - **Estados:** hover de fila, `focus-within`/selección cuando sus descendientes reciben foco, vacío personalizable; encabezado sticky y contenedor con scroll horizontal.
 - **Correcto:**
 
@@ -652,7 +652,7 @@ La clave debe ser estable y única por fila. `Table` es una tabla de lectura; pa
 |---|---|
 | Propósito y límite | Cambiar lo que se consulta. Una pestaña es una sección de la pantalla; el estado del negocio se expresa con C08 |
 | Entradas | Los contratos actuales. `DenseToggleGroup` recibe `label`, `options` (pares `value` y `label`), `selected` y `onChange(next)`. `DenseTabs` recibe `label`, `tabs`, `active`, `onChange` e `idPrefix?` |
-| Variantes | Filtro simple, selección múltiple y navegación de secciones |
+| Variantes | Filtro simple, selección múltiple y navegación de secciones. `DenseToolbar split` ubica el primer control a la izquierda y el último elemento (resumen o contador) a la derecha |
 | Anatomía | En las pantallas que adoptan la barra, búsqueda (260 px) y filtros van a la izquierda del primer renglón; desplegables compactos de 32 px (hasta cuatro a 1280 px, tope visual propuesto de 320 px). Pestañas, etapas, controles segmentados, cifras que filtran y «Quitar filtros» van al renglón de secciones. Agrupar es una opción distinta de filtrar. Un criterio ocupa un solo lugar |
 | Estados | Datos, sin coincidencias, contenido extenso |
 | Interacción | Los filtros conservan su lugar en la URL donde ya existe. Cambiar de sección conserva el estado del registro |
@@ -1068,7 +1068,7 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 | Propósito y límite | Examinar y decidir sobre un ítem (control, comprobante, lote o documento) sin perder la lista que lo originó. Un objeto con navegación propia va a su página (C15) |
 | Entradas | `kind` (`control`, `comprobante`, `lote` o `documento`), `isOpen`, `onClose`, `title`, `description?`, `children`, `primaryAction?` (un botón), `primaryHint?`, `cancelLabel?` (por defecto «Cancelar») y `returnFocusTo?` (la fila de origen) |
 | Variantes | Con acción primaria: pie fijo con «Cancelar» y la acción. Sin acción primaria: sin pie; el cierre queda en el encabezado |
-| Anatomía | Encabezado con título, descripción y «Cerrar»; cuerpo desplazable con el detalle y la actividad del ítem; pie fijo con una sola acción primaria. `data-object-kind` identifica el tipo en el marcado |
+| Anatomía | Encabezado con título, descripción y «Cerrar»; cuerpo desplazable. Para un control, ordenar el contenido como descripción → Estado → Comprobantes afectados → Resolver este control (opciones) → Actividad del control. El pie queda fijo y muestra «Cancelar» más una sola acción primaria. `data-object-kind` identifica el tipo en el marcado |
 | Estados | Cerrado, sin DOM. Abierto con el contenido que entrega la pantalla (datos, carga o error local). La acción primaria deshabilitada muestra su motivo |
 | Interacción | Escape y «Cerrar» cierran. Al cerrar, el foco vuelve a `returnFocusTo` o, si no se entrega, a la fila que tenía el foco al abrir. La URL la arma la pantalla con `withObjectPanel(ruta, kind, id)`, que agrega `?panel=<tipo>-<id>`; `withoutObjectPanel(ruta)` la retira al cerrar y conserva el resto de la consulta y el fragmento |
 | Accesibilidad | Diálogo con nombre (título) y descripción. El foco entra al contenido y se contiene mientras el panel está abierto; al cerrar, vuelve al origen; el scroll del cuerpo queda bloqueado |
@@ -1106,7 +1106,7 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 | Propósito y límite | Mostrar la trazabilidad de un objeto (historial y comentarios) y permitir comentar sobre él. Cada región pertenece a un objeto: no hay historial global ni comentarios de cartera |
 | Entradas | `label?` (nombre de la región), `entries` (`id`, `kind` `historial` o `comentario`, `at`, `author?`, `text`), `onSubmitComment?` (sin él, no hay redactor) y `busy?` |
 | Variantes | Solo lectura (sin `onSubmitComment`) o con redactor. `ObjectActivityTrigger` es el acceso de barra «Comentarios · N», con `count` y `onOpen` |
-| Anatomía | Lista cronológica: tipo (`Historial` o `Comentario`), autor si existe, fecha y hora en `<time>` y texto. Debajo, el redactor con etiqueta visible «Escribí un comentario» y el botón «Comentar» |
+| Anatomía | Lista cronológica: tipo (`Historial` o `Comentario`), autor si existe, fecha y hora en `<time>` y texto. En el detalle de control va después de las opciones para resolver y antes del pie fijo del panel. Debajo, el redactor con etiqueta visible «Escribí un comentario» y el botón «Comentar» |
 | Estados | Sin entradas: vacío de sección («Sin actividad todavía»). Enviando (`busy`): redactor y botón bloqueados; el botón dice «Enviando». Sin texto: el envío queda deshabilitado con su motivo |
 | Interacción | «Comentar» envía el texto recortado y limpia el redactor. Un envío en curso no se repite. El comentario entra a la lista cuando la pantalla confirma el guardado |
 | Accesibilidad | Región con nombre; la lista tiene nombre propio; la etiqueta del redactor es persistente; el motivo del envío deshabilitado va enlazado con `aria-describedby`. Las horas son `<time>` |
@@ -1130,7 +1130,7 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 | Propósito y límite | Listar decisiones pendientes, una por fila. Lo resuelto no vive en la cola: queda en la actividad del objeto |
 | Entradas | `WorkQueue`: `label`, `density?` (`queue` o `compact`), `empty?` y `children` (filas). `WorkQueueRow`: `id`, `title`, `decision`, `subtitle?`, `status?` (clave de `StatusBadge`), `date?`, `amount?` y `onOpen` |
 | Variantes | `queue`: filas de 48 px en la portada y en la lista principal. `compact`: filas de 32 px dentro de un panel |
-| Anatomía | Cinco columnas por fila: principal (título, decisión y contexto), estado, fecha, importe alineado a la derecha con cifras tabulares y la acción «Abrir» |
+| Anatomía | Cinco columnas por fila: principal (título arriba y decisión/detalle debajo, en la misma celda; el contexto opcional sigue en esa celda), estado, fecha, importe alineado a la derecha con cifras tabulares y una sola acción «Abrir». En celdas tabulares con dos niveles, usar `TableCellStack`: dato principal arriba y detalle muted abajo, sin concatenarlos en una línea |
 | Estados | Con filas. Sin filas: vacío de cola, que es un resultado y no un error. Carga y error los entrega la pantalla con `AsyncState` |
 | Interacción | «Abrir» lleva al objeto, en panel (C10) o en página (C15), según la pantalla. La acción es el botón de la fila |
 | Accesibilidad | Lista con nombre. Cada acción lleva el nombre del objeto («Abrir Facturas C»). El estado se lee como texto de `StatusBadge` |
@@ -1160,7 +1160,7 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 | Propósito y límite | Orientar el mes: qué falta, qué está listo y el importe estimado. No repite el contenido de las etapas ni reemplaza el cálculo final |
 | Entradas | `title?` (por defecto «Resumen del mes»), `dueLabel?`, `pending` (`id`, `label`, `href`), `ready` (textos), `estimatedAmount` (ya formateado) y `estimateNote?` |
 | Variantes | Con pendientes, o sin pendientes («No queda nada pendiente.») |
-| Anatomía | Cabecera con título y vencimiento. Tres bloques en una grilla que se apila en pantallas angostas: «Qué falta (N)» con enlaces, «Listo (N)» y «Importe estimado» con su aclaración |
+| Anatomía | Cabecera con título y vencimiento. Tres bloques en una grilla que se apila en pantallas angostas: «Qué falta (N)» con enlaces, «Listo (N)» y «Importe estimado» con su aclaración; el avance del cierre conserva su columna independiente en la referencia DS-0 |
 | Estados | Con pendientes; sin pendientes; sin pasos listos («Todavía no hay pasos listos.»). El importe siempre lleva su aclaración de estimado |
 | Interacción | Cada pendiente es un enlace a la etapa o al objeto que lo resuelve. La portada no ejecuta acciones |
 | Accesibilidad | Región con nombre; tres subregiones con encabezado; los enlaces se leen por su texto. El importe no depende del color |
@@ -1184,7 +1184,7 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 | Propósito y límite | Resolver un documento por vez: ver el archivo, revisar sus datos extraídos y decidir. La gestión masiva (filtros, selección y lote) va en otra vista |
 | Entradas | `DocumentTriage`: `queueLabel`, `queue`, `queueOpen`, `onQueueToggle`, `viewer`, `fields` y `decision`. `DocumentViewer`: `title`, `pageLabel?`, `zoomLabel?` y `children`. `DocumentFields`: `fields` (`id`, `label`, `value`, `confidence` `alta`, `media` o `baja`) y `onChange(id, value)`. `DecisionBar`: `label`, `secondary?`, `primary?`, `hint?` y `next?` |
 | Variantes | Cola desplegada o plegada. La barra admite una acción principal y el avance «Siguiente» |
-| Anatomía | Tres zonas: cola angosta a la izquierda, plegable con un botón que informa su estado; visor del documento con nombre, página y zoom; datos extraídos editables junto al visor. Debajo, la barra de decisión: acciones secundarias a la izquierda y, a la derecha, la acción principal, su motivo y «Siguiente» |
+| Anatomía | Tres columnas: cola angosta a la izquierda, plegable con un botón que informa su estado; visor del documento en el centro; columna derecha con «Revisar comprobante», confianza por campo, avisos contextuales (por ejemplo CUIT de otro cliente con «Mover a…») y, debajo de los campos, las acciones. «Siguiente» permanece junto a las acciones. Una sola acción primaria |
 | Estados | Sin documento: el visor dice que no hay documentos por revisar (vacío de sección) y los demás bloques siguen. Confianza por campo en texto: «Confianza alta», «Confianza media» o «Confianza baja». La acción principal deshabilitada muestra su motivo |
 | Interacción | El botón de cola alterna «Ocultar cola» y «Mostrar cola» y mantiene `aria-expanded`. Editar un campo informa `onChange`; guardar o validar es de la pantalla. «Siguiente» pasa al documento siguiente de la cola |
 | Accesibilidad | La cola es un `aside` con nombre y queda oculta (`hidden`) cuando está plegada; el botón controla su `id`. El visor se nombra con el archivo. Cada campo tiene etiqueta persistente y su confianza como descripción. La barra es un grupo con nombre |
@@ -1209,8 +1209,8 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 |---|---|
 | Propósito y límite | Mostrar un objeto de larga vida (cliente) con sus períodos, su actividad y el acceso a su configuración. La configuración fiscal y los formularios largos viven en su propia página |
 | Entradas | `ObjectPage`: `breadcrumb` (`label`, `href?`), `title`, `status?`, `description?`, `actions?` y `children`. `Breadcrumb`: `items` y `label?` |
-| Variantes | Con o sin estado, descripción y acciones |
-| Anatomía | Migas de pan («Clientes › Cliente A»). Cabecera con el nombre como `h1`, el estado y las acciones. Debajo, las secciones: períodos y actividad. El acceso a Configuración fiscal es un enlace de acción de la cabecera |
+| Variantes | Con o sin estado, descripción y acciones; la cabecera puede usar una miga de retorno («← Clientes») |
+| Anatomía | Miga de retorno. Cabecera con nombre como `h1` y estado en la misma línea, datos debajo y acciones a la derecha. Luego, indicadores del cliente en `StatStrip` (cifra arriba, etiqueta debajo, divisores), pestañas y la sección Períodos; la sección se titula «Períodos» sin pegarle el conteo. Actividad queda en su pestaña/sección. Configuración fiscal y Comentarios son acciones de cabecera |
 | Estados | Con secciones; sin estado; sin acciones. La carga y el error de cada sección los resuelve su consulta |
 | Interacción | Las migas llevan al nivel superior. La página actual va sin enlace y con `aria-current="page"`. Cada período lleva a su legajo |
 | Accesibilidad | Navegación de migas con nombre; un único `h1`; el nivel actual se marca con `aria-current`; cada sección tiene su encabezado |
@@ -1233,8 +1233,8 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 |---|---|
 | Propósito y límite | Mostrar una secuencia con dependencias (cierre, presentación, pago). Un paso no se adelanta: el flujo indica qué falta para avanzar. No reemplaza los controles ni la lista de decisiones |
 | Entradas | `label` (nombre de la secuencia) y `steps`: `key`, `label`, `status` (`done`, `current`, `blocked` o `pending`), `reason?` y `action?` |
-| Variantes | Según el estado de cada paso. El paso en curso es el único con acción |
-| Anatomía | Lista ordenada: marca numerada (decorativa), nombre del paso, estado en texto, motivo cuando corresponde y, solo en el paso en curso, la acción |
+| Variantes | Según el estado de cada paso. El paso en curso es el único con una acción primaria |
+| Anatomía | Lista ordenada: marca numerada (decorativa), nombre del paso, estado en texto, motivo cuando corresponde y, solo en el paso en curso, una acción primaria. Los pasos siguientes informan qué falta, sin competir con esa acción |
 | Estados | «Hecho», «En curso», «Bloqueado» y «Pendiente». El motivo aparece en los pasos bloqueados o pendientes; un paso hecho no lo repite |
 | Interacción | Solo el paso en curso ofrece su acción. Los pasos bloqueados muestran qué falta, sin acción |
 | Accesibilidad | Lista con nombre; el paso en curso lleva `aria-current="step"`; el estado es texto, no color; la marca numérica es decorativa |
@@ -1249,6 +1249,25 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 
 **Incorrecto:** un botón «Presentar» habilitado antes de que el paso anterior esté hecho, o una lista de controles mezclada con los pasos del cierre.
 
+### Pantallas de referencia DS-0
+
+Las seis pantallas son fixtures de layout con datos sintéticos; el demo determina qué regiones y bloques aparecen y en qué orden, mientras `DESIGN.md` y las piezas del paquete determinan su presentación. No hay comparación pixel a pixel.
+
+- **Portada (`portada`):** resumen del mes, impuestos del período, alertas que requieren atención y avance del cierre en su columna.
+- **Controles (`controles`):** decisiones abiertas en filas con detalle secundario, estado, importe y acción; historial de controles resueltos.
+- **Panel de control (`control-panel`):** la misma lista de Controles detrás del panel; descripción, estado, comprobantes afectados, opciones para resolver y actividad; pie fijo con Cancelar y una primaria.
+- **Clasificación (`clasificacion`):** buscador y contador en extremos opuestos; cabecera de sección con descripción y acción; tabla de comprobantes con celda principal/detalle de dos líneas.
+- **Triage (`triage`):** cola a la izquierda, visor al centro y revisión del comprobante a la derecha, con confianza, aviso CUIT/Mover a… y acciones bajo los campos.
+- **Ficha de cliente (`cliente`):** retorno a Clientes, nombre/estado/datos, acciones a la derecha, indicadores en franja, pestañas y Períodos con celdas de dos líneas.
+
+Para regenerar las capturas comparativas lado a lado en 1440×900 por panel:
+
+```sh
+DS0C_SCREENS=portada,controles,control-panel,clasificacion,triage,cliente pnpm --filter @contable/design-system visual:ds-0c
+```
+
+El comando guarda demo, sistema de diseño y composición en `ds-0c/{demo,ds,lado-a-lado}/` del workspace de rediseño; la revisión es humana y no aplica umbral de píxeles.
+
 ### Familia Dense del paquete
 
 | Export | Contrato de props o retorno |
@@ -1256,10 +1275,10 @@ Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con
 | `DenseDensity`, `useDensity` | `DenseDensity` admite `28`, `32` y `40`; `useDensity()` devuelve `[density, setDensity]`, persiste la elección en `contable.dense.rowHeight` y usa `32` como valor inicial o de respaldo. |
 | `normalizeSearch(value)` | Normaliza texto a minúsculas, sin tildes y sin espacios al inicio o al final. |
 | `DensePage` | Requiere `density` y `children`; acepta `flow` (por defecto `false`) y `className`. |
-| `DenseSection` | Requiere `title` y `children`; acepta `id`, `count`, `description`, `actions` y `surface` (`integrated` u `outlined`; sin la prop, la presentación actual). |
+| `DenseSection` | Requiere `title` y `children`; acepta `id`, `count`, `description`, `actions` y `surface` (`integrated` u `outlined`; sin la prop, la presentación actual). Título y descripción se agrupan a la izquierda; las acciones van a la derecha en la misma cabecera. |
 | `DenseHeader` | Requiere `title`; acepta `description` y `actions`. |
-| `StatStrip`, `StatItem` | `StatStrip` requiere `items` y `label`. Cada item requiere `key`, `label` y `value`; acepta `detail`, `tone="warn"`, `active`, `onSelect` y `pressed`. Un item seleccionable se representa como botón; `pressed` expone `aria-pressed` solo en un item que alterna un filtro. |
-| `DenseToolbar` | Agrupa `children` dentro de la barra de herramientas. |
+| `StatStrip`, `StatItem` | `StatStrip` requiere `items` y `label`; acepta `variant="inline"` (por defecto) o `variant="strip"` (cifra arriba, etiqueta debajo y divisores). Cada item requiere `key`, `label` y `value`; acepta `detail`, `tone="warn"`, `active`, `onSelect` y `pressed`. Un item seleccionable se representa como botón; `pressed` expone `aria-pressed` solo en un item que alterna un filtro. |
+| `DenseToolbar` | Agrupa `children` dentro de la barra de herramientas; `split` (por defecto `false`) distribuye el primer control a la izquierda y el último elemento a la derecha. |
 | `DensitySwitch` | Requiere `value: DenseDensity` y `onChange(next)`. |
 | `DenseToggleGroup`, `DenseToggleOption` | Requiere `label`, `options` (pares `value` y `label`), `selected` (valores activos) y `onChange(next)`; cada opción es un botón con `aria-pressed` y `next` sigue el orden de `options`. |
 | `DenseWorkspace` | Requiere `panelId` y `children`; acepta `inspector` para habilitar la columna lateral y `role` (`tabpanel` por defecto, o `region`, que exige `aria-label` o `aria-labelledby` en el tipo). |
