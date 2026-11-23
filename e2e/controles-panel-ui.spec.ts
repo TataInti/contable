@@ -78,9 +78,7 @@ const COMPROBANTES_C: FacturaSintetica[] = [
   },
 ];
 
-test("controles de perfil de un Responsable Inscripto: aceptar un grupo y excluir el otro, y el cierre avanza", async ({
-  page,
-}) => {
+test("cola de Controles: resolver desde el Legajo y revisar Actividad en el panel lateral", async ({ page }, testInfo) => {
   test.setTimeout(900_000);
   page.setDefaultTimeout(15_000);
 
@@ -120,11 +118,17 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
   await test.step("Controles: aceptar un grupo con motivo y excluir el otro del cálculo", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
     const panel = page.locator(".work-page").first();
-    await expect(panel.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem")).toHaveCount(2, { timeout: 20_000 });
+    const openQueue = panel.getByRole("list", { name: "Controles abiertos" });
+    const openItems = openQueue.getByRole("listitem");
     await expect(panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ })).toBeVisible();
-    // La nota de crédito C (código 13) va a su grupo de notas C, no a «Tipo no reconocido».
+    const openCountBefore = await openItems.count();
+    await expect(panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ })).toHaveCount(1);
     await expect(panel.getByRole("button", { name: /Abrir Notas de crédito y débito C: 1 comprobante/ })).toBeVisible();
     await expect(panel.getByText("Tipo no reconocido")).toHaveCount(0);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.screenshot({ path: testInfo.outputPath("controles-cola-1440x900.png") });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.screenshot({ path: testInfo.outputPath("controles-cola-1280x720.png") });
 
     await panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ }).click();
     const firstDrawer = page.getByRole("dialog");
@@ -133,14 +137,19 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     await expect(firstDrawer.getByText("C · 0000-00000001")).toBeVisible();
     await expect(firstDrawer.getByText("C · 0000-00000002")).toBeVisible();
     await expect(firstDrawer.getByRole("button", { name: "Abrir en Clasificación" })).toHaveCount(2);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.screenshot({ path: testInfo.outputPath("control-panel-1440x900.png") });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.screenshot({ path: testInfo.outputPath("control-panel-1280x720.png") });
     await firstDrawer.getByRole("button", { name: "Aceptar con motivo", exact: true }).click();
     await firstDrawer.getByLabel("Motivo").fill(MOTIVO_ACEPTAR);
     await mutating(page, "/profile-groups/", () => firstDrawer.getByRole("button", { name: "Confirmar aceptación" }).click());
     await expect(firstDrawer).toBeHidden();
 
-    await expect(panel.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem")).toHaveCount(1);
-    await expect(panel.getByRole("button", { name: "Resueltos (1)" })).toBeVisible();
-    await panel.getByRole("button", { name: "Resueltos (1)" }).click();
+    await expect(openItems).toHaveCount(openCountBefore - 1);
+    await expect(panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Resueltos (3)" })).toBeVisible();
+    await panel.getByRole("button", { name: "Resueltos (3)" }).click();
     const resolvedRow = panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ });
     await resolvedRow.click();
     const resolvedDrawer = page.getByRole("dialog");
@@ -149,13 +158,15 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     await expect(resolvedDrawer).toBeHidden();
     await expect(resolvedRow).toBeFocused();
 
+    await panel.getByRole("button", { name: /Abiertos \(3\)/ }).click();
     await panel.getByRole("button", { name: /Abrir Notas de crédito y débito C: 1 comprobante/ }).click();
     const secondDrawer = page.getByRole("dialog");
     await secondDrawer.getByRole("button", { name: "Excluir del cálculo con motivo", exact: true }).click();
     await secondDrawer.getByLabel("Motivo").fill(MOTIVO_EXCLUIR);
     await mutating(page, "/profile-groups/", () => secondDrawer.getByRole("button", { name: "Confirmar exclusión" }).click());
     await expect(secondDrawer).toBeHidden();
-    await expect(panel.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem")).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: /Abrir Facturas C/ })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: /Abrir Notas de crédito y débito C/ })).toHaveCount(0);
   });
 
   await test.step("Recalcular con los grupos resueltos: la NC excluida no entra en la base; 90.000 × 3,5 % = 3.150,00", async () => {

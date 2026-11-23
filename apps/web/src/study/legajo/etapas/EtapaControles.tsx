@@ -56,7 +56,7 @@ export function EtapaControles({ capabilities, wp, controlResolutions, setContro
   const open = wp.controls.filter((item) => item.status === "OPEN");
   const resolved = wp.controls.filter((item) => item.status !== "OPEN");
   const labelFor = (control: Workpaper["controls"][number]) => control.code.startsWith(PREFIJO_CONTROL_PERFIL)
-    ? `${GRUPO_LABELS[control.code.slice(PREFIJO_CONTROL_PERFIL.length)] ?? control.code}: ${Number(control.actual ?? 0)} comprobantes`
+    ? `${GRUPO_LABELS[control.code.slice(PREFIJO_CONTROL_PERFIL.length)] ?? control.code}: ${Number(control.actual ?? 0)} ${Number(control.actual ?? 0) === 1 ? "comprobante" : "comprobantes"}`
     : CONTROL_LABELS[control.code] ?? control.message ?? control.code;
   const openPanel = (id: string) => { setAccionGrupo(null); setParams((current) => { current.set("panel", `control-${id}`); return current; }, { replace: true }); };
   const closePanel = () => { setAccionGrupo(null); setParams((current) => { current.delete("panel"); return current; }, { replace: true }); };

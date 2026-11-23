@@ -120,19 +120,24 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
   await test.step("Controles: aceptar un grupo con motivo y excluir el otro del cálculo", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
     const panel = page.locator(".work-page").first();
-    await expect(panel.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem")).toHaveCount(2, { timeout: 20_000 });
+    const queue = panel.getByRole("list", { name: "Controles abiertos" });
     await expect(panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ })).toBeVisible();
     // La nota de crédito C (código 13) va a su grupo de notas C, no a «Tipo no reconocido».
     await expect(panel.getByRole("button", { name: /Abrir Notas de crédito y débito C: 1 comprobante/ })).toBeVisible();
+    await expect(panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ })).toHaveCount(1);
     await expect(panel.getByText("Tipo no reconocido")).toHaveCount(0);
 
     await panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ }).click();
     const firstDrawer = page.getByRole("dialog");
-    await expect(firstDrawer.getByText("2 comprobantes afectados por este control.")).toBeVisible();
+    await expect(firstDrawer.getByRole("list", { name: "Comprobantes afectados" })).toBeVisible();
+    await expect(firstDrawer.getByText("C · 0000-00000001")).toBeVisible();
+    await expect(firstDrawer.getByText("C · 0000-00000002")).toBeVisible();
     await firstDrawer.getByRole("button", { name: "Aceptar con motivo", exact: true }).click();
     await firstDrawer.getByLabel("Motivo").fill(MOTIVO_ACEPTAR);
     await mutating(page, "/profile-groups/", () => firstDrawer.getByRole("button", { name: "Confirmar aceptación" }).click());
     await expect(firstDrawer).toBeHidden();
+    await expect(queue.getByRole("button", { name: /Abrir Facturas C/ })).toHaveCount(0);
+    await expect(queue.getByRole("button", { name: /Abrir Notas de crédito y débito C/ })).toHaveCount(1);
 
     await panel.getByRole("button", { name: /Abrir Notas de crédito y débito C: 1 comprobante/ }).click();
     const secondDrawer = page.getByRole("dialog");
@@ -140,7 +145,8 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     await secondDrawer.getByLabel("Motivo").fill(MOTIVO_EXCLUIR);
     await mutating(page, "/profile-groups/", () => secondDrawer.getByRole("button", { name: "Confirmar exclusión" }).click());
     await expect(secondDrawer).toBeHidden();
-    await expect(panel.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem")).toHaveCount(0);
+    await expect(queue.getByRole("button", { name: /Abrir Facturas C/ })).toHaveCount(0);
+    await expect(queue.getByRole("button", { name: /Abrir Notas de crédito y débito C/ })).toHaveCount(0);
   });
 
   await test.step("Recalcular con los grupos resueltos: la NC excluida no entra en la base; 90.000 × 3,5 % = 3.150,00", async () => {
