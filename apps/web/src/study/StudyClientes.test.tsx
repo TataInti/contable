@@ -329,7 +329,7 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     // Sólo las normas activas del estudio aparecen como opciones normales;
     // la desactivada no se ofrece, pero tampoco desaparece si estaba guardada.
     expect(within(abrirListado("Norma contable")).getByRole("option", { name: "RTIC" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "Sin definir" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Sin norma contable" })).toBeTruthy();
     expect(within(abrirListado("Norma contable")).queryByRole("option", { name: "VENCER" })).toBeNull();
   });
 

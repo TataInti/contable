@@ -108,7 +108,7 @@ describe("StudyClientes — detalle del cliente (K3)", () => {
     const aviso = detalle.querySelector(".dense-inspector__banner .ds-notice") as HTMLElement;
 
     expect(aviso.textContent).toContain(
-      "Ficha incompleta: falta condición IVA, provincia, actividad, norma contable.",
+      "Ficha incompleta: falta condición IVA, provincia, actividad.",
     );
     fireEvent.click(within(aviso).getByRole("button", { name: "Completar" }));
     expect(await screen.findByRole("dialog", { name: "Editar cliente" })).toBeTruthy();

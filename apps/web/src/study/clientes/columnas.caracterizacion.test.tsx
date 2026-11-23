@@ -137,9 +137,9 @@ describe("StudyClientes — columnas de la cartera (K2)", () => {
     expect(celda("c1", 7).textContent).toBe("jun");
     expect(celda("c2", 7).querySelector(".dense-dim")?.textContent).toBe("—");
     expect(celda("c1", 8).querySelector(".dense-dim")?.textContent).toBe("Completa");
-    expect(celda("c2", 8).textContent?.trim()).toBe("Faltan 4");
+    expect(celda("c2", 8).textContent?.trim()).toBe("Faltan 3");
     expect(celda("c2", 8).querySelector("[title]")?.getAttribute("title")).toBe(
-      "Falta: condición IVA, provincia, actividad, norma contable",
+      "Falta: condición IVA, provincia, actividad",
     );
   });
 

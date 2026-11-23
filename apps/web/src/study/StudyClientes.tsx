@@ -645,7 +645,6 @@ export function StudyClientes() {
       />
 
       <PanelEdicion
-        puedeCargarNormas={capabilities.has("firm.manage")}
         editingClient={editingClient}
         guardadoParcial={guardadoParcial}
         setEditingClient={setEditingClient}
