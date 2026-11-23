@@ -162,7 +162,7 @@ function renderLegajo() {
   );
 }
 
-async function abrirEtapa(nombre: RegExp) {
+async function abrirEtapa(nombre: RegExp, elegirResolver = true) {
   fireEvent.click(await screen.findByRole("tab", { name: nombre }));
   if (/Controles/.test(nombre.source)) {
     let abrir = screen.queryAllByRole("button", { name: /^Abrir / });
@@ -174,7 +174,16 @@ async function abrirEtapa(nombre: RegExp) {
       }
     }
     if (abrir[0]) fireEvent.click(abrir[0]);
+    const resolver = elegirResolver ? screen.queryByRole("button", { name: "Resolver" }) : null;
+    if (resolver) fireEvent.click(resolver);
   }
+}
+
+async function elegirEximir() {
+  const cambiar = screen.queryByRole("button", { name: "Cambiar acción" });
+  if (cambiar) fireEvent.click(cambiar);
+  const eximir = screen.getByRole("button", { name: "Eximir" });
+  fireEvent.click(eximir);
 }
 
 // Llamadas de resolución de controles: [url, cuerpo].
@@ -206,11 +215,11 @@ describe("Legajo · etapa Controles (K13)", () => {
     await abrirEtapa(/Controles/);
 
     expect(
-      ((await screen.findByRole("button", { name: "Resolver" })) as HTMLButtonElement).disabled,
+      ((await screen.findByRole("button", { name: "Confirmar resolución" })) as HTMLButtonElement).disabled,
     ).toBe(true);
     cambiarValor(screen.getByRole("textbox", { name: "Motivo" }), "Conciliado con el libro IVA Demo");
     expect(
-      ((await screen.findByRole("button", { name: "Resolver" })) as HTMLButtonElement).disabled,
+      ((await screen.findByRole("button", { name: "Confirmar resolución" })) as HTMLButtonElement).disabled,
     ).toBe(false);
   });
 
@@ -226,7 +235,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect(
       screen.queryByRole("combobox", { name: "Evidencia PORTAL_IVA_RECONCILIATION" }),
     ).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Resolver" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Confirmar resolución" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Conciliación con Portal IVA/ }));
     expect(screen.queryByRole("combobox", { name: /^Evidencia/ })).toBeNull();
@@ -265,7 +274,7 @@ describe("Legajo · etapa Controles (K13)", () => {
 
     cambiarValor(await screen.findByRole("textbox", { name: "Motivo" }), "Conciliado con el libro IVA Demo");
     cambiarValor(await screen.findByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" }), "doc-listo");
-    fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar resolución" }));
 
     await waitFor(() => expect(llamadasResolve()).toHaveLength(1));
     expect(llamadasResolve()[0]).toStrictEqual([
@@ -285,7 +294,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     await abrirEtapa(/Controles/);
 
     cambiarValor(await screen.findByRole("textbox", { name: "Motivo" }), "Diferencia de redondeo");
-    fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar resolución" }));
 
     await waitFor(() => expect(llamadasResolve()).toHaveLength(1));
     expect(llamadasResolve()[0]).toStrictEqual([
@@ -300,6 +309,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
+    await elegirEximir();
     cambiarValor(await screen.findByRole("textbox", { name: "Motivo" }), "Diferencia menor aceptada");
     fireEvent.click(screen.getByRole("button", { name: "Eximir" }));
     expect(await screen.findByText(CONFIRMACION_EXIMIR)).toBeInTheDocument();
@@ -319,6 +329,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
+    await elegirEximir();
     cambiarValor(await screen.findByRole("textbox", { name: "Motivo" }), "Diferencia menor aceptada");
     const eximir = screen.getByRole("button", { name: "Eximir" });
     eximir.focus();
@@ -330,19 +341,29 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect(llamadasResolve()).toHaveLength(0);
   });
 
-  it("Resolver y Eximir explican por qué están deshabilitados y dejan de hacerlo al escribir", async () => {
+  it("muestra motivo solo tras elegir acción y mantiene Resolver antes de Eximir", async () => {
     fijarContexto(PERMISOS_REVISION);
     fijarRespuestas({ controles: [bloqueante(), advertencia()] });
     renderLegajo();
-    await abrirEtapa(/Controles/);
+    await abrirEtapa(/Controles/, false);
 
-    expect(await screen.findAllByText(MOTIVO_ACCIONES)).toHaveLength(1);
+    expect(screen.queryByRole("textbox", { name: "Motivo" })).toBeNull();
+    expect(screen.queryByText(/Falta escribir el motivo/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
+    expect(screen.getByRole("button", { name: "Confirmar resolución" })).toBeDisabled();
+    cambiarValor(screen.getByRole("textbox", { name: "Motivo" }), "Diferencia conciliada");
+    expect(screen.getByRole("button", { name: "Confirmar resolución" })).toBeEnabled();
+
     fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Conciliación con Portal IVA/ }));
-    expect(screen.getByRole("button", { name: "Eximir" })).toBeDisabled();
+    expect(screen.queryByRole("textbox", { name: "Motivo" })).toBeNull();
+    const acciones = screen.getByLabelText("Acciones del control");
+    expect(within(acciones).getAllByRole("button").map((boton) => boton.textContent)).toEqual(["Resolver", "Eximir"]);
+    fireEvent.click(within(acciones).getByRole("button", { name: "Eximir" }));
+    const eximir = screen.getByRole("button", { name: "Eximir" });
+    expect(eximir).toBeDisabled();
     cambiarValor(screen.getByRole("textbox", { name: "Motivo" }), "Diferencia menor");
-    expect(screen.queryByText(MOTIVO_ACCIONES)).toBeNull();
-    expect(screen.getByRole("button", { name: "Eximir" })).toBeEnabled();
+    expect(eximir).toBeEnabled();
   });
 
   it("el error de Resolver aparece junto a su botón y toma el foco", async () => {
@@ -353,7 +374,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     await abrirEtapa(/Controles/);
 
     cambiarValor(await screen.findByRole("textbox", { name: "Motivo" }), "Conciliado");
-    const resolver = screen.getByRole("button", { name: "Resolver" });
+    const resolver = screen.getByRole("button", { name: "Confirmar resolución" });
     fireEvent.click(resolver);
 
     const alerta = await screen.findByText("No se pudo registrar la resolución");
@@ -370,7 +391,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     await abrirEtapa(/Controles/);
 
     expect(await screen.findByText("Conciliación con Portal IVA")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Resolver" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Confirmar resolución" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Eximir" })).toBeNull();
     expect(screen.queryByRole("textbox", { name: /^Resolución/ })).toBeNull();
     expect(screen.queryByRole("combobox", { name: /^Evidencia/ })).toBeNull();
@@ -388,8 +409,8 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
-    expect(screen.getAllByText("Respaldo conciliado en Demo").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "Resolver" })).toBeNull();
+    expect(await screen.findByText("Respaldo conciliado en Demo", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirmar resolución" })).toBeNull();
     expect(screen.queryByRole("textbox", { name: /^Resolución/ })).toBeNull();
   });
 
@@ -410,9 +431,12 @@ describe("Legajo · etapa Controles (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Controles/);
 
-    expect((await screen.findAllByText("Diferencias de libro por alícuota")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Bloquea el cierre")).toBeInTheDocument();
-    expect(screen.getByText(/Pendiente de respaldo/)).toBeInTheDocument();
+    const queue = screen.getByRole("list", { name: "Controles abiertos" });
+    const row = within(queue).getAllByRole("listitem").find((item) => item.textContent?.includes("Diferencias de libro por alícuota"));
+    expect(row).toBeDefined();
+    expect(row!).toHaveTextContent("Diferencias de libro por alícuota");
+    expect(row!).toHaveTextContent("Bloqueante");
+    expect(row!).toHaveTextContent("1.000,00");
   });
 
   it("la carga de los documentos de respaldo se anuncia con role status", async () => {
@@ -459,17 +483,17 @@ describe("Legajo · etapa Controles (K13)", () => {
     await abrirEtapa(/Controles/);
 
     await screen.findByText("No se pudieron leer los documentos de respaldo");
-    expect((screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByRole("button", { name: "Confirmar resolución" }) as HTMLButtonElement).disabled).toBe(
       true,
     );
-    expect(screen.getByText(MOTIVO_ACCIONES)).toBeInTheDocument();
+    expect(screen.getByText("Escribí el motivo para confirmar la resolución.")).toBeInTheDocument();
 
     cambiarValor(screen.getByRole("textbox", { name: "Motivo" }), "Conciliado sin respaldo");
-    expect((screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled).toBe(
+    expect((screen.getByRole("button", { name: "Confirmar resolución" }) as HTMLButtonElement).disabled).toBe(
       false,
     );
     expect(screen.queryByText(MOTIVO_ACCIONES)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar resolución" }));
 
     await waitFor(() => expect(llamadasResolve()).toHaveLength(1));
     expect(llamadasResolve()[0]).toStrictEqual([
@@ -500,11 +524,13 @@ describe("Legajo · etapa Controles (K13)", () => {
       );
     expect(alertasDeLectura).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Reintentar" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Resolver" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Confirmar resolución" })).toHaveLength(1);
+    expect(screen.getByRole("dialog").querySelectorAll(".action-drawer__footer .ds-button--primary")).toHaveLength(1);
     expect(screen.getByRole("textbox", { name: "Motivo" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Caja e imputaciones del período/ }));
     expect(screen.getByRole("heading", { name: "Caja e imputaciones del período" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
     expect(screen.getByRole("textbox", { name: "Motivo" })).toBeInTheDocument();
   });
 
@@ -522,6 +548,7 @@ describe("Legajo · etapa Controles (K13)", () => {
     expect(await screen.findAllByRole("combobox", { name: /^Evidencia / })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Caja e imputaciones del período/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Resolver" }));
     expect(screen.getByRole("combobox", { name: "Evidencia CASH_ALLOCATION_RECONCILIATION" })).toBeInTheDocument();
     expect(screen.queryByText("No se pudieron leer los documentos de respaldo")).toBeNull();
     expect(screen.queryByText("Cargando documentos de respaldo…")).toBeNull();
@@ -545,10 +572,10 @@ describe("Legajo · etapa Controles (K13)", () => {
     const carga = await screen.findAllByText("Cargando documentos de respaldo…");
     expect(carga).toHaveLength(1);
     expect(carga[0]?.closest("[role='status']")).toBeInstanceOf(HTMLElement);
-    expect(screen.getAllByRole("button", { name: "Resolver" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Confirmar resolución" })).toHaveLength(1);
   });
 
-  it("la etapa no tiene acciones primarias: la única primaria visible es la de la tarjeta", async () => {
+  it("mantiene una acción primaria en el panel y conserva Finalizar en la barra del Legajo", async () => {
     fijarContexto([...PERMISOS_REVISION, "tax.settlements.finalize"]);
     fijarRespuestas({ controles: [bloqueante(), advertencia()] });
     renderLegajo();
@@ -556,9 +583,10 @@ describe("Legajo · etapa Controles (K13)", () => {
 
     await screen.findByRole("combobox", { name: "Evidencia BOOK_RATE_RECONCILIATION" });
     const tarjeta = document.querySelector<HTMLElement>(".work-page");
+    const dialog = screen.getByRole("dialog");
     expect(tarjeta).not.toBeNull();
     expect(tarjeta!.querySelectorAll(".workpaper-body .ds-button--primary")).toHaveLength(1);
-    expect(tarjeta!.querySelectorAll(".ds-button--primary")).toHaveLength(2);
+    expect(dialog.querySelectorAll(".action-drawer__footer .ds-button--primary")).toHaveLength(1);
     expect(within(tarjeta!).getByRole("button", { name: "Finalizar" })).toBeInTheDocument();
   });
 });
@@ -646,30 +674,35 @@ describe("Legajo · etapa Cierre (K13)", () => {
 });
 
 describe("Legajo · Controles: motivo, lugar de las acciones y diálogo de Eximir (Foco 2.7b)", () => {
-  it("la ayuda del campo vale para las dos acciones y Resolver y Eximir mantienen su lugar con el campo vacío y lleno", async () => {
+  it("elige Resolver o Eximir antes de mostrar el motivo y mantiene una sola acción primaria en el pie", async () => {
     fijarContexto(PERMISOS_REVISION);
     fijarRespuestas({ controles: [advertencia()] });
     renderLegajo();
-    await abrirEtapa(/Controles/);
-    const campo = await screen.findByRole("textbox", {
-      name: "Motivo",
-    });
-    expect(campo).toHaveAttribute("placeholder", "Escribí cómo se resolvió.");
-    const grupo = screen.getByRole("dialog");
-    const nombres = () => within(grupo).getAllByRole("button").map((boton) => boton.textContent);
-    const eximir = within(grupo).getByRole("button", { name: "Eximir" });
-    const resolver = within(grupo).getByRole("button", { name: "Resolver" });
-    expect(nombres().indexOf("Eximir")).toBeGreaterThan(-1);
-    expect(nombres().indexOf("Resolver")).toBeGreaterThan(-1);
-    expect(resolver).toBeDisabled();
-    const motivo = document.getElementById(eximir.getAttribute("aria-describedby") ?? "");
-    expect(motivo).not.toBeNull();
-    expect(motivo!).toHaveTextContent(MOTIVO_ACCIONES);
-    expect(eximir).toHaveAttribute("aria-describedby", motivo!.id);
+    await abrirEtapa(/Controles/, false);
+
+    expect(screen.queryByRole("textbox", { name: "Motivo" })).toBeNull();
+    expect(screen.queryByText(/Falta escribir el motivo/)).toBeNull();
+    const acciones = screen.getByLabelText("Acciones del control");
+    expect(within(acciones).getAllByRole("button").map((boton) => boton.textContent)).toEqual(["Resolver", "Eximir"]);
+
+    fireEvent.click(within(acciones).getByRole("button", { name: "Resolver" }));
+    const campo = screen.getByRole("textbox", { name: "Motivo" });
+    expect(campo).toHaveAttribute("placeholder", "Escribí el motivo.");
+    const confirmarResolucion = screen.getByRole("button", { name: "Confirmar resolución" });
+    expect(confirmarResolucion).toBeDisabled();
+    expect(screen.getByRole("dialog").querySelectorAll(".action-drawer__footer .ds-button--primary")).toHaveLength(1);
+    expect(screen.getByText("Escribí el motivo para confirmar la resolución.")).toBeInTheDocument();
     cambiarValor(campo, "Diferencia menor");
-    expect(nombres().indexOf("Eximir")).toBeGreaterThan(-1);
-    expect(nombres().indexOf("Resolver")).toBeGreaterThan(-1);
-    expect(within(grupo).queryByRole("note")).toBeNull();
+    expect(confirmarResolucion).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar acción" }));
+    fireEvent.click(screen.getByRole("button", { name: "Eximir" }));
+    const eximir = screen.getByRole("button", { name: "Eximir" });
+    cambiarValor(screen.getByRole("textbox", { name: "Motivo" }), "");
+    expect(eximir).toBeDisabled();
+    expect(screen.getByRole("dialog").querySelectorAll(".action-drawer__footer .ds-button--primary")).toHaveLength(1);
+    cambiarValor(screen.getByRole("textbox", { name: "Motivo" }), "Motivo de exención");
+    expect(eximir).toBeEnabled();
   });
 
   it("el contador de controles bloqueantes no es una región de alerta", async () => {
@@ -699,6 +732,7 @@ describe("Legajo · Controles: motivo, lugar de las acciones y diálogo de Eximi
     fijarRespuestas({ controles: [advertencia()] });
     renderLegajo();
     await abrirEtapa(/Controles/);
+    await elegirEximir();
     cambiarValor(await screen.findByRole("textbox", { name: "Motivo" }), "Diferencia menor aceptada");
     fireEvent.click(screen.getByRole("button", { name: "Eximir" }));
     const cuerpo = await screen.findByText(CONFIRMACION_EXIMIR);

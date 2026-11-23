@@ -355,20 +355,23 @@
   padding: 0;
   list-style: none;
 }
-
 .workpaper-control__affected li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--ds-space-3);
+  gap: var(--ds-space-2) var(--ds-space-3);
   min-block-size: var(--ds-row-height);
+  padding-block: var(--ds-space-2);
   border-block-end: 1px solid var(--ds-color-border-subtle);
 }
-
+.workpaper-control__affected li > strong { overflow-wrap: anywhere; }
+.workpaper-control__affected li > button { grid-column: 1 / -1; justify-self: start; }
 .workpaper-control__affected li > span {
   color: var(--ds-color-text-muted);
   font-variant-numeric: tabular-nums;
 }
+.workpaper-control__activity { display: grid; gap: var(--ds-space-1); margin: 0; padding-inline-start: var(--ds-space-4); }
+.workpaper-control__activity li { line-height: var(--ds-leading-normal); }
 
 .workpaper-control {
   display: grid;

@@ -316,8 +316,9 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
       while (await row.count()) {
         await row.getByRole("button", { name: /Abrir/ }).click();
         const drawer = page.getByRole("dialog");
+        await drawer.getByRole("button", { name: "Resolver", exact: true }).click();
         await drawer.getByLabel("Motivo").fill(MOTIVO_CONTROL);
-        await mutating(page, "/resolve", () => drawer.getByRole("button", { name: "Resolver", exact: true }).click());
+        await mutating(page, "/resolve", () => drawer.getByRole("button", { name: "Confirmar resolución", exact: true }).click());
         await expect(drawer).toBeHidden();
       }
       await expect(queue.getByRole("listitem").filter({ hasText: nombre }), `«${nombre}» sin abiertos`).toHaveCount(0);

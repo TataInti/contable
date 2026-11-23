@@ -1602,6 +1602,7 @@ export function StudyExpedienteMensual() {
             firmId={firmId}
             clientId={clientId}
             periodLabel={selectedTaxPeriod ? fiscalTaxPeriodLabel(selectedTaxPeriod) : null}
+            collapsible={safeActiveStep === 4}
           />
         </DensePage>
       </WorkPage>

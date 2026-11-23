@@ -292,6 +292,7 @@ describe("StudyExpedienteMensual", () => {
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: /Controles/ }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Diferencias de libro por alícuota/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Resolver" }));
 
     const evidence = await screen.findByRole("combobox", {
       name: "Evidencia BOOK_RATE_RECONCILIATION",
@@ -303,7 +304,7 @@ describe("StudyExpedienteMensual", () => {
 
     cambiarValor(screen.getByRole("textbox", { name: "Motivo" }), "Respaldo revisado y conciliado");
     cambiarValor(evidence, "document-reviewed");
-    const resolveButton = screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement;
+    const resolveButton = screen.getByRole("button", { name: "Confirmar resolución" }) as HTMLButtonElement;
     expect(resolveButton.disabled).toBe(false);
     fireEvent.click(resolveButton);
 
@@ -347,6 +348,7 @@ describe("StudyExpedienteMensual", () => {
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: /Controles/ }));
     fireEvent.click(screen.getByRole("button", { name: /Abrir Diferencias de libro por alícuota/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Resolver" }));
 
     const evidence = await screen.findByRole("combobox", {
       name: "Evidencia BOOK_RATE_RECONCILIATION",
@@ -357,7 +359,7 @@ describe("StudyExpedienteMensual", () => {
     expect(evidence.closest(".ds-field")?.parentElement?.contains(explanation)).toBe(true);
     expect(within(abrirListado("Evidencia BOOK_RATE_RECONCILIATION")).queryByRole("option", { name: /factura-extraida\.pdf/ })).toBeNull();
     expect(
-      (screen.getByRole("button", { name: "Resolver" }) as HTMLButtonElement).disabled,
+      (screen.getByRole("button", { name: "Confirmar resolución" }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
 

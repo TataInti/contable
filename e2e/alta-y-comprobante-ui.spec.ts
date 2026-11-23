@@ -629,10 +629,11 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
       const row = page.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem").filter({ hasText: control === "BANK_CREDIT_RECONCILIATION" ? "Acreditaciones bancarias vs. facturación" : "Caja e imputaciones del período" }).first();
       await row.getByRole("button", { name: /Abrir/ }).click();
       const drawer = page.getByRole("dialog");
+      await drawer.getByRole("button", { name: "Resolver", exact: true }).click();
       await drawer.getByLabel("Motivo").fill("Conciliado contra el comprobante de respaldo cargado en la bandeja.");
       await pickOption(drawer.getByLabel(`Evidencia ${control}`), "ticket-mesa-8");
       await mutating(page, "/controls", () =>
-        drawer.getByRole("button", { name: "Resolver" }).click(),
+        drawer.getByRole("button", { name: "Confirmar resolución", exact: true }).click(),
       );
       await expect(drawer).toBeHidden();
     }

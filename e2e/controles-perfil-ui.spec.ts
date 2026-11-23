@@ -121,32 +121,47 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     await page.getByRole("tab", { name: /^Controles/ }).click();
     const panel = page.locator(".work-page").first();
     const queue = panel.getByRole("list", { name: "Controles abiertos" });
-    await expect(panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ })).toBeVisible();
+    const facturas = queue.getByRole("listitem").filter({ hasText: "Facturas C" });
+    const notas = queue.getByRole("listitem").filter({ hasText: "Notas de crédito y débito C" });
+    await expect(facturas).toContainText("2 comprobantes");
+    await expect(notas).toContainText("1 comprobante");
     // La nota de crédito C (código 13) va a su grupo de notas C, no a «Tipo no reconocido».
-    await expect(panel.getByRole("button", { name: /Abrir Notas de crédito y débito C: 1 comprobante/ })).toBeVisible();
-    await expect(panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ })).toHaveCount(1);
     await expect(panel.getByText("Tipo no reconocido")).toHaveCount(0);
 
-    await panel.getByRole("button", { name: /Abrir Facturas C: 2 comprobantes/ }).click();
+    await facturas.getByRole("button", { name: /Abrir/ }).click();
     const firstDrawer = page.getByRole("dialog");
     await expect(firstDrawer.getByRole("list", { name: "Comprobantes afectados" })).toBeVisible();
     await expect(firstDrawer.getByText("C · 0001-00000001")).toBeVisible();
     await expect(firstDrawer.getByText("C · 0001-00000002")).toBeVisible();
+    await expect(firstDrawer.getByLabel("Motivo")).toHaveCount(0);
     await firstDrawer.getByRole("button", { name: "Aceptar con motivo", exact: true }).click();
+    await expect(firstDrawer.getByLabel("Motivo")).toBeVisible();
+    await expect(firstDrawer.getByRole("button", { name: "Confirmar aceptación" })).toBeDisabled();
     await firstDrawer.getByLabel("Motivo").fill(MOTIVO_ACEPTAR);
     await mutating(page, "/profile-groups/", () => firstDrawer.getByRole("button", { name: "Confirmar aceptación" }).click());
     await expect(firstDrawer).toBeHidden();
     await expect(queue.getByRole("button", { name: /Abrir Facturas C/ })).toHaveCount(0);
     await expect(queue.getByRole("button", { name: /Abrir Notas de crédito y débito C/ })).toHaveCount(1);
 
-    await panel.getByRole("button", { name: /Abrir Notas de crédito y débito C: 1 comprobante/ }).click();
+    await queue.getByRole("listitem").filter({ hasText: "Notas de crédito y débito C" }).getByRole("button", { name: /Abrir/ }).click();
     const secondDrawer = page.getByRole("dialog");
     await secondDrawer.getByRole("button", { name: "Excluir del cálculo con motivo", exact: true }).click();
+    await expect(secondDrawer.getByLabel("Motivo")).toBeVisible();
+    await expect(secondDrawer.getByRole("button", { name: "Confirmar exclusión" })).toBeDisabled();
     await secondDrawer.getByLabel("Motivo").fill(MOTIVO_EXCLUIR);
     await mutating(page, "/profile-groups/", () => secondDrawer.getByRole("button", { name: "Confirmar exclusión" }).click());
     await expect(secondDrawer).toBeHidden();
     await expect(queue.getByRole("button", { name: /Abrir Facturas C/ })).toHaveCount(0);
     await expect(queue.getByRole("button", { name: /Abrir Notas de crédito y débito C/ })).toHaveCount(0);
+
+    await panel.getByRole("button", { name: /^Resueltos \(\d+\)$/ }).click();
+    const resolvedQueue = panel.getByRole("list", { name: "Controles resueltos" });
+    const resolvedFacturas = resolvedQueue.getByRole("listitem").filter({ hasText: "Facturas C" });
+    const resolvedNotas = resolvedQueue.getByRole("listitem").filter({ hasText: "Notas de crédito y débito C" });
+    await expect(resolvedFacturas).toContainText("Resuelto");
+    await expect(resolvedNotas).toContainText("Resuelto");
+    await expect(page.getByText("No quedan comprobantes pendientes en ese grupo")).toHaveCount(0);
+    await panel.getByRole("button", { name: /^Abiertos \(\d+\)$/ }).click();
   });
 
   await test.step("Recalcular con los grupos resueltos: la NC excluida no entra en la base; 90.000 × 3,5 % = 3.150,00", async () => {
@@ -158,15 +173,17 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     await page.getByRole("tab", { name: /^Controles/ }).click();
     for (const nombre of ["Acreditaciones bancarias vs. facturación", "Caja e imputaciones del período"]) {
       const queue = page.getByRole("list", { name: "Controles abiertos" });
-      const row = queue.getByRole("listitem").filter({ hasText: nombre }).first();
-      while (await row.count()) {
-        await row.getByRole("button", { name: /Abrir/ }).click();
-        const drawer = page.getByRole("dialog");
-        await drawer.getByLabel("Motivo").fill(MOTIVO_CONTROL);
-        await mutating(page, "/resolve", () => drawer.getByRole("button", { name: "Resolver", exact: true }).click());
-        await expect(drawer).toBeHidden();
-      }
-      await expect(queue.getByRole("listitem").filter({ hasText: nombre }), `«${nombre}» sin abiertos`).toHaveCount(0);
+      const row = queue.getByRole("listitem").filter({ hasText: nombre });
+      await expect(row, `«${nombre}» aparece una sola vez en abiertos`).toHaveCount(1);
+      await row.getByRole("button", { name: /Abrir/ }).click();
+      const drawer = page.getByRole("dialog");
+      await expect(drawer.getByLabel("Motivo")).toHaveCount(0);
+      await drawer.getByRole("button", { name: "Resolver", exact: true }).click();
+      await drawer.getByLabel("Motivo").fill(MOTIVO_CONTROL);
+      await expect(drawer.getByRole("button", { name: "Confirmar resolución" })).toBeEnabled();
+      await mutating(page, "/resolve", () => drawer.getByRole("button", { name: "Confirmar resolución", exact: true }).click());
+      await expect(drawer).toBeHidden();
+      await expect(queue.getByRole("listitem").filter({ hasText: nombre }), `«${nombre}» no reaparece en abiertos`).toHaveCount(0);
     }
   });
 

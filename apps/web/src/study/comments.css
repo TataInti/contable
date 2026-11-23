@@ -1,4 +1,6 @@
 .comment-thread { display: grid; gap: var(--ds-space-4); margin-block: var(--ds-space-6); color: var(--ds-color-text); }
+.comment-thread--collapsed { margin-block: var(--ds-space-3); }
+.comment-thread__toggle { justify-self: start; min-height: 0; padding: var(--ds-space-1) 0; text-align: left; }
 .comment-thread h2 { margin: 0; font-size: var(--ds-text-xl); }
 .comment-thread__list, .study-comments-inbox ol { display: grid; gap: var(--ds-space-4); margin: 0; padding: 0; list-style: none; }
 .comment-thread__item, .study-comments-inbox li { padding-block: var(--ds-space-3); border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle); }

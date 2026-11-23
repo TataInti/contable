@@ -13,12 +13,13 @@ type CommentRow = {
 };
 type Member = { id: string; name: string };
 
-export function CommentThread({ firmId, clientId, periodLabel, compact = false }: {
-  firmId: string | null; clientId: string | null; periodLabel?: string | null; compact?: boolean;
+export function CommentThread({ firmId, clientId, periodLabel, compact = false, collapsible = false }: {
+  firmId: string | null; clientId: string | null; periodLabel?: string | null; compact?: boolean; collapsible?: boolean;
 }) {
   const queryClient = useQueryClient();
   const location = useLocation();
   const userId = useSession().me?.userId;
+  const [expanded, setExpanded] = useState(false);
   const [body, setBody] = useState("");
   const [search, setSearch] = useState("");
   const [mentionedUserId, setMentionedUserId] = useState<string | null>(null);
@@ -33,16 +34,24 @@ export function CommentThread({ firmId, clientId, periodLabel, compact = false }
   const edit = useMutation({ mutationFn: ({ id, text }: { id: string; text: string }) => api.patch<CommentRow>(`/firms/${firmId}/comments/${id}`, { body: text }), onSuccess: () => { setEditingId(null); void refresh(); } });
   const archive = useMutation({ mutationFn: (id: string) => api.post(`/firms/${firmId}/comments/${id}/archive`, {}), onSuccess: refresh });
   useEffect(() => {
+    if (collapsible) setExpanded(false);
+  }, [collapsible, periodLabel]);
+  useEffect(() => {
     const id = new URLSearchParams(location.search).get("comentario");
-    if (id && location.pathname === "/expediente-mensual" && query.data) {
+    if (id && location.pathname === "/expediente-mensual" && query.data && collapsible) setExpanded(true);
+  }, [location.pathname, location.search, query.data, collapsible]);
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get("comentario");
+    if (id && location.pathname === "/expediente-mensual" && query.data && (!collapsible || expanded)) {
       document.getElementById(`comentario-${id}`)?.scrollIntoView?.({ block: "center" });
     }
-  }, [location.pathname, location.search, query.data]);
-  if (!firmId || !clientId) return null;
-  const matchingMembers = Array.isArray(members.data) ? members.data : [];
+  }, [location.pathname, location.search, query.data, collapsible, expanded]);
   const comments = Array.isArray(query.data) ? query.data : [];
+  const matchingMembers = Array.isArray(members.data) ? members.data : [];
+  if (!firmId || !clientId) return null;
+  if (collapsible && !expanded) return <section className="comment-thread comment-thread--collapsed" aria-label="Comentarios"><Button className="comment-thread__toggle" variant="text" onClick={() => setExpanded(true)}>Comentarios del mes ({comments.length}) · Abrir</Button></section>;
   return <section className="comment-thread" aria-label="Comentarios">
-    <h2>{compact ? "Comentarios" : "Comentarios del mes"}</h2>
+    {collapsible ? <Button className="comment-thread__toggle" variant="text" onClick={() => setExpanded(false)}>Comentarios del mes ({comments.length}) · Cerrar</Button> : <h2>{compact ? "Comentarios" : "Comentarios del mes"}</h2>}
     {query.isError ? <Notice tone="error">No se pudieron cargar los comentarios. Actualizá la pantalla para volver a intentar.</Notice> : null}
     {query.isPending ? <p role="status">Cargando comentarios…</p> : null}
     <ol className="comment-thread__list">
