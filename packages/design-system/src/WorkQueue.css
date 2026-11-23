@@ -20,12 +20,16 @@
 
 .work-queue-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: var(--ds-space-4);
   min-block-size: var(--work-queue-row-min);
   padding-block: var(--ds-space-1);
   border-block-end: 1px solid var(--ds-color-border-subtle);
+}
+
+.work-queue-row[data-has-date="true"] {
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
 }
 
 .work-queue-row__principal {

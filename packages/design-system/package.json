@@ -19,7 +19,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint",
     "test": "vitest run",
-    "visual:ds-0c": "node scripts/visual-gate.mjs"
+    "visual:ds-0c": "node scripts/visual-reference.mjs"
   },
   "peerDependencies": {
     "react": "^19.0.0",

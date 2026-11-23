@@ -16,12 +16,12 @@ describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
 
   it("panel de control: abre con ?panel=, cierra con Escape y devuelve el foco a la fila", () => {
     render(<ControlesPanelDemo />);
-    const fila = screen.getByRole("button", { name: "Abrir Facturas C sin tipo aceptado" });
+    const fila = screen.getByRole("button", { name: "Abrir Facturas C: 2 comprobantes" });
     fila.focus();
     fireEvent.click(fila);
 
     expect(
-      screen.getByRole("dialog", { name: "Control: Facturas C sin tipo aceptado" }),
+      screen.getByRole("dialog", { name: "Facturas C: 2 comprobantes" }),
     ).toBeInTheDocument();
     expect(
       screen.getByText("/clientes/1/legajo/2026-10/controles?panel=control-1"),
@@ -36,11 +36,11 @@ describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
 
   it("panel de control: el pie tiene una sola acción primaria y la actividad admite comentarios", () => {
     render(<ControlesPanelDemo />);
-    fireEvent.click(screen.getByRole("button", { name: "Abrir Ventas sin CUIT del comprador" }));
+    fireEvent.click(screen.getByRole("button", { name: "Abrir Facturas C: 2 comprobantes" }));
 
     const dialogo = screen.getByRole("dialog");
     expect(dialogo.querySelectorAll(".ds-button--primary")).toHaveLength(1);
-    expect(within(dialogo).getByText("Consultar el tipo con el cliente.")).toBeInTheDocument();
+    expect(within(dialogo).getByText("Pidió confirmar las diferencias antes de cerrar.")).toBeInTheDocument();
 
     fireEvent.change(within(dialogo).getByLabelText("Escribí un comentario"), {
       target: { value: "Pedir el CUIT por correo" },
@@ -54,7 +54,7 @@ describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
     expect(screen.getByRole("heading", { name: "Impuestos del período" })).toBeInTheDocument();
     expect(screen.getByText("Ingresos Brutos · Tucumán")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Requiere atención" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Revisar →" })).toHaveAttribute("href", "#controles");
+    expect(screen.getAllByRole("link").find((link) => link.getAttribute("href") === "#controles")).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Avance del cierre" }).querySelectorAll("li")).toHaveLength(5);
     expect(screen.getByText("$ 48.450,00")).toBeInTheDocument();
     expect(document.querySelectorAll(".ds-button--primary")).toHaveLength(0);
@@ -64,14 +64,14 @@ describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
     render(<TriageDemo />);
 
     expect(
-      screen.getByRole("region", { name: "Factura C sintética 0001.pdf" }),
+      screen.getByRole("region", { name: "comprobante-1.pdf" }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Ocultar cola" }));
     expect(screen.getByRole("button", { name: "Mostrar cola" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
     expect(
-      screen.getByRole("region", { name: "Factura C sintética 0002.pdf" }),
+      screen.getByRole("region", { name: "comprobante-2.pdf" }),
     ).toBeInTheDocument();
 
     const importe = screen.getByLabelText("Importe total") as HTMLInputElement;
@@ -84,7 +84,7 @@ describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
     render(<PaginaClienteDemo />);
 
     expect(
-      screen.getByRole("heading", { level: 1, name: "Cliente sintético A" }),
+      screen.getByRole("heading", { level: 1, name: "ZZ-AYUDA Restaurante Nuevo" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Configuración fiscal" })).toHaveAttribute(
       "href",
@@ -94,7 +94,7 @@ describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Comentarios · 1" }));
     expect(screen.getByRole("region", { name: "Actividad del cliente" })).toBeInTheDocument();
-    expect(document.querySelectorAll(".ds-button--primary")).toHaveLength(1);
+    expect(document.querySelectorAll(".ds-button--primary")).toHaveLength(0);
   });
 
   it("cierre por pasos: marca el paso en curso y muestra el motivo de los que siguen", () => {

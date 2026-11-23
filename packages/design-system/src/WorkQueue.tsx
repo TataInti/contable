@@ -60,6 +60,8 @@ export interface WorkQueueRowProps {
   amount?: string;
   /** Abre el objeto (panel o página). El nombre accesible incluye el título. */
   onOpen: () => void;
+  /** Rótulo contextual de la acción; por defecto «Abrir». */
+  actionLabel?: string;
 }
 
 /** Fila de cola: una decisión, su estado y su importe o fecha, con la acción de abrir. */
@@ -72,10 +74,11 @@ export function WorkQueueRow({
   date,
   amount,
   onOpen,
+  actionLabel = "Abrir",
 }: WorkQueueRowProps) {
   const density = useContext(DensidadCola);
   return (
-    <li className={`work-queue-row work-queue-row--${density}`} data-row-key={id}>
+    <li className={`work-queue-row work-queue-row--${density}`} data-row-key={id} data-has-date={date ? "true" : "false"}>
       <div className="work-queue-row__principal">
         <p className="work-queue-row__titulo">{title}</p>
         <p className="work-queue-row__decision">{decision}</p>
@@ -84,7 +87,7 @@ export function WorkQueueRow({
       <div className="work-queue-row__estado">
         {status ? <StatusBadge status={status} /> : null}
       </div>
-      <div className="work-queue-row__fecha">{date ?? ""}</div>
+      {date ? <div className="work-queue-row__fecha">{date}</div> : null}
       <div className="work-queue-row__importe">{amount ?? ""}</div>
       <div className="work-queue-row__accion">
         <Button
@@ -92,9 +95,9 @@ export function WorkQueueRow({
           variant="secondary"
           size="row"
           onClick={onOpen}
-          aria-label={`Abrir ${title}`}
+          aria-label={`${actionLabel} ${title}`}
         >
-          Abrir
+          {actionLabel}
         </Button>
       </div>
     </li>

@@ -2,37 +2,23 @@
 
 .marco-trabajo, .marco-trabajo * { box-sizing: border-box; }
 .marco-trabajo { display: grid; grid-template-columns: 264px minmax(0, 1fr); width: 100%; height: 100vh; overflow: hidden; background: var(--ds-color-background); color: var(--ds-color-text); font: var(--ds-text-base)/var(--ds-leading-normal) var(--ds-font-sans); }
-.marco-trabajo__sidebar { height: 100%; overflow: auto; padding: var(--ds-space-5) var(--ds-space-3); border-right: 1px solid var(--ds-color-border); background: var(--ds-color-surface); }
-.marco-trabajo__brand { padding: 0 var(--ds-space-2) var(--ds-space-7); font: 600 var(--ds-text-xl)/1.2 var(--ds-font-serif); }
-.marco-trabajo__nav-label { margin: 18px var(--ds-space-2) 6px; color: var(--ds-color-text-muted); font-size: var(--ds-text-xs); font-weight: 600; text-transform: uppercase; }
-.marco-trabajo__sidebar nav button { display: block; width: 100%; padding: 9px 10px; border: 0; border-radius: var(--ds-radius-sm); background: transparent; color: var(--ds-color-text); text-align: left; font: inherit; cursor: pointer; }
-.marco-trabajo__sidebar nav button:hover { background: var(--ds-color-surface-hover); }
-.marco-trabajo__sidebar nav button[aria-current="page"] { background: var(--ds-color-selected); font-weight: 600; }
+.marco-trabajo__sidebar { height: 100%; overflow: auto; padding: var(--ds-space-5) var(--ds-space-3); border-inline-end: var(--ds-border-width) solid var(--ds-color-border); background: var(--ds-color-surface); }
+.marco-trabajo__brand { padding: 0 var(--ds-space-2) var(--ds-space-7); font: var(--ds-font-weight-medium) var(--ds-text-xl)/var(--ds-leading-tight) var(--ds-font-serif); }
+.marco-trabajo__nav-label { margin: var(--ds-space-5) var(--ds-space-2) var(--ds-space-2); color: var(--ds-color-text-muted); font-size: var(--ds-text-xs); font-weight: var(--ds-font-weight-medium); text-transform: uppercase; }
+.marco-trabajo__nav-item { display: flex; justify-content: flex-start; inline-size: 100%; padding: var(--ds-space-2); border-radius: var(--ds-radius-sm); text-align: start; }
+.marco-trabajo__nav-item:hover, .marco-trabajo__nav-item--active { background: var(--ds-color-surface-hover); }
+.marco-trabajo__nav-item--active { background: var(--ds-color-selected); font-weight: var(--ds-font-weight-medium); }
 .marco-trabajo__main { min-width: 0; min-height: 0; }
 .marco-trabajo .work-page { height: 100%; }
-.marco-trabajo .work-page__body { padding-inline: 40px; }
-.marco-trabajo .work-page__content { padding-top: 32px; }
+.marco-trabajo .work-page__content { padding-top: var(--ds-space-4); }
 .marco-trabajo .patrones-demo { gap: 0; padding: 0; }
-.marco-trabajo .month-summary { margin-top: 30px; }
-.marco-trabajo .work-bar { padding-inline: 32px 24px; border-bottom-color: var(--ds-color-border); }
-.marco-trabajo .work-bar__row--contexto { min-height: 49px; }
-.marco-trabajo .work-bar__row--secciones { min-height: 40px; }
-.marco-trabajo .work-bar__inicio { gap: var(--ds-space-2); margin-inline-end: var(--ds-space-3); }
 .marco-trabajo__context { display: flex; min-width: 0; align-items: center; gap: var(--ds-space-2); white-space: nowrap; }
-.marco-trabajo__context > * { flex: none; }
-.marco-trabajo__periodo { display: inline-flex; min-width: 200px; height: var(--ds-control-height-sm); align-items: center; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-sm); background: var(--ds-color-surface); }
-.marco-trabajo__periodo input { width: 100%; border: 0; padding: 0 9px; background: transparent; color: var(--ds-color-text); font: inherit; }
 .marco-trabajo__meta { color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); white-space: nowrap; }
-.marco-trabajo__status-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--ds-color-success); }
-.marco-trabajo .status-badge { flex: none; white-space: nowrap; }
-.marco-trabajo__comments { flex: none; height: var(--ds-control-height-sm); padding: 0 var(--ds-space-2); border: 0; background: transparent; color: var(--ds-color-text); font: inherit; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
-.marco-trabajo__period-action { height: var(--ds-control-height-sm); padding: 0 10px; border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-sm); background: var(--ds-color-surface); color: var(--ds-color-text); font: inherit; font-weight: 600; white-space: nowrap; }
-.marco-trabajo__tabs { display: flex; gap: 20px; overflow: hidden; }
-.marco-trabajo__tabs button { height: 40px; padding: 0 4px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ds-color-text); font: inherit; white-space: nowrap; }
-.marco-trabajo__tabs button[aria-current="page"] { border-bottom-color: var(--ds-color-primary); font-weight: 600; }
-.marco-trabajo__page { max-width: 1160px; margin: 0 auto; padding: 0 0 var(--ds-space-7); }
-.marco-trabajo__eyebrow { color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); font-weight: 600; text-transform: uppercase; }
-.marco-trabajo__page h1 { margin: 0; font-size: 32px; font-weight: 600; line-height: 1.25; }
-.marco-trabajo__page > p { margin: 4px 0 0; color: var(--ds-color-text-muted); }
+.marco-trabajo__tabs { display: flex; gap: var(--ds-space-5); overflow: auto; }
+.marco-trabajo__tab { min-height: var(--ds-space-10); padding: 0 var(--ds-space-1); border: 0; border-block-end: var(--ds-border-width-strong) solid transparent; white-space: nowrap; }
+.marco-trabajo__tab--activa { border-block-end-color: var(--ds-color-primary); font-weight: var(--ds-font-weight-medium); }
+.marco-trabajo__page { max-width: 1440px; margin: 0 auto; padding-block-end: var(--ds-space-7); }
+.marco-trabajo__page > p { margin-block: var(--ds-space-1) 0; color: var(--ds-color-text-muted); }
+.marco-trabajo__page > .cover-grid { margin-block-start: var(--ds-space-8); }
 .marco-trabajo__sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-@media (max-width: 900px) { .marco-trabajo { grid-template-columns: 220px minmax(0, 1fr); } .marco-trabajo__periodo { min-width: 200px; } .marco-trabajo__meta { display: none; } }
+@media (max-width: 900px) { .marco-trabajo { grid-template-columns: 220px minmax(0, 1fr); } }

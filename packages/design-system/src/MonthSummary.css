@@ -1,22 +1,4 @@
-.month-summary__eyebrow { margin: 0 0 var(--ds-space-1); color: var(--ds-color-text-muted); font-size: var(--ds-text-xs); font-weight: var(--ds-font-weight-bold); text-transform: uppercase; }
-.month-summary__reference-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 1fr); gap: var(--ds-space-8); }
-.month-summary__reference-main { display: grid; align-content: start; gap: var(--ds-space-6); min-inline-size: 0; }
-.month-summary--reference .month-summary__cabecera { display: block; }
-.month-summary--reference .month-summary__cabecera h2 { font-size: var(--ds-text-2xl); }
-.month-summary--reference .month-summary__vence { margin-block-start: var(--ds-space-2); }
-.month-summary--reference .month-summary__bloque h3, .month-summary__flow h3 { padding-block-end: var(--ds-space-2); border-block-end: 1px solid var(--ds-color-border-subtle); color: var(--ds-color-text); font-weight: var(--ds-font-weight-bold); }
-.month-summary__taxes li, .month-summary__alerts li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--ds-space-3); padding-block: var(--ds-space-2); border-block-end: 1px solid var(--ds-color-border-subtle); }
-.month-summary__copy { display: grid; gap: var(--ds-space-0-5); min-inline-size: 0; }
-.month-summary__copy small { color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
-.month-summary__amount { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.month-summary__alerts { margin-block-start: var(--ds-space-1); }
-.month-summary__alerts .month-summary__enlace { white-space: nowrap; text-decoration: none; color: var(--ds-color-text); }
-.month-summary__flow { min-inline-size: 0; }
-.month-summary__flow .step-flow { margin: 0; }
-@media (max-width: 800px) { .month-summary__reference-grid { grid-template-columns: 1fr; gap: var(--ds-space-6); } }
-@media (max-width: 560px) { .month-summary__taxes li, .month-summary__alerts li { grid-template-columns: minmax(0, 1fr) auto; } .month-summary__amount, .month-summary__alerts .month-summary__enlace { grid-column: 2; } }
-
-
+/* C13: la portada conserva la distribución y los campos del estado de referencia. */
 .month-summary {
   display: grid;
   gap: var(--ds-space-4);
@@ -24,86 +6,75 @@
   font-family: var(--ds-font-sans);
   color: var(--ds-color-text);
 }
-
-.month-summary__cabecera {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--ds-space-2);
+.month-summary--reference { display: block; }
+.month-summary--reference .cover-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+  gap: var(--ds-space-8);
+  margin-block-start: var(--ds-space-8);
 }
-
-.month-summary__cabecera h2 {
+.month-summary__reference-main { min-inline-size: 0; }
+.month-summary__reference-main h2 { margin-block: var(--ds-space-1) var(--ds-space-2); }
+.month-summary__reference-main h3 { margin-block: var(--ds-space-7) var(--ds-space-2); }
+.month-summary--reference aside h3 { margin: 0 0 var(--ds-space-2); }
+.month-summary--reference .tax-list,
+.month-summary--reference .work-list { border-block-start: var(--ds-border-width) solid var(--ds-color-border-subtle); }
+.month-summary--reference .tax-row,
+.month-summary--reference .work-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--ds-space-5);
+  align-items: center;
+  min-block-size: var(--ds-space-12);
+  padding-block: var(--ds-space-2);
+  border: 0;
+  border-block-end: var(--ds-border-width) solid var(--ds-color-border-subtle);
+  background: transparent;
+  color: var(--ds-color-text);
+  text-align: start;
+  font: inherit;
+}
+.month-summary--reference .work-row { inline-size: 100%; text-decoration: none; }
+.month-summary--reference .work-row:hover { background: var(--ds-color-surface-hover); }
+.month-summary--reference .tax-row > div:first-child,
+.month-summary--reference .work-row > span:first-child,
+.month-summary--reference .progress-row__content { display: grid; gap: var(--ds-space-0-5); min-inline-size: 0; }
+.month-summary--reference .progress {
+  display: grid;
   margin: 0;
-  font-size: var(--ds-text-xl);
-  font-weight: var(--ds-font-weight-medium);
+  padding: 0;
+  list-style: none;
+  border-block-start: var(--ds-border-width) solid var(--ds-color-border-subtle);
 }
-
-.month-summary__vence {
-  margin: 0;
-  font-size: var(--ds-text-sm);
-  color: var(--ds-color-text-muted);
+.month-summary--reference .progress-row {
+  display: grid;
+  grid-template-columns: var(--ds-space-7) minmax(0, 1fr) auto;
+  gap: var(--ds-space-3);
+  align-items: center;
+  min-block-size: var(--ds-space-12);
+  padding-block: var(--ds-space-2);
+  border-block-end: var(--ds-border-width) solid var(--ds-color-border-subtle);
 }
+.month-summary--reference .step-no { color: var(--ds-color-text-muted); font-variant-numeric: tabular-nums; }
 
+/* MonthSummary general: variante contractual de tres bloques. */
+.month-summary__cabecera { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--ds-space-2); }
+.month-summary__cabecera h2 { margin: 0; font-size: var(--ds-text-xl); font-weight: var(--ds-font-weight-medium); }
+.month-summary__vence { margin: 0; }
 .month-summary__bloques {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
   gap: var(--ds-space-6);
-  border-block-start: 1px solid var(--ds-color-border-subtle);
+  border-block-start: var(--ds-border-width) solid var(--ds-color-border-subtle);
   padding-block-start: var(--ds-space-4);
 }
-
-.month-summary__bloque {
-  display: grid;
-  align-content: start;
-  gap: var(--ds-space-2);
-  min-inline-size: 0;
-}
-
-.month-summary__bloque h3 {
-  margin: 0;
-  font-size: var(--ds-text-sm);
-  font-weight: var(--ds-font-weight-medium);
-  color: var(--ds-color-text-muted);
-}
-
-.month-summary__lista {
-  display: grid;
-  gap: var(--ds-space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--ds-text-base);
-}
-
-.month-summary__enlace {
-  color: var(--ds-color-primary);
-  text-decoration: underline;
-  text-underline-offset: var(--ds-space-0-5);
-  overflow-wrap: anywhere;
-}
-
-.month-summary__enlace:focus-visible {
-  outline: var(--ds-focus-width) solid var(--ds-color-focus);
-  outline-offset: var(--ds-focus-offset);
-  border-radius: var(--ds-radius-sm);
-}
-
-.month-summary__nada {
-  margin: 0;
-  font-size: var(--ds-text-sm);
-  color: var(--ds-color-text-muted);
-}
-
-.month-summary__importe {
-  margin: 0;
-  font-size: var(--ds-text-2xl);
-  font-weight: var(--ds-font-weight-medium);
-  font-variant-numeric: tabular-nums;
-}
-
-.month-summary__nota {
-  margin: 0;
-  font-size: var(--ds-text-sm);
-  color: var(--ds-color-text-muted);
-}
+.month-summary__bloque { display: grid; align-content: start; gap: var(--ds-space-2); min-inline-size: 0; }
+.month-summary__bloque h3 { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); }
+.month-summary__lista { display: grid; gap: var(--ds-space-1); margin: 0; padding: 0; list-style: none; font-size: var(--ds-text-base); }
+.month-summary__enlace { color: var(--ds-color-primary); text-decoration: underline; text-underline-offset: var(--ds-space-0-5); overflow-wrap: anywhere; }
+.month-summary__enlace:focus-visible { outline: var(--ds-focus-width) solid var(--ds-color-focus); outline-offset: var(--ds-focus-offset); border-radius: var(--ds-radius-sm); }
+.month-summary__nada { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
+.month-summary__importe { margin: 0; font-size: var(--ds-text-2xl); font-weight: var(--ds-font-weight-medium); font-variant-numeric: tabular-nums; }
+.month-summary__nota { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
+@media (max-width: 800px) { .month-summary--reference .cover-grid { grid-template-columns: 1fr; gap: var(--ds-space-6); } }
+@media (max-width: 560px) { .month-summary--reference .tax-row, .month-summary--reference .work-row { grid-template-columns: minmax(0, 1fr) auto; } }

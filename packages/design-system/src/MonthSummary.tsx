@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from "react";
 import "./MonthSummary.css";
-import { StepFlow, type FlowStep } from "./StepFlow.js";
+import type { FlowStep } from "./StepFlow.js";
 import { StatusBadge } from "./StatusBadge.js";
 
 /** Pendiente del mes con enlace directo a la tarea que lo resuelve. */
@@ -66,39 +66,57 @@ export function MonthSummary({
   const listoId = `${base}-listo`;
   const importeId = `${base}-importe`;
   const demo = taxes.length > 0 || alerts.length > 0 || steps.length > 0;
+  const estado = (status: string) => {
+    const normalized = status.toUpperCase();
+    if (["READY", "DONE", "COMPLETED"].includes(normalized)) return "Listo";
+    if (["BLOCKING"].includes(normalized)) return "Bloqueante";
+    if (["PENDING", "WAITING", "EN_ESPERA"].includes(normalized)) return "En espera";
+    if (["NEEDS_REVIEW", "REVIEW", "WARN"].includes(normalized)) return "Revisar";
+    return status;
+  };
   return (
     <section className={`month-summary${demo ? " month-summary--reference" : ""}`} aria-labelledby={titleId}>
-      <header className="month-summary__cabecera">
-        <div><p className="month-summary__eyebrow">Resumen del mes</p><h2 id={titleId}>{title}</h2></div>
-        {dueLabel ? <p className="month-summary__vence">{dueLabel}</p> : null}
-      </header>
       {demo ? (
-        <div className="month-summary__reference-grid">
-          <div className="month-summary__reference-main">
-            <section className="month-summary__bloque" aria-labelledby={faltaId}>
-              <h3 id={faltaId}>Impuestos del período</h3>
-              <ul className="month-summary__lista month-summary__taxes">
-                {taxes.map((tax) => <li key={tax.id}><span className="month-summary__copy"><strong>{tax.label}</strong><small>{tax.detail}</small></span><StatusBadge status={tax.status} /><strong className="month-summary__amount">{tax.amount}</strong></li>)}
-              </ul>
-            </section>
-            <section className="month-summary__bloque" aria-labelledby={listoId}>
-              <h3 id={listoId}>Requiere atención</h3>
-              <ul className="month-summary__lista month-summary__alerts">
-                {alerts.map((item) => <li key={item.id}><span className="month-summary__copy"><strong>{item.label}</strong><small>{item.detail}</small></span><StatusBadge status={item.status} /><a className="month-summary__enlace" href={item.href}>{item.action} →</a></li>)}
-              </ul>
-            </section>
-          </div>
-          <section className="month-summary__flow" aria-labelledby={importeId}>
-            <h3 id={importeId}>Avance del cierre</h3>
-            <StepFlow label="Avance del cierre" steps={steps} />
+        <div className="cover-grid">
+          <section className="month-summary__reference-main">
+            <p className="ds-text-help month-summary__eyebrow">Resumen del mes</p>
+            <h2 className="ds-title-section" id={titleId}>{title}</h2>
+            {dueLabel ? <p className="ds-text-body month-summary__vence">{dueLabel}</p> : null}
+            <h3 className="ds-title-block" id={faltaId}>Impuestos del período</h3>
+            <div className="tax-list" aria-label="Impuestos del período">
+              {taxes.map((tax) => (
+                <div className="tax-row" key={tax.id}><div><b>{tax.label}</b><div className="ds-text-help">{tax.detail}</div></div><StatusBadge status={tax.status} label={estado(tax.status)} /><b>{tax.amount}</b></div>
+              ))}
+            </div>
+            <h3 className="ds-title-block" id={listoId}>Requiere atención</h3>
+            <div className="work-list" aria-label="Requiere atención">
+              {alerts.map((item) => (
+                <a className="work-row" href={item.href} key={item.id}><span><b>{item.label}</b><span className="ds-text-help">{item.detail}</span></span><StatusBadge status={item.status} label={estado(item.status)} /><span>{item.action} →</span></a>
+              ))}
+            </div>
           </section>
+          <aside aria-labelledby={importeId}>
+            <h3 className="ds-title-block" id={importeId}>Avance del cierre</h3>
+            <ol className="progress" aria-label="Avance del cierre">
+              {steps.map((step, index) => {
+                const status = step.status === "done" ? "READY" : step.status === "blocked" ? "BLOCKING" : step.status === "pending" ? "PENDING" : "IN_PROGRESS";
+                return <li className="progress-row" key={step.key}><span className="step-no">{index + 1}</span><span className="progress-row__content"><b>{step.label}</b><span className="ds-text-help">{step.reason}</span></span><StatusBadge status={status} label={estado(status)} /></li>;
+              })}
+            </ol>
+          </aside>
         </div>
       ) : (
-        <div className="month-summary__bloques">
-          <section className="month-summary__bloque" aria-labelledby={faltaId}><h3 id={faltaId}>Qué falta ({pending.length})</h3>{pending.length === 0 ? <p className="month-summary__nada">No queda nada pendiente.</p> : <ul className="month-summary__lista">{pending.map((item) => <li key={item.id}><a className="month-summary__enlace" href={item.href}>{item.label}</a></li>)}</ul>}</section>
-          <section className="month-summary__bloque" aria-labelledby={listoId}><h3 id={listoId}>Listo ({ready.length})</h3>{ready.length === 0 ? <p className="month-summary__nada">Todavía no hay pasos listos.</p> : <ul className="month-summary__lista">{ready.map((texto) => <li key={texto}>{texto}</li>)}</ul>}</section>
-          <section className="month-summary__bloque" aria-labelledby={importeId}><h3 id={importeId}>Importe estimado</h3><p className="month-summary__importe">{estimatedAmount}</p>{estimateNote ? <p className="month-summary__nota">{estimateNote}</p> : null}</section>
-        </div>
+        <>
+          <header className="month-summary__cabecera">
+            <div><p className="month-summary__eyebrow">Resumen del mes</p><h2 id={titleId}>{title}</h2></div>
+            {dueLabel ? <p className="month-summary__vence">{dueLabel}</p> : null}
+          </header>
+          <div className="month-summary__bloques">
+            <section className="month-summary__bloque" aria-labelledby={faltaId}><h3 id={faltaId}>Qué falta ({pending.length})</h3>{pending.length === 0 ? <p className="month-summary__nada">No queda nada pendiente.</p> : <ul className="month-summary__lista">{pending.map((item) => <li key={item.id}><a className="month-summary__enlace" href={item.href}>{item.label}</a></li>)}</ul>}</section>
+            <section className="month-summary__bloque" aria-labelledby={listoId}><h3 id={listoId}>Listo ({ready.length})</h3>{ready.length === 0 ? <p className="month-summary__nada">Todavía no hay pasos listos.</p> : <ul className="month-summary__lista">{ready.map((texto) => <li key={texto}>{texto}</li>)}</ul>}</section>
+            <section className="month-summary__bloque" aria-labelledby={importeId}><h3 id={importeId}>Importe estimado</h3><p className="month-summary__importe">{estimatedAmount}</p>{estimateNote ? <p className="month-summary__nota">{estimateNote}</p> : null}</section>
+          </div>
+        </>
       )}
     </section>
   );

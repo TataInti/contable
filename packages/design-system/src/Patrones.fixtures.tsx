@@ -4,7 +4,6 @@
  */
 import { useState } from "react";
 import "./Patrones.fixtures.css";
-import { SearchSelect } from "./SearchSelect.js";
 import { Button } from "./Button.js";
 import {
   DecisionBar,
@@ -15,7 +14,8 @@ import {
   type DocumentField,
 } from "./DocumentTriage.js";
 import { EmptyState } from "./EmptyState.js";
-import { DenseSection } from "./Dense.js";
+import { DenseSection, DenseToolbar, StatStrip } from "./Dense.js";
+import { Field } from "./Field.js";
 import {
   ObjectActivity,
   ObjectActivityTrigger,
@@ -36,50 +36,38 @@ interface ControlSintetico {
   decision: string;
   contexto: string;
   estado: string;
-  fecha: string;
+  fecha?: string;
   importe: string;
 }
 
 const controles: ControlSintetico[] = [
   {
     id: "1",
-    titulo: "Facturas C sin tipo aceptado",
-    decision: "Aceptar con motivo o excluir del cálculo",
-    contexto: "Cliente sintético A · 10/2026",
+    titulo: "Facturas C: 2 comprobantes",
+    decision: "El tipo informado no coincide con el perfil fiscal.",
+    contexto: "Control · octubre de 2026",
     estado: "BLOCKING",
-    fecha: "20/11/2026",
-    importe: "$ 1.250,00",
+    importe: "2 comprobantes",
   },
   {
     id: "2",
-    titulo: "Ventas sin CUIT del comprador",
-    decision: "Completar el CUIT o aceptar con motivo",
-    contexto: "Cliente sintético B · 10/2026",
+    titulo: "Acreditaciones bancarias vs. facturación",
+    decision: "Hay $125.000,00 sin conciliar con ventas.",
+    contexto: "Control · octubre de 2026",
     estado: "BLOCKING",
-    fecha: "21/11/2026",
-    importe: "$ 480,00",
+    importe: "$125.000,00",
   },
 ];
 
 const actividadControl: ObjectActivityEntry[] = [
-  {
-    id: "h-1",
-    kind: "historial",
-    at: "19/11/2026 09:15",
-    text: "Se detectó el control al importar el libro sintético.",
-  },
-  {
-    id: "c-1",
-    kind: "comentario",
-    at: "20/11/2026 10:42",
-    author: "Persona sintética A",
-    text: "Consultar el tipo con el cliente.",
-  },
+  { id: "h-1", kind: "historial", at: "04/11/2026 09:29 · admin", text: "Pidió confirmar las diferencias antes de cerrar." },
+  { id: "h-2", kind: "historial", at: "04/11/2026 09:12 · Titular", text: "Revisó el lote de percepciones IIBB." },
+  { id: "h-3", kind: "historial", at: "03/11/2026 16:41 · Sistema", text: "Se recalculó la liquidación con 3 percepciones." },
 ];
 
 /** Cola de controles con el panel de detalle abierto: filas de 48 px y panel compacto. */
-export function ControlesPanelDemo() {
-  const [abierto, setAbierto] = useState<ControlSintetico | null>(null);
+export function ControlesPanelDemo({ initiallyOpen = false }: { initiallyOpen?: boolean } = {}) {
+  const [abierto, setAbierto] = useState<ControlSintetico | null>(initiallyOpen ? controles[0] ?? null : null);
   const [origen, setOrigen] = useState<HTMLElement | null>(null);
   const [urlActual, setUrlActual] = useState("/clientes/1/legajo/2026-10/controles");
   const [actividad, setActividad] = useState(actividadControl);
@@ -106,7 +94,7 @@ export function ControlesPanelDemo() {
             decision={control.decision}
             subtitle={control.contexto}
             status={control.estado}
-            date={control.fecha}
+            {...(control.fecha ? { date: control.fecha } : {})}
             amount={control.importe}
             onOpen={() => abrir(control, document.activeElement as HTMLElement)}
           />
@@ -116,48 +104,93 @@ export function ControlesPanelDemo() {
         kind="control"
         isOpen={abierto !== null}
         onClose={cerrar}
-        title={abierto ? `Control: ${abierto.titulo}` : "Control"}
-        description={abierto?.contexto ?? ""}
+        title={abierto?.titulo ?? "Control"}
+        {...(abierto ? { description: "Control · octubre de 2026" } : {})}
         returnFocusTo={origen}
         primaryAction={
           <Button type="button" variant="primary" onClick={cerrar}>
-            Aceptar con motivo
+            Guardar decisión
           </Button>
         }
       >
-        <WorkQueue label="Comprobantes afectados" density="compact">
-          <WorkQueueRow
-            id="comp-1"
-            title="Comprobante sintético 0001-00000007"
-            decision="Factura C · 12/10/2026"
-            amount="$ 1.250,00"
-            onOpen={() => undefined}
-          />
-          <WorkQueueRow
-            id="comp-2"
-            title="Comprobante sintético 0001-00000009"
-            decision="Factura C · 14/10/2026"
-            amount="$ 600,00"
-            onOpen={() => undefined}
-          />
-        </WorkQueue>
-        <ObjectActivity
-          label="Actividad del control"
-          entries={actividad}
-          onSubmitComment={(texto) =>
-            setActividad((previa) => [
-              ...previa,
-              {
-                id: `c-${previa.length + 1}`,
-                kind: "comentario",
-                at: "23/11/2026 08:00",
-                author: "Persona sintética B",
-                text: texto,
-              },
-            ])
-          }
-        />
+        <>
+          {abierto ? <p>{abierto.decision}</p> : null}
+          {abierto ? <div className="patrones-demo__fact"><span>Estado</span><StatusBadge status={abierto.estado} /></div> : null}
+          {abierto?.id === "1" ? (
+            <>
+              <DenseSection title="Comprobantes afectados">
+                <WorkQueue label="Comprobantes afectados" density="compact">
+                  <WorkQueueRow id="C 000101" title="C 000101" decision="03/10/2026" amount="$ 18.000,00" onOpen={() => undefined} />
+                  <WorkQueueRow id="C 000116" title="C 000116" decision="18/10/2026" amount="$ 59.250,00" onOpen={() => undefined} />
+                </WorkQueue>
+              </DenseSection>
+              <DenseSection title="Resolver este control">
+                <div className="patrones-demo__decisiones" role="group" aria-label="Acciones para resolver">
+                  <Button type="button" variant="secondary">Aceptar con motivo</Button>
+                  <Button type="button" variant="secondary">Excluir del cálculo con motivo</Button>
+                  <Button type="button" variant="text">Ir a Configuración fiscal para tildar el tipo</Button>
+                </div>
+                <label className="patrones-demo__motivo"><span className="ds-text-help">Motivo</span><textarea className="dense-textarea" aria-label="Motivo de la decisión" placeholder="Escribí el motivo" /></label>
+              </DenseSection>
+            </>
+          ) : null}
+          <DenseSection title="Actividad del control">
+            <ObjectActivity
+              label="Actividad del control"
+              entries={actividad}
+              onSubmitComment={(texto) => setActividad((previa) => [...previa, { id: `c-${previa.length + 1}`, kind: "comentario", at: "23/11/2026 08:00", author: "Persona sintética", text: texto }])}
+            />
+          </DenseSection>
+        </>
       </ObjectPanel>
+    </div>
+  );
+}
+
+/** Lista de controles del estado de referencia, compuesta con WorkQueue. */
+export function ControlesListaDemo() {
+  return (
+    <div className="patrones-demo">
+      <DenseSection title="Controles que requieren una decisión" description="2 abiertos" actions={<Button type="button" variant="text">Ver actividad</Button>}>
+        <WorkQueue label="Controles que requieren una decisión">
+          {controles.map((control) => (
+            <WorkQueueRow key={control.id} id={control.id} title={control.titulo} decision={control.decision} status={control.estado} amount={control.importe} actionLabel="Revisar" onOpen={() => undefined} />
+          ))}
+        </WorkQueue>
+      </DenseSection>
+      <DenseSection title="Historial" description="6 controles resueltos" actions={<Button type="button" variant="text">Abrir actividad</Button>}><div /></DenseSection>
+    </div>
+  );
+}
+
+interface FilaClasificacion { id: string; emisor: string; fecha: string; importe: string; estado: string }
+const filasClasificacion: FilaClasificacion[] = Array.from({ length: 12 }, (_, index) => ({
+  id: `C ${String(101 + index).padStart(6, "0")}`,
+  emisor: ["Almacén Norte", "Bodega Los Cerros", "Proveedor Tucumán", "Mayorista NOA"][index % 4]!,
+  fecha: `${String(index + 1).padStart(2, "0")}/10/2026`,
+  importe: `$ ${ (18000 + index * 2750).toLocaleString("es-AR", { minimumFractionDigits: 2 }) }`,
+  estado: index < 6 ? "NEEDS_REVIEW" : "READY",
+}));
+const columnasClasificacion: TableColumn<FilaClasificacion>[] = [
+  { key: "comprobante", header: "Comprobante", render: (row) => <span><strong>{row.id}</strong><span className="ds-text-help">Venta · actividad Restaurante</span></span> },
+  { key: "emisor", header: "Emisor", render: (row) => row.emisor },
+  { key: "fecha", header: "Fecha", render: (row) => row.fecha },
+  { key: "importe", header: "Importe", align: "right", render: (row) => row.importe },
+  { key: "estado", header: "Estado", render: (row) => <StatusBadge status={row.estado} label={row.estado === "NEEDS_REVIEW" ? "Revisar" : "Clasificado"} /> },
+];
+
+/** Clasificación con los mismos doce comprobantes visibles que el demo. */
+export function ClasificacionDemo() {
+  return (
+    <div className="patrones-demo">
+      <DenseToolbar>
+        <Field aria-label="Buscar comprobante" placeholder="Buscar comprobante" />
+        <span className="ds-text-help">6 para revisar</span>
+      </DenseToolbar>
+      <DenseSection title="Clasificación" description="Revisá y clasificá los comprobantes del período." actions={<Button type="button" variant="secondary">Acciones por lote</Button>}>
+        <Table columns={columnasClasificacion} rows={filasClasificacion} rowKey={(row) => row.id} />
+      </DenseSection>
+      <p className="ds-text-help">Mostrando 12 de 40 comprobantes sintéticos.</p>
     </div>
   );
 }
@@ -194,15 +227,19 @@ export function PortadaDemo() {
 }
 
 const camposTriage: DocumentField[] = [
-  { id: "emisor", label: "CUIT del emisor", value: "20-00000000-1", confidence: "alta" },
-  { id: "tipo", label: "Tipo de comprobante", value: "Factura C", confidence: "media" },
-  { id: "importe", label: "Importe total", value: "1250,00", confidence: "baja" },
+  { id: "tipo", label: "Tipo de comprobante", value: "Factura C", confidence: "alta" },
+  { id: "fecha", label: "Fecha", value: "01/10/2026", confidence: "alta" },
+  { id: "razon-social", label: "Razón social", value: "Almacén Norte", confidence: "baja" },
+  { id: "importe", label: "Importe total", value: "$ 18.000,00", confidence: "alta" },
 ];
 
 const documentos = [
-  "Factura C sintética 0001",
-  "Factura C sintética 0002",
-  "Recibo sintético 0003",
+  { numero: "C 000101", proveedor: "Almacén Norte", fecha: "01/10/2026", importe: "$ 18.000,00" },
+  { numero: "C 000102", proveedor: "Bodega Los Cerros", fecha: "02/10/2026", importe: "$ 20.750,00" },
+  { numero: "C 000103", proveedor: "Proveedor Tucumán", fecha: "03/10/2026", importe: "$ 23.500,00" },
+  { numero: "C 000104", proveedor: "Mayorista NOA", fecha: "04/10/2026", importe: "$ 26.250,00" },
+  { numero: "C 000105", proveedor: "Almacén Norte", fecha: "05/10/2026", importe: "$ 29.000,00" },
+  { numero: "C 000106", proveedor: "Bodega Los Cerros", fecha: "06/10/2026", importe: "$ 31.750,00" },
 ];
 
 /** Triage: un documento por vez, cola plegable, datos con confianza y «Siguiente». */
@@ -210,46 +247,50 @@ export function TriageDemo() {
   const [colaAbierta, setColaAbierta] = useState(true);
   const [campos, setCampos] = useState(camposTriage);
   const [indice, setIndice] = useState(0);
-  const actual = documentos[indice] ?? documentos[0] ?? "";
+  const actual = documentos[indice] ?? documentos[0]!;
 
   return (
     <DocumentTriage
       queueLabel="Documentos por revisar"
       queue={
-        <ul className="patrones-demo__lista">
-          {documentos.map((nombre, posicion) => (
-            <li key={nombre}>
-              <button
-                type="button"
-                className="patrones-demo__opcion"
-                aria-current={posicion === indice ? "true" : undefined}
-                onClick={() => setIndice(posicion)}
-              >
-                {nombre}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="patrones-demo__triage-queue">
+          <h2>Cola</h2>
+          <p className="ds-text-help">{indice + 1} de 40</p>
+          <ul className="patrones-demo__lista">
+            {documentos.map((documento, posicion) => (
+              <li key={documento.numero}>
+                <button type="button" className="patrones-demo__opcion" aria-current={posicion === indice ? "true" : undefined} onClick={() => setIndice(posicion)}>
+                  <strong>{documento.numero}</strong><small>{documento.proveedor}</small>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <Button type="button" variant="text">Ver lista completa</Button>
+        </div>
       }
       queueOpen={colaAbierta}
       onQueueToggle={() => setColaAbierta((previa) => !previa)}
       viewer={
-        <DocumentViewer title={`${actual}.pdf`} pageLabel="Página 1 de 1" zoomLabel="100 %">
+        <DocumentViewer title={`comprobante-${indice + 1}.pdf`} pageLabel="1 de 1" zoomLabel="100 %">
           <div className="patrones-demo__hoja" aria-hidden="true">
-            <span>FACTURA C</span>
-            <span>Documento sintético</span>
+            <div><strong>{actual.proveedor}</strong><strong>FACTURA C</strong></div>
+            <h2>{actual.numero}</h2>
+            <p>Fecha <b>{actual.fecha}</b></p>
+            <p>Cliente <b>ZZ-AYUDA Restaurante Nuevo</b></p>
+            <p>CUIT <b>30-23456789-1</b></p>
+            <p>Importe total <b>{actual.importe}</b></p>
           </div>
         </DocumentViewer>
       }
       fields={
-        <DocumentFields
-          fields={campos}
-          onChange={(id, value) =>
-            setCampos((previos) =>
-              previos.map((campo) => (campo.id === id ? { ...campo, value } : campo)),
-            )
-          }
-        />
+        <div className="patrones-demo__triage-fields">
+          <h1 className="ds-title-page">Revisar comprobante</h1>
+          <p className="ds-text-help">PDF recibido el 04/11/2026</p>
+          <DocumentFields
+            fields={campos}
+            onChange={(id, value) => setCampos((previos) => previos.map((campo) => (campo.id === id ? { ...campo, value } : campo)))}
+          />
+        </div>
       }
       decision={
         <DecisionBar
@@ -280,20 +321,16 @@ export function TriageDemo() {
   );
 }
 
-const columnasPeriodos: TableColumn<{
-  id: string;
-  periodo: string;
-  estado: string;
-  controles: string;
-}>[] = [
-  { key: "periodo", header: "Período", render: (fila) => fila.periodo },
-  { key: "estado", header: "Estado", render: (fila) => fila.estado },
-  { key: "controles", header: "Controles", align: "right", render: (fila) => fila.controles },
+interface PeriodoCliente { id: string; periodo: string; detalle: string; estado: string; etiquetaEstado: string; importe: string; accion: string }
+const columnasPeriodos: TableColumn<PeriodoCliente>[] = [
+  { key: "periodo", header: "Período", render: (fila) => <span><strong>{fila.periodo}</strong><span className="ds-text-help">{fila.detalle}</span></span> },
+  { key: "estado", header: "Estado", render: (fila) => <StatusBadge status={fila.estado} label={fila.etiquetaEstado} /> },
+  { key: "importe", header: "Importe", align: "right", render: (fila) => fila.importe },
+  { key: "accion", header: "Acción", render: (fila) => <Button type="button" variant="text" size="row" href={`#${fila.id}`}>{fila.accion}</Button> },
 ];
 
-/** Página de cliente: ubicación, períodos, actividad y acceso a Configuración fiscal. */
+/** Página de cliente: ubicación, períodos, actividad y acceso a su configuración. */
 export function PaginaClienteDemo() {
-  const [periodo, setPeriodo] = useState("2026-10");
   const [comentariosAbiertos, setComentariosAbiertos] = useState(false);
   const [actividad, setActividad] = useState<ObjectActivityEntry[]>([
     {
@@ -303,18 +340,18 @@ export function PaginaClienteDemo() {
       text: "Se cargó el libro de compras sintético.",
     },
   ]);
-  const periodos = [
-    { id: "2026-10", periodo: "Octubre 2026", estado: "En curso", controles: "2" },
-    { id: "2026-09", periodo: "Septiembre 2026", estado: "Finalizado", controles: "0" },
+  const periodos: PeriodoCliente[] = [
+    { id: "2026-10", periodo: "octubre de 2026 · IIBB Tucumán", detalle: "Revisión 1 · vence el 20/11/2026", estado: "NEEDS_REVIEW", etiquetaEstado: "Revisar", importe: "$ 48.450,00", accion: "Abrir Legajo" },
+    { id: "2026-09", periodo: "septiembre de 2026 · IIBB Tucumán", detalle: "Finalizado el 18/10/2026", estado: "READY", etiquetaEstado: "Listo", importe: "$ 31.200,00", accion: "Ver" },
   ];
 
   return (
     <div className="patrones-demo">
       <ObjectPage
-        breadcrumb={[{ label: "Clientes", href: "#clientes" }, { label: "Cliente sintético A" }]}
-        title="Cliente sintético A"
-        status={<StatusBadge status="CONFIGURED" variant="pill" />}
-        description="CUIT sintético 20-00000000-1 · Régimen sintético"
+        breadcrumb={[{ label: "Clientes", href: "#clientes" }, { label: "ZZ-AYUDA Restaurante Nuevo" }]}
+        title="ZZ-AYUDA Restaurante Nuevo"
+        status={<StatusBadge status="ACTIVE" variant="pill" />}
+        description="CUIT 30-23456789-1 · Restaurante · San Miguel de Tucumán"
         actions={
           <>
             <Button type="button" variant="secondary" href="#configuracion-fiscal">
@@ -327,20 +364,22 @@ export function PaginaClienteDemo() {
           </>
         }
       >
+        <StatStrip
+          label="Resumen del cliente"
+          items={[
+            { key: "abiertos", label: "períodos abiertos", value: "2" },
+            { key: "vencimiento", label: "próximo vencimiento", value: "20/11" },
+            { key: "menciones", label: "mención pendiente", value: "1" },
+          ]}
+        />
+        <nav className="patrones-demo__tabs" aria-label="Secciones del cliente">
+          <Button type="button" variant="text" aria-current="page">Resumen</Button>
+          <Button type="button" variant="text">Períodos</Button>
+          <Button type="button" variant="text">Actividad</Button>
+          <Button type="button" variant="text">Configuración fiscal</Button>
+        </nav>
         <DenseSection id="periodos" title="Períodos" count={periodos.length}>
           <Table columns={columnasPeriodos} rows={periodos} rowKey={(fila) => fila.id} />
-          <div className="patrones-demo__fila">
-            <SearchSelect
-              label="Período del legajo"
-              options={periodos.map((fila) => ({ value: fila.id, label: fila.periodo }))}
-              value={periodo}
-              onChange={setPeriodo}
-              allowEmpty={false}
-            />
-            <Button type="button" variant="primary" size="row" href={`#legajo-${periodo}`}>
-              Abrir legajo
-            </Button>
-          </div>
         </DenseSection>
         {comentariosAbiertos ? (
           <DenseSection id="actividad" title="Actividad">
