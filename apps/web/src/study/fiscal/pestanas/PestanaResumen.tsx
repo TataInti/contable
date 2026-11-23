@@ -6,7 +6,7 @@ import { StatusBadge } from "../../../ui/StatusBadge";
 import { CONDITION_LABELS, today, type ClientActivityLink, type FiscalStep, type FiscalTab, type Mutacion, type ProfileForm, type TaxPeriod, type TaxRegistration, type TaxpayerProfileVersion } from "../utilidades";
 
 type Props = {
-  nextRequiredStep: { key: FiscalStep; label: string } | undefined;
+  configuracionCompleta: boolean;
   canWrite: boolean;
   latestProfile: TaxpayerProfileVersion | undefined;
   profileQuery: UseQueryResult<TaxpayerProfileVersion[]>;
@@ -25,10 +25,10 @@ type Props = {
   setTab: Dispatch<SetStateAction<FiscalTab>>;
 };
 
-export function PestanaResumen({ nextRequiredStep, canWrite, latestProfile, profileQuery, showProfileHistory, setShowProfileHistory, submitReview, activate, setProfileId, setForm, openStepForm, periodsQuery, activeRegistrations, currentActivities, periodsWithObligation, periodsWithoutObligation, setTab }: Props) {
+export function PestanaResumen({ configuracionCompleta, canWrite, latestProfile, profileQuery, showProfileHistory, setShowProfileHistory, submitReview, activate, setProfileId, setForm, openStepForm, periodsQuery, activeRegistrations, currentActivities, periodsWithObligation, periodsWithoutObligation, setTab }: Props) {
   return (
     <>
-      {!nextRequiredStep ? (
+      {configuracionCompleta ? (
         <p className="fiscal-config__complete">
           <StatusBadge status="COMPLETED" label="Configuración completa" />
           <span>El cliente ya tiene todo lo necesario para abrir una liquidación.</span>

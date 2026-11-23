@@ -14,6 +14,7 @@ import type {
 } from "@contable/contracts";
 import { cuitEnding } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
+import { activateIfConfigurationComplete } from "./client-status.js";
 import { isPrismaUniqueViolation } from "../lib/prisma-errors.js";
 
 /** Agrega la terminación de CUIT: dato derivado del CUIT, no se guarda (supuesto S2). */
@@ -379,10 +380,14 @@ export class ClientRepository {
     if (input.legalForm !== undefined) data.legalForm = input.legalForm;
     if (input.serviceStartDate !== undefined) data.serviceStartDate = new Date(input.serviceStartDate);
 
-    return this.scoped(ctx, (tx) => tx.clientProfile.update({
-      where: { clientId },
-      data,
-    }));
+    return this.scoped(ctx, async (tx) => {
+      const profile = await tx.clientProfile.update({
+        where: { clientId },
+        data,
+      });
+      if (ctx) await activateIfConfigurationComplete(tx, ctx, clientId);
+      return profile;
+    });
   }
 
   /** Crea un ejercicio fiscal y sus períodos mensuales. */

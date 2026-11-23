@@ -385,6 +385,76 @@ describe("G1-03 perfil fiscal (integración DB)", () => {
     expect(active.activatedAt).not.toBeNull();
   });
 
+  it("activa el cliente al completar ficha y configuración fiscal sin reemplazar un estado manual", async () => {
+    await runAsRuntime(OWNER_A, FIRM_ALFA, async (tx) => {
+      await tx.client.update({ where: { id: CLIENT_ALFA }, data: { status: "ONBOARDING" } });
+      await tx.clientProfile.upsert({
+        where: { clientId: CLIENT_ALFA },
+        create: { firmId: FIRM_ALFA, clientId: CLIENT_ALFA, accountingStandard: "RTIC" },
+        update: { accountingStandard: "RTIC" },
+      });
+    });
+
+    const fx = await setupMasters();
+    const draft = await profiles.createProfile(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      legalName: "Cliente Alfa SA",
+      cuit: "20111111111",
+      personType: "JURIDICA",
+      nationalCondition: "RESPONSABLE_INSCRIPTO",
+      validFrom: "2026-01-01",
+    });
+    await profiles.submitReview(ctxOwner, draft.id);
+    await profiles.activate(ctxOwner, draft.id);
+    await profiles.addRegistration(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      profileVersionId: draft.id,
+      regimeId: fx.ri.id,
+      validFrom: "2026-01-01",
+    });
+    await profiles.addClientActivity(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      profileVersionId: draft.id,
+      activityId: fx.actividad.id,
+      isPrimary: true,
+    });
+    const period = await periods.createPeriod(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      taxTypeId: fx.iva.id,
+      startDate: "2026-10-01",
+      endDate: "2026-10-31",
+      label: "Octubre 2026 estado cliente",
+    });
+    await periods.materializeObligation(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      profileVersionId: draft.id,
+      regimeId: fx.ri.id,
+      periodId: period.id,
+      dueDate: "2026-11-20",
+    });
+    expect((await prisma.client.findUniqueOrThrow({ where: { id: CLIENT_ALFA } })).status).toBe("ACTIVE");
+    expect(await prisma.auditEvent.findFirst({
+      where: { clientId: CLIENT_ALFA, action: "client.status.automatically_activated" },
+      select: { before: true, after: true },
+    })).toMatchObject({ before: { status: "ONBOARDING" }, after: { status: "ACTIVE", reason: "CONFIGURATION_COMPLETE" } });
+
+    await runAsRuntime(OWNER_A, FIRM_ALFA, (tx) => tx.client.update({ where: { id: CLIENT_ALFA }, data: { status: "INACTIVE" } }));
+    const nextPeriod = await periods.createPeriod(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      taxTypeId: fx.iva.id,
+      startDate: "2026-11-01",
+      endDate: "2026-11-30",
+      label: "Noviembre 2026 estado cliente",
+    });
+    await periods.materializeObligation(ctxOwner, {
+      clientId: CLIENT_ALFA,
+      profileVersionId: draft.id,
+      regimeId: fx.ri.id,
+      periodId: nextPeriod.id,
+    });
+    expect((await prisma.client.findUniqueOrThrow({ where: { id: CLIENT_ALFA } })).status).toBe("INACTIVE");
+  });
+
   it("crea una sucesora sin reemplazar el perfil activo antes de su activación", async () => {
     const p1 = await profiles.createProfile(ctxOwner, {
       clientId: CLIENT_ALFA,

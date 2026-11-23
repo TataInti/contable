@@ -43,6 +43,7 @@ const obligacion = {
   id: "obligation-1",
   status: "PENDING",
   dueDate: "2026-12-20T00:00:00.000Z",
+  profile: { version: 1 },
   regime: regimen,
   period: { id: "period-1", label: "Noviembre 2026", startDate: FECHA, endDate: FIN },
 };
@@ -62,12 +63,13 @@ const perfilActivo = {
   source: null,
   createdAt: FECHA,
 };
-const inscripcion = { id: "registration-1", status: "ACTIVE", validFrom: FECHA, validTo: null, registrationNumber: null, regime: regimen };
+const inscripcion = { id: "registration-1", status: "ACTIVE", validFrom: FECHA, validTo: null, registrationNumber: null, profile: { version: 1 }, regime: regimen };
 const actividad = {
   id: "activity-1",
   isPrimary: true,
   validFrom: FECHA,
   validTo: null,
+  profile: { version: 1 },
   activity: { id: "activity-catalog-1", code: "COMERCIO", name: "Comercio minorista", isActive: true, jurisdiction: jurisdiccion },
 };
 const perfilContable = {
@@ -387,7 +389,7 @@ describe("Caracterización · matriz §2.1 (13 filas): datos visibles con client
       montar({ datos });
       expect(await screen.findByRole("region", { name: "Resumen" })).toBeTruthy();
       const encabezado = document.querySelector(".dense-head") as HTMLElement;
-      expect(encabezado.textContent).toContain("Cliente SINTÉTICO A · SINTÉTICO · CUIT 20111111112");
+      expect(encabezado.textContent).toContain("Cliente SINTÉTICO A · SINTÉTICO · CUIT 20-11111111-2");
       expect(within(encabezado).getAllByRole("button").map((boton) => boton.textContent?.trim())).toEqual([
         "Volver a clientes",
         "Actualizar",
