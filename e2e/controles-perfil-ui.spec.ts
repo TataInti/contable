@@ -35,7 +35,8 @@ import type { FacturaSintetica } from "./helpers/fuentes-sinteticas";
 const CLIENTE = {
   legalName: `Cliente E2E Controles Perfil ${SUFFIX} S.R.L.`,
   tradeName: `E2E Controles Perfil ${SUFFIX}`,
-  cuit: syntheticCuit(Number.parseInt(RUN, 36) + 8_000),
+  // Offset 11_000: libre entre los syntheticCuit(RUN + n) de e2e/ (máximo previo 10_000); cada spec usa su rango para no repetir CUIT en la firma.
+  cuit: syntheticCuit(Number.parseInt(RUN, 36) + 11_000),
   fiscalAddress: "Av. Mate de Luna 1500, San Miguel de Tucumán",
 };
 const OCTUBRE = { start: "2026-10-01", end: "2026-10-31", mes: "Octubre de 2026", label: `Octubre 2026 IIBB ${SUFFIX}` };

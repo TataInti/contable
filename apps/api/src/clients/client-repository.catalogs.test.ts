@@ -16,7 +16,7 @@ vi.mock("../auth/tenant.js", () => ({
     }),
 }));
 
-import { ClientRepository } from "./client-repository.js";
+import { ClientMutationError, ClientRepository } from "./client-repository.js";
 
 const tenantContext = { firmId: "firm-a", userId: "user-a", actorKind: "USER" } as const;
 
@@ -46,6 +46,34 @@ describe("ClientRepository.create — perfil categórico", () => {
         activity: "COMERCIO — Comercio",
         legalForm: "Sociedad anónima (SA)",
       }),
+    });
+  });
+
+  it("un CUIT repetido en el estudio es un 409 CLIENT_CUIT_DUPLICATE y no un error interno", async () => {
+    db.clientCreate.mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed on the fields: (`firmId`,`cuit`)"), {
+        code: "P2002",
+      }),
+    );
+    const repo = new ClientRepository();
+    const attempt = repo.create(
+      "firm-a",
+      {
+        legalName: "Razón social libre S.A.",
+        cuit: "20111111112",
+        vatCondition: "RESPONSABLE_INSCRIPTO",
+        province: "Tucumán",
+        activity: "COMERCIO — Comercio",
+        legalForm: "Sociedad anónima (SA)",
+      },
+      tenantContext,
+    );
+
+    await expect(attempt).rejects.toBeInstanceOf(ClientMutationError);
+    await expect(attempt).rejects.toMatchObject({
+      statusCode: 409,
+      code: "CLIENT_CUIT_DUPLICATE",
+      message: "Ya existe un cliente con ese CUIT en el estudio.",
     });
   });
 });

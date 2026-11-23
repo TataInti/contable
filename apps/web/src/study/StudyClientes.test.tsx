@@ -515,6 +515,39 @@ describe("StudyClientes — norma contable del catálogo del estudio", () => {
     );
   });
 
+  it("muestra el CUIT repetido al guardar un alta nueva", async () => {
+    mockApi({
+      functionalCurrency: "ARS",
+      accountingStandard: null,
+      fiscalYearEndMonth: 12,
+      vatCondition: null,
+      iibbJurisdictions: [],
+      province: null,
+      activity: null,
+      legalForm: null,
+      serviceStartDate: null,
+    });
+    vi.mocked(api.post).mockRejectedValue(
+      new ApiError("CLIENT_CUIT_DUPLICATE", "Ya existe un cliente con ese CUIT en el estudio.", 409),
+    );
+    renderClientes();
+    fireEvent.click(screen.getByRole("button", { name: "Nuevo cliente" }));
+
+    cambiarValor(screen.getByLabelText("Razón social"), "Alta repetida S.A.");
+    cambiarValor(screen.getByLabelText("CUIT"), "20111111112");
+    cambiarValor(screen.getByLabelText("Condición frente al IVA"), "RESPONSABLE_INSCRIPTO");
+    fireEvent.focus(screen.getByLabelText("Provincia"));
+    fireEvent.click(screen.getByRole("option", { name: "Tucumán" }));
+    await within(abrirListado(/Actividad principal/)).findByRole("option", { name: "COMERCIO — Comercio" });
+    cambiarValor(screen.getByLabelText(/Actividad principal/), "COMERCIO — Comercio");
+    fireEvent.focus(screen.getByLabelText("Forma jurídica"));
+    fireEvent.click(screen.getByRole("option", { name: "Sociedad anónima (SA)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cliente" }));
+
+    expect(await screen.findByText("Ya existe un cliente con ese CUIT en el estudio.")).toBeTruthy();
+    expect(vi.mocked(api.post)).toHaveBeenCalledWith("/firms/firm-a/clients", expect.objectContaining({ cuit: "20111111112" }));
+  });
+
   it("registra el correo opcional como contacto principal después de crear el cliente", async () => {
     mockApi({});
     vi.mocked(api.post).mockImplementation(((path: string) =>
