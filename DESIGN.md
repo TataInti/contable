@@ -340,7 +340,7 @@ Las sombras del sistema están tokenizadas; las excepciones observadas son: `box
 
 `packages/design-system/src` es la fuente de los componentes compartidos. Su API pública incluye `Button`, `Field`, `MoneyField`, `Table`, `EmptyState`, `Notice`, las primitivas Dense, `StatusBadge`, `ActionDrawer`, `ConfirmAction`, `ConfirmDialog`, `useConfirmAction`, `AsyncState`, `Icon`, `SectionIndex`, `Switch`, `ToastProvider` y `useNotify`. Las rutas históricas de `apps/web/src/ui` reexportan los componentes migrados para conservar los imports existentes. El paquete expone `@contable/design-system/Dense.css`; el adaptador web lo importa antes de sus reglas contextuales para mantener el orden de la cascada.
 
-Foco organiza esos componentes en **nueve familias, C01 a C09**. Cada familia tiene un contrato: propósito y límite, entradas, variantes, anatomía, estados, interacción, accesibilidad, tokens y aceptación observable. Los nombres de los componentes existentes se mantienen; Foco los evoluciona con props opcionales. Los componentes son genéricos: los estados de consulta, los permisos y las reglas de dominio los resuelve la pantalla que los usa.
+Foco organiza esos componentes en **dieciséis familias, C01 a C16**. C10 a C16 son los patrones de objeto y cola que DS-0 incorpora (panel de objeto, actividad, cola de trabajo, resumen del mes, triage de documento, página de objeto y flujo por pasos). Cada familia tiene un contrato: propósito y límite, entradas, variantes, anatomía, estados, interacción, accesibilidad, tokens y aceptación observable. Los nombres de los componentes existentes se mantienen; Foco los evoluciona con props opcionales. Los componentes son genéricos: los estados de consulta, los permisos y las reglas de dominio los resuelve la pantalla que los usa.
 
 ### Mapa de familias
 
@@ -355,6 +355,13 @@ Foco organiza esos componentes en **nueve familias, C01 a C09**. Cada familia ti
 | C07 — Carga, error y vacío | `AsyncState`, `DenseLoading`, `EmptyState` | Vigente en main, con `size="inline"` |
 | C08 — Estado y mensajes | `StatusBadge`, `Notice`, `ToastProvider`/`useNotify` | Vigente en main |
 | C09 — Paneles y confirmación | `ActionDrawer`, `ConfirmAction`/`ConfirmDialog`, `DeletionDrawer`, `Field`, `MoneyField`, `Switch` | Vigente en main |
+| C10 — Panel de objeto | `ObjectPanel` (sobre `ActionDrawer`), `withObjectPanel`, `withoutObjectPanel` | Nueva en DS-0, sin consumidores |
+| C11 — Actividad por objeto | `ObjectActivity`, `ObjectActivityTrigger`, `comentariosLabel` | Nueva en DS-0, sin consumidores |
+| C12 — Cola de trabajo | `WorkQueue`, `WorkQueueRow` | Nueva en DS-0, sin consumidores |
+| C13 — Resumen del mes | `MonthSummary` | Nueva en DS-0, sin consumidores |
+| C14 — Triage de documento | `DocumentTriage`, `DocumentViewer`, `DocumentFields`, `DecisionBar`, `NextDocumentButton` | Nueva en DS-0, sin consumidores |
+| C15 — Página de objeto | `ObjectPage`, `Breadcrumb` | Nueva en DS-0, sin consumidores |
+| C16 — Flujo por pasos | `StepFlow` | Nueva en DS-0, sin consumidores |
 
 ### Extensiones Foco y su estado
 
@@ -1051,6 +1058,196 @@ El valor de estado/API es normalizado (`1234567.89`); el formato local sólo cor
 #### Switch
 
 Prende o apaga algo que se guarda al instante (un módulo, una preferencia), con el estado escrito al lado. Recibe `checked`, `onChange(next)` y `label` (nombre accesible); acepta `text` y `busy`. Se expone con `role="switch"` y `aria-checked`; mientras guarda, `busy` bloquea otro clic. Apagar algo que afecta a otros pide confirmación. Dentro de un formulario que se envía después va una casilla.
+
+### C10 — Panel de objeto
+
+**Base:** `ObjectPanel` (sobre `ActionDrawer` y `ActionDrawerFooter`). **Estado:** nueva en DS-0; disponible en el paquete y sin consumidores todavía. Cada pantalla la adopta en su corte.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Examinar y decidir sobre un ítem (control, comprobante, lote o documento) sin perder la lista que lo originó. Un objeto con navegación propia va a su página (C15) |
+| Entradas | `kind` (`control`, `comprobante`, `lote` o `documento`), `isOpen`, `onClose`, `title`, `description?`, `children`, `primaryAction?` (un botón), `primaryHint?`, `cancelLabel?` (por defecto «Cancelar») y `returnFocusTo?` (la fila de origen) |
+| Variantes | Con acción primaria: pie fijo con «Cancelar» y la acción. Sin acción primaria: sin pie; el cierre queda en el encabezado |
+| Anatomía | Encabezado con título, descripción y «Cerrar»; cuerpo desplazable con el detalle y la actividad del ítem; pie fijo con una sola acción primaria. `data-object-kind` identifica el tipo en el marcado |
+| Estados | Cerrado, sin DOM. Abierto con el contenido que entrega la pantalla (datos, carga o error local). La acción primaria deshabilitada muestra su motivo |
+| Interacción | Escape y «Cerrar» cierran. Al cerrar, el foco vuelve a `returnFocusTo` o, si no se entrega, a la fila que tenía el foco al abrir. La URL la arma la pantalla con `withObjectPanel(ruta, kind, id)`, que agrega `?panel=<tipo>-<id>`; `withoutObjectPanel(ruta)` la retira al cerrar y conserva el resto de la consulta y el fragmento |
+| Accesibilidad | Diálogo con nombre (título) y descripción. El foco entra al contenido y se contiene mientras el panel está abierto; al cerrar, vuelve al origen; el scroll del cuerpo queda bloqueado |
+| Tokens | `--ds-space-4`, `--ds-space-6`, `--ds-text-base`, `--ds-leading-normal`, `--ds-color-text`, `--ds-color-border-subtle`, `--ds-z-modal` |
+
+**Aceptación observable:**
+- Escape y «Cerrar» devuelven el foco a la fila que abrió el panel.
+- El pie muestra una sola acción primaria junto a «Cancelar».
+- Con un control abierto, la URL lleva `?panel=control-<id>`; al cerrarlo, vuelve a la URL de la lista.
+
+**Correcto:**
+
+```tsx
+<ObjectPanel
+  kind="control"
+  isOpen={abierto}
+  onClose={cerrar}
+  title="Control: Facturas C"
+  returnFocusTo={filaOrigen}
+  primaryAction={<Button type="button" variant="primary" onClick={aceptar}>Aceptar con motivo</Button>}
+>
+  <ComprobantesAfectados />
+  <ObjectActivity entries={actividad} onSubmitComment={comentar} />
+</ObjectPanel>
+```
+
+**Incorrecto:** un `ActionDrawer` con dos acciones primarias en el pie y sin origen del foco declarado. Las acciones que ofrece un control salen de la regla de dominio de la pantalla, no del panel.
+
+### C11 — Actividad por objeto
+
+**Base:** `ObjectActivity`, `ObjectActivityTrigger` y `comentariosLabel`. **Estado:** nueva en DS-0.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Mostrar la trazabilidad de un objeto (historial y comentarios) y permitir comentar sobre él. Cada región pertenece a un objeto: no hay historial global ni comentarios de cartera |
+| Entradas | `label?` (nombre de la región), `entries` (`id`, `kind` `historial` o `comentario`, `at`, `author?`, `text`), `onSubmitComment?` (sin él, no hay redactor) y `busy?` |
+| Variantes | Solo lectura (sin `onSubmitComment`) o con redactor. `ObjectActivityTrigger` es el acceso de barra «Comentarios · N», con `count` y `onOpen` |
+| Anatomía | Lista cronológica: tipo (`Historial` o `Comentario`), autor si existe, fecha y hora en `<time>` y texto. Debajo, el redactor con etiqueta visible «Escribí un comentario» y el botón «Comentar» |
+| Estados | Sin entradas: vacío de sección («Sin actividad todavía»). Enviando (`busy`): redactor y botón bloqueados; el botón dice «Enviando». Sin texto: el envío queda deshabilitado con su motivo |
+| Interacción | «Comentar» envía el texto recortado y limpia el redactor. Un envío en curso no se repite. El comentario entra a la lista cuando la pantalla confirma el guardado |
+| Accesibilidad | Región con nombre; la lista tiene nombre propio; la etiqueta del redactor es persistente; el motivo del envío deshabilitado va enlazado con `aria-describedby`. Las horas son `<time>` |
+| Tokens | `--ds-text-sm`, `--ds-text-base`, `--ds-font-weight-medium`, `--ds-color-text`, `--ds-color-text-muted`, `--ds-color-surface`, `--ds-color-surface-muted`, `--ds-color-border`, `--ds-color-border-subtle`, `--ds-color-text-disabled`, `--ds-radius-md`, `--ds-control-height-md`, `--ds-border-width`, `--ds-space-1`, `--ds-space-2`, `--ds-space-3`, `--ds-space-4`, `--ds-focus-width`, `--ds-focus-offset`, `--ds-color-focus` |
+
+**Aceptación observable:**
+- El acceso de barra muestra «Comentarios · N» con el conteo de comentarios confirmados.
+- Un comentario vacío no se envía, y el motivo queda visible junto al botón.
+- Sin entradas, el bloque dice «Sin actividad todavía» y no dibuja una lista vacía.
+
+**Correcto:** `<ObjectActivityTrigger count={3} onOpen={abrirComentarios} />` en la barra y `<ObjectActivity entries={entradas} onSubmitComment={comentar} />` dentro del panel o de la página del objeto.
+
+**Incorrecto:** un bloque de comentarios de ancho completo debajo de cada etapa. La actividad pertenece al objeto que la genera.
+
+### C12 — Cola de trabajo
+
+**Base:** `WorkQueue` y `WorkQueueRow`. **Estado:** nueva en DS-0.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Listar decisiones pendientes, una por fila. Lo resuelto no vive en la cola: queda en la actividad del objeto |
+| Entradas | `WorkQueue`: `label`, `density?` (`queue` o `compact`), `empty?` y `children` (filas). `WorkQueueRow`: `id`, `title`, `decision`, `subtitle?`, `status?` (clave de `StatusBadge`), `date?`, `amount?` y `onOpen` |
+| Variantes | `queue`: filas de 48 px en la portada y en la lista principal. `compact`: filas de 32 px dentro de un panel |
+| Anatomía | Cinco columnas por fila: principal (título, decisión y contexto), estado, fecha, importe alineado a la derecha con cifras tabulares y la acción «Abrir» |
+| Estados | Con filas. Sin filas: vacío de cola, que es un resultado y no un error. Carga y error los entrega la pantalla con `AsyncState` |
+| Interacción | «Abrir» lleva al objeto, en panel (C10) o en página (C15), según la pantalla. La acción es el botón de la fila |
+| Accesibilidad | Lista con nombre. Cada acción lleva el nombre del objeto («Abrir Facturas C»). El estado se lee como texto de `StatusBadge` |
+| Tokens | `--ds-control-height-md`, `--ds-row-height`, `--ds-space-1`, `--ds-space-2`, `--ds-space-4`, `--ds-text-base`, `--ds-text-sm`, `--ds-font-weight-medium`, `--ds-color-text`, `--ds-color-text-muted`, `--ds-color-border-subtle` |
+
+**Aceptación observable:**
+- Cada fila muestra una sola decisión y una sola acción de abrir.
+- El importe y la fecha quedan alineados a la derecha, con cifras tabulares.
+- Una cola vacía dice que no hay decisiones pendientes y no muestra una lista vacía.
+
+**Correcto:**
+
+```tsx
+<WorkQueue label="Controles bloqueantes">
+  <WorkQueueRow id="c-1" title="Facturas C" decision="Aceptar con motivo o excluir" status="BLOCKING" date="20/11/2026" amount="$ 1.250,00" onOpen={() => abrir("c-1")} />
+</WorkQueue>
+```
+
+**Incorrecto:** una tabla con tres botones por fila (ver, editar, resolver). Una fila tiene una decisión y un acceso.
+
+### C13 — Resumen del mes
+
+**Base:** `MonthSummary`. **Estado:** nueva en DS-0.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Orientar el mes: qué falta, qué está listo y el importe estimado. No repite el contenido de las etapas ni reemplaza el cálculo final |
+| Entradas | `title?` (por defecto «Resumen del mes»), `dueLabel?`, `pending` (`id`, `label`, `href`), `ready` (textos), `estimatedAmount` (ya formateado) y `estimateNote?` |
+| Variantes | Con pendientes, o sin pendientes («No queda nada pendiente.») |
+| Anatomía | Cabecera con título y vencimiento. Tres bloques en una grilla que se apila en pantallas angostas: «Qué falta (N)» con enlaces, «Listo (N)» y «Importe estimado» con su aclaración |
+| Estados | Con pendientes; sin pendientes; sin pasos listos («Todavía no hay pasos listos.»). El importe siempre lleva su aclaración de estimado |
+| Interacción | Cada pendiente es un enlace a la etapa o al objeto que lo resuelve. La portada no ejecuta acciones |
+| Accesibilidad | Región con nombre; tres subregiones con encabezado; los enlaces se leen por su texto. El importe no depende del color |
+| Tokens | `--ds-text-xl`, `--ds-text-2xl`, `--ds-text-sm`, `--ds-font-weight-medium`, `--ds-color-primary`, `--ds-color-text`, `--ds-color-text-muted`, `--ds-color-border-subtle`, `--ds-space-1`, `--ds-space-2`, `--ds-space-4`, `--ds-space-6`, `--ds-space-0-5`, `--ds-focus-width`, `--ds-focus-offset`, `--ds-color-focus`, `--ds-radius-sm` |
+
+**Aceptación observable:**
+- Cada pendiente es un enlace que abre su etapa.
+- Sin pendientes, la portada lo dice en texto.
+- El importe se presenta como estimado.
+
+**Correcto:** `<MonthSummary pending={[{ id: "controles", label: "2 controles bloqueantes", href: ruta }]} ready={["Saldos"]} estimatedAmount="$ 0,00" estimateNote="Estimado; el cálculo final sale en Liquidación." />`
+
+**Incorrecto:** una lista de tareas sin enlaces, o un importe sin la aclaración de que es estimado.
+
+### C14 — Triage de documento
+
+**Base:** `DocumentTriage`, `DocumentViewer`, `DocumentFields` y `DecisionBar` (con `NextDocumentButton`). **Estado:** nueva en DS-0.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Resolver un documento por vez: ver el archivo, revisar sus datos extraídos y decidir. La gestión masiva (filtros, selección y lote) va en otra vista |
+| Entradas | `DocumentTriage`: `queueLabel`, `queue`, `queueOpen`, `onQueueToggle`, `viewer`, `fields` y `decision`. `DocumentViewer`: `title`, `pageLabel?`, `zoomLabel?` y `children`. `DocumentFields`: `fields` (`id`, `label`, `value`, `confidence` `alta`, `media` o `baja`) y `onChange(id, value)`. `DecisionBar`: `label`, `secondary?`, `primary?`, `hint?` y `next?` |
+| Variantes | Cola desplegada o plegada. La barra admite una acción principal y el avance «Siguiente» |
+| Anatomía | Tres zonas: cola angosta a la izquierda, plegable con un botón que informa su estado; visor del documento con nombre, página y zoom; datos extraídos editables junto al visor. Debajo, la barra de decisión: acciones secundarias a la izquierda y, a la derecha, la acción principal, su motivo y «Siguiente» |
+| Estados | Sin documento: el visor dice que no hay documentos por revisar (vacío de sección) y los demás bloques siguen. Confianza por campo en texto: «Confianza alta», «Confianza media» o «Confianza baja». La acción principal deshabilitada muestra su motivo |
+| Interacción | El botón de cola alterna «Ocultar cola» y «Mostrar cola» y mantiene `aria-expanded`. Editar un campo informa `onChange`; guardar o validar es de la pantalla. «Siguiente» pasa al documento siguiente de la cola |
+| Accesibilidad | La cola es un `aside` con nombre y queda oculta (`hidden`) cuando está plegada; el botón controla su `id`. El visor se nombra con el archivo. Cada campo tiene etiqueta persistente y su confianza como descripción. La barra es un grupo con nombre |
+| Tokens | `--ds-color-border`, `--ds-color-border-subtle`, `--ds-color-surface`, `--ds-color-surface-muted`, `--ds-color-primary`, `--ds-color-selected`, `--ds-color-text`, `--ds-color-text-muted`, `--ds-color-text-faint`, `--ds-color-border-strong`, `--ds-radius-md`, `--ds-radius-sm`, `--ds-text-sm`, `--ds-text-base`, `--ds-control-height-sm`, `--ds-space-2`, `--ds-space-3`, `--ds-space-4`, `--ds-focus-width`, `--ds-focus-offset`, `--ds-color-focus` |
+
+**Aceptación observable:**
+- Con la cola plegada, el documento ocupa el ancho disponible.
+- Cada campo dice su confianza en texto.
+- «Siguiente» muestra el documento siguiente sin volver a la lista.
+
+**Correcto:** `<DocumentTriage queueOpen={abierta} onQueueToggle={alternar} queue={lista} viewer={<DocumentViewer title={nombre} pageLabel="Página 1 de 2">{vista}</DocumentViewer>} fields={<DocumentFields fields={campos} onChange={editar} />} decision={<DecisionBar label="Decisión sobre el documento" primary={aprobar} next={<NextDocumentButton onNext={siguiente} />} />} />`
+
+**Incorrecto:** un formulario aislado sin el documento a la vista, o una lista masiva con casillas dentro del triage.
+
+**Límites de esta pieza (sección breve):** las decisiones y sus reglas (aprobar, enviar a clasificación, rechazar, mover de cliente) las define la pantalla y su permiso. Los atajos de teclado del triage quedan para la implementación de la pantalla. El selector «Mover a…» se entrega como acción de la barra, armado con `SearchSelect`.
+
+### C15 — Página de objeto
+
+**Base:** `ObjectPage` y `Breadcrumb`. **Estado:** nueva en DS-0. Las secciones se componen con `DenseSection`, `Table` y `ObjectActivity`.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Mostrar un objeto de larga vida (cliente) con sus períodos, su actividad y el acceso a su configuración. La configuración fiscal y los formularios largos viven en su propia página |
+| Entradas | `ObjectPage`: `breadcrumb` (`label`, `href?`), `title`, `status?`, `description?`, `actions?` y `children`. `Breadcrumb`: `items` y `label?` |
+| Variantes | Con o sin estado, descripción y acciones |
+| Anatomía | Migas de pan («Clientes › Cliente A»). Cabecera con el nombre como `h1`, el estado y las acciones. Debajo, las secciones: períodos y actividad. El acceso a Configuración fiscal es un enlace de acción de la cabecera |
+| Estados | Con secciones; sin estado; sin acciones. La carga y el error de cada sección los resuelve su consulta |
+| Interacción | Las migas llevan al nivel superior. La página actual va sin enlace y con `aria-current="page"`. Cada período lleva a su legajo |
+| Accesibilidad | Navegación de migas con nombre; un único `h1`; el nivel actual se marca con `aria-current`; cada sección tiene su encabezado |
+| Tokens | `--ds-text-2xl`, `--ds-text-sm`, `--ds-leading-tight`, `--ds-font-weight-medium`, `--ds-color-text`, `--ds-color-text-muted`, `--ds-color-text-faint`, `--ds-color-border-subtle`, `--ds-color-primary`, `--ds-space-0-5`, `--ds-space-1`, `--ds-space-2`, `--ds-space-4`, `--ds-space-6`, `--ds-focus-width`, `--ds-focus-offset`, `--ds-color-focus`, `--ds-radius-sm` |
+
+**Aceptación observable:**
+- Hay un solo `h1` y las migas muestran la ubicación.
+- Configuración fiscal es un enlace a su página.
+- La actividad del cliente se abre desde «Comentarios · N».
+
+**Correcto:** `<ObjectPage breadcrumb={[{ label: "Clientes", href: "/clientes" }, { label: nombre }]} title={nombre} actions={<Button variant="secondary" href={ruta}>Configuración fiscal</Button>}>{periodos}</ObjectPage>`
+
+**Incorrecto:** formularios de configuración fiscal dentro de la ficha resumen, o un título repetido en la barra y en la cabecera.
+
+### C16 — Flujo por pasos
+
+**Base:** `StepFlow`. **Estado:** nueva en DS-0.
+
+| Campo | Contrato |
+|---|---|
+| Propósito y límite | Mostrar una secuencia con dependencias (cierre, presentación, pago). Un paso no se adelanta: el flujo indica qué falta para avanzar. No reemplaza los controles ni la lista de decisiones |
+| Entradas | `label` (nombre de la secuencia) y `steps`: `key`, `label`, `status` (`done`, `current`, `blocked` o `pending`), `reason?` y `action?` |
+| Variantes | Según el estado de cada paso. El paso en curso es el único con acción |
+| Anatomía | Lista ordenada: marca numerada (decorativa), nombre del paso, estado en texto, motivo cuando corresponde y, solo en el paso en curso, la acción |
+| Estados | «Hecho», «En curso», «Bloqueado» y «Pendiente». El motivo aparece en los pasos bloqueados o pendientes; un paso hecho no lo repite |
+| Interacción | Solo el paso en curso ofrece su acción. Los pasos bloqueados muestran qué falta, sin acción |
+| Accesibilidad | Lista con nombre; el paso en curso lleva `aria-current="step"`; el estado es texto, no color; la marca numérica es decorativa |
+| Tokens | `--ds-control-height-sm`, `--ds-radius-full`, `--ds-border-width`, `--ds-color-border-strong`, `--ds-color-border-subtle`, `--ds-color-success`, `--ds-color-primary`, `--ds-color-selected`, `--ds-color-warning`, `--ds-color-text`, `--ds-color-text-muted`, `--ds-text-sm`, `--ds-font-weight-medium`, `--ds-space-1`, `--ds-space-2`, `--ds-space-3` |
+
+**Aceptación observable:**
+- Un solo paso está en curso y muestra su acción.
+- Un paso bloqueado dice qué falta.
+- Cada estado se lee en texto, sin depender del color.
+
+**Correcto:** `<StepFlow label="Cierre del mes" steps={[{ key: "revision", label: "Revisar controles", status: "done" }, { key: "finalizar", label: "Finalizar el mes", status: "current", action: finalizarBoton }, { key: "presentar", label: "Presentar", status: "blocked", reason: "Falta finalizar el mes." }]} />`
+
+**Incorrecto:** un botón «Presentar» habilitado antes de que el paso anterior esté hecho, o una lista de controles mezclada con los pasos del cierre.
 
 ### Familia Dense del paquete
 
