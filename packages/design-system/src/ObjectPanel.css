@@ -1,0 +1,11 @@
+/* Panel de objeto (C10): el envoltorio solo ordena el contenido; el cajón lo da ActionDrawer. */
+
+.object-panel {
+  display: grid;
+  gap: var(--ds-space-6);
+  min-inline-size: 0;
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-base);
+  line-height: var(--ds-leading-normal);
+  color: var(--ds-color-text);
+}

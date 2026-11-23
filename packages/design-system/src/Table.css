@@ -74,6 +74,24 @@
   }
 }
 
+.ds-table__cell-stack {
+  display: grid;
+  min-inline-size: 0;
+  line-height: var(--ds-leading-tight);
+}
+
+.ds-table__cell-primary,
+.ds-table__cell-secondary {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-table__cell-secondary {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
 .ds-table__cell--right {
   text-align: right;
   font-variant-numeric: tabular-nums;

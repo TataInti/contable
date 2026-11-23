@@ -1,3 +1,5 @@
+import "./StatusBadge.css";
+
 export type StatusTone = "ok" | "warn" | "danger" | "info" | "muted";
 export type StatusBadgeVariant = "plain" | "pill";
 

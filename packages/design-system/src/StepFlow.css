@@ -1,0 +1,88 @@
+/* Flujo secuencial por pasos (C16). Estado en texto; el color acompaña. Solo tokens --ds-*. */
+
+.step-flow {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--ds-font-sans);
+  color: var(--ds-color-text);
+}
+
+.step-flow__paso {
+  display: grid;
+  grid-template-columns: var(--ds-control-height-sm) minmax(0, 1fr);
+  gap: var(--ds-space-3);
+  padding-block: var(--ds-space-3);
+  border-block-start: 1px solid var(--ds-color-border-subtle);
+}
+
+.step-flow__marca {
+  display: inline-grid;
+  place-items: center;
+  block-size: var(--ds-control-height-sm);
+  inline-size: var(--ds-control-height-sm);
+  border-radius: var(--ds-radius-full);
+  border: var(--ds-border-width) solid var(--ds-color-border-strong);
+  font-size: var(--ds-text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-color-text-muted);
+}
+
+.step-flow__cuerpo {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.step-flow__titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  margin: 0;
+}
+
+.step-flow__nombre {
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.step-flow__estado {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}
+
+.step-flow__motivo {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}
+
+.step-flow__accion {
+  padding-block-start: var(--ds-space-1);
+}
+
+.step-flow__paso--done .step-flow__marca {
+  border-color: var(--ds-color-success);
+  color: var(--ds-color-success);
+}
+
+.step-flow__paso--current .step-flow__marca {
+  border-color: var(--ds-color-primary);
+  background: var(--ds-color-selected);
+  color: var(--ds-color-primary);
+}
+
+.step-flow__paso--blocked .step-flow__marca {
+  border-color: var(--ds-color-warning);
+  color: var(--ds-color-warning);
+}
+
+.step-flow__paso--blocked .step-flow__estado {
+  color: var(--ds-color-warning);
+}
+
+.step-flow__paso--current .step-flow__nombre {
+  color: var(--ds-color-primary);
+}

@@ -9,6 +9,15 @@ export interface TableColumn<T> {
   accessor?: (row: T) => ReactNode;
 }
 
+export function TableCellStack({ primary, secondary }: { primary: ReactNode; secondary: ReactNode }) {
+  return (
+    <span className="ds-table__cell-stack">
+      <span className="ds-table__cell-primary">{primary}</span>
+      <span className="ds-table__cell-secondary">{secondary}</span>
+    </span>
+  );
+}
+
 export interface TableProps<T> extends HTMLAttributes<HTMLTableElement> {
   columns: TableColumn<T>[];
   rows: T[];

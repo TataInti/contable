@@ -1,0 +1,79 @@
+/* Presentación mínima de los fixtures de DS-0 (solo demostración; no es una pantalla de la app). */
+
+.patrones-demo {
+  display: grid;
+  gap: var(--ds-space-4);
+  min-inline-size: 0;
+  padding: var(--ds-space-4);
+  font-family: var(--ds-font-sans);
+  color: var(--ds-color-text);
+}
+
+.patrones-demo__url {
+  margin: 0;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.patrones-demo__lista {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.patrones-demo__opcion {
+  inline-size: 100%;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  font: inherit;
+  font-size: var(--ds-text-sm);
+  text-align: start;
+  color: var(--ds-color-text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  cursor: pointer;
+}
+
+.patrones-demo__opcion strong,
+.patrones-demo__opcion small { display: block; }
+.patrones-demo__opcion small { margin-block-start: var(--ds-space-0-5); color: var(--ds-color-text-muted); }
+.patrones-demo__opcion[aria-current="true"] { background: var(--ds-color-selected); font-weight: var(--ds-font-weight-medium); }
+
+.patrones-demo__opcion:focus-visible {
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.patrones-demo__hoja {
+  display: grid;
+  align-content: start;
+  gap: var(--ds-space-3);
+  min-block-size: 22rem;
+  padding: var(--ds-space-6);
+  border: var(--ds-border-width) solid var(--ds-color-border);
+  background: var(--ds-color-surface);
+  color: var(--ds-color-text);
+}
+.patrones-demo__hoja > div:first-child { display: flex; justify-content: space-between; gap: var(--ds-space-3); }
+.patrones-demo__hoja h2 { margin: var(--ds-space-6) 0; }
+.patrones-demo__hoja p { display: flex; justify-content: space-between; gap: var(--ds-space-3); margin: 0; padding-block-end: var(--ds-space-2); border-block-end: var(--ds-border-width) solid var(--ds-color-border-subtle); }
+
+.patrones-demo__fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ds-space-3);
+}
+
+.patrones-demo__fact { display: flex; justify-content: space-between; align-items: center; gap: var(--ds-space-3); }
+.patrones-demo__decisiones { display: grid; gap: var(--ds-space-2); }
+.patrones-demo__motivo { display: grid; gap: var(--ds-space-2); margin-block-start: var(--ds-space-3); }
+.patrones-demo__tabs { display: flex; gap: var(--ds-space-4); overflow: auto; border-block-end: var(--ds-border-width) solid var(--ds-color-border-subtle); }
+.patrones-demo__triage-queue, .patrones-demo__triage-fields { display: grid; align-content: start; gap: var(--ds-space-2); min-inline-size: 0; }
+.patrones-demo__triage-queue h2, .patrones-demo__triage-fields h1 { margin: 0; }
+.patrones-demo__triage-queue > p, .patrones-demo__triage-fields > p { margin: 0; }
+
