@@ -69,7 +69,6 @@ describe("ObjectPanel", () => {
     expect(panel).toHaveAccessibleDescription("Dos comprobantes afectados");
     expect(panel.querySelector('[data-object-kind="control"]')).not.toBeNull();
     expect(screen.getByText("Detalle sintético del control")).toBeInTheDocument();
-    expect(getComputedStyle(screen.getByRole("heading", { name: "Control: Facturas C" })).whiteSpace).toBe("nowrap");
   });
 
   it("cierra con Escape y devuelve el foco a la fila de origen", async () => {

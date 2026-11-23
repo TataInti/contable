@@ -142,6 +142,7 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await rowFacturas.getByRole("button", { name: /Abrir/ }).click();
     const firstDrawer = page.getByRole("dialog");
     await expect(page).toHaveURL(/panel=control-/);
+    await expect(firstDrawer.getByRole("heading", { name: "Facturas C", exact: true })).toHaveCSS("white-space", "nowrap");
     await expect(firstDrawer.getByRole("list", { name: "Comprobantes afectados" })).toBeVisible();
     await expect(firstDrawer.getByText("C · 0001-00000001")).toBeVisible();
     await expect(firstDrawer.getByText("C · 0001-00000002")).toBeVisible();
