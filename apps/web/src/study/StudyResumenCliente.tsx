@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api, type ClientContact, type ClientSummary } from "../lib/api";
+import { formatCuit } from "../lib/cuit";
 import { useClientContext } from "../context/ClientContext";
 import { DenseHeader, DensePage, DenseSearch, DenseToolbar, useDensity } from "../ui/Dense";
 import "./study.css";
@@ -125,6 +126,8 @@ export function StudyResumenCliente() {
 
   const { client, accounting, fiscal, counts } = query.data;
   const profile = client.profile;
+  const nombreComercial = client.tradeName?.trim();
+  const descripcionCliente = `${client.legalName}${nombreComercial && nombreComercial.toLocaleLowerCase() !== client.legalName.trim().toLocaleLowerCase() ? ` · ${nombreComercial}` : ""} · CUIT ${formatCuit(client.cuit)}`;
   const sections: SummarySectionDefinition[] = [
     { id: "overview", group: "Resumen", label: "Resumen" },
     { id: "accounting-periods", group: "Contable", label: "Períodos contables" },
@@ -143,7 +146,7 @@ export function StudyResumenCliente() {
     <DensePage density={density} flow className="client-summary">
       <DenseHeader
         title="Resumen del cliente"
-        description={`${client.legalName}${client.tradeName ? ` · ${client.tradeName}` : ""} · CUIT ${client.cuit}`}
+        description={descripcionCliente}
         actions={acciones}
       />
 

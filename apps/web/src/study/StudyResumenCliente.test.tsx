@@ -209,7 +209,9 @@ describe("StudyResumenCliente — composición del resumen", () => {
     const overview = await screen.findByRole("region", { name: "Resumen" });
     expect(within(overview).getByRole("heading", { name: "Resumen", level: 2 })).toBeTruthy();
     expect(within(overview).queryByRole("heading", { name: "Estado del cliente" })).toBeNull();
-    expect(screen.getByText("En configuración")).toBeTruthy();
+    expect(within(overview).getByText("Activo")).toBeTruthy();
+    expect(screen.getByText("Alfa Uno S.A. · Alfa · CUIT 20-11111111-2")).toBeTruthy();
+    expect(screen.queryByText("En configuración")).toBeNull();
     expect(screen.getAllByText(/Actualizado/)).toHaveLength(1);
     expect(within(overview).getByText("1 vigente")).toBeTruthy();
     expect(within(overview).getByText("Obligación materializada")).toBeTruthy();
@@ -232,6 +234,14 @@ describe("StudyResumenCliente — composición del resumen", () => {
     expect(within(fiscalGroup).getByRole("button", { name: "Actividades registradas" })).toBeTruthy();
     expect(fiscalGroup.querySelectorAll("button")).toHaveLength(3);
     expect(fiscalGroup.querySelectorAll("small")).toHaveLength(0);
+  });
+
+  it("evita repetir la razón social en el subtítulo y formatea el CUIT", async () => {
+    const summary = summaryFixture();
+    summary.client.tradeName = summary.client.legalName;
+    renderSummary(summary);
+
+    expect(await screen.findByText("Alfa Uno S.A. · CUIT 20-11111111-2")).toBeTruthy();
   });
 
   it("muestra ejercicios contables únicamente cuando hay uno abierto", async () => {

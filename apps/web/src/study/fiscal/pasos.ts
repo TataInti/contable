@@ -30,6 +30,30 @@ export function nextRequiredStepFor(stepCompletion: Record<FiscalStep, boolean>)
   return FISCAL_STEPS.find((item) => !stepCompletion[item.key]);
 }
 
+export function fiscalConfigurationCompleteFor({
+  latestProfile,
+  registrations,
+  activities,
+  periods,
+  obligations,
+}: {
+  latestProfile: unknown;
+  registrations: readonly unknown[];
+  activities: readonly unknown[];
+  periods: readonly unknown[];
+  obligations: readonly unknown[];
+}) {
+  return !nextRequiredStepFor(
+    stepCompletionFor({
+      latestProfile,
+      registrationsQuery: { data: registrations },
+      clientActivitiesQuery: { data: activities },
+      periodsQuery: { data: periods },
+      obligationsQuery: { data: obligations },
+    }),
+  );
+}
+
 // Un perfil cargado pero sin activar no está terminado: se dice, en lugar de darlo por completo.
 export function stepStatusLabelFor(
   key: FiscalStep,

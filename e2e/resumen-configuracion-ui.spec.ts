@@ -16,7 +16,7 @@ import { altaClienteRI, crearPeriodoIIBB, inscribirIIBB, vincularActividad, IIBB
 const CLIENTE = {
   legalName: `Cliente E2E Estado ${SUFFIX} S.R.L.`,
   tradeName: `E2E Estado ${SUFFIX}`,
-  cuit: syntheticCuit(Number.parseInt(RUN, 36) + 10_000),
+  cuit: syntheticCuit(Number.parseInt(RUN, 36) + 12_000),
   fiscalAddress: "Av. Mate de Luna 1500, San Miguel de Tucumán",
 };
 const OCTUBRE = { start: "2026-10-01", end: "2026-10-31", mes: "Octubre de 2026", label: `Octubre 2026 IIBB ${SUFFIX}` };
@@ -41,5 +41,9 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
     const fila = page.locator(".client-summary__overview-facts > div").filter({ hasText: "Configuración fiscal" });
     await expect(fila, "dato «Configuración fiscal» del Resumen").toContainText("Completado", { timeout: 15_000 });
     await expect(fila).not.toContainText("Pendiente");
+    await expect(page.locator(".client-summary__overview-status")).toContainText("Activo");
+    await expect(page.locator(".client-summary__overview-status")).not.toContainText("En configuración");
+    const encabezado = `${CLIENTE.legalName} · ${CLIENTE.tradeName} · CUIT ${CLIENTE.cuit.slice(0, 2)}-${CLIENTE.cuit.slice(2, 10)}-${CLIENTE.cuit.slice(10)}`;
+    await expect(page.getByText(encabezado, { exact: true })).toBeVisible();
   });
 });

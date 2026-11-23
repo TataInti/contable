@@ -5,7 +5,7 @@ import { formatearFecha } from "../../../lib/formatoFechas";
 import { DenseSection } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { SummaryFact } from "../Piezas";
-import { nextRequiredStepFor, stepCompletionFor } from "../../fiscal/pasos";
+import { fiscalConfigurationCompleteFor } from "../../fiscal/pasos";
 
 type Props = {
   client: ClientSummary["client"];
@@ -22,15 +22,14 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
     (latest, item) => (!latest || item.version > latest.version ? item : latest),
     undefined,
   );
-  const configuracionCompleta = !nextRequiredStepFor(
-    stepCompletionFor({
-      latestProfile: ultimoPerfil,
-      registrationsQuery: { data: fiscal.registrations },
-      clientActivitiesQuery: { data: fiscal.activities },
-      periodsQuery: { data: fiscal.periods },
-      obligationsQuery: { data: fiscal.obligations },
-    }),
-  );
+  const configuracionCompleta = fiscalConfigurationCompleteFor({
+    latestProfile: ultimoPerfil,
+    registrations: fiscal.registrations,
+    activities: fiscal.activities,
+    periods: fiscal.periods,
+    obligations: fiscal.obligations,
+  });
+  const estadoResumen = client.status === "ONBOARDING" && client.profile && configuracionCompleta ? "ACTIVE" : client.status;
   return (
     <DenseSection
       id="rc-resumen"
@@ -41,7 +40,7 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
         <div className="client-summary__overview-meta">
           <span className="client-summary__overview-status">
             <span>Estado</span>
-            <StatusBadge status={client.status} variant="pill" />
+            <StatusBadge status={estadoResumen} variant="pill" />
           </span>
           <span className="client-summary__overview-created">
             Alta en el estudio {formatearFecha(client.createdAt)}
