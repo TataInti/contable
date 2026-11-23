@@ -16,7 +16,7 @@ describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
 
   it("panel de control: abre el detalle, cierra con Escape, devuelve el foco y no imprime la ruta", () => {
     render(<ControlesPanelDemo />);
-    const fila = screen.getByRole("button", { name: "Abrir Facturas C: 2 comprobantes" });
+    const fila = screen.getByRole("button", { name: "Revisar Facturas C: 2 comprobantes" });
     fila.focus();
     fireEvent.click(fila);
 
@@ -34,7 +34,7 @@ describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
 
   it("panel de control: el pie tiene una sola acción primaria y la actividad admite comentarios", () => {
     render(<ControlesPanelDemo />);
-    fireEvent.click(screen.getByRole("button", { name: "Abrir Facturas C: 2 comprobantes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revisar Facturas C: 2 comprobantes" }));
 
     const dialogo = screen.getByRole("dialog");
     expect(dialogo.querySelectorAll(".ds-button--primary")).toHaveLength(1);

@@ -94,6 +94,7 @@ export function ControlesPanelDemo({ initiallyOpen = false }: { initiallyOpen?: 
             decision={control.decision}
             status={control.estado}
             amount={control.importe}
+            actionLabel="Revisar"
             onOpen={() => abrir(control, document.activeElement as HTMLElement)}
           />
         ))}
