@@ -53,4 +53,15 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
     await expect(filaCliente).toContainText("Activo");
     await expect(filaCliente).not.toContainText("En configuración");
   });
+
+  await test.step("Norma contable opcional (A57): ni el detalle de la ficha ni el Resumen la cuentan como faltante", async () => {
+    const fila = page.getByRole("row").filter({ hasText: CLIENTE.legalName });
+    await fila.getByRole("button", { name: CLIENTE.legalName }).click();
+    await expect(page.getByText(/falta[^.]*norma contable/i)).toHaveCount(0);
+
+    await goTo(page, "Resumen");
+    await page.getByRole("button", { name: "Ficha contable", exact: true }).click();
+    await expect(page.getByText("Sin norma contable", { exact: true })).toBeVisible();
+    await expect(page.getByText(/falta[^.]*norma contable/i)).toHaveCount(0);
+  });
 });

@@ -1,8 +1,6 @@
 import { useEffect, useRef, type FormEvent } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Notice, SearchSelect } from "@contable/design-system";
-import { Link } from "react-router-dom";
-import { moduleById } from "../../moduleRegistry";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ApiError, type Client } from "../../../lib/api";
 import {
@@ -39,14 +37,9 @@ interface PanelEdicionProps {
   clientActivityCatalog: UseQueryResult<ClientEconomicActivityOption[], Error>;
   catalogos: CatalogosFicha;
   guardadoParcial: "identidad" | "ficha" | null;
-  /** Quien administra el estudio (firm.manage) ve el enlace a Usuarios y accesos en el aviso de normas. */
-  puedeCargarNormas: boolean;
 }
 
-const MODULO_USUARIOS = moduleById("usuarios")!;
-
 export function PanelEdicion({
-  puedeCargarNormas,
   editingClient,
   setEditingClient,
   identityForm,
@@ -85,7 +78,6 @@ export function PanelEdicion({
     standardValue,
     standardCatalogUnavailable,
     standardCatalogLoading,
-    standardCatalogEmpty,
     reintentarNormas,
     standardCatalog,
     outOfCatalogJurisdictions,
@@ -370,7 +362,7 @@ export function PanelEdicion({
               className="ctxbar__input"
               value={standardValue}
               onChange={(value) => setProfileForm({ ...profileForm, accountingStandard: value })}
-              placeholder="Sin definir"
+              placeholder="Sin norma contable"
               options={[
                 ...(standardCatalogUnavailable && standardValue ? [{ value: standardValue, label: standardValue }] : []),
                 ...standardCatalog.filter((entry) => entry.isActive).map((entry) => ({ value: entry.name, label: entry.name })),
@@ -393,25 +385,6 @@ export function PanelEdicion({
             >
               No se pudo cargar el catálogo de normas. Reintentá.
             </Notice>
-          ) : null}
-          {standardCatalogEmpty ? (
-            puedeCargarNormas ? (
-              <EmptyState
-                size="inline"
-                title="No hay normas contables cargadas."
-                action={
-                  <Link to={MODULO_USUARIOS.path}>
-                    Cargalas en {MODULO_USUARIOS.label}, pestaña Normas contables
-                  </Link>
-                }
-              />
-            ) : (
-              <EmptyState
-                size="inline"
-                title="No hay normas contables cargadas."
-                description={`Pedí a quien administra el estudio que las cargue en ${MODULO_USUARIOS.label}, pestaña Normas contables.`}
-              />
-            )
           ) : null}
           {standardUnknown ? (
             <Notice tone="warning">
