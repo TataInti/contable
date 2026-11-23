@@ -49,14 +49,14 @@ describe("fixtures de los patrones DS-0 (datos sintéticos)", () => {
     expect(within(dialogo).getByText("Pedir el CUIT por correo")).toBeInTheDocument();
   });
 
-  it("portada: los pendientes son enlaces y el importe se muestra", () => {
+  it("portada: reproduce impuestos, atención y avance del cierre", () => {
     render(<PortadaDemo />);
-
-    expect(screen.getByRole("link", { name: "2 controles bloqueantes" })).toHaveAttribute(
-      "href",
-      "#controles",
-    );
-    expect(screen.getByText("$ 0,00")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Impuestos del período" })).toBeInTheDocument();
+    expect(screen.getByText("Ingresos Brutos · Tucumán")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Requiere atención" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Revisar →" })).toHaveAttribute("href", "#controles");
+    expect(screen.getByRole("list", { name: "Avance del cierre" }).querySelectorAll("li")).toHaveLength(5);
+    expect(screen.getByText("$ 48.450,00")).toBeInTheDocument();
     expect(document.querySelectorAll(".ds-button--primary")).toHaveLength(0);
   });
 

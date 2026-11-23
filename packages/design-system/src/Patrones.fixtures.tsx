@@ -166,14 +166,27 @@ export function PortadaDemo() {
   return (
     <div className="patrones-demo">
       <MonthSummary
-        dueLabel="Vence el 20/11/2026"
-        pending={[
-          { id: "controles", label: "2 controles bloqueantes", href: "#controles" },
-          { id: "fuentes", label: "1 fuente sin lote", href: "#fuentes" },
+        title="Lo relevante para cerrar octubre"
+        dueLabel="Vence el 20/11/2026 · revisión 1"
+        pending={[]}
+        ready={[]}
+        estimatedAmount="$ 48.450,00"
+        estimateNote=""
+        taxes={[
+          { id: "ibb", label: "Ingresos Brutos · Tucumán", detail: "Liquidación estimada", status: "NEEDS_REVIEW", amount: "$ 48.450,00" },
+          { id: "tem", label: "Tasa de Comercio · San Miguel", detail: "Sin saldo a ingresar", status: "READY", amount: "$ 0,00" },
         ]}
-        ready={["Saldos del mes anterior", "Clasificación de 40 comprobantes"]}
-        estimatedAmount="$ 0,00"
-        estimateNote="Estimado sintético: el cálculo final sale en Liquidación."
+        alerts={[
+          { id: "controles", label: "2 controles bloquean el cierre", detail: "Facturas C y acreditaciones bancarias", status: "BLOCKING", action: "Revisar", href: "#controles" },
+          { id: "triage", label: "4 comprobantes esperan triage", detail: "Datos extraídos para confirmar", status: "NEEDS_REVIEW", action: "Abrir", href: "#triage" },
+        ]}
+        steps={[
+          { key: "fuentes", label: "Fuentes", status: "done", reason: "40 comprobantes y 3 percepciones" },
+          { key: "clasificacion", label: "Clasificación", status: "done", reason: "40 comprobantes clasificados" },
+          { key: "calculo", label: "Cálculo", status: "done", reason: "IIBB estimado en $ 48.450,00" },
+          { key: "controles", label: "Controles", status: "blocked", reason: "2 decisiones pendientes" },
+          { key: "cierre", label: "Cierre", status: "pending", reason: "Disponible al resolver bloqueos" },
+        ]}
       />
     </div>
   );

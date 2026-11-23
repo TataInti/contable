@@ -1,4 +1,21 @@
-/* Portada del Legajo (C13). Tres bloques en una grilla; solo tokens --ds-*. */
+.month-summary__eyebrow { margin: 0 0 var(--ds-space-1); color: var(--ds-color-text-muted); font-size: var(--ds-text-xs); font-weight: var(--ds-font-weight-bold); text-transform: uppercase; }
+.month-summary__reference-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 1fr); gap: var(--ds-space-8); }
+.month-summary__reference-main { display: grid; align-content: start; gap: var(--ds-space-6); min-inline-size: 0; }
+.month-summary--reference .month-summary__cabecera { display: block; }
+.month-summary--reference .month-summary__cabecera h2 { font-size: var(--ds-text-2xl); }
+.month-summary--reference .month-summary__vence { margin-block-start: var(--ds-space-2); }
+.month-summary--reference .month-summary__bloque h3, .month-summary__flow h3 { padding-block-end: var(--ds-space-2); border-block-end: 1px solid var(--ds-color-border-subtle); color: var(--ds-color-text); font-weight: var(--ds-font-weight-bold); }
+.month-summary__taxes li, .month-summary__alerts li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--ds-space-3); padding-block: var(--ds-space-2); border-block-end: 1px solid var(--ds-color-border-subtle); }
+.month-summary__copy { display: grid; gap: var(--ds-space-0-5); min-inline-size: 0; }
+.month-summary__copy small { color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
+.month-summary__amount { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.month-summary__alerts { margin-block-start: var(--ds-space-1); }
+.month-summary__alerts .month-summary__enlace { white-space: nowrap; text-decoration: none; color: var(--ds-color-text); }
+.month-summary__flow { min-inline-size: 0; }
+.month-summary__flow .step-flow { margin: 0; }
+@media (max-width: 800px) { .month-summary__reference-grid { grid-template-columns: 1fr; gap: var(--ds-space-6); } }
+@media (max-width: 560px) { .month-summary__taxes li, .month-summary__alerts li { grid-template-columns: minmax(0, 1fr) auto; } .month-summary__amount, .month-summary__alerts .month-summary__enlace { grid-column: 2; } }
+
 
 .month-summary {
   display: grid;
