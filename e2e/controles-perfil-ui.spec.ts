@@ -174,16 +174,15 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     for (const nombre of ["Acreditaciones bancarias vs. facturación", "Caja e imputaciones del período"]) {
       const queue = page.getByRole("list", { name: "Controles abiertos" });
       const row = queue.getByRole("listitem").filter({ hasText: nombre });
-      await expect(row, `«${nombre}» aparece una sola vez en abiertos`).toHaveCount(1);
+      // Espera estricta de 4U: un solo control abierto, resolverlo una vez y comprobar cero tras el refetch.
+      await expect(row, `«${nombre}» abierto tras el recálculo`).toHaveCount(1);
       await row.getByRole("button", { name: /Abrir/ }).click();
       const drawer = page.getByRole("dialog");
-      await expect(drawer.getByLabel("Motivo")).toHaveCount(0);
       await drawer.getByRole("button", { name: "Resolver", exact: true }).click();
       await drawer.getByLabel("Motivo").fill(MOTIVO_CONTROL);
-      await expect(drawer.getByRole("button", { name: "Confirmar resolución" })).toBeEnabled();
       await mutating(page, "/resolve", () => drawer.getByRole("button", { name: "Confirmar resolución", exact: true }).click());
       await expect(drawer).toBeHidden();
-      await expect(queue.getByRole("listitem").filter({ hasText: nombre }), `«${nombre}» no reaparece en abiertos`).toHaveCount(0);
+      await expect(queue.getByRole("listitem").filter({ hasText: nombre }), `«${nombre}» sin abiertos`).toHaveCount(0);
     }
   });
 

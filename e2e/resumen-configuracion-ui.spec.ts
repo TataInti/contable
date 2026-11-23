@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { RUN, SUFFIX, goTo, login, syntheticCuit } from "./helpers/ui";
-import { altaClienteRI, crearPeriodoIIBB, inscribirIIBB, vincularActividad, IIBB } from "./helpers/liquidacion-ui";
+import { altaClienteRI, crearPeriodoIIBB, inscribirIIBB, pick, vincularActividad, IIBB } from "./helpers/liquidacion-ui";
 
 /**
  * Un solo estado de la configuración fiscal (D4), operado como lo opera el contador: se completa la configuración de
@@ -52,5 +52,16 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
     const filaCliente = page.getByRole("row").filter({ hasText: CLIENTE.legalName });
     await expect(filaCliente).toContainText("Activo");
     await expect(filaCliente).not.toContainText("En configuración");
+  });
+
+  await test.step("Norma contable opcional (A57): ni el detalle de la ficha ni el Resumen la cuentan como faltante", async () => {
+    const fila = page.getByRole("row").filter({ hasText: CLIENTE.legalName });
+    await fila.getByRole("button", { name: CLIENTE.legalName, exact: true }).click();
+    await expect(page.getByText(/falta[^.]*norma contable/i)).toHaveCount(0);
+
+    await goTo(page, "Resumen");
+    await pick(page.getByRole("combobox", { name: "Sección del cliente" }), "Ficha contable");
+    await expect(page.getByText("Sin norma contable", { exact: true })).toBeVisible();
+    await expect(page.getByText(/falta[^.]*norma contable/i)).toHaveCount(0);
   });
 });

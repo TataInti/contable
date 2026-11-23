@@ -775,7 +775,9 @@ export function StudyExpedienteMensual() {
     }));
     const search = new URLSearchParams(location.search);
     search.set("etapa", WORKPAPER_STEPS[index]?.title.toLocaleLowerCase("es-AR") ?? "saldos");
-    navigate({ search: `?${search.toString()}` }, { replace: true });
+    // flushSync: la etapa elegida se pinta en el mismo clic. Sin esto, el router la aplica en una transición
+    // diferida y el panel nuevo aparece después de que el usuario (o el spec) ya miró la pantalla.
+    navigate({ search: `?${search.toString()}` }, { replace: true, flushSync: true });
   };
 
   const renderEtapa = (wp: Workpaper, step: number) => {
@@ -895,20 +897,31 @@ export function StudyExpedienteMensual() {
             }
           />
         ) : step === 4 ? (
-          <EtapaControles
-            capabilities={capacidades}
-            wp={wp}
-            controlResolutions={controlResolutions}
-            setControlResolutions={setControlResolutions}
-            controlEvidence={controlEvidence}
-            setControlEvidence={setControlEvidence}
-            documentsQuery={documentsQuery}
-            affectedVouchers={classificationQuery.data?.items ?? []}
-            onGoToClassification={() => goToStep(2)}
-            resolveControlMutation={resolveControlMutation}
-            grupoPerfilMutation={grupoPerfilMutation}
-            confirmar={confirmar}
-          />
+          calculateMutation.isPending && calculateMutation.variables?.id === wp.id ? (
+            <AsyncState
+              loading
+              error={false}
+              errorTitle=""
+              errorDescription=""
+              onRetry={() => void listQuery.refetch()}
+              loadingLabel="Actualizando controles…"
+            />
+          ) : (
+            <EtapaControles
+              capabilities={capacidades}
+              wp={wp}
+              controlResolutions={controlResolutions}
+              setControlResolutions={setControlResolutions}
+              controlEvidence={controlEvidence}
+              setControlEvidence={setControlEvidence}
+              documentsQuery={documentsQuery}
+              affectedVouchers={classificationQuery.data?.items ?? []}
+              onGoToClassification={() => goToStep(2)}
+              resolveControlMutation={resolveControlMutation}
+              grupoPerfilMutation={grupoPerfilMutation}
+              confirmar={confirmar}
+            />
+          )
         ) : (
           <EtapaCierre
             wp={wp}

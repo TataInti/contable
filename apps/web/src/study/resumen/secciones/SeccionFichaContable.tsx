@@ -62,7 +62,7 @@ export function SeccionFichaContable({ profile, canManageContacts, contactos, ac
             <SummaryFact label="Forma jurídica" value={displayValue(profile.legalForm)} />
             <SummaryFact label="Provincia" value={displayValue(profile.province)} />
             <SummaryFact label="Actividad principal" value={displayValue(profile.activity)} />
-            <SummaryFact label="Norma contable" value={displayValue(profile.accountingStandard)} />
+            <SummaryFact label="Norma contable" value={profile.accountingStandard?.trim() || "Sin norma contable"} />
             <SummaryFact
               label="Jurisdicciones IIBB"
               value={profile.iibbJurisdictions.length > 0 ? profile.iibbJurisdictions.join(", ") : "Sin configurar"}

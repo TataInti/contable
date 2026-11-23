@@ -29,6 +29,6 @@ export function profileGaps(client: { profile?: ClientProfile | null }): string[
   if (!profile?.vatCondition) gaps.push("condición IVA");
   if (!profile?.province) gaps.push("provincia");
   if (!profile?.activity) gaps.push("actividad");
-  if (!profile?.accountingStandard) gaps.push("norma contable");
+  // La norma contable es opcional (A57): no integra los faltantes de la ficha.
   return gaps;
 }

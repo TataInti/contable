@@ -243,44 +243,17 @@ describe("StudyClientes — estados y errores (K6)", () => {
     ).toBeTruthy();
   });
 
-  it("con firm.manage, el aviso de normas vacías enlaza a Usuarios y accesos (pestaña Normas contables)", async () => {
-    contextMock.current = contextoDePrueba(["client.read", "client.manage", "firm.manage"]);
+  it("sin normas en el catálogo, la norma es opcional: el campo ofrece «Sin norma contable», sin aviso ni enlace (A57)", async () => {
     respuestaCatalogo["/accounting-standards"] = () => Promise.resolve([]);
-    const cajon = await abrirEdicion();
+    renderConRutas("/clientes", <StudyClientes />);
+    const detalle = await seleccionarCliente("20-00000007-9", "Sintético Delta S.A.");
+    fireEvent.click(within(detalle).getByRole("button", { name: "Editar" }));
+    const cajon = await screen.findByRole("dialog", { name: "Editar cliente" });
 
-    expect(await within(cajon).findByText("No hay normas contables cargadas.")).toBeTruthy();
-    const enlace = within(cajon).getByRole("link", {
-      name: "Cargalas en Usuarios y accesos, pestaña Normas contables",
-    });
-    expect(enlace.getAttribute("href")).toBe("/administracion");
-  });
-
-  it("sin firm.manage, el aviso de normas vacías nombra la pantalla y no enlaza", async () => {
-    respuestaCatalogo["/accounting-standards"] = () => Promise.resolve([]);
-    const cajon = await abrirEdicion();
-
-    expect(await within(cajon).findByText("No hay normas contables cargadas.")).toBeTruthy();
-    expect(
-      within(cajon).getByText(
-        "Pedí a quien administra el estudio que las cargue en Usuarios y accesos, pestaña Normas contables.",
-      ),
-    ).toBeTruthy();
-    expect(within(cajon).queryByRole("link", { name: /Cargalas/ })).toBeNull();
-    expect(within(cajon).queryByRole("link", { name: /Usuarios y accesos/ })).toBeNull();
-    expect(cajon.querySelector('a[href="/administracion"]')).toBeNull();
-  });
-
-  it("un catálogo de normas vacío explica qué falta y a quién pedirlo", async () => {
-    respuestaCatalogo["/accounting-standards"] = () => Promise.resolve([]);
-    const cajon = await abrirEdicion();
-
-    expect(await within(cajon).findByText("No hay normas contables cargadas.")).toBeTruthy();
-    expect(
-      within(cajon).getByText(
-        // vigente: cambia con decisión de Inti (16-nov)
-        "Pedí a quien administra el estudio que las cargue en Usuarios y accesos, pestaña Normas contables.",
-      ),
-    ).toBeTruthy();
+    expect((await within(cajon).findByLabelText("Norma contable")).getAttribute("placeholder")).toBe("Sin norma contable");
+    expect(within(cajon).queryByText("No hay normas contables cargadas.")).toBeNull();
+    expect(within(cajon).queryByRole("link", { name: /normas contables/i })).toBeNull();
+    expect(within(cajon).queryByText(/falta.*norma/i)).toBeNull();
   });
 
   it("sin client.manage, la cartera vacía explica qué falta y a quién pedirlo, sin acción de crear", async () => {

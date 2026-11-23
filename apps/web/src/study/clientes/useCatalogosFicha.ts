@@ -75,7 +75,6 @@ export function useCatalogosFicha({
   const selectedStandardEntry = standardCatalog.find((entry) => entry.name === standardValue);
   const standardCatalogUnavailable = accountingStandardsCatalog.isError;
   const standardCatalogLoading = sinRespuesta(accountingStandardsCatalog);
-  const standardCatalogEmpty = accountingStandardsCatalog.isSuccess && standardCatalog.length === 0;
   const reintentarNormas = () => void accountingStandardsCatalog.refetch();
   const standardUnknown =
     !standardCatalogLoading &&
@@ -114,7 +113,6 @@ export function useCatalogosFicha({
     selectedStandardEntry,
     standardCatalogUnavailable,
     standardCatalogLoading,
-    standardCatalogEmpty,
     reintentarNormas,
     standardUnknown,
     vatConditionIsLegacy,
