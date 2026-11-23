@@ -775,7 +775,9 @@ export function StudyExpedienteMensual() {
     }));
     const search = new URLSearchParams(location.search);
     search.set("etapa", WORKPAPER_STEPS[index]?.title.toLocaleLowerCase("es-AR") ?? "saldos");
-    navigate({ search: `?${search.toString()}` }, { replace: true });
+    // flushSync: la etapa elegida se pinta en el mismo clic. Sin esto, el router la aplica en una transición
+    // diferida y el panel nuevo aparece después de que el usuario (o el spec) ya miró la pantalla.
+    navigate({ search: `?${search.toString()}` }, { replace: true, flushSync: true });
   };
 
   const renderEtapa = (wp: Workpaper, step: number) => {
@@ -895,18 +897,31 @@ export function StudyExpedienteMensual() {
             }
           />
         ) : step === 4 ? (
-          <EtapaControles
-            capabilities={capacidades}
-            wp={wp}
-            controlResolutions={controlResolutions}
-            setControlResolutions={setControlResolutions}
-            controlEvidence={controlEvidence}
-            setControlEvidence={setControlEvidence}
-            documentsQuery={documentsQuery}
-            resolveControlMutation={resolveControlMutation}
-            grupoPerfilMutation={grupoPerfilMutation}
-            confirmar={confirmar}
-          />
+          // Mientras el recálculo no terminó de refrescar el legajo, la lista es la de la corrida anterior:
+          // sus controles ya no son accionables (el servidor los reemplazó). Se muestra la espera, no la lista vieja.
+          calculateMutation.isPending && calculateMutation.variables?.id === wp.id ? (
+            <AsyncState
+              loading
+              error={false}
+              errorTitle=""
+              errorDescription=""
+              onRetry={() => void listQuery.refetch()}
+              loadingLabel="Actualizando controles…"
+            />
+          ) : (
+            <EtapaControles
+              capabilities={capacidades}
+              wp={wp}
+              controlResolutions={controlResolutions}
+              setControlResolutions={setControlResolutions}
+              documentsQuery={documentsQuery}
+              controlEvidence={controlEvidence}
+              setControlEvidence={setControlEvidence}
+              resolveControlMutation={resolveControlMutation}
+              grupoPerfilMutation={grupoPerfilMutation}
+              confirmar={confirmar}
+            />
+          )
         ) : (
           <EtapaCierre
             wp={wp}
