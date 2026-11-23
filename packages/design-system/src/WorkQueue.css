@@ -1,0 +1,77 @@
+/* Cola de trabajo (C12). Filas de 48 px en la cola y 32 px en un panel. Solo tokens --ds-*. */
+
+.work-queue {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--ds-font-sans);
+  color: var(--ds-color-text);
+  border-block-start: 1px solid var(--ds-color-border-subtle);
+}
+
+.work-queue--queue {
+  --work-queue-row-min: calc(var(--ds-control-height-md) + var(--ds-space-2));
+}
+
+.work-queue--compact {
+  --work-queue-row-min: var(--ds-row-height);
+}
+
+.work-queue-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  align-items: center;
+  gap: var(--ds-space-4);
+  min-block-size: var(--work-queue-row-min);
+  padding-block: var(--ds-space-1);
+  border-block-end: 1px solid var(--ds-color-border-subtle);
+}
+
+.work-queue-row__principal {
+  min-inline-size: 0;
+}
+
+.work-queue-row__principal p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.work-queue-row__titulo {
+  font-weight: var(--ds-font-weight-medium);
+  font-size: var(--ds-text-base);
+}
+
+.work-queue-row__decision {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text);
+}
+
+.work-queue-row__contexto {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}
+
+.work-queue-row__fecha,
+.work-queue-row__importe {
+  font-size: var(--ds-text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ds-color-text-muted);
+}
+
+.work-queue-row__importe {
+  color: var(--ds-color-text);
+  text-align: end;
+}
+
+.work-queue-row__accion {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.work-queue--vacia {
+  padding-block: var(--ds-space-4);
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}

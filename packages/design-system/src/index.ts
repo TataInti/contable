@@ -24,3 +24,8 @@ export * from "./WorkBar.js";
 export * from "./Menu.js";
 export * from "./BarSelect.js";
 export * from "./SearchSelect.js";
+
+// Patrones de objeto y cola (DS-0, C10–C12): sin consumidores todavía; las pantallas los migran por corte.
+export * from "./ObjectPanel.js";
+export * from "./ObjectActivity.js";
+export * from "./WorkQueue.js";

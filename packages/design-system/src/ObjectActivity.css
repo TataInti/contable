@@ -1,0 +1,102 @@
+/* Actividad por objeto (C11). Solo tokens --ds-*: sin literales de color, espaciado ni radio. */
+
+.object-activity {
+  display: grid;
+  gap: var(--ds-space-4);
+  min-inline-size: 0;
+  font-family: var(--ds-font-sans);
+  color: var(--ds-color-text);
+}
+
+.object-activity__lista {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-block-start: 1px solid var(--ds-color-border-subtle);
+}
+
+.object-activity__entrada {
+  display: grid;
+  gap: var(--ds-space-1);
+  padding-block: var(--ds-space-3);
+  border-block-end: 1px solid var(--ds-color-border-subtle);
+}
+
+.object-activity__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}
+
+.object-activity__tipo {
+  font-weight: var(--ds-font-weight-medium);
+  color: var(--ds-color-text);
+}
+
+.object-activity__hora {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.object-activity__texto {
+  margin: 0;
+  font-size: var(--ds-text-base);
+  line-height: var(--ds-leading-normal);
+  overflow-wrap: anywhere;
+}
+
+.object-activity__redactor {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.object-activity__etiqueta {
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  color: var(--ds-color-text);
+}
+
+.object-activity__campo {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: var(--ds-control-height-md);
+  padding: var(--ds-space-2);
+  font: inherit;
+  font-size: var(--ds-text-base);
+  color: var(--ds-color-text);
+  background: var(--ds-color-surface);
+  border: var(--ds-border-width) solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  resize: vertical;
+}
+
+.object-activity__campo:focus-visible {
+  outline: var(--ds-focus-width) solid var(--ds-color-focus);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.object-activity__campo:disabled {
+  color: var(--ds-color-text-disabled);
+  background: var(--ds-color-surface-muted);
+}
+
+.object-activity__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ds-space-2);
+}
+
+.object-activity__ayuda {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-color-text-muted);
+}
