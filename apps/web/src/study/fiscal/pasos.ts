@@ -1,4 +1,4 @@
-import { FISCAL_STEPS, type FiscalStep, type TaxpayerProfileVersion } from "./utilidades";
+import { FISCAL_STEPS, type FiscalStep } from "./utilidades";
 
 /** Lista con datos: basta con que exponga `data` (las consultas de react-query lo cumplen). */
 type ConsultaConDatos = { data?: readonly unknown[] };
@@ -10,7 +10,8 @@ export function stepCompletionFor({
   periodsQuery,
   obligationsQuery,
 }: {
-  latestProfile: TaxpayerProfileVersion | undefined;
+  // Solo importa si existe un perfil: lo usan Configuración fiscal y el Resumen del cliente.
+  latestProfile: unknown;
   registrationsQuery: ConsultaConDatos;
   clientActivitiesQuery: ConsultaConDatos;
   periodsQuery: ConsultaConDatos;

@@ -5,6 +5,7 @@ import { formatearFecha } from "../../../lib/formatoFechas";
 import { DenseSection } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { SummaryFact } from "../Piezas";
+import { nextRequiredStepFor, stepCompletionFor } from "../../fiscal/pasos";
 
 type Props = {
   client: ClientSummary["client"];
@@ -16,6 +17,20 @@ type Props = {
 };
 
 export function SeccionResumen({ client, profile, fiscal, openAccountingYearCount, activeActivities, navigate }: Props) {
+  // Mismo criterio que Configuración fiscal (pasos.ts): un único estado de la configuración fiscal.
+  const ultimoPerfil = fiscal.profiles.reduce<(typeof fiscal.profiles)[number] | undefined>(
+    (latest, item) => (!latest || item.version > latest.version ? item : latest),
+    undefined,
+  );
+  const configuracionCompleta = !nextRequiredStepFor(
+    stepCompletionFor({
+      latestProfile: ultimoPerfil,
+      registrationsQuery: { data: fiscal.registrations },
+      clientActivitiesQuery: { data: fiscal.activities },
+      periodsQuery: { data: fiscal.periods },
+      obligationsQuery: { data: fiscal.obligations },
+    }),
+  );
   return (
     <DenseSection
       id="rc-resumen"
@@ -44,7 +59,7 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
           label="Configuración fiscal"
           value={
             <StatusBadge
-              status={client.onboarding?.completed ? "COMPLETED" : "PENDING"}
+              status={configuracionCompleta ? "COMPLETED" : "PENDING"}
               className="status-badge--regular"
             />
           }

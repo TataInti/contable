@@ -64,7 +64,9 @@ export async function altaClienteRI(page: Page, cliente: ClienteRI) {
   await pick(page.locator("#client-vat-condition"), "Responsable inscripto");
   await pick(page.locator("#client-province"), "Tucumán");
   await pick(page.locator("#client-legal-form"), "Sociedad de responsabilidad limitada (SRL)");
-  await page.locator(".action-drawer").getByRole("button", { name: "Guardar cliente" }).click();
+  await mutating(page, "/clients", () =>
+    page.locator(".action-drawer").getByRole("button", { name: "Guardar cliente" }).click(),
+  );
   await expect(page).toHaveURL(/\/configuracion-fiscal/);
   await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" })).toHaveValue(
     new RegExp(cliente.legalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
