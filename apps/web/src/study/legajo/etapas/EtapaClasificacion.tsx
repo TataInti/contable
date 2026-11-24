@@ -501,7 +501,7 @@ export function EtapaClasificacion({
                             placeholder="Buscar actividad…"
                             options={activityOptions(draft.activityCode).map((item) => ({
                               value: item.code,
-                              label: [item.level, item.code, item.name].filter(Boolean).join(" · "),
+                              label: item.name ? `${item.code} · ${item.name}` : item.code,
                             }))}
                           />
                         );
