@@ -12,6 +12,7 @@ import {
   revisarLotesDe,
   rotuloDelPeriodo,
   vincularActividad,
+  vincularActividades,
 } from "./helpers/liquidacion-ui";
 import { type FacturaSintetica } from "./helpers/fuentes-sinteticas";
 
@@ -40,8 +41,12 @@ const CLIENTE = {
 };
 const OCTUBRE = { start: "2026-10-01", end: "2026-10-31", mes: "Octubre de 2026", label: `Octubre 2026 IIBB ${SUFFIX}` };
 const ACTIVIDAD_NUEVA = "Comercio";
-const ACTIVIDAD_FILA_1 = "REST-TUC";
-const ACTIVIDAD_FILA_2 = "REST-AR";
+// Catálogo de Tucumán sembrado para el E2E (apps/api/src/seed-maestros-fiscales.ts): códigos COMERCIO, SERVICIOS, RESTO-TUC.
+// Se vinculan después del cajón de cambio (que necesita «Comercio» libre): así la lista de cada fila tiene cuatro opciones
+// y supera el borde de la tabla, que es el caso del defecto.
+const ACTIVIDADES_DESPUES = ["Comercio", "Servicios"];
+const ACTIVIDAD_FILA_1 = "COMERCIO";
+const ACTIVIDAD_FILA_2 = "RESTO-TUC";
 
 /** Tres facturas A por 115.000 neto (50.000 + 40.000 + 25.000), todas de octubre de 2026. */
 function facturasDeOctubre(): FacturaSintetica[] {
@@ -141,6 +146,10 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     await expect(cajon).toBeHidden({ timeout: 15_000 });
   });
 
+  await test.step("Vincular Comercio y Servicios: la lista de cada fila tiene cuatro opciones", async () => {
+    await vincularActividades(page, ACTIVIDADES_DESPUES);
+  });
+
   await test.step("Octubre de 2026: período con su obligación de IIBB", async () => {
     await page.getByRole("tab", { name: /^Períodos y obligaciones/ }).click();
     await crearPeriodoIIBB(page, OCTUBRE);
@@ -161,11 +170,11 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     const primera = campos.nth(0);
     const tabla = primera.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' ds-table__wrapper ')][1]");
     await primera.click();
-    await verificarListaCompleta(page, page.getByRole("listbox"), [/REST-AR/, /REST-TUC/], tabla);
+    await verificarListaCompleta(page, page.getByRole("listbox"), [/COMERCIO/, /RESTO-TUC/, /SERVICIOS/], tabla);
     await page.screenshot({ path: test.info().outputPath("4v-clasificacion-desplegable-abierto.png") });
   });
 
-  await test.step("Primera fila: se elige REST-TUC por teclado y se guarda con «Actualizar»", async () => {
+  await test.step("Primera fila: se elige COMERCIO por teclado y se guarda con «Actualizar»", async () => {
     const primera = page.locator('input[id^="actividad-"]').nth(0);
     await primera.click();
     await primera.pressSequentially(ACTIVIDAD_FILA_1, { delay: 10 });
@@ -178,7 +187,7 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     await mutating(page, "/classifications/", () => actualizar.nth(0).click());
   });
 
-  await test.step("Segunda fila: se elige REST-AR con clic y se guarda con «Actualizar»", async () => {
+  await test.step("Segunda fila: se elige RESTO-TUC con clic y se guarda con «Actualizar»", async () => {
     const segunda = page.locator('input[id^="actividad-"]').nth(1);
     await segunda.click();
     const opcion = page.getByRole("listbox").getByRole("option", { name: new RegExp(ACTIVIDAD_FILA_2) }).first();
