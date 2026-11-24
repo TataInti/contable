@@ -548,21 +548,51 @@
 
 
 
-.workpaper-classification-fields {
-  display: grid;
-  min-width: 12rem;
-  gap: var(--ds-space-2);
+.workpaper-classification-voucher-number {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
-.workpaper-classification-fields select,
-.workpaper-classification-fields input {
+.workpaper-classification-table {
+  table-layout: auto;
+}
+
+.workpaper-classification-table tbody tr {
+  height: 42px;
+}
+
+.workpaper-classification-table td:has(.workpaper-classification-voucher-number) {
+  white-space: nowrap;
+  width: 1%;
+}
+
+.workpaper-classification-table td:has(.workpaper-classification-inline) {
   min-width: 0;
-  padding: 0.45rem 0.55rem;
-  border: 1px solid var(--ds-border);
+}
+
+.workpaper-classification-inline {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--ds-space-2);
+  white-space: nowrap;
+}
+
+.workpaper-classification-code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workpaper-classification-chip {
+  padding: 1px var(--ds-space-1);
   border-radius: var(--ds-radius-sm);
-  background: var(--ds-surface);
-  color: var(--ds-text);
-  font: inherit;
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.workpaper-classification-inline .link-button {
+  flex: 0 0 auto;
 }
 
 .workpaper-allocation-select {

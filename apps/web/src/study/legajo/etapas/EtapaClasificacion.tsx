@@ -3,7 +3,6 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, Field, Table, type TableColumn, SearchSelect, ObjectPanel } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
-import { CLASSIFICATION_ORIGIN_LABELS } from "../etiquetas";
 import { formatMoney } from "../formato";
 import type {
   AllocationCoverage,
@@ -90,6 +89,7 @@ export function EtapaClasificacion({
   const [motivoExclusion, setMotivoExclusion] = useState("");
   const [motivoError, setMotivoError] = useState<string | null>(null);
   const [reglasAbiertas, setReglasAbiertas] = useState(false);
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
   const visibleClassifications = useMemo(() => {
     const items = classificationQuery.data?.items ?? [];
     if (filter === "PENDING") {
@@ -360,6 +360,7 @@ export function EtapaClasificacion({
             </div>
           ) : null}
           <Table<WorkpaperClassification>
+            className="workpaper-classification-table"
             rows={visibleClassifications}
             rowKey={(classification) => classification.id}
             empty={
@@ -392,7 +393,7 @@ export function EtapaClasificacion({
                 header: "Comprobante",
                 render: (classification) => (
                   <>
-                    <strong>
+                    <strong className="workpaper-classification-voucher-number">
                       {classification.voucher.letter ?? classification.voucher.type} ·{" "}
                       {String(classification.voucher.pointOfSale).padStart(4, "0")}-
                       {String(classification.voucher.number).padStart(8, "0")}
@@ -472,79 +473,74 @@ export function EtapaClasificacion({
                   return (
                     <>
                       {aviso}
-                      {!puedeClasificar ? (
-                    <>
-                      <strong>{classification.categoryCode ?? classification.activityCode}</strong>
-                      {classification.categoryCode && classification.activityCode ? (
-                        <small> · {classification.activityCode}</small>
-                      ) : null}
-                      <br />
-                      <small>
-                        {CLASSIFICATION_ORIGIN_LABELS[classification.origin ?? ""] ??
-                          "Clasificación guardada"}
-                      </small>
-                    </>
-                  ) : (
-                    <div className="workpaper-classification-fields">
-                      {classification.origin === "SINGLE_ACTIVITY_PER_LEVEL" ? (
-                        <>
-                          <span>
-                            {activityOptions(draft.activityCode)
-                              .filter((activity) => activity.level)
-                              .map((activity) => `${activity.level} ${activity.code} · ${activity.name}`)
-                              .join("  ·  ") || "Actividad asignada automáticamente por nivel"}
-                          </span>{" "}
-                          <small className="muted-copy">auto</small>
-                        </>
-                      ) : null}
-                      {classification.origin === "RULE" ? (
-                        <StatusBadge status="INFO" label="Por regla" />
-                      ) : null}
-                      {classification.direction === "PURCHASE" ? (
-                        <SearchSelect
-                          label="Rubro del proveedor"
-                          hideLabel
-                          value={draft.categoryCode}
-                          onChange={(value) =>
-                            setClassificationDrafts((current) => ({
-                              ...current,
-                              [classification.id]: {
-                                ...draft,
-                                categoryCode: value,
-                              },
-                            }))
-                          }
-                          placeholder="Rubro…"
-                          options={[
-                            { value: "SUPER", label: "SUPER · Minimercados" },
-                            { value: "TRANSPORTE", label: "TRANSPORTE" },
-                          ]}
-                        />
-                      ) : null}
-                      <SearchSelect
-                        id={`actividad-${classification.id}`}
-                        label="Actividad"
-                        hideLabel
-                        value={draft.activityCode}
-                        onChange={(value) =>
-                          setClassificationDrafts((current) => ({
-                            ...current,
-                            [classification.id]: {
-                              ...draft,
-                              activityCode: value,
-                            },
-                          }))
-                        }
-                        placeholder={classification.direction === "SALE" ? "Elegí la actividad…" : "Sin actividad (opcional)"}
-                        options={activityOptions(draft.activityCode).map((activity) => ({
-                          value: activity.code,
-                          label: [activity.level, activity.name ? `${activity.code} · ${activity.name}` : activity.code]
-                            .filter(Boolean)
-                            .join(" "),
-                        }))}
-                      />
-                    </div>
-                  )}
+                      {(() => {
+                        const activity = activityOptions(draft.activityCode).find((item) => item.code === draft.activityCode);
+                        const automatic = ORIGENES_AUTOMATICOS.includes(classification.origin ?? "") && draft.activityCode === (classification.activityCode ?? "");
+                        const automaticLevels = automatic
+                          ? activityOptions(draft.activityCode).filter((item) => item.level)
+                          : [];
+                        const manual = classification.origin === "MANUAL" || (ORIGENES_AUTOMATICOS.includes(classification.origin ?? "") && !automatic);
+                        const fullActivity = automaticLevels.length
+                          ? automaticLevels.map((item) => [item.level, item.code, item.name].filter(Boolean).join(" · ")).join(" · ")
+                          : activity
+                            ? [activity.level, activity.code, activity.name].filter(Boolean).join(" · ")
+                            : classification.activityCode ?? "Actividad no informada";
+                        const selector = (
+                          <SearchSelect
+                            id={`actividad-${classification.id}`}
+                            label="Actividad"
+                            hideLabel
+                            value={draft.activityCode}
+                            onChange={(value) => {
+                              setClassificationDrafts((current) => ({
+                                ...current,
+                                [classification.id]: { ...draft, activityCode: value },
+                              }));
+                              setEditingActivityId(null);
+                            }}
+                            placeholder="Buscar actividad…"
+                            options={activityOptions(draft.activityCode).map((item) => ({
+                              value: item.code,
+                              label: [item.level, item.code, item.name].filter(Boolean).join(" · "),
+                            }))}
+                          />
+                        );
+                        return (
+                          puedeClasificar && editingActivityId === classification.id ? (
+                            <>
+                              {classification.direction === "PURCHASE" ? (
+                                <SearchSelect
+                                  label="Rubro del proveedor"
+                                  hideLabel
+                                  value={draft.categoryCode}
+                                  onChange={(value) => setClassificationDrafts((current) => ({
+                                    ...current,
+                                    [classification.id]: { ...draft, categoryCode: value },
+                                  }))}
+                                  placeholder="Rubro…"
+                                  options={[{ value: "SUPER", label: "SUPER · Minimercados" }, { value: "TRANSPORTE", label: "TRANSPORTE" }]}
+                                />
+                              ) : null}
+                              {selector}
+                            </>
+                          ) : (
+                            <div className="workpaper-classification-inline" title={fullActivity}>
+                              <span className="workpaper-classification-code">
+                                {classification.categoryCode ? `${classification.categoryCode} · ` : ""}{automaticLevels.length
+                                  ? automaticLevels.map((item) => `${item.level} ${item.code}`).join(" · ")
+                                  : draft.activityCode || "Sin actividad"}
+                              </span>
+                              {classification.origin === "RULE" ? <StatusBadge status="INFO" label="Por regla" /> : null}
+                              {(automatic || manual) ? (
+                                <small className="workpaper-classification-chip">{automatic ? "auto" : "manual"}</small>
+                              ) : null}
+                              {puedeClasificar ? (
+                                <button type="button" className="link-button" onClick={() => setEditingActivityId(classification.id)}>Cambiar</button>
+                              ) : null}
+                            </div>
+                          )
+                        );
+                      })()}
                     </>
                   );
                 },

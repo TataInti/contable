@@ -274,6 +274,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     renderLegajo();
     await abrirClasificacion();
     const fila = filaCon("A · 0001-00000001");
+    fireEvent.click(within(fila).getByRole("button", { name: "Cambiar" }));
     cambiarValor(within(fila).getByRole("combobox", { name: "Rubro del proveedor" }), "SUPER");
     cambiarValor(within(fila).getByRole("combobox", { name: "Actividad" }), "REST");
     fireEvent.click(within(fila).getByRole("button", { name: "Guardar" }));
@@ -291,6 +292,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     renderLegajo();
     await abrirClasificacion();
     const fila = filaCon("B · 0001-00000003");
+    fireEvent.click(within(fila).getByRole("button", { name: "Cambiar" }));
     cambiarValor(within(fila).getByRole("combobox", { name: "Actividad" }), "REST");
     fireEvent.click(within(fila).getByRole("button", { name: "Guardar" }));
     await waitFor(() =>
@@ -304,12 +306,14 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
     fijarContexto(PERMISOS_CLASIFICAR);
     renderLegajo();
     await abrirClasificacion();
+    const fila = filaCon("B · 0001-00000004");
+    fireEvent.click(within(fila).getByRole("button", { name: "Cambiar" }));
     expect(
-      within(abrirListado("Actividad", filaCon("B · 0001-00000004"))).getByRole("option", { name: "REST · Restaurante" }),
+      within(abrirListado("Actividad", fila)).getByRole("option", { name: "REST · Restaurante" }),
     ).toBeInTheDocument();
-    expect(within(abrirListado("Actividad", filaCon("B · 0001-00000004"))).getByRole("option", { name: "VIEJA" })).toBeInTheDocument();
+    expect(within(abrirListado("Actividad", fila)).getByRole("option", { name: "VIEJA" })).toBeInTheDocument();
     expect(
-      within(abrirListado("Actividad", filaCon("B · 0001-00000004"))).queryByRole("option", { name: "VIEJA · Actividad vencida" }),
+      within(abrirListado("Actividad", fila)).queryByRole("option", { name: "VIEJA · Actividad vencida" }),
     ).toBeNull();
   });
 
@@ -436,6 +440,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       );
 
       const fila = filaCon("B · 0001-00000003");
+      fireEvent.click(within(fila).getByRole("button", { name: "Cambiar" }));
       cambiarValor(within(fila).getByRole("combobox", { name: "Actividad" }), "REST");
       fireEvent.click(within(fila).getByRole("button", { name: "Guardar" }));
       await waitFor(() =>
@@ -479,9 +484,15 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       renderLegajo();
       await abrirClasificacion();
       expect(screen.getByText(/1 venta asignada automáticamente a la única actividad de cada nivel/)).toBeInTheDocument();
-      expect(screen.getByText("Tucumán REST · Restaurante")).toBeInTheDocument();
-      expect(screen.getByText("auto")).toBeInTheDocument();
-      expect(screen.queryByPlaceholderText("Asignada automáticamente por nivel")).not.toBeInTheDocument();
+      const filaAuto = filaCon("B · 0001-00000006");
+      expect(within(filaAuto).getByText("Tucumán REST")).toBeInTheDocument();
+      expect(within(filaAuto).getByText("auto")).toBeInTheDocument();
+      expect(within(filaAuto).getByTitle("Tucumán · REST · Restaurante")).toBeInTheDocument();
+      expect(within(filaAuto).queryByPlaceholderText("Buscar actividad…")).not.toBeInTheDocument();
+      fireEvent.click(within(filaAuto).getByRole("button", { name: "Cambiar" }));
+      expect(within(filaAuto).getByPlaceholderText("Buscar actividad…")).toBeInTheDocument();
+      cambiarValor(within(filaAuto).getByRole("combobox", { name: "Actividad" }), "REST");
+      expect(within(filaAuto).getByText("manual")).toBeInTheDocument();
       cambiarValor(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), "PENDING");
       expect(screen.queryByText("B · 0001-00000006")).not.toBeInTheDocument();
       expect(screen.queryByText("B · 0001-00000007")).not.toBeInTheDocument();
