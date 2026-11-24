@@ -1,6 +1,6 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 declare const process: { env: { CI?: string } };
-import { RUN, SUFFIX, login, mutating, syntheticCuit } from "./helpers/ui";
+import { RUN, SUFFIX, goTo, login, mutating, pickOption, syntheticCuit } from "./helpers/ui";
 import {
   IIBB,
   activarAutorrevision,
@@ -92,7 +92,7 @@ async function verificarBarraADerecha(page: Page) {
   return thread;
 }
 
-test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conservan el plegado", async ({ page }, testInfo) => {
+test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conservan el plegado", async ({ page, browser }, testInfo) => {
   test.setTimeout(900_000);
   page.setDefaultTimeout(15_000);
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -111,15 +111,34 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
         await mutating(page, "/comments", () => thread.getByRole("button", { name: "Comentar", exact: true }).click());
         await expect(thread.getByRole("listitem").filter({ hasText: comment })).toBeVisible();
       }
+      const reviewerPage = await browser.newPage();
+      await reviewerPage.setViewportSize({ width: 1440, height: 900 });
+      await reviewerPage.addInitScript(() => localStorage.setItem("contable-study-navigation-tour-v1", "dismissed"));
+      await login(reviewerPage, "revisor@contable.local", "revisor1234");
+      await goTo(reviewerPage, "Clientes");
+      await reviewerPage.getByRole("button", { name: `Abrir ficha de ${CLIENTE.legalName}` }).click();
+      await pickOption(reviewerPage.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), CLIENTE.legalName);
+      await goTo(reviewerPage, "Legajo");
+      await pickOption(reviewerPage.getByRole("combobox", { name: "Período fiscal" }), rotuloDelPeriodo(PERIODO.mes, PERIODO.label));
+      const reviewerThread = reviewerPage.getByRole("region", { name: "Comentarios" });
+      await expect(reviewerThread).toBeVisible();
+      const reviewerComment = `Comentario Revisor E2E ${SUFFIX}`;
+      await reviewerThread.getByLabel("Escribí un comentario").fill(reviewerComment);
+      await mutating(reviewerPage, "/comments", () => reviewerThread.getByRole("button", { name: "Comentar", exact: true }).click());
+      await expect(reviewerThread.getByRole("listitem").first()).toContainText(reviewerComment);
+      await reviewerPage.close();
+      await page.reload();
+      await expect(page.getByRole("region", { name: "Comentarios" })).toBeVisible();
       const items = thread.getByRole("listitem");
-      await expect(items).toHaveCount(3);
-      await expect(items.nth(0)).toContainText(comments[2]);
-      await expect(items.nth(1)).toContainText(comments[1]);
-      await expect(items.nth(2)).toContainText(comments[0]);
+      await expect(items).toHaveCount(4);
+      await expect(items.nth(0)).toContainText(reviewerComment);
+      await expect(items.nth(1)).toContainText(comments[2]);
+      await expect(items.nth(2)).toContainText(comments[1]);
+      await expect(items.nth(3)).toContainText(comments[0]);
       await capturar(page, testInfo, "1440.png");
     }
     if (etapa === "Controles") {
-      await expect(thread.getByText(`Comentario Reciente E2E ${SUFFIX}`, { exact: true })).toBeVisible();
+      await expect(thread.getByText(`Comentario Revisor E2E ${SUFFIX}`, { exact: true })).toBeVisible();
     }
   }
 

@@ -64,7 +64,7 @@ export function CommentThread({ firmId, clientId, periodLabel, compact = false, 
     <ol className="comment-thread__list">
       {orderedComments.map((item) => <li key={item.id} id={`comentario-${item.id}`} className="comment-thread__item">
         <p className="comment-thread__meta"><strong>{item.authorName}</strong><span aria-hidden="true"> · </span><time className="comment-thread__date" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("es-AR")}</time>
-          {item.isEdited ? <span> · editado</span> : null}{item.periodLabel ? <span> · {item.periodLabel}</span> : null}</p>
+          {item.isEdited ? <span> · editado</span> : null}</p>
         {item.archivedAt ? <p>Comentario archivado</p> : editingId === item.id ? <form onSubmit={(event) => { event.preventDefault(); edit.mutate({ id: item.id, text: editingBody }); }}>
           <label htmlFor={`edit-comment-${item.id}`}>Editar comentario</label>
           <textarea id={`edit-comment-${item.id}`} className="study-textarea" required maxLength={4000} value={editingBody} onChange={(event) => setEditingBody(event.target.value)} />
@@ -72,6 +72,7 @@ export function CommentThread({ firmId, clientId, periodLabel, compact = false, 
           <Button type="submit" loading={edit.isPending}>Guardar cambios</Button>
           <Button type="button" variant="ghost" onClick={() => setEditingId(null)}>Cancelar</Button>
         </form> : <p>{item.body}</p>}
+        {item.periodLabel ? <p className="comment-thread__period">{item.periodLabel}</p> : null}
         {item.mentionedName ? <p>Mención para {item.mentionedName}{item.resolvedAt ? " · resuelta" : ""}</p> : null}
         {item.authorUserId === userId && !item.archivedAt ? <div className="comment-thread__actions">
           <Button size="sm" variant="ghost" onClick={() => { setEditingId(item.id); setEditingBody(item.body); }}>Editar comentario</Button>
