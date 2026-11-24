@@ -348,7 +348,7 @@ describe("Legajo · ciclo de revisión (Foco 2.10)", () => {
     const barra = container.querySelector<HTMLElement>(".work-bar")!;
     // vigente: cambia con A29
     expect(barra.compareDocumentPosition(aviso) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(aviso.previousElementSibling?.tagName).toBe("H1");
+    expect(aviso.previousElementSibling?.classList.contains("workpaper-stage-toolbar")).toBe(true);
   });
 
   it("sin pedido de cambios no se dibuja el aviso bajo el estado", async () => {

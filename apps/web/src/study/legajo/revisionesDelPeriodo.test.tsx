@@ -350,8 +350,9 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     elegirRevision(1);
     expect(await screen.findByText("Paso 1 · Finalizar")).toBeTruthy();
     expect(screen.getByText("Detalle técnico").closest("details")?.hasAttribute("open")).toBe(false);
-    const contenido = document.querySelector(".work-page__content") as HTMLElement;
-    expect(within(contenido).getAllByRole("button").map((button) => button.textContent)).toEqual(["Comentar"]);
+    const contenido = document.querySelector(".workpaper-main") as HTMLElement;
+    expect(within(contenido).queryAllByRole("button").map((button) => button.textContent)).toEqual([]);
+    expect(screen.getByRole("complementary", { name: "Comentarios del mes" })).toBeTruthy();
   });
 });
 
@@ -370,10 +371,11 @@ describe("Legajo · «Actualizar» en una revisión anterior (Barra 2e)", () => 
     const barraLegajo = screen.getByRole("region", {
       name: "Legajo: período, revisión, etapas y acciones",
     });
-    expect(await within(barraLegajo).findByRole("button", { name: "Actualizar" })).toBeTruthy();
+    const accionesEtapa = document.querySelector(".workpaper-stage-toolbar") as HTMLElement;
+    expect(await within(accionesEtapa).findByRole("button", { name: "Actualizar" })).toBeTruthy();
     expect(within(barraLegajo).queryByRole("button", { name: "Cargar saldo inicial" })).toBeNull();
     fireEvent.click(within(barraLegajo).getByRole("tab", { name: "Cálculo" }));
-    expect(await within(barraLegajo).findByRole("button", { name: "Actualizar" })).toBeTruthy();
+    expect(await within(document.querySelector(".workpaper-stage-toolbar") as HTMLElement).findByRole("button", { name: "Actualizar" })).toBeTruthy();
     expect(within(barraLegajo).queryByRole("button", { name: "Cargar saldo inicial" })).toBeNull();
   });
 });

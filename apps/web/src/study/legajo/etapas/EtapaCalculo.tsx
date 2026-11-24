@@ -280,6 +280,7 @@ export function EtapaCalculo({
             <small className="muted-copy">Dato del último corte; se está actualizando.</small>
           ) : null}
           <Table<TaxPosition>
+            className="workpaper-position-table"
             rows={positionQuery.data ?? []}
             rowKey={(position) => position.obligationId}
             empty={

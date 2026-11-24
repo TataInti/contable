@@ -118,8 +118,7 @@ describe("Caracterización del corte pulido-decisiones (sin cambios de comportam
     const aviso = container.querySelector(".workpaper-pedido");
     const barra = container.querySelector(".work-bar");
     expect(aviso?.textContent).toContain("Falta el extracto bancario de octubre.");
-    // El aviso va justo después del encabezado para lectores de pantalla, y la barra queda fuera del cuerpo.
-    expect(aviso?.previousElementSibling?.tagName).toBe("H1");
+    expect(aviso?.previousElementSibling?.classList.contains("workpaper-stage-toolbar")).toBe(true);
     expect(container.querySelector(".work-page__body")?.contains(barra ?? null)).toBe(false);
     expect(barra!.compareDocumentPosition(aviso!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

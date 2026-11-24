@@ -16,3 +16,35 @@
 .study-comments-inbox [role="tab"] { padding: var(--ds-space-3); border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ds-color-text); cursor: pointer; }
 .study-comments-inbox [role="tab"][aria-selected="true"] { border-bottom-color: var(--ds-color-primary); font-weight: var(--ds-font-weight-bold); }
 .study-comments-inbox li > button { margin: var(--ds-space-2) var(--ds-space-2) 0 0; }
+
+/* El Legajo divide el área de trabajo; cada lado desplaza su propio contenido. */
+.work-page:has(.workpaper-workspace) .work-page__body { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.work-page:has(.workpaper-workspace) .work-page__content { display: flex; min-width: 0; min-height: 0; flex: 1; padding-top: 0; }
+.workpaper-workspace { display: flex; min-width: 0; min-height: 0; flex: 1; }
+.workpaper-main { min-width: 0; min-height: 0; flex: 1; overflow: auto; padding: var(--ds-space-4) var(--ds-space-6) var(--ds-space-7); scrollbar-gutter: stable; }
+.workpaper-stage-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--ds-space-2); margin-block-end: var(--ds-space-3); padding-block-end: var(--ds-space-2); border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle); }
+.comments-sidebar { position: relative; z-index: var(--ds-z-sticky); display: flex; flex: 0 0 var(--comments-sidebar-width, 320px); flex-direction: column; min-width: 0; min-height: 0; border-left: var(--ds-border-width) solid var(--ds-color-border-subtle); background: var(--ds-color-background); }
+.comments-sidebar--closed { flex-basis: 48px; }
+.comments-sidebar__header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: var(--ds-space-2); min-height: 48px; padding: 0 var(--ds-space-3); border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle); }
+.comments-sidebar__header h2 { margin: 0; font-size: var(--ds-text-lg); font-weight: var(--ds-font-weight-medium); }
+.comments-sidebar__thread { display: flex; min-height: 0; flex: 1; padding: var(--ds-space-3); }
+.comments-sidebar .comment-thread { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; flex: 1; gap: var(--ds-space-3); margin: 0; }
+.comments-sidebar .comment-thread > h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.comments-sidebar .comment-thread__list { min-height: 0; overflow: auto; }
+.comments-sidebar .comment-thread form { padding-top: var(--ds-space-3); border-top: var(--ds-border-width) solid var(--ds-color-border-subtle); }
+.comments-sidebar .comment-thread form > p { margin: 0; }
+.comments-sidebar .comment-thread form textarea { min-height: 72px; max-height: 120px; resize: vertical; }
+.comments-sidebar__collapsed { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--ds-space-2); min-width: 0; padding: var(--ds-space-3) var(--ds-space-1); white-space: nowrap; }
+.comments-sidebar__collapsed span { writing-mode: vertical-rl; transform: rotate(180deg); }
+
+@media (max-width: 1280px) {
+  .workpaper-main .ds-table__wrapper { min-width: 0; overflow-x: clip; }
+  .workpaper-main .ds-table { width: 100%; min-width: 0; table-layout: fixed; }
+  .workpaper-main .ds-table thead th { white-space: normal; overflow-wrap: anywhere; }
+  .workpaper-main .ds-table tbody td { padding-inline: var(--ds-space-1); overflow-wrap: anywhere; }
+  .workpaper-main .ds-table tbody td > * { max-width: 100%; }
+  .workpaper-main .ds-table__wrapper:has(.workpaper-position-table) { min-width: max-content; overflow: visible; }
+  .workpaper-main .workpaper-position-table { width: max-content; min-width: max-content; table-layout: auto; }
+  .workpaper-main .workpaper-classification-fields { min-width: 0; }
+  .workpaper-main .workpaper-classification-fields .ds-search-select { width: 100%; min-width: 0; }
+}
