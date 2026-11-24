@@ -31,7 +31,7 @@ import { type FacturaSintetica } from "./helpers/fuentes-sinteticas";
  *
  * Verificación de la lista: el cuadro de la lista se extiende más allá del borde inferior de la tabla y el
  * punto inferior de la lista y cada opción visible están sobre la lista (no los tapa ni los recorta la tabla).
- * Las filas se buscan por el número del comprobante; las actividades, por la etiqueta completa (el catálogo
+ * La fila sin clasificar guarda con «Guardar»; una ya clasificada, con «Actualizar». Las filas se buscan por el número del comprobante; las actividades, por la etiqueta completa (el catálogo
  * de CI tiene más de una actividad con el código COMERCIO). Todo sintético y con el sufijo de la corrida.
  * Capturas 1440×900: 4v-cajon-desplegable-abierto.png y 4v-clasificacion-desplegable-abierto.png.
  */
@@ -196,7 +196,7 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     await page.screenshot({ path: test.info().outputPath("4v-clasificacion-desplegable-abierto.png") });
   });
 
-  await test.step("Primera fila: se elige COMERCIO por teclado y se guarda con «Actualizar»", async () => {
+  await test.step("Primera fila: se elige COMERCIO por teclado y se guarda con «Guardar»", async () => {
     const primera = fila(NUMERO_FILA_1).locator('input[id^="actividad-"]');
     await primera.click();
     await primera.pressSequentially("COMERCIO", { delay: 10 });
@@ -205,10 +205,10 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     await page.keyboard.press("Enter");
     await expect(primera).toHaveValue(OPCION_COMERCIO);
     await expect(page.getByRole("listbox")).toHaveCount(0);
-    await mutating(page, "/classifications/", () => fila(NUMERO_FILA_1).getByRole("button", { name: /^Actualizar/ }).click());
+    await mutating(page, "/classifications/", () => fila(NUMERO_FILA_1).getByRole("button", { name: /^(Guardar|Actualizar)\b/ }).click());
   });
 
-  await test.step("Segunda fila: se elige RESTO-TUC con clic y se guarda con «Actualizar»", async () => {
+  await test.step("Segunda fila: se elige RESTO-TUC con clic y se guarda con «Guardar»", async () => {
     const segunda = fila(NUMERO_FILA_2).locator('input[id^="actividad-"]');
     await segunda.click();
     const opcion = page.getByRole("listbox").getByRole("option", { name: OPCION_RESTO });
@@ -216,7 +216,7 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     await opcion.click();
     await expect(segunda).toHaveValue(OPCION_RESTO);
     await expect(page.getByRole("listbox")).toHaveCount(0);
-    await mutating(page, "/classifications/", () => fila(NUMERO_FILA_2).getByRole("button", { name: /^Actualizar/ }).click());
+    await mutating(page, "/classifications/", () => fila(NUMERO_FILA_2).getByRole("button", { name: /^(Guardar|Actualizar)\b/ }).click());
   });
 
   await test.step("Al volver al Legajo, las dos actividades siguen guardadas", async () => {
