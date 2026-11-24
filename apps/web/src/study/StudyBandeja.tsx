@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@contable/design-system";
 import { api, type Document, type DocumentRequest } from "../lib/api";
@@ -21,23 +21,6 @@ export function StudyBandeja() {
   const { firmId, clientId, capabilities } = useClientContext();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
-  // DIAG-TEMPORAL (no mergear)
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      console.error("DIAG click", t.tagName, String(t.className).slice(0, 80), (t.textContent ?? "").slice(0, 40), e.clientX, e.clientY);
-    };
-    const onKey = (e: KeyboardEvent) => console.error("DIAG key", e.key, (e.target as HTMLElement).tagName);
-    document.addEventListener("click", onClick, true);
-    document.addEventListener("keydown", onKey, true);
-    return () => {
-      document.removeEventListener("click", onClick, true);
-      document.removeEventListener("keydown", onKey, true);
-    };
-  }, []);
-  useEffect(() => {
-    console.error("DIAG showUpload", showUpload, new Error().stack?.split("\n").slice(1, 3).join(" / "));
-  }, [showUpload]);
   const cargaRef = useRef<CargarDocumentoHandle>(null);
   const [documentSearch, setDocumentSearch] = useState("");
   const [documentFilter, setDocumentFilter] = useState<DocumentQueueFilter>("ALL");
