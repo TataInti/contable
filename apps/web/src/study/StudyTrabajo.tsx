@@ -260,7 +260,7 @@ export function StudyTrabajo() {
     requests.isError || closes.isError || obligations.isError;
 
   return (
-    <DensePage density={density} flow>
+    <DensePage density={density} flow className="study-trabajo">
       <DenseHeader
         title="Trabajo"
         description="Revisiones, pedidos, cierres y vencimientos que requieren una decisión."

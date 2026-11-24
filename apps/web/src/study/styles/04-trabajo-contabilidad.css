@@ -1,12 +1,12 @@
 /* Work management */
 
 /* Trabajo: una columna, secciones sin caja, filas de 40 px y acciones en una línea. */
-.study-columns.work-columns {
+.study-trabajo .study-columns.work-columns {
   grid-template-columns: minmax(0, 1fr);
   gap: var(--ds-space-4);
 }
 
-.work-columns .study-panel {
+.study-trabajo .work-columns .study-panel {
   margin: 0;
   padding: var(--ds-space-4) 0 0;
   border: 0;
@@ -14,53 +14,53 @@
   background: transparent;
 }
 
-.work-columns .ds-table__wrapper {
+.study-trabajo .work-columns .ds-table__wrapper {
   border: 0;
   border-radius: 0;
 }
 
-.work-columns .ds-table tbody tr {
+.study-trabajo .work-columns .ds-table tbody tr {
   height: 40px;
 }
 
-.work-columns .ds-table td {
+.study-trabajo .work-columns .ds-table td {
   height: 40px;
   padding-top: 0;
   padding-bottom: 0;
   vertical-align: middle;
 }
 
-.work-columns .table-primary {
+.study-trabajo .work-columns .table-primary {
   display: flex;
   align-items: baseline;
   gap: var(--ds-space-2);
   min-width: 0;
 }
 
-.work-columns .table-primary strong {
+.study-trabajo .work-columns .table-primary strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.work-columns .table-primary small {
+.study-trabajo .work-columns .table-primary small {
   flex: none;
   white-space: nowrap;
 }
 
-.work-columns .table-actions {
+.study-trabajo .work-columns .table-actions {
   flex-wrap: nowrap;
   justify-content: flex-end;
   white-space: nowrap;
 }
 
-.work-columns .table-actions .ds-button {
+.study-trabajo .work-columns .table-actions .ds-button {
   min-height: 30px;
   padding-block: var(--ds-space-0-5);
 }
 
-.work-line {
+.study-trabajo .work-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -71,12 +71,12 @@
   border-top: 1px solid var(--ds-color-border);
 }
 
-.work-line h2 {
+.study-trabajo .work-line h2 {
   margin: 0;
   font-size: var(--ds-text-lg);
 }
 
-.work-line__hint {
+.study-trabajo .work-line__hint {
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-sm);
 }
