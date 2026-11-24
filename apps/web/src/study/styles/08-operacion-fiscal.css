@@ -349,6 +349,20 @@
   gap: var(--ds-space-3);
 }
 
+.workpaper-period-selector {
+  block-size: var(--ds-control-height-sm);
+  min-block-size: var(--ds-control-height-sm);
+  padding-block: 0;
+}
+
+.object-panel[data-object-kind="control"] {
+  gap: var(--ds-space-3);
+}
+.object-panel[data-object-kind="control"] > h3,
+.object-panel[data-object-kind="control"] > p {
+  margin-block: 0;
+}
+
 .object-panel .workpaper-control__affected {
   display: grid;
   margin: 0;

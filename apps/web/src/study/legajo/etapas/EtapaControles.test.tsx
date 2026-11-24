@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EtapaControles } from "./EtapaControles";
@@ -23,7 +23,11 @@ describe("EtapaControles", () => {
       documentsQuery={query} resolveControlMutation={mutation} confirmar={vi.fn()} /></MemoryRouter>);
     expect(screen.getByRole("list", { name: "Controles abiertos" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Abrir Hay una diferencia/ }));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Hay una diferencia/ })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /Confirmar/ })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Resolver" }));
+    expect(within(dialog).getByRole("button", { name: "Confirmar resolución" })).toBeInTheDocument();
   });
 });
