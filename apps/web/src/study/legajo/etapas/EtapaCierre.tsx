@@ -53,26 +53,26 @@ export function EtapaCierre({
   const control = (label: string, allowed: boolean, handler?: () => void) => (
     <Button variant="secondary" onClick={handler} disabled={!allowed}>{label}</Button>
   );
-  const paso = (n: number, titulo: string, descripcion: string, hecho: boolean, accion: React.ReactNode) => (
-    <li key={n}>
-      <h3>Paso {n} · {titulo}</h3>
-      <p>{descripcion}</p>
-      <p role="status">{hecho ? "Hecho" : "Pendiente"}</p>
-      {accion}
+  const paso = (n: number, titulo: string, descripcion: string, hecho: boolean, disponible: boolean, accion: React.ReactNode) => (
+    <li className="workpaper-close-step" key={n}>
+      <span className="workpaper-close-step__number">{n}</span>
+      <div className="workpaper-close-step__title"><strong>{titulo}</strong><small>{descripcion}</small></div>
+      <span className="workpaper-close-step__status" role="status">{hecho ? "Hecho" : disponible ? "Disponible" : "Bloqueado"}</span>
+      <div className="workpaper-close-step__action">{accion}</div>
     </li>
   );
 
   return (
     <div className="workpaper-stage">
-      <ol aria-label="Pasos para cerrar el período">
-        {paso(1, "Finalizar", "Congela la liquidación y genera los saldos de cierre.", finalized,
+      <ol className="workpaper-close-checklist" aria-label="Pasos para cerrar el período">
+        {paso(1, "Finalizar", "Congela la liquidación y genera los saldos de cierre.", finalized, readyToFinalize && canFinalize && !readOnly,
           readyToFinalize ? readOnly ? null : <>{control("Finalizar", canFinalize, onFinalize)}{canFinalize ? null : <p>Tu perfil no tiene permiso para finalizar este legajo.</p>}</> :
             !finalized ? <><p>{blocking.length ? "Falta resolver los controles bloqueantes." : "Falta revisar la liquidación."}</p><Button variant="secondary" onClick={blocking.length ? onGoToControls : onGoToCalculation}>{blocking.length ? "Ir a Controles" : "Ir a Cálculo"}</Button></> : null)}
-        {paso(2, "Registrar presentación y acuse", "Guardá la fecha, el número y el acuse emitido por el organismo.", hasFiling,
+        {paso(2, "Registrar presentación y acuse", "Guardá la fecha, el número y el acuse emitido por el organismo.", hasFiling, finalized && canFile && !readOnly,
           finalized ? readOnly ? null : <>{control("Registrar presentación y acuse", canFile, onPresentation)}{canFile ? null : <p>Tu perfil no tiene permiso para registrar la presentación.</p>}</> : <p>Falta finalizar la liquidación.</p>)}
-        {paso(3, "Cargar la declaración jurada", "Adjuntá la declaración y registrá los saldos que informa.", hasDeclaration,
+        {paso(3, "Cargar la declaración jurada", "Adjuntá la declaración y registrá los saldos que informa.", hasDeclaration, hasFiling && canDeclare && !readOnly,
           hasFiling ? readOnly ? null : <>{control("Cargar la declaración jurada", canDeclare, onDeclaration)}{canDeclare ? null : <p>Tu perfil no tiene permiso para cargar la declaración jurada.</p>}</> : <p>Falta registrar la presentación y su acuse.</p>)}
-        {paso(4, "Pago (opcional)", "Registrá el pago o indicá que no hubo importe a pagar.", hasPayment || paymentNotRequired,
+        {paso(4, "Pago (opcional)", "Registrá el pago o indicá que no hubo importe a pagar.", hasPayment || paymentNotRequired, paymentNotRequired || (hasFiling && canPay && !readOnly),
           paymentNotRequired ? <p>No requiere pago: el saldo es cero o a favor.</p> :
             hasFiling ? readOnly ? null : <>{control("Registrar pago", canPay, onPayment)}{canPay ? null : <p>Tu perfil no tiene permiso para registrar el pago.</p>}</> : <p>Falta registrar la presentación.</p>)}
       </ol>

@@ -173,10 +173,9 @@ export function EtapaClasificacion({
 
   return (
     <div className="workpaper-stage">
-      <p className="muted-copy">
-        Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de
-        calcular.
-        {motivoEditar ? ` ${motivoEditar}` : null}
+      <p className="workpaper-classification-help muted-copy">
+        <span title="Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular." aria-label="Ayuda sobre clasificación">?</span>
+        {motivoEditar ? <small>{motivoEditar}</small> : null}
       </p>
       <div className="workpaper-classification-summary">
         <span>
@@ -236,7 +235,7 @@ export function EtapaClasificacion({
             <small className="muted-copy">Dato del último corte; se está actualizando.</small>
           ) : null}
           {asignadasSolas.length > 0 ? (
-            <p className="workpaper-stage__note">
+            <p className="workpaper-classification-auto muted-copy">
               {asignadasSolas
                 .map(([actividad, cantidad]) =>
                   actividad
@@ -250,7 +249,7 @@ export function EtapaClasificacion({
           {motivoClasificacionBloqueada ? (
             <p className="workpaper-stage__note">{motivoClasificacionBloqueada}</p>
           ) : null}
-          <div className="workpaper-stage__actions">
+          <div className="workpaper-stage__actions workpaper-classification-toolbar">
             <div>
               Filtrar comprobantes
               <SearchSelect
@@ -278,7 +277,7 @@ export function EtapaClasificacion({
             ) : null}
           </div>
           {puedeClasificar ? (
-            <div className="workpaper-stage__actions" role="group" aria-label="Acciones sobre los comprobantes seleccionados">
+            <div className="workpaper-stage__actions workpaper-classification-toolbar" role="group" aria-label="Acciones sobre los comprobantes seleccionados">
               <strong>
                 {seleccionados.length} {seleccionados.length === 1 ? "seleccionado" : "seleccionados"}
               </strong>
@@ -626,11 +625,9 @@ export function EtapaClasificacion({
               },
             ]}
           />
-          <p className="workpaper-stage__note">
-            El cálculo queda bloqueado mientras exista una compra sin rubro o una venta sin
-            actividad. El rubro manual se guarda en el maestro del proveedor para los próximos
-            períodos. Los comprobantes excluidos quedan fuera del cálculo hasta que los reincluyas.
-          </p>
+          {(classificationQuery.data.pending + (classificationQuery.data.activityPending ?? 0)) > 0 ? (
+            <p className="workpaper-classification-auto muted-copy">El cálculo queda bloqueado mientras haya comprobantes sin rubro o actividad. Clasificalos o excluilos para continuar.</p>
+          ) : null}
           <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
             <div>
               <strong>Reglas recordadas</strong>

@@ -566,6 +566,10 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await expect(page.getByRole("tab", { name: /Saldos/ })).toBeVisible();
     for (const stage of ["Saldos", "Fuentes", "Clasificación", "Cálculo", "Controles", "Cierre"]) {
       await page.getByRole("tab", { name: new RegExp(stage) }).click();
+      await expect.poll(() => page.locator("#workpaper-panel").evaluate((panel) => {
+        const bounds = panel.getBoundingClientRect();
+        return { visible: bounds.top >= 0 && bounds.top < window.innerHeight, scrollTop: panel.scrollTop };
+      })).toEqual({ visible: true, scrollTop: 0 });
       if (stage === "Fuentes") await page.locator(".work-page").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
       if (stage === "Clasificación") {
         await page.locator(".work-page").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();

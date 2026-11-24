@@ -767,6 +767,14 @@ export function StudyExpedienteMensual() {
     Math.max(vigente ? (etapaDesdeUrl ?? etapaPorLegajo[vigente.id] ?? 0) : 0, 0),
     WORKPAPER_STEPS.length - 1,
   );
+  useEffect(() => {
+    if (!vigente) return;
+    const panel = document.getElementById("workpaper-panel");
+    if (panel) panel.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    document.getElementById(`workpaper-${safeActiveStep}`)?.focus({ preventScroll: true });
+  }, [safeActiveStep, vigente?.id]);
   const goToStep = (index: number) => {
     if (!vigente) return;
     setEtapaPorLegajo((values) => ({
