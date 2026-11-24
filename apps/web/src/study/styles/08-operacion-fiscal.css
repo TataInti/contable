@@ -1187,6 +1187,11 @@
   cursor: help;
 }
 .workpaper-classification-auto { margin: 0; font-size: var(--ds-text-xs); }
+.workpaper-classification-head { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-4); min-width: 0; }
+.workpaper-classification-topbar { display: flex; align-items: center; justify-content: flex-end; gap: var(--ds-space-3); white-space: nowrap; }
+.workpaper-classification-topbar > div { display: inline-flex; align-items: center; gap: var(--ds-space-2); }
+.workpaper-classification-topbar > label { display: inline-flex; align-items: center; gap: var(--ds-space-2); margin: 0; }
+.workpaper-classification-topbar .ds-field { width: 8.5rem; }
 .workpaper-classification-toolbar { flex-direction: row; align-items: center; justify-content: flex-end; }
 .workpaper-classification-rules { border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-2); }
 .workpaper-classification-rules > summary { cursor: pointer; color: var(--ds-color-text-muted); }
