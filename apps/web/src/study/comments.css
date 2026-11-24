@@ -43,6 +43,8 @@
   .workpaper-main .ds-table thead th { white-space: normal; overflow-wrap: anywhere; }
   .workpaper-main .ds-table tbody td { padding-inline: var(--ds-space-1); overflow-wrap: anywhere; }
   .workpaper-main .ds-table tbody td > * { max-width: 100%; }
+  .workpaper-main .ds-table__wrapper:has(.workpaper-position-table) { min-width: max-content; overflow: visible; }
+  .workpaper-main .workpaper-position-table { width: max-content; min-width: max-content; table-layout: auto; }
   .workpaper-main .workpaper-classification-fields { min-width: 0; }
   .workpaper-main .workpaper-classification-fields .ds-search-select { width: 100%; min-width: 0; }
 }
