@@ -287,11 +287,11 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await expect(page.getByText("Listo para calcular").first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/3 ventas asignadas automáticamente a la única actividad/).first()).toBeVisible();
     await expect(page.getByPlaceholder("Asignada automáticamente por nivel")).toHaveCount(3);
-    await expect(page.getByRole("button", { name: "Más" })).toBeVisible();
+    await expect(page.locator(".workpaper-classification-more summary")).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("r3-clasificacion.png"), fullPage: false });
     await page.setViewportSize({ width: 1280, height: 900 });
     await expect(page.getByRole("button", { name: /^Clasificar seleccionados \(0\)$/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Más" })).toBeVisible();
+    await expect(page.locator(".workpaper-classification-more summary")).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("r3-clasificacion-1280.png"), fullPage: false });
     await page.setViewportSize({ width: 1440, height: 900 });
   });
