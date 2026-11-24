@@ -387,13 +387,30 @@ export function StudyExpedienteMensual() {
   const cambiosDelMes = legajoSeleccionado
     ? cambiosDeActividadDelMes(clientActivitiesQuery.data ?? [], legajoSeleccionado.periodStart)
     : [];
+  const jurisdictionById = new Map((jurisdictionsQuery.data ?? []).map((jurisdiction) => [jurisdiction.id, jurisdiction]));
+  const taxTypeIdsInLegajo = new Set(
+    (taxPeriodsQuery.data ?? [])
+      .filter((taxPeriod) => monthTaxPeriodIds.includes(taxPeriod.id))
+      .map((taxPeriod) => taxPeriod.taxTypeId),
+  );
+  const jurisdictionIdsInLegajo = new Set(
+    (positionQuery.data ?? [])
+      .filter((position) => taxTypeIdsInLegajo.has(position.regime.taxType.id))
+      .map((position) => position.regime.jurisdiction.id),
+  );
   const activityOptions = (currentCode: string) => {
     const options = (clientActivitiesQuery.data ?? [])
       .filter((link) => !link.validTo)
-      .map((link) => ({ code: link.activity.code, name: link.activity.name }));
+      .map((link) => ({
+        code: link.activity.code,
+        name: link.activity.name,
+        level: link.activity.jurisdictionId && jurisdictionIdsInLegajo.has(link.activity.jurisdictionId)
+          ? jurisdictionById.get(link.activity.jurisdictionId)?.name ?? link.activity.jurisdiction.name
+          : undefined,
+      }));
     // Un código ya guardado que no está entre las vigentes se conserva como opción.
     if (currentCode && !options.some((option) => option.code === currentCode)) {
-      options.unshift({ code: currentCode, name: "" });
+      options.unshift({ code: currentCode, name: "", level: undefined });
     }
     return options;
   };
@@ -767,6 +784,14 @@ export function StudyExpedienteMensual() {
     Math.max(vigente ? (etapaDesdeUrl ?? etapaPorLegajo[vigente.id] ?? 0) : 0, 0),
     WORKPAPER_STEPS.length - 1,
   );
+  useEffect(() => {
+    if (!vigente) return;
+    const panel = document.getElementById("workpaper-panel");
+    if (panel) panel.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    document.getElementById(`workpaper-${safeActiveStep}`)?.focus({ preventScroll: true });
+  }, [safeActiveStep, vigente?.id]);
   const goToStep = (index: number) => {
     if (!vigente) return;
     setEtapaPorLegajo((values) => ({
@@ -925,6 +950,9 @@ export function StudyExpedienteMensual() {
         ) : (
           <EtapaCierre
             wp={wp}
+            periodLabel={selectedTaxPeriod ? fiscalTaxPeriodLabel(selectedTaxPeriod) : "Período sin identificar"}
+            positions={positionQuery.data ?? []}
+            inlineForm={positionAction?.kind === "FILING" ? <PanelPresentacion posicion={positionAction.position} onCerrar={() => setPositionAction(null)} firmId={firmId} clientId={clientId} documentos={documentsQuery.data} inline /> : null}
             canFinalize={capacidades.has("tax.settlements.finalize") && !(currentUserId && wp.preparedByUserId === currentUserId && coverageQuery.data?.allowSelfReview === false)}
             canRectify={capacidades.has("tax.settlements.rectify")}
             canFile={capacidades.has("tax.filings.record")}
@@ -1688,7 +1716,7 @@ export function StudyExpedienteMensual() {
         />
       ) : null}
 
-      {positionAction?.kind === "FILING" ? (
+      {positionAction?.kind === "FILING" && safeActiveStep !== 5 ? (
         <PanelPresentacion
           posicion={positionAction.position}
           onCerrar={() => setPositionAction(null)}

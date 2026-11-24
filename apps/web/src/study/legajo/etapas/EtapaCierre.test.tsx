@@ -22,10 +22,10 @@ const wp = {
 describe("Etapa Cierre guiada", () => {
   it("presenta los cuatro pasos y mantiene el detalle técnico plegado", () => {
     render(<EtapaCierre wp={wp} />);
-    expect(screen.getByText("Paso 1 · Finalizar")).toBeInTheDocument();
-    expect(screen.getByText("Paso 2 · Registrar presentación y acuse")).toBeInTheDocument();
-    expect(screen.getByText("Paso 3 · Cargar la declaración jurada")).toBeInTheDocument();
-    expect(screen.getByText("Paso 4 · Pago (opcional)")).toBeInTheDocument();
+    expect(screen.getByText("Finalizar", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText("Registrar presentación y acuse")).toBeInTheDocument();
+    expect(screen.getByText("Cargar la declaración jurada")).toBeInTheDocument();
+    expect(screen.getByText("Pago (opcional)")).toBeInTheDocument();
     expect(screen.getByText("Saldo para el mes siguiente")).toBeInTheDocument();
     expect(screen.getByText("Detalle técnico")).toBeInTheDocument();
     expect(screen.queryByText("hash-in-demo")).not.toBeVisible();

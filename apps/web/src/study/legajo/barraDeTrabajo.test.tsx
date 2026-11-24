@@ -395,13 +395,14 @@ describe("Legajo · correcciones de la barra (Barra 2c)", () => {
     expect(boton.classList.contains("ds-button--sm")).toBe(true);
   });
 
-  it("las dos frases de guía de Clasificación van en un mismo párrafo", async () => {
+  it("la ayuda extensa de Clasificación queda en tooltip y el motivo de solo lectura sigue visible", async () => {
     renderLegajo({ legajos: [legajoDemo("FINALIZED")] });
     fireEvent.click(await within(barra()).findByRole("tab", { name: "Clasificación" }));
-    const guia = await screen.findByText(/^Las actividades adheridas determinan/);
-    expect(guia.closest("p")?.textContent).toBe(
-      "Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular. El legajo no admite cambios de fuentes en su estado actual.",
+    expect(screen.getByLabelText("Ayuda sobre clasificación")).toHaveAttribute(
+      "title",
+      "Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular.",
     );
+    expect(screen.getByText("El legajo no admite cambios de fuentes en su estado actual.")).toBeInTheDocument();
   });
   it.each([
     ["DRAFT", "Calcular liquidación"],

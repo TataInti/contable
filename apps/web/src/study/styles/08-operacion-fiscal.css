@@ -580,21 +580,51 @@
 
 
 
-.workpaper-classification-fields {
-  display: grid;
-  min-width: 12rem;
-  gap: var(--ds-space-2);
+.workpaper-classification-voucher-number {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
-.workpaper-classification-fields select,
-.workpaper-classification-fields input {
+.workpaper-classification-table {
+  table-layout: auto;
+}
+
+.workpaper-classification-table tbody tr {
+  height: 42px;
+}
+
+.workpaper-classification-table td:has(.workpaper-classification-voucher-number) {
+  white-space: nowrap;
+  width: 1%;
+}
+
+.workpaper-classification-table td:has(.workpaper-classification-inline) {
   min-width: 0;
-  padding: 0.45rem 0.55rem;
-  border: 1px solid var(--ds-border);
+}
+
+.workpaper-classification-inline {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--ds-space-2);
+  white-space: nowrap;
+}
+
+.workpaper-classification-code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workpaper-classification-chip {
+  padding: 1px var(--ds-space-1);
   border-radius: var(--ds-radius-sm);
-  background: var(--ds-surface);
-  color: var(--ds-text);
-  font: inherit;
+  background: var(--ds-color-surface-muted);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xs);
+}
+
+.workpaper-classification-inline .link-button {
+  flex: 0 0 auto;
 }
 
 .workpaper-allocation-select {
@@ -1184,9 +1214,9 @@
 /* Clasificación: los tres indicadores son un renglón de cifras, sin cajas (regla «sin cajas»). */
 .workpaper-classification-summary {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
-  gap: var(--ds-space-6);
+  gap: var(--ds-space-2);
   margin: 0;
   padding: 0;
   border: 0;
@@ -1196,9 +1226,71 @@
 .workpaper-classification-summary > span {
   display: inline-flex;
   align-items: baseline;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-1);
+  white-space: nowrap;
 }
 
 .workpaper-classification-summary > span small {
   color: var(--ds-color-text-muted);
 }
+.workpaper-classification-help-mark { display: inline-grid; place-items: center; inline-size: 1.15rem; block-size: 1.15rem; border: 1px solid var(--ds-color-border); border-radius: 50%; cursor: help; }
+.workpaper-classification-help { display: flex; align-items: center; gap: var(--ds-space-2); margin: 0; }
+.workpaper-classification-auto { margin: 0; font-size: var(--ds-text-xs); }
+.workpaper-classification-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ds-space-2) var(--ds-space-4); min-width: 0; }
+.workpaper-classification-topbar { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: var(--ds-space-2) var(--ds-space-3); min-width: 0; }
+.workpaper-classification-topbar > div { display: inline-flex; align-items: center; gap: var(--ds-space-2); }
+.workpaper-classification-topbar > label { display: inline-flex; align-items: center; gap: var(--ds-space-2); margin: 0; }
+.workpaper-classification-topbar .ds-field { width: 8.5rem; }
+.workpaper-classification-topbar > .workpaper-classification-more details > summary { cursor: pointer; list-style: none; }
+.workpaper-classification-topbar > .workpaper-classification-more details > summary::-webkit-details-marker { display: none; }
+.workpaper-classification-topbar > .workpaper-classification-more details[open] { position: relative; }
+.workpaper-classification-more__menu { display: flex; align-items: center; gap: var(--ds-space-3); }
+.workpaper-classification-toolbar { flex-direction: row; align-items: center; justify-content: flex-end; }
+.workpaper-classification-rules { border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-2); }
+@media (min-width: 1451px) {
+  .workpaper-classification-topbar > .workpaper-classification-more details > summary { display: none; }
+  .workpaper-classification-more__menu { display: contents; }
+}
+@media (max-width: 1450px) {
+  .workpaper-classification-topbar > .workpaper-classification-more details > summary { display: inline-flex; padding: var(--ds-space-2); border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-sm); }
+  .workpaper-classification-topbar > .workpaper-classification-more details[open] .workpaper-classification-more__menu { position: absolute; z-index: 10; top: calc(100% + var(--ds-space-1)); right: 0; display: flex; flex-direction: column; align-items: flex-start; min-width: max-content; padding: var(--ds-space-2); border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-sm); background: var(--ds-color-surface); box-shadow: var(--ds-shadow-popover); }
+}
+.workpaper-classification-rules > summary { cursor: pointer; color: var(--ds-color-text-muted); }
+
+.workpaper-calculation-selection__row {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) minmax(0, auto);
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-4);
+  min-block-size: var(--ds-row-height);
+  border-bottom: 1px solid var(--ds-color-border-subtle);
+}
+.workpaper-calculation-selection__row > label { display: flex; align-items: center; gap: var(--ds-space-2); }
+.workpaper-calculation-selection__row .ds-field { inline-size: 8.75rem; }
+.workpaper-calculation-minimum { display: grid; grid-template-columns: 8.75rem 1rem; align-items: start; gap: var(--ds-space-1); }
+.workpaper-help-mark { display: inline-grid; place-items: center; inline-size: 1rem; block-size: 1rem; margin-top: 1.55rem; border: 1px solid var(--ds-color-border); border-radius: 50%; color: var(--ds-color-text-muted); font-size: var(--ds-text-xs); cursor: help; }
+.workpaper-calculation { padding: var(--ds-space-2) 0; border: 0; border-bottom: 1px solid var(--ds-color-border); border-radius: 0; background: transparent; }
+.workpaper-calculation__totals { grid-template-columns: minmax(12rem, 1fr); gap: 0; }
+.workpaper-calculation__totals > div { grid-template-columns: minmax(14rem, 1fr) minmax(8rem, auto); align-items: center; padding: var(--ds-space-1) var(--ds-space-2); border: 0; border-bottom: 1px solid var(--ds-color-border-subtle); border-radius: 0; background: transparent; }
+.workpaper-calculation__totals dd { text-align: right; font-size: var(--ds-text-sm); font-variant-numeric: tabular-nums; }
+
+.workpaper-calculation__amount--zero { color: var(--ds-color-text-muted); }
+.workpaper-calculation-breakdown > .ds-table__wrapper { width: 100%; }
+.workpaper-calculation-breakdown .ds-table th,
+.workpaper-calculation-breakdown .ds-table td { min-block-size: 2.25rem; padding-block: var(--ds-space-1); }
+.workpaper-calculation-breakdown .ds-table tbody tr:last-child { border-top: 1px solid var(--ds-color-border); font-weight: 700; }
+.workpaper-calculation-breakdown .ds-table tbody tr:last-child td { font-weight: 700; }
+
+.workpaper-close-summary { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); white-space: nowrap; }
+.workpaper-close-summary strong { color: var(--ds-color-text); }
+.workpaper-close-checklist { display: grid; margin: 0; padding: 0; list-style: none; }
+.workpaper-close-step { display: grid; grid-template-columns: 2rem minmax(0, 1fr) 7rem minmax(12rem, auto); align-items: center; gap: var(--ds-space-2) var(--ds-space-3); min-block-size: 3rem; border-bottom: 1px solid var(--ds-color-border-subtle); }
+.workpaper-close-step__number, .workpaper-close-step__status { color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
+.workpaper-close-step__inline { grid-column: 2 / -1; min-width: 0; padding: 0 0 var(--ds-space-3); }
+.workpaper-close-inline { display: grid; gap: var(--ds-space-2); padding: var(--ds-space-2) 0; border-top: 1px solid var(--ds-color-border-subtle); }
+.workpaper-close-inline h4, .workpaper-close-inline p { margin: 0; }
+.workpaper-close-inline .study-form { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--ds-space-2); }
+.workpaper-close-inline__actions { display: flex; justify-content: flex-end; gap: var(--ds-space-2); }
+.workpaper-close-step__title { display: grid; gap: var(--ds-space-1); }
+.workpaper-close-step__title small { color: var(--ds-color-text-muted); }
+.workpaper-close-step__action { display: flex; align-items: center; gap: var(--ds-space-2); }

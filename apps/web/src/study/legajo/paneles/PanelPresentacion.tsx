@@ -13,6 +13,7 @@ interface PanelPresentacionProps {
   firmId: string;
   clientId: string;
   documentos: EvidenceDocument[] | undefined;
+  inline?: boolean;
 }
 
 // Se monta al abrir el cajón desde la tabla de cálculo: el estado arranca con la posición elegida.
@@ -22,6 +23,7 @@ export function PanelPresentacion({
   firmId,
   clientId,
   documentos,
+  inline = false,
 }: PanelPresentacionProps) {
   const queryClient = useQueryClient();
   const notify = useNotify();
@@ -74,31 +76,7 @@ export function PanelPresentacion({
       : !filingForm.evidenceDocumentId && !filingReceipt
         ? "Adjuntá el acuse de presentación."
         : null;
-  return (
-    <ActionDrawer
-      isOpen
-      onClose={onCerrar}
-      title={`Registrar presentación · ${posicion.regime.taxType.name}`}
-      description="Cargá los datos de la presentación y adjuntá el acuse que emite el organismo."
-      size="wide"
-      footer={
-        <ActionDrawerFooter
-          primary={
-            <Button
-              type="submit"
-              form="legajo-presentacion"
-              loading={recordFilingMutation.isPending}
-              loadingLabel="Subiendo y validando el acuse"
-              disabled={motivoRegistrar !== null}
-            >
-              Registrar presentación
-            </Button>
-          }
-          hint={motivoRegistrar}
-          onCancel={onCerrar}
-        />
-      }
-    >
+  const formulario = (
       <form
         id="legajo-presentacion"
         className="study-form study-form--presentacion"
@@ -164,6 +142,27 @@ export function PanelPresentacion({
         />
         <WorkpaperActionError error={recordFilingMutation.error} />
       </form>
+  );
+  const submit = <Button type="submit" form="legajo-presentacion" loading={recordFilingMutation.isPending} loadingLabel="Subiendo y validando el acuse" disabled={motivoRegistrar !== null}>Registrar presentación</Button>;
+  if (inline) return (
+    <section className="workpaper-close-inline" aria-label="Formulario para registrar presentación">
+      <h4>Registrar presentación · {posicion.regime.taxType.name}</h4>
+      <p className="muted-copy">Cargá los datos de la presentación y adjuntá el acuse que emite el organismo.</p>
+      {formulario}
+      {motivoRegistrar ? <p className="muted-copy" role="status">{motivoRegistrar}</p> : null}
+      <div className="workpaper-close-inline__actions"><Button variant="ghost" onClick={onCerrar}>Cancelar</Button>{submit}</div>
+    </section>
+  );
+  return (
+    <ActionDrawer
+      isOpen
+      onClose={onCerrar}
+      title={`Registrar presentación · ${posicion.regime.taxType.name}`}
+      description="Cargá los datos de la presentación y adjuntá el acuse que emite el organismo."
+      size="wide"
+      footer={<ActionDrawerFooter primary={submit} hint={motivoRegistrar} onCancel={onCerrar} />}
+    >
+      {formulario}
     </ActionDrawer>
   );
 }

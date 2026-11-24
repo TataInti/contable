@@ -120,6 +120,7 @@ async function esperarImporte(page: Page, texto: string) {
 
 test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la interfaz", async ({ page }) => {
   test.setTimeout(900_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
   page.setDefaultTimeout(15_000);
 
   const errores: string[] = [];
@@ -285,6 +286,17 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await page.locator(".work-page").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
     await expect(page.getByText("Listo para calcular").first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/3 ventas asignadas automáticamente a la única actividad/).first()).toBeVisible();
+    await expect(page.getByText("Prov. RESTO-TUC · Mun. RESTO-SMT")).toHaveCount(3);
+    await expect(page.locator('[title*="Tucumán · RESTO-TUC · Restaurante y bares"][title*="San Miguel de Tucumán · RESTO-SMT"]')).toHaveCount(3);
+    await expect(page.locator(".workpaper-classification-chip").getByText("auto")).toHaveCount(3);
+    await expect(page.getByPlaceholder("Buscar actividad…")).toHaveCount(0);
+    await expect(page.locator(".workpaper-classification-more summary")).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("r3-clasificacion.png"), fullPage: false });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByRole("button", { name: /^Clasificar seleccionados \(0\)$/ })).toBeVisible();
+    await expect(page.locator(".workpaper-classification-more summary")).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("r3-clasificacion-1280.png"), fullPage: false });
+    await page.setViewportSize({ width: 1440, height: 900 });
   });
 
   await test.step("Cálculo sin mínimo: IIBB 4.025,00 y TEM 10.028,00 por el mínimo de la categoría B", async () => {
@@ -297,6 +309,12 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await esperarImporte(page, "2.524,45");
     await esperarImporte(page, "690,00");
     await esperarImporte(page, "10.028,00");
+    const filaIibb = page.locator(".workpaper-calculation-selection__row").filter({ hasText: IIBB.taxName });
+    await expect(filaIibb.getByRole("textbox", { name: "Mínimo del mes" })).toBeVisible();
+    await expect(filaIibb.locator(".workpaper-calculation-minimum")).toHaveCount(1);
+    await page.screenshot({ path: test.info().outputPath("r3-calculo.png"), fullPage: false });
+    await page.locator("details.workpaper-calculation__trace").first().locator("summary").click();
+    await page.screenshot({ path: test.info().outputPath("r3-calculo-formula-abierta.png"), fullPage: false });
   });
 
   await test.step("Mínimo de IIBB 11.180: aviso de desactualizado y Recalcular", async () => {
@@ -340,6 +358,10 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await pasos.getByRole("button", { name: "Finalizar", exact: true }).click();
     await mutating(page, "/finalize", () => page.getByRole("button", { name: "Sí, finalizar" }).click());
     await expect(pasos.locator("li").nth(0).getByRole("status")).toHaveText("Hecho");
+    await page.screenshot({ path: test.info().outputPath("r3-cierre.png"), fullPage: false });
+    await pasos.locator("li").nth(1).getByRole("button", { name: "Registrar presentación y acuse", exact: true }).click();
+    await page.screenshot({ path: test.info().outputPath("r3-cierre-paso-desplegado.png"), fullPage: false });
+    await page.getByRole("button", { name: "Cancelar", exact: true }).last().click();
   });
 
   await test.step("Cálculo: presentación con acuse, declaración jurada y pago de IIBB y TEM", async () => {

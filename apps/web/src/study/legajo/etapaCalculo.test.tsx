@@ -339,7 +339,7 @@ describe("Legajo · etapa Cálculo (K12)", () => {
         : rutas(path)) as never);
     renderLegajo();
     await abrirCalculo();
-    expect(await screen.findByText("Determinación y trazabilidad del cálculo")).toBeInTheDocument();
+    expect(await screen.findByText("Determinación")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Reintentar" })).toBeInTheDocument();
   });
 
@@ -353,11 +353,7 @@ describe("Legajo · etapa Cálculo (K12)", () => {
         : rutas(path)) as never);
     renderLegajo();
     await abrirCalculo();
-    expect(
-      await screen.findByText(
-        "Devengado fiscal, pagos e intereses sin mezclarlo con el resultado gerencial.",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("No se pudo leer la posición fiscal")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Reintentar" })).toBeInTheDocument();
   });
   it("la carga de la determinación y de la posición se anuncia con role=status y la etapa tiene una sola acción primaria", async () => {

@@ -1,9 +1,8 @@
 // Etapa Clasificación e imputación del Legajo: clasificación de comprobantes e imputación de retenciones y percepciones (Foco 2.3c).
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { AsyncState, Button, EmptyState, Field, Table, type TableColumn, SearchSelect } from "@contable/design-system";
+import { AsyncState, Button, EmptyState, Field, Table, type TableColumn, SearchSelect, ObjectPanel } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
-import { CLASSIFICATION_ORIGIN_LABELS } from "../etiquetas";
 import { formatMoney } from "../formato";
 import type {
   AllocationCoverage,
@@ -23,7 +22,7 @@ export interface EtapaClasificacionProps {
   classificationQuery: UseQueryResult<ClassificationCoverage, Error>;
   allocationQuery: UseQueryResult<AllocationCoverage, Error>;
   jurisdictionsQuery: UseQueryResult<TaxJurisdiction[], Error>;
-  activityOptions: (currentCode: string) => Array<{ code: string; name: string }>;
+  activityOptions: (currentCode: string) => Array<{ code: string; name: string; level?: string }>;
   classificationDrafts: Record<string, BorradorClasificacion>;
   setClassificationDrafts: Dispatch<SetStateAction<Record<string, BorradorClasificacion>>>;
   allocationDrafts: Record<string, string>;
@@ -89,6 +88,8 @@ export function EtapaClasificacion({
   const [excluyendo, setExcluyendo] = useState(false);
   const [motivoExclusion, setMotivoExclusion] = useState("");
   const [motivoError, setMotivoError] = useState<string | null>(null);
+  const [reglasAbiertas, setReglasAbiertas] = useState(false);
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
   const visibleClassifications = useMemo(() => {
     const items = classificationQuery.data?.items ?? [];
     if (filter === "PENDING") {
@@ -173,12 +174,10 @@ export function EtapaClasificacion({
 
   return (
     <div className="workpaper-stage">
-      <p className="muted-copy">
-        Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de
-        calcular.
-        {motivoEditar ? ` ${motivoEditar}` : null}
-      </p>
+      {motivoEditar ? <p className="workpaper-classification-help muted-copy"><small>{motivoEditar}</small></p> : null}
+      <div className="workpaper-classification-head">
       <div className="workpaper-classification-summary">
+        <span className="workpaper-classification-help-mark" title="Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular." aria-label="Ayuda sobre clasificación">?</span>
         <span>
           <strong>{indicador(classificationQuery.data?.classified)}</strong>
           <small>Clasificados</small>
@@ -212,6 +211,29 @@ export function EtapaClasificacion({
           <small>Listo para calcular</small>
         </span>
       </div>
+      <div className="workpaper-classification-topbar">
+        <div><span>Filtrar</span>
+          <SearchSelect
+            label="Filtrar comprobantes"
+            hideLabel
+            value={filter}
+            onChange={(value) => setFilter(value)}
+            allowEmpty={false}
+            options={[{ value: "ALL", label: "Todos" }, { value: "PENDING", label: "Sin clasificar" }, { value: "EXCLUDED", label: "Excluidos" }]}
+          />
+        </div>
+        <div className="workpaper-classification-more">
+          <details>
+            <summary>Más</summary>
+            <div className="workpaper-classification-more__menu">
+              {puedeClasificar ? <label><input type="checkbox" checked={rememberRule} onChange={(event) => setRememberRule(event.target.checked)} /> Recordar para este proveedor/cliente</label> : null}
+              <Button size="sm" variant="text" onClick={() => setReglasAbiertas(true)}>Reglas recordadas ({rulesQuery.data?.length ?? 0})</Button>
+            </div>
+          </details>
+        </div>
+        {puedeClasificar ? <Button size="sm" variant="secondary" disabled={bulkClassifyMutation.isPending || seleccionadosActivos.length === 0} onClick={clasificarSeleccionados}>Clasificar seleccionados ({seleccionadosActivos.length})</Button> : null}
+      </div>
+      </div>
       {classificationQuery.isError ? (
         <AsyncState
           loading={false}
@@ -236,7 +258,7 @@ export function EtapaClasificacion({
             <small className="muted-copy">Dato del último corte; se está actualizando.</small>
           ) : null}
           {asignadasSolas.length > 0 ? (
-            <p className="workpaper-stage__note">
+            <p className="workpaper-classification-auto muted-copy">
               {asignadasSolas
                 .map(([actividad, cantidad]) =>
                   actividad
@@ -250,38 +272,8 @@ export function EtapaClasificacion({
           {motivoClasificacionBloqueada ? (
             <p className="workpaper-stage__note">{motivoClasificacionBloqueada}</p>
           ) : null}
-          <div className="workpaper-stage__actions">
-            <div>
-              Filtrar comprobantes
-              <SearchSelect
-                label="Filtrar comprobantes"
-                hideLabel
-                value={filter}
-                onChange={(value) => setFilter(value)}
-                allowEmpty={false}
-                options={[
-                  { value: "ALL", label: "Todos" },
-                  { value: "PENDING", label: "Sin clasificar" },
-                  { value: "EXCLUDED", label: "Excluidos" },
-                ]}
-              />
-            </div>
-            {puedeClasificar ? (
-              <label>
-                <input
-                  type="checkbox"
-                  checked={rememberRule}
-                  onChange={(event) => setRememberRule(event.target.checked)}
-                />{" "}
-                Recordar para este proveedor/cliente
-              </label>
-            ) : null}
-          </div>
-          {puedeClasificar ? (
-            <div className="workpaper-stage__actions" role="group" aria-label="Acciones sobre los comprobantes seleccionados">
-              <strong>
-                {seleccionados.length} {seleccionados.length === 1 ? "seleccionado" : "seleccionados"}
-              </strong>
+          {puedeClasificar && seleccionados.length > 0 ? (
+            <div className="workpaper-stage__actions workpaper-classification-toolbar" role="group" aria-label="Acciones sobre los comprobantes seleccionados">
               {seleccionadosActivos.length > 0 && !sentidos.has("SALE") ? (
                 <SearchSelect
                   label="Rubro de las compras seleccionadas"
@@ -308,14 +300,6 @@ export function EtapaClasificacion({
                   }))}
                 />
               ) : null}
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={bulkClassifyMutation.isPending}
-                onClick={clasificarSeleccionados}
-              >
-                Clasificar seleccionados
-              </Button>
               {seleccionadosActivos.length > 0 ? (
                 <Button
                   size="sm"
@@ -376,6 +360,7 @@ export function EtapaClasificacion({
             </div>
           ) : null}
           <Table<WorkpaperClassification>
+            className="workpaper-classification-table"
             rows={visibleClassifications}
             rowKey={(classification) => classification.id}
             empty={
@@ -408,7 +393,7 @@ export function EtapaClasificacion({
                 header: "Comprobante",
                 render: (classification) => (
                   <>
-                    <strong>
+                    <strong className="workpaper-classification-voucher-number">
                       {classification.voucher.letter ?? classification.voucher.type} ·{" "}
                       {String(classification.voucher.pointOfSale).padStart(4, "0")}-
                       {String(classification.voucher.number).padStart(8, "0")}
@@ -488,66 +473,74 @@ export function EtapaClasificacion({
                   return (
                     <>
                       {aviso}
-                      {!puedeClasificar ? (
-                    <>
-                      <strong>{classification.categoryCode ?? classification.activityCode}</strong>
-                      {classification.categoryCode && classification.activityCode ? (
-                        <small> · {classification.activityCode}</small>
-                      ) : null}
-                      <br />
-                      <small>
-                        {CLASSIFICATION_ORIGIN_LABELS[classification.origin ?? ""] ??
-                          "Clasificación guardada"}
-                      </small>
-                    </>
-                  ) : (
-                    <div className="workpaper-classification-fields">
-                      {classification.origin === "RULE" ? (
-                        <StatusBadge status="INFO" label="Por regla" />
-                      ) : null}
-                      {classification.direction === "PURCHASE" ? (
-                        <SearchSelect
-                          label="Rubro del proveedor"
-                          hideLabel
-                          value={draft.categoryCode}
-                          onChange={(value) =>
-                            setClassificationDrafts((current) => ({
-                              ...current,
-                              [classification.id]: {
-                                ...draft,
-                                categoryCode: value,
-                              },
-                            }))
-                          }
-                          placeholder="Rubro…"
-                          options={[
-                            { value: "SUPER", label: "SUPER · Minimercados" },
-                            { value: "TRANSPORTE", label: "TRANSPORTE" },
-                          ]}
-                        />
-                      ) : null}
-                      <SearchSelect
-                        id={`actividad-${classification.id}`}
-                        label="Actividad"
-                        hideLabel
-                        value={draft.activityCode}
-                        onChange={(value) =>
-                          setClassificationDrafts((current) => ({
-                            ...current,
-                            [classification.id]: {
-                              ...draft,
-                              activityCode: value,
-                            },
-                          }))
-                        }
-                        placeholder={classification.direction === "SALE" ? "Elegí la actividad…" : "Sin actividad (opcional)"}
-                        options={activityOptions(draft.activityCode).map((activity) => ({
-                          value: activity.code,
-                          label: activity.name ? `${activity.code} · ${activity.name}` : activity.code,
-                        }))}
-                      />
-                    </div>
-                  )}
+                      {(() => {
+                        const activity = activityOptions(draft.activityCode).find((item) => item.code === draft.activityCode);
+                        const automatic = ORIGENES_AUTOMATICOS.includes(classification.origin ?? "") && draft.activityCode === (classification.activityCode ?? "");
+                        const automaticLevels = automatic
+                          ? activityOptions(draft.activityCode).filter((item) => item.level)
+                          : [];
+                        const manual = classification.origin === "MANUAL" || (ORIGENES_AUTOMATICOS.includes(classification.origin ?? "") && !automatic);
+                        const fullActivity = automaticLevels.length
+                          ? automaticLevels.map((item) => [item.level, item.code, item.name].filter(Boolean).join(" · ")).join(" · ")
+                          : activity
+                            ? [activity.level, activity.code, activity.name].filter(Boolean).join(" · ")
+                            : classification.activityCode ?? "Actividad no informada";
+                        const selector = (
+                          <SearchSelect
+                            id={`actividad-${classification.id}`}
+                            label="Actividad"
+                            hideLabel
+                            value={draft.activityCode}
+                            onChange={(value) => {
+                              setClassificationDrafts((current) => ({
+                                ...current,
+                                [classification.id]: { ...draft, activityCode: value },
+                              }));
+                              setEditingActivityId(null);
+                            }}
+                            placeholder="Buscar actividad…"
+                            options={activityOptions(draft.activityCode).map((item) => ({
+                              value: item.code,
+                              label: item.name ? `${item.code} · ${item.name}` : item.code,
+                            }))}
+                          />
+                        );
+                        return (
+                          puedeClasificar && editingActivityId === classification.id ? (
+                            <>
+                              {classification.direction === "PURCHASE" ? (
+                                <SearchSelect
+                                  label="Rubro del proveedor"
+                                  hideLabel
+                                  value={draft.categoryCode}
+                                  onChange={(value) => setClassificationDrafts((current) => ({
+                                    ...current,
+                                    [classification.id]: { ...draft, categoryCode: value },
+                                  }))}
+                                  placeholder="Rubro…"
+                                  options={[{ value: "SUPER", label: "SUPER · Minimercados" }, { value: "TRANSPORTE", label: "TRANSPORTE" }]}
+                                />
+                              ) : null}
+                              {selector}
+                            </>
+                          ) : (
+                            <div className="workpaper-classification-inline" title={fullActivity}>
+                              <span className="workpaper-classification-code">
+                                {classification.categoryCode ? `${classification.categoryCode} · ` : ""}{automaticLevels.length
+                                  ? automaticLevels.map((item, index) => `${index === 0 ? "Prov." : "Mun."} ${item.code}`).join(" · ")
+                                  : draft.activityCode || "Sin actividad"}
+                              </span>
+                              {classification.origin === "RULE" ? <StatusBadge status="INFO" label="Por regla" /> : null}
+                              {(automatic || manual) ? (
+                                <small className="workpaper-classification-chip">{automatic ? "auto" : "manual"}</small>
+                              ) : null}
+                              {puedeClasificar ? (
+                                <button type="button" className="link-button" onClick={() => setEditingActivityId(classification.id)}>Cambiar</button>
+                              ) : null}
+                            </div>
+                          )
+                        );
+                      })()}
                     </>
                   );
                 },
@@ -626,20 +619,16 @@ export function EtapaClasificacion({
               },
             ]}
           />
-          <p className="workpaper-stage__note">
-            El cálculo queda bloqueado mientras exista una compra sin rubro o una venta sin
-            actividad. El rubro manual se guarda en el maestro del proveedor para los próximos
-            períodos. Los comprobantes excluidos quedan fuera del cálculo hasta que los reincluyas.
-          </p>
-          <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
-            <div>
-              <strong>Reglas recordadas</strong>
-              <small>
-                Cada regla clasifica sola los comprobantes nuevos de un mismo proveedor o cliente; los
-                ya clasificados no cambian.
-              </small>
-            </div>
-          </div>
+          {(classificationQuery.data.pending + (classificationQuery.data.activityPending ?? 0)) > 0 ? (
+            <p className="workpaper-classification-auto muted-copy">El cálculo queda bloqueado mientras haya comprobantes sin rubro o actividad. Clasificalos o excluilos para continuar.</p>
+          ) : null}
+          <ObjectPanel
+            kind="documento"
+            isOpen={reglasAbiertas}
+            onClose={() => setReglasAbiertas(false)}
+            title={`Reglas recordadas (${rulesQuery.data?.length ?? 0})`}
+            description="Las reglas se aplican a comprobantes nuevos del mismo proveedor o cliente."
+          >
           {rulesQuery.isError ? (
             <AsyncState
               loading={false}
@@ -718,6 +707,7 @@ export function EtapaClasificacion({
               ]}
             />
           )}
+          </ObjectPanel>
         </>
       )}
       <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
