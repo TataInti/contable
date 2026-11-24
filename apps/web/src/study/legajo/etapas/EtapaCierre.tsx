@@ -1,9 +1,13 @@
 // Etapa Cierre del Legajo: texto de cierre y arrastre, hashes y controles bloqueantes (Foco 2.3d).
-import type { Workpaper } from "../tipos";
 import { Button } from "@contable/design-system";
+import { formatMoney } from "../formato";
+import { formatearFecha } from "../../../lib/formatoFechas";
+import type { TaxPosition, Workpaper } from "../tipos";
 
 interface EtapaCierreProps {
   wp: Workpaper;
+  periodLabel?: string;
+  positions?: TaxPosition[];
   onFinalize?: () => void;
   onRectify?: () => void;
   onGoToCalculation?: () => void;
@@ -27,6 +31,8 @@ interface EtapaCierreProps {
 
 export function EtapaCierre({
   wp,
+  periodLabel = "Período sin identificar",
+  positions = [],
   onFinalize,
   onRectify,
   onGoToCalculation,
@@ -50,6 +56,9 @@ export function EtapaCierre({
   const blocking = wp.controls.filter((c) => c.severity === "BLOCKING" && c.status === "OPEN");
   const finalized = wp.status === "FINALIZED";
   const readyToFinalize = wp.status === "REVIEWED" && blocking.length === 0;
+  const pasosHechos = Number(finalized) + Number(hasFiling) + Number(hasDeclaration) + Number(hasPayment || paymentNotRequired);
+  const totalIngresar = positions.reduce((sum, position) => sum + Math.round(Number(position.totalPayable) * 100), 0) / 100;
+  const vence = positions.find((position) => position.dueDate)?.dueDate ?? null;
   const control = (label: string, allowed: boolean, handler?: () => void) => (
     <Button variant="secondary" onClick={handler} disabled={!allowed}>{label}</Button>
   );
@@ -64,6 +73,7 @@ export function EtapaCierre({
 
   return (
     <div className="workpaper-stage">
+      <p className="workpaper-close-summary"><strong>{periodLabel}</strong> · {positions.map((position) => position.regime.taxType.name).filter((name, index, all) => all.indexOf(name) === index).join(" / ") || "Impuestos sin posición"} · Total a ingresar {formatMoney(totalIngresar.toFixed(2))} · Vence {formatearFecha(vence, "sin fecha cargada")} · {pasosHechos} de 4 pasos</p>
       <ol className="workpaper-close-checklist" aria-label="Pasos para cerrar el período">
         {paso(1, "Finalizar", "Congela la liquidación y genera los saldos de cierre.", finalized, readyToFinalize && canFinalize && !readOnly,
           readyToFinalize ? readOnly ? null : <>{control("Finalizar", canFinalize, onFinalize)}{canFinalize ? null : <p>Tu perfil no tiene permiso para finalizar este legajo.</p>}</> :

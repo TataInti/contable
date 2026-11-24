@@ -933,6 +933,8 @@ export function StudyExpedienteMensual() {
         ) : (
           <EtapaCierre
             wp={wp}
+            periodLabel={selectedTaxPeriod ? fiscalTaxPeriodLabel(selectedTaxPeriod) : "Período sin identificar"}
+            positions={positionQuery.data ?? []}
             canFinalize={capacidades.has("tax.settlements.finalize") && !(currentUserId && wp.preparedByUserId === currentUserId && coverageQuery.data?.allowSelfReview === false)}
             canRectify={capacidades.has("tax.settlements.rectify")}
             canFile={capacidades.has("tax.filings.record")}
