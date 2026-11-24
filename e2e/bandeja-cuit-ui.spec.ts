@@ -167,7 +167,7 @@ test("control de CUIT en la Bandeja: CUIT de otro cliente, mover a otro cliente 
     await fila.getByRole("button", { name: "Subir", exact: true }).click();
     const cajon = page.locator(".action-drawer");
     await expect(cajon.locator("#upload-request-item")).toBeVisible();
-    await expect(cajon.getByText(new RegExp(escaparRegex(titulo)))).toBeVisible();
+    await expect(cajon.locator("#upload-request-item")).toHaveValue(new RegExp(escaparRegex(titulo)));
     await cajon.locator('input[type="file"]').setInputFiles({
       name: COMPROBANTE_DESDE_TRABAJO,
       mimeType: "application/pdf",
