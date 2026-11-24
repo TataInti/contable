@@ -1482,7 +1482,6 @@ export function StudyExpedienteMensual() {
           />
         ) : null
       }
-      sectionActions={accionesEtapa}
     />
   );
 
@@ -1611,6 +1610,11 @@ export function StudyExpedienteMensual() {
                   month={selectedTaxPeriod?.startDate ? selectedTaxPeriod.startDate.slice(0, 7) : mesActualMonotributo()}
                   puedePagar={capabilities.has("tax.payments.record") && !soloLectura}
                 />
+              ) : null}
+              {accionesEtapa ? (
+                <div className="workpaper-stage-toolbar" role="group" aria-label="Acciones de la etapa">
+                  {accionesEtapa}
+                </div>
               ) : null}
               {cuerpo}
             </DensePage>

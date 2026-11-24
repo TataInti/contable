@@ -37,11 +37,12 @@ function renderSidebar() {
 }
 
 describe("CommentsSidebar", () => {
-  it("abre por defecto desde 1440 px y pliega por debajo", () => {
+  it("abre por defecto desde 1200 px y pliega por debajo", () => {
     expect(COMMENTS_SIDEBAR_WIDTH).toBeGreaterThanOrEqual(320);
     expect(COMMENTS_SIDEBAR_WIDTH).toBeLessThanOrEqual(380);
-    expect(defaultCommentsSidebarOpen(1280)).toBe(false);
-    expect(defaultCommentsSidebarOpen(1439)).toBe(false);
+    expect(defaultCommentsSidebarOpen(1199)).toBe(false);
+    expect(defaultCommentsSidebarOpen(1200)).toBe(true);
+    expect(defaultCommentsSidebarOpen(1280)).toBe(true);
     expect(defaultCommentsSidebarOpen(1440)).toBe(true);
   });
 

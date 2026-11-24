@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
+declare const process: { env: { CI?: string } };
 import { RUN, SUFFIX, login, mutating, syntheticCuit } from "./helpers/ui";
 import {
   IIBB,
@@ -29,6 +30,13 @@ const COMPROBANTES: FacturaSintetica[] = [
   { fecha: "2026-10-20", tipo: "13", numero: "3", docTipo: "80", docNumero: syntheticCuit(Number.parseInt(RUN, 36) + 30_003), denominacion: `Nota de crédito sintética ${SUFFIX}`, neto: "10000.00", iva: "0.00" },
 ];
 
+const CAPTURES = "/home/hermes/.hermes/workspace/contable/rediseno-pantallas/r2";
+
+async function capturar(page: Page, testInfo: TestInfo, fileName: string) {
+  const destination = process.env.CI ? testInfo.outputPath(fileName) : `${CAPTURES}/${fileName}`;
+  await page.screenshot({ path: destination });
+}
+
 async function prepararLegajoConControles(page: Page) {
   await altaClienteRI(page, CLIENTE);
   await inscribirIIBB(page);
@@ -50,22 +58,41 @@ async function abrirEtapa(page: Page, etapa: string) {
   await tab.focus();
   await page.keyboard.press("Enter");
   await expect(tab).toHaveAttribute("aria-selected", "true");
+  const acciones = page.locator(".workpaper-stage-toolbar");
+  if (await acciones.count()) {
+    const pestañas = await page.locator(".work-bar__row--secciones").boundingBox();
+    const herramientas = await acciones.boundingBox();
+    expect(pestañas).not.toBeNull();
+    expect(herramientas).not.toBeNull();
+    expect(herramientas!.y).toBeGreaterThanOrEqual(pestañas!.y + pestañas!.height);
+    expect(await page.locator(".work-bar__row--secciones").getByRole("button", { name: "Actualizar" }).count()).toBe(0);
+  }
 }
 
 async function verificarBarraADerecha(page: Page) {
   const thread = page.getByRole("region", { name: "Comentarios" });
   await expect(thread).toBeVisible();
-  const contenido = page.locator(".workpaper-body");
-  const barra = await thread.boundingBox();
+  const contenido = page.locator(".workpaper-main");
   const area = await contenido.boundingBox();
+  const barra = await page.locator(".comments-sidebar").boundingBox();
+  const trabajo = await page.locator(".work-page__body").boundingBox();
+  const lista = await thread.locator(".comment-thread__list").boundingBox();
+  const formulario = await thread.locator("form").boundingBox();
   expect(barra).not.toBeNull();
   expect(area).not.toBeNull();
+  expect(trabajo).not.toBeNull();
+  expect(lista).not.toBeNull();
+  expect(formulario).not.toBeNull();
   expect(barra!.x).toBeGreaterThan(area!.x);
-  expect(barra!.x).toBeGreaterThanOrEqual(area!.x + area!.width * 0.6);
+  expect(barra!.y + barra!.height).toBeCloseTo(trabajo!.y + trabajo!.height, 0);
+  expect(formulario!.y).toBeGreaterThan(lista!.y);
+  expect(barra!.y + barra!.height - (formulario!.y + formulario!.height)).toBeLessThanOrEqual(14);
+  expect(await contenido.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   return thread;
 }
 
-test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conservan el plegado", async ({ page }) => {
+test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conservan el plegado", async ({ page }, testInfo) => {
   test.setTimeout(900_000);
   page.setDefaultTimeout(15_000);
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -76,7 +103,7 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
   for (const etapa of ["Saldos", "Clasificación", "Controles"]) {
     await abrirEtapa(page, etapa);
     const thread = await verificarBarraADerecha(page);
-    await page.screenshot({ path: `rediseno-pantallas/r2/${etapa.toLowerCase().replaceAll("ó", "o")}-1440x900.png` });
+    await capturar(page, testInfo, `${etapa.toLowerCase().replaceAll("ó", "o")}-1440x900.png`);
     if (etapa === "Clasificación") {
       const comment = `Comentario lateral E2E ${SUFFIX}`;
       await thread.getByLabel("Escribí un comentario").fill(comment);
@@ -92,14 +119,14 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
   for (const etapa of ["Saldos", "Clasificación", "Controles"]) {
     await abrirEtapa(page, etapa);
     await verificarBarraADerecha(page);
-    await page.screenshot({ path: `rediseno-pantallas/r2/${etapa.toLowerCase().replaceAll("ó", "o")}-1280x720.png` });
+    await capturar(page, testInfo, `${etapa.toLowerCase().replaceAll("ó", "o")}-1280x720.png`);
   }
   await abrirEtapa(page, "Clasificación");
   const plegar = page.getByRole("button", { name: /Plegar comentarios/ });
   await plegar.click();
   const franja = page.getByRole("button", { name: /Comentarios · \d+/ });
   await expect(franja).toBeVisible();
-  await page.screenshot({ path: "rediseno-pantallas/r2/comentarios-plegados.png" });
+  await capturar(page, testInfo, "comentarios-plegados.png");
   await page.reload();
   await expect(page.getByRole("button", { name: /Comentarios · \d+/ })).toBeVisible();
   await page.getByRole("button", { name: /Comentarios · \d+/ }).click();
@@ -114,7 +141,7 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await expect(page.getByRole("region", { name: "Comentarios" })).toBeVisible();
-  await page.screenshot({ path: "rediseno-pantallas/r2/panel-control-sobre-comentarios.png" });
+  await capturar(page, testInfo, "panel-control-sobre-comentarios.png");
   const sidebarAfter = await sidebar.boundingBox();
   expect(sidebarAfter?.x).toBe(sidebarBefore?.x);
   await dialog.getByRole("button", { name: "Cerrar" }).click();

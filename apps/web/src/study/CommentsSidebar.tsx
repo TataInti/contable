@@ -14,7 +14,7 @@ export function commentsSidebarStorageKey(userId: string) {
 }
 
 export function defaultCommentsSidebarOpen(viewportWidth: number) {
-  return viewportWidth >= 1440;
+  return viewportWidth >= 1200;
 }
 
 function readPreference(key: string, viewportWidth: number) {

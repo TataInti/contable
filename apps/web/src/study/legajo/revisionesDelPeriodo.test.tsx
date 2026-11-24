@@ -371,10 +371,11 @@ describe("Legajo · «Actualizar» en una revisión anterior (Barra 2e)", () => 
     const barraLegajo = screen.getByRole("region", {
       name: "Legajo: período, revisión, etapas y acciones",
     });
-    expect(await within(barraLegajo).findByRole("button", { name: "Actualizar" })).toBeTruthy();
+    const accionesEtapa = document.querySelector(".workpaper-stage-toolbar") as HTMLElement;
+    expect(await within(accionesEtapa).findByRole("button", { name: "Actualizar" })).toBeTruthy();
     expect(within(barraLegajo).queryByRole("button", { name: "Cargar saldo inicial" })).toBeNull();
     fireEvent.click(within(barraLegajo).getByRole("tab", { name: "Cálculo" }));
-    expect(await within(barraLegajo).findByRole("button", { name: "Actualizar" })).toBeTruthy();
+    expect(await within(document.querySelector(".workpaper-stage-toolbar") as HTMLElement).findByRole("button", { name: "Actualizar" })).toBeTruthy();
     expect(within(barraLegajo).queryByRole("button", { name: "Cargar saldo inicial" })).toBeNull();
   });
 });
