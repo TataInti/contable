@@ -3,12 +3,11 @@ import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, MoneyField, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
-import { calculationLabel } from "../etiquetas";
-import { esPedidoDeCambios, formatMoney } from "../formato";
+import { formatMoney } from "../formato";
 import { formatearFecha } from "../../../lib/formatoFechas";
 import type { PositionAction, TaxPosition, WorkpaperCalculationComponent } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
-import { pluralizar } from "../textos";
+
 import {
   alternarImpuesto,
   errorMinimo,
@@ -47,12 +46,30 @@ export function EtapaCalculo({
   bloqueoSeleccion = null,
 }: EtapaCalculoProps) {
   const determinacion = calculationQuery.data ?? [];
+  const conceptos = [
+    { label: "Base imponible", keys: ["BASE_TOTAL", "BASE_PAIS", "BASE_IMPONIBLE"] },
+    { label: "Impuesto por actividad", keys: ["IMPUESTO_POR_ACTIVIDAD", "IMPUESTO_POR_JURISDICCION"] },
+    { label: "Mínimo aplicado", keys: ["MINIMO_APLICADO"] },
+    { label: "Impuesto determinado", keys: ["IMPUESTO_DETERMINADO"] },
+    { label: "Percepciones", keys: ["PERCEPCIONES", "PERCEPCIONES_SUFRIDAS"] },
+    { label: "Retenciones", keys: ["RETENCIONES", "RETENCIONES_SUFRIDAS"] },
+    { label: "Recaudaciones bancarias", keys: ["RECAUDACIONES"] },
+    { label: "Saldo a favor anterior", keys: ["SALDO_ANTERIOR", "SALDO_TECNICO_ANTERIOR", "SALDO_LIBRE_ANTERIOR"] },
+    { label: "Otros créditos", keys: ["OTROS_CREDITOS", "CREDITO_DTO_814", "CREDITOS_SEGUNDO_PARRAFO"] },
+    { label: "Total a ingresar", keys: ["TOTAL_A_INGRESAR"] },
+  ];
+  const filasDeterminacion = conceptos.map((concepto) => ({
+    label: concepto.label,
+    amounts: Object.fromEntries(determinacion.map((component) => {
+      const totals = component.settlement?.totals ?? {};
+      const key = concepto.keys.find((candidate) => Object.hasOwn(totals, candidate))
+        ?? (concepto.label === "Total a ingresar" ? Object.keys(totals).find((candidate) => candidate.startsWith("TOTAL_A_INGRESAR")) : undefined);
+      return [component.obligationId, component.settlement ? key ? totals[key] ?? "0" : "0" : null];
+    })),
+  }));
 
   return (
     <div className="workpaper-stage">
-      <p className="muted-copy">
-        Devengado fiscal, pagos e intereses sin mezclarlo con el resultado gerencial.
-      </p>
       {calculationQuery.isSuccess && determinacion.length > 0 ? (
         <section className="workpaper-calculation-selection">
           <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
@@ -90,6 +107,7 @@ export function EtapaCalculo({
                     {component.obligation.jurisdictionName}
                   </span>
                 </label>
+                {!marcado ? <small className="muted-copy">No liquidado este mes.</small> : null}
                 {marcado && component.usaMinimoDeclarado ? (
                   <MoneyField
                     label="Mínimo del mes"
@@ -118,7 +136,7 @@ export function EtapaCalculo({
       <div className="workpaper-calculation-breakdown">
         <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
           <div>
-            <strong>Determinación y trazabilidad del cálculo</strong>
+            <strong>Determinación</strong>
             <small>
               Totales, fórmulas, alícuotas y versión de reglas congeladas por obligación.
             </small>
@@ -149,110 +167,44 @@ export function EtapaCalculo({
             {calculationQuery.isFetching ? (
               <small className="muted-copy">Dato del último corte; se está actualizando.</small>
             ) : null}
-            {determinacion.map((component) => (
-              <article className="workpaper-calculation" key={component.obligationId}>
-                <div className="workpaper-calculation__header">
-                  <span>
-                    <strong>
-                      {component.obligation.taxTypeName} · {component.obligation.regimeName}
-                    </strong>
-                    <small>{component.obligation.jurisdictionName}</small>
-                  </span>
-                  {component.settlement ? (
-                    <span>
-                      <StatusBadge status={component.settlement.status} />
-                    </span>
-                  ) : (
-                    <StatusBadge status="PENDING" />
-                  )}
-                </div>
-                {!seleccionDeImpuesto(seleccion, component.obligationId) ? (
-                  <p className="muted-copy">No liquidado este mes.</p>
-                ) : component.settlement ? (
-                  <>
-                    <dl className="workpaper-calculation__totals">
-                      {Object.entries(component.settlement.totals ?? {})
-                        .filter(([concept]) => calculationLabel(concept) !== null)
-                        .map(([concept, amount]) => (
-                          <div
-                            className={concept === "TOTAL_A_INGRESAR" ? "is-total" : ""}
-                            key={concept}
-                          >
-                            <dt>{calculationLabel(concept)}</dt>
-                            <dd>{formatMoney(amount)}</dd>
-                          </div>
-                        ))}
-                    </dl>
-                    <ul className="workpaper-calculation__formula">
-                      {lineasDeFormula(component).map((linea) => (
-                        <li key={linea}>{linea}</li>
-                      ))}
-                    </ul>
-                    {component.settlement.f931Inputs.length > 0 ? (
-                      <p className="workpaper-calculation__source-note">
-                        F.931 revisado · remuneración neta{" "}
-                        {formatMoney(
-                          String(
-                            component.settlement.f931Inputs[0]?.snapshot["netRemuneration"] ?? 0,
-                          ),
-                        )}
-                      </p>
-                    ) : null}
-                    <details className="workpaper-calculation__trace">
-                      <summary>
-                        Ver{" "}
-                        {pluralizar(
-                          component.settlement.lines.length,
-                          "línea de cálculo",
-                          "líneas de cálculo",
-                        )}
-                      </summary>
-                      <Table<(typeof component.settlement.lines)[number]>
-                        rows={component.settlement.lines}
-                        rowKey={(line) => line.id}
-                        empty={
-                          <EmptyState size="inline" title="La liquidación no generó líneas." />
-                        }
-                        columns={[
-                          {
-                            key: "concept",
-                            header: "Concepto",
-                            render: (line) => line.concept.replaceAll("_", " "),
-                          },
-                          {
-                            key: "formula",
-                            header: "Fórmula / fuente",
-                            render: (line) => line.formula ?? "—",
-                          },
-                          {
-                            key: "amount",
-                            header: "Importe",
-                            align: "right",
-                            render: (line) => <strong>{formatMoney(line.amount)}</strong>,
-                          },
-                        ]}
-                      />
-                    </details>
-                    {component.settlement.differences.some((d) => !esPedidoDeCambios(d)) ? (
-                      <div className="workpaper-calculation__differences">
-                        {component.settlement.differences
-                          .filter((difference) => !esPedidoDeCambios(difference))
-                          .map((difference) => (
-                            <p key={difference.id}>
-                              <StatusBadge status={difference.severity} />
-                              <span>
-                                <strong>{difference.code}</strong> · {difference.message}
-                              </span>
-                            </p>
-                          ))}
-                      </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <p className="muted-copy">El detalle se genera cuando el legajo se calcula.</p>
-                )}
-              </article>
-            ))}
+            <Table<(typeof filasDeterminacion)[number]>
+              rows={filasDeterminacion}
+              rowKey={(row) => row.label}
+              empty={<EmptyState size="inline" title="No hay conceptos para mostrar." />}
+              columns={[
+                { key: "concept", header: "Concepto", render: (row) => row.label === "Total a ingresar" ? <strong>{row.label}</strong> : row.label },
+                ...determinacion.map((component) => ({
+                  key: component.obligationId,
+                  header: <span>{component.obligation.taxTypeName}<small className="muted-copy"> · {component.obligation.jurisdictionName}</small><small><StatusBadge status={component.settlement?.status ?? "PENDING"} /></small></span>,
+                  align: "right" as const,
+                  render: (row: (typeof filasDeterminacion)[number]) => {
+                    const amount = row.amounts[component.obligationId];
+                    if (!seleccionDeImpuesto(seleccion, component.obligationId) || amount === null) return <span className="muted-copy">—</span>;
+                    const importe = formatMoney(amount ?? "0");
+                    return row.label === "Total a ingresar" ? <strong>{importe}</strong> : <span className={`workpaper-calculation__amount${Number(amount) === 0 ? " workpaper-calculation__amount--zero" : ""}`}>{importe}</span>;
+                  },
+                })),
+              ]}
+            />
+            {determinacion.map((component) => component.settlement ? (
+              <details className="workpaper-calculation__trace" key={`formula-${component.obligationId}`}>
+                <summary>Ver cómo se calculó · {component.obligation.taxTypeName}</summary>
+                <small className="muted-copy">Versión de reglas {component.settlement.engineVersion}</small>
+                <ul className="workpaper-calculation__formula">
+                  {lineasDeFormula(component).map((linea) => <li key={linea}>{linea}</li>)}
+                </ul>
+                {component.settlement.lines.length ? <Table<(typeof component.settlement.lines)[number]>
+                  rows={component.settlement.lines}
+                  rowKey={(line) => line.id}
+                  empty={<EmptyState size="inline" title="La liquidación no generó líneas." />}
+                  columns={[
+                    { key: "concept", header: "Concepto", render: (line) => line.concept.replaceAll("_", " ") },
+                    { key: "formula", header: "Fórmula / fuente", render: (line) => line.formula ?? "—" },
+                    { key: "amount", header: "Importe", align: "right", render: (line) => <strong>{formatMoney(line.amount)}</strong> },
+                  ]}
+                /> : null}
+              </details>
+            ) : null)}
           </>
         )}
       </div>
