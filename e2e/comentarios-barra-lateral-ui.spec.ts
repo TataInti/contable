@@ -113,7 +113,7 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
       }
       const reviewerPage = await browser.newPage();
       await login(reviewerPage, "revisor@contable.local", "revisor1234");
-      const commentsUrl = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name).find((url) => /\/api\/v1\/firms\/[^/]+\/clients\/[^/]+\/comments(?:\?.*)?$/.test(url)));
+      const commentsUrl = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name).find((url) => url.includes("/api/v1/firms/") && url.includes("/clients/") && url.split("?")[0]?.endsWith("/comments")));
       expect(commentsUrl).toBeTruthy();
       const reviewerComment = `Comentario Revisor E2E ${SUFFIX}`;
       const created = await reviewerPage.evaluate(async ({ url, comment, periodLabel }) => {
