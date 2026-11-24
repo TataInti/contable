@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Notice, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
@@ -30,6 +30,11 @@ export function StudyTrabajo() {
   // La clave cambia en cada apertura: la carga arranca limpia y preselecciona el pedido de la fila.
   const [uploadKey, setUploadKey] = useState(0);
   const [uploadRequestId, setUploadRequestId] = useState<string | null>(null);
+  // Precarga la Bandeja al abrir Trabajo: su «Subir documento» tiene el mismo nombre que el de
+  // este encabezado, y así el cambio de página se ve enseguida en vez de esperar la carga del módulo.
+  useEffect(() => {
+    void import("./StudyBandeja");
+  }, []);
   const confirm = useConfirmAction();
   const [showClose, setShowClose] = useState(false);
   const notify = useNotify();
