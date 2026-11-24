@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, MoneyField, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
-import { formatMoney } from "../formato";
+import { formatMoney, esPedidoDeCambios } from "../formato";
 import { formatearFecha } from "../../../lib/formatoFechas";
 import type { PositionAction, TaxPosition, WorkpaperCalculationComponent } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
@@ -193,6 +193,10 @@ export function EtapaCalculo({
                 <ul className="workpaper-calculation__formula">
                   {lineasDeFormula(component).map((linea) => <li key={linea}>{linea}</li>)}
                 </ul>
+                {component.settlement.f931Inputs.length ? <p className="workpaper-calculation__source-note">F.931 revisado · remuneración neta {formatMoney(String(component.settlement.f931Inputs[0]?.snapshot["netRemuneration"] ?? 0))}</p> : null}
+                {component.settlement.differences.some((difference) => !esPedidoDeCambios(difference)) ? <div className="workpaper-calculation__differences">
+                  {component.settlement.differences.filter((difference) => !esPedidoDeCambios(difference)).map((difference) => <p key={difference.id}><StatusBadge status={difference.severity} /><span><strong>{difference.code}</strong> · {difference.message}</span></p>)}
+                </div> : null}
                 {component.settlement.lines.length ? <Table<(typeof component.settlement.lines)[number]>
                   rows={component.settlement.lines}
                   rowKey={(line) => line.id}
