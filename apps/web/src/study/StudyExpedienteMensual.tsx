@@ -935,6 +935,7 @@ export function StudyExpedienteMensual() {
             wp={wp}
             periodLabel={selectedTaxPeriod ? fiscalTaxPeriodLabel(selectedTaxPeriod) : "Período sin identificar"}
             positions={positionQuery.data ?? []}
+            inlineForm={positionAction?.kind === "FILING" ? <PanelPresentacion posicion={positionAction.position} onCerrar={() => setPositionAction(null)} firmId={firmId} clientId={clientId} documentos={documentsQuery.data} inline /> : null}
             canFinalize={capacidades.has("tax.settlements.finalize") && !(currentUserId && wp.preparedByUserId === currentUserId && coverageQuery.data?.allowSelfReview === false)}
             canRectify={capacidades.has("tax.settlements.rectify")}
             canFile={capacidades.has("tax.filings.record")}
@@ -1684,7 +1685,7 @@ export function StudyExpedienteMensual() {
         />
       ) : null}
 
-      {positionAction?.kind === "FILING" ? (
+      {positionAction?.kind === "FILING" && safeActiveStep !== 5 ? (
         <PanelPresentacion
           posicion={positionAction.position}
           onCerrar={() => setPositionAction(null)}
