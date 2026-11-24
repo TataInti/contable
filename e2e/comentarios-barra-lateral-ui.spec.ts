@@ -1,6 +1,6 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 declare const process: { env: { CI?: string } };
-import { RUN, SUFFIX, login, mutating, syntheticCuit } from "./helpers/ui";
+import { RUN, SUFFIX, goTo, login, mutating, pickOption, syntheticCuit } from "./helpers/ui";
 import {
   IIBB,
   activarAutorrevision,
@@ -103,6 +103,15 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
   await page.addInitScript(() => localStorage.setItem("contable-study-navigation-tour-v1", "dismissed"));
   await login(page);
   await prepararLegajoConControles(page);
+  await goTo(page, "Usuarios y accesos");
+  const reviewerRow = page.locator("tr", { hasText: "revisor@contable.local" });
+  await reviewerRow.getByText("Más acciones").click();
+  await reviewerRow.getByRole("button", { name: /Administrar clientes de Revisor local/ }).click();
+  const assignments = page.locator(".action-drawer");
+  await pickOption(assignments.getByRole("combobox", { name: "Cliente" }), CLIENTE.legalName);
+  await mutating(page, "/assignments", () => assignments.getByRole("button", { name: "Asignar cliente" }).click());
+  await assignments.getByRole("button", { name: "Cerrar", exact: true }).first().click().catch(() => undefined);
+  await goTo(page, "Legajo");
 
   for (const etapa of ["Saldos", "Clasificación", "Controles"]) {
     await abrirEtapa(page, etapa);
@@ -114,6 +123,7 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
         await thread.getByLabel("Escribí un comentario").fill(comment);
         await mutating(page, "/comments", () => thread.getByRole("button", { name: "Comentar", exact: true }).click());
         await expect(thread.getByRole("listitem").filter({ hasText: comment })).toBeVisible();
+        await page.waitForTimeout(1_100);
       }
       const reviewerPage = await browser.newPage();
       await login(reviewerPage, "revisor@contable.local", "revisor1234");
