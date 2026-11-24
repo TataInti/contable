@@ -1,6 +1,6 @@
 import { useImperativeHandle, useState, type Ref } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, EmptyState, useNotify, SearchSelect } from "@contable/design-system";
+import { Button, EmptyState, Notice, useNotify, SearchSelect } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { ApiError, api, uploadToSignedUrl, type DocumentRequest } from "../../lib/api";
 import { useClientContext } from "../../context/ClientContext";
@@ -35,6 +35,12 @@ interface CargarDocumentoProps {
   onRetryRequests: () => void;
   onClose: () => void;
   onUploaded: (documentId: string) => void;
+  /** Ítem que se preselecciona al abrir la carga desde un pedido (o el único pendiente). */
+  itemInicial?: string;
+  /** Si se indica, la carga sin pedidos pendientes ofrece «Crear pedido» en vez de «Ir a pedidos». */
+  onCrearPedido?: () => void;
+  /** Si se indica, cada subida muestra un aviso con el enlace «Ver en Bandeja». */
+  onVerEnBandeja?: () => void;
 }
 
 export function CargarDocumento({
@@ -48,20 +54,25 @@ export function CargarDocumento({
   onRetryRequests,
   onClose,
   onUploaded,
+  itemInicial,
+  onCrearPedido,
+  onVerEnBandeja,
 }: CargarDocumentoProps) {
   const { firmId, clientId } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const notify = useNotify();
-  const [uploadRequestItemId, setUploadRequestItemId] = useState("");
+  const [uploadRequestItemId, setUploadRequestItemId] = useState(itemInicial ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [bookFileSelected, setBookFileSelected] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [subidaRecibida, setSubidaRecibida] = useState(false);
 
   useImperativeHandle(ref, () => ({ limpiarError: () => setUploadError(null) }), []);
 
   const chooseFile = (selected: File | null) => {
+    setSubidaRecibida(false);
     const extension = selected?.name.toLocaleLowerCase("es-AR").split(".").pop();
     if (selected && ["xlsx", "xls", "csv", "txt"].includes(extension ?? "")) {
       setBookFileSelected(true);
@@ -109,6 +120,9 @@ export function CargarDocumento({
     onSuccess: (document) => {
       notify.success("Documento recibido. Ya ingresó al circuito de validación y procesamiento.");
       setFile(null);
+      // El ítem recibido deja de estar pendiente: el selector vuelve a vacío para el próximo archivo.
+      setUploadRequestItemId("");
+      setSubidaRecibida(true);
       onUploaded(document.documentId);
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] }),
@@ -127,12 +141,26 @@ export function CargarDocumento({
         setFile(null);
         setBookFileSelected(false);
         setUploadError(null);
+        setSubidaRecibida(false);
       }}
       title="Nuevo documento"
       description="El archivo pasa por validación, antivirus y extracción antes de estar disponible."
       size="wide"
+      initialFocus="close"
     >
       <p className="secure-note upload-panel__secure-note">Carga segura</p>
+      {subidaRecibida && onVerEnBandeja ? (
+        <Notice
+          tone="success"
+          action={
+            <Button size="sm" variant="secondary" onClick={onVerEnBandeja}>
+              Ver en Bandeja
+            </Button>
+          }
+        >
+          Documento recibido. Podés cargar otro archivo o revisarlo en la Bandeja.
+        </Notice>
+      ) : null}
       {requestsLoading ? (
         <div className="query-state query-state--compact" role="status">
           <span className="loading-copy">Buscando pedidos abiertos…</span>
@@ -151,13 +179,23 @@ export function CargarDocumento({
       ) : pendingRequestItems.length === 0 ? (
         <EmptyState
           size="compact"
-          title="Primero creá un pedido documental"
-          description="Cada carga queda vinculada a un ítem solicitado para preservar la trazabilidad."
+          title={subidaRecibida ? "No quedan ítems pendientes" : "Primero creá un pedido documental"}
+          description={
+            subidaRecibida
+              ? "Cada carga queda vinculada a un ítem solicitado. Creá otro pedido para cargar más documentos."
+              : "Cada carga queda vinculada a un ítem solicitado para preservar la trazabilidad."
+          }
           action={
             capabilities.has("request.manage") ? (
-              <Button size="sm" onClick={() => navigate("/trabajo")}>
-                Ir a pedidos
-              </Button>
+              onCrearPedido ? (
+                <Button size="sm" onClick={onCrearPedido}>
+                  Crear pedido
+                </Button>
+              ) : (
+                <Button size="sm" onClick={() => navigate("/trabajo")}>
+                  Ir a pedidos
+                </Button>
+              )
             ) : undefined
           }
         />
@@ -174,7 +212,6 @@ export function CargarDocumento({
               id="upload-request-item"
               label="Corresponde a"
               hideLabel
-              className="ctxbar__input"
               value={uploadRequestItemId}
               onChange={(value) => setUploadRequestItemId(value)}
               required
@@ -244,6 +281,7 @@ export function CargarDocumento({
                 setFile(null);
                 setBookFileSelected(false);
                 setUploadError(null);
+                setSubidaRecibida(false);
               }}
             >
               Cancelar
