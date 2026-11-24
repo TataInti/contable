@@ -1,0 +1,123 @@
+import { expect, test, type Page } from "@playwright/test";
+import { RUN, SUFFIX, login, mutating, syntheticCuit } from "./helpers/ui";
+import {
+  IIBB,
+  activarAutorrevision,
+  altaClienteRI,
+  abrirLegajo as crearLegajo,
+  calcularIIBB,
+  cargarLibroVentas,
+  crearPeriodoIIBB,
+  inscribirIIBB,
+  irAlLegajo,
+  revisarLotesDe,
+  rotuloDelPeriodo,
+  vincularActividad,
+} from "./helpers/liquidacion-ui";
+import type { FacturaSintetica } from "./helpers/fuentes-sinteticas";
+
+const CLIENTE = {
+  legalName: `Cliente E2E Comentarios ${SUFFIX} S.R.L.`,
+  tradeName: `E2E Comentarios ${SUFFIX}`,
+  cuit: syntheticCuit(Number.parseInt(RUN, 36) + 25_000),
+  fiscalAddress: "Av. Mate de Luna 1500, San Miguel de Tucumán",
+};
+const PERIODO = { start: "2026-10-01", end: "2026-10-31", mes: "Octubre de 2026", label: `Octubre 2026 comentarios ${SUFFIX}` };
+const COMPROBANTES: FacturaSintetica[] = [
+  { fecha: "2026-10-05", tipo: "11", numero: "1", docTipo: "80", docNumero: syntheticCuit(Number.parseInt(RUN, 36) + 30_001), denominacion: `Venta sintética 1 ${SUFFIX}`, neto: "50000.00", iva: "0.00" },
+  { fecha: "2026-10-12", tipo: "11", numero: "2", docTipo: "80", docNumero: syntheticCuit(Number.parseInt(RUN, 36) + 30_002), denominacion: `Venta sintética 2 ${SUFFIX}`, neto: "40000.00", iva: "0.00" },
+  { fecha: "2026-10-20", tipo: "13", numero: "3", docTipo: "80", docNumero: syntheticCuit(Number.parseInt(RUN, 36) + 30_003), denominacion: `Nota de crédito sintética ${SUFFIX}`, neto: "10000.00", iva: "0.00" },
+];
+
+async function prepararLegajoConControles(page: Page) {
+  await altaClienteRI(page, CLIENTE);
+  await inscribirIIBB(page);
+  await vincularActividad(page, IIBB.activity);
+  await crearPeriodoIIBB(page, PERIODO);
+  const rotulo = rotuloDelPeriodo(PERIODO.mes, PERIODO.label);
+  await crearLegajo(page, rotulo);
+  const { libro } = await cargarLibroVentas(page, COMPROBANTES, `comentarios-${SUFFIX}.xlsx`);
+  await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
+  await expect(page.getByRole("dialog", { name: "Importar libros IVA" })).toBeHidden({ timeout: 60_000 });
+  await activarAutorrevision(page);
+  await irAlLegajo(page, rotulo);
+  await revisarLotesDe(page, "Gestionar Ventas del período");
+  await calcularIIBB(page);
+}
+
+async function abrirEtapa(page: Page, etapa: string) {
+  const tab = page.getByRole("tab", { name: new RegExp(`^${etapa}`) });
+  await tab.focus();
+  await page.keyboard.press("Enter");
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+}
+
+async function verificarBarraADerecha(page: Page) {
+  const thread = page.getByRole("region", { name: "Comentarios" });
+  await expect(thread).toBeVisible();
+  const contenido = page.locator(".workpaper-body");
+  const barra = await thread.boundingBox();
+  const area = await contenido.boundingBox();
+  expect(barra).not.toBeNull();
+  expect(area).not.toBeNull();
+  expect(barra!.x).toBeGreaterThan(area!.x);
+  expect(barra!.x).toBeGreaterThanOrEqual(area!.x + area!.width * 0.6);
+  return thread;
+}
+
+test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conservan el plegado", async ({ page }) => {
+  test.setTimeout(900_000);
+  page.setDefaultTimeout(15_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(() => localStorage.setItem("contable-study-navigation-tour-v1", "dismissed"));
+  await login(page);
+  await prepararLegajoConControles(page);
+
+  for (const etapa of ["Saldos", "Clasificación", "Controles"]) {
+    await abrirEtapa(page, etapa);
+    const thread = await verificarBarraADerecha(page);
+    await page.screenshot({ path: `rediseno-pantallas/r2/${etapa.toLowerCase().replaceAll("ó", "o")}-1440x900.png` });
+    if (etapa === "Clasificación") {
+      const comment = `Comentario lateral E2E ${SUFFIX}`;
+      await thread.getByLabel("Escribí un comentario").fill(comment);
+      await mutating(page, "/comments", () => thread.getByRole("button", { name: "Comentar", exact: true }).click());
+      await expect(thread.getByRole("listitem").filter({ hasText: comment })).toBeVisible();
+    }
+    if (etapa === "Controles") {
+      await expect(thread.getByText(`Comentario lateral E2E ${SUFFIX}`, { exact: true })).toBeVisible();
+    }
+  }
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  for (const etapa of ["Saldos", "Clasificación", "Controles"]) {
+    await abrirEtapa(page, etapa);
+    await verificarBarraADerecha(page);
+    await page.screenshot({ path: `rediseno-pantallas/r2/${etapa.toLowerCase().replaceAll("ó", "o")}-1280x720.png` });
+  }
+  await abrirEtapa(page, "Clasificación");
+  const plegar = page.getByRole("button", { name: /Plegar comentarios/ });
+  await plegar.click();
+  const franja = page.getByRole("button", { name: /Comentarios · \d+/ });
+  await expect(franja).toBeVisible();
+  await page.screenshot({ path: "rediseno-pantallas/r2/comentarios-plegados.png" });
+  await page.reload();
+  await expect(page.getByRole("button", { name: /Comentarios · \d+/ })).toBeVisible();
+  await page.getByRole("button", { name: /Comentarios · \d+/ }).click();
+  await expect(page.getByRole("region", { name: "Comentarios" })).toBeVisible();
+
+  await abrirEtapa(page, "Controles");
+  const control = page.locator(".workpaper-controls [data-row-key] button").first();
+  await expect(control).toBeVisible();
+  const sidebar = page.locator(".comments-sidebar");
+  const sidebarBefore = await sidebar.boundingBox();
+  await control.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole("region", { name: "Comentarios" })).toBeVisible();
+  await page.screenshot({ path: "rediseno-pantallas/r2/panel-control-sobre-comentarios.png" });
+  const sidebarAfter = await sidebar.boundingBox();
+  expect(sidebarAfter?.x).toBe(sidebarBefore?.x);
+  await dialog.getByRole("button", { name: "Cerrar" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Comentarios" })).toBeVisible();
+});

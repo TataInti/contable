@@ -14,7 +14,7 @@ import {
   type MenuActionItem,
 } from "@contable/design-system";
 import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
-import { CommentThread } from "./CommentThread";
+import { CommentsSidebar } from "./CommentsSidebar";
 import { Icon } from "../ui/Icon";
 import { api, type Client } from "../lib/api";
 import { formatearFecha } from "../lib/formatoFechas";
@@ -1600,24 +1600,29 @@ export function StudyExpedienteMensual() {
   return (
     <>
       <WorkPage bar={barra}>
-        <DensePage density={density}>
-          <h1 className="sr-only">Legajo</h1>
-          {firmId && clientId ? (
-            <TarjetaMonotributo
+        <div className="workpaper-workspace">
+          <div className="workpaper-main">
+            <DensePage density={density}>
+              <h1 className="sr-only">Legajo</h1>
+              {firmId && clientId ? (
+                <TarjetaMonotributo
+                  firmId={firmId}
+                  clientId={clientId}
+                  month={selectedTaxPeriod?.startDate ? selectedTaxPeriod.startDate.slice(0, 7) : mesActualMonotributo()}
+                  puedePagar={capabilities.has("tax.payments.record") && !soloLectura}
+                />
+              ) : null}
+              {cuerpo}
+            </DensePage>
+          </div>
+          {selectedTaxPeriod ? (
+            <CommentsSidebar
               firmId={firmId}
               clientId={clientId}
-              month={selectedTaxPeriod?.startDate ? selectedTaxPeriod.startDate.slice(0, 7) : mesActualMonotributo()}
-              puedePagar={capabilities.has("tax.payments.record") && !soloLectura}
+              periodLabel={selectedTaxPeriod ? fiscalTaxPeriodLabel(selectedTaxPeriod) : null}
             />
           ) : null}
-          {cuerpo}
-          <CommentThread
-            firmId={firmId}
-            clientId={clientId}
-            periodLabel={selectedTaxPeriod ? fiscalTaxPeriodLabel(selectedTaxPeriod) : null}
-            collapsible={safeActiveStep === 4}
-          />
-        </DensePage>
+        </div>
       </WorkPage>
 
       <FiscalBooksExportAction

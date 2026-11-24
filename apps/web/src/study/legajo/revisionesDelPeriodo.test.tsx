@@ -350,8 +350,9 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     elegirRevision(1);
     expect(await screen.findByText("Paso 1 · Finalizar")).toBeTruthy();
     expect(screen.getByText("Detalle técnico").closest("details")?.hasAttribute("open")).toBe(false);
-    const contenido = document.querySelector(".work-page__content") as HTMLElement;
-    expect(within(contenido).getAllByRole("button").map((button) => button.textContent)).toEqual(["Comentar"]);
+    const contenido = document.querySelector(".workpaper-main") as HTMLElement;
+    expect(within(contenido).queryAllByRole("button").map((button) => button.textContent)).toEqual([]);
+    expect(screen.getByRole("complementary", { name: "Comentarios del mes" })).toBeTruthy();
   });
 });
 

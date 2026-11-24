@@ -29,9 +29,13 @@ async function loginPortal(page: Page) {
   await expect(page).not.toHaveURL(/\/login/);
 }
 
-async function abrirComentariosPlegados(page: Page) {
-  const abrir = page.getByRole("button", { name: /^Comentarios del mes \(\d+\) · Abrir$/ });
-  if (await abrir.count()) await abrir.click();
+async function abrirComentarios(page: Page) {
+  const desplegar = page.getByRole("button", { name: /^Comentarios · \d+$/ });
+  await expect.poll(async () => (await desplegar.count()) + (await page.getByRole("region", { name: "Comentarios" }).count())).toBeGreaterThan(0);
+  if (await desplegar.count()) {
+    await expect(desplegar).toBeVisible();
+    await desplegar.click();
+  }
 }
 
 async function markGuidedTourSeen(page: Page) {
@@ -58,7 +62,7 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
       await markGuidedTourSeen(pageA);
       await login(pageA);
       await openClientLegajo(pageA);
-      await abrirComentariosPlegados(pageA);
+      await abrirComentarios(pageA);
     });
 
     await test.step("A menciona a B y guarda una nota personal", async () => {
@@ -90,6 +94,7 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
       await expect(pageB.getByText(personalText, { exact: true })).toHaveCount(0);
       await pageB.getByRole("button", { name: "Abrir comentario" }).click();
       await expect(pageB).toHaveURL(/\/expediente-mensual\?comentario=/);
+      await abrirComentarios(pageB);
       await expect(pageB.getByRole("region", { name: "Comentarios" }).getByText(mentionText.trim(), { exact: false })).toBeVisible();
       await expect(pageB.getByText(personalText, { exact: true })).toHaveCount(0);
       // Resolver se ofrece en el buzón «Pendientes para mí» (no en el hilo): se vuelve desde el menú.
@@ -101,7 +106,6 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
 
     await test.step("A edita su comentario y archiva otro", async () => {
       await pageA.reload();
-      await abrirComentariosPlegados(pageA);
       await expect(pageA.getByRole("region", { name: "Comentarios" })).toBeVisible();
       const mainComment = pageA.getByRole("listitem").filter({ hasText: mentionText.trim() });
       await mainComment.getByRole("button", { name: "Editar comentario" }).click();

@@ -118,11 +118,10 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
   await test.step("Controles: aceptar un grupo con motivo y excluir el otro del cálculo", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
     const panel = page.locator(".work-page").first();
-    const commentsOpen = panel.getByRole("button", { name: /^Comentarios del mes \(\d+\) · Abrir$/ });
-    await expect(commentsOpen).toBeVisible();
-    await commentsOpen.click();
+    const commentsCollapsed = panel.getByRole("button", { name: /^Comentarios · \d+$/ });
+    if (await commentsCollapsed.count()) await commentsCollapsed.click();
+    await expect(panel.getByRole("region", { name: "Comentarios" })).toBeVisible();
     await expect(panel.getByLabel("Escribí un comentario")).toBeVisible();
-    await panel.getByRole("button", { name: /^Comentarios del mes \(\d+\) · Cerrar$/ }).click();
     const openQueue = panel.getByRole("list", { name: "Controles abiertos" });
     const openItems = openQueue.getByRole("listitem");
     const rowFacturas = openQueue.getByRole("listitem").filter({ hasText: "Facturas C" });
