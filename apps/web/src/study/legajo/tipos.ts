@@ -25,6 +25,9 @@ export interface Workpaper {
     tolerance: string | null;
     evidenceDocumentId: string | null;
     resolution: string | null;
+    resolvedByUserId?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
   }>;
 }
 

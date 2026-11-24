@@ -29,6 +29,11 @@ async function loginPortal(page: Page) {
   await expect(page).not.toHaveURL(/\/login/);
 }
 
+async function abrirComentariosPlegados(page: Page) {
+  const abrir = page.getByRole("button", { name: /^Comentarios del mes \(\d+\) · Abrir$/ });
+  if (await abrir.count()) await abrir.click();
+}
+
 async function markGuidedTourSeen(page: Page) {
   await page.addInitScript(() => {
     window.localStorage.setItem("contable-study-navigation-tour-v1", "dismissed");
@@ -53,6 +58,7 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
       await markGuidedTourSeen(pageA);
       await login(pageA);
       await openClientLegajo(pageA);
+      await abrirComentariosPlegados(pageA);
     });
 
     await test.step("A menciona a B y guarda una nota personal", async () => {
@@ -95,6 +101,7 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
 
     await test.step("A edita su comentario y archiva otro", async () => {
       await pageA.reload();
+      await abrirComentariosPlegados(pageA);
       await expect(pageA.getByRole("region", { name: "Comentarios" })).toBeVisible();
       const mainComment = pageA.getByRole("listitem").filter({ hasText: mentionText.trim() });
       await mainComment.getByRole("button", { name: "Editar comentario" }).click();

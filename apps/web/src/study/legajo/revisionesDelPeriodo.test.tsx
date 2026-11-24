@@ -333,6 +333,7 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     );
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: /^Controles/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Abrir / }));
     expect(await screen.findByRole("button", { name: "Resolver" })).toBeTruthy();
     elegirRevision(1);
     expect((await screen.findAllByText(/Control sintético|CONTROL_DEMO/)).length).toBeGreaterThan(

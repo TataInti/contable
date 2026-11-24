@@ -10,9 +10,9 @@ vi.mock("../session/SessionContext", () => ({ useSession: () => ({ me: { userId:
 vi.mock("../lib/api", () => ({ api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() } }));
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
-function renderThread() {
+function renderThread(collapsible = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><MemoryRouter><CommentThread firmId="firm-1" clientId="client-1" periodLabel="Octubre 2026" /></MemoryRouter></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><MemoryRouter><CommentThread firmId="firm-1" clientId="client-1" periodLabel="Octubre 2026" collapsible={collapsible} /></MemoryRouter></QueryClientProvider>);
 }
 
 describe("hilo de comentarios", () => {
@@ -33,6 +33,24 @@ describe("hilo de comentarios", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Solo para mí" }));
     fireEvent.click(screen.getByRole("button", { name: "Comentar" }));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/firms/firm-1/clients/client-1/comments", expect.objectContaining({ body: "Dato para mi seguimiento", isPersonal: true, mentionedUserId: null })));
+  });
+
+  it("pliega el hilo en una línea con contador y permite abrir y cerrar el formulario", async () => {
+    vi.mocked(api.get).mockResolvedValue([{
+      id: "existing-comment", clientId: "client-1", authorUserId: "member-2", authorName: "Mara",
+      body: "Comentario de prueba", isPersonal: false, periodLabel: "Octubre 2026", mentionedUserId: null,
+      mentionedName: null, resolvedAt: null, archivedAt: null, createdAt: "2026-09-20T12:00:00.000Z",
+      updatedAt: "2026-09-20T12:00:00.000Z", isEdited: false,
+    }] as never);
+    renderThread(true);
+
+    const abrir = await screen.findByRole("button", { name: "Comentarios del mes (1) · Abrir" });
+    expect(screen.queryByLabelText("Escribí un comentario")).toBeNull();
+    fireEvent.click(abrir);
+    expect(await screen.findByLabelText("Escribí un comentario")).toBeTruthy();
+    expect(screen.getByText("Comentario de prueba")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Comentarios del mes (1) · Cerrar" }));
+    expect(screen.queryByLabelText("Escribí un comentario")).toBeNull();
   });
 
   it("carga usuarios del estudio al escribir @", async () => {

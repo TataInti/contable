@@ -80,10 +80,13 @@
 }
 
 .action-drawer__header h2 {
-  max-width: 18ch;
-  font-size: clamp(23px, 3vw, 30px);
-  letter-spacing: -0.025em;
-  line-height: 1.08;
+  max-width: min(32ch, 100%);
+  overflow: hidden;
+  font-size: var(--ds-text-xl);
+  letter-spacing: -0.02em;
+  line-height: var(--ds-leading-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .action-drawer__header p {
