@@ -360,9 +360,10 @@
   min-inline-size: 340px;
   max-inline-size: 420px;
 }
+/* El ancho mínimo en línea del listbox (ancho del campo) gana solo aquí: el piso del Legajo es 420px. */
 .work-bar__inicio .ds-search-select:has(.workpaper-period-selector) .ds-search-select__listbox {
   inline-size: max-content;
-  min-inline-size: 420px;
+  min-inline-size: 420px !important;
   max-inline-size: min(600px, calc(100vw - 32px));
 }
 .work-bar__inicio .ds-search-select:has(.workpaper-period-selector) .ds-search-select__option {
