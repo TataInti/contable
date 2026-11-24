@@ -288,7 +288,7 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await expect(page.getByText(/3 ventas asignadas automáticamente a la única actividad/).first()).toBeVisible();
     await expect(page.getByText(/RESTO-TUC · Restaurante y bares \(Tucumán\)/)).toHaveCount(3);
     await expect(page.getByText(/RESTO-SMT · Restaurante y bares \(San Miguel de Tucumán\)/)).toHaveCount(3);
-    await expect(page.getByText("auto")).toHaveCount(3);
+    await expect(page.locator(".workpaper-classification-fields").getByText("auto")).toHaveCount(3);
     await expect(page.locator(".workpaper-classification-more summary")).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("r3-clasificacion.png"), fullPage: false });
     await page.setViewportSize({ width: 1280, height: 900 });
