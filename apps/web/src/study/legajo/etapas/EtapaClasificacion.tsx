@@ -174,12 +174,10 @@ export function EtapaClasificacion({
 
   return (
     <div className="workpaper-stage">
-      <p className="workpaper-classification-help muted-copy">
-        <span title="Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular." aria-label="Ayuda sobre clasificación">?</span>
-        {motivoEditar ? <small>{motivoEditar}</small> : null}
-      </p>
+      {motivoEditar ? <p className="workpaper-classification-help muted-copy"><small>{motivoEditar}</small></p> : null}
       <div className="workpaper-classification-head">
       <div className="workpaper-classification-summary">
+        <span className="workpaper-classification-help-mark" title="Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular." aria-label="Ayuda sobre clasificación">?</span>
         <span>
           <strong>{indicador(classificationQuery.data?.classified)}</strong>
           <small>Clasificados</small>
@@ -224,8 +222,15 @@ export function EtapaClasificacion({
             options={[{ value: "ALL", label: "Todos" }, { value: "PENDING", label: "Sin clasificar" }, { value: "EXCLUDED", label: "Excluidos" }]}
           />
         </div>
-        {puedeClasificar ? <label><input type="checkbox" checked={rememberRule} onChange={(event) => setRememberRule(event.target.checked)} /> Recordar para este proveedor/cliente</label> : null}
-        <Button size="sm" variant="text" onClick={() => setReglasAbiertas(true)}>Reglas recordadas ({rulesQuery.data?.length ?? 0})</Button>
+        <div className="workpaper-classification-more">
+          <details>
+            <summary>Más</summary>
+            <div className="workpaper-classification-more__menu">
+              {puedeClasificar ? <label><input type="checkbox" checked={rememberRule} onChange={(event) => setRememberRule(event.target.checked)} /> Recordar para este proveedor/cliente</label> : null}
+              <Button size="sm" variant="text" onClick={() => setReglasAbiertas(true)}>Reglas recordadas ({rulesQuery.data?.length ?? 0})</Button>
+            </div>
+          </details>
+        </div>
         {puedeClasificar ? <Button size="sm" variant="secondary" disabled={bulkClassifyMutation.isPending || seleccionadosActivos.length === 0} onClick={clasificarSeleccionados}>Clasificar seleccionados ({seleccionadosActivos.length})</Button> : null}
       </div>
       </div>
@@ -519,7 +524,13 @@ export function EtapaClasificacion({
                             },
                           }))
                         }
-                        placeholder={classification.direction === "SALE" ? "Elegí la actividad…" : "Sin actividad (opcional)"}
+                        placeholder={
+                          classification.origin === "SINGLE_ACTIVITY_PER_LEVEL"
+                            ? "Asignada automáticamente por nivel"
+                            : classification.direction === "SALE"
+                              ? "Elegí la actividad…"
+                              : "Sin actividad (opcional)"
+                        }
                         options={activityOptions(draft.activityCode).map((activity) => ({
                           value: activity.code,
                           label: activity.name ? `${activity.code} · ${activity.name}` : activity.code,

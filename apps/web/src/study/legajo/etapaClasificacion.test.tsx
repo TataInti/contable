@@ -354,8 +354,8 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       comprobante("venta-b", "SALE", 4),
       comprobante("venta-auto", "SALE", 6, {
         status: "CLASSIFIED",
-        activityCode: "REST",
-        origin: "SINGLE_CLIENT_ACTIVITY",
+        activityCode: null,
+        origin: "SINGLE_ACTIVITY_PER_LEVEL",
       }),
       comprobante("venta-x", "SALE", 7, {
         status: "PENDING",
@@ -472,14 +472,13 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       expect(within(excluida).getByText("Fuera del cálculo")).toBeInTheDocument();
     });
 
-    it("con una sola actividad muestra «ventas asignadas a REST automáticamente» y no las cuenta pendientes", async () => {
+    it("con actividad única por nivel muestra la asignación automática en el selector y no cuenta ventas como pendientes", async () => {
       rutas3b();
       fijarContexto(PERMISOS_CLASIFICAR);
       renderLegajo();
       await abrirClasificacion();
-      expect(
-        screen.getByText(/1 venta asignada a REST automáticamente/),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/1 venta asignada automáticamente a la única actividad de cada nivel/)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Asignada automáticamente por nivel")).toBeInTheDocument();
       cambiarValor(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), "PENDING");
       expect(screen.queryByText("B · 0001-00000006")).not.toBeInTheDocument();
       expect(screen.queryByText("B · 0001-00000007")).not.toBeInTheDocument();

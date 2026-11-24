@@ -1171,30 +1171,28 @@
 .workpaper-classification-summary > span small {
   color: var(--ds-color-text-muted);
 }
-
-.workpaper-classification-help {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-  margin: 0;
-}
-.workpaper-classification-help > span {
-  display: inline-grid;
-  place-items: center;
-  inline-size: 1.15rem;
-  block-size: 1.15rem;
-  border: 1px solid var(--ds-color-border);
-  border-radius: 50%;
-  cursor: help;
-}
+.workpaper-classification-help-mark { display: inline-grid; place-items: center; inline-size: 1.15rem; block-size: 1.15rem; border: 1px solid var(--ds-color-border); border-radius: 50%; cursor: help; }
+.workpaper-classification-help { display: flex; align-items: center; gap: var(--ds-space-2); margin: 0; }
 .workpaper-classification-auto { margin: 0; font-size: var(--ds-text-xs); }
-.workpaper-classification-head { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-4); min-width: 0; }
-.workpaper-classification-topbar { display: flex; align-items: center; justify-content: flex-end; gap: var(--ds-space-3); white-space: nowrap; }
+.workpaper-classification-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ds-space-2) var(--ds-space-4); min-width: 0; }
+.workpaper-classification-topbar { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: var(--ds-space-2) var(--ds-space-3); min-width: 0; }
 .workpaper-classification-topbar > div { display: inline-flex; align-items: center; gap: var(--ds-space-2); }
 .workpaper-classification-topbar > label { display: inline-flex; align-items: center; gap: var(--ds-space-2); margin: 0; }
 .workpaper-classification-topbar .ds-field { width: 8.5rem; }
+.workpaper-classification-topbar > .workpaper-classification-more details > summary { cursor: pointer; list-style: none; }
+.workpaper-classification-topbar > .workpaper-classification-more details > summary::-webkit-details-marker { display: none; }
+.workpaper-classification-topbar > .workpaper-classification-more details[open] { position: relative; }
+.workpaper-classification-more__menu { display: flex; align-items: center; gap: var(--ds-space-3); }
 .workpaper-classification-toolbar { flex-direction: row; align-items: center; justify-content: flex-end; }
 .workpaper-classification-rules { border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-2); }
+@media (min-width: 1451px) {
+  .workpaper-classification-topbar > .workpaper-classification-more details > summary { display: none; }
+  .workpaper-classification-more__menu { display: contents; }
+}
+@media (max-width: 1450px) {
+  .workpaper-classification-topbar > .workpaper-classification-more details > summary { display: inline-flex; padding: var(--ds-space-2); border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-sm); }
+  .workpaper-classification-topbar > .workpaper-classification-more details[open] .workpaper-classification-more__menu { position: absolute; z-index: 10; top: calc(100% + var(--ds-space-1)); right: 0; display: flex; flex-direction: column; align-items: flex-start; min-width: max-content; padding: var(--ds-space-2); border: 1px solid var(--ds-color-border); border-radius: var(--ds-radius-sm); background: var(--ds-color-surface); box-shadow: var(--ds-shadow-popover); }
+}
 .workpaper-classification-rules > summary { cursor: pointer; color: var(--ds-color-text-muted); }
 
 .workpaper-calculation-selection__row {

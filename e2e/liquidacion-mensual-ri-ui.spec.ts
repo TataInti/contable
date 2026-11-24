@@ -286,7 +286,14 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await page.locator(".work-page").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
     await expect(page.getByText("Listo para calcular").first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/3 ventas asignadas automáticamente a la única actividad/).first()).toBeVisible();
+    await expect(page.getByPlaceholder("Asignada automáticamente por nivel")).toHaveCount(3);
+    await expect(page.getByRole("button", { name: "Más" })).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("r3-clasificacion.png"), fullPage: false });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(page.getByRole("button", { name: /^Clasificar seleccionados \(0\)$/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Más" })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("r3-clasificacion-1280.png"), fullPage: false });
+    await page.setViewportSize({ width: 1440, height: 900 });
   });
 
   await test.step("Cálculo sin mínimo: IIBB 4.025,00 y TEM 10.028,00 por el mínimo de la categoría B", async () => {
@@ -299,6 +306,9 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await esperarImporte(page, "2.524,45");
     await esperarImporte(page, "690,00");
     await esperarImporte(page, "10.028,00");
+    const filaIibb = page.locator(".workpaper-calculation-selection__row").filter({ hasText: IIBB.taxName });
+    await expect(filaIibb.getByLabel("Mínimo del mes")).toBeVisible();
+    await expect(filaIibb.locator(".workpaper-calculation-minimum")).toHaveCount(1);
     await page.screenshot({ path: test.info().outputPath("r3-calculo.png"), fullPage: false });
     await page.locator("details.workpaper-calculation__trace").first().locator("summary").click();
     await page.screenshot({ path: test.info().outputPath("r3-calculo-formula-abierta.png"), fullPage: false });
