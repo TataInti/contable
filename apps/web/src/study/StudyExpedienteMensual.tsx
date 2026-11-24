@@ -387,13 +387,30 @@ export function StudyExpedienteMensual() {
   const cambiosDelMes = legajoSeleccionado
     ? cambiosDeActividadDelMes(clientActivitiesQuery.data ?? [], legajoSeleccionado.periodStart)
     : [];
+  const jurisdictionById = new Map((jurisdictionsQuery.data ?? []).map((jurisdiction) => [jurisdiction.id, jurisdiction]));
+  const taxTypeIdsInLegajo = new Set(
+    (taxPeriodsQuery.data ?? [])
+      .filter((taxPeriod) => monthTaxPeriodIds.includes(taxPeriod.id))
+      .map((taxPeriod) => taxPeriod.taxTypeId),
+  );
+  const jurisdictionIdsInLegajo = new Set(
+    (positionQuery.data ?? [])
+      .filter((position) => taxTypeIdsInLegajo.has(position.regime.taxType.id))
+      .map((position) => position.regime.jurisdiction.id),
+  );
   const activityOptions = (currentCode: string) => {
     const options = (clientActivitiesQuery.data ?? [])
       .filter((link) => !link.validTo)
-      .map((link) => ({ code: link.activity.code, name: link.activity.name }));
+      .map((link) => ({
+        code: link.activity.code,
+        name: link.activity.name,
+        level: link.activity.jurisdictionId && jurisdictionIdsInLegajo.has(link.activity.jurisdictionId)
+          ? jurisdictionById.get(link.activity.jurisdictionId)?.name ?? link.activity.jurisdiction.name
+          : undefined,
+      }));
     // Un código ya guardado que no está entre las vigentes se conserva como opción.
     if (currentCode && !options.some((option) => option.code === currentCode)) {
-      options.unshift({ code: currentCode, name: "" });
+      options.unshift({ code: currentCode, name: "", level: undefined });
     }
     return options;
   };

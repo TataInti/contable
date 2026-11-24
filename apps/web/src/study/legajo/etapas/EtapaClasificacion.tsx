@@ -23,7 +23,7 @@ export interface EtapaClasificacionProps {
   classificationQuery: UseQueryResult<ClassificationCoverage, Error>;
   allocationQuery: UseQueryResult<AllocationCoverage, Error>;
   jurisdictionsQuery: UseQueryResult<TaxJurisdiction[], Error>;
-  activityOptions: (currentCode: string) => Array<{ code: string; name: string }>;
+  activityOptions: (currentCode: string) => Array<{ code: string; name: string; level?: string }>;
   classificationDrafts: Record<string, BorradorClasificacion>;
   setClassificationDrafts: Dispatch<SetStateAction<Record<string, BorradorClasificacion>>>;
   allocationDrafts: Record<string, string>;
@@ -486,6 +486,17 @@ export function EtapaClasificacion({
                     </>
                   ) : (
                     <div className="workpaper-classification-fields">
+                      {classification.origin === "SINGLE_ACTIVITY_PER_LEVEL" ? (
+                        <>
+                          <span>
+                            {activityOptions(draft.activityCode)
+                              .filter((activity) => activity.level)
+                              .map((activity) => `${activity.level} ${activity.code} · ${activity.name}`)
+                              .join("  ·  ") || "Actividad asignada automáticamente por nivel"}
+                          </span>{" "}
+                          <small className="muted-copy">auto</small>
+                        </>
+                      ) : null}
                       {classification.origin === "RULE" ? (
                         <StatusBadge status="INFO" label="Por regla" />
                       ) : null}
@@ -524,16 +535,12 @@ export function EtapaClasificacion({
                             },
                           }))
                         }
-                        placeholder={
-                          classification.origin === "SINGLE_ACTIVITY_PER_LEVEL"
-                            ? "Asignada automáticamente por nivel"
-                            : classification.direction === "SALE"
-                              ? "Elegí la actividad…"
-                              : "Sin actividad (opcional)"
-                        }
+                        placeholder={classification.direction === "SALE" ? "Elegí la actividad…" : "Sin actividad (opcional)"}
                         options={activityOptions(draft.activityCode).map((activity) => ({
                           value: activity.code,
-                          label: activity.name ? `${activity.code} · ${activity.name}` : activity.code,
+                          label: [activity.level, activity.name ? `${activity.code} · ${activity.name}` : activity.code]
+                            .filter(Boolean)
+                            .join(" "),
                         }))}
                       />
                     </div>

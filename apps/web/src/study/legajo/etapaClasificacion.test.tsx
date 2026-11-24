@@ -145,8 +145,8 @@ const imputacionesDemo = {
 };
 
 const actividadesDemo = [
-  { validTo: null, activity: { code: "REST", name: "Restaurante" } },
-  { validTo: "2025-12-31", activity: { code: "VIEJA", name: "Actividad vencida" } },
+  { validTo: null, activity: { code: "REST", name: "Restaurante", jurisdictionId: "jur-tuc", jurisdiction: { name: "Tucumán" } } },
+  { validTo: "2025-12-31", activity: { code: "VIEJA", name: "Actividad vencida", jurisdiction: { name: "Tucumán" } } },
 ];
 
 const jurisdiccionesDemo = [
@@ -392,6 +392,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
           imputaciones: imputacionesDemo,
           actividades: actividadesDemo,
           jurisdicciones: jurisdiccionesDemo,
+          posiciones: [{ regime: { taxType: { id: "tax-type-a" }, jurisdiction: { id: "jur-tuc" } } }],
           ...(extra.legajos ? { legajos: extra.legajos } : {}),
         }) as never,
       );
@@ -478,7 +479,9 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       renderLegajo();
       await abrirClasificacion();
       expect(screen.getByText(/1 venta asignada automáticamente a la única actividad de cada nivel/)).toBeInTheDocument();
-      expect(screen.getByPlaceholderText("Asignada automáticamente por nivel")).toBeInTheDocument();
+      expect(screen.getByText("Tucumán REST · Restaurante")).toBeInTheDocument();
+      expect(screen.getByText("auto")).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("Asignada automáticamente por nivel")).not.toBeInTheDocument();
       cambiarValor(screen.getByRole("combobox", { name: "Filtrar comprobantes" }), "PENDING");
       expect(screen.queryByText("B · 0001-00000006")).not.toBeInTheDocument();
       expect(screen.queryByText("B · 0001-00000007")).not.toBeInTheDocument();
