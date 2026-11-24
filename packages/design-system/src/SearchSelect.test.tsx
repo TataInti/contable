@@ -229,3 +229,16 @@ describe("SearchSelect en portal (dentro de tablas y cajones con scroll)", () =>
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 });
+
+describe("SearchSelect: el buscador se ve", () => {
+  it("muestra la lupa y, al abrir, el placeholder «Buscar…»; sin coincidencias lo dice con el texto buscado", () => {
+    const { container } = render(<SearchSelect label="Provincia" options={options} value="" onChange={() => {}} />);
+    expect(container.querySelector(".ds-search-select__icon")).not.toBeNull();
+    const input = screen.getByRole("combobox", { name: "Provincia" });
+    expect(input).toHaveAttribute("placeholder", "Elegí…");
+    fireEvent.focus(input);
+    expect(input).toHaveAttribute("placeholder", "Buscar…");
+    fireEvent.change(input, { target: { value: "xyz" } });
+    expect(screen.getByText("Sin resultados para \"xyz\"")).toBeInTheDocument();
+  });
+});

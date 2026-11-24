@@ -33,7 +33,8 @@ import { type FacturaSintetica } from "./helpers/fuentes-sinteticas";
  * punto inferior de la lista y cada opción visible están sobre la lista (no los tapa ni los recorta la tabla).
  * La fila sin clasificar guarda con «Guardar»; una ya clasificada, con «Actualizar». Las filas se buscan por el número del comprobante; las actividades, por la etiqueta completa (el catálogo
  * de CI tiene más de una actividad con el código COMERCIO). Todo sintético y con el sufijo de la corrida.
- * Capturas 1440×900: 4v-cajon-desplegable-abierto.png y 4v-clasificacion-desplegable-abierto.png.
+ * Capturas 1440×900: 4v-cajon-desplegable-abierto.png, 4v-clasificacion-desplegable-abierto.png (lupa y «Buscar…»)
+ * y 4v-buscador-actividades.png (la búsqueda «serv» deja solo SERVICIOS).
  */
 
 const CLIENTE = {
@@ -194,6 +195,10 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     await primera.click();
     await verificarListaCompleta(page, page.getByRole("listbox"), [OPCION_COMERCIO, OPCION_RESTO, OPCION_SERVICIOS], tabla);
     await page.screenshot({ path: test.info().outputPath("4v-clasificacion-desplegable-abierto.png") });
+    await primera.pressSequentially("serv", { delay: 10 });
+    await expect(page.getByRole("listbox").getByRole("option", { name: OPCION_SERVICIOS })).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("4v-buscador-actividades.png") });
+    await page.keyboard.press("Escape");
   });
 
   await test.step("Primera fila: se elige COMERCIO por teclado y se guarda con «Guardar»", async () => {

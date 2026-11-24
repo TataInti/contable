@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
+import { Icon } from "./Icon.js";
 import "./Field.css";
 import "./SearchSelect.css";
 
@@ -201,29 +202,32 @@ export function SearchSelect({
   return (
     <div className="ds-field ds-search-select">
       {hideLabel ? null : <label className="ds-field__label" htmlFor={inputId}>{label}</label>}
-      <input
-        ref={inputRef}
-        id={inputId}
-        className={`ds-field__input${invalid ? " ds-field__input--error" : ""}${className ? ` ${className}` : ""}`}
-        role="combobox"
-        aria-label={label}
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls={listboxId}
-        aria-activedescendant={open && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
-        aria-required={required || undefined}
-        aria-invalid={invalid || undefined}
-        aria-describedby={describedBy}
-        aria-haspopup="listbox"
-        value={open ? query : selectedLabel ?? ""}
-        placeholder={placeholder}
-        disabled={disabled}
-        autoComplete="off"
-        onFocus={() => setOpen(true)}
-        onBlur={() => { setOpen(false); setQuery(""); setActiveIndex(-1); onBlur?.(); }}
-        onChange={onInputChange}
-        onKeyDown={onKeyDown}
-      />
+      <div className="ds-search-select__control">
+        <Icon name="search" size={16} className="ds-search-select__icon" />
+        <input
+          ref={inputRef}
+          id={inputId}
+          className={`ds-field__input${invalid ? " ds-field__input--error" : ""}${className ? ` ${className}` : ""}`}
+          role="combobox"
+          aria-label={label}
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-activedescendant={open && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+          aria-required={required || undefined}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
+          aria-haspopup="listbox"
+          value={open ? query : selectedLabel ?? ""}
+          placeholder={open ? "Buscar…" : placeholder}
+          disabled={disabled}
+          autoComplete="off"
+          onFocus={() => setOpen(true)}
+          onBlur={() => { setOpen(false); setQuery(""); setActiveIndex(-1); onBlur?.(); }}
+          onChange={onInputChange}
+          onKeyDown={onKeyDown}
+        />
+      </div>
       <input type="hidden" name={name} value={value} />
       {/* Un clic dentro de la lista (también en su barra de desplazamiento) no quita el foco del campo. */}
       {open && placement ? createPortal(
@@ -237,7 +241,7 @@ export function SearchSelect({
           {allowEmpty ? <li role="option" data-value="" aria-selected={!value} className="ds-search-select__option" onMouseDown={(event) => event.preventDefault()} onClick={() => select("")}>{placeholder}</li> : null}
           {flatOptions}
           {groupedOptions}
-          {!visibleOptions.length ? <li className="ds-search-select__empty">No hay opciones que coincidan.</li> : null}
+          {!visibleOptions.length ? <li className="ds-search-select__empty">{query.trim() ? `Sin resultados para "${query.trim()}"` : "No hay opciones que coincidan."}</li> : null}
         </ul>,
         document.body,
       ) : null}

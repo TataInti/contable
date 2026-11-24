@@ -4,6 +4,24 @@
   position: relative;
 }
 
+/* Lupa a la izquierda dentro del campo: el texto arranca después del ícono (sin literales: tokens de espaciado). */
+.ds-search-select__control {
+  position: relative;
+}
+
+.ds-search-select__control > .ds-field__input {
+  padding-inline-start: calc(var(--ds-space-3) + var(--ds-space-4) + var(--ds-space-2));
+}
+
+.ds-search-select__icon {
+  position: absolute;
+  inset-inline-start: var(--ds-space-3);
+  inset-block: 0;
+  margin-block: auto;
+  color: var(--ds-color-text-muted);
+  pointer-events: none;
+}
+
 .ds-search-select__listbox {
   position: fixed;
   z-index: calc(var(--ds-z-modal) + 1);
