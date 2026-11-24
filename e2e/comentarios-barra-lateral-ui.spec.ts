@@ -30,7 +30,7 @@ const COMPROBANTES: FacturaSintetica[] = [
   { fecha: "2026-10-20", tipo: "13", numero: "3", docTipo: "80", docNumero: syntheticCuit(Number.parseInt(RUN, 36) + 30_003), denominacion: `Nota de crédito sintética ${SUFFIX}`, neto: "10000.00", iva: "0.00" },
 ];
 
-const CAPTURES = "/home/hermes/.hermes/workspace/contable/rediseno-pantallas/r2";
+const CAPTURES = "/home/hermes/.hermes/workspace/contable/rediseno-pantallas/comentarios-tarjetas";
 
 async function capturar(page: Page, testInfo: TestInfo, fileName: string) {
   const destination = process.env.CI ? testInfo.outputPath(fileName) : `${CAPTURES}/${fileName}`;
@@ -105,13 +105,21 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
     const thread = await verificarBarraADerecha(page);
     await capturar(page, testInfo, `${etapa.toLowerCase().replaceAll("ó", "o")}-1440x900.png`);
     if (etapa === "Clasificación") {
-      const comment = `Comentario lateral E2E ${SUFFIX}`;
-      await thread.getByLabel("Escribí un comentario").fill(comment);
-      await mutating(page, "/comments", () => thread.getByRole("button", { name: "Comentar", exact: true }).click());
-      await expect(thread.getByRole("listitem").filter({ hasText: comment })).toBeVisible();
+      const comments = ["Antiguo", "Intermedio", "Reciente"].map((label) => `Comentario ${label} E2E ${SUFFIX}`);
+      for (const comment of comments) {
+        await thread.getByLabel("Escribí un comentario").fill(comment);
+        await mutating(page, "/comments", () => thread.getByRole("button", { name: "Comentar", exact: true }).click());
+        await expect(thread.getByRole("listitem").filter({ hasText: comment })).toBeVisible();
+      }
+      const items = thread.getByRole("listitem");
+      await expect(items).toHaveCount(3);
+      await expect(items.nth(0)).toContainText(comments[2]);
+      await expect(items.nth(1)).toContainText(comments[1]);
+      await expect(items.nth(2)).toContainText(comments[0]);
+      await capturar(page, testInfo, "1440.png");
     }
     if (etapa === "Controles") {
-      await expect(thread.getByText(`Comentario lateral E2E ${SUFFIX}`, { exact: true })).toBeVisible();
+      await expect(thread.getByText(`Comentario Reciente E2E ${SUFFIX}`, { exact: true })).toBeVisible();
     }
   }
 
@@ -119,9 +127,16 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
   for (const etapa of ["Saldos", "Clasificación", "Controles"]) {
     await abrirEtapa(page, etapa);
     await verificarBarraADerecha(page);
-    await capturar(page, testInfo, `${etapa.toLowerCase().replaceAll("ó", "o")}-1280x720.png`);
+    if (etapa === "Clasificación") await capturar(page, testInfo, "1280.png");
   }
   await abrirEtapa(page, "Clasificación");
+  const posted = `Comentario publicado E2E ${SUFFIX}`;
+  const thread = page.getByRole("region", { name: "Comentarios" });
+  await thread.getByLabel("Escribí un comentario").fill(posted);
+  await mutating(page, "/comments", () => thread.getByRole("button", { name: "Comentar", exact: true }).click());
+  await expect(thread.getByRole("listitem").first()).toContainText(posted);
+  await expect(thread.getByRole("listitem").first()).toBeInViewport();
+  await capturar(page, testInfo, "publicado.png");
   const plegar = page.getByRole("button", { name: /Plegar comentarios/ });
   await plegar.click();
   const franja = page.getByRole("button", { name: /Comentarios · \d+/ });

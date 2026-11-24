@@ -81,6 +81,8 @@ test("comentarios y menciones recorren Legajo, buzón y permisos desde la interf
       await pageA.getByRole("checkbox", { name: "Solo para mí" }).check();
       await mutating(pageA, "/comments", () => pageA.getByRole("button", { name: "Comentar", exact: true }).click());
       await expect(thread.getByRole("listitem").filter({ hasText: personalText })).toBeVisible();
+      await expect(thread.getByRole("listitem").nth(0)).toContainText(personalText);
+      await expect(thread.getByRole("listitem").nth(1)).toContainText(mentionText.trim());
     });
 
     await test.step("B ve una mención, abre su hilo y no ve la nota personal", async () => {

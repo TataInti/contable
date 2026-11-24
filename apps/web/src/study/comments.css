@@ -2,9 +2,16 @@
 .comment-thread--collapsed { margin-block: var(--ds-space-3); }
 .comment-thread__toggle { justify-self: start; min-height: 0; padding: var(--ds-space-1) 0; text-align: left; }
 .comment-thread h2 { margin: 0; font-size: var(--ds-text-xl); }
-.comment-thread__list, .study-comments-inbox ol { display: grid; gap: var(--ds-space-4); margin: 0; padding: 0; list-style: none; }
-.comment-thread__item, .study-comments-inbox li { padding-block: var(--ds-space-3); border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle); }
+.comment-thread__list, .study-comments-inbox ol { display: grid; margin: 0; padding: 0; list-style: none; }
+.comment-thread__list { gap: var(--ds-space-2); }
+.study-comments-inbox ol { gap: var(--ds-space-4); }
+.comment-thread__item { display: grid; gap: var(--ds-space-1); min-width: 0; padding: var(--ds-space-2); border: var(--ds-border-width) solid var(--ds-color-border-subtle); border-radius: var(--ds-radius-md); background: var(--ds-color-surface); }
+.study-comments-inbox li { padding-block: var(--ds-space-3); border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle); }
 .comment-thread__item p, .study-comments-inbox li p { margin: var(--ds-space-1) 0; line-height: var(--ds-leading-normal); }
+.comment-thread__item p { margin: 0; }
+.comment-thread__meta { display: flex; min-width: 0; align-items: baseline; overflow: hidden; white-space: nowrap; }
+.comment-thread__meta strong { overflow: hidden; text-overflow: ellipsis; }
+.comment-thread__date { overflow: hidden; color: var(--ds-color-text-muted); text-overflow: ellipsis; }
 .comment-thread textarea { display: block; width: 100%; max-width: 100%; }
 .comment-thread form { display: grid; gap: var(--ds-space-2); }
 .comment-thread form > label, .comment-thread label { font-weight: var(--ds-font-weight-medium); }

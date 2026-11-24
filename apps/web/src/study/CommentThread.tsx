@@ -26,11 +26,12 @@ export function CommentThread({ firmId, clientId, periodLabel, compact = false, 
   const [isPersonal, setIsPersonal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
   const base = `/firms/${firmId}/clients/${clientId}/comments`;
   const query = useQuery({ queryKey: ["comments", firmId, clientId], queryFn: () => api.get<CommentRow[]>(base), enabled: Boolean(firmId && clientId) });
   const members = useQuery({ queryKey: ["comment-members", firmId, clientId, search], queryFn: () => api.get<Member[]>(`${base}/members?search=${encodeURIComponent(search.slice(1))}`), enabled: Boolean(firmId && clientId && search.startsWith("@")) });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["comments", firmId, clientId] });
-  const create = useMutation({ mutationFn: () => api.post<CommentRow>(base, { body, isPersonal, mentionedUserId, periodLabel }), onSuccess: () => { setBody(""); setSearch(""); setMentionedUserId(null); setIsPersonal(false); void refresh(); } });
+  const create = useMutation({ mutationFn: () => api.post<CommentRow>(base, { body, isPersonal, mentionedUserId, periodLabel }), onSuccess: (created) => { queryClient.setQueryData<CommentRow[]>(["comments", firmId, clientId], (previous) => [created, ...(previous ?? []).filter((item) => item.id !== created.id)]); setPendingScrollId(created.id); setBody(""); setSearch(""); setMentionedUserId(null); setIsPersonal(false); void refresh(); } });
   const edit = useMutation({ mutationFn: ({ id, text }: { id: string; text: string }) => api.patch<CommentRow>(`/firms/${firmId}/comments/${id}`, { body: text }), onSuccess: () => { setEditingId(null); void refresh(); } });
   const archive = useMutation({ mutationFn: (id: string) => api.post(`/firms/${firmId}/comments/${id}/archive`, {}), onSuccess: refresh });
   useEffect(() => {
@@ -46,7 +47,13 @@ export function CommentThread({ firmId, clientId, periodLabel, compact = false, 
       document.getElementById(`comentario-${id}`)?.scrollIntoView?.({ block: "center" });
     }
   }, [location.pathname, location.search, query.data, collapsible, expanded]);
+  useEffect(() => {
+    if (!pendingScrollId || !query.data) return;
+    document.getElementById(`comentario-${pendingScrollId}`)?.scrollIntoView?.({ block: "nearest" });
+    setPendingScrollId(null);
+  }, [pendingScrollId, query.data]);
   const comments = Array.isArray(query.data) ? query.data : [];
+  const orderedComments = [...comments].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   const matchingMembers = Array.isArray(members.data) ? members.data : [];
   if (!firmId || !clientId) return null;
   if (collapsible && !expanded) return <section className="comment-thread comment-thread--collapsed" aria-label="Comentarios"><Button className="comment-thread__toggle" variant="text" onClick={() => setExpanded(true)}>Comentarios del mes ({comments.length}) · Abrir</Button></section>;
@@ -55,8 +62,8 @@ export function CommentThread({ firmId, clientId, periodLabel, compact = false, 
     {query.isError ? <Notice tone="error">No se pudieron cargar los comentarios. Actualizá la pantalla para volver a intentar.</Notice> : null}
     {query.isPending ? <p role="status">Cargando comentarios…</p> : null}
     <ol className="comment-thread__list">
-      {comments.map((item) => <li key={item.id} id={`comentario-${item.id}`} className="comment-thread__item">
-        <p><strong>{item.authorName}</strong> · <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("es-AR")}</time>
+      {orderedComments.map((item) => <li key={item.id} id={`comentario-${item.id}`} className="comment-thread__item">
+        <p className="comment-thread__meta"><strong>{item.authorName}</strong><span aria-hidden="true"> · </span><time className="comment-thread__date" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("es-AR")}</time>
           {item.isEdited ? <span> · editado</span> : null}{item.periodLabel ? <span> · {item.periodLabel}</span> : null}</p>
         {item.archivedAt ? <p>Comentario archivado</p> : editingId === item.id ? <form onSubmit={(event) => { event.preventDefault(); edit.mutate({ id: item.id, text: editingBody }); }}>
           <label htmlFor={`edit-comment-${item.id}`}>Editar comentario</label>
