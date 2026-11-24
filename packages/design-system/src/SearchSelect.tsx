@@ -26,6 +26,8 @@ export interface SearchSelectProps {
   name?: string;
   placeholder?: string;
   className?: string;
+  /** Clases extra para la lista desplegable (se renderiza en un portal, fuera del contenedor del campo). */
+  listboxClassName?: string;
   disabled?: boolean;
   required?: boolean;
   /** false: el valor siempre es una opción y la lista no ofrece «vacío». Por defecto, sí. */
@@ -85,6 +87,7 @@ export function SearchSelect({
   name,
   placeholder = "Elegí…",
   className,
+  listboxClassName,
   disabled,
   required,
   allowEmpty = true,
@@ -236,7 +239,7 @@ export function SearchSelect({
         <ul
           id={listboxId}
           role="listbox"
-          className="ds-search-select__listbox"
+          className={`ds-search-select__listbox${listboxClassName ? ` ${listboxClassName}` : ""}`}
           style={{ position: "fixed", ...placement }}
           onMouseDown={(event) => event.preventDefault()}
         >

@@ -1401,6 +1401,7 @@ export function StudyExpedienteMensual() {
           placeholder="Seleccioná un período fiscal…"
           allowEmpty={false}
           className="workpaper-period-selector"
+          listboxClassName="workpaper-period-listbox"
           options={opcionesPeriodo}
           value={selectedTaxPeriodId}
           onChange={cambiarPeriodo}
