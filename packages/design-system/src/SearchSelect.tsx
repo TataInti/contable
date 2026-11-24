@@ -227,8 +227,9 @@ export function SearchSelect({
           onChange={onInputChange}
           onKeyDown={onKeyDown}
         />
+        {/* El valor elegido va junto al campo (mismo contenedor): así el campo y su valor siguen juntos para formularios y pruebas. */}
+        <input type="hidden" name={name} value={value} />
       </div>
-      <input type="hidden" name={name} value={value} />
       {/* Un clic dentro de la lista (también en su barra de desplazamiento) no quita el foco del campo. */}
       {open && placement ? createPortal(
         <ul
