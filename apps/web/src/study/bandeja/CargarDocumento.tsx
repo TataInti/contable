@@ -178,8 +178,12 @@ export function CargarDocumento({
       ) : pendingRequestItems.length === 0 ? (
         <EmptyState
           size="compact"
-          title="Primero creá un pedido documental"
-          description="Cada carga queda vinculada a un ítem solicitado para preservar la trazabilidad."
+          title={subidaRecibida ? "No quedan ítems pendientes" : "Primero creá un pedido documental"}
+          description={
+            subidaRecibida
+              ? "Cada carga queda vinculada a un ítem solicitado. Creá otro pedido para cargar más documentos."
+              : "Cada carga queda vinculada a un ítem solicitado para preservar la trazabilidad."
+          }
           action={
             capabilities.has("request.manage") ? (
               onCrearPedido ? (
