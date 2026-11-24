@@ -19,6 +19,21 @@ export function SeccionObligaciones({
   capabilities,
   navigate,
 }: SeccionObligacionesProps) {
+  // Sin obligaciones, la sección es una línea con la acción que la resuelve.
+  if (!obligations.isLoading && !obligations.isError && obligationRows.length === 0) {
+    return (
+      <section className="work-line" id="work-obligations-section">
+        <h2>Próximas obligaciones</h2>
+        <span className="section-count">0</span>
+        <span className="work-line__hint">Sin vencimientos configurados para este cliente.</span>
+        {capabilities.has("tax.profile.write") ? (
+          <Button size="sm" variant="ghost" onClick={() => navigate("/configuracion-fiscal")}>
+            Configurar obligaciones
+          </Button>
+        ) : null}
+      </section>
+    );
+  }
   return (
     <>
       <section className="study-page__section" id="work-obligations-section">

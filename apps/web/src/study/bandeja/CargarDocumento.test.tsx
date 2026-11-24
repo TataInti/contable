@@ -366,7 +366,8 @@ describe("Caracterización K5 · cajón de carga: pedidos, error, vacío y botó
     await abrirCajonConPedidos();
     const select = selectorItem()!;
     fireEvent.focus(select);
-    const opciones = Array.from(select.parentElement!.querySelectorAll<HTMLElement>('[role="option"]'), (option) => option.textContent);
+    const listado = document.getElementById(select.getAttribute("aria-controls") ?? "");
+    const opciones = Array.from(listado!.querySelectorAll<HTMLElement>('[role="option"]'), (option) => option.textContent);
     // vigente: cambia con I7B-5
     expect(opciones).toEqual(["Elegí el ítem solicitado", "Marzo 2026 · Factura de compra"]);
     expect(select.getAttribute("aria-required")).toBe("true");

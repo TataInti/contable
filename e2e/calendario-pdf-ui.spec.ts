@@ -104,11 +104,8 @@ test("el calendario se arma desde su PDF, el contador corrige la celda dudosa y 
     await pickOption(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), cliente);
     await goTo(page, "Legajo");
     await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Período fiscal" }).locator("option:checked")).toContainText(
-      `Octubre de 2027 · IVA`,
-    );
-    await expect(page.getByRole("combobox", { name: "Período fiscal" }).locator("option:checked")).toContainText(
-      `Oct 2027 E2E ${SUFFIX}`,
+    await expect(page.getByRole("combobox", { name: "Período fiscal" })).toHaveValue(
+      new RegExp(`Octubre de 2027 · IVA.*Oct 2027 E2E ${SUFFIX}`),
     );
     await expect(page.getByText("Vence el 18/11/2027", { exact: true })).toBeVisible();
     await goTo(page, "Trabajo");
