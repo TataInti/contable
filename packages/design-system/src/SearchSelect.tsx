@@ -1,4 +1,6 @@
-import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
+import { Icon } from "./Icon.js";
 import "./Field.css";
 import "./SearchSelect.css";
 
@@ -24,6 +26,8 @@ export interface SearchSelectProps {
   name?: string;
   placeholder?: string;
   className?: string;
+  /** Clases extra para la lista desplegable (se renderiza en un portal, fuera del contenedor del campo). */
+  listboxClassName?: string;
   disabled?: boolean;
   required?: boolean;
   /** false: el valor siempre es una opción y la lista no ofrece «vacío». Por defecto, sí. */
@@ -40,6 +44,39 @@ function normalize(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es");
 }
 
+/**
+ * La lista se dibuja en el documento (portal) con posición fija calculada desde el campo: así no la recorta
+ * ningún contenedor con scroll (tablas, cajones, paneles). Alturas en px, igual que el máximo de 16 rem del CSS.
+ */
+const LISTBOX_MAX_HEIGHT = 256;
+const LISTBOX_MIN_HEIGHT = 96;
+/** Con menos espacio debajo del campo que esto, la lista abre hacia arriba (si arriba hay más lugar). */
+const LISTBOX_MIN_BELOW = 160;
+const LISTBOX_GAP = 4;
+const VIEWPORT_MARGIN = 8;
+
+interface ListboxPlacement {
+  left: number;
+  minWidth: number;
+  maxWidth: number;
+  maxHeight: number;
+  top?: number;
+  bottom?: number;
+}
+
+function placementFor(field: DOMRect): ListboxPlacement {
+  const viewportHeight = window.innerHeight;
+  const viewportWidth = window.innerWidth;
+  const below = viewportHeight - field.bottom - LISTBOX_GAP - VIEWPORT_MARGIN;
+  const above = field.top - LISTBOX_GAP - VIEWPORT_MARGIN;
+  const left = Math.max(VIEWPORT_MARGIN, field.left);
+  const width = { minWidth: field.width, maxWidth: Math.max(field.width, viewportWidth - left - VIEWPORT_MARGIN) };
+  if (below < Math.min(LISTBOX_MAX_HEIGHT, LISTBOX_MIN_BELOW) && above > below) {
+    return { left, ...width, bottom: viewportHeight - field.top + LISTBOX_GAP, maxHeight: Math.min(LISTBOX_MAX_HEIGHT, Math.max(above, LISTBOX_MIN_HEIGHT)) };
+  }
+  return { left, ...width, top: field.bottom + LISTBOX_GAP, maxHeight: Math.min(LISTBOX_MAX_HEIGHT, Math.max(below, LISTBOX_MIN_HEIGHT)) };
+}
+
 export function SearchSelect({
   label,
   options = [],
@@ -50,6 +87,7 @@ export function SearchSelect({
   name,
   placeholder = "Elegí…",
   className,
+  listboxClassName,
   disabled,
   required,
   allowEmpty = true,
@@ -72,6 +110,26 @@ export function SearchSelect({
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [placement, setPlacement] = useState<ListboxPlacement | null>(null);
+
+  // Mientras la lista está abierta se ubica sobre el campo, y se vuelve a ubicar con scroll (de cualquier ancestro) o cambio de tamaño.
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlacement(null);
+      return;
+    }
+    const update = () => {
+      const field = inputRef.current;
+      if (field) setPlacement(placementFor(field.getBoundingClientRect()));
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open]);
 
   // La validez sigue al valor elegido, no al texto del buscador: mientras el desplegable está
   // abierto el campo muestra la búsqueda (vacía al enfocar) y no debe bloquear el envío.
@@ -148,37 +206,49 @@ export function SearchSelect({
   return (
     <div className="ds-field ds-search-select">
       {hideLabel ? null : <label className="ds-field__label" htmlFor={inputId}>{label}</label>}
-      <input
-        ref={inputRef}
-        id={inputId}
-        className={`ds-field__input${invalid ? " ds-field__input--error" : ""}${className ? ` ${className}` : ""}`}
-        role="combobox"
-        aria-label={label}
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls={listboxId}
-        aria-activedescendant={open && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
-        aria-required={required || undefined}
-        aria-invalid={invalid || undefined}
-        aria-describedby={describedBy}
-        aria-haspopup="listbox"
-        value={open ? query : selectedLabel ?? ""}
-        placeholder={placeholder}
-        disabled={disabled}
-        autoComplete="off"
-        onFocus={() => setOpen(true)}
-        onBlur={() => { setOpen(false); setQuery(""); setActiveIndex(-1); onBlur?.(); }}
-        onChange={onInputChange}
-        onKeyDown={onKeyDown}
-      />
-      <input type="hidden" name={name} value={value} />
-      {open ? (
-        <ul id={listboxId} role="listbox" className="ds-search-select__listbox">
+      <div className="ds-search-select__control">
+        <Icon name="search" size={16} className="ds-search-select__icon" />
+        <input
+          ref={inputRef}
+          id={inputId}
+          className={`ds-field__input${invalid ? " ds-field__input--error" : ""}${className ? ` ${className}` : ""}`}
+          role="combobox"
+          aria-label={label}
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-activedescendant={open && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+          aria-required={required || undefined}
+          aria-invalid={invalid || undefined}
+          aria-describedby={describedBy}
+          aria-haspopup="listbox"
+          value={open ? query : selectedLabel ?? ""}
+          placeholder={open ? "Buscar…" : placeholder}
+          disabled={disabled}
+          autoComplete="off"
+          onFocus={() => setOpen(true)}
+          onBlur={() => { setOpen(false); setQuery(""); setActiveIndex(-1); onBlur?.(); }}
+          onChange={onInputChange}
+          onKeyDown={onKeyDown}
+        />
+        {/* El valor elegido va junto al campo (mismo contenedor): así el campo y su valor siguen juntos para formularios y pruebas. */}
+        <input type="hidden" name={name} value={value} />
+      </div>
+      {/* Un clic dentro de la lista (también en su barra de desplazamiento) no quita el foco del campo. */}
+      {open && placement ? createPortal(
+        <ul
+          id={listboxId}
+          role="listbox"
+          className={`ds-search-select__listbox${listboxClassName ? ` ${listboxClassName}` : ""}`}
+          style={{ position: "fixed", ...placement }}
+          onMouseDown={(event) => event.preventDefault()}
+        >
           {allowEmpty ? <li role="option" data-value="" aria-selected={!value} className="ds-search-select__option" onMouseDown={(event) => event.preventDefault()} onClick={() => select("")}>{placeholder}</li> : null}
           {flatOptions}
           {groupedOptions}
-          {!visibleOptions.length ? <li className="ds-search-select__empty">No hay opciones que coincidan.</li> : null}
-        </ul>
+          {!visibleOptions.length ? <li className="ds-search-select__empty">{query.trim() ? `Sin resultados para "${query.trim()}"` : "No hay opciones que coincidan."}</li> : null}
+        </ul>,
+        document.body,
       ) : null}
     </div>
   );
