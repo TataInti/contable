@@ -1152,9 +1152,9 @@
 /* Clasificación: los tres indicadores son un renglón de cifras, sin cajas (regla «sin cajas»). */
 .workpaper-classification-summary {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
-  gap: var(--ds-space-6);
+  gap: var(--ds-space-2);
   margin: 0;
   padding: 0;
   border: 0;
@@ -1164,7 +1164,8 @@
 .workpaper-classification-summary > span {
   display: inline-flex;
   align-items: baseline;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-1);
+  white-space: nowrap;
 }
 
 .workpaper-classification-summary > span small {
@@ -1205,7 +1206,9 @@
   border-bottom: 1px solid var(--ds-color-border-subtle);
 }
 .workpaper-calculation-selection__row > label { display: flex; align-items: center; gap: var(--ds-space-2); }
-.workpaper-calculation-selection__row .ds-field { inline-size: 10rem; }
+.workpaper-calculation-selection__row .ds-field { inline-size: 8.75rem; }
+.workpaper-calculation-minimum { display: grid; grid-template-columns: 8.75rem 1rem; align-items: start; gap: var(--ds-space-1); }
+.workpaper-help-mark { display: inline-grid; place-items: center; inline-size: 1rem; block-size: 1rem; margin-top: 1.55rem; border: 1px solid var(--ds-color-border); border-radius: 50%; color: var(--ds-color-text-muted); font-size: var(--ds-text-xs); cursor: help; }
 .workpaper-calculation { padding: var(--ds-space-2) 0; border: 0; border-bottom: 1px solid var(--ds-color-border); border-radius: 0; background: transparent; }
 .workpaper-calculation__totals { grid-template-columns: minmax(12rem, 1fr); gap: 0; }
 .workpaper-calculation__totals > div { grid-template-columns: minmax(14rem, 1fr) minmax(8rem, auto); align-items: center; padding: var(--ds-space-1) var(--ds-space-2); border: 0; border-bottom: 1px solid var(--ds-color-border-subtle); border-radius: 0; background: transparent; }

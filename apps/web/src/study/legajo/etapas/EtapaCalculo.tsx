@@ -109,24 +109,23 @@ export function EtapaCalculo({
                 </label>
                 {!marcado ? <small className="muted-copy">No liquidado este mes.</small> : null}
                 {marcado && component.usaMinimoDeclarado ? (
-                  <MoneyField
-                    label="Mínimo del mes"
-                    name={`minimo-${component.obligationId}`}
-                    disabled={Boolean(bloqueoSeleccion)}
-                    value={valor}
-                    error={error ?? undefined}
-                    hint={
-                      component.minimoAnterior
-                        ? `El mes anterior usaste ${formatMoney(component.minimoAnterior.amount)}. No se aplica solo.`
-                        : "Dejalo vacío si no corresponde mínimo: en ese caso no se aplica ninguno."
-                    }
-                    onChange={(nuevo) =>
-                      onSeleccionChange({
-                        ...seleccion,
-                        minimums: { ...seleccion.minimums, [component.obligationId]: nuevo },
-                      })
-                    }
-                  />
+                  <div className="workpaper-calculation-minimum">
+                    <MoneyField
+                      label="Mínimo del mes"
+                      name={`minimo-${component.obligationId}`}
+                      disabled={Boolean(bloqueoSeleccion)}
+                      value={valor}
+                      error={error ?? undefined}
+                      hint={component.minimoAnterior ? `El mes anterior usaste ${formatMoney(component.minimoAnterior.amount)}. No se aplica solo.` : undefined}
+                      onChange={(nuevo) =>
+                        onSeleccionChange({
+                          ...seleccion,
+                          minimums: { ...seleccion.minimums, [component.obligationId]: nuevo },
+                        })
+                      }
+                    />
+                    <span className="workpaper-help-mark" title="Dejalo vacío si no corresponde mínimo: en ese caso no se aplica ninguno." aria-label="Ayuda sobre el mínimo del mes">?</span>
+                  </div>
                 ) : null}
               </div>
             );
