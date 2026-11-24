@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, Notice, useNotify } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
@@ -18,6 +18,7 @@ import { CajonConversacion } from "./trabajo/CajonConversacion";
 import { SeccionPedidos } from "./trabajo/SeccionPedidos";
 import { SeccionCierres } from "./trabajo/SeccionCierres";
 import { SeccionObligaciones } from "./trabajo/SeccionObligaciones";
+import { CargarDocumento } from "./bandeja/CargarDocumento";
 
 export function StudyTrabajo() {
   const [density] = useDensity();
@@ -25,6 +26,15 @@ export function StudyTrabajo() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showRequest, setShowRequest] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  // La clave cambia en cada apertura: la carga arranca limpia y preselecciona el pedido de la fila.
+  const [uploadKey, setUploadKey] = useState(0);
+  const [uploadRequestId, setUploadRequestId] = useState<string | null>(null);
+  // Precarga la Bandeja al abrir Trabajo: su «Subir documento» tiene el mismo nombre que el de
+  // este encabezado, y así el cambio de página se ve enseguida en vez de esperar la carga del módulo.
+  useEffect(() => {
+    void import("./StudyBandeja");
+  }, []);
   const confirm = useConfirmAction();
   const [showClose, setShowClose] = useState(false);
   const notify = useNotify();
@@ -214,6 +224,27 @@ export function StudyTrabajo() {
     );
 
   const activeRequests = (requests.data ?? []).filter((item) => item.status !== "COMPLETED");
+  const pendingRequestItems = (requests.data ?? []).flatMap((request) =>
+    request.items
+      .filter((item) => item.status === "PENDING")
+      .map((item) => ({ ...item, requestTitle: request.title })),
+  );
+  // Preselección: el pedido de la fila; si no hay fila, el único ítem pendiente del cliente.
+  const pedidoDeLaFila = uploadRequestId
+    ? (requests.data ?? []).find((request) => request.id === uploadRequestId)
+    : undefined;
+  const itemInicial = pedidoDeLaFila
+    ? pedidoDeLaFila.items.find((item) => item.status === "PENDING")?.id
+    : pendingRequestItems.length === 1
+      ? pendingRequestItems[0]?.id
+      : undefined;
+  const openUpload = (requestId: string | null = null) => {
+    setShowRequest(false);
+    setShowClose(false);
+    setUploadRequestId(requestId);
+    setUploadKey((value) => value + 1);
+    setUploadOpen(true);
+  };
   const obligationRows = filasDeObligaciones(obligations.data, selectedAccountingPeriod);
   const openCloses = (closes.data ?? []).filter((item) => item.status !== "FINALIZED");
   const conversationRequest = activeConversation
@@ -229,7 +260,7 @@ export function StudyTrabajo() {
     requests.isError || closes.isError || obligations.isError;
 
   return (
-    <DensePage density={density} flow>
+    <DensePage density={density} flow className="study-trabajo">
       <DenseHeader
         title="Trabajo"
         description="Revisiones, pedidos, cierres y vencimientos que requieren una decisión."
@@ -247,6 +278,11 @@ export function StudyTrabajo() {
           >
             Actualizar
           </Button>
+          {capabilities.has("document.upload") ? (
+            <Button variant="secondary" onClick={() => openUpload()}>
+              Subir documento
+            </Button>
+          ) : null}
           {capabilities.has("period.soft_close") ? (
             <Button
               onClick={() => {
@@ -319,6 +355,25 @@ export function StudyTrabajo() {
         createClose={createClose}
       />
 
+      <CargarDocumento
+        key={uploadKey}
+        isOpen={uploadOpen}
+        base={base}
+        capabilities={capabilities}
+        pendingRequestItems={pendingRequestItems}
+        requestsLoading={requests.isLoading}
+        requestsError={requests.isError}
+        onRetryRequests={() => void requests.refetch()}
+        onClose={() => setUploadOpen(false)}
+        onUploaded={() => undefined}
+        itemInicial={itemInicial}
+        onCrearPedido={() => {
+          setUploadOpen(false);
+          setShowRequest(true);
+        }}
+        onVerEnBandeja={() => navigate("/bandeja")}
+      />
+
       <CajonRevision
         reviewRequest={reviewRequest}
         setActiveReviewRequestId={setActiveReviewRequestId}
@@ -352,6 +407,7 @@ export function StudyTrabajo() {
           sendRequest={sendRequest}
           setActiveReviewRequestId={setActiveReviewRequestId}
           setShowRequest={setShowRequest}
+          onSubir={(requestId) => openUpload(requestId)}
         />
         <SeccionCierres
           closes={closes}

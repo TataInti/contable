@@ -417,9 +417,10 @@ describe("StudyCatalogosFiscales", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo organismo" }));
     const opcionesJurisdiccion = screen.getAllByRole("combobox", { name: "Jurisdicción" }).flatMap((combo) => {
       fireEvent.focus(combo);
-      return within(combo.parentElement as HTMLElement).queryAllByRole("option", {
+      const listado = document.getElementById(combo.getAttribute("aria-controls") ?? "");
+      return listado ? within(listado).queryAllByRole("option", {
         name: /Provincia UI — Provincia, Jurisdicción sintética E2E/,
-      });
+      }) : [];
     });
     // Aserción tocada: el desplegable del organismo ofrece la jurisdicción una vez (antes, 2 en el listado nativo).
     expect(opcionesJurisdiccion).toHaveLength(1);

@@ -15,7 +15,7 @@
 
 .upload-dropzone {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--ds-space-4);
   min-height: 104px;
@@ -47,19 +47,19 @@
   outline-offset: 2px;
 }
 
-.upload-dropzone > span:nth-of-type(2) {
+.upload-dropzone > span:first-of-type {
   display: grid;
   min-width: 0;
   gap: var(--ds-space-1);
 }
 
-.upload-dropzone > span:nth-of-type(2) strong {
+.upload-dropzone > span:first-of-type strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.upload-dropzone > span:nth-of-type(2) small {
+.upload-dropzone > span:first-of-type small {
   color: var(--ds-color-text-muted);
 }
 

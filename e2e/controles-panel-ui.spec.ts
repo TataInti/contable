@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { RUN, SUFFIX, login, mutating, syntheticCuit } from "./helpers/ui";
 import {
   activarAutorrevision,
@@ -43,6 +43,9 @@ const OCTUBRE = { start: "2026-10-01", end: "2026-10-31", mes: "Octubre de 2026"
 const MOTIVO_ACEPTAR = `E2E ${SUFFIX}: el cliente informó que emite las facturas C en el período; se acepta con motivo.`;
 const MOTIVO_EXCLUIR = `E2E ${SUFFIX}: la nota de crédito C se excluye del cálculo hasta que el estudio la confirme.`;
 const MOTIVO_CONTROL = `E2E ${SUFFIX}: extracto bancario sintético no aportado en la corrida; se resuelve con motivo y queda registrado.`;
+async function capturarR1c(page: Page, testInfo: TestInfo, nombre: string) {
+  await page.screenshot({ path: testInfo.outputPath(nombre) });
+}
 
 /** Facturas C (código 11) y nota de crédito C (código 13), todas sintéticas. */
 const COMPROBANTES_C: FacturaSintetica[] = [
@@ -103,6 +106,18 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
 
   await test.step("Legajo de octubre: libro de ventas con 2 Facturas C y 1 Nota de Crédito C", async () => {
     await abrirLegajo(page, rotulo);
+    const selectorPeriodo = page.getByRole("combobox", { name: "Período fiscal" });
+    await selectorPeriodo.click();
+    await selectorPeriodo.fill("Octubre");
+    const opcionPeriodo = page.getByRole("option").filter({ hasText: rotulo });
+    await expect(opcionPeriodo).toHaveCount(1);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    expect((await selectorPeriodo.boundingBox())?.width).toBeGreaterThanOrEqual(340);
+    expect((await page.getByRole("listbox").boundingBox())?.width).toBeGreaterThanOrEqual(420);
+    await expect(opcionPeriodo).toHaveCSS("white-space", "nowrap");
+    await expect(opcionPeriodo).toHaveAttribute("title", rotulo);
+    await capturarR1c(page, testInfo, "selector-periodo-busqueda-r1c-v2.png");
+    await opcionPeriodo.click();
     const { libro } = await cargarLibroVentas(page, COMPROBANTES_C, `ventas-c-${SUFFIX}.xlsx`);
     await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
     await expect(page.getByRole("dialog", { name: "Importar libros IVA" })).toBeHidden({ timeout: 60_000 });
@@ -117,6 +132,7 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
 
   await test.step("Controles: aceptar un grupo con motivo y excluir el otro del cálculo", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
+    await expect(page.getByText("Falta resolver controles bloqueantes.", { exact: true })).toHaveCount(0);
     const panel = page.locator(".work-page").first();
     const commentsCollapsed = panel.getByRole("button", { name: /^Comentarios · \d+$/ });
     if (await commentsCollapsed.count()) await commentsCollapsed.click();
@@ -134,23 +150,35 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await expect(rowNotas).toContainText("1 comprobante");
     await expect(panel.getByText("Tipo no reconocido")).toHaveCount(0);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.screenshot({ path: testInfo.outputPath("controles-cola-1440x900.png") });
+    await capturarR1c(page, testInfo, "controles-cola-1440x900-r1c.png");
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.screenshot({ path: testInfo.outputPath("controles-cola-1280x720.png") });
+    await capturarR1c(page, testInfo, "controles-cola-1280x720-r1c.png");
 
     await rowFacturas.getByRole("button", { name: /Abrir/ }).click();
     const firstDrawer = page.getByRole("dialog");
     await expect(page).toHaveURL(/panel=control-/);
+    await expect(firstDrawer.getByRole("button", { name: /Confirmar/ })).toHaveCount(0);
     await expect(firstDrawer.getByRole("heading", { name: "Facturas C", exact: true })).toHaveCSS("white-space", "nowrap");
+    await expect(firstDrawer.getByText("Estado: Bloqueante · Bloquea el cierre")).toBeVisible();
     await expect(firstDrawer.getByRole("list", { name: "Comprobantes afectados" })).toBeVisible();
     await expect(firstDrawer.getByText("C · 0001-00000001")).toBeVisible();
     await expect(firstDrawer.getByText("C · 0001-00000002")).toBeVisible();
     await expect(firstDrawer.getByRole("button", { name: "Abrir en Clasificación" })).toHaveCount(2);
     await expect(firstDrawer.getByText("Sin actividad todavía")).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(firstDrawer.getByRole("heading", { name: "Actividad del control" })).toBeInViewport();
+    await expect(firstDrawer.getByRole("button", { name: "Aceptar con motivo" })).toBeInViewport();
+    await expect(firstDrawer.getByRole("button", { name: "Ir a Configuración fiscal" })).toBeInViewport();
+    await capturarR1c(page, testInfo, "control-panel-1440x900-r1c-before.png");
     await page.setViewportSize({ width: 1280, height: 720 });
     await expect(firstDrawer.getByText("C · 0001-00000001")).toBeInViewport();
     await expect(firstDrawer.getByText("C · 0001-00000002")).toBeInViewport();
-    await page.screenshot({ path: testInfo.outputPath("control-panel-1280x720.png") });
+    await expect(firstDrawer.getByRole("button", { name: "Ir a Configuración fiscal" })).toBeInViewport();
+    await capturarR1c(page, testInfo, "control-panel-1280x720-r1c-before.png");
+    await firstDrawer.getByRole("button", { name: "Ir a Configuración fiscal" }).click();
+    await expect(page).toHaveURL(/configuracion-fiscal/);
+    await page.goBack();
+    await expect(firstDrawer).toBeVisible();
     await expect(firstDrawer.getByLabel("Motivo")).toHaveCount(0);
     await expect(firstDrawer.getByText("Falta escribir el motivo.", { exact: true })).toHaveCount(0);
     await firstDrawer.getByRole("button", { name: "Aceptar con motivo", exact: true }).click();
@@ -162,7 +190,12 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await page.setViewportSize({ width: 1440, height: 900 });
     await expect(firstDrawer.getByText("C · 0001-00000001")).toBeInViewport();
     await expect(firstDrawer.getByText("C · 0001-00000002")).toBeInViewport();
-    await page.screenshot({ path: testInfo.outputPath("control-panel-1440x900.png") });
+    await expect(firstDrawer.getByRole("button", { name: "Ir a Configuración fiscal" })).toBeInViewport();
+    await capturarR1c(page, testInfo, "control-panel-1440x900-r1c-after.png");
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await expect(firstDrawer.getByRole("button", { name: "Ir a Configuración fiscal" })).toBeInViewport();
+    await capturarR1c(page, testInfo, "control-panel-1280x720-r1c-after.png");
+    await page.setViewportSize({ width: 1440, height: 900 });
     await firstDrawer.getByLabel("Motivo").fill(MOTIVO_ACEPTAR);
     await expect(firstDrawer.getByRole("button", { name: "Confirmar aceptación" })).toBeEnabled();
     await mutating(page, "/profile-groups/", () => firstDrawer.getByRole("button", { name: "Confirmar aceptación" }).click());

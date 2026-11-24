@@ -18,9 +18,10 @@ function comboboxDe(etiqueta: string | RegExp, ambito?: Ambito): HTMLInputElemen
   return consulta(ambito).getByRole("combobox", { name: etiqueta }) as HTMLInputElement;
 }
 
-/** Listado del propio desplegable (cada SearchSelect lo renderiza dentro de su raíz). */
+/** Listado del propio desplegable: el componente lo dibuja en el documento (portal) y lo enlaza con aria-controls. */
 function listadoDe(combobox: HTMLInputElement): HTMLElement {
-  const listado = combobox.parentElement?.querySelector<HTMLElement>('[role="listbox"]');
+  const id = combobox.getAttribute("aria-controls");
+  const listado = id ? document.getElementById(id) : null;
   if (!listado) throw new Error("El desplegable no tiene listado abierto");
   return listado;
 }
@@ -86,7 +87,8 @@ export function cambiarValor(elemento: HTMLElement, valor: string) {
   if (elemento.getAttribute("role") === "combobox") {
     // Primero se abre el desplegable (el listado solo existe mientras está abierto).
     fireEvent.focus(elemento);
-    const opciones = Array.from(elemento.parentElement?.querySelectorAll<HTMLElement>('[role="option"]') ?? []);
+    const listado = document.getElementById(elemento.getAttribute("aria-controls") ?? "");
+    const opciones = Array.from(listado?.querySelectorAll<HTMLElement>('[role="option"]') ?? []);
     const opcion = opciones.find((item) => item.getAttribute("data-value") === valor);
     if (opcion) {
       fireEvent.click(opcion);
