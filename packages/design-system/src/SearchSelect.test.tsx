@@ -60,6 +60,12 @@ describe("SearchSelect", () => {
     expect(document.querySelector('input[name="province"]')).toHaveValue("tucuman");
   });
 
+  it("expone el rótulo completo como title de cada opción", () => {
+    render(<SearchSelect label="Provincia" options={options} value="" onChange={() => {}} />);
+    fireEvent.focus(screen.getByRole("combobox", { name: "Provincia" }));
+    expect(screen.getByRole("option", { name: "Buenos Aires" })).toHaveAttribute("title", "Buenos Aires");
+  });
+
   it("navega con flechas, Enter y Escape, exponiendo el activo accesible", () => {
     const onChange = vi.fn();
     render(<SearchSelect label="Provincia" options={options} value="" onChange={onChange} />);
@@ -137,5 +143,108 @@ describe("SearchSelect", () => {
     fireEvent.focus(combobox); // abierto: el buscador queda vacío y el valor sigue elegido
     expect(combobox.value).toBe("");
     expect(combobox.checkValidity()).toBe(true);
+  });
+});
+
+/** Rectángulo del campo, simulado: la lista se posiciona desde él (el portal calcula con getBoundingClientRect). */
+function campoEn(top: number, width = 300) {
+  return { x: 200, y: top, top, bottom: top + 32, left: 200, right: 200 + width, width, height: 32, toJSON: () => ({}) } as DOMRect;
+}
+
+describe("SearchSelect en portal (dentro de tablas y cajones con scroll)", () => {
+  it("la lista se renderiza en document.body, fuera del contenedor que la recorta", () => {
+    render(
+      <div data-testid="tabla" style={{ overflow: "auto", height: 40 }}>
+        <SearchSelect label="Actividad" options={options} value="" onChange={() => {}} />
+      </div>,
+    );
+    fireEvent.focus(screen.getByRole("combobox", { name: "Actividad" }));
+    const listbox = screen.getByRole("listbox");
+    expect(listbox.parentElement).toBe(document.body);
+    expect(screen.getByTestId("tabla").contains(listbox)).toBe(false);
+  });
+
+  it("se ubica con position fixed debajo del campo, con al menos el ancho del campo", () => {
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+    render(<SearchSelect label="Actividad" options={options} value="" onChange={() => {}} />);
+    const input = screen.getByRole("combobox", { name: "Actividad" });
+    vi.spyOn(input, "getBoundingClientRect").mockReturnValue(campoEn(100, 300));
+    fireEvent.focus(input);
+    const listbox = screen.getByRole("listbox");
+    expect(listbox.style.position).toBe("fixed");
+    expect(listbox.style.left).toBe("200px");
+    expect(listbox.style.minWidth).toBe("300px");
+    expect(parseFloat(listbox.style.top)).toBeGreaterThan(132);
+    expect(listbox.style.bottom).toBe("");
+  });
+
+  it("abre hacia arriba cuando no hay lugar debajo del campo", () => {
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+    render(<SearchSelect label="Actividad" options={options} value="" onChange={() => {}} />);
+    const input = screen.getByRole("combobox", { name: "Actividad" });
+    vi.spyOn(input, "getBoundingClientRect").mockReturnValue(campoEn(720, 300));
+    fireEvent.focus(input);
+    const listbox = screen.getByRole("listbox");
+    expect(listbox.style.top).toBe("");
+    expect(parseFloat(listbox.style.bottom)).toBeGreaterThan(800 - 720);
+  });
+
+  it("reposiciona al hacer scroll en cualquier ancestro", () => {
+    Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+    render(
+      <div data-testid="tabla" style={{ overflow: "auto", height: 200 }}>
+        <SearchSelect label="Actividad" options={options} value="" onChange={() => {}} />
+      </div>,
+    );
+    const input = screen.getByRole("combobox", { name: "Actividad" });
+    const spy = vi.spyOn(input, "getBoundingClientRect").mockReturnValue(campoEn(100));
+    fireEvent.focus(input);
+    const antes = screen.getByRole("listbox").style.top;
+    spy.mockReturnValue(campoEn(60));
+    fireEvent.scroll(screen.getByTestId("tabla"));
+    expect(screen.getByRole("listbox").style.top).not.toBe(antes);
+  });
+
+  it("un clic dentro de la lista no cuenta como afuera: el campo conserva el foco y elige la opción", () => {
+    const onChange = vi.fn();
+    render(<SearchSelect label="Actividad" options={options} value="" onChange={onChange} />);
+    const input = screen.getByRole("combobox", { name: "Actividad" });
+    fireEvent.focus(input);
+    const listbox = screen.getByRole("listbox");
+    expect(fireEvent.mouseDown(listbox)).toBe(false); // el mousedown sobre la lista no mueve el foco
+    fireEvent.click(screen.getByRole("option", { name: "Salta" }));
+    expect(onChange).toHaveBeenCalledWith("salta");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("el teclado sigue funcionando: aria-activedescendant apunta a una opción de la lista en portal", () => {
+    render(<SearchSelect label="Actividad" options={options} value="" onChange={() => {}} />);
+    const input = screen.getByRole("combobox", { name: "Actividad" });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    const activo = input.getAttribute("aria-activedescendant");
+    expect(activo).toBeTruthy();
+    expect(document.getElementById(activo!)).toBe(screen.getByRole("listbox").querySelector(".is-active"));
+  });
+
+  it("cierra al salir del campo (clic afuera) aunque la lista esté en portal", () => {
+    render(<SearchSelect label="Actividad" options={options} value="" onChange={() => {}} />);
+    const input = screen.getByRole("combobox", { name: "Actividad" });
+    fireEvent.focus(input);
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    fireEvent.blur(input);
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+});
+
+describe("SearchSelect: el buscador se ve", () => {
+  it("muestra la lupa y, al abrir, el placeholder «Buscar…»; sin coincidencias lo dice con el texto buscado", () => {
+    const { container } = render(<SearchSelect label="Provincia" options={options} value="" onChange={() => {}} />);
+    expect(container.querySelector(".ds-search-select__icon")).not.toBeNull();
+    const input = screen.getByRole("combobox", { name: "Provincia" });
+    expect(input).toHaveAttribute("placeholder", "Elegí…");
+    fireEvent.focus(input);
+    expect(input).toHaveAttribute("placeholder", "Buscar…");
+    fireEvent.change(input, { target: { value: "xyz" } });
+    expect(screen.getByText("Sin resultados para \"xyz\"")).toBeInTheDocument();
   });
 });

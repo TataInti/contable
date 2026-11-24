@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { StudyExpedienteMensual } from "../StudyExpedienteMensual";
+import { abrirListado, elegirOpcion, valorElegido } from "../../test/elegirOpcion";
 import {
   CLIENTE_DEMO,
   FIRMA_DEMO,
@@ -105,10 +106,8 @@ describe("Legajo · selector de período fiscal (K15)", () => {
     );
     renderPage();
 
-    const selector = (await screen.findByRole("combobox", {
-      name: "Período fiscal",
-    })) as HTMLSelectElement;
-    await waitFor(() => expect(selector.value).toBe("period-a"));
+    await screen.findByRole("combobox", { name: "Período fiscal" });
+    await waitFor(() => expect(valorElegido("Período fiscal")).toBe("period-a"));
     expect(sessionStorage.getItem(CLAVE)).toBe("period-a");
   });
 
@@ -119,10 +118,8 @@ describe("Legajo · selector de período fiscal (K15)", () => {
     );
     renderPage();
 
-    const selector = (await screen.findByRole("combobox", {
-      name: "Período fiscal",
-    })) as HTMLSelectElement;
-    await waitFor(() => expect(selector.value).toBe("period-iva"));
+    await screen.findByRole("combobox", { name: "Período fiscal" });
+    await waitFor(() => expect(valorElegido("Período fiscal")).toBe("period-iva"));
     expect(sessionStorage.getItem(CLAVE)).toBe("period-iva");
   });
 
@@ -132,8 +129,8 @@ describe("Legajo · selector de período fiscal (K15)", () => {
     );
     renderPage();
 
-    const selector = await screen.findByRole("combobox", { name: "Período fiscal" });
-    fireEvent.change(selector, { target: { value: "period-iva-sep" } });
+    await screen.findByRole("combobox", { name: "Período fiscal" });
+    elegirOpcion("Período fiscal", /Septiembre de 2026/);
 
     await waitFor(() => expect(sessionStorage.getItem(CLAVE)).toBe("period-iva-sep"));
     await waitFor(() =>
@@ -154,9 +151,10 @@ describe("Legajo · selector de período fiscal (K15)", () => {
     );
     renderPage();
 
-    const selector = await screen.findByRole("combobox", { name: "Período fiscal" });
-    expect(within(selector).getByRole("option", { name: /Ingresos Brutos/ })).toBeTruthy();
-    expect(within(selector).queryByRole("option", { name: /IVA/ })).toBeNull();
+    await screen.findByRole("combobox", { name: "Período fiscal" });
+    const opciones = within(abrirListado("Período fiscal"));
+    expect(opciones.getByRole("option", { name: /Ingresos Brutos/ })).toBeTruthy();
+    expect(opciones.queryByRole("option", { name: /IVA/ })).toBeNull();
   });
 
   it("ofrece Reintentar cuando fallan los períodos fiscales", async () => {

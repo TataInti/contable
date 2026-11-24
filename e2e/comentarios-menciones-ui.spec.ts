@@ -14,7 +14,7 @@ async function openClientLegajo(page: Page) {
   await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
   const period = page.getByLabel("Período fiscal");
   await pickOption(period, MONTH);
-  await expect.poll(() => period.locator("option:checked").innerText()).toContain(MONTH);
+  await expect(period).toHaveValue(new RegExp(MONTH));
 }
 
 async function nuevaPagina(context: BrowserContext) {

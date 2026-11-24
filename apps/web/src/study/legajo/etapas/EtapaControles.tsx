@@ -3,7 +3,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { AsyncState, Button, EmptyState, getStatusBadgeMeta, ObjectPanel, WorkQueue, WorkQueueRow, SearchSelect } from "@contable/design-system";
-import { CONTROL_LABELS, CONTROL_SEVERITY_LABELS } from "../etiquetas";
+import { CONTROL_LABELS } from "../etiquetas";
 import { formatMoney } from "../formato";
 import type { EvidenceDocument, Workpaper, WorkpaperClassification } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
@@ -117,12 +117,12 @@ export function EtapaControles({ capabilities, wp, controlResolutions, setContro
       {(showResolved ? resolved : open).map((control) => <WorkQueueRow key={control.id} id={control.id} title={labelFor(control)} decision={summaryFor(control)} status={control.status === "OPEN" ? control.severity : control.status} amount={amountFor(control)} onOpen={() => openPanel(control.id)} actionLabel="Abrir" />)}
     </WorkQueue>
     <Button variant="text" onClick={() => setShowResolved((value) => !value)}>{showResolved ? `Abiertos (${open.length})` : `Resueltos (${resolved.length})`}</Button>
-    <ObjectPanel kind="control" isOpen={Boolean(selected)} onClose={closePanel} title={nombre} description={selected ? `Estado: ${getStatusBadgeMeta(selected.status === "OPEN" ? selected.severity : selected.status).label}` : undefined} primaryAction={primary} primaryHint={primary && !motivo.trim() ? grupo ? `Escribí el motivo para confirmar ${accionGrupo === "accept" ? "la aceptación" : "la exclusión"}.` : accionControlActiva === "waive" ? "Escribí el motivo para eximir este control." : "Escribí el motivo para confirmar la resolución." : null} returnFocusTo={selected ? Array.from(document.querySelectorAll<HTMLElement>("[data-row-key]")).find((row) => row.dataset.rowKey === selected.id)?.querySelector("button") : null}>
+    <ObjectPanel kind="control" isOpen={Boolean(selected)} onClose={closePanel} title={nombre} description={selected ? `Estado: ${getStatusBadgeMeta(selected.status === "OPEN" ? selected.severity : selected.status).label}${selected.status === "OPEN" && selected.severity === "BLOCKING" ? " · Bloquea el cierre" : ""}` : undefined} primaryAction={primary} primaryHint={primary && !motivo.trim() ? grupo ? `Escribí el motivo para confirmar ${accionGrupo === "accept" ? "la aceptación" : "la exclusión"}.` : accionControlActiva === "waive" ? "Escribí el motivo para eximir este control." : "Escribí el motivo para confirmar la resolución." : null} returnFocusTo={selected ? Array.from(document.querySelectorAll<HTMLElement>("[data-row-key]")).find((row) => row.dataset.rowKey === selected.id)?.querySelector("button") : null}>
       {selected ? <>
         <h3>Comprobantes afectados</h3>
         {grupo ? controlVouchers.length ? <ul className="workpaper-control__affected" aria-label="Comprobantes afectados">{controlVouchers.map((item) => <li key={item.id}><strong>{item.voucher.letter ?? item.voucher.type} · {String(item.voucher.pointOfSale).padStart(4, "0")}-{String(item.voucher.number).padStart(8, "0")}</strong><span>{new Date(item.voucher.issuedOn).toLocaleDateString("es-AR", { timeZone: "UTC" })} · {formatMoney(item.voucher.total)}</span><Button variant="link" onClick={() => { closePanel(); onGoToClassification?.(); }}>Abrir en Clasificación</Button></li>)}</ul> : <p>{count(selected)} comprobantes afectados; el detalle no está disponible.</p> : <p>{selected.actual ? `Importe observado: ${formatMoney(selected.actual)}.` : "No hay comprobantes asociados en los datos del control."}</p>}
         {selected.message ? <p>{selected.message}</p> : null}
-        <p>{selected.severity === "BLOCKING" ? "Bloquea el cierre" : (CONTROL_SEVERITY_LABELS[selected.severity] ?? selected.severity)}</p>
+
         {selected.status === "OPEN" && !puedeResolver ? <p role="status">Tu perfil no puede resolver controles de este legajo.</p> : null}
         {selected.expected !== null ? <p>Esperado: {formatMoney(selected.expected)}{selected.actual !== null ? ` · Actual: ${formatMoney(selected.actual)}` : selected.status === "OPEN" ? " · Pendiente de respaldo" : ""}{selected.tolerance !== null ? ` · Tolerancia: ${formatMoney(selected.tolerance)}` : ""}</p> : null}
         <h3>Actividad del control</h3>

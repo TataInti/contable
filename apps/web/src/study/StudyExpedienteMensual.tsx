@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   AsyncState,
-  BarSelect,
   Button,
   EmptyState,
   Menu,
@@ -11,6 +10,7 @@ import {
   WorkBar,
   WorkPage,
   getStatusBadgeMeta,
+  SearchSelect,
   type MenuActionItem,
 } from "@contable/design-system";
 import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
@@ -1395,11 +1395,16 @@ export function StudyExpedienteMensual() {
   const contexto = (
     <>
       {selectableTaxPeriods.length > 0 ? (
-        <BarSelect
+        <SearchSelect
+          hideLabel
           label="Período fiscal"
+          placeholder="Seleccioná un período fiscal…"
+          allowEmpty={false}
+          className="workpaper-period-selector"
+          listboxClassName="workpaper-period-listbox"
           options={opcionesPeriodo}
           value={selectedTaxPeriodId}
-          onChange={(event) => cambiarPeriodo(event.target.value)}
+          onChange={cambiarPeriodo}
         />
       ) : null}
       {selectedTaxPeriod ? (
@@ -1581,7 +1586,7 @@ export function StudyExpedienteMensual() {
           aria-labelledby={`workpaper-${safeActiveStep}`}
           aria-live="polite"
         >
-          {safeActiveStep < 5 && estadosEtapas[safeActiveStep]?.mensaje ? (
+          {safeActiveStep < 5 && estadosEtapas[safeActiveStep]?.mensaje && !(safeActiveStep === 4 && estadosEtapas[safeActiveStep]?.mensaje === "Falta resolver controles bloqueantes") ? (
             <div className="workpaper-stage-guidance" role="status">
               <p>{estadosEtapas[safeActiveStep]?.mensaje}.</p>
               {estadosEtapas[safeActiveStep]?.accion ? (

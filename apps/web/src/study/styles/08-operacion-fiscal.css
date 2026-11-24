@@ -349,6 +349,38 @@
   gap: var(--ds-space-3);
 }
 
+.workpaper-period-selector {
+  block-size: var(--ds-control-height-sm);
+  min-block-size: var(--ds-control-height-sm);
+  padding-block: 0;
+}
+
+.work-bar__inicio .ds-search-select:has(.workpaper-period-selector) {
+  flex: 0 1 420px;
+  min-inline-size: 340px;
+  max-inline-size: 420px;
+}
+/* Lista del período del Legajo (portal): su piso de 420px gana sobre el ancho en línea del campo. */
+.workpaper-period-listbox {
+  inline-size: max-content;
+  min-inline-size: 420px !important;
+  max-inline-size: min(600px, calc(100vw - 32px));
+}
+.workpaper-period-listbox .ds-search-select__option {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.object-panel[data-object-kind="control"] {
+  gap: var(--ds-space-3);
+}
+.object-panel[data-object-kind="control"] > h3,
+.object-panel[data-object-kind="control"] > p {
+  margin-block: 0;
+}
+
 .object-panel .workpaper-control__affected {
   display: grid;
   margin: 0;
