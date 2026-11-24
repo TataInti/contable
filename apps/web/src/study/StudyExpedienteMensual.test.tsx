@@ -146,6 +146,7 @@ function mockPageApi({
   allocations = { total: 0, allocated: 0, pending: 0, ready: true, items: [] },
   controls = [],
   documents = [],
+  taxPeriods = [taxPeriod],
 }: {
   status?: string;
   sourcePresent?: boolean;
@@ -153,9 +154,10 @@ function mockPageApi({
   allocations?: unknown;
   controls?: unknown[];
   documents?: unknown[];
+  taxPeriods?: unknown[];
 } = {}) {
   vi.mocked(api.get).mockImplementation(((path: string) => {
-    if (path.endsWith("/tax-periods")) return Promise.resolve([taxPeriod]);
+    if (path.endsWith("/tax-periods")) return Promise.resolve(taxPeriods);
     if (path.includes("/monthly-tax-workpapers?")) return Promise.resolve([workpaper(status, controls)]);
     if (path.endsWith("/documents")) return Promise.resolve(documents);
     if (path.endsWith("/coverage")) {
@@ -257,6 +259,37 @@ afterEach(() => {
 });
 
 describe("StudyExpedienteMensual", () => {
+  it("usa un selector buscable de período con la etiqueta de la barra", async () => {
+    const septiembre = { ...taxPeriod, id: "period-september", startDate: "2026-09-01", endDate: "2026-09-30", label: "2026-09" };
+    mockPageApi({ taxPeriods: [taxPeriod, septiembre] });
+    renderPage();
+    const selector = await screen.findByRole("combobox", { name: "Período fiscal" });
+    expect(selector.tagName).toBe("INPUT");
+    fireEvent.focus(selector);
+    expect(selector.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.change(selector, { target: { value: "Septiembre" } });
+    const option = await screen.findByRole("option", { name: /Septiembre de 2026/ });
+    expect(option).toBeTruthy();
+    expect(screen.queryByRole("option", { name: /Octubre de 2026/ })).toBeNull();
+    fireEvent.click(option);
+    await waitFor(() => expect(sessionStorage.getItem("contable:firm-a:client-a:selected-tax-period")).toBe("period-september"));
+  });
+
+  it("no repite el aviso de controles cuando Controles es la etapa activa", async () => {
+    mockPageApi({
+      status: "CALCULATED",
+      sourcePresent: true,
+      controls: [{
+        id: "control-blocking", code: "BANK_RECONCILIATION", status: "OPEN", severity: "BLOCKING",
+        message: "Hay una diferencia", expected: null, actual: "125000", tolerance: null,
+        evidenceDocumentId: null, resolution: null,
+      }],
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("tab", { name: /^Controles/ }));
+    expect(screen.queryByText("Falta resolver controles bloqueantes.")).toBeNull();
+  });
+
   it("ofrece evidencia REVIEWED y habilita Resolver con explicación y respaldo", async () => {
     const control = {
       id: "control-reviewed",
