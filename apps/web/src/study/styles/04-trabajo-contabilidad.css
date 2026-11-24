@@ -57,8 +57,7 @@
 
 .work-columns .table-actions .ds-button {
   min-height: 30px;
-  padding-top: 2px;
-  padding-bottom: 2px;
+  padding-block: var(--ds-space-0-5);
 }
 
 .work-line {
