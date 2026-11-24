@@ -146,6 +146,7 @@ export function CargarDocumento({
       title="Nuevo documento"
       description="El archivo pasa por validación, antivirus y extracción antes de estar disponible."
       size="wide"
+      initialFocus="close"
     >
       <p className="secure-note upload-panel__secure-note">Carga segura</p>
       {subidaRecibida && onVerEnBandeja ? (

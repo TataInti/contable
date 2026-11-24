@@ -14,11 +14,17 @@
   background: transparent;
 }
 
+.work-columns .ds-table__wrapper {
+  border: 0;
+  border-radius: 0;
+}
+
 .work-columns .ds-table tbody tr {
   height: 40px;
 }
 
 .work-columns .ds-table td {
+  height: 40px;
   padding-top: 0;
   padding-bottom: 0;
   vertical-align: middle;
@@ -45,7 +51,14 @@
 
 .work-columns .table-actions {
   flex-wrap: nowrap;
+  justify-content: flex-end;
   white-space: nowrap;
+}
+
+.work-columns .table-actions .ds-button {
+  min-height: 30px;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 .work-line {
