@@ -211,7 +211,6 @@ export function CargarDocumento({
               id="upload-request-item"
               label="Corresponde a"
               hideLabel
-              className="ctxbar__input"
               value={uploadRequestItemId}
               onChange={(value) => setUploadRequestItemId(value)}
               required

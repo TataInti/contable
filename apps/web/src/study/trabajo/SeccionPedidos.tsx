@@ -55,7 +55,7 @@ export function SeccionPedidos({
                   header: "Pedido",
                   render: (row) => (
                     <div className="table-primary">
-                      <strong>{row.title}</strong>
+                      <strong title={row.title}>{row.title}</strong>
                       <small>
                         {
                           row.items.filter(
@@ -127,7 +127,7 @@ export function SeccionPedidos({
                       ) : null}
                       {capabilities.has("document.upload") &&
                       row.items.some((item) => item.status === "PENDING") ? (
-                        <Button size="sm" variant="secondary" onClick={() => onSubir(row.id)}>
+                        <Button size="sm" variant="ghost" onClick={() => onSubir(row.id)}>
                           Subir
                         </Button>
                       ) : null}

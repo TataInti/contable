@@ -601,10 +601,10 @@ describe("K8 · cierres", () => {
     expect(within(fila).queryByRole("button")).toBeNull();
   });
 
-  it("sin ciclos abiertos muestra «Sin ciclos de cierre» con «Iniciar cierre» que abre el cajón", async () => {
+  it("sin ciclos abiertos muestra «Cierres» con 0 y «Iniciar cierre» que abre el cajón", async () => {
     responderApi({ cierres: [{ id: "close-3", status: "FINALIZED", workItems: [] }] });
     renderTrabajo();
-    expect(await seccion("work-closes-section").findByText("Sin ciclos de cierre")).toBeTruthy();
+    expect(await seccion("work-closes-section").findByText("Cierres")).toBeTruthy();
     await waitFor(() =>
       expect(
         seccion("work-closes-section").getByRole("button", { name: "Iniciar cierre" }),
@@ -659,7 +659,7 @@ describe("K9 · próximas obligaciones", () => {
     responderApi({ obligaciones: [] });
     renderTrabajo();
     expect(
-      await seccion("work-obligations-section").findByText("Sin obligaciones materializadas"),
+      await seccion("work-obligations-section").findByText("Sin vencimientos configurados para este cliente."),
     ).toBeTruthy();
     fireEvent.click(
       seccion("work-obligations-section").getByRole("button", { name: "Configurar obligaciones" }),

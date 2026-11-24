@@ -28,6 +28,20 @@ export function SeccionCierres({
   activeFiscalYear,
   setShowClose,
 }: SeccionCierresProps) {
+  // Sin cierres, la sección es una línea («Cierres · 0 · Iniciar cierre»), no una caja vacía.
+  if (!closes.isLoading && !closes.isError && openCloses.length === 0) {
+    return (
+      <section className="work-line" id="work-closes-section">
+        <h2>Cierres</h2>
+        <span className="section-count">0</span>
+        {capabilities.has("period.soft_close") ? (
+          <Button size="sm" variant="ghost" onClick={() => setShowClose(true)}>
+            Iniciar cierre
+          </Button>
+        ) : null}
+      </section>
+    );
+  }
   return (
     <>
       <>
