@@ -645,8 +645,8 @@ describe("Legajo · etapa Cierre (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Cierre/);
 
-    expect(await screen.findByText("Paso 1 · Finalizar")).toBeInTheDocument();
-    expect(screen.getByText("Paso 4 · Pago (opcional)")).toBeInTheDocument();
+    expect(await screen.findByText("Finalizar", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText("Pago (opcional)", { selector: "strong" })).toBeInTheDocument();
     const detalle = screen.getByText("Detalle técnico");
     expect(detalle.closest("details")).not.toHaveAttribute("open");
     fireEvent.click(detalle);
@@ -663,7 +663,7 @@ describe("Legajo · etapa Cierre (K13)", () => {
     renderLegajo();
     await abrirEtapa(/Cierre/);
 
-    expect(await screen.findByText("Paso 1 · Finalizar")).toBeInTheDocument();
+    expect(await screen.findByText("Finalizar", { selector: "strong" })).toBeInTheDocument();
     fireEvent.click(screen.getByText("Detalle técnico"));
     const valor = (etiqueta: string) =>
       screen.getByText(etiqueta).parentElement?.querySelector("dd")?.textContent;

@@ -293,7 +293,9 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     fireEvent.click(await screen.findByRole("tab", { name: "Clasificación" }));
     expect(await screen.findByRole("combobox", { name: "Rubro del proveedor" })).toBeTruthy();
     elegirRevision(1);
-    expect(await screen.findByText(/^Las actividades adheridas determinan/)).toBeTruthy();
+    expect(screen.getByLabelText("Ayuda sobre clasificación").getAttribute("title")).toBe(
+      "Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular.",
+    );
     expect(screen.queryByRole("combobox", { name: "Rubro del proveedor" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Guardar|^Reimputar/ })).toBeNull();
   });
@@ -348,7 +350,7 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: "Cierre" }));
     elegirRevision(1);
-    expect(await screen.findByText("Paso 1 · Finalizar")).toBeTruthy();
+    expect(await screen.findByText("Finalizar", { selector: "strong" })).toBeTruthy();
     expect(screen.getByText("Detalle técnico").closest("details")?.hasAttribute("open")).toBe(false);
     const contenido = document.querySelector(".work-page__content") as HTMLElement;
     expect(within(contenido).getAllByRole("button").map((button) => button.textContent)).toEqual(["Comentar"]);

@@ -168,6 +168,15 @@ jobs:
           AI_SERVICE_SECRET: dev-secret
           MFA_CHALLENGE_SECRET: e2e-mfa-challenge-secret-with-32-characters
 
+      - name: Publicar capturas R3
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r3-capturas
+          path: test-results/**/r3-*.png
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Publicar trazas y capturas del E2E
         # Trazas (trace.zip) y capturas de los specs que fallan: para revisar el recorrido sin volver a correrlo.
         if: always()
