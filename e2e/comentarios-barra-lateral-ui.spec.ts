@@ -105,8 +105,8 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
   await prepararLegajoConControles(page);
   await goTo(page, "Usuarios y accesos");
   const reviewerRow = page.locator("tr", { hasText: "revisor@contable.local" });
-  await reviewerRow.getByText("Más acciones").click();
-  await reviewerRow.getByRole("button", { name: /Administrar clientes de Revisor local/ }).click();
+  await reviewerRow.click();
+  await page.getByRole("button", { name: /Administrar clientes de Revisor Demo/ }).click();
   const assignments = page.locator(".action-drawer");
   await pickOption(assignments.getByRole("combobox", { name: "Cliente" }), CLIENTE.legalName);
   await mutating(page, "/assignments", () => assignments.getByRole("button", { name: "Asignar cliente" }).click());
