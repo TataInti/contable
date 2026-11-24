@@ -16,6 +16,8 @@ interface SeccionPedidosProps {
   sendRequest: UseMutationResult<unknown, Error, string>;
   setActiveReviewRequestId: Dispatch<SetStateAction<string | null>>;
   setShowRequest: Dispatch<SetStateAction<boolean>>;
+  /** Abre la carga de documentos apuntada al pedido de la fila. */
+  onSubir: (requestId: string) => void;
 }
 
 export function SeccionPedidos({
@@ -27,6 +29,7 @@ export function SeccionPedidos({
   sendRequest,
   setActiveReviewRequestId,
   setShowRequest,
+  onSubir,
 }: SeccionPedidosProps) {
   return (
     <>
@@ -120,6 +123,12 @@ export function SeccionPedidos({
                           onClick={() => sendRequest.mutate(row.id)}
                         >
                           Enviar pedido
+                        </Button>
+                      ) : null}
+                      {capabilities.has("document.upload") &&
+                      row.items.some((item) => item.status === "PENDING") ? (
+                        <Button size="sm" variant="secondary" onClick={() => onSubir(row.id)}>
+                          Subir
                         </Button>
                       ) : null}
                       {capabilities.has("request.manage") ? (

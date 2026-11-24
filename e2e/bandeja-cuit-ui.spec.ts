@@ -36,6 +36,12 @@ const TERCERO_3 = syntheticCuit(RUN36 + 8_702);
 
 const COMPROBANTE_DE_B = `comprobante-del-cliente-b-${SUFFIX}.pdf`;
 const COMPROBANTE_DE_TERCEROS = `comprobante-de-terceros-${SUFFIX}.pdf`;
+const COMPROBANTE_DESDE_TRABAJO = `comprobante-subido-desde-trabajo-${SUFFIX}.pdf`;
+
+/** Escapa un texto para usarlo dentro de un RegExp (títulos con paréntesis, puntos, nombres de archivo). */
+function escaparRegex(texto: string) {
+  return texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 /** PDF mínimo con los marcadores que lee el servicio de IA de prueba. */
 function comprobante(etiqueta: string, emisor: string, receptor: string) {
@@ -150,6 +156,29 @@ test("control de CUIT en la Bandeja: CUIT de otro cliente, mover a otro cliente 
     await page.getByRole("button", { name: "Aprobar extracción", exact: true }).click();
     await mutating(page, "/approve", () => page.getByRole("button", { name: "Aprobar extracción", exact: true }).last().click());
     await expect(page.getByText("Extracción revisada").first()).toBeVisible();
+  });
+
+  await test.step("Trabajo: «Subir» en el pedido de A → el comprobante llega a la Bandeja de A sin pasar por la Bandeja", async () => {
+    const titulo = `Compras de A (${SUFFIX}) 3`;
+    await crearPedido(page, titulo);
+    await goTo(page, "Trabajo");
+    const fila = page.getByRole("row", { name: new RegExp(escaparRegex(titulo)) });
+    await expect(fila).toBeVisible();
+    await fila.getByRole("button", { name: "Subir", exact: true }).click();
+    const cajon = page.locator(".action-drawer");
+    await expect(cajon.locator("#upload-request-item")).toBeVisible();
+    await expect(cajon.getByText(new RegExp(escaparRegex(titulo)))).toBeVisible();
+    await cajon.locator('input[type="file"]').setInputFiles({
+      name: COMPROBANTE_DESDE_TRABAJO,
+      mimeType: "application/pdf",
+      buffer: comprobante("desde Trabajo", TERCERO_1, CLIENTE_A.cuit),
+    });
+    await mutating(page, "/complete", () => cajon.getByRole("button", { name: "Subir y procesar" }).click());
+    await expect(cajon.getByText("Documento recibido")).toBeVisible();
+    await cajon.getByRole("button", { name: "Ver en Bandeja", exact: true }).click();
+    await expect(page.getByRole("row", { name: new RegExp(escaparRegex(COMPROBANTE_DESDE_TRABAJO)) }).first()).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   test.info().annotations.push({ type: "errores de mutación", description: errores.join(" | ") || "ninguno" });
