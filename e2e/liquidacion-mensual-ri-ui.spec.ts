@@ -307,7 +307,7 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await esperarImporte(page, "690,00");
     await esperarImporte(page, "10.028,00");
     const filaIibb = page.locator(".workpaper-calculation-selection__row").filter({ hasText: IIBB.taxName });
-    await expect(filaIibb.getByLabel("Mínimo del mes")).toBeVisible();
+    await expect(filaIibb.getByRole("textbox", { name: "Mínimo del mes" })).toBeVisible();
     await expect(filaIibb.locator(".workpaper-calculation-minimum")).toHaveCount(1);
     await page.screenshot({ path: test.info().outputPath("r3-calculo.png"), fullPage: false });
     await page.locator("details.workpaper-calculation__trace").first().locator("summary").click();
