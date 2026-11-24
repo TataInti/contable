@@ -95,6 +95,10 @@ async function verificarBarraADerecha(page: Page) {
 test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conservan el plegado", async ({ page, browser }, testInfo) => {
   test.setTimeout(900_000);
   page.setDefaultTimeout(15_000);
+  let commentsUrl: string | null = null;
+  page.on("request", (request) => {
+    if (request.method() === "GET" && request.url().includes("/comments") && !request.url().includes("/comments/members")) commentsUrl = request.url();
+  });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.addInitScript(() => localStorage.setItem("contable-study-navigation-tour-v1", "dismissed"));
   await login(page);
@@ -113,7 +117,6 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
       }
       const reviewerPage = await browser.newPage();
       await login(reviewerPage, "revisor@contable.local", "revisor1234");
-      const commentsUrl = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name).find((url) => url.includes("/api/v1/firms/") && url.includes("/clients/") && url.split("?")[0]?.endsWith("/comments")));
       expect(commentsUrl).toBeTruthy();
       const reviewerComment = `Comentario Revisor E2E ${SUFFIX}`;
       const created = await reviewerPage.evaluate(async ({ url, comment, periodLabel }) => {
