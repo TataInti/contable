@@ -108,6 +108,11 @@ async function verificarListaCompleta(page: Page, lista: Locator, opciones: RegE
   }
 }
 
+/** Abre el selector de actividad de una fila: en Clasificación se muestra al tocar «Cambiar» (R3-d). */
+async function abrirCambio(fila: Locator) {
+  await fila.getByRole("button", { name: "Cambiar", exact: true }).click();
+}
+
 /** Vincula actividades del catálogo en un solo alta, eligiendo cada una por su etiqueta completa. */
 async function vincularEtiquetas(page: Page, actividades: Array<{ buscar: string; etiqueta: RegExp }>) {
   await clickAdd(page, "Actividades");
@@ -189,7 +194,8 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
   await test.step("Clasificación: la lista de la primera fila se ve completa (no la recorta la tabla)", async () => {
     await irAlLegajo(page, rotulo);
     await page.getByRole("tab", { name: /Clasificación/ }).click();
-    await expect(page.locator('input[id^="actividad-"]')).toHaveCount(3);
+    await abrirCambio(fila(NUMERO_FILA_1));
+    await expect(page.locator('input[id^="actividad-"]')).toHaveCount(1);
     const primera = fila(NUMERO_FILA_1).locator('input[id^="actividad-"]');
     const tabla = primera.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' ds-table__wrapper ')][1]");
     await primera.click();
@@ -208,26 +214,31 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     await expect(page.getByRole("listbox").getByRole("option", { name: OPCION_COMERCIO })).toBeVisible();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
-    await expect(primera).toHaveValue(OPCION_COMERCIO);
     await expect(page.getByRole("listbox")).toHaveCount(0);
+    await abrirCambio(fila(NUMERO_FILA_1));
+    await expect(primera).toHaveValue(OPCION_COMERCIO);
     await mutating(page, "/classifications/", () => fila(NUMERO_FILA_1).getByRole("button", { name: /^(Guardar|Actualizar)\b/ }).click());
   });
 
   await test.step("Segunda fila: se elige RESTO-TUC con clic y se guarda con «Guardar»", async () => {
     const segunda = fila(NUMERO_FILA_2).locator('input[id^="actividad-"]');
+    await abrirCambio(fila(NUMERO_FILA_2));
     await segunda.click();
     const opcion = page.getByRole("listbox").getByRole("option", { name: OPCION_RESTO });
     await expect(opcion).toBeVisible();
     await opcion.click();
-    await expect(segunda).toHaveValue(OPCION_RESTO);
     await expect(page.getByRole("listbox")).toHaveCount(0);
+    await abrirCambio(fila(NUMERO_FILA_2));
+    await expect(segunda).toHaveValue(OPCION_RESTO);
     await mutating(page, "/classifications/", () => fila(NUMERO_FILA_2).getByRole("button", { name: /^(Guardar|Actualizar)\b/ }).click());
   });
 
   await test.step("Al volver al Legajo, las dos actividades siguen guardadas", async () => {
     await irAlLegajo(page, rotulo);
     await page.getByRole("tab", { name: /Clasificación/ }).click();
+    await abrirCambio(fila(NUMERO_FILA_1));
     await expect(fila(NUMERO_FILA_1).locator('input[id^="actividad-"]')).toHaveValue(OPCION_COMERCIO);
+    await abrirCambio(fila(NUMERO_FILA_2));
     await expect(fila(NUMERO_FILA_2).locator('input[id^="actividad-"]')).toHaveValue(OPCION_RESTO);
   });
 
