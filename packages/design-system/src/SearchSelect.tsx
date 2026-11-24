@@ -128,6 +128,7 @@ export function SearchSelect({
       key={option.value}
       role="option"
       data-value={option.value}
+      title={option.label}
       aria-selected={option.value === value}
       aria-disabled={option.disabled || undefined}
       className={`ds-search-select__option${option.disabled ? " is-disabled" : ""}${activeIndex === index ? " is-active" : ""}`}

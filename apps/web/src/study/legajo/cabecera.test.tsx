@@ -9,6 +9,7 @@ import { ToastProvider } from "@contable/design-system";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api } from "../../lib/api";
 import { StudyExpedienteMensual } from "../StudyExpedienteMensual";
+import { valorElegido } from "../../test/elegirOpcion";
 import { CLIENTE_DEMO, FIRMA_DEMO, PERIODO_ELEGIDO_DEMO, rutasDemo } from "./datosDemoLegajo";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
@@ -106,9 +107,7 @@ describe("Legajo · cabecera (K3)", () => {
   /** Espera a que la barra tenga el período elegido, para que los ítems del menú reflejen el período. */
   async function esperarPeriodo() {
     await waitFor(() =>
-      expect(
-        (screen.getByRole("combobox", { name: "Período fiscal" }) as HTMLSelectElement).value,
-      ).toBe(PERIODO_ELEGIDO_DEMO),
+      expect(valorElegido("Período fiscal")).toBe(PERIODO_ELEGIDO_DEMO),
     );
   }
 

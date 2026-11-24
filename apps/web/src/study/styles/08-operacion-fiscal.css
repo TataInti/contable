@@ -355,6 +355,23 @@
   padding-block: 0;
 }
 
+.work-bar__inicio .ds-search-select:has(.workpaper-period-selector) {
+  flex: 0 1 420px;
+  min-inline-size: 340px;
+  max-inline-size: 420px;
+}
+.work-bar__inicio .ds-search-select:has(.workpaper-period-selector) .ds-search-select__listbox {
+  inline-size: max-content;
+  min-inline-size: 420px;
+  max-inline-size: min(600px, calc(100vw - 32px));
+}
+.work-bar__inicio .ds-search-select:has(.workpaper-period-selector) .ds-search-select__option {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .object-panel[data-object-kind="control"] {
   gap: var(--ds-space-3);
 }

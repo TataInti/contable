@@ -1,6 +1,4 @@
-import { mkdir } from "node:fs/promises";
-import { resolve } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { RUN, SUFFIX, login, mutating, syntheticCuit } from "./helpers/ui";
 import {
   activarAutorrevision,
@@ -45,11 +43,8 @@ const OCTUBRE = { start: "2026-10-01", end: "2026-10-31", mes: "Octubre de 2026"
 const MOTIVO_ACEPTAR = `E2E ${SUFFIX}: el cliente informó que emite las facturas C en el período; se acepta con motivo.`;
 const MOTIVO_EXCLUIR = `E2E ${SUFFIX}: la nota de crédito C se excluye del cálculo hasta que el estudio la confirme.`;
 const MOTIVO_CONTROL = `E2E ${SUFFIX}: extracto bancario sintético no aportado en la corrida; se resuelve con motivo y queda registrado.`;
-const R1_CAPTURAS = resolve(process.cwd(), "rediseno-pantallas/r1");
-
-async function capturarR1c(page: import("@playwright/test").Page, nombre: string) {
-  await mkdir(R1_CAPTURAS, { recursive: true });
-  await page.screenshot({ path: resolve(R1_CAPTURAS, nombre) });
+async function capturarR1c(page: Page, testInfo: TestInfo, nombre: string) {
+  await page.screenshot({ path: testInfo.outputPath(nombre) });
 }
 
 /** Facturas C (código 11) y nota de crédito C (código 13), todas sintéticas. */
@@ -86,7 +81,7 @@ const COMPROBANTES_C: FacturaSintetica[] = [
   },
 ];
 
-test("cola de Controles: resolver desde el Legajo y revisar Actividad en el panel lateral", async ({ page }) => {
+test("cola de Controles: resolver desde el Legajo y revisar Actividad en el panel lateral", async ({ page }, testInfo) => {
   test.setTimeout(900_000);
   page.setDefaultTimeout(15_000);
 
@@ -116,7 +111,12 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await selectorPeriodo.fill("Octubre");
     const opcionPeriodo = page.getByRole("option").filter({ hasText: rotulo });
     await expect(opcionPeriodo).toHaveCount(1);
-    await capturarR1c(page, "selector-periodo-busqueda-r1c.png");
+    await page.setViewportSize({ width: 1440, height: 900 });
+    expect((await selectorPeriodo.boundingBox())?.width).toBeGreaterThanOrEqual(340);
+    expect((await page.getByRole("listbox").boundingBox())?.width).toBeGreaterThanOrEqual(420);
+    await expect(opcionPeriodo).toHaveCSS("white-space", "nowrap");
+    await expect(opcionPeriodo).toHaveAttribute("title", rotulo);
+    await capturarR1c(page, testInfo, "selector-periodo-busqueda-r1c-v2.png");
     await opcionPeriodo.click();
     const { libro } = await cargarLibroVentas(page, COMPROBANTES_C, `ventas-c-${SUFFIX}.xlsx`);
     await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
@@ -151,9 +151,9 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await expect(rowNotas).toContainText("1 comprobante");
     await expect(panel.getByText("Tipo no reconocido")).toHaveCount(0);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await capturarR1c(page, "controles-cola-1440x900-r1c.png");
+    await capturarR1c(page, testInfo, "controles-cola-1440x900-r1c.png");
     await page.setViewportSize({ width: 1280, height: 720 });
-    await capturarR1c(page, "controles-cola-1280x720-r1c.png");
+    await capturarR1c(page, testInfo, "controles-cola-1280x720-r1c.png");
 
     await rowFacturas.getByRole("button", { name: /Abrir/ }).click();
     const firstDrawer = page.getByRole("dialog");
@@ -170,12 +170,12 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await expect(firstDrawer.getByRole("heading", { name: "Actividad del control" })).toBeInViewport();
     await expect(firstDrawer.getByRole("button", { name: "Aceptar con motivo" })).toBeInViewport();
     await expect(firstDrawer.getByRole("button", { name: "Ir a Configuración fiscal" })).toBeInViewport();
-    await capturarR1c(page, "control-panel-1440x900-r1c-before.png");
+    await capturarR1c(page, testInfo, "control-panel-1440x900-r1c-before.png");
     await page.setViewportSize({ width: 1280, height: 720 });
     await expect(firstDrawer.getByText("C · 0001-00000001")).toBeInViewport();
     await expect(firstDrawer.getByText("C · 0001-00000002")).toBeInViewport();
     await expect(firstDrawer.getByRole("button", { name: "Ir a Configuración fiscal" })).toBeInViewport();
-    await capturarR1c(page, "control-panel-1280x720-r1c-before.png");
+    await capturarR1c(page, testInfo, "control-panel-1280x720-r1c-before.png");
     await firstDrawer.getByRole("button", { name: "Ir a Configuración fiscal" }).click();
     await expect(page).toHaveURL(/configuracion-fiscal/);
     await page.goBack();
@@ -192,10 +192,10 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await expect(firstDrawer.getByText("C · 0001-00000001")).toBeInViewport();
     await expect(firstDrawer.getByText("C · 0001-00000002")).toBeInViewport();
     await expect(firstDrawer.getByRole("button", { name: "Ir a Configuración fiscal" })).toBeInViewport();
-    await capturarR1c(page, "control-panel-1440x900-r1c-after.png");
+    await capturarR1c(page, testInfo, "control-panel-1440x900-r1c-after.png");
     await page.setViewportSize({ width: 1280, height: 720 });
     await expect(firstDrawer.getByRole("button", { name: "Ir a Configuración fiscal" })).toBeInViewport();
-    await capturarR1c(page, "control-panel-1280x720-r1c-after.png");
+    await capturarR1c(page, testInfo, "control-panel-1280x720-r1c-after.png");
     await page.setViewportSize({ width: 1440, height: 900 });
     await firstDrawer.getByLabel("Motivo").fill(MOTIVO_ACEPTAR);
     await expect(firstDrawer.getByRole("button", { name: "Confirmar aceptación" })).toBeEnabled();
