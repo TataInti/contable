@@ -60,6 +60,12 @@ describe("SearchSelect", () => {
     expect(document.querySelector('input[name="province"]')).toHaveValue("tucuman");
   });
 
+  it("expone el rótulo completo como title de cada opción", () => {
+    render(<SearchSelect label="Provincia" options={options} value="" onChange={() => {}} />);
+    fireEvent.focus(screen.getByRole("combobox", { name: "Provincia" }));
+    expect(screen.getByRole("option", { name: "Buenos Aires" })).toHaveAttribute("title", "Buenos Aires");
+  });
+
   it("navega con flechas, Enter y Escape, exponiendo el activo accesible", () => {
     const onChange = vi.fn();
     render(<SearchSelect label="Provincia" options={options} value="" onChange={onChange} />);
