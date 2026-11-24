@@ -527,7 +527,7 @@ export function EtapaClasificacion({
                             <div className="workpaper-classification-inline" title={fullActivity}>
                               <span className="workpaper-classification-code">
                                 {classification.categoryCode ? `${classification.categoryCode} · ` : ""}{automaticLevels.length
-                                  ? automaticLevels.map((item) => `${item.level} ${item.code}`).join(" · ")
+                                  ? automaticLevels.map((item, index) => `${index === 0 ? "Prov." : "Mun."} ${item.code}`).join(" · ")
                                   : draft.activityCode || "Sin actividad"}
                               </span>
                               {classification.origin === "RULE" ? <StatusBadge status="INFO" label="Por regla" /> : null}
