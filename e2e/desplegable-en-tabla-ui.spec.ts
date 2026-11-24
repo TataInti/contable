@@ -6,13 +6,13 @@ import {
   activarAutorrevision,
   altaClienteRI,
   cargarLibroVentas,
+  clickAdd,
   crearPeriodoIIBB,
   inscribirIIBB,
   irAlLegajo,
   revisarLotesDe,
   rotuloDelPeriodo,
   vincularActividad,
-  vincularActividades,
 } from "./helpers/liquidacion-ui";
 import { type FacturaSintetica } from "./helpers/fuentes-sinteticas";
 
@@ -22,15 +22,18 @@ import { type FacturaSintetica } from "./helpers/fuentes-sinteticas";
  *   1. Alta del cliente con IIBB y actividad de restaurante vinculada.
  *   2. Cajón «Registrar cambio de actividad»: el desplegable «Actividad nueva» muestra su lista completa
  *      (no queda recortada por el cajón) y se cierra sin registrar nada.
- *   3. Octubre de 2026: período, libro de ventas de tres facturas (sintéticas) revisado por el Titular.
- *   4. Legajo › Clasificación: el desplegable «Rubro / actividad» de la primera fila muestra su lista
- *      completa, fuera del borde de la tabla. Se elige una opción por teclado, se guarda con «Actualizar».
- *   5. La segunda fila se elige por clic y se guarda.
- *   6. Se vuelve a abrir el Legajo: las dos clasificaciones quedaron guardadas.
+ *   3. Vincular Comercio y Servicios: cada fila de Clasificación tiene cuatro opciones.
+ *   4. Octubre de 2026: período, libro de ventas de tres facturas (sintéticas) revisado por el Titular.
+ *   5. Legajo › Clasificación: el desplegable «Rubro / actividad» de la primera fila muestra su lista
+ *      completa, fuera del borde de la tabla. Se elige por teclado y se guarda con «Actualizar».
+ *   6. La segunda fila se elige por clic y se guarda.
+ *   7. Se vuelve a abrir el Legajo: las dos clasificaciones quedaron guardadas.
  *
  * Verificación de la lista: el cuadro de la lista se extiende más allá del borde inferior de la tabla y el
  * punto inferior de la lista y cada opción visible están sobre la lista (no los tapa ni los recorta la tabla).
- * Todo sintético y con el sufijo de la corrida.
+ * Las filas se buscan por el número del comprobante; las actividades, por la etiqueta completa (el catálogo
+ * de CI tiene más de una actividad con el código COMERCIO). Todo sintético y con el sufijo de la corrida.
+ * Capturas 1440×900: 4v-cajon-desplegable-abierto.png y 4v-clasificacion-desplegable-abierto.png.
  */
 
 const CLIENTE = {
@@ -41,12 +44,18 @@ const CLIENTE = {
 };
 const OCTUBRE = { start: "2026-10-01", end: "2026-10-31", mes: "Octubre de 2026", label: `Octubre 2026 IIBB ${SUFFIX}` };
 const ACTIVIDAD_NUEVA = "Comercio";
-// Catálogo de Tucumán sembrado para el E2E (apps/api/src/seed-maestros-fiscales.ts): códigos COMERCIO, SERVICIOS, RESTO-TUC.
-// Se vinculan después del cajón de cambio (que necesita «Comercio» libre): así la lista de cada fila tiene cuatro opciones
-// y supera el borde de la tabla, que es el caso del defecto.
-const ACTIVIDADES_DESPUES = ["Comercio", "Servicios"];
-const ACTIVIDAD_FILA_1 = "COMERCIO";
-const ACTIVIDAD_FILA_2 = "RESTO-TUC";
+// Catálogo de Tucumán sembrado para el E2E (apps/api/src/seed-maestros-fiscales.ts). Se busca por código y se elige
+// por la etiqueta anclada al inicio («CÓDIGO — Nombre»): así no coincide con otra actividad de nombre parecido.
+const ACTIVIDADES_DESPUES = [
+  { buscar: "Comercio", etiqueta: /^COMERCIO — Comercio\b/ },
+  { buscar: "Servicios", etiqueta: /^SERVICIOS — Servicios\b/ },
+];
+// En la lista de cada fila la opción es «CÓDIGO · Nombre».
+const OPCION_COMERCIO = /^COMERCIO · /;
+const OPCION_RESTO = /^RESTO-TUC · /;
+const OPCION_SERVICIOS = /^SERVICIOS · /;
+const NUMERO_FILA_1 = "00000501";
+const NUMERO_FILA_2 = "00000502";
 
 /** Tres facturas A por 115.000 neto (50.000 + 40.000 + 25.000), todas de octubre de 2026. */
 function facturasDeOctubre(): FacturaSintetica[] {
@@ -98,6 +107,17 @@ async function verificarListaCompleta(page: Page, lista: Locator, opciones: RegE
   }
 }
 
+/** Vincula actividades del catálogo en un solo alta, eligiendo cada una por su etiqueta completa. */
+async function vincularEtiquetas(page: Page, actividades: Array<{ buscar: string; etiqueta: RegExp }>) {
+  await clickAdd(page, "Actividades");
+  const cajon = page.getByRole("dialog", { name: "Vincular actividad económica" });
+  for (const { buscar, etiqueta } of actividades) {
+    await cajon.getByRole("searchbox", { name: "Buscar actividad" }).fill(buscar);
+    await cajon.getByRole("checkbox", { name: etiqueta }).check();
+  }
+  await mutating(page, "/activities", () => cajon.getByRole("button", { name: "Vincular actividad", exact: true }).click());
+}
+
 /** Libro de ventas del mes, importado y revisado por el Titular desde el Legajo de ese mes. */
 async function libroDeOctubreRevisado(page: Page, rotulo: string) {
   await abrirLegajo(page, rotulo);
@@ -121,6 +141,9 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     if (!response.url().includes("/api/v1/")) return;
     if (response.status() >= 400) errores.push(`${request.method()} ${response.url()} → ${response.status()}`);
   });
+
+  // Fila de Clasificación por el número de su comprobante: la fila tiene su desplegable y su botón «Actualizar».
+  const fila = (numero: string) => page.locator("tr").filter({ hasText: numero });
 
   await test.step("Ingresar como Titular", () => login(page));
 
@@ -147,7 +170,7 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
   });
 
   await test.step("Vincular Comercio y Servicios: la lista de cada fila tiene cuatro opciones", async () => {
-    await vincularActividades(page, ACTIVIDADES_DESPUES);
+    await vincularEtiquetas(page, ACTIVIDADES_DESPUES);
   });
 
   await test.step("Octubre de 2026: período con su obligación de IIBB", async () => {
@@ -165,46 +188,42 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
   await test.step("Clasificación: la lista de la primera fila se ve completa (no la recorta la tabla)", async () => {
     await irAlLegajo(page, rotulo);
     await page.getByRole("tab", { name: /Clasificación/ }).click();
-    const campos = page.locator('input[id^="actividad-"]');
-    await expect(campos).toHaveCount(3);
-    const primera = campos.nth(0);
+    await expect(page.locator('input[id^="actividad-"]')).toHaveCount(3);
+    const primera = fila(NUMERO_FILA_1).locator('input[id^="actividad-"]');
     const tabla = primera.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' ds-table__wrapper ')][1]");
     await primera.click();
-    await verificarListaCompleta(page, page.getByRole("listbox"), [/COMERCIO/, /RESTO-TUC/, /SERVICIOS/], tabla);
+    await verificarListaCompleta(page, page.getByRole("listbox"), [OPCION_COMERCIO, OPCION_RESTO, OPCION_SERVICIOS], tabla);
     await page.screenshot({ path: test.info().outputPath("4v-clasificacion-desplegable-abierto.png") });
   });
 
   await test.step("Primera fila: se elige COMERCIO por teclado y se guarda con «Actualizar»", async () => {
-    const primera = page.locator('input[id^="actividad-"]').nth(0);
+    const primera = fila(NUMERO_FILA_1).locator('input[id^="actividad-"]');
     await primera.click();
-    await primera.pressSequentially(ACTIVIDAD_FILA_1, { delay: 10 });
-    await expect(page.getByRole("listbox").getByRole("option", { name: new RegExp(ACTIVIDAD_FILA_1) }).first()).toBeVisible();
+    await primera.pressSequentially("COMERCIO", { delay: 10 });
+    await expect(page.getByRole("listbox").getByRole("option", { name: OPCION_COMERCIO })).toBeVisible();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
-    await expect(primera).toHaveValue(new RegExp(ACTIVIDAD_FILA_1));
+    await expect(primera).toHaveValue(OPCION_COMERCIO);
     await expect(page.getByRole("listbox")).toHaveCount(0);
-    const actualizar = page.locator(".work-page").first().getByRole("button", { name: /^Actualizar/ });
-    await mutating(page, "/classifications/", () => actualizar.nth(0).click());
+    await mutating(page, "/classifications/", () => fila(NUMERO_FILA_1).getByRole("button", { name: /^Actualizar/ }).click());
   });
 
   await test.step("Segunda fila: se elige RESTO-TUC con clic y se guarda con «Actualizar»", async () => {
-    const segunda = page.locator('input[id^="actividad-"]').nth(1);
+    const segunda = fila(NUMERO_FILA_2).locator('input[id^="actividad-"]');
     await segunda.click();
-    const opcion = page.getByRole("listbox").getByRole("option", { name: new RegExp(ACTIVIDAD_FILA_2) }).first();
+    const opcion = page.getByRole("listbox").getByRole("option", { name: OPCION_RESTO });
     await expect(opcion).toBeVisible();
     await opcion.click();
-    await expect(segunda).toHaveValue(new RegExp(ACTIVIDAD_FILA_2));
+    await expect(segunda).toHaveValue(OPCION_RESTO);
     await expect(page.getByRole("listbox")).toHaveCount(0);
-    const actualizar = page.locator(".work-page").first().getByRole("button", { name: /^Actualizar/ });
-    await mutating(page, "/classifications/", () => actualizar.nth(1).click());
+    await mutating(page, "/classifications/", () => fila(NUMERO_FILA_2).getByRole("button", { name: /^Actualizar/ }).click());
   });
 
   await test.step("Al volver al Legajo, las dos actividades siguen guardadas", async () => {
     await irAlLegajo(page, rotulo);
     await page.getByRole("tab", { name: /Clasificación/ }).click();
-    const campos = page.locator('input[id^="actividad-"]');
-    await expect(campos.nth(0)).toHaveValue(new RegExp(ACTIVIDAD_FILA_1));
-    await expect(campos.nth(1)).toHaveValue(new RegExp(ACTIVIDAD_FILA_2));
+    await expect(fila(NUMERO_FILA_1).locator('input[id^="actividad-"]')).toHaveValue(OPCION_COMERCIO);
+    await expect(fila(NUMERO_FILA_2).locator('input[id^="actividad-"]')).toHaveValue(OPCION_RESTO);
   });
 
   test.info().annotations.push({ type: "errores de mutación", description: errores.join(" | ") || "ninguno" });
