@@ -9,7 +9,6 @@ import {
   crearPeriodoIIBB,
   inscribirIIBB,
   irAlLegajo,
-  pick,
   revisarLotesDe,
   rotuloDelPeriodo,
   vincularActividad,
@@ -104,6 +103,8 @@ async function libroDeOctubreRevisado(page: Page, rotulo: string) {
   await revisarLotesDe(page, "Gestionar Ventas del período");
 }
 
+test.use({ viewport: { width: 1440, height: 900 } });
+
 test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: lista completa, elegir y guardar", async ({ page }) => {
   test.setTimeout(900_000);
   page.setDefaultTimeout(15_000);
@@ -133,6 +134,7 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     await campo.click();
     const lista = page.getByRole("listbox");
     await verificarListaCompleta(page, lista, [new RegExp(ACTIVIDAD_NUEVA)]);
+    await page.screenshot({ path: test.info().outputPath("4v-cajon-desplegable-abierto.png") });
     await lista.getByRole("option", { name: new RegExp(ACTIVIDAD_NUEVA) }).first().click();
     await expect(campo).toHaveValue(new RegExp(ACTIVIDAD_NUEVA));
     await cajon.getByRole("button", { name: "Cancelar", exact: true }).click();
@@ -160,6 +162,7 @@ test("desplegable con búsqueda en la tabla de Clasificación y en un cajón: li
     const tabla = primera.locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' ds-table__wrapper ')][1]");
     await primera.click();
     await verificarListaCompleta(page, page.getByRole("listbox"), [/REST-AR/, /REST-TUC/], tabla);
+    await page.screenshot({ path: test.info().outputPath("4v-clasificacion-desplegable-abierto.png") });
   });
 
   await test.step("Primera fila: se elige REST-TUC por teclado y se guarda con «Actualizar»", async () => {

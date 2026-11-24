@@ -441,8 +441,8 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     // Qué datos admite la carga manual (para comparar con lo que dice el ticket: neto, IVA 21 %, total).
     const campo = dialog.getByLabel("Campo de la fila 1");
     await campo.click();
-    await expect(dialog.getByRole("listbox")).toBeVisible();
-    const offered = await dialog.getByRole("listbox").getByRole("option").allTextContents();
+    await expect(page.getByRole("listbox")).toBeVisible();
+    const offered = await page.getByRole("listbox").getByRole("option").allTextContents();
     await campo.press("Escape");
     test.info().annotations.push({ type: "campos de la carga manual", description: offered.filter(Boolean).join(" | ") });
     const rows: Array<[string, string]> = [

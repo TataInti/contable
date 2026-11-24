@@ -1,14 +1,14 @@
+/* La lista va en el documento (portal, ver SearchSelect.tsx): posición fija calculada desde el campo.
+   Por encima de los cajones y diálogos (--ds-z-modal), así no la tapan ni la recortan tablas o paneles. */
 .ds-search-select {
   position: relative;
 }
 
 .ds-search-select__listbox {
-  position: absolute;
-  z-index: 30;
-  inset-block-start: calc(100% + var(--ds-space-1));
-  inset-inline: 0;
-  max-block-size: 16rem;
+  position: fixed;
+  z-index: calc(var(--ds-z-modal) + 1);
   overflow: auto;
+  box-sizing: border-box;
   margin: 0;
   padding: var(--ds-space-1);
   list-style: none;
