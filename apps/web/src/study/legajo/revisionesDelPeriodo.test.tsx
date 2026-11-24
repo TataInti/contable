@@ -291,12 +291,15 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     );
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: "Clasificación" }));
+    expect(await screen.findByRole("button", { name: "Cambiar" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar" }));
     expect(await screen.findByRole("combobox", { name: "Rubro del proveedor" })).toBeTruthy();
     elegirRevision(1);
     expect(screen.getByLabelText("Ayuda sobre clasificación").getAttribute("title")).toBe(
       "Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular.",
     );
     expect(screen.queryByRole("combobox", { name: "Rubro del proveedor" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cambiar" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Guardar|^Reimputar/ })).toBeNull();
   });
 
