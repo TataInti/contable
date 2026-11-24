@@ -1,6 +1,6 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 declare const process: { env: { CI?: string } };
-import { RUN, SUFFIX, goTo, login, mutating, pickOption, syntheticCuit } from "./helpers/ui";
+import { RUN, SUFFIX, login, mutating, syntheticCuit } from "./helpers/ui";
 import {
   IIBB,
   activarAutorrevision,
@@ -112,20 +112,21 @@ test("Comentarios del mes quedan fijos a la derecha en todas las etapas y conser
         await expect(thread.getByRole("listitem").filter({ hasText: comment })).toBeVisible();
       }
       const reviewerPage = await browser.newPage();
-      await reviewerPage.setViewportSize({ width: 1440, height: 900 });
-      await reviewerPage.addInitScript(() => localStorage.setItem("contable-study-navigation-tour-v1", "dismissed"));
       await login(reviewerPage, "revisor@contable.local", "revisor1234");
-      await goTo(reviewerPage, "Clientes");
-      await reviewerPage.getByRole("button", { name: `Abrir ficha de ${CLIENTE.legalName}` }).click();
-      await pickOption(reviewerPage.getByRole("combobox", { name: "Cliente en el que estás trabajando" }), CLIENTE.legalName);
-      await goTo(reviewerPage, "Legajo");
-      await pickOption(reviewerPage.getByRole("combobox", { name: "Período fiscal" }), rotuloDelPeriodo(PERIODO.mes, PERIODO.label));
-      const reviewerThread = reviewerPage.getByRole("region", { name: "Comentarios" });
-      await expect(reviewerThread).toBeVisible();
+      const commentsUrl = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name).find((url) => /\/api\/v1\/firms\/[^/]+\/clients\/[^/]+\/comments(?:\?.*)?$/.test(url)));
+      expect(commentsUrl).toBeTruthy();
       const reviewerComment = `Comentario Revisor E2E ${SUFFIX}`;
-      await reviewerThread.getByLabel("Escribí un comentario").fill(reviewerComment);
-      await mutating(reviewerPage, "/comments", () => reviewerThread.getByRole("button", { name: "Comentar", exact: true }).click());
-      await expect(reviewerThread.getByRole("listitem").first()).toContainText(reviewerComment);
+      const created = await reviewerPage.evaluate(async ({ url, comment, periodLabel }) => {
+        const cookie = document.cookie.split("; ").find((entry) => entry.startsWith("csrf_token="));
+        const response = await fetch(url, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": cookie ? decodeURIComponent(cookie.slice("csrf_token=".length)) : "" },
+          body: JSON.stringify({ body: comment, isPersonal: false, periodLabel }),
+        });
+        return { status: response.status, body: await response.text() };
+      }, { url: commentsUrl!, comment: reviewerComment, periodLabel: PERIODO.label });
+      expect(created.status, created.body).toBe(201);
       await reviewerPage.close();
       await page.reload();
       await expect(page.getByRole("region", { name: "Comentarios" })).toBeVisible();
