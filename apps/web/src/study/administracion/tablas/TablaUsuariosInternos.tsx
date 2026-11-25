@@ -12,6 +12,7 @@ type Props = {
   selectedUserId: string | null;
   setSelectedUserId: Dispatch<SetStateAction<string | null>>;
   internalInspector: ReactNode;
+  openIdentityEdit: (item: InternalMember) => void;
   internalRoleDrafts: Record<string, string>;
   updateInternalRole: { isPending: boolean; variables?: { userId: string; role: string } };
   changeRole: (item: InternalMember, nextRole: string) => void;
@@ -24,6 +25,7 @@ export function TablaUsuariosInternos({
   selectedUserId,
   setSelectedUserId,
   internalInspector,
+  openIdentityEdit,
   internalRoleDrafts,
   updateInternalRole,
   changeRole,
@@ -60,7 +62,9 @@ export function TablaUsuariosInternos({
             hideLabel
             className="dense-select dense-select--inline"
             value={internalRoleDrafts[item.userId] ?? item.role}
-            disabled={updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId}
+            disabled={
+              updateInternalRole.isPending && updateInternalRole.variables?.userId === item.userId
+            }
             onChange={(value) => changeRole(item, value)}
             allowEmpty={false}
             options={INTERNAL_ROLE_OPTIONS.map(([value, label]) => ({ value, label }))}
@@ -89,7 +93,7 @@ export function TablaUsuariosInternos({
             aria-label={`Editar a ${item.user?.name ?? "este usuario"}`}
             onClick={(event) => {
               event.stopPropagation();
-              setSelectedUserId(item.userId);
+              openIdentityEdit(item);
             }}
           >
             Editar
@@ -108,7 +112,9 @@ export function TablaUsuariosInternos({
       selectedKey={selectedUserId}
       onSelect={setSelectedUserId}
       inspectorOpen={Boolean(internalInspector)}
-      rowClassName={(item) => (effectiveStatus(item) === "SUSPENDED" ? "dense-row--muted" : undefined)}
+      rowClassName={(item) =>
+        effectiveStatus(item) === "SUSPENDED" ? "dense-row--muted" : undefined
+      }
       footer={footerWith("El estudio debe conservar al menos un titular o administrador activo.")}
       empty={
         <EmptyState

@@ -99,7 +99,11 @@ const membersFixture = [
     role: "AUDITOR_READONLY",
     status: "SUSPENDED",
     acceptedAt: null,
-    user: { name: "Auditora Suspendida", emailNormalized: "auditora@example.com", status: "SUSPENDED" },
+    user: {
+      name: "Auditora Suspendida",
+      emailNormalized: "auditora@example.com",
+      status: "SUSPENDED",
+    },
   },
 ];
 
@@ -134,9 +138,9 @@ function renderAdministracion() {
   return render(
     <QueryClientProvider client={client}>
       <ToastProvider>
-      <MemoryRouter>
-        <StudyAdministracion />
-      </MemoryRouter>
+        <MemoryRouter>
+          <StudyAdministracion />
+        </MemoryRouter>
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -151,8 +155,6 @@ async function abrirPanelUsuario(nombre: string) {
 async function abrirEdicionUsuario(nombre: string) {
   const fila = await screen.findByRole("row", { name: new RegExp(nombre) });
   fireEvent.click(within(fila).getByRole("button", { name: `Editar a ${nombre}` }));
-  const panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
-  fireEvent.click(within(panel).getByRole("button", { name: `Editar a ${nombre}` }));
   return screen.findByRole("dialog", { name: "Editar usuario" });
 }
 
@@ -190,7 +192,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     };
     vi.mocked(api.patch).mockResolvedValue({ allowSelfReview: true } as never);
     renderAdministracion();
-    expect(screen.queryByRole("checkbox", { name: "Permitir autorrevisión de fuentes y legajos" })).toBeNull();
+    expect(
+      screen.queryByRole("checkbox", { name: "Permitir autorrevisión de fuentes y legajos" }),
+    ).toBeNull();
     await openControls();
 
     const toggle = (await screen.findByRole("checkbox", {
@@ -208,7 +212,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(await screen.findByText("Activada")).toBeTruthy();
     expect(screen.getByText(/reduce el control interno de cuatro ojos/)).toBeTruthy();
     const studyStyles = readStudyStyles();
-    expect(studyStyles).toMatch(/\.self-review-setting__title\s*\{[^}]*font-size:\s*var\(--ds-text-base\)/);
+    expect(studyStyles).toMatch(
+      /\.self-review-setting__title\s*\{[^}]*font-size:\s*var\(--ds-text-base\)/,
+    );
   });
 
   it("presenta la opción al Administrador como lectura y reserva el cambio al Titular", async () => {
@@ -299,7 +305,7 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(within(table).queryByText("Módulos")).toBeNull();
     expect(within(table).queryByText(/de 7/)).toBeNull();
     expect(screen.queryByText("3 usuarios")).toBeNull();
-    expect((document.querySelector(".administration-users")?.textContent ?? "")).not.toMatch(
+    expect(document.querySelector(".administration-users")?.textContent ?? "").not.toMatch(
       /\bUI\b|fuente de verdad|contexto superior|\bemail\b/i,
     );
 
@@ -320,14 +326,25 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     const rowActions = page.querySelectorAll<HTMLButtonElement>(".dense-row-actions .ds-button");
     expect(rowActions.length).toBeGreaterThan(0);
     expect(Array.from(rowActions).every((action) => action.tagName === "BUTTON")).toBe(true);
-    expect(Array.from(rowActions).every((action) => action.classList.contains("ds-button--row"))).toBe(true);
+    expect(
+      Array.from(rowActions).every((action) => action.classList.contains("ds-button--row")),
+    ).toBe(true);
     expect(page.querySelectorAll(".dense-fp__bars")).toHaveLength(0);
 
     const studyStyles = readStudyStyles();
-    const tokens = readFileSync(resolve(process.cwd(), "../../packages/design-system/src/tokens.css"), "utf8");
-    expect(studyStyles).toMatch(/\.administration-users \.dense-select--inline\s*\{[^}]*height:\s*var\(--ds-control-height-sm\);[^}]*min-height:\s*var\(--ds-control-height-sm\);[^}]*font-size:\s*var\(--ds-text-sm\);/);
-    expect(studyStyles).not.toMatch(/\.administration-users \.dense-row-actions \.ds-button\s*\{[^}]*min-height:\s*var\(--ds-touch-target\);/);
-    expect(studyStyles).toMatch(/@media \(pointer: coarse\)\s*\{[^}]*\.administration-users \.dense-select--inline\s*\{[^}]*height:\s*var\(--ds-touch-target\);/s);
+    const tokens = readFileSync(
+      resolve(process.cwd(), "../../packages/design-system/src/tokens.css"),
+      "utf8",
+    );
+    expect(studyStyles).toMatch(
+      /\.administration-users \.dense-select--inline\s*\{[^}]*height:\s*var\(--ds-control-height-sm\);[^}]*min-height:\s*var\(--ds-control-height-sm\);[^}]*font-size:\s*var\(--ds-text-sm\);/,
+    );
+    expect(studyStyles).not.toMatch(
+      /\.administration-users \.dense-row-actions \.ds-button\s*\{[^}]*min-height:\s*var\(--ds-touch-target\);/,
+    );
+    expect(studyStyles).toMatch(
+      /@media \(pointer: coarse\)\s*\{[^}]*\.administration-users \.dense-select--inline\s*\{[^}]*height:\s*var\(--ds-touch-target\);/s,
+    );
     expect(tokens).toMatch(/--ds-control-height-sm:\s*32px;/);
     expect(tokens).toMatch(/--ds-touch-target:\s*44px;/);
   });
@@ -341,28 +358,40 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(within(detail).getByText("revisor@example.com")).toBeTruthy();
     expect(within(detail).getByRole("table", { name: "Módulos habilitados por rol" })).toBeTruthy();
     expect(within(detail).getByRole("button", { name: "Suspender a Revisor Demo" })).toBeTruthy();
-    expect(within(detail).getByRole("button", { name: "Recuperar acceso de Revisor Demo" })).toBeTruthy();
+    expect(
+      within(detail).getByRole("button", { name: "Recuperar acceso de Revisor Demo" }),
+    ).toBeTruthy();
     expect(within(detail).getByRole("button", { name: "Editar a Revisor Demo" })).toBeTruthy();
-    expect(within(detail).getByRole("button", { name: "Administrar clientes de Revisor Demo" })).toBeTruthy();
+    expect(
+      within(detail).getByRole("button", { name: "Administrar clientes de Revisor Demo" }),
+    ).toBeTruthy();
   });
 
-  it("abre desde Editar el panel que concentra las acciones secundarias", async () => {
+  it("abre desde Editar el formulario directamente y conserva la ficha en la fila", async () => {
     mockApi(standardsFixture, membersFixture);
     renderAdministracion();
 
     const row = await screen.findByRole("row", { name: /Revisor Demo/ });
     const table = screen.getByRole("table", { name: "Usuarios internos" });
-    const actionsHeader = within(table).getByRole("columnheader", { name: "Acciones" }) as HTMLElement;
+    const actionsHeader = within(table).getByRole("columnheader", {
+      name: "Acciones",
+    }) as HTMLElement;
     expect(actionsHeader.style.width).toBe("180px");
     expect(within(row).getByRole("button", { name: "Editar a Revisor Demo" })).toBeTruthy();
     expect(within(row).getAllByRole("button")).toHaveLength(1);
     fireEvent.click(within(row).getByRole("button", { name: "Editar a Revisor Demo" }));
-    const panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
+    expect(await screen.findByRole("dialog", { name: "Editar usuario" })).toBeTruthy();
 
     expect(within(row).queryByText("Más acciones")).toBeNull();
-    expect(within(panel).getByRole("button", { name: "Administrar clientes de Revisor Demo" })).toBeTruthy();
+    fireEvent.click(within(row).getByText("Revisor Demo"));
+    const panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
+    expect(
+      within(panel).getByRole("button", { name: "Administrar clientes de Revisor Demo" }),
+    ).toBeTruthy();
     expect(within(panel).getByRole("button", { name: "Suspender a Revisor Demo" })).toBeTruthy();
-    expect(within(panel).getByRole("button", { name: "Recuperar acceso de Revisor Demo" })).toBeTruthy();
+    expect(
+      within(panel).getByRole("button", { name: "Recuperar acceso de Revisor Demo" }),
+    ).toBeTruthy();
   });
 
   it("guarda el cambio a Titular sin pedir confirmación", async () => {
@@ -373,7 +402,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     cambiarValor(await screen.findByLabelText("Rol de Revisor Demo"), "OWNER");
 
     await waitFor(() =>
-      expect(vi.mocked(api.patch)).toHaveBeenCalledWith("/firms/firm-a/members/u2", { role: "OWNER" }),
+      expect(vi.mocked(api.patch)).toHaveBeenCalledWith("/firms/firm-a/members/u2", {
+        role: "OWNER",
+      }),
     );
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
@@ -413,19 +444,27 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     expect(form).toBeTruthy();
     expect(footer).toBeTruthy();
     expect(footer?.contains(screen.getByRole("button", { name: "Cancelar" }))).toBe(true);
-    const submit = within(footer as HTMLElement).getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement;
+    const submit = within(footer as HTMLElement).getByRole("button", {
+      name: "Guardar cambios",
+    }) as HTMLButtonElement;
     expect(submit.form).toBe(form);
     fireEvent.click(submit);
 
     expect(await screen.findByText("Ingresá el nombre")).toBeTruthy();
-    expect(await screen.findByText("Ingresá un correo válido, por ejemplo nombre@estudio.com")).toBeTruthy();
+    expect(
+      await screen.findByText("Ingresá un correo válido, por ejemplo nombre@estudio.com"),
+    ).toBeTruthy();
     expect(name.getAttribute("aria-invalid")).toBe("true");
     expect(email.getAttribute("aria-invalid")).toBe("true");
     expect(api.patch).not.toHaveBeenCalled();
 
     const studyStyles = readStudyStyles();
-    expect(studyStyles).toMatch(/\.administration-users \.administration-user-edit-form\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
-    expect(studyStyles).toMatch(/\.administration-users \.dense-inspector__foot \.dense-row-actions\s*\{[^}]*flex-wrap:\s*wrap/);
+    expect(studyStyles).toMatch(
+      /\.administration-users \.administration-user-edit-form\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
+    );
+    expect(studyStyles).toMatch(
+      /\.administration-users \.dense-inspector__foot \.dense-row-actions\s*\{[^}]*flex-wrap:\s*wrap/,
+    );
   });
 
   it("explica en español cuando el correo ya pertenece a otra cuenta", async () => {
@@ -500,7 +539,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     const panel = await abrirPanelUsuario("Auditora Suspendida");
-    fireEvent.click(within(panel).getByRole("button", { name: "Reactivar acceso de Auditora Suspendida" }));
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "Reactivar acceso de Auditora Suspendida" }),
+    );
 
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith("/firms/firm-a/members/u3/reactivate", {}),
@@ -531,7 +572,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     fireEvent.click(await screen.findByRole("tab", { name: /Accesos del portal/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Suspender acceso de Cliente Portal" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Suspender acceso de Cliente Portal" }),
+    );
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(
         "/firms/firm-a/clients/client-a/portal-memberships/portal-a",
@@ -547,7 +590,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     fireEvent.click(await screen.findByRole("tab", { name: /Accesos del portal/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Reactivar acceso de Cliente Portal" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Reactivar acceso de Cliente Portal" }),
+    );
 
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(
@@ -571,7 +616,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     const close = within(drawer).getByRole("button", { name: "Cerrar" });
     await waitFor(() => expect(document.activeElement).toBe(close));
     const clientSelect = await within(drawer).findByLabelText("Cliente");
-    expect(within(abrirListado("Cliente", drawer)).getByRole("option", { name: "Cliente Beta" })).toBeTruthy();
+    expect(
+      within(abrirListado("Cliente", drawer)).getByRole("option", { name: "Cliente Beta" }),
+    ).toBeTruthy();
     cambiarValor(clientSelect, "client-b");
     fireEvent.click(screen.getByRole("button", { name: "Asignar cliente" }));
 
@@ -592,14 +639,14 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     fireEvent.click(
       within(panel).getByRole("button", { name: "Administrar clientes de Revisor Demo" }),
     );
-    fireEvent.click(await screen.findByRole("button", {
-      name: "Quitar cliente Cliente Alfa de Revisor Demo",
-    }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Quitar cliente Cliente Alfa de Revisor Demo",
+      }),
+    );
 
     await waitFor(() =>
-      expect(api.del).toHaveBeenCalledWith(
-        "/firms/firm-a/clients/client-a/assignments/u2",
-      ),
+      expect(api.del).toHaveBeenCalledWith("/firms/firm-a/clients/client-a/assignments/u2"),
     );
   });
 
@@ -617,12 +664,18 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     fireEvent.click(await screen.findByRole("tab", { name: "Datos del estudio" }));
     expect(await screen.findByText(/Estudio Ejemplo SRL/)).toBeTruthy();
     expect(screen.getByText("Buenos Aires (GMT-3)")).toBeTruthy();
-    expect(screen.getByText("Consultá y actualizá los datos de identificación y la zona horaria del estudio.")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Consultá y actualizá los datos de identificación y la zona horaria del estudio.",
+      ),
+    ).toBeTruthy();
     expect(document.querySelectorAll(".administration-profile__facts > div")).toHaveLength(4);
     expect(screen.queryByRole("searchbox")).toBeNull();
     expect(document.querySelector(".dense-toolbar")).toBeNull();
     const studyStyles = readStudyStyles();
-    expect(studyStyles).toMatch(/\.administration-profile__facts\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
+    expect(studyStyles).toMatch(
+      /\.administration-profile__facts\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/,
+    );
     fireEvent.click(await screen.findByRole("button", { name: "Editar datos" }));
     cambiarValor(await screen.findByLabelText("Razón social"), "Estudio Actualizado SRL");
     cambiarValor(screen.getByLabelText("Nombre del estudio"), "Estudio Actualizado");
@@ -630,7 +683,9 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     const timezone = await screen.findByLabelText("Zona horaria");
     expect(valorElegido("Zona horaria")).toBe("America/Argentina/Buenos_Aires");
     const listado = abrirListado("Zona horaria");
-    expect(within(listado).getByRole("option", { name: "Buenos Aires (GMT-3) · Argentina" }).textContent).toContain("Buenos Aires (GMT-3)");
+    expect(
+      within(listado).getByRole("option", { name: "Buenos Aires (GMT-3) · Argentina" }).textContent,
+    ).toContain("Buenos Aires (GMT-3)");
     expect(within(listado).getByRole("group", { name: "América" })).toBeTruthy();
     cambiarValor(timezone, "America/Argentina/Cordoba");
     fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
@@ -658,7 +713,10 @@ describe("StudyAdministracion — catálogo de normas contables", () => {
     renderAdministracion();
 
     fireEvent.click(await screen.findByRole("button", { name: "Alta en lote" }));
-    cambiarValor(await screen.findByLabelText(/Una persona por línea/), "Lucía Fernández, lucia@estudio.com, Revisor\nMartín Acosta, martin@estudio\nPaula Sosa, paula@estudio.com");
+    cambiarValor(
+      await screen.findByLabelText(/Una persona por línea/),
+      "Lucía Fernández, lucia@estudio.com, Revisor\nMartín Acosta, martin@estudio\nPaula Sosa, paula@estudio.com",
+    );
 
     // La línea con correo inválido se marca y no se crea.
     expect(await screen.findByText("Correo inválido o faltante.")).toBeTruthy();

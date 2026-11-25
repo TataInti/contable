@@ -80,7 +80,7 @@ function renderLegajo() {
   return render(
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={["/?etapa=saldos"]}>
           <StudyExpedienteMensual />
         </MemoryRouter>
       </ToastProvider>
@@ -105,11 +105,14 @@ afterEach(() => {
 });
 
 describe("Legajo · etapa Saldos (K9)", () => {
-  it("muestra «Sin aplicaciones» y «Sin cambios» en los saldos sin movimientos ni historial", async () => {
+  // 15-4: las columnas sin dato (Movimientos, Historial) no se muestran.
+  it("no ocupa columnas con «Sin aplicaciones» ni «Sin cambios» cuando no hay movimientos ni historial", async () => {
     fijarContexto(PERMISOS_SALDOS);
     renderLegajo();
-    expect((await screen.findAllByText("Sin aplicaciones")).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText("Sin cambios")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("Carga manual · Persona Demo")).toBeInTheDocument();
+    expect(screen.queryByText("Sin aplicaciones")).toBeNull();
+    expect(screen.queryByText("Sin cambios")).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Historial" })).toBeNull();
   });
 
   it("muestra «Carga manual · nombre» cuando el saldo no tiene referencia ni documento", async () => {
@@ -237,6 +240,23 @@ describe("Legajo · etapa Saldos (3E): arrastre, mes anterior y cambios con moti
 
   it("la columna del historial se llama Historial", async () => {
     fijarContexto(PERMISOS_SALDOS);
+    vi.mocked(api.get).mockImplementation(
+      rutasDemo({
+        saldos: [
+          {
+            ...saldoDemo,
+            history: [
+              {
+                id: "cambio-demo",
+                createdAt: "2026-10-01T12:00:00.000Z",
+                changes: { originalAmount: { from: "100.00", to: "150.00" } },
+                createdBy: { id: "u-demo", name: "Persona Demo" },
+              },
+            ],
+          },
+        ],
+      }) as never,
+    );
     renderLegajo();
     expect(await screen.findByText("Historial")).toBeInTheDocument();
   });

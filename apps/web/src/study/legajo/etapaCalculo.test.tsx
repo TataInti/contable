@@ -302,15 +302,17 @@ describe("Legajo · etapa Cálculo (K12)", () => {
     expect(screen.queryByRole("button", { name: "Calcular mora" })).toBeNull();
   });
 
-  it("Registrar pago abre el panel de pago del impuesto", async () => {
+  it("las acciones de presentación, declaración jurada y pago no están en Cálculo: viven en el Cierre", async () => {
     fijarContexto(PERMISOS_CALCULO);
     fijarRespuestas({
       posiciones: { "period-a": [posicion("obligacion-iibb", "Ingresos Brutos")] },
     });
     renderLegajo();
     await abrirCalculo();
-    fireEvent.click(await screen.findByRole("button", { name: "Registrar pago" }));
-    expect(await screen.findByRole("dialog", { name: "Registrar pago" })).toBeInTheDocument();
+    expect((await screen.findAllByText(/Régimen Ingresos Brutos/)).length).toBeGreaterThan(0);
+    for (const nombre of ["Registrar pago", "Registrar presentación", "Cargar declaración jurada"]) {
+      expect(screen.queryByRole("button", { name: nombre })).toBeNull();
+    }
   });
 
   it("Actualizar vuelve a consultar la posición fiscal del período", async () => {
@@ -320,7 +322,7 @@ describe("Legajo · etapa Cálculo (K12)", () => {
     });
     renderLegajo();
     await abrirCalculo();
-    await screen.findByRole("button", { name: "Registrar pago" });
+    await screen.findAllByText(/Régimen Ingresos Brutos/);
     const consultasDePosicion = () =>
       vi.mocked(api.get).mock.calls.filter(([ruta]) => String(ruta).includes("/tax-position?"))
         .length;

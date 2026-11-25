@@ -80,7 +80,6 @@ function montar(components: WorkpaperCalculationComponent[], seleccion: Seleccio
       calculationQuery={consulta(components)}
       positionQuery={consulta<TaxPosition[]>([])}
       calculateInterestMutation={{ isPending: false, mutate: vi.fn(), variables: undefined, error: null } as unknown as UseMutationResult<unknown, Error, { workpaperId: string; obligationId: string }>}
-      setPositionAction={vi.fn()}
       seleccion={seleccion}
       onSeleccionChange={onSeleccionChange}
     />,

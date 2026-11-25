@@ -30,6 +30,7 @@ export const CLIENTES_SINTETICOS = [
     cuitEnding: "0",
     status: "ACTIVE",
     profile: PERFIL_SINTETICO_COMPLETO,
+    configurationMissing: [],
   },
   {
     id: "c2",
@@ -48,6 +49,7 @@ export const CLIENTES_SINTETICOS = [
     cuitEnding: "2",
     status: "INACTIVE",
     profile: PERFIL_SINTETICO_COMPLETO,
+    configurationMissing: [],
   },
   {
     id: "c4",

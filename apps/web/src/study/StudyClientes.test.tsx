@@ -659,9 +659,10 @@ describe("StudyClientes — cartera densa", () => {
       if (path.endsWith("/contacts")) return Promise.resolve(contactRows);
       if (path.includes("/clients")) {
         return Promise.resolve([
-          { ...clientFixture(completeProfile), id: "c1", legalName: "Alfa Uno S.A.", cuit: "20111111112" },
+          { ...clientFixture(completeProfile), configurationMissing: [], id: "c1", legalName: "Alfa Uno S.A.", cuit: "20111111112" },
           {
             ...clientFixture({}),
+            configurationMissing: [{ key: "ficha", label: "ficha contable", step: "ficha" }, { key: "actividades", label: "actividad fiscal", step: "actividades" }],
             id: "c2",
             legalName: "Beta Dos S.R.L.",
             tradeName: "Beta Comercial",
@@ -716,8 +717,8 @@ describe("StudyClientes — cartera densa", () => {
     expect(actionHeader?.style.position).toBe("sticky");
     expect(actionHeader?.style.right).toBe("0px");
     expect(actionHeader?.style.width).toBe("9%");
-    expect(profileHeader?.style.width).toBe("8%");
-    expect(statusHeader?.style.width).toBe("17%");
+    expect(profileHeader?.style.width).toBe("14%");
+    expect(statusHeader?.style.width).toBe("11%");
     const actionCells = table.querySelectorAll("tbody td.client-list__action-column");
     expect(actionCells).toHaveLength(3);
     expect((actionCells[0] as HTMLTableCellElement).style.position).toBe("sticky");
@@ -745,7 +746,7 @@ describe("StudyClientes — cartera densa", () => {
     expect(detail.querySelector(".dense-inspector__body")?.contains(alert)).toBe(false);
     expect(detail.querySelector(".dense-inspector__foot")?.contains(alert)).toBe(false);
 
-    fireEvent.click(within(alert as HTMLElement).getByRole("button", { name: "Completar" }));
+    fireEvent.click(within(alert as HTMLElement).getByRole("button", { name: "ficha contable" }));
     expect(await screen.findByRole("button", { name: "Guardar cambios" })).toBeTruthy();
   });
 
@@ -768,7 +769,7 @@ describe("StudyClientes — cartera densa", () => {
     fireEvent.click(within(await screen.findByRole("table")).getByText("30-22222222-3"));
 
     const detail = await screen.findByRole("complementary", { name: "Detalle de Beta Dos S.R.L." });
-    expect(within(detail).getByText(/Ficha incompleta: falta condición IVA/)).toBeTruthy();
+    expect(detail.querySelector(".dense-inspector__banner")?.textContent).toContain("Falta: ficha contable, actividad fiscal");
     expect(within(detail).getByRole("button", { name: "Abrir" })).toBeTruthy();
     expect(detail.querySelector("#client-contacts-c2")).not.toBeNull();
     fireEvent.click(within(detail).getByText("Más acciones"));
