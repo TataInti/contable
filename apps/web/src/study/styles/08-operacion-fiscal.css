@@ -594,10 +594,10 @@
 }
 
 .workpaper-classification-table td:has(.workpaper-classification-inline) {
-  /* Con max-width: 0 la celda no ensancha la tabla: ocupa el resto y el nombre se recorta con «…». */
-  width: 100%;
-  min-width: 0;
-  max-width: 0;
+  /* Ancho acotado: el nombre se recorta con «…» (completo en el tooltip) y la celda no ensancha la tabla. */
+  width: 13rem;
+  min-width: 6rem;
+  max-width: 13rem;
 }
 
 .workpaper-classification-inline {
@@ -630,6 +630,12 @@
 
 .workpaper-classification-inline .link-button {
   flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ds-color-action, var(--ds-color-primary, currentColor));
+  font-size: var(--ds-text-xs);
+  text-decoration: underline;
 }
 
 .workpaper-allocation-select {
@@ -1247,6 +1253,8 @@
 .workpaper-classification-table th.ds-table__cell--right,
 .workpaper-classification-table td.ds-table__cell--right { white-space: nowrap; text-align: right; }
 .workpaper-main .ds-table.workpaper-classification-table thead th { white-space: nowrap; overflow-wrap: normal; }
+.workpaper-main .ds-table.workpaper-classification-table th,
+.workpaper-main .ds-table.workpaper-classification-table td { padding-inline: var(--ds-space-2); }
 .workpaper-classification-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .workpaper-classification-totals { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ds-space-1) var(--ds-space-4); margin: 0; padding: var(--ds-space-2) var(--ds-space-3); border-top: var(--ds-border-width) solid var(--ds-color-border-strong); font-size: var(--ds-text-sm); font-variant-numeric: tabular-nums; }
 .workpaper-classification-totals > span:first-child { margin-inline-end: auto; color: var(--ds-color-text-muted); }
