@@ -1522,3 +1522,7 @@
 .workpaper-controls__juntos .study-textarea {
   flex: 1 1 100%;
 }
+
+.workpaper-controls__resueltos {
+  justify-self: start;
+}

@@ -1540,7 +1540,8 @@ export function StudyExpedienteMensual() {
   const pestanas = WORKPAPER_STEPS.map((step, indice) => ({
     id: String(indice),
     description: `Estado: ${estadosEtapas[indice]?.estado ?? "No disponible todavía"}`,
-    status: `${estadosEtapas[indice]?.estado === "Lista" ? "✓" : estadosEtapas[indice]?.estado === "Con pendientes" ? "!" : "·"} ${estadosEtapas[indice]?.estado ?? "No disponible todavía"}`,
+    // 13-7: con bloqueantes abiertos el punto con número ya lo dice; no se repite «Con pendientes».
+    status: indice === 4 && bloqueantesAbiertos > 0 ? undefined : `${estadosEtapas[indice]?.estado === "Lista" ? "✓" : estadosEtapas[indice]?.estado === "Con pendientes" ? "!" : "·"} ${estadosEtapas[indice]?.estado ?? "No disponible todavía"}`,
     label: (
       <>
         {step.title}
