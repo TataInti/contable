@@ -93,6 +93,12 @@ describe("registro fiscal sugerido", () => {
       </QueryClientProvider>,
     );
     const dialog = screen.getByRole("dialog", { name: "Regímenes sugeridos" });
+    expect(within(dialog).getByRole("combobox", { name: "Categoría TEM propuesta" })).toHaveProperty("value", "B");
+    expect(within(dialog).getByLabelText("Desde")).toHaveProperty("value", expect.stringMatching(/^\d{2}\/\d{2}\/\d{4}$/));
+    expect(within(dialog).getByRole("checkbox", { name: "IIBB Tucumán" }).closest("label")?.getAttribute("title")).toContain("Provincia de Tucumán");
+    fireEvent.change(within(dialog).getByLabelText("Desde"), { target: { value: "31/02/2026" } });
+    expect(within(dialog).getByRole("button", { name: "Registrar" })).toHaveProperty("disabled", true);
+    fireEvent.change(within(dialog).getByLabelText("Desde"), { target: { value: "01/10/2026" } });
     fireEvent.click(within(dialog).getByRole("checkbox", { name: /IIBB Tucumán/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Registrar" }));
     await waitFor(() =>
@@ -105,6 +111,7 @@ describe("registro fiscal sugerido", () => {
       regimeId: "tem",
       validFrom: expect.any(String),
     });
+    expect(api.post).toHaveBeenCalledWith("/firms/firma/clients/cliente/tax-registrations", expect.objectContaining({ validFrom: "2026-10-01" }));
     expect(api.post).toHaveBeenCalledWith("/firms/firma/clients/cliente/activities", {
       profileVersionId: "perfil",
       activityId: "a",
