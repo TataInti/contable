@@ -86,7 +86,7 @@ export function SelectorMotor({
   return (
     <div className="ds-field">
       <label className="ds-field__label" htmlFor={id}>
-        Opción de cálculo
+        Opción de cálculo <span aria-hidden="true">*</span>
       </label>
       <SearchSelect
         id={id}

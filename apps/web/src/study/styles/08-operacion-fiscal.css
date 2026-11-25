@@ -158,6 +158,10 @@
   color: var(--ds-color-text);
 }
 
+.fiscal-action-form .ds-field:has(> .ds-field__control > input:required) > .ds-field__label::after {
+  content: " *";
+}
+
 .study-form.fiscal-action-form > .study-panel__heading,
 .study-form.fiscal-action-form > .study-form__actions,
 .study-form--compact > .study-form__actions {
