@@ -149,18 +149,9 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     );
   });
 
-  await test.step("Configuración fiscal: perfil activo", async () => {
-    await page.getByRole("button", { name: "Crear perfil fiscal" }).first().click();
-    await page.locator("#pf-legal-name").fill(CLIENTE.legalName);
-    await page.locator("#pf-cuit").fill(CLIENTE.cuit);
-    await page.locator("#pf-fiscal-address").fill(CLIENTE.fiscalAddress);
-    await pick(page.locator("#pf-person-type"), "Jurídica");
-    await pick(page.locator("#pf-condition"), "Responsable Inscripto");
-    await page.locator("#pf-valid-from").fill(ALTA);
-    await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
-    await page.getByRole("button", { name: "Enviar a revisión" }).click();
-    await page.getByRole("button", { name: "Activar perfil" }).click();
+  await test.step("Configuración fiscal: perfil activo desde el alta", async () => {
     await expect(page.getByRole("button", { name: "Crear nueva versión" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Crear perfil fiscal" })).toHaveCount(0);
   });
 
   await test.step("Configuración fiscal: inscripción en IIBB Tucumán y TEM SMT (regímenes de sistema) desde el alta", async () => {

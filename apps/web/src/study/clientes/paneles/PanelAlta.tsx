@@ -51,7 +51,7 @@ export function PanelAlta({
       isOpen={creating}
       onClose={() => setCreating(false)}
       title="Nuevo cliente"
-      description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
+      description="Completá la ficha. Al guardar, el perfil fiscal queda activo si elegís la condición frente al IVA; podés editarlo después en Configuración fiscal."
       footer={
         <ActionDrawerFooter
           primary={
