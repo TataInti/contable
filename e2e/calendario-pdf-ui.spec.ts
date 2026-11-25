@@ -77,7 +77,7 @@ test("el calendario se arma desde su PDF, el contador corrige la celda dudosa y 
     await page.getByRole("button", { name: "Solo dudosas" }).click();
     await expect(page.getByText("1 de 5 celdas")).toBeVisible();
     await page.getByRole("button", { name: /^Editar IVA - Régimen general, vence 19\/11\/2027$/ }).click();
-    await page.getByLabel("Fecha de vencimiento *").fill("2027-11-18");
+    await page.getByLabel("Fecha de vencimiento *").fill("18/11/2027");
     await page.getByRole("button", { name: "Guardar celda" }).click();
     await page.getByRole("button", { name: "Solo dudosas" }).click();
     await expect(page.getByText("18/11/2027", { exact: true })).toBeVisible();
