@@ -57,12 +57,12 @@ export function SeccionPedidos({
                     <div className="table-primary">
                       <strong title={row.title}>{row.title}</strong>
                       <small>
-                        {
-                          row.items.filter(
+                        {(() => {
+                          const pendientes = row.items.filter(
                             (item) => item.status !== "ACCEPTED" && item.status !== "WAIVED",
-                          ).length
-                        }{" "}
-                        ítems pendientes
+                          ).length;
+                          return `${pendientes} ${pendientes === 1 ? "ítem pendiente" : "ítems pendientes"}`;
+                        })()}
                       </small>
                     </div>
                   ),

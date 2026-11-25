@@ -1,11 +1,10 @@
 // Etapa Cálculo del Legajo: determinación por obligación y posición fiscal del período, con sus acciones (Foco 2.3c).
-import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, MoneyField, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { formatMoney, esPedidoDeCambios } from "../formato";
 import { formatearFecha } from "../../../lib/formatoFechas";
-import type { PositionAction, TaxPosition, WorkpaperCalculationComponent } from "../tipos";
+import type { TaxPosition, WorkpaperCalculationComponent } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
 
 import {
@@ -26,7 +25,6 @@ export interface EtapaCalculoProps {
     Error,
     { workpaperId: string; obligationId: string }
   >;
-  setPositionAction: Dispatch<SetStateAction<PositionAction>>;
   /** Impuestos marcados para liquidar este mes y mínimos cargados. */
   seleccion: SeleccionCalculo;
   onSeleccionChange: (seleccion: SeleccionCalculo) => void;
@@ -40,7 +38,6 @@ export function EtapaCalculo({
   calculationQuery,
   positionQuery,
   calculateInterestMutation,
-  setPositionAction,
   seleccion,
   onSeleccionChange,
   bloqueoSeleccion = null,
@@ -319,38 +316,6 @@ export function EtapaCalculo({
                       <span className="muted-copy">
                         Presentada el {formatearFecha(position.filedAt, "Sin vencimiento")}
                       </span>
-                    ) : position.settlement?.status === "FINALIZED" &&
-                      capabilities.has("tax.filings.record") ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setPositionAction({ kind: "FILING", position });
-                        }}
-                      >
-                        Registrar presentación
-                      </Button>
-                    ) : null}
-                    {position.filedAt ? (
-                      capabilities.has("tax.filings.record") ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setPositionAction({ kind: "DECLARATION", position });
-                          }}
-                        >
-                          {position.hasDeclaration
-                            ? "Corregir declaración jurada"
-                            : "Cargar declaración jurada"}
-                        </Button>
-                      ) : (
-                        <span className="muted-copy">
-                          {position.hasDeclaration
-                            ? `Declaración jurada cargada · total a pagar ${formatMoney(position.totalAPagar)}`
-                            : "Falta la declaración jurada: la carga el Titular, el Administrador o el Revisor."}
-                        </span>
-                      )
                     ) : null}
                     {Number(position.pending) > 0 &&
                     position.dueDate &&
@@ -380,18 +345,6 @@ export function EtapaCalculo({
                           }
                         />
                       </>
-                    ) : null}
-                    {Number(position.totalPayable) > 0 &&
-                    capabilities.has("tax.payments.record") ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          setPositionAction({ kind: "PAYMENT", position });
-                        }}
-                      >
-                        Registrar pago
-                      </Button>
                     ) : null}
                   </span>
                 ),

@@ -19,6 +19,7 @@ export interface FormularioAlta {
   contactEmail: string;
   vatCondition: string;
   province: string;
+  fiscalAddress: string;
   activity: string;
   legalForm: string;
 }
@@ -51,7 +52,7 @@ export function PanelAlta({
       isOpen={creating}
       onClose={() => setCreating(false)}
       title="Nuevo cliente"
-      description="Completá los datos fiscales básicos. La configuración fiscal completa queda como paso siguiente."
+      description="Completá la ficha. Al guardar, el perfil fiscal queda activo si elegís la condición frente al IVA; podés editarlo después en Configuración fiscal."
       footer={
         <ActionDrawerFooter
           primary={
@@ -156,6 +157,9 @@ export function PanelAlta({
           </Notice>
         ) : null}
       </form>
+      <div className="client-create__address-grid">
+        <Field id="client-fiscal-address" form="client-create-form" label="Domicilio fiscal (opcional)" value={form.fiscalAddress} onChange={(event) => setForm({ ...form, fiscalAddress: event.target.value })} hint="Si es San Miguel de Tucumán, se propondrá TEM junto con IIBB." />
+      </div>
     </ActionDrawer>
   );
 }

@@ -112,7 +112,7 @@ function renderizarCaja() {
 }
 
 async function seccionCon(texto: string) {
-  const seccion = await screen.findByRole("region", { name: "Saldo de caja fiscal" });
+  const seccion = await screen.findByRole("region", { name: "Saldo fiscal del mes" });
   await within(seccion).findByText(texto);
   return seccion;
 }
@@ -147,15 +147,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("Saldo de caja fiscal en Rentabilidad (corte 8b)", () => {
+describe("Saldo fiscal del mes en Rentabilidad (corte 8b)", () => {
   it("COMPLETO: cifra, desglose y sin enlace al Legajo", async () => {
     renderizarCaja();
     const seccion = await seccionCon("Completo");
 
     expect(textoDe(seccion.querySelector(".caja-fiscal__cifra"))).toBe(pesos(350));
-    const tabla = within(seccion).getByRole("table", { name: "Desglose de la caja fiscal" });
+    const tabla = within(seccion).getByRole("table", { name: "Desglose del saldo fiscal" });
     expect(within(tabla).getByText("Ventas con IVA")).toBeTruthy();
-    expect(within(tabla).getByText("IVA · 10/2026 · IVA_GENERAL")).toBeTruthy();
+    expect(within(tabla).getByText("IVA · octubre de 2026")).toBeTruthy();
     expect(within(tabla).getByText(pesos(1000))).toBeTruthy();
     expect(within(tabla).getByText(pesos(400))).toBeTruthy();
     expect(within(tabla).getAllByText(pesos(250))).toHaveLength(2);
@@ -172,7 +172,7 @@ describe("Saldo de caja fiscal en Rentabilidad (corte 8b)", () => {
 
     expect(seccion.querySelector(".caja-fiscal__cifra")).toBeNull();
     expect(within(seccion).getByText("Falta cargar 1 declaración jurada")).toBeTruthy();
-    expect(within(seccion).getByText("IIBB · 10/2026 · CONVENIO_MULTILATERAL")).toBeTruthy();
+    expect(within(seccion).getByText("Ingresos Brutos Convenio Multilateral · octubre de 2026")).toBeTruthy();
     fireEvent.click(within(seccion).getByRole("button", { name: "Abrir el Legajo" }));
     await waitFor(() => expect(screen.getByTestId("ruta").textContent).toBe("/expediente-mensual"));
     expect(contextMock.current.setClientId).toHaveBeenCalledWith(CLIENTE);
@@ -185,14 +185,14 @@ describe("Saldo de caja fiscal en Rentabilidad (corte 8b)", () => {
     renderizarCaja();
     const seccion = await seccionCon("Parcial");
 
-    expect(within(seccion).getByText("IIBB · 10/2026 · CONVENIO_MULTILATERAL")).toBeTruthy();
+    expect(within(seccion).getByText("Ingresos Brutos Convenio Multilateral · octubre de 2026")).toBeTruthy();
     expect(within(seccion).queryByRole("button", { name: "Abrir el Legajo" })).toBeNull();
   });
 
   it("SIN_DATOS: muestra el motivo y no cifra ni tabla", async () => {
     respuesta = () => ok(SIN_DATOS);
     renderizarCaja();
-    const seccion = await seccionCon("Sin datos para calcular la caja fiscal");
+    const seccion = await seccionCon("Sin datos para calcular el saldo fiscal");
 
     expect(
       within(seccion).getByText(/No hay comprobantes aprobados de ventas ni de compras/),
@@ -206,7 +206,7 @@ describe("Saldo de caja fiscal en Rentabilidad (corte 8b)", () => {
     renderizarCaja();
     const estado = await screen.findByRole("status");
 
-    expect(estado.textContent).toContain("Calculando el saldo de caja fiscal…");
+    expect(estado.textContent).toContain("Calculando el saldo fiscal…");
     expect(screen.queryByRole("table")).toBeNull();
   });
 
@@ -221,7 +221,7 @@ describe("Saldo de caja fiscal en Rentabilidad (corte 8b)", () => {
       },
     });
     renderizarCaja();
-    const seccion = await seccionCon("No se pudo calcular el saldo de caja fiscal");
+    const seccion = await seccionCon("No se pudo calcular el saldo fiscal");
 
     expect(
       within(seccion).getByText(/Hay 1 comprobante\(s\) en moneda extranjera sin tipo de cambio/),
@@ -255,7 +255,7 @@ describe("Saldo de caja fiscal en Rentabilidad (corte 8b)", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    const seccion = await screen.findByRole("region", { name: "Saldo de caja fiscal" });
+    const seccion = await screen.findByRole("region", { name: "Saldo fiscal del mes" });
     const grilla = document.querySelector(".profitability-grid");
 
     expect(grilla).not.toBeNull();

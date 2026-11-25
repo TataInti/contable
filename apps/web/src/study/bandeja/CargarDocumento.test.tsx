@@ -399,12 +399,88 @@ describe("Caracterización K5 · cajón de carga: pedidos, error, vacío y botó
     expect(screen.queryByRole("button", { name: "Ir a pedidos" })).toBeNull();
   });
 
-  it("con request.manage, el vacío ofrece «Ir a pedidos»", async () => {
+  it("con request.manage y sin pedidos no pide crear uno: ofrece subir el archivo directo (D7)", async () => {
     fijarContexto(["client.read", "document.upload", "request.manage"]);
     mockApi(() => Promise.resolve([]));
     renderBandeja();
     fireEvent.click(await screen.findByRole("button", { name: "Subir documento" }));
-    expect(await screen.findByRole("button", { name: "Ir a pedidos" })).toBeTruthy();
+    await waitFor(() => expect(inputArchivo()).not.toBeNull());
+    expect(screen.queryByText("Primero creá un pedido documental")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Ir a pedidos" })).toBeNull();
+    expect(botonSubir().disabled).toBe(true);
+    fireEvent.change(inputArchivo(), {
+      target: { files: [archivo("ticket-compra.pdf", "application/pdf")] },
+    });
+    expect(botonSubir().disabled).toBe(false);
+  });
+
+  it("sin pedido, crea el pedido con el nombre del archivo, lo envía, sube y acepta el ítem (D7)", async () => {
+    fijarContexto(["client.read", "document.upload", "request.manage"]);
+    mockApi(() => Promise.resolve([]));
+    const bytes = [37, 80, 68, 70];
+    const factura = archivo("ticket-compra.pdf", "application/pdf", bytes);
+    if (typeof factura.arrayBuffer !== "function") {
+      Object.defineProperty(factura, "arrayBuffer", {
+        value: async () => new Uint8Array(bytes).buffer,
+      });
+    }
+    vi.mocked(api.post).mockImplementation((async (path: string) => {
+      if (path.endsWith("/document-requests"))
+        return { id: "request-auto", title: "ticket-compra.pdf", items: [{ id: "item-auto" }] };
+      if (path.endsWith("/document-upload-sessions"))
+        return { sessionId: "session-a", presignedUrl: "https://minio.local/upload", objectKey: "q/t.pdf" };
+      if (path.endsWith("/complete")) return { documentId: "document-a", status: "UPLOADED" };
+      return {};
+    }) as never);
+    vi.mocked(uploadToSignedUrl).mockResolvedValue(undefined as never);
+    renderBandeja();
+    fireEvent.click(await screen.findByRole("button", { name: "Subir documento" }));
+    await waitFor(() => expect(inputArchivo()).not.toBeNull());
+    fireEvent.change(inputArchivo(), { target: { files: [factura] } });
+    fireEvent.click(botonSubir());
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        `${BASE}/document-requests/request-auto/items/item-auto/accept`,
+      ),
+    );
+    const rutas = vi.mocked(api.post).mock.calls.map(([path]) => String(path).replace(BASE, ""));
+    expect(rutas).toEqual([
+      "/document-requests",
+      "/document-requests/request-auto/send",
+      "/document-upload-sessions",
+      "/document-upload-sessions/session-a/complete",
+      "/document-requests/request-auto/items/item-auto/accept",
+    ]);
+    expect(api.post).toHaveBeenCalledWith(`${BASE}/document-requests`, {
+      title: "ticket-compra.pdf",
+      items: [{ description: "ticket-compra.pdf", required: true }],
+    });
+    expect(api.post).toHaveBeenCalledWith(`${BASE}/document-upload-sessions`, {
+      expectedMime: "application/pdf",
+      requestItemId: "item-auto",
+    });
+  });
+
+  it("si la subida falla, cancela el pedido interno recién creado (D7)", async () => {
+    fijarContexto(["client.read", "document.upload", "request.manage"]);
+    mockApi(() => Promise.resolve([]));
+    vi.mocked(api.post).mockImplementation((async (path: string) => {
+      if (path.endsWith("/document-requests"))
+        return { id: "request-auto", items: [{ id: "item-auto" }] };
+      if (path.endsWith("/document-upload-sessions")) throw new Error("Falla de red");
+      return {};
+    }) as never);
+    renderBandeja();
+    fireEvent.click(await screen.findByRole("button", { name: "Subir documento" }));
+    await waitFor(() => expect(inputArchivo()).not.toBeNull());
+    fireEvent.change(inputArchivo(), {
+      target: { files: [archivo("ticket-compra.pdf", "application/pdf")] },
+    });
+    fireEvent.click(botonSubir());
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(`${BASE}/document-requests/request-auto/cancel`),
+    );
+    expect((await screen.findByRole("alert")).textContent).toBe("No se pudo subir el documento.");
   });
 
   it("«Subir y procesar» se habilita solo con ítem y archivo elegidos", async () => {

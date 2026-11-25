@@ -35,6 +35,22 @@ describe("ClientRepository: terminación de CUIT derivada", () => {
     ]);
   });
 
+  it("list devuelve faltantes según el perfil fiscal vigente, no la actividad contable opcional", async () => {
+    tx.client.findMany.mockResolvedValue([
+      { id: "c1", cuit: "20000000079", profile: { activity: null },
+        taxpayerProfiles: [{ id: "p1", version: 1, status: "ACTIVE" }],
+        taxRegistrations: [{ profileVersionId: "p1" }], clientActivities: [{ profileVersionId: "p1" }],
+        taxPeriods: [{ id: "periodo" }], taxObligations: [{ profileVersionId: "p1" }] },
+      { id: "c2", cuit: "20000000060", profile: {},
+        taxpayerProfiles: [{ id: "p2", version: 2, status: "ACTIVE" }],
+        taxRegistrations: [{ profileVersionId: "p2" }], clientActivities: [{ profileVersionId: "p1" }],
+        taxPeriods: [{ id: "periodo" }], taxObligations: [{ profileVersionId: "p2" }] },
+    ]);
+    const rows = await new ClientRepository().list(FIRM);
+    expect(rows[0]?.configurationMissing).toEqual([]);
+    expect(rows[1]?.configurationMissing).toEqual([{ key: "actividades", label: "actividad fiscal", step: "actividades" }]);
+  });
+
   it("get devuelve cuitEnding en el detalle del cliente", async () => {
     tx.client.findFirst.mockResolvedValue({
       id: "c1",
