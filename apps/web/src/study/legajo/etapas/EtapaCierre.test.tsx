@@ -19,6 +19,8 @@ const wp = {
   controls: [],
 };
 
+afterEach(cleanup);
+
 describe("Etapa Cierre guiada", () => {
   afterEach(() => cleanup());
 
@@ -96,5 +98,28 @@ describe("Etapa Cierre guiada", () => {
     render(<EtapaCierre wp={wp} positions={[position("iibb", "Ingresos Brutos")]} canFile canPay />);
     expect(screen.queryByRole("list", { name: "Estado de Ingresos Brutos" })).toBeNull();
     expect(screen.getByText("Falta finalizar la liquidación.")).toBeInTheDocument();
+  });
+
+  it("resume «Total determinado · Pagado · Saldo» y da formato de importe al saldo siguiente", () => {
+    const posicion = (accrued: string, paid: string, totalPayable: string) => ({
+      obligationId: "ob", status: "PAID", dueDate: null,
+      regime: { id: "r", name: "R", isActive: true, taxType: { id: "t", name: "IIBB", isActive: true }, jurisdiction: { id: "j", name: "Tucumán", isActive: true } },
+      settlement: null, accrued, paid, pending: "0.0000", availableCredit: "0.0000", interest: "0.0000", totalPayable,
+    });
+    render(<EtapaCierre
+      wp={{ ...wp, status: "FINALIZED" }}
+      positions={[posicion("9679.4500", "9679.4500", "0.0000"), posicion("10028.0000", "10028.0000", "0.0000")]}
+      hasFiling
+      hasDeclaration
+      hasPayment
+      paymentNotRequired
+      nextBalance="0.0000"
+    />);
+    const resumen = screen.getByText(/Total determinado/).textContent ?? "";
+    expect(resumen.replace(/\u00a0/g, " ")).toContain("Total determinado $ 19.707,45 · Pagado $ 19.707,45 · Saldo $ 0,00");
+    expect(resumen).not.toContain("Total a ingresar");
+    expect(screen.getByText(/Pagado: \$\s19\.707,45/)).toBeInTheDocument();
+    expect(screen.getByText(/\$\s0,00 · pasa a/)).toBeInTheDocument();
+    expect(screen.queryByText(/0\.0000/)).not.toBeInTheDocument();
   });
 });

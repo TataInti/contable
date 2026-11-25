@@ -270,7 +270,7 @@ const ROUTE_POLICY: readonly RoutePolicy[] = [
       if (path.endsWith("/review")) return "tax.settlements.review";
       if (path.endsWith("/finalize")) return "tax.settlements.finalize";
       if (path.endsWith("/rectify")) return "tax.settlements.rectify";
-      if (path.includes("/controls/") && path.endsWith("/resolve")) return "tax.settlements.review";
+      if (path.includes("/controls/") && (path.endsWith("/resolve") || path.endsWith("/resolve-open"))) return "tax.settlements.review";
       return m === "GET" ? "tax.settlements.read" : "tax.settlements.calculate";
     },
   },

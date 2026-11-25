@@ -1,3 +1,4 @@
+import { fuentesFaltantes } from "./fuentesFaltantes";
 import type { CoberturaLegajo, Workpaper, ClassificationCoverage, WorkpaperCalculationComponent } from "./tipos";
 
 export type EstadoEtapa = {
@@ -18,7 +19,7 @@ type EntradaEstadoEtapas = {
 };
 
 export function calcularEstadosEtapas(input: EntradaEstadoEtapas): EstadoEtapa[] {
-  const faltantes = (input.sources ?? []).filter((source) => source.required && !source.present && source.status !== "NO_MOVEMENTS");
+  const faltantes = fuentesFaltantes(input.sources ?? []);
   const fuentesListas = faltantes.length === 0 || input.noMovements === true;
   const sinClasificar = input.classification?.pending ?? 0;
   const sinActividad = input.classification?.activityPending ?? 0;
@@ -30,7 +31,7 @@ export function calcularEstadosEtapas(input: EntradaEstadoEtapas): EstadoEtapa[]
     { estado: "Lista", mensaje: null, destino: 0, accion: null },
     fuentesListas
       ? { estado: "Lista", mensaje: null, destino: 1, accion: null }
-      : { estado: "Con pendientes", mensaje: `Faltan ${faltantes.length} fuentes obligatorias`, destino: 1, accion: "Ir a Fuentes" },
+      : { estado: "Con pendientes", mensaje: faltantes.length === 1 ? "Falta 1 fuente obligatoria" : `Faltan ${faltantes.length} fuentes obligatorias`, destino: 1, accion: "Ir a Fuentes" },
     !fuentesListas
       ? { estado: "No disponible todavía", mensaje: "Faltan fuentes obligatorias", destino: 1, accion: "Ir a Fuentes" }
       : sinClasificar > 0

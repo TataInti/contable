@@ -14,7 +14,6 @@ import {
   DenseSection,
   DenseTable,
   DenseWorkspace,
-  InspectorFacts,
   StatStrip,
   useDensity,
   type DenseColumn,
@@ -136,7 +135,7 @@ export function StudyDashboard() {
   const worklistNote = !canReadTaxWorklist
     ? "Tu rol no permite consultar liquidaciones de la firma."
     : worklistQuery.data
-      ? `${atRisk} con correcciones pendientes · ${inReview} en revisión. Excluye las finalizadas y las reemplazadas.`
+      ? "No incluye las finalizadas ni las reemplazadas."
       : worklistQuery.isError
         ? "Sin respuesta de la cartera fiscal: reintentá con el aviso de la lista."
         : "Cifras pendientes hasta que responda la cartera fiscal.";
@@ -146,7 +145,7 @@ export function StudyDashboard() {
       to: "/bandeja",
       label: "Documentos en procesamiento",
       singular: "Documento en procesamiento",
-      detail: `${documentosExtraidos} ${documentosExtraidos === 1 ? "listo" : "listos"} para revisar`,
+      detail: `${documentosExtraidos} para revisar`,
       count: data?.processing ?? 0,
       tone: "info",
     },
@@ -304,11 +303,11 @@ export function StudyDashboard() {
     <EmptyState
       size="inline"
       title="Sin liquidaciones en curso"
-      description="Cuando se calcule una liquidación, aparecerá acá priorizada por riesgo."
+      description="Aparecerán acá, priorizadas por riesgo, cuando se calculen."
       action={
         clientId && capabilities.has("tax.settlements.read") ? (
           <Button variant="secondary" onClick={openTaxWorkspace}>
-            {periodId ? "Abrir legajo" : "Configurar período"}
+            {periodId ? "Seguir en el Legajo" : "Configurar período"}
           </Button>
         ) : capabilities.has("client.manage") ? (
           <Button variant="secondary" onClick={() => navigate("/clientes")}>
@@ -352,7 +351,7 @@ export function StudyDashboard() {
     <DensePage density={density} flow>
       <DenseHeader
         title="Resumen operativo"
-        description={`${firmName ? `${firmName} · ` : ""}prioridades reales de la cartera, ordenadas para avanzar.`}
+        description={`${firmName ? `${firmName} · ` : ""}cartera del estudio, ordenada para avanzar.`}
         actions={
           <>
             <Button
@@ -376,27 +375,9 @@ export function StudyDashboard() {
             >
               Actualizar
             </Button>
-            {clientId ? (
-              <Button
-                href="/bandeja"
-                variant="primary"
-                onClick={(event) => {
-                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                  event.preventDefault();
-                  navigate(event.currentTarget.pathname);
-                }}
-              >
-                Revisar bandeja
-              </Button>
-            ) : capabilities.has("client.manage") ? (
-              <Button size="sm" onClick={() => navigate("/clientes")}>
-                Elegir cliente
-              </Button>
-            ) : (
-              <Button size="sm" disabled title="Seleccioná un cliente para abrir la bandeja.">
-                Revisar bandeja
-              </Button>
-            )}
+            <Button size="sm" variant="primary" onClick={openTaxWorkspace}>
+              Abrir Legajo del mes
+            </Button>
           </>
         }
       />
@@ -415,6 +396,7 @@ export function StudyDashboard() {
       ) : (
         <>
           <StatStrip
+            variant="strip"
             label="Resumen de la cartera"
             items={[
               {
@@ -495,10 +477,10 @@ export function StudyDashboard() {
         <DenseSection
           id="risk-portfolio"
           title="Liquidaciones en curso"
-          count={worklistQuery.data ? worklist.length : undefined}
           description={worklistNote}
           surface="integrated"
           actions={
+            worklist.length > 0 ? (
             <>
               <SearchSelect
                 hideLabel
@@ -511,10 +493,11 @@ export function StudyDashboard() {
               />
               {clientId && canReadTaxWorklist ? (
                 <Link className="dense-link" to="/liquidaciones">
-                  Ver todas
+                  Ver todo
                 </Link>
               ) : null}
             </>
+            ) : undefined
           }
         >
           <div className="dense-worklist">{worklistBody}</div>
@@ -528,7 +511,7 @@ export function StudyDashboard() {
           surface="integrated"
           actions={
             <Link className="dense-link" to={clientId ? "/trabajo" : "/clientes"}>
-              Abrir obligaciones
+              Ver todo
             </Link>
           }
         >
@@ -546,7 +529,7 @@ export function StudyDashboard() {
                 return (
                   <li key={item.label} data-tone={item.tone}>
                     <Link to={destino} className="dense-agenda__link">
-                      <span className="dense-agenda__count">{item.count}</span>
+                      <span className={`dense-agenda__count${item.count === 0 ? " dense-agenda__count--zero" : ""}`}>{item.count}</span>
                       <span className="dense-agenda__copy">
                         <strong>{etiqueta}</strong>
                         <small>{item.detail}</small>
@@ -559,36 +542,12 @@ export function StudyDashboard() {
                       aria-label={`Abrir ${etiqueta}`}
                       onClick={() => navigate(destino)}
                     >
-                      Abrir
+                      Ver todo
                     </Button>
                   </li>
                 );
               })}
             </ul>
-          )}
-        </DenseSection>
-
-        <DenseSection
-          id="overview"
-          title="Panorama general"
-          surface="integrated"
-          actions={
-            <Link className="dense-link" to="/clientes">
-              Ver clientes
-            </Link>
-          }
-        >
-          {summaryNote ? (
-            <p className="dense-dim">{summaryNote}</p>
-          ) : (
-            <InspectorFacts
-              items={[
-                ["Clientes activos", data?.clients ?? 0],
-                ["Documentos recibidos", data?.documents ?? 0],
-                ["Con datos extraídos", data?.extracted ?? 0],
-                ["Tasa de extracción", extractionRate],
-              ]}
-            />
           )}
         </DenseSection>
       </DenseWorkspace>

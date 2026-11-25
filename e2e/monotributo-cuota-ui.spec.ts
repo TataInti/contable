@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { SUFFIX, goTo, login, mutating, syntheticCuit, RUN } from "./helpers/ui";
+import { abrirInscripcionManual, SUFFIX, goTo, login, mutating, syntheticCuit, RUN } from "./helpers/ui";
 
 /**
  * Monotributista categoría A servicios, operado como lo opera el contador (cliente nuevo y sintético).
@@ -58,18 +58,9 @@ test("monotributo: categoría A servicios, cuota en el Legajo y pago registrado,
     await expect(page).toHaveURL(/\/configuracion-fiscal/);
   });
 
-  await test.step("Configuración fiscal: perfil activo", async () => {
-    await page.getByRole("button", { name: "Crear perfil fiscal" }).first().click();
-    await page.locator("#pf-legal-name").fill(CLIENTE.legalName);
-    await page.locator("#pf-cuit").fill(CLIENTE.cuit);
-    await page.locator("#pf-fiscal-address").fill(CLIENTE.fiscalAddress);
-    await pick(page.locator("#pf-person-type"), "Física");
-    await pick(page.locator("#pf-condition"), "Monotributista");
-    await page.locator("#pf-valid-from").fill(ALTA);
-    await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
-    await page.getByRole("button", { name: "Enviar a revisión" }).click();
-    await page.getByRole("button", { name: "Activar perfil" }).click();
+  await test.step("Configuración fiscal: perfil activo desde el alta", async () => {
     await expect(page.getByRole("button", { name: "Crear nueva versión" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Crear perfil fiscal" })).toHaveCount(0);
   });
 
   await test.step("Configuración fiscal: inscripción en Monotributo desde el alta", async () => {
@@ -79,6 +70,7 @@ test("monotributo: categoría A servicios, cuota en el Legajo y pago registrado,
       .filter({ has: page.getByRole("heading", { name: "Regímenes adheridos", exact: true }) })
       .getByRole("button", { name: "Agregar" })
       .click();
+    await abrirInscripcionManual(page);
     await pick(page.locator("#reg-regime"), "Monotributo");
     await page.locator("#reg-from").fill(ALTA);
     await mutating(page, "/tax-registrations", () =>

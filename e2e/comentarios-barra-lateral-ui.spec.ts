@@ -46,7 +46,7 @@ async function prepararLegajoConControles(page: Page) {
   await crearLegajo(page, rotulo);
   const { libro } = await cargarLibroVentas(page, COMPROBANTES, `comentarios-${SUFFIX}.xlsx`);
   await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
-  await expect(page.getByRole("dialog", { name: "Importar libros IVA" })).toBeHidden({ timeout: 60_000 });
+  await expect(page.getByRole("dialog", { name: "Importar libro de ventas" })).toBeHidden({ timeout: 60_000 });
   await activarAutorrevision(page);
   await irAlLegajo(page, rotulo);
   await revisarLotesDe(page, "Gestionar Ventas del período");

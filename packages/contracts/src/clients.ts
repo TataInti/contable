@@ -13,6 +13,7 @@ export const createClientSchema = z
     cuit: cuit,
     vatCondition: nationalTaxCondition.optional(),
     province: z.enum(ARGENTINA_PROVINCES).optional(),
+    fiscalAddress: z.string().trim().max(300).optional(),
     activity: z.string().max(300).optional(),
     legalForm: z.enum(CLIENT_LEGAL_FORMS).optional(),
   })

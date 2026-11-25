@@ -1,0 +1,28 @@
+.fiscal-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.fiscal-suggestions fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  width: 100%;
+  align-self: flex-start;
+  margin: 0;
+  padding: var(--ds-space-3);
+}
+.fiscal-suggestions fieldset label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  overflow-wrap: anywhere;
+}
+.fiscal-suggestions fieldset input {
+  flex: none;
+}
+.fiscal-suggestions > .ds-field {
+  width: 100%;
+  align-self: flex-start;
+}

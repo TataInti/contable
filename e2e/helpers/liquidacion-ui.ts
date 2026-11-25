@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { goTo, mutating, pickOption, seen } from "./ui";
+import { abrirInscripcionManual, goTo, mutating, pickOption, seen } from "./ui";
 import { libroVentasXlsx, lineaPercepcionDgr, nombrePercepcionDgr, type FacturaSintetica } from "./fuentes-sinteticas";
 
 /**
@@ -71,22 +71,14 @@ export async function altaClienteRI(page: Page, cliente: ClienteRI) {
   await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" })).toHaveValue(
     new RegExp(cliente.legalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
   );
-  await page.getByRole("button", { name: "Crear perfil fiscal" }).first().click();
-  await page.locator("#pf-legal-name").fill(cliente.legalName);
-  await page.locator("#pf-cuit").fill(cliente.cuit);
-  await page.locator("#pf-fiscal-address").fill(cliente.fiscalAddress);
-  await pick(page.locator("#pf-person-type"), "Jurídica");
-  await pick(page.locator("#pf-condition"), "Responsable Inscripto");
-  await page.locator("#pf-valid-from").fill(ALTA);
-  await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
-  await page.getByRole("button", { name: "Enviar a revisión" }).click();
-  await page.getByRole("button", { name: "Activar perfil" }).click();
   await expect(page.getByRole("button", { name: "Crear nueva versión" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Crear perfil fiscal" })).toHaveCount(0);
 }
 
 /** Inscripción en IIBB Tucumán desde el alta del cliente (sin fecha: rige desde el alta). */
 export async function inscribirIIBB(page: Page) {
   await clickAdd(page, "Regímenes adheridos");
+  await abrirInscripcionManual(page);
   await pick(page.locator("#reg-regime"), IIBB.regime);
   await page.locator("#reg-from").fill(ALTA);
   await mutating(page, "/tax-registrations", () =>
@@ -130,8 +122,8 @@ export async function crearPeriodoIIBB(page: Page, periodo: { start: string; end
   );
 }
 
-/** Rótulo del período en el desplegable del Legajo: «Mes de año · Impuesto · etiqueta». */
-export const rotuloDelPeriodo = (mes: string, label: string) => `${mes} · ${IIBB.taxName} · ${label}`;
+/** Rótulo del mes en el desplegable del Legajo: una entrada por mes, «Mes de año» (sin impuesto ni etiqueta del período). */
+export const rotuloDelPeriodo = (mes: string, _label?: string) => mes;
 
 /** Abre el Legajo del mes elegido y lo crea si todavía no existe. */
 export async function abrirLegajo(page: Page, rotulo: string) {
@@ -158,14 +150,13 @@ export async function cargarLibroVentas(page: Page, facturas: FacturaSintetica[]
   } else {
     await page.getByRole("button", { name: "Cargar archivo" }).click();
   }
-  const panel = page.getByRole("dialog", { name: reemplazar ? "Reemplazar libro IVA" : "Importar libros IVA" });
+  const panel = page.getByRole("dialog", { name: reemplazar ? "Reemplazar libro IVA" : "Importar libro de ventas" });
   const libro = panel.locator('section[aria-label="Libro de ventas"]');
   await libro.locator('input[type="file"]').setInputFiles({
     name: nombre,
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: bytes ?? Buffer.from(libroVentasXlsx(facturas)),
   });
-  await libro.getByRole("button", { name: "Analizar alícuotas", exact: true }).click();
   await expect(libro.getByRole("button", { name: "Importar", exact: true })).toBeEnabled({ timeout: 60_000 });
   return { panel, libro };
 }
