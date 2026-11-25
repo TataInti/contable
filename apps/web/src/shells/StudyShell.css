@@ -541,3 +541,16 @@
     transition: none;
   }
 }
+
+/* El selector recorta nombres largos: debajo se lee el nombre completo, en dos líneas como máximo. */
+.study__client-current {
+  display: -webkit-box;
+  margin-top: var(--ds-space-1);
+  overflow: hidden;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
