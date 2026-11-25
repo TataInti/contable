@@ -122,8 +122,8 @@ export async function crearPeriodoIIBB(page: Page, periodo: { start: string; end
   );
 }
 
-/** Rótulo del período en el desplegable del Legajo: «Mes de año · Impuesto · etiqueta». */
-export const rotuloDelPeriodo = (mes: string, label: string) => `${mes} · ${IIBB.taxName} · ${label}`;
+/** Rótulo del mes en el desplegable del Legajo: una entrada por mes, «Mes de año» (sin impuesto ni etiqueta del período). */
+export const rotuloDelPeriodo = (mes: string, _label?: string) => mes;
 
 /** Abre el Legajo del mes elegido y lo crea si todavía no existe. */
 export async function abrirLegajo(page: Page, rotulo: string) {

@@ -109,8 +109,8 @@ async function clickAdd(page: Page, heading: string) {
     .click();
 }
 
-/** Etiqueta de período como la muestra el desplegable del Legajo: «Octubre de 2026 · Impuesto · etiqueta». */
-const rotuloDelPeriodo = (tax: typeof IIBB | typeof TEM) => `${PERIODO.mes} · ${tax.taxName} · ${tax.label}`;
+/** Etiqueta del mes como la muestra el desplegable del Legajo: una entrada por mes, «Octubre de 2026». */
+const rotuloDelPeriodo = (_tax: typeof IIBB | typeof TEM) => PERIODO.mes;
 
 /** Lee un importe en la tabla o texto del Legajo; falla con el texto visible si no aparece. */
 async function esperarImporte(page: Page, texto: string) {

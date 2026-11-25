@@ -135,9 +135,9 @@ function etiquetaDelPeriodo(tax: Tax) {
   return `Marzo 2025 ${tax.taxType.code} ${SUFFIX}`;
 }
 
-/** Rótulo del período en el desplegable de la barra: mes y año primero, y después el rótulo de siempre. */
-function periodLabel(tax: Tax) {
-  return `Marzo de 2025 · ${tax.taxType.name} · ${etiquetaDelPeriodo(tax)}`;
+/** Rótulo del mes en el desplegable de la barra: una entrada por mes, sin impuesto ni etiqueta del período. */
+function periodLabel(_tax: Tax) {
+  return "Marzo de 2025";
 }
 
 /** Lecturas del catálogo (no crean nada): permiten repetir la prueba sin chocar con lo que ya existe. */
