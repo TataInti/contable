@@ -594,13 +594,17 @@
 }
 
 .workpaper-classification-table td:has(.workpaper-classification-inline) {
+  /* Con max-width: 0 la celda no ensancha la tabla: ocupa el resto y el nombre se recorta con «…». */
+  width: 100%;
   min-width: 0;
+  max-width: 0;
 }
 
 .workpaper-classification-inline {
   display: flex;
   min-width: 0;
   flex-wrap: nowrap;
+  overflow: hidden;
   align-items: center;
   gap: 0 var(--ds-space-2);
 }
