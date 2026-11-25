@@ -333,7 +333,11 @@ export function StudyOnboardingFiscal() {
   });
   const hasActiveProfile = (profileQuery.data ?? []).some((profile) => profile.status === "ACTIVE");
   const stepStatusLabel = (key: FiscalStep) => stepStatusLabelFor(key, stepCompletion, hasActiveProfile);
+  const activeRegistrations = (registrationsQuery.data ?? []).filter((row) => row.status === "ACTIVE");
+  const currentActivities = (clientActivitiesQuery.data ?? []).filter((row) => !row.validTo);
   const obligationByPeriod = new Map((obligationsQuery.data ?? []).map((obligation) => [obligation.period.id, obligation]));
+  const periodsWithObligation = (periodsQuery.data ?? []).filter((period) => obligationByPeriod.has(period.id)).length;
+  const periodsWithoutObligation = (periodsQuery.data?.length ?? 0) - periodsWithObligation;
   return (
     <DensePage density={density} flow>
       <DenseHeader
@@ -386,7 +390,7 @@ export function StudyOnboardingFiscal() {
       >
         {failedQueries.length > 0 ? <AvisoConsultas failedQueries={failedQueries} /> : null}
 
-        {tab === "resumen" ? <PestanaResumen faltantes={faltantes} abrirFaltante={abrirFaltante} configuracionCompleta={configuracionCompleta} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} /> : null}
+        {tab === "resumen" ? <PestanaResumen faltantes={faltantes} abrirFaltante={abrirFaltante} configuracionCompleta={configuracionCompleta} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
         {tab === "comprobantes" && firmId && clientId ? <PestanaComprobantes firmId={firmId} clientId={clientId} canWrite={canWrite} /> : null}
         {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} corregirFecha={corregirInscripcion} confirm={confirm} categoriaTem={categoriaTem.fila} categoriaMonotributo={filaMonotributo} /> : null}
         {tab === "actividades" ? <PestanaActividades canWrite={canWrite} openStepForm={openStepForm} clientActivitiesQuery={clientActivitiesQuery} endActivity={endActivity} corregirFecha={(row) => { updateActivity.reset(); setActivityToEdit(row); }} registrarCambio={() => { registerChange.reset(); setChangeOpen(true); }} confirm={confirm} renderEstado={renderEstadoActividad} /> : null}
