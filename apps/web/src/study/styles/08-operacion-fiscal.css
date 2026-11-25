@@ -1481,7 +1481,7 @@
 }
 .workpaper-close-step {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) 7rem minmax(12rem, auto);
+  grid-template-columns: 2rem minmax(0, 1fr) 6rem 15rem;
   align-items: center;
   gap: var(--ds-space-2) var(--ds-space-3);
   min-block-size: 3rem;
@@ -1523,6 +1523,8 @@
 .workpaper-close-step__title small {
   color: var(--ds-color-text-muted);
 }
+.workpaper-close-step__status { justify-self: start; }
+.workpaper-close-step__action p { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
 .workpaper-close-step__action {
   display: flex;
   align-items: center;
@@ -1566,3 +1568,9 @@
 .legajo-cajon-impuesto__seccion > p { margin: 0; }
 .legajo-cajon-impuesto__pago { display: flex; align-items: center; justify-content: flex-end; gap: var(--ds-space-3); }
 .legajo-cajon-impuesto__pago p { margin: 0; }
+
+/* Aviso de éxito con un cajón abierto: se corre al costado del cajón y no tapa su pie con el botón principal. */
+@media (min-width: 1100px) {
+  html body:has(.action-drawer__panel) .ds-toast-region { inset-inline-end: calc(560px + var(--ds-space-4)); }
+  html body:has(.action-drawer__panel--wide) .ds-toast-region { inset-inline-end: calc(680px + var(--ds-space-4)); }
+}

@@ -374,7 +374,7 @@ export function PanelImpuesto({
                     className="ds-field__input"
                     value={presentacion.evidenceDocumentId}
                     onChange={(value) => setPresentacion({ ...presentacion, evidenceDocumentId: value })}
-                    placeholder="Subir un acuse nuevo"
+                    placeholder="Elegir uno ya subido (o adjuntá el archivo abajo)"
                     options={acuses.map((document) => ({
                       value: document.id,
                       label: `${document.fileVersions?.[0]?.originalName ?? "Acuse"} · ${getStatusBadgeMeta(document.status).label}`,
