@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
+import { abrirInscripcionManual, RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
 import { lineaPercepcionDgr, libroVentasXlsx, nombrePercepcionDgr } from "./helpers/fuentes-sinteticas";
 import { vincularActividades } from "./helpers/liquidacion-ui";
 
@@ -157,6 +157,7 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
   await test.step("Configuración fiscal: inscripción en IIBB Tucumán y TEM SMT (regímenes de sistema) desde el alta", async () => {
     for (const tax of [IIBB, TEM]) {
       await clickAdd(page, "Regímenes adheridos");
+      await abrirInscripcionManual(page);
       await pick(page.locator("#reg-regime"), tax.regime);
       await page.locator("#reg-from").fill(ALTA);
       await mutating(page, "/tax-registrations", () =>

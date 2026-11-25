@@ -1,7 +1,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
-import { RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
+import { abrirInscripcionManual, RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
 
 /**
  * E2E de punta a punta desde la interfaz, con el comprobante real de una mesa de
@@ -352,6 +352,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Configuración fiscal: inscripción en los tres regímenes", async () => {
     for (const tax of Object.values(taxes)) {
       await clickAdd(page, "Regímenes adheridos");
+      await abrirInscripcionManual(page);
       await pickOption(page.locator("#reg-regime"), tax.regime.name);
       await page.locator("#reg-from").fill(data.validFrom);
       await mutating(page, "/tax-registrations", () =>
