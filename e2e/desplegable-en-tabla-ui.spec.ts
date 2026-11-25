@@ -130,7 +130,7 @@ async function libroDeOctubreRevisado(page: Page, rotulo: string) {
   await page.getByRole("tab", { name: /Fuentes/ }).first().click();
   const { libro } = await cargarLibroVentas(page, facturasDeOctubre(), `ventas-oct-desplegable-${SUFFIX}.xlsx`);
   await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
-  await expect(page.getByRole("dialog", { name: "Importar libros IVA" })).toBeHidden({ timeout: 60_000 });
+  await expect(page.getByRole("dialog", { name: "Importar libro de ventas" })).toBeHidden({ timeout: 60_000 });
   await revisarLotesDe(page, "Gestionar Ventas del período");
 }
 

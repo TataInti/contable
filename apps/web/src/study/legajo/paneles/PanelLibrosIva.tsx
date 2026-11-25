@@ -156,8 +156,8 @@ export function PanelLibrosIva({
     );
   };
   // Una sola acción primaria del panel: Importar del lado listo, en el orden que muestra el panel.
-  const ladosEnOrden: Lado[] =
-    ladoInicial === "PURCHASE" ? ["PURCHASE", "SALE"] : ["SALE", "PURCHASE"];
+  // Un cajón por fuente: solo el libro desde cuya fila se abrió (ventas si no hay fila de origen).
+  const ladosEnOrden: Lado[] = [ladoInicial ?? "SALE"];
   const principal = ladosEnOrden.find((lado) => listoParaImportar(lado)) ?? null;
   const importar = (lado: Lado, file: File) => {
     if (esLibroExcel(file)) importSifereMutation.mutate({ direction: lado, file });
@@ -171,7 +171,7 @@ export function PanelLibrosIva({
   ): string | null => {
     if (motivoBloqueo) return motivoBloqueo;
     if (!file) return "Elegí el archivo del libro.";
-    if (excel && !analysis) return "Analizá el libro para poder importarlo.";
+    if (excel && !analysis) return "Analizando el libro…";
     if (!activeWorkpaperId) return "Falta un legajo del período para importar.";
     if (fuentes === undefined) return "Esperá a que cargue la cobertura del período.";
     if (!fuenteDe(lado)) return "La fuente de este libro no está en la cobertura del período.";
@@ -182,8 +182,8 @@ export function PanelLibrosIva({
     <ActionDrawer
       isOpen={abierto}
       onClose={onCerrar}
-      title={replacesBatchId ? "Reemplazar libro IVA" : "Importar libros IVA"}
-      description="Elegí el libro de ventas o de compras. Un .xlsx pasa por el análisis de alícuotas antes de importarse; un .csv, .txt o .json se importa como lote de su fuente ARCA IVA."
+      title={replacesBatchId ? "Reemplazar libro IVA" : ladoInicial === "PURCHASE" ? "Importar libro de compras" : "Importar libro de ventas"}
+      description="Elegí el archivo del libro: un .xlsx se analiza solo al elegirlo y después queda un único paso, «Importar». Un .csv, .txt o .json se importa como lote de la fuente."
       size="wide"
     >
       {ladosEnOrden.map((lado) => {
@@ -209,6 +209,7 @@ export function PanelLibrosIva({
             >
               Modelo .xlsx
             </Button>
+            <small className="muted-copy"> Planilla de ejemplo con las columnas que espera el análisis.</small>
             <Field
               id={`libro-iva-${lado}`}
               type="file"
@@ -219,22 +220,12 @@ export function PanelLibrosIva({
                 const selected = event.target.files?.[0] ?? null;
                 setArchivos((current) => ({ ...current, [lado]: selected }));
                 setAnalisis((current) => ({ ...current, [lado]: null }));
+                // Un .xlsx se analiza solo al elegirlo: queda un único botón, «Importar».
+                if (selected && esLibroExcel(selected)) analyzeSifereMutation.mutate({ direction: lado, file: selected });
               }}
             />
             <div>
               <div className="legajo-libro__acciones">
-                {!file || excel ? (
-                  <Button
-                    variant="secondary"
-                    disabled={!file || isAnalyzing}
-                    loading={isAnalyzing}
-                    onClick={() => {
-                      if (file) analyzeSifereMutation.mutate({ direction: lado, file });
-                    }}
-                  >
-                    Analizar alícuotas
-                  </Button>
-                ) : null}
                 <Button
                   variant={principal === lado ? "primary" : "secondary"}
                   disabled={!listoParaImportar(lado) || isImporting || fuentes === undefined}

@@ -327,6 +327,49 @@ export class ClientRepository {
 
       await tx.clientProfile.create({ data: profileData });
 
+      if (input.vatCondition) {
+        const now = new Date();
+        const prefix = input.cuit.slice(0, 2);
+        const fiscalProfile = await tx.taxpayerProfileVersion.create({
+          data: {
+            firmId,
+            clientId: client.id,
+            version: 1,
+            legalName: input.legalName,
+            cuit: input.cuit,
+            personType: prefix === "30" || prefix === "33" ? "JURIDICA" : "FISICA",
+            nationalCondition: input.vatCondition,
+            fiscalYearEndMonth: 12,
+            validFrom: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)),
+            status: "ACTIVE",
+            activatedAt: now,
+            source: "ALTA_CLIENTE",
+            ...(ctx ? { createdByUserId: ctx.userId } : {}),
+          },
+        });
+        if (ctx) {
+          await tx.auditEvent.create({
+            data: {
+              firmId,
+              clientId: client.id,
+              userId: ctx.userId,
+              actorKind: ctx.actorKind,
+              action: "taxpayer_profile.created_and_activated",
+              entityType: "TaxpayerProfileVersion",
+              entityId: fiscalProfile.id,
+              after: redact({
+                status: "ACTIVE",
+                version: 1,
+                personType: fiscalProfile.personType,
+                nationalCondition: fiscalProfile.nationalCondition,
+                province: input.province ?? null,
+                validFrom: fiscalProfile.validFrom.toISOString(),
+              }) as Prisma.InputJsonValue,
+            },
+          });
+          await activateIfConfigurationComplete(tx, ctx, client.id);
+        }
+      }
       await tx.onboardingChecklist.create({
         data: {
           firmId,

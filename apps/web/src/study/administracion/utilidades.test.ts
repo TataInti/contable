@@ -49,8 +49,6 @@ const CORREO_VALIDO = "revisora@estudio.com";
 async function abrirEdicionRevisora() {
   const fila = await screen.findByRole("row", { name: /Revisora Demo/ });
   fireEvent.click(within(fila).getByRole("button", { name: "Editar a Revisora Demo" }));
-  const panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
-  fireEvent.click(within(panel).getByRole("button", { name: "Editar a Revisora Demo" }));
   return screen.findByRole("dialog", { name: "Editar usuario" });
 }
 
