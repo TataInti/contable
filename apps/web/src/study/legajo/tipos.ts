@@ -220,6 +220,8 @@ export interface WorkpaperSource {
   periodId: string | null;
   origin: string;
   adapterVersion: string;
+  /** Fuentes que, ya revisadas, cubren esta (la tabla manual se satisface con el libro de ventas). */
+  satisfiedBy?: string[];
   expectedColumns: string[];
   batches: WorkpaperSourceBatch[];
 }

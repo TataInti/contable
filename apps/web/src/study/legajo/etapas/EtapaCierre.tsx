@@ -59,7 +59,11 @@ export function EtapaCierre({
   const finalized = wp.status === "FINALIZED";
   const readyToFinalize = wp.status === "REVIEWED" && blocking.length === 0;
   const pasosHechos = Number(finalized) + Number(hasFiling) + Number(hasDeclaration) + Number(hasPayment || paymentNotRequired);
-  const totalIngresar = positions.reduce((sum, position) => sum + Math.round(Number(position.totalPayable) * 100), 0) / 100;
+  const centavos = (campo: "accrued" | "paid" | "totalPayable") =>
+    positions.reduce((sum, position) => sum + Math.round(Number(position[campo] ?? 0) * 100), 0);
+  const totalDeterminado = centavos("accrued") / 100;
+  const totalPagado = centavos("paid") / 100;
+  const saldoPendiente = centavos("totalPayable") / 100;
   const vence = positions.find((position) => position.dueDate)?.dueDate ?? null;
   const control = (label: string, allowed: boolean, handler?: () => void) => (
     <Button variant="secondary" onClick={handler} disabled={!allowed}>{label}</Button>
@@ -76,7 +80,7 @@ export function EtapaCierre({
 
   return (
     <div className="workpaper-stage">
-      <p className="workpaper-close-summary"><strong>{periodLabel}</strong> · {positions.map((position) => position.regime.taxType.name).filter((name, index, all) => all.indexOf(name) === index).join(" / ") || "Impuestos sin posición"} · Total a ingresar {formatMoney(totalIngresar.toFixed(2))} · Vence {formatearFecha(vence, "sin fecha cargada")} · {pasosHechos} de 4 pasos</p>
+      <p className="workpaper-close-summary"><strong>{periodLabel}</strong> · {positions.map((position) => position.regime.taxType.name).filter((name, index, all) => all.indexOf(name) === index).join(" / ") || "Impuestos sin posición"} · Total determinado {formatMoney(totalDeterminado.toFixed(2))} · Pagado {formatMoney(totalPagado.toFixed(2))} · Saldo {formatMoney(saldoPendiente.toFixed(2))} · Vence {formatearFecha(vence, "sin fecha cargada")} · {pasosHechos} de 4 pasos</p>
       <ol className="workpaper-close-checklist" aria-label="Pasos para cerrar el período">
         {paso(1, "Finalizar", "Congela la liquidación y genera los saldos de cierre.", finalized, readyToFinalize && canFinalize && !readOnly,
           readyToFinalize ? readOnly ? null : <>{control("Finalizar", canFinalize, onFinalize)}{canFinalize ? null : <p>Tu perfil no tiene permiso para finalizar este legajo.</p>}</> :
@@ -86,12 +90,12 @@ export function EtapaCierre({
         {paso(3, "Cargar la declaración jurada", "Adjuntá la declaración y registrá los saldos que informa.", hasDeclaration, hasFiling && canDeclare && !readOnly,
           hasFiling ? readOnly ? null : <>{control("Cargar la declaración jurada", canDeclare, onDeclaration)}{canDeclare ? null : <p>Tu perfil no tiene permiso para cargar la declaración jurada.</p>}</> : <p>Falta registrar la presentación y su acuse.</p>)}
         {paso(4, "Pago (opcional)", "Registrá el pago o indicá que no hubo importe a pagar.", hasPayment || paymentNotRequired, paymentNotRequired || (hasFiling && canPay && !readOnly),
-          paymentNotRequired ? <p>No requiere pago: el saldo es cero o a favor.</p> :
+          paymentNotRequired ? <p>{hasPayment ? `Pagado: ${formatMoney(totalPagado.toFixed(2))}.` : "No requiere pago: el saldo es cero o a favor."}</p> :
             hasFiling ? readOnly ? null : <>{control("Registrar pago", canPay, onPayment)}{canPay ? null : <p>Tu perfil no tiene permiso para registrar el pago.</p>}</> : <p>Falta registrar la presentación.</p>)}
       </ol>
       <section aria-label="Saldo para el mes siguiente">
         <h3>Saldo para el mes siguiente</h3>
-        <p>{nextBalance ?? "El saldo se informa al cargar la declaración jurada."} · pasa a {nextPeriod}.</p>
+        <p>{nextBalance !== null && nextBalance !== "" && Number.isFinite(Number(nextBalance)) ? formatMoney(nextBalance) : "El saldo se informa al cargar la declaración jurada."} · pasa a {nextPeriod}.</p>
       </section>
       {finalized && !readOnly ? <div>
         <p>Reabrí con una rectificativa cuando necesites corregir una liquidación ya cerrada.</p>

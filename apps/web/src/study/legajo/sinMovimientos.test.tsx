@@ -101,8 +101,8 @@ describe("Sin movimientos por fuente (corte 2A)", () => {
     renderEtapa();
     const renglon = screen
       .getAllByRole("status")
-      .find((el) => el.textContent?.includes("Para calcular falta"));
-    expect(renglon?.textContent).toBe("Para calcular falta: Retenciones IIBB");
+      .find((el) => el.textContent?.includes("Falta 1:"));
+    expect(renglon?.textContent).toBe("Falta 1: Retenciones IIBB");
     expect(screen.getAllByText("Sin movimientos").length).toBeGreaterThan(0);
   });
 

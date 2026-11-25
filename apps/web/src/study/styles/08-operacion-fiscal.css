@@ -1503,3 +1503,22 @@
   align-items: center;
   gap: var(--ds-space-2);
 }
+
+/* Controles omitidos por falta de datos y resolución conjunta de bloqueantes (D6). */
+.workpaper-controls__omitidos {
+  margin: 0 0 var(--ds-space-3);
+  padding-left: var(--ds-space-4);
+  color: var(--ds-color-text-muted, inherit);
+}
+
+.workpaper-controls__juntos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-3);
+}
+
+.workpaper-controls__juntos .study-textarea {
+  flex: 1 1 100%;
+}
