@@ -28,6 +28,7 @@ type Props = {
   tem?: CategoriaTemEstado;
   mono?: EstadoMonotributo;
   refresh: () => void;
+  onManual?: () => void;
 };
 
 export function CajonRegistroSugerido({
@@ -41,6 +42,7 @@ export function CajonRegistroSugerido({
   tem,
   mono,
   refresh,
+  onManual,
 }: Props) {
   const [regimeIds, setRegimeIds] = useState<string[]>([]);
   const [activityIds, setActivityIds] = useState<string[]>([]);
@@ -204,6 +206,11 @@ export function CajonRegistroSugerido({
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
           </Button>
+          {onManual ? (
+            <Button type="button" variant="ghost" onClick={onManual}>
+              Elegir otro régimen
+            </Button>
+          ) : null}
         </div>
       </form>
     </ActionDrawer>
