@@ -11,6 +11,8 @@ interface SeccionObligacionesProps {
   obligationRows: FilaObligacion[];
   capabilities: ClientContextValue["capabilities"];
   navigate: (ruta: string) => void;
+  /** Entra al Legajo con el cliente, el mes y el impuesto de la obligación ya elegidos. */
+  abrirLegajo: (taxPeriodId: string) => void;
 }
 
 export function SeccionObligaciones({
@@ -18,6 +20,7 @@ export function SeccionObligaciones({
   obligationRows,
   capabilities,
   navigate,
+  abrirLegajo,
 }: SeccionObligacionesProps) {
   // Sin obligaciones, la sección es una línea con la acción que la resuelve.
   if (!obligations.isLoading && !obligations.isError && obligationRows.length === 0) {
@@ -59,6 +62,20 @@ export function SeccionObligaciones({
                 key: "status",
                 header: "Estado",
                 render: (row) => <StatusBadge status={row.status} />,
+              },
+              {
+                key: "legajo",
+                header: <span className="sr-only">Acciones</span>,
+                render: (row) => (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Abrir legajo ${row.name} ${row.periodLabel}`}
+                    onClick={() => abrirLegajo(row.taxPeriodId)}
+                  >
+                    Abrir legajo
+                  </Button>
+                ),
               },
             ]}
           />

@@ -642,6 +642,17 @@ describe("K9 · próximas obligaciones", () => {
     );
   });
 
+  it("«Abrir legajo» en cada obligación deja elegido su impuesto y mes", async () => {
+    window.sessionStorage.clear();
+    responderApi({ obligaciones: [OBLIGACION_OCTUBRE_PENDIENTE] });
+    renderTrabajo();
+    const obligaciones = seccion("work-obligations-section");
+    fireEvent.click(await obligaciones.findByRole("button", { name: /Abrir legajo IVA/ }));
+    expect(window.sessionStorage.getItem("contable:firm-a:client-a:selected-tax-period")).toBe(
+      "period-a",
+    );
+  });
+
   it("sin período contable seleccionado, lista todas las obligaciones del cliente", async () => {
     usarContexto(CAPACIDADES_TODAS, "period-z");
     responderApi({

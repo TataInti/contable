@@ -17,12 +17,13 @@ import { CajonEvidencia } from "./trabajo/CajonEvidencia";
 import { CajonConversacion } from "./trabajo/CajonConversacion";
 import { SeccionPedidos } from "./trabajo/SeccionPedidos";
 import { SeccionCierres } from "./trabajo/SeccionCierres";
+import { abrirLegajoDeObligacion } from "./panel/abrirCliente";
 import { SeccionObligaciones } from "./trabajo/SeccionObligaciones";
 import { CargarDocumento } from "./bandeja/CargarDocumento";
 
 export function StudyTrabajo() {
   const [density] = useDensity();
-  const { firmId, clientId, periodId, capabilities } = useClientContext();
+  const { firmId, clientId, periodId, capabilities, setClientId } = useClientContext();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showRequest, setShowRequest] = useState(false);
@@ -426,6 +427,11 @@ export function StudyTrabajo() {
         obligationRows={obligationRows}
         capabilities={capabilities}
         navigate={navigate}
+        abrirLegajo={(taxPeriodId) => {
+          if (firmId && clientId) {
+            abrirLegajoDeObligacion({ firmId, clientId, taxPeriodId, setClientId, navigate });
+          }
+        }}
       />
       <ConfirmDialog confirm={confirm} />
     </DensePage>
