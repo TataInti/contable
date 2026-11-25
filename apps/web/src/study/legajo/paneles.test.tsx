@@ -108,7 +108,7 @@ async function abrirLibrosIva() {
   await esperarCoberturaDemo();
   fireEvent.click(await screen.findByRole("button", { name: "Gestionar Ventas del período" }));
   fireEvent.click(await screen.findByRole("button", { name: "Cargar archivo" }));
-  return screen.findByRole("dialog", { name: "Importar libros IVA" });
+  return screen.findByRole("dialog", { name: "Importar libro de ventas" });
 }
 
 // La cobertura (fuentes) llega después de la lista de legajos: Gestionar depende de ella.
@@ -148,13 +148,14 @@ afterEach(() => {
 });
 
 describe("Legajo · libros IVA (K4)", () => {
-  it("Importar queda deshabilitado hasta analizar el libro de ventas", async () => {
+  it("Importar queda deshabilitado hasta elegir el libro y el cajón muestra solo ventas", async () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirLibrosIva();
     const ventas = seccionLibro(dialogo, "Ventas");
-    expect(within(ventas).getByRole("button", { name: "Analizar alícuotas" })).toBeDisabled();
+    expect(within(ventas).queryByRole("button", { name: "Analizar alícuotas" })).toBeNull();
     expect(within(ventas).getByRole("button", { name: "Importar" })).toBeDisabled();
+    expect(within(dialogo).queryByRole("heading", { name: "Compras" })).toBeNull();
   });
 
   // Sin legajo del período no hay fila ARCA IVA: «Importar libro» no aparece y la lista ofrece crear el legajo (P1).
@@ -185,7 +186,6 @@ describe("Legajo · libros IVA (K4)", () => {
     fireEvent.change(ventas.querySelector('input[type="file"]') as HTMLInputElement, {
       target: { files: [archivo] },
     });
-    fireEvent.click(within(ventas).getByRole("button", { name: "Analizar alícuotas" }));
     await waitFor(() =>
       expect(within(ventas).getByRole("button", { name: "Importar" })).toBeEnabled(),
     );
@@ -225,7 +225,6 @@ describe("Legajo · libros IVA (K4)", () => {
     fireEvent.change(ventas.querySelector('input[type="file"]') as HTMLInputElement, {
       target: { files: [new File(["ventas demo"], "libro-ventas-demo.xlsx")] },
     });
-    fireEvent.click(within(ventas).getByRole("button", { name: "Analizar alícuotas" }));
     await waitFor(() =>
       expect(within(ventas).getByRole("button", { name: "Importar" })).toBeEnabled(),
     );
@@ -234,7 +233,7 @@ describe("Legajo · libros IVA (K4)", () => {
     expect(await within(ventas).findByRole("alert")).toHaveTextContent(
       "El libro no tiene columnas de IVA.",
     );
-    expect(within(seccionLibro(dialogo, "Compras")).queryByRole("alert")).toBeNull();
+    expect(within(dialogo).queryByRole("heading", { name: "Compras" })).toBeNull();
   });
 });
 
@@ -397,7 +396,7 @@ describe("Legajo · pie del cajón de saldo inicial (Foco 2.7a)", () => {
 });
 
 describe("Legajo · panel Importar libros IVA (Foco 2.7b)", () => {
-  it("«Elegí el archivo del libro» aparece una sola vez por sección y «Analizar alícuotas» e «Importar» van en un mismo grupo", async () => {
+  it("«Elegí el archivo del libro» aparece una sola vez por sección y «Importar» es el único botón del grupo", async () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirLibrosIva();
@@ -405,7 +404,7 @@ describe("Legajo · panel Importar libros IVA (Foco 2.7b)", () => {
     expect(within(ventas).getAllByText(/Elegí el archivo del libro/)).toHaveLength(1);
     const grupo = ventas.querySelector<HTMLElement>(".legajo-libro__acciones");
     expect(grupo).not.toBeNull();
-    expect(within(grupo!).getByRole("button", { name: "Analizar alícuotas" })).toBeDisabled();
+    expect(within(grupo!).getAllByRole("button")).toHaveLength(1);
     expect(within(grupo!).getByRole("button", { name: "Importar" })).toBeDisabled();
   });
 });

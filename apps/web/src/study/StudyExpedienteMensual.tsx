@@ -865,6 +865,7 @@ export function StudyExpedienteMensual() {
             reviewSourceMutation={reviewSourceMutation}
             noMovementsMutation={noMovementsMutation}
             motivoSinMovimientos={motivoSinMovimientos}
+            onContinuar={() => goToStep(2)}
           />
         ) : step === 2 ? (
           <div>
