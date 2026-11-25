@@ -287,7 +287,7 @@ export function StudyAyuda() {
         <h3 className="study-page__eyebrow">Si carga el estudio</h3>
         <ol>
           <li>Subir documento.</li>
-          <li>Elegí el ítem solicitado al que corresponde.</li>
+          <li>Si responde a un pedido, elegí el ítem; si no, dejalo vacío y el pedido se crea solo.</li>
           <li>Elegir archivo y Subir y procesar.</li>
           <li>Esperá a que deje de decir Procesando comprobante.</li>
         </ol>

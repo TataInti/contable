@@ -3,6 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({
   clientCreate: vi.fn(async () => ({ id: "client-a" })),
   clientProfileCreate: vi.fn(async () => ({ id: "profile-a" })),
+  taxpayerProfileVersionCreate: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({
+    id: "fiscal-profile-a",
+    ...data,
+  })),
+  auditEventCreate: vi.fn(async () => ({ id: "audit-a" })),
   onboardingCreate: vi.fn(async () => ({ id: "onboarding-a" })),
 }));
 
@@ -12,6 +17,8 @@ vi.mock("../auth/tenant.js", () => ({
     run({
       client: { create: db.clientCreate },
       clientProfile: { create: db.clientProfileCreate },
+      taxpayerProfileVersion: { create: db.taxpayerProfileVersionCreate },
+      auditEvent: { create: db.auditEventCreate },
       onboardingChecklist: { create: db.onboardingCreate },
     }),
 }));
@@ -45,6 +52,23 @@ describe("ClientRepository.create — perfil categórico", () => {
         province: "Tucumán",
         activity: "COMERCIO — Comercio",
         legalForm: "Sociedad anónima (SA)",
+      }),
+    });
+    expect(db.taxpayerProfileVersionCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        firmId: "firm-a",
+        clientId: "client-a",
+        legalName: "Razón social libre S.A.",
+        cuit: "20111111112",
+        personType: "FISICA",
+        nationalCondition: "RESPONSABLE_INSCRIPTO",
+        fiscalYearEndMonth: 12,
+        version: 1,
+        status: "ACTIVE",
+        source: "ALTA_CLIENTE",
+        createdByUserId: "user-a",
+        validFrom: expect.any(Date),
+        activatedAt: expect.any(Date),
       }),
     });
   });

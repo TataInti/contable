@@ -3,6 +3,7 @@ import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 
+import { esOpcionalPorVentas, fuentesFaltantes, textoFaltantes } from "../fuentesFaltantes";
 import { PanelGestionarFuente } from "../paneles/PanelGestionarFuente";
 import type { CoberturaLegajo } from "../tipos";
 import type { ResultadoImportacionLote } from "../loteFuente";
@@ -27,6 +28,8 @@ export interface EtapaFuentesProps {
   motivoSinMovimientos: string | null;
   /** El mes está calculado: cargar, reemplazar o retirar un archivo deja el cálculo desactualizado y hay que recalcular. */
   calculado?: boolean;
+  /** Pasa a la etapa siguiente (Clasificación) una vez revisado lo importado. */
+  onContinuar?: () => void;
 }
 
 function nombreFuente(source: CoberturaLegajo["sources"][number]) {
@@ -38,11 +41,11 @@ function nombreFuente(source: CoberturaLegajo["sources"][number]) {
   return source.label;
 }
 
-function estadoFuente(source: CoberturaLegajo["sources"][number]) {
+function estadoFuente(source: CoberturaLegajo["sources"][number], fuentes: readonly CoberturaLegajo["sources"][number][]) {
   if (source.batches.some((batch) => batch.errorRows > 0)) return { status: "ERROR", label: "Con errores" };
-  if (source.present) return { status: "READY", label: `Cargada · ${source.count} filas` };
+  if (source.present) return { status: "READY", label: `Cargada · ${source.count} ${source.count === 1 ? "fila" : "filas"}` };
   if (source.status === "NO_MOVEMENTS") return { status: "NO_MOVEMENTS", label: "Sin movimientos" };
-  return source.required
+  return source.required && !esOpcionalPorVentas(source, fuentes)
     ? { status: "WAITING_INPUTS", label: "Pendiente" }
     : { status: "PENDING", label: "Opcional" };
 }
@@ -65,12 +68,40 @@ export function EtapaFuentes({
   noMovementsMutation,
   motivoSinMovimientos,
   calculado = false,
+  onContinuar,
 }: EtapaFuentesProps) {
   const [fuenteAbierta, setFuenteAbierta] = useState<string | null>(null);
   const fuentes = coverageQuery.data?.sources ?? [];
   const fuenteSeleccionada = fuentes.find((source) => source.code === fuenteAbierta) ?? null;
-  const faltantes = fuentes.filter((source) => source.required && !source.present && source.status !== "NO_MOVEMENTS").map(nombreFuente);
+  const faltantes = fuentesFaltantes(fuentes);
   const puedeCargar = canEditSources && !soloLectura && capabilities.has("tax.vouchers.prepare");
+  const allowSelfReview = coverageQuery.data?.allowSelfReview ?? false;
+  const puedeRevisar = puedeCargar && capabilities.has("tax.vouchers.review");
+  // Lotes importados y confirmados que todavía no cuentan para el cálculo porque nadie los revisó.
+  const porRevisar = fuentes.flatMap((source) =>
+    source.batches
+      .filter((batch) => batch.batchStatus === "COMMITTED" && batch.reviewStatus !== "REVIEWED" && !["RETIRED", "REPLACED"].includes(batch.reviewStatus) && batch.errorRows === 0)
+      .map((batch) => ({ source, batch })),
+  );
+  const revisables = puedeRevisar
+    ? porRevisar.filter(({ batch }) => allowSelfReview || !currentUserId || batch.createdByUserId !== currentUserId)
+    : [];
+  const [revisando, setRevisando] = useState(false);
+  const [errorRevision, setErrorRevision] = useState<Error | null>(null);
+  const faltantesTrasRevisar = faltantes.filter((source) => !revisables.some((item) => item.source.code === source.code));
+  const revisarYContinuar = async () => {
+    setRevisando(true);
+    setErrorRevision(null);
+    try {
+      for (const { batch } of revisables) await reviewSourceMutation.mutateAsync(batch.id);
+      if (faltantesTrasRevisar.length === 0 && revisables.length === porRevisar.length) onContinuar?.();
+    } catch (error) {
+      setErrorRevision(error instanceof Error ? error : new Error("No se pudo revisar el archivo."));
+    } finally {
+      setRevisando(false);
+    }
+  };
+  const seguiraEnClasificacion = faltantesTrasRevisar.length === 0 && revisables.length === porRevisar.length && Boolean(onContinuar);
 
   return (
     <div className="workpaper-stage">
@@ -81,8 +112,23 @@ export function EtapaFuentes({
       ) : (
         <>
           <p className="workpaper-source-readiness" role="status">
-            {faltantes.length ? <>Para calcular falta: <strong>{faltantes.join(", ")}</strong></> : "Todo listo para calcular"}
+            {faltantes.length ? <strong>{textoFaltantes(faltantes.map(nombreFuente))}</strong> : porRevisar.length ? "Falta revisar lo importado" : "Todo listo para calcular"}
+            {faltantes.length && fuentes.some((source) => esOpcionalPorVentas(source, fuentes)) ? <span className="muted-copy"> · Las demás fuentes son opcionales.</span> : null}
           </p>
+          {porRevisar.length ? (
+            <div role="status" className="workpaper-source-importado">
+              <p>
+                {porRevisar.length === 1 ? `Se importó ${nombreFuente(porRevisar[0]!.source)}.` : `Se importaron ${porRevisar.length} archivos.`}{" "}
+                {revisables.length ? "Revisalo para que cuente en el cálculo." : "Necesita la revisión de otra persona del estudio para contar en el cálculo."}
+              </p>
+              {revisables.length ? (
+                <Button variant="primary" loading={revisando} disabled={revisando} onClick={() => void revisarYContinuar()}>
+                  {seguiraEnClasificacion ? "Revisar y continuar" : "Revisar lo importado"}
+                </Button>
+              ) : null}
+              {errorRevision ? <small className="form-error" role="alert">{errorRevision.message}</small> : null}
+            </div>
+          ) : null}
           {coverageQuery.isFetching ? <small className="muted-copy">Dato del último corte; se está actualizando.</small> : null}
           <Table
             rows={fuentes}
@@ -90,7 +136,7 @@ export function EtapaFuentes({
             empty="No hay fuentes definidas para el legajo."
             columns={[
               { key: "source", header: "Fuente", render: (source) => <strong>{nombreFuente(source)}</strong> },
-              { key: "state", header: "Estado", render: (source) => <StatusBadge status={estadoFuente(source).status} label={estadoFuente(source).label} /> },
+              { key: "state", header: "Estado", render: (source) => <StatusBadge status={estadoFuente(source, fuentes).status} label={estadoFuente(source, fuentes).label} /> },
               {
                 key: "manage",
                 header: "",
@@ -120,7 +166,7 @@ export function EtapaFuentes({
             canEdit={puedeCargar && !motivoImportarLibro}
             calculado={calculado}
             currentUserId={currentUserId}
-            allowSelfReview={coverageQuery.data.allowSelfReview}
+            allowSelfReview={allowSelfReview}
             canReview={capabilities.has("tax.vouchers.review")}
             canEditSources={puedeCargar}
             reviewSourceMutation={reviewSourceMutation}
