@@ -214,8 +214,7 @@ export function EtapaClasificacion({
   return (
     <div className="workpaper-stage">
       <div className="workpaper-classification-head">
-      <div className="workpaper-classification-summary">
-        <span className="workpaper-classification-help-mark" title="Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular." aria-label="Ayuda sobre clasificación">?</span>
+      <div className="workpaper-classification-summary" role="group" title="Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular." aria-label="Ayuda sobre clasificación">
         <span>
           <strong>{indicador(classificationQuery.data?.classified)}</strong>
           <small>Clasificados</small>

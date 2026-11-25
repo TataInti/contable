@@ -600,14 +600,20 @@
 .workpaper-classification-inline {
   display: flex;
   min-width: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0 var(--ds-space-2);
 }
 
 .workpaper-classification-code {
   min-width: 0;
-  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workpaper-classification-chip {
+  flex: 0 0 auto;
 }
 
 .workpaper-classification-chip {
@@ -1232,7 +1238,6 @@
 .workpaper-classification-summary > span small { text-transform: lowercase; }
 .workpaper-classification-summary > span + span::before { content: "·"; margin-inline-end: var(--ds-space-2); color: var(--ds-color-text-muted); }
 .workpaper-classification-summary > span:last-child::before { content: "—"; }
-.workpaper-classification-summary > .workpaper-classification-help-mark + span::before { content: none; }
 /* Tabla de comprobantes: columnas según su contenido, importes alineados a la derecha (11-1, 11-6). */
 .workpaper-main .ds-table.workpaper-classification-table { table-layout: auto; }
 .workpaper-classification-table th.ds-table__cell--right,
