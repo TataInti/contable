@@ -21,8 +21,8 @@ const ventas = (conLote: boolean): WorkpaperSource => ({
   ...base, code: "ARCA_IVA_SALES", label: "Libro IVA Ventas", origin: "ARCA", expectedColumns: ["nonTaxed"],
   required: true, present: false, status: "PENDING", batches: conLote ? [lote(false) as never] : [],
 });
-const iibb: WorkpaperSource = { ...base, code: "DGR_IIBB_TUC", label: "Ingresos Brutos Tucumán", origin: "DGR_IIBB", required: true, present: false, status: "PENDING", batches: [] };
-const tem: WorkpaperSource = { ...base, code: "SMT_TEM", label: "TEM San Miguel de Tucumán", origin: "SMT_TEM", required: true, present: false, status: "PENDING", batches: [] };
+const iibb: WorkpaperSource = { ...base, code: "DGR_IIBB_TUC", label: "Ingresos Brutos Tucumán", origin: "DGR_IIBB", satisfiedBy: ["ARCA_IVA_SALES"], required: true, present: false, status: "PENDING", batches: [] };
+const tem: WorkpaperSource = { ...base, code: "SMT_TEM", label: "TEM San Miguel de Tucumán", origin: "SMT_TEM", satisfiedBy: ["ARCA_IVA_SALES"], required: true, present: false, status: "PENDING", batches: [] };
 
 describe("faltantes de Fuentes (10-1)", () => {
   it("con las ventas sin cargar, Ingresos Brutos y TEM no se piden: «Falta 1: Ventas del período»", () => {

@@ -1,21 +1,17 @@
 import type { CoberturaLegajo } from "./tipos";
 
-type Fuente = Pick<CoberturaLegajo["sources"][number], "required" | "present" | "status"> & { code?: string };
-
-// Tablas manuales por actividad que el libro de ventas revisado reemplaza (satisfiedBy en el servidor).
-const CODIGOS_BASE_MANUAL = new Set(["DGR_IIBB_TUC", "SMT_TEM"]);
-const CODIGO_VENTAS = "ARCA_IVA_SALES";
+type Fuente = Pick<CoberturaLegajo["sources"][number], "required" | "present" | "status"> & { code?: string; satisfiedBy?: readonly string[] };
 
 const sinCubrir = (fuente: Fuente) => fuente.required && !fuente.present && fuente.status !== "NO_MOVEMENTS";
 
 /**
- * Fuentes que realmente hay que cargar para calcular. Mientras falten las ventas, las tablas manuales de
- * Ingresos Brutos y TEM son opcionales: la base sale del libro de ventas, que es lo único que se pide primero.
+ * Fuentes que realmente hay que cargar para calcular. Si una fuente declara (satisfiedBy, que viene de la API)
+ * que otra la cubre y esa otra todavía falta, la primera es opcional: se pide primero la que la cubre.
  */
 export function fuentesFaltantes<T extends Fuente>(fuentes: readonly T[]): T[] {
   const faltantes = fuentes.filter(sinCubrir);
-  if (!faltantes.some((fuente) => fuente.code === CODIGO_VENTAS)) return faltantes;
-  return faltantes.filter((fuente) => !(fuente.code !== undefined && CODIGOS_BASE_MANUAL.has(fuente.code)));
+  const codigosFaltantes = new Set(faltantes.flatMap((fuente) => (fuente.code === undefined ? [] : [fuente.code])));
+  return faltantes.filter((fuente) => !(fuente.satisfiedBy ?? []).some((codigo) => codigosFaltantes.has(codigo)));
 }
 
 export function esOpcionalPorVentas(fuente: Fuente, fuentes: readonly Fuente[]): boolean {
