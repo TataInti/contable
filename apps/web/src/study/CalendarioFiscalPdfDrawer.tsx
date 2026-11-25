@@ -51,7 +51,14 @@ const DRAWER_FIELD_IDS = {
   pdfBase64: "cal-pdf-archivo",
 } as const;
 
-const ORDEN_CAMPOS = ["taxAuthorityId", "jurisdictionId", "year", "title", "taxTypeId", "pdfBase64"] as const;
+const ORDEN_CAMPOS = [
+  "taxAuthorityId",
+  "jurisdictionId",
+  "year",
+  "title",
+  "taxTypeId",
+  "pdfBase64",
+] as const;
 type CampoAlta = (typeof ORDEN_CAMPOS)[number];
 
 const ETIQUETAS_VACIAS: Record<CampoAlta, string> = {
@@ -191,7 +198,9 @@ function CalendarioFiscalPdfPanel({
           lectura.dudosas > 0
             ? `; ${lectura.dudosas} ${lectura.dudosas === 1 ? "quedó dudosa" : "quedaron dudosas"} para revisar`
             : "";
-        notify.success(`Se propusieron ${lectura.importadas} celdas${dudas}. Revisalas junto al PDF antes de publicar.`);
+        notify.success(
+          `Se propusieron ${lectura.importadas} celdas${dudas}. Revisalas junto al PDF antes de publicar.`,
+        );
       } else {
         notify.info(`Se creó el borrador. ${lectura.motivo ?? ""}`.trim());
       }
@@ -238,7 +247,12 @@ function CalendarioFiscalPdfPanel({
         />
       }
     >
-      <form id="cargar-calendario-pdf-form" className="study-form study-form--alinear-arriba" noValidate onSubmit={onSubmit}>
+      <form
+        id="cargar-calendario-pdf-form"
+        className="study-form study-form--alinear-arriba"
+        noValidate
+        onSubmit={onSubmit}
+      >
         {serverNotice ? <Notice tone="error">{serverNotice}</Notice> : null}
         {authorities.isError ? (
           <AsyncState
@@ -252,6 +266,7 @@ function CalendarioFiscalPdfPanel({
         ) : null}
         <CalendarioFiscalSelect
           id={DRAWER_FIELD_IDS.taxAuthorityId}
+          required
           label="Organismo"
           value={form.taxAuthorityId}
           placeholder="Elegí el organismo"
@@ -271,6 +286,7 @@ function CalendarioFiscalPdfPanel({
         ) : null}
         <CalendarioFiscalSelect
           id={DRAWER_FIELD_IDS.jurisdictionId}
+          required
           label="Jurisdicción"
           value={form.jurisdictionId}
           placeholder="Elegí la jurisdicción"
@@ -280,6 +296,7 @@ function CalendarioFiscalPdfPanel({
         />
         <CalendarioFiscalSelect
           id={DRAWER_FIELD_IDS.taxTypeId}
+          required
           label="Impuesto al que aplica"
           value={taxTypeId}
           placeholder="Elegí el impuesto"
@@ -294,8 +311,9 @@ function CalendarioFiscalPdfPanel({
         />
         <Field
           id={DRAWER_FIELD_IDS.year}
+          required
           name="year"
-          label="Año"
+          label="Año *"
           className="calendario-anio"
           hint="Entre 2000 y 2100."
           inputMode="numeric"
@@ -306,8 +324,9 @@ function CalendarioFiscalPdfPanel({
         />
         <Field
           id={DRAWER_FIELD_IDS.title}
+          required
           name="title"
-          label="Título"
+          label="Título *"
           hint="Cómo se llama en el PDF, por ejemplo «Calendario nacional 2026»."
           value={form.title}
           onChange={(event) => change("title", event.target.value)}
@@ -316,10 +335,11 @@ function CalendarioFiscalPdfPanel({
         />
         <Field
           id={DRAWER_FIELD_IDS.pdfBase64}
+          required
           name="pdf"
           type="file"
           accept="application/pdf,.pdf"
-          label="PDF del calendario"
+          label="PDF del calendario *"
           hint="PDF de hasta 5 MB. El archivo original queda guardado con el calendario."
           onChange={(event) => {
             setFile(event.target.files?.[0] ?? null);

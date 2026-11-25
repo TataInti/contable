@@ -1294,3 +1294,10 @@
 .workpaper-close-step__title { display: grid; gap: var(--ds-space-1); }
 .workpaper-close-step__title small { color: var(--ds-color-text-muted); }
 .workpaper-close-step__action { display: flex; align-items: center; gap: var(--ds-space-2); }
+
+/* Calendario fiscal: requeridos y grupos del formulario de celda. */
+.calendario-requerido { color: var(--ds-color-danger); }
+.calendario-celda-form { display: grid; gap: var(--ds-space-3); }
+.calendario-celda-seccion { display: grid; gap: var(--ds-space-3); padding-block: var(--ds-space-3); border-top: 1px solid var(--ds-color-border-subtle); }
+.calendario-celda-seccion h3 { margin: 0; font-size: var(--ds-text-base); }
+.calendario-celda-digitos .dense-seg__option { min-inline-size: 32px; }
