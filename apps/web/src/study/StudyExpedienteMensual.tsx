@@ -1440,7 +1440,7 @@ export function StudyExpedienteMensual() {
           coverageQuery.isFetching && coverageQuery.isSuccess ? "Actualizando…" : "Actualizar",
         )}
         <Button size="sm" variant="secondary" onClick={() => navigate("/bandeja")}>
-          Ir a bandeja
+          Subir PDF o foto (Bandeja)
         </Button>
       </>
     );

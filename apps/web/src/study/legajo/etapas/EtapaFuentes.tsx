@@ -4,6 +4,7 @@ import { AsyncState, Button, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 
 import { esOpcionalPorVentas, fuentesFaltantes, textoFaltantes } from "../fuentesFaltantes";
+import { nombreFuente } from "../nombreFuente";
 import { PanelGestionarFuente } from "../paneles/PanelGestionarFuente";
 import type { CoberturaLegajo } from "../tipos";
 import type { ResultadoImportacionLote } from "../loteFuente";
@@ -30,15 +31,6 @@ export interface EtapaFuentesProps {
   calculado?: boolean;
   /** Pasa a la etapa siguiente (Clasificación) una vez revisado lo importado. */
   onContinuar?: () => void;
-}
-
-function nombreFuente(source: CoberturaLegajo["sources"][number]) {
-  if (source.origin === "ARCA") {
-    return source.expectedColumns.includes("nonTaxed") ? "Ventas del período" : "Compras del período";
-  }
-  if (source.origin === "DGR_RPI_TUC") return "Retenciones y percepciones IIBB Tucumán";
-  if (source.origin === "DGR_IIBB") return "Ingresos Brutos Tucumán";
-  return source.label;
 }
 
 function estadoFuente(source: CoberturaLegajo["sources"][number], fuentes: readonly CoberturaLegajo["sources"][number][]) {
@@ -86,6 +78,11 @@ export function EtapaFuentes({
   const revisables = puedeRevisar
     ? porRevisar.filter(({ batch }) => allowSelfReview || !currentUserId || batch.createdByUserId !== currentUserId)
     : [];
+  const abrirFuente = (codigo: string) => {
+    setSourceCode(codigo);
+    setSourceFile(null);
+    setFuenteAbierta(codigo);
+  };
   const [revisando, setRevisando] = useState(false);
   const [errorRevision, setErrorRevision] = useState<Error | null>(null);
   const faltantesTrasRevisar = faltantes.filter((source) => !revisables.some((item) => item.source.code === source.code));
@@ -135,18 +132,23 @@ export function EtapaFuentes({
             rowKey={(source) => source.code}
             empty="No hay fuentes definidas para el legajo."
             columns={[
-              { key: "source", header: "Fuente", render: (source) => <strong>{nombreFuente(source)}</strong> },
+              {
+                key: "source",
+                header: "Fuente",
+                render: (source) => (
+                  <Button size="row" variant="text" className="workpaper-source-name" aria-label={`Gestionar ${nombreFuente(source)}`} onClick={() => abrirFuente(source.code)}>
+                    <strong>{nombreFuente(source)}</strong>
+                  </Button>
+                ),
+              },
               { key: "state", header: "Estado", render: (source) => <StatusBadge status={estadoFuente(source, fuentes).status} label={estadoFuente(source, fuentes).label} /> },
               {
                 key: "manage",
                 header: "",
                 align: "right",
+                // Atajo visual: el control accesible es el nombre de la fuente (misma acción).
                 render: (source) => (
-                  <Button size="sm" variant="secondary" aria-label={`Gestionar ${nombreFuente(source)}`} onClick={() => {
-                    setSourceCode(source.code);
-                    setSourceFile(null);
-                    setFuenteAbierta(source.code);
-                  }}>
+                  <Button size="row" variant="text" aria-hidden="true" tabIndex={-1} onClick={() => abrirFuente(source.code)}>
                     Gestionar
                   </Button>
                 ),
