@@ -7,12 +7,11 @@ import { Inspector, InspectorFacts, InspectorSection } from "../../ui/Dense";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { CommentThread } from "../CommentThread";
 import { sinRespuesta } from "./consultas";
-import { MONTH_LONG, profileGaps, vatLabel } from "./etiquetas";
+import { MONTH_LONG, configurationGaps, vatLabel } from "./etiquetas";
 import type { ClientWithProfile } from "./tipos";
 
-const missingProfileFields = profileGaps;
-
 interface InspectorClienteProps {
+  openConfiguration: (id: string, step: string) => void;
   firmId: string | null;
   selectedClient: ClientWithProfile;
   capabilities: ReadonlySet<string>;
@@ -42,6 +41,7 @@ export function InspectorCliente({
   openClientWorkspace,
   setDeletingClient,
   setSelectedId,
+  openConfiguration,
 }: InspectorClienteProps) {
   // C03: sin respuesta el contador no dice 0; en carga dice «pendiente» y con error «no disponible».
   const cantidadContactos = contactsQuery.data?.length ?? 0;
@@ -61,18 +61,11 @@ export function InspectorCliente({
         </span>
       }
       banner={
-        missingProfileFields(selectedClient).length > 0 ? (
-          <Notice
-            tone="warning"
-            action={
-              canManage ? (
-                <Button size="sm" variant="secondary" onClick={() => startClientEdit(selectedClient)}>
-                  Completar
-                </Button>
-              ) : undefined
-            }
-          >
-            Ficha incompleta: falta {missingProfileFields(selectedClient).join(", ")}.
+        configurationGaps(selectedClient).length > 0 ? (
+          <Notice tone="warning">
+            Falta: {configurationGaps(selectedClient).map((gap, index) => (
+              <span key={gap.key}>{index ? ", " : ""}<Button type="button" variant="text" size="row" onClick={() => openConfiguration(selectedClient.id, gap.step)}>{gap.label}</Button></span>
+            ))}.
           </Notice>
         ) : undefined
       }
