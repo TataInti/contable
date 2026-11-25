@@ -185,9 +185,9 @@ describe("StudyClientes — cajón de edición (K5)", () => {
     const cajon = await abrirEdicion();
 
     expect(
-      (await within(cajon).findByRole("checkbox", { name: /AR-T — Provincia de Tucumán/ }) as HTMLInputElement).checked,
+      (await within(cajon).findByRole("checkbox", { name: /^Provincia de Tucumán/ }) as HTMLInputElement).checked,
     ).toBe(true);
-    fireEvent.click(within(cajon).getByRole("checkbox", { name: /TUC — Tucumán — Convenio Multilateral/ }));
+    fireEvent.click(within(cajon).getByRole("checkbox", { name: /^Tucumán — Convenio Multilateral/ }));
     fireEvent.click(within(cajon).getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() =>

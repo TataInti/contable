@@ -1,8 +1,8 @@
 import type { RefObject } from "react";
 import { CLIENT_VAT_CONDITION_LABELS, CLIENT_VAT_CONDITIONS } from "@contable/contracts";
 import { DenseSearch, DenseToggleGroup, DenseToolbar } from "../../ui/Dense";
-import { CUIT_ENDINGS } from "./terminacion";
-import { SearchSelect } from "@contable/design-system";
+import { CUIT_ENDINGS, parseEndingFilter } from "./terminacion";
+import { BarSelect } from "@contable/design-system";
 
 /** Criterios de la barra que, activos, reducen la cartera o cambian sus filas. */
 export interface FiltrosActivos {
@@ -53,33 +53,34 @@ export function FiltrosCartera({
         placeholder="Buscar por nombre o CUIT…"
         label="Buscar clientes"
       />
-      <SearchSelect
-        hideLabel
+      <BarSelect
         label="Filtrar por estado"
-        className="dense-select"
         value={statusFilter}
-        onChange={(value) => setStatusFilter(value)}
-        placeholder="Estado: todos"
+        onChange={(event) => setStatusFilter(event.target.value)}
         options={[
+          { value: "", label: "Todos los estados" },
           { value: "ACTIVE", label: "Activos" },
           { value: "INACTIVE", label: "Inactivos" },
         ]}
       />
-      <SearchSelect
-        hideLabel
+      <BarSelect
         label="Filtrar por condición IVA"
-        className="dense-select"
         value={vatFilter}
-        onChange={(value) => setVatFilter(value)}
-        placeholder="IVA: todas"
-        options={CLIENT_VAT_CONDITIONS.map((value) => ({ value, label: CLIENT_VAT_CONDITION_LABELS[value] }))}
+        onChange={(event) => setVatFilter(event.target.value)}
+        options={[
+          { value: "", label: "Todas las condiciones" },
+          ...CLIENT_VAT_CONDITIONS.map((value) => ({ value, label: CLIENT_VAT_CONDITION_LABELS[value] })),
+        ]}
       />
-      <span className="dense-dim">Terminación de CUIT</span>
-      <DenseToggleGroup
+      <BarSelect
         label="Terminación de CUIT"
-        options={CUIT_ENDINGS.map((digit) => ({ value: digit, label: digit }))}
-        selected={endingFilter}
-        onChange={setEndingFilter}
+        value={endingFilter.join(",")}
+        onChange={(event) => setEndingFilter(parseEndingFilter(event.target.value))}
+        options={[
+          { value: "", label: "Toda terminación de CUIT" },
+          ...(endingFilter.length > 1 ? [{ value: endingFilter.join(","), label: `Terminaciones ${endingFilter.join(", ")}` }] : []),
+          ...CUIT_ENDINGS.map((digit) => ({ value: digit, label: `Termina en ${digit}` })),
+        ]}
       />
       <DenseToggleGroup
         label="Agrupación de la lista"

@@ -74,9 +74,8 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     await screen.findByRole("table", { name: "Cartera de clientes" });
 
     expect(filasClave()).toEqual(["c2", "c4"]);
-    expect(screen.getByRole("button", { name: "1" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "9" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "0" }).getAttribute("aria-pressed")).toBe("false");
+    // La terminación es un desplegable: con varios dígitos desde la URL muestra la opción «Terminaciones 1, 9».
+    expect((screen.getByLabelText("Terminación de CUIT") as HTMLSelectElement).value).toBe("1,9");
   });
 
   it("un filtro de terminación sin dígitos válidos no filtra la cartera", async () => {
@@ -187,7 +186,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
     expect(parametrosUrl().toString()).toBe("");
 
-    fireEvent.click(screen.getByRole("button", { name: "9" }));
+    cambiarValor(screen.getByLabelText("Terminación de CUIT"), "9");
     await waitFor(() => expect(parametrosUrl().get("terminacion")).toBe("9"));
   });
 });

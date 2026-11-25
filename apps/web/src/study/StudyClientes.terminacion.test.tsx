@@ -132,13 +132,18 @@ describe("StudyClientes — terminación de CUIT", () => {
     await screen.findByRole("table", { name: "Cartera de clientes" });
     expect(rowKeys()).toHaveLength(6);
 
-    fireEvent.click(screen.getByRole("button", { name: "9" }));
+    const selector = screen.getByLabelText("Terminación de CUIT");
+    fireEvent.change(selector, { target: { value: "9" } });
     await waitFor(() => expect(rowKeys()).toEqual(["c-9a", "c-9b"]));
     expect(currentParams().get("terminacion")).toBe("9");
 
-    fireEvent.click(screen.getByRole("button", { name: "1" }));
-    await waitFor(() => expect(rowKeys()).toEqual(["c-1", "c-9a", "c-9b"]));
-    expect(currentParams().get("terminacion")).toBe("1,9");
+    fireEvent.change(selector, { target: { value: "1" } });
+    await waitFor(() => expect(rowKeys()).toEqual(["c-1"]));
+    expect(currentParams().get("terminacion")).toBe("1");
+
+    fireEvent.change(selector, { target: { value: "" } });
+    await waitFor(() => expect(rowKeys()).toHaveLength(6));
+    expect(currentParams().get("terminacion")).toBeNull();
   });
 
   it("agrupa por terminación con encabezado y conteo por grupo, y deja «Sin CUIT» al final", async () => {
@@ -183,6 +188,6 @@ describe("StudyClientes — terminación de CUIT", () => {
 
     expect(rowKeys()).toEqual(["c-9a", "c-9b"]);
     expect(groupHeaders()).toEqual(["Terminación de CUIT 9 2"]);
-    expect(screen.getByRole("button", { name: "9" }).getAttribute("aria-pressed")).toBe("true");
+    expect((screen.getByLabelText("Terminación de CUIT") as HTMLSelectElement).value).toBe("9");
   });
 });

@@ -839,10 +839,15 @@
   line-height: 1.3;
 }
 
-@media (max-width: 1280px) {
-  .dense-table[aria-label="Cartera de clientes"] .client-list__secondary-column {
-    display: none;
-  }
+/* 03-8: el contador que filtra se ve como botón (con borde), no como texto. */
+.dense-stats[aria-label="Resumen de la cartera"] .dense-stat.ds-button {
+  border: var(--ds-border-width) solid var(--ds-color-border);
+  margin-inline: 0;
+}
+
+/* 03-10: el ícono de lupa de los desplegables con búsqueda no tapa la primera letra dentro de un cajón. */
+.study-inline-form .ds-search-select__control > .ctxbar__input {
+  padding-inline-start: calc(var(--ds-space-3) + var(--ds-space-4) + var(--ds-space-2));
 }
 
 /* D3c: grilla de la ficha, menú de acciones y editor por secciones. */
@@ -1058,4 +1063,19 @@
   text-overflow: clip;
   text-align: start;
   height: auto;
+}
+
+/* 03-13: «Comentarios» plegado en el inspector hasta que haya uno. */
+.client-inspector__comments > summary {
+  cursor: pointer;
+  padding: var(--ds-space-3) 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+}
+
+/* 03-9: los campos obligatorios del alta llevan asterisco. */
+.client-create-form .ds-field:has(input[required]) > .ds-field__label::after {
+  content: " *";
+  color: var(--ds-color-danger);
 }
