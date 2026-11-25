@@ -1,16 +1,16 @@
 // Etapa Cálculo del Legajo: determinación por obligación y posición fiscal del período, con sus acciones (Foco 2.3c).
-import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, MoneyField, Table } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { formatMoney, esPedidoDeCambios } from "../formato";
 import { formatearFecha } from "../../../lib/formatoFechas";
-import type { PositionAction, TaxPosition, WorkpaperCalculationComponent } from "../tipos";
+import type { TaxPosition, WorkpaperCalculationComponent } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
 
 import {
   alternarImpuesto,
   errorMinimo,
+  etiquetasCortas,
   lineasDeFormula,
   seleccionDeImpuesto,
   type SeleccionCalculo,
@@ -26,7 +26,6 @@ export interface EtapaCalculoProps {
     Error,
     { workpaperId: string; obligationId: string }
   >;
-  setPositionAction: Dispatch<SetStateAction<PositionAction>>;
   /** Impuestos marcados para liquidar este mes y mínimos cargados. */
   seleccion: SeleccionCalculo;
   onSeleccionChange: (seleccion: SeleccionCalculo) => void;
@@ -40,12 +39,19 @@ export function EtapaCalculo({
   calculationQuery,
   positionQuery,
   calculateInterestMutation,
-  setPositionAction,
   seleccion,
   onSeleccionChange,
   bloqueoSeleccion = null,
 }: EtapaCalculoProps) {
   const determinacion = calculationQuery.data ?? [];
+  const etiquetas = etiquetasCortas(determinacion.map((component) => component.obligation));
+  const etiquetaDe = (obligationId: string) =>
+    etiquetas[determinacion.findIndex((component) => component.obligationId === obligationId)] ?? "";
+  // 12-4: «Interés», «Disponible» y «Total a pagar» solo aparecen cuando aportan algo distinto de «Pendiente».
+  const posiciones = positionQuery.data ?? [];
+  const hayInteres = posiciones.some((position) => Number(position.interest) !== 0);
+  const hayDisponible = posiciones.some((position) => Number(position.availableCredit) !== 0);
+  const hayTotalDistinto = posiciones.some((position) => Number(position.totalPayable) !== Number(position.pending));
   const conceptos = [
     { label: "Base imponible", keys: ["BASE_TOTAL", "BASE_PAIS", "BASE_IMPONIBLE"] },
     { label: "Impuesto por actividad", keys: ["IMPUESTO_POR_ACTIVIDAD", "IMPUESTO_POR_JURISDICCION"] },
@@ -102,10 +108,7 @@ export function EtapaCalculo({
                       )
                     }
                   />
-                  <span>
-                    {component.obligation.taxTypeName} · {component.obligation.regimeName} ·{" "}
-                    {component.obligation.jurisdictionName}
-                  </span>
+                  <span>{etiquetaDe(component.obligationId)}</span>
                 </label>
                 {!marcado ? <small className="muted-copy">No liquidado este mes.</small> : null}
                 {marcado && component.usaMinimoDeclarado ? (
@@ -174,7 +177,7 @@ export function EtapaCalculo({
                 { key: "concept", header: "Concepto", render: (row) => row.label === "Total a ingresar" ? <strong>{row.label}</strong> : row.label },
                 ...determinacion.map((component) => ({
                   key: component.obligationId,
-                  header: <span>{component.obligation.taxTypeName}<small className="muted-copy"> · {component.obligation.jurisdictionName}</small><small><StatusBadge status={component.settlement?.status ?? "PENDING"} /></small></span>,
+                  header: <span className="workpaper-calculation__column-title">{etiquetaDe(component.obligationId)}<small><StatusBadge status={component.settlement?.status ?? "PENDING"} /></small></span>,
                   align: "right" as const,
                   render: (row: (typeof filasDeterminacion)[number]) => {
                     const amount = row.amounts[component.obligationId];
@@ -234,6 +237,12 @@ export function EtapaCalculo({
           {positionQuery.isFetching ? (
             <small className="muted-copy">Dato del último corte; se está actualizando.</small>
           ) : null}
+          <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
+            <div>
+              <strong>Presentación y pago</strong>
+              <small>Estado de cada impuesto después de determinarlo.</small>
+            </div>
+          </div>
           <Table<TaxPosition>
             className="workpaper-position-table"
             rows={positionQuery.data ?? []}
@@ -261,13 +270,12 @@ export function EtapaCalculo({
                       {position.regime.jurisdiction.name}
                       {!position.regime.jurisdiction.isActive ? " (oculto)" : ""}
                     </small>
+                    <br />
+                    <small className="muted-copy">
+                      Vence {formatearFecha(position.dueDate, "sin vencimiento")}
+                    </small>
                   </>
                 ),
-              },
-              {
-                key: "dueDate",
-                header: "Vencimiento",
-                render: (position) => formatearFecha(position.dueDate, "Sin vencimiento"),
               },
               {
                 key: "accrued",
@@ -275,12 +283,12 @@ export function EtapaCalculo({
                 align: "right",
                 render: (position) => formatMoney(position.accrued),
               },
-              {
+              ...(hayInteres ? [{
                 key: "interest",
                 header: "Interés",
-                align: "right",
-                render: (position) => formatMoney(position.interest),
-              },
+                align: "right" as const,
+                render: (position: TaxPosition) => formatMoney(position.interest),
+              }] : []),
               {
                 key: "paid",
                 header: "Pagado",
@@ -293,18 +301,18 @@ export function EtapaCalculo({
                 align: "right",
                 render: (position) => <strong>{formatMoney(position.pending)}</strong>,
               },
-              {
+              ...(hayTotalDistinto ? [{
                 key: "totalPayable",
                 header: "Total a pagar",
-                align: "right",
-                render: (position) => <strong>{formatMoney(position.totalPayable)}</strong>,
-              },
-              {
+                align: "right" as const,
+                render: (position: TaxPosition) => <strong>{formatMoney(position.totalPayable)}</strong>,
+              }] : []),
+              ...(hayDisponible ? [{
                 key: "credit",
                 header: "Disponible",
-                align: "right",
-                render: (position) => formatMoney(position.availableCredit),
-              },
+                align: "right" as const,
+                render: (position: TaxPosition) => formatMoney(position.availableCredit),
+              }] : []),
               {
                 key: "status",
                 header: "Estado",
@@ -319,38 +327,6 @@ export function EtapaCalculo({
                       <span className="muted-copy">
                         Presentada el {formatearFecha(position.filedAt, "Sin vencimiento")}
                       </span>
-                    ) : position.settlement?.status === "FINALIZED" &&
-                      capabilities.has("tax.filings.record") ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setPositionAction({ kind: "FILING", position });
-                        }}
-                      >
-                        Registrar presentación
-                      </Button>
-                    ) : null}
-                    {position.filedAt ? (
-                      capabilities.has("tax.filings.record") ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            setPositionAction({ kind: "DECLARATION", position });
-                          }}
-                        >
-                          {position.hasDeclaration
-                            ? "Corregir declaración jurada"
-                            : "Cargar declaración jurada"}
-                        </Button>
-                      ) : (
-                        <span className="muted-copy">
-                          {position.hasDeclaration
-                            ? `Declaración jurada cargada · total a pagar ${formatMoney(position.totalAPagar)}`
-                            : "Falta la declaración jurada: la carga el Titular, el Administrador o el Revisor."}
-                        </span>
-                      )
                     ) : null}
                     {Number(position.pending) > 0 &&
                     position.dueDate &&
@@ -380,18 +356,6 @@ export function EtapaCalculo({
                           }
                         />
                       </>
-                    ) : null}
-                    {Number(position.totalPayable) > 0 &&
-                    capabilities.has("tax.payments.record") ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          setPositionAction({ kind: "PAYMENT", position });
-                        }}
-                      >
-                        Registrar pago
-                      </Button>
                     ) : null}
                   </span>
                 ),

@@ -56,8 +56,12 @@ body:has(.comments-sidebar--closed) .ds-toast-region { inset-inline-end: calc(48
   .workpaper-main .ds-table thead th { white-space: normal; overflow-wrap: anywhere; }
   .workpaper-main .ds-table tbody td { padding-inline: var(--ds-space-1); overflow-wrap: anywhere; }
   .workpaper-main .ds-table tbody td > * { max-width: 100%; }
-  .workpaper-main .ds-table__wrapper:has(.workpaper-position-table) { min-width: max-content; overflow: visible; }
-  .workpaper-main .workpaper-position-table { width: max-content; min-width: max-content; table-layout: auto; }
+  /* 12-1: la tabla de presentación y pago ocupa el ancho del contenedor (antes medía el contenido y se salía de pantalla). */
+  .workpaper-main .workpaper-position-table { table-layout: auto; }
+  .workpaper-main .workpaper-position-table th:first-child { min-width: 9rem; }
+  .workpaper-main .workpaper-position-table .study-table__actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--ds-space-1); }
+  .workpaper-main .workpaper-calculation-breakdown .ds-table thead th:first-child { white-space: nowrap; }
+  .workpaper-main .workpaper-calculation-breakdown .ds-table tbody td:first-child { overflow-wrap: normal; white-space: nowrap; }
   .workpaper-main .workpaper-classification-fields { min-width: 0; }
   .workpaper-main .workpaper-classification-fields .ds-search-select { width: 100%; min-width: 0; }
 }

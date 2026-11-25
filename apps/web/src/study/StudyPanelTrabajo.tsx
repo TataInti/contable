@@ -7,7 +7,7 @@ import {
   type TaxPanelResponse,
   type TaxPanelRow,
 } from "@contable/contracts";
-import { api, type FiscalYear } from "../lib/api";
+import { api } from "../lib/api";
 import { formatCuit } from "../lib/cuit";
 import { formatearFecha, formatearPeriodo } from "../lib/formatoFechas";
 import { useClientContext } from "../context/ClientContext";
@@ -26,7 +26,7 @@ import {
 } from "../ui/Dense";
 import { StatusBadge } from "../ui/StatusBadge";
 import { CUIT_ENDINGS } from "./clientes/terminacion";
-import { abrirClienteDelPanel } from "./panel/abrirCliente";
+import { abrirLegajoDeObligacion } from "./panel/abrirCliente";
 import {
   MENSAJE_RANGO_INVERTIDO,
   PANEL_PAGE_SIZE,
@@ -64,12 +64,11 @@ const MOTIVO_SIN_ASIGNACIONES = "sin-asignaciones";
 const ID_RANGO = "panel-trabajo-rango-error";
 
 export function StudyPanelTrabajo() {
-  const { firmId, capabilities, setClientId, setPeriodId, clientId } = useClientContext();
+  const { firmId, capabilities, setClientId, clientId } = useClientContext();
   const session = useSession();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [density] = useDensity();
-  const [abriendo, setAbriendo] = useState<string | null>(null);
   const desdeRef = useRef<HTMLInputElement | null>(null);
   const revisionAutomatica = useRef(false);
 
@@ -162,23 +161,15 @@ export function StudyPanelTrabajo() {
     setSearchParams(escribirFiltros(cambio(filtros)), { replace: true });
   const quitarFiltros = () => setSearchParams(new URLSearchParams(), { replace: true });
 
-  const abrir = async (fila: TaxPanelRow) => {
+  const abrir = (fila: TaxPanelRow) => {
     if (firmId === null) return;
-    setAbriendo(fila.obligationId);
-    try {
-      await abrirClienteDelPanel({
-        firmId,
-        clientId: fila.clientId,
-        rango: { periodStart: fila.periodStart, periodEnd: fila.periodEnd },
-        cargarAnios: (firma, cliente) =>
-          api.get<FiscalYear[]>(`/firms/${firma}/clients/${cliente}/fiscal-years`),
-        setClientId,
-        setPeriodId,
-        navigate: (to) => navigate(to),
-      });
-    } finally {
-      setAbriendo(null);
-    }
+    abrirLegajoDeObligacion({
+      firmId,
+      clientId: fila.clientId,
+      taxPeriodId: fila.periodId,
+      setClientId,
+      navigate: (to) => navigate(to),
+    });
   };
 
   const indicadores = indicadoresDelPanel(filas);
@@ -336,11 +327,10 @@ export function StudyPanelTrabajo() {
         <Button
           size="sm"
           variant="ghost"
-          disabled={abriendo !== null}
-          aria-label={`Abrir cliente ${fila.clientName}`}
-          onClick={() => void abrir(fila)}
+          aria-label={`Abrir legajo ${fila.clientName}`}
+          onClick={() => abrir(fila)}
         >
-          Abrir cliente
+          Abrir legajo
         </Button>
       ),
     },
@@ -404,6 +394,10 @@ export function StudyPanelTrabajo() {
         columns={columnas}
         rows={filas}
         rowKey={(fila) => fila.obligationId}
+        onSelect={(clave) => {
+          const fila = filas.find((item) => item.obligationId === clave);
+          if (fila) abrir(fila);
+        }}
         empty={vacio}
         footer={
           <>

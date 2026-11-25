@@ -11,6 +11,7 @@ import {
   WorkPage,
   getStatusBadgeMeta,
   SearchSelect,
+  useNotify,
   type MenuActionItem,
 } from "@contable/design-system";
 import { FiscalBooksExportAction } from "./FiscalBooksExportAction";
@@ -34,7 +35,6 @@ import type {
   CreditLot,
   EvidenceDocument,
   FiscalTaxPeriod,
-  PositionAction,
   TaxJurisdiction,
   TaxPosition,
   TaxRegime,
@@ -49,7 +49,6 @@ import {
   fiscalTaxPeriodSelectionKey,
   readFiscalTaxPeriodSelection,
   writeFiscalTaxPeriodSelection,
-  rotuloPeriodoFiscal,
 } from "./legajo/periodoFiscal";
 import {
   WORKPAPER_STEPS,
@@ -60,15 +59,14 @@ import { pluralizar } from "./legajo/textos";
 import { mensajesDePedidoDeCambios, selfReviewNote } from "./legajo/formato";
 import { calcularEstadosEtapas } from "./legajo/estadoEtapas";
 import { WorkpaperActionError } from "./legajo/WorkpaperActionError";
+import { agruparPorMes, mesEnFrase, mesParaAbrir, rotuloMes } from "./legajo/mesesDelLegajo";
 import { PeriodoSinLegajo } from "./legajo/PeriodoSinLegajo";
 import { TarjetaMonotributo } from "./legajo/TarjetaMonotributo";
 import { mesActualMonotributo } from "./fiscal/monotributo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
 import { PanelLibrosIva } from "./legajo/paneles/PanelLibrosIva";
 import { PanelSaldoInicial } from "./legajo/paneles/PanelSaldoInicial";
-import { PanelPago } from "./legajo/paneles/PanelPago";
-import { PanelPresentacion } from "./legajo/paneles/PanelPresentacion";
-import { PanelDeclaracion } from "./legajo/paneles/PanelDeclaracion";
+import { PanelImpuesto } from "./legajo/paneles/PanelImpuesto";
 import { EtapaFuentes } from "./legajo/etapas/EtapaFuentes";
 import { EtapaSaldos } from "./legajo/etapas/EtapaSaldos";
 import { rangoMesAnterior } from "./legajo/saldosArrastre";
@@ -113,6 +111,9 @@ const ESTADOS_EDITABLES_CLASIFICACION = [...ESTADOS_EDITABLES_FUENTES, "CALCULAT
 // Reemplazar, retirar o revisar un archivo: también con el mes calculado. El cálculo queda desactualizado y hay que recalcular.
 const ESTADOS_CON_FUENTES_VIGENTES = [...ESTADOS_EDITABLES_FUENTES, "CALCULATED"];
 
+// Valor de la opción «Abrir <mes>» del selector (no es un período: crea el mes al elegirla).
+const PREFIJO_ABRIR_MES = "abrir-mes:";
+
 /** Error de una acción: solo ocupa lugar en la barra si hay un error que mostrar (P4). */
 function errorDe(error: Error | null | undefined, clave: string) {
   return error ? <WorkpaperActionError key={clave} error={error} /> : null;
@@ -143,6 +144,7 @@ export function StudyExpedienteMensual() {
   const { me } = useSession();
   const currentUserId = me?.userId ?? null;
   const queryClient = useQueryClient();
+  const notify = useNotify();
   const navigate = useNavigate();
   const location = useLocation();
   const taxPeriodStorageKey =
@@ -164,7 +166,7 @@ export function StudyExpedienteMensual() {
   });
   const [controlResolutions, setControlResolutions] = useState<Record<string, string>>({});
   const [controlEvidence, setControlEvidence] = useState<Record<string, string>>({});
-  const [positionAction, setPositionAction] = useState<PositionAction>(null);
+  const [impuestoAbierto, setImpuestoAbierto] = useState<string | null>(null);
   const [seleccionCalculo, setSeleccionCalculo] = useState<{
     workpaperId: string;
     seleccion: SeleccionCalculo;
@@ -208,10 +210,13 @@ export function StudyExpedienteMensual() {
   const selectableTaxPeriods = (taxPeriodsQuery.data ?? []).filter(
     (taxPeriod) => taxPeriod.taxType.isActive,
   );
+  // Una entrada por mes: el período del primer impuesto del mes representa al Legajo del mes.
+  const mesesDelLegajo = agruparPorMes(selectableTaxPeriods);
+  const mesDeLaSeleccion = mesesDelLegajo.find((mes) =>
+    mes.periodos.some((taxPeriod) => taxPeriod.id === selectedTaxPeriodId),
+  );
   const selectedTaxPeriod =
-    taxPeriodSelection.key === taxPeriodStorageKey
-      ? selectableTaxPeriods.find((taxPeriod) => taxPeriod.id === selectedTaxPeriodId)
-      : undefined;
+    taxPeriodSelection.key === taxPeriodStorageKey ? mesDeLaSeleccion?.periodos[0] : undefined;
 
   useEffect(() => {
     if (taxPeriodSelection.key !== taxPeriodStorageKey) {
@@ -223,10 +228,11 @@ export function StudyExpedienteMensual() {
     }
     if (!taxPeriodStorageKey || !taxPeriodsQuery.data) return;
 
-    const availablePeriods = taxPeriodsQuery.data.filter((taxPeriod) => taxPeriod.taxType.isActive);
-    const nextId = availablePeriods.some((taxPeriod) => taxPeriod.id === taxPeriodSelection.id)
-      ? taxPeriodSelection.id
-      : (availablePeriods[0]?.id ?? "");
+    const meses = agruparPorMes(taxPeriodsQuery.data.filter((taxPeriod) => taxPeriod.taxType.isActive));
+    const mesElegido = meses.find((mes) =>
+      mes.periodos.some((taxPeriod) => taxPeriod.id === taxPeriodSelection.id),
+    );
+    const nextId = (mesElegido ?? meses[0])?.periodos[0]?.id ?? "";
     if (nextId !== taxPeriodSelection.id) {
       setTaxPeriodSelection({ key: taxPeriodStorageKey, id: nextId });
     }
@@ -366,9 +372,9 @@ export function StudyExpedienteMensual() {
     },
     enabled: Boolean(firmId && clientId && selectedTaxPeriod && monthTaxPeriodIds.length > 0),
   });
+  // Un Legajo por mes: se muestra el primer vencimiento entre los impuestos del mes.
   const dueDateForSelectedTax = selectedTaxPeriod
     ? (positionQuery.data ?? [])
-        .filter((position) => position.regime.taxType.id === selectedTaxPeriod.taxTypeId)
         .map((position) => position.dueDate)
         .filter((dueDate): dueDate is string => dueDate !== null)
         .sort()[0] ?? null
@@ -968,7 +974,6 @@ export function StudyExpedienteMensual() {
             calculationQuery={calculationQuery}
             positionQuery={positionQuery}
             calculateInterestMutation={calculateInterestMutation}
-            setPositionAction={setPositionAction}
             seleccion={seleccionDe(wp.id)}
             onSeleccionChange={(seleccion) => actualizarSeleccion(wp.id, seleccion)}
             bloqueoSeleccion={
@@ -1009,16 +1014,15 @@ export function StudyExpedienteMensual() {
             wp={wp}
             periodLabel={selectedTaxPeriod ? fiscalTaxPeriodLabel(selectedTaxPeriod) : "Período sin identificar"}
             positions={positionQuery.data ?? []}
-            inlineForm={positionAction?.kind === "FILING" ? <PanelPresentacion posicion={positionAction.position} onCerrar={() => setPositionAction(null)} firmId={firmId} clientId={clientId} documentos={documentsQuery.data} inline /> : null}
             canFinalize={capacidades.has("tax.settlements.finalize") && !(currentUserId && wp.preparedByUserId === currentUserId && coverageQuery.data?.allowSelfReview === false)}
             canRectify={capacidades.has("tax.settlements.rectify")}
             canFile={capacidades.has("tax.filings.record")}
             canDeclare={capacidades.has("tax.filings.record")}
             canPay={capacidades.has("tax.payments.record")}
-            hasFiling={(positionQuery.data ?? []).some((position) => Boolean(position.filingId))}
-            hasDeclaration={(positionQuery.data ?? []).some((position) => Boolean(position.hasDeclaration))}
-            hasPayment={(positionQuery.data ?? []).some((position) => Number(position.paid) > 0)}
-            paymentNotRequired={(positionQuery.data ?? []).some((position) => Number(position.totalPayable) <= 0)}
+            hasFiling={(positionQuery.data ?? []).length > 0 && (positionQuery.data ?? []).every((position) => Boolean(position.filingId))}
+            hasDeclaration={(positionQuery.data ?? []).length > 0 && (positionQuery.data ?? []).every((position) => Boolean(position.hasDeclaration))}
+            hasPayment={(positionQuery.data ?? []).length > 0 && (positionQuery.data ?? []).every((position) => Number(position.paid) > 0 || Number(position.totalPayable) <= 0)}
+            paymentNotRequired={(positionQuery.data ?? []).length > 0 && (positionQuery.data ?? []).every((position) => Number(position.totalPayable) <= 0 && Number(position.paid) <= 0)}
             nextPeriod={new Date(new Date(wp.periodEnd).getTime() + 86400000).toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: "UTC" })}
             nextBalance={positionQuery.data?.find((position) => position.saldoFavorTecnico || position.saldoLibreDisponibilidad)?.saldoFavorTecnico ?? null}
             readOnly={soloLectura}
@@ -1036,18 +1040,7 @@ export function StudyExpedienteMensual() {
               confirmLabel: "Sí, crear rectificativa",
               onConfirm: () => rectifyMutation.mutate(wp.id),
             })}
-            onPresentation={() => {
-              const position = positionQuery.data?.find((item) => item.settlement?.status === "FINALIZED");
-              if (position) setPositionAction({ kind: "FILING", position });
-            }}
-            onDeclaration={() => {
-              const position = positionQuery.data?.find((item) => item.filingId);
-              if (position) setPositionAction({ kind: "DECLARATION", position });
-            }}
-            onPayment={() => {
-              const position = positionQuery.data?.find((item) => item.settlement?.status === "FINALIZED");
-              if (position) setPositionAction({ kind: "PAYMENT", position });
-            }}
+            onOpenTax={setImpuestoAbierto}
           />
         )}
       </>
@@ -1059,13 +1052,44 @@ export function StudyExpedienteMensual() {
     setRevisionElegidaId(null);
     if (taxPeriodStorageKey) writeFiscalTaxPeriodSelection(taxPeriodStorageKey, id);
   };
+  // «Abrir <mes>»: crea el período y las obligaciones de los regímenes activos con el calendario fiscal.
+  const puedeAbrirMes = capabilities.has("tax.profile.write");
+  const mesParaAbrirAhora = puedeAbrirMes && taxPeriodsQuery.isSuccess ? mesParaAbrir(mesesDelLegajo, new Date()) : null;
+  const abrirMesMutation = useMutation({
+    mutationFn: (mes: string) =>
+      api.post<{ label: string; regimes: number; obligationsCreated: number; calendarNotices: string[] }>(
+        `/firms/${firmId}/clients/${clientId}/tax-periods/open-month`,
+        { month: mes },
+      ),
+    onError: (error: Error) => notify.error(error.message),
+    onSuccess: async (resultado, mes) => {
+      const actualizados = await taxPeriodsQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: ["tax-obligations", firmId, clientId] });
+      const periodoDelMes = (actualizados.data ?? []).find(
+        (taxPeriod) => taxPeriod.taxType.isActive && taxPeriod.startDate.slice(0, 7) === mes,
+      );
+      if (periodoDelMes) cambiarPeriodo(periodoDelMes.id);
+      const avisos = resultado.calendarNotices ?? [];
+      if (resultado.regimes === 0) {
+        notify.info(`No se abrió ${mesEnFrase(mes)}: ${avisos[0] ?? "ningún régimen del cliente tiene liquidación mensual."}`);
+      } else {
+        notify.success(
+          `${resultado.label} quedó abierto: ${resultado.obligationsCreated} ${resultado.obligationsCreated === 1 ? "obligación creada" : "obligaciones creadas"}.`,
+        );
+      }
+    },
+  });
   const opcionesPeriodo = [
-    { value: "", label: "Seleccioná un período fiscal…" },
-    ...selectableTaxPeriods.map((taxPeriod) => ({
-      value: taxPeriod.id,
-      label: rotuloPeriodoFiscal(taxPeriod),
-    })),
+    { value: "", label: "Seleccioná un mes…" },
+    ...mesesDelLegajo.map((mes) => ({ value: mes.periodos[0]!.id, label: rotuloMes(mes) })),
+    ...(mesParaAbrirAhora
+      ? [{ value: `${PREFIJO_ABRIR_MES}${mesParaAbrirAhora}`, label: `Abrir ${mesEnFrase(mesParaAbrirAhora)}` }]
+      : []),
   ];
+  const elegirOpcionDePeriodo = (valor: string) => {
+    if (valor.startsWith(PREFIJO_ABRIR_MES)) abrirMesMutation.mutate(valor.slice(PREFIJO_ABRIR_MES.length));
+    else cambiarPeriodo(valor);
+  };
   const sinPeriodosFiscales = taxPeriodsQuery.isSuccess && selectableTaxPeriods.length === 0;
   const sinLegajo = Boolean(selectedTaxPeriod) && listQuery.isSuccess && workpapers.length === 0;
   const canCalculate = capabilities.has("tax.settlements.calculate");
@@ -1484,13 +1508,13 @@ export function StudyExpedienteMensual() {
         <SearchSelect
           hideLabel
           label="Período fiscal"
-          placeholder="Seleccioná un período fiscal…"
+          placeholder="Seleccioná un mes…"
           allowEmpty={false}
           className="workpaper-period-selector"
           listboxClassName="workpaper-period-listbox"
           options={opcionesPeriodo}
-          value={selectedTaxPeriodId}
-          onChange={cambiarPeriodo}
+          value={selectedTaxPeriod?.id ?? ""}
+          onChange={elegirOpcionDePeriodo}
         />
       ) : null}
       {selectedTaxPeriod ? (
@@ -1604,11 +1628,25 @@ export function StudyExpedienteMensual() {
     cuerpo = (
       <EmptyState
         title="Configurá un período fiscal"
-        description="El legajo organiza las obligaciones del mes seleccionado."
+        description={
+          mesParaAbrirAhora
+            ? "El legajo organiza las obligaciones del mes seleccionado. Abrí el mes para crear el período y las obligaciones de los regímenes del cliente, con su vencimiento."
+            : "El legajo organiza las obligaciones del mes seleccionado."
+        }
         action={
-          <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
-            Abrir configuración fiscal
-          </Button>
+          <>
+            {mesParaAbrirAhora ? (
+              <Button
+                onClick={() => abrirMesMutation.mutate(mesParaAbrirAhora)}
+                loading={abrirMesMutation.isPending}
+              >
+                {`Abrir ${mesEnFrase(mesParaAbrirAhora)}`}
+              </Button>
+            ) : null}
+            <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
+              Abrir configuración fiscal
+            </Button>
+          </>
         }
       />
     );
@@ -1735,11 +1773,7 @@ export function StudyExpedienteMensual() {
 
       <FiscalBooksExportAction
         periodId={selectedTaxPeriod?.id ?? null}
-        periodLabel={
-          selectedTaxPeriod
-            ? `${selectedTaxPeriod.taxType.name} · ${fiscalTaxPeriodLabel(selectedTaxPeriod)}`
-            : null
-        }
+        periodLabel={mesDeLaSeleccion ? rotuloMes(mesDeLaSeleccion) : null}
         abierto={exportarAbierto}
         onCerrar={() => setExportarAbierto(false)}
       />
@@ -1778,32 +1812,15 @@ export function StudyExpedienteMensual() {
         documentos={documentsQuery.data}
       />
 
-      {positionAction?.kind === "PAYMENT" ? (
-        <PanelPago
-          posicion={positionAction.position}
-          onCerrar={() => setPositionAction(null)}
-          firmId={firmId}
-          clientId={clientId}
-        />
-      ) : null}
-
-      {positionAction?.kind === "FILING" && safeActiveStep !== 5 ? (
-        <PanelPresentacion
-          posicion={positionAction.position}
-          onCerrar={() => setPositionAction(null)}
-          firmId={firmId}
-          clientId={clientId}
-          documentos={documentsQuery.data}
-        />
-      ) : null}
-
-      {positionAction?.kind === "DECLARATION" ? (
-        <PanelDeclaracion
-          posicion={positionAction.position}
-          onCerrar={() => setPositionAction(null)}
+      {impuestoAbierto && positionQuery.data?.some((item) => item.obligationId === impuestoAbierto) ? (
+        <PanelImpuesto
+          posicion={positionQuery.data.find((item) => item.obligationId === impuestoAbierto)!}
+          onCerrar={() => setImpuestoAbierto(null)}
           firmId={firmId}
           clientId={clientId}
           documentsQuery={documentsQuery}
+          canFile={capabilities.has("tax.filings.record")}
+          canPay={capabilities.has("tax.payments.record")}
         />
       ) : null}
 

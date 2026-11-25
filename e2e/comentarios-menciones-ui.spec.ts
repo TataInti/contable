@@ -13,8 +13,8 @@ async function openClientLegajo(page: Page) {
   await goTo(page, "Legajo");
   await expect(page.getByRole("heading", { name: "Legajo", exact: true })).toBeVisible();
   const period = page.getByLabel("Período fiscal");
-  await pickOption(period, MONTH);
-  await expect(period).toHaveValue(new RegExp(MONTH));
+  await pickOption(period, "Noviembre de 2026");
+  await expect(period).toHaveValue("Noviembre de 2026");
 }
 
 async function nuevaPagina(context: BrowserContext) {

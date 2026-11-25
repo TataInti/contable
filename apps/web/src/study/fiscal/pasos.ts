@@ -31,7 +31,7 @@ export function nextRequiredStepFor(stepCompletion: Record<FiscalStep, boolean>)
   return FISCAL_STEPS.find((item) => !stepCompletion[item.key]);
 }
 
-export function fiscalConfigurationCompleteFor({
+export function fiscalConfigurationReadinessFor({
   hasAccountingProfile,
   latestProfile,
   registrations,
@@ -46,14 +46,18 @@ export function fiscalConfigurationCompleteFor({
   periods: readonly unknown[];
   obligations: readonly { profile?: { version: number } }[];
 }) {
-  return isClientConfigurationComplete({
+  return {
     hasAccountingProfile,
     hasActiveFiscalProfile: latestProfile?.status === "ACTIVE",
     hasActiveRegistration: registrations.some((registration) => registration.status === "ACTIVE" && registration.profile?.version === latestProfile?.version),
     hasActiveActivity: activities.some((activity) => activity.validTo === null && activity.profile?.version === latestProfile?.version),
     hasTaxPeriod: periods.length > 0,
     hasObligation: obligations.some((obligation) => obligation.profile?.version === latestProfile?.version),
-  });
+  };
+}
+
+export function fiscalConfigurationCompleteFor(input: Parameters<typeof fiscalConfigurationReadinessFor>[0]) {
+  return isClientConfigurationComplete(fiscalConfigurationReadinessFor(input));
 }
 
 // Un perfil cargado pero sin activar no está terminado: se dice, en lugar de darlo por completo.

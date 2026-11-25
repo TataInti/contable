@@ -1,12 +1,15 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { Dispatch, SetStateAction } from "react";
 import { Button, EmptyState } from "@contable/design-system";
+import type { ClientConfigurationMissing } from "@contable/contracts";
 import { formatCuit } from "../../../lib/cuit";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { CONDITION_LABELS, today, type ClientActivityLink, type FiscalStep, type FiscalTab, type Mutacion, type ProfileForm, type TaxPeriod, type TaxRegistration, type TaxpayerProfileVersion } from "../utilidades";
 
 type Props = {
   configuracionCompleta: boolean;
+  faltantes: ClientConfigurationMissing[];
+  abrirFaltante: (step: ClientConfigurationMissing["step"]) => void;
   canWrite: boolean;
   latestProfile: TaxpayerProfileVersion | undefined;
   profileQuery: UseQueryResult<TaxpayerProfileVersion[]>;
@@ -25,7 +28,7 @@ type Props = {
   setTab: Dispatch<SetStateAction<FiscalTab>>;
 };
 
-export function PestanaResumen({ configuracionCompleta, canWrite, latestProfile, profileQuery, showProfileHistory, setShowProfileHistory, submitReview, activate, setProfileId, setForm, openStepForm, periodsQuery, activeRegistrations, currentActivities, periodsWithObligation, periodsWithoutObligation, setTab }: Props) {
+export function PestanaResumen({ configuracionCompleta, faltantes, abrirFaltante, canWrite, latestProfile, profileQuery, showProfileHistory, setShowProfileHistory, submitReview, activate, setProfileId, setForm, openStepForm, periodsQuery, activeRegistrations, currentActivities, periodsWithObligation, periodsWithoutObligation, setTab }: Props) {
   return (
     <>
       {configuracionCompleta ? (
@@ -33,7 +36,7 @@ export function PestanaResumen({ configuracionCompleta, canWrite, latestProfile,
           <StatusBadge status="COMPLETED" label="Configuración completa" />
           <span>El cliente ya tiene todo lo necesario para abrir una liquidación.</span>
         </p>
-      ) : null}
+      ) : faltantes.length ? <p>Falta: {faltantes.map((gap, index) => <span key={gap.key}>{index ? ", " : ""}<Button type="button" variant="text" size="row" onClick={() => abrirFaltante(gap.step)}>{gap.label}</Button></span>)}.</p> : null}
 
       <section className="fiscal-section" aria-labelledby="contributor-title">
         <div className="fiscal-section__heading">
