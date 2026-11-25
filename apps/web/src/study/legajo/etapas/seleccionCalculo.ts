@@ -184,3 +184,22 @@ export function lineasDeFormula(component: WorkpaperCalculationComponent): strin
   }
   return lineas;
 }
+
+/**
+ * Nombre corto del impuesto para listas y encabezados: «Ingresos Brutos · Tucumán» (sin régimen ni «Provincia de»).
+ * Suma el régimen solo si dos filas quedarían con el mismo nombre.
+ */
+export function etiquetasCortas(
+  obligaciones: ReadonlyArray<{ taxTypeName: string; regimeName: string; jurisdictionName: string }>,
+): string[] {
+  const base = obligaciones.map((obligacion) => {
+    const impuesto = obligacion.taxTypeName;
+    const jurisdiccion = obligacion.jurisdictionName.replace(/^(Provincia|Municipalidad|Municipio) de /i, "");
+    return jurisdiccion && !impuesto.includes(jurisdiccion) ? `${impuesto} · ${jurisdiccion}` : impuesto;
+  });
+  return base.map((etiqueta, indice) =>
+    base.filter((otra) => otra === etiqueta).length > 1
+      ? `${etiqueta} · ${obligaciones[indice]?.regimeName ?? ""}`
+      : etiqueta,
+  );
+}

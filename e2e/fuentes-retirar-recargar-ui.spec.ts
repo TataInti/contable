@@ -87,7 +87,7 @@ async function importeAusente(page: Page, texto: string) {
 async function importarLibro(page: Page, datos: FacturaSintetica[], nombre: string, bytes?: Buffer) {
   const { libro } = await cargarLibroVentas(page, datos, nombre, false, bytes);
   await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
-  await expect(page.getByRole("dialog", { name: "Importar libros IVA" })).toBeHidden({ timeout: 60_000 });
+  await expect(page.getByRole("dialog", { name: "Importar libro de ventas" })).toBeHidden({ timeout: 60_000 });
 }
 
 test("fuentes del Legajo: retirar y volver a cargar una percepción, y reemplazar un libro antes de calcular", async ({ page }) => {
@@ -182,7 +182,6 @@ test("fuentes del Legajo: retirar y volver a cargar una percepción, y reemplaza
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       buffer: BYTES_SEPTIEMBRE,
     });
-    await libro.getByRole("button", { name: "Analizar alícuotas", exact: true }).click();
     await expect(libro.getByRole("button", { name: "Importar", exact: true })).toBeEnabled({ timeout: 60_000 });
     rechazoEsperado = true;
     const [respuesta] = await Promise.all([

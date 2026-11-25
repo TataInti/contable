@@ -4,7 +4,13 @@ import { DenseTabs, type DenseTab } from "../../../ui/Dense";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { Icon } from "../../../ui/Icon";
 import type { BatchUserLine } from "../../batch-users.js";
-import { INTERNAL_MODULES, INTERNAL_MODULES_BY_ROLE, INTERNAL_ROLE_OPTIONS, type BatchResult, type CreatedInternalUser } from "../tipos";
+import {
+  INTERNAL_MODULES,
+  INTERNAL_MODULES_BY_ROLE,
+  INTERNAL_ROLE_OPTIONS,
+  type BatchResult,
+  type CreatedInternalUser,
+} from "../tipos";
 
 type Props = {
   showInternalInviteForm: boolean;
@@ -35,7 +41,34 @@ type Props = {
   tablaVistaPreviaLote: ReactNode;
 };
 
-export function PanelAltaUsuarios({ showInternalInviteForm, closeInternalDrawer, createMode, setCreateMode, createTabs, createdInternalUser, setCreatedInternalUser, internalName, setInternalName, internalEmail, setInternalEmail, internalRole, setInternalRole, inviteInternal, actionError, setActionError, batchResults, batchText, setBatchText, batchLines, validBatchLines, batchRunning, runBatch, downloadBatchCredentials, tablaResultadoLote, tablaVistaPreviaLote }: Props) {
+export function PanelAltaUsuarios({
+  showInternalInviteForm,
+  closeInternalDrawer,
+  createMode,
+  setCreateMode,
+  createTabs,
+  createdInternalUser,
+  setCreatedInternalUser,
+  internalName,
+  setInternalName,
+  internalEmail,
+  setInternalEmail,
+  internalRole,
+  setInternalRole,
+  inviteInternal,
+  actionError,
+  setActionError,
+  batchResults,
+  batchText,
+  setBatchText,
+  batchLines,
+  validBatchLines,
+  batchRunning,
+  runBatch,
+  downloadBatchCredentials,
+  tablaResultadoLote,
+  tablaVistaPreviaLote,
+}: Props) {
   return (
     <ActionDrawer
       isOpen={showInternalInviteForm}
@@ -68,7 +101,9 @@ export function PanelAltaUsuarios({ showInternalInviteForm, closeInternalDrawer,
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => void navigator.clipboard.writeText(createdInternalUser.temporaryPassword)}
+                onClick={() =>
+                  void navigator.clipboard.writeText(createdInternalUser.temporaryPassword)
+                }
               >
                 Copiar contraseña
               </Button>
@@ -92,14 +127,16 @@ export function PanelAltaUsuarios({ showInternalInviteForm, closeInternalDrawer,
             >
               <Field
                 id="internal-invite-name"
-                label="Nombre"
+                label="Nombre *"
+                aria-label="Nombre"
                 value={internalName}
                 onChange={(event) => setInternalName(event.target.value)}
                 required
               />
               <Field
                 id="internal-invite-email"
-                label="Correo"
+                label="Correo *"
+                aria-label="Correo"
                 type="email"
                 value={internalEmail}
                 onChange={(event) => setInternalEmail(event.target.value)}
@@ -122,7 +159,8 @@ export function PanelAltaUsuarios({ showInternalInviteForm, closeInternalDrawer,
                     <span>
                       <strong>{label}</strong>{" "}
                       <small>
-                        · {(INTERNAL_MODULES_BY_ROLE[value] ?? []).length} de {INTERNAL_MODULES.length} módulos
+                        · {(INTERNAL_MODULES_BY_ROLE[value] ?? []).length} de{" "}
+                        {INTERNAL_MODULES.length} módulos
                       </small>
                     </span>
                   </label>
@@ -162,9 +200,7 @@ export function PanelAltaUsuarios({ showInternalInviteForm, closeInternalDrawer,
               {batchResults.length} usuarios. Las contraseñas temporales se muestran una sola vez:
               descargalas ahora.
             </p>
-            <div className="dense-batch-preview">
-              {tablaResultadoLote}
-            </div>
+            <div className="dense-batch-preview">{tablaResultadoLote}</div>
             <div className="study-form__actions">
               <Button
                 type="button"
@@ -194,7 +230,9 @@ export function PanelAltaUsuarios({ showInternalInviteForm, closeInternalDrawer,
                 rows={6}
                 value={batchText}
                 onChange={(event) => setBatchText(event.target.value)}
-                placeholder={"Lucía Fernández, lucia@estudio.com, Preparador\nMartín Acosta, martin@estudio.com, Revisor"}
+                placeholder={
+                  "Lucía Fernández, lucia@estudio.com, Preparador\nMartín Acosta, martin@estudio.com, Revisor"
+                }
               />
               <span className="ds-field__hint">
                 Si falta el rol se asigna Preparador. Podés cambiarlo después desde la tabla.
@@ -202,8 +240,16 @@ export function PanelAltaUsuarios({ showInternalInviteForm, closeInternalDrawer,
             </label>
             {batchLines.length > 0 ? (
               <div className="dense-batch-preview">
+                <p>
+                  {validBatchLines.length} de {batchLines.length} líneas válidas para crear.
+                </p>
                 {tablaVistaPreviaLote}
               </div>
+            ) : null}
+            {validBatchLines.length === 0 ? (
+              <p className="form-submit-hint" role="note">
+                Ingresá al menos una línea válida para crear usuarios.
+              </p>
             ) : null}
             <div className="study-form__actions">
               <Button
@@ -212,8 +258,10 @@ export function PanelAltaUsuarios({ showInternalInviteForm, closeInternalDrawer,
                 disabled={validBatchLines.length === 0}
                 onClick={() => void runBatch()}
               >
-                <Icon name="plus" size={17} /> Crear {validBatchLines.length}{" "}
-                {validBatchLines.length === 1 ? "usuario" : "usuarios"}
+                <Icon name="plus" size={17} />{" "}
+                {validBatchLines.length === 0
+                  ? "Crear usuarios"
+                  : `Crear ${validBatchLines.length} ${validBatchLines.length === 1 ? "usuario" : "usuarios"}`}
               </Button>
               <Button type="button" variant="ghost" onClick={closeInternalDrawer}>
                 Cancelar

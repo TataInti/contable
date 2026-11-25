@@ -6,14 +6,9 @@ import { api } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import {
-  DenseHeader,
-  DensePage,
-  StatStrip,
-  useDensity,
-} from "../ui/Dense";
+import { DenseHeader, DensePage, useDensity } from "../ui/Dense";
 import "./study.css";
-import { formatearFechaHora } from "../lib/formatoFechas";
+import { formatearFechaHora, formatearMes } from "../lib/formatoFechas";
 import { CajaFiscal } from "./rentabilidad/CajaFiscal";
 
 /**
@@ -59,9 +54,6 @@ function formatMoney(value: string | undefined | null): string {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(num);
 }
 
-function basisLabel(basis: string): string {
-  return basis === "CAJA" ? "Caja (flujo real)" : "Devengado (acumulado)";
-}
 
 export function StudyRentabilidad() {
   const [density] = useDensity();
@@ -89,9 +81,17 @@ export function StudyRentabilidad() {
     ],
     [periodsQuery.data],
   );
+  const fiscalYearsQuery = useQuery({
+    queryKey: ["fiscal-years", firmId, clientId],
+    queryFn: () => api.get<Array<{ periods: Array<{ id: string; startDate: string }> }>>(`/firms/${firmId}/clients/${clientId}/fiscal-years`),
+    enabled: Boolean(firmId && clientId && periodId && !availablePeriods.some((period) => period.id === periodId)),
+  });
+  const contextMonth = fiscalYearsQuery.data?.flatMap((year) => year.periods)
+    .find((period) => period.id === periodId)?.startDate.slice(0, 7);
   const selectedPeriod =
     availablePeriods.find((period) => period.id === (urlPeriod ?? periodId)) ??
     availablePeriods.find((period) => period.id === periodId) ??
+    availablePeriods.find((period) => period.startDate.slice(0, 7) === contextMonth) ??
     availablePeriods[0] ??
     null;
   const activePeriodId = selectedPeriod?.id ?? periodId;
@@ -158,7 +158,7 @@ export function StudyRentabilidad() {
             id={`profitability-${basis.toLowerCase()}-title`}
             className="profitability-view__title"
           >
-            {basis === "DEVENGADO" ? "Resultado gerencial" : "Flujo neto"} · {basisLabel(basis)}
+            {basis === "DEVENGADO" ? "Resultado gerencial · Devengado" : "Flujo de caja"}
           </h3>
         </div>
         <div className="profitability-view__actions">
@@ -166,7 +166,7 @@ export function StudyRentabilidad() {
           {snapshot ? (
             <span className="profitability-view__version">v{snapshot.version}</span>
           ) : null}
-          {capabilities.has("profitability.calculate") ? (
+          {snapshot && capabilities.has("profitability.calculate") ? (
             <Button
               size="sm"
               disabled={!selectedPeriod || calculateMutation.isPending}
@@ -269,7 +269,7 @@ export function StudyRentabilidad() {
                 value={activePeriodId ?? ""}
                 onChange={(value) => selectPeriod(value)}
                 allowEmpty={false}
-                options={availablePeriods.map((period) => ({ value: period.id, label: period.label ?? period.startDate.slice(0, 7) }))}
+                options={availablePeriods.map((period) => ({ value: period.id, label: formatearMes(period.startDate) }))}
               />
             </div>
           ) : null}
@@ -287,23 +287,6 @@ export function StudyRentabilidad() {
         }
       />
 
-      <StatStrip
-        label="Resultado del período"
-        items={[
-          { key: "accrual", label: "Devengado", value: devengado ? `v${devengado.version}` : "Sin calcular" },
-          { key: "cash", label: "Caja", value: caja ? `v${caja.version}` : "Sin calcular" },
-        ]}
-      />
-
-      <Notice
-        tone="info"
-        action={
-          !clientId ? null : !selectedPeriod ? <Button size="sm" variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>Configurar período</Button> : !devengado && capabilities.has("profitability.calculate") ? <Button size="sm" onClick={() => calculateMutation.mutate({ basis: "DEVENGADO" })}>Calcular devengado</Button> : !caja && capabilities.has("profitability.calculate") ? <Button size="sm" onClick={() => calculateMutation.mutate({ basis: "CAJA" })}>Calcular caja</Button> : devengado?.status === "DRAFT" && capabilities.has("profitability.publish") ? <Button size="sm" onClick={() => confirm.ask({ title: "¿Publicar esta versión?", description: "El cliente podrá consultar este resultado en el portal del cliente.", confirmLabel: "Publicar", onConfirm: () => publishMutation.mutate({ basis: "DEVENGADO" }) })}>Publicar devengado</Button> : null
-        }
-      >
-        <strong>Próximo paso:</strong> {!clientId ? "Seleccioná un cliente para consultar su resultado." : !selectedPeriod ? "Configurá un período fiscal con obligaciones materializadas." : !devengado ? "Calculá primero la rentabilidad devengada del período activo." : !caja ? "Calculá la vista de caja para completar el análisis." : devengado.status === "DRAFT" && capabilities.has("profitability.publish") ? "Publicá la versión devengada cuando esté lista para el cliente." : "Revisá las dos vistas y sus versiones publicadas."}
-      </Notice>
-
 
 
       {!clientId ? (
@@ -311,7 +294,7 @@ export function StudyRentabilidad() {
           title="Elegí un cliente"
           description="La rentabilidad se calcula por cliente y período fiscal."
         />
-      ) : periodsQuery.isLoading || listQuery.isLoading ? (
+      ) : periodsQuery.isLoading || fiscalYearsQuery.isLoading || listQuery.isLoading ? (
         <div className="study-state" role="status">
           Cargando rentabilidad…
         </div>

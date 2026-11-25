@@ -102,15 +102,15 @@ describe("StudyClientes — detalle del cliente (K3)", () => {
     expect(detalle.querySelector(".dense-avatar--lg")?.textContent).toBe("S");
   });
 
-  it("con faltantes muestra el aviso y «Completar» abre la edición", async () => {
+  it("con faltantes muestra los pasos y la ficha abre la edición", async () => {
     renderConRutas("/clientes", <StudyClientes />);
     const detalle = await seleccionarCliente(CUIT_BETA, BETA);
     const aviso = detalle.querySelector(".dense-inspector__banner .ds-notice") as HTMLElement;
 
     expect(aviso.textContent).toContain(
-      "Ficha incompleta: falta condición IVA, provincia, actividad.",
+      "Falta: ficha contable, perfil fiscal activo, inscripción fiscal, actividad fiscal, período fiscal, obligación.",
     );
-    fireEvent.click(within(aviso).getByRole("button", { name: "Completar" }));
+    fireEvent.click(within(aviso).getByRole("button", { name: "ficha contable" }));
     expect(await screen.findByRole("dialog", { name: "Editar cliente" })).toBeTruthy();
   });
 
