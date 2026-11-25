@@ -4,6 +4,7 @@ import { api, type ClientContact } from "../../lib/api";
 import { formatCuit } from "../../lib/cuit";
 import { formatearFecha } from "../../lib/formatoFechas";
 import { Inspector, InspectorFacts, InspectorSection } from "../../ui/Dense";
+import { ListaFaltantes } from "../../ui/ListaFaltantes";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { CommentThread } from "../CommentThread";
 import { sinRespuesta } from "./consultas";
@@ -71,9 +72,7 @@ export function InspectorCliente({
       banner={
         configurationGaps(selectedClient).length > 0 ? (
           <Notice tone="warning">
-            Falta: {configurationGaps(selectedClient).map((gap, index) => (
-              <span key={gap.key}>{index ? ", " : ""}<Button type="button" variant="text" size="row" onClick={() => openConfiguration(selectedClient.id, gap.step)}>{gap.label}</Button></span>
-            ))}.
+            <ListaFaltantes faltantes={configurationGaps(selectedClient)} onAbrir={(gap) => openConfiguration(selectedClient.id, gap.step)} />
           </Notice>
         ) : undefined
       }

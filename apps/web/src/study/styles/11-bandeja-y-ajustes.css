@@ -1079,3 +1079,39 @@
   content: " *";
   color: var(--ds-color-danger);
 }
+
+/* Lista «Falta»: alineada a la izquierda y con las comas pegadas a cada dato. */
+.faltantes-lista {
+  display: block;
+  text-align: start;
+}
+
+.faltantes-lista .ds-button--row {
+  display: inline;
+  min-inline-size: 0;
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+  text-align: start;
+  white-space: normal;
+  vertical-align: baseline;
+}
+
+/* Las etiquetas de la ficha («Nombre de fantasía») entran en una línea. */
+.dense-inspector .dense-facts > div {
+  grid-template-columns: 136px minmax(0, 1fr);
+}
+
+.dense-inspector .dense-facts dt {
+  white-space: nowrap;
+}
+
+/* Clientes: buscador más angosto para que «Agrupar por terminación» quede en la fila de filtros. */
+.dense-toolbar:has(select[aria-label="Filtrar por estado"]) .dense-search .dense-input {
+  width: 200px;
+}
+
+.client-list__gaps {
+  justify-content: flex-start;
+  padding-inline: 0;
+}

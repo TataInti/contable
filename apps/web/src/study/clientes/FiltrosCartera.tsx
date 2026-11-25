@@ -77,7 +77,7 @@ export function FiltrosCartera({
         value={endingFilter.join(",")}
         onChange={(event) => setEndingFilter(parseEndingFilter(event.target.value))}
         options={[
-          { value: "", label: "Toda terminación de CUIT" },
+          { value: "", label: "Terminación: todas" },
           ...(endingFilter.length > 1 ? [{ value: endingFilter.join(","), label: `Terminaciones ${endingFilter.join(", ")}` }] : []),
           ...CUIT_ENDINGS.map((digit) => ({ value: digit, label: `Termina en ${digit}` })),
         ]}

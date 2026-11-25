@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { Button, EmptyState } from "@contable/design-system";
 import type { ClientConfigurationMissing } from "@contable/contracts";
 import { formatCuit } from "../../../lib/cuit";
+import { ListaFaltantes } from "../../../ui/ListaFaltantes";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { CONDITION_LABELS, today, type ClientActivityLink, type FiscalStep, type FiscalTab, type Mutacion, type ProfileForm, type TaxPeriod, type TaxRegistration, type TaxpayerProfileVersion } from "../utilidades";
 
@@ -36,7 +37,7 @@ export function PestanaResumen({ configuracionCompleta, faltantes, abrirFaltante
           <StatusBadge status="COMPLETED" label="Configuración completa" />
           <span>El cliente ya tiene todo lo necesario para abrir una liquidación.</span>
         </p>
-      ) : faltantes.length ? <p>Falta: {faltantes.map((gap, index) => <span key={gap.key}>{index ? ", " : ""}<Button type="button" variant="text" size="row" onClick={() => abrirFaltante(gap.step)}>{gap.label}</Button></span>)}.</p> : null}
+      ) : faltantes.length ? <p><ListaFaltantes faltantes={faltantes} onAbrir={(gap) => abrirFaltante(gap.step)} /></p> : null}
 
       <section className="fiscal-section" aria-labelledby="contributor-title">
         <div className="fiscal-section__heading">
