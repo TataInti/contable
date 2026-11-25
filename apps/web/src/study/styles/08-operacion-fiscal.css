@@ -1524,6 +1524,7 @@
   color: var(--ds-color-text-muted);
 }
 .workpaper-close-step__status { justify-self: start; }
+.workpaper-close-step__status--hecho::before { content: "✓"; }
 .workpaper-close-step__action p { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
 .workpaper-close-step__action {
   display: flex;

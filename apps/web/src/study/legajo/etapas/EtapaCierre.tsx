@@ -67,7 +67,7 @@ export function EtapaCierre({
     <li className="workpaper-close-step" key={n}>
       <span className="workpaper-close-step__number">{n}</span>
       <div className="workpaper-close-step__title"><strong>{titulo}</strong><small>{descripcion}</small></div>
-      <span className="workpaper-close-step__status" role="status">{hecho ? <><span aria-hidden="true">✓</span><span className="sr-only">Hecho</span></> : disponible ? "Disponible" : "Bloqueado"}</span>
+      <span className={`workpaper-close-step__status${hecho ? " workpaper-close-step__status--hecho" : ""}`} role="status">{hecho ? <span className="sr-only">Hecho</span> : disponible ? "Disponible" : "Bloqueado"}</span>
       <div className="workpaper-close-step__action">{accion}</div>
     </li>
   );
