@@ -135,7 +135,7 @@ describe("Legajo · etapa Fuentes (K10)", () => {
   it("muestra una fila por fuente sin códigos internos y señala qué falta para calcular", async () => {
     fijarContexto(PERMISOS_FUENTES);
     renderLegajo("/expediente-mensual?etapa=fuentes");
-    expect(await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).toHaveTextContent(/Para calcular falta:.*Ventas del período, Compras del período/);
+    expect(await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).toHaveTextContent(/Faltan 2: Ventas del período, Compras del período/);
     expect(screen.getByRole("button", { name: "Gestionar Ventas del período" })).toBeInTheDocument();
     expect(screen.queryByText("ARCA_IVA_SALES")).toBeNull();
     expect(screen.getAllByRole("row")).toHaveLength(4);
@@ -269,7 +269,7 @@ describe("Legajo · etapa Fuentes (K10)", () => {
     fijarContexto(PERMISOS_FUENTES);
     renderLegajo();
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
-    expect(await screen.findByText(/Para calcular falta:/)).toBeInTheDocument();
+    expect(await screen.findByText(/Faltan? \d+:/)).toBeInTheDocument();
   });
 
   it("un TXT de la DGR en otra fuente no se importa y nombra la fuente correcta", async () => {

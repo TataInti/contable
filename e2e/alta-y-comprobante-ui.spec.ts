@@ -344,18 +344,9 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await expect(page.getByRole("combobox", { name: "Cliente en el que estás trabajando" })).toHaveValue(new RegExp(data.client.legalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 
-  await test.step("Configuración fiscal: perfil activo", async () => {
-    await page.getByRole("button", { name: "Crear perfil fiscal" }).first().click();
-    await page.locator("#pf-legal-name").fill(data.client.legalName);
-    await page.locator("#pf-cuit").fill(data.client.cuit);
-    await page.locator("#pf-fiscal-address").fill(data.client.fiscalAddress);
-    await pickOption(page.locator("#pf-person-type"), "Jurídica");
-    await pickOption(page.locator("#pf-condition"), "Responsable Inscripto");
-    await page.locator("#pf-valid-from").fill(data.validFrom);
-    await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
-    await page.getByRole("button", { name: "Enviar a revisión" }).click();
-    await page.getByRole("button", { name: "Activar perfil" }).click();
+  await test.step("Configuración fiscal: perfil activo desde el alta", async () => {
     await expect(page.getByRole("button", { name: "Crear nueva versión" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Crear perfil fiscal" })).toHaveCount(0);
   });
 
   await test.step("Configuración fiscal: inscripción en los tres regímenes", async () => {
@@ -482,7 +473,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
         const nombreFuente = source.endsWith("Ventas") ? "Ventas del período" : "Compras del período";
         await page.getByRole("button", { name: `Gestionar ${nombreFuente}` }).click();
         await page.getByRole("button", { name: "Cargar archivo" }).click();
-        const panel = page.getByRole("dialog", { name: "Importar libros IVA" });
+        const panel = page.getByRole("dialog", { name: seccion === "Libro de ventas" ? "Importar libro de ventas" : "Importar libro de compras" });
         const libro = panel.locator(`section[aria-label="${seccion}"]`);
         await libro.locator('input[type="file"]').setInputFiles(file);
         await mutating(page, "/import-batches", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
