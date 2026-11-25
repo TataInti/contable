@@ -42,7 +42,6 @@ const CLIENTE = {
 const OCTUBRE = { start: "2026-10-01", end: "2026-10-31", mes: "Octubre de 2026", label: `Octubre 2026 IIBB ${SUFFIX}` };
 const MOTIVO_ACEPTAR = `E2E ${SUFFIX}: el cliente informó que emite las facturas C en el período; se acepta con motivo.`;
 const MOTIVO_EXCLUIR = `E2E ${SUFFIX}: la nota de crédito C se excluye del cálculo hasta que el estudio la confirme.`;
-const MOTIVO_CONTROL = `E2E ${SUFFIX}: extracto bancario sintético no aportado en la corrida; se resuelve con motivo y queda registrado.`;
 
 /** Facturas C (código 11) y nota de crédito C (código 13), todas sintéticas. */
 const COMPROBANTES_C: FacturaSintetica[] = [
@@ -107,7 +106,7 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     await abrirLegajo(page, rotulo);
     const { libro } = await cargarLibroVentas(page, COMPROBANTES_C, `ventas-c-${SUFFIX}.xlsx`);
     await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
-    await expect(page.getByRole("dialog", { name: "Importar libros IVA" })).toBeHidden({ timeout: 60_000 });
+    await expect(page.getByRole("dialog", { name: "Importar libro de ventas" })).toBeHidden({ timeout: 60_000 });
   });
 
   await test.step("Revisión del lote y cálculo: el Legajo abre los controles de perfil", async () => {
@@ -169,21 +168,11 @@ test("controles de perfil de un Responsable Inscripto: aceptar un grupo y exclui
     await esperarImporte(page, "3.150,00");
   });
 
-  await test.step("Controles automáticos: acreditaciones bancarias y caja, resueltas con motivo", async () => {
+  await test.step("Controles automáticos: acreditaciones bancarias y caja quedan omitidas (sin extracto ni caja)", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
-    for (const nombre of ["Acreditaciones bancarias vs. facturación", "Caja e imputaciones del período"]) {
-      const queue = page.getByRole("list", { name: "Controles abiertos" });
-      const row = queue.getByRole("listitem").filter({ hasText: nombre });
-      // Espera estricta de 4U: un solo control abierto, resolverlo una vez y comprobar cero tras el refetch.
-      await expect(row, `«${nombre}» abierto tras el recálculo`).toHaveCount(1);
-      await row.getByRole("button", { name: /Abrir/ }).click();
-      const drawer = page.getByRole("dialog");
-      await drawer.getByRole("button", { name: "Resolver", exact: true }).click();
-      await drawer.getByLabel("Motivo").fill(MOTIVO_CONTROL);
-      await mutating(page, "/resolve", () => drawer.getByRole("button", { name: "Confirmar resolución", exact: true }).click());
-      await expect(drawer).toBeHidden();
-      await expect(queue.getByRole("listitem").filter({ hasText: nombre }), `«${nombre}» sin abiertos`).toHaveCount(0);
-    }
+    // D6: sin extracto bancario ni movimientos de caja, los dos controles no bloquean: quedan «Omitido» a la vista.
+    await expect(page.getByRole("list", { name: "Controles omitidos" })).toContainText("Omitido: no hay extracto cargado");
+    await expect(page.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem").filter({ hasText: /Acreditaciones bancarias|Caja e imputaciones/ })).toHaveCount(0);
   });
 
   await test.step("Revisión: enviar a revisión y aprobar (autorrevisión activada)", async () => {

@@ -24,10 +24,10 @@ let duplicateClientId = "";
 let initialCuit = "";
 let runtimePrisma: PrismaClient | null = null;
 
-function validTestCuit(): string {
+function validTestCuit(prefix = "20"): string {
   const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
   for (;;) {
-    const base = `20${String(randomInt(0, 100_000_000)).padStart(8, "0")}`;
+    const base = `${prefix}${String(randomInt(0, 100_000_000)).padStart(8, "0")}`;
     const sum = weights.reduce((total, weight, index) => total + Number(base[index]) * weight, 0);
     const check = (11 - (sum % 11)) % 11;
     if (check < 10) return `${base}${check}`;
@@ -181,6 +181,68 @@ afterAll(async () => {
   await runtimePrisma?.$disconnect();
   await app?.close();
   app = null;
+});
+
+describe("Alta con perfil fiscal activo — integración API/PostgreSQL", () => {
+  it.each([
+    ["RESPONSABLE_INSCRIPTO", "JURIDICA"],
+    ["MONOTRIBUTISTA", "FISICA"],
+  ] as const)(
+    "crea perfil %s vigente sin activar prematuramente al cliente",
+    async (condition, personType) => {
+      const cuit = validTestCuit(personType === "JURIDICA" ? "30" : "20");
+      const now = new Date();
+      const response = await app!.inject({
+        method: "POST",
+        url: `/api/v1/firms/${FIRM_ALFA}/clients`,
+        cookies: { refresh_token: ownerToken, csrf_token: CSRF },
+        headers: { "x-csrf-token": CSRF },
+        payload: {
+          legalName: `Alta fiscal sintética ${randomUUID()}`,
+          cuit,
+          vatCondition: condition,
+          province: "Tucumán",
+          fiscalAddress: "San Miguel de Tucumán, domicilio sintético",
+        },
+      });
+      expect(response.statusCode).toBe(201);
+      const id = response.json().data.id as string;
+      const profile = await prisma.taxpayerProfileVersion.findFirstOrThrow({
+        where: { firmId: FIRM_ALFA, clientId: id },
+      });
+      expect(profile).toMatchObject({
+        status: "ACTIVE",
+        version: 1,
+        personType,
+        nationalCondition: condition,
+        source: "ALTA_CLIENTE",
+        fiscalAddress: "San Miguel de Tucumán, domicilio sintético",
+        createdByUserId: OWNER_A,
+      });
+      expect(profile.validFrom.toISOString().slice(0, 10)).toBe(
+        new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+          .toISOString()
+          .slice(0, 10),
+      );
+      expect(
+        (await prisma.clientProfile.findUniqueOrThrow({ where: { clientId: id } })).province,
+      ).toBe("Tucumán");
+      expect((await prisma.client.findUniqueOrThrow({ where: { id } })).status).toBe("ONBOARDING");
+      expect(
+        await prisma.auditEvent.findFirst({
+          where: {
+            firmId: FIRM_ALFA,
+            clientId: id,
+            entityId: profile.id,
+            action: "taxpayer_profile.created_and_activated",
+          },
+        }),
+      ).toMatchObject({
+        userId: OWNER_A,
+        after: expect.objectContaining({ status: "ACTIVE", province: "Tucumán" }),
+      });
+    },
+  );
 });
 
 describe("PATCH identidad de cliente — integración API/PostgreSQL", () => {

@@ -5,18 +5,54 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { buildPortalInvitationLink } from "../lib/portalInvitationLink";
 import { useClientContext } from "../context/ClientContext";
+import { useSession } from "../session/SessionContext";
 import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
 import { memberRecoveryCopy, memberRowActions } from "./member-row-actions.js";
 import { StudyUserAssignments } from "./StudyUserAssignments";
-import { DenseHeader, DensePage, DenseSearch, DenseTabs, DenseToolbar, DenseWorkspace, Inspector, InspectorFacts, InspectorSection, StatStrip, normalizeSearch, useDenseShortcuts, useDensity, type DenseTab } from "../ui/Dense";
+import {
+  DenseHeader,
+  DensePage,
+  DenseSearch,
+  DenseTabs,
+  DenseToolbar,
+  DenseWorkspace,
+  Inspector,
+  InspectorFacts,
+  InspectorSection,
+  StatStrip,
+  normalizeSearch,
+  useDenseShortcuts,
+  useDensity,
+  type DenseTab,
+} from "../ui/Dense";
 import { credentialsCsv, parseBatchUsers } from "./batch-users.js";
 import "./study.css";
 import { formatearFechaHora } from "../lib/formatoFechas";
-import { type AccountingStandardRow, type AdminTab, type BatchResult, type CreatedAccessRecovery, type CreatedInternalUser, type CreatedInvitation, type FirmProfile, type InternalMember, type PortalInvitation, type PortalMembership, INTERNAL_MODULES, INTERNAL_MODULES_BY_ROLE, INTERNAL_ROLE_LABELS, INTERNAL_ROLE_OPTIONS } from "./administracion/tipos";
+import {
+  type AccountingStandardRow,
+  type AdminTab,
+  type BatchResult,
+  type CreatedAccessRecovery,
+  type CreatedInternalUser,
+  type CreatedInvitation,
+  type FirmProfile,
+  type InternalMember,
+  type PortalInvitation,
+  type PortalMembership,
+  INTERNAL_MODULES,
+  INTERNAL_MODULES_BY_ROLE,
+  INTERNAL_ROLE_LABELS,
+  INTERNAL_ROLE_OPTIONS,
+} from "./administracion/tipos";
 import { groupTimeZones } from "./administracion/zonasHorarias";
-import { batchUserErrorLabel, initials, isValidEmail, userMutationError } from "./administracion/utilidades";
+import {
+  batchUserErrorLabel,
+  initials,
+  isValidEmail,
+  userMutationError,
+} from "./administracion/utilidades";
 import { PanelControles } from "./administracion/tablas/PanelControles";
 import { PanelDatosEstudio } from "./administracion/tablas/PanelDatosEstudio";
 import { TablaAccesosPortal, filasDelPortal } from "./administracion/tablas/TablaAccesosPortal";
@@ -82,7 +118,9 @@ const ROLE_SHORT_LABELS: Record<string, string> = {
 };
 
 export function StudyAdministracion() {
-  const { firmId, clientId, capabilities } = useClientContext();
+  const { firmId, clientId, setClientId, capabilities } = useClientContext();
+  const session = useSession();
+  const clients = session.me?.firms.find((firm) => firm.firmId === firmId)?.clients ?? [];
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [internalEmail, setInternalEmail] = useState("");
@@ -95,7 +133,11 @@ export function StudyAdministracion() {
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
   const [recoveryLink, setRecoveryLink] = useState<string | null>(null);
-  const [recoverySummary, setRecoverySummary] = useState<{ memberName: string; expiresAt: string; sessionsRevoked: number } | null>(null);
+  const [recoverySummary, setRecoverySummary] = useState<{
+    memberName: string;
+    expiresAt: string;
+    sessionsRevoked: number;
+  } | null>(null);
   const notify = useNotify();
   const [actionError, setActionError] = useState<string | null>(null);
   const [tab, setTab] = useState<AdminTab>("internal");
@@ -119,7 +161,8 @@ export function StudyAdministracion() {
   const [batchResults, setBatchResults] = useState<BatchResult[] | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
   const [density] = useDensity();
-  const identityNameError = identitySubmitted && !identityName.trim() ? "Ingresá el nombre" : undefined;
+  const identityNameError =
+    identitySubmitted && !identityName.trim() ? "Ingresá el nombre" : undefined;
   const identityEmailError =
     identitySubmitted && !isValidEmail(identityEmail)
       ? "Ingresá un correo válido, por ejemplo nombre@estudio.com"
@@ -174,18 +217,24 @@ export function StudyAdministracion() {
   const inviteInternal = useMutation({
     mutationFn: () =>
       api.post<CreatedInternalUser>(`/firms/${firmId}/users`, {
-        email: internalEmail.trim(), name: internalName.trim(), role: internalRole,
+        email: internalEmail.trim(),
+        name: internalName.trim(),
+        role: internalRole,
       }),
     onSuccess: (created) => {
       setActionError(null);
-      notify.success("El usuario fue creado. Entregale la contraseña temporal por un canal seguro.");
+      notify.success(
+        "El usuario fue creado. Entregale la contraseña temporal por un canal seguro.",
+      );
       setCreatedInternalUser(created);
       setInternalEmail("");
       setInternalName("");
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo crear el usuario interno."),
+      setActionError(
+        error instanceof Error ? error.message : "No se pudo crear el usuario interno.",
+      ),
   });
   const updateInternalRole = useMutation({
     mutationFn: ({ userId, role: nextRole }: { userId: string; role: string }) =>
@@ -210,7 +259,15 @@ export function StudyAdministracion() {
     },
   });
   const updateMemberIdentity = useMutation({
-    mutationFn: ({ userId, name, email: nextEmail }: { userId: string; name: string; email: string }) =>
+    mutationFn: ({
+      userId,
+      name,
+      email: nextEmail,
+    }: {
+      userId: string;
+      name: string;
+      email: string;
+    }) =>
       api.patch(`/firms/${firmId}/users/${userId}`, { name: name.trim(), email: nextEmail.trim() }),
     onSuccess: () => {
       setActionError(null);
@@ -281,7 +338,9 @@ export function StudyAdministracion() {
       void queryClient.invalidateQueries({ queryKey: ["internal-members", firmId] });
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo generar el enlace de recuperación."),
+      setActionError(
+        error instanceof Error ? error.message : "No se pudo generar el enlace de recuperación.",
+      ),
   });
   const invitations = useQuery({
     queryKey: ["portal-invitations", firmId, clientId],
@@ -312,13 +371,11 @@ export function StudyAdministracion() {
       setActionError(error instanceof Error ? error.message : "No se pudo crear la invitación."),
   });
   const updatePortalMembership = useMutation({
-    mutationFn: ({
-      id,
-      patch,
-    }: {
-      id: string;
-      patch: { role?: string; status?: string };
-    }) => api.patch<PortalMembership>(`/firms/${firmId}/clients/${clientId}/portal-memberships/${id}`, patch),
+    mutationFn: ({ id, patch }: { id: string; patch: { role?: string; status?: string } }) =>
+      api.patch<PortalMembership>(
+        `/firms/${firmId}/clients/${clientId}/portal-memberships/${id}`,
+        patch,
+      ),
     onSuccess: (_updated, { id, patch }) => {
       setActionError(null);
       if (patch.role !== undefined) {
@@ -372,7 +429,9 @@ export function StudyAdministracion() {
       invalidateStandards();
     },
     onError: (error) =>
-      setActionError(error instanceof Error ? error.message : "No se pudo crear la norma contable."),
+      setActionError(
+        error instanceof Error ? error.message : "No se pudo crear la norma contable.",
+      ),
   });
   const updateStandard = useMutation({
     mutationFn: ({ id, name, isActive }: { id: string; name?: string; isActive?: boolean }) =>
@@ -446,10 +505,7 @@ export function StudyAdministracion() {
   };
 
   const pendingInvitationCount = invitations.data?.filter(
-    (item) =>
-      !item.revokedAt &&
-      !item.acceptedAt &&
-      new Date(item.expiresAt) >= new Date(),
+    (item) => !item.revokedAt && !item.acceptedAt && new Date(item.expiresAt) >= new Date(),
   ).length;
   const openInternalInviteForm = () => {
     setActionError(null);
@@ -525,7 +581,8 @@ export function StudyAdministracion() {
             variant={variant}
             aria-label={`Recuperar acceso de ${memberName}`}
             loading={
-              createAccessRecovery.isPending && createAccessRecovery.variables?.userId === item.userId
+              createAccessRecovery.isPending &&
+              createAccessRecovery.variables?.userId === item.userId
             }
             disabled={anyMemberActionPending}
             onClick={() => {
@@ -700,6 +757,7 @@ export function StudyAdministracion() {
           selectedUserId={selectedUserId}
           setSelectedUserId={setSelectedUserId}
           internalInspector={internalInspector}
+          openIdentityEdit={openIdentityEdit}
           internalRoleDrafts={internalRoleDrafts}
           updateInternalRole={updateInternalRole}
           changeRole={changeRole}
@@ -710,11 +768,24 @@ export function StudyAdministracion() {
     tableBody = !clientId ? (
       <EmptyState
         title="Seleccioná un cliente"
-        description="El acceso al portal siempre se administra dentro de una empresa cliente."
+        description="Elegí acá la empresa cuyos accesos querés administrar."
         action={
-          <Button variant="secondary" onClick={() => navigate("/clientes")}>
-            Ir a clientes
-          </Button>
+          clients.length ? (
+            <SearchSelect
+              label="Cliente para accesos del portal"
+              value=""
+              onChange={(value) => setClientId(value || null)}
+              placeholder="Elegí un cliente…"
+              options={clients.map((client) => ({
+                value: client.clientId,
+                label: client.clientName,
+              }))}
+            />
+          ) : (
+            <Button variant="secondary" onClick={() => navigate("/clientes")}>
+              Ir a clientes
+            </Button>
+          )
         }
       />
     ) : (
@@ -758,7 +829,10 @@ export function StudyAdministracion() {
           }
         />
       ) : firmProfile.data ? (
-        <PanelDatosEstudio firmProfile={{ data: firmProfile.data }} openProfileEdit={openProfileEdit} />
+        <PanelDatosEstudio
+          firmProfile={{ data: firmProfile.data }}
+          openProfileEdit={openProfileEdit}
+        />
       ) : (
         <EmptyState
           title="Datos del estudio no disponibles"
@@ -786,7 +860,11 @@ export function StudyAdministracion() {
           title="No se pudieron cargar las normas contables"
           description="No asumimos que no haya normas mientras la consulta está fallando."
           action={
-            <Button size="sm" variant="secondary" onClick={() => void accountingStandards.refetch()}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => void accountingStandards.refetch()}
+            >
               Reintentar
             </Button>
           }
@@ -860,7 +938,9 @@ export function StudyAdministracion() {
   };
   const downloadBatchCredentials = () => {
     const rows = (batchResults ?? [])
-      .filter((item): item is BatchResult & { created: CreatedInternalUser } => Boolean(item.created))
+      .filter((item): item is BatchResult & { created: CreatedInternalUser } =>
+        Boolean(item.created),
+      )
       .map((item) => ({
         name: item.created.name,
         email: item.created.email,
@@ -882,16 +962,18 @@ export function StudyAdministracion() {
   ];
   const pageDescriptions: Record<AdminTab, string> = {
     internal: "Administrá las cuentas del estudio, los roles y los clientes asignados.",
-    portal: clientId
-      ? "Accesos del portal del cliente seleccionado. Para cambiar de cliente, volvé a Inicio."
-      : "Elegí un cliente en Inicio para consultar y administrar sus accesos al portal.",
+    portal: "Elegí un cliente para consultar y administrar sus accesos al portal.",
     standards: "Configurá las normas contables que pueden elegir los clientes del estudio.",
     profile: "Consultá y actualizá los datos de identificación y la zona horaria del estudio.",
     controls: "Configurá los controles internos del estudio.",
   };
   const pageDescription = pageDescriptions[tab];
   const adminTabs: DenseTab<AdminTab>[] = [
-    { id: "internal", label: "Usuarios internos", count: internalMembers.data ? allMembers.length : undefined },
+    {
+      id: "internal",
+      label: "Usuarios internos",
+      count: internalMembers.data ? allMembers.length : undefined,
+    },
     { id: "portal", label: "Accesos del portal", count: clientId ? portalRows.length : undefined },
     { id: "standards", label: "Normas contables", count: accountingStandards.data?.length },
     { id: "profile", label: "Datos del estudio" },
@@ -911,7 +993,8 @@ export function StudyAdministracion() {
         {batchResults.map((item) => (
           <tr key={item.line.line} className={item.error ? "is-bad" : undefined}>
             <td>
-              <strong>{item.line.name}</strong> <span className="muted-copy">{item.line.email}</span>
+              <strong>{item.line.name}</strong>{" "}
+              <span className="muted-copy">{item.line.email}</span>
             </td>
             <td>{INTERNAL_ROLE_LABELS[item.line.role ?? ""] ?? "—"}</td>
             <td>
@@ -926,30 +1009,31 @@ export function StudyAdministracion() {
       </tbody>
     </table>
   ) : null;
-  const tablaVistaPreviaLote = batchLines.length > 0 ? (
-    <table aria-label="Vista previa del alta en lote">
-      <thead>
-        <tr>
-          <th>Nombre</th>
-          <th>Correo</th>
-          <th>Rol</th>
-        </tr>
-      </thead>
-      <tbody>
-        {batchLines.map((line) => (
-          <tr key={line.line} className={line.error ? "is-bad" : undefined}>
-            <td>{line.name || "—"}</td>
-            <td>{line.email || "—"}</td>
-            <td>
-              {line.error
-                ? batchUserErrorLabel(line.error)
-                : (INTERNAL_ROLE_LABELS[line.role ?? ""] ?? "—")}
-            </td>
+  const tablaVistaPreviaLote =
+    batchLines.length > 0 ? (
+      <table aria-label="Vista previa del alta en lote">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Correo</th>
+            <th>Rol</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
-  ) : null;
+        </thead>
+        <tbody>
+          {batchLines.map((line) => (
+            <tr key={line.line} className={line.error ? "is-bad" : undefined}>
+              <td>{line.name || "—"}</td>
+              <td>{line.email || "—"}</td>
+              <td>
+                {line.error
+                  ? batchUserErrorLabel(line.error)
+                  : (INTERNAL_ROLE_LABELS[line.role ?? ""] ?? "—")}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    ) : null;
   return (
     <DensePage density={density} className="administration-users">
       <DenseHeader
@@ -984,7 +1068,11 @@ export function StudyAdministracion() {
       <StatStrip
         label="Resumen de accesos"
         items={[
-          { key: "suspended", label: "Suspendidos", value: internalMembers.data ? suspendedInternalMemberCount : "—" },
+          {
+            key: "suspended",
+            label: "Suspendidos",
+            value: internalMembers.data ? suspendedInternalMemberCount : "—",
+          },
           {
             key: "pending",
             label: "Invitaciones pendientes",
@@ -1013,6 +1101,18 @@ export function StudyAdministracion() {
 
       {tab !== "profile" && tab !== "controls" ? (
         <DenseToolbar>
+          {tab === "portal" && clientId ? (
+            <SearchSelect
+              label="Cliente para accesos del portal"
+              hideLabel
+              value={clientId}
+              onChange={(value) => setClientId(value || null)}
+              options={clients.map((client) => ({
+                value: client.clientId,
+                label: client.clientName,
+              }))}
+            />
+          ) : null}
           <DenseSearch
             inputRef={searchRef}
             value={search}
@@ -1064,7 +1164,8 @@ export function StudyAdministracion() {
         <div className="invitation-link" role="status">
           <p>
             Enlace de recuperación para <strong>{recoverySummary?.memberName}</strong>. Copialo
-            ahora: se muestra una sola vez y vence el {formatearFechaHora(recoverySummary?.expiresAt)}.
+            ahora: se muestra una sola vez y vence el{" "}
+            {formatearFechaHora(recoverySummary?.expiresAt)}.
             {recoverySummary && recoverySummary.sessionsRevoked > 0
               ? ` Se cerraron ${recoverySummary.sessionsRevoked} sesión(es) activa(s) del usuario.`
               : " El usuario no tenía sesiones activas abiertas."}{" "}

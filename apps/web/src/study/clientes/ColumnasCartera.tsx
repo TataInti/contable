@@ -2,12 +2,11 @@ import { Button } from "@contable/design-system";
 import type { DenseColumn } from "../../ui/Dense";
 import { formatCuit } from "../../lib/cuit";
 import { StatusBadge } from "../../ui/StatusBadge";
-import { MONTH_SHORT, profileGaps, vatLabel } from "./etiquetas";
+import { MONTH_SHORT, configurationGaps, vatLabel } from "./etiquetas";
 import type { ClientWithProfile } from "./tipos";
 
-const missingProfileFields = profileGaps;
-
 interface ColumnasCarteraProps {
+  openConfiguration: (id: string, step: string) => void;
   inspectorOpen: boolean;
   clientId: string | null;
   openClientWorkspace: (id: string) => void;
@@ -19,6 +18,7 @@ export function columnasCartera({
   clientId,
   openClientWorkspace,
   openClientSummary,
+  openConfiguration,
 }: ColumnasCarteraProps): DenseColumn<ClientWithProfile>[] {
   const columns: DenseColumn<ClientWithProfile>[] = [
     {
@@ -126,24 +126,27 @@ export function columnasCartera({
     {
       key: "gaps",
       header: "Ficha",
-      width: inspectorOpen ? "10%" : "8%",
+      width: inspectorOpen ? "16%" : "14%",
       className: "client-list__profile-column",
-      sortValue: (row) => missingProfileFields(row).length,
+      sortValue: (row) => configurationGaps(row).length,
       render: (row) => {
-        const gaps = missingProfileFields(row);
+        const gaps = configurationGaps(row);
         return gaps.length === 0 ? (
           <span className="dense-dim">Completa</span>
         ) : (
-          <span title={`Falta: ${gaps.join(", ")}`}>
-            <StatusBadge status="MISSING" label={`Faltan ${gaps.length}`} />
-          </span>
+          <Button type="button" variant="text" size="row" className="client-list__gaps" title={`Falta: ${gaps.map((gap) => gap.label).join(", ")}`} onClick={(event) => { event.stopPropagation(); openConfiguration(row.id, gaps[0]!.step); }}>
+            <span>
+              Falta: {gaps.slice(0, 2).map((gap) => gap.label).join(", ")}
+              {gaps.length > 2 ? ` y ${gaps.length - 2} más` : ""}
+            </span>
+          </Button>
         );
       },
     },
     {
       key: "status",
-      header: "Estado",
-      width: inspectorOpen ? "22%" : "17%",
+      header: "Cuenta",
+      width: inspectorOpen ? "16%" : "11%",
       className: "client-list__status-column",
       sortValue: (row) => row.status,
       render: (row) => <StatusBadge status={row.status} />,

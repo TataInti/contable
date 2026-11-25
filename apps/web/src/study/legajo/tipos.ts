@@ -220,6 +220,8 @@ export interface WorkpaperSource {
   periodId: string | null;
   origin: string;
   adapterVersion: string;
+  /** Fuentes que, ya revisadas, cubren esta (la tabla manual se satisface con el libro de ventas). */
+  satisfiedBy?: string[];
   expectedColumns: string[];
   batches: WorkpaperSourceBatch[];
 }
@@ -356,10 +358,6 @@ export interface WorkpaperCalculationComponent {
     minimo: { amount: string; origen: "CAMPO" | "CATEGORIA"; declaredAt: string | null } | null;
   } | null;
 }
-export type PositionAction = {
-  kind: "PAYMENT" | "FILING" | "DECLARATION";
-  position: TaxPosition;
-} | null;
 
 export interface CoberturaLegajo {
   components: Array<{
