@@ -312,9 +312,7 @@ describe("Legajo · revisión anterior en solo lectura, por etapa (Barra 2c)", (
     );
     renderPage();
     fireEvent.click(await screen.findByRole("tab", { name: "Cálculo" }));
-    expect(
-      (await screen.findAllByRole("button", { name: "Registrar pago" })).length,
-    ).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/Régimen Ingresos Brutos/)).length).toBeGreaterThan(0);
     elegirRevision(1);
     expect((await screen.findAllByText(/Régimen Ingresos Brutos/)).length).toBeGreaterThan(0);
     for (const nombre of [

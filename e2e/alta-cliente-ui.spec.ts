@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { RUN, SUFFIX, goTo, pickOption, seen, syntheticCuit } from "./helpers/ui";
+import { abrirInscripcionManual, RUN, SUFFIX, goTo, pickOption, seen, syntheticCuit } from "./helpers/ui";
 
 /**
  * E2E de alta completa desde la interfaz: deja cargado todo lo que hace falta
@@ -171,6 +171,7 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
 
   await test.step("Configuración fiscal: inscripción en el régimen", async () => {
     await page.getByRole("button", { name: /Registrar inscripción|Completar inscripción/ }).first().click();
+    await abrirInscripcionManual(page);
     await pickOption(page.locator("#reg-regime"), data.regime.name);
     // La inscripción tiene su propio «Desde» (por defecto, el mes anterior): debe cubrir el período.
     await page.locator("#reg-from").fill(data.validFrom);

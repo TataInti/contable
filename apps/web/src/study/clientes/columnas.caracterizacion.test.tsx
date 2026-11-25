@@ -85,7 +85,7 @@ describe("StudyClientes — columnas de la cartera (K2)", () => {
       "Norma",
       "Cierre",
       "Ficha",
-      "Estado",
+      "Cuenta",
       "",
     ]);
   });
@@ -137,9 +137,9 @@ describe("StudyClientes — columnas de la cartera (K2)", () => {
     expect(celda("c1", 7).textContent).toBe("jun");
     expect(celda("c2", 7).querySelector(".dense-dim")?.textContent).toBe("—");
     expect(celda("c1", 8).querySelector(".dense-dim")?.textContent).toBe("Completa");
-    expect(celda("c2", 8).textContent?.trim()).toBe("Faltan 3");
+    expect(celda("c2", 8).textContent?.trim()).toBe("Falta: ficha contable, perfil fiscal activo y 4 más");
     expect(celda("c2", 8).querySelector("[title]")?.getAttribute("title")).toBe(
-      "Falta: condición IVA, provincia, actividad",
+      "Falta: ficha contable, perfil fiscal activo, inscripción fiscal, actividad fiscal, período fiscal, obligación",
     );
   });
 
@@ -188,12 +188,12 @@ describe("StudyClientes — columnas de la cartera (K2)", () => {
       "client-list__action-column",
     ];
 
-    expect(anchos(sinDetalle)).toEqual(["18%", "10%", "5%", "8%", "17%", "9%"]);
+    expect(anchos(sinDetalle)).toEqual(["18%", "10%", "5%", "14%", "11%", "9%"]);
 
     fireEvent.click(within(tablaCartera()).getByText("20-00000006-0"));
     await screen.findByRole("complementary", { name: "Detalle de Sintético Alfa S.A." });
 
     expect(tablaCartera().querySelectorAll("thead th.client-list__secondary-column")).toHaveLength(0);
-    expect(anchos(conDetalle)).toEqual(["24%", "12%", "10%", "22%", "13%"]);
+    expect(anchos(conDetalle)).toEqual(["24%", "12%", "16%", "16%", "13%"]);
   });
 });

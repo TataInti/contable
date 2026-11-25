@@ -1,11 +1,12 @@
 import type { NavigateFunction } from "react-router-dom";
 import { Button } from "@contable/design-system";
+import { clientConfigurationMissing } from "@contable/contracts";
 import type { ClientSummary } from "../../../lib/api";
 import { formatearFecha } from "../../../lib/formatoFechas";
 import { DenseSection } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { SummaryFact } from "../Piezas";
-import { fiscalConfigurationCompleteFor } from "../../fiscal/pasos";
+import { fiscalConfigurationReadinessFor } from "../../fiscal/pasos";
 
 type Props = {
   client: ClientSummary["client"];
@@ -22,14 +23,14 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
     (latest, item) => (!latest || item.version > latest.version ? item : latest),
     undefined,
   );
-  const configuracionCompleta = fiscalConfigurationCompleteFor({
+  const faltantes = clientConfigurationMissing(fiscalConfigurationReadinessFor({
     hasAccountingProfile: Boolean(profile),
     latestProfile: ultimoPerfil,
     registrations: fiscal.registrations,
     activities: fiscal.activities,
     periods: fiscal.periods,
     obligations: fiscal.obligations,
-  });
+  }));
   return (
     <DenseSection
       id="rc-resumen"
@@ -57,10 +58,10 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
         <SummaryFact
           label="Configuración fiscal"
           value={
-            <StatusBadge
-              status={configuracionCompleta ? "COMPLETED" : "PENDING"}
-              className="status-badge--regular"
-            />
+            <>
+              <StatusBadge status={faltantes.length ? "PENDING" : "COMPLETED"} className="status-badge--regular" />
+              {faltantes.length ? <span>Falta: {faltantes.map((gap, index) => <span key={gap.key}>{index ? ", " : ""}<Button type="button" variant="text" size="row" onClick={() => navigate(gap.step === "ficha" ? "/clientes" : `/configuracion-fiscal?paso=${encodeURIComponent(gap.step)}`)}>{gap.label}</Button></span>)}.</span> : null}
+            </>
           }
         />
         {openAccountingYearCount > 0 ? (

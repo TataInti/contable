@@ -1,7 +1,7 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
-import { RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
+import { abrirInscripcionManual, RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
 
 /**
  * E2E de punta a punta desde la interfaz, con el comprobante real de una mesa de
@@ -135,9 +135,9 @@ function etiquetaDelPeriodo(tax: Tax) {
   return `Marzo 2025 ${tax.taxType.code} ${SUFFIX}`;
 }
 
-/** Rótulo del período en el desplegable de la barra: mes y año primero, y después el rótulo de siempre. */
-function periodLabel(tax: Tax) {
-  return `Marzo de 2025 · ${tax.taxType.name} · ${etiquetaDelPeriodo(tax)}`;
+/** Rótulo del mes en el desplegable de la barra: una entrada por mes, sin impuesto ni etiqueta del período. */
+function periodLabel(_tax: Tax) {
+  return "Marzo de 2025";
 }
 
 /** Lecturas del catálogo (no crean nada): permiten repetir la prueba sin chocar con lo que ya existe. */
@@ -352,6 +352,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Configuración fiscal: inscripción en los tres regímenes", async () => {
     for (const tax of Object.values(taxes)) {
       await clickAdd(page, "Regímenes adheridos");
+      await abrirInscripcionManual(page);
       await pickOption(page.locator("#reg-regime"), tax.regime.name);
       await page.locator("#reg-from").fill(data.validFrom);
       await mutating(page, "/tax-registrations", () =>
@@ -691,18 +692,18 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await goTo(page, "Liquidaciones");
     await goTo(page, "Legajo");
     await pickOption(page.locator('input[role="combobox"][aria-label="Período fiscal"]'), periodLabel(taxes.iva));
-    await page.getByRole("tab", { name: /Cálculo/ }).click();
+    // La presentación y el pago se registran en el cajón del impuesto, desde el Cierre.
+    await page.getByRole("tab", { name: /^Cierre/ }).click();
     const card = page.locator(".work-page").first();
-    await card.getByRole("button", { name: "Registrar presentación" }).first().click();
+    await card.getByRole("button", { name: /^(Completar|Ver o corregir) / }).first().click();
     const drawer = page.locator(".action-drawer");
     await drawer.getByLabel("Importe presentado").fill("38199.00");
     await drawer.getByLabel("Fecha de presentación").fill("2025-04-17");
-    await drawer.getByLabel("Identificador externo").fill(`E2E-VEP-${SUFFIX}`);
+    await drawer.getByLabel("Número de presentación").fill(`E2E-VEP-${SUFFIX}`);
     // La constancia la sube el estudio en este mismo paso: se valida (antivirus) y recién
     // entonces se registra la presentación.
     await drawer.getByLabel("Archivo del acuse").setInputFiles(fixture);
     await mutating(page, "/filings", () => drawer.getByRole("button", { name: "Registrar presentación" }).click());
-    await card.getByRole("button", { name: "Registrar pago" }).first().click();
     await drawer.getByLabel("Importe", { exact: true }).fill("38199.00");
     await drawer.getByLabel("Fecha de pago").fill("2025-04-18");
     await drawer.getByLabel("Referencia").fill(`E2E-PAGO-${SUFFIX}`);

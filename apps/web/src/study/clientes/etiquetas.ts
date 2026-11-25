@@ -1,5 +1,14 @@
 import { CLIENT_VAT_CONDITION_LABELS } from "@contable/contracts";
-import type { ClientProfile } from "./tipos";
+import { clientConfigurationMissing } from "@contable/contracts";
+import type { ClientProfile, ClientWithProfile } from "./tipos";
+
+/** Cuando falta el dato de la API, no inventar un estado completo. */
+export function configurationGaps(client: ClientWithProfile) {
+  return client.configurationMissing ?? clientConfigurationMissing({
+    hasAccountingProfile: Boolean(client.profile), hasActiveFiscalProfile: false,
+    hasActiveRegistration: false, hasActiveActivity: false, hasTaxPeriod: false, hasObligation: false,
+  });
+}
 
 export const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 export const MONTH_LONG = [

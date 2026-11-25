@@ -1,4 +1,8 @@
 import type { FiscalYear } from "../../lib/api";
+import {
+  fiscalTaxPeriodSelectionKey,
+  writeFiscalTaxPeriodSelection,
+} from "../legajo/periodoFiscal";
 
 /**
  * «Abrir cliente» del Panel de trabajo (corte 4b, S4-12). Replica la lógica de `openSettlement`
@@ -57,4 +61,24 @@ export async function abrirClienteDelPanel(opciones: AbrirClienteDelPanel): Prom
   }
   opciones.navigate(destino);
   return destino;
+}
+
+export interface AbrirLegajoDeObligacion {
+  firmId: string;
+  clientId: string;
+  /** Período fiscal de la obligación (impuesto y mes): es el que el Legajo deja elegido. */
+  taxPeriodId: string;
+  setClientId: (clientId: string | null) => void;
+  navigate: (to: string) => void;
+}
+
+/** «Abrir legajo»: deja elegidos cliente, mes e impuesto de la obligación y entra directo al Legajo. */
+export function abrirLegajoDeObligacion(opciones: AbrirLegajoDeObligacion): string {
+  opciones.setClientId(opciones.clientId);
+  writeFiscalTaxPeriodSelection(
+    fiscalTaxPeriodSelectionKey(opciones.firmId, opciones.clientId),
+    opciones.taxPeriodId,
+  );
+  opciones.navigate(RUTA_EXPEDIENTE);
+  return RUTA_EXPEDIENTE;
 }

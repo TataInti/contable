@@ -206,7 +206,7 @@ describe("Panel de trabajo: lectura por la red simulada (corte 4b, corrección)"
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: "Cargar más" }));
     expect(
-      await screen.findByRole("button", { name: "Abrir cliente Cliente Demo 2" }),
+      await screen.findByRole("button", { name: "Abrir legajo Cliente Demo 2" }),
     ).toBeTruthy();
     expect(screen.getByText("2 de 2 obligaciones")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
