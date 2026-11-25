@@ -26,6 +26,7 @@ import {
 } from "../ManualExtractionValueControl";
 import { EXTRACTION_SCALAR_FIELDS, fiscalScalarHasValue } from "../extractionScalarFields";
 import { StatusBadge } from "../../ui/StatusBadge";
+import { nombreVisibleDelEstado } from "./colaDeDocumentos";
 import { ConfirmDialog, useConfirmAction } from "../../ui/ConfirmAction";
 import { formatearFechaHora } from "../../lib/formatoFechas";
 import { RechazarDocumento } from "./RechazarDocumento";
@@ -387,7 +388,12 @@ export function DetalleDocumento({ rows, selectedId, setSelectedId }: DetalleDoc
                     Ver archivo
                   </Button>
                 ) : null}
-                <StatusBadge status={detail.data?.status} />
+                <StatusBadge
+                  status={detail.data?.status}
+                  label={
+                    detail.data?.status ? nombreVisibleDelEstado(detail.data.status) : undefined
+                  }
+                />
               </div>
             </div>
             {rejectionReceipt ? (

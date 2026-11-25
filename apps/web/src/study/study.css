@@ -22,3 +22,25 @@
 .dense-stats--strip .dense-stat.ds-button {
   justify-content: flex-start;
 }
+
+/* 07-11: el aviso de CUIT pendiente se lee como un bloque ordenado: etiqueta arriba, campo y botón en una línea. */
+.cuit-control-bloque {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+}
+.cuit-control-bloque > p {
+  margin: 0;
+}
+.cuit-control__motivo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1, 4px) var(--space-2, 8px);
+  align-items: end;
+}
+.cuit-control__motivo > label,
+.cuit-control__motivo > .form-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}

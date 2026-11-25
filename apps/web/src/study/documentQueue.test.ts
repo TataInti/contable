@@ -16,14 +16,14 @@ function documentWithStatus(status: string) {
 describe("belongsToDocumentQueue", () => {
   const filters: DocumentQueueFilter[] = ["ALL", "PROCESSING", "NEEDS_REVIEW", "REVIEWED", "ERROR"];
 
-  it("un documento EXTRACTED queda en Para revisar y fuera de Revisado", () => {
+  it("un documento EXTRACTED queda en Para revisar y fuera de Aprobado", () => {
     const doc = documentWithStatus("EXTRACTED");
     for (const filter of filters) {
       expect(belongsToDocumentQueue(doc, filter)).toBe(filter === "ALL" || filter === "NEEDS_REVIEW");
     }
   });
 
-  it("un documento REVIEWED (extracción aprobada) está en Revisado y ya no en Para revisar", () => {
+  it("un documento REVIEWED (extracción aprobada) está en Aprobado y ya no en Para revisar", () => {
     const doc = documentWithStatus("REVIEWED");
     for (const filter of filters) {
       expect(belongsToDocumentQueue(doc, filter)).toBe(filter === "ALL" || filter === "REVIEWED");
@@ -99,7 +99,7 @@ describe("colas de la Bandeja con los 13 estados del documento (7b.2)", () => {
 describe("nombreVisibleDelEstado (C7B-4: un nombre por estado, el mismo que su cola)", () => {
   it("los estados de cola se muestran con el nombre de su cola", () => {
     expect(nombreVisibleDelEstado("EXTRACTED")).toBe("Para revisar");
-    expect(nombreVisibleDelEstado("REVIEWED")).toBe("Revisado");
+    expect(nombreVisibleDelEstado("REVIEWED")).toBe("Aprobado");
     for (const status of ["UPLOADED", "VALIDATING", "PROCESSING", "IN_PROGRESS", "RUNNING"]) {
       expect(nombreVisibleDelEstado(status)).toBe("Procesando");
     }
