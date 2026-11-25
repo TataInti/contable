@@ -11,6 +11,7 @@ import { WorkpaperActionError } from "../WorkpaperActionError";
 import {
   alternarImpuesto,
   errorMinimo,
+  etiquetasCortas,
   lineasDeFormula,
   seleccionDeImpuesto,
   type SeleccionCalculo,
@@ -46,6 +47,14 @@ export function EtapaCalculo({
   bloqueoSeleccion = null,
 }: EtapaCalculoProps) {
   const determinacion = calculationQuery.data ?? [];
+  const etiquetas = etiquetasCortas(determinacion.map((component) => component.obligation));
+  const etiquetaDe = (obligationId: string) =>
+    etiquetas[determinacion.findIndex((component) => component.obligationId === obligationId)] ?? "";
+  // 12-4: «Interés», «Disponible» y «Total a pagar» solo aparecen cuando aportan algo distinto de «Pendiente».
+  const posiciones = positionQuery.data ?? [];
+  const hayInteres = posiciones.some((position) => Number(position.interest) !== 0);
+  const hayDisponible = posiciones.some((position) => Number(position.availableCredit) !== 0);
+  const hayTotalDistinto = posiciones.some((position) => Number(position.totalPayable) !== Number(position.pending));
   const conceptos = [
     { label: "Base imponible", keys: ["BASE_TOTAL", "BASE_PAIS", "BASE_IMPONIBLE"] },
     { label: "Impuesto por actividad", keys: ["IMPUESTO_POR_ACTIVIDAD", "IMPUESTO_POR_JURISDICCION"] },
@@ -102,10 +111,7 @@ export function EtapaCalculo({
                       )
                     }
                   />
-                  <span>
-                    {component.obligation.taxTypeName} · {component.obligation.regimeName} ·{" "}
-                    {component.obligation.jurisdictionName}
-                  </span>
+                  <span>{etiquetaDe(component.obligationId)}</span>
                 </label>
                 {!marcado ? <small className="muted-copy">No liquidado este mes.</small> : null}
                 {marcado && component.usaMinimoDeclarado ? (
@@ -174,7 +180,7 @@ export function EtapaCalculo({
                 { key: "concept", header: "Concepto", render: (row) => row.label === "Total a ingresar" ? <strong>{row.label}</strong> : row.label },
                 ...determinacion.map((component) => ({
                   key: component.obligationId,
-                  header: <span>{component.obligation.taxTypeName}<small className="muted-copy"> · {component.obligation.jurisdictionName}</small><small><StatusBadge status={component.settlement?.status ?? "PENDING"} /></small></span>,
+                  header: <span className="workpaper-calculation__column-title">{etiquetaDe(component.obligationId)}<small><StatusBadge status={component.settlement?.status ?? "PENDING"} /></small></span>,
                   align: "right" as const,
                   render: (row: (typeof filasDeterminacion)[number]) => {
                     const amount = row.amounts[component.obligationId];
@@ -234,6 +240,12 @@ export function EtapaCalculo({
           {positionQuery.isFetching ? (
             <small className="muted-copy">Dato del último corte; se está actualizando.</small>
           ) : null}
+          <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
+            <div>
+              <strong>Presentación y pago</strong>
+              <small>Estado de cada impuesto después de determinarlo.</small>
+            </div>
+          </div>
           <Table<TaxPosition>
             className="workpaper-position-table"
             rows={positionQuery.data ?? []}
@@ -261,13 +273,12 @@ export function EtapaCalculo({
                       {position.regime.jurisdiction.name}
                       {!position.regime.jurisdiction.isActive ? " (oculto)" : ""}
                     </small>
+                    <br />
+                    <small className="muted-copy">
+                      Vence {formatearFecha(position.dueDate, "sin vencimiento")}
+                    </small>
                   </>
                 ),
-              },
-              {
-                key: "dueDate",
-                header: "Vencimiento",
-                render: (position) => formatearFecha(position.dueDate, "Sin vencimiento"),
               },
               {
                 key: "accrued",
@@ -275,12 +286,12 @@ export function EtapaCalculo({
                 align: "right",
                 render: (position) => formatMoney(position.accrued),
               },
-              {
+              ...(hayInteres ? [{
                 key: "interest",
                 header: "Interés",
-                align: "right",
-                render: (position) => formatMoney(position.interest),
-              },
+                align: "right" as const,
+                render: (position: TaxPosition) => formatMoney(position.interest),
+              }] : []),
               {
                 key: "paid",
                 header: "Pagado",
@@ -293,18 +304,18 @@ export function EtapaCalculo({
                 align: "right",
                 render: (position) => <strong>{formatMoney(position.pending)}</strong>,
               },
-              {
+              ...(hayTotalDistinto ? [{
                 key: "totalPayable",
                 header: "Total a pagar",
-                align: "right",
-                render: (position) => <strong>{formatMoney(position.totalPayable)}</strong>,
-              },
-              {
+                align: "right" as const,
+                render: (position: TaxPosition) => <strong>{formatMoney(position.totalPayable)}</strong>,
+              }] : []),
+              ...(hayDisponible ? [{
                 key: "credit",
                 header: "Disponible",
-                align: "right",
-                render: (position) => formatMoney(position.availableCredit),
-              },
+                align: "right" as const,
+                render: (position: TaxPosition) => formatMoney(position.availableCredit),
+              }] : []),
               {
                 key: "status",
                 header: "Estado",
