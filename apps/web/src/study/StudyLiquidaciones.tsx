@@ -1,21 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Button, EmptyState, Field, Notice, Table, useNotify, SearchSelect } from "@contable/design-system";
+import { Button, EmptyState, Notice, Table, useNotify, SearchSelect } from "@contable/design-system";
 import { api, downloadFile } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
-import { ActionDrawer } from "../ui/ActionDrawer";
-import { Icon } from "../ui/Icon";
 import { StatusBadge } from "../ui/StatusBadge";
-import {
-  DenseHeader,
-  DensePage,
-  StatStrip,
-  useDensity,
-} from "../ui/Dense";
+import { DenseHeader, DensePage, DenseSection, useDensity } from "../ui/Dense";
 import { mensajeDeErrorDeLiquidacion } from "./liquidaciones/errores";
+import { fiscalTaxPeriodSelectionKey, writeFiscalTaxPeriodSelection } from "./legajo/periodoFiscal";
 import "./study.css";
-import { formatearFecha, formatearRango } from "../lib/formatoFechas";
+import { formatearPeriodo } from "../lib/formatoFechas";
 
 interface TaxSettlement {
   id: string;
@@ -32,23 +26,6 @@ interface TaxSettlement {
     jurisdiction: { name: string; isActive: boolean };
   };
 }
-interface TaxPeriod {
-  id: string;
-  taxTypeId: string;
-  startDate: string;
-  endDate: string;
-  label: string | null;
-  taxType: { name: string; code: string; isActive: boolean };
-}
-interface TaxRegime {
-  id: string;
-  name: string;
-  isActive: boolean;
-  taxTypeId: string;
-  jurisdictionId: string;
-  taxType: { name: string; isActive: boolean };
-  jurisdiction: { name: string; isActive: boolean };
-}
 
 type ArtifactFormat = "csv" | "pdf";
 interface TaxExportArtifact {
@@ -56,128 +33,30 @@ interface TaxExportArtifact {
   format: string;
 }
 
-const today = new Date().toISOString().slice(0, 10);
-
 function formatMoney(value: string | undefined | null): string {
   const num = Number(value ?? 0);
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(num);
 }
 
-function taxPeriodLabel(period: TaxPeriod) {
-  return period.label ?? formatearRango(period.startDate, period.endDate);
-}
+const mesDe = (row: TaxSettlement) => formatearPeriodo(row.period.startDate, row.period.endDate);
 
 export function StudyLiquidaciones() {
   const [density] = useDensity();
   const { firmId, clientId, capabilities } = useClientContext();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const notify = useNotify();
-  const [showCalculator, setShowCalculator] = useState(false);
-  const [calculation, setCalculation] = useState({ periodId: "", regimeId: "", cutoff: today });
-  const canCalculate = capabilities.has("tax.settlements.calculate");
+  const [filtroImpuesto, setFiltroImpuesto] = useState("");
+  const [filtroMes, setFiltroMes] = useState("");
 
-  const taxPeriodsQuery = useQuery({
-    queryKey: ["tax-periods", firmId, clientId],
-    queryFn: () => api.get<TaxPeriod[]>(`/firms/${firmId}/clients/${clientId}/tax-periods`),
+  // Historial de solo lectura: todas las liquidaciones del cliente, sin depender de un período elegido en otra pantalla.
+  const listQuery = useQuery({
+    queryKey: ["tax-settlements", firmId, clientId, "todas"],
+    queryFn: () => api.get<TaxSettlement[]>(`/firms/${firmId}/clients/${clientId}/tax-settlements?limit=200`),
     enabled: Boolean(firmId && clientId),
   });
-  const regimesQuery = useQuery({
-    queryKey: ["tax-regimes"],
-    queryFn: () => api.get<TaxRegime[]>("/tax/regimes"),
-    enabled: Boolean(firmId),
-  });
 
-  const selectableTaxPeriods = useMemo(
-    () => (taxPeriodsQuery.data ?? []).filter((period) => period.taxType.isActive),
-    [taxPeriodsQuery.data],
-  );
-  const selectedTaxPeriod = useMemo(
-    () => selectableTaxPeriods.find((period) => period.id === calculation.periodId),
-    [calculation.periodId, selectableTaxPeriods],
-  );
-  useEffect(() => {
-    if (!taxPeriodsQuery.data) return;
-    setCalculation((current) => {
-      if (selectableTaxPeriods.some((period) => period.id === current.periodId)) return current;
-      return { ...current, periodId: selectableTaxPeriods[0]?.id ?? "", regimeId: "" };
-    });
-  }, [selectableTaxPeriods, taxPeriodsQuery.data]);
-  const listQuery = useQuery({
-    queryKey: ["tax-settlements", firmId, clientId, calculation.periodId],
-    queryFn: () =>
-      api.get<TaxSettlement[]>(
-        `/firms/${firmId}/clients/${clientId}/tax-settlements?periodId=${encodeURIComponent(calculation.periodId)}`,
-      ),
-    enabled: Boolean(firmId && clientId && calculation.periodId),
-  });
-  const availableRegimes = (regimesQuery.data ?? []).filter(
-    (regime) => regime.isActive && (!selectedTaxPeriod || regime.taxTypeId === selectedTaxPeriod.taxTypeId),
-  );
-  const selectedRegime = availableRegimes.find((regime) => regime.id === calculation.regimeId);
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["tax-settlements", firmId, clientId] });
-    void queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId] });
-  };
-
-  // Una acción que falla se avisa donde se avisa todo: en la notificación, con el mapeo único de errores.
   const failed = (error: unknown) =>
     notify.error(mensajeDeErrorDeLiquidacion(error, "No se pudo completar la acción sobre la liquidación."));
-  const calculateMutation = useMutation({
-    mutationFn: () =>
-      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/calculate`, {
-        taxTypeId: selectedTaxPeriod?.taxTypeId,
-        regimeId: calculation.regimeId,
-        jurisdictionId: selectedRegime?.jurisdictionId,
-        periodId: calculation.periodId,
-        cutoff: calculation.cutoff,
-      }),
-    onSuccess: () => {
-      invalidate();
-      setShowCalculator(false);
-      setCalculation((current) => ({ ...current, regimeId: "", cutoff: today }));
-      notify.success("La liquidación fue calculada con los comprobantes aprobados al corte indicado.");
-    },
-    onError: failed,
-  });
-  const submitMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/submit-review`),
-    onSuccess: () => {
-      invalidate();
-      notify.success("La liquidación fue enviada a revisión.");
-    },
-    onError: failed,
-  });
-  const reviewMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/review`),
-    onSuccess: () => {
-      invalidate();
-      notify.success("La liquidación quedó revisada.");
-    },
-    onError: failed,
-  });
-  const finalizeMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/finalize`),
-    onSuccess: () => {
-      invalidate();
-      notify.success("La liquidación fue finalizada y quedó inmutable.");
-    },
-    onError: failed,
-  });
-  const rectifyMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.post(`/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/rectify`, {
-        reason: "Rectificación iniciada desde la cartera",
-      }),
-    onSuccess: () => {
-      invalidate();
-      notify.success("Se inició una rectificación de la liquidación.");
-    },
-    onError: failed,
-  });
   // El papel de trabajo se genera una vez por versión y formato: si ya existe, se descarga el guardado.
   const downloadArtifact = async (id: string, format: ArtifactFormat) => {
     const artifactsPath = `/firms/${firmId}/clients/${clientId}/tax-settlements/${id}/artifacts`;
@@ -194,6 +73,40 @@ export function StudyLiquidaciones() {
   const artifactIsBusy = (id: string, format: ArtifactFormat) =>
     artifactMutation.isPending && artifactMutation.variables?.id === id && artifactMutation.variables.format === format;
 
+  const all = useMemo(
+    () =>
+      [...(listQuery.data ?? [])].sort(
+        (a, b) => b.period.startDate.localeCompare(a.period.startDate) || b.version - a.version,
+      ),
+    [listQuery.data],
+  );
+  const opcionesImpuesto = useMemo(
+    () =>
+      [...new Map(all.map((row) => [row.regime.taxType.code, row.regime.taxType.name])).entries()].map(
+        ([value, label]) => ({ value, label }),
+      ),
+    [all],
+  );
+  const opcionesMes = useMemo(
+    () =>
+      [...new Map(all.map((row) => [row.period.startDate, mesDe(row)])).entries()].map(([value, label]) => ({
+        value,
+        label,
+      })),
+    [all],
+  );
+  const data = all.filter(
+    (row) =>
+      (!filtroImpuesto || row.regime.taxType.code === filtroImpuesto) &&
+      (!filtroMes || row.period.startDate === filtroMes),
+  );
+
+  // El Legajo toma el mes de la selección guardada: se deja el de la liquidación y se abre.
+  const abrirEnLegajo = (row: TaxSettlement) => {
+    if (firmId && clientId) writeFiscalTaxPeriodSelection(fiscalTaxPeriodSelectionKey(firmId, clientId), row.period.id);
+    navigate("/expediente-mensual");
+  };
+
   if (!firmId || !clientId) {
     return (
       <EmptyState
@@ -203,293 +116,149 @@ export function StudyLiquidaciones() {
     );
   }
 
-  const data = listQuery.data ?? [];
+  const puedeExportar = capabilities.has("tax.settlements.export");
   return (
     <DensePage density={density} flow>
       <DenseHeader
         title="Liquidaciones"
-        description="Cada liquidación conserva su versión, las reglas aplicadas y la evidencia del corte de cálculo."
+        description="Historial de todas las liquidaciones del cliente, con su versión y estado. Para calcular o rectificar, abrí el Legajo."
         actions={
-          <>
-          {canCalculate ? (
-            <Button
-              onClick={() => setShowCalculator((visible) => !visible)}
-              variant={showCalculator ? "secondary" : "primary"}
-              disabled={!selectableTaxPeriods.length}
-            >
-              <Icon name={showCalculator ? "close" : "plus"} size={16} />{" "}
-              {showCalculator ? "Cerrar cálculo" : "Calcular liquidación"}
-            </Button>
-          ) : null}
           <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>
-            Ver legajo
+            Abrir en el Legajo
           </Button>
-        
-          </>
         }
       />
 
-      <StatStrip
-        label="Estado del período"
-        items={[
-          { key: "settlements", label: "Liquidaciones", value: data.length },
-          { key: "periods", label: "Períodos fiscales", value: taxPeriodsQuery.data?.length ?? "—" },
-          { key: "regimes", label: "Regímenes disponibles", value: availableRegimes.length },
-        ]}
-      />
-
-      {taxPeriodsQuery.isLoading ? (
-        <div className="study-state" role="status">
-          Cargando períodos fiscales…
-        </div>
-      ) : taxPeriodsQuery.isError ? (
-        <Notice
-          tone="error"
-          title="No se pudieron cargar los períodos fiscales"
-          action={
-            <Button variant="secondary" onClick={() => void taxPeriodsQuery.refetch()}>
-              Reintentar
-            </Button>
-          }
-        >
-          Reintentá la consulta para volver a cargar los períodos del cliente.
-        </Notice>
-      ) : selectableTaxPeriods.length === 0 ? (
-        <EmptyState
-          title="Configurá un período fiscal"
-          description="Seleccioná un período fiscal para consultar o calcular liquidaciones."
-          action={
-            <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
-              Abrir configuración fiscal
-            </Button>
-          }
-        />
-      ) : null}
-
-
-
-
-      <ActionDrawer
-        isOpen={showCalculator}
-        onClose={() => setShowCalculator(false)}
-        title="Calcular liquidación"
-        description="Elegí el período fiscal y el régimen. El cálculo sólo toma documentación aprobada hasta la fecha de corte."
+      <DenseSection
+        id="settlements-list"
+        title="Liquidaciones registradas"
+        count={listQuery.data ? data.length : undefined}
+        surface="integrated"
+        actions={
+          all.length > 1 ? (
+            <>
+              <SearchSelect
+                hideLabel
+                label="Filtrar por mes"
+                className="dense-select"
+                value={filtroMes}
+                onChange={setFiltroMes}
+                placeholder="Mes: todos"
+                options={opcionesMes}
+              />
+              <SearchSelect
+                hideLabel
+                label="Filtrar por impuesto"
+                className="dense-select"
+                value={filtroImpuesto}
+                onChange={setFiltroImpuesto}
+                placeholder="Impuesto: todos"
+                options={opcionesImpuesto}
+              />
+            </>
+          ) : null
+        }
       >
-        <form
-          className="study-form study-form--compact fiscal-action-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            calculateMutation.mutate();
-          }}
-        >
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="settlement-tax-period">
-              Período fiscal
-            </label>
-            <SearchSelect
-              id="settlement-tax-period"
-              label="Período fiscal"
-              hideLabel
-              value={calculation.periodId}
-              onChange={(value) => setCalculation({ ...calculation, periodId: value, regimeId: "" })}
-              required
-              placeholder="Seleccioná un período…"
-              options={selectableTaxPeriods.map((period) => ({ value: period.id, label: `${period.taxType.name} · ${taxPeriodLabel(period)}` }))}
-            />
+        {listQuery.isLoading ? (
+          <div className="study-state" role="status">
+            Cargando liquidaciones…
           </div>
-          <div className="ds-field">
-            <label className="ds-field__label" htmlFor="settlement-regime">
-              Régimen
-            </label>
-            <SearchSelect
-              id="settlement-regime"
-              label="Régimen"
-              hideLabel
-              value={calculation.regimeId}
-              onChange={(value) => setCalculation({ ...calculation, regimeId: value })}
-              required
-              disabled={!calculation.periodId}
-              placeholder="Seleccioná un régimen…"
-              options={availableRegimes.map((regime) => ({ value: regime.id, label: `${regime.name} · ${regime.jurisdiction.name}${!regime.jurisdiction.isActive ? " (oculto)" : ""}` }))}
-            />
-          </div>
-          <Field
-            label="Fecha de corte"
-            id="settlement-cutoff"
-            type="date"
-            value={calculation.cutoff}
-            onChange={(event) => setCalculation({ ...calculation, cutoff: event.target.value })}
-            required
-          />
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={calculateMutation.isPending}
-              disabled={!selectedTaxPeriod || !selectedRegime || !calculation.cutoff}
-            >
-              Calcular
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setShowCalculator(false)}>
-              Cancelar
-            </Button>
-          </div>
-        </form>
-      </ActionDrawer>
-
-
-      <section className="study-page__section" aria-labelledby="settlements-list-title">
-      <div className="study-panel__heading">
-        <div>
-          <h2 id="settlements-list-title">Liquidaciones registradas</h2>
-          <p>
-            {selectedTaxPeriod
-              ? `Período fiscal: ${selectedTaxPeriod.taxType.name} · ${taxPeriodLabel(selectedTaxPeriod)}. `
-              : "Seleccioná un período fiscal. "}
-            Consultá versiones, estados y acciones disponibles para cada liquidación.
-          </p>
-        </div>
-        <span className="section-count">{data.length}</span>
-      </div>
-      {listQuery.isLoading ? (
-        <div className="study-state" role="status">
-          Cargando liquidaciones…
-        </div>
-      ) : listQuery.isError ? (
-        <Notice
-          tone="error"
-          title="No se pudieron cargar las liquidaciones"
-          action={
-            <Button variant="secondary" onClick={() => void listQuery.refetch()}>
-              Reintentar
-            </Button>
-          }
-        >
-          Reintentá en unos minutos para volver a cargar la cartera.
-        </Notice>
-      ) : !selectedTaxPeriod ? null : data.length === 0 ? (
-        <EmptyState
-          title="Todavía no hay liquidaciones"
-          description="Iniciá el cálculo para un régimen configurado o prepará la evidencia desde el legajo."
-          action={
-            canCalculate ? (
-              <Button onClick={() => setShowCalculator(true)} disabled={!selectableTaxPeriods.length}>
-                Calcular liquidación
+        ) : listQuery.isError ? (
+          <Notice
+            tone="error"
+            title="No se pudieron cargar las liquidaciones"
+            action={
+              <Button variant="secondary" onClick={() => void listQuery.refetch()}>
+                Reintentar
               </Button>
-            ) : (
+            }
+          >
+            Reintentá en unos minutos para volver a cargar la cartera.
+          </Notice>
+        ) : all.length === 0 ? (
+          <EmptyState
+            title="Todavía no hay liquidaciones"
+            description="Las liquidaciones se calculan en el Legajo y aparecen acá cuando existen."
+            action={
               <Button variant="secondary" onClick={() => navigate("/expediente-mensual")}>
-                Abrir legajo
+                Abrir en el Legajo
               </Button>
-            )
-          }
-        />
-      ) : (
-        <Table<TaxSettlement>
-          columns={[
-            {
-              key: "period",
-              header: "Período",
-              render: (row) => row.period.label ?? formatearFecha(row.period.startDate),
-            },
-            {
-              key: "tax",
-              header: "Impuesto",
-              render: (row) => (
-                <>
-                  <strong>{row.regime.taxType.name}{!row.regime.taxType.isActive ? " (oculto)" : ""}</strong>
-                  <br />
-                  <small>
-                    {row.regime.name}{!row.regime.isActive ? " (oculto)" : ""} · {row.regime.jurisdiction.name}{!row.regime.jurisdiction.isActive ? " (oculto)" : ""}
-                  </small>
-                </>
-              ),
-            },
-            { key: "version", header: "Versión", render: (row) => `v${row.version}` },
-            {
-              key: "status",
-              header: "Estado",
-              render: (row) => <StatusBadge status={row.status} />,
-            },
-            {
-              key: "total",
-              header: "Total",
-              align: "right",
-              render: (row) =>
-                formatMoney(row.totals?.["TOTAL_A_INGRESAR"] ?? row.totals?.totalDue),
-            },
-            {
-              key: "actions",
-              header: "Acciones",
-              render: (row) => (
-                <span className="study-table__actions">
-                  <Button size="sm" variant="ghost" onClick={() => navigate("/expediente-mensual")}>
-                    Legajo
-                  </Button>
-                  {row.status === "CALCULATED" &&
-                  capabilities.has("tax.settlements.submit_review") ? (
-                    <Button size="sm" onClick={() => submitMutation.mutate(row.id)}>
-                      Enviar a revisión
+            }
+          />
+        ) : (
+          <Table<TaxSettlement>
+            columns={[
+              { key: "month", header: "Mes", render: (row) => mesDe(row) },
+              {
+                key: "tax",
+                header: "Impuesto",
+                render: (row) =>
+                  `${row.regime.taxType.name}${!row.regime.taxType.isActive ? " (oculto)" : ""} · ${row.regime.name}${!row.regime.isActive ? " (oculto)" : ""}`,
+              },
+              {
+                key: "status",
+                header: "Estado",
+                render: (row) => (
+                  <>
+                    <StatusBadge status={row.status} /> <small>v{row.version}</small>
+                  </>
+                ),
+              },
+              {
+                key: "total",
+                header: "Total",
+                align: "right",
+                render: (row) => formatMoney(row.totals?.["TOTAL_A_INGRESAR"] ?? row.totals?.totalDue),
+              },
+              {
+                key: "actions",
+                header: "Acciones",
+                render: (row) => (
+                  <span className="study-table__actions">
+                    <Button size="sm" variant="ghost" onClick={() => abrirEnLegajo(row)}>
+                      Abrir en el Legajo
                     </Button>
-                  ) : null}
-                  {row.status === "IN_REVIEW" && capabilities.has("tax.settlements.review") ? (
-                    <Button size="sm" onClick={() => reviewMutation.mutate(row.id)}>
-                      Revisar
-                    </Button>
-                  ) : null}
-                  {row.status === "REVIEWED" && capabilities.has("tax.settlements.finalize") ? (
-                    <Button size="sm" onClick={() => finalizeMutation.mutate(row.id)}>
-                      Finalizar
-                    </Button>
-                  ) : null}
-                  {row.status === "FINALIZED" && capabilities.has("tax.settlements.rectify") ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => rectifyMutation.mutate(row.id)}
-                    >
-                      Rectificar
-                    </Button>
-                  ) : null}
-                  {row.status === "FINALIZED" && capabilities.has("tax.settlements.export") ? (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        loading={artifactIsBusy(row.id, "pdf")}
-                        loadingLabel="Generando…"
-                        disabled={artifactMutation.isPending}
-                        onClick={() => artifactMutation.mutate({ id: row.id, format: "pdf" })}
-                      >
-                        PDF
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        loading={artifactIsBusy(row.id, "csv")}
-                        loadingLabel="Generando…"
-                        disabled={artifactMutation.isPending}
-                        onClick={() => artifactMutation.mutate({ id: row.id, format: "csv" })}
-                      >
-                        CSV
-                      </Button>
-                    </>
-                  ) : null}
-                </span>
-              ),
-            },
-          ]}
-          rows={data}
-          rowKey={(row) => row.id}
-          empty={
-            <EmptyState
-              size="compact"
-              kind="no-data"
-              title="Todavía no hay liquidaciones"
-              description="Las liquidaciones del período aparecerán acá cuando estén disponibles."
-            />
-          }
-        />
-      )}
-      </section>
+                    {row.status === "FINALIZED" && puedeExportar ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          loading={artifactIsBusy(row.id, "pdf")}
+                          loadingLabel="Generando…"
+                          disabled={artifactMutation.isPending}
+                          onClick={() => artifactMutation.mutate({ id: row.id, format: "pdf" })}
+                        >
+                          Descargar PDF
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          loading={artifactIsBusy(row.id, "csv")}
+                          loadingLabel="Generando…"
+                          disabled={artifactMutation.isPending}
+                          onClick={() => artifactMutation.mutate({ id: row.id, format: "csv" })}
+                        >
+                          Descargar CSV
+                        </Button>
+                      </>
+                    ) : null}
+                  </span>
+                ),
+              },
+            ]}
+            rows={data}
+            rowKey={(row) => row.id}
+            empty={
+              <EmptyState
+                size="compact"
+                kind="no-data"
+                title="Ninguna liquidación coincide con el filtro"
+                description="Cambiá el mes o el impuesto para ver más."
+              />
+            }
+          />
+        )}
+      </DenseSection>
     </DensePage>
   );
 }

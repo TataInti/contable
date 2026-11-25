@@ -719,7 +719,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     test.info().annotations.push({ type: "liquidaciones · pantalla", description: (await main.innerText()).replace(/\s+/g, " ").slice(0, 1500) });
     // Papeles de trabajo de la liquidación finalizada (IIBB, el período que muestra la pantalla).
     for (const format of ["PDF", "CSV"]) {
-      await mutating(page, "/artifacts", () => main.getByRole("button", { name: format, exact: true }).click());
+      await mutating(page, "/artifacts", () => main.getByRole("button", { name: `Descargar ${format}`, exact: true }).first().click());
     }
     await expect(page.getByText(/Se generó el papel de trabajo en CSV/)).toBeVisible();
   });
