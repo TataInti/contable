@@ -20,6 +20,8 @@ import { PestanaPeriodos } from "./fiscal/pestanas/PestanaPeriodos";
 import { CajonPerfil } from "./fiscal/cajones/CajonPerfil";
 import { perfilInicial } from "./fiscal/cajones/perfilInicial";
 import { CajonInscripcion } from "./fiscal/cajones/CajonInscripcion";
+import { CajonRegistroSugerido } from "./fiscal/cajones/CajonRegistroSugerido";
+import { sugerirConfiguracionFiscal } from "./fiscal/sugerencias";
 import { CajonCorregirInscripcion } from "./fiscal/cajones/CajonCorregirInscripcion";
 import { CajonCorregirActividad } from "./fiscal/cajones/CajonCorregirActividad";
 import { CajonCambioActividad } from "./fiscal/cajones/CajonCambioActividad";
@@ -67,6 +69,7 @@ export function StudyOnboardingFiscal() {
   });
   const [profileId, setProfileId] = useState<string | null>(null);
   const [regimeId, setRegimeId] = useState("");
+  const [sugeridosAbiertos, setSugeridosAbiertos] = useState(false);
   const [activityIds, setActivityIds] = useState<string[]>([]);
   const [periodForm, setPeriodForm] = useState({ taxTypeId: "", startDate: today, endDate: today, label: "" });
   const [obligationForm, setObligationForm] = useState({ regimeId: "", periodId: "", dueDate: "" });
@@ -145,6 +148,11 @@ export function StudyOnboardingFiscal() {
     [profileQuery.data],
   );
   const effectiveProfileId = profileId ?? latestProfile?.id;
+  const sugerencias = useMemo(() => sugerirConfiguracionFiscal({
+    cliente: clientQuery.data, perfil: latestProfile, regimenes: regimesQuery.data ?? [],
+    inscripciones: registrationsQuery.data ?? [], actividades: activitiesQuery.data ?? [],
+    actividadesVigentes: clientActivitiesQuery.data ?? [], jurisdicciones: jurisdictionsQuery.data ?? [],
+  }), [clientQuery.data, latestProfile, regimesQuery.data, registrationsQuery.data, activitiesQuery.data, clientActivitiesQuery.data, jurisdictionsQuery.data]);
   const propuestaPerfil = useMemo(() => perfilInicial(clientQuery.data), [clientQuery.data]);
   // Primer perfil: el formulario arranca con lo que ya cargó el alta. Se reaplica si el alta llega después de abrir el cajón;
   // una nueva versión conserva los valores guardados (la pestaña Resumen los carga antes de abrirlo).
@@ -301,6 +309,7 @@ export function StudyOnboardingFiscal() {
 
   const mutationError = createProfile.error ?? submitReview.error ?? activate.error ?? addRegistration.error ?? addActivity.error ?? updateActivity.error ?? cancelRegistration.error ?? endActivity.error ?? createPeriod.error ?? createObligation.error ?? openMonth.error ?? deletePeriod.error;
   const openStepForm = (nextStep: FiscalStep) => {
+    if (nextStep === "inscripcion" && sugerencias.regimenes.length && canWrite) { setSugeridosAbiertos(true); return; }
     setOpenFormStep(nextStep);
   };
   const corregirInscripcion = (registration: TaxRegistration) => { updateRegistration.reset(); setRegistrationToEdit(registration); };
@@ -382,6 +391,7 @@ export function StudyOnboardingFiscal() {
 
       <CajonPerfil openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} latestProfile={latestProfile} createProfile={createProfile} form={form} setForm={setForm} propuesta={latestProfile ? null : propuestaPerfil} />
       <CajonInscripcion openFormStep={openFormStep} setOpenFormStep={setOpenFormStep} regimeId={regimeId} setRegimeId={setRegimeId} suggestedFrom={primerDiaMesAnterior()} addRegistration={addRegistration} regimesQuery={regimesQuery} effectiveProfileId={effectiveProfileId} />
+      <CajonRegistroSugerido open={sugeridosAbiertos} onClose={() => setSugeridosAbiertos(false)} firmId={firmId} clientId={clientId} profileId={effectiveProfileId} regimes={sugerencias.regimenes} activities={sugerencias.actividades} tem={categoriaTem.query.data} mono={monotributo.query.data} refresh={invalidateClientFiscal} onManual={() => { setSugeridosAbiertos(false); setOpenFormStep("inscripcion"); }} />
       <CajonCorregirInscripcion registration={registrationToEdit} onClose={() => setRegistrationToEdit(null)} updateRegistration={updateRegistration} />
       <CajonCorregirActividad activity={activityToEdit} onClose={() => setActivityToEdit(null)} updateActivity={updateActivity} />
       <CajonCambioActividad isOpen={changeOpen} onClose={() => setChangeOpen(false)} vigentes={(clientActivitiesQuery.data ?? []).filter((link) => !link.validTo)} activitiesQuery={activitiesQuery} registrar={registerChange} />

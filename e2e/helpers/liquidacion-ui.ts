@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { goTo, mutating, pickOption, seen } from "./ui";
+import { abrirInscripcionManual, goTo, mutating, pickOption, seen } from "./ui";
 import { libroVentasXlsx, lineaPercepcionDgr, nombrePercepcionDgr, type FacturaSintetica } from "./fuentes-sinteticas";
 
 /**
@@ -78,6 +78,7 @@ export async function altaClienteRI(page: Page, cliente: ClienteRI) {
 /** Inscripción en IIBB Tucumán desde el alta del cliente (sin fecha: rige desde el alta). */
 export async function inscribirIIBB(page: Page) {
   await clickAdd(page, "Regímenes adheridos");
+  await abrirInscripcionManual(page);
   await pick(page.locator("#reg-regime"), IIBB.regime);
   await page.locator("#reg-from").fill(ALTA);
   await mutating(page, "/tax-registrations", () =>
