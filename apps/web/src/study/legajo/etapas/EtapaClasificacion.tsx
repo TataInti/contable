@@ -3,6 +3,7 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState, Field, Table, type TableColumn, SearchSelect, ObjectPanel } from "@contable/design-system";
 import { StatusBadge } from "../../../ui/StatusBadge";
+import { formatCuit } from "../../../lib/cuit";
 import { formatMoney } from "../formato";
 import type {
   AllocationCoverage,
@@ -55,7 +56,31 @@ const ORIGENES_AUTOMATICOS = ["SINGLE_CLIENT_ACTIVITY", "SINGLE_ACTIVITY_PER_LEV
 const numeroComprobante = (classification: WorkpaperClassification) =>
   `${classification.voucher.letter ?? classification.voucher.type} · ${String(classification.voucher.pointOfSale).padStart(4, "0")}-${String(classification.voucher.number).padStart(8, "0")}`;
 
+/** El régimen repite al impuesto cuando uno contiene al otro (ej.: «Ingresos Brutos» / «IIBB Contribuyente Local Tucumán»). */
+const nombreRedundante = (regimen: string, impuesto: string) => {
+  const a = regimen.trim().toLowerCase();
+  const b = impuesto.trim().toLowerCase();
+  return a === b || a.includes(b) || b.includes(a);
+};
+
 const fechaCorta = (value: string) => new Date(value).toLocaleDateString("es-AR", { timeZone: "UTC" });
+
+/** Importes del comprobante: neto (base de las alícuotas), IVA y total. Las notas de crédito restan en los totales. */
+const importesDe = (classification: WorkpaperClassification) => {
+  const total = Number(classification.voucher.total ?? 0);
+  const iva = classification.rateBuckets.reduce((sum, bucket) => sum + Number(bucket.amount), 0);
+  const neto = classification.rateBuckets.length > 0
+    ? classification.rateBuckets.reduce((sum, bucket) => sum + Number(bucket.base), 0)
+    : total;
+  const signo = classification.documentKind === "CREDIT_NOTE" ? -1 : 1;
+  return { neto, iva, total, signo };
+};
+const tipoComprobante = (classification: WorkpaperClassification) =>
+  classification.documentKind === "CREDIT_NOTE"
+    ? "Nota de crédito (resta)"
+    : classification.documentKind === "DEBIT_NOTE"
+      ? "Nota de débito"
+      : null;
 
 export function EtapaClasificacion({
   capabilities,
@@ -116,6 +141,18 @@ export function EtapaClasificacion({
     }
     return [...porActividad.entries()];
   }, [classificationQuery.data?.items]);
+  // Totales al pie (11-1): solo comprobantes incluidos en el cálculo; las notas de crédito restan.
+  const totalesVisibles = useMemo(() => {
+    const incluidos = visibleClassifications.filter((item) => !item.excludedAt);
+    if (incluidos.length === 0) return null;
+    return incluidos.reduce(
+      (acc, item) => {
+        const { neto, iva, total, signo } = importesDe(item);
+        return { cantidad: acc.cantidad + 1, neto: acc.neto + signo * neto, iva: acc.iva + signo * iva, total: acc.total + signo * total };
+      },
+      { cantidad: 0, neto: 0, iva: 0, total: 0 },
+    );
+  }, [visibleClassifications]);
   const puedeClasificar = canEditClassifications && capabilities.has("tax.vouchers.prepare");
 
   const clasificarSeleccionados = () => {
@@ -159,11 +196,13 @@ export function EtapaClasificacion({
     );
   };
   // Motivo visible junto a la tabla cuando la pantalla no deja clasificar ni imputar (P1).
-  const motivoEditar = !capabilities.has("tax.vouchers.prepare")
+  const motivoEditarBase = !capabilities.has("tax.vouchers.prepare")
     ? "Tu rol no puede clasificar comprobantes ni imputar retenciones."
     : !canEditSources && !canEditClassifications
       ? "El legajo no admite cambios de fuentes en su estado actual."
       : null;
+  // Un solo aviso por pantalla (11-4): con un mes cerrado alcanza el motivo de solo lectura (la barra ya ofrece «Crear rectificativa»).
+  const motivoEditar = motivoEditarBase;
   // Antes de responder, el indicador dice «pendiente»; si la consulta falla, «no disponible» (C03).
   const indicador = (valor: number | undefined) =>
     classificationQuery.isSuccess
@@ -174,7 +213,6 @@ export function EtapaClasificacion({
 
   return (
     <div className="workpaper-stage">
-      {motivoEditar ? <p className="workpaper-classification-help muted-copy"><small>{motivoEditar}</small></p> : null}
       <div className="workpaper-classification-head">
       <div className="workpaper-classification-summary">
         <span className="workpaper-classification-help-mark" title="Las actividades adheridas determinan la alícuota aplicable. Completá las que falten antes de calcular." aria-label="Ayuda sobre clasificación">?</span>
@@ -198,21 +236,18 @@ export function EtapaClasificacion({
         </span>
         <span>
           {classificationQuery.isSuccess ? (
-            <StatusBadge
-              status={
-                classificationQuery.data.ready && (classificationQuery.data.activityPending ?? 0) === 0
-                  ? "READY"
-                  : "WAITING_INPUTS"
-              }
-            />
+            classificationQuery.data.ready && (classificationQuery.data.activityPending ?? 0) === 0 ? (
+              <StatusBadge status="READY" label="Listo para calcular" />
+            ) : (
+              <StatusBadge status="WAITING_INPUTS" label="Faltan clasificar comprobantes" />
+            )
           ) : (
             <strong>{classificationQuery.isError ? "no disponible" : "pendiente"}</strong>
           )}
-          <small>Listo para calcular</small>
         </span>
       </div>
       <div className="workpaper-classification-topbar">
-        <div><span>Filtrar</span>
+        <div>
           <SearchSelect
             label="Filtrar comprobantes"
             hideLabel
@@ -257,7 +292,7 @@ export function EtapaClasificacion({
           {classificationQuery.isFetching ? (
             <small className="muted-copy">Dato del último corte; se está actualizando.</small>
           ) : null}
-          {asignadasSolas.length > 0 ? (
+          {asignadasSolas.length > 0 && !motivoClasificacionBloqueada && !motivoEditar ? (
             <p className="workpaper-classification-auto muted-copy">
               {asignadasSolas
                 .map(([actividad, cantidad]) =>
@@ -269,8 +304,12 @@ export function EtapaClasificacion({
               . No cuentan como pendientes.
             </p>
           ) : null}
-          {motivoClasificacionBloqueada ? (
-            <p className="workpaper-stage__note">{motivoClasificacionBloqueada}</p>
+          {motivoEditar || motivoClasificacionBloqueada ? (
+            <p className="workpaper-stage__note">
+              {motivoEditar ? <span>{motivoEditar}</span> : null}
+              {motivoEditar && motivoClasificacionBloqueada ? " " : null}
+              {motivoClasificacionBloqueada ? <span>{motivoClasificacionBloqueada}</span> : null}
+            </p>
           ) : null}
           {puedeClasificar && seleccionados.length > 0 ? (
             <div className="workpaper-stage__actions workpaper-classification-toolbar" role="group" aria-label="Acciones sobre los comprobantes seleccionados">
@@ -360,7 +399,7 @@ export function EtapaClasificacion({
             </div>
           ) : null}
           <Table<WorkpaperClassification>
-            className="workpaper-classification-table"
+            className="ds-table workpaper-classification-table"
             rows={visibleClassifications}
             rowKey={(classification) => classification.id}
             empty={
@@ -389,20 +428,26 @@ export function EtapaClasificacion({
                   ] satisfies TableColumn<WorkpaperClassification>[])
                 : []),
               {
+                key: "date",
+                header: "Fecha",
+                render: (classification) => <span className="workpaper-classification-date">{fechaCorta(classification.voucher.issuedOn)}</span>,
+              },
+              {
                 key: "voucher",
                 header: "Comprobante",
                 render: (classification) => (
                   <>
-                    <strong className="workpaper-classification-voucher-number">
-                      {classification.voucher.letter ?? classification.voucher.type} ·{" "}
-                      {String(classification.voucher.pointOfSale).padStart(4, "0")}-
-                      {String(classification.voucher.number).padStart(8, "0")}
-                    </strong>
+                    <strong className="workpaper-classification-voucher-number">{numeroComprobante(classification)}</strong>
                     <br />
                     <small>
-                      {classification.direction === "PURCHASE" ? "Compra" : "Venta"} ·{" "}
-                      {classification.counterpartyCuit}
+                      {classification.direction === "PURCHASE" ? "Compra" : "Venta"} · {formatCuit(classification.counterpartyCuit)}
                     </small>
+                    {tipoComprobante(classification) ? (
+                      <>
+                        <br />
+                        <small>{tipoComprobante(classification)}</small>
+                      </>
+                    ) : null}
                     {classification.direction === "PURCHASE" && classification.ivaCredit === false ? (
                       <>
                         <br />
@@ -424,25 +469,22 @@ export function EtapaClasificacion({
                 ),
               },
               {
-                key: "treatment",
-                header: "Tratamiento",
-                render: (classification) => (
-                  <>
-                    {classification.documentKind === "CREDIT_NOTE"
-                      ? "Nota de crédito (resta)"
-                      : classification.documentKind === "DEBIT_NOTE"
-                        ? "Nota de débito"
-                        : "Factura"}
-                    <br />
-                    <small>
-                      {classification.rateBuckets.length > 0
-                        ? classification.rateBuckets
-                            .map((bucket) => `${bucket.rate}%: ${formatMoney(bucket.amount)}`)
-                            .join(" · ")
-                        : "Sin componentes por alícuota"}
-                    </small>
-                  </>
-                ),
+                key: "net",
+                header: "Neto",
+                align: "right",
+                render: (classification) => formatMoney(String(importesDe(classification).neto)),
+              },
+              {
+                key: "iva",
+                header: "IVA",
+                align: "right",
+                render: (classification) => formatMoney(String(importesDe(classification).iva)),
+              },
+              {
+                key: "total",
+                header: "Total",
+                align: "right",
+                render: (classification) => <strong>{formatMoney(String(importesDe(classification).total))}</strong>,
               },
               {
                 key: "classification",
@@ -485,6 +527,11 @@ export function EtapaClasificacion({
                           : activity
                             ? [activity.level, activity.code, activity.name].filter(Boolean).join(" · ")
                             : classification.activityCode ?? "Actividad no informada";
+                        // Nombre de la actividad (el código y el nivel quedan en el tooltip).
+                        const nombreActividad =
+                          (automaticLevels.length ? automaticLevels[0]?.name : activity?.name) ||
+                          draft.activityCode ||
+                          "Sin actividad";
                         const selector = (
                           <SearchSelect
                             id={`actividad-${classification.id}`}
@@ -526,9 +573,7 @@ export function EtapaClasificacion({
                           ) : (
                             <div className="workpaper-classification-inline" title={fullActivity}>
                               <span className="workpaper-classification-code">
-                                {classification.categoryCode ? `${classification.categoryCode} · ` : ""}{automaticLevels.length
-                                  ? automaticLevels.map((item, index) => `${index === 0 ? "Prov." : "Mun."} ${item.code}`).join(" · ")
-                                  : draft.activityCode || "Sin actividad"}
+                                {classification.categoryCode ? `${classification.categoryCode} · ` : ""}{nombreActividad}
                               </span>
                               {classification.origin === "RULE" ? <StatusBadge status="INFO" label="Por regla" /> : null}
                               {(automatic || manual) ? (
@@ -619,6 +664,14 @@ export function EtapaClasificacion({
               },
             ]}
           />
+          {totalesVisibles ? (
+            <p className="workpaper-classification-totals" aria-label="Totales de los comprobantes incluidos">
+              <span>Total de {totalesVisibles.cantidad} {totalesVisibles.cantidad === 1 ? "comprobante" : "comprobantes"}</span>
+              <span>Neto <strong>{formatMoney(String(totalesVisibles.neto))}</strong></span>
+              <span>IVA <strong>{formatMoney(String(totalesVisibles.iva))}</strong></span>
+              <span>Total <strong>{formatMoney(String(totalesVisibles.total))}</strong></span>
+            </p>
+          ) : null}
           {(classificationQuery.data.pending + (classificationQuery.data.activityPending ?? 0)) > 0 ? (
             <p className="workpaper-classification-auto muted-copy">El cálculo queda bloqueado mientras haya comprobantes sin rubro o actividad. Clasificalos o excluilos para continuar.</p>
           ) : null}
@@ -712,11 +765,13 @@ export function EtapaClasificacion({
       )}
       <div className="workpaper-stage__heading workpaper-stage__heading--subsection">
         <div>
-          <strong>Imputación de retenciones y percepciones</strong>
-          <small>
-            Cada certificado queda asignado a una obligación, jurisdicción y período concretos antes
-            de entrar al motor.
-          </small>
+          <strong>Retenciones y percepciones</strong>
+          {allocationQuery.isSuccess && !allocationQuery.data.ready ? (
+            <small>
+              Cada certificado queda asignado a una obligación, jurisdicción y período concretos antes
+              de entrar al motor.
+            </small>
+          ) : null}
         </div>
         <span className="workpaper-stage__actions">
           {allocationQuery.isSuccess ? (
@@ -786,13 +841,16 @@ export function EtapaClasificacion({
                         ? " (oculto)"
                         : ""}
                     </strong>
-                    <br />
-                    <small>
-                      {allocation.obligation?.regime.name}
-                      {allocation.obligation && !allocation.obligation.regime.isActive
-                        ? " (oculto)"
-                        : ""}
-                    </small>
+                    {/* El régimen se muestra solo si agrega algo al nombre del impuesto (11-7). */}
+                    {allocation.obligation && !nombreRedundante(allocation.obligation.regime.name, allocation.obligation.regime.taxType.name) ? (
+                      <>
+                        <br />
+                        <small>
+                          {allocation.obligation.regime.name}
+                          {!allocation.obligation.regime.isActive ? " (oculto)" : ""}
+                        </small>
+                      </>
+                    ) : null}
                   </>
                 ),
               },

@@ -485,7 +485,7 @@ describe("Legajo · etapa Clasificación e imputación (K11)", () => {
       await abrirClasificacion();
       expect(screen.getByText(/1 venta asignada automáticamente a la única actividad de cada nivel/)).toBeInTheDocument();
       const filaAuto = filaCon("B · 0001-00000006");
-      expect(within(filaAuto).getByText("Prov. REST")).toBeInTheDocument();
+      expect(within(filaAuto).getByText("Restaurante")).toBeInTheDocument();
       expect(within(filaAuto).getByText("auto")).toBeInTheDocument();
       expect(within(filaAuto).getByTitle("Tucumán · REST · Restaurante")).toBeInTheDocument();
       expect(within(filaAuto).queryByPlaceholderText("Buscar actividad…")).not.toBeInTheDocument();

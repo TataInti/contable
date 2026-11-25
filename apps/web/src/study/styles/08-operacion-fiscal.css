@@ -593,11 +593,6 @@
   height: 42px;
 }
 
-.workpaper-classification-table td:has(.workpaper-classification-voucher-number) {
-  white-space: nowrap;
-  width: 1%;
-}
-
 .workpaper-classification-table td:has(.workpaper-classification-inline) {
   min-width: 0;
 }
@@ -605,14 +600,14 @@
 .workpaper-classification-inline {
   display: flex;
   min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--ds-space-2);
-  white-space: nowrap;
+  gap: 0 var(--ds-space-2);
 }
 
 .workpaper-classification-code {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  white-space: normal;
 }
 
 .workpaper-classification-chip {
@@ -1233,7 +1228,19 @@
 .workpaper-classification-summary > span small {
   color: var(--ds-color-text-muted);
 }
-.workpaper-classification-help-mark { display: inline-grid; place-items: center; inline-size: 1.15rem; block-size: 1.15rem; border: 1px solid var(--ds-color-border); border-radius: 50%; cursor: help; }
+/* Estado de la clasificación en una línea: «3 clasificados · 0 pendientes · 0 excluidos — Listo para calcular» (11-5). */
+.workpaper-classification-summary > span small { text-transform: lowercase; }
+.workpaper-classification-summary > span + span::before { content: "·"; margin-inline-end: var(--ds-space-2); color: var(--ds-color-text-muted); }
+.workpaper-classification-summary > span:last-child::before { content: "—"; }
+.workpaper-classification-summary > .workpaper-classification-help-mark + span::before { content: none; }
+/* Tabla de comprobantes: columnas según su contenido, importes alineados a la derecha (11-1, 11-6). */
+.workpaper-main .ds-table.workpaper-classification-table { table-layout: auto; }
+.workpaper-classification-table th.ds-table__cell--right,
+.workpaper-classification-table td.ds-table__cell--right { white-space: nowrap; text-align: right; }
+.workpaper-main .ds-table.workpaper-classification-table thead th { white-space: nowrap; overflow-wrap: normal; }
+.workpaper-classification-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.workpaper-classification-totals { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ds-space-1) var(--ds-space-4); margin: 0; padding: var(--ds-space-2) var(--ds-space-3); border-top: var(--ds-border-width) solid var(--ds-color-border-strong); font-size: var(--ds-text-sm); font-variant-numeric: tabular-nums; }
+.workpaper-classification-totals > span:first-child { margin-inline-end: auto; color: var(--ds-color-text-muted); }
 .workpaper-classification-help { display: flex; align-items: center; gap: var(--ds-space-2); margin: 0; }
 .workpaper-classification-auto { margin: 0; font-size: var(--ds-text-xs); }
 .workpaper-classification-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ds-space-2) var(--ds-space-4); min-width: 0; }
