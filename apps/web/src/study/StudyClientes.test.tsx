@@ -717,8 +717,8 @@ describe("StudyClientes — cartera densa", () => {
     expect(actionHeader?.style.position).toBe("sticky");
     expect(actionHeader?.style.right).toBe("0px");
     expect(actionHeader?.style.width).toBe("9%");
-    expect(profileHeader?.style.width).toBe("8%");
-    expect(statusHeader?.style.width).toBe("17%");
+    expect(profileHeader?.style.width).toBe("14%");
+    expect(statusHeader?.style.width).toBe("11%");
     const actionCells = table.querySelectorAll("tbody td.client-list__action-column");
     expect(actionCells).toHaveLength(3);
     expect((actionCells[0] as HTMLTableCellElement).style.position).toBe("sticky");

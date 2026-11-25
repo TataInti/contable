@@ -126,7 +126,7 @@ export function columnasCartera({
     {
       key: "gaps",
       header: "Ficha",
-      width: inspectorOpen ? "10%" : "8%",
+      width: inspectorOpen ? "16%" : "14%",
       className: "client-list__profile-column",
       sortValue: (row) => configurationGaps(row).length,
       render: (row) => {
@@ -134,16 +134,19 @@ export function columnasCartera({
         return gaps.length === 0 ? (
           <span className="dense-dim">Completa</span>
         ) : (
-          <Button type="button" variant="text" size="row" title={`Falta: ${gaps.map((gap) => gap.label).join(", ")}`} onClick={(event) => { event.stopPropagation(); openConfiguration(row.id, gaps[0]!.step); }}>
-            <StatusBadge status="MISSING" label={`Faltan ${gaps.length}`} />
+          <Button type="button" variant="text" size="row" className="client-list__gaps" title={`Falta: ${gaps.map((gap) => gap.label).join(", ")}`} onClick={(event) => { event.stopPropagation(); openConfiguration(row.id, gaps[0]!.step); }}>
+            <span>
+              Falta: {gaps.slice(0, 2).map((gap) => gap.label).join(", ")}
+              {gaps.length > 2 ? ` y ${gaps.length - 2} más` : ""}
+            </span>
           </Button>
         );
       },
     },
     {
       key: "status",
-      header: "Estado",
-      width: inspectorOpen ? "22%" : "17%",
+      header: "Cuenta",
+      width: inspectorOpen ? "16%" : "11%",
       className: "client-list__status-column",
       sortValue: (row) => row.status,
       render: (row) => <StatusBadge status={row.status} />,
