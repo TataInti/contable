@@ -148,18 +148,9 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     );
   });
 
-  await test.step("Configuración fiscal: perfil activo", async () => {
-    await page.getByRole("button", { name: "Crear perfil fiscal" }).first().click();
-    await page.locator("#pf-legal-name").fill(CLIENTE.legalName);
-    await page.locator("#pf-cuit").fill(CLIENTE.cuit);
-    await page.locator("#pf-fiscal-address").fill(CLIENTE.fiscalAddress);
-    await pick(page.locator("#pf-person-type"), "Jurídica");
-    await pick(page.locator("#pf-condition"), "Responsable Inscripto");
-    await page.locator("#pf-valid-from").fill(ALTA);
-    await page.getByRole("button", { name: "Crear perfil", exact: true }).click();
-    await page.getByRole("button", { name: "Enviar a revisión" }).click();
-    await page.getByRole("button", { name: "Activar perfil" }).click();
+  await test.step("Configuración fiscal: perfil activo desde el alta", async () => {
     await expect(page.getByRole("button", { name: "Crear nueva versión" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Crear perfil fiscal" })).toHaveCount(0);
   });
 
   await test.step("Configuración fiscal: inscripción en IIBB Tucumán y TEM SMT (regímenes de sistema) desde el alta", async () => {
@@ -219,15 +210,13 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await page.getByRole("tab", { name: /Fuentes/ }).first().click();
     await page.getByRole("button", { name: "Gestionar Ventas del período" }).click();
     await page.getByRole("button", { name: "Cargar archivo" }).click();
-    const panel = page.getByRole("dialog", { name: "Importar libros IVA" });
+    const panel = page.getByRole("dialog", { name: "Importar libro de ventas" });
     const libro = panel.locator('section[aria-label="Libro de ventas"]');
     await libro.locator('input[type="file"]').setInputFiles({
       name: `ventas-arca-${SUFFIX}.xlsx`,
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       buffer: Buffer.from(libroVentasXlsx(FACTURAS)),
     });
-    // Un .xlsx pasa por el análisis de alícuotas antes de importarse: «Importar» se habilita recién después.
-    await libro.getByRole("button", { name: "Analizar alícuotas", exact: true }).click();
     await expect(libro.getByRole("button", { name: "Importar", exact: true })).toBeEnabled({ timeout: 60_000 });
     await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
     await expect(panel).toBeHidden({ timeout: 60_000 });

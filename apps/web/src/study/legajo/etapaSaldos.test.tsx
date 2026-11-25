@@ -80,7 +80,7 @@ function renderLegajo() {
   return render(
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={["/?etapa=saldos"]}>
           <StudyExpedienteMensual />
         </MemoryRouter>
       </ToastProvider>

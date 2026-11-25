@@ -119,7 +119,7 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await opcionPeriodo.click();
     const { libro } = await cargarLibroVentas(page, COMPROBANTES_C, `ventas-c-${SUFFIX}.xlsx`);
     await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
-    await expect(page.getByRole("dialog", { name: "Importar libros IVA" })).toBeHidden({ timeout: 60_000 });
+    await expect(page.getByRole("dialog", { name: "Importar libro de ventas" })).toBeHidden({ timeout: 60_000 });
   });
 
   await test.step("Revisión del lote y cálculo: el Legajo abre los controles de perfil", async () => {

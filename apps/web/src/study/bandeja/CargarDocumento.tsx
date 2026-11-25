@@ -93,29 +93,71 @@ export function CargarDocumento({
     setFile(error ? null : selected);
   };
 
+  const subirArchivo = async (archivo: File, requestItemId: string) => {
+    const session = await api.post<UploadSession>(`${base}/document-upload-sessions`, {
+      expectedMime: archivo.type || undefined,
+      requestItemId,
+    });
+    await uploadToSignedUrl(session.presignedUrl, archivo);
+    const digest = await crypto.subtle.digest("SHA-256", await archivo.arrayBuffer());
+    const sha256 = [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    return api.post<UploadComplete>(
+      `${base}/document-upload-sessions/${session.sessionId}/complete`,
+      {
+        originalName: archivo.name,
+        mimeType: archivo.type || "application/octet-stream",
+        sizeBytes: archivo.size,
+        sha256,
+        objectKey: session.objectKey,
+      },
+    );
+  };
+
+  // Con permiso para pedir documentación, subir sin elegir ítem crea un pedido interno con el nombre
+  // del archivo, lo envía y lo cierra al subir (D7). Sin ese permiso se exige elegir un ítem pendiente.
+  const puedeSinPedido = capabilities.has("request.manage");
+
   const upload = useMutation({
     mutationFn: async () => {
       if (!file || !base) throw new Error("Falta seleccionar un archivo");
-      if (!uploadRequestItemId) throw new Error("Elegí el pedido al que corresponde el archivo");
-      const session = await api.post<UploadSession>(`${base}/document-upload-sessions`, {
-        expectedMime: file.type || undefined,
-        requestItemId: uploadRequestItemId,
-      });
-      await uploadToSignedUrl(session.presignedUrl, file);
-      const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-      const sha256 = [...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
-      return api.post<UploadComplete>(
-        `${base}/document-upload-sessions/${session.sessionId}/complete`,
-        {
-          originalName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-          sha256,
-          objectKey: session.objectKey,
-        },
-      );
+      if (!uploadRequestItemId && !puedeSinPedido) {
+        throw new Error("Elegí el pedido al que corresponde el archivo");
+      }
+      let requestItemId = uploadRequestItemId;
+      let autoRequestId: string | null = null;
+      if (!requestItemId) {
+        const titulo = file.name.slice(0, 200);
+        const pedido = await api.post<DocumentRequest>(`${base}/document-requests`, {
+          title: titulo,
+          items: [{ description: file.name.slice(0, 500), required: true }],
+        });
+        const item = pedido.items[0];
+        if (!item) throw new Error("No se pudo crear el pedido interno.");
+        await api.post(`${base}/document-requests/${pedido.id}/send`);
+        autoRequestId = pedido.id;
+        requestItemId = item.id;
+      }
+      let subido: UploadComplete;
+      try {
+        subido = await subirArchivo(file, requestItemId);
+      } catch (error) {
+        // Si la subida falla, el pedido interno recién creado no queda huérfano.
+        if (autoRequestId) {
+          await api
+            .post(`${base}/document-requests/${autoRequestId}/cancel`)
+            .catch(() => undefined);
+        }
+        throw error;
+      }
+      if (autoRequestId) {
+        // El estudio no se pide a sí mismo: el ítem se acepta al subir y el pedido queda completado.
+        await api
+          .post(`${base}/document-requests/${autoRequestId}/items/${requestItemId}/accept`)
+          .catch(() => undefined);
+      }
+      return subido;
     },
     onSuccess: (document) => {
       notify.success("Documento recibido. Ya ingresó al circuito de validación y procesamiento.");
@@ -176,10 +218,12 @@ export function CargarDocumento({
             </Button>
           }
         />
-      ) : pendingRequestItems.length === 0 ? (
+      ) : pendingRequestItems.length === 0 && !puedeSinPedido ? (
         <EmptyState
           size="compact"
-          title={subidaRecibida ? "No quedan ítems pendientes" : "Primero creá un pedido documental"}
+          title={
+            subidaRecibida ? "No quedan ítems pendientes" : "Primero creá un pedido documental"
+          }
           description={
             subidaRecibida
               ? "Cada carga queda vinculada a un ítem solicitado. Creá otro pedido para cargar más documentos."
@@ -206,19 +250,28 @@ export function CargarDocumento({
             upload.mutate();
           }}
         >
-          <div className="ds-field">
-            <span className="ds-field__label">Corresponde a</span>
-            <SearchSelect
-              id="upload-request-item"
-              label="Corresponde a"
-              hideLabel
-              value={uploadRequestItemId}
-              onChange={(value) => setUploadRequestItemId(value)}
-              required
-              placeholder="Elegí el ítem solicitado"
-              options={pendingRequestItems.map((item) => ({ value: item.id, label: `${item.requestTitle} · ${item.description}` }))}
-            />
-          </div>
+          {pendingRequestItems.length > 0 ? (
+            <div className="ds-field">
+              <span className="ds-field__label">Corresponde a</span>
+              <SearchSelect
+                id="upload-request-item"
+                label="Corresponde a"
+                hideLabel
+                value={uploadRequestItemId}
+                onChange={(value) => setUploadRequestItemId(value)}
+                required={!puedeSinPedido}
+                placeholder={
+                  puedeSinPedido
+                    ? "Sin pedido: se crea uno con el nombre del archivo"
+                    : "Elegí el ítem solicitado"
+                }
+                options={pendingRequestItems.map((item) => ({
+                  value: item.id,
+                  label: `${item.requestTitle} · ${item.description}`,
+                }))}
+              />
+            </div>
+          ) : null}
           <label
             className={`upload-dropzone${dragging ? " upload-dropzone--dragging" : ""}`}
             onDragOver={(event) => {
@@ -269,7 +322,7 @@ export function CargarDocumento({
               type="submit"
               loading={upload.isPending}
               loadingLabel="Subiendo documento"
-              disabled={!file || !uploadRequestItemId}
+              disabled={!file || (!uploadRequestItemId && !puedeSinPedido)}
             >
               Subir y procesar
             </Button>

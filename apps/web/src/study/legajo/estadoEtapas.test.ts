@@ -10,7 +10,7 @@ describe("estado por etapa del Legajo", () => {
       blockingControls: 0,
       status: "COLLECTING_INPUTS",
     });
-    expect(resultado[1]).toMatchObject({ estado: "Con pendientes", destino: 1, mensaje: "Faltan 1 fuentes obligatorias" });
+    expect(resultado[1]).toMatchObject({ estado: "Con pendientes", destino: 1, mensaje: "Falta 1 fuente obligatoria" });
     expect(resultado[2]).toMatchObject({ estado: "No disponible todavía", destino: 1, accion: "Ir a Fuentes" });
     const conFuentes = calcularEstadosEtapas({
       sources: [{ required: true, present: true, status: "LOADED" }],

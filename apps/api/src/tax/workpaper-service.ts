@@ -366,6 +366,7 @@ export class MonthlyWorkpaperService {
         periodId: obligation?.periodId ?? null,
         origin: policy.origin,
         adapterVersion: policy.adapterVersion,
+        satisfiedBy: [...(policy.satisfiedBy ?? [])],
         expectedColumns: policy.expectedColumns,
         batches: batches.map((item) => ({
           id: item.id,
