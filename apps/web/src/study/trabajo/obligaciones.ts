@@ -3,6 +3,8 @@ import type { Obligation } from "./tipos";
 
 export interface FilaObligacion {
   id: string;
+  /** Período fiscal (impuesto y mes) con el que se abre el Legajo. */
+  taxPeriodId: string;
   name: string;
   periodLabel: string;
   dueDate: string;
@@ -23,6 +25,7 @@ export function filasDeObligaciones(
     })
     .map((item) => ({
     id: item.id,
+    taxPeriodId: item.period.id,
     name: `${item.regime.taxType.name} · ${item.regime.jurisdiction.name}`,
     periodLabel:
       item.period.label ??
