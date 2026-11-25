@@ -19,6 +19,7 @@ export interface FormularioAlta {
   contactEmail: string;
   vatCondition: string;
   province: string;
+  fiscalAddress: string;
   activity: string;
   legalForm: string;
 }
@@ -156,6 +157,9 @@ export function PanelAlta({
           </Notice>
         ) : null}
       </form>
+      <div className="client-create__address-grid">
+        <Field id="client-fiscal-address" form="client-create-form" label="Domicilio fiscal (opcional)" value={form.fiscalAddress} onChange={(event) => setForm({ ...form, fiscalAddress: event.target.value })} hint="Si es San Miguel de Tucumán, se propondrá TEM junto con IIBB." />
+      </div>
     </ActionDrawer>
   );
 }

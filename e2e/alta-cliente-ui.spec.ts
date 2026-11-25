@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { RUN, SUFFIX, goTo, pickOption, seen, syntheticCuit } from "./helpers/ui";
+import { abrirInscripcionManual, RUN, SUFFIX, goTo, pickOption, seen, syntheticCuit } from "./helpers/ui";
 
 /**
  * E2E de alta completa desde la interfaz: deja cargado todo lo que hace falta
@@ -171,6 +171,7 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
 
   await test.step("Configuración fiscal: inscripción en el régimen", async () => {
     await page.getByRole("button", { name: /Registrar inscripción|Completar inscripción/ }).first().click();
+    await abrirInscripcionManual(page);
     await pickOption(page.locator("#reg-regime"), data.regime.name);
     // La inscripción tiene su propio «Desde» (por defecto, el mes anterior): debe cubrir el período.
     await page.locator("#reg-from").fill(data.validFrom);
@@ -213,25 +214,13 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await expect(seen(page, data.activity.code)).toBeVisible();
   });
 
-  await test.step("Verificar que el cliente se puede procesar: el servidor acepta calcular la liquidación", async () => {
+  await test.step("Verificar que el cliente se puede procesar: Liquidaciones es el historial y el cálculo se hace en el Legajo", async () => {
     await goTo(page, "Liquidaciones");
     await expect(page.getByRole("heading", { name: "Liquidaciones", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Calcular liquidación" }).first().click();
-    await pickOption(page.locator("#settlement-tax-period"), data.period.label);
-    await pickOption(page.locator("#settlement-regime"), data.regime.name);
-    await page.locator("#settlement-cutoff").fill(data.period.end);
-    const calculated = page.waitForResponse(
-      (response) => response.url().includes("/tax-settlements/calculate") && response.request().method() === "POST",
-    );
-    await page.getByRole("button", { name: "Calcular", exact: true }).click();
-    const response = await calculated;
-    // Los rechazos de la cadena de requisitos serían REGISTRATION_REQUIRED, NO_ACTIVE_RULES o
-    // UNSUPPORTED_ENGINE_VERSION: ninguno debe aparecer.
-    const body = await response.text();
-    expect(body, `respuesta de calcular: ${response.status()} ${body}`).not.toMatch(
-      /REGISTRATION_REQUIRED|NO_ACTIVE_RULES|UNSUPPORTED_ENGINE_VERSION/,
-    );
-    expect(response.status(), body).toBe(200);
+    // Liquidaciones es un historial de solo lectura (sin cajón de cálculo): el cliente nuevo aún no tiene ninguna
+    // y la pantalla lleva al Legajo, donde se calcula (el cálculo se prueba en liquidacion-mensual-ri-ui).
+    await expect(page.getByRole("button", { name: "Calcular liquidación" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Abrir en el Legajo" }).first()).toBeVisible();
   });
 
   expect(failedMutations, `mutaciones rechazadas:\n${failedMutations.join("\n")}`).toEqual([]);

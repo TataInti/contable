@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -233,24 +233,24 @@ describe("Inicio: composición R01", () => {
     expect(screen.queryByText("Resumen no disponible para tu rol")).toBeNull();
   });
 
-  it("Otros circuitos y Panorama general son secciones del lienzo, sin panel lateral", async () => {
+  it("Otros circuitos es una sección del lienzo, sin panel lateral ni «Panorama general» repetido (02-2)", async () => {
     renderDashboard(["client.read", "tax.settlements.read"]);
     await worklistTable();
     expect(await screen.findByRole("heading", { name: "Otros circuitos" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Panorama general" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Panorama general" })).toBeNull();
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 
-  it("«Abrir obligaciones» con cliente elegido lleva a Trabajo", async () => {
+  it("«Ver todo» de obligaciones con cliente elegido lleva a Trabajo", async () => {
     renderDashboard(["client.read", "tax.settlements.read"]);
     await worklistTable();
-    expect(screen.getByRole("link", { name: "Abrir obligaciones" }).getAttribute("href")).toBe("/trabajo");
+    expect(within(document.getElementById("obligations") as HTMLElement).getByRole("link", { name: "Ver todo" }).getAttribute("href")).toBe("/trabajo");
   });
 
-  it("«Abrir obligaciones» sin cliente elegido lleva a Clientes para elegir uno", async () => {
+  it("«Ver todo» de obligaciones sin cliente elegido lleva a Clientes para elegir uno", async () => {
     renderDashboard(["client.read", "tax.settlements.read"], null);
     await worklistTable();
-    expect(screen.getByRole("link", { name: "Abrir obligaciones" }).getAttribute("href")).toBe("/clientes");
+    expect(within(document.getElementById("obligations") as HTMLElement).getByRole("link", { name: "Ver todo" }).getAttribute("href")).toBe("/clientes");
   });
 
   it("documentos y pedidos conservan su regla: con cliente, Bandeja y Trabajo; sin cliente, Clientes", async () => {

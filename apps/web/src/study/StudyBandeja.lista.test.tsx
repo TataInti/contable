@@ -197,7 +197,7 @@ describe("StudyBandeja · lista de documentos (7b.2)", () => {
     expect(indicador("Para revisar")).toBe("1");
     expect(indicador("Procesando")).toBe("5");
     // C7B-4 (7b.2): la cola pasa de «Revisados» a «Revisado», el mismo nombre que su etiqueta. Antes: indicador("Revisados").
-    expect(indicador("Revisado")).toBe("1");
+    expect(indicador("Aprobado")).toBe("1");
     expect(indicador("Con error")).toBe("2");
   });
 
@@ -225,7 +225,7 @@ describe("StudyBandeja · lista de documentos (7b.2)", () => {
     fireEvent.change(buscar, { target: { value: "REVIEWED" } });
     expect(screen.queryByText("ticket.jpg")).toBeNull();
     // 7b-6, antes: «Revisado» no encontraba el documento. Ahora sí: es el nombre visible del estado.
-    fireEvent.change(buscar, { target: { value: "Revisado" } });
+    fireEvent.change(buscar, { target: { value: "Aprobado" } });
     expect(screen.queryByText("ticket.jpg")).not.toBeNull();
     // 7b-6, antes: la fecha ISO encontraba el documento. Ahora no.
     fireEvent.change(buscar, { target: { value: "2026-10-20" } });
@@ -400,8 +400,8 @@ describe("StudyBandeja · lista de documentos (7b.2)", () => {
     expect(await screen.findByRole("button", { name: "Actualizar" })).toBeTruthy();
   });
 
-  // K16 · «Ítems pendientes» (C7B-5).
-  it("K16 · «Ítems pendientes» se carga al abrir la pantalla: «…» mientras carga y después el número real", async () => {
+  // K16 · «Pedidos por completar» (C7B-5).
+  it("K16 · «Pedidos por completar» se carga al abrir la pantalla: «…» mientras carga y después el número real", async () => {
     responder((ruta) => {
       if (ruta.endsWith("/documents")) return Promise.resolve([factura()]);
       if (ruta.endsWith("/document-requests")) return Promise.resolve([pedido()]);
@@ -409,21 +409,21 @@ describe("StudyBandeja · lista de documentos (7b.2)", () => {
     });
     renderBandeja();
     // C7B-5, antes: «0» sin abrir el cajón de carga (defecto 7b-5).
-    expect(indicador("Ítems pendientes")).toBe("…");
-    await waitFor(() => expect(indicador("Ítems pendientes")).toBe("2"));
+    expect(indicador("Pedidos por completar")).toBe("…");
+    await waitFor(() => expect(indicador("Pedidos por completar")).toBe("2"));
     fireEvent.click(screen.getByRole("button", { name: "Subir documento" }));
-    expect(indicador("Ítems pendientes")).toBe("2");
+    expect(indicador("Pedidos por completar")).toBe("2");
   });
 
   // C7B-5 · sin respuesta, nunca 0.
-  it("C7B-5 · «Ítems pendientes» dice «no disponible» si falla su consulta, nunca 0", async () => {
+  it("C7B-5 · «Pedidos por completar» dice «no disponible» si falla su consulta, nunca 0", async () => {
     responder((ruta) => {
       if (ruta.endsWith("/documents")) return Promise.resolve([factura()]);
       if (ruta.endsWith("/document-requests")) return Promise.reject(new Error("falla de red"));
       return undefined;
     });
     renderBandeja();
-    await waitFor(() => expect(indicador("Ítems pendientes")).toBe("no disponible"));
+    await waitFor(() => expect(indicador("Pedidos por completar")).toBe("no disponible"));
   });
 
   it("C7B-5 · con la lista en error, las cifras de las colas dicen «no disponible», nunca 0", async () => {

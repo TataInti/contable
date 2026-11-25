@@ -42,7 +42,6 @@ const CLIENTE = {
 const OCTUBRE = { start: "2026-10-01", end: "2026-10-31", mes: "Octubre de 2026", label: `Octubre 2026 IIBB ${SUFFIX}` };
 const MOTIVO_ACEPTAR = `E2E ${SUFFIX}: el cliente informó que emite las facturas C en el período; se acepta con motivo.`;
 const MOTIVO_EXCLUIR = `E2E ${SUFFIX}: la nota de crédito C se excluye del cálculo hasta que el estudio la confirme.`;
-const MOTIVO_CONTROL = `E2E ${SUFFIX}: extracto bancario sintético no aportado en la corrida; se resuelve con motivo y queda registrado.`;
 async function capturarR1c(page: Page, testInfo: TestInfo, nombre: string) {
   await page.screenshot({ path: testInfo.outputPath(nombre) });
 }
@@ -203,8 +202,9 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
 
     await expect(openItems).toHaveCount(openCountBefore - 1);
     await expect(openQueue.getByRole("button", { name: /Abrir Facturas C/ })).toHaveCount(0);
-    await expect(panel.getByRole("button", { name: "Resueltos (3)" })).toBeVisible();
-    await panel.getByRole("button", { name: "Resueltos (3)" }).click();
+    // Resueltos (5): los 3 de antes más los 2 controles automáticos omitidos por falta de extracto y de caja.
+    await expect(panel.getByRole("button", { name: "Resueltos (5)" })).toBeVisible();
+    await panel.getByRole("button", { name: "Resueltos (5)" }).click();
     const resolvedQueue = panel.getByRole("list", { name: "Controles resueltos" });
     const resolvedRow = resolvedQueue.getByRole("listitem").filter({ hasText: "Facturas C" });
     await expect(resolvedRow).toContainText("Resuelto");
@@ -218,7 +218,7 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await expect(resolvedDrawer).toBeHidden();
     await expect(resolvedButton).toBeFocused();
 
-    await panel.getByRole("button", { name: /Abiertos \(3\)/ }).click();
+    await panel.getByRole("button", { name: /Abiertos \(1\)/ }).click();
     await panel.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem").filter({ hasText: "Notas de crédito y débito C" }).getByRole("button", { name: /Abrir/ }).click();
     const secondDrawer = page.getByRole("dialog");
     await secondDrawer.getByRole("button", { name: "Excluir del cálculo con motivo", exact: true }).click();
@@ -237,22 +237,11 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     await esperarImporte(page, "3.150,00");
   });
 
-  await test.step("Controles automáticos: acreditaciones bancarias y caja, resueltas con motivo", async () => {
+  await test.step("Controles automáticos: acreditaciones bancarias y caja quedan omitidas (sin extracto ni caja)", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
-    for (const nombre of ["Acreditaciones bancarias vs. facturación", "Caja e imputaciones del período"]) {
-      const queue = page.getByRole("list", { name: "Controles abiertos" });
-      const row = queue.getByRole("listitem").filter({ hasText: nombre });
-      await expect(row, `«${nombre}» aparece una sola vez en abiertos`).toHaveCount(1);
-      await row.getByRole("button", { name: /Abrir/ }).click();
-      const drawer = page.getByRole("dialog");
-      await expect(drawer.getByLabel("Motivo")).toHaveCount(0);
-      await drawer.getByRole("button", { name: "Resolver", exact: true }).click();
-      await drawer.getByLabel("Motivo").fill(MOTIVO_CONTROL);
-      await expect(drawer.getByRole("button", { name: "Confirmar resolución" })).toBeEnabled();
-      await mutating(page, "/resolve", () => drawer.getByRole("button", { name: "Confirmar resolución", exact: true }).click());
-      await expect(drawer).toBeHidden();
-      await expect(queue.getByRole("listitem").filter({ hasText: nombre }), `«${nombre}» no reaparece en abiertos`).toHaveCount(0);
-    }
+    // D6: sin extracto bancario ni movimientos de caja, los dos controles no bloquean: quedan «Omitido» a la vista.
+    await expect(page.getByRole("list", { name: "Controles omitidos" })).toContainText("Omitido: no hay extracto cargado");
+    await expect(page.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem").filter({ hasText: /Acreditaciones bancarias|Caja e imputaciones/ })).toHaveCount(0);
   });
 
   await test.step("Revisión: enviar a revisión y aprobar (autorrevisión activada)", async () => {

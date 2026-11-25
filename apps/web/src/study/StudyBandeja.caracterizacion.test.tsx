@@ -61,7 +61,8 @@ describe("StudyBandeja · caracterización del detalle (7b.3a, antes de mover na
   });
 
   it("K7 · «Abrir el más reciente» abre el documento de la lista", async () => {
-    fetchSimulado(rutaBandeja(documento("doc-a", "EXTRACTED")));
+    // 07-3: un documento «Para revisar» se abre solo; el panel vacío queda para los que no lo están.
+    fetchSimulado(rutaBandeja(documento("doc-a", "REVIEWED")));
     renderBandeja(clienteComoApp());
     expect(await screen.findByText("Elegí un documento")).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: "Abrir el más reciente" }));

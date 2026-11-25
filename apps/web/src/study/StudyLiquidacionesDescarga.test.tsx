@@ -105,7 +105,7 @@ function withBase(extra: Router): Router {
   return (method, path) => {
     if (method === "GET" && path === `${BASE}/tax-periods`) return json([period]);
     if (method === "GET" && path === "/tax/regimes") return json([regime]);
-    if (method === "GET" && path === `${BASE}/tax-settlements?periodId=${PERIOD}`) {
+    if (method === "GET" && path === `${BASE}/tax-settlements?limit=200`) {
       return json([settlement(SETTLEMENT, "FINALIZED", 1), settlement(DRAFT, "CALCULATED", 2)]);
     }
     return extra(method, path);
@@ -161,7 +161,7 @@ async function waitForRows() {
   await waitFor(() => expect(screen.getAllByRole("row").length).toBeGreaterThan(2));
 }
 
-const pdfButton = () => screen.getByRole("button", { name: "PDF" }) as HTMLButtonElement;
+const pdfButton = () => screen.getByRole("button", { name: "Descargar PDF" }) as HTMLButtonElement;
 
 beforeEach(() => {
   downloads.length = 0;
@@ -186,16 +186,16 @@ describe("Liquidaciones: PDF y CSV del papel de trabajo", () => {
     stubApi(withBase(() => undefined));
     renderPage(FULL);
     await waitForRows();
-    expect(screen.getAllByRole("button", { name: "PDF" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "CSV" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Descargar PDF" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Descargar CSV" })).toHaveLength(1);
   });
 
   it("sin la capacidad de exportar no aparecen PDF ni CSV", async () => {
     stubApi(withBase(() => undefined));
     renderPage(["tax.settlements.read"]);
     await waitForRows();
-    expect(screen.queryByRole("button", { name: "PDF" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "CSV" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Descargar PDF" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Descargar CSV" })).toBeNull();
   });
 
   it("sin papel previo: lo genera, lo descarga con su nombre y avisa que se descargó", async () => {
@@ -298,8 +298,8 @@ describe("Liquidaciones: PDF y CSV del papel de trabajo", () => {
   );
 
   it.each([
-    ["PDF", "pdf"],
-    ["CSV", "csv"],
+    ["Descargar PDF", "pdf"],
+    ["Descargar CSV", "csv"],
   ])(
     "si la descarga de %s no tiene respuesta de la red, avisa el paso siguiente, no descarga y el botón vuelve a quedar disponible",
     async (nombre, formato) => {

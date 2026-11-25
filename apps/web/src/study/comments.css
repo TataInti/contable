@@ -19,7 +19,8 @@
 .comment-thread__actions { display: flex; gap: var(--ds-space-2); }
 .comment-thread [role="listbox"] { display: grid; gap: var(--ds-space-1); margin: 0; padding: var(--ds-space-2); list-style: none; border: var(--ds-border-width) solid var(--ds-color-border); background: var(--ds-color-surface); }
 .comment-thread [role="option"] button { width: 100%; padding: var(--ds-space-2); text-align: left; color: var(--ds-color-text); background: transparent; border: 0; cursor: pointer; }
-.study-comments-inbox { max-width: 900px; margin-inline: auto; padding: var(--ds-space-6); }
+.study-comments-inbox { max-width: 900px; margin-inline: 0; }
+.study-comments-inbox .study-page__header { margin-bottom: var(--ds-space-4); }
 .study-comments-inbox [role="tablist"] { display: flex; gap: var(--ds-space-4); margin-block: var(--ds-space-4); border-bottom: var(--ds-border-width) solid var(--ds-color-border); }
 .study-comments-inbox [role="tab"] { padding: var(--ds-space-3); border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ds-color-text); cursor: pointer; }
 .study-comments-inbox [role="tab"][aria-selected="true"] { border-bottom-color: var(--ds-color-primary); font-weight: var(--ds-font-weight-bold); }
@@ -31,6 +32,7 @@
 .workpaper-workspace { display: flex; min-width: 0; min-height: 0; flex: 1; }
 .workpaper-main { min-width: 0; min-height: 0; flex: 1; overflow: auto; padding: var(--ds-space-4) var(--ds-space-6) var(--ds-space-7); scrollbar-gutter: stable; }
 .workpaper-stage-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--ds-space-2); margin-block-end: var(--ds-space-3); padding-block-end: var(--ds-space-2); border-bottom: var(--ds-border-width) solid var(--ds-color-border-subtle); }
+.workpaper-continuar { display: flex; justify-content: flex-end; margin-block-start: var(--ds-space-4); padding-block-start: var(--ds-space-3); border-top: var(--ds-border-width) solid var(--ds-color-border-subtle); }
 .comments-sidebar { position: relative; z-index: var(--ds-z-sticky); display: flex; flex: 0 0 var(--comments-sidebar-width, 320px); flex-direction: column; min-width: 0; min-height: 0; border-left: var(--ds-border-width) solid var(--ds-color-border-subtle); background: var(--ds-color-background); }
 .comments-sidebar--closed { flex-basis: 48px; }
 /* Los avisos flotantes del Legajo quedan a la izquierda de la barra de comentarios: no tapan el cuadro de escribir. */
@@ -54,8 +56,12 @@ body:has(.comments-sidebar--closed) .ds-toast-region { inset-inline-end: calc(48
   .workpaper-main .ds-table thead th { white-space: normal; overflow-wrap: anywhere; }
   .workpaper-main .ds-table tbody td { padding-inline: var(--ds-space-1); overflow-wrap: anywhere; }
   .workpaper-main .ds-table tbody td > * { max-width: 100%; }
-  .workpaper-main .ds-table__wrapper:has(.workpaper-position-table) { min-width: max-content; overflow: visible; }
-  .workpaper-main .workpaper-position-table { width: max-content; min-width: max-content; table-layout: auto; }
+  /* 12-1: la tabla de presentación y pago ocupa el ancho del contenedor (antes medía el contenido y se salía de pantalla). */
+  .workpaper-main .workpaper-position-table { table-layout: auto; }
+  .workpaper-main .workpaper-position-table th:first-child { min-width: 9rem; }
+  .workpaper-main .workpaper-position-table .study-table__actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--ds-space-1); }
+  .workpaper-main .workpaper-calculation-breakdown .ds-table thead th:first-child { white-space: nowrap; }
+  .workpaper-main .workpaper-calculation-breakdown .ds-table tbody td:first-child { overflow-wrap: normal; white-space: nowrap; }
   .workpaper-main .workpaper-classification-fields { min-width: 0; }
   .workpaper-main .workpaper-classification-fields .ds-search-select { width: 100%; min-width: 0; }
 }

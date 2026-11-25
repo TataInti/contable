@@ -112,6 +112,18 @@ describe("Legajo · selector de período fiscal (K15)", () => {
   });
 
   it("conserva la elección guardada en la sesión", async () => {
+    sessionStorage.setItem(CLAVE, "period-iva-sep");
+    vi.mocked(api.get).mockImplementation(
+      rutasDemo({ periodos: [periodoIibbDemo, periodoSeptiembreDemo] }) as never,
+    );
+    renderPage();
+
+    await screen.findByRole("combobox", { name: "Período fiscal" });
+    await waitFor(() => expect(valorElegido("Período fiscal")).toBe("period-iva-sep"));
+    expect(sessionStorage.getItem(CLAVE)).toBe("period-iva-sep");
+  });
+
+  it("un período guardado de otro impuesto del mismo mes elige la entrada de ese mes", async () => {
     sessionStorage.setItem(CLAVE, "period-iva");
     vi.mocked(api.get).mockImplementation(
       rutasDemo({ periodos: [periodoIibbDemo, periodoIvaDemo] }) as never,
@@ -119,8 +131,10 @@ describe("Legajo · selector de período fiscal (K15)", () => {
     renderPage();
 
     await screen.findByRole("combobox", { name: "Período fiscal" });
-    await waitFor(() => expect(valorElegido("Período fiscal")).toBe("period-iva"));
-    expect(sessionStorage.getItem(CLAVE)).toBe("period-iva");
+    await waitFor(() => expect(valorElegido("Período fiscal")).toBe("period-a"));
+    expect(sessionStorage.getItem(CLAVE)).toBe("period-a");
+    const opciones = within(abrirListado("Período fiscal")).getAllByRole("option");
+    expect(opciones.map((opcion) => opcion.textContent)).toEqual(["Seleccioná un mes…", "Octubre de 2026"]);
   });
 
   it("guarda el cambio de período y consulta el legajo de ese período", async () => {
@@ -145,7 +159,7 @@ describe("Legajo · selector de período fiscal (K15)", () => {
       rutasDemo({
         periodos: [
           periodoIibbDemo,
-          { ...periodoIvaDemo, taxType: { name: "IVA", isActive: false } },
+          { ...periodoSeptiembreDemo, taxType: { name: "IVA", isActive: false } },
         ],
       }) as never,
     );
@@ -153,8 +167,8 @@ describe("Legajo · selector de período fiscal (K15)", () => {
 
     await screen.findByRole("combobox", { name: "Período fiscal" });
     const opciones = within(abrirListado("Período fiscal"));
-    expect(opciones.getByRole("option", { name: /Ingresos Brutos/ })).toBeTruthy();
-    expect(opciones.queryByRole("option", { name: /IVA/ })).toBeNull();
+    expect(opciones.getByRole("option", { name: "Octubre de 2026" })).toBeTruthy();
+    expect(opciones.queryByRole("option", { name: /Septiembre/ })).toBeNull();
   });
 
   it("ofrece Reintentar cuando fallan los períodos fiscales", async () => {
@@ -179,5 +193,89 @@ describe("Legajo · selector de período fiscal (K15)", () => {
     expect(screen.getByRole("button", { name: "Abrir configuración fiscal" })).toBeTruthy();
     expect(screen.getByText("Sin períodos fiscales")).toBeTruthy(); // vigente: cambia con A29
     expect(llamadas("monthly-tax-workpapers?")).toBe(0);
+  });
+});
+
+describe("Legajo · «Abrir <mes>» (09-2, 18-5)", () => {
+  const permisosConEscritura = () => {
+    contextMock.current = {
+      ...contextMock.current,
+      capabilities: new Set(["client.read", "tax.settlements.calculate", "tax.profile.write"]),
+    } as unknown as ClientContextValue;
+  };
+  const periodoNoviembre = { ...periodoIibbDemo, id: "period-nov", startDate: "2026-11-01", endDate: "2026-11-30", label: "Noviembre 2026" };
+  const resultadoApertura = { month: "2026-11", label: "Noviembre 2026", regimes: 2, periodsCreated: 2, obligationsCreated: 2, calendarNotices: [] };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 25, 12));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("ofrece abrir el mes siguiente al último; al elegirlo crea período y obligaciones y lo deja elegido", async () => {
+    permisosConEscritura();
+    let abierto = false;
+    const rutas = rutasDemo({ periodos: [periodoIibbDemo] });
+    vi.mocked(api.get).mockImplementation(((path: string) =>
+      path.endsWith("/tax-periods") ? Promise.resolve(abierto ? [periodoNoviembre, periodoIibbDemo] : [periodoIibbDemo]) : rutas(path)) as never);
+    vi.mocked(api.post).mockImplementation((async () => {
+      abierto = true;
+      return resultadoApertura;
+    }) as never);
+    renderPage();
+
+    await screen.findByRole("combobox", { name: "Período fiscal" });
+    const opciones = within(abrirListado("Período fiscal")).getAllByRole("option");
+    expect(opciones.map((opcion) => opcion.textContent)).toEqual([
+      "Seleccioná un mes…",
+      "Octubre de 2026",
+      "Abrir noviembre de 2026",
+    ]);
+    elegirOpcion("Período fiscal", "Abrir noviembre de 2026");
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        `/firms/${FIRMA_DEMO}/clients/${CLIENTE_DEMO}/tax-periods/open-month`,
+        { month: "2026-11" },
+      ),
+    );
+    await waitFor(() => expect(valorElegido("Período fiscal")).toBe("period-nov"));
+    expect(sessionStorage.getItem(CLAVE)).toBe("period-nov");
+  });
+
+  it("sin permiso de escritura fiscal no ofrece abrir el mes", async () => {
+    vi.mocked(api.get).mockImplementation(rutasDemo({ periodos: [periodoIibbDemo] }) as never);
+    renderPage();
+
+    await screen.findByRole("combobox", { name: "Período fiscal" });
+    const opciones = within(abrirListado("Período fiscal")).getAllByRole("option");
+    expect(opciones.map((opcion) => opcion.textContent)).toEqual(["Seleccioná un mes…", "Octubre de 2026"]);
+  });
+
+  it("con el mes actual ya abierto no hay nada para abrir", async () => {
+    permisosConEscritura();
+    vi.mocked(api.get).mockImplementation(rutasDemo({ periodos: [periodoNoviembre] }) as never);
+    renderPage();
+
+    await screen.findByRole("combobox", { name: "Período fiscal" });
+    const opciones = within(abrirListado("Período fiscal")).getAllByRole("option");
+    expect(opciones.map((opcion) => opcion.textContent)).toEqual(["Seleccioná un mes…", "Noviembre de 2026"]);
+  });
+
+  it("un cliente sin períodos ofrece «Abrir octubre de 2026» (el mes anterior) en el cuerpo", async () => {
+    permisosConEscritura();
+    vi.mocked(api.get).mockImplementation(rutasDemo({ periodos: [] }) as never);
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Abrir octubre de 2026" }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        `/firms/${FIRMA_DEMO}/clients/${CLIENTE_DEMO}/tax-periods/open-month`,
+        { month: "2026-10" },
+      ),
+    );
+    expect(screen.getByRole("button", { name: "Abrir configuración fiscal" })).toBeTruthy();
   });
 });

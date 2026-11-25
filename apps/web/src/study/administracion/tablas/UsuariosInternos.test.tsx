@@ -112,11 +112,11 @@ describe("Usuarios internos: tabla (caracterización K2)", () => {
     expect(within(activa).getByText("Activo")).toBeTruthy();
   });
 
-  it("abre el panel completo desde Editar y mantiene allí las acciones", async () => {
+  it("abre el panel completo desde la fila y mantiene allí las acciones", async () => {
     renderizarAdministracion();
 
     const revisora = await screen.findByRole("row", { name: /Revisora Demo/ });
-    fireEvent.click(within(revisora).getByRole("button", { name: "Editar a Revisora Demo" }));
+    fireEvent.click(revisora);
     const panelRevisora = await screen.findByRole("complementary", { name: "Detalle del usuario" });
     expect(within(panelRevisora).getByRole("heading", { name: "Revisora Demo" })).toBeTruthy();
     expect(
@@ -139,7 +139,7 @@ describe("Usuarios internos: tabla (caracterización K2)", () => {
     expect(within(panelAuditor).queryByRole("button", { name: /Recuperar acceso/ })).toBeNull();
   });
 
-  it("la fila y el botón Editar abren el mismo panel lateral", async () => {
+  it("la fila abre el panel lateral y Editar abre directamente el cajón", async () => {
     renderizarAdministracion();
     const revisora = await screen.findByRole("row", { name: /Revisora Demo/ });
 
@@ -149,11 +149,13 @@ describe("Usuarios internos: tabla (caracterización K2)", () => {
 
     fireEvent.click(within(panel).getByRole("button", { name: "Cerrar detalle" }));
     fireEvent.click(within(revisora).getByRole("button", { name: "Editar a Revisora Demo" }));
+    const cajon = await screen.findByRole("dialog", { name: "Editar usuario" });
+    expect((within(cajon).getByLabelText("Nombre") as HTMLInputElement).value).toBe("Revisora Demo");
+    expect((within(cajon).getByLabelText("Correo") as HTMLInputElement).value).toBe("revisora@example.com");
+    fireEvent.click(within(cajon).getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(revisora);
     panel = await screen.findByRole("complementary", { name: "Detalle del usuario" });
-    expect(within(panel).getByRole("heading", { name: "Revisora Demo" })).toBeTruthy();
-    expect(
-      within(panel).getByRole("button", { name: "Administrar clientes de Revisora Demo" }),
-    ).toBeTruthy();
+    expect(within(panel).getByRole("button", { name: "Administrar clientes de Revisora Demo" })).toBeTruthy();
   });
 
   it("expone nombres accesibles, anchos de columna y la fila suspendida atenuada", async () => {
