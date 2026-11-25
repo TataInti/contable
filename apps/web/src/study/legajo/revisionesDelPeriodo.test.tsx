@@ -51,7 +51,7 @@ const revisionAnterior = { ...legajoDemo("FINALIZED"), id: "wp-a", revision: 1 }
 
 /** Abre el menú «Revisión» de la barra y elige la revisión pedida. */
 function elegirRevision(numero: number) {
-  fireEvent.click(screen.getByRole("button", { name: /^Revisión \d+$/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^Revisión \d+ de \d+$/ }));
   fireEvent.click(screen.getByRole("menuitemradio", { name: new RegExp(`^Revisión ${numero}`) }));
 }
 
