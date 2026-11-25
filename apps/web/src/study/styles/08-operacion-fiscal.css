@@ -1281,7 +1281,7 @@
 .workpaper-calculation-breakdown .ds-table tbody tr:last-child { border-top: 1px solid var(--ds-color-border); font-weight: 700; }
 .workpaper-calculation-breakdown .ds-table tbody tr:last-child td { font-weight: 700; }
 
-.workpaper-close-summary { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); white-space: nowrap; }
+.workpaper-close-summary { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
 .workpaper-close-summary strong { color: var(--ds-color-text); }
 .workpaper-close-checklist { display: grid; margin: 0; padding: 0; list-style: none; }
 .workpaper-close-step { display: grid; grid-template-columns: 2rem minmax(0, 1fr) 7rem minmax(12rem, auto); align-items: center; gap: var(--ds-space-2) var(--ds-space-3); min-block-size: 3rem; border-bottom: 1px solid var(--ds-color-border-subtle); }
@@ -1294,3 +1294,22 @@
 .workpaper-close-step__title { display: grid; gap: var(--ds-space-1); }
 .workpaper-close-step__title small { color: var(--ds-color-text-muted); }
 .workpaper-close-step__action { display: flex; align-items: center; gap: var(--ds-space-2); }
+
+/* Controles omitidos por falta de datos y resolución conjunta de bloqueantes (D6). */
+.workpaper-controls__omitidos {
+  margin: 0 0 var(--ds-space-3);
+  padding-left: var(--ds-space-4);
+  color: var(--ds-color-text-muted, inherit);
+}
+
+.workpaper-controls__juntos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-3);
+}
+
+.workpaper-controls__juntos .study-textarea {
+  flex: 1 1 100%;
+}

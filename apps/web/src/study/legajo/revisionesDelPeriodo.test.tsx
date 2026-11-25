@@ -61,7 +61,7 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/?etapa=saldos"]}>
         <StudyExpedienteMensual />
       </MemoryRouter>
     </QueryClientProvider>,
