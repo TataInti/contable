@@ -3,7 +3,12 @@ import type { useConfirmAction } from "../../../ui/ConfirmAction";
 import { formatearFechaHora } from "../../../lib/formatoFechas";
 import { DenseTable, type DenseColumn, normalizeSearch } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
-import { PORTAL_ROLE_LABELS, type PortalInvitation, type PortalMembership, type PortalRow } from "../tipos";
+import {
+  PORTAL_ROLE_LABELS,
+  type PortalInvitation,
+  type PortalMembership,
+  type PortalRow,
+} from "../tipos";
 import { initials } from "../utilidades";
 import { footerWith } from "./pieDeTabla";
 
@@ -96,7 +101,7 @@ export function TablaAccesosPortal({ portalRows }: { portalRows: PortalRow[] }) 
             {initials(row.name)}
           </span>
           {row.name ? <strong>{row.name}</strong> : null}
-          <span className="dense-person__email">{row.email}</span>
+          <span className="dense-person__email administration-portal-email">{row.email}</span>
         </span>
       ),
     },
@@ -173,7 +178,9 @@ export function TablaAccesosPortal({ portalRows }: { portalRows: PortalRow[] }) 
       rows={portalRows}
       rowKey={(row) => row.key}
       rowClassName={(row) => (row.status === "REVOKED" ? "dense-row--muted" : undefined)}
-      footer={footerWith("La invitación vence a los siete días y sólo puede usarse con el correo indicado.")}
+      footer={footerWith(
+        "La invitación vence a los siete días y sólo puede usarse con el correo indicado.",
+      )}
       empty={
         <EmptyState
           size="compact"

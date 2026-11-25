@@ -710,6 +710,19 @@ export function StudyExpedienteMensual() {
       });
     },
   });
+  const resolveOpenMutation = useMutation({
+    mutationFn: ({ workpaperId, resolution }: { workpaperId: string; resolution: string }) =>
+      api.post(
+        `/firms/${firmId}/clients/${clientId}/monthly-tax-workpapers/${workpaperId}/controls/resolve-open`,
+        { resolution, status: "RESOLVED" },
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["monthly-workpapers", firmId, clientId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["monthly-workpaper-coverage", firmId, clientId],
+      });
+    },
+  });
   // Grupos «no corresponde al perfil» (corte 4B): excluir o aceptar con motivo, por grupo.
   const grupoPerfilMutation = useMutation({
     mutationFn: ({
@@ -778,6 +791,19 @@ export function StudyExpedienteMensual() {
     const indice = workpapers.findIndex((item) => item.id === wp.id);
     return indice > 0 ? workpapers[indice - 1] : undefined;
   };
+  const bloqueantesAbiertos =
+    vigente?.controls.filter((control) => control.severity === "BLOCKING" && control.status === "OPEN")
+      .length ?? 0;
+  const estadosEtapas = calcularEstadosEtapas({
+    sources: coverageQuery.data?.sources,
+    classification: classificationQuery.data,
+    calculationCount: calculationQuery.data?.length,
+    blockingControls: bloqueantesAbiertos,
+    status: vigente?.status,
+  });
+  const datosDeEtapasListos =
+    Boolean(vigente) &&
+    [coverageQuery, classificationQuery, calculationQuery].every((consulta) => !consulta.isLoading);
   const etapaDesdeUrl = (() => {
     const valor = new URLSearchParams(location.search)
       .get("etapa")
@@ -789,12 +815,31 @@ export function StudyExpedienteMensual() {
     );
     return indice >= 0 ? indice : null;
   })();
+  // Sin etapa elegida (ni en la URL ni antes), el legajo abre en la primera con pendientes (09-5).
+  const etapaConPendientes = (() => {
+    const pendiente = estadosEtapas.findIndex((estado) => estado.estado === "Con pendientes");
+    if (pendiente >= 0) return pendiente;
+    const noLista = estadosEtapas.findIndex((estado) => estado.estado !== "Lista");
+    return noLista >= 0 ? noLista : WORKPAPER_STEPS.length - 1;
+  })();
   const safeActiveStep = Math.min(
     Math.max(vigente ? (etapaDesdeUrl ?? etapaPorLegajo[vigente.id] ?? 0) : 0, 0),
     WORKPAPER_STEPS.length - 1,
   );
+  const etapaAutomaticaRef = useRef(false);
+  const etapaSinElegir = Boolean(vigente) && etapaDesdeUrl === null && etapaPorLegajo[vigente!.id] === undefined;
+  useEffect(() => {
+    if (!vigente || !datosDeEtapasListos || !etapaSinElegir) return;
+    etapaAutomaticaRef.current = etapaConPendientes !== safeActiveStep;
+    setEtapaPorLegajo((values) => (values[vigente.id] === undefined ? { ...values, [vigente.id]: etapaConPendientes } : values));
+  }, [vigente?.id, datosDeEtapasListos, etapaSinElegir, etapaConPendientes]);
   useEffect(() => {
     if (!vigente) return;
+    // La etapa inicial automática no roba el foco: solo lo mueve una elección de la persona.
+    if (etapaAutomaticaRef.current) {
+      etapaAutomaticaRef.current = false;
+      return;
+    }
     const panel = document.getElementById("workpaper-panel");
     if (panel) panel.scrollTop = 0;
     document.documentElement.scrollTop = 0;
@@ -875,6 +920,7 @@ export function StudyExpedienteMensual() {
             reviewSourceMutation={reviewSourceMutation}
             noMovementsMutation={noMovementsMutation}
             motivoSinMovimientos={motivoSinMovimientos}
+            onContinuar={() => goToStep(2)}
           />
         ) : step === 2 ? (
           <div>
@@ -953,6 +999,7 @@ export function StudyExpedienteMensual() {
               affectedVouchers={classificationQuery.data?.items ?? []}
               onGoToClassification={() => goToStep(2)}
               resolveControlMutation={resolveControlMutation}
+              resolveOpenMutation={resolveOpenMutation}
               grupoPerfilMutation={grupoPerfilMutation}
               confirmar={confirmar}
             />
@@ -1021,16 +1068,6 @@ export function StudyExpedienteMensual() {
   ];
   const sinPeriodosFiscales = taxPeriodsQuery.isSuccess && selectableTaxPeriods.length === 0;
   const sinLegajo = Boolean(selectedTaxPeriod) && listQuery.isSuccess && workpapers.length === 0;
-  const bloqueantesAbiertos =
-    vigente?.controls.filter((control) => control.severity === "BLOCKING" && control.status === "OPEN")
-      .length ?? 0;
-  const estadosEtapas = calcularEstadosEtapas({
-    sources: coverageQuery.data?.sources,
-    classification: classificationQuery.data,
-    calculationCount: calculationQuery.data?.length,
-    blockingControls: bloqueantesAbiertos,
-    status: vigente?.status,
-  });
   const canCalculate = capabilities.has("tax.settlements.calculate");
   const textoSoloLectura =
     seleccionada && soloLectura && reemplazadaPor(seleccionada)
@@ -1430,6 +1467,17 @@ export function StudyExpedienteMensual() {
     );
   }
 
+  // «Continuar: <paso siguiente>»: al pie de cada etapa y en la barra (09-6, 12-7).
+  const siguienteEtapa = safeActiveStep < WORKPAPER_STEPS.length - 1 ? safeActiveStep + 1 : null;
+  const textoContinuar =
+    siguienteEtapa === null
+      ? null
+      : `Continuar: ${WORKPAPER_STEPS[siguienteEtapa]!.title}${
+          siguienteEtapa === 4 && bloqueantesAbiertos > 0
+            ? ` (${pluralizar(bloqueantesAbiertos, "bloqueante", "bloqueantes")})`
+            : ""
+        }`;
+
   const contexto = (
     <>
       {selectableTaxPeriods.length > 0 ? (
@@ -1623,7 +1671,7 @@ export function StudyExpedienteMensual() {
           aria-labelledby={`workpaper-${safeActiveStep}`}
           aria-live="polite"
         >
-          {safeActiveStep < 5 && estadosEtapas[safeActiveStep]?.mensaje && !(safeActiveStep === 4 && estadosEtapas[safeActiveStep]?.mensaje === "Falta resolver controles bloqueantes") ? (
+          {safeActiveStep < 5 && estadosEtapas[safeActiveStep]?.mensaje && estadosEtapas[safeActiveStep]?.destino !== safeActiveStep && !(safeActiveStep === 4 && estadosEtapas[safeActiveStep]?.mensaje === "Falta resolver controles bloqueantes") ? (
             <div className="workpaper-stage-guidance" role="status">
               <p>{estadosEtapas[safeActiveStep]?.mensaje}.</p>
               {estadosEtapas[safeActiveStep]?.accion ? (
@@ -1634,6 +1682,13 @@ export function StudyExpedienteMensual() {
             </div>
           ) : null}
           {renderEtapa(seleccionada, safeActiveStep)}
+          {textoContinuar && siguienteEtapa !== null ? (
+            <div className="workpaper-continuar">
+              <Button variant={acciones?.accion ? "secondary" : "primary"} onClick={() => goToStep(siguienteEtapa)}>
+                {textoContinuar}
+              </Button>
+            </div>
+          ) : null}
         </div>
       </>
     );
@@ -1654,9 +1709,14 @@ export function StudyExpedienteMensual() {
                   puedePagar={capabilities.has("tax.payments.record") && !soloLectura}
                 />
               ) : null}
-              {accionesEtapa ? (
+              {accionesEtapa || (seleccionada && textoContinuar) ? (
                 <div className="workpaper-stage-toolbar" role="group" aria-label="Acciones de la etapa">
                   {accionesEtapa}
+                  {seleccionada && textoContinuar && siguienteEtapa !== null ? (
+                    <Button size="sm" variant="secondary" onClick={() => goToStep(siguienteEtapa)}>
+                      {textoContinuar}
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
               {cuerpo}

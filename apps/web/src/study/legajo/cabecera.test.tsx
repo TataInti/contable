@@ -101,7 +101,7 @@ describe("Legajo · cabecera (K3)", () => {
     fireEvent.click(await screen.findByRole("tab", { name: /Fuentes/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Gestionar Ventas del período" }));
     fireEvent.click(await screen.findByRole("button", { name: "Cargar archivo" }));
-    expect(await screen.findByRole("dialog", { name: "Importar libros IVA" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Importar libro de ventas" })).toBeInTheDocument();
   });
 
   /** Espera a que la barra tenga el período elegido, para que los ítems del menú reflejen el período. */

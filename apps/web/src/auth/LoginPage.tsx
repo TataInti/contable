@@ -17,6 +17,7 @@ export function LoginPage() {
   const [challenge, setChallenge] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [missing, setMissing] = useState<{ email?: string; password?: string }>({});
   const notice = (location.state as { notice?: string } | null)?.notice;
 
   const finish = async () => {
@@ -28,6 +29,15 @@ export function LoginPage() {
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+    if (!challenge) {
+      const faltan = {
+        email: email.trim() ? undefined : "Ingresá tu correo.",
+        password: password ? undefined : "Ingresá tu contraseña.",
+      };
+      setMissing(faltan);
+      if (faltan.email) return void document.getElementById("email")?.focus();
+      if (faltan.password) return void document.getElementById("password")?.focus();
+    }
     setLoading(true);
     try {
       if (challenge) {
@@ -43,7 +53,14 @@ export function LoginPage() {
         await finish();
       }
     } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : "No se pudo iniciar sesión");
+      setError(
+        caught instanceof ApiError && caught.message === "Credenciales inválidas"
+          ? "El correo o la contraseña no coinciden. Revisalos y probá de nuevo."
+          : caught instanceof ApiError
+            ? caught.message
+            : "No se pudo iniciar sesión",
+      );
+      if (!challenge) document.getElementById("email")?.focus();
     } finally {
       setLoading(false);
     }
@@ -58,35 +75,12 @@ export function LoginPage() {
           </span>
           <span>
             <span className="login__brand-name">Contable</span>
-            <span className="login__brand-tag">Gestión profesional</span>
+            <span className="login__brand-tag">Gestión del estudio</span>
           </span>
         </div>
         <div className="login__story-copy">
-          <p className="login__eyebrow">Tu mesa de trabajo contable</p>
-          <h2>
-            Claridad para decidir.
-            <br />
-            Evidencia para confiar.
-          </h2>
-          <p>Documentos, revisiones, vencimientos y reportes conectados en un mismo contexto.</p>
+          <h2>Claridad para decidir. Evidencia para confiar.</h2>
         </div>
-        <ul className="login__principles">
-          <li>
-            <Icon name="shield" size={17} />
-            <span>
-              <strong>Información trazable</strong>
-              <small>Cada cifra conserva su origen.</small>
-            </span>
-          </li>
-          <li>
-            <Icon name="check" size={17} />
-            <span>
-              <strong>Revisión bajo control</strong>
-              <small>Las decisiones sensibles quedan registradas.</small>
-            </span>
-          </li>
-        </ul>
-        <p className="login__story-footer">Diseñado para estudios contables argentinos</p>
       </section>
       <section className="login__access">
         <div className="login__mobile-brand" aria-label="Contable">
@@ -96,9 +90,6 @@ export function LoginPage() {
           <span className="login__brand-name">Contable</span>
         </div>
         <div className="login__card">
-          <div className="login__secure">
-            <Icon name="shield" size={15} /> Acceso seguro
-          </div>
           <h1 className="login__title">
             {challenge ? "Verificar identidad" : "Bienvenido de nuevo"}
           </h1>
@@ -134,6 +125,7 @@ export function LoginPage() {
                   autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
+                  error={missing.email}
                   placeholder="nombre@estudio.com"
                   required
                 />
@@ -144,19 +136,17 @@ export function LoginPage() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  minLength={8}
+                  error={missing.password}
                   required
                 />
               </>
             )}
-            {error ? (
-              <Notice tone="error">{error}</Notice>
-            ) : null}
+            <div aria-live="polite">{error ? <Notice tone="error">{error}</Notice> : null}</div>
             <Button
               type="submit"
               loading={loading}
               loadingLabel={challenge ? "Verificando identidad" : "Iniciando sesión"}
-              disabled={challenge ? code.length !== 6 : !email || password.length < 8}
+              disabled={challenge ? code.length !== 6 : false}
             >
               {challenge ? (
                 "Verificar y continuar"
@@ -180,10 +170,11 @@ export function LoginPage() {
               </Button>
             ) : null}
           </form>
-          <p className="login__privacy">
-            <Icon name="shield" size={14} /> Tu sesión y el contexto del estudio se validan en cada
-            acceso.
-          </p>
+          {challenge ? null : (
+            <p className="login__help">
+              ¿No podés entrar? Pedile un enlace nuevo a quien administra el estudio.
+            </p>
+          )}
         </div>
       </section>
     </main>
