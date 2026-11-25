@@ -19,7 +19,8 @@
 .comment-thread__actions { display: flex; gap: var(--ds-space-2); }
 .comment-thread [role="listbox"] { display: grid; gap: var(--ds-space-1); margin: 0; padding: var(--ds-space-2); list-style: none; border: var(--ds-border-width) solid var(--ds-color-border); background: var(--ds-color-surface); }
 .comment-thread [role="option"] button { width: 100%; padding: var(--ds-space-2); text-align: left; color: var(--ds-color-text); background: transparent; border: 0; cursor: pointer; }
-.study-comments-inbox { max-width: 900px; margin-inline: auto; padding: var(--ds-space-6); }
+.study-comments-inbox { max-width: 900px; margin-inline: 0; }
+.study-comments-inbox .study-page__header { margin-bottom: var(--ds-space-4); }
 .study-comments-inbox [role="tablist"] { display: flex; gap: var(--ds-space-4); margin-block: var(--ds-space-4); border-bottom: var(--ds-border-width) solid var(--ds-color-border); }
 .study-comments-inbox [role="tab"] { padding: var(--ds-space-3); border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ds-color-text); cursor: pointer; }
 .study-comments-inbox [role="tab"][aria-selected="true"] { border-bottom-color: var(--ds-color-primary); font-weight: var(--ds-font-weight-bold); }
