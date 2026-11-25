@@ -60,7 +60,7 @@ export function StudyModuleGuard({ module, children }: { module: StudyModule; ch
           title="Esta sección todavía no está disponible"
           description={`${module.label} no forma parte de esta versión operativa. Que figure «Habilitado» en Módulos de estudios significa que está asignado a tu estudio, no que ya funcione; no hace falta activar nada.${alternative ? ` Mientras tanto, podés usar ${alternative.label}.` : ""}`}
           action={
-            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+            <div className="study-route-state__actions">
               {alternative ? (
                 <Button type="button" onClick={() => navigate(alternative.to)}>
                   Ir a {alternative.label}
