@@ -499,13 +499,32 @@ describe("B8 — humo de liquidación completa por API", () => {
 
     const controlsResponse = await request("GET", `${sourceBase}/controls`);
     expectStatus(controlsResponse, 200, "lectura de controles de cierre del expediente");
-    const controls = responseData<Array<{ id: string; code: string; severity: string; status: string }>>(controlsResponse);
-    const blockingControls = controls.filter((control) => control.severity === "BLOCKING");
-    expectB8(blockingControls.map((control) => control.code).sort(), "nacen los dos controles bloqueantes esperados").toEqual([
+    type ControlRow = { id: string; code: string; severity: string; status: string; resolution: string | null };
+    const controls = responseData<ControlRow[]>(controlsResponse);
+    // D6: sin extracto bancario ni imputaciones cargadas, los dos controles no bloquean: quedan omitidos con aviso.
+    expectB8(controls.filter((control) => control.severity === "BLOCKING" && control.status === "OPEN"), "sin datos de banco ni caja no hay controles bloqueantes abiertos").toEqual([]);
+    const omitted = controls.filter((control) => control.resolution?.startsWith("Omitido:"));
+    expectB8(omitted.map((control) => control.code).sort(), "los dos controles sin datos quedan omitidos").toEqual([
       "BANK_CREDIT_RECONCILIATION",
       "CASH_ALLOCATION_RECONCILIATION",
     ]);
-    expectB8(blockingControls.every((control) => control.status === "OPEN"), "ambos controles bloqueantes nacen abiertos").toBe(true);
+    expectB8(omitted.find((control) => control.code === "BANK_CREDIT_RECONCILIATION")?.resolution, "el aviso dice que no hay extracto cargado").toBe("Omitido: no hay extracto cargado");
+
+    // Con un extracto bancario cargado en el período, los controles de acreditaciones y de caja vuelven a bloquear.
+    const bankLedgerAccount = await prisma.account.create({
+      data: { firmId: FIRM, clientId: client.id, code: "1.1.02", name: "T-Banco B8", type: "ASSET", normalBalance: "DEBIT", path: "1.1.02" },
+    });
+    const bankAccount = await prisma.bankAccount.create({
+      data: { firmId: FIRM, clientId: client.id, accountId: bankLedgerAccount.id, bankName: "T-Banco B8", accountNumber: "T-0001" },
+    });
+    await prisma.bankMovement.create({
+      data: { firmId: FIRM, clientId: client.id, bankAccountId: bankAccount.id, dedupeHash: `t-b8-${RUN}`, valueDate: new Date(`${OCTOBER_START}T12:00:00.000Z`), description: "T-Acreditación B8", amount: "1000.00" },
+    });
+    const recalculateResponse = await request("POST", `${sourceBase}/calculate`, { cutoff: OCTOBER_END });
+    expectStatus(recalculateResponse, 200, "recálculo con extracto bancario cargado");
+    const controlsAfterBank = responseData<ControlRow[]>(await request("GET", `${sourceBase}/controls`));
+    const blockingControls = controlsAfterBank.filter((control) => control.severity === "BLOCKING" && control.status === "OPEN").sort((a, b) => a.code.localeCompare(b.code));
+    expectB8(blockingControls.map((control) => control.code), "con extracto cargado vuelven a bloquear los dos controles").toEqual(["BANK_CREDIT_RECONCILIATION", "CASH_ALLOCATION_RECONCILIATION"]);
 
     // Desvío 1 (decisión de Ciro, 16-nov): la API no envía a revisión con controles bloqueantes abiertos.
     // vigente: cambia con decisión de Inti (16-nov, hallazgo 48)
@@ -531,6 +550,23 @@ describe("B8 — humo de liquidación completa por API", () => {
       expectB8(resolved.status, `${control.code} queda resuelto`).toBe("RESOLVED");
       expectB8(resolved.evidenceDocumentId, `${control.code} conserva el documento de evidencia`).toBe(evidence.id);
     }
+
+    // D6: los bloqueantes restantes se resuelven juntos con un solo motivo.
+    for (const code of ["T-JUNTOS-1", "T-JUNTOS-2"]) {
+      await prisma.taxControlFinding.create({
+        data: { firmId: FIRM, clientId: client.id, workpaperId: workpaper.id, code, severity: "BLOCKING", status: "OPEN" },
+      });
+    }
+    const blockedByTwo = await request("POST", `${sourceBase}/submit-review`);
+    expectStatus(blockedByTwo, 422, "con dos bloqueantes abiertos el envío se rechaza");
+    const resolveTogether = await request("POST", `${sourceBase}/controls/resolve-open`, { resolution: "T-Un solo motivo", status: "RESOLVED" });
+    expectStatus(resolveTogether, 200, "resolución conjunta de los bloqueantes abiertos");
+    const togetherRows = responseData<Array<{ code: string; status: string; resolution: string }>>(resolveTogether);
+    expectB8(togetherRows.map((row) => row.code).sort(), "la resolución conjunta alcanza a los dos bloqueantes").toEqual(["T-JUNTOS-1", "T-JUNTOS-2"]);
+    expectB8(togetherRows.every((row) => row.status === "RESOLVED" && row.resolution === "T-Un solo motivo"), "todos quedan resueltos con el mismo motivo").toBe(true);
+    const resolveTogetherAgain = await request("POST", `${sourceBase}/controls/resolve-open`, { resolution: "T-Otra vez", status: "RESOLVED" });
+    expectStatus(resolveTogetherAgain, 200, "repetir la resolución conjunta no falla");
+    expectB8(responseData<unknown[]>(resolveTogetherAgain), "ya no quedan bloqueantes abiertos").toEqual([]);
 
     // Con los controles resueltos, el envío pasa y la revisión aprueba el cálculo antes del cierre.
     const submitted = await request("POST", `${sourceBase}/submit-review`);

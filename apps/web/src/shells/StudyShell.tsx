@@ -229,6 +229,11 @@ export function StudyShell() {
                 placeholder={clients.length === 0 ? "Sin clientes asignados" : "Elegí un cliente…"}
                 options={clients.map((client) => ({ value: client.clientId, label: client.clientName }))}
               />
+              {clientId ? (
+                <span className="study__client-current" aria-hidden="true">
+                  {clients.find((client) => client.clientId === clientId)?.clientName}
+                </span>
+              ) : null}
             </div>
             {clientModules.map((item) => (
               <StudyNavLink

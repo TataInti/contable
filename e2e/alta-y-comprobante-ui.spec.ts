@@ -474,7 +474,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
         const nombreFuente = source.endsWith("Ventas") ? "Ventas del período" : "Compras del período";
         await page.getByRole("button", { name: `Gestionar ${nombreFuente}` }).click();
         await page.getByRole("button", { name: "Cargar archivo" }).click();
-        const panel = page.getByRole("dialog", { name: "Importar libros IVA" });
+        const panel = page.getByRole("dialog", { name: seccion === "Libro de ventas" ? "Importar libro de ventas" : "Importar libro de compras" });
         const libro = panel.locator(`section[aria-label="${seccion}"]`);
         await libro.locator('input[type="file"]').setInputFiles(file);
         await mutating(page, "/import-batches", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
@@ -617,22 +617,12 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     test.info().annotations.push({ type: "controles · controles de pantalla", description: controls.join(" | ").slice(0, 1200) });
   });
 
-  await test.step("Legajo: resolver los dos controles bloqueantes con el comprobante aprobado como respaldo", async () => {
+  await test.step("Legajo: sin extracto ni caja, los dos controles quedan omitidos y no hace falta respaldo", async () => {
     // Acreditaciones bancarias y caja piden respaldo documental. Se usa el ticket aprobado: es lo único que
     // hay cargado y alcanza para recorrer el circuito (no es un respaldo real de acreditaciones bancarias).
     const card = page.locator(".work-page").first();
-    for (const control of ["BANK_CREDIT_RECONCILIATION", "CASH_ALLOCATION_RECONCILIATION"]) {
-      const row = page.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem").filter({ hasText: control === "BANK_CREDIT_RECONCILIATION" ? "Acreditaciones bancarias vs. facturación" : "Caja e imputaciones del período" }).first();
-      await row.getByRole("button", { name: /Abrir/ }).click();
-      const drawer = page.getByRole("dialog");
-      await drawer.getByRole("button", { name: "Resolver", exact: true }).click();
-      await drawer.getByLabel("Motivo").fill("Conciliado contra el comprobante de respaldo cargado en la bandeja.");
-      await pickOption(drawer.getByLabel(`Evidencia ${control}`), "ticket-mesa-8");
-      await mutating(page, "/controls", () =>
-        drawer.getByRole("button", { name: "Confirmar resolución", exact: true }).click(),
-      );
-      await expect(drawer).toBeHidden();
-    }
+    await expect(page.getByRole("list", { name: "Controles omitidos" })).toContainText("Omitido: no hay extracto cargado");
+    await expect(page.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem").filter({ hasText: /Acreditaciones bancarias|Caja e imputaciones/ })).toHaveCount(0);
     await page.waitForTimeout(1500);
     test.info().annotations.push({ type: "legajo · Controles tras resolver", description: (await card.innerText()).replace(/\s+/g, " ").slice(0, 1200) });
   });
@@ -730,7 +720,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     test.info().annotations.push({ type: "liquidaciones · pantalla", description: (await main.innerText()).replace(/\s+/g, " ").slice(0, 1500) });
     // Papeles de trabajo de la liquidación finalizada (IIBB, el período que muestra la pantalla).
     for (const format of ["PDF", "CSV"]) {
-      await mutating(page, "/artifacts", () => main.getByRole("button", { name: format, exact: true }).click());
+      await mutating(page, "/artifacts", () => main.getByRole("button", { name: `Descargar ${format}`, exact: true }).first().click());
     }
     await expect(page.getByText(/Se generó el papel de trabajo en CSV/)).toBeVisible();
   });

@@ -500,6 +500,27 @@ export function workpaperRoutes(app: FastifyInstance) {
     },
   );
 
+  app.post(
+    "/api/v1/firms/:firmId/clients/:clientId/monthly-tax-workpapers/:workpaperId/controls/resolve-open",
+    async (req, reply) => {
+      const ctx = tenantContextFromRequest(req);
+      const { workpaperId } = req.params as { workpaperId: string };
+      const body = z
+        .object({
+          resolution: z.string().trim().min(1),
+          status: z.enum(["RESOLVED", "WAIVED"]),
+        })
+        .strict()
+        .parse(req.body);
+      try {
+        const data = await service.resolveOpenControls(ctx, workpaperId, body);
+        return reply.send({ data });
+      } catch (err) {
+        return handleError(reply, err);
+      }
+    },
+  );
+
   // F1.7: libro de créditos de solo lectura (TaxCreditLot/Movement).
   app.get("/api/v1/firms/:firmId/clients/:clientId/tax-credit-ledger", async (req, reply) => {
     const ctx = tenantContextFromRequest(req);

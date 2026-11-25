@@ -123,11 +123,11 @@ describe("Rentabilidad sin período contable (A27 D27-2 a)", () => {
     });
     expect(valorElegido("Seleccionar período de rentabilidad")).toBe(OCTUBRE.id);
     expect(within(abrirListado("Seleccionar período de rentabilidad")).getAllByRole("option").map((opcion) => opcion.textContent)).toEqual([
-      "10/2026",
-      "11/2026",
+      "octubre de 2026",
+      "noviembre de 2026",
     ]);
 
-    const caja = await screen.findByRole("region", { name: "Saldo de caja fiscal" });
+    const caja = await screen.findByRole("region", { name: "Saldo fiscal del mes" });
     await within(caja).findByText("Completo");
     expect(pedidos).toContain(
       `/api/v1/firms/${FIRMA}/clients/${CLIENTE}/profitability/caja-fiscal?periodId=${OCTUBRE.id}`,
@@ -146,6 +146,6 @@ describe("Rentabilidad sin período contable (A27 D27-2 a)", () => {
     expect(await screen.findByText("Sin período fiscal para calcular")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Configurar período fiscal" })).toBeTruthy();
     expect(screen.queryByRole("combobox", { name: "Seleccionar período de rentabilidad" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "Saldo de caja fiscal" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Saldo fiscal del mes" })).toBeNull();
   });
 });
