@@ -13,6 +13,15 @@ type CommentRow = {
 };
 type Member = { id: string; name: string };
 
+function formatCommentDate(value: string) {
+  if (!value || Number.isNaN(new Date(value).getTime())) return "";
+  const parts = new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(value));
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("day")}/${part("month")}/${part("year")} ${part("hour")}:${part("minute")}`;
+}
+
 export function CommentThread({ firmId, clientId, periodLabel, compact = false, collapsible = false }: {
   firmId: string | null; clientId: string | null; periodLabel?: string | null; compact?: boolean; collapsible?: boolean;
 }) {
@@ -63,7 +72,7 @@ export function CommentThread({ firmId, clientId, periodLabel, compact = false, 
     {query.isPending ? <p role="status">Cargando comentarios…</p> : null}
     <ol className="comment-thread__list">
       {orderedComments.map((item) => <li key={item.id} id={`comentario-${item.id}`} className="comment-thread__item">
-        <p className="comment-thread__meta"><strong>{item.authorName}</strong><span aria-hidden="true"> · </span><time className="comment-thread__date" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("es-AR")}</time>
+        <p className="comment-thread__meta"><strong>{item.authorName}</strong>{formatCommentDate(item.createdAt) ? <><span aria-hidden="true"> · </span><time className="comment-thread__date" dateTime={item.createdAt}>{formatCommentDate(item.createdAt)}</time></> : null}
           {item.isEdited ? <span> · editado</span> : null}</p>
         {item.archivedAt ? <p>Comentario archivado</p> : editingId === item.id ? <form onSubmit={(event) => { event.preventDefault(); edit.mutate({ id: item.id, text: editingBody }); }}>
           <label htmlFor={`edit-comment-${item.id}`}>Editar comentario</label>
@@ -72,7 +81,6 @@ export function CommentThread({ firmId, clientId, periodLabel, compact = false, 
           <Button type="submit" loading={edit.isPending}>Guardar cambios</Button>
           <Button type="button" variant="ghost" onClick={() => setEditingId(null)}>Cancelar</Button>
         </form> : <p>{item.body}</p>}
-        {item.periodLabel ? <p className="comment-thread__period">{item.periodLabel}</p> : null}
         {item.mentionedName ? <p>Mención para {item.mentionedName}{item.resolvedAt ? " · resuelta" : ""}</p> : null}
         {item.authorUserId === userId && !item.archivedAt ? <div className="comment-thread__actions">
           <Button size="sm" variant="ghost" onClick={() => { setEditingId(item.id); setEditingBody(item.body); }}>Editar comentario</Button>
