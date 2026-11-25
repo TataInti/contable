@@ -2,12 +2,11 @@ import { Button } from "@contable/design-system";
 import type { DenseColumn } from "../../ui/Dense";
 import { formatCuit } from "../../lib/cuit";
 import { StatusBadge } from "../../ui/StatusBadge";
-import { MONTH_SHORT, profileGaps, vatLabel } from "./etiquetas";
+import { MONTH_SHORT, configurationGaps, vatLabel } from "./etiquetas";
 import type { ClientWithProfile } from "./tipos";
 
-const missingProfileFields = profileGaps;
-
 interface ColumnasCarteraProps {
+  openConfiguration: (id: string, step: string) => void;
   inspectorOpen: boolean;
   clientId: string | null;
   openClientWorkspace: (id: string) => void;
@@ -19,6 +18,7 @@ export function columnasCartera({
   clientId,
   openClientWorkspace,
   openClientSummary,
+  openConfiguration,
 }: ColumnasCarteraProps): DenseColumn<ClientWithProfile>[] {
   const columns: DenseColumn<ClientWithProfile>[] = [
     {
@@ -128,15 +128,15 @@ export function columnasCartera({
       header: "Ficha",
       width: inspectorOpen ? "10%" : "8%",
       className: "client-list__profile-column",
-      sortValue: (row) => missingProfileFields(row).length,
+      sortValue: (row) => configurationGaps(row).length,
       render: (row) => {
-        const gaps = missingProfileFields(row);
+        const gaps = configurationGaps(row);
         return gaps.length === 0 ? (
           <span className="dense-dim">Completa</span>
         ) : (
-          <span title={`Falta: ${gaps.join(", ")}`}>
+          <Button type="button" variant="text" size="row" title={`Falta: ${gaps.map((gap) => gap.label).join(", ")}`} onClick={(event) => { event.stopPropagation(); openConfiguration(row.id, gaps[0]!.step); }}>
             <StatusBadge status="MISSING" label={`Faltan ${gaps.length}`} />
-          </span>
+          </Button>
         );
       },
     },

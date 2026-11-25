@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, EmptyState, useNotify } from "@contable/design-system";
+import { clientConfigurationMissing, type ClientConfigurationMissing } from "@contable/contracts";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { formatCuit } from "../lib/cuit";
 import { useClientContext } from "../context/ClientContext";
@@ -12,7 +14,7 @@ import "./study.css";
 import { PasosFiscales } from "./fiscal/Pasos";
 import { MutationError } from "./fiscal/MutationError";
 import { AvisoConsultas } from "./fiscal/AvisoConsultas";
-import { nextRequiredStepFor, stepCompletionFor, stepStatusLabelFor, fiscalConfigurationCompleteFor } from "./fiscal/pasos";
+import { nextRequiredStepFor, stepCompletionFor, stepStatusLabelFor, fiscalConfigurationReadinessFor } from "./fiscal/pasos";
 import { PestanaResumen } from "./fiscal/pestanas/PestanaResumen";
 import { PestanaRegimenes } from "./fiscal/pestanas/PestanaRegimenes";
 import { PestanaActividades } from "./fiscal/pestanas/PestanaActividades";
@@ -56,7 +58,10 @@ export function StudyOnboardingFiscal() {
   });
   const queryClient = useQueryClient();
   const canWrite = capabilities.has("tax.profile.write");
-  const [tab, setTab] = useState<FiscalTab>("resumen");
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const pasoSolicitado = searchParams.get("paso");
+  const [tab, setTab] = useState<FiscalTab>(() => pasoSolicitado === "inscripcion" ? "regimenes" : pasoSolicitado === "actividades" ? "actividades" : pasoSolicitado === "periodos" || pasoSolicitado === "obligaciones" ? "periodos" : "resumen");
   const [openFormStep, setOpenFormStep] = useState<FiscalStep | null>(null);
   const [showProfileHistory, setShowProfileHistory] = useState(false);
   const [form, setForm] = useState<ProfileForm>({
@@ -168,14 +173,15 @@ export function StudyOnboardingFiscal() {
       (!selectedPeriod || registration.regime.taxType.id === selectedPeriod.taxTypeId),
   );
   const stepCompletion = stepCompletionFor({ latestProfile, registrationsQuery, clientActivitiesQuery, periodsQuery, obligationsQuery });
-  const configuracionCompleta = fiscalConfigurationCompleteFor({
+  const faltantes = clientConfigurationMissing(fiscalConfigurationReadinessFor({
     hasAccountingProfile: Boolean(clientQuery.data?.profile),
     latestProfile,
     registrations: registrationsQuery.data ?? [],
     activities: clientActivitiesQuery.data ?? [],
     periods: periodsQuery.data ?? [],
     obligations: obligationsQuery.data ?? [],
-  });
+  }));
+  const configuracionCompleta = faltantes.length === 0;
   const nextRequiredStep = nextRequiredStepFor(stepCompletion);
   const fiscalQueries = [
     { key: "perfil", label: "el perfil fiscal", query: profileQuery },
@@ -308,6 +314,10 @@ export function StudyOnboardingFiscal() {
   if (!firmId || !clientId) return <EmptyState title="Seleccioná un cliente" description="Elegí un cliente para configurar su perfil fiscal." />;
 
   const mutationError = createProfile.error ?? submitReview.error ?? activate.error ?? addRegistration.error ?? addActivity.error ?? updateActivity.error ?? cancelRegistration.error ?? endActivity.error ?? createPeriod.error ?? createObligation.error ?? openMonth.error ?? deletePeriod.error;
+  const abrirFaltante = (step: ClientConfigurationMissing["step"]) => {
+    if (step === "ficha") { navigate("/clientes"); return; }
+    setTab(step === "perfil" ? "resumen" : step === "inscripcion" ? "regimenes" : step === "actividades" ? "actividades" : "periodos");
+  };
   const openStepForm = (nextStep: FiscalStep) => {
     if (nextStep === "inscripcion" && sugerencias.regimenes.length && canWrite) { setSugeridosAbiertos(true); return; }
     setOpenFormStep(nextStep);
@@ -380,7 +390,7 @@ export function StudyOnboardingFiscal() {
       >
         {failedQueries.length > 0 ? <AvisoConsultas failedQueries={failedQueries} /> : null}
 
-        {tab === "resumen" ? <PestanaResumen configuracionCompleta={configuracionCompleta} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
+        {tab === "resumen" ? <PestanaResumen faltantes={faltantes} abrirFaltante={abrirFaltante} configuracionCompleta={configuracionCompleta} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
         {tab === "comprobantes" && firmId && clientId ? <PestanaComprobantes firmId={firmId} clientId={clientId} canWrite={canWrite} /> : null}
         {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} corregirFecha={corregirInscripcion} confirm={confirm} categoriaTem={categoriaTem.fila} categoriaMonotributo={filaMonotributo} /> : null}
         {tab === "actividades" ? <PestanaActividades canWrite={canWrite} openStepForm={openStepForm} clientActivitiesQuery={clientActivitiesQuery} endActivity={endActivity} corregirFecha={(row) => { updateActivity.reset(); setActivityToEdit(row); }} registrarCambio={() => { registerChange.reset(); setChangeOpen(true); }} confirm={confirm} renderEstado={renderEstadoActividad} /> : null}
