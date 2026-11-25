@@ -15,7 +15,7 @@ export type SummarySectionId =
 
 export type SummarySectionDefinition = {
   id: SummarySectionId;
-  group: "Resumen" | "Contable" | "Fiscal" | "Configuración fiscal" | "Configuración";
+  group: "Datos generales" | "Contable" | "Fiscal" | "Configuración fiscal" | "Configuración";
   label: string;
 };
 
@@ -51,11 +51,11 @@ export function buildSearchResults(summary: ClientSummary, search: string): Summ
     }
   };
 
-  addSectionHit("overview", "Resumen");
+  addSectionHit("overview", "Datos generales");
   if (matchesSearch(term, summary.client.legalName, summary.client.tradeName, summary.client.cuit)) {
     addResult({
       sectionId: "overview",
-      sectionLabel: "Resumen",
+      sectionLabel: "Datos generales",
       title: summary.client.legalName,
       detail: `CUIT ${summary.client.cuit}`,
     });
@@ -83,12 +83,11 @@ export function buildSearchResults(summary: ClientSummary, search: string): Summ
     }
   }
 
-  addSectionHit("tax-periods", "Períodos fiscales");
   for (const period of summary.fiscal.periods) {
     if (matchesSearch(term, period.taxType.name, period.taxType.code, period.label, formatearRango(period.startDate, period.endDate))) {
       addResult({
-        sectionId: "tax-periods",
-        sectionLabel: "Períodos fiscales",
+        sectionId: "obligations",
+        sectionLabel: "Obligaciones",
         title: `${period.taxType.name} · ${etiquetaPeriodo(period.label)}`,
         detail: `${period.taxType.code} · ${formatearRango(period.startDate, period.endDate)}`,
       });

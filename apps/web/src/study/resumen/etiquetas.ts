@@ -31,6 +31,13 @@ export function displayValue(value: string | null | undefined) {
   return value?.trim() || "Sin configurar";
 }
 
+/** Forma jurídica por sigla: «Sociedad de responsabilidad limitada (SRL)» → «SRL». Sin sigla, el texto completo. */
+export function siglaFormaJuridica(value: string | null | undefined) {
+  const texto = value?.trim();
+  if (!texto) return null;
+  return /\(([^()]+)\)\s*$/.exec(texto)?.[1] ?? texto;
+}
+
 export function displayVatCondition(value: string | null | undefined) {
   if (!value) return "Sin configurar";
   return (CLIENT_VAT_CONDITION_LABELS as Record<string, string>)[value] ?? value;

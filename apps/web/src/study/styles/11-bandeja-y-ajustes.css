@@ -1059,3 +1059,10 @@
   text-align: start;
   height: auto;
 }
+
+.client-summary__missing,
+.client-summary__periods-note {
+  margin: var(--ds-space-4) 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+}

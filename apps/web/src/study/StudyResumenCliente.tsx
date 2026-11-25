@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { AsyncState, Button, EmptyState } from "@contable/design-system";
 import { useNavigate } from "react-router-dom";
 import { api, type ClientContact, type ClientSummary } from "../lib/api";
@@ -13,7 +13,6 @@ import { IndiceSecciones } from "./resumen/IndiceSecciones";
 import { SummarySectionEmpty } from "./resumen/Piezas";
 import { SeccionResumen } from "./resumen/secciones/SeccionResumen";
 import { SeccionPeriodosContables } from "./resumen/secciones/SeccionPeriodosContables";
-import { SeccionPeriodosFiscales } from "./resumen/secciones/SeccionPeriodosFiscales";
 import { SeccionObligaciones } from "./resumen/secciones/SeccionObligaciones";
 import { SeccionFichaContable } from "./resumen/secciones/SeccionFichaContable";
 import { SeccionPerfilFiscal } from "./resumen/secciones/SeccionPerfilFiscal";
@@ -25,7 +24,6 @@ export function StudyResumenCliente() {
   const [density] = useDensity();
   const { firmId, clientId, capabilities } = useClientContext();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState<SummarySectionId>("overview");
   const [search, setSearch] = useState("");
   const canManageContacts = capabilities.has("client.manage");
@@ -66,22 +64,15 @@ export function StudyResumenCliente() {
     query.data?.accounting.fiscalYears.filter((year) => year.status === "OPEN").length ?? 0;
   const cargandoResumen = query.isPending && query.fetchStatus !== "idle";
 
-  const actualizar = () => {
-    void queryClient.invalidateQueries({ queryKey: ["client-summary", firmId, clientId] });
-    void queryClient.invalidateQueries({ queryKey: ["client-contacts", firmId, clientId] });
-  };
   const acciones = (
     <>
       <Button variant="ghost" onClick={() => navigate("/clientes")}>
         Volver a clientes
       </Button>
-      <Button variant="secondary" onClick={actualizar}>
-        Actualizar
-      </Button>
       <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
         Configuración fiscal
       </Button>
-      <Button onClick={() => navigate("/trabajo")}>Abrir trabajo</Button>
+      <Button onClick={() => navigate("/expediente-mensual")}>Abrir Legajo</Button>
     </>
   );
 
@@ -127,25 +118,28 @@ export function StudyResumenCliente() {
   const { client, accounting, fiscal, counts } = query.data;
   const profile = client.profile;
   const nombreComercial = client.tradeName?.trim();
-  const descripcionCliente = `${client.legalName}${nombreComercial && nombreComercial.toLocaleLowerCase() !== client.legalName.trim().toLocaleLowerCase() ? ` · ${nombreComercial}` : ""} · CUIT ${formatCuit(client.cuit)}`;
+  const mostrarComercial = Boolean(nombreComercial) && nombreComercial?.toLocaleLowerCase() !== client.legalName.trim().toLocaleLowerCase();
+  const descripcionCliente = `${mostrarComercial ? `${nombreComercial} · ` : ""}CUIT ${formatCuit(client.cuit)}`;
+  const hayContable = accountingPeriodCount > 0;
+  const hayCatalogos = counts.accounts + counts.counterparties + counts.costCenters > 0;
   const sections: SummarySectionDefinition[] = [
-    { id: "overview", group: "Resumen", label: "Resumen" },
-    { id: "accounting-periods", group: "Contable", label: "Períodos contables" },
-    { id: "tax-periods", group: "Fiscal", label: "Períodos fiscales" },
+    { id: "overview", group: "Datos generales", label: "Datos generales" },
+    ...(hayContable ? [{ id: "accounting-periods" as const, group: "Contable" as const, label: "Períodos contables" }] : []),
     { id: "obligations", group: "Fiscal", label: "Obligaciones" },
     { id: "tax-profile", group: "Configuración fiscal", label: "Perfil fiscal" },
     { id: "registrations", group: "Configuración fiscal", label: "Regímenes adheridos" },
     { id: "activities", group: "Configuración fiscal", label: "Actividades registradas" },
     { id: "base-config", group: "Configuración", label: "Ficha contable" },
-    { id: "catalogs", group: "Configuración", label: "Catálogos" },
+    ...(hayCatalogos ? [{ id: "catalogs" as const, group: "Configuración" as const, label: "Catálogos" }] : []),
   ];
-  const searchResults = buildSearchResults(query.data, search);
+  const seccionesVisibles = new Set(sections.map((section) => section.id));
+  const searchResults = buildSearchResults(query.data, search).filter((result) => seccionesVisibles.has(result.sectionId));
   const termino = search.trim();
 
   return (
     <DensePage density={density} flow className="client-summary">
       <DenseHeader
-        title="Resumen del cliente"
+        title={client.legalName}
         description={descripcionCliente}
         actions={acciones}
       />
@@ -154,7 +148,7 @@ export function StudyResumenCliente() {
         <DenseSearch
           value={search}
           onChange={setSearch}
-          placeholder="CUIT, período, impuesto, obligación…"
+          placeholder="Buscar en el cliente"
           label="Buscar en este cliente"
         />
         {termino ? <span className="client-summary__search-status">{etiquetaCoincidencias(searchResults.length)}</span> : null}
@@ -230,8 +224,6 @@ export function StudyResumenCliente() {
           {!termino && activeSection === "accounting-periods" ? (
             <SeccionPeriodosContables accounting={accounting} accountingPeriodCount={accountingPeriodCount} />
           ) : null}
-
-          {!termino && activeSection === "tax-periods" ? <SeccionPeriodosFiscales fiscal={fiscal} /> : null}
 
           {!termino && activeSection === "obligations" ? <SeccionObligaciones fiscal={fiscal} /> : null}
 

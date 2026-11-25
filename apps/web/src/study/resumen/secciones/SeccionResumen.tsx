@@ -31,10 +31,17 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
     periods: fiscal.periods,
     obligations: fiscal.obligations,
   }));
+  // Solo lo que falta o lo que sigue: con la configuración completa y obligaciones generadas no hay atajos.
+  const primerFaltante = faltantes[0];
+  const siguiente: Array<{ texto: string; ruta: string }> = [];
+  if (primerFaltante && primerFaltante.step !== "ficha") {
+    siguiente.push({ texto: "Completar la configuración fiscal", ruta: `/configuracion-fiscal?paso=${encodeURIComponent(primerFaltante.step)}` });
+  }
+  if (fiscal.obligations.length === 0) siguiente.push({ texto: "Generar obligaciones", ruta: "/configuracion-fiscal" });
   return (
     <DenseSection
       id="rc-resumen"
-      title="Resumen"
+      title="Datos generales"
       description="Una lectura rápida para decidir dónde continuar."
       surface="integrated"
       actions={
@@ -76,30 +83,24 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
           detail={`${activeActivities} vigente${activeActivities === 1 ? "" : "s"}`}
         />
         <SummaryFact
-          label={fiscal.obligations.length === 1 ? "Obligación materializada" : "Obligaciones materializadas"}
+          label={fiscal.obligations.length === 1 ? "Obligación" : "Obligaciones"}
           value={String(fiscal.obligations.length)}
         />
       </dl>
-      <div className="client-summary__overview-links">
-        <h3>Accesos rápidos</h3>
-        <ul>
-          <li>
-            <Button type="button" variant="text" size="row" onClick={() => navigate("/expediente-mensual")}>
-              <strong>Cargar período</strong>
-            </Button>
-          </li>
-          <li>
-            <Button type="button" variant="text" size="row" onClick={() => navigate("/configuracion-fiscal")}>
-              <strong>Materializar obligaciones</strong>
-            </Button>
-          </li>
-          <li>
-            <Button type="button" variant="text" size="row" onClick={() => navigate("/configuracion-fiscal")}>
-              <strong>Nueva versión del perfil</strong>
-            </Button>
-          </li>
-        </ul>
-      </div>
+      {siguiente.length > 0 ? (
+        <div className="client-summary__overview-links">
+          <h3>Qué sigue</h3>
+          <ul>
+            {siguiente.map((item) => (
+              <li key={item.texto}>
+                <Button type="button" variant="text" size="row" onClick={() => navigate(item.ruta)}>
+                  <strong>{item.texto}</strong>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </DenseSection>
   );
 }

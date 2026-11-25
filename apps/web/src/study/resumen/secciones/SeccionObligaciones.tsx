@@ -1,7 +1,7 @@
 import { Table } from "@contable/design-system";
 import type { ClientSummary } from "../../../lib/api";
 import { StatusBadge } from "../../../ui/StatusBadge";
-import { formatearFecha, formatearRango } from "../../../lib/formatoFechas";
+import { formatearFecha, formatearPeriodo } from "../../../lib/formatoFechas";
 import { DenseSection } from "../../../ui/Dense";
 import { etiquetaPeriodo } from "../etiquetas";
 import { SalidaConfiguracionFiscal, SummarySectionEmpty } from "../Piezas";
@@ -11,18 +11,21 @@ type Props = {
 };
 
 export function SeccionObligaciones({ fiscal }: Props) {
+  // Los períodos fiscales viven acá: los que todavía no tienen obligación se listan debajo de la tabla.
+  const conObligacion = new Set(fiscal.obligations.map((obligation) => obligation.period.id));
+  const sinObligacion = fiscal.periods.filter((period) => !conObligacion.has(period.id));
   return (
     <DenseSection
       id="rc-obligaciones"
-      title="Obligaciones materializadas"
+      title="Obligaciones"
       description="Régimen, período, vencimiento y estado de cada obligación del cliente."
       count={fiscal.obligations.length}
       surface="integrated"
     >
       {fiscal.obligations.length === 0 ? (
         <SummarySectionEmpty
-          title="Sin obligaciones materializadas"
-          description="Las obligaciones aparecen acá cuando se materializan en Configuración fiscal."
+          title="Sin obligaciones"
+          description="Las obligaciones aparecen acá cuando se generan en Configuración fiscal."
           action={<SalidaConfiguracionFiscal />}
         />
       ) : (
@@ -46,15 +49,12 @@ export function SeccionObligaciones({ fiscal }: Props) {
               key: "period",
               header: "Período",
               render: (obligation) => (
-                <div className="summary-table__primary">
-                  <strong>{etiquetaPeriodo(obligation.period.label)}</strong>
-                  <small>{formatearRango(obligation.period.startDate, obligation.period.endDate)}</small>
-                </div>
+                <span>{obligation.period.label ? etiquetaPeriodo(obligation.period.label) : formatearPeriodo(obligation.period.startDate, obligation.period.endDate)}</span>
               ),
             },
             {
               key: "dueDate",
-              header: "Vencimiento",
+              header: "Vence",
               render: (obligation) => <span className="tabular-copy">{formatearFecha(obligation.dueDate)}</span>,
             },
             {
@@ -65,6 +65,15 @@ export function SeccionObligaciones({ fiscal }: Props) {
           ]}
         />
       )}
+      {sinObligacion.length > 0 ? (
+        <p className="client-summary__periods-note">
+          Períodos fiscales sin obligación:{" "}
+          {sinObligacion
+            .map((period) => `${period.taxType.name} · ${period.label ? etiquetaPeriodo(period.label) : formatearPeriodo(period.startDate, period.endDate)}`)
+            .join(", ")}
+          .
+        </p>
+      ) : null}
     </DenseSection>
   );
 }

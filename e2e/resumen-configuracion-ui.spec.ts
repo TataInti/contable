@@ -43,7 +43,8 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
     await expect(fila).not.toContainText("Pendiente");
     await expect(page.locator(".client-summary__overview-status")).toContainText("Activo");
     await expect(page.locator(".client-summary__overview-status")).not.toContainText("En configuración");
-    const encabezado = `${CLIENTE.legalName} · ${CLIENTE.tradeName} · CUIT ${CLIENTE.cuit.slice(0, 2)}-${CLIENTE.cuit.slice(2, 10)}-${CLIENTE.cuit.slice(10)}`;
+    await expect(page.getByRole("heading", { level: 1, name: CLIENTE.legalName })).toBeVisible();
+    const encabezado = `${CLIENTE.tradeName} · CUIT ${CLIENTE.cuit.slice(0, 2)}-${CLIENTE.cuit.slice(2, 10)}-${CLIENTE.cuit.slice(10)}`;
     await expect(page.getByText(encabezado, { exact: true })).toBeVisible();
   });
 

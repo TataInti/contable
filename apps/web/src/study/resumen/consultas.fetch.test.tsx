@@ -128,13 +128,12 @@ describe("Foco 7a.2 · consultas con fetch simulado (cliente de consultas real)"
     expect(llamadas.filter((ruta) => ruta.endsWith("/contacts"))).toHaveLength(2);
   });
 
-  it("F-B · vacíos de Períodos fiscales, Obligaciones, Regímenes y Actividades con salida a Configuración fiscal", async () => {
+  it("F-B · vacíos de Obligaciones, Regímenes y Actividades con salida a Configuración fiscal", async () => {
     montar(porDefecto);
     const menu = within(
       await screen.findByRole("navigation", { name: "Secciones internas del cliente" }),
     );
     for (const seccion of [
-      "Períodos fiscales",
       "Obligaciones",
       "Regímenes adheridos",
       "Actividades registradas",
@@ -148,17 +147,16 @@ describe("Foco 7a.2 · consultas con fetch simulado (cliente de consultas real)"
     }
   });
 
-  it("F-C · «Actualizar» en el encabezado vuelve a pedir el resumen y los contactos", async () => {
+  it("F-C · el encabezado no tiene «Actualizar»: el resumen y los contactos se piden una vez al abrir", async () => {
     const { llamadas } = montar(porDefecto);
-    await screen.findByRole("heading", { level: 1, name: "Resumen del cliente" });
     await screen.findByRole("navigation", { name: "Secciones internas del cliente" });
-    fireEvent.click(screen.getByRole("button", { name: "Actualizar" }));
+    expect(screen.queryByRole("button", { name: "Actualizar" })).toBeNull();
     await waitFor(() => {
-      expect(llamadas.filter((ruta) => ruta.endsWith("/summary"))).toHaveLength(2);
-      expect(llamadas.filter((ruta) => ruta.endsWith("/contacts"))).toHaveLength(2);
+      expect(llamadas.filter((ruta) => ruta.endsWith("/summary"))).toHaveLength(1);
+      expect(llamadas.filter((ruta) => ruta.endsWith("/contacts"))).toHaveLength(1);
     });
   });
-  it("F-D · carga de la pantalla: encabezado con un solo h1 y «Actualizar» visibles mientras carga", async () => {
+  it("F-D · carga de la pantalla: encabezado con un solo h1 y «Abrir Legajo» visibles mientras carga", async () => {
     montar((ruta) =>
       ruta.endsWith("/summary") ? new Promise<Response>(() => undefined) : respuesta(200, []),
     );
@@ -166,7 +164,7 @@ describe("Foco 7a.2 · consultas con fetch simulado (cliente de consultas real)"
     expect(screen.getAllByRole("heading", { level: 1, name: "Resumen del cliente" })).toHaveLength(
       1,
     );
-    expect(screen.getByRole("button", { name: "Actualizar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Abrir Legajo" })).toBeTruthy();
   });
 
   it("F-E · error del resumen: encabezado con un solo h1 y aviso con «Reintentar»", async () => {

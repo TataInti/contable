@@ -203,28 +203,24 @@ afterEach(() => {
 });
 
 describe("StudyResumenCliente — composición del resumen", () => {
-  it("muestra una sola fecha de actualización, métricas alineadas y accesos fiscales agrupados", async () => {
+  it("muestra una sola fecha de actualización, métricas alineadas y el índice fiscal agrupado", async () => {
     renderSummary();
 
-    const overview = await screen.findByRole("region", { name: "Resumen" });
-    expect(within(overview).getByRole("heading", { name: "Resumen", level: 2 })).toBeTruthy();
+    const overview = await screen.findByRole("region", { name: "Datos generales" });
+    expect(within(overview).getByRole("heading", { name: "Datos generales", level: 2 })).toBeTruthy();
     expect(within(overview).queryByRole("heading", { name: "Estado del cliente" })).toBeNull();
     expect(within(overview).getByText("Activo")).toBeTruthy();
-    expect(screen.getByText("Alfa Uno S.A. · Alfa · CUIT 20-11111111-2")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Alfa Uno S.A." })).toBeTruthy();
+    expect(screen.getByText("Alfa · CUIT 20-11111111-2")).toBeTruthy();
     expect(screen.queryByText("En configuración")).toBeNull();
     expect(screen.getAllByText(/Actualizado/)).toHaveLength(1);
     expect(within(overview).getByText("1 vigente")).toBeTruthy();
-    expect(within(overview).getByText("Obligación materializada")).toBeTruthy();
+    expect(within(overview).getByText("Obligación")).toBeTruthy();
     expect(screen.queryByText("1 obligaciones")).toBeNull();
     expect(within(overview).queryByText("Ejercicios contables")).toBeNull();
 
-    const quickLinks = overview.querySelector(".client-summary__overview-links ul") as HTMLUListElement;
-    expect(Array.from(quickLinks.querySelectorAll("button"), (button) => button.textContent?.trim())).toEqual([
-      "Cargar período",
-      "Materializar obligaciones",
-      "Nueva versión del perfil",
-    ]);
-    expect(quickLinks.querySelectorAll("small")).toHaveLength(0);
+    // Con la configuración completa y obligaciones generadas no hay atajos: solo lo que falta o sigue.
+    expect(overview.querySelector(".client-summary__overview-links")).toBeNull();
 
     const navigation = screen.getByRole("navigation", { name: "Secciones internas del cliente" });
     const fiscalGroupTitle = within(navigation).getByText("Configuración fiscal", { selector: "p" });
@@ -241,28 +237,22 @@ describe("StudyResumenCliente — composición del resumen", () => {
     summary.client.tradeName = summary.client.legalName;
     renderSummary(summary);
 
-    expect(await screen.findByText("Alfa Uno S.A. · CUIT 20-11111111-2")).toBeTruthy();
+    expect(await screen.findByText("CUIT 20-11111111-2")).toBeTruthy();
   });
 
   it("muestra ejercicios contables únicamente cuando hay uno abierto", async () => {
     renderSummary(summaryFixture("OPEN"));
 
-    const overview = await screen.findByRole("region", { name: "Resumen" });
+    const overview = await screen.findByRole("region", { name: "Datos generales" });
     expect(within(overview).getByText("Ejercicio contable")).toBeTruthy();
   });
 
-  it("enlaza los accesos rápidos a pantallas operativas existentes", async () => {
+  it("enlaza los botones del encabezado a Legajo y Configuración fiscal", async () => {
     renderSummary();
-    await screen.findByRole("region", { name: "Resumen" });
+    await screen.findByRole("region", { name: "Datos generales" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Cargar período" }));
+    fireEvent.click(screen.getByRole("button", { name: "Abrir Legajo" }));
     await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/expediente-mensual"));
-
-    fireEvent.click(screen.getByRole("button", { name: "Materializar obligaciones" }));
-    await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/configuracion-fiscal"));
-
-    fireEvent.click(screen.getByRole("button", { name: "Nueva versión del perfil" }));
-    await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/configuracion-fiscal"));
   });
 });
 
@@ -316,7 +306,7 @@ describe("StudyResumenCliente — datos de contacto y domicilio", () => {
     ];
     renderSummary(summaryFixture("CLOSED", "Av. Rivadavia 123", false), contacts, true);
 
-    expect(await screen.findByRole("region", { name: "Resumen" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Datos generales" })).toBeTruthy();
     const ficha = openAccountingFacts();
     await waitFor(() => expect(within(ficha).getByText("Ana Contacto")).toBeTruthy());
     expect(within(ficha).getByText(/ana@example\.com/)).toBeTruthy();
@@ -332,14 +322,14 @@ describe("StudyResumenCliente — datos de contacto y domicilio", () => {
     ).toBeNull();
   });
 
-  it("muestra No cargado y enlaces de carga cuando la lista de contactos y el domicilio están vacíos", async () => {
+  it("indica lo que falta y enlaces de carga cuando la lista de contactos y el domicilio están vacíos", async () => {
     renderSummary(summaryFixture("CLOSED", null, false), [], true);
 
-    expect(await screen.findByRole("region", { name: "Resumen" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Datos generales" })).toBeTruthy();
     const ficha = openAccountingFacts();
-    await waitFor(() => expect(within(ficha).getAllByText("No cargado").length).toBeGreaterThanOrEqual(3));
-    expect(within(ficha).getByRole("link", { name: "Cargar en Contactos" })).toBeTruthy();
-    expect(within(ficha).getByRole("link", { name: "Cargar en Configuración fiscal" })).toBeTruthy();
+    await waitFor(() => expect(within(ficha).getByText(/Falta cargar:.*contacto principal.*domicilio fiscal/)).toBeTruthy());
+    expect(within(ficha).getByRole("link", { name: "Completar lo que falta" })).toBeTruthy();
+    expect(within(ficha).getByRole("link", { name: "Cargar el domicilio fiscal" })).toBeTruthy();
   });
 
   it("no consulta ni expone contactos para quien no tiene client.manage", async () => {
@@ -362,10 +352,11 @@ describe("StudyResumenCliente — datos de contacto y domicilio", () => {
       ],
     );
 
-    expect(await screen.findByRole("region", { name: "Resumen" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Datos generales" })).toBeTruthy();
     const ficha = openAccountingFacts();
-    await waitFor(() => expect(within(ficha).getByText("Domicilio fiscal")).toBeTruthy());
+    await waitFor(() => expect(within(ficha).getByRole("link", { name: "Cargar el domicilio fiscal" })).toBeTruthy());
     expect(within(ficha).queryByText("Contacto principal")).toBeNull();
+    expect(within(ficha).queryByText(/contacto principal/)).toBeNull();
     expect(within(ficha).queryByText("Dato Privado")).toBeNull();
     expect(
       vi.mocked(api.get).mock.calls.some(([path]: Parameters<typeof api.get>) => path.endsWith("/contacts")),

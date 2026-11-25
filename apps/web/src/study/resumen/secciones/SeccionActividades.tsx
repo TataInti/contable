@@ -31,13 +31,13 @@ export function SeccionActividades({ fiscal, activeActivities }: Props) {
               <div>
                 <strong>{item.activity.name}{!item.activity.isActive ? " (oculto)" : ""}</strong>
                 <small>
-                  {item.activity.code} · {item.activity.jurisdiction.name}{!item.activity.jurisdiction.isActive ? " (oculto)" : ""}
+                  {item.activity.code}{!item.activity.jurisdiction.isActive ? " (oculto)" : ""}
                 </small>
                 <small>Desde {formatearFecha(item.validFrom)}{item.validTo ? ` · hasta ${formatearFecha(item.validTo)}` : ""}</small>
               </div>
               <StatusBadge
                 status="INFO"
-                label={item.isPrimary ? "Principal" : "Secundaria"}
+                label={`${item.isPrimary ? "Principal" : "Secundaria"} en ${item.activity.jurisdiction.name}`}
                 className="status-badge--regular"
               />
             </li>
