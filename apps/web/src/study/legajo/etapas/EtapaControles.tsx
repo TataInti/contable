@@ -3,7 +3,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { AsyncState, Button, EmptyState, getStatusBadgeMeta, ObjectPanel, WorkQueue, WorkQueueRow, SearchSelect } from "@contable/design-system";
-import { CONTROL_LABELS } from "../etiquetas";
+import { CONTROL_CAUSAS, CONTROL_LABELS } from "../etiquetas";
 import { formatMoney } from "../formato";
 import type { EvidenceDocument, Workpaper, WorkpaperClassification } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
@@ -49,11 +49,6 @@ export interface EtapaControlesProps {
   confirmar: (solicitud: SolicitudConfirmacion) => void;
 }
 
-// Qué revisar cuando el control no trae mensaje ni importes (13-2).
-const CAUSA_CONTROL: Record<string, string> = {
-  CASH_ALLOCATION_RECONCILIATION: "Hay movimientos de caja o imputaciones fiscales del período sin conciliar.",
-};
-
 const CARGA_DOCUMENTOS = "Cargando documentos de respaldo…";
 
 export function EtapaControles({ capabilities, wp, controlResolutions, setControlResolutions, controlEvidence, setControlEvidence, documentsQuery, affectedVouchers = [], onGoToClassification, resolveControlMutation, resolveOpenMutation, grupoPerfilMutation, confirmar }: EtapaControlesProps) {
@@ -93,7 +88,7 @@ export function EtapaControles({ capabilities, wp, controlResolutions, setContro
     if (control.actual !== null && control.expected !== null) return `Esperado: ${formatMoney(control.expected)} · Actual: ${formatMoney(control.actual)}`;
     if (control.actual !== null) return `Importe observado: ${formatMoney(control.actual)}.`;
     if (control.expected !== null) return `Importe esperado: ${formatMoney(control.expected)}.`;
-    return CAUSA_CONTROL[control.code] ?? "Revisá este control antes de cerrar.";
+    return Object.entries(CONTROL_CAUSAS).find(([codigo]) => codigo === control.code)?.[1] ?? "Revisá este control antes de cerrar.";
   };
   const count = (control: Workpaper["controls"][number]) => control.code.startsWith(PREFIJO_CONTROL_PERFIL) ? Number(control.actual ?? 0) : null;
   const amountFor = (control: Workpaper["controls"][number]) => control.code.startsWith(PREFIJO_CONTROL_PERFIL)
