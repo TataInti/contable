@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { goTo, mutating, pickOption, seen } from "./ui";
+import { abrirInscripcionManual, goTo, mutating, pickOption, seen } from "./ui";
 import { libroVentasXlsx, lineaPercepcionDgr, nombrePercepcionDgr, type FacturaSintetica } from "./fuentes-sinteticas";
 
 /**
@@ -78,6 +78,7 @@ export async function altaClienteRI(page: Page, cliente: ClienteRI) {
 /** Inscripción en IIBB Tucumán desde el alta del cliente (sin fecha: rige desde el alta). */
 export async function inscribirIIBB(page: Page) {
   await clickAdd(page, "Regímenes adheridos");
+  await abrirInscripcionManual(page);
   await pick(page.locator("#reg-regime"), IIBB.regime);
   await page.locator("#reg-from").fill(ALTA);
   await mutating(page, "/tax-registrations", () =>
@@ -121,8 +122,8 @@ export async function crearPeriodoIIBB(page: Page, periodo: { start: string; end
   );
 }
 
-/** Rótulo del período en el desplegable del Legajo: «Mes de año · Impuesto · etiqueta». */
-export const rotuloDelPeriodo = (mes: string, label: string) => `${mes} · ${IIBB.taxName} · ${label}`;
+/** Rótulo del mes en el desplegable del Legajo: una entrada por mes, «Mes de año» (sin impuesto ni etiqueta del período). */
+export const rotuloDelPeriodo = (mes: string, _label?: string) => mes;
 
 /** Abre el Legajo del mes elegido y lo crea si todavía no existe. */
 export async function abrirLegajo(page: Page, rotulo: string) {

@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { SUFFIX, goTo, login, mutating, syntheticCuit, RUN } from "./helpers/ui";
+import { abrirInscripcionManual, SUFFIX, goTo, login, mutating, syntheticCuit, RUN } from "./helpers/ui";
 
 /**
  * Monotributista categoría A servicios, operado como lo opera el contador (cliente nuevo y sintético).
@@ -70,6 +70,7 @@ test("monotributo: categoría A servicios, cuota en el Legajo y pago registrado,
       .filter({ has: page.getByRole("heading", { name: "Regímenes adheridos", exact: true }) })
       .getByRole("button", { name: "Agregar" })
       .click();
+    await abrirInscripcionManual(page);
     await pick(page.locator("#reg-regime"), "Monotributo");
     await page.locator("#reg-from").fill(ALTA);
     await mutating(page, "/tax-registrations", () =>
