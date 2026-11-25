@@ -128,6 +128,7 @@ export function PanelAltaUsuarios({
               <Field
                 id="internal-invite-name"
                 label="Nombre *"
+                aria-label="Nombre"
                 value={internalName}
                 onChange={(event) => setInternalName(event.target.value)}
                 required
@@ -135,6 +136,7 @@ export function PanelAltaUsuarios({
               <Field
                 id="internal-invite-email"
                 label="Correo *"
+                aria-label="Correo"
                 type="email"
                 value={internalEmail}
                 onChange={(event) => setInternalEmail(event.target.value)}
