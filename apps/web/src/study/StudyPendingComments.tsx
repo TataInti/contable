@@ -39,7 +39,7 @@ export function StudyPendingComments() {
     {tab === "notes" && notes.isError ? <p role="alert">No se pudieron cargar tus notas.</p> : null}
     {tab === "notes" && notes.isError ? <Button variant="secondary" onClick={() => void notes.refetch()}>Volver a intentar</Button> : null}
     {resolve.isError ? <p role="alert">No se pudo marcar como resuelto. Volvé a intentar.</p> : null}
-    {!items.length && !(tab === "pending" ? pending.isPending : notes.isPending) ? <p>{tab === "pending" ? "Nadie te mencionó todavía. Cuando alguien te escriba @tu-nombre en un comentario, aparece acá." : "Todavía no guardaste notas personales."}</p> : null}
+    {!items.length && !(tab === "pending" ? pending.isPending : notes.isPending) ? <p>{tab === "pending" ? "No tenés menciones pendientes. Cuando alguien te escriba @tu-nombre en un comentario, aparece acá." : "Todavía no guardaste notas personales."}</p> : null}
     <ol>{items.map((item) => <li key={item.id}>
       <strong>{item.clientName}</strong>{item.periodLabel ? <span> · {item.periodLabel}</span> : null}
       <p>{item.body.length > 180 ? `${item.body.slice(0, 180)}…` : item.body}</p>
