@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@contable/design-system";
+import { Button, Field, SearchSelect } from "@contable/design-system";
 import { api } from "../../../lib/api";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { MutationError } from "../MutationError";
-import { CampoFecha } from "../CampoFecha";
+
 import { primerDiaMesAnterior } from "../fechas";
 import "./CajonRegistroSugerido.css";
 import { etiquetaRegimen } from "../etiquetaRegimen";
@@ -45,6 +45,7 @@ export function CajonRegistroSugerido({
   const [regimeIds, setRegimeIds] = useState<string[]>([]);
   const [activityIds, setActivityIds] = useState<string[]>([]);
   const [desde, setDesde] = useState(primerDiaMesAnterior);
+  const [fechaTexto, setFechaTexto] = useState("");
   const [temCategory, setTemCategory] = useState("");
   const [monoCategory, setMonoCategory] = useState("A");
   const [monoActivity, setMonoActivity] = useState("SERVICIOS");
@@ -60,6 +61,7 @@ export function CajonRegistroSugerido({
     setRegimeIds(regimes.map((regime) => regime.id));
     setActivityIds(activities.map((activity) => activity.id));
     setDesde(primerDiaMesAnterior());
+    setFechaTexto(primerDiaMesAnterior().split("-").reverse().join("/"));
     setTemCategory(
       tem?.category ??
         (tem?.options.some((option) => option.category === "B")
@@ -130,21 +132,31 @@ export function CajonRegistroSugerido({
         <fieldset>
           <legend>Regímenes</legend>
           {regimes.map((regime) => (
-            <label key={regime.id}>
+            <label key={regime.id} title={etiquetaRegimen(regime)}>
               <input
                 type="checkbox"
                 checked={regimeIds.includes(regime.id)}
                 onChange={() => toggle(regime.id, regimeIds, setRegimeIds)}
               />{" "}
-              {etiquetaRegimen(regime)}
+              {({ RI: "IVA · Responsable Inscripto", IIBB_LOCAL_TUC: "IIBB Tucumán", TEM_SMT: "TEM San Miguel" } as Record<string, string>)[regime.code] ?? regime.name}
             </label>
           ))}
         </fieldset>
-        <CampoFecha
+        <Field
           label="Desde"
           id="sugeridos-desde"
-          value={desde}
-          onChange={(event) => setDesde(event.target.value)}
+          value={fechaTexto}
+          placeholder="dd/mm/aaaa"
+          inputMode="numeric"
+          pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}"
+          onChange={(event) => {
+            const value = event.target.value;
+            setFechaTexto(value);
+            const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+            const iso = match ? `${match[3]}-${match[2]}-${match[1]}` : "";
+            const date = iso ? new Date(`${iso}T00:00:00Z`) : null;
+            setDesde(date && !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === iso ? iso : "");
+          }}
           required
         />
         {activities.length ? (
@@ -167,50 +179,12 @@ export function CajonRegistroSugerido({
           </p>
         )}
         {temSelected ? (
-          <label>
-            Categoría TEM propuesta{" "}
-            <select
-              aria-label="Categoría TEM propuesta"
-              value={temCategory}
-              onChange={(event) => setTemCategory(event.target.value)}
-            >
-              <option value="">Elegir después</option>
-              {tem?.options.map((option) => (
-                <option key={option.category} value={option.category}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SearchSelect label="Categoría TEM propuesta" value={temCategory} onChange={setTemCategory} placeholder="Elegir después" options={(tem?.options ?? []).map((option) => ({ value: option.category, label: option.label }))} />
         ) : null}
         {monoSelected ? (
           <>
-            <label>
-              Categoría Monotributo propuesta{" "}
-              <select
-                aria-label="Categoría Monotributo propuesta"
-                value={monoCategory}
-                onChange={(event) => setMonoCategory(event.target.value)}
-              >
-                {CATEGORIAS_MONOTRIBUTO.map((category) => (
-                  <option key={category}>{category}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Tipo de actividad{" "}
-              <select
-                aria-label="Tipo de actividad"
-                value={monoActivity}
-                onChange={(event) => setMonoActivity(event.target.value)}
-              >
-                {ACTIVIDADES_MONOTRIBUTO.map((activity) => (
-                  <option key={activity.value} value={activity.value}>
-                    {activity.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SearchSelect label="Categoría Monotributo propuesta" value={monoCategory} onChange={setMonoCategory} allowEmpty={false} options={CATEGORIAS_MONOTRIBUTO.map((category) => ({ value: category, label: category }))} />
+            <SearchSelect label="Tipo de actividad" value={monoActivity} onChange={setMonoActivity} allowEmpty={false} options={ACTIVIDADES_MONOTRIBUTO.map((activity) => ({ value: activity.value, label: activity.label }))} />
           </>
         ) : null}
         <MutationError error={guardar.error} />
