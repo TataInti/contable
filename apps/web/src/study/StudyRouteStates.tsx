@@ -34,6 +34,12 @@ function ContextRequired({
   );
 }
 
+const UNAVAILABLE_ALTERNATIVES: Record<string, { label: string; to: string }> = {
+  contabilidad: { label: "Liquidaciones", to: "/liquidaciones" },
+  reportes: { label: "Rentabilidad", to: "/rentabilidad" },
+  asistente: { label: "la Bandeja documental", to: "/bandeja" },
+};
+
 export function StudyModuleGuard({ module, children }: { module: StudyModule; children: ReactNode }) {
   const { isReady, firmId, clientId, periodId, capabilities } = useClientContext();
   const navigate = useNavigate();
@@ -47,15 +53,23 @@ export function StudyModuleGuard({ module, children }: { module: StudyModule; ch
   }
 
   if (module.status !== "released") {
+    const alternative = UNAVAILABLE_ALTERNATIVES[module.id];
     return (
       <div className="study-page study-route-state">
         <EmptyState
           title="Esta sección todavía no está disponible"
-          description="La función no forma parte de esta versión operativa."
+          description={`${module.label} no forma parte de esta versión operativa. Que figure «Habilitado» en Módulos de estudios significa que está asignado a tu estudio, no que ya funcione; no hace falta activar nada.${alternative ? ` Mientras tanto, podés usar ${alternative.label}.` : ""}`}
           action={
-            <Button type="button" variant="secondary" onClick={() => navigate("/")}>
-              Volver al inicio
-            </Button>
+            <div className="study-route-state__actions">
+              {alternative ? (
+                <Button type="button" onClick={() => navigate(alternative.to)}>
+                  Ir a {alternative.label}
+                </Button>
+              ) : null}
+              <Button type="button" variant="secondary" onClick={() => navigate("/")}>
+                Volver al inicio
+              </Button>
+            </div>
           }
         />
       </div>
