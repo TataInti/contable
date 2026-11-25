@@ -1281,7 +1281,7 @@
 .workpaper-calculation-breakdown .ds-table tbody tr:last-child { border-top: 1px solid var(--ds-color-border); font-weight: 700; }
 .workpaper-calculation-breakdown .ds-table tbody tr:last-child td { font-weight: 700; }
 
-.workpaper-close-summary { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); white-space: nowrap; }
+.workpaper-close-summary { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
 .workpaper-close-summary strong { color: var(--ds-color-text); }
 .workpaper-close-checklist { display: grid; margin: 0; padding: 0; list-style: none; }
 .workpaper-close-step { display: grid; grid-template-columns: 2rem minmax(0, 1fr) 7rem minmax(12rem, auto); align-items: center; gap: var(--ds-space-2) var(--ds-space-3); min-block-size: 3rem; border-bottom: 1px solid var(--ds-color-border-subtle); }
