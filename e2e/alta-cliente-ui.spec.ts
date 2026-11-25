@@ -220,25 +220,13 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await expect(seen(page, data.activity.code)).toBeVisible();
   });
 
-  await test.step("Verificar que el cliente se puede procesar: el servidor acepta calcular la liquidación", async () => {
+  await test.step("Verificar que el cliente se puede procesar: Liquidaciones es el historial y el cálculo se hace en el Legajo", async () => {
     await goTo(page, "Liquidaciones");
     await expect(page.getByRole("heading", { name: "Liquidaciones", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Calcular liquidación" }).first().click();
-    await pickOption(page.locator("#settlement-tax-period"), data.period.label);
-    await pickOption(page.locator("#settlement-regime"), data.regime.name);
-    await page.locator("#settlement-cutoff").fill(data.period.end);
-    const calculated = page.waitForResponse(
-      (response) => response.url().includes("/tax-settlements/calculate") && response.request().method() === "POST",
-    );
-    await page.getByRole("button", { name: "Calcular", exact: true }).click();
-    const response = await calculated;
-    // Los rechazos de la cadena de requisitos serían REGISTRATION_REQUIRED, NO_ACTIVE_RULES o
-    // UNSUPPORTED_ENGINE_VERSION: ninguno debe aparecer.
-    const body = await response.text();
-    expect(body, `respuesta de calcular: ${response.status()} ${body}`).not.toMatch(
-      /REGISTRATION_REQUIRED|NO_ACTIVE_RULES|UNSUPPORTED_ENGINE_VERSION/,
-    );
-    expect(response.status(), body).toBe(200);
+    // Liquidaciones es un historial de solo lectura (sin cajón de cálculo): el cliente nuevo aún no tiene ninguna
+    // y la pantalla lleva al Legajo, donde se calcula (el cálculo se prueba en liquidacion-mensual-ri-ui).
+    await expect(page.getByRole("button", { name: "Calcular liquidación" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Abrir en el Legajo" }).first()).toBeVisible();
   });
 
   expect(failedMutations, `mutaciones rechazadas:\n${failedMutations.join("\n")}`).toEqual([]);
