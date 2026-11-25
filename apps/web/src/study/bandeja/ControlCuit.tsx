@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button, Notice } from "@contable/design-system";
 import { api, ApiError, type Document } from "../../lib/api";
+import { documentFileName } from "./utilidades";
 import { etiquetaCuitEstado, planDeBloqueCuit, validarMotivoCuit } from "./cuitControlTexto";
 
 interface ControlCuitProps {
@@ -195,7 +196,8 @@ export function ControlCuitBloque({
   return (
     <section className="cuit-control-bloque" aria-label="Acciones en bloque para el CUIT">
       <p>
-        {cantidad === 1 ? "Hay 1 comprobante" : `Hay ${cantidad} comprobantes`} con el CUIT pendiente.
+        {cantidad === 1 ? "Hay 1 comprobante" : `Hay ${cantidad} comprobantes`} con el CUIT pendiente
+        {cantidad <= 3 ? `: ${plan.pendientes.map((documento) => documentFileName(documento)).join(", ")}` : ""}.
       </p>
       <div className="review-actions__buttons">
         {plan.destino ? (
@@ -242,7 +244,7 @@ export function ControlCuitBloque({
           </p>
         ) : null}
         <Button type="submit" variant="secondary" disabled={ocupado}>
-          {`Aceptar los ${cantidad} con motivo`}
+          {cantidad === 1 ? "Aceptar con motivo" : `Aceptar los ${cantidad} con motivo`}
         </Button>
       </form>
       {aviso ? (

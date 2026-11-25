@@ -185,7 +185,7 @@ export function CargarDocumento({
         setUploadError(null);
         setSubidaRecibida(false);
       }}
-      title="Nuevo documento"
+      title="Subir documento"
       description="El archivo pasa por validación, antivirus y extracción antes de estar disponible."
       size="wide"
       initialFocus="close"

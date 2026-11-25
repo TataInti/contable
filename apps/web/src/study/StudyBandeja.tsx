@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@contable/design-system";
 import { api, type Document, type DocumentRequest } from "../lib/api";
@@ -19,7 +19,7 @@ import { DetalleDocumento } from "./bandeja/DetalleDocumento";
 export function StudyBandeja() {
   const [density] = useDensity();
   const { firmId, clientId, capabilities } = useClientContext();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [elegidoId, setSelectedId] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const cargaRef = useRef<CargarDocumentoHandle>(null);
   const [documentSearch, setDocumentSearch] = useState("");
@@ -48,6 +48,15 @@ export function StudyBandeja() {
   const documentosVisibles = ordenarPorIngresoDescendente(rows).filter(
     (document) => belongsToDocumentQueue(document, documentFilter) && coincideConBusqueda(document, documentSearch),
   );
+  // 07-3: sin elección, el panel abre una vez el primer documento «Para revisar» en vez de quedar vacío.
+  const primeroParaRevisar = documentosVisibles.find((document) => belongsToDocumentQueue(document, "NEEDS_REVIEW"))?.id;
+  const abiertoAutomaticamente = useRef(false);
+  useEffect(() => {
+    if (abiertoAutomaticamente.current || !primeroParaRevisar) return;
+    abiertoAutomaticamente.current = true;
+    setSelectedId((actual) => actual ?? primeroParaRevisar);
+  }, [primeroParaRevisar]);
+  const selectedId = elegidoId;
   const cantidadEnCola = (filter: DocumentQueueFilter) =>
     rows.filter((document) => belongsToDocumentQueue(document, filter)).length;
   // Una cifra sin respuesta no es 0 (C7B-5 y regla transversal): sin cliente no hay consulta; con error, «no disponible».
@@ -61,7 +70,7 @@ export function StudyBandeja() {
     { id: "ALL", label: "Todos", value: cifraDeCola("ALL") },
     { id: "NEEDS_REVIEW", label: "Para revisar", value: cifraDeCola("NEEDS_REVIEW") },
     { id: "PROCESSING", label: "Procesando", value: cifraDeCola("PROCESSING") },
-    { id: "REVIEWED", label: "Revisado", value: cifraDeCola("REVIEWED") },
+    { id: "REVIEWED", label: "Aprobado", value: cifraDeCola("REVIEWED") },
     { id: "ERROR", label: "Con error", value: cifraDeCola("ERROR") },
   ];
   const pendingRequestItems = (requests.data ?? []).flatMap((request) =>
