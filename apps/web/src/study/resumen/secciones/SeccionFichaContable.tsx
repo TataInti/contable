@@ -32,13 +32,13 @@ export function SeccionFichaContable({ profile, canManageContacts, contactos, ac
   const formaJuridica = siglaFormaJuridica(profile?.legalForm);
   const domicilioFalta = !activeProfile?.fiscalAddress?.trim();
   const contactosListos = !cargando && !error;
+  // La norma contable es opcional (A57): no cuenta como faltante.
   const faltan = [
     !profile && "ficha contable",
     profile && !condicionIva && "condición IVA",
     profile && !formaJuridica && "forma jurídica",
     profile && !profile.province?.trim() && "provincia",
     profile && !profile.activity?.trim() && "actividad principal",
-    profile && !profile.accountingStandard?.trim() && "norma contable",
     profile && profile.iibbJurisdictions.length === 0 && "jurisdicciones IIBB",
     profile && !profile.serviceStartDate && "inicio del servicio",
     canManageContacts && contactosListos && !principal && "contacto principal",
