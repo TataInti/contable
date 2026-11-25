@@ -12,3 +12,13 @@
 @import "./styles/09-ficha-cliente.css";
 @import "./styles/10-indice-detalle.css";
 @import "./styles/11-bandeja-y-ajustes.css";
+
+/* Inicio: un contador en cero se lee como dato apagado, no como alerta. */
+.dense-agenda__count--zero {
+  color: var(--ds-color-text-faint);
+}
+
+/* Inicio: los contadores de la franja arrancan alineados arriba, con o sin aclaración. */
+.dense-stats--strip .dense-stat.ds-button {
+  justify-content: flex-start;
+}

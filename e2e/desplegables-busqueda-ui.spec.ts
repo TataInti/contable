@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
-import { goTo, login } from "./helpers/ui";
+import { abrirInscripcionManual, goTo, login } from "./helpers/ui";
 
 /**
  * Desplegables con búsqueda en tres pantallas del estudio, operados como el contador: escribe en el campo,
@@ -50,6 +50,7 @@ test("desplegables con búsqueda en alta de cliente, configuración fiscal y reg
       .filter({ has: page.getByRole("heading", { name: "Regímenes adheridos", exact: true }) })
       .getByRole("button", { name: "Agregar" })
       .click();
+    await abrirInscripcionManual(page);
     await buscarYElegir(page.locator("#reg-regime"), "Monotrib", "Monotributo");
     await page.keyboard.press("Escape");
   });

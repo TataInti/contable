@@ -78,12 +78,13 @@ describe("StudyClientes — cajones de alta, estado y contacto (K4)", () => {
       "client-cuit",
       "client-vat-condition",
       "client-province",
+      "client-fiscal-address",
       "client-activity",
       "client-legal-form",
     ]) {
       expect(cajon.querySelector(`#${id}`)).not.toBeNull();
     }
-    expect(cajon.querySelectorAll(".ds-field")).toHaveLength(8);
+    expect(cajon.querySelectorAll(".ds-field")).toHaveLength(9);
     expect(cajon.querySelector(".action-drawer__primary .action-drawer__hint")?.textContent).toBe(
       "Falta completar 2 campos: razón social y CUIT.",
     );

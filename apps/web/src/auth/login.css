@@ -292,3 +292,10 @@
     box-shadow: none;
   }
 }
+
+.login__help {
+  margin: var(--ds-space-5) 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  line-height: 1.5;
+}

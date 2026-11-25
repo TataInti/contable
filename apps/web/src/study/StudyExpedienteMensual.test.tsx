@@ -489,7 +489,7 @@ describe("StudyExpedienteMensual", () => {
     renderPage();
     await openSourcesStage();
 
-    expect((await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).textContent).toContain("Para calcular falta: Ingresos Brutos Tucumán");
+    expect((await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).textContent).toContain("Falta 1: Ingresos Brutos Tucumán");
     expect(screen.getByRole("button", { name: "Gestionar Ingresos Brutos Tucumán" })).toBeTruthy();
   });
 

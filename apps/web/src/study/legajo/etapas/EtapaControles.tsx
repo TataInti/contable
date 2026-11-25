@@ -19,6 +19,12 @@ export interface ResolverControlVariables {
 }
 
 /** Pedido de confirmación que arma la pantalla (ConfirmDialog, C09). */
+/** Resolver de una vez todos los controles bloqueantes abiertos con un solo motivo (13-4). */
+export interface ResolverAbiertosVariables {
+  workpaperId: string;
+  resolution: string;
+}
+
 export interface SolicitudConfirmacion {
   title: string;
   description: string;
@@ -37,6 +43,7 @@ export interface EtapaControlesProps {
   affectedVouchers?: WorkpaperClassification[];
   onGoToClassification?: () => void;
   resolveControlMutation: UseMutationResult<unknown, Error, ResolverControlVariables>;
+  resolveOpenMutation?: UseMutationResult<unknown, Error, ResolverAbiertosVariables>;
   /** Excluir o aceptar un grupo «no corresponde al perfil» (corte 4B). */
   grupoPerfilMutation?: UseMutationResult<unknown, Error, GrupoPerfilVariables>;
   confirmar: (solicitud: SolicitudConfirmacion) => void;
@@ -44,10 +51,12 @@ export interface EtapaControlesProps {
 
 const CARGA_DOCUMENTOS = "Cargando documentos de respaldo…";
 
-export function EtapaControles({ capabilities, wp, controlResolutions, setControlResolutions, controlEvidence, setControlEvidence, documentsQuery, affectedVouchers = [], onGoToClassification, resolveControlMutation, grupoPerfilMutation, confirmar }: EtapaControlesProps) {
+export function EtapaControles({ capabilities, wp, controlResolutions, setControlResolutions, controlEvidence, setControlEvidence, documentsQuery, affectedVouchers = [], onGoToClassification, resolveControlMutation, resolveOpenMutation, grupoPerfilMutation, confirmar }: EtapaControlesProps) {
   const [params, setParams] = useSearchParams();
   const [showResolved, setShowResolved] = useState(false);
   const [motivosGrupo, setMotivosGrupo] = useState<Record<string, string>>({});
+  const [resolverJuntos, setResolverJuntos] = useState(false);
+  const [motivoJuntos, setMotivoJuntos] = useState("");
   const [accionGrupo, setAccionGrupo] = useState<"accept" | "exclude" | null>(null);
   const [accionControl, setAccionControl] = useState<{ findingId: string; action: "resolve" | "waive" } | null>(null);
   const selectedId = params.get("panel")?.startsWith("control-") ? params.get("panel")!.slice(8) : null;
@@ -61,10 +70,19 @@ export function EtapaControles({ capabilities, wp, controlResolutions, setContro
   const eligibleEvidenceDocuments = (documentsQuery.data ?? []).filter((document) => ["READY", "APPLIED", "REVIEWED"].includes(document.status));
   const open = wp.controls.filter((item) => item.status === "OPEN");
   const resolved = wp.controls.filter((item) => item.status !== "OPEN");
+  // Controles cuya fuente no tiene datos: no bloquean y quedan visibles como «Omitido: …».
+  // Un cálculo nuevo genera otro control con el mismo código: se muestra solo el más reciente de cada uno (la API los entrega del más nuevo al más viejo).
+  const omitidos = resolved.filter((item) => item.resolution?.startsWith("Omitido:")).filter((item, index, lista) => lista.findIndex((otro) => otro.code === item.code) === index);
+  const juntos = open.filter((item) => item.severity === "BLOCKING" && !item.code.startsWith(PREFIJO_CONTROL_PERFIL));
+  const resolverTodos = () => {
+    if (!resolveOpenMutation || !motivoJuntos.trim()) return;
+    resolveOpenMutation.mutate({ workpaperId: wp.id, resolution: motivoJuntos.trim() }, { onSuccess: () => { setResolverJuntos(false); setMotivoJuntos(""); } });
+  };
   const labelFor = (control: Workpaper["controls"][number]) => control.code.startsWith(PREFIJO_CONTROL_PERFIL)
     ? (GRUPO_LABELS[control.code.slice(PREFIJO_CONTROL_PERFIL.length)] ?? control.code)
     : CONTROL_LABELS[control.code] ?? control.message ?? control.code;
   const summaryFor = (control: Workpaper["controls"][number]) => {
+    if (control.status !== "OPEN" && control.resolution?.startsWith("Omitido:")) return control.resolution;
     if (control.message?.trim()) return control.message;
     if (control.code.startsWith(PREFIJO_CONTROL_PERFIL)) return "Los comprobantes no corresponden al perfil fiscal del cliente.";
     if (control.actual !== null && control.expected !== null) return `Esperado: ${formatMoney(control.expected)} · Actual: ${formatMoney(control.actual)}`;
@@ -113,6 +131,17 @@ export function EtapaControles({ capabilities, wp, controlResolutions, setContro
   return <div className="workpaper-controls">
     {pideRespaldo && documentsQuery.isError ? <AsyncState loading={false} error errorTitle="No se pudieron leer los documentos de respaldo" errorDescription="Reintentá la lectura. Mientras tanto, el control puede resolverse sin respaldo." onRetry={() => void documentsQuery.refetch()} loadingLabel={CARGA_DOCUMENTOS} /> : null}
     {pideRespaldo && !documentsQuery.isError && !documentsQuery.isSuccess ? <AsyncState loading error={false} errorTitle="" errorDescription="" onRetry={() => void documentsQuery.refetch()} loadingLabel={CARGA_DOCUMENTOS} /> : null}
+    {omitidos.length ? <ul className="workpaper-controls__omitidos" aria-label="Controles omitidos">{omitidos.map((control) => <li key={control.id}><strong>{labelFor(control)}</strong> · {control.resolution}</li>)}</ul> : null}
+    {puedeResolver && resolveOpenMutation && juntos.length >= 2 && !showResolved ? <div className="workpaper-controls__juntos">
+      {!resolverJuntos ? <Button variant="secondary" onClick={() => setResolverJuntos(true)}>{`Resolver los ${juntos.length} con un solo motivo`}</Button> : <>
+        <label className="ds-field__label" htmlFor="controles-motivo-juntos">{`Motivo para los ${juntos.length} controles`}</label>
+        <textarea className="study-textarea" id="controles-motivo-juntos" value={motivoJuntos} placeholder="Escribí el motivo." onChange={(event) => setMotivoJuntos(event.target.value)} />
+        <Button variant="primary" disabled={!motivoJuntos.trim()} loading={resolveOpenMutation.isPending} onClick={resolverTodos}>{`Confirmar resolución de ${juntos.length} controles`}</Button>
+        <Button variant="ghost" onClick={() => setResolverJuntos(false)}>Cancelar</Button>
+        {!motivoJuntos.trim() ? <small className="muted-copy">Escribí el motivo para resolver los {juntos.length} controles.</small> : null}
+        <WorkpaperActionError error={resolveOpenMutation.error} />
+      </>}
+    </div> : null}
     <WorkQueue label={showResolved ? "Controles resueltos" : "Controles abiertos"} empty={<EmptyState size="inline" title={showResolved ? "Todavía no hay controles resueltos." : "No hay controles abiertos para este legajo."} />}>
       {(showResolved ? resolved : open).map((control) => <WorkQueueRow key={control.id} id={control.id} title={labelFor(control)} decision={summaryFor(control)} status={control.status === "OPEN" ? control.severity : control.status} amount={amountFor(control)} onOpen={() => openPanel(control.id)} actionLabel="Abrir" />)}
     </WorkQueue>

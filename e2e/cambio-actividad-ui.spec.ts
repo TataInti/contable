@@ -58,7 +58,7 @@ async function libroDelMesRevisado(page: Page, rotulo: string, facturas: Factura
   await page.getByRole("tab", { name: /Fuentes/ }).first().click();
   const { libro } = await cargarLibroVentas(page, facturas, nombre);
   await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
-  await expect(page.getByRole("dialog", { name: "Importar libros IVA" })).toBeHidden({ timeout: 60_000 });
+  await expect(page.getByRole("dialog", { name: "Importar libro de ventas" })).toBeHidden({ timeout: 60_000 });
   await revisarLotesDe(page, "Gestionar Ventas del período");
 }
 

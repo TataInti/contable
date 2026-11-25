@@ -27,6 +27,10 @@
   flex-wrap: wrap;
 }
 
+.profitability-view:not(:has(.profitability-totals)) {
+  padding: var(--ds-space-4);
+}
+
 .profitability-view__title {
   margin: 0;
   font-size: 1.15rem;
@@ -136,6 +140,12 @@
   margin: 0;
   font-size: 1.6rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.caja-fiscal__total {
+  margin: 0;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
