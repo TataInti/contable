@@ -361,9 +361,17 @@
 }
 
 .work-bar__inicio .ds-search-select:has(.workpaper-period-selector) {
-  flex: 0 1 200px;
-  min-inline-size: 170px;
-  max-inline-size: 200px;
+  flex: 0 1 420px;
+  min-inline-size: 340px;
+  max-inline-size: 420px;
+}
+/* A 1280 px la barra lleva además cliente, vencimiento y menús: el período (solo el mes) cede ancho (09-3). */
+@media (max-width: 1360px) {
+  .work-bar__inicio .ds-search-select:has(.workpaper-period-selector) {
+    flex-basis: 200px;
+    min-inline-size: 170px;
+    max-inline-size: 200px;
+  }
 }
 /* Cliente y CUIT al inicio de la barra del Legajo (09-1): cede ancho antes que el período y se corta con puntos suspensivos. */
 .work-bar__cliente {
