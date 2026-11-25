@@ -260,6 +260,15 @@ export function StudyExpedienteMensual() {
       ),
     enabled: Boolean(firmId && clientId && rangoAnterior),
   });
+  // Período fiscal del mes anterior (mismo impuesto): permite saltar a cerrarlo desde Saldos.
+  const periodoMesAnterior =
+    rangoAnterior && selectedTaxPeriod
+      ? selectableTaxPeriods.find(
+          (taxPeriod) =>
+            taxPeriod.taxTypeId === selectedTaxPeriod.taxTypeId &&
+            taxPeriod.startDate.slice(0, 10) === rangoAnterior.desde,
+        )
+      : undefined;
   const mesAnteriorCerrado = mesAnteriorQuery.isSuccess
     ? mesAnteriorQuery.data.some((wp) => wp.status === "FINALIZED")
     : undefined;
@@ -890,6 +899,7 @@ export function StudyExpedienteMensual() {
             periodoInicio={wp.periodStart}
             mesAnteriorCerrado={mesAnteriorCerrado}
             legajoFinalizado={wp.status === "FINALIZED"}
+            onIrAlMesAnterior={periodoMesAnterior ? () => cambiarPeriodo(periodoMesAnterior.id) : undefined}
           />
         ) : step === 1 ? (
           <EtapaFuentes
@@ -1409,7 +1419,7 @@ export function StudyExpedienteMensual() {
           () => void ledgerQuery.refetch(),
           ledgerQuery.isFetching ? "Actualizando…" : "Actualizar",
         )}
-        {soloLectura ? null : (
+        {soloLectura || vigente.status === "FINALIZED" ? null : (
           <Button
             size="sm"
             variant="secondary"
