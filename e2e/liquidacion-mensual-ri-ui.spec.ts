@@ -27,7 +27,7 @@ async function pick(campo: Locator, texto: string) {
  *      115.000) y percepciones de la DGR (TXT, 1.500,55).
  *   4. Cálculo sin mínimo: IIBB 4.025,00 − 1.500,55 = 2.524,45; TEM 690,00 < mínimo B → 10.028,00.
  *   5. Mínimo de IIBB 11.180 → aviso de desactualizado → Recalcular → 11.180,00 − 1.500,55 = 9.679,45.
- *   6. Controles: los 2 bloqueantes se resuelven con motivo desde la pantalla.
+ *   6. Controles: sin extracto ni caja cargados, los 2 controles quedan omitidos con aviso (no bloquean).
  *   7. Autorrevisión del titular: Enviar a revisión → Aprobar revisión (casilla activada en Usuarios y accesos → Controles).
  *   8. Cierre en pasos: Finalizar con confirmación; presentación con acuse, declaración jurada y pago de IIBB y TEM.
  *   9. No verificado en este spec: el saldo que pasa al mes siguiente. La declaración jurada de IIBB y TEM no origina
@@ -77,7 +77,6 @@ const FACTURAS = [
   { fecha: "2026-10-20", tipo: "1", numero: "3", docTipo: "80", docNumero: syntheticCuit(Number.parseInt(RUN, 36) + 4_003), denominacion: "Comensal E2E 3", neto: "25000.00", iva: "5250.00" },
 ];
 const PERCEPCION = { importe: "1500.55", fecha: "15/10/2026" };
-const MOTIVO_CONTROL = `E2E ${SUFFIX}: extracto bancario sintético no aportado en la corrida; se resuelve con motivo y queda registrado.`;
 /** Respaldos sintéticos (PDF mínimo) para el acuse y la declaración jurada; el contenido distinto evita el duplicado por hash. */
 const acuseSintetico = (etiqueta: string) => ({
   name: `acuse-${etiqueta}-${SUFFIX}.pdf`,
@@ -324,24 +323,11 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await esperarImporte(page, "9.679,45");
   });
 
-  await test.step("Controles: los dos bloqueantes se resuelven con motivo desde la pantalla", async () => {
+  await test.step("Controles: sin extracto ni caja, los dos controles quedan omitidos con aviso y no bloquean", async () => {
     await page.getByRole("tab", { name: /^Controles/ }).click();
-    for (const nombre of ["Acreditaciones bancarias vs. facturación", "Caja e imputaciones del período"]) {
-      const queue = page.getByRole("list", { name: "Controles abiertos" });
-      const rows = queue.getByRole("listitem").filter({ hasText: nombre });
-      const cantidadEsperada = 1; // El caso IIBB+TEM presenta una fila de cada control automático en la cola del legajo.
-      await expect(rows, `«${nombre}» aparece una vez en el legajo IIBB+TEM`).toHaveCount(cantidadEsperada);
-      for (let resuelto = 0; resuelto < cantidadEsperada; resuelto += 1) {
-        await rows.first().getByRole("button", { name: /Abrir/ }).click();
-        const drawer = page.getByRole("dialog");
-        await drawer.getByRole("button", { name: "Resolver", exact: true }).click();
-        await drawer.getByLabel("Motivo").fill(MOTIVO_CONTROL);
-        await mutating(page, "/resolve", () => drawer.getByRole("button", { name: "Confirmar resolución", exact: true }).click());
-        await expect(drawer).toBeHidden();
-        await expect(rows, `«${nombre}»: queda ${cantidadEsperada - resuelto - 1} sin resolver`).toHaveCount(cantidadEsperada - resuelto - 1);
-      }
-      await expect(rows, `«${nombre}» no reaparece en abiertos`).toHaveCount(0);
-    }
+    // D6: sin extracto bancario ni movimientos de caja, los dos controles no bloquean: quedan «Omitido» a la vista.
+    await expect(page.getByRole("list", { name: "Controles omitidos" })).toContainText("Omitido: no hay extracto cargado");
+    await expect(page.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem").filter({ hasText: /Acreditaciones bancarias|Caja e imputaciones/ })).toHaveCount(0);
     await expect(page.getByText("bloqueantes abiertos")).toHaveCount(0);
   });
 

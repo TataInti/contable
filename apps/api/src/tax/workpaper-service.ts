@@ -239,6 +239,10 @@ export interface WorkpaperCreateInput {
  * Control bloqueante abierto: impide enviar el expediente a revisión y cerrarlo.
  * Un solo predicado para ambos casos (P3): el envío y el cierre lo usan.
  */
+/** Texto visible de un control automático omitido por falta de datos en su fuente. */
+export const CONTROL_OMITIDO_SIN_EXTRACTO = "Omitido: no hay extracto cargado";
+export const CONTROL_OMITIDO_SIN_CAJA = "Omitido: no hay movimientos de caja ni imputaciones cargadas";
+
 export function esControlBloqueanteAbierto(control: { severity: string; status: string }): boolean {
   return control.severity === "BLOCKING" && control.status === "OPEN";
 }
@@ -556,6 +560,8 @@ export class MonthlyWorkpaperService {
       components: Array<{ taxTypeCode: string; settlementId: string }>;
       allocationsReady: boolean;
       allocationsCount: number;
+      /** Movimientos del extracto bancario dentro del período (0 = no hay extracto cargado). */
+      bankMovementsCount: number;
       /** Año del período: las tildes de comprobantes del cliente se guardan por año (corte 4B). */
       periodYear: number;
     },
@@ -695,7 +701,8 @@ export class MonthlyWorkpaperService {
         (sum, classification) => sum.plus(classification.voucher.total.abs()),
         new Prisma.Decimal(0),
       );
-    const bankApplicable = billedSales.greaterThan(0);
+    // Un control cuya fuente no tiene datos no bloquea: queda «Omitido» con el motivo a la vista.
+    const bankApplicable = billedSales.greaterThan(0) && input.bankMovementsCount > 0;
     // Comprobantes de venta que no corresponden al perfil del cliente (corte 4B): un control bloqueante por grupo.
     const permitidoPerfil = await loadPerfilPermitido(tx, {
       firmId: input.firmId,
@@ -717,15 +724,28 @@ export class MonthlyWorkpaperService {
       severity: bankApplicable ? "BLOCKING" : "INFO",
       status: bankApplicable ? "OPEN" : "RESOLVED",
       expected: billedSales,
-      ...(!bankApplicable ? { resolution: "No hay ventas que conciliar en el período" } : {}),
+      ...(!bankApplicable
+        ? {
+            resolution: billedSales.greaterThan(0)
+              ? CONTROL_OMITIDO_SIN_EXTRACTO
+              : "No hay ventas que conciliar en el período",
+          }
+        : {}),
     });
-    const cashApplicable = classifications.length > 0 || input.allocationsCount > 0;
+    // Caja: aplica si hay movimientos cargados o imputaciones fiscales pendientes; sin datos de la fuente, se omite.
+    const cashApplicable =
+      input.bankMovementsCount > 0 || (input.allocationsCount > 0 && !input.allocationsReady);
     await ensure({
       code: "CASH_ALLOCATION_RECONCILIATION",
       severity: cashApplicable ? "BLOCKING" : "INFO",
       status: cashApplicable ? "OPEN" : "RESOLVED",
       ...(!cashApplicable
-        ? { resolution: "No hay movimientos de caja o imputaciones que conciliar" }
+        ? {
+            resolution:
+              classifications.length > 0
+                ? CONTROL_OMITIDO_SIN_CAJA
+                : "No hay movimientos de caja o imputaciones que conciliar",
+          }
         : !input.allocationsReady
         ? { resolution: "Hay imputaciones fiscales pendientes" }
         : {}),
@@ -1200,12 +1220,21 @@ export class MonthlyWorkpaperService {
         clientId: wp.clientId,
         year: wp.periodStart.getUTCFullYear(),
       });
+      // Extracto bancario del período: si no hay movimientos, el control de acreditaciones se omite con aviso.
+      const bankMovementsCount = await tx.bankMovement.count({
+        where: {
+          firmId: ctx.firmId,
+          clientId: wp.clientId,
+          valueDate: { gte: wp.periodStart, lte: wp.periodEnd },
+        },
+      });
       const inputHash = taxHash({
         workpaperId: wp.id,
         clientId: wp.clientId,
         periodStart: wp.periodStart.toISOString(),
         periodEnd: wp.periodEnd.toISOString(),
         revision: wp.revision,
+        ...(bankMovementsCount > 0 ? { bankMovements: bankMovementsCount } : {}),
         voucherProfile: { clases: [...permitidoCalculo.clases], exentos: permitidoCalculo.exentos },
         settlements: results
           .map((result) => ({
@@ -1269,6 +1298,7 @@ export class MonthlyWorkpaperService {
         })),
         allocationsReady: allocations.ready,
         allocationsCount: allocations.total,
+        bankMovementsCount,
       });
 
       const updated = await tx.monthlyTaxWorkpaper.update({
@@ -2521,59 +2551,100 @@ export class MonthlyWorkpaperService {
       evidenceDocumentId?: string;
     },
   ) {
+    return withTenantContext(ctx, (tx) => this.resolveControlWithTransaction(ctx, tx, workpaperId, findingId, input));
+  }
+
+  /**
+   * Resuelve de una vez todos los controles bloqueantes abiertos del expediente con un solo motivo.
+   * Los controles «no corresponde al perfil» se excluyen: tienen su propia acción por grupo.
+   * Es atómico: si uno no se puede resolver (p. ej. eximir sin ser revisor distinto), no se resuelve ninguno.
+   */
+  async resolveOpenControls(
+    ctx: TenantContext,
+    workpaperId: string,
+    input: { resolution: string; status: "RESOLVED" | "WAIVED" },
+  ) {
     return withTenantContext(ctx, async (tx) => {
-      const finding = await tx.taxControlFinding.findFirst({
-        where: { id: findingId, firmId: ctx.firmId, workpaperId },
-      });
-      if (!finding) throw new WorkpaperError("WORKPAPER_NOT_FOUND", "Control no encontrado");
-      if (finding.status !== "OPEN") {
-        throw new WorkpaperError("INVALID_TRANSITION", "El control ya fue resuelto");
-      }
-      // El respaldo documental es opcional: lo que se exige es la explicación escrita
-      // (la valida la ruta). Si se adjunta un documento, debe ser del cliente y estar listo.
-      if (input.evidenceDocumentId) {
-        const evidence = await tx.document.findFirst({
-          where: {
-            id: input.evidenceDocumentId,
-            firmId: ctx.firmId,
-            clientId: finding.clientId,
-            status: { in: ["READY", "APPLIED", "REVIEWED"] },
-          },
-        });
-        if (!evidence) {
-          throw new WorkpaperError(
-            "BLOCKING_CONTROLS",
-            "La evidencia del control debe pertenecer al cliente y estar lista o revisada",
-          );
-        }
-      }
-      // F1.5: un waiver de un control bloqueante exige un revisor autorizado
-      // distinto del preparador del expediente (maker-checker).
-      if (input.status === "WAIVED" && finding.severity === "BLOCKING") {
-        const wp = await tx.monthlyTaxWorkpaper.findFirst({
-          where: { id: workpaperId, firmId: ctx.firmId },
-          select: { preparedByUserId: true },
-        });
-        if (wp?.preparedByUserId === ctx.userId) {
-          throw new WorkpaperError(
-            "MAKER_CHECKER_VIOLATION",
-            "El preparador no puede eximir un control bloqueante de su propio expediente",
-          );
-        }
-      }
-      return tx.taxControlFinding.update({
-        where: { id: findingId },
-        data: {
-          status: input.status,
-          resolution: input.resolution.trim(),
-          ...(input.evidenceDocumentId
-            ? { evidenceDocumentId: input.evidenceDocumentId }
-            : {}),
-          resolvedByUserId: ctx.userId,
+      const open = await tx.taxControlFinding.findMany({
+        where: {
+          firmId: ctx.firmId,
+          workpaperId,
+          status: "OPEN",
+          severity: "BLOCKING",
+          NOT: { code: { startsWith: PREFIJO_CONTROL_PERFIL } },
         },
+        orderBy: { createdAt: "asc" },
       });
+      const resolved = [];
+      for (const finding of open) {
+        resolved.push(await this.resolveControlWithTransaction(ctx, tx, workpaperId, finding.id, input));
+      }
+      return resolved;
     });
   }
+
+  private async resolveControlWithTransaction(
+    ctx: TenantContext,
+    tx: Prisma.TransactionClient,
+    workpaperId: string,
+    findingId: string,
+    input: {
+      resolution: string;
+      status: "RESOLVED" | "WAIVED";
+      evidenceDocumentId?: string;
+    },
+  ) {
+    const finding = await tx.taxControlFinding.findFirst({
+      where: { id: findingId, firmId: ctx.firmId, workpaperId },
+    });
+    if (!finding) throw new WorkpaperError("WORKPAPER_NOT_FOUND", "Control no encontrado");
+    if (finding.status !== "OPEN") {
+      throw new WorkpaperError("INVALID_TRANSITION", "El control ya fue resuelto");
+    }
+    // El respaldo documental es opcional: lo que se exige es la explicación escrita
+    // (la valida la ruta). Si se adjunta un documento, debe ser del cliente y estar listo.
+    if (input.evidenceDocumentId) {
+      const evidence = await tx.document.findFirst({
+        where: {
+          id: input.evidenceDocumentId,
+          firmId: ctx.firmId,
+          clientId: finding.clientId,
+          status: { in: ["READY", "APPLIED", "REVIEWED"] },
+        },
+      });
+      if (!evidence) {
+        throw new WorkpaperError(
+          "BLOCKING_CONTROLS",
+          "La evidencia del control debe pertenecer al cliente y estar lista o revisada",
+        );
+      }
+    }
+    // F1.5: un waiver de un control bloqueante exige un revisor autorizado
+    // distinto del preparador del expediente (maker-checker).
+    if (input.status === "WAIVED" && finding.severity === "BLOCKING") {
+      const wp = await tx.monthlyTaxWorkpaper.findFirst({
+        where: { id: workpaperId, firmId: ctx.firmId },
+        select: { preparedByUserId: true },
+      });
+      if (wp?.preparedByUserId === ctx.userId) {
+        throw new WorkpaperError(
+          "MAKER_CHECKER_VIOLATION",
+          "El preparador no puede eximir un control bloqueante de su propio expediente",
+        );
+      }
+    }
+    return tx.taxControlFinding.update({
+      where: { id: findingId },
+      data: {
+        status: input.status,
+        resolution: input.resolution.trim(),
+        ...(input.evidenceDocumentId
+          ? { evidenceDocumentId: input.evidenceDocumentId }
+          : {}),
+        resolvedByUserId: ctx.userId,
+      },
+    });
+}
 
   // ------------------------------------------------------------------
   // Revisión y cierre

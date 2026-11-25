@@ -625,22 +625,12 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     test.info().annotations.push({ type: "controles · controles de pantalla", description: controls.join(" | ").slice(0, 1200) });
   });
 
-  await test.step("Legajo: resolver los dos controles bloqueantes con el comprobante aprobado como respaldo", async () => {
+  await test.step("Legajo: sin extracto ni caja, los dos controles quedan omitidos y no hace falta respaldo", async () => {
     // Acreditaciones bancarias y caja piden respaldo documental. Se usa el ticket aprobado: es lo único que
     // hay cargado y alcanza para recorrer el circuito (no es un respaldo real de acreditaciones bancarias).
     const card = page.locator(".work-page").first();
-    for (const control of ["BANK_CREDIT_RECONCILIATION", "CASH_ALLOCATION_RECONCILIATION"]) {
-      const row = page.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem").filter({ hasText: control === "BANK_CREDIT_RECONCILIATION" ? "Acreditaciones bancarias vs. facturación" : "Caja e imputaciones del período" }).first();
-      await row.getByRole("button", { name: /Abrir/ }).click();
-      const drawer = page.getByRole("dialog");
-      await drawer.getByRole("button", { name: "Resolver", exact: true }).click();
-      await drawer.getByLabel("Motivo").fill("Conciliado contra el comprobante de respaldo cargado en la bandeja.");
-      await pickOption(drawer.getByLabel(`Evidencia ${control}`), "ticket-mesa-8");
-      await mutating(page, "/controls", () =>
-        drawer.getByRole("button", { name: "Confirmar resolución", exact: true }).click(),
-      );
-      await expect(drawer).toBeHidden();
-    }
+    await expect(page.getByRole("list", { name: "Controles omitidos" })).toContainText("Omitido: no hay extracto cargado");
+    await expect(page.getByRole("list", { name: "Controles abiertos" }).getByRole("listitem").filter({ hasText: /Acreditaciones bancarias|Caja e imputaciones/ })).toHaveCount(0);
     await page.waitForTimeout(1500);
     test.info().annotations.push({ type: "legajo · Controles tras resolver", description: (await card.innerText()).replace(/\s+/g, " ").slice(0, 1200) });
   });
