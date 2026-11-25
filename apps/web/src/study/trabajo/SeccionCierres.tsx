@@ -1,4 +1,3 @@
-import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, EmptyState, Table } from "@contable/design-system";
 import { StatusBadge } from "../../ui/StatusBadge";
@@ -15,7 +14,8 @@ interface SeccionCierresProps {
   finalizeClose: UseMutationResult<unknown, Error, string>;
   confirm: ReturnType<typeof useConfirmAction>;
   activeFiscalYear: FiscalYear | undefined;
-  setShowClose: Dispatch<SetStateAction<boolean>>;
+  periodId: string | null;
+  setShowClose: (abrir: boolean) => void;
 }
 
 export function SeccionCierres({
@@ -26,31 +26,33 @@ export function SeccionCierres({
   finalizeClose,
   confirm,
   activeFiscalYear,
+  periodId,
   setShowClose,
 }: SeccionCierresProps) {
-  // Sin cierres, la sección es una línea («Cierres · 0 · Iniciar cierre»), no una caja vacía.
-  if (!closes.isLoading && !closes.isError && openCloses.length === 0) {
-    return (
-      <section className="work-line" id="work-closes-section">
-        <h2>Cierres</h2>
-        <span className="section-count">0</span>
-        {capabilities.has("period.soft_close") ? (
-          <Button size="sm" variant="ghost" onClick={() => setShowClose(true)}>
-            Iniciar cierre
-          </Button>
-        ) : null}
-      </section>
-    );
-  }
+  const puedeIniciar = capabilities.has("period.soft_close");
+  const iniciar = (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={!periodId || !activeFiscalYear}
+      title={
+        !activeFiscalYear ? "Seleccioná un período contable para abrir el cierre" : undefined
+      }
+      onClick={() => setShowClose(true)}
+    >
+      Iniciar cierre
+    </Button>
+  );
   return (
     <>
       <>
         <section className="study-panel" id="work-closes-section">
           <div className="study-panel__heading">
             <div>
-              <h2>Cierres</h2>
+              <h2>Cierres del período</h2>
             </div>
             <span className="section-count">{openCloses.length}</span>
+            {puedeIniciar && openCloses.length > 0 ? iniciar : null}
           </div>
           {closes.isLoading ? (
             <div className="query-state query-state--compact">
@@ -133,11 +135,21 @@ export function SeccionCierres({
           ) : (
             <EmptyState
               size="compact"
-              title="Sin ciclos de cierre"
+              title="Sin cierres en curso"
               description="Cuando se abra un cierre vas a ver su avance acá."
               action={
-                capabilities.has("period.soft_close") && activeFiscalYear ? (
-                  <Button size="sm" variant="secondary" onClick={() => setShowClose(true)}>
+                puedeIniciar ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={!periodId || !activeFiscalYear}
+                    title={
+                      !activeFiscalYear
+                        ? "Seleccioná un período contable para abrir el cierre"
+                        : undefined
+                    }
+                    onClick={() => setShowClose(true)}
+                  >
                     Iniciar cierre
                   </Button>
                 ) : undefined

@@ -6,7 +6,7 @@ import { api, type FiscalYear } from "../lib/api";
 import { useClientContext } from "../context/ClientContext";
 import { Icon } from "../ui/Icon";
 import { ConfirmDialog, useConfirmAction } from "../ui/ConfirmAction";
-import { DenseHeader, DensePage, StatStrip, useDensity } from "../ui/Dense";
+import { DenseHeader, DensePage, useDensity } from "../ui/Dense";
 import "./study.css";
 import type { CloseCycle, EvidencePreview, Obligation, RequestThread, WorkDocumentRequest } from "./trabajo/tipos";
 import { filasDeObligaciones } from "./trabajo/obligaciones";
@@ -247,6 +247,7 @@ export function StudyTrabajo() {
     setUploadOpen(true);
   };
   const obligationRows = filasDeObligaciones(obligations.data, selectedAccountingPeriod);
+  const pendingObligationRows = obligationRows.filter((row) => row.status !== "PAID");
   const openCloses = (closes.data ?? []).filter((item) => item.status !== "FINALIZED");
   const conversationRequest = activeConversation
     ? (requests.data ?? []).find((item) => item.id === activeConversation.requestId)
@@ -284,24 +285,6 @@ export function StudyTrabajo() {
               Subir documento
             </Button>
           ) : null}
-          {capabilities.has("period.soft_close") ? (
-            <Button
-              onClick={() => {
-                setShowRequest(false);
-                setShowClose((value) => !value);
-              }}
-              variant={showClose ? "secondary" : "ghost"}
-              disabled={!periodId || !activeFiscalYear}
-              title={
-                !activeFiscalYear
-                  ? "Seleccioná un período contable para abrir el cierre"
-                  : undefined
-              }
-            >
-              <Icon name={showClose ? "close" : "tasks"} size={17} />
-              {showClose ? "Cancelar cierre" : "Iniciar cierre"}
-            </Button>
-          ) : null}
           {capabilities.has("request.manage") ? (
             <Button
               onClick={() => {
@@ -318,18 +301,6 @@ export function StudyTrabajo() {
           </>
         }
       />
-
-      <StatStrip
-        label="Resumen del trabajo"
-        items={[
-          { key: "requests", label: "Pedidos abiertos", value: activeRequests.length, tone: activeRequests.length > 0 ? "warn" : undefined },
-          { key: "closes", label: "Cierres en curso", value: openCloses.length },
-          { key: "obligations", label: "Obligaciones", value: obligationRows.length },
-        ]}
-      />
-
-
-
 
       {hasQueryError ? (
         <Notice tone="warning">
@@ -418,21 +389,26 @@ export function StudyTrabajo() {
           finalizeClose={finalizeClose}
           confirm={confirm}
           activeFiscalYear={activeFiscalYear}
-          setShowClose={setShowClose}
+          periodId={periodId}
+          setShowClose={(abrir) => {
+            setShowRequest(false);
+            setShowClose(abrir);
+          }}
+        />
+        <SeccionObligaciones
+          obligations={obligations}
+          obligationRows={pendingObligationRows}
+          allPaid={obligationRows.length > 0 && pendingObligationRows.length === 0}
+          capabilities={capabilities}
+          navigate={navigate}
+          abrirLegajo={(taxPeriodId) => {
+            if (firmId && clientId) {
+              abrirLegajoDeObligacion({ firmId, clientId, taxPeriodId, setClientId, navigate });
+            }
+          }}
         />
       </div>
 
-      <SeccionObligaciones
-        obligations={obligations}
-        obligationRows={obligationRows}
-        capabilities={capabilities}
-        navigate={navigate}
-        abrirLegajo={(taxPeriodId) => {
-          if (firmId && clientId) {
-            abrirLegajoDeObligacion({ firmId, clientId, taxPeriodId, setClientId, navigate });
-          }
-        }}
-      />
       <ConfirmDialog confirm={confirm} />
     </DensePage>
   );

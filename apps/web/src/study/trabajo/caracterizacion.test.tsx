@@ -156,16 +156,18 @@ function renderTrabajo() {
   );
 }
 
-function estadistica(nombre: string) {
-  const grupo = screen.getByRole("group", { name: "Resumen del trabajo" });
-  const item = Array.from(grupo.querySelectorAll(".dense-stat")).find(
-    (elemento) => elemento.querySelector(".dense-stat__label")?.textContent === nombre,
-  );
-  if (!item) throw new Error(`Falta la estadística «${nombre}»`);
-  return {
-    valor: item.querySelector(".dense-stat__value")?.textContent,
-    alerta: item.classList.contains("dense-stat--warn"),
-  };
+// 08-5: la tira de cifras se quitó; cada sección lleva su propio contador en el título.
+const SECCION_DE_CONTEO: Record<string, string> = {
+  "Pedidos abiertos": "work-requests-section",
+  "Cierres en curso": "work-closes-section",
+  Obligaciones: "work-obligations-section",
+};
+
+function conteoDe(nombre: string) {
+  const id = SECCION_DE_CONTEO[nombre];
+  const insignia = id ? document.querySelector(`#${id} .section-count`) : null;
+  if (!insignia) throw new Error(`Falta el contador de «${nombre}»`);
+  return insignia.textContent;
 }
 
 beforeEach(() => {
@@ -198,9 +200,17 @@ describe("K1 · encabezado de Trabajo", () => {
   it("con period.soft_close muestra «Iniciar cierre» ghost; con request.manage, «Pedir documentación» primario", async () => {
     usarContexto(["client.read", "period.soft_close"]);
     renderTrabajo();
-    const iniciar = await screen.findByRole("button", { name: "Iniciar cierre" });
+    // 08-1: «Iniciar cierre» vive en la sección «Cierres del período», no en el encabezado.
+    const iniciar = await within(
+      await waitFor(() => {
+        const encabezado = document.querySelector(".dense-head__actions");
+        const seccionCierres = document.getElementById("work-closes-section");
+        if (!encabezado || !seccionCierres) throw new Error("Falta el encabezado o la sección");
+        expect(within(encabezado as HTMLElement).queryByRole("button", { name: "Iniciar cierre" })).toBeNull();
+        return seccionCierres;
+      }),
+    ).findByRole("button", { name: "Iniciar cierre" });
     await waitFor(() => expect((iniciar as HTMLButtonElement).disabled).toBe(false));
-    expect(iniciar.className).toContain("ds-button--ghost");
     expect(screen.queryByRole("button", { name: "Pedir documentación" })).toBeNull();
 
     cleanup();
@@ -245,21 +255,19 @@ describe("K2 · banda de cifras", () => {
     });
     renderTrabajo();
     await waitFor(() => {
-      expect(estadistica("Pedidos abiertos").valor).toBe("2");
-      expect(estadistica("Cierres en curso").valor).toBe("1");
-      expect(estadistica("Obligaciones").valor).toBe("2");
+      expect(conteoDe("Pedidos abiertos")).toBe("2");
+      expect(conteoDe("Cierres en curso")).toBe("1");
+      expect(conteoDe("Obligaciones")).toBe("2");
     });
-    expect(estadistica("Pedidos abiertos").alerta).toBe(true);
-    expect(estadistica("Cierres en curso").alerta).toBe(false);
   });
 
   it("mientras las consultas están pendientes, la banda muestra 0 en las tres cifras", () => {
     vi.mocked(api.get).mockImplementation((() => new Promise(() => undefined)) as never);
     renderTrabajo();
     // vigente: cambia con D7C-17 (hoy 0 mientras carga; el corte 7c.2 muestra «pendiente»)
-    expect(estadistica("Pedidos abiertos").valor).toBe("0");
-    expect(estadistica("Cierres en curso").valor).toBe("0");
-    expect(estadistica("Obligaciones").valor).toBe("0");
+    expect(conteoDe("Pedidos abiertos")).toBe("0");
+    expect(conteoDe("Cierres en curso")).toBe("0");
+    expect(conteoDe("Obligaciones")).toBe("0");
   });
 });
 
@@ -358,7 +366,7 @@ describe("K4 · pedidos cancelados", () => {
     renderTrabajo();
     const fila = await filaDePedido("Demo: Pedido cancelado");
     // vigente: cambia con D7C-4 (hoy el pedido cancelado cuenta como abierto y se lista)
-    await waitFor(() => expect(estadistica("Pedidos abiertos").valor).toBe("1"));
+    await waitFor(() => expect(conteoDe("Pedidos abiertos")).toBe("1"));
     expect(fila.getByText("Cancelado")).toBeTruthy();
   });
 });
@@ -601,10 +609,10 @@ describe("K8 · cierres", () => {
     expect(within(fila).queryByRole("button")).toBeNull();
   });
 
-  it("sin ciclos abiertos muestra «Cierres» con 0 y «Iniciar cierre» que abre el cajón", async () => {
+  it("sin ciclos abiertos muestra «Cierres del período» con 0 y «Iniciar cierre» que abre el cajón", async () => {
     responderApi({ cierres: [{ id: "close-3", status: "FINALIZED", workItems: [] }] });
     renderTrabajo();
-    expect(await seccion("work-closes-section").findByText("Cierres")).toBeTruthy();
+    expect(await seccion("work-closes-section").findByText("Cierres del período")).toBeTruthy();
     await waitFor(() =>
       expect(
         seccion("work-closes-section").getByRole("button", { name: "Iniciar cierre" }),
@@ -670,7 +678,7 @@ describe("K9 · próximas obligaciones", () => {
     responderApi({ obligaciones: [] });
     renderTrabajo();
     expect(
-      await seccion("work-obligations-section").findByText("Sin vencimientos configurados para este cliente."),
+      await seccion("work-obligations-section").findByText("Sin obligaciones materializadas"),
     ).toBeTruthy();
     fireEvent.click(
       seccion("work-obligations-section").getByRole("button", { name: "Configurar obligaciones" }),
