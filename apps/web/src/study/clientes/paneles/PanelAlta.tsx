@@ -19,6 +19,7 @@ export interface FormularioAlta {
   contactEmail: string;
   vatCondition: string;
   province: string;
+  fiscalAddress: string;
   activity: string;
   legalForm: string;
 }
@@ -124,6 +125,7 @@ export function PanelAlta({
           options={CLIENT_VAT_CONDITIONS.map((condition) => ({ value: condition, label: CLIENT_VAT_CONDITION_LABELS[condition] }))}
         />
         <SearchSelect id="client-province" name="province" className="ctxbar__input" label="Provincia" value={form.province} onChange={(province) => setForm({ ...form, province })} options={ARGENTINA_PROVINCES.map((province) => ({ value: province, label: province }))} />
+        <Field id="client-fiscal-address" label="Domicilio fiscal (opcional)" value={form.fiscalAddress} onChange={(event) => setForm({ ...form, fiscalAddress: event.target.value })} hint="Si es San Miguel de Tucumán, se propondrá TEM junto con IIBB." />
         <div>
           <SearchSelect id="client-activity" name="activity" className="ctxbar__input" label="Actividad principal" value={form.activity} onChange={(activity) => setForm({ ...form, activity })} options={activeActivityEntries.map((activity) => { const value = clientEconomicActivityValue(activity); return { value, label: value }; })} />
           {sinRespuesta(clientActivityCatalog) ? <small role="status">Cargando catálogo de actividades…</small> : null}

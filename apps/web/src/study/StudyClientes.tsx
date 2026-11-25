@@ -105,6 +105,7 @@ export function StudyClientes() {
     contactEmail: "",
     vatCondition: "",
     province: "",
+    fiscalAddress: "",
     activity: "",
     legalForm: "",
   });
@@ -177,6 +178,7 @@ export function StudyClientes() {
         ...(submittedForm.tradeName.trim() ? { tradeName: submittedForm.tradeName.trim() } : {}),
         ...(submittedForm.vatCondition ? { vatCondition: submittedForm.vatCondition } : {}),
         ...(submittedForm.province ? { province: submittedForm.province } : {}),
+        ...(submittedForm.fiscalAddress.trim() ? { fiscalAddress: submittedForm.fiscalAddress.trim() } : {}),
         ...(submittedForm.activity ? { activity: submittedForm.activity } : {}),
         ...(submittedForm.legalForm ? { legalForm: submittedForm.legalForm } : {}),
       }),
@@ -218,6 +220,7 @@ export function StudyClientes() {
         contactEmail: "",
         vatCondition: "",
         province: "",
+        fiscalAddress: "",
         activity: "",
         legalForm: "",
       });

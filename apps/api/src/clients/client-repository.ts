@@ -339,6 +339,7 @@ export class ClientRepository {
             cuit: input.cuit,
             personType: prefix === "30" || prefix === "33" ? "JURIDICA" : "FISICA",
             nationalCondition: input.vatCondition,
+            ...(input.fiscalAddress ? { fiscalAddress: input.fiscalAddress } : {}),
             fiscalYearEndMonth: 12,
             validFrom: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)),
             status: "ACTIVE",
