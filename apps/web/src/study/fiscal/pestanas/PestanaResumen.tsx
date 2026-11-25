@@ -2,9 +2,8 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import type { Dispatch, SetStateAction } from "react";
 import { Button, EmptyState } from "@contable/design-system";
 import type { ClientConfigurationMissing } from "@contable/contracts";
-import { formatCuit } from "../../../lib/cuit";
 import { StatusBadge } from "../../../ui/StatusBadge";
-import { CONDITION_LABELS, today, type ClientActivityLink, type FiscalStep, type FiscalTab, type Mutacion, type ProfileForm, type TaxPeriod, type TaxRegistration, type TaxpayerProfileVersion } from "../utilidades";
+import { CONDITION_LABELS, today, type FiscalStep, type Mutacion, type ProfileForm, type TaxpayerProfileVersion } from "../utilidades";
 
 type Props = {
   configuracionCompleta: boolean;
@@ -20,15 +19,9 @@ type Props = {
   setProfileId: Dispatch<SetStateAction<string | null>>;
   setForm: Dispatch<SetStateAction<ProfileForm>>;
   openStepForm: (paso: FiscalStep) => void;
-  periodsQuery: UseQueryResult<TaxPeriod[]>;
-  activeRegistrations: TaxRegistration[];
-  currentActivities: ClientActivityLink[];
-  periodsWithObligation: number;
-  periodsWithoutObligation: number;
-  setTab: Dispatch<SetStateAction<FiscalTab>>;
 };
 
-export function PestanaResumen({ configuracionCompleta, faltantes, abrirFaltante, canWrite, latestProfile, profileQuery, showProfileHistory, setShowProfileHistory, submitReview, activate, setProfileId, setForm, openStepForm, periodsQuery, activeRegistrations, currentActivities, periodsWithObligation, periodsWithoutObligation, setTab }: Props) {
+export function PestanaResumen({ configuracionCompleta, faltantes, abrirFaltante, canWrite, latestProfile, profileQuery, showProfileHistory, setShowProfileHistory, submitReview, activate, setProfileId, setForm, openStepForm }: Props) {
   return (
     <>
       {configuracionCompleta ? (
@@ -47,7 +40,6 @@ export function PestanaResumen({ configuracionCompleta, faltantes, abrirFaltante
           <>
             <dl className="fiscal-facts">
               <div><dt>Razón social</dt><dd>{latestProfile.legalName}</dd></div>
-              <div><dt>CUIT</dt><dd>{formatCuit(latestProfile.cuit)}</dd></div>
               <div><dt>Tipo</dt><dd>{latestProfile.personType === "JURIDICA" ? "Persona jurídica" : "Persona física"}</dd></div>
               <div><dt>Condición</dt><dd>{CONDITION_LABELS[latestProfile.nationalCondition]}</dd></div>
               <div><dt>Domicilio fiscal</dt><dd>{latestProfile.fiscalAddress?.trim() || "No cargado"}</dd></div>
@@ -75,44 +67,6 @@ export function PestanaResumen({ configuracionCompleta, faltantes, abrirFaltante
             }
           />
         )}
-      </section>
-
-      <section className="fiscal-section" aria-labelledby="fiscal-setup-title">
-        <div className="fiscal-section__heading">
-          <h2 id="fiscal-setup-title">Configuración vigente</h2>
-        </div>
-        <dl className="fiscal-overview">
-          <div>
-            <dt>Regímenes</dt>
-            <dd>
-              {activeRegistrations.length === 0
-                ? <span className="muted-copy">Sin regímenes adheridos</span>
-                : activeRegistrations.map((row) => <span key={row.id} className="fiscal-overview__item">{row.regime.name}</span>)}
-            </dd>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setTab("regimenes")}>Ver regímenes</Button>
-          </div>
-          <div>
-            <dt>Actividades</dt>
-            <dd>
-              {currentActivities.length === 0
-                ? <span className="muted-copy">Sin actividades vinculadas</span>
-                : currentActivities.map((row) => <span key={row.id} className="fiscal-overview__item">{row.activity.code} · {row.activity.name}</span>)}
-            </dd>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setTab("actividades")}>Ver actividades</Button>
-          </div>
-          <div>
-            <dt>Períodos</dt>
-            <dd>
-              {(periodsQuery.data?.length ?? 0) === 0
-                ? <span className="muted-copy">Sin períodos fiscales</span>
-                : <span className="fiscal-overview__item">
-                    {periodsQuery.data?.length} {periodsQuery.data?.length === 1 ? "período" : "períodos"} · {periodsWithObligation} con obligación
-                    {periodsWithoutObligation > 0 ? ` · ${periodsWithoutObligation} sin obligación` : ""}
-                  </span>}
-            </dd>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setTab("periodos")}>Ver períodos</Button>
-          </div>
-        </dl>
       </section>
     </>
   );

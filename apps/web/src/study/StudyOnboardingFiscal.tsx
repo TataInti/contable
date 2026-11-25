@@ -333,16 +333,12 @@ export function StudyOnboardingFiscal() {
   });
   const hasActiveProfile = (profileQuery.data ?? []).some((profile) => profile.status === "ACTIVE");
   const stepStatusLabel = (key: FiscalStep) => stepStatusLabelFor(key, stepCompletion, hasActiveProfile);
-  const activeRegistrations = (registrationsQuery.data ?? []).filter((row) => row.status === "ACTIVE");
-  const currentActivities = (clientActivitiesQuery.data ?? []).filter((row) => !row.validTo);
   const obligationByPeriod = new Map((obligationsQuery.data ?? []).map((obligation) => [obligation.period.id, obligation]));
-  const periodsWithObligation = (periodsQuery.data ?? []).filter((period) => obligationByPeriod.has(period.id)).length;
-  const periodsWithoutObligation = (periodsQuery.data?.length ?? 0) - periodsWithObligation;
   return (
     <DensePage density={density} flow>
       <DenseHeader
         title="Configuración fiscal"
-        description="Datos del contribuyente, regímenes, actividades, períodos y obligaciones del cliente."
+        description={clientQuery.data?.legalName ?? "Cliente"}
         actions={
           nextRequiredStep && canWrite ? (
             <Button onClick={() => openStepForm(nextRequiredStep.key)}>
@@ -355,7 +351,7 @@ export function StudyOnboardingFiscal() {
       />
 
       {clientQuery.data ? (
-        <dl className="fiscal-overview" aria-label="Cliente">
+        <dl className="fiscal-overview fiscal-overview--inline" aria-label="Cliente">
           <div>
             <dt>CUIT</dt>
             <dd className="tabular-copy">{formatCuit(clientQuery.data.cuit)}</dd>
@@ -375,9 +371,9 @@ export function StudyOnboardingFiscal() {
         onChange={setTab}
         tabs={[
           { id: "resumen", label: "Resumen" },
-          { id: "regimenes", label: "Regímenes", count: registrationsQuery.data?.length ?? 0 },
-          { id: "actividades", label: "Actividades", count: clientActivitiesQuery.data?.length ?? 0 },
-          { id: "periodos", label: "Períodos y obligaciones", count: periodsQuery.data?.length ?? 0 },
+          { id: "regimenes", label: "Regímenes" },
+          { id: "actividades", label: "Actividades" },
+          { id: "periodos", label: "Períodos y obligaciones" },
           { id: "comprobantes", label: "Comprobantes" },
         ]}
       />
@@ -390,7 +386,7 @@ export function StudyOnboardingFiscal() {
       >
         {failedQueries.length > 0 ? <AvisoConsultas failedQueries={failedQueries} /> : null}
 
-        {tab === "resumen" ? <PestanaResumen faltantes={faltantes} abrirFaltante={abrirFaltante} configuracionCompleta={configuracionCompleta} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} periodsQuery={periodsQuery} activeRegistrations={activeRegistrations} currentActivities={currentActivities} periodsWithObligation={periodsWithObligation} periodsWithoutObligation={periodsWithoutObligation} setTab={setTab} /> : null}
+        {tab === "resumen" ? <PestanaResumen faltantes={faltantes} abrirFaltante={abrirFaltante} configuracionCompleta={configuracionCompleta} canWrite={canWrite} latestProfile={latestProfile} profileQuery={profileQuery} showProfileHistory={showProfileHistory} setShowProfileHistory={setShowProfileHistory} submitReview={submitReview} activate={activate} setProfileId={setProfileId} setForm={setForm} openStepForm={openStepForm} /> : null}
         {tab === "comprobantes" && firmId && clientId ? <PestanaComprobantes firmId={firmId} clientId={clientId} canWrite={canWrite} /> : null}
         {tab === "regimenes" ? <PestanaRegimenes canWrite={canWrite} openStepForm={openStepForm} registrationsQuery={registrationsQuery} cancelRegistration={cancelRegistration} corregirFecha={corregirInscripcion} confirm={confirm} categoriaTem={categoriaTem.fila} categoriaMonotributo={filaMonotributo} /> : null}
         {tab === "actividades" ? <PestanaActividades canWrite={canWrite} openStepForm={openStepForm} clientActivitiesQuery={clientActivitiesQuery} endActivity={endActivity} corregirFecha={(row) => { updateActivity.reset(); setActivityToEdit(row); }} registrarCambio={() => { registerChange.reset(); setChangeOpen(true); }} confirm={confirm} renderEstado={renderEstadoActividad} /> : null}
