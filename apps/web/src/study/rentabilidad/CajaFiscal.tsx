@@ -12,6 +12,7 @@ import {
 } from "@contable/design-system";
 import { useClientContext } from "../../context/ClientContext";
 import { ApiError, api, type FiscalYear } from "../../lib/api";
+import { formatearMes } from "../../lib/formatoFechas";
 import { abrirClienteDelPanel } from "../panel/abrirCliente";
 
 /*
@@ -35,7 +36,17 @@ const ESTADO: Record<Datos["estado"], { status: string; label: string }> = {
 
 const formatoPesos = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" });
 const pesos = (valor: string) => formatoPesos.format(Number(valor));
-const etiqueta = (f: Faltante) => `${f.impuesto} · ${f.periodo} · ${f.regimen}`;
+const nombresRegimen: Record<string, string> = {
+  IIBB_LOCAL_TUC: "Ingresos Brutos Tucumán",
+  TEM_SMT: "Tributo Económico Municipal",
+  IVA_GENERAL: "IVA",
+  CONVENIO_MULTILATERAL: "Ingresos Brutos Convenio Multilateral",
+};
+const mesFiscal = (periodo: string) => {
+  const match = /^(\d{2})\/(\d{4})$/.exec(periodo);
+  return match ? formatearMes(`${match[2]}-${match[1]}-01`) : periodo;
+};
+const etiqueta = (f: Faltante) => `${nombresRegimen[f.regimen] ?? f.impuesto} · ${mesFiscal(f.periodo)}`;
 
 interface Fila {
   clave: string;
@@ -122,11 +133,11 @@ export function CajaFiscal({ periodo }: Props) {
       <header className="caja-fiscal__header">
         <div>
           <h3 id="caja-fiscal-titulo" className="caja-fiscal__title">
-            Saldo de caja fiscal
+            Saldo fiscal del mes
           </h3>
           <p className="caja-fiscal__meta">
-            {datos ? `Período fiscal ${datos.periodo.etiqueta} · ` : ""}
-            Base Caja fiscal, separada de Devengado y Caja
+            {datos ? `Período fiscal ${mesFiscal(datos.periodo.etiqueta)} · ` : ""}
+            Cálculo fiscal independiente del flujo de caja
           </p>
         </div>
         {datos ? (
@@ -137,8 +148,8 @@ export function CajaFiscal({ periodo }: Props) {
       <AsyncState
         loading={consulta.isLoading}
         error={consulta.isError}
-        loadingLabel="Calculando el saldo de caja fiscal…"
-        errorTitle="No se pudo calcular el saldo de caja fiscal"
+        loadingLabel="Calculando el saldo fiscal…"
+        errorTitle="No se pudo calcular el saldo fiscal"
         errorDescription={
           consulta.error instanceof ApiError ? consulta.error.message : "Reintentá en unos minutos."
         }
@@ -182,18 +193,22 @@ export function CajaFiscal({ periodo }: Props) {
       {datos?.estado === "SIN_DATOS" ? (
         <EmptyState
           size="compact"
-          title="Sin datos para calcular la caja fiscal"
-          description={`No hay comprobantes aprobados de ventas ni de compras en el período ${datos.periodo.etiqueta}. No se muestra un cero: no hay base para calcular.`}
+          title="Sin datos para calcular el saldo fiscal"
+          description={`No hay comprobantes aprobados de ventas ni de compras en el período ${mesFiscal(datos.periodo.etiqueta)}. No se muestra un cero: no hay base para calcular.`}
         />
       ) : null}
 
       {datos?.desglose ? (
         <Table<Fila>
-          aria-label="Desglose de la caja fiscal"
+          aria-label="Desglose del saldo fiscal"
           columns={COLUMNAS}
           rows={filasDesglose(datos, datos.desglose)}
           rowKey={(f) => f.clave}
         />
+      ) : null}
+
+      {datos?.desglose && datos.cifra !== null ? (
+        <p className="caja-fiscal__total">Total del saldo fiscal: <strong>{pesos(datos.cifra)}</strong></p>
       ) : null}
 
       {datos ? (
