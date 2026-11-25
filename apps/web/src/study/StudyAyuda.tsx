@@ -5,7 +5,6 @@ import "./study.css";
 import "./ayuda.css";
 
 const CHAPTERS = [
-  { id: "indice", label: "Índice" },
   { id: "principios", label: "Principios" },
   { id: "entrar", label: "Cómo entrar" },
   { id: "contexto", label: "Cliente y período" },
