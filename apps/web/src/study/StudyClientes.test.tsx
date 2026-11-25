@@ -962,7 +962,7 @@ describe("StudyClientes — cartera densa", () => {
     const form = drawer.querySelector("#client-create-form") as HTMLFormElement;
     expect(form.classList.contains("study-inline-form--client")).toBe(true);
     expect(form.classList.contains("client-create-form")).toBe(true);
-    expect(form.querySelectorAll(".ds-field")).toHaveLength(9);
+    expect(form.querySelectorAll(".ds-field")).toHaveLength(8);
 
     const createButton = within(drawer).getByRole("button", { name: "Guardar cliente" }) as HTMLButtonElement; // vigente: cambia con decisión de Inti (16-nov)
     expect(createButton.disabled).toBe(true);
