@@ -34,7 +34,6 @@ import type {
   CreditLot,
   EvidenceDocument,
   FiscalTaxPeriod,
-  PositionAction,
   TaxJurisdiction,
   TaxPosition,
   TaxRegime,
@@ -66,9 +65,7 @@ import { mesActualMonotributo } from "./fiscal/monotributo";
 import { PanelEditarSaldo } from "./legajo/paneles/PanelEditarSaldo";
 import { PanelLibrosIva } from "./legajo/paneles/PanelLibrosIva";
 import { PanelSaldoInicial } from "./legajo/paneles/PanelSaldoInicial";
-import { PanelPago } from "./legajo/paneles/PanelPago";
-import { PanelPresentacion } from "./legajo/paneles/PanelPresentacion";
-import { PanelDeclaracion } from "./legajo/paneles/PanelDeclaracion";
+import { PanelImpuesto } from "./legajo/paneles/PanelImpuesto";
 import { EtapaFuentes } from "./legajo/etapas/EtapaFuentes";
 import { EtapaSaldos } from "./legajo/etapas/EtapaSaldos";
 import { rangoMesAnterior } from "./legajo/saldosArrastre";
@@ -164,7 +161,7 @@ export function StudyExpedienteMensual() {
   });
   const [controlResolutions, setControlResolutions] = useState<Record<string, string>>({});
   const [controlEvidence, setControlEvidence] = useState<Record<string, string>>({});
-  const [positionAction, setPositionAction] = useState<PositionAction>(null);
+  const [impuestoAbierto, setImpuestoAbierto] = useState<string | null>(null);
   const [seleccionCalculo, setSeleccionCalculo] = useState<{
     workpaperId: string;
     seleccion: SeleccionCalculo;
@@ -912,7 +909,6 @@ export function StudyExpedienteMensual() {
             calculationQuery={calculationQuery}
             positionQuery={positionQuery}
             calculateInterestMutation={calculateInterestMutation}
-            setPositionAction={setPositionAction}
             seleccion={seleccionDe(wp.id)}
             onSeleccionChange={(seleccion) => actualizarSeleccion(wp.id, seleccion)}
             bloqueoSeleccion={
@@ -952,16 +948,15 @@ export function StudyExpedienteMensual() {
             wp={wp}
             periodLabel={selectedTaxPeriod ? fiscalTaxPeriodLabel(selectedTaxPeriod) : "Período sin identificar"}
             positions={positionQuery.data ?? []}
-            inlineForm={positionAction?.kind === "FILING" ? <PanelPresentacion posicion={positionAction.position} onCerrar={() => setPositionAction(null)} firmId={firmId} clientId={clientId} documentos={documentsQuery.data} inline /> : null}
             canFinalize={capacidades.has("tax.settlements.finalize") && !(currentUserId && wp.preparedByUserId === currentUserId && coverageQuery.data?.allowSelfReview === false)}
             canRectify={capacidades.has("tax.settlements.rectify")}
             canFile={capacidades.has("tax.filings.record")}
             canDeclare={capacidades.has("tax.filings.record")}
             canPay={capacidades.has("tax.payments.record")}
-            hasFiling={(positionQuery.data ?? []).some((position) => Boolean(position.filingId))}
-            hasDeclaration={(positionQuery.data ?? []).some((position) => Boolean(position.hasDeclaration))}
-            hasPayment={(positionQuery.data ?? []).some((position) => Number(position.paid) > 0)}
-            paymentNotRequired={(positionQuery.data ?? []).some((position) => Number(position.totalPayable) <= 0)}
+            hasFiling={(positionQuery.data ?? []).length > 0 && (positionQuery.data ?? []).every((position) => Boolean(position.filingId))}
+            hasDeclaration={(positionQuery.data ?? []).length > 0 && (positionQuery.data ?? []).every((position) => Boolean(position.hasDeclaration))}
+            hasPayment={(positionQuery.data ?? []).length > 0 && (positionQuery.data ?? []).every((position) => Number(position.paid) > 0 || Number(position.totalPayable) <= 0)}
+            paymentNotRequired={(positionQuery.data ?? []).length > 0 && (positionQuery.data ?? []).every((position) => Number(position.totalPayable) <= 0 && Number(position.paid) <= 0)}
             nextPeriod={new Date(new Date(wp.periodEnd).getTime() + 86400000).toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: "UTC" })}
             nextBalance={positionQuery.data?.find((position) => position.saldoFavorTecnico || position.saldoLibreDisponibilidad)?.saldoFavorTecnico ?? null}
             readOnly={soloLectura}
@@ -979,18 +974,7 @@ export function StudyExpedienteMensual() {
               confirmLabel: "Sí, crear rectificativa",
               onConfirm: () => rectifyMutation.mutate(wp.id),
             })}
-            onPresentation={() => {
-              const position = positionQuery.data?.find((item) => item.settlement?.status === "FINALIZED");
-              if (position) setPositionAction({ kind: "FILING", position });
-            }}
-            onDeclaration={() => {
-              const position = positionQuery.data?.find((item) => item.filingId);
-              if (position) setPositionAction({ kind: "DECLARATION", position });
-            }}
-            onPayment={() => {
-              const position = positionQuery.data?.find((item) => item.settlement?.status === "FINALIZED");
-              if (position) setPositionAction({ kind: "PAYMENT", position });
-            }}
+            onOpenTax={setImpuestoAbierto}
           />
         )}
       </>
@@ -1707,32 +1691,15 @@ export function StudyExpedienteMensual() {
         documentos={documentsQuery.data}
       />
 
-      {positionAction?.kind === "PAYMENT" ? (
-        <PanelPago
-          posicion={positionAction.position}
-          onCerrar={() => setPositionAction(null)}
-          firmId={firmId}
-          clientId={clientId}
-        />
-      ) : null}
-
-      {positionAction?.kind === "FILING" && safeActiveStep !== 5 ? (
-        <PanelPresentacion
-          posicion={positionAction.position}
-          onCerrar={() => setPositionAction(null)}
-          firmId={firmId}
-          clientId={clientId}
-          documentos={documentsQuery.data}
-        />
-      ) : null}
-
-      {positionAction?.kind === "DECLARATION" ? (
-        <PanelDeclaracion
-          posicion={positionAction.position}
-          onCerrar={() => setPositionAction(null)}
+      {impuestoAbierto && positionQuery.data?.some((item) => item.obligationId === impuestoAbierto) ? (
+        <PanelImpuesto
+          posicion={positionQuery.data.find((item) => item.obligationId === impuestoAbierto)!}
+          onCerrar={() => setImpuestoAbierto(null)}
           firmId={firmId}
           clientId={clientId}
           documentsQuery={documentsQuery}
+          canFile={capabilities.has("tax.filings.record")}
+          canPay={capabilities.has("tax.payments.record")}
         />
       ) : null}
 
