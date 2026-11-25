@@ -262,9 +262,9 @@ describe("Panel de trabajo: pantalla", () => {
     expect(screen.getAllByText("restringido")).toHaveLength(4);
   });
 
-  it("cada fila tiene «Abrir cliente» con el nombre completo del cliente", async () => {
+  it("cada fila tiene «Abrir legajo» con el nombre completo del cliente", async () => {
     renderPanel();
-    expect(await screen.findByRole("button", { name: `Abrir cliente ${CLIENTE}` })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: `Abrir legajo ${CLIENTE}` })).toBeTruthy();
   });
 
   it("muestra los nombres que llegan y, sin ninguno visible, la cantidad de responsables", async () => {
@@ -311,35 +311,29 @@ describe("Panel de trabajo: pantalla", () => {
     expect(screen.queryByText(/^Sobre /)).toBeNull();
   });
 
-  it("«Abrir cliente» con período contable elige el período y va al Legajo", async () => {
-    apiMock.get.mockResolvedValue([
-      {
-        id: "ejercicio-demo",
-        label: "2026",
-        periods: [
-          {
-            id: "contable-oct",
-            startDate: "2026-10-01",
-            endDate: "2026-10-31",
-            status: "OPEN",
-          },
-        ],
-      },
-    ]);
+  it("«Abrir legajo» deja elegidos cliente e impuesto-mes y va directo al Legajo", async () => {
+    window.sessionStorage.clear();
     const contextoPrueba = contexto();
     contextMock.current = contextoPrueba;
     renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: `Abrir cliente ${CLIENTE}` }));
+    fireEvent.click(await screen.findByRole("button", { name: `Abrir legajo ${CLIENTE}` }));
     await waitFor(() => expect(ubicacion()).toBe("/expediente-mensual"));
     expect(contextoPrueba.setClientId).toHaveBeenCalledWith("client-a");
-    expect(contextoPrueba.setPeriodId).toHaveBeenCalledWith("contable-oct");
+    expect(apiMock.get).not.toHaveBeenCalled();
+    const clave = `contable:${contextoPrueba.firmId}:client-a:selected-tax-period`;
+    expect(window.sessionStorage.getItem(clave)).toBe(fila().periodId);
   });
 
-  it("«Abrir cliente» sin período contable va al Resumen del cliente", async () => {
-    apiMock.get.mockResolvedValue([]);
+  it("el clic en la fila abre el mismo Legajo", async () => {
+    window.sessionStorage.clear();
+    const contextoPrueba = contexto();
+    contextMock.current = contextoPrueba;
     renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: `Abrir cliente ${CLIENTE}` }));
-    await waitFor(() => expect(ubicacion()).toBe("/resumen-cliente"));
+    const boton = await screen.findByRole("button", { name: `Abrir legajo ${CLIENTE}` });
+    const celda = boton.closest("tr")!.querySelector("td")!;
+    fireEvent.click(celda);
+    await waitFor(() => expect(ubicacion()).toBe("/expediente-mensual"));
+    expect(contextoPrueba.setClientId).toHaveBeenCalledWith("client-a");
   });
 
   it("OWNER sin obligaciones propias abre en «Todo el estudio» con el motivo visible", async () => {
@@ -379,7 +373,7 @@ describe("Panel de trabajo: pantalla", () => {
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: "Cargar más" }));
     expect(
-      await screen.findByRole("button", { name: "Abrir cliente Cliente Demo 2" }),
+      await screen.findByRole("button", { name: "Abrir legajo Cliente Demo 2" }),
     ).toBeTruthy();
     expect(screen.getByText("2 de 2 obligaciones")).toBeTruthy();
   });

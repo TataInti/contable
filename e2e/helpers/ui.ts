@@ -93,3 +93,10 @@ export async function mutating(page: Page, urlPart: string, action: () => Promis
   expect(response.status(), `${urlPart} → ${response.status()} ${await response.text().catch(() => "")}`).toBeLessThan(300);
   return response;
 }
+
+/** El alta propone regímenes en un cajón; para elegir otro a mano se pasa al formulario de inscripción. */
+export async function abrirInscripcionManual(page: Page) {
+  const sugeridos = page.getByRole("dialog", { name: "Regímenes sugeridos" });
+  await sugeridos.or(page.locator("#reg-regime")).first().waitFor();
+  if (await sugeridos.isVisible()) await sugeridos.getByRole("button", { name: "Elegir otro régimen" }).click();
+}

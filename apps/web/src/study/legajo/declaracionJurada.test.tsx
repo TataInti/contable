@@ -14,6 +14,7 @@ import {
   CLIENTE_DEMO,
   FIRMA_DEMO,
   PERIODO_ELEGIDO_DEMO,
+  legajoDemo,
   periodoIibbDemo,
   rutasDemo,
 } from "./datosDemoLegajo";
@@ -139,7 +140,11 @@ function renderLegajo() {
 }
 // Documentos: la lista, o «pendiente» / «error» para simular la carga y su fallo.
 function preparar(posicion: object, documentos: unknown[] | "pendiente" | "error" = []) {
-  const rutas = rutasDemo({ periodos: [periodoIibbDemo], posiciones: [posicion as never] });
+  const rutas = rutasDemo({
+    legajos: [legajoDemo("FINALIZED")],
+    periodos: [periodoIibbDemo],
+    posiciones: [posicion as never],
+  });
   vi.mocked(api.get).mockImplementation(((path: string) => {
     if (!path.endsWith("/documents")) return rutas(path);
     if (documentos === "pendiente") return new Promise(() => undefined);
@@ -148,10 +153,11 @@ function preparar(posicion: object, documentos: unknown[] | "pendiente" | "error
     return Promise.resolve(documentos);
   }) as never);
 }
-async function abrirDeclaracion(nombre = "Cargar declaración jurada") {
-  fireEvent.click(await screen.findByRole("tab", { name: /Cálculo/ }));
+// La declaración jurada se carga en el cajón del impuesto, desde el Cierre.
+async function abrirDeclaracion(nombre = /^Completar IVA/) {
+  fireEvent.click(await screen.findByRole("tab", { name: /^Cierre/ }));
   fireEvent.click(await screen.findByRole("button", { name: nombre }));
-  return screen.findByRole("dialog", { name: /^Declaración jurada/ });
+  return screen.findByRole("dialog", { name: /^IVA/ });
 }
 // El pie del cajón (el «Cerrar» del encabezado no se confunde con el de la acción).
 const pie = (dialogo: HTMLElement) =>
@@ -193,30 +199,44 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("Legajo · declaración jurada (5b-4a)", () => {
-  it("después de la presentación ofrece Cargar, vacío y con su motivo", async () => {
+  it("después de la presentación ofrece Cargar, precargada con el cálculo y con su motivo", async () => {
     preparar(presentada);
     renderLegajo();
     const dialogo = await abrirDeclaracion();
-    expect(within(dialogo).getByLabelText("Impuesto determinado")).toHaveValue("");
+    expect(within(dialogo).getByLabelText("Impuesto determinado")).toHaveValue("1.500,00");
+    expect(within(dialogo).getByLabelText("Saldo a favor técnico")).toHaveValue("0,00");
+    expect(within(dialogo).getByLabelText("Total a pagar")).toHaveValue("1.500,00");
     expect(pie(dialogo).getByRole("button", { name: "Guardar declaración jurada" })).toBeDisabled();
+    expect(pie(dialogo).getByText("Adjuntá la declaración jurada.")).toBeInTheDocument();
+    cambiarValor(within(dialogo).getByLabelText("Impuesto determinado"), "");
     expect(pie(dialogo).getByText("Indicá el impuesto determinado.")).toBeInTheDocument();
     expect(
       within(dialogo).getByText("Todavía no hay declaraciones juradas subidas para este cliente."),
     ).toBeInTheDocument();
   });
 
-  it("sin presentación con acuse no se ofrece la declaración jurada", async () => {
+  it("sin presentación con acuse el cajón pide primero el acuse y no guarda la declaración sola", async () => {
     preparar({ ...presentada, filedAt: null, filingId: null });
     renderLegajo();
-    fireEvent.click(await screen.findByRole("tab", { name: /Cálculo/ }));
-    expect(await screen.findByRole("button", { name: "Registrar presentación" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: /declaración jurada/i })).toBeNull();
+    const dialogo = await abrirDeclaracion();
+    expect(pie(dialogo).getByRole("button", { name: "Registrar presentación" })).toBeDisabled();
+    expect(pie(dialogo).getByText("Adjuntá el acuse de presentación.")).toBeInTheDocument();
+    expect(pie(dialogo).queryByRole("button", { name: /^Guardar declaración jurada/ })).toBeNull();
+  });
+
+  it("al diferir del cálculo marca el importe y dice cuánto era", async () => {
+    preparar(presentada, [DOC_DJ]);
+    renderLegajo();
+    const dialogo = await abrirDeclaracion();
+    expect(within(dialogo).queryByText(/Difiere del cálculo/)).toBeNull();
+    cambiarValor(within(dialogo).getByLabelText("Total a pagar"), "1300,5");
+    expect(within(dialogo).getByText(/Difiere del cálculo: .*1\.500,00/)).toBeInTheDocument();
   });
 
   it("al corregir precarga los importes y el documento vigente", async () => {
     preparar(cargada, [DOC_DJ]);
     renderLegajo();
-    const dialogo = await abrirDeclaracion("Corregir declaración jurada");
+    const dialogo = await abrirDeclaracion(/^(Completar|Ver o corregir) IVA/);
     expect(within(dialogo).getByLabelText("Impuesto determinado")).toHaveValue("1.500,5");
     expect(within(dialogo).getByLabelText("Total a pagar")).toHaveValue("1.300,5");
     expect(valorElegido("Documento de respaldo", dialogo)).toBe(DJ);
@@ -233,9 +253,9 @@ describe("Legajo · declaración jurada (5b-4a)", () => {
     fijarPermisos(SIN_DJ);
     preparar(posicion, [DOC_DJ]);
     renderLegajo();
-    fireEvent.click(await screen.findByRole("tab", { name: /Cálculo/ }));
-    expect(await screen.findByText(new RegExp(texto))).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /declaración jurada/i })).toBeNull();
+    const dialogo = await abrirDeclaracion(/^(Completar|Ver o corregir) IVA/);
+    expect(within(dialogo).getByText(new RegExp(texto))).toBeInTheDocument();
+    expect(within(dialogo).queryByRole("button", { name: /^Guardar/ })).toBeNull();
   });
 
   it("guarda con los importes y el documento elegido, sin saldosFavorDetalle si no hay detalle", async () => {
@@ -262,7 +282,7 @@ describe("Legajo · declaración jurada (5b-4a)", () => {
     ];
     preparar({ ...cargada, saldosFavorDetalle }, [DOC_DJ]);
     renderLegajo();
-    guardar(await abrirDeclaracion("Corregir declaración jurada"));
+    guardar(await abrirDeclaracion(/^(Completar|Ver o corregir) IVA/));
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith(
         PATCH,
@@ -292,7 +312,7 @@ describe("Legajo · declaración jurada (5b-4a)", () => {
     expect(within(dialogo).getByText(/Revisá cuál es el importe a pagar/)).toBeInTheDocument();
     fireEvent.click(pie(dialogo).getByRole("button", { name: "Cerrar" }));
     await waitFor(() =>
-      expect(screen.queryByRole("dialog", { name: /^Declaración jurada/ })).toBeNull(),
+      expect(screen.queryByRole("dialog", { name: /^IVA/ })).toBeNull(),
     );
   });
 

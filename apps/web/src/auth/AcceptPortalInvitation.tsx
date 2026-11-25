@@ -58,6 +58,11 @@ export function AcceptPortalInvitation() {
             El enlace de invitación está incompleto. Pedile uno nuevo a quien administra el
             estudio.
           </Notice>
+        ) : null}
+        {!token ? (
+          <Button type="button" variant="secondary" onClick={() => navigate("/login")}>
+            Volver al ingreso
+          </Button>
         ) : (
           <form className="login__form" onSubmit={submit}>
             <Field

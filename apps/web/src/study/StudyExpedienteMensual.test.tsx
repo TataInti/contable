@@ -437,7 +437,7 @@ describe("StudyExpedienteMensual", () => {
     expect(screen.getByText("Error anterior al crear el legajo")).toBeTruthy();
   });
 
-  it("no vuelve a ofrecer la presentación de un impuesto ya presentado", async () => {
+  it("Cálculo informa la presentación hecha y no ofrece registrarla", async () => {
     mockPageApi({ status: "FINALIZED" });
     const base = vi.mocked(api.get).getMockImplementation()!;
     const position = (obligationId: string, taxName: string, filedAt: string | null) => ({
@@ -471,7 +471,8 @@ describe("StudyExpedienteMensual", () => {
     fireEvent.click(await screen.findByRole("tab", { name: /Cálculo/ }));
 
     expect(await screen.findByText(/Presentada el/)).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Registrar presentación" })).toHaveLength(1);
+    // La presentación se registra en el Cierre: Cálculo ya no ofrece el botón, ni siquiera al impuesto abierto.
+    expect(screen.queryAllByRole("button", { name: "Registrar presentación" })).toHaveLength(0);
   });
 
   it("explica junto a Calcular qué fuentes obligatorias siguen sin revisar", async () => {
@@ -489,7 +490,7 @@ describe("StudyExpedienteMensual", () => {
     renderPage();
     await openSourcesStage();
 
-    expect((await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).textContent).toContain("Para calcular falta: Ingresos Brutos Tucumán");
+    expect((await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).textContent).toContain("Falta 1: Ingresos Brutos Tucumán");
     expect(screen.getByRole("button", { name: "Gestionar Ingresos Brutos Tucumán" })).toBeTruthy();
   });
 

@@ -12,7 +12,7 @@ import type {
   CreateCostCenter,
   CreateFiscalYear,
 } from "@contable/contracts";
-import { cuitEnding } from "@contable/contracts";
+import { clientConfigurationMissing, cuitEnding } from "@contable/contracts";
 import { withTenantContext, type TenantContext } from "../auth/tenant.js";
 import { activateIfConfigurationComplete } from "./client-status.js";
 import { isPrismaUniqueViolation } from "../lib/prisma-errors.js";
@@ -327,6 +327,50 @@ export class ClientRepository {
 
       await tx.clientProfile.create({ data: profileData });
 
+      if (input.vatCondition) {
+        const now = new Date();
+        const prefix = input.cuit.slice(0, 2);
+        const fiscalProfile = await tx.taxpayerProfileVersion.create({
+          data: {
+            firmId,
+            clientId: client.id,
+            version: 1,
+            legalName: input.legalName,
+            cuit: input.cuit,
+            personType: prefix === "30" || prefix === "33" ? "JURIDICA" : "FISICA",
+            nationalCondition: input.vatCondition,
+            ...(input.fiscalAddress ? { fiscalAddress: input.fiscalAddress } : {}),
+            fiscalYearEndMonth: 12,
+            validFrom: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)),
+            status: "ACTIVE",
+            activatedAt: now,
+            source: "ALTA_CLIENTE",
+            ...(ctx ? { createdByUserId: ctx.userId } : {}),
+          },
+        });
+        if (ctx) {
+          await tx.auditEvent.create({
+            data: {
+              firmId,
+              clientId: client.id,
+              userId: ctx.userId,
+              actorKind: ctx.actorKind,
+              action: "taxpayer_profile.created_and_activated",
+              entityType: "TaxpayerProfileVersion",
+              entityId: fiscalProfile.id,
+              after: redact({
+                status: "ACTIVE",
+                version: 1,
+                personType: fiscalProfile.personType,
+                nationalCondition: fiscalProfile.nationalCondition,
+                province: input.province ?? null,
+                validFrom: fiscalProfile.validFrom.toISOString(),
+              }) as Prisma.InputJsonValue,
+            },
+          });
+          await activateIfConfigurationComplete(tx, ctx, client.id);
+        }
+      }
       await tx.onboardingChecklist.create({
         data: {
           firmId,
@@ -352,10 +396,28 @@ export class ClientRepository {
   async list(firmId: string, ctx?: TenantContext) {
     const clients = await this.scoped(ctx, (tx) => tx.client.findMany({
       where: { firmId },
-      include: { profile: true },
+      include: {
+        profile: true,
+        taxpayerProfiles: { select: { id: true, version: true, status: true }, orderBy: { version: "desc" }, take: 1 },
+        taxRegistrations: { where: { status: "ACTIVE" }, select: { profileVersionId: true } },
+        clientActivities: { where: { validTo: null }, select: { profileVersionId: true } },
+        taxPeriods: { select: { id: true }, take: 1 },
+        taxObligations: { select: { profileVersionId: true } },
+      },
       orderBy: { legalName: "asc" },
     }));
-    return clients.map((client) => withCuitEnding(client));
+    return clients.map(({ taxpayerProfiles, taxRegistrations, clientActivities, taxPeriods, taxObligations, ...client }) => {
+      const latest = taxpayerProfiles?.[0];
+      const readiness = {
+        hasAccountingProfile: Boolean(client.profile),
+        hasActiveFiscalProfile: latest?.status === "ACTIVE",
+        hasActiveRegistration: Boolean(latest && taxRegistrations?.some((item) => item.profileVersionId === latest.id)),
+        hasActiveActivity: Boolean(latest && clientActivities?.some((item) => item.profileVersionId === latest.id)),
+        hasTaxPeriod: Boolean(taxPeriods?.length),
+        hasObligation: Boolean(latest && taxObligations?.some((item) => item.profileVersionId === latest.id)),
+      };
+      return { ...withCuitEnding(client), configurationMissing: clientConfigurationMissing(readiness) };
+    });
   }
 
   /** Obtiene un cliente con su perfil y su terminación de CUIT derivada. */

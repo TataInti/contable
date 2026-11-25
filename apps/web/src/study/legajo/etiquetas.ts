@@ -1,3 +1,4 @@
+import { fuentesFaltantes } from "./fuentesFaltantes";
 import type { AllocationCoverage, ClassificationCoverage, WorkpaperSource } from "./tipos";
 
 export function calculationDisabledMessage({
@@ -18,7 +19,7 @@ export function calculationDisabledMessage({
   if (isPending) return "El cálculo está en curso.";
   if (!canCalculate) return "Tu perfil no tiene permiso para calcular este legajo.";
 
-  const missingSources = sources?.some((source) => source.required && !source.present && source.status !== "NO_MOVEMENTS") ?? false;
+  const missingSources = fuentesFaltantes(sources ?? []).length > 0;
   const missingClassifications = (classifications?.pending ?? 0) > 0;
   const missingAllocations = (allocations?.pending ?? 0) > 0;
   const reasons = [

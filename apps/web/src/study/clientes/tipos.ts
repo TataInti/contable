@@ -1,3 +1,4 @@
+import type { ClientConfigurationMissing } from "@contable/contracts";
 import type { Client } from "../../lib/api";
 
 export interface ClientProfile {
@@ -24,6 +25,7 @@ export interface ClientWithProfile extends Client {
   cuitEnding?: string | null;
   tradeName?: string | null;
   profile?: ClientProfile | null;
+  configurationMissing?: ClientConfigurationMissing[];
 }
 
 export interface ClientContactForm {
