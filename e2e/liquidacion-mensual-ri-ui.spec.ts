@@ -211,15 +211,13 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await page.getByRole("tab", { name: /Fuentes/ }).first().click();
     await page.getByRole("button", { name: "Gestionar Ventas del período" }).click();
     await page.getByRole("button", { name: "Cargar archivo" }).click();
-    const panel = page.getByRole("dialog", { name: "Importar libros IVA" });
+    const panel = page.getByRole("dialog", { name: "Importar libro de ventas" });
     const libro = panel.locator('section[aria-label="Libro de ventas"]');
     await libro.locator('input[type="file"]').setInputFiles({
       name: `ventas-arca-${SUFFIX}.xlsx`,
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       buffer: Buffer.from(libroVentasXlsx(FACTURAS)),
     });
-    // Un .xlsx pasa por el análisis de alícuotas antes de importarse: «Importar» se habilita recién después.
-    await libro.getByRole("button", { name: "Analizar alícuotas", exact: true }).click();
     await expect(libro.getByRole("button", { name: "Importar", exact: true })).toBeEnabled({ timeout: 60_000 });
     await mutating(page, "/sifere/import", () => libro.getByRole("button", { name: "Importar", exact: true }).click());
     await expect(panel).toBeHidden({ timeout: 60_000 });

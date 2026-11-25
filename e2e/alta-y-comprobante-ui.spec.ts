@@ -473,7 +473,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
         const nombreFuente = source.endsWith("Ventas") ? "Ventas del período" : "Compras del período";
         await page.getByRole("button", { name: `Gestionar ${nombreFuente}` }).click();
         await page.getByRole("button", { name: "Cargar archivo" }).click();
-        const panel = page.getByRole("dialog", { name: "Importar libros IVA" });
+        const panel = page.getByRole("dialog", { name: seccion === "Libro de ventas" ? "Importar libro de ventas" : "Importar libro de compras" });
         const libro = panel.locator(`section[aria-label="${seccion}"]`);
         await libro.locator('input[type="file"]').setInputFiles(file);
         await mutating(page, "/import-batches", () => libro.getByRole("button", { name: "Importar", exact: true }).click());

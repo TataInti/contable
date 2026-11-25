@@ -865,6 +865,7 @@ export function StudyExpedienteMensual() {
             reviewSourceMutation={reviewSourceMutation}
             noMovementsMutation={noMovementsMutation}
             motivoSinMovimientos={motivoSinMovimientos}
+            onContinuar={() => goToStep(2)}
           />
         ) : step === 2 ? (
           <div>
@@ -1613,7 +1614,7 @@ export function StudyExpedienteMensual() {
           aria-labelledby={`workpaper-${safeActiveStep}`}
           aria-live="polite"
         >
-          {safeActiveStep < 5 && estadosEtapas[safeActiveStep]?.mensaje && !(safeActiveStep === 4 && estadosEtapas[safeActiveStep]?.mensaje === "Falta resolver controles bloqueantes") ? (
+          {safeActiveStep < 5 && estadosEtapas[safeActiveStep]?.mensaje && estadosEtapas[safeActiveStep]?.destino !== safeActiveStep && !(safeActiveStep === 4 && estadosEtapas[safeActiveStep]?.mensaje === "Falta resolver controles bloqueantes") ? (
             <div className="workpaper-stage-guidance" role="status">
               <p>{estadosEtapas[safeActiveStep]?.mensaje}.</p>
               {estadosEtapas[safeActiveStep]?.accion ? (

@@ -149,14 +149,13 @@ export async function cargarLibroVentas(page: Page, facturas: FacturaSintetica[]
   } else {
     await page.getByRole("button", { name: "Cargar archivo" }).click();
   }
-  const panel = page.getByRole("dialog", { name: reemplazar ? "Reemplazar libro IVA" : "Importar libros IVA" });
+  const panel = page.getByRole("dialog", { name: reemplazar ? "Reemplazar libro IVA" : "Importar libro de ventas" });
   const libro = panel.locator('section[aria-label="Libro de ventas"]');
   await libro.locator('input[type="file"]').setInputFiles({
     name: nombre,
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: bytes ?? Buffer.from(libroVentasXlsx(facturas)),
   });
-  await libro.getByRole("button", { name: "Analizar alícuotas", exact: true }).click();
   await expect(libro.getByRole("button", { name: "Importar", exact: true })).toBeEnabled({ timeout: 60_000 });
   return { panel, libro };
 }
