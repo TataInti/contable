@@ -1312,8 +1312,24 @@ export function StudyCatalogosFiscales() {
         onClose={() => { setDrawer(null); setEditingAuthority(null); }}
         title={drawer === "authority-edit" ? "Editar organismo recaudador" : "Nuevo organismo recaudador"}
         description="La jurisdicción define el alcance en el que puede asignarse este organismo: ARCA recauda en Nación, las DGR en cada provincia y las direcciones de rentas en cada municipio."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="authority-form"
+              loading={editingAuthority ? updateAuthority.isPending : createAuthority.isPending}
+              disabled={!authorityForm.code.trim() || !authorityForm.name.trim() || !authorityForm.jurisdictionId}
+            >
+              {editingAuthority ? "Guardar cambios" : "Crear organismo"}
+            </Button>
+          </>
+        }
       >
         <form
+          id="authority-form"
           className="study-form study-form--compact dense-form fiscal-required-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -1359,18 +1375,6 @@ export function StudyCatalogosFiscales() {
           {!authorityForm.code.trim() || !authorityForm.name.trim() || !authorityForm.jurisdictionId ? (
             <p className="form-submit-hint" role="note">Completá código, nombre y jurisdicción para guardar el organismo.</p>
           ) : null}
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={editingAuthority ? updateAuthority.isPending : createAuthority.isPending}
-              disabled={!authorityForm.code.trim() || !authorityForm.name.trim() || !authorityForm.jurisdictionId}
-            >
-              {editingAuthority ? "Guardar cambios" : "Crear organismo"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
-              Cancelar
-            </Button>
-          </div>
         </form>
       </ActionDrawer>
 
@@ -1379,8 +1383,32 @@ export function StudyCatalogosFiscales() {
         onClose={() => { setDrawer(null); setEditingRegime(null); }}
         title={drawer === "regime-edit" ? "Editar régimen" : "Nuevo régimen"}
         description="El organismo recaudador seleccionado debe corresponder a la jurisdicción del régimen."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="regime-form"
+              loading={editingRegime ? updateRegime.isPending : createRegime.isPending}
+              disabled={
+                !regimeForm.code.trim() ||
+                !regimeForm.name.trim() ||
+                !regimeForm.taxTypeId ||
+                !regimeForm.calcFamilyId ||
+                !regimeForm.moduleId ||
+                !regimeForm.jurisdictionId ||
+                !regimeForm.authorityId
+              }
+            >
+              {editingRegime ? "Guardar cambios" : "Crear régimen"}
+            </Button>
+          </>
+        }
       >
         <form
+          id="regime-form"
           className="study-form study-form--compact dense-form fiscal-required-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -1555,26 +1583,6 @@ export function StudyCatalogosFiscales() {
           !regimeForm.calcFamilyId || !regimeForm.moduleId || !regimeForm.jurisdictionId || !regimeForm.authorityId ? (
             <p className="form-submit-hint" role="note">Completá los campos obligatorios para guardar el régimen.</p>
           ) : null}
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={editingRegime ? updateRegime.isPending : createRegime.isPending}
-              disabled={
-                !regimeForm.code.trim() ||
-                !regimeForm.name.trim() ||
-                !regimeForm.taxTypeId ||
-                !regimeForm.calcFamilyId ||
-                !regimeForm.moduleId ||
-                !regimeForm.jurisdictionId ||
-                !regimeForm.authorityId
-              }
-            >
-              {editingRegime ? "Guardar cambios" : "Crear régimen"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
-              Cancelar
-            </Button>
-          </div>
         </form>
       </ActionDrawer>
 
@@ -1584,8 +1592,31 @@ export function StudyCatalogosFiscales() {
         onClose={() => setActivityDrawer(null)}
         title="Nueva actividad económica"
         description="El código se guarda en mayúsculas. Completá sus campos de catálogo y vigencia."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="activity-form"
+              loading={createActivity.isPending}
+              disabled={
+                !activityForm.code.trim() ||
+                !activityForm.name.trim() ||
+                !activityForm.jurisdictionId ||
+                !activityForm.validFrom ||
+                !activityCodeValid ||
+                !activityValidityValid
+              }
+            >
+              Crear actividad
+            </Button>
+          </>
+        }
       >
         <form
+          id="activity-form"
           className="study-form study-form--compact dense-form fiscal-required-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -1676,25 +1707,6 @@ export function StudyCatalogosFiscales() {
               Completá código, nombre, jurisdicción y vigencia para poder crear la actividad.
             </p>
           ) : null}
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={createActivity.isPending}
-              disabled={
-                !activityForm.code.trim() ||
-                !activityForm.name.trim() ||
-                !activityForm.jurisdictionId ||
-                !activityForm.validFrom ||
-                !activityCodeValid ||
-                !activityValidityValid
-              }
-            >
-              Crear actividad
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
-              Cancelar
-            </Button>
-          </div>
         </form>
       </ActionDrawer>
 
@@ -2043,8 +2055,16 @@ export function StudyCatalogosFiscales() {
         onClose={() => setMasterDrawer(null)}
         title="Nuevo tipo de impuesto"
         description="Agregá el impuesto que usa el estudio para definir sus regímenes fiscales."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+            <Button type="submit"
+              form="tax-type-form" loading={createTaxType.isPending} disabled={!taxTypeForm.code.trim() || !taxTypeForm.name.trim()}>Crear tipo de impuesto</Button>
+          </>
+        }
       >
         <form
+          id="tax-type-form"
           className="study-form study-form--compact dense-form fiscal-required-form"
           onSubmit={(event) => {
             event.preventDefault();
@@ -2097,10 +2117,6 @@ export function StudyCatalogosFiscales() {
           {!taxTypeForm.code.trim() || !taxTypeForm.name.trim() ? (
             <p className="form-submit-hint" role="note">Completá código y nombre para crear el tipo de impuesto.</p>
           ) : null}
-          <div className="study-form__actions">
-            <Button type="submit" loading={createTaxType.isPending} disabled={!taxTypeForm.code.trim() || !taxTypeForm.name.trim()}>Crear tipo de impuesto</Button>
-            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
-          </div>
         </form>
       </ActionDrawer>
 
