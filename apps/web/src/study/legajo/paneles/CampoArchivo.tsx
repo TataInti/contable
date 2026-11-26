@@ -9,7 +9,7 @@ interface CampoArchivoProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
 }
 
 /** Control de archivo con el texto en español: botón «Elegir archivo» y el nombre elegido. */
-export function CampoArchivo({ label, id, hint, archivo, className, ...rest }: CampoArchivoProps) {
+export function CampoArchivo({ label, id, hint, archivo, ...rest }: CampoArchivoProps) {
   const hintId = hint ? `${id}-hint` : undefined;
   return (
     <div className="ds-field">
