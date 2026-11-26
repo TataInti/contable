@@ -132,7 +132,7 @@ test("seguridad anónima y navegación del estudio (Puerta 3)", async ({ page, r
   // URL directa al asistente: muestra estado no disponible, no la pantalla.
   await page.goto("/asistente");
   await expect(
-    page.getByRole("heading", { name: "Esta sección todavía no está disponible", exact: true }),
+    page.getByRole("heading", { name: "Sección no disponible", exact: true }),
   ).toBeVisible();
 
   await page.goto("/ruta-obsoleta");
