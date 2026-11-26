@@ -1613,6 +1613,22 @@
 .legajo-cajon-impuesto__pago { display: flex; align-items: center; justify-content: flex-end; gap: var(--ds-space-3); }
 .legajo-cajon-impuesto__pago p { margin: 0; }
 
+/* Cabecera de Configuración fiscal: CUIT y terminación en una sola línea, sin filas apiladas. */
+.fiscal-overview--inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-6);
+  border-top: 0;
+}
+
+.fiscal-overview--inline > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  padding: 0;
+  border-bottom: 0;
+}
+
 /* Etapa no disponible todavía: candado en la pestaña (el motivo va en el tooltip). */
 .workpaper-candado {
   display: inline-flex;
