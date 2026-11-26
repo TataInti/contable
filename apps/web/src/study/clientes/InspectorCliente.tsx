@@ -1,9 +1,10 @@
-import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
+import { useQuery, type UseMutationResult, type UseQueryResult } from "@tanstack/react-query";
 import { Button, EmptyState, Notice } from "@contable/design-system";
-import type { ClientContact } from "../../lib/api";
+import { api, type ClientContact } from "../../lib/api";
 import { formatCuit } from "../../lib/cuit";
 import { formatearFecha } from "../../lib/formatoFechas";
 import { Inspector, InspectorFacts, InspectorSection } from "../../ui/Dense";
+import { ListaFaltantes } from "../../ui/ListaFaltantes";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { CommentThread } from "../CommentThread";
 import { sinRespuesta } from "./consultas";
@@ -50,6 +51,14 @@ export function InspectorCliente({
     : contactsQuery.isError
       ? "no disponible"
       : `${cantidadContactos} ${cantidadContactos === 1 ? "contacto" : "contactos"}`;
+  const hayAviso = configurationGaps(selectedClient).length > 0;
+  // 03-13: los comentarios quedan plegados hasta que haya uno.
+  const comentarios = useQuery({
+    queryKey: ["comments", firmId, selectedClient.id],
+    queryFn: () => api.get<unknown[]>(`/firms/${firmId}/clients/${selectedClient.id}/comments`),
+    enabled: Boolean(firmId),
+  });
+  const cantidadComentarios = Array.isArray(comentarios.data) ? comentarios.data.length : 0;
   return (
     <Inspector
       label={`Detalle de ${selectedClient.legalName}`}
@@ -63,9 +72,7 @@ export function InspectorCliente({
       banner={
         configurationGaps(selectedClient).length > 0 ? (
           <Notice tone="warning">
-            Falta: {configurationGaps(selectedClient).map((gap, index) => (
-              <span key={gap.key}>{index ? ", " : ""}<Button type="button" variant="text" size="row" onClick={() => openConfiguration(selectedClient.id, gap.step)}>{gap.label}</Button></span>
-            ))}.
+            <ListaFaltantes faltantes={configurationGaps(selectedClient)} onAbrir={(gap) => openConfiguration(selectedClient.id, gap.step)} />
           </Notice>
         ) : undefined
       }
@@ -120,15 +127,16 @@ export function InspectorCliente({
             ["Estado", <StatusBadge key="s" status={selectedClient.status} />],
             ["Nombre de fantasía", selectedClient.tradeName || "—"],
             ["Forma jurídica", selectedClient.profile?.legalForm || "—"],
-            ["Provincia", selectedClient.profile?.province || "—"],
-            ["Actividad", selectedClient.profile?.activity || "—"],
+            // 03-12: si el aviso ya dice que falta, no se repite con un guion.
+            ["Provincia", selectedClient.profile?.province || (hayAviso ? null : "—")],
+            ["Actividad", selectedClient.profile?.activity || (hayAviso ? null : "—")],
           ]}
         />
       </InspectorSection>
       <InspectorSection title="Perfil fiscal y contable">
         <InspectorFacts
           items={[
-            ["Condición IVA", vatLabel(selectedClient.profile?.vatCondition) || "—"],
+            ["Condición IVA", vatLabel(selectedClient.profile?.vatCondition) || (hayAviso ? null : "—")],
             ["Norma contable", selectedClient.profile?.accountingStandard || "—"],
             [
               "Cierre del ejercicio",
@@ -217,7 +225,7 @@ export function InspectorCliente({
             </div>
           ) : (
             <EmptyState
-              size="compact"
+              size="inline"
               title="Todavía no hay contactos"
               description="Agregá personas de referencia para este cliente."
             />
@@ -225,7 +233,10 @@ export function InspectorCliente({
         </InspectorSection>
         </div>
       ) : null}
-      <CommentThread firmId={firmId} clientId={selectedClient.id} compact />
+      <details key={cantidadComentarios > 0 ? "con" : "sin"} className="client-inspector__comments" open={cantidadComentarios > 0}>
+        <summary>Comentarios ({cantidadComentarios})</summary>
+        <CommentThread firmId={firmId} clientId={selectedClient.id} compact />
+      </details>
     </Inspector>
   );
 }

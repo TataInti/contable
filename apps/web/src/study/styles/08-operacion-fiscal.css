@@ -1,4 +1,4 @@
-/* ============================================================
+/* =====================================================
    Operación fiscal — configuración, expediente y reglas
    ============================================================ */
 
@@ -161,6 +161,10 @@
 /* Foco 2.10: la línea de consecuencia del motor se lee con el texto principal, no con el de ayuda. */
 .form-submit-hint.selector-motor-consecuencia {
   color: var(--ds-color-text);
+}
+
+.fiscal-action-form .ds-field:has(> .ds-field__control > input:required) > .ds-field__label::after {
+  content: " *";
 }
 
 .study-form.fiscal-action-form > .study-panel__heading,
@@ -370,6 +374,39 @@
   flex: 0 1 420px;
   min-inline-size: 340px;
   max-inline-size: 420px;
+}
+/* A 1280 px la barra lleva además cliente, vencimiento y menús: el período (solo el mes) cede ancho (09-3). */
+@media (max-width: 1360px) {
+  .work-bar__inicio .ds-search-select:has(.workpaper-period-selector) {
+    flex-basis: 200px;
+    min-inline-size: 170px;
+    max-inline-size: 200px;
+  }
+}
+/* Cliente y CUIT al inicio de la barra del Legajo (09-1): cede ancho antes que el período y se corta con puntos suspensivos. */
+.work-bar__cliente {
+  flex: 0 0 auto;
+  min-inline-size: 120px;
+  max-inline-size: 440px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ds-text-sm);
+}
+/* El vencimiento no recorta al cliente: va en dos renglones (texto y «Calendarios») y, en pantallas
+   angostas, el CUIT queda en el tooltip para que el nombre se lea completo. */
+.work-bar__vence {
+  display: inline-flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-inline-start: var(--ds-space-2);
+  font-size: var(--ds-text-sm);
+  white-space: nowrap;
+}
+.work-bar__vence .ds-button { min-block-size: 0; padding-block: 0; }
+@media (max-width: 1439px) {
+  .work-bar__cliente .muted-copy { display: none; }
 }
 /* Lista del período del Legajo (portal): su piso de 420px gana sobre el ancho en línea del campo. */
 .workpaper-period-listbox {
@@ -1470,12 +1507,34 @@
   font-weight: 700;
 }
 
+.workpaper-close-summary { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); white-space: nowrap; }
+.workpaper-close-summary strong { color: var(--ds-color-text); }
+.workpaper-close-checklist { display: grid; margin: 0; padding: 0; list-style: none; }
+.workpaper-close-step { display: grid; grid-template-columns: 2rem minmax(0, 1fr) 7rem minmax(12rem, auto); align-items: center; gap: var(--ds-space-2) var(--ds-space-3); min-block-size: 3rem; border-bottom: 1px solid var(--ds-color-border-subtle); }
+.workpaper-close-step__number, .workpaper-close-step__status { color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
+.workpaper-close-step__inline { grid-column: 2 / -1; min-width: 0; padding: 0 0 var(--ds-space-3); }
+.workpaper-close-inline { display: grid; gap: var(--ds-space-2); padding: var(--ds-space-2) 0; border-top: 1px solid var(--ds-color-border-subtle); }
+.workpaper-close-inline h4, .workpaper-close-inline p { margin: 0; }
+.workpaper-close-inline .study-form { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--ds-space-2); }
+.workpaper-close-inline__actions { display: flex; justify-content: flex-end; gap: var(--ds-space-2); }
+.workpaper-close-step__title { display: grid; gap: var(--ds-space-1); }
+.workpaper-close-step__title small { color: var(--ds-color-text-muted); }
+.workpaper-close-step__action { display: flex; align-items: center; gap: var(--ds-space-2); }
+
+/* Calendario fiscal: requeridos y grupos del formulario de celda. */
+.calendario-requerido { color: var(--ds-color-danger); }
+.calendario-celda-form { display: grid; gap: var(--ds-space-3); }
+.calendario-celda-seccion { display: grid; gap: var(--ds-space-3); padding-block: var(--ds-space-3); border-top: 1px solid var(--ds-color-border-subtle); }
+.calendario-celda-seccion h3 { margin: 0; font-size: var(--ds-text-base); }
+.calendario-celda-digitos .dense-seg__option { min-inline-size: 32px; }
+
 .workpaper-close-summary {
   margin: 0;
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-sm);
-  white-space: nowrap;
 }
+.workpaper-close-summary > span { display: block; }
+.workpaper-close-summary__cifras { margin-top: var(--ds-space-1); font-variant-numeric: tabular-nums; }
 .workpaper-close-summary strong {
   color: var(--ds-color-text);
 }
@@ -1487,7 +1546,7 @@
 }
 .workpaper-close-step {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) 7rem minmax(12rem, auto);
+  grid-template-columns: 2rem minmax(0, 1fr) 6rem 15rem;
   align-items: center;
   gap: var(--ds-space-2) var(--ds-space-3);
   min-block-size: 3rem;
@@ -1529,9 +1588,14 @@
 .workpaper-close-step__title small {
   color: var(--ds-color-text-muted);
 }
+.workpaper-close-step__status { justify-self: start; text-align: left; }
+.workpaper-close-step__status--hecho::before { content: "✓ "; }
+.workpaper-close-step__action p { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
 .workpaper-close-step__action {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
+  text-align: left;
   gap: var(--ds-space-2);
 }
 
@@ -1552,6 +1616,27 @@
 
 .workpaper-controls__juntos .study-textarea {
   flex: 1 1 100%;
+}
+
+.workpaper-controls__resueltos {
+  justify-self: start;
+  text-align: start;
+}
+
+/* El nombre de un control puede ser largo: el título del cajón hace salto de línea en vez de cortarse con «…». */
+.action-drawer__panel:has([data-object-kind="control"]) .action-drawer__header h2 {
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.workpaper-controls .ds-empty--inline {
+  padding-block: var(--ds-space-2);
+}
+
+.workpaper-controls .work-queue--vacia {
+  justify-items: start;
 }
 
 /* Cierre: un cajón por impuesto (presentación, declaración jurada y pago). */
@@ -1587,3 +1672,93 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Aviso de éxito con un cajón abierto: se corre al costado del cajón y no tapa su pie con el botón principal. */
+@media (min-width: 1100px) {
+  html body:has(.action-drawer__panel) .ds-toast-region { inset-inline-end: calc(560px + var(--ds-space-4)); }
+  html body:has(.action-drawer__panel--wide) .ds-toast-region { inset-inline-end: calc(680px + var(--ds-space-4)); }
+}
+
+/* Control de archivo del Cierre: texto en español (el nativo muestra «Choose File»). */
+.campo-archivo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  min-block-size: 2.5rem;
+  padding: 0 var(--ds-space-2);
+  border: 1px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface, var(--ds-color-background));
+}
+.campo-archivo__input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+.campo-archivo:focus-within {
+  outline: 2px solid var(--ds-color-focus);
+  outline-offset: 2px;
+}
+.campo-archivo__boton {
+  background: transparent;
+  font-family: inherit;
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 1px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.campo-archivo__nombre {
+  min-inline-size: 0;
+  overflow: hidden;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.legajo-cajon-impuesto__resta {
+  margin: 0 0 var(--ds-space-2);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.legajo-cajon-impuesto__resta strong { color: var(--ds-color-text); }
+.legajo-cajon-impuesto__con-pago { display: flex; align-items: center; gap: var(--ds-space-2); }
+
+/* Pestañas del legajo: el estado («! Con pendientes») usa el mismo tamaño que el nombre de la pestaña y lleva aire antes del texto. */
+.dense-tabs[aria-label="Etapas del legajo"] .dense-tab__status {
+  font-size: var(--ds-text-sm);
+  white-space: nowrap;
+}
+.dense-tabs[aria-label="Etapas del legajo"] .dense-tab__status-texto {
+  margin-inline-start: var(--ds-space-1);
+}
+
+/* Cabecera de Configuración fiscal: CUIT y terminación en una sola línea, sin filas apiladas. */
+.fiscal-overview--inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-6);
+  border-top: 0;
+}
+
+.fiscal-overview--inline > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  padding: 0;
+  border-bottom: 0;
+}
+
+/* Etapa no disponible todavía: candado en la pestaña (el motivo va en el tooltip). */
+.workpaper-candado {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ds-color-text-muted);
+  cursor: help;
+}
+.workpaper-continuar { display: flex; align-items: center; gap: var(--ds-space-3); }

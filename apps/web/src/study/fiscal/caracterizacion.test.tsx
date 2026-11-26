@@ -226,13 +226,13 @@ describe("Caracterización · Configuración fiscal: pasos y estado (F1, F2, F10
     expect(screen.queryByText("Configuración completa")).toBeNull();
   });
 
-  it("F10 · documenta: con consultas pendientes, la pestaña dice 0 y los pasos dicen «Pendiente»", async () => {
+  it("F10 · documenta: con consultas pendientes, la pestaña no muestra contador y los pasos dicen «Pendiente»", async () => {
     montar({ pendiente: true });
     const pasos = await screen.findByRole("navigation", { name: "Pasos del onboarding fiscal" });
     expect(within(pasos).getAllByText("Pendiente", { exact: true })).toHaveLength(5);
     const regimenes = pestana(/Regímenes/);
-    // vigente: defecto 3.2 (la carga se lee como dato); lo cambia 7a.4 (sin D7A-N en §7.2)
-    expect(regimenes.querySelector(".dense-count")?.textContent).toBe("0");
+    // 18-9: las pestañas ya no llevan insignia de contador (contaban cosas distintas).
+    expect(regimenes.querySelector(".dense-count")).toBeNull();
     fireEvent.click(regimenes);
     expect(await screen.findByText("Cargando adhesiones…")).toBeTruthy();
   });

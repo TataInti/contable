@@ -31,10 +31,21 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
     periods: fiscal.periods,
     obligations: fiscal.obligations,
   }));
+  // Solo lo que falta o lo que sigue: con la configuración completa y obligaciones generadas no hay atajos.
+  const primerFaltante = faltantes[0];
+  const siguiente: Array<{ texto: string; ruta: string }> = [];
+  if (primerFaltante && primerFaltante.step !== "ficha") {
+    siguiente.push({ texto: "Completar la configuración fiscal", ruta: `/configuracion-fiscal?paso=${encodeURIComponent(primerFaltante.step)}` });
+  }
+  if (fiscal.obligations.length === 0) siguiente.push({ texto: "Generar obligaciones", ruta: "/configuracion-fiscal" });
+  // Próximo vencimiento: sale de las obligaciones que la pantalla ya trae; sin datos no se muestra nada.
+  const proxima = fiscal.obligations
+    .filter((item) => item.dueDate && !["PAID", "FILED", "NOT_APPLICABLE"].includes(item.status))
+    .sort((a, b) => (a.dueDate as string).localeCompare(b.dueDate as string))[0];
   return (
     <DenseSection
       id="rc-resumen"
-      title="Resumen"
+      title="Datos generales"
       description="Una lectura rápida para decidir dónde continuar."
       surface="integrated"
       actions={
@@ -53,13 +64,13 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
       <dl className="client-summary__overview-facts">
         <SummaryFact
           label="Ficha contable"
-          value={<StatusBadge status={profile ? "CONFIGURED" : "PENDING"} className="status-badge--regular" />}
+          value={<StatusBadge status={profile ? "CONFIGURED" : "PENDING"} label={profile ? "Completa" : undefined} className="status-badge--regular" />}
         />
         <SummaryFact
           label="Configuración fiscal"
           value={
             <>
-              <StatusBadge status={faltantes.length ? "PENDING" : "COMPLETED"} className="status-badge--regular" />
+              <StatusBadge status={faltantes.length ? "PENDING" : "COMPLETED"} label={faltantes.length ? undefined : "Completa"} className="status-badge--regular" />
               {faltantes.length ? <span>Falta: {faltantes.map((gap, index) => <span key={gap.key}>{index ? ", " : ""}<Button type="button" variant="text" size="row" onClick={() => navigate(gap.step === "ficha" ? "/clientes" : `/configuracion-fiscal?paso=${encodeURIComponent(gap.step)}`)}>{gap.label}</Button></span>)}.</span> : null}
             </>
           }
@@ -71,35 +82,38 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
           />
         ) : null}
         <SummaryFact
-          label="Actividades registradas"
-          value={String(fiscal.activities.length)}
-          detail={`${activeActivities} vigente${activeActivities === 1 ? "" : "s"}`}
+          label="Actividades vigentes"
+          value={String(activeActivities)}
         />
         <SummaryFact
-          label={fiscal.obligations.length === 1 ? "Obligación materializada" : "Obligaciones materializadas"}
+          label={fiscal.obligations.length === 1 ? "Obligación" : "Obligaciones"}
           value={String(fiscal.obligations.length)}
         />
       </dl>
-      <div className="client-summary__overview-links">
-        <h3>Accesos rápidos</h3>
-        <ul>
-          <li>
-            <Button type="button" variant="text" size="row" onClick={() => navigate("/expediente-mensual")}>
-              <strong>Cargar período</strong>
-            </Button>
-          </li>
-          <li>
-            <Button type="button" variant="text" size="row" onClick={() => navigate("/configuracion-fiscal")}>
-              <strong>Materializar obligaciones</strong>
-            </Button>
-          </li>
-          <li>
-            <Button type="button" variant="text" size="row" onClick={() => navigate("/configuracion-fiscal")}>
-              <strong>Nueva versión del perfil</strong>
-            </Button>
-          </li>
-        </ul>
-      </div>
+      {proxima ? (
+        <p className="client-summary__proximo">
+          <span>
+            Próximo vencimiento: <strong>{proxima.regime.taxType.name} · {formatearFecha(proxima.dueDate)}</strong>
+          </span>
+          <Button type="button" variant="text" size="row" onClick={() => navigate("/expediente-mensual")}>
+            Abrir legajo
+          </Button>
+        </p>
+      ) : null}
+      {siguiente.length > 0 ? (
+        <div className="client-summary__overview-links">
+          <h3>Qué sigue</h3>
+          <ul>
+            {siguiente.map((item) => (
+              <li key={item.texto}>
+                <Button type="button" variant="text" size="row" onClick={() => navigate(item.ruta)}>
+                  <strong>{item.texto}</strong>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </DenseSection>
   );
 }

@@ -47,7 +47,7 @@ describe("busqueda del Resumen del cliente (R1 y R2, funciones puras)", () => {
       periodos: [{ id: "period-1", startDate: FECHA, endDate: FIN, label: "Noviembre 2026", taxType: impuesto }],
     });
     expect(buildSearchResults(resumen, "20111111112")).toEqual([
-      { sectionId: "overview", sectionLabel: "Resumen", title: "Cliente SINTÉTICO A", detail: "CUIT 20111111112" },
+      { sectionId: "overview", sectionLabel: "Datos generales", title: "Cliente SINTÉTICO A", detail: "CUIT 20111111112" },
     ]);
     expect(buildSearchResults(resumen, "noviembre").map((resultado) => resultado.title)).toContain("IVA · noviembre de 2026");
     expect(buildSearchResults(resumen, "zzz")).toEqual([]);

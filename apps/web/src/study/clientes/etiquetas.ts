@@ -41,3 +41,15 @@ export function profileGaps(client: { profile?: ClientProfile | null }): string[
   // La norma contable es opcional (A57): no integra los faltantes de la ficha.
   return gaps;
 }
+
+/** Sigla de la condición frente al IVA para columnas angostas; el nombre completo va en el tooltip. */
+const VAT_SHORT: Record<string, string> = {
+  RESPONSABLE_INSCRIPTO: "RI",
+  MONOTRIBUTISTA: "Monotributo",
+  EXENTO: "Exento",
+  NO_RESPONSABLE: "No resp.",
+};
+export function vatShort(value: string | null | undefined): string {
+  if (!value) return "";
+  return VAT_SHORT[value] ?? vatLabel(value);
+}

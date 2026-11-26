@@ -208,10 +208,10 @@ describe("StudyClientes — ficha con catálogos", () => {
     await openFirstProfileDrawer();
 
     const arT = (await screen.findByRole("checkbox", {
-      name: /AR-T — Provincia de Tucumán/,
+      name: /^Provincia de Tucumán/,
     })) as HTMLInputElement;
     const tuc = screen.getByRole("checkbox", {
-      name: /TUC — Tucumán — Convenio Multilateral/,
+      name: /^Tucumán — Convenio Multilateral/,
     }) as HTMLInputElement;
     expect(arT.checked).toBe(true);
     expect(tuc.checked).toBe(false);
@@ -248,8 +248,9 @@ describe("StudyClientes — ficha con catálogos", () => {
     await openFirstProfileDrawer();
 
     await screen.findByLabelText("Moneda funcional");
-    expect(valorElegido("Moneda funcional")).toBe("EUR");
-    expect(within(abrirListado("Moneda funcional")).getByRole("option", { name: /EUR — fuera de catálogo/ })).toBeTruthy();
+    const moneda = screen.getByLabelText("Moneda funcional") as HTMLSelectElement;
+    expect(moneda.value).toBe("EUR");
+    expect(within(moneda).getByRole("option", { name: /EUR — fuera de catálogo/ })).toBeTruthy();
     expect(screen.getByText(/no está respaldada por el sistema/)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Guardar cambios" }) as HTMLButtonElement).disabled).toBe(true);
     expect(vi.mocked(api.patch)).not.toHaveBeenCalled();
@@ -271,10 +272,11 @@ describe("StudyClientes — ficha con catálogos", () => {
     await openFirstProfileDrawer();
 
     expect(screen.queryByText(/no están en el catálogo fiscal/)).toBeNull();
-    expect(within(abrirListado("Moneda funcional")).getByRole("option", { name: "ARS" })).toBeTruthy();
-    expect(within(abrirListado("Moneda funcional")).getByRole("option", { name: "USD" })).toBeTruthy();
+    const moneda = screen.getByLabelText("Moneda funcional") as HTMLSelectElement;
+    expect(within(moneda).getByRole("option", { name: "ARS" })).toBeTruthy();
+    expect(within(moneda).getByRole("option", { name: "USD" })).toBeTruthy();
     const tuc = screen.getByRole("checkbox", {
-      name: /TUC — Tucumán — Convenio Multilateral/,
+      name: /^Tucumán — Convenio Multilateral/,
     }) as HTMLInputElement;
     expect(tuc.checked).toBe(true);
   });
@@ -716,9 +718,9 @@ describe("StudyClientes — cartera densa", () => {
     expect(actionHeader).not.toBeNull();
     expect(actionHeader?.style.position).toBe("sticky");
     expect(actionHeader?.style.right).toBe("0px");
-    expect(actionHeader?.style.width).toBe("9%");
-    expect(profileHeader?.style.width).toBe("14%");
-    expect(statusHeader?.style.width).toBe("11%");
+    expect(actionHeader?.style.width).toBe("8%");
+    expect(profileHeader?.style.width).toBe("18%");
+    expect(statusHeader?.style.width).toBe("12%");
     const actionCells = table.querySelectorAll("tbody td.client-list__action-column");
     expect(actionCells).toHaveLength(3);
     expect((actionCells[0] as HTMLTableCellElement).style.position).toBe("sticky");

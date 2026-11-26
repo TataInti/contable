@@ -1,4 +1,4 @@
-import { Button, SearchSelect } from "@contable/design-system";
+import { Button } from "@contable/design-system";
 import type { SummarySectionDefinition, SummarySectionId } from "./busqueda";
 
 type Props = {
@@ -10,7 +10,7 @@ type Props = {
 
 export function IndiceSecciones({ secciones, activeSection, hayBusqueda, onSelect }: Props) {
   const sectionGroups: SummarySectionDefinition["group"][] = [
-    "Resumen",
+    "Datos generales",
     "Contable",
     "Fiscal",
     "Configuración fiscal",
@@ -18,31 +18,15 @@ export function IndiceSecciones({ secciones, activeSection, hayBusqueda, onSelec
   ];
   return (
     <>
-      <label className="client-summary__index-select-control">
-        <span className="sr-only">Sección del cliente</span>
-        <SearchSelect
-          label="Sección del cliente"
-          hideLabel
-          className="client-summary__index-select"
-          value={activeSection}
-          onChange={(value) => {
-            onSelect(value as SummarySectionId);
-          }}
-          allowEmpty={false}
-          options={secciones.map((section) => ({
-            value: section.id,
-            label: section.group === section.label ? section.label : `${section.group} · ${section.label}`,
-          }))}
-        />
-      </label>
       <nav className="client-summary__section-index" aria-label="Secciones internas del cliente">
-        <div className="client-summary__index-heading">
-        </div>
         {sectionGroups.map((group) => {
           const groupSections = secciones.filter((section) => section.group === group);
+          if (groupSections.length === 0) return null;
+          // El grupo que se llama igual que su única sección no repite el nombre como encabezado.
+          const repiteNombre = groupSections.length === 1 && groupSections[0]?.label === group;
           return (
             <div className="client-summary__index-group" key={group}>
-              <p>{group}</p>
+              {repiteNombre ? null : <p>{group}</p>}
               <ul>
                 {groupSections.map((section) => (
                   <li key={section.id}>
