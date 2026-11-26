@@ -335,6 +335,12 @@
   border-top: 1px solid var(--ds-border);
 }
 
+.workpaper-calculation-selection > .workpaper-stage__heading--subsection:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .workpaper-close-details dt {
   color: var(--ds-text-muted);
   font-size: 0.72rem;
@@ -644,7 +650,7 @@
 }
 
 .workpaper-classification-table td:has(.workpaper-classification-inline) {
-  /* Ancho acotado: el nombre se recorta con «…» (completo en el tooltip) y la celda no ensancha la tabla. */
+  /* Ancho acotado: la celda no ensancha la tabla; el nombre baja de renglón en vez de cortarse. */
   width: 13rem;
   min-width: 6rem;
   max-width: 13rem;
@@ -661,9 +667,8 @@
 
 .workpaper-classification-code {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .workpaper-classification-chip {
@@ -689,8 +694,9 @@
 }
 
 .workpaper-allocation-select {
-  min-width: 13rem;
-  max-width: 20rem;
+  min-width: 0;
+  inline-size: 100%;
+  max-width: 14rem;
   padding: 0.45rem 0.55rem;
   border: 1px solid var(--ds-border);
   border-radius: var(--ds-radius-sm);
@@ -1440,7 +1446,7 @@
 }
 .workpaper-calculation-minimum {
   display: grid;
-  grid-template-columns: 8.75rem 1rem;
+  grid-template-columns: 8.75rem;
   align-items: start;
   gap: var(--ds-space-1);
 }
@@ -1651,6 +1657,21 @@
 .legajo-cajon-impuesto__seccion > p { margin: 0; }
 .legajo-cajon-impuesto__pago { display: flex; align-items: center; justify-content: flex-end; gap: var(--ds-space-3); }
 .legajo-cajon-impuesto__pago p { margin: 0; }
+
+/* Encabezado de cada impuesto en Determinación: nombre y estado en una sola línea, con aire entre los dos. */
+.workpaper-calculation__column-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ds-space-2);
+  max-width: 100%;
+  white-space: nowrap;
+}
+.workpaper-calculation__column-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Aviso de éxito con un cajón abierto: se corre al costado del cajón y no tapa su pie con el botón principal. */
 @media (min-width: 1100px) {
