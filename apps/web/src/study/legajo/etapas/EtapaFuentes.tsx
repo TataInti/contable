@@ -39,7 +39,7 @@ function estadoFuente(source: CoberturaLegajo["sources"][number], fuentes: reado
   if (source.status === "NO_MOVEMENTS") return { status: "NO_MOVEMENTS", label: "Sin movimientos" };
   return source.required && !esOpcionalPorVentas(source, fuentes)
     ? { status: "WAITING_INPUTS", label: "Pendiente" }
-    : { status: "PENDING", label: "Opcional" };
+    : { status: "NOT_APPLICABLE", label: "Opcional" };
 }
 
 export function EtapaFuentes({

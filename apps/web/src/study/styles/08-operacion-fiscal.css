@@ -1566,3 +1566,12 @@
 .legajo-cajon-impuesto__seccion > p { margin: 0; }
 .legajo-cajon-impuesto__pago { display: flex; align-items: center; justify-content: flex-end; gap: var(--ds-space-3); }
 .legajo-cajon-impuesto__pago p { margin: 0; }
+
+/* Etapa no disponible todavía: candado en la pestaña (el motivo va en el tooltip). */
+.workpaper-candado {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ds-color-text-muted);
+  cursor: help;
+}
+.workpaper-continuar { display: flex; align-items: center; gap: var(--ds-space-3); }
