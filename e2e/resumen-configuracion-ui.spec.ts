@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { RUN, SUFFIX, goTo, login, syntheticCuit } from "./helpers/ui";
-import { altaClienteRI, crearPeriodoIIBB, inscribirIIBB, pick, vincularActividad, IIBB } from "./helpers/liquidacion-ui";
+import { altaClienteRI, crearPeriodoIIBB, inscribirIIBB, vincularActividad, IIBB } from "./helpers/liquidacion-ui";
 
 /**
  * Un solo estado de la configuración fiscal (D4), operado como lo opera el contador: se completa la configuración de
@@ -61,7 +61,7 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
     await expect(page.getByText(/falta[^.]*norma contable/i)).toHaveCount(0);
 
     await goTo(page, "Resumen");
-    await pick(page.getByRole("combobox", { name: "Sección del cliente" }), "Ficha contable");
+    await page.getByRole("navigation", { name: "Secciones internas del cliente" }).getByRole("button", { name: "Ficha contable" }).click();
     await expect(page.getByRole("heading", { name: "Ficha contable", level: 2 })).toBeVisible();
     await expect(page.getByText("Sin norma contable", { exact: true })).toHaveCount(0);
     await expect(page.getByText(/falta[^.]*norma contable/i)).toHaveCount(0);
