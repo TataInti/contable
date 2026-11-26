@@ -76,7 +76,7 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await page.getByRole("button", { name: "Nuevo organismo" }).click();
     await page.locator("#authority-code").fill(data.authority.code);
     await page.locator("#authority-name").fill(data.authority.name);
-    await pickOption(page.locator("#authority-jurisdiction"), data.jurisdiction.code);
+    await pickOption(page.locator("#authority-jurisdiction"), data.jurisdiction.name);
     await page.getByRole("button", { name: "Crear organismo" }).click();
     await expect(seen(page, data.authority.code)).toBeVisible();
   });
@@ -90,8 +90,8 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     // La familia se completa sola con la del impuesto; se verifica en vez de elegirla.
     await expect(page.locator("#regime-calc-family")).not.toHaveValue("");
     await pickOption(page.locator("#regime-module"), "IVA Responsable Inscripto");
-    await pickOption(page.locator("#regime-jurisdiction"), data.jurisdiction.code);
-    await pickOption(page.locator("#regime-authority"), data.authority.code);
+    await pickOption(page.locator("#regime-jurisdiction"), data.jurisdiction.name);
+    await pickOption(page.locator("#regime-authority"), data.authority.name);
     await page.getByRole("button", { name: "Crear régimen" }).click();
     await expect(seen(page, data.regime.code)).toBeVisible();
   });
@@ -101,7 +101,7 @@ test("alta completa de parámetros para procesar un cliente, desde la UI", async
     await page.getByRole("button", { name: "Nueva actividad" }).click();
     await page.locator("#activity-code").fill(data.activity.code);
     await page.locator("#activity-name").fill(data.activity.name);
-    await pickOption(page.locator("#activity-jurisdiction"), data.jurisdiction.code);
+    await pickOption(page.locator("#activity-jurisdiction"), data.jurisdiction.name);
     await page.locator("#activity-valid-from").fill(data.validFrom);
     await page.getByRole("button", { name: /^Crear actividad|^Guardar|^Crear$/ }).first().click();
     await expect(seen(page, data.activity.code)).toBeVisible();
