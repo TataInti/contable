@@ -62,7 +62,7 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
 
     await goTo(page, "Resumen");
     await pick(page.getByRole("combobox", { name: "Sección del cliente" }), "Ficha contable");
-    await expect(page.getByText("Ficha contable", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ficha contable", level: 2 })).toBeVisible();
     await expect(page.getByText("Sin norma contable", { exact: true })).toHaveCount(0);
     await expect(page.getByText(/falta[^.]*norma contable/i)).toHaveCount(0);
   });
