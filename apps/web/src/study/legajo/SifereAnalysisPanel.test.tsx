@@ -57,7 +57,7 @@ describe("SifereAnalysisPanel (análisis de libro IVA)", () => {
       "Alícuota",
       "Base",
       "IVA",
-      "Comp.",
+      "Comprobantes",
     ]);
     const filas = Array.from(container.querySelectorAll("table tbody tr")).map((fila) =>
       Array.from(fila.querySelectorAll("td")).map(texto),

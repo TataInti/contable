@@ -342,7 +342,7 @@ export function StudyOnboardingFiscal() {
     <DensePage density={density} flow>
       <DenseHeader
         title="Configuración fiscal"
-        description="Datos del contribuyente, regímenes, actividades, períodos y obligaciones del cliente."
+        description={clientQuery.data?.legalName ?? "Cliente"}
         actions={
           nextRequiredStep && canWrite ? (
             <Button onClick={() => openStepForm(nextRequiredStep.key)}>
@@ -355,7 +355,7 @@ export function StudyOnboardingFiscal() {
       />
 
       {clientQuery.data ? (
-        <dl className="fiscal-overview" aria-label="Cliente">
+        <dl className="fiscal-overview fiscal-overview--inline" aria-label="Cliente">
           <div>
             <dt>CUIT</dt>
             <dd className="tabular-copy">{formatCuit(clientQuery.data.cuit)}</dd>
@@ -375,9 +375,9 @@ export function StudyOnboardingFiscal() {
         onChange={setTab}
         tabs={[
           { id: "resumen", label: "Resumen" },
-          { id: "regimenes", label: "Regímenes", count: registrationsQuery.data?.length ?? 0 },
-          { id: "actividades", label: "Actividades", count: clientActivitiesQuery.data?.length ?? 0 },
-          { id: "periodos", label: "Períodos y obligaciones", count: periodsQuery.data?.length ?? 0 },
+          { id: "regimenes", label: "Regímenes" },
+          { id: "actividades", label: "Actividades" },
+          { id: "periodos", label: "Períodos y obligaciones" },
           { id: "comprobantes", label: "Comprobantes" },
         ]}
       />

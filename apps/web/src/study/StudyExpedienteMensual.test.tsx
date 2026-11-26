@@ -416,7 +416,7 @@ describe("StudyExpedienteMensual", () => {
 
     // El botón del encabezado aparece deshabilitado hasta que carga el período
     // fiscal: esperamos a que esté habilitado antes de accionar.
-    fireEvent.click(await screen.findByRole("button", { name: "Acciones del período" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Más acciones" }));
     const createButton = await screen.findByRole<HTMLButtonElement>("menuitem", { name: /Nuevo legajo/ });
     await waitFor(() => expect(createButton.getAttribute("aria-disabled")).not.toBe("true")); // vigente: cambia con A29
     fireEvent.click(createButton);
@@ -490,8 +490,8 @@ describe("StudyExpedienteMensual", () => {
     renderPage();
     await openSourcesStage();
 
-    expect((await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).textContent).toContain("Falta 1: Ingresos Brutos Tucumán");
-    expect(screen.getByRole("button", { name: "Gestionar Ingresos Brutos Tucumán" })).toBeTruthy();
+    expect((await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).textContent).toContain("Falta 1: Base por actividad (IIBB Tucumán)");
+    expect(screen.getByRole("button", { name: "Gestionar Base por actividad (IIBB Tucumán)" })).toBeTruthy();
   });
 
   it("muestra el estado Pendiente sin códigos ni conteos técnicos", async () => {

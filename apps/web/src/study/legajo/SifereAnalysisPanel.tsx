@@ -41,7 +41,7 @@ export function SifereAnalysisPanel({ analysis }: { analysis: SifereAnalysis }) 
             },
             {
               key: "comprobantes",
-              header: "Comp.",
+              header: "Comprobantes",
               align: "right",
               accessor: (rate) => rate.count,
             },
