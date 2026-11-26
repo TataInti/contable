@@ -156,7 +156,7 @@ describe("Foco 7a.2 · consultas con fetch simulado (cliente de consultas real)"
       expect(llamadas.filter((ruta) => ruta.endsWith("/contacts"))).toHaveLength(1);
     });
   });
-  it("F-D · carga de la pantalla: encabezado con un solo h1 y «Abrir Legajo» visibles mientras carga", async () => {
+  it("F-D · carga de la pantalla: encabezado con un solo h1 y «Abrir legajo» visibles mientras carga", async () => {
     montar((ruta) =>
       ruta.endsWith("/summary") ? new Promise<Response>(() => undefined) : respuesta(200, []),
     );
@@ -164,7 +164,7 @@ describe("Foco 7a.2 · consultas con fetch simulado (cliente de consultas real)"
     expect(screen.getAllByRole("heading", { level: 1, name: "Resumen del cliente" })).toHaveLength(
       1,
     );
-    expect(screen.getByRole("button", { name: "Abrir Legajo" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Abrir legajo" })).toBeTruthy();
   });
 
   it("F-E · error del resumen: encabezado con un solo h1 y aviso con «Reintentar»", async () => {

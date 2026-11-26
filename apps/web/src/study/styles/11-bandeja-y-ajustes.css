@@ -1018,12 +1018,32 @@
     gap: var(--ds-space-4);
   }
 
-  .client-summary__index-select-control {
-    display: block;
+  /* Sin columna lateral: el índice pasa a ser una fila de enlaces de sección. */
+  .client-summary__section-index {
+    position: static;
+    padding: 0 0 var(--ds-space-3);
+    border-right: 0;
+    border-bottom: 1px solid var(--client-summary-line);
+  }
+
+  .client-summary__section-index .client-summary__index-group > p {
+    display: none;
   }
 
   .client-summary__section-index {
-    display: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ds-space-1) var(--ds-space-3);
+  }
+
+  .client-summary__index-group + .client-summary__index-group {
+    margin-top: 0;
+  }
+
+  .client-summary__index-group ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ds-space-1);
   }
 }
 

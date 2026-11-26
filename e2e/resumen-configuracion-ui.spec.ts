@@ -8,7 +8,7 @@ import { altaClienteRI, crearPeriodoIIBB, inscribirIIBB, pick, vincularActividad
  *
  *   1. Alta del cliente, perfil fiscal activo, IIBB con actividad de restaurante y período de octubre con obligación.
  *   2. Configuración fiscal → Resumen: «Configuración completa».
- *   3. Resumen del cliente: «Configuración fiscal» muestra «Completado» (no «Pendiente»).
+ *   3. Resumen del cliente: «Configuración fiscal» muestra «Completa» (no «Pendiente»).
  *
  * Todo sintético y con el sufijo de la corrida. Solo se opera por la interfaz.
  */
@@ -39,7 +39,7 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
   await test.step("Resumen del cliente: la configuración fiscal figura completa, como en Configuración fiscal", async () => {
     await goTo(page, "Resumen");
     const fila = page.locator(".client-summary__overview-facts > div").filter({ hasText: "Configuración fiscal" });
-    await expect(fila, "dato «Configuración fiscal» del Resumen").toContainText("Completado", { timeout: 15_000 });
+    await expect(fila, "dato «Configuración fiscal» del Resumen").toContainText("Completa", { timeout: 15_000 });
     await expect(fila).not.toContainText("Pendiente");
     await expect(page.locator(".client-summary__overview-status")).toContainText("Activo");
     await expect(page.locator(".client-summary__overview-status")).not.toContainText("En configuración");

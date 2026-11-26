@@ -2,7 +2,7 @@ import type { NavigateFunction } from "react-router-dom";
 import { Button } from "@contable/design-system";
 import { clientConfigurationMissing } from "@contable/contracts";
 import type { ClientSummary } from "../../../lib/api";
-import { formatearFecha } from "../../../lib/formatoFechas";
+import { formatearFecha, formatearMes } from "../../../lib/formatoFechas";
 import { DenseSection } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { SummaryFact } from "../Piezas";
@@ -38,6 +38,10 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
     siguiente.push({ texto: "Completar la configuración fiscal", ruta: `/configuracion-fiscal?paso=${encodeURIComponent(primerFaltante.step)}` });
   }
   if (fiscal.obligations.length === 0) siguiente.push({ texto: "Generar obligaciones", ruta: "/configuracion-fiscal" });
+  // Próximo vencimiento y legajo del mes: salen de las obligaciones que la pantalla ya trae.
+  const proxima = fiscal.obligations
+    .filter((item) => item.dueDate && !["PAID", "FILED", "NOT_APPLICABLE"].includes(item.status))
+    .sort((a, b) => (a.dueDate as string).localeCompare(b.dueDate as string))[0];
   return (
     <DenseSection
       id="rc-resumen"
@@ -60,13 +64,13 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
       <dl className="client-summary__overview-facts">
         <SummaryFact
           label="Ficha contable"
-          value={<StatusBadge status={profile ? "CONFIGURED" : "PENDING"} className="status-badge--regular" />}
+          value={<StatusBadge status={profile ? "CONFIGURED" : "PENDING"} label={profile ? "Completa" : undefined} className="status-badge--regular" />}
         />
         <SummaryFact
           label="Configuración fiscal"
           value={
             <>
-              <StatusBadge status={faltantes.length ? "PENDING" : "COMPLETED"} className="status-badge--regular" />
+              <StatusBadge status={faltantes.length ? "PENDING" : "COMPLETED"} label={faltantes.length ? undefined : "Completa"} className="status-badge--regular" />
               {faltantes.length ? <span>Falta: {faltantes.map((gap, index) => <span key={gap.key}>{index ? ", " : ""}<Button type="button" variant="text" size="row" onClick={() => navigate(gap.step === "ficha" ? "/clientes" : `/configuracion-fiscal?paso=${encodeURIComponent(gap.step)}`)}>{gap.label}</Button></span>)}.</span> : null}
             </>
           }
@@ -78,10 +82,29 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
           />
         ) : null}
         <SummaryFact
-          label="Actividades registradas"
-          value={String(fiscal.activities.length)}
-          detail={`${activeActivities} vigente${activeActivities === 1 ? "" : "s"}`}
+          label="Actividades vigentes"
+          value={String(activeActivities)}
         />
+        {proxima ? (
+          <>
+            <SummaryFact
+              label="Próximo vencimiento"
+              value={formatearFecha(proxima.dueDate)}
+              detail={proxima.regime.taxType.name}
+            />
+            <SummaryFact
+              label={`Legajo de ${formatearMes(proxima.period.endDate)}`}
+              value={
+                <>
+                  <StatusBadge status={proxima.status} className="status-badge--regular" />
+                  <Button type="button" variant="text" size="row" onClick={() => navigate("/expediente-mensual")}>
+                    Abrir legajo
+                  </Button>
+                </>
+              }
+            />
+          </>
+        ) : null}
         <SummaryFact
           label={fiscal.obligations.length === 1 ? "Obligación" : "Obligaciones"}
           value={String(fiscal.obligations.length)}

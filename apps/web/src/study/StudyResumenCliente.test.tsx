@@ -214,7 +214,8 @@ describe("StudyResumenCliente — composición del resumen", () => {
     expect(screen.getByText("Alfa · CUIT 20-11111111-2")).toBeTruthy();
     expect(screen.queryByText("En configuración")).toBeNull();
     expect(screen.getAllByText(/Actualizado/)).toHaveLength(1);
-    expect(within(overview).getByText("1 vigente")).toBeTruthy();
+    expect(within(overview).getByText("Actividades vigentes")).toBeTruthy();
+    expect(within(overview).queryByText("1 vigente")).toBeNull();
     expect(within(overview).getByText("Obligación")).toBeTruthy();
     expect(screen.queryByText("1 obligaciones")).toBeNull();
     expect(within(overview).queryByText("Ejercicios contables")).toBeNull();
@@ -251,7 +252,7 @@ describe("StudyResumenCliente — composición del resumen", () => {
     renderSummary();
     await screen.findByRole("region", { name: "Datos generales" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Abrir Legajo" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Abrir legajo" })[0] as HTMLElement);
     await waitFor(() => expect(screen.getByTestId("current-path").textContent).toBe("/expediente-mensual"));
   });
 });

@@ -72,7 +72,7 @@ export function StudyResumenCliente() {
       <Button variant="secondary" onClick={() => navigate("/configuracion-fiscal")}>
         Configuración fiscal
       </Button>
-      <Button onClick={() => navigate("/expediente-mensual")}>Abrir Legajo</Button>
+      <Button onClick={() => navigate("/expediente-mensual")}>Abrir legajo</Button>
     </>
   );
 

@@ -241,12 +241,14 @@ describe("Caracterización · Resumen del cliente: índice y secciones (R3 a R5)
     expect(seccion.querySelector(".dense-count")?.textContent).toBe("1");
   });
 
-  it("R4 · el selector de sección tiene 7 opciones y «Catálogos» muestra los tres conteos", async () => {
+  it("R4 · el índice de secciones tiene 7 enlaces (sin selector aparte) y «Catálogos» muestra los tres conteos", async () => {
     montar();
-    const selector = await screen.findByRole("combobox", { name: "Sección del cliente" });
-    expect(abrirListado("Sección del cliente").querySelectorAll('[role="option"]')).toHaveLength(7);
+    await screen.findByRole("region", { name: "Datos generales" });
+    expect(screen.queryByRole("combobox", { name: "Sección del cliente" })).toBeNull();
+    const indice = screen.getByRole("navigation", { name: "Secciones internas del cliente" });
+    expect(within(indice).getAllByRole("button")).toHaveLength(7);
 
-    cambiarValor(selector, "catalogs");
+    fireEvent.click(within(indice).getByRole("button", { name: "Catálogos" }));
     const seccion = await screen.findByRole("region", { name: "Catálogos del cliente" });
     const filas = Array.from(seccion.querySelectorAll(".client-summary__catalog-list li"), (fila) => fila.textContent);
     expect(filas).toEqual(["Plan de cuentas1", "Contrapartes2", "Centros de costo activos3"]);
@@ -271,14 +273,14 @@ describe("Caracterización · Resumen del cliente: índice y secciones (R3 a R5)
 });
 
 describe("Caracterización · Resumen del cliente: estados y datos (R6 a R9)", () => {
-  it("R6 · documenta: con perfil contable y configuración fiscal completa (perfil, regímenes, actividades, períodos y obligaciones), «Ficha contable» dice «Configurada» y «Configuración fiscal» dice «Completado»", async () => {
+  it("R6 · documenta: con perfil contable y configuración fiscal completa (perfil, regímenes, actividades, períodos y obligaciones), «Ficha contable» y «Configuración fiscal» dicen «Completa»", async () => {
     montar();
     const resumenSeccion = await screen.findByRole("region", { name: "Datos generales" });
     const valorDe = (etiqueta: string) => within(resumenSeccion).getByText(etiqueta, { selector: "dt" }).parentElement?.textContent;
-    expect(valorDe("Ficha contable")).toContain("Configurada");
+    expect(valorDe("Ficha contable")).toContain("Completa");
     // D4: «Configuración fiscal» del Resumen usa el mismo criterio que Configuración fiscal (pasos.ts), no el flag
-    // «onboarding» que nadie actualiza. Con la configuración completa, dice «Completado».
-    expect(valorDe("Configuración fiscal")).toContain("Completado");
+    // «onboarding» que nadie actualiza. Con la configuración completa, dice «Completa».
+    expect(valorDe("Configuración fiscal")).toContain("Completa");
   });
 
   it("R6b · D4: sin regímenes adheridos, «Configuración fiscal» del Resumen dice «Pendiente» aunque el flag «onboarding» diga otra cosa", async () => {
@@ -392,7 +394,7 @@ describe("Caracterización · matriz §2.1 (13 filas): datos visibles con client
       expect(within(encabezado).getAllByRole("button").map((boton) => boton.textContent?.trim())).toEqual([
         "Volver a clientes",
         "Configuración fiscal",
-        "Abrir Legajo",
+        "Abrir legajo",
       ]);
     }
   });
@@ -427,12 +429,12 @@ describe("Caracterización · matriz §2.1 (13 filas): datos visibles con client
     expect(await screen.findByRole("region", { name: /Obligaciones/ })).toBeTruthy();
   });
 
-  it("M5 · resumen: 4 datos de estado; «Qué sigue» solo aparece si falta algo (completo y vacío)", async () => {
+  it("M5 · resumen: 4 datos de estado (6 con próximo vencimiento y legajo del mes); «Qué sigue» solo aparece si falta algo (completo y vacío)", async () => {
     for (const datos of [resumen(), resumen(vacio)]) {
       cleanup();
       montar({ datos });
       const resumenSeccion = await screen.findByRole("region", { name: "Datos generales" });
-      expect(resumenSeccion.querySelectorAll("dt")).toHaveLength(4);
+      expect(resumenSeccion.querySelectorAll("dt")).toHaveLength(datos.fiscal.obligations.length > 0 ? 6 : 4);
       const accesos = resumenSeccion.querySelector(".client-summary__overview-links") as HTMLElement | null;
       if (datos.fiscal.profiles.length > 0) expect(accesos).toBeNull();
       else expect(within(accesos as HTMLElement).getAllByRole("button").map((boton) => boton.textContent)).toEqual(["Generar obligaciones"]);
