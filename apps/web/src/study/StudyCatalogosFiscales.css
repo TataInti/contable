@@ -1,3 +1,7 @@
+.fiscal-required-form .ds-field:has(> .ds-field__control > input:required) > .ds-field__label::after {
+  content: " *";
+}
+
 .fiscal-catalog-page .dense-inspector-actions__menu {
   flex: 0 0 auto;
   margin-left: auto;

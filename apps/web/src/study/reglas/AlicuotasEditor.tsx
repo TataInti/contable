@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import type { CatalogEconomicActivity, TaxRuleKindOption } from "@contable/contracts";
 import { MONOTRIBUTO_CATEGORY_CODES } from "@contable/contracts";
-import { Button, MoneyField, Table, SearchSelect } from "@contable/design-system";
+import { Button, MoneyField, Notice, Table, SearchSelect } from "@contable/design-system";
 import { Icon } from "../../ui/Icon";
 import { ErrorConsulta } from "./Errores";
 import type { RuleJurisdictionOption, RulePackDetail, RuleRow, RuleVersion } from "./tipos";
@@ -48,6 +48,9 @@ export function AlicuotasEditor({
   const subjetosTipo = new Set((ruleKindsQuery.data ?? []).map((option) => option.subject));
   const usaActividades = subjetosTipo.has("ACTIVITY") || subjetosTipo.has("ACTIVITY_OR_DEFAULT");
   const usaJurisdicciones = subjetosTipo.has("JURISDICTION") || subjetosTipo.has("JURISDICTION_OR_DEFAULT");
+  const reglasSinTipo = !editable && ruleKindsQuery.isSuccess && selectedVersion.rateRules.some(
+    (row) => !(ruleKindsQuery.data ?? []).some((kind) => kind.id === row.kindId),
+  );
   // Los campos de cada regla se nombran por su posición, no por un identificador interno.
   const rowNumber = (row: { id: string }) => draftRows.findIndex((item) => item.id === row.id) + 1;
 
@@ -125,6 +128,11 @@ export function AlicuotasEditor({
                     </Button>
                   ) : null}
                 </div>
+                {reglasSinTipo ? (
+                  <Notice tone="warning">
+                    Hay reglas sin tipo identificable. Antes de usar esta versión, revisá sus alícuotas con quien administra el estudio y creá una versión corregida si corresponde.
+                  </Notice>
+                ) : null}
                 {ruleKindsQuery.isError ? (
                   <ErrorConsulta
                     titulo="No se pudieron cargar los tipos de regla"
@@ -174,6 +182,7 @@ export function AlicuotasEditor({
                       key: "kind",
                       header: "Tipo de regla",
                       render: (row) => {
+                        if (ruleKindsQuery.isLoading) return <span className="muted-copy">Cargando…</span>;
                         if (ruleKindsQuery.isError) return <span className="muted-copy">No disponible</span>;
                         const kinds = ruleKindsQuery.data ?? [];
                         const currentKind = kinds.find((kind) => kind.id === row.kindId);
