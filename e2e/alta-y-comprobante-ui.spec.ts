@@ -707,6 +707,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
     await drawer.getByLabel("Importe", { exact: true }).fill("38199.00");
     await drawer.getByLabel("Fecha de pago").fill("2025-04-18");
     await drawer.getByLabel("Referencia").fill(`E2E-PAGO-${SUFFIX}`);
+    await drawer.getByLabel("Registrar también el pago al guardar").check();
     await mutating(page, "/payments", () => drawer.getByRole("button", { name: "Registrar pago" }).click());
     await page.waitForTimeout(2000);
     test.info().annotations.push({ type: "legajo · tras presentar y pagar", description: (await card.innerText()).replace(/\s+/g, " ").slice(-900) });

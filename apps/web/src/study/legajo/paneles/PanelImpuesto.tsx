@@ -201,9 +201,16 @@ export function PanelImpuesto({
   // Sin permiso de presentación, el pago es lo único que se puede guardar: no hace falta tildarlo.
   const incluyePago = pagoVisible && (conPago || !canFile);
   const documentosListos = canFile && motivo === null;
+  // Al pagar una declaración jurada ya guardada y sin cambios no se vuelve a guardar como corrección.
+  const djCambiada =
+    !conDj ||
+    archivoDj !== null ||
+    dj.documentId !== (posicion.declarationDocumentId ?? "") ||
+    IMPORTES.some(([campo]) => !mismoImporte(dj[campo], posicion[campo] ?? ""));
+  const guardaDocumentos = documentosListos && !(incluyePago && presentada && !djCambiada);
   const pagoListo = incluyePago && motivoPago === null;
   // Un solo botón al pie: guarda lo que esté completo (presentación, declaración jurada y, si se tilda, el pago).
-  const puedeGuardar = (documentosListos || pagoListo) && !(incluyePago && motivoPago !== null);
+  const puedeGuardar = (guardaDocumentos || pagoListo) && !(incluyePago && motivoPago !== null);
 
   const etiquetaDocumentos = !presentada
     ? djCompleta
@@ -213,7 +220,7 @@ export function PanelImpuesto({
       ? "Guardar corrección"
       : "Guardar declaración jurada";
   const etiquetaGuardar = incluyePago
-    ? documentosListos
+    ? guardaDocumentos
       ? `${etiquetaDocumentos} y pago`
       : "Registrar pago"
     : etiquetaDocumentos;
@@ -224,7 +231,7 @@ export function PanelImpuesto({
     mutationFn: async () => {
       let warnings: TaxFilingDeclarationWarning[] = [];
       let guardoDj = false;
-      if (documentosListos) {
+      if (guardaDocumentos) {
         let filingId = posicion.filingId ?? null;
         if (presentacionLista) {
           // La constancia es obligatoria: se elige una ya subida o se sube en este mismo paso.
