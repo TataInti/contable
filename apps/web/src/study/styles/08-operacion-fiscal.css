@@ -1,4 +1,4 @@
-/* ============================================================
+/* =====================================================
    Operación fiscal — configuración, expediente y reglas
    ============================================================ */
 
@@ -161,6 +161,10 @@
 /* Foco 2.10: la línea de consecuencia del motor se lee con el texto principal, no con el de ayuda. */
 .form-submit-hint.selector-motor-consecuencia {
   color: var(--ds-color-text);
+}
+
+.fiscal-action-form .ds-field:has(> .ds-field__control > input:required) > .ds-field__label::after {
+  content: " *";
 }
 
 .study-form.fiscal-action-form > .study-panel__heading,
@@ -1464,6 +1468,27 @@
   font-weight: 700;
 }
 
+.workpaper-close-summary { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); white-space: nowrap; }
+.workpaper-close-summary strong { color: var(--ds-color-text); }
+.workpaper-close-checklist { display: grid; margin: 0; padding: 0; list-style: none; }
+.workpaper-close-step { display: grid; grid-template-columns: 2rem minmax(0, 1fr) 7rem minmax(12rem, auto); align-items: center; gap: var(--ds-space-2) var(--ds-space-3); min-block-size: 3rem; border-bottom: 1px solid var(--ds-color-border-subtle); }
+.workpaper-close-step__number, .workpaper-close-step__status { color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
+.workpaper-close-step__inline { grid-column: 2 / -1; min-width: 0; padding: 0 0 var(--ds-space-3); }
+.workpaper-close-inline { display: grid; gap: var(--ds-space-2); padding: var(--ds-space-2) 0; border-top: 1px solid var(--ds-color-border-subtle); }
+.workpaper-close-inline h4, .workpaper-close-inline p { margin: 0; }
+.workpaper-close-inline .study-form { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--ds-space-2); }
+.workpaper-close-inline__actions { display: flex; justify-content: flex-end; gap: var(--ds-space-2); }
+.workpaper-close-step__title { display: grid; gap: var(--ds-space-1); }
+.workpaper-close-step__title small { color: var(--ds-color-text-muted); }
+.workpaper-close-step__action { display: flex; align-items: center; gap: var(--ds-space-2); }
+
+/* Calendario fiscal: requeridos y grupos del formulario de celda. */
+.calendario-requerido { color: var(--ds-color-danger); }
+.calendario-celda-form { display: grid; gap: var(--ds-space-3); }
+.calendario-celda-seccion { display: grid; gap: var(--ds-space-3); padding-block: var(--ds-space-3); border-top: 1px solid var(--ds-color-border-subtle); }
+.calendario-celda-seccion h3 { margin: 0; font-size: var(--ds-text-base); }
+.calendario-celda-digitos .dense-seg__option { min-inline-size: 32px; }
+
 .workpaper-close-summary {
   margin: 0;
   color: var(--ds-color-text-muted);
@@ -1548,6 +1573,27 @@
   flex: 1 1 100%;
 }
 
+.workpaper-controls__resueltos {
+  justify-self: start;
+  text-align: start;
+}
+
+/* El nombre de un control puede ser largo: el título del cajón hace salto de línea en vez de cortarse con «…». */
+.action-drawer__panel:has([data-object-kind="control"]) .action-drawer__header h2 {
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.workpaper-controls .ds-empty--inline {
+  padding-block: var(--ds-space-2);
+}
+
+.workpaper-controls .work-queue--vacia {
+  justify-items: start;
+}
+
 /* Cierre: un cajón por impuesto (presentación, declaración jurada y pago). */
 .workpaper-close-taxes { display: grid; gap: var(--ds-space-2); margin-top: var(--ds-space-4); }
 .workpaper-close-taxes h3 { margin: 0; font-size: var(--ds-text-lg); }
@@ -1582,3 +1628,12 @@
   padding: 0;
   border-bottom: 0;
 }
+
+/* Etapa no disponible todavía: candado en la pestaña (el motivo va en el tooltip). */
+.workpaper-candado {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ds-color-text-muted);
+  cursor: help;
+}
+.workpaper-continuar { display: flex; align-items: center; gap: var(--ds-space-3); }

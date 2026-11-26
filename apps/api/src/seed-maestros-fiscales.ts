@@ -239,6 +239,15 @@ async function main() {
     await ensureRegimeModule(temRegime.id, "TAX_TEM_SMT");
     // Familia de cálculo de los regímenes de sistema: la migración 20261112000000 la asigna a las filas existentes;
     // en una base nueva el régimen se crea después, así que se vincula aquí con la misma regla, solo donde está vacía.
+    // Lo mismo con la familia por defecto de los tipos de impuesto (IVA y TEM; el Monotributo se vincula arriba): así el
+    // alta de un régimen de IVA o TEM completa sola la familia de cálculo, sin depender de datos de otras pruebas.
+    for (const [taxTypeId, familyKey] of [
+      [iva.id, "VAT_RI"],
+      [tem.id, "TEM"],
+    ] as const) {
+      const familia = await tx.calcFamily.findUnique({ where: { key: familyKey } });
+      if (familia) await tx.taxType.updateMany({ where: { id: taxTypeId, defaultFamilyId: null }, data: { defaultFamilyId: familia.id } });
+    }
     for (const [regimeId, familyKey] of [
       [ri.id, "VAT_RI"],
       [cm03Regime.id, "IIBB_CM03"],

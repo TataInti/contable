@@ -61,12 +61,12 @@ export function WorkpaperSourceReviewAction({
           }
           onClick={() => onReview(batch.id)}
         >
-          Revisar
+          {selfReviewBlocked ? "Pedir revisión a otra persona" : "Revisar"}
         </Button>
       ) : null}
       {showReviewButton && selfReviewBlocked ? (
         <small className="muted-copy">
-          Para revisar este lote, el Titular puede habilitar la autorrevisión en Configuración del estudio.
+          Lo importaste vos: lo revisa otra persona del estudio, o el Titular puede habilitar la autorrevisión en Configuración del estudio.
         </small>
       ) : null}
       {error ? (

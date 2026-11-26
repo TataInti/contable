@@ -29,7 +29,7 @@ describe("WorkpaperSourceReviewAction", () => {
       />,
     );
 
-    expect((screen.getByRole("button", { name: "Revisar" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Pedir revisión a otra persona" }) as HTMLButtonElement).disabled).toBe(true);
     expect(
       screen.getByText(/Titular puede habilitar la autorrevisión en Configuración del estudio/),
     ).toBeTruthy();
