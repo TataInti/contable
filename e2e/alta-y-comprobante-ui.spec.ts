@@ -398,7 +398,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Trabajo: pedido documental para recibir el comprobante", async () => {
     await goTo(page, "Trabajo");
     await expect(page.getByRole("heading", { name: "Trabajo", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: /Nuevo pedido|Crear pedido/ }).first().click();
+    await page.getByRole("button", { name: /Nuevo pedido|Pedir documentación/ }).first().click();
     await page.locator("#request-title").fill(data.request.title);
     await page.locator("#request-item").fill(data.request.item);
     await mutating(page, "/document-requests", () =>
