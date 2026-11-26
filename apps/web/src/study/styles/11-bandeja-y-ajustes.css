@@ -1040,10 +1040,11 @@
     margin-top: 0;
   }
 
+  /* Entre pestañas hay separación: cada enlace conserva su relleno y no se toca con el siguiente. */
   .client-summary__index-group ul {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--ds-space-1);
+    gap: var(--ds-space-1) var(--ds-space-3);
   }
 }
 
@@ -1085,4 +1086,18 @@
   margin: var(--ds-space-4) 0 0;
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-sm);
+}
+
+/* Próximo vencimiento: una línea bajo los indicadores, con el acceso al Legajo. */
+.client-summary__proximo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-3);
+  margin: var(--ds-space-3) 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+}
+.client-summary__proximo strong {
+  color: var(--ds-color-text);
 }

@@ -2,7 +2,7 @@ import type { NavigateFunction } from "react-router-dom";
 import { Button } from "@contable/design-system";
 import { clientConfigurationMissing } from "@contable/contracts";
 import type { ClientSummary } from "../../../lib/api";
-import { formatearFecha, formatearMes } from "../../../lib/formatoFechas";
+import { formatearFecha } from "../../../lib/formatoFechas";
 import { DenseSection } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
 import { SummaryFact } from "../Piezas";
@@ -38,7 +38,7 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
     siguiente.push({ texto: "Completar la configuración fiscal", ruta: `/configuracion-fiscal?paso=${encodeURIComponent(primerFaltante.step)}` });
   }
   if (fiscal.obligations.length === 0) siguiente.push({ texto: "Generar obligaciones", ruta: "/configuracion-fiscal" });
-  // Próximo vencimiento y legajo del mes: salen de las obligaciones que la pantalla ya trae.
+  // Próximo vencimiento: sale de las obligaciones que la pantalla ya trae; sin datos no se muestra nada.
   const proxima = fiscal.obligations
     .filter((item) => item.dueDate && !["PAID", "FILED", "NOT_APPLICABLE"].includes(item.status))
     .sort((a, b) => (a.dueDate as string).localeCompare(b.dueDate as string))[0];
@@ -85,31 +85,21 @@ export function SeccionResumen({ client, profile, fiscal, openAccountingYearCoun
           label="Actividades vigentes"
           value={String(activeActivities)}
         />
-        {proxima ? (
-          <>
-            <SummaryFact
-              label="Próximo vencimiento"
-              value={formatearFecha(proxima.dueDate)}
-              detail={proxima.regime.taxType.name}
-            />
-            <SummaryFact
-              label={`Legajo de ${formatearMes(proxima.period.endDate)}`}
-              value={
-                <>
-                  <StatusBadge status={proxima.status} className="status-badge--regular" />
-                  <Button type="button" variant="text" size="row" onClick={() => navigate("/expediente-mensual")}>
-                    Abrir legajo
-                  </Button>
-                </>
-              }
-            />
-          </>
-        ) : null}
         <SummaryFact
           label={fiscal.obligations.length === 1 ? "Obligación" : "Obligaciones"}
           value={String(fiscal.obligations.length)}
         />
       </dl>
+      {proxima ? (
+        <p className="client-summary__proximo">
+          <span>
+            Próximo vencimiento: <strong>{proxima.regime.taxType.name} · {formatearFecha(proxima.dueDate)}</strong>
+          </span>
+          <Button type="button" variant="text" size="row" onClick={() => navigate("/expediente-mensual")}>
+            Abrir legajo
+          </Button>
+        </p>
+      ) : null}
       {siguiente.length > 0 ? (
         <div className="client-summary__overview-links">
           <h3>Qué sigue</h3>

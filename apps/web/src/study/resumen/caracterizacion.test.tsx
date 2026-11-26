@@ -429,12 +429,17 @@ describe("Caracterización · matriz §2.1 (13 filas): datos visibles con client
     expect(await screen.findByRole("region", { name: /Obligaciones/ })).toBeTruthy();
   });
 
-  it("M5 · resumen: 4 datos de estado (6 con próximo vencimiento y legajo del mes); «Qué sigue» solo aparece si falta algo (completo y vacío)", async () => {
+  it("M5 · resumen: 4 datos de estado y, con obligaciones, la línea «Próximo vencimiento» con «Abrir legajo»; «Qué sigue» solo aparece si falta algo (completo y vacío)", async () => {
     for (const datos of [resumen(), resumen(vacio)]) {
       cleanup();
       montar({ datos });
       const resumenSeccion = await screen.findByRole("region", { name: "Datos generales" });
-      expect(resumenSeccion.querySelectorAll("dt")).toHaveLength(datos.fiscal.obligations.length > 0 ? 6 : 4);
+      expect(resumenSeccion.querySelectorAll("dt")).toHaveLength(4);
+      const proximo = resumenSeccion.querySelector(".client-summary__proximo") as HTMLElement | null;
+      if (datos.fiscal.obligations.length > 0) {
+        expect(proximo?.textContent).toMatch(/^Próximo vencimiento: IVA · .+Abrir legajo$/);
+        expect(within(proximo as HTMLElement).getByRole("button", { name: "Abrir legajo" })).toBeTruthy();
+      } else expect(proximo).toBeNull();
       const accesos = resumenSeccion.querySelector(".client-summary__overview-links") as HTMLElement | null;
       if (datos.fiscal.profiles.length > 0) expect(accesos).toBeNull();
       else expect(within(accesos as HTMLElement).getAllByRole("button").map((boton) => boton.textContent)).toEqual(["Generar obligaciones"]);
