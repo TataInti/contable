@@ -125,7 +125,7 @@ export function EtapaCierre({
       ) : null}
       <section aria-label="Saldo para el mes siguiente">
         <h3>Saldo para el mes siguiente</h3>
-        <p>{nextBalance !== null && nextBalance !== "" && Number.isFinite(Number(nextBalance)) ? formatMoney(nextBalance) : "El saldo se informa al cargar la declaración jurada."} · pasa a {nextPeriod}.</p>
+        <p>{nextBalance !== null && nextBalance !== "" && Number.isFinite(Number(nextBalance)) ? `${formatMoney(nextBalance)} · pasa a ${nextPeriod}.` : `El saldo se informa al cargar la declaración jurada y pasa a ${nextPeriod}.`}</p>
       </section>
       {finalized && !readOnly ? <div>
         <p>Reabrí con una rectificativa cuando necesites corregir una liquidación ya cerrada.</p>

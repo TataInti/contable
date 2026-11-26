@@ -113,7 +113,7 @@ describe("Legajo · cabecera (K3)", () => {
 
   /** Abre «Acciones del período» y devuelve el ítem pedido. */
   function itemDelPeriodo(nombre: RegExp): HTMLElement {
-    fireEvent.click(screen.getByRole("button", { name: "Acciones del período" }));
+    fireEvent.click(screen.getByRole("button", { name: "Más acciones" }));
     return screen.getByRole("menuitem", { name: nombre });
   }
 
@@ -146,7 +146,7 @@ describe("Legajo · cabecera (K3)", () => {
     fijarContexto(["client.read", "tax.settlements.calculate"]);
     renderLegajo();
     await esperarPeriodo();
-    fireEvent.click(screen.getByRole("button", { name: "Acciones del período" }));
+    fireEvent.click(screen.getByRole("button", { name: "Más acciones" }));
     expect(screen.queryByRole("menuitem", { name: /Exportar libros/ })).toBeNull();
   });
 

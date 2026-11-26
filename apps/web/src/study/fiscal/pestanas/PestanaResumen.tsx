@@ -2,10 +2,9 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import type { Dispatch, SetStateAction } from "react";
 import { Button, EmptyState } from "@contable/design-system";
 import type { ClientConfigurationMissing } from "@contable/contracts";
-import { formatCuit } from "../../../lib/cuit";
 import { ListaFaltantes } from "../../../ui/ListaFaltantes";
 import { StatusBadge } from "../../../ui/StatusBadge";
-import { CONDITION_LABELS, today, type ClientActivityLink, type FiscalStep, type FiscalTab, type Mutacion, type ProfileForm, type TaxPeriod, type TaxRegistration, type TaxpayerProfileVersion } from "../utilidades";
+import { CONDITION_LABELS, FISCAL_STEPS, today, type ClientActivityLink, type FiscalStep, type FiscalTab, type Mutacion, type ProfileForm, type TaxPeriod, type TaxRegistration, type TaxpayerProfileVersion } from "../utilidades";
 
 type Props = {
   configuracionCompleta: boolean;
@@ -37,7 +36,7 @@ export function PestanaResumen({ configuracionCompleta, faltantes, abrirFaltante
           <StatusBadge status="COMPLETED" label="Configuración completa" />
           <span>El cliente ya tiene todo lo necesario para abrir una liquidación.</span>
         </p>
-      ) : faltantes.length ? <p><ListaFaltantes faltantes={faltantes} onAbrir={(gap) => abrirFaltante(gap.step)} /></p> : null}
+      ) : faltantes.length ? <p><ListaFaltantes faltantes={faltantes.map((gap) => ({ ...gap, label: FISCAL_STEPS.find((paso) => paso.key === gap.step)?.label ?? gap.label }))} onAbrir={(gap) => abrirFaltante(gap.step)} /></p> : null}
 
       <section className="fiscal-section" aria-labelledby="contributor-title">
         <div className="fiscal-section__heading">
@@ -48,7 +47,6 @@ export function PestanaResumen({ configuracionCompleta, faltantes, abrirFaltante
           <>
             <dl className="fiscal-facts">
               <div><dt>Razón social</dt><dd>{latestProfile.legalName}</dd></div>
-              <div><dt>CUIT</dt><dd>{formatCuit(latestProfile.cuit)}</dd></div>
               <div><dt>Tipo</dt><dd>{latestProfile.personType === "JURIDICA" ? "Persona jurídica" : "Persona física"}</dd></div>
               <div><dt>Condición</dt><dd>{CONDITION_LABELS[latestProfile.nationalCondition]}</dd></div>
               <div><dt>Domicilio fiscal</dt><dd>{latestProfile.fiscalAddress?.trim() || "No cargado"}</dd></div>

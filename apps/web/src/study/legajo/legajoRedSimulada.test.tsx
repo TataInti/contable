@@ -107,7 +107,7 @@ describe("Legajo · flujos con la red simulada a través del cliente real (Barra
   it("la carga del legajo y de la etapa Saldos llega por el cliente real y muestra la barra y la tabla", async () => {
     renderLegajo();
     const barra = await screen.findByRole("region", { name: NOMBRE_BARRA });
-    expect(await within(barra).findByRole("button", { name: "Revisión 1" })).toBeTruthy();
+    expect(await within(barra).findByRole("button", { name: "Revisión 1 de 1" })).toBeTruthy();
     expect(await screen.findByText("SALDO A FAVOR")).toBeTruthy();
     expect(rutasLeidas.some((ruta) => ruta.includes("/monthly-tax-workpapers?from="))).toBe(true);
     expect(rutasLeidas.some((ruta) => ruta.endsWith("/tax-credit-ledger"))).toBe(true);

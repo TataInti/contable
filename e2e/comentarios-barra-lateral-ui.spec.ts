@@ -71,6 +71,10 @@ async function abrirEtapa(page: Page, etapa: string) {
 
 async function verificarBarraADerecha(page: Page) {
   const thread = page.getByRole("region", { name: "Comentarios" });
+  // Sin comentarios en el mes, la barra arranca plegada (09-7): se abre desde la franja.
+  const franja = page.getByRole("button", { name: /^Comentarios · \d+$/ });
+  await expect(franja.or(thread)).toBeVisible();
+  if (await franja.isVisible()) await franja.click();
   await expect(thread).toBeVisible();
   const contenido = page.locator(".workpaper-main");
   const area = await contenido.boundingBox();
