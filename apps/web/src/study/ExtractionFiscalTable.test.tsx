@@ -235,7 +235,8 @@ describe("ExtractionFiscalTable", () => {
     expect(screen.getByRole("status", { name: "Estado del documento" }).textContent).toContain(
       "neto + IVA no cierra con el total",
     );
-    
+    expect(rowForField(table, "Neto gravado")[1]!.textContent).not.toContain("a revisar");
+    expect(rowForField(table, "IVA · alícuota 21%")[1]!.textContent).not.toContain("a revisar");
   });
 
   it("marca los valores null como no visibles", () => {
@@ -268,7 +269,7 @@ describe("ExtractionFiscalTable", () => {
     const flagged = rowForField(table, label);
 
     expect(flagged[1]!.textContent).toContain(" · a revisar: dato inválido");
-    
+    expect(rowForField(table, otherLabel)[1]!.textContent).not.toContain("a revisar");
     expect(screen.queryByRole("status", { name: "Estado del documento" })).toBeNull();
   });
 
@@ -303,7 +304,7 @@ describe("ExtractionFiscalTable", () => {
     renderTable();
     table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
     expect(screen.queryByRole("status", { name: "Estado del documento" })).toBeNull();
-    
+    expect(rowForField(table, "Percepción – sin clasificar")[1]!.textContent).not.toContain("a revisar");
   });
 
   it("muestra la corrección efectiva y distingue los campos cargados a mano", () => {
