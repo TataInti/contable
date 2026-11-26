@@ -1602,6 +1602,8 @@
   outline-offset: 2px;
 }
 .campo-archivo__boton {
+  background: transparent;
+  font-family: inherit;
   padding: var(--ds-space-1) var(--ds-space-3);
   border: 1px solid var(--ds-color-border-strong);
   border-radius: var(--ds-radius-md);
