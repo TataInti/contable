@@ -1535,14 +1535,14 @@ export function StudyExpedienteMensual() {
         />
       ) : null}
       {selectedTaxPeriod ? (
-        <span className="muted-copy" aria-live="polite">
+        <span className="muted-copy work-bar__vence" aria-live="polite">
           {positionQuery.isLoading ? (
             "Cargando vencimiento…"
           ) : dueDateForSelectedTax ? (
             `Vence el ${formatearFecha(dueDateForSelectedTax)}`
           ) : (
             <>
-              Sin vencimiento cargado{" "}
+              <span>Sin vencimiento cargado</span>
               <Button size="sm" variant="text" onClick={() => navigate("/calendarios-fiscales")}>
                 Calendarios
               </Button>

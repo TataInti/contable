@@ -375,13 +375,28 @@
 }
 /* Cliente y CUIT al inicio de la barra del Legajo (09-1): cede ancho antes que el período y se corta con puntos suspensivos. */
 .work-bar__cliente {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-inline-size: 120px;
   max-inline-size: 440px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--ds-text-sm);
+}
+/* El vencimiento no recorta al cliente: va en dos renglones (texto y «Calendarios») y, en pantallas
+   angostas, el CUIT queda en el tooltip para que el nombre se lea completo. */
+.work-bar__vence {
+  display: inline-flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-inline-start: var(--ds-space-2);
+  font-size: var(--ds-text-sm);
+  white-space: nowrap;
+}
+.work-bar__vence .ds-button { min-block-size: 0; padding-block: 0; }
+@media (max-width: 1439px) {
+  .work-bar__cliente .muted-copy { display: none; }
 }
 /* Lista del período del Legajo (portal): su piso de 420px gana sobre el ancho en línea del campo. */
 .workpaper-period-listbox {
