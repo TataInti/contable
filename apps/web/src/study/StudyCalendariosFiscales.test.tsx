@@ -395,13 +395,13 @@ describe("alta de calendario", () => {
     renderAt(listUrl);
     fireEvent.click((await screen.findAllByRole("button", { name: "Nuevo calendario" }))[0]!);
     const dialog = await screen.findByRole("dialog", { name: "Nuevo calendario" });
-    cambiarValor(within(dialog).getByLabelText("Año"), "1999");
+    cambiarValor(within(dialog).getByLabelText("Año *"), "1999");
     expect(within(dialog).getByText("El año debe estar entre 2000 y 2100")).toBeTruthy();
 
     cambiarValor(within(dialog).getByLabelText("Organismo"), AUTH);
     cambiarValor(within(dialog).getByLabelText("Jurisdicción"), JUR);
-    cambiarValor(within(dialog).getByLabelText("Año"), "2026");
-    cambiarValor(within(dialog).getByLabelText("Título"), "Calendario sintético 2026");
+    cambiarValor(within(dialog).getByLabelText("Año *"), "2026");
+    cambiarValor(within(dialog).getByLabelText("Título *"), "Calendario sintético 2026");
     post.mockImplementationOnce(() =>
       Promise.reject(
         new ApiError("CALENDAR_REFERENCE_NOT_FOUND", "El organismo no existe en el catálogo", 422, null, {
@@ -423,8 +423,8 @@ describe("alta de calendario", () => {
     const dialog = await screen.findByRole("dialog", { name: "Nuevo calendario" });
     cambiarValor(within(dialog).getByLabelText("Organismo"), AUTH);
     cambiarValor(within(dialog).getByLabelText("Jurisdicción"), JUR);
-    cambiarValor(within(dialog).getByLabelText("Año"), "2026");
-    cambiarValor(within(dialog).getByLabelText("Título"), "Calendario sintético 2026");
+    cambiarValor(within(dialog).getByLabelText("Año *"), "2026");
+    cambiarValor(within(dialog).getByLabelText("Título *"), "Calendario sintético 2026");
     fireEvent.submit(document.getElementById("nuevo-calendario-form")!);
     expect(await screen.findByText("Calendario creado: versión 1 en borrador.")).toBeTruthy();
     await waitFor(() => expect(lastSearch).toBe(`?calendario=${CAL_NEW}`));
@@ -532,16 +532,16 @@ describe("celdas", () => {
     fireEvent.click(await screen.findByRole("tab", { name: /^Celdas/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Agregar celda" }));
     const dialog = await screen.findByRole("dialog", { name: "Agregar celda" });
-    fireEvent.change(within(dialog).getByLabelText("Concepto (como figura en el PDF)"), {
+    fireEvent.change(within(dialog).getByLabelText("Concepto (como figura en el PDF) *"), {
       target: { value: "Concepto sintético" },
     });
-    fireEvent.change(within(dialog).getByLabelText("Fecha de vencimiento (AAAA-MM-DD)"), {
-      target: { value: "2026-02-30" },
+    fireEvent.change(within(dialog).getByLabelText("Fecha de vencimiento *"), {
+      target: { value: "30/02/2026" },
     });
-    expect(within(dialog).getByText("La fecha debe ser una fecha real con formato AAAA-MM-DD")).toBeTruthy();
+    expect(within(dialog).getByText("La fecha debe ser una fecha real con formato dd/mm/aaaa")).toBeTruthy();
 
-    fireEvent.change(within(dialog).getByLabelText("Fecha de vencimiento (AAAA-MM-DD)"), {
-      target: { value: "2026-02-27" },
+    fireEvent.change(within(dialog).getByLabelText("Fecha de vencimiento *"), {
+      target: { value: "27/02/2026" },
     });
     fireEvent.submit(document.getElementById("celda-form")!);
     expect(within(dialog).getByText("Indicá las terminaciones de la celda (por ejemplo 0123)")).toBeTruthy();
@@ -570,7 +570,7 @@ describe("celdas", () => {
     fireEvent.click(await screen.findByRole("tab", { name: /^Celdas/ }));
     fireEvent.click(await screen.findByRole("button", { name: `Editar ${IB}, vence 18/02/2026` }));
     const dialog = await screen.findByRole("dialog", { name: "Editar celda" });
-    expect((within(dialog).getByLabelText("Concepto (como figura en el PDF)") as HTMLInputElement).value).toBe(IB);
+    expect((within(dialog).getByLabelText("Concepto (como figura en el PDF) *") as HTMLInputElement).value).toBe(IB);
     fireEvent.change(within(dialog).getByLabelText("Rótulo del período de referencia"), {
       target: { value: "Anticipo Ene-26 corregido" },
     });
@@ -676,10 +676,10 @@ describe("pulido de Calendarios fiscales (Foco 2.7c)", () => {
     expect(within(dialog).getByRole("note").textContent).toBe("Completá organismo, jurisdicción, año y título.");
     cambiarValor(within(dialog).getByLabelText("Organismo"), AUTH);
     cambiarValor(within(dialog).getByLabelText("Jurisdicción"), JUR);
-    cambiarValor(within(dialog).getByLabelText("Año"), "1999");
-    cambiarValor(within(dialog).getByLabelText("Título"), "Calendario sintético 2026");
+    cambiarValor(within(dialog).getByLabelText("Año *"), "1999");
+    cambiarValor(within(dialog).getByLabelText("Título *"), "Calendario sintético 2026");
     expect(within(dialog).getByRole("note").textContent).toBe("Revisá el año.");
-    cambiarValor(within(dialog).getByLabelText("Año"), "2026");
+    cambiarValor(within(dialog).getByLabelText("Año *"), "2026");
     expect(crear.disabled).toBe(false);
     expect(within(dialog).queryByRole("note")).toBeNull();
   });

@@ -12,6 +12,7 @@ export function CalendarioFiscalSelect({
   onBlur,
   error,
   placeholder,
+  required = false,
 }: {
   id: string;
   label: string;
@@ -21,17 +22,25 @@ export function CalendarioFiscalSelect({
   onBlur?: () => void;
   error?: string;
   placeholder?: string;
+  required?: boolean;
 }) {
   const errorId = error ? `${id}-error` : undefined;
   return (
     <div className="ds-field">
       <label className="ds-field__label" htmlFor={id}>
         {label}
+        {required ? (
+          <span className="calendario-requerido" aria-hidden="true">
+            {" "}
+            *
+          </span>
+        ) : null}
       </label>
       <div className="ds-field__control">
         <SearchSelect
           id={id}
           label={label}
+          required={required}
           hideLabel
           value={value}
           onChange={onChange}

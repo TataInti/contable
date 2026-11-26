@@ -38,7 +38,7 @@ export interface DenseTab<T extends string> {
   count?: number;
   warnCount?: number;
   description?: string;
-  status?: string;
+  status?: ReactNode;
 }
 
 export function DenseTabs<T extends string>({
@@ -75,7 +75,7 @@ export function DenseTabs<T extends string>({
             role="tab"
             aria-selected={active === tab.id}
             aria-controls={`${idPrefix}-panel`}
-            aria-description={tab.description ?? tab.status}
+            aria-description={tab.description ?? (typeof tab.status === "string" ? tab.status : undefined)}
             tabIndex={active === tab.id ? 0 : -1}
             className="dense-tab"
             onClick={() => onChange(tab.id)}

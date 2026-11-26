@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, Field, useNotify } from "@contable/design-system";
+import { Button, useNotify } from "@contable/design-system";
 import { api } from "../../../lib/api";
+import { ZonaArchivo } from "../ZonaArchivo";
 import { ActionDrawer } from "../../../ui/ActionDrawer";
 import { fileToBase64, fileToHash } from "../archivoFuente";
 import { importarLoteFuente, LoteConFilasObservadas, ladoDeLibroIva } from "../loteFuente";
@@ -210,14 +211,12 @@ export function PanelLibrosIva({
               Modelo .xlsx
             </Button>
             <small className="muted-copy"> Planilla de ejemplo con las columnas que espera el análisis.</small>
-            <Field
+            <ZonaArchivo
               id={`libro-iva-${lado}`}
-              type="file"
-              label="Archivo del libro (.xlsx, .csv, .txt o .json)"
-              hint={file ? file.name : undefined}
+              archivo={file}
+              ayuda=".xlsx, .csv, .txt o .json"
               accept=".xlsx,.xls,.csv,.txt,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain,application/json"
-              onChange={(event) => {
-                const selected = event.target.files?.[0] ?? null;
+              onArchivo={(selected) => {
                 setArchivos((current) => ({ ...current, [lado]: selected }));
                 setAnalisis((current) => ({ ...current, [lado]: null }));
                 // Un .xlsx se analiza solo al elegirlo: queda un único botón, «Importar».

@@ -24,8 +24,8 @@ const fixture = join(fixtures, "ticket-mesa-8.jpg");
 const sourceFiles = [
   { source: "Libro IVA Ventas", file: join(fixtures, "libro-iva-ventas-2025-03.json") },
   { source: "Libro IVA Compras", file: join(fixtures, "libro-iva-compras-2025-03.json") },
-  { source: "Ingresos Brutos Tucumán", file: join(fixtures, "iibb-tucuman-2025-03.json") },
-  { source: "TEM San Miguel de Tucumán", file: join(fixtures, "tem-san-miguel-2025-03.json") },
+  { source: "Base por actividad (IIBB Tucumán)", file: join(fixtures, "iibb-tucuman-2025-03.json") },
+  { source: "Base por actividad (TEM San Miguel)", file: join(fixtures, "tem-san-miguel-2025-03.json") },
 ];
 
 /**
@@ -36,14 +36,14 @@ const taxes = {
   iva: {
     taxType: { code: "IVA", name: "IVA — Impuesto al Valor Agregado", family: "IVA Responsable Inscripto" },
     taxTypeOption: "(IVA)",
-    jurisdiction: "(AR)",
+    jurisdiction: "Argentina (Nación) —",
     module: "IVA Responsable Inscripto",
     family: null as string | null,
     engine: "IVA RI por alícuota",
     authority: { code: "ARCA", name: "ARCA — Agencia de Recaudación y Control Aduanero" },
     regime: { code: "RI", name: "Responsable Inscripto" },
     pack: { code: "AR_VAT_RI_V1", name: "IVA Responsable Inscripto V1" },
-    activity: { code: "E2E-REST-AR", name: "Servicios de restaurante", jurisdiction: "(AR)" },
+    activity: { code: "E2E-REST-AR", name: "Servicios de restaurante", jurisdiction: "Argentina (Nación) —" },
     allActivities: false,
     minimum: null as string | null,
     rate: "21",
@@ -53,14 +53,14 @@ const taxes = {
   iibb: {
     taxType: { code: "IIBB", name: "Ingresos Brutos", family: "IIBB local — Tucumán" },
     taxTypeOption: "(IIBB)",
-    jurisdiction: "(AR-T)",
+    jurisdiction: "Provincia de Tucumán —",
     module: "IIBB local Tucumán",
     family: "IIBB local — Tucumán",
     engine: "IIBB local Tucumán",
     authority: { code: "DGR-TUC", name: "DGR Tucumán" },
     regime: { code: "IIBB_LOCAL_TUC", name: "IIBB Contribuyente Local Tucumán" },
     pack: { code: "AR_IIBB_TUC_LOCAL_V1", name: "IIBB Contribuyente Local Tucumán V1" },
-    activity: { code: "E2E-REST-TUC", name: "Servicios de restaurante (Tucumán)", jurisdiction: "(AR-T)" },
+    activity: { code: "E2E-REST-TUC", name: "Servicios de restaurante (Tucumán)", jurisdiction: "Provincia de Tucumán —" },
     allActivities: true,
     minimum: "1500" as string | null,
     rate: "3.5",
@@ -70,14 +70,14 @@ const taxes = {
   tem: {
     taxType: { code: "TEM", name: "Tributo Económico Municipal (TEM)", family: "Tasa de Espacios Municipales" },
     taxTypeOption: "(TEM)",
-    jurisdiction: "(AR-SMT)",
+    jurisdiction: "San Miguel de Tucumán —",
     module: "TEM San Miguel de Tucumán",
     family: null as string | null,
     engine: "TEM San Miguel de Tucumán",
     authority: { code: "SMT-TEM", name: "Municipalidad de San Miguel de Tucumán — TEM" },
     regime: { code: "TEM_SMT", name: "TEM San Miguel de Tucumán" },
     pack: { code: "AR_TEM_SMT_V1", name: "TEM San Miguel de Tucumán V1" },
-    activity: { code: "E2E-REST-SMT", name: "Restaurante (municipal)", jurisdiction: "(AR-SMT)" },
+    activity: { code: "E2E-REST-SMT", name: "Restaurante (municipal)", jurisdiction: "San Miguel de Tucumán —" },
     allActivities: false,
     minimum: "500" as string | null,
     rate: "0.6",
@@ -206,7 +206,7 @@ async function createRegime(page: Page, tax: Tax) {
   await expect(page.locator("#regime-calc-family")).not.toHaveValue("");
   await pickOption(page.locator("#regime-module"), tax.module);
   await pickOption(page.locator("#regime-jurisdiction"), tax.jurisdiction);
-  await pickOption(page.locator("#regime-authority"), tax.authority.code);
+  await pickOption(page.locator("#regime-authority"), tax.authority.name);
   await mutating(page, "/tax/regimes", () => page.getByRole("button", { name: "Crear régimen" }).click());
 }
 
@@ -312,7 +312,7 @@ test("alta de impuestos, motores y cliente, y carga y revisión de un comprobant
   await test.step("Catálogos: organismos, regímenes y actividades de IVA, IIBB y TEM", async () => {
     await goTo(page, "Catálogos fiscales");
     await expect(page.getByRole("heading", { name: "Catálogos fiscales", exact: true })).toBeVisible();
-    await createJurisdiction(page, { code: "AR-SMT", name: "San Miguel de Tucumán", kind: "MUNICIPAL", parent: "(AR-T)" });
+    await createJurisdiction(page, { code: "AR-SMT", name: "San Miguel de Tucumán", kind: "MUNICIPAL", parent: "Provincia de Tucumán —" });
     for (const tax of Object.values(taxes)) await createTaxType(page, tax);
     for (const tax of Object.values(taxes)) await createAuthority(page, tax);
     for (const tax of Object.values(taxes)) await createRegime(page, tax);

@@ -20,17 +20,9 @@
   overflow-wrap: anywhere;
 }
 
-.workpaper-source-file-drop {
-  display: grid;
-  gap: var(--ds-space-2);
-  justify-items: start;
-  padding: var(--ds-space-4);
-  border: 1px dashed var(--ds-color-border-strong);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-color-surface-muted);
-}
-
-.workpaper-source-file-drop:focus-within {
-  outline: var(--ds-focus-width) solid var(--ds-color-focus);
-  outline-offset: var(--ds-focus-offset);
+.workpaper-source-name {
+  justify-content: flex-start;
+  padding-inline-start: 0;
+  text-align: start;
+  white-space: normal;
 }

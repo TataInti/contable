@@ -490,8 +490,8 @@ describe("StudyExpedienteMensual", () => {
     renderPage();
     await openSourcesStage();
 
-    expect((await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).textContent).toContain("Falta 1: Ingresos Brutos Tucumán");
-    expect(screen.getByRole("button", { name: "Gestionar Ingresos Brutos Tucumán" })).toBeTruthy();
+    expect((await screen.findByText((_, element) => Boolean(element?.classList.contains("workpaper-source-readiness")))).textContent).toContain("Falta 1: Base por actividad (IIBB Tucumán)");
+    expect(screen.getByRole("button", { name: "Gestionar Base por actividad (IIBB Tucumán)" })).toBeTruthy();
   });
 
   it("muestra el estado Pendiente sin códigos ni conteos técnicos", async () => {
